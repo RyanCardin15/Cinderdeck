@@ -69,6 +69,7 @@ final class AppCoordinator {
     LogCleanupScheduler.shared.start()
     RecordingMetadataCleanupScheduler.shared.start()
     CaptureHistoryRetentionService.shared.start()
+    ClipboardTextHistoryStore.shared.start()
     DiagnosticLogger.shared.log(.debug, .lifecycle, "Background schedulers started")
 
     AppStatusBarController.shared.setup(
@@ -98,6 +99,7 @@ final class AppCoordinator {
     LogCleanupScheduler.shared.stop()
     RecordingMetadataCleanupScheduler.shared.stop()
     SnapzyConfigurationSyncCoordinator.shared.stop()
+    ClipboardTextHistoryStore.shared.stop()
 
     for observer in observers {
       NotificationCenter.default.removeObserver(observer)

@@ -162,6 +162,8 @@ enum PreferencesKeys {
 
   // History
   static let historyEnabled = "history.enabled"
+  static let clipboardTextHistoryEnabled = "history.clipboardTextEnabled"
+  static let historyClipboardTextSelected = "history.clipboardTextSelected"
   static let historyRetentionDays = "history.retentionDays"
   static let historyMaxCount = "history.maxCount"
   static let historyBackgroundStyle = "history.backgroundStyle"

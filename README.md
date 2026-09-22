@@ -1,3 +1,5 @@
+> **Private customized version:** This repository adds regular clipboard text to **⌘⇧H → Clipboard text**, with search, preview, copy, delete, and local retention. See [custom build notes](docs/CUSTOM_BUILD.md) for building this version. The installation and release links below refer to the original upstream app and do not include this customization.
+
 <div align="center">
   <img src="./banner.png" width="200" height="200" alt="Snapzy banner" />
 

@@ -169,6 +169,7 @@ enum SnapzyConfigurationExporter {
     let manager = HistoryFloatingManager.shared
     writer.section("history")
     writer.value("enabled", defaults.boolValue(PreferencesKeys.historyEnabled, default: true))
+    writer.value("clipboard_text_enabled", defaults.boolValue(PreferencesKeys.clipboardTextHistoryEnabled, default: false))
     writer.value("retention_days", defaults.integerValue(PreferencesKeys.historyRetentionDays, default: 30))
     writer.value("max_count", defaults.integerValue(PreferencesKeys.historyMaxCount, default: 500))
     writer.value("background_style", HistoryBackgroundStyle.currentStoredStyle(userDefaults: defaults).rawValue)

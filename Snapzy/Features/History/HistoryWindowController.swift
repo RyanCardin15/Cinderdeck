@@ -10,6 +10,7 @@ import Carbon.HIToolbox
 
 extension Notification.Name {
   static let historyCopySelection = Notification.Name("historyCopySelection")
+  static let historyMoveClipboardSelection = Notification.Name("historyMoveClipboardSelection")
   static let historyActivateSelection = Notification.Name("historyActivateSelection")
   static let historyDeleteSelection = Notification.Name("historyDeleteSelection")
   static let historySelectAll = Notification.Name("historySelectAll")

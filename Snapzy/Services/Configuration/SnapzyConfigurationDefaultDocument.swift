@@ -140,6 +140,7 @@ enum SnapzyConfigurationDefaultDocument {
   private static func writeHistory(_ writer: inout SimpleTOMLWriter) {
     writer.section("history")
     writer.value("enabled", true)
+    writer.value("clipboard_text_enabled", false)
     writer.value("retention_days", 30)
     writer.value("max_count", 500)
     writer.value("background_style", HistoryBackgroundStyle.defaultStyle.rawValue)

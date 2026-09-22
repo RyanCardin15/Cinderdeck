@@ -58,6 +58,9 @@ final class DatabaseManager: @unchecked Sendable {
   let dbPool: DatabasePool
   let databaseURL: URL
 
+  // GRDB owns its thread-safe cleanup; no main-actor hop is needed for destruction.
+  nonisolated deinit {}
+
   private init(databaseURL: URL = DatabaseManager.defaultDatabaseURL) throws {
     let dir = databaseURL.deletingLastPathComponent()
     do {
@@ -233,6 +236,15 @@ final class DatabaseManager: @unchecked Sendable {
         on: "captureHistoryRecord",
         columns: ["isDeleted"]
       )
+    }
+
+    migrator.registerMigration("v3_createClipboardTextRecords") { db in
+      try db.create(table: "clipboardTextRecord") { t in
+        t.column("id", .text).primaryKey()
+        t.column("text", .text).notNull()
+        t.column("contentHash", .text).notNull().unique()
+        t.column("copiedAt", .datetime).notNull().indexed()
+      }
     }
 
     return migrator

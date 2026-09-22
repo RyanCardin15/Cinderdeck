@@ -427,6 +427,9 @@ enum SnapzyConfigurationImporter {
     collectBool(&reader, "history", "enabled", mutations: &mutations) {
       defaults.set($0, forKey: PreferencesKeys.historyEnabled)
     }
+    collectBool(&reader, "history", "clipboard_text_enabled", mutations: &mutations) {
+      defaults.set($0, forKey: PreferencesKeys.clipboardTextHistoryEnabled)
+    }
     collectInt(&reader, "history", "retention_days", range: 0...90, mutations: &mutations) {
       defaults.set($0, forKey: PreferencesKeys.historyRetentionDays)
     }

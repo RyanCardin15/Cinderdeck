@@ -110,6 +110,13 @@ final class HistoryFloatingPanel: NSPanel {
   override func keyDown(with event: NSEvent) {
     let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
+    if UserDefaults.standard.bool(forKey: PreferencesKeys.historyClipboardTextSelected),
+      !isTextInputActive, flags.isEmpty, (123...126).contains(event.keyCode) {
+      let delta = event.keyCode == 123 || event.keyCode == 126 ? -1 : 1
+      NotificationCenter.default.post(name: .historyMoveClipboardSelection, object: self, userInfo: ["delta": delta])
+      return
+    }
+
     if !isTextInputActive, flags.isEmpty, (event.keyCode == 51 || event.keyCode == 117) {
       NotificationCenter.default.post(name: .historyDeleteSelection, object: self)
       return

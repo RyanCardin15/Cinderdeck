@@ -13,10 +13,30 @@ struct HistorySettingsView: View {
   @AppStorage(PreferencesKeys.historyMaxCount) private var historyMaxCount = 500
   @AppStorage(PreferencesKeys.historyBackgroundStyle) private var historyBackgroundStyle: HistoryBackgroundStyle = .defaultStyle
   @State private var captureStorageSizeText = L10n.PreferencesGeneral.calculating
+  @AppStorage(PreferencesKeys.clipboardTextHistoryEnabled) private var clipboardTextEnabled = false
+  @ObservedObject private var clipboardTextStore = ClipboardTextHistoryStore.shared
+  @State private var confirmsClearClipboardText = false
   private let storageManager = CaptureStorageManager.shared
 
   var body: some View {
     Form {
+      Section("Clipboard text") {
+        SettingRow(
+          icon: "doc.on.clipboard",
+          title: "Save copied text",
+          description: "Keep up to 500 text copies on this Mac for 30 days. Text marked sensitive, images, and files are skipped."
+        ) {
+          Toggle("Save copied text", isOn: $clipboardTextEnabled).labelsHidden()
+        }
+        SettingRow(
+          icon: "trash",
+          title: "Clear clipboard text",
+          description: "Remove saved text without changing your captures or current clipboard."
+        ) {
+          Button("Clear Text History") { confirmsClearClipboardText = true }
+            .disabled(clipboardTextStore.records.isEmpty)
+        }
+      }
       Section(L10n.PreferencesHistory.floatingPanelSection) {
         SettingRow(
           icon: "rectangle.stack.badge.person.crop",
@@ -181,6 +201,12 @@ struct HistorySettingsView: View {
       }
     }
     .formStyle(.grouped)
+    .alert("Clear clipboard text history?", isPresented: $confirmsClearClipboardText) {
+      Button("Cancel", role: .cancel) {}
+      Button("Clear Text History", role: .destructive) { clipboardTextStore.clear() }
+    } message: {
+      Text("Saved text will be removed from Snapzy. Your captures and current clipboard will stay unchanged.")
+    }
     .onAppear {
       updateCaptureStorageSize()
     }
