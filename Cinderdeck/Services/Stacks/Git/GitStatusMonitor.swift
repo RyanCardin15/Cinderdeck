@@ -5,7 +5,7 @@ import Foundation
 final class GitStatusMonitor: ObservableObject {
   @Published private(set) var statuses: [URL: GitRepoStatus] = [:]
   let git: GitService
-  private var watchers: [URL: StackFileWatcher] = [:]
+  private var watchers: [URL: StackDirectoryWatcher] = [:]
   private var refreshing = Set<URL>()
   private var wanted = Set<URL>()
   private var visibleTask: Task<Void, Never>?
@@ -15,25 +15,27 @@ final class GitStatusMonitor: ObservableObject {
   init(git: GitService = .shared) { self.git = git }
 
   func configure(_ repos: [RepoDefinition]) {
+    generation += 1
+    let version = generation
     wanted = Set(repos.map(\.path))
     for path in watchers.keys where !wanted.contains(path) { watchers.removeValue(forKey: path)?.stop(); statuses[path] = nil }
     for path in wanted {
       Task { [weak self] in
         guard let self else { return }
         await refresh(path)
-        guard watchers[path] == nil, wanted.contains(path), let directories = try? await git.gitDirectories(at: path) else { return }
-        watchers[path] = StackFileWatcher(delay: 0.6, paths: {
-          var urls = directories + [path.appendingPathComponent(".git")]
-          for directory in directories {
-            urls += ["HEAD", "index", "packed-refs", "refs", "logs", "logs/HEAD"].map { directory.appendingPathComponent($0) }
-            for folder in ["refs", "logs/refs"] {
-              if let enumerator = FileManager.default.enumerator(at: directory.appendingPathComponent(folder), includingPropertiesForKeys: nil) {
-                urls += enumerator.compactMap { $0 as? URL }
-              }
+        guard generation == version, watchers[path] == nil, wanted.contains(path),
+          let directories = try? await git.gitDirectories(at: path) else { return }
+        // Recheck after suspension: a removed repo or stopped monitor must not
+        // acquire a watcher, and concurrent configure calls must not replace one.
+        guard generation == version, watchers[path] == nil, wanted.contains(path) else { return }
+        do {
+          watchers[path] = try StackDirectoryWatcher(directories: directories) { [weak self] in
+            Task { @MainActor in
+              guard let self, self.wanted.contains(path) else { return }
+              await self.refresh(path)
             }
           }
-          return urls
-        }, onChange: { [weak self] in Task { @MainActor in await self?.refresh(path) } })
+        } catch { statuses[path]?.error = error.localizedDescription }
       }
     }
   }

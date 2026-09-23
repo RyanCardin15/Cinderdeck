@@ -38,11 +38,14 @@ actor LogBuffer {
     let fd = open(url.path, O_RDWR | O_CLOEXEC | O_NOFOLLOW)
     guard fd >= 0 else { throw StackError.message("Cannot read log for \(service)") }
     let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
-    self.handle = handle
     offset = fromEnd ? (try handle.seekToEnd()) : 0
     try handle.seek(toOffset: offset)
+    self.handle = handle
     let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write, .extend, .delete, .rename], queue: .global(qos: .utility))
     source.setEventHandler { [weak self] in Task { await self?.scheduleRead() } }
+    // Cancellation is asynchronous. Keep the descriptor alive until Dispatch
+    // has unregistered it so a concurrent command cannot reuse it prematurely.
+    source.setCancelHandler { try? handle.close() }
     self.source = source
     source.resume()
     readAvailable()
@@ -120,8 +123,9 @@ actor LogBuffer {
   func close() {
     scheduledRead?.cancel(); scheduledRead = nil
     source?.cancel(); source = nil
-    try? handle?.close(); handle = nil
+    handle = nil
   }
+  deinit { scheduledRead?.cancel(); source?.cancel() }
   static func merged(_ buffers: [[StackLogLine]]) -> [StackLogLine] {
     buffers.flatMap { $0 }.sorted {
       $0.timestamp == $1.timestamp ? $0.id.uuidString < $1.id.uuidString : $0.timestamp < $1.timestamp

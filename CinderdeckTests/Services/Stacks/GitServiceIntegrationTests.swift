@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import XCTest
 @testable import Cinderdeck
@@ -97,6 +98,47 @@ final class GitServiceIntegrationTests: XCTestCase {
     for _ in 0..<40 where monitor.statuses[worktree]?.branch != "external-change" { try await Task.sleep(nanoseconds: 100_000_000) }
     XCTAssertEqual(monitor.statuses[worktree]?.branch, "external-change")
     monitor.stop()
+  }
+  func testLargeRepositoryMonitoringLeavesGitHubRequestsUsable() async throws {
+    let oid = try await run(["rev-parse", "HEAD"], at: clone).trimmingCharacters(in: .whitespacesAndNewlines)
+    let refs = clone.appendingPathComponent(".git/refs/remotes/origin/team")
+    try FileManager.default.createDirectory(at: refs, withIntermediateDirectories: true)
+    for index in 0..<400 {
+      try Data("\(oid)\n".utf8).write(to: refs.appendingPathComponent("branch-\(index)"))
+    }
+    let before = (0..<1024).filter { fcntl(Int32($0), F_GETFD) >= 0 }.count
+    let monitor = GitStatusMonitor(git: git)
+    monitor.configure([.init(id: "large", path: clone)])
+    defer { monitor.stop() }
+    for _ in 0..<50 where monitor.statuses[clone]?.branch != "main" {
+      try await Task.sleep(nanoseconds: 100_000_000)
+    }
+    try await Task.sleep(nanoseconds: 300_000_000)
+    XCTAssertEqual(monitor.statuses[clone]?.branch, "main")
+    let after = (0..<1024).filter { fcntl(Int32($0), F_GETFD) >= 0 }.count
+    XCTAssertLessThan(after - before, 20)
+
+    // Use the real GitHub file/spawn transport, but never contact GitHub.
+    let cli = root.appendingPathComponent("fake-gh")
+    try """
+      #!/bin/sh
+      while [ "$#" -gt 0 ]; do
+        if [ "$1" = "--input" ]; then
+          test -s "$2" || exit 1
+          /usr/bin/grep -q 'viewer' "$2" || exit 2
+          printf '%s' '{"data":{"viewer":{"login":"fixture-user"}}}'
+          exit 0
+        fi
+        shift
+      done
+      exit 3
+      """.write(to: cli, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: cli.path)
+    let service = GitHubPRService(configuration: {
+      .init(executable: cli.path, environment: ProcessInfo.processInfo.environment)
+    })
+    let login = try await service.viewer()
+    XCTAssertEqual(login, "fixture-user")
   }
   func testStashDropResolvesOIDAfterReordering() async throws {
     try "first\n".write(to: clone.appendingPathComponent("first.txt"), atomically: true, encoding: .utf8)
