@@ -5,27 +5,36 @@ import Foundation
 @MainActor
 final class PRViewControlService {
   private let store: PRViewStore
-  private let viewer: () async throws -> String
+  private let viewer: (String) async throws -> String
+  private let currentHost: () -> String
 
-  init(store: PRViewStore? = nil, viewer: (() async throws -> String)? = nil) {
+  init(store: PRViewStore? = nil, currentHost: @escaping () -> String = { GitHubHost.current }, viewer: ((String) async throws -> String)? = nil) {
     self.store = store ?? .shared
-    self.viewer = viewer ?? { try await GitHubPRService().viewer() }
+    self.currentHost = currentHost
+    self.viewer = viewer ?? { try await GitHubPRService(hostname: $0).viewer() }
   }
 
   func handle(_ method: String, params: JSONValue) async throws -> JSONValue {
     let allowed: Set<String>
     switch method {
-    case "prs.views.list": allowed = ["account"]
-    case "prs.views.upsert": allowed = ["account", "id", "name", "filters", "select"]
-    case "prs.views.select", "prs.views.delete": allowed = ["account", "id"]
-    case "prs.views.reorder": allowed = ["account", "ids"]
+    case "prs.views.list": allowed = ["hostname", "account"]
+    case "prs.views.upsert": allowed = ["hostname", "account", "id", "name", "filters", "select"]
+    case "prs.views.select", "prs.views.delete": allowed = ["hostname", "account", "id"]
+    case "prs.views.reorder": allowed = ["hostname", "account", "ids"]
     default: throw StackControlError(code: "unknown_method", message: "Unknown method \(method)")
     }
     guard let object = params.objectValue, Set(object.keys).isSubset(of: allowed) else {
       throw StackControlError.invalid("Expected an object with only: \(allowed.sorted().joined(separator: ", ")).")
     }
     let expected = try Self.string("account", in: object, required: method != "prs.views.list")
-    let account = try await viewer()
+    let requestedHost = try Self.string("hostname", in: object, required: false)
+    guard let hostname = GitHubHost.normalized(requestedHost ?? currentHost()) else {
+      throw StackControlError.invalid("hostname must be a GitHub server name, such as github.com or github.company.com.")
+    }
+    let account = try await viewer(hostname)
+    if requestedHost == nil, GitHubHost.normalized(currentHost()) != hostname {
+      throw StackControlError(code: "host_changed", message: "The selected GitHub server changed. List PR views again or specify hostname explicitly.")
+    }
     guard !account.isEmpty else { throw StackControlError.invalid("Connect a GitHub account first.") }
     if let expected, expected.caseInsensitiveCompare(account) != .orderedSame {
       throw StackControlError(code: "account_changed", message: "Active GitHub account is \(account), not \(expected). List PR views again before editing.")
@@ -34,7 +43,7 @@ final class PRViewControlService {
     switch method {
     case "prs.views.upsert":
       let id = try Self.string("id", in: object, required: true)!
-      let existing = try store.load(account: account).views.first { $0.id == id }
+      let existing = try store.load(account: account, hostname: hostname).views.first { $0.id == id }
       let name = try Self.string("name", in: object, required: existing == nil) ?? existing!.name
       let filters = try PRViewAPI.patch(object["filters"], onto: existing?.filters ?? PRFilters())
       let select: Bool
@@ -42,19 +51,19 @@ final class PRViewControlService {
         guard case .bool(let flag) = value else { throw StackControlError.invalid("select must be a boolean.") }
         select = flag
       } else { select = false }
-      try store.upsert(account: account, view: .init(id: id, name: name, filters: filters), select: select)
-    case "prs.views.select": try store.select(account: account, id: Self.string("id", in: object, required: true)!)
-    case "prs.views.delete": try store.delete(account: account, id: Self.string("id", in: object, required: true)!)
+      try store.upsert(account: account, hostname: hostname, view: .init(id: id, name: name, filters: filters), select: select)
+    case "prs.views.select": try store.select(account: account, hostname: hostname, id: Self.string("id", in: object, required: true)!)
+    case "prs.views.delete": try store.delete(account: account, hostname: hostname, id: Self.string("id", in: object, required: true)!)
     case "prs.views.reorder":
       guard let values = object["ids"]?.arrayValue, values.allSatisfy({ if case .string = $0 { return true }; return false }) else {
         throw StackControlError.invalid("ids must be an array of custom view ids.")
       }
-      try store.reorder(account: account, ids: values.compactMap(\.stringValue))
+      try store.reorder(account: account, hostname: hostname, ids: values.compactMap(\.stringValue))
     default: break
     }
-    let value = try store.load(account: account)
+    let value = try store.load(account: account, hostname: hostname)
     return .object([
-      "account": .string(account), "selectedViewID": .string(value.selectedViewID),
+      "hostname": .string(hostname), "account": .string(account), "selectedViewID": .string(value.selectedViewID),
       "filters": PRViewAPI.encode(value.filters), "query": .string(value.filters.query(login: account)),
       "views": .array(value.views.map { view in .object([
         "id": .string(view.id), "name": .string(view.name), "builtIn": .bool(view.isBuiltIn),
@@ -84,6 +93,7 @@ nonisolated enum PRViewAPI {
   static func encode(_ filters: PRFilters) -> JSONValue {
     .object([
       "repository": filters.repository.map(JSONValue.string) ?? .null,
+      "organization": filters.organization.map(JSONValue.string) ?? .null,
       "state": .string(states.first { $0.value == filters.state }!.key),
       "role": .string(roles.first { $0.value == filters.role }!.key),
       "sort": .string(sorts.first { $0.value == filters.sort }!.key),
@@ -94,12 +104,13 @@ nonisolated enum PRViewAPI {
   static func patch(_ patch: JSONValue?, onto filters: PRFilters) throws -> PRFilters {
     guard let patch else { return filters }
     guard let object = patch.objectValue,
-      Set(object.keys).isSubset(of: ["repository", "state", "role", "sort", "text", "label", "advanced"]) else {
-      throw StackControlError.invalid("filters must contain only repository, state, role, sort, text, label, advanced.")
+      Set(object.keys).isSubset(of: ["repository", "organization", "state", "role", "sort", "text", "label", "advanced"]) else {
+      throw StackControlError.invalid("filters must contain only repository, organization, state, role, sort, text, label, advanced.")
     }
     var filters = filters
     for (key, value) in object {
       if key == "repository", value == .null { filters.repository = nil; continue }
+      if key == "organization", value == .null { filters.organization = nil; continue }
       if key == "advanced" {
         guard case .bool(let flag) = value else { throw StackControlError.invalid("advanced must be a boolean.") }
         filters.advanced = flag; continue
@@ -107,6 +118,7 @@ nonisolated enum PRViewAPI {
       guard case .string(let text) = value else { throw StackControlError.invalid("\(key) must be a string.") }
       switch key {
       case "repository": filters.repository = text
+      case "organization": filters.organization = text
       case "text": filters.text = text
       case "label": filters.label = text
       case "state":

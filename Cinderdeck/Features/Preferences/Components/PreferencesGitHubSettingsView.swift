@@ -4,6 +4,9 @@ import SwiftUI
 struct GitHubSettingsView: View {
   @ObservedObject var model = GitHubAccountViewModel.shared
 
+  @State private var hostname = ""
+  @State private var showsServerSettings = false
+
   var body: some View {
     Form {
       Section {
@@ -16,7 +19,7 @@ struct GitHubSettingsView: View {
               .font(.system(size: 15, weight: .semibold))
             Text("Repositories, stars, and pull request reviews, together in Cinderdeck.")
               .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            Label("github.com", systemImage: model.account.login == nil ? "network" : "checkmark.circle.fill")
+            Label(model.account.hostname, systemImage: model.account.login == nil ? "network" : "checkmark.circle.fill")
               .font(.caption).foregroundStyle(model.account.login == nil ? Color.secondary : .green)
           }
           Spacer(minLength: 0)
@@ -102,6 +105,27 @@ struct GitHubSettingsView: View {
         Section { Text(notice).font(.callout).textSelection(.enabled) }
       }
 
+      Section("Organizations") {
+        Text("Your organizations appear automatically in the pull request workspace. Choose an organization from the dropdown to browse its repositories.")
+          .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+      }
+
+      Section("Advanced") {
+        DisclosureGroup("Use a different GitHub server", isExpanded: $showsServerSettings) {
+          VStack(alignment: .leading, spacing: 10) {
+            Text("Only change this if your account uses a separate GitHub server. Organizations on your current server are discovered automatically.")
+              .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack {
+              TextField("github.com or github.company.com", text: $hostname)
+                .textFieldStyle(.roundedBorder).accessibilityLabel("GitHub hostname")
+                .accessibilityIdentifier("github.hostname")
+              Button("Use server") { Task { await model.useHost(hostname); hostname = model.account.hostname } }
+                .disabled(model.checking || model.signingIn || hostname == model.account.hostname)
+            }
+          }.padding(.top, 8)
+        }.accessibilityIdentifier("github.serverSettings")
+      }.disabled(model.signingIn)
+
       Section("About this connection") {
         Text("Cinderdeck uses the active GitHub CLI account on this Mac. Signing in here also updates that account for other tools that use GitHub CLI.")
           .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -110,6 +134,10 @@ struct GitHubSettingsView: View {
       }
     }
     .formStyle(.grouped)
-    .task { await model.refresh() }
+    .task {
+      hostname = model.account.hostname
+      showsServerSettings = hostname != "github.com"
+      await model.refresh()
+    }
   }
 }

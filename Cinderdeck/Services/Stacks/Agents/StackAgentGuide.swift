@@ -13,7 +13,7 @@ nonisolated enum StackAgentGuide {
   a Cinderdeck service, or the user). Never stop a stack claimed by someone else without asking the user. \
   switch_branch refuses to touch uncommitted work unless you pass dirty=stash or dirty=carry.
   To configure local Pull Request tabs, call list_pr_views, then upsert_pr_view, select_pr_view, \
-  reorder_pr_views, or delete_pr_view with the returned account. Use stable ids to avoid duplicate tabs. \
+  reorder_pr_views, or delete_pr_view with the returned account and hostname. Use stable ids to avoid duplicate tabs. \
   These tools share the PR window's saved views and do not post to GitHub. Built-in tabs are read-only except selection.
   """
 
@@ -63,11 +63,11 @@ nonisolated enum StackAgentGuide {
 
     - Use `list_pr_views` to inspect saved tabs, queries, active filters, and the current GitHub account.
     - `upsert_pr_view` creates or patches a custom tab using a stable id, a name (required on creation), and optional filters.
-    - `select_pr_view`, `reorder_pr_views`, and `delete_pr_view` manage selection and custom tabs. Supply the account returned by the list tool for every change.
+    - `select_pr_view`, `reorder_pr_views`, and `delete_pr_view` manage selection and custom tabs. Supply the account and hostname returned by the list tool for every change. CLI `--host` pins the server; omitting it uses the server selected in Cinderdeck.
     - CLI: `\(command) prs views list`, then `\(command) prs views upsert my-review-queue --account <login> --name "My reviews" --role review --select`. Use `prs --help` for all options.
-    - Filters support repository (owner/name, or null for My work), state, role, sort, text, label, and advanced query mode. Omitted fields are preserved. To use GitHub search qualifiers, set advanced=true and text to the query, or use CLI `--query`.
-    - Query mode replaces simple state/label/text; repository and role scope still apply. My work defaults to PRs involving the account. `@me` resolves to that account.
-    - Changes appear live and persist locally per GitHub account. Built-in tabs cannot be edited, deleted, or reordered. Selecting a tab replaces unsaved filters. These tools do not post reviews or modify GitHub repositories.
+    - Filters support repository (owner/name, or null), organization (login, or null), state, role, sort, text, label, and advanced query mode. Omitted fields are preserved. To use GitHub search qualifiers, set advanced=true and text to the query, or use CLI `--query`.
+    - Query mode replaces simple state/label/text; repository, organization, and role scope still apply. My work defaults to PRs involving the account. `@me` resolves to that account.
+    - Changes appear live and persist locally per GitHub host and account. Built-in tabs cannot be edited, deleted, or reordered. Selecting a tab replaces unsaved filters. These tools do not post reviews or modify GitHub repositories.
     """
   }
 }

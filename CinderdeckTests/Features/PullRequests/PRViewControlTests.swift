@@ -14,7 +14,7 @@ final class PRViewControlTests: XCTestCase {
     defaults = UserDefaults(suiteName: suite)!
     store = PRViewStore(defaults: defaults)
     account = "reviewer"
-    control = PRViewControlService(store: store, viewer: { [unowned self] in self.account })
+    control = PRViewControlService(store: store, currentHost: { "github.com" }, viewer: { [unowned self] _ in self.account })
   }
 
   override func tearDown() async throws {
@@ -43,19 +43,19 @@ final class PRViewControlTests: XCTestCase {
     XCTAssertEqual(restored.customViews[0].filters.repository, "team/project")
     XCTAssertEqual(restored.selectedViewID, "team-reviews")
     XCTAssertEqual(restored.filters, restored.customViews[0].filters)
-    XCTAssertNotNil(defaults.data(forKey: "github.prs.reviewer.v1"))
+    XCTAssertNotNil(defaults.data(forKey: "github.prs.github.com.reviewer.v2"))
   }
 
   func testAccountChangesAndMissingAccountDoNotMutatePreferences() async throws {
     _ = try await upsert("mine")
-    let before = defaults.data(forKey: "github.prs.reviewer.v1")
+    let before = defaults.data(forKey: "github.prs.github.com.reviewer.v2")
     account = "other"
     for params: [String: JSONValue] in [["account": .string("reviewer"), "id": .string("mine")], ["id": .string("mine")]] {
       do { _ = try await call("delete", params); XCTFail("Must reject account mismatch or missing account") }
       catch let error as StackControlError { XCTAssertTrue(["account_changed", "invalid_params"].contains(error.code)) }
     }
-    XCTAssertEqual(defaults.data(forKey: "github.prs.reviewer.v1"), before)
-    XCTAssertNil(defaults.data(forKey: "github.prs.other.v1"))
+    XCTAssertEqual(defaults.data(forKey: "github.prs.github.com.reviewer.v2"), before)
+    XCTAssertNil(defaults.data(forKey: "github.prs.github.com.other.v2"))
     let result = try await call("list")
     XCTAssertEqual(result["views"]?.arrayValue?.count, 4)
     XCTAssertEqual(result["account"]?.stringValue, "other")
@@ -104,7 +104,7 @@ final class PRViewControlTests: XCTestCase {
 
   func testInvalidInputLeavesStoredBytesUnchanged() async throws {
     _ = try await upsert("mine")
-    let before = defaults.data(forKey: "github.prs.reviewer.v1")
+    let before = defaults.data(forKey: "github.prs.github.com.reviewer.v2")
     let invalid: [[String: JSONValue]] = [
       ["filters": .object(["state": .string("typo")])], ["filters": .object(["advanced": .string("true")])],
       ["filters": .object(["repository": .string("not-a-repo")])], ["filters": .object(["lable": .string("bug")])],
@@ -115,7 +115,7 @@ final class PRViewControlTests: XCTestCase {
       let params = ["account": JSONValue.string(account), "id": .string("mine")].merging(patch) { _, new in new }
       do { _ = try await call("upsert", params); XCTFail("Must reject \(patch)") }
       catch let error as StackControlError { XCTAssertEqual(error.code, "invalid_params") }
-      XCTAssertEqual(defaults.data(forKey: "github.prs.reviewer.v1"), before)
+      XCTAssertEqual(defaults.data(forKey: "github.prs.github.com.reviewer.v2"), before)
     }
   }
 
@@ -127,10 +127,10 @@ final class PRViewControlTests: XCTestCase {
 
   func testMalformedPersistedDataIsNeverOverwritten() async throws {
     let data = Data("broken".utf8)
-    defaults.set(data, forKey: "github.prs.reviewer.v1")
+    defaults.set(data, forKey: "github.prs.github.com.reviewer.v2")
     do { _ = try await upsert("new"); XCTFail("Must preserve unreadable data") }
     catch let error as StackControlError { XCTAssertEqual(error.code, "invalid_configuration") }
-    XCTAssertEqual(defaults.data(forKey: "github.prs.reviewer.v1"), data)
+    XCTAssertEqual(defaults.data(forKey: "github.prs.github.com.reviewer.v2"), data)
   }
 
   func testCLIAndMCPUseSameContract() async throws {
@@ -156,6 +156,64 @@ final class PRViewControlTests: XCTestCase {
       ["views", "list", "--query", "ignored"], ["views", "upsert", "mine", "--account", "reviewer", "--query=x", "--text=y"],
       ["views", "upsert", "mine", "--account", "reviewer", "--repo=a/b", "--my-work"],
     ] { XCTAssertThrowsError(try PRViewsCLI.request(arguments), arguments.joined(separator: " ")) }
+  }
+
+  func testEveryCLIActionUsesSharedStoreIncludingOrganizationAndHost() async throws {
+    var verifiedHosts: [String] = []
+    let control = PRViewControlService(store: store, currentHost: { "github.com" }, viewer: { host in
+      verifiedHosts.append(host)
+      return "reviewer"
+    })
+    func cli(_ args: [String]) async throws -> JSONValue {
+      let request = try PRViewsCLI.request(["views"] + args + ["--host", "github.company.test", "--account", "reviewer"])
+      return try await control.handle(request.method, params: .object(request.params))
+    }
+    _ = try await cli(["upsert", "one", "--name", "Organization", "--org", "team", "--select"])
+    _ = try await cli(["upsert", "one", "--query", "is:merged", "--sort", "newest"])
+    _ = try await cli(["upsert", "two", "--name", "Second"])
+    let reordered = try await cli(["reorder", "two", "one"])
+    XCTAssertEqual(reordered["views"]?.arrayValue?.suffix(2).compactMap { $0["id"]?.stringValue }, ["two", "one"])
+    let selected = try await cli(["select", "one"])
+    XCTAssertEqual(selected["query"]?.stringValue, "is:pr org:team is:merged sort:created-desc")
+    _ = try await cli(["select", "reviews"])
+    XCTAssertEqual(try store.load(account: account, hostname: "github.company.test").filters.organization, "team")
+    _ = try await cli(["select", "one"])
+    _ = try await cli(["delete", "one"])
+    let listed = try await cli(["list"])
+    XCTAssertEqual(listed["selectedViewID"]?.stringValue, "active")
+    XCTAssertEqual(listed["filters"]?["organization"]?.stringValue, "team")
+    XCTAssertEqual(listed["hostname"]?.stringValue, "github.company.test")
+    XCTAssertEqual(listed["views"]?.arrayValue?.count, 5)
+    XCTAssertTrue(verifiedHosts.allSatisfy { $0 == "github.company.test" })
+    XCTAssertTrue(try store.load(account: account).customViews.isEmpty)
+  }
+
+  func testChangingSelectedHostDuringIdentityLookupDoesNotWrite() async throws {
+    var host = "github.com"
+    let control = PRViewControlService(store: store, currentHost: { host }, viewer: { _ in
+      host = "github.company.test"
+      return "reviewer"
+    })
+    do {
+      _ = try await control.handle("prs.views.upsert", params: .object(["account": .string(account), "id": .string("mine"), "name": .string("Mine")]))
+      XCTFail("Must reject a host switch during account lookup")
+    } catch let error as StackControlError { XCTAssertEqual(error.code, "host_changed") }
+    XCTAssertNil(defaults.data(forKey: "github.prs.github.com.reviewer.v2"))
+    XCTAssertNil(defaults.data(forKey: "github.prs.github.company.test.reviewer.v2"))
+  }
+
+  func testHostAndOrganizationValidationCannotOverwritePreferences() async throws {
+    _ = try await upsert("mine")
+    let before = defaults.data(forKey: "github.prs.github.com.reviewer.v2")
+    for patch: [String: JSONValue] in [
+      ["hostname": .string("https://github.com")],
+      ["filters": .object(["organization": .string("team/project")])],
+    ] {
+      let params = ["account": JSONValue.string(account), "id": .string("mine")].merging(patch) { _, new in new }
+      do { _ = try await call("upsert", params); XCTFail("Must reject invalid host or organization") }
+      catch let error as StackControlError { XCTAssertEqual(error.code, "invalid_params") }
+      XCTAssertEqual(defaults.data(forKey: "github.prs.github.com.reviewer.v2"), before)
+    }
   }
 
   func testLocalSocketRoundTripPersistsCLIRequest() async throws {

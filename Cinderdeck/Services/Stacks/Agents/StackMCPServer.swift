@@ -23,6 +23,7 @@ nonisolated enum StackMCPServer {
   private static let stack = property("string", "Stack id or name (see list_stacks)")
   private static let force = property("boolean", "Override another agent's claim. Only with the user's approval.")
 
+  private static let prHost = property("string", "GitHub hostname from list_pr_views. Defaults to the server selected in Cinderdeck. Specify it to pin the target server without switching the UI.")
   private static let prAccount = property("string", "Account returned by list_pr_views; must still be the active GitHub account")
   private static let prID = property("string", "Exact view id from list_pr_views, or a new stable id (letters, numbers, hyphens, underscores)")
   private static let prFilters: JSONValue = .object([
@@ -30,28 +31,29 @@ nonisolated enum StackMCPServer {
     "description": .string("Partial filter update. Omitted fields are preserved; new views default to open, anyone, updated, My work."),
     "properties": .object([
       "repository": .object(["type": .array([.string("string"), .string("null")]), "description": .string("owner/name, or null for My work (involves the account by default)")]),
+      "organization": .object(["type": .array([.string("string"), .string("null")]), "description": .string("Organization login, or null. Applies when repository is null.")]),
       "state": property("string", "Ignored in advanced mode; closed means unmerged", values: PRViewAPI.states.keys.sorted()),
       "role": property("string", "Personal scope; applies in both simple and advanced mode", values: PRViewAPI.roles.keys.sorted()),
       "sort": property("string", "Result ordering", values: PRViewAPI.sorts.keys.sorted()),
       "text": property("string", "Simple search text, or GitHub qualifiers when advanced=true. @me resolves to the account in query mode."),
       "label": property("string", "Simple-mode label; empty string clears"),
-      "advanced": property("boolean", "Use text as a GitHub query instead of simple state/label/text. Repository and role scope still apply."),
+      "advanced": property("boolean", "Use text as a GitHub query instead of simple state/label/text. Repository, organization, and role scope still apply."),
     ]),
   ])
 
   private static let tools: [Tool] = [
-    Tool(name: "list_pr_views", description: "List local Pull Request tabs, their filters and generated queries, active selection, and current GitHub account. Use before configuring PR views.",
-      properties: [:], required: [], readOnly: true),
+    Tool(name: "list_pr_views", description: "List local Pull Request tabs, their filters and generated queries, active selection, hostname, and current GitHub account. Use before configuring PR views.",
+      properties: ["hostname": prHost], required: [], readOnly: true),
     Tool(name: "upsert_pr_view", description: "Create or patch a custom Pull Request tab by stable id, without duplicates. Name is required on creation. Omitted fields stay unchanged; select=true activates it. Updates to an active saved view refresh its filters unless the user has unsaved changes. Built-ins cannot be edited. Local configuration only.",
-      properties: ["account": prAccount, "id": prID, "name": property("string", "Tab name, 1–40 characters"), "filters": prFilters,
+      properties: ["hostname": prHost, "account": prAccount, "id": prID, "name": property("string", "Tab name, 1–40 characters"), "filters": prFilters,
         "select": property("boolean", "Activate after saving, replacing current unsaved filters (default false)")],
       required: ["account", "id"], readOnly: false),
-    Tool(name: "select_pr_view", description: "Activate a built-in or custom PR tab, replacing current unsaved filters. Built-in tabs retain the current repository; custom tabs restore their saved repository.",
-      properties: ["account": prAccount, "id": prID], required: ["account", "id"], readOnly: false),
-    Tool(name: "delete_pr_view", description: "Delete a custom PR tab. Deleting the active tab selects Active and retains repository scope. Built-ins are protected; deleting an already absent custom id is safe to repeat.",
-      properties: ["account": prAccount, "id": prID], required: ["account", "id"], readOnly: false),
+    Tool(name: "select_pr_view", description: "Activate a built-in or custom PR tab, replacing current unsaved filters. Built-in tabs retain the current repository and organization; custom tabs restore their saved repository.",
+      properties: ["hostname": prHost, "account": prAccount, "id": prID], required: ["account", "id"], readOnly: false),
+    Tool(name: "delete_pr_view", description: "Delete a custom PR tab. Deleting the active tab selects Active and retains repository and organization scope. Built-ins are protected; deleting an already absent custom id is safe to repeat.",
+      properties: ["hostname": prHost, "account": prAccount, "id": prID], required: ["account", "id"], readOnly: false),
     Tool(name: "reorder_pr_views", description: "Set the custom PR tab order. Include every custom id exactly once; built-in tabs retain their positions.",
-      properties: ["account": prAccount, "ids": property("array", "Complete ordered list of custom view ids", items: "string")],
+      properties: ["hostname": prHost, "account": prAccount, "ids": property("array", "Complete ordered list of custom view ids", items: "string")],
       required: ["account", "ids"], readOnly: false),
     Tool(name: "list_stacks", description: "List every stack with service status, ports, URLs, PIDs, who started each service, Git branches and claims.",
       properties: [:], required: [], readOnly: true),

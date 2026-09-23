@@ -3,8 +3,10 @@ import Foundation
 nonisolated struct GitHubCLIConfiguration: Sendable {
   var executable: String
   var environment: [String: String]
-  var usesEnvironmentToken: Bool {
-    ["GH_TOKEN", "GITHUB_TOKEN"].contains { environment[$0]?.isEmpty == false }
+  func usesEnvironmentToken(hostname: String) -> Bool {
+    let keys = hostname == "github.com" || hostname.hasSuffix(".ghe.com")
+      ? ["GH_TOKEN", "GITHUB_TOKEN"] : ["GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"]
+    return keys.contains { environment[$0]?.isEmpty == false }
   }
 }
 
@@ -34,4 +36,17 @@ nonisolated enum GitHubAccountError: LocalizedError {
     case .message(let message): return message
     }
   }
+}
+
+/// Hostnames only: never accept a URL, credentials, path, port, or CLI option.
+nonisolated enum GitHubHost {
+  static let preferenceKey = "github.hostname"
+  static func normalized(_ input: String) -> String? {
+    let host = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    guard host.count <= 253, host.contains("."), host.split(separator: ".", omittingEmptySubsequences: false).allSatisfy({
+      !$0.isEmpty && $0.count <= 63 && $0.range(of: #"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"#, options: .regularExpression) != nil
+    }) else { return nil }
+    return host
+  }
+  static var current: String { normalized(UserDefaults.standard.string(forKey: preferenceKey) ?? "") ?? "github.com" }
 }
