@@ -276,8 +276,17 @@ final class PullRequestsTests: XCTestCase {
     let model = makeModel(service: service)
     await model.connect()
     XCTAssertEqual(model.organizations, ["other-team", "team"])
+    // Memberships appear before any repositories from the second org are loaded.
+    XCTAssertEqual(model.availableOrganizations, ["other-team", "team"])
+    XCTAssertFalse(model.repositories.contains { $0.owner == "other-team" })
     model.selectRepository("team/project")
+    model.repositorySearch = "old-search"
+    model.starredOnly = true
     model.selectOrganization("other-team")
+    XCTAssertEqual(model.hostname, "github.com")
+    XCTAssertEqual(service.hostname, "github.com")
+    XCTAssertEqual(model.repositorySearch, "")
+    XCTAssertFalse(model.starredOnly)
     XCTAssertNil(model.filters.repository)
     try await eventually { !model.loadingSelectedOrganization }
     XCTAssertEqual(model.visibleRepositories.map(\.nameWithOwner).sorted(), ["other-team/one", "other-team/two"])
@@ -405,6 +414,23 @@ final class PullRequestsTests: XCTestCase {
     let model = makeModel(service: service)
     await model.connect()
     XCTAssertEqual(model.availableOrganizations, ["outside-org", "team"])
+  }
+
+  func testAllRepositoriesAreGroupedByOwnerWithPersonalRepositoriesFirst() async {
+    let service = PRMockService()
+    var personal = PRFixtures.repository
+    personal.id = "personal"; personal.nameWithOwner = "reviewer/personal"
+    var extra = PRFixtures.repository
+    extra.id = "another"; extra.nameWithOwner = "another-org/repo"
+    var favorite = PRFixtures.repository
+    favorite.id = "starred"; favorite.nameWithOwner = "team/z-favorite"; favorite.viewerHasStarred = true
+    service.extraRepositories = [personal, extra, favorite]
+    let model = makeModel(service: service)
+    await model.connect()
+    XCTAssertEqual(model.repositoryGroups.map(\.owner), ["reviewer", "another-org", "team"])
+    XCTAssertEqual(model.repositoryGroups.last?.repositories.map(\.nameWithOwner), ["team/z-favorite", "team/project"])
+    model.selectOrganization("team")
+    XCTAssertEqual(model.repositoryGroups.map(\.owner), ["team"])
   }
 
   private func eventually(_ condition: () -> Bool, file: StaticString = #filePath, line: UInt = #line) async throws {

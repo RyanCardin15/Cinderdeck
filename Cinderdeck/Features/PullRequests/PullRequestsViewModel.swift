@@ -73,6 +73,21 @@ final class PullRequestsViewModel: ObservableObject {
         return $0.nameWithOwner.localizedStandardCompare($1.nameWithOwner) == .orderedAscending
       }
   }
+  struct RepositoryGroup: Identifiable {
+    var owner: String
+    var repositories: [GitHubRepository]
+    var id: String { owner }
+  }
+  var repositoryGroups: [RepositoryGroup] {
+    Dictionary(grouping: visibleRepositories, by: \.owner)
+      .map { RepositoryGroup(owner: $0.key, repositories: $0.value) }
+      .sorted {
+        if ($0.owner.lowercased() == login?.lowercased()) != ($1.owner.lowercased() == login?.lowercased()) {
+          return $0.owner.lowercased() == login?.lowercased()
+        }
+        return $0.owner.localizedStandardCompare($1.owner) == .orderedAscending
+      }
+  }
   var searchLimitReached: Bool { requests.count >= 1000 && totalCount > requests.count }
   var canLoadMore: Bool { pageInfo?.hasNextPage == true && requests.count < 1000 }
   var query: String { filters.query(login: login ?? "") }
@@ -302,7 +317,7 @@ final class PullRequestsViewModel: ObservableObject {
   }
   func selectOrganization(_ organization: String?) {
     filters.organization = organization; filters.repository = nil
-    repositorySearch = ""
+    repositorySearch = ""; starredOnly = false
     reloadOrganization()
     scheduleSearch(immediate: true)
   }

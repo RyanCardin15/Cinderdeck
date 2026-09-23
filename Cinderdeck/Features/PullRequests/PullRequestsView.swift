@@ -64,11 +64,14 @@ struct PullRequestsView: View {
           if (model.filters.repository == nil && model.filters.organization == nil) { Circle().fill(Color.accentColor).frame(width: 5, height: 5) }
         }.padding(10).background((model.filters.repository == nil && model.filters.organization == nil) ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 7))
       }.buttonStyle(.plain).padding(.horizontal, 10).help("Pull requests you are involved in, across GitHub")
+      Text("ORGANIZATIONS").font(.system(size: 10, weight: .semibold)).tracking(0.8)
+        .foregroundStyle(.secondary).padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 8)
       Picker("Organization", selection: Binding(get: { model.filters.organization ?? "" }, set: { model.selectOrganization($0.isEmpty ? nil : $0) })) {
-        Text("All organizations").tag("")
+        Text("All repositories").tag("")
         ForEach(model.availableOrganizations, id: \.self) { Text($0).tag($0) }
-      }.labelsHidden().controlSize(.small).padding(.horizontal, 14).padding(.top, 14)
+      }.labelsHidden().controlSize(.small).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 14)
         .accessibilityLabel("Organization").accessibilityIdentifier("prs.organization")
+        .help("Choose one of your organizations to browse its repositories")
         .disabled(model.login == nil)
       if model.loadingOrganizations {
         HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("Loading organizations…").font(.caption) }
@@ -106,7 +109,17 @@ struct PullRequestsView: View {
       }
       ScrollView {
         LazyVStack(spacing: 3) {
-          ForEach(model.visibleRepositories) { repository in repositoryRow(repository) }
+          ForEach(model.repositoryGroups) { group in
+            if model.filters.organization == nil {
+              HStack {
+                Text(group.owner == model.login ? "Personal · \(group.owner)" : group.owner)
+                  .font(.system(size: 10, weight: .semibold)).lineLimit(1).truncationMode(.middle)
+                Spacer(minLength: 4)
+                Text("\(group.repositories.count)").font(.system(size: 10).monospacedDigit())
+              }.foregroundStyle(.secondary).padding(.horizontal, 8).padding(.top, 10).padding(.bottom, 3)
+            }
+            ForEach(group.repositories) { repository in repositoryRow(repository) }
+          }
           if model.visibleRepositories.isEmpty && !model.connecting && !(model.loadingRepositories || model.loadingSelectedOrganization) {
             Text(model.starredOnly ? "Star repositories to keep them here." : "No repositories found.")
               .font(.system(size: 12)).foregroundStyle(.secondary).padding(20)
