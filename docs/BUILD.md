@@ -16,7 +16,29 @@ open '.build/development/Build/Products/Debug/Cinderdeck Debug.app'
 
 ## Signed local installation
 
-Select your own Apple Development or Developer ID signing identity. No upstream developer team, certificate, or private key is included.
+Use the local installer for builds you keep in `/Applications`. It creates a persistent **Cinderdeck Local Development** self-signed identity in your login keychain once, then reuses it on subsequent installs. No Apple Developer membership is needed.
+
+```sh
+# First install replacing an ad-hoc build: clear its stale TCC grants once.
+./scripts/install-local.sh --reset-permissions
+# Grant Screen Recording and Accessibility, then quit and reopen the app.
+
+# Subsequent builds: preserve the identity and permissions.
+./scripts/install-local.sh
+```
+
+The script builds Release, signs the app and Sparkle helpers, verifies the signature and certificate-based designated requirement, checks that the executable loads with its headless help command, then replaces `/Applications/Cinderdeck.app`. A previous installation is retained at the backup path printed by the script. `--build-only` validates a signed build without installing it; `--no-launch` skips opening the app after installation. macOS may ask you to authorize certificate trust or private-key access during first setup.
+
+If you already use an Apple Development or Developer ID identity, keep it to avoid another identity change:
+
+```sh
+CINDERDECK_SIGNING_IDENTITY='Apple Development: Your Name (IDENTITY_ID)' \
+  ./scripts/install-local.sh
+```
+
+The override accepts an exact identity name or its SHA-1 fingerprint from `security find-identity -v -p codesigning`. Ad-hoc signing is rejected. See [self-signed certificate setup](SELF_SIGNED_CERT.md) for the one-time repair and certificate lifecycle.
+
+For a manual signed build, select your own Apple Development or Developer ID signing identity. No upstream developer team, certificate, or private key is included.
 
 ```sh
 export CINDERDECK_SIGNING_IDENTITY='Apple Development: Your Name (IDENTITY_ID)'

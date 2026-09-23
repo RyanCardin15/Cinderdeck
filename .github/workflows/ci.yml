@@ -30,6 +30,11 @@ jobs:
           mkdir -p build/swift-module-cache
           swift -module-cache-path build/swift-module-cache tools/localization/CatalogTool.swift verify
 
+      - name: Verify local signing scripts
+        run: |
+          bash -n scripts/create-signing-cert.sh scripts/install-local.sh
+          python3 scripts/tests/test_local_signing.py
+
       - name: Run tests
         env:
           # The following tests crash on GitHub Actions macOS runners (Swift concurrency /
