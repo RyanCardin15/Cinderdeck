@@ -12,6 +12,14 @@
   <a href="https://github.com/RyanCardin15/Cinderdeck/issues">Issues</a>
 </p>
 
+<p align="center">
+  <a href="assets/cinderdeck-promo.mp4?raw=true">
+    <img src="assets/cinderdeck-promo-poster.png" width="960" alt="Watch the Cinderdeck promo: your projects, one control deck." />
+  </a>
+  <br />
+  <a href="assets/cinderdeck-promo.mp4?raw=true"><strong>▶ Watch the 30-second promo</strong></a>
+</p>
+
 Cinderdeck is a native Mac application for running your development environment. Group any set of projects into a stack, define how each service starts, and manage them together from the menu bar, a terminal, or your coding agent.
 
 A web app, an API in another repository, a worker, a local database: bring whatever your project needs. No prescribed repositories, language, framework, or folder layout. Cinderdeck runs the commands you configure using the tools already installed on your Mac.
