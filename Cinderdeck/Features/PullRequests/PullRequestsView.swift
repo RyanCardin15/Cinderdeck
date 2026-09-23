@@ -67,7 +67,10 @@ struct PullRequestsView: View {
       HStack {
         Text("REPOSITORIES").font(.system(size: 10, weight: .semibold)).tracking(0.8).foregroundStyle(.secondary)
         Spacer()
-        if model.loadingRepositories { ProgressView().controlSize(.mini) }
+        if model.connecting || model.loadingRepositories {
+          ProgressView().progressViewStyle(.circular).controlSize(.small)
+            .accessibilityLabel("Loading repositories")
+        }
         Button { model.starredOnly.toggle() } label: {
           Image(systemName: model.starredOnly ? "star.fill" : "star").foregroundStyle(model.starredOnly ? .yellow : .secondary)
         }.buttonStyle(.plain).help(model.starredOnly ? "Show all repositories" : "Show only starred repositories")
@@ -82,7 +85,7 @@ struct PullRequestsView: View {
       ScrollView {
         LazyVStack(spacing: 3) {
           ForEach(model.visibleRepositories) { repository in repositoryRow(repository) }
-          if model.visibleRepositories.isEmpty && !model.loadingRepositories {
+          if model.visibleRepositories.isEmpty && !model.connecting && !model.loadingRepositories {
             Text(model.starredOnly ? "Star repositories to keep them here." : "No repositories found.")
               .font(.system(size: 12)).foregroundStyle(.secondary).padding(20)
           }
@@ -121,9 +124,14 @@ struct PullRequestsView: View {
         }.padding(.vertical, 8).padding(.leading, 8).contentShape(Rectangle())
       }.buttonStyle(.plain).help(repository.nameWithOwner).accessibilityLabel(repository.nameWithOwner)
       Button { Task { await model.toggleStar(repository) } } label: {
-        Image(systemName: repository.viewerHasStarred ? "star.fill" : "star")
-          .font(.system(size: 11)).foregroundStyle(repository.viewerHasStarred ? Color.yellow : Color.secondary.opacity(0.6))
-          .frame(width: 27, height: 30).contentShape(Rectangle())
+        Group {
+          if model.starring.contains(repository.id) {
+            ProgressView().progressViewStyle(.circular).controlSize(.small)
+          } else {
+            Image(systemName: repository.viewerHasStarred ? "star.fill" : "star")
+              .font(.system(size: 11)).foregroundStyle(repository.viewerHasStarred ? Color.yellow : Color.secondary.opacity(0.6))
+          }
+        }.frame(width: 27, height: 30).contentShape(Rectangle())
       }.buttonStyle(.plain).disabled(model.starring.contains(repository.id) || model.connecting)
         .help(repository.viewerHasStarred ? "Unstar on GitHub" : "Star on GitHub")
         .accessibilityLabel("\(repository.viewerHasStarred ? "Unstar" : "Star") \(repository.nameWithOwner) on GitHub")
@@ -141,13 +149,27 @@ struct PullRequestsView: View {
           .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
       }
       Spacer()
-      if model.loading { ProgressView().controlSize(.small) }
+      if let message = loadingMessage {
+        ProgressView().progressViewStyle(.circular).controlSize(.small)
+          .help(message).accessibilityLabel(message).accessibilityIdentifier("prs.loading")
+      }
       Button { showsFilters.toggle() } label: { Label("Filters", systemImage: "line.3.horizontal.decrease") }
         .buttonStyle(.bordered).controlSize(.small).disabled(model.login == nil)
       Button { model.scheduleSearch(immediate: true) } label: { Image(systemName: "arrow.clockwise") }
         .buttonStyle(.bordered).controlSize(.small).help("Refresh pull requests (⌘R)").accessibilityLabel("Refresh pull requests")
         .keyboardShortcut("r", modifiers: .command).disabled(model.login == nil || model.loading)
     }.padding(.horizontal, 22).padding(.vertical, 18)
+  }
+
+  private var loadingMessage: String? {
+    if model.connecting { return "Connecting to GitHub…" }
+    if model.loadingRepositories { return "Loading repositories…" }
+    if model.loading { return "Loading pull requests…" }
+    if model.loadingDetail { return "Loading pull request details…" }
+    if model.loadingFiles { return "Loading changed files…" }
+    if model.submitting { return "Submitting review…" }
+    if !model.starring.isEmpty { return "Updating repository star…" }
+    return nil
   }
 
   private var tabs: some View {
@@ -216,15 +238,22 @@ struct PullRequestsView: View {
       HStack {
         Text(model.loading && model.requests.isEmpty ? "Finding pull requests…" : "\(model.totalCount) pull request\(model.totalCount == 1 ? "" : "s")")
         Spacer()
-        if let updated = model.lastUpdated { Text("Updated \(updated.formatted(date: .omitted, time: .shortened))") }
+        if !model.loading, let updated = model.lastUpdated { Text("Updated \(updated.formatted(date: .omitted, time: .shortened))") }
       }.font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary).padding(.horizontal, 22).padding(.vertical, 12)
       if model.requests.isEmpty {
         VStack(spacing: 12) {
-          Image(systemName: model.loading ? "arrow.triangle.pull" : model.error == nil ? "tray" : "wifi.exclamationmark")
-            .font(.system(size: 32, weight: .light)).foregroundStyle(.secondary)
-          Text(model.loading ? "Loading your work" : model.error == nil ? "You're all caught up" : "Couldn't load pull requests")
+          if model.loading {
+            ProgressView().progressViewStyle(.circular).controlSize(.large)
+              .padding(.bottom, 4)
+              .accessibilityLabel("Loading pull requests")
+              .accessibilityIdentifier("prs.loadingRequests")
+          } else {
+            Image(systemName: model.error == nil ? "tray" : "wifi.exclamationmark")
+              .font(.system(size: 32, weight: .light)).foregroundStyle(.secondary)
+          }
+          Text(model.loading ? "Loading pull requests…" : model.error == nil ? "You're all caught up" : "Couldn't load pull requests")
             .font(.system(size: 17, weight: .semibold))
-          Text(model.loading ? "Pulling the latest from GitHub." : model.error == nil ? "No pull requests match this view. Try another tab or adjust your filters." : "Your filters are saved. Retry when you're ready.")
+          Text(model.loading ? (model.filters.repository ?? "Fetching your latest work from GitHub.") : model.error == nil ? "No pull requests match this view. Try another tab or adjust your filters." : "Your filters are saved. Retry when you're ready.")
             .font(.system(size: 12)).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 320)
           if !model.loading {
             Button(model.error == nil ? "Clear filters" : "Retry") {
@@ -245,8 +274,15 @@ struct PullRequestsView: View {
           }
         }.listStyle(.inset).accessibilityLabel("Pull requests")
         if model.canLoadMore {
-          Button(model.loading ? "Loading…" : "Load more · \(model.requests.count) of \(model.totalCount)") { Task { await model.loadMore() } }
-            .disabled(model.loading).buttonStyle(.borderless).padding(12)
+          Button { Task { await model.loadMore() } } label: {
+            HStack(spacing: 8) {
+              if model.loading {
+                ProgressView().progressViewStyle(.circular).controlSize(.small)
+                  .accessibilityLabel("Loading more pull requests")
+              }
+              Text(model.loading ? "Loading more…" : "Load more · \(model.requests.count) of \(model.totalCount)")
+            }
+          }.disabled(model.loading).buttonStyle(.borderless).padding(12)
         } else if model.searchLimitReached {
           Text("Showing GitHub's first 1,000 results. Narrow your filters to see more.").font(.caption).foregroundStyle(.secondary).padding(12)
         }
@@ -260,7 +296,10 @@ struct PullRequestsView: View {
       Text(model.connecting ? "Connecting to GitHub" : "Your GitHub, in one place").font(.system(size: 23, weight: .semibold))
       Text("Browse repositories, keep your favorites close, and give every review a clear place to land.")
         .font(.system(size: 13)).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 390)
-      if model.connecting { ProgressView().controlSize(.small) }
+      if model.connecting {
+        ProgressView().progressViewStyle(.circular).controlSize(.large)
+          .accessibilityLabel("Connecting to GitHub")
+      }
       else {
         if let error = model.error { Text(error).font(.callout).foregroundStyle(.orange).textSelection(.enabled).frame(maxWidth: 460) }
         Text("Connect your account in Preferences → GitHub.").font(.callout)

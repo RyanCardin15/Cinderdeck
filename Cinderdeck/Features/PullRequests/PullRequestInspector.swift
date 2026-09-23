@@ -17,7 +17,8 @@ struct PullRequestInspector: View {
       }.buttonStyle(.plain).padding(18)
       Divider()
       if model.loadingDetail {
-        ProgressView("Loading details…").frame(maxWidth: .infinity, maxHeight: .infinity)
+        ProgressView("Loading details…").progressViewStyle(.circular)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
         if let error = model.detailError {
           VStack(alignment: .leading, spacing: 8) {
@@ -102,7 +103,7 @@ struct PullRequestInspector: View {
       Text("\(model.files.count) of \(request.changedFiles) files · diff previews")
         .font(.system(size: 10)).foregroundStyle(.secondary)
       ForEach(model.files) { file in PRFileDisclosure(file: file) }
-      if model.loadingFiles { ProgressView("Loading files…").controlSize(.small).padding() }
+      if model.loadingFiles { ProgressView("Loading files…").progressViewStyle(.circular).controlSize(.small).padding() }
       if model.filesHaveMore {
         Button("Load more files") { Task { await model.loadFiles() } }.disabled(model.loadingFiles)
       } else if !model.loadingFiles && model.files.count < request.changedFiles {

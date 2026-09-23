@@ -67,6 +67,7 @@ final class PullRequestsViewModel: ObservableObject {
     defer { connecting = false }
     let version = UUID(); accountVersion = version
     searchTask?.cancel(); searchVersion = UUID()
+    loading = false
     select(nil)
     requests = []; repositories = []; totalCount = 0; pageInfo = nil
     error = nil; notice = nil; login = nil; lastUpdated = nil
