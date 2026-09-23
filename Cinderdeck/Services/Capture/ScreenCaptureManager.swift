@@ -179,6 +179,9 @@ final class ScreenCaptureManager: ObservableObject {
   // MARK: - Permission Handling
 
   private var activeProbeTask: Task<Bool, Never>?
+  /// Automatic capture requests may prompt only once per launch. Explicit permission
+  /// actions in onboarding, Preferences, and the status bar remain available.
+  private var hasPromptedCapturePermission = false
 
   /// Check if screen recording permission is granted
   func checkPermission() async {
@@ -2560,6 +2563,9 @@ final class ScreenCaptureManager: ObservableObject {
     case .granted:
       return nil
     case .notGranted:
+      guard !hasPromptedCapturePermission else { return .permissionDenied }
+      // Set before suspending so overlapping capture hotkeys cannot prompt again.
+      hasPromptedCapturePermission = true
       let granted = await requestPermission()
       if granted {
         return nil

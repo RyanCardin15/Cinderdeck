@@ -27,13 +27,6 @@ final class StacksViewModel: ObservableObject {
   @Published var selectedStackID: String?
   @Published var selectedServiceID: String?
   @Published var stackFilter = ""
-  @Published var logFilter = ""
-  @Published var logService: String?
-  @Published var autoScroll = true
-  @Published var logFocused = false
-  @Published var logFocusRequest = 0
-  @Published private(set) var logLines: [StackLogLine] = []
-  @Published private(set) var activity: [StackEventRecord] = []
   @Published var error: String?
   @Published var branchPicker: StackBranchPickerContext?
   @Published private(set) var branches: [GitBranch] = []
@@ -46,13 +39,11 @@ final class StacksViewModel: ObservableObject {
   @Published private(set) var isConfirming = false
   @Published private(set) var busyRepos = Set<URL>()
   @Published private(set) var claims: [String: StackClaim] = [:]
-  @Published var showsActivity = false
   @Published var agentsSheet = false
   let supervisor: StackSupervisor
   private let git: GitService
   private var subscriptions = Set<AnyCancellable>()
-  private var logTask: Task<Void, Never>?
-  private var visible = false
+  private var terminalWindows: [String: StackTerminalWindowController] = [:]
   private var expanded = false
 
   init(supervisor: StackSupervisor? = nil, git: GitService = .shared) {
@@ -89,9 +80,6 @@ final class StacksViewModel: ObservableObject {
     }
     return services.sorted { $0.id < $1.id }
   }
-  var filteredLogs: [StackLogLine] {
-    logLines.filter { logFilter.isEmpty || AnsiParser.plainText($0.text).localizedCaseInsensitiveContains(logFilter) }
-  }
   var hasAuxiliaryUI: Bool { branchPicker != nil || stackBranchPicker || editor != nil || isConfirming || agentsSheet }
   func claim(_ stack: String) -> StackClaim? { claims[stack].flatMap { $0.isExpired ? nil : $0 } }
   func releaseClaim(_ stack: String) {
@@ -102,8 +90,6 @@ final class StacksViewModel: ObservableObject {
   }
   func selectService(_ service: String?) {
     selectedServiceID = service
-    logService = service
-    refreshLogs()
   }
   func openLogFile(stack: String, service: String?) {
     let url = service.map { supervisor.logURL(stack: stack, service: $0) } ?? supervisor.logDirectory.appendingPathComponent(stack)
@@ -119,9 +105,7 @@ final class StacksViewModel: ObservableObject {
     return !services.contains { [.starting, .stopping, .waiting].contains(runtime(stack, $0.id).phase) }
   }
   func select(_ stack: String) {
-    selectedStackID = stack; selectedServiceID = nil; logService = nil; logFocused = false
-    logLines = []; activity = []
-    refreshLogs()
+    selectedStackID = stack; selectedServiceID = nil
     refreshStashes()
   }
   func moveSelection(_ delta: Int) {
@@ -131,35 +115,9 @@ final class StacksViewModel: ObservableObject {
     select(files[min(max(index + delta, 0), files.count - 1)].id)
   }
   func setPresentation(visible: Bool, expanded: Bool) {
-    self.visible = visible; self.expanded = expanded
+    self.expanded = expanded
     supervisor.gitMonitor.setVisible(visible)
-    logTask?.cancel(); logTask = nil
-    guard visible else { return }
-    refreshStashes()
-    guard expanded else { return }
-    logTask = Task { [weak self] in
-      var lastActivity = Date.distantPast
-      while !Task.isCancelled {
-        guard let self else { return }
-        if let id = selectedStackID {
-          let lines = await supervisor.logLines(stack: id, service: logService)
-          if id == selectedStackID, lines != logLines { logLines = lines }
-          if Date().timeIntervalSince(lastActivity) > 2 {
-            let events = await supervisor.events(stack: id)
-            if id == selectedStackID { activity = events }
-            lastActivity = Date()
-          }
-        }
-        try? await Task.sleep(nanoseconds: 100_000_000)
-      }
-    }
-  }
-  private func refreshLogs() {
-    Task {
-      guard let id = selectedStackID else { return }
-      let lines = await supervisor.logLines(stack: id, service: logService)
-      if id == selectedStackID { logLines = lines }
-    }
+    if visible { refreshStashes() }
   }
   func toggle(_ id: String) {
     Task {
@@ -182,21 +140,20 @@ final class StacksViewModel: ObservableObject {
     case .branch:
       let repoID = selectedServices.first { $0.id == selectedServiceID }?.repo
       if let repo = repoID.flatMap({ selectedDefinition?.repo($0) }) ?? selectedDefinition?.repos.first { openBranchPicker(stack: id, repo: repo) }
-    case .logs: showLogs(stack: id, service: selectedServiceID, manager: manager)
+    case .logs: showLogs(stack: id, service: selectedServiceID)
     }
   }
-  func showLogs(stack: String, service: String?, manager: HistoryFloatingManager) {
-    selectedStackID = stack; selectedServiceID = service; logService = service; showsActivity = false
-    if manager.presentationMode != .expanded { manager.showExpanded() }
-    logFocused = true; logFocusRequest += 1; refreshLogs()
-  }
-  func copyLogs() {
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(filteredLogs.map { "\($0.service) | \(AnsiParser.plainText($0.text))" }.joined(separator: "\n"), forType: .string)
-  }
-  func clearLogs() {
-    guard let id = selectedStackID else { return }
-    Task { await supervisor.clearLogs(stack: id, service: logService); refreshLogs() }
+  func showLogs(stack: String, service: String?) {
+    guard let file = files.first(where: { $0.id == stack }) else { return }
+    let controller: StackTerminalWindowController
+    if let existing = terminalWindows[stack] {
+      controller = existing
+    } else {
+      controller = StackTerminalWindowController(file: file, supervisor: supervisor)
+      controller.onClose = { [weak self] in self?.terminalWindows.removeValue(forKey: stack) }
+      terminalWindows[stack] = controller
+    }
+    controller.show(service: service)
   }
   func openPort(_ port: Int) { if let url = URL(string: "http://localhost:\(port)") { NSWorkspace.shared.open(url) } }
   func openRepo(_ repo: RepoDefinition, inCode: Bool = false) {
