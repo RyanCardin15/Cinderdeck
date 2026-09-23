@@ -1,5 +1,7 @@
 # Local Sparkle Update Testing
 
+> Cinderdeck’s automatic updates are disabled until its own signed feed is configured. Manual checks open GitHub releases. The updater architecture below applies after that setup; see [RELEASES.md](RELEASES.md).
+
 Test the full Sparkle in-app update flow locally before pushing releases. This validates that code signing configurations work correctly with Sparkle's XPC installer in sandboxed mode.
 
 > [!IMPORTANT]
@@ -30,7 +32,7 @@ The script creates a simulated update scenario:
  ┌────────────────────┐     appcast.xml      ┌───────────────────────┐
  │  Installed v99.0.0 │ ──── checks ───────► │  Local HTTP :8089     │
  │  /Applications/    │                      │  ├── appcast.xml      │
- │  Snapzy.app        │ ◄── downloads ────── │  └── Snapzy-test.dmg  │
+ │  Cinderdeck.app        │ ◄── downloads ────── │  └── Cinderdeck-test.dmg  │
  └────────────────────┘     v99.0.1 DMG      └───────────────────────┘
 ```
 
@@ -38,7 +40,7 @@ The script creates a simulated update scenario:
 2. Creates **v1** (99.0.0) — patches `Info.plist`, signs, installs to `/Applications`
 3. Creates **v2** (99.0.1) — patches `Info.plist`, signs, creates DMG
 4. Signs DMG with Sparkle EdDSA key
-5. Generates `appcast.xml` pointing to `http://localhost:8089/Snapzy-test.dmg`
+5. Generates `appcast.xml` pointing to `http://localhost:8089/Cinderdeck-test.dmg`
 6. Starts a local HTTP server on port 8089
 
 ## Signing Modes
@@ -61,7 +63,7 @@ export SPARKLE_PRIVATE_KEY_FILE=~/path/to/sparkle_private_key.pem
 ```
 
 1. Wait for build + server start
-2. Open Snapzy from `/Applications`
+2. Open Cinderdeck from `/Applications`
 3. Menu bar → Preferences → About → **Check for Updates**
 4. **Expected**: Error 4005 — "remote port connection was invalidated"
 5. `Ctrl+C` to stop server
@@ -73,7 +75,7 @@ export SPARKLE_PRIVATE_KEY_FILE=~/path/to/sparkle_private_key.pem
 ```
 
 1. Wait for build + server start
-2. Open Snapzy from `/Applications`
+2. Open Cinderdeck from `/Applications`
 3. Menu bar → Preferences → About → **Check for Updates**
 4. **Expected**: Update downloads and installs — app relaunches as v99.0.1
 5. `Ctrl+C` to stop server
@@ -88,17 +90,17 @@ Serves an appcast with two items: stable `99.0.1` (untagged) and beta `99.0.2-be
 
 **Scenario A — stable channel (default):**
 
-1. `defaults delete com.duongductrong.Snapzy updates.channel` (or leave unset)
-2. Open Snapzy → About → **Check for Updates**
+1. `defaults delete com.ryancardin.cinderdeck updates.channel` (or leave unset)
+2. Open Cinderdeck → About → **Check for Updates**
 3. **Expected**: offered `99.0.1` — never `99.0.2-beta.1`
 
 **Scenario B — beta channel:**
 
-1. In **About → Update Channel** select **Beta** (or `defaults write com.duongductrong.Snapzy updates.channel -string beta`)
+1. In **About → Update Channel** select **Beta** (or `defaults write com.ryancardin.cinderdeck updates.channel -string beta`)
 2. **Check for Updates**
 3. **Expected**: offered `99.0.2-beta.1`; the diagnostics log shows `Allowed channels: [beta]` (stable checks log `Allowed channels: [] (stable)`)
 
-Teardown: `defaults delete com.duongductrong.Snapzy updates.channel` (also done by `clean`).
+Teardown: `defaults delete com.ryancardin.cinderdeck updates.channel` (also done by `clean`).
 
 ### Clean up
 
@@ -106,7 +108,7 @@ Teardown: `defaults delete com.duongductrong.Snapzy updates.channel` (also done 
 ./scripts/test-update-local.sh clean
 ```
 
-Removes `/tmp/test-sparkle-update/` and resets the `updates.channel` preference. Does **not** remove `/Applications/Snapzy.app` — re-install from a release DMG or use `test-tcc-local.sh` to restore.
+Removes `/tmp/test-sparkle-update/` and resets the `updates.channel` preference. Does **not** remove `/Applications/Cinderdeck.app` — re-install from a release DMG or use `test-tcc-local.sh` to restore.
 
 ## Notes
 

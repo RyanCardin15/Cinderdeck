@@ -1,8 +1,8 @@
 # Shortcuts & URL Scheme Automation
 
-Global keyboard shortcuts, in-overlay capture shortcuts, Annotate editor shortcuts, conflict detection, the cheat-sheet overlay, and the `snapzy://` deep-link route table.
+Global keyboard shortcuts, in-overlay capture shortcuts, Annotate editor shortcuts, conflict detection, the cheat-sheet overlay, and the `cinderdeck://` deep-link route table.
 
-Verified against `Snapzy/Services/Shortcuts/`, `Snapzy/Features/Shortcuts/`, `Snapzy/Features/Annotate/Services/AnnotateShortcutManager.swift`, `Snapzy/App/SnapzyDeepLinkHandler.swift`, `Snapzy/Services/Capture/CaptureOverlayShortcutSettings.swift` at HEAD (`v1.32.3`).
+Verified against `Cinderdeck/Services/Shortcuts/`, `Cinderdeck/Features/Shortcuts/`, `Cinderdeck/Features/Annotate/Services/AnnotateShortcutManager.swift`, `Cinderdeck/App/CinderdeckDeepLinkHandler.swift`, `Cinderdeck/Services/Capture/CaptureOverlayShortcutSettings.swift` at HEAD (`v1.0.0`).
 
 ## Global shortcut mechanism
 
@@ -18,16 +18,16 @@ flowchart TD
     F --> G["dispatch to capture / record / open actions"]
 ```
 
-- Engine: `KeyboardShortcutManager.shared` (`Snapzy/Services/Shortcuts/KeyboardShortcutManager.swift`) — Carbon `RegisterEventHotKey` / `UnregisterEventHotKey`; hotkey IDs use signatures `ZSF1`…`ZSFL` (`0x5A53_46xx`).
+- Engine: `KeyboardShortcutManager.shared` (`Cinderdeck/Services/Shortcuts/KeyboardShortcutManager.swift`) — Carbon `RegisterEventHotKey` / `UnregisterEventHotKey`; hotkey IDs use signatures `ZSF1`…`ZSFL` (`0x5A53_46xx`).
 - Config model: `ShortcutConfig { keyCode: UInt32, modifiers: UInt32 }` (Carbon modifiers), persisted as JSON in UserDefaults under per-shortcut keys (`fullscreenShortcut`, `areaShortcut`, `recordingShortcut`, …).
 - Fn modifier: custom bit `ShortcutConfig.functionCarbonModifier = 0x2000`. Carbon `RegisterEventHotKey` cannot express Fn, so Fn-containing configs are **not** Carbon-registered — they are collected into `fnBindings` and dispatched via global+local `NSEvent` keyDown monitors (`updateFnMonitors()` / `handleFnKeyDown`), matched exactly (keyCode + full modifier set incl. Fn) by `ShortcutConfig.matches(event:)`. Fn-only combos (e.g. `fn+F3`) and Fn+modifier combos (e.g. `fn+⌘+F3`) both fire; the non-Fn sibling combo is never hijacked.
   - Requires Accessibility permission (global key monitors silently deliver nothing without it) — the Shortcuts settings tab shows a hint row when an Fn binding exists but `AXIsProcessTrusted()` is false (`KeyboardShortcutManager.hasFnBoundShortcuts`).
   - Monitors are passive: unlike Carbon hotkeys, the frontmost app still receives the keystroke.
   - Monitors are installed only while `shouldRegisterShortcuts` holds and at least one Fn binding exists; temporary suppression (shortcut recording) removes them.
-- Delegate: `KeyboardShortcutDelegate.shortcutTriggered(ShortcutAction)` — implemented by `ScreenCaptureViewModel` (`Snapzy/Features/Capture/CaptureViewModel.swift`).
+- Delegate: `KeyboardShortcutDelegate.shortcutTriggered(ShortcutAction)` — implemented by `ScreenCaptureViewModel` (`Cinderdeck/Features/Capture/CaptureViewModel.swift`).
 - Global enable: `shortcutsEnabled` UserDefaults flag; `enable()` / `disable()` re-register everything. Restored at init if previously enabled.
 - Temporary suspension: `beginTemporaryShortcutSuppression()` / `endTemporaryShortcutSuppression()` — refcounted, unregisters hotkeys without touching the persisted enabled flag (used while recording shortcut input).
-- Recording-session gating: the four recording-session kinds (`pauseResumeRecording`, `togglePenRecording`, `restartRecording`, `deleteRecording`) hold a global registration **only while a recording session is active** (`ScreenRecordingManager.shared.isActive`). The manager observes `ScreenRecordingManager.shared.$state` and re-registers when session activity toggles (`shouldRegisterNow(for:)`), so those combos stay free for other apps while Snapzy is idle; Fn-based session bindings likewise stay out of `fnBindings` while idle. `recording` itself is **not** gated — it starts recordings and must stay global.
+- Recording-session gating: the four recording-session kinds (`pauseResumeRecording`, `togglePenRecording`, `restartRecording`, `deleteRecording`) hold a global registration **only while a recording session is active** (`ScreenRecordingManager.shared.isActive`). The manager observes `ScreenRecordingManager.shared.$state` and re-registers when session activity toggles (`shouldRegisterNow(for:)`), so those combos stay free for other apps while Cinderdeck is idle; Fn-based session bindings likewise stay out of `fnBindings` while idle. `recording` itself is **not** gated — it starts recordings and must stay global.
   - The observer acts on the **emitted** state value, never on a fresh `isActive` read inside the sink: `@Published` delivers on `willSet`, so a property re-read inside the sink observes the stale pre-transition value and registration would run one transition behind (session hotkeys missing during recordings, combos left held after they end — issue #517). The emitted value is parked in `sessionActivityOverride` for the duration of the refresh it triggers.
 - Per-shortcut disable set: `shortcuts.disabledGlobalActions` (`PreferencesKeys.disabledGlobalShortcuts`).
 - Cleared/unbound set: `shortcuts.clearedGlobalActions` (`PreferencesKeys.clearedGlobalShortcuts`) — `shortcut(for:)` returns `nil` for cleared kinds.
@@ -63,7 +63,7 @@ All 19 `GlobalShortcutKind`s with shipping defaults (verified in `KeyboardShortc
 
 ## Overlay shortcuts (in-overlay, not plain global hotkeys)
 
-`CaptureOverlayShortcutSettings` (`Snapzy/Services/Capture/CaptureOverlayShortcutSettings.swift`):
+`CaptureOverlayShortcutSettings` (`Cinderdeck/Services/Capture/CaptureOverlayShortcutSettings.swift`):
 
 - Two kinds: `applicationCapture` and `applicationRecording`; both default to single key **A** with no modifiers (child mode).
 - Child mode (modifiers == 0): pressed *inside* the area-selection / recording overlay to switch to application-window mode. Menu bar items show it as a suffix of the parent shortcut.
@@ -79,12 +79,12 @@ All 19 `GlobalShortcutKind`s with shipping defaults (verified in `KeyboardShortc
 
 ## Recording annotation tool shortcuts
 
-While recording annotations are enabled, hold the configured annotation shortcut modifier (Shift by default) and press a tool key to switch tools. `RecordingAnnotationOverlayWindow` routes key-down events through `RecordingAnnotationState` using `charactersIgnoringModifiers`, with a local monitor for events addressed to Snapzy and a global monitor for events addressed to the recorded app. Matching local events are consumed; global monitors are passive and cannot suppress the recorded app's keystroke, and external-app delivery requires Accessibility permission. The visible tool set is selection, rectangle, oval, arrow, line, pencil, and highlighter.
+While recording annotations are enabled, hold the configured annotation shortcut modifier (Shift by default) and press a tool key to switch tools. `RecordingAnnotationOverlayWindow` routes key-down events through `RecordingAnnotationState` using `charactersIgnoringModifiers`, with a local monitor for events addressed to Cinderdeck and a global monitor for events addressed to the recorded app. Matching local events are consumed; global monitors are passive and cannot suppress the recorded app's keystroke, and external-app delivery requires Accessibility permission. The visible tool set is selection, rectangle, oval, arrow, line, pencil, and highlighter.
 
 ## Quick Access card action shortcuts (hover-scoped)
 
-`QuickAccessActionShortcutStore` (`Snapzy/Features/QuickAccess/Models/QuickAccessActionShortcutStore.swift`) +
-`QuickAccessHoverShortcutRegistry` (`Snapzy/Features/QuickAccess/Services/QuickAccessHoverShortcutRegistry.swift`).
+`QuickAccessActionShortcutStore` (`Cinderdeck/Features/QuickAccess/Models/QuickAccessActionShortcutStore.swift`) +
+`QuickAccessHoverShortcutRegistry` (`Cinderdeck/Features/QuickAccess/Services/QuickAccessHoverShortcutRegistry.swift`).
 
 Hover a Quick Access card, press the key, the card runs that action. All seven `QuickAccessActionKind`s are bound:
 
@@ -108,7 +108,7 @@ Hover a Quick Access card, press the key, the card runs that action. All seven `
 
 ## Annotate editor shortcuts
 
-`AnnotateShortcutManager` (`Snapzy/Features/Annotate/Services/AnnotateShortcutManager.swift`):
+`AnnotateShortcutManager` (`Cinderdeck/Features/Annotate/Services/AnnotateShortcutManager.swift`):
 
 - 14 tool single-key shortcuts (`AnnotationToolType.defaultShortcut`, remappable): crop, selection, rectangle, filledRectangle, oval, arrow, line, text, highlighter, blur, spotlight, counter, watermark, pencil. (`mockup` excluded — internal only.)
 - Tool keys stored per-tool under prefix `annotate.shortcut.`; per-tool disable set `shortcuts.disabledAnnotateToolShortcuts`.
@@ -126,7 +126,7 @@ Hover a Quick Access card, press the key, the card runs that action. All seven `
 
 ## Conflict detection
 
-`ShortcutValidationService` (`Snapzy/Services/Shortcuts/ShortcutValidationService.swift`):
+`ShortcutValidationService` (`Cinderdeck/Services/Shortcuts/ShortcutValidationService.swift`):
 
 - Cross-namespace duplicate checks (global ↔ annotate action ↔ independent overlay ↔ annotate tool): duplicate → `.reject` with `.error` severity, blocks assignment.
 - System screenshot conflicts: `SystemScreenshotShortcutManager` reads `com.apple.symbolichotkeys` via `UserDefaults(suiteName:)` (requires the shared-preference entitlement — see [APP_LIFECYCLE.md](APP_LIFECYCLE.md)). Symbolic hotkey IDs: 28 (save area), 29 (copy area), 30 (save screen), 31 (copy screen), 184 (screenshot options).
@@ -135,50 +135,50 @@ Hover a Quick Access card, press the key, the card runs that action. All seven `
 
 ## Shortcut cheat sheet overlay
 
-- `ShortcutOverlayManager` (`Snapzy/Features/Shortcuts/ShortcutOverlayManager.swift`) — full-screen borderless `NSPanel` (`.screenSaver` level, joins all spaces), content from `ShortcutOverlayContentBuilder.buildSections()` (`Snapzy/Features/Shortcuts/ShortcutOverlayModels.swift`).
-- Open/toggle: ⇧⌘K, menu bar → Keyboard Shortcuts, or `snapzy://show/shortcuts`. Blocked while recording (`RecordingCoordinator.shared.isActive` guard).
+- `ShortcutOverlayManager` (`Cinderdeck/Features/Shortcuts/ShortcutOverlayManager.swift`) — full-screen borderless `NSPanel` (`.screenSaver` level, joins all spaces), content from `ShortcutOverlayContentBuilder.buildSections()` (`Cinderdeck/Features/Shortcuts/ShortcutOverlayModels.swift`).
+- Open/toggle: ⇧⌘K, menu bar → Keyboard Shortcuts, or `cinderdeck://show/shortcuts`. Blocked while recording (`RecordingCoordinator.shared.isActive` guard).
 - Esc closes (local + global monitors); "Open Settings" deep-links to Settings → Shortcuts.
 
 ## URL scheme automation
 
-Scheme: `snapzy://` (registered in `Snapzy/Resources/Info.plist` `CFBundleURLTypes`).
+Scheme: `cinderdeck://` (registered in `Cinderdeck/Resources/Info.plist` `CFBundleURLTypes`).
 
 Gate: `urlSchemeEnabled` (default `true`; Settings → Advanced → URL Scheme integration). Disabled or unknown routes are logged and ignored.
 
-Dispatch: AppleEvent `kAEGetURL` → `AppDelegate` (queued pre-launch) → `AppCoordinator.handleDeepLink` → `SnapzyDeepLinkHandler` (`Snapzy/App/SnapzyDeepLinkHandler.swift`); routes parsed by `SnapzyDeepLinkAction.init?(url:)`.
+Dispatch: AppleEvent `kAEGetURL` → `AppDelegate` (queued pre-launch) → `AppCoordinator.handleDeepLink` → `CinderdeckDeepLinkHandler` (`Cinderdeck/App/CinderdeckDeepLinkHandler.swift`); routes parsed by `CinderdeckDeepLinkAction.init?(url:)`.
 
 ### Canonical route table
 
 | Route | Action |
 | --- | --- |
-| `snapzy://capture/fullscreen` | Capture fullscreen |
-| `snapzy://capture/area` | Capture area |
-| `snapzy://capture/repeat-area`| Repeat last area capture|
-| `snapzy://capture/application` | Application-window capture |
-| `snapzy://capture/active-window` | Capture active window |
-| `snapzy://capture/area-annotate` | Capture area → Annotate |
-| `snapzy://capture/scrolling` | Scrolling capture |
-| `snapzy://capture/ocr` | OCR capture |
-| `snapzy://capture/smart-element` | Smart Element capture |
-| `snapzy://capture/object-cutout` | Object cutout |
-| `snapzy://record/screen` | Start screen recording |
-| `snapzy://record/application` | Application-window recording |
-| `snapzy://open/annotate` | Open empty Annotate editor |
-| `snapzy://open/combine` | Combine images (see params below) |
-| `snapzy://open/video-editor` | Open empty Video Editor |
-| `snapzy://open/cloud-uploads` | Toggle Cloud Uploads window |
-| `snapzy://open/history` | Toggle History panel |
-| `snapzy://show/shortcuts` | Toggle shortcut cheat sheet |
-| `snapzy://settings` / `snapzy://settings?tab=<tab>` | Open Settings, optionally to a tab |
+| `cinderdeck://capture/fullscreen` | Capture fullscreen |
+| `cinderdeck://capture/area` | Capture area |
+| `cinderdeck://capture/repeat-area`| Repeat last area capture|
+| `cinderdeck://capture/application` | Application-window capture |
+| `cinderdeck://capture/active-window` | Capture active window |
+| `cinderdeck://capture/area-annotate` | Capture area → Annotate |
+| `cinderdeck://capture/scrolling` | Scrolling capture |
+| `cinderdeck://capture/ocr` | OCR capture |
+| `cinderdeck://capture/smart-element` | Smart Element capture |
+| `cinderdeck://capture/object-cutout` | Object cutout |
+| `cinderdeck://record/screen` | Start screen recording |
+| `cinderdeck://record/application` | Application-window recording |
+| `cinderdeck://open/annotate` | Open empty Annotate editor |
+| `cinderdeck://open/combine` | Combine images (see params below) |
+| `cinderdeck://open/video-editor` | Open empty Video Editor |
+| `cinderdeck://open/cloud-uploads` | Toggle Cloud Uploads window |
+| `cinderdeck://open/history` | Toggle History panel |
+| `cinderdeck://show/shortcuts` | Toggle shortcut cheat sheet |
+| `cinderdeck://settings` / `cinderdeck://settings?tab=<tab>` | Open Settings, optionally to a tab |
 
 - `open/combine` query params: repeat `?file=` with absolute paths; ≥2 valid files → combines directly, otherwise opens the combine picker (`CombineImagesCoordinator.presentPicker()`). Example:
 
   ```sh
-  open 'snapzy://open/combine?file=/tmp/first.png&file=/tmp/second.png'
+  open 'cinderdeck://open/combine?file=/tmp/first.png&file=/tmp/second.png'
   ```
 
-- Settings tabs: `general`, `capture`, `annotate`, `quick-access`, `history`, `shortcuts`, `permissions`, `cloud`, `advanced`, `about`. Also accepted as path form (`snapzy://settings/capture`).
-- Aliases exist for most routes — e.g. `capture/focused-window`, `capture/window`, `record/window`, `screenshot/area`, `ocr`, `annotate`, `combine`, `uploads`, `history`, `shortcuts`, `preferences`, plus tab aliases (`screenshots`, `privacy`, `config`, `toml`, …). Full alias list: `SnapzyDeepLinkAction.init?(url:)` in `Snapzy/App/SnapzyDeepLinkHandler.swift`.
+- Settings tabs: `general`, `capture`, `annotate`, `quick-access`, `history`, `shortcuts`, `permissions`, `cloud`, `advanced`, `about`. Also accepted as path form (`cinderdeck://settings/capture`).
+- Aliases exist for most routes — e.g. `capture/focused-window`, `capture/window`, `record/window`, `screenshot/area`, `ocr`, `annotate`, `combine`, `uploads`, `history`, `shortcuts`, `preferences`, plus tab aliases (`screenshots`, `privacy`, `config`, `toml`, …). Full alias list: `CinderdeckDeepLinkAction.init?(url:)` in `Cinderdeck/App/CinderdeckDeepLinkHandler.swift`.
 
 ## Related docs
 

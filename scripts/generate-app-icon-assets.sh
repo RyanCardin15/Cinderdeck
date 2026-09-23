@@ -40,8 +40,8 @@ for arg in "$@"; do
 done
 
 DEFAULT_ARGS=()
-[[ "$HAS_INPUT" -eq 1 ]] || DEFAULT_ARGS+=(--icon-document "$ROOT_DIR/Snapzy/SnapzyIcon.icon")
-[[ "$HAS_APPICONSET" -eq 1 ]] || DEFAULT_ARGS+=(--appiconset "$ROOT_DIR/Snapzy/Resources/Assets.xcassets/AppIcon.appiconset")
-[[ "$HAS_PREFIX" -eq 1 ]] || DEFAULT_ARGS+=(--filename-prefix "SnapzyIcon")
+[[ "$HAS_INPUT" -eq 1 ]] || DEFAULT_ARGS+=(--source-png "$ROOT_DIR/assets/cinderdeck-icon.png" --artwork-size 1024)
+[[ "$HAS_APPICONSET" -eq 1 ]] || DEFAULT_ARGS+=(--appiconset "$ROOT_DIR/Cinderdeck/Resources/Assets.xcassets/AppIcon.appiconset")
+[[ "$HAS_PREFIX" -eq 1 ]] || DEFAULT_ARGS+=(--filename-prefix "CinderdeckIcon")
 
 exec "$GENERATOR" "${DEFAULT_ARGS[@]}" "$@"

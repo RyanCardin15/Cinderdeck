@@ -21,7 +21,7 @@ on:
           - beta
 
   push:
-    branches: [master]
+    branches: [main]
 
 concurrency:
   group: release-prepare-${{ github.ref }}
@@ -137,7 +137,7 @@ jobs:
 
           # Create release branch and commit changes
           git checkout -B "$BRANCH"
-          git add Snapzy.xcodeproj/project.pbxproj CHANGELOG.md
+          git add Cinderdeck.xcodeproj/project.pbxproj CHANGELOG.md
           git commit -m "chore: bump version to ${VERSION}"
           git push --force origin "$BRANCH"
 
@@ -160,7 +160,7 @@ jobs:
             echo "Updated existing PR #${EXISTING_PR}"
           else
             gh pr create \
-              --base master \
+              --base main \
               --head "$BRANCH" \
               --title "chore: release ${VERSION}" \
               --body-file build/pr-body.md

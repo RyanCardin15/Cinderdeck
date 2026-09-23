@@ -3,7 +3,7 @@ name: Release Publish
 on:
   pull_request:
     types: [closed]
-    branches: [master]
+    branches: [main]
 
 concurrency:
   group: release-publish
@@ -45,7 +45,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: master
+          ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract changelog
@@ -69,10 +69,10 @@ jobs:
           mkdir -p build
 
           if ! xcodebuild archive \
-            -project Snapzy.xcodeproj \
-            -scheme Snapzy \
+            -project Cinderdeck.xcodeproj \
+            -scheme Cinderdeck \
             -configuration Release \
-            -archivePath build/Snapzy.xcarchive \
+            -archivePath build/Cinderdeck.xcarchive \
             -derivedDataPath build/DerivedData \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
@@ -85,8 +85,8 @@ jobs:
 
           tail -20 build/archive.log
 
-          if [ ! -d "build/Snapzy.xcarchive" ]; then
-            echo "::error::Archive not found at build/Snapzy.xcarchive"
+          if [ ! -d "build/Cinderdeck.xcarchive" ]; then
+            echo "::error::Archive not found at build/Cinderdeck.xcarchive"
             exit 1
           fi
 
@@ -154,7 +154,7 @@ jobs:
       - name: Export app
         run: |
           set -euo pipefail
-          ARCHIVE_PATH="build/Snapzy.xcarchive"
+          ARCHIVE_PATH="build/Cinderdeck.xcarchive"
 
           if [ ! -d "$ARCHIVE_PATH" ]; then
             echo "::error::Archive not found at $ARCHIVE_PATH. Check the Build archive step output."
@@ -163,9 +163,9 @@ jobs:
 
           # Always extract from archive manually — xcodebuild -exportArchive
           # with automatic signing doesn't work in headless CI.
-          ditto "$ARCHIVE_PATH/Products/Applications/Snapzy.app" build/Snapzy.app
+          ditto "$ARCHIVE_PATH/Products/Applications/Cinderdeck.app" build/Cinderdeck.app
 
-          APP_PATH="build/Snapzy.app"
+          APP_PATH="build/Cinderdeck.app"
           SPARKLE_FRAMEWORK="$APP_PATH/Contents/Frameworks/Sparkle.framework"
 
           # Determine signing identity and timestamp flag
@@ -175,7 +175,7 @@ jobs:
             TIMESTAMP_FLAG="--timestamp"
             echo "Signing with Developer ID: $SIGN_IDENTITY"
           elif [ "${HAS_SELF_SIGNED_CERT}" = "true" ]; then
-            SIGN_IDENTITY="Snapzy Self-Signed"
+            SIGN_IDENTITY="Cinderdeck Self-Signed"
             TIMESTAMP_FLAG="--timestamp=none"
             echo "Signing with self-signed certificate: $SIGN_IDENTITY"
           else
@@ -212,7 +212,7 @@ jobs:
           # Pre-process entitlements (Xcode variable substitution)
           BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Contents/Info.plist")
           PROCESSED_ENTITLEMENTS="$RUNNER_TEMP/processed-entitlements.plist"
-          sed "s/\$(PRODUCT_BUNDLE_IDENTIFIER)/$BUNDLE_ID/g" Snapzy/Snapzy.entitlements > "$PROCESSED_ENTITLEMENTS"
+          sed "s/\$(PRODUCT_BUNDLE_IDENTIFIER)/$BUNDLE_ID/g" Cinderdeck/Cinderdeck.entitlements > "$PROCESSED_ENTITLEMENTS"
           echo "Processed entitlements with bundle ID: $BUNDLE_ID"
 
           # Sign main app bundle (with hardened runtime!)
@@ -225,7 +225,7 @@ jobs:
       - name: Verify exported app bundle
         run: |
           set -euo pipefail
-          APP_PATH="build/Snapzy.app"
+          APP_PATH="build/Cinderdeck.app"
 
           codesign --verify --deep --strict --verbose=4 "$APP_PATH"
           codesign -dv --verbose=4 "$APP_PATH"
@@ -248,7 +248,7 @@ jobs:
       - name: Capture candidate signing metadata
         run: |
           set -euo pipefail
-          APP_PATH="build/Snapzy.app"
+          APP_PATH="build/Cinderdeck.app"
 
           codesign -dr - "$APP_PATH" 2>&1 | sed -n 's/^designated => //p' > build/candidate-designated-requirement.txt
           codesign -dvv "$APP_PATH" > build/candidate-signature.txt 2>&1 || true
@@ -275,18 +275,18 @@ jobs:
           fi
 
           echo "Comparing candidate app against release: $PREVIOUS_TAG"
-          if ! gh release download "$PREVIOUS_TAG" -p 'Snapzy-v*.dmg' -D build/previous-release; then
+          if ! gh release download "$PREVIOUS_TAG" -p 'Cinderdeck-v*.dmg' -D build/previous-release; then
             echo "::warning::Failed to download previous release asset. Skipping signing comparison."
             exit 0
           fi
 
-          PREVIOUS_DMG=$(find build/previous-release -name 'Snapzy-v*.dmg' -type f | head -1)
+          PREVIOUS_DMG=$(find build/previous-release -name 'Cinderdeck-v*.dmg' -type f | head -1)
           if [ -z "$PREVIOUS_DMG" ]; then
-            echo "::warning::Previous release has no Snapzy DMG asset. Skipping signing comparison."
+            echo "::warning::Previous release has no Cinderdeck DMG asset. Skipping signing comparison."
             exit 0
           fi
 
-          MOUNT_POINT=$(mktemp -d /tmp/snapzy-previous-release.XXXXXX)
+          MOUNT_POINT=$(mktemp -d /tmp/cinderdeck-previous-release.XXXXXX)
           cleanup() {
             hdiutil detach "$MOUNT_POINT" -quiet >/dev/null 2>&1 || true
             rm -rf "$MOUNT_POINT"
@@ -294,15 +294,15 @@ jobs:
           trap cleanup EXIT
 
           hdiutil attach "$PREVIOUS_DMG" -mountpoint "$MOUNT_POINT" -nobrowse -quiet
-          if [ ! -d "$MOUNT_POINT/Snapzy.app" ]; then
-            echo "::warning::Previous release DMG does not contain Snapzy.app at root. Skipping signing comparison."
+          if [ ! -d "$MOUNT_POINT/Cinderdeck.app" ]; then
+            echo "::warning::Previous release DMG does not contain Cinderdeck.app at root. Skipping signing comparison."
             exit 0
           fi
 
-          ditto "$MOUNT_POINT/Snapzy.app" build/previous-release/Snapzy.app
+          ditto "$MOUNT_POINT/Cinderdeck.app" build/previous-release/Cinderdeck.app
 
-          codesign -dr - build/previous-release/Snapzy.app 2>&1 | sed -n 's/^designated => //p' > build/previous-designated-requirement.txt
-          codesign -dvv build/previous-release/Snapzy.app > build/previous-signature.txt 2>&1 || true
+          codesign -dr - build/previous-release/Cinderdeck.app 2>&1 | sed -n 's/^designated => //p' > build/previous-designated-requirement.txt
+          codesign -dvv build/previous-release/Cinderdeck.app > build/previous-signature.txt 2>&1 || true
 
           if [ ! -s build/previous-designated-requirement.txt ]; then
             echo "::warning::Failed to extract previous release designated requirement. Skipping signing comparison."
@@ -331,21 +331,20 @@ jobs:
       - name: Create DMG
         run: |
           set -euo pipefail
-          APP_PATH="build/Snapzy.app"
+          APP_PATH="build/Cinderdeck.app"
 
           if [ ! -d "$APP_PATH" ]; then
-            echo "::error::Snapzy.app not found at expected path: $APP_PATH"
+            echo "::error::Cinderdeck.app not found at expected path: $APP_PATH"
             exit 1
           fi
 
-          DMG_NAME="Snapzy-v${{ steps.version.outputs.version }}.dmg"
+          DMG_NAME="Cinderdeck-v${{ steps.version.outputs.version }}.dmg"
 
           create-dmg \
-            --volname "Snapzy" \
-            --background "assets/dmg-background.png" \
+            --volname "Cinderdeck" \
             --window-size 660 400 \
             --icon-size 120 \
-            --icon "Snapzy.app" 180 170 \
+            --icon "Cinderdeck.app" 180 170 \
             --app-drop-link 480 170 \
             --no-internet-enable \
             "build/${DMG_NAME}" \
@@ -426,7 +425,7 @@ jobs:
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v7
         with:
-          name: Snapzy-v${{ steps.version.outputs.version }}
+          name: Cinderdeck-v${{ steps.version.outputs.version }}
           path: ${{ env.dmg_path }}
 
       # v3 creates a draft release first, uploads assets, then publishes it.
@@ -469,7 +468,7 @@ jobs:
       - name: Extract build number
         id: build
         run: |
-          BUILD=$(grep -m1 'CURRENT_PROJECT_VERSION' Snapzy.xcodeproj/project.pbxproj | sed 's/.*= //' | sed 's/;.*//' | tr -d ' ')
+          BUILD=$(grep -m1 'CURRENT_PROJECT_VERSION' Cinderdeck.xcodeproj/project.pbxproj | sed 's/.*= //' | sed 's/;.*//' | tr -d ' ')
           echo "number=$BUILD" >> "$GITHUB_OUTPUT"
           echo "Build number: $BUILD"
 
@@ -636,14 +635,14 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           SHA="${{ steps.sha256.outputs.sha256 }}"
-          sed -i '' "s/version \".*\"/version \"${VERSION}\"/" Casks/snapzy.rb
-          sed -i '' "s/sha256 \".*\"/sha256 \"${SHA}\"/" Casks/snapzy.rb
+          sed -e "s/__VERSION__/${VERSION}/g" -e "s/__SHA256__/${SHA}/g" \
+            Casks/cinderdeck.rb.template > Casks/cinderdeck.rb
 
       - name: Update README install version
         if: steps.version.outputs.is_beta != 'true'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          sed -i '' "s|/Snapzy/v[0-9][0-9.]*\/install.sh|/Snapzy/v${VERSION}/install.sh|g" README.md
+          sed -i '' "s|/Cinderdeck/v[0-9][0-9.]*\/install.sh|/Cinderdeck/v${VERSION}/install.sh|g" README.md
 
       - name: Update docs version stamps
         run: |
@@ -656,7 +655,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add appcast.xml Casks/snapzy.rb README.md docs/*.md
+          git add appcast.xml Casks/cinderdeck.rb README.md docs/*.md
           if git diff --cached --quiet; then
             echo "No appcast/cask/readme/docs changes to commit"
             exit 0
@@ -666,4 +665,4 @@ jobs:
           else
             git commit -m "chore: update appcast, cask, readme, and docs for v${{ steps.version.outputs.version }}"
           fi
-          git push origin master
+          git push origin main

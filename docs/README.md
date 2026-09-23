@@ -1,6 +1,6 @@
 # Documentation Map
 
-Flow-first entrypoint for humans and agents working in Snapzy. Docs are separated by domain and cross-linked; start here, then jump to the doc that owns your topic.
+Flow-first entrypoint for humans and agents working in Cinderdeck. Docs are separated by domain and cross-linked; start here, then jump to the doc that owns your topic.
 
 ## Read First
 
@@ -10,13 +10,21 @@ Flow-first entrypoint for humans and agents working in Snapzy. Docs are separate
 | [`DEVELOPMENT.md`](DEVELOPMENT.md) | First-time local setup and source-based development | Running from source |
 | [`STRUCTURE.md`](STRUCTURE.md) | Real source-tree map, runtime architecture, persistence, test architecture, edit guide | Any code change |
 
+## Development workspace
+
+| Doc | Covers |
+| --- | --- |
+| [STACKS.md](STACKS.md) | Arbitrary projects, services, logs, Git, CLI, and MCP agents |
+| [MIGRATION.md](MIGRATION.md) | Moving existing Snapzy data into Cinderdeck |
+| [BRANDING.md](BRANDING.md) | Product identity, artwork, and upstream credit |
+
 ## Architecture & Platform
 
 | Doc | Covers |
 | --- | --- |
 | [`APP_LIFECYCLE.md`](APP_LIFECYCLE.md) | Launch sequence, onboarding, menu bar, app identity, theme, migrations, entitlements |
 | [`PREFERENCES.md`](PREFERENCES.md) | Settings tabs reference, after-capture matrix, preferences storage pattern |
-| [`SHORTCUTS.md`](SHORTCUTS.md) | Global/overlay/annotate shortcuts, conflict detection, `snapzy://` URL scheme |
+| [`SHORTCUTS.md`](SHORTCUTS.md) | Global/overlay/annotate shortcuts, conflict detection, `cinderdeck://` URL scheme |
 | [`UPDATES.md`](UPDATES.md) | Sparkle updates and channels, diagnostics logging, problem reporting |
 | [`LOCALIZATION.md`](LOCALIZATION.md) | Localization architecture, catalog ownership, verification |
 | [`CONFIGURATION.md`](CONFIGURATION.md) | TOML export/import schema, sync, security boundaries |
@@ -53,7 +61,7 @@ Flow-first entrypoint for humans and agents working in Snapzy. Docs are separate
 
 ```mermaid
 flowchart TD
-    A["Launch Snapzy"] --> B["AppDelegate + AppCoordinator"]
+    A["Launch Cinderdeck"] --> B["AppDelegate + AppCoordinator"]
     B --> C{"Need splash / onboarding?"}
     C -->|Yes| D["SplashWindowController + SplashOnboardingRootView"]
     C -->|No| E["Menu bar ready"]
@@ -98,7 +106,7 @@ flowchart TD
 - Annotate editor, inline markup: `ANNOTATE.md`; video editor: `VIDEO_EDITOR.md`
 - Onboarding, menu bar, startup, entitlements: `APP_LIFECYCLE.md`
 - Preferences UI or the after-capture matrix: `PREFERENCES.md`
-- Shortcuts or `snapzy://` automation: `SHORTCUTS.md`
+- Shortcuts or `cinderdeck://` automation: `SHORTCUTS.md`
 - Cloud storage and upload UX: `CLOUD.md`
 - TOML config export/import: `CONFIGURATION.md` (+ `APP_LIFECYCLE.md` onboarding grant)
 - Updates, diagnostics, problem reports: `UPDATES.md`
@@ -108,16 +116,16 @@ flowchart TD
 
 ## Current Behavior Notes
 
-- `AfterCaptureAction.save` decides whether captures go straight to the export folder or into `~/Library/Application Support/Snapzy/Captures/` as temp files. Details in `POST_CAPTURE.md`.
+- `AfterCaptureAction.save` decides whether captures go straight to the export folder or into `~/Library/Application Support/Cinderdeck/Captures/` as temp files. Details in `POST_CAPTURE.md`.
 - Cloud upload is **manual-only** since commit `dd4ccd5` removed the after-capture auto-upload preference. Manual entry points: Quick Access card, Annotate (`⌘U`), Video Editor, History — enabled via the `uploadToCloud` Quick Access action (Preferences → Quick Access → Quick Actions) and gated on `CloudManager.isConfigured`. Details in `CLOUD.md`.
 - GIF recording flow first creates a video, inserts it into Quick Access, converts it, then swaps the card to the GIF output. Details in `RECORDING.md`.
 - Quick Access cards can be dismissed with the visible dismiss action, mouse swipe, or an optional two-finger horizontal swipe on the preview card. Details in `QUICK_ACCESS.md`.
-- Annotate and Video Editor temporarily elevate Snapzy from accessory mode to regular app mode so the editor windows appear in Dock and Cmd+Tab.
-- Screenshot annotations that have been committed are persisted as sidecar packages in `Application Support/Snapzy/AnnotationSessions/`, so History restore can reopen editable annotations instead of only the flattened image. Details in `ANNOTATE.md` and `HISTORY.md`.
+- Annotate and Video Editor temporarily elevate Cinderdeck from accessory mode to regular app mode so the editor windows appear in Dock and Cmd+Tab.
+- Screenshot annotations that have been committed are persisted as sidecar packages in `Application Support/Cinderdeck/AnnotationSessions/`, so History restore can reopen editable annotations instead of only the flattened image. Details in `ANNOTATE.md` and `HISTORY.md`.
 - Open History floating cards support direct native file drag-out in both compact and expanded modes; single-click selection and double-click editor opening remain available, primary-axis list scrolling is preserved, and missing files stay non-draggable. Details in `HISTORY.md`.
 - Full Annotate drag-to-app closes the editor by default. Settings → Annotate → `Close after drop` can be turned off to keep the editor session alive after sharing a rendered copy; `Reactivate after drop` controls whether that preserved editor is activated after drop.
 - During recording, the menu bar item stays menu-first instead of left-click-to-stop. It shows the live timer, keeps Preferences reachable, and temporarily excludes the Settings window from own-app recordings when needed. Details in `RECORDING.md`.
-- URL Scheme automation triggers via `snapzy://` deep links can be disabled under Settings → Advanced → URL Scheme integration (enabled by default). When disabled, incoming automation requests are logged and ignored. Full route table in `SHORTCUTS.md`.
-- Settings → Advanced exports and imports portable TOML preferences at `~/.config/snapzy/config.toml`; folder access is granted once (onboarding config step or Settings → Advanced), background sync is debounced and signature-guarded, and valid direct edits apply on next launch. Details in `CONFIGURATION.md`.
+- URL Scheme automation triggers via `cinderdeck://` deep links can be disabled under Settings → Advanced → URL Scheme integration (enabled by default). When disabled, incoming automation requests are logged and ignored. Full route table in `SHORTCUTS.md`.
+- Settings → Advanced exports and imports portable TOML preferences at `~/.config/cinderdeck/config.toml`; folder access is granted once (onboarding config step or Settings → Advanced), background sync is debounced and signature-guarded, and valid direct edits apply on next launch. Details in `CONFIGURATION.md`.
 
 If one of these behaviors changes, update this file, the owning feature doc, [`STRUCTURE.md`](STRUCTURE.md), and the root [`README.md`](../README.md) in the same change.

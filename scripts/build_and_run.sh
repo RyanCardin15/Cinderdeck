@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="Snapzy"
-DEBUG_BUNDLE_NAME="Snapzy Debug"
-SCHEME="Snapzy"
-PROJECT="Snapzy.xcodeproj"
-LOG_SUBSYSTEM="${LOG_SUBSYSTEM:-Snapzy}"
+APP_NAME="Cinderdeck"
+DEBUG_BUNDLE_NAME="Cinderdeck Debug"
+SCHEME="Cinderdeck"
+PROJECT="Cinderdeck.xcodeproj"
+LOG_SUBSYSTEM="${LOG_SUBSYSTEM:-Cinderdeck}"
 
 MODE="run"
 CONFIGURATION="${CONFIGURATION:-Debug}"
@@ -42,11 +42,11 @@ usage() {
 ${BOLD}Usage:${NC} $0 [run|--logs|--telemetry|--debug|--verify] [options]
 
 ${BOLD}Modes:${NC}
-  run                 Kill, build, and launch Snapzy.app (default)
-  --logs, logs        Launch then stream unified logs for process == "Snapzy"
+  run                 Kill, build, and launch Cinderdeck.app (default)
+  --logs, logs        Launch then stream unified logs for process == "Cinderdeck"
   --telemetry         Launch then stream unified logs for subsystem == "$LOG_SUBSYSTEM"
   --debug, debug      Build then launch the app binary under lldb
-  --verify, verify    Launch and confirm the Snapzy process is running
+  --verify, verify    Launch and confirm the Cinderdeck process is running
 
 ${BOLD}Options:${NC}
   --configuration C   Build configuration. Default: Debug

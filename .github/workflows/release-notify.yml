@@ -93,14 +93,14 @@ jobs:
           PAYLOAD=$(cat <<DISCORD_EOF
           {
             "embeds": [{
-              "title": "🚀 ${TITLE_PREFIX}Snapzy v${VERSION} Released",
+              "title": "🚀 ${TITLE_PREFIX}Cinderdeck v${VERSION} Released",
               "url": "${RELEASE_URL}",
               "description": "${ESCAPED_BODY}",
               "color": 5814783,
               "fields": [
                 {
                   "name": "📦 Download",
-                  "value": "[Snapzy-v${VERSION}.dmg](${DOWNLOAD_URL})",
+                  "value": "[Cinderdeck-v${VERSION}.dmg](${DOWNLOAD_URL})",
                   "inline": true
                 },
                 {
@@ -110,7 +110,7 @@ jobs:
                 }
               ],
               "footer": {
-                "text": "Snapzy Release Automation"
+                "text": "Cinderdeck Release Automation"
               },
               "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             }]

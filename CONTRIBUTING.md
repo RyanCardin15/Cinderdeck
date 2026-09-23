@@ -1,8 +1,8 @@
-# Contributing to Snapzy
+# Contributing to Cinderdeck
 
-Thanks for contributing to Snapzy.
+Thanks for contributing to Cinderdeck.
 
-Snapzy is an open-source native macOS screenshot and screen recording app built with SwiftUI and ScreenCaptureKit. This guide keeps contributions aligned with the current project workflow and structure.
+Cinderdeck is an open-source native macOS development control deck built with SwiftUI and AppKit, forked from Snapzy. This guide keeps contributions aligned with the current project workflow and structure.
 
 ## Ways to contribute
 
@@ -26,7 +26,7 @@ If you need archive, export, or DMG packaging commands, see [docs/BUILD.md](docs
 
 ## Project conventions
 
-Snapzy uses a feature-based structure with limited nesting.
+Cinderdeck uses a feature-based structure with limited nesting.
 
 - Keep primary feature entry points at the root of each feature folder.
 - Use `Components`, `Managers`, `Services`, and `Models` only when needed.
@@ -86,7 +86,7 @@ Examples:
 When filing a bug report, include:
 
 - macOS version
-- Snapzy version or commit SHA
+- Cinderdeck version or commit SHA
 - Steps to reproduce
 - Expected behavior
 - Actual behavior

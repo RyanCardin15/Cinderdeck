@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-APP_NAME="${APP_NAME:-Snapzy}"
+APP_NAME="${APP_NAME:-Cinderdeck}"
 BUNDLE_ID="${BUNDLE_ID:-}"
 DAYS="${DAYS:-14}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-build/crash-logs}"
@@ -48,7 +48,7 @@ Options:
 
 Examples:
   $0
-  $0 --app Snapzy --bundle-id com.duongductrong.Snapzy --days 7
+  $0 --app Cinderdeck --bundle-id com.ryancardin.cinderdeck --days 7
   APP_NAME="My App" BUNDLE_ID=com.example.MyApp $0 --output-dir /tmp/crashes
 EOF
 }

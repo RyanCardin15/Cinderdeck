@@ -1,0 +1,14 @@
+Cinderdeck
+Copyright (c) 2026, Ryan Cardin (Cinderdeck-specific contributions)
+
+Cinderdeck is an independent fork of Snapzy:
+https://github.com/duongductrong/Snapzy
+
+Snapzy was created by Trong Duong Duc and its contributors.
+Copyright (c) 2026, Trong Duong Duc
+Original source baseline: Snapzy 1.32.3, commit 9f48e030.
+
+The original BSD 3-Clause license is preserved verbatim in LICENSE.
+Cinderdeck-specific contributions are distributed under the same BSD 3-Clause terms.
+The fork's development controls, clipboard history, branding, and maintenance are
+provided independently. The original author does not endorse this fork.

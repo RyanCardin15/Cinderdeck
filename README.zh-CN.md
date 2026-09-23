@@ -1,304 +1,35 @@
-<div align="center">
-  <img src="./banner.png" width="200" height="200" alt="Snapzy 横幅" />
+<p align="center"><img src="assets/cinderdeck-icon.png" width="128" alt="Cinderdeck" /></p>
 
-  <h1>Snapzy</h1>
-  <p><strong>在菜单栏中完成原生 macOS 截图、录屏、标注与编辑。</strong></p>
+# Cinderdeck
 
-  <p>
-    <a href="https://trendshift.io/repositories/24550" target="_blank"><img src="https://trendshift.io/api/badge/repositories/24550" alt="duongductrong%2FSnapzy | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-  </p>
+**macOS 上的开发控制台。**
 
-  <p>
-    Built with <a href="https://developer.apple.com/xcode/swiftui/">SwiftUI</a>,
-    <a href="https://developer.apple.com/documentation/appkit">AppKit</a>,
-    <a href="https://developer.apple.com/documentation/screencapturekit">ScreenCaptureKit</a>,
-    <a href="https://developer.apple.com/documentation/vision">Vision</a>, and
-    <a href="https://sparkle-project.org/">Sparkle</a>.
-  </p>
+Cinderdeck 是一款原生 Mac 应用，将项目、服务和开发工具集中管理。你可以把任意一组文件夹或代码仓库配置成一个 stack，为各项服务指定启动命令，再通过应用、终端或编程代理控制它们。
 
-  <p>
-    <a href="./README.md">🇺🇸 English</a> •
-    <a href="./README.vi.md">🇻🇳 Tiếng Việt</a> •
-    <a href="./README.zh-CN.md">🇨🇳 简体中文</a> •
-    <a href="./README.ja.md">🇯🇵 日本語</a>
-  </p>
+- 使用 TOML 配置项目、环境变量、钥匙串引用、服务依赖和就绪检查。
+- 启动、停止、重启服务；查看日志、端口、进程归属和代理活动。
+- 查看 Git 状态，切换分支时明确选择暂存或保留本地修改。
+- 通过 `cinderdeck` CLI 和本地 MCP 服务连接 Codex、Cursor、Claude Code 等客户端。
+- 保留本地文本剪贴板历史，以及截图、录屏、标注、OCR 和视频编辑功能。
 
-  <p>
-    <a href="#features">功能</a> •
-    <a href="#install">安装</a> •
-    <a href="#raycast">Raycast</a> •
-    <a href="#shortcuts">快捷键</a> •
-    <a href="#automation">自动化</a> •
-    <a href="#development">Development</a> •
-    <a href="#documentation">文档</a> •
-    <a href="#community">社区</a> •
-    <a href="#security">安全</a> •
-    <a href="#contributing">贡献</a> •
-    <a href="#contributors">贡献者</a> •
-    <a href="#acknowledgments">致谢</a>
-  </p>
+## 开始使用
 
-  <p>
-    <a href="https://github.com/duongductrong/Snapzy/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/duongductrong/Snapzy?style=flat&amp;logo=github" /></a>
-    <a href="https://github.com/duongductrong/Snapzy/network/members"><img alt="GitHub Forks" src="https://img.shields.io/github/forks/duongductrong/Snapzy?style=flat&amp;logo=github" /></a>
-    <a href="https://github.com/duongductrong/Snapzy/releases"><img alt="GitHub Downloads" src="https://img.shields.io/github/downloads/duongductrong/Snapzy/total?style=flat&amp;logo=github" /></a>
-  </p>
-  <p>
-    <a href="https://deepwiki.com/duongductrong/Snapzy"><img alt="询问 DeepWiki" src="https://deepwiki.com/badge.svg" /></a>
-    <a href="https://discord.gg/xkWDAuJkZu"><img alt="加入 Discord 社区" src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=flat&amp;logo=discord&amp;logoColor=white" /></a>
-    <a href="https://www.raycast.com/chkzz/snapzy"><img alt="Raycast 插件" src="https://img.shields.io/badge/Raycast-Extension-FF6363?style=flat&amp;logo=raycast&amp;logoColor=white" /></a>
-    <a href="#featured-on"><img alt="已收录平台" src="https://img.shields.io/badge/Featured%20On-Product%20Hunt%20%2B%20Unikorn-111827?style=flat&amp;logo=producthunt&amp;logoColor=white" /></a>
-  </p>
-  <p>
-    <a href="https://github.com/sponsors/duongductrong"><img alt="GitHub Sponsors" src="https://img.shields.io/badge/Sponsor-%E2%9D%A4-ff69b4?style=flat&amp;logo=github" /></a>
-    <a href="https://ko-fi.com/duongductrong"><img alt="Ko-fi Donate" src="https://img.shields.io/badge/Ko--fi-Donate-FF5E5B?style=flat&amp;logo=ko-fi&amp;logoColor=white" /></a>
-  </p>
-</div>
+从源码构建需要 **Xcode 26.2 或更高版本**，应用支持 macOS 13 及以上。打开 `Cinderdeck.xcodeproj`，选择 **Cinderdeck** scheme。参阅[构建指南](docs/BUILD.md)。
 
-<a id="features"></a>
+在应用中打开 **⌘⇧H → Stacks → Create stack**，选择自己的文件夹和命令。默认配置目录为 `~/.config/cinderdeck/stacks/`。不限定仓库、框架或语言；保存配置不会自动启动服务。
 
-## 功能
-
-- **截图**：支持全屏或选区截图，并可在手动选区/应用窗口模式间切换（`Application Capture`，默认 `A`）；同时支持选区截图并实时标注（annotate before saving）、带实时拼接预览的滚动截图、OCR 文字提取（识别完成后弹出系统通知显示结果）、透明背景对象抠图并可选安全自动裁剪、窗口阴影保留（macOS 14+）、多格式导出（PNG/JPG/WebP）、隐藏桌面图标/小组件，以及录屏时快速截图
-- **屏幕录制**：支持视频或 GIF 导出、系统音频 + 麦克风、鼠标点击高亮、按键覆盖层、屏幕实时标注、记住上次区域、GIF 尺寸调整，以及用于 Follow Mouse 编辑的 Smart Camera 元数据
-- **标注编辑器**：提供形状、箭头、文本、水印、填充矩形、模糊/像素化、编号、裁剪、去背景与感知裁剪区域的自动裁剪、3D 渲染器模拟背景、缩放/平移（触控板捏合 + 键盘）、拖拽到其他应用，以及可配置工具快捷键
-- **截图后设置**：按模式分别配置保存、Quick Access、复制到剪贴板和标注动作矩阵，并为去背景提供独立的全局自动裁剪开关（默认开启）
-- **视频编辑器**：可视化时间线 + 帧条裁剪、自动聚焦的缩放片段（Follow Mouse）、壁纸背景 + 留白、自定义导出尺寸、动态图 GIF 查看器，以及撤销/重做
-- **Quick Access**：每次截图后弹出的悬浮面板，提供复制、编辑、拖拽到应用、打开和删除操作
-- **捕获历史**：提供悬浮历史面板和完整历史浏览器，可查看最近的截图、视频和 GIF，支持按类型/时间筛选、按文件名搜索、快速复制/打开/删除、一键重新在 Annotate 或 Video Editor 中打开，恢复已提交截图标注并继续编辑，并可配置面板布局与保留策略
-- **快捷键**：为截图、录制和标注工具提供完全可配置的全局快捷键，支持逐项启用/停用和系统冲突检测
-- **引导流程**：首次使用时提供启动页、语言选择、权限引导和快捷键配置
-- **本地化**：应用已提供 🇺🇸 English、🇻🇳 Vietnamese、🇨🇳 Simplified Chinese、🇹🇼 Traditional Chinese、🇪🇸 Spanish、🇯🇵 Japanese、🇰🇷 Korean、🇷🇺 Russian、🇫🇷 French 和 🇩🇪 German，并支持 macOS 原生按应用选择语言
-- **云上传**：坚持隐私优先的自带存储方案，支持 AWS S3 或 Cloudflare R2，不经过第三方服务器；可从 Quick Access 手动上传截图、视频和 GIF，也可从 Annotate 手动上传截图；凭据存储于 macOS Keychain，可选密码保护；支持手动加密导入/导出凭据，便于在另一台 Mac 上快速配置；同时提供上传历史、可配置自动过期（1–90 天或永久）、生命周期规则和自定义域名支持
-- **更新与诊断**：内置 Sparkle 应用更新、带诊断日志包的问题报告和缓存管理
-- **平台特性**：菜单栏应用、浅色/深色/跟随系统主题、启用 Hardened Runtime 并经 Developer ID 签名与 Apple 公证，以及针对用户所选文件夹的安全作用域书签
-
-<a id="install"></a>
-
-## 安装
-
-> 需要 **macOS 13.0** 或更高版本。
-
-### Homebrew
-
-```bash
-brew install --cask snapzy
+```sh
+/Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck stacks install-cli
+cinderdeck stacks status
+cinderdeck stacks setup-agents --print
 ```
 
-### Shell 脚本
+Release 版首次启动时会复制定制版 Snapzy 的本地数据，保留原件，并且不覆盖现有 Cinderdeck 数据。macOS 可能要求为新应用重新授予权限。参阅[迁移说明](docs/MIGRATION.md)。
 
-```bash
-# 安装指定版本
-curl -fsSL https://raw.githubusercontent.com/duongductrong/Snapzy/v1.9.8/install.sh | bash
-```
-
-### 下载发行版
-
-1. 打开 [Releases](https://github.com/duongductrong/Snapzy/releases)
-2. 下载最新打包应用资源，通常为 `Snapzy-v<version>.dmg`
-3. 将 `Snapzy.app` 移动到 `/Applications`
-4. 启动 Snapzy
-5. 当 macOS 在 System Settings 中提示时，授予 Screen Recording 权限
-6. 如果 macOS 提示，请在授予 Screen Recording 后重新启动 Snapzy
-7. 如果你想在录屏中录制人声，也请授予 Microphone 权限
-
-**注意：** Snapzy 目前尚未经过 Apple notarize，因此 macOS 可能会在首次启动时阻止应用打开。将 Snapzy 安装到 `/Applications` 后，请运行：
-
-```bash
-sudo xattr -rd com.apple.quarantine /Applications/Snapzy.app
-```
-
-了解更多：[Apple Support: Open a Mac app from an unidentified developer](https://support.apple.com/en-us/102445)。
-
-## 卸载
-
-若要彻底移除 Snapzy、重置所有权限并清理应用数据：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/duongductrong/Snapzy/master/uninstall.sh | bash
-```
-
-如果你已经 clone 了仓库，也可以直接运行：
-
-```bash
-./uninstall.sh
-```
-
-该脚本会从 `/Applications` 中移除应用，删除偏好设置和缓存，并重置 TCC 权限（Screen Recording、Microphone、Accessibility）。权限变更可能需要注销或重启后才会完全生效。
-
-### 重置权限
-
-如果你只想重置 TCC 权限（Screen Recording、Microphone、Accessibility）而不卸载应用：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/duongductrong/Snapzy/master/reset-permissions.sh | bash
-```
-
-如果你已经 clone 了仓库，也可以直接运行：
-
-```bash
-./reset-permissions.sh
-```
-
-<a id="raycast"></a>
-
-## Raycast
-
-通过官方插件直接从 Raycast 控制 Snapzy：
-
-<a href="https://www.raycast.com/chkzz/snapzy" title="Install snapzy Raycast Extension"><img src="https://www.raycast.com/chkzz/snapzy/install_button@2x.png?v=1.1" height="64" style="height: 64px;" alt="" /></a>
-
-<a id="shortcuts"></a>
-
-## 快捷键
-
-| 操作                                                 | 快捷键 |
-| ---------------------------------------------------- | ------ |
-| 全屏截图                                             | `⇧⌘3`  |
-| 选区截图                                             | `⇧⌘4`  |
-| ↳ 切换手动选区/应用窗口模式（`Application Capture`） | `A`    |
-| 选区截图 + 实时标注                                  | `⇧⌘7`    |
-| 滚动截图                                             | `⇧⌘6`  |
-| 屏幕录制（开始/停止切换）                            | `⇧⌘5`  |
-| 暂停/继续录制（可选，推荐 `⌘⇧Space`）                | _未设置_ |
-| OCR 文字识别                                         | `⇧⌘2`  |
-| 对象抠图截图                                         | `⇧⌘1`  |
-| 打开标注编辑器                                       | `⇧⌘A`  |
-| 打开视频编辑器                                       | `⇧⌘E`  |
-| 打开云上传                                           | `⇧⌘L`  |
-| 显示快捷键列表                                       | `⇧⌘K`  |
-
-### 快速访问卡片操作
-
-将指针悬停在快速访问卡片上，然后按下按键。仅在指针位于卡片上时生效。
-
-| 操作 | 快捷键 |
-| ---- | ------ |
-| 复制 | `⌘C` |
-| 保存 / 打开 | `⌘S` |
-| 编辑 | `⌘E` |
-| 上传到云端 | `⌘U` |
-| 钉在屏幕上 | `⌘P` |
-| 删除 | `⌘⌫` |
-| 关闭 | `⌘W` |
-
-<a id="automation"></a>
-
-## 自动化
-
-Snapzy 注册了 `snapzy://` URL scheme，因此 launcher 和自动化工具（如 [Raycast 插件](https://www.raycast.com/chkzz/snapzy)、Alfred 或自定义脚本）可以直接触发各类捕获动作。此集成选项可以在 **设置 -> 高级 -> URL Scheme 集成** 中开启或关闭。
-
-| 操作           | URL                               |
-| -------------- | --------------------------------- |
-| 全屏截图       | `snapzy://capture/fullscreen`     |
-| 选区截图       | `snapzy://capture/area`           |
-| 应用窗口截图   | `snapzy://capture/application`    |
-| 选区实时标注   | `snapzy://capture/area-annotate`  |
-| 滚动截图       | `snapzy://capture/scrolling`      |
-| OCR 文字识别   | `snapzy://capture/ocr`            |
-| 对象抠图截图   | `snapzy://capture/object-cutout`  |
-| 屏幕录制       | `snapzy://record/screen`          |
-| 应用窗口录制   | `snapzy://record/application`     |
-| 打开标注编辑器 | `snapzy://open/annotate`          |
-| 打开视频编辑器 | `snapzy://open/video-editor`      |
-| 打开云上传     | `snapzy://open/cloud-uploads`     |
-| 打开捕获历史   | `snapzy://open/history`           |
-| 显示快捷键列表 | `snapzy://show/shortcuts`         |
-| 打开设置       | `snapzy://settings`               |
-| 打开设置标签页 | `snapzy://settings?tab=annotate`  |
-
-<a id="development"></a>
-
-## Development
-
-如果你要进行本地开发、从源码运行，或完成首次开发环境设置，请先阅读 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
-
-如果你需要 archive、export 或 DMG 打包命令，请参阅 [docs/BUILD.md](docs/BUILD.md)。如果你想查看贡献流程，请参阅 [CONTRIBUTING.md](CONTRIBUTING.md)。
-
-<a id="documentation"></a>
-
-## 文档
-
-- [询问 DeepWiki（交互式文档助手）](https://deepwiki.com/duongductrong/Snapzy)
-- [面向开发者和 agent 的文档索引](docs/README.md)
-- [项目结构与运行时架构](docs/STRUCTURE.md)
-- [截图、录制与编辑流程](docs/CAPTURE.md)
-- [构建与打包指南](docs/BUILD.md)
-- [发布与更新工作流](docs/RELEASES.md)
-- [本地 Sparkle 更新测试](docs/UPDATE_TESTING.md)
-
-<a id="community"></a>
-
-## 社区
-
-- 加入 Snapzy Discord 社区，获取支持、反馈与讨论：[https://discord.gg/xkWDAuJkZu](https://discord.gg/xkWDAuJkZu)
-
-<a id="featured-on"></a>
-
-## 收录平台
-
-<p>
-  <a href="https://www.producthunt.com/products/snapzy?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-snapzy" target="_blank" rel="noopener noreferrer"><img alt="Snapzy - 可以把它理解成更偏开发者、更开源友好的 CleanShot X | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1097629&amp;theme=light&amp;t=1773585048784"></a>
-  <a href="https://unikorn.vn/p/snapzy?ref=embed-snapzy" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/snapzy?theme=light" alt="Snapzy on Unikorn.vn" style="width: 250px; height: 54px;" width="250" height="54" /></a>
-</p>
-
-## Benchmark
-
-### OCR
-
-基准测试日期：2026 年 4 月 19 日。README 中的 OCR 数据来自可复现的 runner `scripts/run-ocr-readme-benchmark.sh`，测试语料为干净的合成 UI/article text 换行文本，覆盖 `10 种支持语言`，每种语言 `12 个样本`。`Character accuracy` 是主要指标，`exact match` 采用严格计算，此语料上的 `no-output` 比例在下表所有语言中均为 `0%`。
-
-| 语言                | Character Accuracy | Exact Match |
-| ------------------- | -----------------: | ----------: |
-| English             |             100.0% |      100.0% |
-| Vietnamese          |             100.0% |      100.0% |
-| Simplified Chinese  |              99.3% |       75.0% |
-| Traditional Chinese |              99.0% |       66.7% |
-| Spanish             |              99.9% |       91.7% |
-| Japanese            |              99.4% |       66.7% |
-| Korean              |              99.7% |       83.3% |
-| Russian             |             100.0% |      100.0% |
-| French              |              99.3% |       33.3% |
-| German              |              99.8% |       75.0% |
-
-真实截图中的表现可能低于这组语料，尤其是在包含 emoji、低对比度页脚、特殊标点、渐变背景、模糊效果或装饰性很强的字体时。
-
-<a id="security"></a>
-
-## 安全
-
-Snapzy **未** 运行在沙盒中，而是以你的用户账户权限运行。应用启用了 macOS Hardened Runtime，经 Developer ID 签名并通过 Apple 公证，且仅声明最小必要 entitlement；库验证（library validation）始终开启，因此应用只会加载由 Snapzy 或 Apple 签名的代码。网络请求仅用于 Sparkle 更新检查，以及用户主动发起到自己 S3/R2 bucket 的云上传，数据不会发送到第三方服务器。云凭据只保存在 macOS Keychain 中，并可额外通过可选密码保护（SHA-256 哈希，绝不以明文存储）；凭据仅能通过用户提供归档口令保护的手动加密导出/导入流程转移。Snapzy 不收集任何遥测数据。
-
-如果你需要报告安全漏洞，请使用 [GitHub Security Advisory](https://github.com/duongductrong/Snapzy/security/advisories/new) 或私下联系维护者。完整细节见 [SECURITY.md](SECURITY.md)。
-
-<a id="contributing"></a>
-
-## 贡献
-
-欢迎贡献代码。提交 pull request 前请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
-
-## 贡献者
-
-感谢所有为 Snapzy 做出贡献的人！
-
-<a href="https://github.com/duongductrong/Snapzy/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=duongductrong/Snapzy" />
-</a>
-
-## Star 历史
-
-<a href="https://www.star-history.com/?repos=duongductrong%2FSnapzy&type=date&logscale=&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=duongductrong/Snapzy&type=date&theme=dark&logscale&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=duongductrong/Snapzy&type=date&logscale&legend=top-left" />
-   <img alt="Star 历史图表" src="https://api.star-history.com/image?repos=duongductrong/Snapzy&type=date&logscale&legend=top-left" />
- </picture>
-</a>
+Cinderdeck 从 **1.0.0 (200)** 开始独立版本。配置自己的签名更新源之前，自动更新保持关闭。Snapzy 的 Homebrew 包和发布文件不适用于 Cinderdeck。
 
 ## 致谢
 
-Snapzy 的灵感来源于 [CleanShot X](https://cleanshot.com/)，一款适用于 macOS 的先进截图与录屏应用。
+Cinderdeck 由 [Ryan Cardin](https://github.com/RyanCardin15) 维护，是 **[Snapzy](https://github.com/duongductrong/Snapzy) 的独立分支**。原项目由 **Trong Duong Duc 及其贡献者**创建，提供了截图、录屏和编辑功能的基础。原始 [BSD 3-Clause 许可证](LICENSE)及[署名信息](NOTICE)均予以保留。本项目并非 Snapzy 官方发布版本。
 
-## 许可证
-
-BSD 3-Clause License。详见 [LICENSE](LICENSE)。
+[English 与完整文档](README.md) · [Stacks](docs/STACKS.md) · [报告 Cinderdeck 问题](https://github.com/RyanCardin15/Cinderdeck/issues)

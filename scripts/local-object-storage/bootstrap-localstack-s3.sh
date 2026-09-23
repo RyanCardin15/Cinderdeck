@@ -2,7 +2,7 @@
 
 set -eu
 
-bucket="${AWS_S3_BUCKET:-snapzy-s3-local}"
+bucket="${AWS_S3_BUCKET:-cinderdeck-s3-local}"
 region="${AWS_DEFAULT_REGION:-us-east-1}"
 
 if awslocal s3api head-bucket --bucket "$bucket" >/dev/null 2>&1; then

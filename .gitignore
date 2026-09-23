@@ -11,9 +11,12 @@ sparkle_private_key.pem
 /tmp/
 
 # Secrets - never commit
-Snapzy/Config/Secrets.xcconfig
+Cinderdeck/Config/Secrets.xcconfig
 *.xcuserstate
 
 /plans
 
 .codex
+
+*.profraw
+**/xcuserdata/

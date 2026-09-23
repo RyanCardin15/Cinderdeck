@@ -1,0 +1,1495 @@
+//
+//  PreferencesShortcutsSettingsView.swift
+//  Cinderdeck
+//
+//  Keyboard shortcuts configuration tab
+//
+
+import AppKit
+import Carbon.HIToolbox
+import SwiftUI
+
+struct ShortcutsSettingsView: View {
+  @State private var fullscreenShortcut: ShortcutConfig?
+  @State private var areaShortcut: ShortcutConfig?
+  @State private var repeatAreaShortcut: ShortcutConfig?
+  @State private var areaAnnotateShortcut: ShortcutConfig?
+  @State private var activeWindowShortcut: ShortcutConfig?
+  @State private var areaApplicationCaptureShortcut: CaptureOverlayShortcut?
+  @State private var recordingApplicationCaptureShortcut: CaptureOverlayShortcut?
+  @State private var scrollingCaptureShortcut: ShortcutConfig?
+  @State private var objectCutoutShortcut: ShortcutConfig?
+  @State private var ocrShortcut: ShortcutConfig?
+  @State private var smartElementShortcut: ShortcutConfig?
+  @State private var recordingShortcut: ShortcutConfig?
+  @State private var pauseResumeRecordingShortcut: ShortcutConfig?
+  @State private var togglePenRecordingShortcut: ShortcutConfig?
+  @State private var restartRecordingShortcut: ShortcutConfig?
+  @State private var deleteRecordingShortcut: ShortcutConfig?
+  @State private var annotateShortcut: ShortcutConfig?
+  @State private var videoEditorShortcut: ShortcutConfig?
+  @State private var cloudUploadsShortcut: ShortcutConfig?
+  @State private var shortcutListShortcut: ShortcutConfig?
+  @State private var historyShortcut: ShortcutConfig?
+  @State private var openEditorShortcut: ShortcutConfig?
+  @State private var openEditorShortcutEnabled: Bool
+  @State private var copyAndCloseShortcut: ShortcutConfig?
+  @State private var toggleSidebarShortcut: ShortcutConfig?
+  @State private var togglePinShortcut: ShortcutConfig?
+  @State private var cloudUploadShortcut: ShortcutConfig?
+  @State private var autoRedactSensitiveDataShortcut: ShortcutConfig?
+  @State private var globalShortcutEnabled: [GlobalShortcutKind: Bool]
+  @State private var annotateActionEnabled: [AnnotateActionShortcutKind: Bool]
+  @State private var globalValidationIssues: [GlobalShortcutKind: ShortcutValidationIssue] = [:]
+  @State private var captureOverlayValidationIssues: [CaptureOverlayShortcutKind: ShortcutValidationIssue] = [:]
+  @State private var annotateActionValidationIssues: [AnnotateActionShortcutKind: ShortcutValidationIssue] = [:]
+  @State private var annotateToolValidationIssues: [AnnotationToolType: ShortcutValidationIssue] = [:]
+  @State private var shortcutsEnabled: Bool
+  @State private var showDisableConfirmation: Bool = false
+  @State private var isConfirmedDisable: Bool = false
+  @State private var hasSystemConflict: Bool = false
+  @State private var isRefreshingConflict: Bool = false
+  @State private var accessibilityGranted: Bool = AXIsProcessTrusted()
+
+  private let manager = KeyboardShortcutManager.shared
+  private let validator = ShortcutValidationService.shared
+  @ObservedObject private var annotateManager = AnnotateShortcutManager.shared
+  @ObservedObject private var historyFloatingManager = HistoryFloatingManager.shared
+
+  init() {
+    _fullscreenShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .fullscreen))
+    _areaShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .area))
+    _repeatAreaShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .repeatArea))
+    _areaAnnotateShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .areaAnnotate))
+    _activeWindowShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .activeWindow))
+    _areaApplicationCaptureShortcut = State(
+      initialValue: CaptureOverlayShortcutSettings.applicationCaptureShortcut
+    )
+    _recordingApplicationCaptureShortcut = State(
+      initialValue: CaptureOverlayShortcutSettings.recordingApplicationCaptureShortcut
+    )
+    _scrollingCaptureShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .scrollingCapture))
+    _objectCutoutShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .objectCutout))
+    _ocrShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .ocr))
+    _smartElementShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .smartElement))
+    _recordingShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .recording))
+    _pauseResumeRecordingShortcut = State(
+      initialValue: KeyboardShortcutManager.shared.shortcut(for: .pauseResumeRecording)
+    )
+    _togglePenRecordingShortcut = State(
+      initialValue: KeyboardShortcutManager.shared.shortcut(for: .togglePenRecording)
+    )
+    _restartRecordingShortcut = State(
+      initialValue: KeyboardShortcutManager.shared.shortcut(for: .restartRecording)
+    )
+    _deleteRecordingShortcut = State(
+      initialValue: KeyboardShortcutManager.shared.shortcut(for: .deleteRecording)
+    )
+    _annotateShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .annotate))
+    _videoEditorShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .videoEditor))
+    _cloudUploadsShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .cloudUploads))
+    _shortcutListShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .shortcutList))
+    _historyShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .history))
+    _openEditorShortcut = State(initialValue: QuickAccessManager.shared.openEditorShortcut)
+    _openEditorShortcutEnabled = State(initialValue: QuickAccessManager.shared.openEditorShortcutEnabled)
+    _copyAndCloseShortcut = State(initialValue: AnnotateShortcutManager.shared.copyAndCloseShortcut)
+    _toggleSidebarShortcut = State(initialValue: AnnotateShortcutManager.shared.toggleSidebarShortcut)
+    _togglePinShortcut = State(initialValue: AnnotateShortcutManager.shared.togglePinShortcut)
+    _cloudUploadShortcut = State(initialValue: AnnotateShortcutManager.shared.cloudUploadShortcut)
+    _autoRedactSensitiveDataShortcut = State(
+      initialValue: AnnotateShortcutManager.shared.autoRedactSensitiveDataShortcut
+    )
+    _globalShortcutEnabled = State(
+      initialValue: Dictionary(
+        uniqueKeysWithValues: GlobalShortcutKind.allCases.map {
+          ($0, KeyboardShortcutManager.shared.isShortcutEnabled(for: $0))
+        }
+      )
+    )
+    _annotateActionEnabled = State(
+      initialValue: Dictionary(
+        uniqueKeysWithValues: AnnotateActionShortcutKind.allCases.map {
+          ($0, AnnotateShortcutManager.shared.isActionShortcutEnabled(for: $0))
+        }
+      )
+    )
+    _shortcutsEnabled = State(initialValue: KeyboardShortcutManager.shared.isEnabled)
+    _hasSystemConflict = State(
+      initialValue: SystemScreenshotShortcutManager.shared.hasConflictingSystemShortcuts()
+    )
+  }
+
+  var body: some View {
+    Form {
+      // System shortcut conflict status
+      if shortcutsEnabled {
+        if hasSystemConflict {
+          Section {
+            VStack(alignment: .leading, spacing: 12) {
+              // Header
+              HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                  .font(.system(size: 18))
+                  .foregroundColor(.orange)
+
+                VStack(alignment: .leading, spacing: 2) {
+                  Text(L10n.PreferencesShortcuts.systemConflictTitle)
+                    .font(.system(size: 13, weight: .semibold))
+                  Text(L10n.PreferencesShortcuts.systemConflictDescription)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                }
+              }
+
+              // Step-by-step guide
+              VStack(alignment: .leading, spacing: 6) {
+                Text(L10n.PreferencesShortcuts.howToDisable)
+                  .font(.system(size: 10, weight: .semibold))
+                  .foregroundColor(.secondary)
+                  .tracking(0.8)
+
+                PreferencesGuideStep(
+                  step: "1",
+                  text: L10n.Onboarding.guideStep1
+                )
+                PreferencesGuideStep(
+                  step: "2",
+                  text: L10n.Onboarding.guideStep2
+                )
+                PreferencesGuideStep(
+                  step: "3",
+                  text: L10n.Onboarding.guideStep3
+                )
+              }
+              .padding(10)
+              .background(
+                RoundedRectangle(cornerRadius: 8)
+                  .fill(Color.orange.opacity(0.06))
+              )
+
+              // Action buttons
+              HStack(spacing: 8) {
+                Button {
+                  SystemScreenshotShortcutManager.shared.openSystemScreenshotSettings()
+                } label: {
+                  HStack {
+                    Image(systemName: "gear")
+                      .font(.system(size: 12))
+                    Text(L10n.PreferencesShortcuts.openKeyboardShortcutsSettings)
+                      .font(.system(size: 12, weight: .medium))
+                  }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+
+                Button {
+                  refreshSystemConflict()
+                } label: {
+                  HStack(spacing: 4) {
+                    Image(
+                      systemName: isRefreshingConflict
+                        ? "arrow.triangle.2.circlepath" : "arrow.clockwise"
+                    )
+                    .font(.system(size: 12))
+                    .rotationEffect(.degrees(isRefreshingConflict ? 360 : 0))
+                    .animation(
+                      isRefreshingConflict
+                        ? .linear(duration: 0.8).repeatForever(autoreverses: false)
+                        : .default,
+                      value: isRefreshingConflict
+                    )
+                    Text(L10n.Common.refresh)
+                      .font(.system(size: 12, weight: .medium))
+                  }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+              }
+            }
+            .padding(.vertical, 4)
+          } header: {
+            Label(L10n.PreferencesShortcuts.actionRequired, systemImage: "exclamationmark.circle.fill")
+              .foregroundColor(.orange)
+          }
+        } else {
+          // Success badge — no conflicts
+          Section {
+            HStack(spacing: 10) {
+              Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 18))
+                .foregroundColor(.green)
+
+              VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.PreferencesShortcuts.noConflictsDetected)
+                  .font(.system(size: 13, weight: .semibold))
+                Text(L10n.PreferencesShortcuts.noConflictsDescription)
+                  .font(.system(size: 11))
+                  .foregroundColor(.secondary)
+              }
+
+              Spacer()
+
+              Button {
+                refreshSystemConflict()
+              } label: {
+                Image(
+                  systemName: isRefreshingConflict
+                    ? "arrow.triangle.2.circlepath" : "arrow.clockwise"
+                )
+                .font(.system(size: 12))
+                .rotationEffect(.degrees(isRefreshingConflict ? 360 : 0))
+                .animation(
+                  isRefreshingConflict
+                    ? .linear(duration: 0.8).repeatForever(autoreverses: false)
+                    : .default,
+                  value: isRefreshingConflict
+                )
+              }
+              .buttonStyle(.borderless)
+            }
+            .padding(.vertical, 4)
+          } header: {
+            Label(L10n.PreferencesShortcuts.systemShortcuts, systemImage: "checkmark.seal.fill")
+              .foregroundColor(.green)
+          }
+        }
+      }
+
+      Section(L10n.PreferencesShortcuts.globalSection) {
+        Text(L10n.PreferencesShortcuts.globalSectionDescription)
+          .font(.caption)
+          .foregroundColor(.secondary)
+
+        SettingRow(
+          icon: "keyboard",
+          title: L10n.PreferencesShortcuts.enableShortcutsTitle,
+          description: L10n.PreferencesShortcuts.enableShortcutsDescription
+        ) {
+          Toggle("", isOn: $shortcutsEnabled)
+            .labelsHidden()
+            .onChange(of: shortcutsEnabled) { newValue in
+              if newValue {
+                manager.enable()
+                // Re-check system conflicts when enabling
+                hasSystemConflict =
+                  SystemScreenshotShortcutManager.shared.hasConflictingSystemShortcuts()
+              } else {
+                if isConfirmedDisable {
+                  // User confirmed disable, proceed
+                  isConfirmedDisable = false
+                  manager.disable()
+                } else {
+                  // Revert toggle and show confirmation
+                  shortcutsEnabled = true
+                  showDisableConfirmation = true
+                }
+              }
+            }
+        }
+        .alert(L10n.PreferencesShortcuts.disableShortcutsTitle, isPresented: $showDisableConfirmation) {
+          Button(L10n.Common.cancel, role: .cancel) {}
+          Button(L10n.Common.disable, role: .destructive) {
+            isConfirmedDisable = true
+            shortcutsEnabled = false
+          }
+        } message: {
+          Text(L10n.PreferencesShortcuts.disableShortcutsMessage)
+        }
+
+        if showsFnAccessibilityHint {
+          HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+              .font(.system(size: 14))
+              .foregroundColor(.orange)
+
+            Text(L10n.PreferencesShortcuts.fnAccessibilityHint)
+              .font(.system(size: 11))
+              .foregroundColor(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+
+            Spacer()
+
+            Button(L10n.Common.openSettings) {
+              if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                NSWorkspace.shared.open(url)
+              }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+          }
+          .padding(.vertical, 2)
+        }
+      }
+
+      if shortcutsEnabled {
+        Section {
+          ShortcutRecorderView(
+            label: L10n.Actions.captureFullscreen,
+            icon: "rectangle.dashed.and.paperclip",
+            description: L10n.PreferencesShortcuts.captureFullscreenDescription,
+            shortcut: $fullscreenShortcut,
+            defaultShortcut: .defaultFullscreen,
+            isEnabled: globalEnabledBinding(for: .fullscreen),
+            validationIssue: globalValidationIssues[.fullscreen],
+            onShortcutChanged: { handleGlobalShortcutChange($0, for: .fullscreen) }
+          )
+
+          VStack(alignment: .leading, spacing: 4) {
+            ShortcutRecorderView(
+              label: L10n.Actions.captureArea,
+              icon: "rectangle.dashed",
+              description: L10n.PreferencesShortcuts.captureAreaDescription,
+              shortcut: $areaShortcut,
+              defaultShortcut: .defaultArea,
+              isEnabled: globalEnabledBinding(for: .area),
+              validationIssue: globalValidationIssues[.area],
+              onShortcutChanged: { handleGlobalShortcutChange($0, for: .area) }
+            )
+
+            CaptureOverlayShortcutRecorderRow(
+              label: L10n.PreferencesShortcuts.applicationCaptureTitle,
+              description: L10n.PreferencesShortcuts.applicationCaptureDescription,
+              shortcut: $areaApplicationCaptureShortcut,
+              defaultShortcut: CaptureOverlayShortcutSettings.defaultApplicationCaptureShortcut,
+              isEnabled: globalEnabledBinding(for: .area),
+              validationIssue: captureOverlayValidationIssues[.applicationCapture]
+            ) { newShortcut in
+              handleCaptureOverlayShortcutChange(newShortcut, for: .applicationCapture)
+            }
+          }
+          .padding(.vertical, 2)
+
+          ShortcutRecorderView(
+            label: L10n.Actions.captureRepeatArea,
+            icon: "arrow.clockwise",
+            description: L10n.PreferencesShortcuts.captureRepeatAreaDescription,
+            shortcut: $repeatAreaShortcut,
+            defaultShortcut: .defaultRepeatArea,
+            isEnabled: globalEnabledBinding(for: .repeatArea),
+            validationIssue: globalValidationIssues[.repeatArea],
+            onShortcutChanged: { handleGlobalShortcutChange($0, for: .repeatArea) }
+          )
+
+          ShortcutRecorderView(
+            label: L10n.Actions.captureAreaAnnotate,
+            icon: "pencil.and.scribble",
+            description: L10n.PreferencesShortcuts.captureAreaAnnotateDescription,
+            shortcut: $areaAnnotateShortcut,
+            defaultShortcut: .defaultAreaAnnotate,
+            isEnabled: globalEnabledBinding(for: .areaAnnotate),
+            validationIssue: globalValidationIssues[.areaAnnotate],
+            onShortcutChanged: { handleGlobalShortcutChange($0, for: .areaAnnotate) }
+          )
+
+          ShortcutRecorderView(
+            label: L10n.Actions.captureActiveWindow,
+            icon: "macwindow",
+            description: L10n.PreferencesShortcuts.captureActiveWindowDescription,
+            shortcut: $activeWindowShortcut,
+            defaultShortcut: .defaultActiveWindowCapture,
+            isEnabled: globalEnabledBinding(for: .activeWindow),
+            validationIssue: globalValidationIssues[.activeWindow],
+            onShortcutChanged: { handleGlobalShortcutChange($0, for: .activeWindow) }
+          )
+
+          ShortcutRecorderView(
+            label: GlobalShortcutKind.scrollingCapture.displayName,
+            icon: "arrow.up.and.down",
+            description: "Guided session for long screenshots",
+            shortcut: $scrollingCaptureShortcut,
+            defaultShortcut: .defaultScrollingCapture,
+            isEnabled: globalEnabledBinding(for: .scrollingCapture),
+            validationIssue: globalValidationIssues[.scrollingCapture],
+            onShortcutChanged: { handleGlobalShortcutChange($0, for: .scrollingCapture) }
+          )
+
+          ShortcutRecorderView(
+            label: GlobalShortcutKind.objectCutout.displayName,
+            icon: "person.crop.rectangle",
+            description: "Select an area, isolate the subject, and optionally auto-crop",
+            shortcut: $objectCutoutShortcut,
+            defaultShortcut: .defaultObjectCutout,
+            isEnabled: globalEnabledBinding(for: .objectCutout),
+            validationIssue: globalValidationIssues[.objectCutout],
+            onShortcutChanged: { handleGlobalShortcutChange($0, for: .objectCutout) }
+          )
+
+          ShortcutRecorderView(
+            label: L10n.Actions.captureTextOCR,
+            icon: "text.viewfinder",
+            description: L10n.PreferencesShortcuts.captureTextDescription,
+            shortcut: $ocrShortcut,
+            defaultShortcut: .defaultOCR,
+            isEnabled: globalEnabledBinding(for: .ocr),
+            validationIssue: globalValidationIssues[.ocr],
+            onShortcutChanged: { handleGlobalShortcutChange($0, for: .ocr) }
+          )
+
+          ShortcutRecorderView(
+            label: L10n.Actions.captureSmartElement,
+            icon: "dot.viewfinder",
+            description: L10n.PreferencesShortcuts.smartElementCaptureDescription,
+            shortcut: $smartElementShortcut,
+            defaultShortcut: .defaultSmartElement,
+            isEnabled: globalEnabledBinding(for: .smartElement),
+            validationIssue: globalValidationIssues[.smartElement],
+            onShortcutChanged: { handleGlobalShortcutChange($0, for: .smartElement) }
+          )
+        } header: {
+          HStack {
+            Text(L10n.PreferencesShortcuts.captureSection)
+            Spacer()
+            Button(L10n.Common.reset) {
+              resetCaptureSection()
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+          }
+        }
+
+        Section {
+          VStack(alignment: .leading, spacing: 4) {
+            ShortcutRecorderView(
+              label: L10n.Actions.recordVideo,
+              icon: "record.circle",
+              description: L10n.PreferencesShortcuts.recordVideoDescription,
+              shortcut: $recordingShortcut,
+              defaultShortcut: .defaultRecording,
+              isEnabled: globalEnabledBinding(for: .recording),
+              validationIssue: globalValidationIssues[.recording],
+              onShortcutChanged: { handleGlobalShortcutChange($0, for: .recording) }
+            )
+
+            CaptureOverlayShortcutRecorderRow(
+              label: L10n.PreferencesShortcuts.applicationRecordingTitle,
+              description: L10n.PreferencesShortcuts.applicationRecordingDescription,
+              shortcut: $recordingApplicationCaptureShortcut,
+              defaultShortcut: CaptureOverlayShortcutSettings.defaultRecordingApplicationCaptureShortcut,
+              isEnabled: globalEnabledBinding(for: .recording),
+              validationIssue: captureOverlayValidationIssues[.applicationRecording]
+            ) { newShortcut in
+              handleCaptureOverlayShortcutChange(newShortcut, for: .applicationRecording)
+            }
+
+            ShortcutRecorderView(
+              label: L10n.Actions.pauseResumeRecording,
+              icon: "pause.circle",
+              description: L10n.PreferencesShortcuts.pauseResumeRecordingDescription,
+              footnote: L10n.PreferencesShortcuts.activeOnlyWhileRecording,
+              shortcut: $pauseResumeRecordingShortcut,
+              defaultShortcut: nil,
+              isEnabled: globalEnabledBinding(for: .pauseResumeRecording),
+              validationIssue: globalValidationIssues[.pauseResumeRecording],
+              onShortcutChanged: { handleGlobalShortcutChange($0, for: .pauseResumeRecording) }
+            )
+
+            ShortcutRecorderView(
+              label: L10n.Actions.togglePenRecording,
+              icon: "pencil.tip.crop.circle",
+              description: L10n.PreferencesShortcuts.togglePenRecordingDescription,
+              footnote: L10n.PreferencesShortcuts.activeOnlyWhileRecording,
+              shortcut: $togglePenRecordingShortcut,
+              defaultShortcut: nil,
+              isEnabled: globalEnabledBinding(for: .togglePenRecording),
+              validationIssue: globalValidationIssues[.togglePenRecording],
+              onShortcutChanged: { handleGlobalShortcutChange($0, for: .togglePenRecording) }
+            )
+
+            ShortcutRecorderView(
+              label: L10n.Actions.restartRecording,
+              icon: "arrow.counterclockwise.circle",
+              description: L10n.PreferencesShortcuts.restartRecordingDescription,
+              footnote: L10n.PreferencesShortcuts.activeOnlyWhileRecording,
+              shortcut: $restartRecordingShortcut,
+              defaultShortcut: nil,
+              isEnabled: globalEnabledBinding(for: .restartRecording),
+              validationIssue: globalValidationIssues[.restartRecording],
+              onShortcutChanged: { handleGlobalShortcutChange($0, for: .restartRecording) }
+            )
+
+            ShortcutRecorderView(
+              label: L10n.Actions.deleteRecording,
+              icon: "trash.circle",
+              description: L10n.PreferencesShortcuts.deleteRecordingDescription,
+              footnote: L10n.PreferencesShortcuts.activeOnlyWhileRecording,
+              shortcut: $deleteRecordingShortcut,
+              defaultShortcut: nil,
+              isEnabled: globalEnabledBinding(for: .deleteRecording),
+              validationIssue: globalValidationIssues[.deleteRecording],
+              onShortcutChanged: { handleGlobalShortcutChange($0, for: .deleteRecording) }
+            )
+          }
+          .padding(.vertical, 2)
+        } header: {
+          HStack {
+            Text(L10n.PreferencesShortcuts.recordingSection)
+            Spacer()
+            Button(L10n.Common.reset) {
+              resetRecordingSection()
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+          }
+        }
+
+        Section {
+          ShortcutRecorderView(
+            label: L10n.Actions.openAnnotate,
+            icon: "pencil.and.scribble",
+            description: L10n.PreferencesShortcuts.openAnnotateDescription,
+            shortcut: $annotateShortcut,
+            defaultShortcut: .defaultAnnotate,
+            isEnabled: globalEnabledBinding(for: .annotate),
+            validationIssue: globalValidationIssues[.annotate],
+            onShortcutChanged: { handleGlobalShortcutChange($0, for: .annotate) }
+          )
+
+          ShortcutRecorderView(
+            label: L10n.Actions.openVideoEditor,
+            icon: "film",
+            description: L10n.PreferencesShortcuts.openVideoEditorDescription,
+            shortcut: $videoEditorShortcut,
+            defaultShortcut: .defaultVideoEditor,
+            isEnabled: globalEnabledBinding(for: .videoEditor),
+            validationIssue: globalValidationIssues[.videoEditor],
+            onShortcutChanged: { handleGlobalShortcutChange($0, for: .videoEditor) }
+          )
+
+          ShortcutRecorderView(
+            label: L10n.Actions.cloudUploads,
+            icon: "icloud.and.arrow.up",
+            description: L10n.PreferencesShortcuts.cloudUploadsDescription,
+            shortcut: $cloudUploadsShortcut,
+            defaultShortcut: .defaultCloudUploads,
+            isEnabled: globalEnabledBinding(for: .cloudUploads),
+            validationIssue: globalValidationIssues[.cloudUploads],
+            onShortcutChanged: { handleGlobalShortcutChange($0, for: .cloudUploads) }
+          )
+
+          ShortcutRecorderView(
+            label: L10n.Actions.showShortcutList,
+            icon: "list.bullet.rectangle",
+            description: L10n.PreferencesShortcuts.shortcutListDescription,
+            shortcut: $shortcutListShortcut,
+            defaultShortcut: .defaultShortcutList,
+            isEnabled: globalEnabledBinding(for: .shortcutList),
+            validationIssue: globalValidationIssues[.shortcutList],
+            onShortcutChanged: { handleGlobalShortcutChange($0, for: .shortcutList) }
+          )
+
+          Text(L10n.PreferencesShortcuts.recorderHint)
+            .font(.caption)
+            .foregroundColor(.secondary)
+            .padding(.top, 4)
+        } header: {
+          HStack {
+            Text(L10n.PreferencesShortcuts.toolsSection)
+            Spacer()
+            Button(L10n.Common.reset) {
+              resetToolsSection()
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+          }
+        }
+
+        Section {
+          Text(L10n.PreferencesShortcuts.historySectionDescription)
+            .font(.caption)
+            .foregroundColor(.secondary)
+
+          ShortcutRecorderView(
+            label: L10n.Actions.openHistory,
+            icon: "clock.arrow.circlepath",
+            description: L10n.PreferencesShortcuts.openHistoryDescription,
+            shortcut: $historyShortcut,
+            defaultShortcut: .defaultHistory,
+            isEnabled: globalEnabledBinding(for: .history),
+            validationIssue: globalValidationIssues[.history],
+            onShortcutChanged: { handleGlobalShortcutChange($0, for: .history) }
+          )
+
+          ShortcutRecorderView(
+            label: L10n.PreferencesHistory.toggleModeShortcutTitle,
+            icon: "arrow.left.and.right",
+            description: L10n.PreferencesHistory.toggleModeShortcutDescription,
+            shortcut: $historyFloatingManager.toggleModeShortcut,
+            defaultShortcut: HistoryFloatingManager.defaultToggleModeShortcut,
+            isEnabled: $historyFloatingManager.isToggleModeShortcutEnabled,
+            onShortcutChanged: { config in
+              historyFloatingManager.toggleModeShortcut = config
+              return true
+            }
+          )
+          .disabled(!historyFloatingManager.isEnabled)
+          .opacity(historyFloatingManager.isEnabled ? 1.0 : 0.6)
+        } header: {
+          HStack {
+            Text(L10n.PreferencesShortcuts.historySection)
+            Spacer()
+            Button(L10n.Common.reset) {
+              resetHistorySection()
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+          }
+        }
+
+        Section {
+          Text(L10n.PreferencesShortcuts.quickAccessSectionDescription)
+            .font(.caption)
+            .foregroundColor(.secondary)
+
+          ShortcutRecorderView(
+            label: L10n.PreferencesShortcuts.editLatestCapture,
+            icon: "pencil.tip.crop.circle",
+            description: L10n.PreferencesShortcuts.editLatestCaptureDescription,
+            shortcut: $openEditorShortcut,
+            defaultShortcut: QuickAccessManager.defaultOpenEditorShortcut,
+            isEnabled: Binding(
+              get: { openEditorShortcutEnabled },
+              set: { newValue in
+                openEditorShortcutEnabled = newValue
+                QuickAccessManager.shared.openEditorShortcutEnabled = newValue
+              }
+            ),
+            onShortcutChanged: { config in
+              QuickAccessManager.shared.setOpenEditorShortcut(config)
+              return true
+            }
+          )
+        } header: {
+          HStack {
+            Text(L10n.PreferencesShortcuts.quickAccessSection)
+            Spacer()
+            Button(L10n.Common.reset) {
+              resetQuickAccessSection()
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+          }
+        }
+
+        QuickAccessActionShortcutsSection()
+
+        Section {
+          Text(L10n.PreferencesShortcuts.annotateActionsDescription)
+            .font(.caption)
+            .foregroundColor(.secondary)
+
+          ShortcutRecorderView(
+            label: L10n.ShortcutOverlay.copyAndClose,
+            icon: "doc.on.doc",
+            description: L10n.PreferencesShortcuts.copyAndCloseDescription,
+            shortcut: $copyAndCloseShortcut,
+            defaultShortcut: AnnotateShortcutManager.defaultCopyAndClose,
+            isEnabled: annotateActionEnabledBinding(for: .copyAndClose),
+            validationIssue: annotateActionValidationIssues[.copyAndClose],
+            onShortcutChanged: { handleAnnotateActionShortcutChange($0, for: .copyAndClose) }
+          )
+
+          ShortcutRecorderView(
+            label: L10n.AnnotateUI.toggleSidebar,
+            icon: "rectangle.on.rectangle",
+            shortcut: $toggleSidebarShortcut,
+            defaultShortcut: AnnotateShortcutManager.defaultToggleSidebar,
+            isEnabled: annotateActionEnabledBinding(for: .toggleSidebar),
+            validationIssue: annotateActionValidationIssues[.toggleSidebar],
+            onShortcutChanged: { handleAnnotateActionShortcutChange($0, for: .toggleSidebar) }
+          )
+
+          ShortcutRecorderView(
+            label: L10n.ShortcutOverlay.togglePin,
+            icon: "pin",
+            description: L10n.PreferencesShortcuts.togglePinDescription,
+            shortcut: $togglePinShortcut,
+            defaultShortcut: AnnotateShortcutManager.defaultTogglePin,
+            isEnabled: annotateActionEnabledBinding(for: .togglePin),
+            validationIssue: annotateActionValidationIssues[.togglePin],
+            onShortcutChanged: { handleAnnotateActionShortcutChange($0, for: .togglePin) }
+          )
+
+          ShortcutRecorderView(
+            label: L10n.ShortcutOverlay.cloudUpload,
+            icon: "icloud.and.arrow.up",
+            description: L10n.PreferencesShortcuts.cloudUploadDescription,
+            shortcut: $cloudUploadShortcut,
+            defaultShortcut: AnnotateShortcutManager.defaultCloudUpload,
+            isEnabled: annotateActionEnabledBinding(for: .cloudUpload),
+            validationIssue: annotateActionValidationIssues[.cloudUpload],
+            onShortcutChanged: { handleAnnotateActionShortcutChange($0, for: .cloudUpload) }
+          )
+
+          ShortcutRecorderView(
+            label: L10n.ShortcutOverlay.autoRedactSensitiveData,
+            icon: "shield.lefthalf.filled",
+            description: L10n.PreferencesShortcuts.autoRedactSensitiveDataDescription,
+            shortcut: $autoRedactSensitiveDataShortcut,
+            defaultShortcut: AnnotateShortcutManager.defaultAutoRedactSensitiveData,
+            isEnabled: annotateActionEnabledBinding(for: .autoRedactSensitiveData),
+            validationIssue: annotateActionValidationIssues[.autoRedactSensitiveData],
+            onShortcutChanged: { handleAnnotateActionShortcutChange($0, for: .autoRedactSensitiveData) }
+          )
+        } header: {
+          HStack {
+            Text(L10n.ShortcutOverlay.annotateActions)
+            Spacer()
+            Button(L10n.Common.reset) {
+              resetAnnotateActionsSection()
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+          }
+        }
+
+        Section {
+          Text(L10n.PreferencesShortcuts.annotationToolDescription)
+            .font(.caption)
+            .foregroundColor(.secondary)
+
+          ForEach(AnnotateShortcutManager.configurableTools, id: \.self) { tool in
+            SingleKeyRecorderView(
+              tool: tool,
+              shortcut: bindingForTool(tool),
+              isEnabled: toolEnabledBinding(for: tool),
+              validationIssue: annotateToolValidationIssues[tool],
+              onChanged: { handleAnnotateToolShortcutChange($0, for: tool) },
+              conflictingTool: conflictForTool(tool),
+              context: toolContext(for: tool),
+              defaultShortcut: tool.defaultShortcut
+            )
+          }
+
+          Text(L10n.PreferencesShortcuts.singleKeyHint)
+            .font(.caption)
+            .foregroundColor(.secondary)
+            .padding(.top, 4)
+        } header: {
+          HStack {
+            Text(L10n.ShortcutOverlay.annotateToolKeys)
+            Spacer()
+            Button(L10n.Common.reset) {
+              resetAnnotateToolKeysSection()
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+          }
+        }
+
+        Section(L10n.ShortcutOverlay.annotateReference) {
+          Text(L10n.PreferencesShortcuts.referenceDescription)
+            .font(.caption)
+            .foregroundColor(.secondary)
+
+          ReadOnlyShortcutRow(icon: "square.and.arrow.down", label: L10n.ShortcutOverlay.saveDone, shortcut: "⌘ S")
+          ReadOnlyShortcutRow(
+            icon: "square.and.arrow.down.on.square",
+            label: L10n.ShortcutOverlay.saveAs,
+            shortcut: "⌘ ⇧ S"
+          )
+          ReadOnlyShortcutRow(icon: "arrow.uturn.backward", label: L10n.ShortcutOverlay.undo, shortcut: "⌘ Z")
+          ReadOnlyShortcutRow(icon: "arrow.uturn.forward", label: L10n.ShortcutOverlay.redo, shortcut: "⌘ ⇧ Z")
+          ReadOnlyShortcutRow(icon: "trash", label: L10n.ShortcutOverlay.deleteAnnotation, shortcut: "⌫")
+          ReadOnlyShortcutRow(icon: "escape", label: L10n.ShortcutOverlay.cancelDeselect, shortcut: "⎋")
+          ReadOnlyShortcutRow(icon: "return", label: L10n.ShortcutOverlay.confirmCrop, shortcut: "↩")
+          ReadOnlyShortcutRow(
+            icon: "arrow.up.arrow.down.arrow.left.arrow.right",
+            label: L10n.ShortcutOverlay.nudgeAnnotation,
+            shortcut: "← → ↑ ↓"
+          )
+          ReadOnlyShortcutRow(
+            icon: "arrow.up.arrow.down.arrow.left.arrow.right",
+            label: L10n.ShortcutOverlay.nudgeTenPixels,
+            shortcut: "⇧ ← → ↑ ↓"
+          )
+        }
+      }
+    }
+    .formStyle(.grouped)
+    .onAppear {
+      accessibilityGranted = AXIsProcessTrusted()
+    }
+    .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+      accessibilityGranted = AXIsProcessTrusted()
+    }
+    .safeAreaInset(edge: .bottom) {
+      HStack {
+        Spacer()
+        Button(L10n.PreferencesShortcuts.resetToDefaults) {
+          resetToDefaults()
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.regular)
+        .padding()
+      }
+    }
+  }
+
+  // MARK: - Actions
+
+  /// Show the Accessibility hint only when an Fn-based binding exists and the
+  /// permission the Fn key monitors rely on is missing.
+  private var showsFnAccessibilityHint: Bool {
+    shortcutsEnabled && manager.hasFnBoundShortcuts && !accessibilityGranted
+  }
+
+  private func resetCaptureSection(refresh: Bool = true) {
+    fullscreenShortcut = .defaultFullscreen
+    areaShortcut = .defaultArea
+    repeatAreaShortcut = .defaultRepeatArea
+    areaAnnotateShortcut = .defaultAreaAnnotate
+    activeWindowShortcut = .defaultActiveWindowCapture
+    areaApplicationCaptureShortcut = CaptureOverlayShortcutSettings.defaultApplicationCaptureShortcut
+    scrollingCaptureShortcut = .defaultScrollingCapture
+    objectCutoutShortcut = .defaultObjectCutout
+    ocrShortcut = .defaultOCR
+    smartElementShortcut = .defaultSmartElement
+
+    let captureKinds: [GlobalShortcutKind] = [
+      .fullscreen, .area, .repeatArea, .areaAnnotate, .activeWindow, .scrollingCapture, .objectCutout, .ocr, .smartElement,
+    ]
+    for kind in captureKinds {
+      globalShortcutEnabled[kind] = true
+      manager.setShortcutEnabled(true, for: kind)
+      globalValidationIssues.removeValue(forKey: kind)
+    }
+    captureOverlayValidationIssues.removeValue(forKey: .applicationCapture)
+
+    manager.setFullscreenShortcut(.defaultFullscreen)
+    manager.setAreaShortcut(.defaultArea)
+    manager.setRepeatAreaShortcut(.defaultRepeatArea)
+    manager.setAreaAnnotateShortcut(.defaultAreaAnnotate)
+    manager.setActiveWindowShortcut(.defaultActiveWindowCapture)
+    manager.setScrollingCaptureShortcut(.defaultScrollingCapture)
+    manager.setObjectCutoutShortcut(.defaultObjectCutout)
+    manager.setOCRShortcut(.defaultOCR)
+    manager.setSmartElementShortcut(.defaultSmartElement)
+    CaptureOverlayShortcutSettings.resetApplicationCaptureShortcut()
+
+    if refresh {
+      manager.refreshShortcutRegistration()
+      hasSystemConflict = SystemScreenshotShortcutManager.shared.hasConflictingSystemShortcuts()
+    }
+  }
+
+  private func resetRecordingSection(refresh: Bool = true) {
+    recordingShortcut = .defaultRecording
+    recordingApplicationCaptureShortcut = CaptureOverlayShortcutSettings.defaultRecordingApplicationCaptureShortcut
+    pauseResumeRecordingShortcut = nil
+    togglePenRecordingShortcut = nil
+    restartRecordingShortcut = nil
+    deleteRecordingShortcut = nil
+
+    globalShortcutEnabled[.recording] = true
+    globalShortcutEnabled[.pauseResumeRecording] = true
+    globalShortcutEnabled[.togglePenRecording] = true
+    globalShortcutEnabled[.restartRecording] = true
+    globalShortcutEnabled[.deleteRecording] = true
+
+    manager.setShortcutEnabled(true, for: .recording)
+    manager.setShortcutEnabled(true, for: .pauseResumeRecording)
+    manager.setShortcutEnabled(true, for: .togglePenRecording)
+    manager.setShortcutEnabled(true, for: .restartRecording)
+    manager.setShortcutEnabled(true, for: .deleteRecording)
+
+    globalValidationIssues.removeValue(forKey: .recording)
+    globalValidationIssues.removeValue(forKey: .pauseResumeRecording)
+    globalValidationIssues.removeValue(forKey: .togglePenRecording)
+    globalValidationIssues.removeValue(forKey: .restartRecording)
+    globalValidationIssues.removeValue(forKey: .deleteRecording)
+    captureOverlayValidationIssues.removeValue(forKey: .applicationRecording)
+
+    manager.setRecordingShortcut(.defaultRecording)
+    manager.setPauseResumeRecordingShortcut(nil)
+    manager.setTogglePenRecordingShortcut(nil)
+    manager.setRestartRecordingShortcut(nil)
+    manager.setDeleteRecordingShortcut(nil)
+    CaptureOverlayShortcutSettings.resetRecordingApplicationCaptureShortcut()
+
+    if refresh {
+      manager.refreshShortcutRegistration()
+      hasSystemConflict = SystemScreenshotShortcutManager.shared.hasConflictingSystemShortcuts()
+    }
+  }
+
+  private func resetToolsSection(refresh: Bool = true) {
+    annotateShortcut = .defaultAnnotate
+    videoEditorShortcut = .defaultVideoEditor
+    cloudUploadsShortcut = .defaultCloudUploads
+    shortcutListShortcut = .defaultShortcutList
+
+    let toolsKinds: [GlobalShortcutKind] = [.annotate, .videoEditor, .cloudUploads, .shortcutList]
+    for kind in toolsKinds {
+      globalShortcutEnabled[kind] = true
+      manager.setShortcutEnabled(true, for: kind)
+      globalValidationIssues.removeValue(forKey: kind)
+    }
+
+    manager.setAnnotateShortcut(.defaultAnnotate)
+    manager.setVideoEditorShortcut(.defaultVideoEditor)
+    manager.setCloudUploadsShortcut(.defaultCloudUploads)
+    manager.setShortcutListShortcut(.defaultShortcutList)
+
+    if refresh {
+      manager.refreshShortcutRegistration()
+      hasSystemConflict = SystemScreenshotShortcutManager.shared.hasConflictingSystemShortcuts()
+    }
+  }
+
+  private func resetHistorySection(refresh: Bool = true) {
+    historyShortcut = .defaultHistory
+    globalShortcutEnabled[.history] = true
+    manager.setShortcutEnabled(true, for: .history)
+    globalValidationIssues.removeValue(forKey: .history)
+    manager.setHistoryShortcut(.defaultHistory)
+
+    HistoryFloatingManager.shared.resetToggleModeShortcut()
+
+    if refresh {
+      manager.refreshShortcutRegistration()
+      hasSystemConflict = SystemScreenshotShortcutManager.shared.hasConflictingSystemShortcuts()
+    }
+  }
+
+  private func resetQuickAccessSection() {
+    openEditorShortcut = QuickAccessManager.defaultOpenEditorShortcut
+    QuickAccessManager.shared.setOpenEditorShortcut(QuickAccessManager.defaultOpenEditorShortcut)
+    openEditorShortcutEnabled = false
+    QuickAccessManager.shared.openEditorShortcutEnabled = false
+    QuickAccessActionShortcutStore.shared.resetToDefaults()
+  }
+
+  private func resetAnnotateActionsSection() {
+    copyAndCloseShortcut = AnnotateShortcutManager.defaultCopyAndClose
+    toggleSidebarShortcut = AnnotateShortcutManager.defaultToggleSidebar
+    togglePinShortcut = AnnotateShortcutManager.defaultTogglePin
+    cloudUploadShortcut = AnnotateShortcutManager.defaultCloudUpload
+    autoRedactSensitiveDataShortcut = AnnotateShortcutManager.defaultAutoRedactSensitiveData
+
+    for kind in AnnotateActionShortcutKind.allCases {
+      annotateActionEnabled[kind] = true
+      annotateManager.setActionShortcutEnabled(true, for: kind)
+      annotateActionValidationIssues.removeValue(forKey: kind)
+    }
+
+    annotateManager.setCopyAndCloseShortcut(AnnotateShortcutManager.defaultCopyAndClose)
+    annotateManager.setToggleSidebarShortcut(AnnotateShortcutManager.defaultToggleSidebar)
+    annotateManager.setTogglePinShortcut(AnnotateShortcutManager.defaultTogglePin)
+    annotateManager.setCloudUploadShortcut(AnnotateShortcutManager.defaultCloudUpload)
+    annotateManager.setAutoRedactSensitiveDataShortcut(AnnotateShortcutManager.defaultAutoRedactSensitiveData)
+  }
+
+  private func resetAnnotateToolKeysSection() {
+    for tool in AnnotateShortcutManager.configurableTools {
+      annotateManager.setShortcut(tool.defaultShortcut, for: tool)
+      annotateManager.setShortcutEnabled(true, for: tool)
+      annotateToolValidationIssues.removeValue(forKey: tool)
+    }
+  }
+
+  private func resetToDefaults() {
+    resetCaptureSection(refresh: false)
+    resetRecordingSection(refresh: false)
+    resetToolsSection(refresh: false)
+    resetQuickAccessSection()
+    resetAnnotateActionsSection()
+    resetAnnotateToolKeysSection()
+
+    manager.refreshShortcutRegistration()
+    hasSystemConflict = SystemScreenshotShortcutManager.shared.hasConflictingSystemShortcuts()
+  }
+
+  /// Re-check system shortcut conflict status with spinner animation
+  private func refreshSystemConflict() {
+    isRefreshingConflict = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+      withAnimation(.easeInOut(duration: 0.3)) {
+        hasSystemConflict = SystemScreenshotShortcutManager.shared.hasConflictingSystemShortcuts()
+      }
+      isRefreshingConflict = false
+    }
+  }
+
+  // MARK: - Annotation Tool Helpers
+
+  private func bindingForTool(_ tool: AnnotationToolType) -> Binding<Character?> {
+    Binding(
+      get: { annotateManager.shortcut(for: tool) },
+      set: { annotateManager.setShortcut($0, for: tool) }
+    )
+  }
+
+  private func toolEnabledBinding(for tool: AnnotationToolType) -> Binding<Bool> {
+    Binding(
+      get: { annotateManager.isShortcutEnabled(for: tool) },
+      set: { newValue in
+        if newValue, let key = annotateManager.shortcut(for: tool) {
+          switch validator.validateAnnotateToolShortcut(key, for: tool) {
+          case .accept(let issue):
+            annotateToolValidationIssues[tool] = issue
+          case .reject(let issue):
+            annotateToolValidationIssues[tool] = issue
+            return
+          }
+        }
+
+        annotateManager.setShortcutEnabled(newValue, for: tool)
+        if !newValue {
+          annotateToolValidationIssues.removeValue(forKey: tool)
+        }
+      }
+    )
+  }
+
+  private func globalEnabledBinding(for kind: GlobalShortcutKind) -> Binding<Bool> {
+    Binding(
+      get: { globalShortcutEnabled[kind] ?? true },
+      set: { newValue in
+        if newValue {
+          switch validator.validateGlobalShortcut(manager.shortcut(for: kind), for: kind) {
+          case .accept(let issue):
+            globalValidationIssues[kind] = issue
+          case .reject(let issue):
+            globalValidationIssues[kind] = issue
+            return
+          }
+        }
+
+        globalShortcutEnabled[kind] = newValue
+        manager.setShortcutEnabled(newValue, for: kind)
+        if !newValue {
+          globalValidationIssues.removeValue(forKey: kind)
+        }
+        if kind.isSystemConflictRelevant {
+          hasSystemConflict = SystemScreenshotShortcutManager.shared.hasConflictingSystemShortcuts()
+        }
+      }
+    )
+  }
+
+  private func annotateActionEnabledBinding(for kind: AnnotateActionShortcutKind) -> Binding<Bool> {
+    Binding(
+      get: { annotateActionEnabled[kind] ?? true },
+      set: { newValue in
+        if newValue {
+          switch validator.validateAnnotateActionShortcut(annotateManager.shortcut(for: kind), for: kind) {
+          case .accept(let issue):
+            annotateActionValidationIssues[kind] = issue
+          case .reject(let issue):
+            annotateActionValidationIssues[kind] = issue
+            return
+          }
+        }
+
+        annotateActionEnabled[kind] = newValue
+        annotateManager.setActionShortcutEnabled(newValue, for: kind)
+        if !newValue {
+          annotateActionValidationIssues.removeValue(forKey: kind)
+        }
+      }
+    )
+  }
+
+  private func conflictForTool(_ tool: AnnotationToolType) -> AnnotationToolType? {
+    guard annotateManager.isShortcutEnabled(for: tool),
+          let key = annotateManager.shortcut(for: tool) else { return nil }
+    return annotateManager.conflictingTool(for: key, excluding: tool)
+  }
+
+  private func handleGlobalShortcutChange(_ config: ShortcutConfig?, for kind: GlobalShortcutKind) -> Bool {
+    switch validator.validateGlobalShortcut(config, for: kind) {
+    case .accept(let issue):
+      globalValidationIssues[kind] = issue
+      switch kind {
+      case .fullscreen:
+        fullscreenShortcut = config
+        manager.setFullscreenShortcut(config)
+      case .area:
+        areaShortcut = config
+        manager.setAreaShortcut(config)
+      case .repeatArea:
+        repeatAreaShortcut = config
+        manager.setRepeatAreaShortcut(config)
+      case .areaAnnotate:
+        areaAnnotateShortcut = config
+        manager.setAreaAnnotateShortcut(config)
+      case .activeWindow:
+        activeWindowShortcut = config
+        manager.setActiveWindowShortcut(config)
+      case .scrollingCapture:
+        scrollingCaptureShortcut = config
+        manager.setScrollingCaptureShortcut(config)
+      case .recording:
+        recordingShortcut = config
+        manager.setRecordingShortcut(config)
+      case .pauseResumeRecording:
+        pauseResumeRecordingShortcut = config
+        manager.setPauseResumeRecordingShortcut(config)
+      case .togglePenRecording:
+        togglePenRecordingShortcut = config
+        manager.setTogglePenRecordingShortcut(config)
+      case .restartRecording:
+        restartRecordingShortcut = config
+        manager.setRestartRecordingShortcut(config)
+      case .deleteRecording:
+        deleteRecordingShortcut = config
+        manager.setDeleteRecordingShortcut(config)
+      case .annotate:
+        annotateShortcut = config
+        manager.setAnnotateShortcut(config)
+      case .videoEditor:
+        videoEditorShortcut = config
+        manager.setVideoEditorShortcut(config)
+      case .cloudUploads:
+        cloudUploadsShortcut = config
+        manager.setCloudUploadsShortcut(config)
+      case .shortcutList:
+        shortcutListShortcut = config
+        manager.setShortcutListShortcut(config)
+      case .ocr:
+        ocrShortcut = config
+        manager.setOCRShortcut(config)
+      case .smartElement:
+        smartElementShortcut = config
+        manager.setSmartElementShortcut(config)
+      case .objectCutout:
+        objectCutoutShortcut = config
+        manager.setObjectCutoutShortcut(config)
+      case .history:
+        historyShortcut = config
+        manager.setHistoryShortcut(config)
+      }
+
+      if kind.isSystemConflictRelevant {
+        hasSystemConflict = SystemScreenshotShortcutManager.shared.hasConflictingSystemShortcuts()
+      }
+      return true
+    case .reject(let issue):
+      globalValidationIssues[kind] = issue
+      return false
+    }
+  }
+
+  private func handleAnnotateActionShortcutChange(
+    _ config: ShortcutConfig?,
+    for kind: AnnotateActionShortcutKind
+  ) -> Bool {
+    switch validator.validateAnnotateActionShortcut(config, for: kind) {
+    case .accept(let issue):
+      annotateActionValidationIssues[kind] = issue
+      switch kind {
+      case .copyAndClose:
+        copyAndCloseShortcut = config
+        annotateManager.setCopyAndCloseShortcut(config)
+      case .toggleSidebar:
+        toggleSidebarShortcut = config
+        annotateManager.setToggleSidebarShortcut(config)
+      case .togglePin:
+        togglePinShortcut = config
+        annotateManager.setTogglePinShortcut(config)
+      case .cloudUpload:
+        cloudUploadShortcut = config
+        annotateManager.setCloudUploadShortcut(config)
+      case .autoRedactSensitiveData:
+        autoRedactSensitiveDataShortcut = config
+        annotateManager.setAutoRedactSensitiveDataShortcut(config)
+      }
+      return true
+    case .reject(let issue):
+      annotateActionValidationIssues[kind] = issue
+      return false
+    }
+  }
+
+  private func handleCaptureOverlayShortcutChange(
+    _ shortcut: CaptureOverlayShortcut?,
+    for kind: CaptureOverlayShortcutKind
+  ) -> Bool {
+    switch validator.validateCaptureOverlayShortcut(shortcut, for: kind) {
+    case .accept(let issue):
+      captureOverlayValidationIssues[kind] = issue
+      switch kind {
+      case .applicationCapture:
+        areaApplicationCaptureShortcut = shortcut
+        CaptureOverlayShortcutSettings.setApplicationCaptureShortcut(shortcut)
+      case .applicationRecording:
+        recordingApplicationCaptureShortcut = shortcut
+        CaptureOverlayShortcutSettings.setRecordingApplicationCaptureShortcut(shortcut)
+      }
+      manager.refreshShortcutRegistration()
+      hasSystemConflict = SystemScreenshotShortcutManager.shared.hasConflictingSystemShortcuts()
+      return true
+    case .reject(let issue):
+      captureOverlayValidationIssues[kind] = issue
+      return false
+    }
+  }
+
+  private func handleAnnotateToolShortcutChange(
+    _ key: Character?,
+    for tool: AnnotationToolType
+  ) -> Bool {
+    guard let key else {
+      annotateToolValidationIssues.removeValue(forKey: tool)
+      annotateManager.setShortcut(nil, for: tool)
+      return true
+    }
+
+    switch validator.validateAnnotateToolShortcut(key, for: tool) {
+    case .accept(let issue):
+      annotateToolValidationIssues[tool] = issue
+      annotateManager.setShortcut(key, for: tool)
+      return true
+    case .reject(let issue):
+      annotateToolValidationIssues[tool] = issue
+      return false
+    }
+  }
+
+  /// Recording annotation supports a subset of tools
+  private static let recordingTools: Set<AnnotationToolType> = [
+    .selection, .rectangle, .oval, .arrow, .line, .pencil, .highlighter,
+  ]
+
+  /// Screenshot annotation tools (all configurable except crop handled separately)
+  private static let screenshotTools: Set<AnnotationToolType> = [
+    .selection, .rectangle, .oval, .arrow, .line, .text,
+    .highlighter, .blur, .counter, .pencil,
+  ]
+
+  private func toolContext(for tool: AnnotationToolType) -> AnnotationToolContext {
+    let inScreenshot = Self.screenshotTools.contains(tool)
+    let inRecording = Self.recordingTools.contains(tool)
+    if inScreenshot, inRecording { return .both }
+    if inRecording { return .recordingOnly }
+    return .screenshotOnly
+  }
+}
+
+private struct CaptureOverlayShortcutRecorderRow: View {
+  let label: String
+  let description: String
+  @Binding var shortcut: CaptureOverlayShortcut?
+  let defaultShortcut: CaptureOverlayShortcut?
+  let isEnabled: Binding<Bool>
+  let validationIssue: ShortcutValidationIssue?
+  let onShortcutChanged: (CaptureOverlayShortcut?) -> Bool
+
+  @State private var isRecording = false
+  @State private var eventMonitor: Any?
+  @State private var didSuspendGlobalShortcuts = false
+
+  var body: some View {
+    HStack(spacing: 12) {
+      Image(systemName: "macwindow")
+        .font(.title2)
+        .foregroundColor(.secondary)
+        .frame(width: 28)
+
+      VStack(alignment: .leading, spacing: 2) {
+        Text(label)
+          .fontWeight(.medium)
+        Text(description)
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
+
+      Spacer()
+
+      shortcutRecorderButton
+
+      ShortcutResetButton(
+        isDisabled: !isEnabled.wrappedValue || isRecording || shortcut == defaultShortcut,
+        action: resetToDefault
+      )
+
+      toggleStatus
+    }
+    .padding(.vertical, 4)
+    .opacity(rowOpacity)
+    .onChange(of: isEnabled.wrappedValue) { newValue in
+      if !newValue {
+        stopRecording()
+      }
+    }
+    .onDisappear {
+      stopRecording()
+    }
+  }
+
+  private var shortcutRecorderButton: some View {
+    Button {
+      startRecording()
+    } label: {
+      if isRecording {
+        Text(L10n.ShortcutRecorder.pressKeys)
+          .font(.system(size: 12, weight: .medium))
+          .foregroundColor(.accentColor)
+          .frame(minWidth: 100)
+      } else if let shortcut {
+        KeyCapGroupView(parts: shortcut.displayParts)
+      } else {
+        EmptyShortcutCTAView(title: L10n.PreferencesShortcuts.setKey, minWidth: 72)
+      }
+    }
+    .buttonStyle(ShortcutKeycapButtonStyle(isRecording: isRecording))
+    .shortcutValidationHighlight(issue: validationIssue)
+    .disabled(!isEnabled.wrappedValue)
+    .help(isEnabled.wrappedValue ? L10n.ShortcutRecorder.clickToRecord : L10n.ShortcutRecorder.turnOnToEdit)
+  }
+
+  private var toggleStatus: some View {
+    HStack(spacing: 6) {
+      Text(isEnabled.wrappedValue ? L10n.Common.on : L10n.Common.off)
+        .font(.caption)
+        .foregroundColor(.secondary)
+
+      Toggle("", isOn: isEnabled)
+        .labelsHidden()
+    }
+  }
+
+  private var rowOpacity: Double {
+    isEnabled.wrappedValue ? 1 : 0.62
+  }
+
+  private func resetToDefault() {
+    if onShortcutChanged(defaultShortcut) {
+      shortcut = defaultShortcut
+    }
+  }
+
+  private func startRecording() {
+    guard !isRecording, isEnabled.wrappedValue else { return }
+    isRecording = true
+    KeyboardShortcutManager.shared.beginTemporaryShortcutSuppression()
+    didSuspendGlobalShortcuts = true
+
+    eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+      if event.keyCode == UInt16(kVK_Escape) {
+        stopRecording()
+        return nil
+      }
+
+      if isClearShortcutEvent(event) {
+        _ = onShortcutChanged(nil)
+        stopRecording()
+        return nil
+      }
+
+      guard let newShortcut = CaptureOverlayShortcut(from: event) else {
+        return nil
+      }
+
+      if onShortcutChanged(newShortcut) {
+        shortcut = newShortcut
+        stopRecording()
+      }
+      return nil
+    }
+  }
+
+  private func isClearShortcutEvent(_ event: NSEvent) -> Bool {
+    switch Int(event.keyCode) {
+    case kVK_Delete, kVK_ForwardDelete:
+      event.modifierFlags
+        .intersection([.command, .control, .option, .shift])
+        .isEmpty
+    default:
+      false
+    }
+  }
+
+  private func stopRecording() {
+    isRecording = false
+    if let monitor = eventMonitor {
+      NSEvent.removeMonitor(monitor)
+      eventMonitor = nil
+    }
+    if didSuspendGlobalShortcuts {
+      KeyboardShortcutManager.shared.endTemporaryShortcutSuppression()
+      didSuspendGlobalShortcuts = false
+    }
+  }
+}
+
+// MARK: - Guide Step Component
+
+private struct PreferencesGuideStep: View {
+  let step: String
+  let text: String
+
+  var body: some View {
+    HStack(spacing: 8) {
+      Text(step)
+        .font(.system(size: 10, weight: .bold, design: .monospaced))
+        .foregroundColor(.orange)
+        .frame(width: 18, height: 18)
+        .background(
+          Circle()
+            .fill(Color.orange.opacity(0.15))
+        )
+
+      Text(.init(text)) // Supports **bold** markdown
+        .font(.system(size: 12))
+        .foregroundColor(.primary)
+    }
+  }
+}
+
+#Preview {
+  ShortcutsSettingsView()
+    .frame(width: 600, height: 500)
+}
+
+// MARK: - Read-Only Shortcut Row
+
+private struct ReadOnlyShortcutRow: View {
+  let icon: String
+  let label: String
+  let shortcut: String
+
+  var body: some View {
+    HStack(spacing: 12) {
+      Image(systemName: icon)
+        .font(.title3)
+        .foregroundColor(.secondary)
+        .frame(width: 24)
+
+      Text(label)
+        .frame(minWidth: 100, alignment: .leading)
+
+      Spacer()
+
+      if shouldUseKeycaps {
+        KeyCapGroupView(parts: shortcutParts)
+      } else {
+        Text(shortcut)
+          .font(.system(.body, design: .monospaced))
+          .foregroundColor(.secondary)
+          .padding(.horizontal, 12)
+          .padding(.vertical, 6)
+          .background(
+            RoundedRectangle(cornerRadius: 6)
+              .fill(Color.gray.opacity(0.1))
+          )
+      }
+    }
+    .padding(.vertical, 2)
+  }
+
+  /// Split the display string (e.g. "⌘ ⇧ Z" or "← → ↑ ↓") into individual parts
+  private var shortcutParts: [String] {
+    shortcut
+      .split(separator: " ")
+      .map(String.init)
+  }
+
+  private var shouldUseKeycaps: Bool {
+    shortcutParts.filter { !modifierTokens.contains($0) }.count <= 1
+  }
+
+  private var modifierTokens: Set<String> {
+    ["⌘", "⇧", "⌥", "⌃"]
+  }
+}

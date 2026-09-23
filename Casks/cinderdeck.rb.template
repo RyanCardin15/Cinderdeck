@@ -1,0 +1,17 @@
+# Generated with a real artifact checksum by the stable release workflow.
+cask "cinderdeck" do
+  version "__VERSION__"
+  sha256 "__SHA256__"
+  url "https://github.com/RyanCardin15/Cinderdeck/releases/download/v#{version}/Cinderdeck-v#{version}.dmg"
+  name "Cinderdeck"
+  desc "Native macOS development control deck for projects, services, and coding agents"
+  homepage "https://github.com/RyanCardin15/Cinderdeck"
+  depends_on macos: :ventura
+  app "Cinderdeck.app"
+  zap trash: [
+    "~/Library/Application Support/Cinderdeck",
+    "~/Library/Preferences/com.ryancardin.cinderdeck.plist",
+    "~/Library/Caches/Cinderdeck",
+    "~/Library/Logs/Cinderdeck",
+  ]
+end

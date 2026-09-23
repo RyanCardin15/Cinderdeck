@@ -3,7 +3,7 @@
 set -eu
 
 endpoint="${R2_ENDPOINT:-http://cloudflare-r2:9000}"
-bucket="${R2_BUCKET:-snapzy-r2-local}"
+bucket="${R2_BUCKET:-cinderdeck-r2-local}"
 access_key="${R2_ACCESS_KEY_ID:-minioadmin}"
 secret_key="${R2_SECRET_ACCESS_KEY:-minioadmin123}"
 

@@ -12,12 +12,12 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/.build/agent-verify"
 DERIVED="$OUT/derived"
 FIX="$OUT/fixture"
-APP="$DERIVED/Build/Products/Debug/Snapzy Debug.app"
-BIN="$APP/Contents/MacOS/Snapzy"
+APP="$DERIVED/Build/Products/Debug/Cinderdeck Debug.app"
+BIN="$APP/Contents/MacOS/Cinderdeck"
 mkdir -p "$OUT"
 cd "$ROOT"
 
-COMMON=(-project Snapzy.xcodeproj -scheme Snapzy -configuration Debug -destination 'platform=macOS,arch=arm64'
+COMMON=(-project Cinderdeck.xcodeproj -scheme Cinderdeck -configuration Debug -destination 'platform=macOS,arch=arm64'
   -derivedDataPath "$DERIVED" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=)
 
 do_build() {
@@ -25,7 +25,7 @@ do_build() {
   xcodebuild build "${COMMON[@]}" > "$OUT/build.log" 2>&1
   local status=$?
   echo "$status" > "$OUT/build.status"
-  grep -E "(error|warning): " "$OUT/build.log" | grep -E "/Stack|/Snapzy(Main|App)|/AppCoordinator|/HistoryFloating|error:" | sort -u > "$OUT/build.issues" || true
+  grep -E "(error|warning): " "$OUT/build.log" | grep -E "/Stack|/Cinderdeck(Main|App)|/AppCoordinator|/HistoryFloating|error:" | sort -u > "$OUT/build.issues" || true
   echo "[build] status $status"
   return $status
 }
@@ -33,15 +33,15 @@ do_build() {
 do_test() {
   echo "[test] $(date +%T)"
   xcodebuild test "${COMMON[@]}" -parallel-testing-enabled NO \
-    -only-testing:SnapzyTests/StackDefinitionLoaderTests -only-testing:SnapzyTests/GitStatusParserTests \
-    -only-testing:SnapzyTests/GitRecentBranchesTests -only-testing:SnapzyTests/AnsiParserTests -only-testing:SnapzyTests/LogBufferTests \
-    -only-testing:SnapzyTests/StackProcessIntegrationTests -only-testing:SnapzyTests/StackSupervisorOrderingTests \
-    -only-testing:SnapzyTests/GitServiceIntegrationTests -only-testing:SnapzyTests/StackRunStoreTests \
-    -only-testing:SnapzyTests/StackConfigurationTests -only-testing:SnapzyTests/StackDefinitionWatcherTests \
-    -only-testing:SnapzyTests/StackKeyboardTests -only-testing:SnapzyTests/StackCrashRecoveryTests \
-    -only-testing:SnapzyTests/StackEnvironmentAndSecretsTests -only-testing:SnapzyTests/StackControlTests \
-    -only-testing:SnapzyTests/DatabaseManagerTests -only-testing:SnapzyTests/ClipboardTextHistoryStoreTests \
-    -only-testing:SnapzyTests/SimpleTOMLParserTests > "$OUT/test.log" 2>&1
+    -only-testing:CinderdeckTests/StackDefinitionLoaderTests -only-testing:CinderdeckTests/GitStatusParserTests \
+    -only-testing:CinderdeckTests/GitRecentBranchesTests -only-testing:CinderdeckTests/AnsiParserTests -only-testing:CinderdeckTests/LogBufferTests \
+    -only-testing:CinderdeckTests/StackProcessIntegrationTests -only-testing:CinderdeckTests/StackSupervisorOrderingTests \
+    -only-testing:CinderdeckTests/GitServiceIntegrationTests -only-testing:CinderdeckTests/StackRunStoreTests \
+    -only-testing:CinderdeckTests/StackConfigurationTests -only-testing:CinderdeckTests/StackDefinitionWatcherTests \
+    -only-testing:CinderdeckTests/StackKeyboardTests -only-testing:CinderdeckTests/StackCrashRecoveryTests \
+    -only-testing:CinderdeckTests/StackEnvironmentAndSecretsTests -only-testing:CinderdeckTests/StackControlTests \
+    -only-testing:CinderdeckTests/DatabaseManagerTests -only-testing:CinderdeckTests/ClipboardTextHistoryStoreTests \
+    -only-testing:CinderdeckTests/SimpleTOMLParserTests > "$OUT/test.log" 2>&1
   local status=$?
   echo "$status" > "$OUT/test.status"
   grep -E "error:|failed|Test Suite .* (passed|failed)|Executed [0-9]+ tests" "$OUT/test.log" | tail -60 > "$OUT/test.summary" || true
@@ -50,7 +50,7 @@ do_test() {
 }
 
 make_fixture() {
-  pkill -f "SNAPZY_STACKS_PREVIEW_ROOT_MARKER" 2>/dev/null
+  pkill -f "CINDERDECK_STACKS_PREVIEW_ROOT_MARKER" 2>/dev/null
   pkill -f "$BIN" 2>/dev/null; sleep 1
   for port in 47811 47812 47813; do lsof -tiTCP:$port -sTCP:LISTEN | xargs kill 2>/dev/null; done
   rm -rf "$FIX"; mkdir -p "$FIX/stacks" "$FIX/projects/web" "$FIX/projects/api"
@@ -84,9 +84,9 @@ do_e2e() {
   echo "[e2e] $(date +%T)"
   [ -x "$BIN" ] || { echo "no app build"; echo 1 > "$OUT/e2e.status"; return 1; }
   make_fixture
-  export SNAPZY_STACKS_PREVIEW_ROOT="$FIX"
+  export CINDERDECK_STACKS_PREVIEW_ROOT="$FIX"
   local log="$OUT/e2e.log"; : > "$log"
-  run() { echo; echo "\$ snapzy $*" >> "$log"; "$BIN" "$@" >> "$log" 2>&1; echo "[exit $?]" >> "$log"; }
+  run() { echo; echo "\$ cinderdeck $*" >> "$log"; "$BIN" "$@" >> "$log" 2>&1; echo "[exit $?]" >> "$log"; }
   "$BIN" -AppleLanguages "(en)" > "$OUT/app.log" 2>&1 &
   echo "app pid $!" >> "$log"
   for i in $(seq 1 60); do [ -S "$FIX/Agent/control.sock" ] && break; sleep 0.5; done
@@ -108,7 +108,7 @@ do_e2e() {
   run stacks events demo
   run stacks validate "$FIX/stacks/demo.toml"
   run stacks kill-port 47813 $stray --as Codex --session e2e
-  echo >> "$log"; echo '$ snapzy mcp  (initialize, tools/list, list_stacks, read_logs, list_ports)' >> "$log"
+  echo >> "$log"; echo '$ cinderdeck mcp  (initialize, tools/list, list_stacks, read_logs, list_ports)' >> "$log"
   printf '%s\n' \
     '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"cursor-vscode","version":"1"},"capabilities":{}}}' \
     '{"jsonrpc":"2.0","method":"notifications/initialized"}' \

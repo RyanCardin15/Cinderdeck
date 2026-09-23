@@ -1,6 +1,6 @@
 # Self-Signed Certificate Setup
 
-Snapzy uses a self-signed code signing certificate to preserve macOS TCC permissions (Screen Recording, Microphone, etc.) across Sparkle updates.
+Cinderdeck uses a self-signed code signing certificate to preserve macOS TCC permissions (Screen Recording, Microphone, etc.) across Sparkle updates.
 
 ## Why This Matters
 
@@ -79,7 +79,7 @@ When you enroll in Apple Developer Program:
 The default certificate is valid for 10 years. To regenerate:
 
 ```bash
-./scripts/create-signing-cert.sh "Snapzy Self-Signed" 3650
+./scripts/create-signing-cert.sh "Cinderdeck Self-Signed" 3650
 ```
 
 Then update the GitHub Secrets with the new values.

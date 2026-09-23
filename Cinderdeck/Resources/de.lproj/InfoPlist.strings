@@ -1,0 +1,3 @@
+"NSMicrophoneUsageDescription" = "Cinderdeck benötigt Mikrofonzugriff, um Audio mit Ihren Bildschirmaufnahmen aufzunehmen.";
+"NSCameraUsageDescription" = "Cinderdeck benötigt Kamerazugriff, um Ihren Bildschirmaufnahmen ein Kamerabild hinzuzufügen.";
+"NSScreenCaptureUsageDescription" = "Cinderdeck benötigt die Berechtigung zur Bildschirmaufzeichnung, um Screenshots aufzunehmen und Ihren Bildschirm aufzuzeichnen.";

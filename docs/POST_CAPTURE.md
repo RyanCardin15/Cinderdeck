@@ -4,7 +4,7 @@ Post-capture routing is everything that happens after a capture file exists: des
 
 ## Trigger Wiring
 
-- Screenshots: `ScreenCaptureManager` emits every saved file URL on `captureCompletedPublisher` (sent from `saveImage(...)` when `emitCompletion` is true). The single subscription lives in `ScreenCaptureViewModel`'s init (`Snapzy/Features/Capture/CaptureViewModel.swift`) and calls `PostCaptureActionHandler.handleScreenshotCapture(url:)`.
+- Screenshots: `ScreenCaptureManager` emits every saved file URL on `captureCompletedPublisher` (sent from `saveImage(...)` when `emitCompletion` is true). The single subscription lives in `ScreenCaptureViewModel`'s init (`Cinderdeck/Features/Capture/CaptureViewModel.swift`) and calls `PostCaptureActionHandler.handleScreenshotCapture(url:)`.
 - Batch screenshots (multi-display fullscreen) call `handleScreenshotCaptures(urls:)` directly from the capture flow instead of the publisher.
 - Recordings: `RecordingCoordinator` calls `handleVideoCapture(url:)` after the writer finishes and the file is moved to its destination; the GIF flow calls `handleVideoCapture(url:skipQuickAccess: true)` after conversion because the placeholder card was already inserted. See [`RECORDING.md`](RECORDING.md).
 - **OCR exception**: Capture Text is the only capture path that writes no file — recognized text/QR payloads go straight to the pasteboard as plain text, so no post-capture routing runs. See [`CAPTURE.md`](CAPTURE.md).
@@ -12,7 +12,7 @@ Post-capture routing is everything that happens after a capture file exists: des
 
 ## After-Capture Action Matrix
 
-`AfterCaptureAction` (`Snapzy/Features/Preferences/PreferencesManager.swift`) has 4 cases as of HEAD, each gated per `CaptureType` (`.screenshot`, `.recording`):
+`AfterCaptureAction` (`Cinderdeck/Features/Preferences/PreferencesManager.swift`) has 4 cases as of HEAD, each gated per `CaptureType` (`.screenshot`, `.recording`):
 
 | Action | Screenshot default | Recording default | Effect |
 | --- | --- | --- | --- |
@@ -75,31 +75,31 @@ Batch variant `handleScreenshotCaptures(urls:)`: filters missing files, delegate
   - **Screenshots**: `TempCaptureManager.resolveSaveDirectory(for:exportDirectory:)` decides the destination **before** the write — export directory when ON, temp directory when OFF.
   - **Recordings**: the AVAssetWriter always writes into a per-session `Captures/RecordingProcessing/<UUID>/` directory first (`TempCaptureManager.makeRecordingSavePlan`); after the writer finishes, the final video moves to the export directory (Save ON) or the temp capture root (Save OFF) and the processing directory plus writer sidecars are deleted. A failed final move falls back to a unique name in the temp root (`makeRecoveredRecordingURL`).
 - **Export directory**: `SandboxFileAccessManager.resolvedExportDirectoryURL()` resolves the stored security-scoped bookmark (removing invalid bookmarks), falling back to a default location; first-use flows prompt through `ensureExportDirectoryForOperation(promptMessage:)`. See [`PREFERENCES.md`](PREFERENCES.md).
-- **Temp directory**: `~/Library/Application Support/Snapzy/Captures/` — Application Support, deliberately not `/tmp`, so macOS never purges temp files mid drag-and-drop and paste-time reads stay valid.
+- **Temp directory**: `~/Library/Application Support/Cinderdeck/Captures/` — Application Support, deliberately not `/tmp`, so macOS never purges temp files mid drag-and-drop and paste-time reads stay valid.
 - **Saving a temp capture later** (Quick Access Save action): `TempCaptureManager.saveToExportLocation(tempURL:)` moves the file into the export directory **preserving its relative path** (naming-template subfolders survive), moves the recording metadata sidecar for videos, and prunes emptied temp subdirectories.
 - **Deletion**: `deleteTempFile(at:)` removes the file plus its recording metadata sidecar and prunes empty directories.
-- **Launch cleanup**: `cleanupOrphanedFiles()` (called from `SnapzyApp` init) sweeps the temp directory but preserves files that have an active history record, and — while history is enabled — files still inside the retention window or files it cannot reconcile against the database; retention sweeps and explicit cache clearing are the mechanisms that actually delete those.
+- **Launch cleanup**: `cleanupOrphanedFiles()` (called from `CinderdeckApp` init) sweeps the temp directory but preserves files that have an active history record, and — while history is enabled — files still inside the retention window or files it cannot reconcile against the database; retention sweeps and explicit cache clearing are the mechanisms that actually delete those.
 
 ## Output Formats and Naming
 
-- `ImageFormat` (`Snapzy/Services/Capture/ScreenCaptureManager.swift`): `.png`, `.jpeg(quality:)`, `.webp`; extensions `png` / `jpg` / `webp`.
+- `ImageFormat` (`Cinderdeck/Services/Capture/ScreenCaptureManager.swift`): `.png`, `.jpeg(quality:)`, `.webp`; extensions `png` / `jpg` / `webp`.
 - PNG/JPEG write through `CGImageDestination` with DPI metadata set to `scaleFactor × 72` (PNG also gets pixels-per-meter); JPEG carries `kCGImageDestinationLossyCompressionQuality`.
-- WebP writes through `WebPEncoderService` (`Snapzy/Services/WebPEncoder.swift`, libwebp via Swift-WebP): `.photo` preset, `method = 1`, multithreaded, atomic file write.
+- WebP writes through `WebPEncoderService` (`Cinderdeck/Services/WebPEncoder.swift`, libwebp via Swift-WebP): `.photo` preset, `method = 1`, multithreaded, atomic file write.
 - Screenshot outputs use each display's **native** pixel density (`minimumScreenshotOutputScaleFactor` floor is 1.0). Non-Retina external-display captures stay at 1×; mixed-DPI composites may still promote low-density slices to the highest native scale in the selection.
-- Naming goes through `CaptureOutputNaming` (`Snapzy/Services/Capture/CaptureOutputNaming.swift`):
-  - Default templates: `Snapzy_{datetime}_{ms}` (screenshot), `Snapzy_Recording_{datetime}` (recording), overridable per kind in Settings.
+- Naming goes through `CaptureOutputNaming` (`Cinderdeck/Services/Capture/CaptureOutputNaming.swift`):
+  - Default templates: `Cinderdeck_{datetime}_{ms}` (screenshot), `Cinderdeck_Recording_{datetime}` (recording), overridable per kind in Settings.
   - Tokens: `{datetime}`, `{date}`, `{year}`, `{yearShort}`, `{month}`, `{monthName}`, `{monthShort}`, `{day}`, `{time}`, `{ms}`, `{timestamp}`, `{type}`, `{appName}` plus snake/short aliases; `{appName}` resolves from the captured app (or frontmost app for fullscreen/area) and is empty when unavailable.
   - `/` creates sanitized subfolders under the destination; traversal segments and invalid path characters are stripped; known media extensions embedded in templates are removed.
   - `makeUniqueFileURL` dedupes with `_2`, `_3`, … suffixes.
 
 ## Clipboard Behavior
 
-`Snapzy/Services/Clipboard/ClipboardHelper.swift` writes one pasteboard item per capture so receiving apps pick their preferred representation:
+`Cinderdeck/Services/Clipboard/ClipboardHelper.swift` writes one pasteboard item per capture so receiving apps pick their preferred representation:
 
 - `copyImage(from:)` — `writeObjects([NSURL])` (grants the receiver a sandbox extension), then augments the same item with the encoded data type (`.png`/JPEG/WebP UTI) and `.tiff` pixel data. When `NSImage` cannot decode the file (e.g. WebP on macOS 13), the item still carries the file URL and original encoded bytes.
 - `copyMediaFile(from:)` — videos/GIFs: file-URL write plus same-item `.URL` and `.string` fallbacks for Teams/Electron/WebView paste targets.
 - `copyFileURLs(_:)` — batch file-URL copy for multi-display screenshot sets.
-- Render-based `copyImage(_:format:)` — Annotate/Mockup copies render to the configured format, write a temp file (`Snapzy_clipboard_<uuid>`), then copy like a file.
+- Render-based `copyImage(_:format:)` — Annotate/Mockup copies render to the configured format, write a temp file (`Cinderdeck_clipboard_<uuid>`), then copy like a file.
 - Temp files must **not** be deleted after copying: receivers read them at paste time. Orphans are reclaimed by `cleanupOrphanedFiles()` on the next launch.
 
 ## Quick Access Handoff
@@ -111,23 +111,23 @@ Batch variant `handleScreenshotCaptures(urls:)`: filters missing files, delegate
 
 ## Cache and Storage Management
 
-- `CaptureStorageManager` (`Snapzy/Services/FileAccess/CaptureStorageManager.swift`) owns the `Application Support/Snapzy/Captures` cache: `calculateCacheSize()` (background enumeration) and `clearCache()`.
+- `CaptureStorageManager` (`Cinderdeck/Services/FileAccess/CaptureStorageManager.swift`) owns the `Application Support/Cinderdeck/Captures` cache: `calculateCacheSize()` (background enumeration) and `clearCache()`.
 - The UI lives in **Settings → History** (`PreferencesHistorySettingsView`): shows the formatted cache size and offers cache clearing. `clearCache()` refuses to run while a capture or recording is in progress (`CacheCleanupError.operationInProgress`), removes every file in the captures directory (skipping locked files), and deletes matching history records and recording metadata sidecars. See [`HISTORY.md`](HISTORY.md).
 
 ## Key Files
 
 | File | Responsibility |
 | --- | --- |
-| `Snapzy/Services/Capture/PostCaptureActionHandler.swift` | Post-capture action execution, ordering, batch handling, history records |
-| `Snapzy/Services/Capture/TempCaptureManager.swift` | Save-vs-temp destination, recording save plan, temp lifecycle, orphan cleanup |
-| `Snapzy/Services/Capture/ScreenCaptureManager.swift` | `captureCompletedPublisher`, `ImageFormat`, file writing, native output scale |
-| `Snapzy/Services/Capture/CaptureOutputNaming.swift` | Naming templates, context tokens, sanitization, unique dedupe |
-| `Snapzy/Services/Capture/ScreenshotPresetAutoApplier.swift` | Default Annotate canvas preset bake-in during routing |
-| `Snapzy/Services/WebPEncoder.swift` | libwebp-backed WebP encoding |
-| `Snapzy/Services/Clipboard/ClipboardHelper.swift` | Format-aware single-item pasteboard writes |
-| `Snapzy/Services/FileAccess/SandboxFileAccessManager.swift` | Security-scoped export-directory bookmarks and scoped access |
-| `Snapzy/Services/FileAccess/CaptureStorageManager.swift` | Captures cache sizing and clearing (Settings → History) |
-| `Snapzy/Features/Preferences/PreferencesManager.swift` | `AfterCaptureAction` matrix storage and defaults |
+| `Cinderdeck/Services/Capture/PostCaptureActionHandler.swift` | Post-capture action execution, ordering, batch handling, history records |
+| `Cinderdeck/Services/Capture/TempCaptureManager.swift` | Save-vs-temp destination, recording save plan, temp lifecycle, orphan cleanup |
+| `Cinderdeck/Services/Capture/ScreenCaptureManager.swift` | `captureCompletedPublisher`, `ImageFormat`, file writing, native output scale |
+| `Cinderdeck/Services/Capture/CaptureOutputNaming.swift` | Naming templates, context tokens, sanitization, unique dedupe |
+| `Cinderdeck/Services/Capture/ScreenshotPresetAutoApplier.swift` | Default Annotate canvas preset bake-in during routing |
+| `Cinderdeck/Services/WebPEncoder.swift` | libwebp-backed WebP encoding |
+| `Cinderdeck/Services/Clipboard/ClipboardHelper.swift` | Format-aware single-item pasteboard writes |
+| `Cinderdeck/Services/FileAccess/SandboxFileAccessManager.swift` | Security-scoped export-directory bookmarks and scoped access |
+| `Cinderdeck/Services/FileAccess/CaptureStorageManager.swift` | Captures cache sizing and clearing (Settings → History) |
+| `Cinderdeck/Features/Preferences/PreferencesManager.swift` | `AfterCaptureAction` matrix storage and defaults |
 
 ## Related docs
 

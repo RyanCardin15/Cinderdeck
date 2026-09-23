@@ -1,16 +1,16 @@
 # Preferences
 
-Reference for the Settings window: tab structure, every section, and how preferences are stored. Verified against `Snapzy/Features/Preferences/` at HEAD (`v1.32.3`).
+Reference for the Settings window: tab structure, every section, and how preferences are stored. Verified against `Cinderdeck/Features/Preferences/` at HEAD (`v1.0.0`).
 
 ## Root
 
-- `PreferencesView` (`Snapzy/Features/Preferences/PreferencesView.swift`) — SwiftUI `NavigationSplitView` sidebar layout, resizable (default 800×620, min 700×520), 11 categories in 4 unlabelled groups.
-- `PreferencesWindowController` (`Snapzy/Features/Preferences/PreferencesWindowController.swift`) — Dedicated `NSWindowController` directly managing window lifecycle, activation policy transitions (`.regular` ↔ `.accessory`), fullSizeContentView, and titlebar transparency.
-- Selection driven by `PreferencesNavigationState.shared.selectedTab` (`Models/PreferencesNavigationState.swift`, `PreferencesTab` enum) — supports back/forward history stacks (`⌘[` and `⌘]`), last-visited tab persistence, and programmatical routing from menu bar, deep links (`snapzy://settings?tab=`, see [SHORTCUTS.md](SHORTCUTS.md)), and the shortcut overlay.
+- `PreferencesView` (`Cinderdeck/Features/Preferences/PreferencesView.swift`) — SwiftUI `NavigationSplitView` sidebar layout, resizable (default 800×620, min 700×520), 11 categories in 4 unlabelled groups.
+- `PreferencesWindowController` (`Cinderdeck/Features/Preferences/PreferencesWindowController.swift`) — Dedicated `NSWindowController` directly managing window lifecycle, activation policy transitions (`.regular` ↔ `.accessory`), fullSizeContentView, and titlebar transparency.
+- Selection driven by `PreferencesNavigationState.shared.selectedTab` (`Models/PreferencesNavigationState.swift`, `PreferencesTab` enum) — supports back/forward history stacks (`⌘[` and `⌘]`), last-visited tab persistence, and programmatical routing from menu bar, deep links (`cinderdeck://settings?tab=`, see [SHORTCUTS.md](SHORTCUTS.md)), and the shortcut overlay.
 
 ## Storage pattern
 
-- Simple prefs: `@AppStorage(PreferencesKeys.*)` directly in views; keys centralized in `Snapzy/Features/Preferences/Models/PreferencesKeys.swift`.
+- Simple prefs: `@AppStorage(PreferencesKeys.*)` directly in views; keys centralized in `Cinderdeck/Features/Preferences/Models/PreferencesKeys.swift`.
 - Complex structured prefs: `PreferencesManager.shared` (`PreferencesManager.swift`) behind the `PreferencesProviding` protocol (`PreferencesProviding.swift`) for DI.
 - TOML export/import covers most prefs — see [CONFIGURATION.md](CONFIGURATION.md).
 
@@ -26,8 +26,8 @@ Reference for the Settings window: tab structure, every section, and how prefere
 
 ### Menu Bar (`PreferencesMenuBarSettingsView.swift`)
 
-- **Menu Bar Icon**: label-less tile picker for the status item icon — bundled default, built-in SF Symbol alternates (`camera.viewfinder`, `camera.fill`, `scissors`, `photo.on.rectangle`), or a custom PNG. The custom slot is a dashed "+" add tile: click opens an `NSOpenPanel`, or drop a PNG onto it; the file is validated, copied to `Application Support/Snapzy/MenuBarIcon/custom.png`, alpha-bounds normalized, and rendered as a monochrome template. Replace/Remove controls appear while custom is selected. Backed by `MenuBarIconStyle` + `MenuBarIconRenderer` (`menuBar.iconStyle`).
-- **Capture / Recording / Tools**: per-item visibility toggles and drag-to-reorder within each section, backed by `MenuBarCustomizationStore` (`menuBar.itemOrder`, `menuBar.hiddenItems`). Hidden features remain available via keyboard shortcuts and the `snapzy://` URL scheme; group order and separators are fixed (separators render only between non-empty groups).
+- **Menu Bar Icon**: label-less tile picker for the status item icon — bundled default, built-in SF Symbol alternates (`camera.viewfinder`, `camera.fill`, `scissors`, `photo.on.rectangle`), or a custom PNG. The custom slot is a dashed "+" add tile: click opens an `NSOpenPanel`, or drop a PNG onto it; the file is validated, copied to `Application Support/Cinderdeck/MenuBarIcon/custom.png`, alpha-bounds normalized, and rendered as a monochrome template. Replace/Remove controls appear while custom is selected. Backed by `MenuBarIconStyle` + `MenuBarIconRenderer` (`menuBar.iconStyle`).
+- **Capture / Recording / Tools**: per-item visibility toggles and drag-to-reorder within each section, backed by `MenuBarCustomizationStore` (`menuBar.itemOrder`, `menuBar.hiddenItems`). Hidden features remain available via keyboard shortcuts and the `cinderdeck://` URL scheme; group order and separators are fixed (separators render only between non-empty groups).
 - **App**: Check for Updates visibility toggle (fixed position; Preferences and Quit are pinned and not customizable).
 - **Reset to Defaults** restores order, visibility, and the bundled icon.
 
@@ -36,7 +36,7 @@ Reference for the Settings window: tab structure, every section, and how prefere
 Segmented into four panes (`CaptureSettingsPane`): General / Screenshot / Recording / OCR.
 
 - **General pane**:
-  - App Windows: Include Snapzy windows in screenshots (`screenshot.includeOwnApp`) / in recordings (`recording.includeOwnApp`).
+  - App Windows: Include Cinderdeck windows in screenshots (`screenshot.includeOwnApp`) / in recordings (`recording.includeOwnApp`).
   - Desktop: Hide Desktop Icons (`hideDesktopIcons`), Hide Desktop Widgets (`hideDesktopWidgets`).
   - Overlay: Show Selection Area Overlay (`screenshot.showSelectionAreaOverlay`) — in live passthrough sessions the dim appears from capture start when this is on (already-visible hover UI stays alive but looks dimmed until the drag cutout).
   - Magnifier: Reverse Magnifier Zoom Direction (`screenshot.reverseMagnifierZoomDirection`).
@@ -57,7 +57,7 @@ Segmented into four panes (`CaptureSettingsPane`): General / Screenshot / Record
 - **OCR pane**:
   - OCR Model: active recognition provider (`PreferencesOCRModelListView` + `Models/PreferencesOCRModelListViewModel`; selection persisted in `ocr.selectedModel` as `builtin` | `custom:<uuid>`).
     - Built-in OCR is Apple Vision (default, always available).
-    - Add Custom Model opens `PreferencesCustomOCRModelSheet` (name, base URL, model identifier, optional prompt, optional API key stored in the macOS Keychain — service `com.trongduong.snapzy.ocr`; Test Connection; edit/rename/test/remove; metadata JSON in `ocr.customModels`).
+    - Add Custom Model opens `PreferencesCustomOCRModelSheet` (name, base URL, model identifier, optional prompt, optional API key stored in the macOS Keychain — service `com.ryancardin.cinderdeck.ocr`; Test Connection; edit/rename/test/remove; metadata JSON in `ocr.customModels`).
     - A removed or unavailable custom endpoint falls back to Built-in OCR (`OCRModelResolver`). Legacy downloadable selections are treated as Built-in OCR.
   - Notifications: OCR Notifications (`ocr.successNotificationEnabled`, default on — posts a native macOS notification with a preview of the recognized text; falls back to an in-app toast when notifications are unavailable). When the toggle is on, an inline row surfaces the macOS-level permission only when it would block delivery: `notDetermined` shows an "Allow" button that triggers the system prompt in place, `denied` shows an orange hint plus "Open Settings". A granted (or unavailable) state renders nothing, so a healthy setup stays uncluttered. The row refreshes on `NSApplication.didBecomeActiveNotification`, so returning from System Settings updates it.
   - Text Actions: Link Detection (`ocr.linkDetectionEnabled`).
@@ -112,10 +112,10 @@ Provider configuration, credentials, expiration, usage stats, and the Cloud Uplo
 
 ### Advanced (`PreferencesAdvancedSettingsView.swift`)
 
-- **Backup**: TOML Import / Export / Restore Defaults (`SnapzyConfiguration*` services).
-- **Configuration File**: grant access to `~/.config/snapzy`, Sync Now, Open Config, status/issues — see [CONFIGURATION.md](CONFIGURATION.md).
+- **Backup**: TOML Import / Export / Restore Defaults (`CinderdeckConfiguration*` services).
+- **Configuration File**: grant access to `~/.config/cinderdeck`, Sync Now, Open Config, status/issues — see [CONFIGURATION.md](CONFIGURATION.md).
 - **Integration**: URL Scheme toggle (`urlSchemeEnabled`).
-- **Diagnostics**: enable toggle (`diagnostics.enabled`), retention days (`diagnostics.retentionDays`, default 3, range 1–30 via `LogCleanupScheduler`), Open Folder (`~/Library/Logs/Snapzy`) — see [UPDATES.md](UPDATES.md).
+- **Diagnostics**: enable toggle (`diagnostics.enabled`), retention days (`diagnostics.retentionDays`, default 3, range 1–30 via `LogCleanupScheduler`), Open Folder (`~/Library/Logs/Cinderdeck`) — see [UPDATES.md](UPDATES.md).
 
 ### About (`PreferencesAboutSettingsView.swift`)
 

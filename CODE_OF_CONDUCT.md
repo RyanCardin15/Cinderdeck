@@ -2,7 +2,7 @@
 
 ## Our Pledge
 
-We as members, contributors, and maintainers pledge to make participation in the Snapzy community a harassment-free experience for everyone, regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, religion, or sexual identity and orientation.
+We as members, contributors, and maintainers pledge to make participation in the Cinderdeck community a harassment-free experience for everyone, regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, religion, or sexual identity and orientation.
 
 We pledge to act and interact in ways that contribute to an open, welcoming, diverse, inclusive, and healthy community.
 
@@ -32,7 +32,7 @@ Maintainers have the right and responsibility to remove, edit, or reject comment
 
 ## Scope
 
-This Code of Conduct applies within all community spaces, and also applies when an individual is officially representing the Snapzy project in public spaces. Examples of representing our project include using an official project email address, posting through an official social media account, or acting as an appointed representative at an online or offline event.
+This Code of Conduct applies within all community spaces, and also applies when an individual is officially representing the Cinderdeck project in public spaces. Examples of representing our project include using an official project email address, posting through an official social media account, or acting as an appointed representative at an online or offline event.
 
 ## Reporting
 

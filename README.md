@@ -1,296 +1,113 @@
-> **Private customized version:** This repository adds regular clipboard text to **⌘⇧H → Clipboard text**, with search, preview, copy, delete, and local retention. See [custom build notes](docs/CUSTOM_BUILD.md) for building this version. The installation and release links below refer to the original upstream app and do not include this customization.
-
-<div align="center">
-  <img src="./banner.png" width="200" height="200" alt="Snapzy banner" />
-
-  <h1>Snapzy</h1>
-  <p><strong>Native macOS screenshots, recording, annotation, and editing from the menu bar.</strong></p>
-
-  <p>
-    <a href="https://trendshift.io/repositories/24550" target="_blank"><img src="https://trendshift.io/api/badge/repositories/24550" alt="duongductrong%2FSnapzy | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-  </p>
-
-  <p>
-    Built with <a href="https://developer.apple.com/xcode/swiftui/">SwiftUI</a>,
-    <a href="https://developer.apple.com/documentation/appkit">AppKit</a>,
-    <a href="https://developer.apple.com/documentation/screencapturekit">ScreenCaptureKit</a>,
-    <a href="https://developer.apple.com/documentation/vision">Vision</a>, and
-    <a href="https://sparkle-project.org/">Sparkle</a>.
-  </p>
-
-  <p>
-    <a href="./README.md">🇺🇸 English</a> •
-    <a href="./README.vi.md">🇻🇳 Tiếng Việt</a> •
-    <a href="./README.zh-CN.md">🇨🇳 简体中文</a> •
-    <a href="./README.ja.md">🇯🇵 日本語</a>
-  </p>
-
-  <p>
-    <a href="#features">Features</a> •
-    <a href="#install">Install</a> •
-    <a href="#raycast">Raycast</a> •
-    <a href="#shortcuts">Shortcuts</a> •
-    <a href="#development">Development</a> •
-    <a href="#documentation">Documentation</a> •
-    <a href="#community">Community</a> •
-    <a href="#security">Security</a> •
-    <a href="#contributing">Contributing</a> •
-    <a href="#contributors">Contributors</a> •
-    <a href="#acknowledgments">Acknowledgments</a>
-  </p>
-
-  <p>
-    <a href="https://github.com/duongductrong/Snapzy/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/duongductrong/Snapzy?style=flat&amp;logo=github" /></a>
-    <a href="https://github.com/duongductrong/Snapzy/network/members"><img alt="GitHub Forks" src="https://img.shields.io/github/forks/duongductrong/Snapzy?style=flat&amp;logo=github" /></a>
-    <a href="https://github.com/duongductrong/Snapzy/releases"><img alt="GitHub Downloads" src="https://img.shields.io/github/downloads/duongductrong/Snapzy/total?style=flat&amp;logo=github" /></a>
-  </p>
-  <p>
-    <a href="https://deepwiki.com/duongductrong/Snapzy"><img alt="Ask DeepWiki" src="https://deepwiki.com/badge.svg" /></a>
-    <a href="https://discord.gg/xkWDAuJkZu"><img alt="Join Discord Community" src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=flat&amp;logo=discord&amp;logoColor=white" /></a>
-    <a href="https://www.raycast.com/chkzz/snapzy"><img alt="Raycast Extension" src="https://img.shields.io/badge/Raycast-Extension-FF6363?style=flat&amp;logo=raycast&amp;logoColor=white" /></a>
-    <a href="#featured-on"><img alt="Featured On" src="https://img.shields.io/badge/Featured%20On-Product%20Hunt%20%2B%20Unikorn-111827?style=flat&amp;logo=producthunt&amp;logoColor=white" /></a>
-  </p>
-  <p>
-    <a href="https://github.com/sponsors/duongductrong"><img alt="GitHub Sponsors" src="https://img.shields.io/badge/Sponsor-%E2%9D%A4-ff69b4?style=flat&amp;logo=github" /></a>
-    <a href="https://ko-fi.com/duongductrong"><img alt="Ko-fi Donate" src="https://img.shields.io/badge/Ko--fi-Donate-FF5E5B?style=flat&amp;logo=ko-fi&amp;logoColor=white" /></a>
-  </p>
-</div>
-
-## Features
-
-- **Screenshot**: fullscreen or selected-area capture with manual/application window mode toggle (`Application Capture`, default `A`), including already open third-party menu-bar popovers that would normally close when capture begins (restored visually for selection and saved with transparent rounded corners), area capture with inline annotate (annotate before saving), scrolling capture with live stitched preview, OCR text extraction with Apple Vision or custom OpenAI-compatible endpoints and a native result notification, transparent object cutout capture with optional safe auto-crop, window shadow capture (macOS 14+), multi-format export (PNG/JPG/WebP), hide desktop icons/widgets, quick screenshot during recording
-- **Screen Recording**: video or GIF output, system audio + microphone, camera overlay with iPhone Continuity Camera support, mouse click highlights, keystroke overlays, live on-screen annotations, remember last area, GIF resizing, Smart Camera metadata for Follow Mouse edits
-- **Annotation Editor**: shapes, arrows, text, watermarks, filled rectangles, blur/pixelate, automatic local sensitive-data redaction, OCR text extraction from the image context menu, counters, highlighter with text snapping (⌘ to bypass), adjustable Bezier control handles for curved arrows, crop with edge-snapping (⌘ to bypass) and one-key auto-crop to content (`A`), remove background with crop-aware auto-crop support, mockup backgrounds with 3D renderer, zoom/pan (pinch + keyboard), drag-to-app with optional keep-editing and editor reactivation behavior, configurable tool/action shortcuts
-- **After Capture Settings**: per-mode action matrix for save, Quick Access, clipboard copy, and annotate plus a separate global remove-background auto-crop toggle (enabled by default)
-- **Video Editor**: trim with visual timeline + frame strip, zoom segments with auto-focus (Follow Mouse), wallpaper backgrounds + padding, custom export dimensions, animated GIF viewer, undo/redo
-- **Quick Access**: floating panel after every capture with copy, edit, drag-to-app, two-finger swipe dismiss, open, and delete actions, plus configurable keyboard shortcuts that fire on the card you are hovering
-- **Capture History**: floating history panel + full browser for recent screenshots, videos, and GIFs with type/time filters, filename search, quick copy/open/delete actions, direct drag-to-app reuse with scroll-safe gesture arbitration, one-click reopen in Annotate or Video Editor, editable annotation restore for committed screenshot edits, configurable panel layout, and retention policies
-- **Shortcuts**: fully configurable global shortcuts for capture, recording, and annotation tools, with per-shortcut on/off control and system conflict detection
-- **Onboarding**: splash screen, first-run language selection, guided permissions setup, and shortcut configuration for first-time users
-- **Localization**: 🇺🇸 English, 🇻🇳 Vietnamese, 🇨🇳 Simplified Chinese, 🇹🇼 Traditional Chinese, 🇪🇸 Spanish, 🇯🇵 Japanese, 🇰🇷 Korean, 🇷🇺 Russian, 🇫🇷 French, and 🇩🇪 German app localization with native macOS per-app language support
-- **Cloud Upload**: privacy-first bring-your-own-storage via AWS S3 or Cloudflare R2 — no third-party servers, manual upload from Quick Access for screenshots, videos, and GIFs, or from Annotate for screenshots, credentials stored in the macOS Keychain with optional password protection, manual encrypted credential import/export for faster setup on another Mac, upload history, configurable auto-expiration (1–90 days or permanent), lifecycle rules, custom domain support
-- **Advanced Settings**: TOML export/import, one-time config folder grant, debounced background sync, safe sync-before-open, and launch-time auto-apply for portable preferences, dotfiles, backup, and machine-to-machine setup via `~/.config/snapzy/config.toml`
-- **Updates & Diagnostics**: in-app updates via Sparkle, problem reporting with diagnostic log bundles, cache management
-- **Platform**: menu-bar app, appearance theming (light/dark/system), Developer ID signed and notarized with the Hardened Runtime enabled, security-scoped bookmarks for user-selected folders
-
-## Install
-
-> Requires **macOS 13.0** or later.
-
-### Homebrew
-
-```bash
-brew install --cask snapzy
-```
-
-### Shell script
-
-```bash
-# Install a specific version
-curl -fsSL https://raw.githubusercontent.com/duongductrong/Snapzy/v1.32.3/install.sh | bash
-```
-
-### Download a release
-
-1. Go to [Releases](https://github.com/duongductrong/Snapzy/releases)
-2. Download the latest packaged app asset, typically `Snapzy-v<version>.dmg`
-3. Move `Snapzy.app` to `/Applications`
-4. Launch Snapzy
-5. Grant Screen Recording permission when prompted in System Settings
-6. Re-launch Snapzy after granting Screen Recording if macOS asks for it
-7. Grant Microphone and Camera permission too if you want voice or camera input in recordings
-
-> Snapzy is signed and notarized by Apple. macOS will open it without any extra steps.
-
-## Uninstall
-
-To completely remove Snapzy, reset all permissions, and clean up app data:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/duongductrong/Snapzy/master/uninstall.sh | bash
-```
-
-Or if you cloned the repo:
-
-```bash
-./uninstall.sh
-```
-
-This will remove the app from `/Applications`, delete preferences and caches, and reset TCC permissions (Screen Recording, Microphone, Accessibility). You may need to log out or reboot for permission changes to fully take effect.
-
-### Reset Permissions
-
-If you only want to reset TCC permissions (Screen Recording, Microphone, Accessibility) without uninstalling the app:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/duongductrong/Snapzy/master/reset-permissions.sh | bash
-```
-
-Or if you cloned the repo:
-
-```bash
-./reset-permissions.sh
-```
-
-## Raycast
-
-Control Snapzy directly from Raycast using the official extension:
-
-<a href="https://www.raycast.com/chkzz/snapzy" title="Install snapzy Raycast Extension"><img src="https://www.raycast.com/chkzz/snapzy/install_button@2x.png?v=1.1" height="64" style="height: 64px;" alt="" /></a>
-
-## Shortcuts
-
-| Action                                                  | Shortcut |
-| ------------------------------------------------------- | -------- |
-| Fullscreen screenshot                                   | `⇧⌘3`    |
-| Area screenshot                                         | `⇧⌘4`    |
-| ↳ Toggle manual/app window mode (`Application Capture`) | `A`      |
-| Repeat last area screenshot                             | `⌃⌘⇧4`   |
-| Area screenshot + inline annotate                       | `⇧⌘7`    |
-| Scrolling screenshot                                    | `⇧⌘6`    |
-| Screen recording (start/stop toggle)                    | `⇧⌘5`    |
-| Pause/Resume recording (optional, recommended `⌘⇧Space`) | _unset_  |
-| OCR text capture                                        | `⇧⌘2`    |
-| Object cutout capture                                   | `⇧⌘1`    |
-| Smart element capture                                   | `⌥⇧4`    |
-| Open Annotate                                           | `⇧⌘A`    |
-| Open Video Editor                                       | `⇧⌘E`    |
-| Open Cloud Uploads                                      | `⇧⌘L`    |
-| Show shortcuts list                                     | `⇧⌘K`    |
-
-### Quick Access card actions
-
-Hover a Quick Access card, then press the key. Active only while the pointer is over a card.
-
-| Action | Shortcut |
-| ------ | -------- |
-| Copy | `⌘C` |
-| Save / Open | `⌘S` |
-| Edit | `⌘E` |
-| Upload to cloud | `⌘U` |
-| Pin to screen | `⌘P` |
-| Delete | `⌘⌫` |
-| Close | `⌘W` |
-
-## Automation
-
-Snapzy registers the `snapzy://` URL scheme so launchers and automation tools (such as the [Raycast Extension](https://www.raycast.com/chkzz/snapzy), Alfred, or custom scripts) can trigger capture actions. This integration can be toggled on or off under **Settings -> Advanced -> URL Scheme integration**.
-
-| Action                | URL                               |
-| --------------------- | --------------------------------- |
-| Fullscreen screenshot | `snapzy://capture/fullscreen`     |
-| Area screenshot       | `snapzy://capture/area`           |
-| Repeat area screenshot | `snapzy://capture/repeat-area`   |
-| Application window    | `snapzy://capture/application`    |
-| Active window         | `snapzy://capture/active-window`  |
-| Area annotate         | `snapzy://capture/area-annotate`  |
-| Scrolling screenshot  | `snapzy://capture/scrolling`      |
-| OCR text capture      | `snapzy://capture/ocr`            |
-| Smart element capture | `snapzy://capture/smart-element`  |
-| Object cutout capture | `snapzy://capture/object-cutout`  |
-| Screen recording      | `snapzy://record/screen`          |
-| Application recording | `snapzy://record/application`     |
-| Open Annotate         | `snapzy://open/annotate`          |
-| Combine images        | `snapzy://open/combine`           |
-| Open Video Editor     | `snapzy://open/video-editor`      |
-| Open Cloud Uploads    | `snapzy://open/cloud-uploads`     |
-| Open Capture History  | `snapzy://open/history`           |
-| Show shortcuts list   | `snapzy://show/shortcuts`         |
-| Open Settings         | `snapzy://settings`               |
-| Open Settings tab     | `snapzy://settings?tab=annotate`  |
-
-`snapzy://open/combine` opens the image picker. Automation tools can skip the
-picker by passing two or more URL-encoded local paths as repeated `file`
-parameters:
-
-```bash
-open 'snapzy://open/combine?file=/tmp/first.png&file=/tmp/second.png'
-```
-
-## Development
-
-For local setup, source builds, and first-time development workflow, start with [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
-
-If you need archive, export, or DMG packaging commands, see [docs/BUILD.md](docs/BUILD.md). If you want the contribution workflow, see [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Documentation
-
-- [Ask DeepWiki (interactive docs assistant)](https://deepwiki.com/duongductrong/Snapzy)
-- [Docs map for humans and agents](docs/README.md)
-- [Project structure and runtime architecture](docs/STRUCTURE.md)
-- [App lifecycle, onboarding, and menu bar](docs/APP_LIFECYCLE.md)
-- Capture: [screenshot flows](docs/CAPTURE.md) · [scrolling capture](docs/SCROLLING_CAPTURE.md) · [recording](docs/RECORDING.md) · [post-capture routing](docs/POST_CAPTURE.md)
-- Editors: [Quick Access](docs/QUICK_ACCESS.md) · [capture history](docs/HISTORY.md) · [Annotate](docs/ANNOTATE.md) · [Video Editor](docs/VIDEO_EDITOR.md)
-- Platform: [cloud upload](docs/CLOUD.md) · [shortcuts & URL scheme](docs/SHORTCUTS.md) · [settings reference](docs/PREFERENCES.md) · [updates & diagnostics](docs/UPDATES.md)
-- [TOML configuration export/import](docs/CONFIGURATION.md)
-- [Build and packaging guide](docs/BUILD.md)
-- [Release and update workflow](docs/RELEASES.md)
-- [Local Sparkle update testing](docs/UPDATE_TESTING.md)
-
-## Community
-
-- Join the Snapzy Discord community for support, feedback, and discussion: [https://discord.gg/xkWDAuJkZu](https://discord.gg/xkWDAuJkZu)
-
-## Featured On
-
-<p>
-  <a href="https://www.producthunt.com/products/snapzy?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-snapzy" target="_blank" rel="noopener noreferrer"><img alt="Snapzy - Think CleanShot X, but open-source and developer-friendly | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1097629&amp;theme=light&amp;t=1773585048784"></a>
-  <a href="https://unikorn.vn/p/snapzy?ref=embed-snapzy" target="_blank"><img src="https://unikorn.vn/api/widgets/badge/snapzy?theme=light" alt="Snapzy trên Unikorn.vn" style="width: 250px; height: 54px;" width="250" height="54" /></a>
+<p align="center">
+  <img src="assets/cinderdeck-icon.png" width="144" alt="Cinderdeck app icon" />
 </p>
 
-## Benchmark
+<h1 align="center">Cinderdeck</h1>
+<p align="center"><strong>Your development control deck for macOS.</strong><br />Your projects. Your commands. One place to run them.</p>
 
-### OCR
+<p align="center">
+  <a href="docs/STACKS.md">Set up a stack</a> ·
+  <a href="docs/BUILD.md">Build the app</a> ·
+  <a href="docs/README.md">Documentation</a> ·
+  <a href="https://github.com/RyanCardin15/Cinderdeck/issues">Issues</a>
+</p>
 
-Benchmark date: April 19, 2026. Current OCR numbers come from `scripts/run-ocr-readme-benchmark.sh` on a clean synthetic wrapped UI/article-text corpus with `12 samples / language` across `10 supported languages`. `Character accuracy` is the primary signal, `exact match` is intentionally strict, and `no-output` on this corpus is `0%` for all languages below.
+Cinderdeck is a native Mac application for running your development environment. Group any set of projects into a stack, define how each service starts, and manage them together from the menu bar, a terminal, or your coding agent.
 
-| Language            | Character Accuracy | Exact Match |
-| ------------------- | -----------------: | ----------: |
-| English             |             100.0% |      100.0% |
-| Vietnamese          |             100.0% |      100.0% |
-| Simplified Chinese  |              99.3% |       75.0% |
-| Traditional Chinese |              99.0% |       66.7% |
-| Spanish             |              99.9% |       91.7% |
-| Japanese            |              99.4% |       66.7% |
-| Korean              |              99.7% |       83.3% |
-| Russian             |             100.0% |      100.0% |
-| French              |              99.3% |       33.3% |
-| German              |              99.8% |       75.0% |
+A web app, an API in another repository, a worker, a local database: bring whatever your project needs. No prescribed repositories, language, framework, or folder layout. Cinderdeck runs the commands you configure using the tools already installed on your Mac.
 
-Real-world screenshots can score lower, especially with emoji, low-contrast footers, unusual punctuation, gradients, blur, or decorative fonts.
+**Cinderdeck is an independent fork of [Snapzy](https://github.com/duongductrong/Snapzy), created by Trong Duong Duc and its contributors.** Snapzy supplied the native capture, recording, annotation, and editing foundation. Cinderdeck extends that foundation into a development workspace with configurable stacks, service orchestration, agent controls, and local clipboard history. The original [BSD 3-Clause license](LICENSE) and attribution are preserved; see [NOTICE](NOTICE).
 
-## Security
+## A place for the whole project
 
-Snapzy is **not** sandboxed — it runs with your user account's privileges. It ships with the macOS Hardened Runtime enabled, is Developer ID signed and notarized by Apple, and declares a minimal set of entitlements; library validation stays on, so the app can only load code signed by Snapzy or by Apple. Network requests are limited to Sparkle update checks, local loopback OAuth callback redirection, user-initiated cloud uploads to **your own** cloud storage (AWS S3, Cloudflare R2, or Google Drive), and optional user-initiated OCR model downloads from HTTPS/Hugging Face sources the user explicitly defines. Snapzy bundles no OCR models and its model catalog ships empty, so no model is referenced or fetched unless you add one. Model manifests are validated locally and importing metadata performs no download. The default built-in OCR engine runs entirely on-device; if you explicitly add a custom OCR endpoint in Settings, OCR requests (including the captured image) go to that endpoint. Cloud credentials and OAuth tokens are stored exclusively in the macOS Keychain, can be further protected with an optional password (SHA-256 hashed, never stored in plaintext), and can only be transferred via a manual encrypted export/import flow protected by a user-supplied archive passphrase. Custom OCR endpoint API keys are likewise stored only in the macOS Keychain and are never included in config or credential exports. Snapzy collects no telemetry.
+- **Run any stack.** Add project folders and start commands, with optional Git repositories, environment variables, Keychain references, dependencies, and readiness checks.
+- **See what is running.** Service status, listening ports, process ownership, live logs, crash output, and activity live together. Start, stop, or restart individual services or an entire stack.
+- **Work across repositories.** Inspect branches and changes, fetch or pull, and switch branches with explicit stash/carry choices.
+- **Give agents the same controls.** The `cinderdeck` CLI and local MCP server work with Codex, Cursor, Claude Code, and other clients. Agent identity and advisory claims make ownership visible.
+- **Keep useful context nearby.** Local text clipboard history, capture history, and search sit alongside your stacks.
+- **Capture what you are building.** Screenshots, scrolling capture, screen recording, annotation, OCR, and video editing remain available from the Snapzy foundation.
 
-To report a vulnerability, please use a [GitHub Security Advisory](https://github.com/duongductrong/Snapzy/security/advisories/new) or contact the maintainer privately. See [SECURITY.md](SECURITY.md) for full details.
+Built with SwiftUI and AppKit. Local configuration, local history, no Cinderdeck account. Cloud uploads and custom OCR endpoints are optional and explicitly configured.
 
-## Contributing
+## Start with your own projects
 
-Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+Build and open the app, then use **⌘⇧H → Stacks → Create stack**. Choose your folders and enter the commands you already use. Expand the panel with **⌘E** for logs and service controls. Shortcuts can be customized in Settings.
 
-## Contributors
+Definitions are ordinary TOML files in `~/.config/cinderdeck/stacks/`. This example combines two independent projects; replace the paths and commands with your own:
 
-Thanks to all the people who contribute to Snapzy!
+```toml
+name = "My workspace"
+root = "~/Projects"
 
-<a href="https://github.com/duongductrong/Snapzy/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=duongductrong/Snapzy" />
-</a>
+[repos.web]
+path = "my-web-app"
 
-## Star History
+[repos.api]
+path = "my-api"
 
-<a href="https://www.star-history.com/?repos=duongductrong%2FSnapzy&type=date&logscale=&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=duongductrong/Snapzy&type=date&theme=dark&logscale&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=duongductrong/Snapzy&type=date&logscale&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=duongductrong/Snapzy&type=date&logscale&legend=top-left" />
- </picture>
-</a>
+[services.api]
+repo = "api"
+cmd = "npm run dev"
+port = 4000
+ready.port = 4000
 
-## Acknowledgments
+[services.web]
+repo = "web"
+cmd = "npm run dev"
+depends_on = ["api"]
+port = 3000
+url = "http://localhost:3000"
+ready.port = 3000
+```
 
-Snapzy is inspired by [CleanShot X](https://cleanshot.com/), an advanced screenshot and screen recording application for macOS.
+Saving a definition reloads it. Starting services is explicit. Git is optional; a service can use `cwd` instead of a repository. Dependencies and runtimes are installed by you, not by importing a stack. [Read the full stack guide](docs/STACKS.md).
 
-## License
+## Terminal and coding agents
 
-BSD 3-Clause License. See [LICENSE](LICENSE).
+In the Stacks panel, open **Agents & CLI** to install the command and view setup instructions. Or run:
+
+```sh
+/Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck stacks install-cli
+# Make sure ~/.local/bin is on your PATH.
+cinderdeck stacks status
+cinderdeck stacks start my-workspace --as Codex
+cinderdeck stacks logs my-workspace -f
+cinderdeck stacks stop my-workspace
+cinderdeck stacks setup-agents --print
+```
+
+Use the filename without `.toml` as the stack ID. `cinderdeck mcp` exposes the same controls over MCP stdio. Agent setup changes client configuration only when you run the setup command. Use `cinderdeck stacks agent-help` for the full command reference and agent instructions.
+
+## Build Cinderdeck
+
+Requires macOS 13 or later and **Xcode 26.2 or later** to build the current Swift source. Open `Cinderdeck.xcodeproj` and select the **Cinderdeck** scheme, or use:
+
+```sh
+git clone https://github.com/RyanCardin15/Cinderdeck.git
+cd Cinderdeck
+xcodebuild -project Cinderdeck.xcodeproj -scheme Cinderdeck \
+  -configuration Debug -destination 'platform=macOS' \
+  -derivedDataPath .build/development \
+  CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build
+open '.build/development/Build/Products/Debug/Cinderdeck Debug.app'
+```
+
+For a signed app in `/Applications`, testing, and release packaging, see [the build guide](docs/BUILD.md). Cinderdeck starts its own version line at **1.0.0 (200)**. This source release does not claim Snapzy’s downloads, Homebrew package, notarization, or update signatures. Automatic updates stay off until Cinderdeck’s own signed release feed is configured; **Check for Updates** opens this repository’s releases.
+
+## Coming from the customized Snapzy build
+
+On its first Release launch, Cinderdeck copies your existing local history database, configuration, stacks, preferences, and logs into its own locations. It preserves the originals and never overwrites existing Cinderdeck data. Custom project paths and original capture files stay where you chose to save them. Existing Keychain identifiers and `snapzy://` shortcuts remain supported for compatibility.
+
+The application has a new bundle identity, so macOS may ask you to grant capture or accessibility permissions to **Cinderdeck**. See [migration and compatibility](docs/MIGRATION.md).
+
+## Documentation and contributing
+
+[Stacks](docs/STACKS.md) · [Configuration](docs/CONFIGURATION.md) · [History](docs/HISTORY.md) · [Capture](docs/CAPTURE.md) · [Recording](docs/RECORDING.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+
+[Tiếng Việt](README.vi.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
+
+## Credit
+
+Cinderdeck is maintained by [Ryan Cardin](https://github.com/RyanCardin15). The original Snapzy project was created by [Trong Duong Duc](https://github.com/duongductrong), with its [contributors](https://github.com/duongductrong/Snapzy/graphs/contributors). This fork is independent and is not an official Snapzy release.
+
+The Snapzy source lineage and original copyright notice are preserved in Git history, [LICENSE](LICENSE), and the [upstream changelog](docs/upstream/CHANGELOG.md). You can support the original author through [Snapzy’s sponsor page](https://github.com/sponsors/duongductrong).

@@ -118,7 +118,7 @@ func usage() -> Never {
 }
 
 func loadManifest() throws -> Manifest {
-  let manifestURL = repoRoot.appendingPathComponent("Snapzy/Resources/Localization/manifest.json")
+  let manifestURL = repoRoot.appendingPathComponent("Cinderdeck/Resources/Localization/manifest.json")
   let data = try Data(contentsOf: manifestURL)
   let decoder = JSONDecoder()
   let manifest = try decoder.decode(Manifest.self, from: data)
@@ -229,7 +229,7 @@ func mergedCatalog(from manifest: Manifest) throws -> Catalog {
 }
 
 func extractL10nKeys() throws -> Set<String> {
-  let localizationRoot = repoRoot.appendingPathComponent("Snapzy/Shared/Localization")
+  let localizationRoot = repoRoot.appendingPathComponent("Cinderdeck/Shared/Localization")
   let regex = try NSRegularExpression(pattern: #"(?:string|format)\(\s*"([a-z0-9][a-z0-9.-]*\.[a-z0-9][a-z0-9.-]*)""#)
   var keys = Set<String>()
 
@@ -250,7 +250,7 @@ func extractL10nKeys() throws -> Set<String> {
 }
 
 func extractL10nTableMappings() throws -> [String: String] {
-  let l10nURL = repoRoot.appendingPathComponent("Snapzy/Shared/Localization/L10n.swift")
+  let l10nURL = repoRoot.appendingPathComponent("Cinderdeck/Shared/Localization/L10n.swift")
   let content = try String(contentsOf: l10nURL, encoding: .utf8)
   let lines = content.split(separator: "\n", omittingEmptySubsequences: false)
   guard let startIndex = lines.firstIndex(where: { $0.contains("private nonisolated static let tableMappings") }) else {
