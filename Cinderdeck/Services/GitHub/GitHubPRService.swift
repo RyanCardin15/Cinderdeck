@@ -2,6 +2,9 @@ import Foundation
 
 @MainActor
 protocol GitHubPRServing {
+  var hostname: String { get set }
+  func organizations(after: String?) async throws -> GitHubConnection<GitHubActor>
+  func repositories(organization: String, after: String?) async throws -> GitHubConnection<GitHubRepository>
   func viewer() async throws -> String
   func repositories(after: String?) async throws -> GitHubConnection<GitHubRepository>
   func search(_ query: String, after: String?) async throws -> PullRequestSearchPage
@@ -21,15 +24,30 @@ nonisolated enum GitHubPRError: LocalizedError {
 @MainActor
 final class GitHubPRService: GitHubPRServing {
   typealias Transport = ([String], Data?) async throws -> Data
-  private let transport: Transport
-  init(transport: Transport? = nil) { self.transport = transport ?? Self.execute }
+  var hostname: String
+  private let transport: Transport?
+  private let configuration: () async throws -> GitHubCLIConfiguration
+  init(hostname: String = GitHubHost.current,
+    configuration: @escaping () async throws -> GitHubCLIConfiguration = { try await GitHubCLI.configuration() },
+    transport: Transport? = nil) {
+    self.hostname = hostname
+    self.transport = transport
+    self.configuration = configuration
+  }
+  private func send(_ args: [String], _ payload: Data?) async throws -> Data {
+    try Task.checkCancellation()
+    if let transport { return try await transport(args, payload) }
+    let host = hostname
+    let configuration = try await configuration()
+    return try await Self.execute(args, payload: payload, hostname: host, configuration: configuration)
+  }
 
-  private static func execute(_ args: [String], payload: Data?) async throws -> Data {
-    let configuration = try await GitHubCLI.configuration()
+  private static func execute(_ args: [String], payload: Data?, hostname: String, configuration: GitHubCLIConfiguration) async throws -> Data {
+    guard GitHubHost.normalized(hostname) == hostname else { throw GitHubPRError.message("Enter a valid GitHub hostname in Preferences.") }
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent("cinderdeck-github-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     defer { try? FileManager.default.removeItem(at: directory) }
-    var arguments = ["api", "--hostname", "github.com"] + args
+    var arguments = ["api", "--hostname", hostname] + args
     if let payload {
       let file = directory.appendingPathComponent("request.json")
       try payload.write(to: file, options: .atomic)
@@ -56,7 +74,7 @@ final class GitHubPRService: GitHubPRServing {
   private struct Envelope<T: Decodable>: Decodable { var data: T?; var errors: [GitHubErrorEnvelope.Issue]? }
   private func graph<T: Decodable>(_ query: String, variables: [String: Any] = [:], as type: T.Type) async throws -> T {
     let payload = try JSONSerialization.data(withJSONObject: ["query": query, "variables": variables])
-    let response = try await transport(["graphql"], payload)
+    let response = try await send(["graphql"], payload)
     let envelope = try Self.decoder().decode(Envelope<T>.self, from: response)
     if let error = envelope.errors?.first { throw GitHubPRError.message(error.message) }
     guard let data = envelope.data else { throw GitHubPRError.message("GitHub returned an empty response.") }
@@ -76,11 +94,35 @@ final class GitHubPRService: GitHubPRServing {
     struct Result: Decodable { var viewer: Viewer }
     return try await graph("""
       query($after: String) { viewer { repositories(first: 100, after: $after,
-        affiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER], orderBy: {field: UPDATED_AT, direction: DESC}) {
-        nodes { id nameWithOwner isPrivate isArchived viewerHasStarred url }
+        affiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER],
+        ownerAffiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER], orderBy: {field: UPDATED_AT, direction: DESC}) {
+        nodes { id nameWithOwner isPrivate isArchived viewerHasStarred url ownerAccount: owner { kind: __typename } }
         totalCount pageInfo { hasNextPage endCursor }
       } } }
       """, variables: ["after": after as Any? ?? NSNull()], as: Result.self).viewer.repositories
+  }
+  func organizations(after: String?) async throws -> GitHubConnection<GitHubActor> {
+    struct Viewer: Decodable { var organizations: GitHubConnection<GitHubActor> }
+    struct Result: Decodable { var viewer: Viewer }
+    return try await graph("""
+      query($after: String) { viewer { organizations(first: 100, after: $after) {
+        nodes { login } pageInfo { hasNextPage endCursor }
+      } } }
+      """, variables: ["after": after as Any? ?? NSNull()], as: Result.self).viewer.organizations
+  }
+  func repositories(organization: String, after: String?) async throws -> GitHubConnection<GitHubRepository> {
+    struct Organization: Decodable { var repositories: GitHubConnection<GitHubRepository> }
+    struct Result: Decodable { var organization: Organization? }
+    let result = try await graph("""
+      query($organization: String!, $after: String) { organization(login: $organization) {
+        repositories(first: 100, after: $after, orderBy: {field: UPDATED_AT, direction: DESC}) {
+          nodes { id nameWithOwner isPrivate isArchived viewerHasStarred url ownerAccount: owner { kind: __typename } }
+          totalCount pageInfo { hasNextPage endCursor }
+        }
+      } }
+      """, variables: ["organization": organization, "after": after as Any? ?? NSNull()], as: Result.self)
+    guard let organization = result.organization else { throw GitHubPRError.message("This organization is not accessible with your current GitHub connection.") }
+    return organization.repositories
   }
   static let summaryFields = """
     id number title url state isDraft updatedAt additions deletions changedFiles reviewDecision
@@ -88,13 +130,25 @@ final class GitHubPRService: GitHubPRServing {
     commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
     """
   func search(_ query: String, after: String?) async throws -> PullRequestSearchPage {
+    do { return try await search(query, after: after, pageSize: 25) }
+    catch {
+      try Task.checkCancellation()
+      let message = error.localizedDescription.lowercased()
+      guard !message.contains("rate limit"), !message.hasPrefix("command timed out"),
+        message.contains("timed out") || message.contains("timeout") || message.contains("wasn't able to respond to your request in time") else { throw error }
+      // A smaller read can recover from GitHub's GraphQL processing timeout.
+      // Never retry auth/rate-limit errors or any mutation.
+      return try await search(query, after: after, pageSize: 10)
+    }
+  }
+  private func search(_ query: String, after: String?, pageSize: Int) async throws -> PullRequestSearchPage {
     struct Search: Decodable { var nodes: [PullRequest]; var issueCount: Int; var pageInfo: GitHubPageInfo }
     struct Result: Decodable { var search: Search }
     let data = try await graph("""
-      query($query: String!, $after: String) { search(query: $query, type: ISSUE, first: 50, after: $after) {
+      query($query: String!, $after: String, $first: Int!) { search(query: $query, type: ISSUE, first: $first, after: $after) {
         issueCount pageInfo { hasNextPage endCursor } nodes { ... on PullRequest { \(Self.summaryFields) } }
       } }
-      """, variables: ["query": query, "after": after as Any? ?? NSNull()], as: Result.self).search
+      """, variables: ["query": query, "after": after as Any? ?? NSNull(), "first": pageSize], as: Result.self).search
     return .init(requests: data.nodes, count: data.issueCount, pageInfo: data.pageInfo)
   }
   func detail(id: String) async throws -> PullRequestDetail {
@@ -112,7 +166,7 @@ final class GitHubPRService: GitHubPRServing {
   func files(repository: String, number: Int, page: Int) async throws -> [PullRequestFile] {
     guard Self.validRepository(repository), number > 0, page > 0 else { throw GitHubPRError.message("Invalid pull request.") }
     return try Self.decoder().decode([PullRequestFile].self,
-      from: await transport(["repos/\(repository)/pulls/\(number)/files?per_page=100&page=\(page)"], nil))
+      from: await send(["repos/\(repository)/pulls/\(number)/files?per_page=100&page=\(page)"], nil))
   }
   static func validRepository(_ name: String) -> Bool {
     name.split(separator: "/", omittingEmptySubsequences: false).count == 2 &&
@@ -139,7 +193,7 @@ final class GitHubPRService: GitHubPRServing {
     if let issue = event.validation(detail: current, login: login, body: body) { throw GitHubPRError.message(issue) }
     guard current.headRefOid == detail.headRefOid else { throw GitHubPRError.message("New commits were pushed. Refresh and review the latest changes before submitting.") }
     let payload = try JSONSerialization.data(withJSONObject: ["event": event.rawValue, "body": body, "commit_id": detail.headRefOid])
-    let response = try await transport(["repos/\(request.repository.nameWithOwner)/pulls/\(request.number)/reviews", "--method", "POST"], payload)
+    let response = try await send(["repos/\(request.repository.nameWithOwner)/pulls/\(request.number)/reviews", "--method", "POST"], payload)
     struct Receipt: Decodable { var id: Int; var commit_id: String; var state: String }
     let receipt = try Self.decoder().decode(Receipt.self, from: response)
     let expectedState = event == .approve ? "APPROVED" : event == .requestChanges ? "CHANGES_REQUESTED" : "COMMENTED"

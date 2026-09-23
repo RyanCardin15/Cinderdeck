@@ -14,7 +14,8 @@ nonisolated enum StackCommandRunner {
   static func run(_ executable: String, _ arguments: [String], directory: URL? = nil,
     environment: [String: String] = ProcessInfo.processInfo.environment, timeout: TimeInterval = 60
   ) async throws -> StackCommandResult {
-    try await Task.detached(priority: .utility) {
+    let task = Task.detached(priority: .utility) {
+      try Task.checkCancellation()
       let folder = FileManager.default.temporaryDirectory.appendingPathComponent("cinderdeck-command-\(UUID().uuidString)")
       try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
       defer { try? FileManager.default.removeItem(at: folder) }
@@ -50,6 +51,7 @@ nonisolated enum StackCommandRunner {
         if Date() >= deadline || Task.isCancelled {
           kill(-pid, SIGKILL)
           waitpid(pid, &status, 0)
+          try Task.checkCancellation()
           throw StackError.message("Command timed out after \(Int(timeout)) seconds")
         }
         try? await Task.sleep(nanoseconds: 25_000_000)
@@ -61,6 +63,11 @@ nonisolated enum StackCommandRunner {
         return try handle.read(upToCount: 8 * 1024 * 1024) ?? Data()
       }
       return StackCommandResult(status: code, output: try read(output), error: try read(error))
-    }.value
+    }
+    return try await withTaskCancellationHandler {
+      try await task.value
+    } onCancel: {
+      task.cancel()
+    }
   }
 }

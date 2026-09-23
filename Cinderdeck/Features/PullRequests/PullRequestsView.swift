@@ -39,7 +39,7 @@ struct PullRequestsView: View {
         while model.connecting || model.submitting || !model.starring.isEmpty {
           do { try await Task.sleep(nanoseconds: 100_000_000) } catch { return }
         }
-        await model.connect()
+        await model.connect(hostname: notification.userInfo?["hostname"] as? String)
       }
     }
     .onChange(of: model.filters) { _ in model.scheduleSearch() }
@@ -61,13 +61,26 @@ struct PullRequestsView: View {
           Image(systemName: "tray.full").frame(width: 18)
           Text("My work").fontWeight(.medium)
           Spacer()
-          if model.filters.repository == nil { Circle().fill(Color.accentColor).frame(width: 5, height: 5) }
-        }.padding(10).background(model.filters.repository == nil ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 7))
+          if (model.filters.repository == nil && model.filters.organization == nil) { Circle().fill(Color.accentColor).frame(width: 5, height: 5) }
+        }.padding(10).background((model.filters.repository == nil && model.filters.organization == nil) ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 7))
       }.buttonStyle(.plain).padding(.horizontal, 10).help("Pull requests you are involved in, across GitHub")
+      Picker("Organization", selection: Binding(get: { model.filters.organization ?? "" }, set: { model.selectOrganization($0.isEmpty ? nil : $0) })) {
+        Text("All organizations").tag("")
+        ForEach(model.availableOrganizations, id: \.self) { Text($0).tag($0) }
+      }.labelsHidden().controlSize(.small).padding(.horizontal, 14).padding(.top, 14)
+        .accessibilityLabel("Organization").accessibilityIdentifier("prs.organization")
+        .disabled(model.login == nil)
+      if model.loadingOrganizations {
+        HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("Loading organizations…").font(.caption) }
+          .foregroundStyle(.secondary).padding(.horizontal, 16).padding(.top, 6)
+      }
+      if let message = model.organizationError {
+        Text("Couldn’t load all organizations. \(message)").font(.caption).foregroundStyle(.orange).padding(.horizontal, 14)
+      }
       HStack {
         Text("REPOSITORIES").font(.system(size: 10, weight: .semibold)).tracking(0.8).foregroundStyle(.secondary)
         Spacer()
-        if model.connecting || model.loadingRepositories {
+        if model.connecting || (model.loadingRepositories || model.loadingSelectedOrganization) {
           ProgressView().progressViewStyle(.circular).controlSize(.small)
             .accessibilityLabel("Loading repositories")
         }
@@ -82,10 +95,19 @@ struct PullRequestsView: View {
           .accessibilityIdentifier("prs.repositorySearch")
       }.font(.system(size: 11)).padding(8).background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 6))
         .padding(.horizontal, 14).padding(.bottom, 10)
+      if let message = model.repositoryError {
+        VStack(alignment: .leading, spacing: 6) {
+          Text("Some repositories could not be loaded. \(message)").font(.caption).foregroundStyle(.orange)
+          Button("Retry") {
+            if model.filters.organization != nil { model.reloadOrganization() }
+            else { Task { await model.connect() } }
+          }.controlSize(.small)
+        }.padding(.horizontal, 14).padding(.bottom, 8)
+      }
       ScrollView {
         LazyVStack(spacing: 3) {
           ForEach(model.visibleRepositories) { repository in repositoryRow(repository) }
-          if model.visibleRepositories.isEmpty && !model.connecting && !model.loadingRepositories {
+          if model.visibleRepositories.isEmpty && !model.connecting && !(model.loadingRepositories || model.loadingSelectedOrganization) {
             Text(model.starredOnly ? "Star repositories to keep them here." : "No repositories found.")
               .font(.system(size: 12)).foregroundStyle(.secondary).padding(20)
           }
@@ -99,7 +121,7 @@ struct PullRequestsView: View {
         }
         VStack(alignment: .leading, spacing: 2) {
           Text(model.login ?? "Not connected").font(.system(size: 11, weight: .semibold)).lineLimit(1)
-          Text("github.com").font(.system(size: 10)).foregroundStyle(.secondary)
+          Text(model.hostname).font(.system(size: 10)).foregroundStyle(.secondary)
         }
         Spacer(minLength: 2)
         Button { PreferencesWindowController.shared.show(tab: .github) } label: { Image(systemName: "gearshape") }
@@ -145,7 +167,7 @@ struct PullRequestsView: View {
         .buttonStyle(.plain).help("Toggle repositories").accessibilityLabel("Toggle repository sidebar")
       VStack(alignment: .leading, spacing: 4) {
         Text("Pull requests").font(.system(size: 21, weight: .semibold))
-        Text(model.filters.repository ?? "My work · pull requests you're involved in")
+        Text(model.filters.repository ?? model.filters.organization.map { "\($0) · all accessible repositories" } ?? "My work · pull requests you're involved in")
           .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
       }
       Spacer()
@@ -155,7 +177,7 @@ struct PullRequestsView: View {
       }
       Button { showsFilters.toggle() } label: { Label("Filters", systemImage: "line.3.horizontal.decrease") }
         .buttonStyle(.bordered).controlSize(.small).disabled(model.login == nil)
-      Button { model.scheduleSearch(immediate: true) } label: { Image(systemName: "arrow.clockwise") }
+      Button { model.scheduleSearch(immediate: true, force: true) } label: { Image(systemName: "arrow.clockwise") }
         .buttonStyle(.bordered).controlSize(.small).help("Refresh pull requests (⌘R)").accessibilityLabel("Refresh pull requests")
         .keyboardShortcut("r", modifiers: .command).disabled(model.login == nil || model.loading)
     }.padding(.horizontal, 22).padding(.vertical, 18)
@@ -163,7 +185,7 @@ struct PullRequestsView: View {
 
   private var loadingMessage: String? {
     if model.connecting { return "Connecting to GitHub…" }
-    if model.loadingRepositories { return "Loading repositories…" }
+    if (model.loadingRepositories || model.loadingSelectedOrganization) { return "Loading repositories…" }
     if model.loading { return "Loading pull requests…" }
     if model.loadingDetail { return "Loading pull request details…" }
     if model.loadingFiles { return "Loading changed files…" }
@@ -238,7 +260,8 @@ struct PullRequestsView: View {
       HStack {
         Text(model.loading && model.requests.isEmpty ? "Finding pull requests…" : "\(model.totalCount) pull request\(model.totalCount == 1 ? "" : "s")")
         Spacer()
-        if !model.loading, let updated = model.lastUpdated { Text("Updated \(updated.formatted(date: .omitted, time: .shortened))") }
+        if model.loading && !model.requests.isEmpty { Text("Refreshing…") }
+        else if let updated = model.lastUpdated { Text("Updated \(updated.formatted(date: .omitted, time: .shortened))") }
       }.font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary).padding(.horizontal, 22).padding(.vertical, 12)
       if model.requests.isEmpty {
         VStack(spacing: 12) {
@@ -253,12 +276,12 @@ struct PullRequestsView: View {
           }
           Text(model.loading ? "Loading pull requests…" : model.error == nil ? "You're all caught up" : "Couldn't load pull requests")
             .font(.system(size: 17, weight: .semibold))
-          Text(model.loading ? (model.filters.repository ?? "Fetching your latest work from GitHub.") : model.error == nil ? "No pull requests match this view. Try another tab or adjust your filters." : "Your filters are saved. Retry when you're ready.")
+          Text(model.loading ? (model.filters.repository ?? model.filters.organization ?? "Fetching your latest work from GitHub.") : model.error == nil ? "No pull requests match this view. Try another tab or adjust your filters." : "Your filters are saved. Retry when you're ready.")
             .font(.system(size: 12)).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 320)
           if !model.loading {
             Button(model.error == nil ? "Clear filters" : "Retry") {
-              if model.error == nil { model.filters = PRFilters(repository: model.filters.repository, state: .all) }
-              else { model.scheduleSearch(immediate: true) }
+              if model.error == nil { model.filters = PRFilters(repository: model.filters.repository, organization: model.filters.organization, state: .all) }
+              else { model.scheduleSearch(immediate: true, force: true) }
             }.buttonStyle(.bordered)
           }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -360,7 +383,7 @@ enum PRStyle {
 
 enum PROpenURL {
   static func open(_ value: String) {
-    guard let url = URL(string: value), url.scheme == "https", url.host == "github.com" || url.host == "cli.github.com" else { return }
+    guard let url = URL(string: value), url.scheme == "https", (url.host == GitHubHost.current || url.host == "github.com" || url.host == "cli.github.com"), url.user == nil, url.password == nil else { return }
     NSWorkspace.shared.open(url)
   }
 }

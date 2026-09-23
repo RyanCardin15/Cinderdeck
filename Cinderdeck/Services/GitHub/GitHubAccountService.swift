@@ -2,6 +2,7 @@ import Foundation
 
 nonisolated struct GitHubAccountSnapshot: Equatable, Sendable {
   var login: String?
+  var hostname = "github.com"
   var cliInstalled = true
   var managedByEnvironment = false
   var message: String?
@@ -11,7 +12,7 @@ nonisolated struct GitHubSignInProgress: Equatable, Sendable {
   var code: String?
   var url: URL?
 
-  static func parse(_ output: String) -> Self {
+  static func parse(_ output: String, hostname: String = "github.com") -> Self {
     var code: String?
     var url: URL?
     for line in output.components(separatedBy: .newlines) {
@@ -21,18 +22,19 @@ nonisolated struct GitHubSignInProgress: Equatable, Sendable {
       }
       if line.contains("Open this URL"), let range = line.range(of: "https://"),
         let candidate = URL(string: String(line[range.lowerBound...]).trimmingCharacters(in: .whitespacesAndNewlines)),
-        candidate.scheme == "https", candidate.host == "github.com", candidate.user == nil, candidate.password == nil,
+        candidate.scheme == "https", candidate.host == hostname, candidate.user == nil, candidate.password == nil,
         ["/login/device", "/login/oauth/authorize"].contains(candidate.path) {
         url = candidate
       }
     }
-    if code != nil, url == nil { url = URL(string: "https://github.com/login/device") }
+    if code != nil, url == nil { url = URL(string: "https://\(hostname)/login/device") }
     return .init(code: code, url: url)
   }
 }
 
 @MainActor
 protocol GitHubAccountServing {
+  var hostname: String { get set }
   func status() async -> GitHubAccountSnapshot
   func signIn(progress: @escaping (GitHubSignInProgress) -> Void) async throws -> String?
   func cancelSignIn()
@@ -56,44 +58,51 @@ private nonisolated final class GitHubLoginOutput: @unchecked Sendable {
 
 @MainActor
 final class GitHubAccountService: GitHubAccountServing {
+  var hostname: String
   private var process: Process?
   private var signingIn = false
   private let configuration: () async throws -> GitHubCLIConfiguration
-  private let viewer: () async throws -> String
+  private let viewer: (() async throws -> String)?
   private let timeout: TimeInterval
-  init(configuration: @escaping () async throws -> GitHubCLIConfiguration = { try await GitHubCLI.configuration(refresh: true) },
-    viewer: @escaping () async throws -> String = { try await GitHubPRService().viewer() }, timeout: TimeInterval = 900) {
+  init(hostname: String = GitHubHost.current, configuration: @escaping () async throws -> GitHubCLIConfiguration = { try await GitHubCLI.configuration(refresh: true) },
+    viewer: (() async throws -> String)? = nil, timeout: TimeInterval = 900) {
+    self.hostname = hostname
     self.configuration = configuration
     self.viewer = viewer
     self.timeout = timeout
   }
 
   func status() async -> GitHubAccountSnapshot {
+    let host = hostname
     do {
       let configuration = try await configuration()
       do {
-        return .init(login: try await viewer(), managedByEnvironment: configuration.usesEnvironmentToken)
+        let login: String
+        if let viewer { login = try await viewer() } else { login = try await GitHubPRService(hostname: host).viewer() }
+        return .init(login: login, hostname: host, managedByEnvironment: configuration.usesEnvironmentToken(hostname: host))
       } catch {
-        return .init(managedByEnvironment: configuration.usesEnvironmentToken, message: "Could not verify your GitHub connection. Sign in or check your network and try again.")
+        return .init(hostname: host, managedByEnvironment: configuration.usesEnvironmentToken(hostname: host), message: "Could not verify your GitHub connection. Sign in or check your network and try again.")
       }
-    } catch GitHubAccountError.missingCLI { return .init(cliInstalled: false) }
-    catch { return .init(message: "Could not check GitHub CLI. Try again.") }
+    } catch GitHubAccountError.missingCLI { return .init(hostname: host, cliInstalled: false) }
+    catch { return .init(hostname: host, message: "Could not check GitHub CLI. Try again.") }
   }
 
   func signIn(progress: @escaping (GitHubSignInProgress) -> Void) async throws -> String? {
     guard !signingIn else { throw GitHubAccountError.message("Sign-in is already in progress.") }
+    let host = hostname
+    guard GitHubHost.normalized(host) == host else { throw GitHubAccountError.message("Enter a valid GitHub hostname.") }
     signingIn = true
     defer { signingIn = false }
     let configuration = try await configuration()
     try Task.checkCancellation()
-    guard !configuration.usesEnvironmentToken else {
+    guard !configuration.usesEnvironmentToken(hostname: host) else {
       throw GitHubAccountError.message("An environment token controls your GitHub connection. Remove that override in your shell configuration before using browser sign-in.")
     }
     let child = Process()
     child.executableURL = URL(fileURLWithPath: configuration.executable)
     // Non-interactive web mode prints the device code and URL, then waits for
     // browser authorization. Omit --git-protocol to preserve the user's setting.
-    child.arguments = ["auth", "login", "--hostname", "github.com", "--web", "--skip-ssh-key"]
+    child.arguments = ["auth", "login", "--hostname", host, "--web", "--skip-ssh-key"]
     child.environment = configuration.environment
     child.standardInput = FileHandle.nullDevice
     let pipe = Pipe()
@@ -118,7 +127,7 @@ final class GitHubAccountService: GitHubAccountServing {
     while child.isRunning {
       try Task.checkCancellation()
       guard Date() < deadline else { throw GitHubAccountError.message("Sign-in expired. Start again to get a new code.") }
-      let current = GitHubSignInProgress.parse(output.text())
+      let current = GitHubSignInProgress.parse(output.text(), hostname: host)
       if current != previous { previous = current; progress(current) }
       try await Task.sleep(nanoseconds: 100_000_000)
     }

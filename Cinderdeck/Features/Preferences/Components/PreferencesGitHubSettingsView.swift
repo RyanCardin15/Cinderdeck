@@ -4,6 +4,8 @@ import SwiftUI
 struct GitHubSettingsView: View {
   @ObservedObject var model = GitHubAccountViewModel.shared
 
+  @State private var hostname = ""
+
   var body: some View {
     Form {
       Section {
@@ -16,13 +18,25 @@ struct GitHubSettingsView: View {
               .font(.system(size: 15, weight: .semibold))
             Text("Repositories, stars, and pull request reviews, together in Cinderdeck.")
               .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            Label("github.com", systemImage: model.account.login == nil ? "network" : "checkmark.circle.fill")
+            Label(model.account.hostname, systemImage: model.account.login == nil ? "network" : "checkmark.circle.fill")
               .font(.caption).foregroundStyle(model.account.login == nil ? Color.secondary : .green)
           }
           Spacer(minLength: 0)
           if model.checking { ProgressView().controlSize(.small) }
         }.padding(.vertical, 6)
       }
+
+      Section("GitHub host") {
+        HStack {
+          TextField("github.com or github.company.com", text: $hostname)
+            .textFieldStyle(.roundedBorder).accessibilityLabel("GitHub hostname")
+            .accessibilityIdentifier("github.hostname")
+          Button("Use host") { Task { await model.useHost(hostname); hostname = model.account.hostname } }
+            .disabled(model.checking || model.signingIn || hostname == model.account.hostname)
+        }
+        Text("Use github.com or your enterprise hostname (including company.ghe.com). Each host keeps its own account and saved views.")
+          .font(.caption).foregroundStyle(.secondary)
+      }.disabled(model.signingIn)
 
       if model.signingIn {
         Section("Finish signing in") {
@@ -110,6 +124,6 @@ struct GitHubSettingsView: View {
       }
     }
     .formStyle(.grouped)
-    .task { await model.refresh() }
+    .task { hostname = model.account.hostname; await model.refresh() }
   }
 }
