@@ -13,9 +13,18 @@ struct StackExpandedView: View {
       notices
       ScrollView(.vertical) {
         VStack(alignment: .leading, spacing: 12) {
-          servicesGrid
+          if viewModel.selectedServices.isEmpty, file.definition != nil {
+            VStack(alignment: .leading, spacing: 8) {
+              Text("No background services").font(.headline)
+              Text("Open this workspace to run its tasks and workflows.").font(.callout).foregroundColor(.secondary)
+              Button("Open workspace") {
+                manager.hide()
+                WorkspaceWindowController.shared.show(workspace: file.id)
+              }.buttonStyle(StackPillButtonStyle(compact: true))
+            }.padding(16).frame(maxWidth: .infinity, alignment: .leading).stackSurface(cornerRadius: 12)
+          } else { servicesGrid }
           if let repos = file.definition?.repos, !repos.isEmpty { repoList(repos) }
-        }.padding(2)
+        }.padding(4)
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -24,36 +33,35 @@ struct StackExpandedView: View {
   // MARK: Header
 
   private var header: some View {
-    HStack(alignment: .center, spacing: 10) {
-      VStack(alignment: .leading, spacing: 5) {
-        Text(showsWorkspaceName ? file.name : "Services").font(.system(size: 19, weight: .bold)).lineLimit(1).help(file.name)
-        HStack(spacing: 6) {
-          StackStateBadge(label: file.definition == nil ? "Degraded" : state.label, since: state.isActive ? state.startedAt : nil)
-          if let operation = state.operation { StackChip(systemImage: "hourglass", text: operation + "…", tint: .orange) }
-          if let claim = viewModel.claim(file.id) { StackClaimChip(claim: claim) { viewModel.releaseClaim(file.id) } }
-          Text(file.id + ".toml").font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary.opacity(0.8)).lineLimit(1)
-            .onTapGesture { viewModel.openInEditor(file) }.help("Open the definition in your editor")
-        }
+    VStack(alignment: .leading, spacing: 12) {
+      HStack(alignment: .firstTextBaseline, spacing: 12) {
+        Text(showsWorkspaceName ? file.name : "Services")
+          .font(.system(size: 19, weight: .bold)).lineLimit(1).help(file.name)
+          .layoutPriority(1)
+        Spacer(minLength: 8)
+        StackStateBadge(label: file.definition == nil ? "Degraded" : state.label, since: state.isActive ? state.startedAt : nil)
       }
-      Spacer(minLength: 6)
-      Button { viewModel.showLogs(stack: file.id, service: nil) } label: {
-        Label("Terminal", systemImage: "terminal")
-      }
-      .buttonStyle(StackPillButtonStyle())
-      .help("Open terminal for \(file.name)")
-      .accessibilityIdentifier("stacks.openTerminal")
-      if state.isActive {
-        Button { viewModel.toggle(file.id) } label: { Label("Stop", systemImage: "stop.fill") }
+      HStack(spacing: 8) {
+        Button { viewModel.showLogs(stack: file.id, service: nil) } label: { Label("Terminal", systemImage: "terminal") }
           .buttonStyle(StackPillButtonStyle())
-      } else {
-        Button { viewModel.toggle(file.id) } label: { Label("Start services", systemImage: "play.fill") }
-          .buttonStyle(StackPillButtonStyle(kind: .primary(StackPalette.color(phase: .ready))))
-          .disabled(file.definition == nil || viewModel.isBusy(file.id))
+          .help("Open terminal for \(file.name)")
+          .accessibilityIdentifier("stacks.openTerminal")
+        if state.isActive {
+          Button { viewModel.toggle(file.id) } label: { Label("Stop", systemImage: "stop.fill") }
+            .buttonStyle(StackPillButtonStyle())
+        } else {
+          Button { viewModel.toggle(file.id) } label: { Label("Start services", systemImage: "play.fill") }
+            .buttonStyle(StackPillButtonStyle(kind: .primary(StackPalette.color(phase: .ready))))
+            .disabled(file.definition == nil || viewModel.selectedServices.isEmpty || viewModel.isBusy(file.id))
+        }
+        Button { viewModel.restart(file.id) } label: { Label("Restart", systemImage: "arrow.clockwise") }
+          .buttonStyle(StackPillButtonStyle())
+          .disabled(file.definition == nil || viewModel.selectedServices.isEmpty || viewModel.isBusy(file.id))
+        Spacer(minLength: 8)
+        StackActionsMenu(file: file, viewModel: viewModel, manager: manager)
       }
-      Button { viewModel.restart(file.id) } label: { Label("Restart", systemImage: "arrow.clockwise") }
-        .buttonStyle(StackPillButtonStyle())
-        .disabled(file.definition == nil || viewModel.isBusy(file.id))
-      StackActionsMenu(file: file, viewModel: viewModel, manager: manager)
+      if let operation = state.operation { StackChip(systemImage: "hourglass", text: operation + "…", tint: .orange) }
+      if let claim = viewModel.claim(file.id) { StackClaimChip(claim: claim) { viewModel.releaseClaim(file.id) } }
     }
   }
 
@@ -83,7 +91,7 @@ struct StackExpandedView: View {
   // MARK: Services
 
   private var servicesGrid: some View {
-    LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 10)], spacing: 10) {
+    LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 10)], spacing: 10) {
       ForEach(viewModel.selectedServices) { service in
         StackServiceTile(stack: file, service: service, viewModel: viewModel, manager: manager)
       }

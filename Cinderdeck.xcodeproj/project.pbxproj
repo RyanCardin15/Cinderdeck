@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C1DE00012A00000000000001 /* cinderdeck-promo.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = C1DE00022A00000000000002 /* cinderdeck-promo.mp4 */; };
 		A31BF0A82F1CF69100902D12 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = A31BF0A72F1CF69100902D12 /* Sparkle */; };
 		B42DE1A02FA1B90000WEBP01 /* WebP in Frameworks */ = {isa = PBXBuildFile; productRef = B42DE1A12FA1B90000WEBP01 /* WebP */; };
 		C73DB2A02FA3GRDB00GRDB01 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = C73DB2A12FA3GRDB00GRDB01 /* GRDB */; };
@@ -23,6 +24,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		C1DE00022A00000000000002 /* cinderdeck-promo.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "assets/cinderdeck-promo.mp4"; sourceTree = SOURCE_ROOT; };
 		A36462A32F18EEDA0003453D /* Cinderdeck Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Cinderdeck Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D00100012F9F000000000001 /* CinderdeckTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CinderdeckTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D00110022F9F000000000002 /* Cinderdeck.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = Cinderdeck.xctestplan; sourceTree = "<group>"; };
@@ -82,6 +84,7 @@
 			isa = PBXGroup;
 			children = (
 				D00110022F9F000000000002 /* Cinderdeck.xctestplan */,
+				C1DE00022A00000000000002 /* cinderdeck-promo.mp4 */,
 				A36462A52F18EEDA0003453D /* Cinderdeck */,
 				D00100032F9F000000000003 /* CinderdeckTests */,
 				A36462A42F18EEDA0003453D /* Products */,
@@ -207,6 +210,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C1DE00012A00000000000001 /* cinderdeck-promo.mp4 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

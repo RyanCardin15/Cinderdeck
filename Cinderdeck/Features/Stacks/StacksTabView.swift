@@ -8,7 +8,7 @@ struct StacksTabView: View {
   private var expanded: Bool { manager.presentationMode == .expanded }
 
   var body: some View {
-    VStack(spacing: 8) {
+    VStack(spacing: 12) {
       if let error = viewModel.error {
         HStack(spacing: 8) {
           Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
@@ -20,12 +20,9 @@ struct StacksTabView: View {
         .padding(.horizontal, 10).padding(.vertical, 7)
         .stackSurface(cornerRadius: 10, tint: .orange)
       }
-      HStack {
-        Text("Services, tasks, and workflows").font(.caption).foregroundColor(.secondary)
-        Spacer()
-        Button("Open Workspaces") { WorkspaceWindowController.shared.show(workspace: viewModel.selectedStackID) }
-      }
+      workspaceToolbar
       if viewModel.files.isEmpty { emptyState }
+      else if viewModel.filteredFiles.isEmpty { noSearchResults }
       else if expanded { expandedContent }
       else { compactContent }
     }
@@ -66,6 +63,36 @@ struct StacksTabView: View {
     }
   }
 
+  private var workspaceToolbar: some View {
+    HStack(spacing: 12) {
+      Text("Services, tasks, and workflows")
+        .font(.system(size: 11, weight: .medium))
+        .foregroundColor(.secondary)
+        .lineLimit(1)
+      Spacer(minLength: 8)
+      Button {
+        manager.hide()
+        WorkspaceWindowController.shared.show(workspace: viewModel.selectedStackID)
+      } label: {
+        Label("Open Workspaces", systemImage: "arrow.up.forward.app")
+      }
+      .buttonStyle(StackPillButtonStyle(compact: true))
+      .fixedSize()
+      .accessibilityIdentifier("history.openWorkspaces")
+    }
+    .frame(minHeight: 28)
+  }
+
+  private var noSearchResults: some View {
+    VStack(spacing: 10) {
+      Image(systemName: "magnifyingglass").font(.system(size: 24)).foregroundColor(.secondary)
+      Text("No matching workspaces").font(.headline)
+      Text("Try another name or clear your search.").font(.callout).foregroundColor(.secondary)
+      Button("Clear search") { manager.searchText = ""; viewModel.stackFilter = "" }
+        .buttonStyle(StackPillButtonStyle(compact: true))
+    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+
   // MARK: Empty
 
   private var emptyState: some View {
@@ -90,28 +117,34 @@ struct StacksTabView: View {
   // MARK: Compact
 
   private var compactContent: some View {
-    HStack(alignment: .top, spacing: 10) {
-      ScrollViewReader { proxy in
-        ScrollView(.horizontal, showsIndicators: false) {
-          LazyHStack(alignment: .top, spacing: 12) {
-            ForEach(viewModel.filteredFiles) { file in
-              StackCompactCardView(file: file, viewModel: viewModel, manager: manager).id(file.id)
-            }
-          }.padding(4)
+    GeometryReader { geometry in
+      HStack(alignment: .top, spacing: 12) {
+        ScrollViewReader { proxy in
+          ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(alignment: .top, spacing: 12) {
+              ForEach(viewModel.filteredFiles) { file in
+                StackCompactCardView(file: file, viewModel: viewModel, manager: manager)
+                  .frame(height: max(0, geometry.size.height - 8))
+                  .id(file.id)
+              }
+            }.padding(4)
+          }
+          .onChange(of: viewModel.selectedStackID) { id in
+            if let id { withAnimation { proxy.scrollTo(id, anchor: .center) } }
+          }
         }
-        .onChange(of: viewModel.selectedStackID) { id in if let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
+        VStack(spacing: 8) {
+          StackIconButton(systemName: "plus", help: "Create workspace", size: 28) { viewModel.create() }
+          StackIconButton(systemName: "sparkles", help: "Agent access", tint: StackPalette.agent, size: 28) { viewModel.agentsSheet = true }
+        }.padding(.top, 4)
       }
-      VStack(spacing: 6) {
-        StackIconButton(systemName: "plus", help: "Create workspace", size: 28) { viewModel.create() }
-        StackIconButton(systemName: "sparkles", help: "Agent access", tint: StackPalette.agent, size: 28) { viewModel.agentsSheet = true }
-      }.padding(.top, 6)
     }
   }
 
   // MARK: Expanded
 
   private var expandedContent: some View {
-    HStack(spacing: 14) {
+    HStack(alignment: .top, spacing: 16) {
       VStack(alignment: .leading, spacing: 10) {
         HStack {
           Text("WORKSPACES").font(.system(size: 10, weight: .bold)).foregroundColor(.secondary).tracking(0.6)
@@ -123,12 +156,12 @@ struct StacksTabView: View {
             ForEach(viewModel.filteredFiles) { file in sidebarRow(file) }
           }.padding(2)
         }
-        Spacer(minLength: 0)
         agentStatus
         Button { NSWorkspace.shared.open(StackDefinitionLoader.directory()) } label: {
-          Label("Open workspace definitions", systemImage: "folder")
+          Label("Workspace files", systemImage: "folder")
         }.buttonStyle(StackPillButtonStyle(compact: true))
-      }.frame(width: 210)
+      }.frame(width: 196).frame(maxHeight: .infinity, alignment: .top)
+      Divider()
       if let file = viewModel.selectedFile {
         StackExpandedView(file: file, viewModel: viewModel, manager: manager)
       } else {

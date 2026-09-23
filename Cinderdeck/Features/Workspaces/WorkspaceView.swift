@@ -1,6 +1,6 @@
 import SwiftUI
 
-private enum WorkspaceSection: String, CaseIterable {
+enum WorkspaceSection: String, CaseIterable {
   case services = "Services", tasks = "Tasks", workflows = "Workflows", runs = "Runs"
   var explanation: String {
     switch self {
@@ -19,6 +19,12 @@ struct WorkspaceView: View {
   @State private var editing: WorkspaceComponentEditor.Context?
   @State private var selectedRun: UUID?
   @State private var search = ""
+  init(model: StacksViewModel, runner: WorkspaceRunner, initialSection: WorkspaceSection = .services) {
+    self.model = model
+    self.runner = runner
+    _section = State(initialValue: initialSection)
+  }
+
   private var workspace: StackDefinition? { model.selectedDefinition }
   private var workspaceRuns: [WorkspaceRun] { runner.runs.filter { $0.workspaceID == model.selectedStackID } }
 

@@ -71,6 +71,13 @@ struct AboutSettingsView: View {
           .lineLimit(2)
           .frame(maxWidth: 420)
       }
+      Button { PromoVideoWindowController.shared.showDemo() } label: {
+        Label("Watch demo", systemImage: "play.circle.fill")
+      }
+      .buttonStyle(.bordered)
+      .controlSize(.large)
+      .help("See History, Workspaces, Workflows, and Git in action")
+      .accessibilityIdentifier("about.watchDemo")
     }
     .padding(.bottom, 4)
   }

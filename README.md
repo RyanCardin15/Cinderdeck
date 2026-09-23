@@ -14,11 +14,13 @@
 
 <p align="center">
   <a href="assets/cinderdeck-promo.mp4?raw=true">
-    <img src="assets/cinderdeck-promo.gif" width="960" alt="Cinderdeck animated demo: your projects, one control deck." />
+    <img src="assets/cinderdeck-promo.gif" width="960" alt="Cinderdeck demo showing History, workspace services, ordered Workflows, run results, and GitHub pull requests." />
   </a>
   <br />
-  <a href="assets/cinderdeck-promo.mp4?raw=true"><strong>▶ Watch the 30-second promo with sound</strong></a>
+  <a href="assets/cinderdeck-promo.mp4?raw=true"><strong>▶ Watch the 48-second demo with sound</strong></a>
 </p>
+
+The demo plays inline above as an animated GIF. [Read the scene-by-scene description](docs/PROMO.md). In the app, open **Settings → About → Watch demo** for the full video.
 
 Cinderdeck is a native Mac application for running your development environment. Group any set of projects into a stack, define how each service starts, and manage them together from the menu bar, a terminal, or your coding agent.
 

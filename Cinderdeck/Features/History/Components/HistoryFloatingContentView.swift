@@ -17,7 +17,7 @@ struct HistoryFloatingContentView: View {
 
   @State private var selectedCompactFilter: CaptureHistoryType? = nil
   @AppStorage(PreferencesKeys.stacksEnabled) private var stacksEnabled = true
-  @StateObject private var stacksViewModel = StacksViewModel()
+  @StateObject private var stacksViewModel: StacksViewModel
   @State private var selectedClipboardID: UUID?
   @State private var usesExplicitCompactFilterSelection = false
   @State private var selectedId: UUID? = nil
@@ -30,8 +30,9 @@ struct HistoryFloatingContentView: View {
   @StateObject private var scrollController = HistoryScrollController()
   @StateObject private var searchViewModel: HistorySearchViewModel
 
-  init(manager: HistoryFloatingManager) {
+  init(manager: HistoryFloatingManager, stacksViewModel: StacksViewModel? = nil) {
     self.manager = manager
+    _stacksViewModel = StateObject(wrappedValue: stacksViewModel ?? StacksViewModel())
     _searchViewModel = StateObject(wrappedValue: HistorySearchViewModel(
       searchTextPublisher: manager.$searchText.eraseToAnyPublisher(),
       selectedFilterPublisher: manager.$expandedFilter.eraseToAnyPublisher(),
@@ -199,34 +200,25 @@ struct HistoryFloatingContentView: View {
   }
 
   private var compactHeader: some View {
-    ZStack {
+    HStack(spacing: 12) {
+      preferencesButton()
       compactFilterBar
-        .frame(maxWidth: .infinity)
-
+        .layoutPriority(1)
+      Spacer(minLength: 8)
       HStack(spacing: 8) {
-        preferencesButton()
-
-        Spacer()
-
         controlButton(
           systemName: "arrow.up.forward.app",
           help: L10n.Actions.openHistory,
           action: openFullHistory
         )
-
         controlButton(
           systemName: manager.isPinned ? "pin.fill" : "pin",
           help: manager.isPinned ? L10n.PreferencesHistory.unpinPanel : L10n.PreferencesHistory.pinPanel,
           isActive: manager.isPinned,
           action: manager.togglePin
         )
-
-        controlButton(
-          systemName: "xmark",
-          help: L10n.Common.close,
-          action: manager.hide
-        )
-      }
+        controlButton(systemName: "xmark", help: L10n.Common.close, action: manager.hide)
+      }.fixedSize()
     }
   }
 

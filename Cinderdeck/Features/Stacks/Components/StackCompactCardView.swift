@@ -11,12 +11,29 @@ struct StackCompactCardView: View {
     VStack(alignment: .leading, spacing: 9) {
       VStack(alignment: .leading, spacing: 5) {
         Text(file.name).font(.system(size: 13.5, weight: .semibold)).lineLimit(1).help(file.name)
-        StackStateBadge(label: file.definition == nil ? "Degraded" : state.label, since: state.isActive ? state.startedAt : nil)
+        HStack(spacing: 8) {
+          StackStateBadge(label: file.definition == nil ? "Degraded" : state.label, since: state.isActive ? state.startedAt : nil)
+          Spacer(minLength: 0)
+          if let definition = file.definition, !definition.tasks.isEmpty || !definition.workflows.isEmpty {
+            Text("\(definition.tasks.count) \(definition.tasks.count == 1 ? "task" : "tasks") · \(definition.workflows.count) \(definition.workflows.count == 1 ? "workflow" : "workflows")")
+              .font(.system(size: 9.5)).foregroundColor(.secondary).lineLimit(1)
+          }
+        }
       }
-      notices
       ScrollView(showsIndicators: false) {
-        VStack(spacing: 5) {
+        VStack(alignment: .leading, spacing: 8) {
+          notices
           ForEach(services) { service in serviceRow(service) }
+          if services.isEmpty, let definition = file.definition {
+            ForEach(definition.tasks.prefix(3)) { task in
+              Label(task.name, systemImage: "terminal")
+                .font(.system(size: 11)).foregroundColor(.secondary).lineLimit(1)
+            }
+            ForEach(definition.workflows.prefix(2)) { workflow in
+              Label(workflow.name, systemImage: "arrow.triangle.branch")
+                .font(.system(size: 11)).foregroundColor(.secondary).lineLimit(1)
+            }
+          }
           // Repos without services still show branch information.
           ForEach((file.definition?.repos ?? []).filter { repo in !services.contains { $0.repo == repo.id } }) { repo in
             HStack(spacing: 6) {
@@ -31,7 +48,8 @@ struct StackCompactCardView: View {
       footer
     }
     .padding(12)
-    .frame(width: 300, height: 212)
+    .frame(width: 300)
+    .frame(maxHeight: .infinity, alignment: .topLeading)
     .stackSurface(cornerRadius: 16, selected: selected)
     .contentShape(RoundedRectangle(cornerRadius: 16))
     .onTapGesture { viewModel.select(file.id) }
@@ -95,6 +113,12 @@ struct StackCompactCardView: View {
           .buttonStyle(StackPillButtonStyle(kind: .secondary, compact: true))
         Button { viewModel.restart(file.id) } label: { Label("Restart", systemImage: "arrow.clockwise") }
           .buttonStyle(StackPillButtonStyle(compact: true)).disabled(viewModel.isBusy(file.id))
+      } else if services.isEmpty, file.definition != nil {
+        Button {
+          manager.hide()
+          WorkspaceWindowController.shared.show(workspace: file.id)
+        } label: { Label("Open workspace", systemImage: "arrow.up.forward.app") }
+          .buttonStyle(StackPillButtonStyle(compact: true))
       } else {
         Button { viewModel.toggle(file.id) } label: { Label("Start", systemImage: "play.fill") }
           .buttonStyle(StackPillButtonStyle(kind: .primary(StackPalette.color(phase: .ready)), compact: true))

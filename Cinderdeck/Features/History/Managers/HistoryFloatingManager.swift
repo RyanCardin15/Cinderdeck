@@ -132,6 +132,14 @@ final class HistoryFloatingManager: ObservableObject {
 
   // MARK: - Init
 
+  #if DEBUG
+  /// Render the actual panel in visual fixtures without opening a floating window.
+  convenience init(previewMode: HistoryFloatingPresentationMode) {
+    self.init()
+    presentationMode = previewMode
+  }
+  #endif
+
   private init() {
     panelController.onPanelDidResignKey = { [weak self] in
       self?.handlePanelDidResignKey()
