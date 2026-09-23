@@ -10,6 +10,7 @@ nonisolated enum StackCLI {
     guard arguments.count > 1 else { return nil }
     switch arguments[1] {
     case "stacks", "stack": return run(Array(arguments.dropFirst(2)))
+    case "prs", "pull-requests": return PRViewsCLI.run(Array(arguments.dropFirst(2)))
     case "mcp": return StackMCPServer.run()
     case "help", "--help", "-h":
       guard isCommandName(arguments[0]) else { return nil }
@@ -483,6 +484,7 @@ nonisolated enum StackCLI {
     cinderdeck stacks install-cli                 Link ~/.local/bin/cinderdeck to this app
     cinderdeck stacks setup-agents                Add the Cinderdeck MCP server to Cursor, Codex, Claude Code
     cinderdeck stacks agent-help                  Instructions to paste into AGENTS.md
+    cinderdeck prs views                          Configure Pull Request tabs (prs --help)
     cinderdeck mcp                                Run as an MCP server over stdio
 
   OPTIONS

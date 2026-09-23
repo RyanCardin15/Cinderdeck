@@ -16,7 +16,13 @@ final class PullRequestsViewModel: ObservableObject {
   @Published private(set) var detail: PullRequestDetail?
   @Published private(set) var files: [PullRequestFile] = []
   @Published private(set) var customViews: [PRSavedView] = []
-  @Published var filters = PRFilters()
+  @Published var filters = PRFilters() {
+    didSet {
+      // Persist edits immediately, before an agent can update another tab or
+      // the SwiftUI search debounce runs. Applying store changes never echoes.
+      if !applyingViewPreferences { savePreferences() }
+    }
+  }
   @Published var repositorySearch = ""
   @Published var starredOnly = false
   @Published private(set) var selectedViewID = "active"
@@ -35,7 +41,9 @@ final class PullRequestsViewModel: ObservableObject {
   @Published private(set) var pageInfo: GitHubPageInfo?
   @Published private(set) var filesHaveMore = false
   private var service: GitHubPRServing
-  private let defaults: UserDefaults
+  private let viewStore: PRViewStore
+  private var viewSubscription: AnyCancellable?
+  private var applyingViewPreferences = false
   private let cache: PRSearchCache
   private var displayedQuery: String?
   private var detailTask: Task<Void, Never>?
@@ -51,11 +59,19 @@ final class PullRequestsViewModel: ObservableObject {
   private var accountVersion = UUID()
   private var filesPage = 0
 
-  init(service: GitHubPRServing? = nil, defaults: UserDefaults = .standard, cache: PRSearchCache? = nil) {
+  init(service: GitHubPRServing? = nil, defaults: UserDefaults? = nil, cache: PRSearchCache? = nil, viewStore: PRViewStore? = nil) {
     self.service = service ?? GitHubPRService()
-    self.defaults = defaults
+    self.viewStore = viewStore ?? defaults.map { PRViewStore(defaults: $0) } ?? .shared
     self.hostname = self.service.hostname
     self.cache = cache ?? PRSearchCache()
+    viewSubscription = self.viewStore.changes.sink { [weak self] change in
+      guard let self, self.login?.lowercased() == change.account, self.hostname == change.hostname else { return }
+      let filtersChanged = self.filters != change.preferences.filters
+      let organizationChanged = self.filters.organization != change.preferences.filters.organization
+      self.apply(change.preferences)
+      if organizationChanged { self.reloadOrganization() }
+      if filtersChanged { self.scheduleSearch(immediate: true) }
+    }
   }
   var views: [PRSavedView] { PRSavedView.defaults + customViews }
   var selectedRequest: PullRequest? { requests.first { $0.id == selectedID } }
@@ -322,59 +338,50 @@ final class PullRequestsViewModel: ObservableObject {
     scheduleSearch(immediate: true)
   }
   func selectView(_ view: PRSavedView) {
-    var next = view.filters
-    if view.isBuiltIn { next.repository = filters.repository; next.organization = filters.organization }
-    selectedViewID = view.id
-    let organizationChanged = filters.organization != next.organization
-    filters = next
-    if organizationChanged { reloadOrganization() }
-    savePreferences()
-    scheduleSearch(immediate: true)
+    guard let login else { return }
+    do {
+      // Save any unsaved repository/filter changes before switching views.
+      try viewStore.saveWorkspace(account: login, hostname: hostname, filters: filters, selectedViewID: selectedViewID)
+      try viewStore.select(account: login, hostname: hostname, id: view.id)
+      scheduleSearch(immediate: true)
+    } catch { self.error = error.localizedDescription }
   }
   @discardableResult
   func saveView(name: String, replacing id: String? = nil) -> Bool {
-    let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !name.isEmpty, name.count <= 40 else { return false }
-    if let id, let index = customViews.firstIndex(where: { $0.id == id }) {
-      customViews[index] = .init(id: id, name: name, filters: filters)
-      selectedViewID = id
-    } else {
-      let view = PRSavedView(name: name, filters: filters)
-      customViews.append(view); selectedViewID = view.id
-    }
-    savePreferences()
-    return true
+    guard let login else { return false }
+    do {
+      try viewStore.upsert(account: login, hostname: hostname, view: .init(id: id ?? UUID().uuidString, name: name, filters: filters), select: true)
+      return true
+    } catch { self.error = error.localizedDescription; return false }
   }
   func deleteView(_ view: PRSavedView) {
-    customViews.removeAll { $0.id == view.id }
-    if selectedViewID == view.id { selectView(PRSavedView.defaults[1]) }
-    savePreferences()
+    guard let login else { return }
+    do { try viewStore.delete(account: login, hostname: hostname, id: view.id) }
+    catch { self.error = error.localizedDescription }
   }
   func moveView(_ view: PRSavedView, by offset: Int) {
-    guard let index = customViews.firstIndex(where: { $0.id == view.id }), customViews.indices.contains(index + offset) else { return }
-    customViews.swapAt(index, index + offset); savePreferences()
-  }
-  private struct Preferences: Codable {
-    var customViews: [PRSavedView]; var filters: PRFilters; var selectedViewID: String
+    guard let login, let index = customViews.firstIndex(where: { $0.id == view.id }), customViews.indices.contains(index + offset) else { return }
+    var ids = customViews.map(\.id)
+    ids.swapAt(index, index + offset)
+    do { try viewStore.reorder(account: login, hostname: hostname, ids: ids) }
+    catch { self.error = error.localizedDescription }
   }
   private func savePreferences() {
     guard let login else { return }
-    let value = Preferences(customViews: customViews, filters: filters, selectedViewID: selectedViewID)
-    if let data = try? JSONEncoder().encode(value) { defaults.set(data, forKey: preferencesKey(login: login)) }
+    do { try viewStore.saveWorkspace(account: login, hostname: hostname, filters: filters, selectedViewID: selectedViewID) }
+    catch { self.error = error.localizedDescription }
   }
-  private func preferencesKey(login: String) -> String { "github.prs.\(hostname).\(login.lowercased()).v2" }
   private func restoreViews(login: String) {
-    customViews = []; filters = .init(); selectedViewID = "active"
-    guard let data = defaults.data(forKey: preferencesKey(login: login)) ??
-      (hostname == "github.com" ? defaults.data(forKey: "github.prs.\(login.lowercased()).v1") : nil),
-      let value = try? JSONDecoder().decode(Preferences.self, from: data) else { return }
-    var seen = Set(PRSavedView.defaults.map(\.id))
-    customViews = value.customViews.filter { !$0.name.isEmpty && seen.insert($0.id).inserted }
-    filters = value.filters
-    if let repository = filters.repository, !GitHubPRService.validRepository(repository) { filters.repository = nil }
-    if let organization = filters.organization, !GitHubPRService.validRepository("\(organization)/repo") { filters.organization = nil }
-    reloadOrganization()
-    selectedViewID = views.contains { $0.id == value.selectedViewID } ? value.selectedViewID : "active"
+    apply(PRViewStore.Preferences())
+    do { apply(try viewStore.load(account: login, hostname: hostname)); reloadOrganization() }
+    catch { self.error = error.localizedDescription }
+  }
+  private func apply(_ value: PRViewStore.Preferences) {
+    applyingViewPreferences = true
+    defer { applyingViewPreferences = false }
+    if customViews != value.customViews { customViews = value.customViews }
+    if selectedViewID != value.selectedViewID { selectedViewID = value.selectedViewID }
+    if filters != value.filters { filters = value.filters }
   }
 
   func select(_ id: String?) {

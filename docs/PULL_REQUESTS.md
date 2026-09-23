@@ -24,10 +24,67 @@ Discovery explicitly requests both viewer and owner affiliations from [GitHub’
 - Select a repository to show its PRs from **all authors**. A role filter can narrow that scope.
 - **All**, **Active**, **Review requests**, and **Done** provide starting views. Done means merged PRs; use **Closed, unmerged** for PRs closed without merging.
 - Filter by state, role, label, or text, and sort by activity, creation date, or discussion count.
-- Turn on **Query** for [GitHub search qualifiers](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests), such as `is:open author:@me review:required`. Query mode replaces the simple state, label, and text filters. Repository and role scope still apply.
+- Turn on **Query** for [GitHub search qualifiers](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests), such as `is:open author:@me review:required`. Query mode replaces the simple state, label, and text filters. Repository, organization, and role scope still apply.
 - Results load 25 at a time. A search that hits GitHub’s processing timeout retries once with 10 results to reduce the work GitHub must do; authentication failures, rate limits, and local command timeouts are not retried. **Load more** preserves the current list. GitHub search returns at most 1,000 matches; the app asks you to narrow your filters when you reach that limit.
 
-Use **+** beside the tabs to save the current repository, search, filters, and sorting as a custom view. A dot marks a modified view; **Save changes** updates it. Right-click a custom tab to edit its name, move it, or delete it. Built-in tabs retain the currently selected repository. Custom tabs restore their saved repository. Views and the last filter are saved locally per GitHub host and account and separately for Debug and Release apps.
+Use **+** beside the tabs to save the current repository, search, filters, and sorting as a custom view. A dot marks a modified view; **Save changes** updates it. Right-click a custom tab to edit its name, move it, or delete it. Built-in tabs retain the currently selected repository and organization. Custom tabs restore their saved repository. Views and the last filter are saved locally per GitHub host and account and separately for Debug and Release apps.
+
+## Configure views with agents or scripts
+
+Choose **Agent access** (the sparkles button in the PR window) to connect Codex, Cursor, or Claude Code. The existing Cinderdeck MCP server now exposes `list_pr_views`, `upsert_pr_view`, `select_pr_view`, `reorder_pr_views`, and `delete_pr_view`; existing connections need only reload their tools or restart their client. Agent setup instructions include both stacks and PR views. The CLI is the same `cinderdeck` command installed from Agent access.
+
+Start by listing views. The result includes the GitHub hostname and active account, every tab's exact id, filters and generated query, plus the current selection and workspace filters. Supply that account on subsequent changes; Cinderdeck refuses the change if the active GitHub account has switched. Use `--host <hostname>` (MCP `hostname`) to pin the server returned by the list call. When omitted, the server selected in Cinderdeck is used. An explicit host does not switch the UI to a different server.
+
+```sh
+cinderdeck prs views list
+cinderdeck prs views upsert team-reviews --account YOUR_LOGIN \
+  --name "Team reviews" --repo my-org/my-repo --role review --select
+cinderdeck prs views upsert team-reviews --account YOUR_LOGIN \
+  --query 'is:open draft:false review:required' --sort updated
+cinderdeck prs views select team-reviews --account YOUR_LOGIN
+cinderdeck prs views reorder team-reviews another-custom-id --account YOUR_LOGIN
+cinderdeck prs views delete team-reviews --account YOUR_LOGIN
+cinderdeck prs --help
+```
+
+All CLI results are JSON; errors are JSON on stderr with a nonzero exit code. `--json` is also accepted. Use `--org <organization>` for an organization-wide view, `--repo <owner/name>` for a repository, or `--my-work` to clear both scopes, `--text` to return to simple search, and an empty string to clear text or label. Reorder must include every custom id exactly once, including an empty list when there are no custom tabs.
+
+Equivalent MCP creation arguments for `upsert_pr_view`:
+
+```json
+{
+  "hostname": "github.com",
+  "account": "YOUR_LOGIN",
+  "id": "team-reviews",
+  "name": "Team reviews",
+  "filters": {
+    "repository": "my-org/my-repo",
+    "role": "review",
+    "text": "is:open draft:false review:required",
+    "advanced": true,
+    "sort": "updated"
+  },
+  "select": true
+}
+```
+
+`id` is stable (1–100 letters, numbers, hyphens, or underscores): reusing it patches the same tab without creating duplicates. A name of 1–40 characters is required on creation. Omitted fields are preserved on update. New tabs default to My work, open state, anyone, and recently updated. MCP filter tokens are:
+
+| Field | Values |
+| --- | --- |
+| `repository` | `owner/name`, or `null` to use organization/My work scope |
+| `organization` | Organization login, or `null`; applies when repository is `null` |
+| `state` | `all`, `open`, `draft`, `merged`, `closed` (unmerged) |
+| `role` | `anyone`, `author`, `review`, `assigned`, `involved` |
+| `sort` | `updated`, `newest`, `oldest`, `comments` |
+| `text`, `label` | Strings; empty clears |
+| `advanced` | Boolean; true uses `text` as GitHub search qualifiers |
+
+Query mode retains repository, organization, and role scope, including the default involvement scope for My work. `@me` resolves to the active account. Inspect the returned `query` to confirm the effective search. These controls use the same search behavior as the PR window.
+
+Changes persist locally per GitHub host and account and appear immediately in the open window. Creating a tab does not activate it unless `select` is true. Updating the active saved tab updates its filters when the user has no unsaved edits; otherwise those edits are preserved. Explicit selection replaces unsaved filters. Deleting the active custom tab falls back to Active while retaining repository and organization scope. Built-in tabs can be selected but cannot be edited, deleted, or reordered. Existing saved views require no migration.
+
+The control methods use the existing local socket (`prs.views.list`, `.upsert`, `.select`, `.delete`, `.reorder`) and work even when the PR window is closed. They verify the account through GitHub CLI but do not modify GitHub repositories, stars, or reviews. Debug and Release configurations remain separate.
 
 ## Review
 
@@ -43,10 +100,11 @@ Press **⌘R** to force a refresh. There is no periodic polling. Superseded sear
 
 ## Verification
 
-The focused suites cover warm tabs and saved queries, concurrent request limits and sharing, stale refresh failures, cache invalidation, organization pagination and scope, host/account separation, enterprise API and sign-in routing, timeout fallback, review validation and exact payloads, star failure handling, and process cancellation. External writes are tested using injected transports, without posting reviews or changing repository stars.
+The focused suites cover warm tabs and saved queries, concurrent request limits and sharing, stale refresh failures, cache invalidation, organization pagination and scope, host/account separation, enterprise API and sign-in routing, timeout fallback, review validation and exact payloads, star failure handling, process cancellation, CLI/MCP view controls, live view updates, and validation without partial writes. External writes are tested using injected transports, without posting reviews or changing repository stars.
 
 ```sh
 scripts/run-tests.sh -only-testing:CinderdeckTests/PullRequestsTests \
+  -only-testing:CinderdeckTests/PRViewControlTests -only-testing:CinderdeckTests/StackControlTests \
   -only-testing:CinderdeckTests/GitHubAccountTests \
   -only-testing:CinderdeckTests/StackProcessIntegrationTests
 ```

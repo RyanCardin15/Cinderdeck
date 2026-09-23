@@ -5,6 +5,7 @@ struct PullRequestsView: View {
   @ObservedObject var model: PullRequestsViewModel
   @ObservedObject private var theme = ThemeManager.shared
   @State private var viewEditor: PRViewEditorContext?
+  @State private var showsAgentAccess = false
   @State private var showsFilters = true
   @State private var showsSidebar = true
 
@@ -43,6 +44,7 @@ struct PullRequestsView: View {
       }
     }
     .onChange(of: model.filters) { _ in model.scheduleSearch() }
+    .sheet(isPresented: $showsAgentAccess) { StackAgentsSheet() }
     .sheet(item: $viewEditor) { context in PRSavedViewEditor(model: model, context: context) }
     .frame(minWidth: 1000, minHeight: 600)
   }
@@ -184,6 +186,8 @@ struct PullRequestsView: View {
           .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
       }
       Spacer()
+      Button { showsAgentAccess = true } label: { Image(systemName: "sparkles") }
+        .buttonStyle(.plain).help("Let agents configure PR views").accessibilityLabel("Agent access")
       if let message = loadingMessage {
         ProgressView().progressViewStyle(.circular).controlSize(.small)
           .help(message).accessibilityLabel(message).accessibilityIdentifier("prs.loading")

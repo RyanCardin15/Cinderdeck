@@ -119,6 +119,55 @@ final class PullRequestsTests: XCTestCase {
     XCTAssertNil(restored.filters.repository)
   }
 
+  func testAgentChangesUpdateOpenWindowAndUIChangesRemainVisibleToAgents() async throws {
+    let defaults = temporaryDefaults()
+    let store = PRViewStore(defaults: defaults)
+    let model = PullRequestsViewModel(service: PRMockService(), viewStore: store)
+    let control = PRViewControlService(store: store, currentHost: { "github.com" }, viewer: { _ in "reviewer" })
+    await model.connect()
+    _ = try await control.handle("prs.views.upsert", params: .object([
+      "account": .string("reviewer"), "id": .string("agent-view"), "name": .string("Agent view"),
+      "filters": .object(["text": .string("latest")]), "select": .bool(true),
+    ]))
+    XCTAssertEqual(model.customViews.map(\.id), ["agent-view"])
+    XCTAssertEqual(model.selectedViewID, "agent-view")
+    XCTAssertEqual(model.filters.text, "latest")
+    try await Task.sleep(nanoseconds: 50_000_000)
+    XCTAssertEqual(model.requests.first?.title, "latest")
+
+    model.filters.label = "UI edit"
+    _ = try await control.handle("prs.views.upsert", params: .object([
+      "account": .string("reviewer"), "id": .string("agent-view"),
+      "filters": .object(["sort": .string("newest")]),
+    ]))
+    XCTAssertEqual(model.filters.label, "UI edit", "Agent edits must preserve filters even before a debounced search")
+    XCTAssertEqual(model.filters.sort, .updated)
+    XCTAssertEqual(model.customViews.first?.filters.sort, .newest)
+    XCTAssertTrue(model.saveView(name: "Updated in UI", replacing: "agent-view"))
+    let result = try await control.handle("prs.views.list", params: .object([:]))
+    XCTAssertEqual(result["views"]?.arrayValue?.last?["name"]?.stringValue, "Updated in UI")
+    XCTAssertEqual(result["filters"]?["label"]?.stringValue, "UI edit")
+    try store.upsert(account: "another-user", view: .init(id: "other", name: "Other", filters: .init()), select: true)
+    XCTAssertEqual(model.selectedViewID, "agent-view")
+    try store.upsert(account: "reviewer", hostname: "github.company.test", view: .init(id: "enterprise", name: "Enterprise", filters: .init()), select: true)
+    XCTAssertEqual(model.selectedViewID, "agent-view", "Same login on another server must not change the open workspace")
+    model.deleteView(try XCTUnwrap(model.customViews.first))
+    XCTAssertEqual(try store.load(account: "reviewer").customViews.count, 0)
+    XCTAssertEqual(model.selectedViewID, "active")
+  }
+
+  func testExistingSavedViewPreferencesRemainCompatible() async throws {
+    let defaults = temporaryDefaults()
+    let json = #"{"customViews":[{"id":"old-id","name":"Existing tab","filters":{"repository":"team/project","state":"Draft","role":"Created by me","sort":"Newest first","text":"fix","label":"bug","advanced":false}}],"filters":{"repository":"team/project","state":"Draft","role":"Created by me","sort":"Newest first","text":"fix","label":"bug","advanced":false},"selectedViewID":"old-id"}"#
+    defaults.set(Data(json.utf8), forKey: "github.prs.reviewer.v1")
+    let model = PullRequestsViewModel(service: PRMockService(), defaults: defaults)
+    await model.connect()
+    XCTAssertEqual(model.selectedViewID, "old-id")
+    XCTAssertEqual(model.customViews.first?.name, "Existing tab")
+    XCTAssertNotNil(defaults.data(forKey: "github.prs.github.com.reviewer.v2"))
+    XCTAssertEqual(model.filters, .init(repository: "team/project", state: .draft, role: .author, sort: .newest, text: "fix", label: "bug"))
+  }
+
   func testOutOfOrderSearchAndDetailCannotReplaceCurrentSelection() async throws {
     let service = PRMockService()
     let model = makeModel(service: service)
