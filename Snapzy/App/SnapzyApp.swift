@@ -16,7 +16,6 @@ extension Notification.Name {
   static let showOnboarding = Notification.Name("showOnboarding")
 }
 
-@main
 struct SnapzyApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
   @ObservedObject private var themeManager = ThemeManager.shared

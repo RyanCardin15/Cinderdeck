@@ -65,3 +65,10 @@ The previous derived-data folder referenced an obsolete checkout path, so this b
 ### Scope notes
 
 External Azure/Git Credential Manager accounts and particular nvm/dotnet/uv/pnpm installations were not exercised; portable shell resolution and temporary Git remotes were verified. Native notification delivery depends on the user's macOS permission; crash/retry behavior is covered without prompting during tests. The optional Stacks deep-link extension in the plan is deferred. Services must run in the foreground as described in `STACKS.md`.
+
+## Agent control and UI refresh (September 23, 2026)
+
+- `Services/Stacks/Agents/`: Unix-socket control API (`StackControlService`, newline-delimited JSON, peer UID check, `LOCAL_PEERPID` attribution), `state.json` snapshots, advisory claims, port ownership (`StackProcessInspector`), the `snapzy` CLI and the stdio MCP server. `App/SnapzyMain.swift` dispatches `snapzy stacks …` / `snapzy mcp` before the UI starts; `SnapzyApp` is no longer `@main`.
+- Services and events record their actor (`custom_v3_addStackActors` adds `stackRunRecord.ownerJSON` and `stackEventRecord.actor`). Owners survive restarts, branch switches and reattach.
+- UI: shared `StackStyle` (surfaces, pill buttons, chips, owner/claim badges), service tiles, repo cards, a dark console with service tabs and an Activity view, redesigned compact cards and sidebar, and the Agent access sheet.
+- Verification: `scripts/stacks-verify.sh [build|test|e2e|all|--watch]`. The e2e run launches the Debug app against a fixture stack and exercises the CLI (status, start/wait, logs, ports attribution, claim conflicts, restart, branch switch, events, validate, kill-port) and an MCP session.

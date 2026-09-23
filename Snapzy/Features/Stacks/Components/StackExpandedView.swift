@@ -4,169 +4,367 @@ struct StackExpandedView: View {
   let file: StackDefinitionFile
   @ObservedObject var viewModel: StacksViewModel
   @ObservedObject var manager: HistoryFloatingManager
-  @FocusState private var logFilterFocused: Bool
+  private var state: StackRuntimeState { viewModel.selectedState }
+
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       header
-      if !file.issues.isEmpty {
-        ScrollView { Text(file.issues.map(\.message).joined(separator: "\n")).font(.caption).foregroundColor(.orange).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
-          .frame(maxHeight: 65)
-      }
-      if viewModel.supervisor.definitionChanged(file.id) {
-        Label("Definition changed — restart to apply", systemImage: "doc.badge.clock").font(.caption).foregroundColor(.orange)
-      }
-      ScrollView {
-        VStack(alignment: .leading, spacing: 10) {
-          if let repos = file.definition?.repos, !repos.isEmpty {
-            sectionLabel("REPOS")
-            ForEach(repos) { repo in StackRepoRow(stack: file.id, repo: repo, viewModel: viewModel) }
-            Divider().padding(.vertical, 2)
-          }
-          sectionLabel("SERVICES")
-          ForEach(viewModel.selectedServices) { service in
-            StackServiceRow(stack: file.id, service: service, viewModel: viewModel, manager: manager)
-          }
-        }.padding(.trailing, 5)
-      }.frame(maxHeight: 255)
-      logsToolbar
-      StackLogView(lines: viewModel.filteredLogs, allServices: viewModel.logService == nil,
-        autoScroll: viewModel.autoScroll, focusRequest: viewModel.logFocusRequest,
-        onFocus: { viewModel.logFocused = true })
-        .frame(minHeight: 85, maxHeight: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.15)))
-      if let latest = viewModel.activity.first {
-        DisclosureGroup {
-          ScrollView {
-            VStack(alignment: .leading, spacing: 4) {
-              ForEach(viewModel.activity) { event in
-                HStack {
-                  Text([event.serviceName, event.kind, event.detail].compactMap { $0 }.joined(separator: " · "))
-                  Spacer(); Text(event.occurredAt, style: .relative)
-                }.font(.caption2).foregroundColor(.secondary)
-              }
-            }
-          }.frame(maxHeight: 75)
-        } label: {
-          HStack(spacing: 4) {
-            Text([latest.serviceName, latest.kind].compactMap { $0 }.joined(separator: " "))
-            Text(latest.occurredAt, style: .relative)
-            Text("ago")
-          }.font(.caption2).foregroundColor(.secondary)
+      notices
+      servicesGrid
+      if let repos = file.definition?.repos, !repos.isEmpty { repoStrip(repos) }
+      StackConsoleView(file: file, viewModel: viewModel)
+        .frame(minHeight: 150, maxHeight: .infinity)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+  }
+
+  // MARK: Header
+
+  private var header: some View {
+    HStack(alignment: .center, spacing: 10) {
+      VStack(alignment: .leading, spacing: 5) {
+        Text(file.name).font(.system(size: 19, weight: .bold)).lineLimit(1)
+        HStack(spacing: 6) {
+          StackStateBadge(label: file.definition == nil ? "Degraded" : state.label, since: state.isActive ? state.startedAt : nil)
+          if let operation = state.operation { StackChip(systemImage: "hourglass", text: operation + "…", tint: .orange) }
+          if let claim = viewModel.claim(file.id) { StackClaimChip(claim: claim) { viewModel.releaseClaim(file.id) } }
+          Text(file.id + ".toml").font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary.opacity(0.8))
+            .onTapGesture { viewModel.openInEditor(file) }.help("Open the definition in your editor")
         }
       }
-    }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-  }
-  private var header: some View {
-    HStack(spacing: 8) {
-      VStack(alignment: .leading, spacing: 3) {
-        Text(file.name).font(.system(size: 18, weight: .semibold)).lineLimit(1)
-        HStack(spacing: 5) {
-          StackStatusDot(label: viewModel.selectedState.label)
-          Text(viewModel.selectedState.label)
-          if let started = viewModel.selectedState.startedAt { Text(started, style: .relative) }
-        }.font(.caption).foregroundColor(.secondary)
+      Spacer(minLength: 6)
+      if state.isActive {
+        Button { viewModel.toggle(file.id) } label: { Label("Stop", systemImage: "stop.fill") }
+          .buttonStyle(StackPillButtonStyle())
+      } else {
+        Button { viewModel.toggle(file.id) } label: { Label("Start stack", systemImage: "play.fill") }
+          .buttonStyle(StackPillButtonStyle(kind: .primary(StackPalette.color(phase: .ready))))
+          .disabled(file.definition == nil || viewModel.isBusy(file.id))
       }
-      Spacer(minLength: 4)
-      Button(viewModel.selectedState.isActive ? "Stop" : "Start", systemImage: viewModel.selectedState.isActive ? "stop.fill" : "play.fill") { viewModel.toggle(file.id) }
-        .disabled(!viewModel.selectedState.isActive && (file.definition == nil || viewModel.isBusy(file.id)))
-      Button("Restart all", systemImage: "arrow.clockwise") { viewModel.restart(file.id) }
+      Button { viewModel.restart(file.id) } label: { Label("Restart", systemImage: "arrow.clockwise") }
+        .buttonStyle(StackPillButtonStyle())
         .disabled(file.definition == nil || viewModel.isBusy(file.id))
       StackActionsMenu(file: file, viewModel: viewModel, manager: manager)
-    }.controlSize(.small)
+    }
   }
-  private var logsToolbar: some View {
-    HStack(spacing: 8) {
-      sectionLabel("LOGS")
-      Picker("Service", selection: $viewModel.logService) {
-        Text("All").tag(Optional<String>.none)
-        ForEach(viewModel.selectedServices) { Text($0.id).tag(Optional($0.id)) }
-      }.labelsHidden().frame(width: 115)
-      TextField("Filter logs…", text: $viewModel.logFilter).textFieldStyle(.roundedBorder)
-        .focused($logFilterFocused).onChange(of: logFilterFocused) { if $0 { viewModel.logFocused = true } }
-      Toggle("Auto-scroll", isOn: $viewModel.autoScroll).toggleStyle(.checkbox).fixedSize()
-      Button { viewModel.copyLogs() } label: { Image(systemName: "doc.on.doc") }.help("Copy visible logs").accessibilityLabel("Copy logs")
-      Button("Clear") { viewModel.clearLogs() }.help("Clear the in-memory console; the log file is kept")
-    }.font(.caption).controlSize(.small)
+
+  @ViewBuilder private var notices: some View {
+    if !file.issues.isEmpty {
+      ScrollView {
+        VStack(alignment: .leading, spacing: 3) {
+          ForEach(file.issues) { issue in
+            Label(issue.message, systemImage: issue.severity == .error ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
+              .foregroundColor(issue.severity == .error ? StackPalette.color(phase: .crashed) : .orange)
+          }
+        }.font(.system(size: 11, weight: .medium)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+      }
+      .frame(maxHeight: 58)
+      .padding(8).stackSurface(cornerRadius: 10, tint: .orange)
+    }
+    if viewModel.supervisor.definitionChanged(file.id) {
+      HStack(spacing: 8) {
+        Label("Definition changed — restart to apply", systemImage: "arrow.triangle.2.circlepath")
+          .font(.system(size: 11, weight: .medium)).foregroundColor(.orange)
+        Spacer()
+        Button("Restart now") { viewModel.restart(file.id) }.buttonStyle(StackPillButtonStyle(compact: true))
+      }
+    }
   }
-  private func sectionLabel(_ title: String) -> some View { Text(title).font(.system(size: 10, weight: .semibold)).foregroundColor(.secondary) }
+
+  // MARK: Services
+
+  private var servicesGrid: some View {
+    let services = viewModel.selectedServices
+    let rows = CGFloat((services.count + 2) / 3)
+    return ScrollView(showsIndicators: services.count > 6) {
+      LazyVGrid(columns: [GridItem(.adaptive(minimum: 220, maximum: 400), spacing: 10)], spacing: 10) {
+        ForEach(services) { service in
+          StackServiceTile(stack: file, service: service, viewModel: viewModel, manager: manager)
+        }
+      }.padding(2)
+    }
+    .frame(height: min(max(rows, 1), 2) * 82 + 4)
+  }
+
+  // MARK: Repos
+
+  private func repoStrip(_ repos: [RepoDefinition]) -> some View {
+    ScrollView(.horizontal, showsIndicators: false) {
+      HStack(spacing: 8) {
+        ForEach(repos) { repo in StackRepoRow(stack: file.id, repo: repo, viewModel: viewModel) }
+      }.padding(2)
+    }
+  }
 }
 
-struct StackServiceRow: View {
-  let stack: String
+// MARK: - Service tile
+
+struct StackServiceTile: View {
+  let stack: StackDefinitionFile
   let service: ServiceDefinition
   @ObservedObject var viewModel: StacksViewModel
   @ObservedObject var manager: HistoryFloatingManager
-  private var runtime: StackServiceRuntime { viewModel.runtime(stack, service.id) }
+  @State private var hovering = false
+  private var runtime: StackServiceRuntime { viewModel.runtime(stack.id, service.id) }
+  private var selected: Bool { viewModel.selectedServiceID == service.id }
+  private var port: Int? { service.port ?? { if case .port(let port) = service.readiness { return port }; return nil }() }
+
   var body: some View {
-    VStack(alignment: .leading, spacing: 4) {
+    VStack(alignment: .leading, spacing: 7) {
       HStack(spacing: 7) {
         StackStatusDot(phase: runtime.phase)
-        Text(service.id).font(.system(size: 12, weight: .medium)).frame(minWidth: 70, alignment: .leading)
-        if let port = service.port {
-          Button(":\(String(port))") { viewModel.openPort(port) }.buttonStyle(.plain).foregroundColor(.accentColor)
-        }
-        if let process = runtime.process { Text("pid \(String(process.pid))").foregroundColor(.secondary) }
-        if let started = runtime.startedAt { Text(started, style: .relative).foregroundColor(.secondary) }
-        Text("\(runtime.restartCount) restarts").foregroundColor(.secondary)
+        Text(service.id).font(.system(size: 12.5, weight: .semibold)).lineLimit(1).layoutPriority(1)
+        Text(runtime.phase.label).font(.system(size: 10.5)).foregroundColor(StackPalette.color(phase: runtime.phase)).lineLimit(1)
         Spacer(minLength: 2)
-        if !runtime.phase.isActive {
-          Button { viewModel.start(stack, service: service.id) } label: { Image(systemName: "play.fill") }.help("Start service").accessibilityLabel("Start \(service.id)")
-            .disabled(viewModel.isBusy(stack))
+        ZStack(alignment: .trailing) {
+          if runtime.process != nil { StackOwnerBadge(owner: runtime.owner, compact: true).opacity(hovering ? 0 : 1) }
+          actions.opacity(hovering ? 1 : 0)
+        }.fixedSize()
+      }
+      HStack(spacing: 5) {
+        if let port {
+          Button { viewModel.openPort(port) } label: {
+            StackChip(systemImage: "globe", text: ":\(String(port))", tint: runtime.phase == .ready ? .accentColor : .secondary, monospaced: true)
+          }.buttonStyle(.plain).help("Open http://localhost:\(String(port))").fixedSize()
         }
-        Button { viewModel.restart(stack, service: service.id, dependents: NSEvent.modifierFlags.contains(.option)) } label: { Image(systemName: "arrow.clockwise") }
-          .help("Restart service (Option: also restart dependents)").accessibilityLabel("Restart \(service.id)").disabled(viewModel.isBusy(stack))
-        Button { viewModel.stop(stack, service: service.id) } label: { Image(systemName: "stop.fill") }
-          .disabled(!runtime.phase.isActive && runtime.process == nil).help("Stop service").accessibilityLabel("Stop \(service.id)")
-        Button("Logs") { viewModel.selectedServiceID = service.id; viewModel.showLogs(stack: stack, service: service.id, manager: manager) }
-      }.font(.caption).buttonStyle(.borderless)
+        if let repo = service.repo.flatMap({ stack.definition?.repo($0) }) {
+          StackBranchChip(stack: stack.id, repo: repo, viewModel: viewModel).layoutPriority(1)
+        }
+        Spacer(minLength: 4)
+        meta.layoutPriority(-1)
+      }
       if let detail = runtime.detail {
-        HStack {
-          Text(detail).font(.caption2).foregroundColor(runtime.phase == .crashed ? .red : .secondary).textSelection(.enabled)
+        HStack(spacing: 6) {
+          Text(detail).font(.system(size: 10)).lineLimit(2).textSelection(.enabled)
+            .foregroundColor(runtime.phase == .crashed ? StackPalette.color(phase: .crashed) : .secondary)
           if let conflict = runtime.conflict {
             Button(runtime.phase == .stopped ? "Kill" : "Kill & start") {
-              viewModel.killConflict(stack: stack, service: service.id, startAfter: runtime.phase != .stopped)
-            }.disabled(conflict.owners.isEmpty).font(.caption2)
-            Button("Cancel") { viewModel.supervisor.dismissPortConflict(stack: stack, service: service.id) }.font(.caption2)
+              viewModel.killConflict(stack: stack.id, service: service.id, startAfter: runtime.phase != .stopped)
+            }.buttonStyle(StackPillButtonStyle(kind: .destructive, compact: true)).disabled(conflict.owners.isEmpty)
+            Button("Dismiss") { viewModel.supervisor.dismissPortConflict(stack: stack.id, service: service.id) }
+              .buttonStyle(StackPillButtonStyle(compact: true))
           }
         }
       }
     }
-    .padding(6)
-    .background(viewModel.selectedServiceID == service.id ? Color.accentColor.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 6))
-    .contentShape(Rectangle()).onTapGesture { viewModel.selectedServiceID = service.id }
+    .padding(.horizontal, 11).padding(.vertical, 9)
+    .frame(maxWidth: .infinity, minHeight: 72, alignment: .topLeading)
+    .stackSurface(cornerRadius: 12, selected: selected, tint: runtime.phase == .crashed ? StackPalette.color(phase: .crashed) : nil)
+    .contentShape(RoundedRectangle(cornerRadius: 12))
+    .onHover { hovering = $0 }
+    .onTapGesture { viewModel.selectService(selected ? nil : service.id) }
+    .accessibilityElement(children: .contain).accessibilityLabel("\(service.id), \(runtime.phase.label)")
+  }
+
+  private var meta: some View {
+    HStack(spacing: 4) {
+      if let process = runtime.process { Text("pid \(String(process.pid))") }
+      if let started = runtime.startedAt { Text("·"); Text(started, style: .relative) }
+      if runtime.restartCount > 0 { Text("· ↻\(runtime.restartCount)") }
+    }
+    .font(.system(size: 9.5, design: .monospaced)).foregroundColor(.secondary).lineLimit(1)
+  }
+
+  private var actions: some View {
+    HStack(spacing: 1) {
+      if !runtime.phase.isActive && runtime.process == nil {
+        StackIconButton(systemName: "play.fill", help: "Start \(service.id)", tint: StackPalette.color(phase: .ready), size: 22) {
+          viewModel.start(stack.id, service: service.id)
+        }.disabled(viewModel.isBusy(stack.id))
+      } else {
+        StackIconButton(systemName: "arrow.clockwise", help: "Restart \(service.id) (Option: also dependents)", size: 22) {
+          viewModel.restart(stack.id, service: service.id, dependents: NSEvent.modifierFlags.contains(.option))
+        }.disabled(viewModel.isBusy(stack.id))
+        StackIconButton(systemName: "stop.fill", help: "Stop \(service.id)", size: 22) { viewModel.stop(stack.id, service: service.id) }
+      }
+      StackIconButton(systemName: "text.alignleft", help: "Show \(service.id) logs", size: 22) {
+        viewModel.selectService(service.id)
+        viewModel.showsActivity = false
+      }
+    }
   }
 }
+
+// MARK: - Repo card
 
 struct StackRepoRow: View {
   let stack: String
   let repo: RepoDefinition
   @ObservedObject var viewModel: StacksViewModel
   private var status: GitRepoStatus { viewModel.status(repo) }
+  private var busy: Bool { viewModel.busyRepos.contains(repo.path) }
+
   var body: some View {
-    VStack(alignment: .leading, spacing: 4) {
-      HStack(spacing: 8) {
-        Text(repo.id).font(.system(size: 12, weight: .medium)).frame(minWidth: 85, alignment: .leading).lineLimit(1)
-        StackBranchChip(stack: stack, repo: repo, viewModel: viewModel)
-        Text(status.isDirty ? "\(status.changedFiles) changed" : "clean").foregroundColor(status.isDirty ? .orange : .secondary)
-          .help("\(status.staged) staged · \(status.unstaged) unstaged · \(status.untracked) untracked · \(status.conflicted) conflicted")
-        Spacer(minLength: 0)
-        if viewModel.busyRepos.contains(repo.path) { ProgressView().controlSize(.mini) }
-        Button("Fetch") { viewModel.fetch(repo) }.disabled(viewModel.busyRepos.contains(repo.path))
-        Button("Pull") { viewModel.pull(repo, stack: stack) }.disabled(viewModel.busyRepos.contains(repo.path) || !viewModel.canSwitch(stack: stack, repo: repo.id) || status.upstream == nil)
-      }.font(.caption).controlSize(.small)
-      if let reason = status.operation ?? status.error { Text(reason).font(.caption2).foregroundColor(.orange).textSelection(.enabled) }
+    HStack(spacing: 7) {
+      Image(systemName: "shippingbox").font(.system(size: 10, weight: .semibold)).foregroundColor(.secondary)
+      Text(repo.id).font(.system(size: 11.5, weight: .semibold)).lineLimit(1)
+      StackBranchChip(stack: stack, repo: repo, viewModel: viewModel)
+      Group {
+        if let reason = status.operation ?? status.error {
+          Text(reason).foregroundColor(.orange).lineLimit(1).help(reason)
+        } else if status.isDirty {
+          Text("\(status.changedFiles) changed").foregroundColor(.orange)
+            .help("\(status.staged) staged · \(status.unstaged) unstaged · \(status.untracked) untracked · \(status.conflicted) conflicted")
+        } else {
+          Text("clean").foregroundColor(.secondary)
+        }
+      }.font(.system(size: 10, weight: .medium))
       let stashes = viewModel.stashes[repo.path] ?? []
       if !stashes.isEmpty {
-        Menu("\(stashes.count) Snapzy stash\(stashes.count == 1 ? "" : "es")") {
+        Menu {
           ForEach(stashes) { stash in
             Menu(stash.message) {
               Button("Pop") { viewModel.useStash(stash, repo: repo, drop: false) }
               Button("Drop…") { viewModel.useStash(stash, repo: repo, drop: true) }
             }
           }
-        }.font(.caption2).fixedSize().disabled(viewModel.busyRepos.contains(repo.path))
+        } label: { StackChip(systemImage: "tray.full", text: "\(stashes.count)", tint: .orange) }
+          .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().disabled(busy)
+          .help("\(stashes.count) Snapzy stash\(stashes.count == 1 ? "" : "es")")
       }
+      if busy { ProgressView().controlSize(.mini) }
+      StackIconButton(systemName: "arrow.down.circle", help: "Fetch \(repo.id)", size: 22) { viewModel.fetch(repo) }.disabled(busy)
+      StackIconButton(systemName: "arrow.down.to.line", help: "Pull \(repo.id) (fast-forward only)", size: 22) { viewModel.pull(repo, stack: stack) }
+        .disabled(busy || !viewModel.canSwitch(stack: stack, repo: repo.id) || status.upstream == nil)
+    }
+    .padding(.leading, 10).padding(.trailing, 5).padding(.vertical, 5)
+    .stackSurface(cornerRadius: 11)
+  }
+}
+
+// MARK: - Console
+
+struct StackConsoleView: View {
+  let file: StackDefinitionFile
+  @ObservedObject var viewModel: StacksViewModel
+  @FocusState private var filterFocused: Bool
+  private let background = Color(red: 0.07, green: 0.075, blue: 0.09)
+
+  var body: some View {
+    VStack(spacing: 0) {
+      toolbar
+      Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
+      if viewModel.showsActivity { activity } else {
+        StackLogView(lines: viewModel.filteredLogs, allServices: viewModel.logService == nil,
+          serviceOrder: viewModel.selectedServices.map(\.id),
+          autoScroll: viewModel.autoScroll, focusRequest: viewModel.logFocusRequest,
+          onFocus: { viewModel.logFocused = true })
+      }
+    }
+    .background(background)
+    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.white.opacity(0.08)))
+    .environment(\.colorScheme, .dark)
+  }
+
+  private var toolbar: some View {
+    HStack(spacing: 6) {
+      ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 4) {
+          tab("All", color: nil, selected: viewModel.logService == nil && !viewModel.showsActivity) {
+            viewModel.showsActivity = false; viewModel.selectService(nil)
+          }
+          ForEach(viewModel.selectedServices) { service in
+            tab(service.id, color: StackPalette.service(service.id, in: viewModel.selectedServices.map(\.id)), selected: viewModel.logService == service.id && !viewModel.showsActivity) {
+              viewModel.showsActivity = false; viewModel.selectService(service.id)
+            }
+          }
+          tab("Activity", color: nil, icon: "clock.arrow.circlepath", selected: viewModel.showsActivity) { viewModel.showsActivity = true }
+        }
+      }
+      Spacer(minLength: 4)
+      if !viewModel.showsActivity {
+        HStack(spacing: 5) {
+          Image(systemName: "line.3.horizontal.decrease").font(.system(size: 9, weight: .bold)).foregroundColor(.secondary)
+          TextField("Filter", text: $viewModel.logFilter).textFieldStyle(.plain)
+            .font(.system(size: 11, design: .monospaced)).focused($filterFocused).frame(width: 120)
+          if !viewModel.logFilter.isEmpty {
+            Button { viewModel.logFilter = "" } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 10)) }
+              .buttonStyle(.plain).foregroundColor(.secondary)
+          }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(Color.white.opacity(filterFocused ? 0.12 : 0.07), in: Capsule())
+        StackIconButton(systemName: viewModel.autoScroll ? "arrow.down.to.line.compact" : "pause", help: viewModel.autoScroll ? "Auto-scroll on" : "Auto-scroll paused",
+          tint: viewModel.autoScroll ? .accentColor : .secondary, size: 22) { viewModel.autoScroll.toggle() }
+        StackIconButton(systemName: "doc.on.doc", help: "Copy visible logs", size: 22) { viewModel.copyLogs() }
+        StackIconButton(systemName: "trash", help: "Clear the console (log files are kept)", size: 22) { viewModel.clearLogs() }
+        StackIconButton(systemName: "arrow.up.forward.square", help: "Open log file", size: 22) {
+          viewModel.openLogFile(stack: file.id, service: viewModel.logService)
+        }
+      }
+    }
+    .padding(.horizontal, 8).padding(.vertical, 6)
+  }
+
+  private func tab(_ title: String, color: Color?, icon: String? = nil, selected: Bool, action: @escaping () -> Void) -> some View {
+    Button(action: action) {
+      HStack(spacing: 5) {
+        if let color { Circle().fill(color).frame(width: 6, height: 6) }
+        if let icon { Image(systemName: icon).font(.system(size: 9, weight: .bold)) }
+        Text(title).font(.system(size: 10.5, weight: .semibold)).lineLimit(1)
+      }
+      .foregroundColor(selected ? .white : .white.opacity(0.6))
+      .padding(.horizontal, 9).padding(.vertical, 4)
+      .background(selected ? Color.white.opacity(0.14) : Color.clear, in: Capsule())
+      .contentShape(Capsule())
+    }.buttonStyle(.plain)
+  }
+
+  private var activity: some View {
+    ScrollView {
+      LazyVStack(alignment: .leading, spacing: 0) {
+        if viewModel.activity.isEmpty {
+          Text("No activity yet").font(.system(size: 11)).foregroundColor(.secondary).padding(12)
+        }
+        ForEach(viewModel.activity) { event in
+          HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: icon(event.kind)).font(.system(size: 10, weight: .semibold)).foregroundColor(color(event.kind)).frame(width: 14)
+            VStack(alignment: .leading, spacing: 2) {
+              HStack(spacing: 5) {
+                if let service = event.serviceName {
+                  Text(service).font(.system(size: 11, weight: .semibold)).foregroundColor(StackPalette.service(service, in: viewModel.selectedServices.map(\.id)))
+                }
+                Text(title(event.kind)).font(.system(size: 11)).foregroundColor(.white.opacity(0.85))
+                if let actor = event.actor {
+                  StackChip(systemImage: actor == "You" ? "person.fill" : "sparkles", text: actor, tint: actor == "You" ? .secondary : StackPalette.agent)
+                }
+              }
+              if let detail = event.detail { Text(detail).font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary).lineLimit(2) }
+            }
+            Spacer(minLength: 6)
+            Text(event.occurredAt, style: .relative).font(.system(size: 10)).foregroundColor(.secondary)
+          }
+          .padding(.horizontal, 12).padding(.vertical, 6)
+        }
+      }.padding(.vertical, 4)
+    }
+  }
+
+  private func title(_ kind: String) -> String {
+    switch kind {
+    case "branchSwitched": return "switched branches"
+    case "repoChangeFailed": return "repo change failed"
+    default: return kind
+    }
+  }
+  private func icon(_ kind: String) -> String {
+    switch kind {
+    case "started": return "play.fill"
+    case "ready": return "checkmark.circle.fill"
+    case "stopped": return "stop.fill"
+    case "crashed", "repoChangeFailed": return "xmark.octagon.fill"
+    case "branchSwitched": return "arrow.triangle.branch"
+    case "pulled": return "arrow.down.to.line"
+    default: return "circle.fill"
+    }
+  }
+  private func color(_ kind: String) -> Color {
+    switch kind {
+    case "ready", "started": return StackPalette.color(phase: .ready)
+    case "crashed", "repoChangeFailed": return StackPalette.color(phase: .crashed)
+    case "branchSwitched", "pulled": return StackPalette.branch
+    default: return .secondary
     }
   }
 }

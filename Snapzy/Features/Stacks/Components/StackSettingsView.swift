@@ -7,6 +7,7 @@ struct StackSettingsView: View {
   @AppStorage(PreferencesKeys.stacksNotifyOnCrash) private var notify = true
   @AppStorage(PreferencesKeys.stacksAutoFetchMinutes) private var autoFetch = 0
   @State private var managesSecrets = false
+  @State private var managesAgents = false
   var body: some View {
     Section("Stacks") {
       Toggle("Show Stacks in history", isOn: $enabled)
@@ -39,7 +40,14 @@ struct StackSettingsView: View {
         Spacer()
         Button("Manage secrets…") { managesSecrets = true }
       }
-    }.sheet(isPresented: $managesSecrets) { StackSecretsSheet() }
+      HStack {
+        Text("Let Cursor, Codex and Claude Code manage stacks through MCP or the snapzy CLI.").font(.caption).foregroundColor(.secondary)
+        Spacer()
+        Button("Agent access…") { managesAgents = true }
+      }
+    }
+    .sheet(isPresented: $managesSecrets) { StackSecretsSheet() }
+    .sheet(isPresented: $managesAgents) { StackAgentsSheet() }
   }
 }
 

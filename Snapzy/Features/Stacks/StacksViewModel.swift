@@ -45,6 +45,9 @@ final class StacksViewModel: ObservableObject {
   @Published var editor: StackEditorContext?
   @Published private(set) var isConfirming = false
   @Published private(set) var busyRepos = Set<URL>()
+  @Published private(set) var claims: [String: StackClaim] = [:]
+  @Published var showsActivity = false
+  @Published var agentsSheet = false
   let supervisor: StackSupervisor
   private let git: GitService
   private var subscriptions = Set<AnyCancellable>()
@@ -63,6 +66,7 @@ final class StacksViewModel: ObservableObject {
     supervisor.$states.assign(to: &$states)
     supervisor.gitMonitor.$statuses.assign(to: &$repoStatuses)
     supervisor.$errorMessage.compactMap { $0 }.sink { [weak self] in self?.error = $0 }.store(in: &subscriptions)
+    StackControlService.shared.$claims.assign(to: &$claims)
     let manager = HistoryFloatingManager.shared
     Publishers.CombineLatest3(manager.$panelIsVisible, manager.$selectedSection, manager.$presentationMode)
       .debounce(for: .milliseconds(20), scheduler: RunLoop.main)
@@ -88,7 +92,24 @@ final class StacksViewModel: ObservableObject {
   var filteredLogs: [StackLogLine] {
     logLines.filter { logFilter.isEmpty || AnsiParser.plainText($0.text).localizedCaseInsensitiveContains(logFilter) }
   }
-  var hasAuxiliaryUI: Bool { branchPicker != nil || stackBranchPicker || editor != nil || isConfirming }
+  var hasAuxiliaryUI: Bool { branchPicker != nil || stackBranchPicker || editor != nil || isConfirming || agentsSheet }
+  func claim(_ stack: String) -> StackClaim? { claims[stack].flatMap { $0.isExpired ? nil : $0 } }
+  func releaseClaim(_ stack: String) {
+    guard let claim = claim(stack), confirm(title: "Release \(claim.holder.name)'s claim?",
+      message: "\(claim.holder.label) is using this stack\(claim.note.map { " (" + $0 + ")" } ?? ""). Other agents will be able to change it again.",
+      buttons: ["Release", "Cancel"]) == 0 else { return }
+    StackControlService.shared.release(stack: stack)
+  }
+  func selectService(_ service: String?) {
+    selectedServiceID = service
+    logService = service
+    refreshLogs()
+  }
+  func openLogFile(stack: String, service: String?) {
+    let url = service.map { supervisor.logURL(stack: stack, service: $0) } ?? supervisor.logDirectory.appendingPathComponent(stack)
+    if FileManager.default.fileExists(atPath: url.path) { NSWorkspace.shared.open(url) }
+    else { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: supervisor.logDirectory.path) }
+  }
   func runtime(_ stack: String, _ service: String) -> StackServiceRuntime { states[stack]?.services[service] ?? .init() }
   func isBusy(_ stack: String) -> Bool { states[stack]?.operation != nil || supervisor.isBootstrapping }
   func status(_ repo: RepoDefinition) -> GitRepoStatus { repoStatuses[repo.path] ?? .init(branch: "Loading…") }
@@ -141,12 +162,15 @@ final class StacksViewModel: ObservableObject {
     }
   }
   func toggle(_ id: String) {
-    Task { if states[id]?.isActive == true { await supervisor.stop(stack: id) } else { await supervisor.start(stack: id) } }
+    Task {
+      if states[id]?.isActive == true { await supervisor.stop(stack: id, actor: .user) }
+      else { await supervisor.start(stack: id, actor: .user) }
+    }
   }
-  func stop(_ id: String, service: String? = nil) { Task { await supervisor.stop(stack: id, services: service.map { [$0] }) } }
-  func start(_ id: String, service: String) { Task { await supervisor.start(stack: id, services: [service]) } }
+  func stop(_ id: String, service: String? = nil) { Task { await supervisor.stop(stack: id, services: service.map { [$0] }, actor: .user) } }
+  func start(_ id: String, service: String) { Task { await supervisor.start(stack: id, services: [service], actor: .user) } }
   func restart(_ id: String, service: String? = nil, dependents: Bool = false) {
-    Task { await supervisor.restart(stack: id, service: service, includeDependents: dependents) }
+    Task { await supervisor.restart(stack: id, service: service, includeDependents: dependents, actor: .user) }
   }
   func command(_ command: StackKeyboardCommand, manager: HistoryFloatingManager) {
     guard !hasAuxiliaryUI, let id = selectedStackID else { return }
@@ -162,7 +186,7 @@ final class StacksViewModel: ObservableObject {
     }
   }
   func showLogs(stack: String, service: String?, manager: HistoryFloatingManager) {
-    selectedStackID = stack; logService = service
+    selectedStackID = stack; selectedServiceID = service; logService = service; showsActivity = false
     if manager.presentationMode != .expanded { manager.showExpanded() }
     logFocused = true; logFocusRequest += 1; refreshLogs()
   }
@@ -262,7 +286,7 @@ final class StacksViewModel: ObservableObject {
         default: return
         }
       }
-      try await supervisor.performGitChange(stack: id, repos: Set(choices.keys), eventDetail: transitions.joined(separator: ", ")) {
+      try await supervisor.performGitChange(stack: id, repos: Set(choices.keys), eventDetail: transitions.joined(separator: ", "), actor: .user) {
         var completed: [String] = []
         for repo in repos {
           guard let branch = choices[repo.id] else { continue }
@@ -280,7 +304,7 @@ final class StacksViewModel: ObservableObject {
   func fetch(_ repo: RepoDefinition) { gitAction(repo) { try await self.git.fetch(at: repo.path) } }
   func pull(_ repo: RepoDefinition, stack: String) {
     gitAction(repo) {
-      try await self.supervisor.performGitChange(stack: stack, repos: [repo.id], eventKind: "pulled", eventDetail: repo.id) { try await self.git.pull(at: repo.path) }
+      try await self.supervisor.performGitChange(stack: stack, repos: [repo.id], eventKind: "pulled", eventDetail: repo.id, actor: .user) { try await self.git.pull(at: repo.path) }
     }
   }
   private func gitAction(_ repo: RepoDefinition, action: @escaping () async throws -> Void) {

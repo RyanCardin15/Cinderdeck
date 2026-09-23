@@ -22,6 +22,8 @@ nonisolated struct StackServiceRuntime: Sendable {
   var detail: String?
   var conflict: StackPortConflict?
   var launchDefinition: StackLaunchDefinition?
+  /// Who last started this service: you in the panel, or an agent.
+  var owner: StackActor?
 }
 
 nonisolated struct StackRuntimeState: Sendable {

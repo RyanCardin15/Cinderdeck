@@ -19,7 +19,7 @@ final class StackRunStoreTests: XCTestCase {
     try upgraded.read { db in
       XCTAssertTrue(try db.tableExists("stackRunRecord")); XCTAssertTrue(try db.tableExists("stackEventRecord"))
       XCTAssertEqual(try String.fetchOne(db, sql: "SELECT text FROM clipboardTextRecord"), "keep me")
-      XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM grdb_migrations WHERE identifier LIKE 'custom_%'"), 2)
+      XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM grdb_migrations WHERE identifier LIKE 'custom_%'"), 3)
     }
   }
   func testReattachLiveRecordDropReusedAndDeadRecords() async throws {

@@ -57,6 +57,10 @@ final class StackSupervisor: ObservableObject {
     states[id]?.services.values.contains { $0.launchDefinition.map { $0.stack != definition(id) } ?? false } ?? false
   }
   private func key(_ id: String, _ service: String) -> String { "\(id)/\(service)" }
+  var logDirectory: URL { logRoot }
+  func logURL(stack id: String, service: String) -> URL {
+    logRoot.appendingPathComponent(id).appendingPathComponent(service + ".log")
+  }
   private func change(_ id: String, _ service: String, _ body: (inout StackServiceRuntime) -> Void) {
     var state = states[id] ?? .init()
     var runtime = state.services[service] ?? .init()
@@ -86,6 +90,7 @@ final class StackSupervisor: ObservableObject {
         change(id, service) {
           $0.phase = launch == nil ? .unhealthy : .ready
           $0.process = record.identity; $0.startedAt = record.startedAt; $0.launchDefinition = launch
+          $0.owner = record.owner
           if launch == nil { $0.detail = "Saved launch settings are damaged. Stop is available; restart uses the current definition." }
         }
         if !files.contains(where: { $0.id == id }) {
@@ -138,7 +143,9 @@ final class StackSupervisor: ObservableObject {
     } catch { errorMessage = "Cannot load stacks: \(error.localizedDescription)" }
   }
 
-  func start(stack id: String, services: Set<String>? = nil) async {
+  /// `actor` records who asked for the start. nil keeps the current owner
+  /// (used for dependency wake-ups and automatic restarts).
+  func start(stack id: String, services: Set<String>? = nil, actor: StackActor? = nil) async {
     guard !isBootstrapping, states[id]?.operation == nil, let definition = definition(id) else { return }
     states[id, default: .init()].operation = "Starting"
     states[id]?.error = nil
@@ -148,6 +155,11 @@ final class StackSupervisor: ObservableObject {
     }
     let selected = services ?? Set(definition.services.filter(\.autostart).map(\.id))
     for service in selected { restartPolicies[key(id, service)] = nil }
+    if let actor {
+      for service in selected where definition.service(service) != nil && runtime(id, service).process == nil {
+        change(id, service) { $0.owner = actor }
+      }
+    }
     await startServices(id, selected: selected, epoch: epoch)
   }
 
@@ -208,7 +220,8 @@ final class StackSupervisor: ObservableObject {
       let started = Date()
       do {
         guard let store else { throw StackError.message("Run database is unavailable; service was stopped") }
-        try await store.save(StackRunRecord(definition: launch, process: identity, logURL: url, startedAt: started))
+        try await store.save(StackRunRecord(definition: launch, process: identity, logURL: url, startedAt: started,
+          owner: runtime(id, service).owner))
       } catch { try? await process.stop(signal: SIGTERM, timeout: 1); throw error }
       processes[k] = process
       let pattern: String? = if case .log(let pattern) = launch.service.readiness { pattern } else { nil }
@@ -223,7 +236,7 @@ final class StackSupervisor: ObservableObject {
       await logs[k]?.close(); logs[k] = buffer
       change(id, service) { $0.process = identity; $0.startedAt = started; $0.launchDefinition = launch; $0.conflict = nil }
       if !current() { return } // Stop is waiting on this launch and will own cleanup.
-      await event(id, service, "started")
+      await event(id, service, "started", actor: runtime(id, service).owner)
       observeExit(id, service, process: process, identity: identity)
       observeReadiness(id, service, launch: launch, identity: identity, started: started)
     } catch {
@@ -295,7 +308,7 @@ final class StackSupervisor: ObservableObject {
     do { try await store?.delete(stack: id, service: service) } catch { errorMessage = error.localizedDescription }
     change(id, service) {
       $0.phase = failed ? .crashed : .stopped; $0.process = nil; $0.startedAt = nil
-      if failed { $0.lastCrashedAt = Date() }
+      if failed { $0.lastCrashedAt = Date() } else { $0.owner = nil }
       $0.detail = failed ? result.code.map { "Exited with status \($0)" } ?? "Reattached process exited (status unavailable)" : nil
       $0.launchDefinition = nil
     }
@@ -321,7 +334,7 @@ final class StackSupervisor: ObservableObject {
     }
   }
 
-  func stop(stack id: String, services: Set<String>? = nil) async {
+  func stop(stack id: String, services: Set<String>? = nil, actor: StackActor? = nil) async {
     if states[id]?.operation == "Stopping" { return }
     // Cancelling one service must not invalidate sibling launches. The stopping
     // set protects it while startServices drops that service from its pending set.
@@ -330,10 +343,10 @@ final class StackSupervisor: ObservableObject {
     if ownsOperation { states[id, default: .init()].operation = "Stopping" }
     defer { if ownsOperation { states[id]?.operation = nil } }
     let selected = services ?? Set(states[id]?.services.keys.map { $0 } ?? [])
-    await stopServices(id, selected: selected)
+    await stopServices(id, selected: selected, actor: actor)
   }
 
-  private func stopServices(_ id: String, selected: Set<String>) async {
+  private func stopServices(_ id: String, selected: Set<String>, actor: StackActor? = nil) async {
     let activeDefinition = states[id]?.services.values.compactMap(\.launchDefinition).first?.stack ?? definition(id)
     let order = ((try? activeDefinition?.dependencyLayers()) ?? []).flatMap { $0 }.reversed()
     let ordered = Array(order).filter(selected.contains) + selected.subtracting(order).sorted()
@@ -353,23 +366,27 @@ final class StackSupervisor: ObservableObject {
         processes[k] = nil
         try await store?.delete(stack: id, service: service)
         await logs[k]?.readAvailable()
-        change(id, service) { $0.phase = .stopped; $0.process = nil; $0.startedAt = nil; $0.launchDefinition = nil; $0.detail = nil }
+        let wasRunning = runtime(id, service).process != nil || runtime(id, service).startedAt != nil
+        change(id, service) { $0.phase = .stopped; $0.process = nil; $0.startedAt = nil; $0.launchDefinition = nil; $0.detail = nil; $0.owner = nil }
         if let port = spec?.port, let conflict = try await inspectPort(port) {
           change(id, service) { $0.conflict = conflict; $0.detail = "Still listening after stop. " + conflict.description }
         }
-        await event(id, service, "stopped")
+        if wasRunning || actor != nil { await event(id, service, "stopped", actor: actor) }
       } catch { change(id, service) { $0.phase = .crashed; $0.detail = error.localizedDescription }; states[id]?.error = error.localizedDescription }
       stopping.remove(k)
     }
   }
 
-  func restart(stack id: String, service: String? = nil, includeDependents: Bool = false) async {
+  func restart(stack id: String, service: String? = nil, includeDependents: Bool = false, actor: StackActor? = nil) async {
     guard states[id]?.operation == nil else { return }
     let selected = service.map { includeDependents ? definition(id)?.includingDependents(of: [$0]) ?? [$0] : [$0] }
-    await stop(stack: id, services: selected)
+    // Keep the original owner unless someone else asked for the restart.
+    let owners = Dictionary(uniqueKeysWithValues: (states[id]?.services ?? [:]).compactMap { name, runtime in runtime.owner.map { (name, $0) } })
+    await stop(stack: id, services: selected, actor: actor)
     guard !(selected ?? Set(states[id]?.services.keys.map { $0 } ?? [])).contains(where: { runtime(id, $0).process != nil }) else { return }
     await reloadDefinitions()
-    await start(stack: id, services: selected)
+    if actor == nil { for (name, owner) in owners { change(id, name) { $0.owner = owner } } }
+    await start(stack: id, services: selected, actor: actor)
   }
 
   func stopAll() async {
@@ -394,7 +411,7 @@ final class StackSupervisor: ObservableObject {
   }
 
   func performGitChange(stack id: String, repos: Set<String>, eventKind: String = "branchSwitched",
-    eventDetail: String? = nil, action: () async throws -> Void) async throws {
+    eventDetail: String? = nil, actor: StackActor? = nil, action: () async throws -> Void) async throws {
     guard let stack = definition(id) else { throw StackError.message("This stack needs a valid definition") }
     let paths = Set(stack.repos.filter { repos.contains($0.id) }.map { $0.path.resolvingSymlinksInPath().standardizedFileURL.path })
     // A folder may be shared by several stacks, even under different repo names.
@@ -427,13 +444,18 @@ final class StackSupervisor: ObservableObject {
     for stackID in affected.keys { states[stackID, default: .init()].operation = "Updating repos" }
     defer { for stackID in affected.keys { states[stackID]?.operation = nil; wakeWaiting(stackID) } }
     var failure: Error?
+    // Services restarted around a checkout keep whoever started them.
+    var owners: [String: [String: StackActor]] = [:]
+    for (stackID, services) in restart {
+      for service in services { if let owner = runtime(stackID, service).owner { owners[stackID, default: [:]][service] = owner } }
+    }
     for stackID in restart.keys.sorted() { await stopServices(stackID, selected: restart[stackID] ?? []) }
     if restart.contains(where: { stackID, services in services.contains { runtime(stackID, $0).process != nil } }) {
       failure = StackError.message("Could not stop all affected services; repo was not changed")
     } else {
       do {
         try await action()
-        for stackID in affected.keys { await event(stackID, nil, eventKind, detail: eventDetail) }
+        for stackID in affected.keys { await event(stackID, nil, eventKind, detail: eventDetail, actor: actor) }
       } catch {
         failure = error
         await event(id, nil, "repoChangeFailed", detail: error.localizedDescription)
@@ -441,6 +463,7 @@ final class StackSupervisor: ObservableObject {
     }
     for (stackID, epoch) in operationEpochs where epochs[stackID, default: 0] == epoch {
       let stopped = (restart[stackID] ?? []).filter { runtime(stackID, $0).process == nil }
+      for service in stopped { if let owner = owners[stackID]?[service] { change(stackID, service) { $0.owner = owner } } }
       await startServices(stackID, selected: stopped, epoch: epoch)
     }
     if let failure { throw failure }
@@ -467,9 +490,12 @@ final class StackSupervisor: ObservableObject {
   func clearLogs(stack id: String, service: String?) async {
     for name in states[id]?.services.keys.sorted() ?? [] where service == nil || service == name { await logs[key(id, name)]?.clear() }
   }
-  func events(stack id: String) async -> [StackEventRecord] { (try? await store?.events(stack: id)) ?? [] }
-  private func event(_ id: String, _ service: String?, _ kind: String, detail: String? = nil) async {
-    do { try await store?.event(.init(stackID: id, serviceName: service, kind: kind, detail: detail)) }
+  func events(stack id: String, limit: Int = 40) async -> [StackEventRecord] { (try? await store?.events(stack: id, limit: limit)) ?? [] }
+  func recordEvent(stack id: String, service: String?, kind: String, detail: String? = nil, actor: StackActor? = nil) async {
+    await event(id, service, kind, detail: detail, actor: actor)
+  }
+  private func event(_ id: String, _ service: String?, _ kind: String, detail: String? = nil, actor: StackActor? = nil) async {
+    do { try await store?.event(.init(stackID: id, serviceName: service, kind: kind, detail: detail, actor: actor.map(\.label))) }
     catch { errorMessage = "Could not save stack activity: \(error.localizedDescription)" }
   }
   private func sweepEvents() async {

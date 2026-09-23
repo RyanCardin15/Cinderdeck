@@ -4,6 +4,7 @@ import SwiftUI
 struct StackLogView: NSViewRepresentable {
   let lines: [StackLogLine]
   let allServices: Bool
+  var serviceOrder: [String] = []
   let autoScroll: Bool
   let focusRequest: Int
   let onFocus: () -> Void
@@ -13,12 +14,15 @@ struct StackLogView: NSViewRepresentable {
     let scroll = NSScrollView()
     scroll.hasVerticalScroller = true; scroll.hasHorizontalScroller = false
     scroll.borderType = .noBorder
-    scroll.drawsBackground = true; scroll.backgroundColor = .textBackgroundColor
+    scroll.drawsBackground = true; scroll.backgroundColor = Self.background
+    scroll.scrollerStyle = .overlay
     let text = StackLogTextView()
     text.isEditable = false; text.isSelectable = true; text.isRichText = true
     text.isAutomaticLinkDetectionEnabled = false
-    text.backgroundColor = .textBackgroundColor
-    text.textContainerInset = NSSize(width: 10, height: 8)
+    text.backgroundColor = Self.background
+    text.insertionPointColor = .white
+    text.selectedTextAttributes = [.backgroundColor: NSColor.systemBlue.withAlphaComponent(0.35)]
+    text.textContainerInset = NSSize(width: 12, height: 10)
     text.autoresizingMask = [.width]; text.isVerticallyResizable = true
     text.isHorizontallyResizable = false
     text.textContainer?.widthTracksTextView = true
@@ -49,12 +53,13 @@ struct StackLogView: NSViewRepresentable {
     else { storage.setAttributedString(NSAttributedString()); coordinator.styles = [:]; start = 0 }
     for line in lines.dropFirst(start) {
       if allServices {
-        let color = Self.palette[line.service.utf8.reduce(0) { $0 + Int($1) } % Self.palette.count]
-        storage.append(NSAttributedString(string: "\(line.service) | ", attributes: [.font: NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold), .foregroundColor: color]))
+        let color = Self.palette[StackPalette.serviceIndex(line.service, in: serviceOrder)]
+        storage.append(NSAttributedString(string: "\(line.service) ", attributes: [.font: NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold), .foregroundColor: color]))
+        storage.append(NSAttributedString(string: "│ ", attributes: [.font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular), .foregroundColor: NSColor(white: 1, alpha: 0.18)]))
       }
       var parser = coordinator.styles[line.service] ?? .init()
       for run in parser.parse(line.text) {
-        let color = run.style.foreground.map(Self.color) ?? NSColor.textColor
+        let color = run.style.foreground.map(Self.color) ?? Self.foreground
         storage.append(NSAttributedString(string: run.text, attributes: [
           .font: NSFont.monospacedSystemFont(ofSize: 11, weight: run.style.bold ? .bold : .regular),
           .foregroundColor: run.style.dim ? color.withAlphaComponent(0.55) : color,
@@ -71,10 +76,12 @@ struct StackLogView: NSViewRepresentable {
       scroll.contentView.scroll(to: oldOrigin); scroll.reflectScrolledClipView(scroll.contentView)
     }
   }
-  static let palette: [NSColor] = [.systemBlue, .systemGreen, .systemOrange, .systemPurple, .systemTeal, .systemPink]
+  static let background = NSColor(srgbRed: 0.07, green: 0.075, blue: 0.09, alpha: 1)
+  static let foreground = NSColor(white: 0.86, alpha: 1)
+  static let palette: [NSColor] = StackPalette.services.map { NSColor($0) }
   static func color(_ index: Int) -> NSColor {
-    let basic: [NSColor] = [.black, .systemRed, .systemGreen, .systemYellow, .systemBlue, .systemPurple, .systemCyan, .lightGray,
-      .darkGray, .systemRed, .systemGreen, .systemYellow, .systemBlue, .systemPurple, .systemCyan, .white]
+    let basic: [NSColor] = [NSColor(white: 0.45, alpha: 1), .systemRed, .systemGreen, .systemYellow, .systemBlue, .systemPurple, .systemCyan, .lightGray,
+      NSColor(white: 0.55, alpha: 1), .systemRed, .systemGreen, .systemYellow, .systemBlue, .systemPurple, .systemCyan, .white]
     if index < 16 { return basic[max(0, index)] }
     if index >= 232 { let value = CGFloat(8 + (index - 232) * 10) / 255; return NSColor(white: value, alpha: 1) }
     let value = index - 16

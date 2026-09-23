@@ -367,7 +367,7 @@ struct HistoryFloatingContentView: View {
         .font(.system(size: 12, weight: .semibold))
         .foregroundColor(.secondary.opacity(0.9))
 
-      TextField(manager.selectedSection == .stacks && stacksViewModel.logFocused ? "Filter logs…" : manager.selectedSection.searchPrompt, text: $manager.searchText)
+      TextField(manager.selectedSection.searchPrompt, text: $manager.searchText)
         .textFieldStyle(.plain)
         .font(.system(size: 12, weight: .medium))
 

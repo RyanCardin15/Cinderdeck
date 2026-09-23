@@ -133,6 +133,46 @@ Each service retains the latest 5,000 lines in memory. The All view interleaves 
 | ⌘P | Pin/unpin |
 | Delete | Does nothing on Stacks |
 
+## Agents (MCP and CLI)
+
+Coding agents can run and inspect stacks, so they stop spawning their own dev servers in scattered terminals. Everything goes through one local control socket owned by Snapzy; services an agent starts appear in the panel with a purple ✦ badge naming it.
+
+**Set up:** Stacks → ✦ (or Settings → History → Stacks → **Agent access…**). Install the CLI, then **Add** Cursor, Codex and/or Claude Code. From a terminal the same thing is:
+
+```sh
+/Applications/Snapzy.app/Contents/MacOS/Snapzy stacks install-cli   # links ~/.local/bin/snapzy
+snapzy stacks setup-agents --instructions                           # Cursor, Codex, Claude Code (+ AGENTS.md/CLAUDE.md notes)
+snapzy stacks setup-agents --print                                  # just show the config snippets
+```
+
+`setup-agents` backs up each file it edits (`*.snapzy-backup`), writes `mcpServers.snapzy` in `~/.cursor/mcp.json`, `[mcp_servers.snapzy]` in `~/.codex/config.toml` (with a 15-minute tool timeout because starts wait for readiness), and runs `claude mcp add --scope user` when the Claude CLI is installed. `--instructions` adds a marked block to `~/.codex/AGENTS.md` and `~/.claude/CLAUDE.md`; re-running replaces the block instead of duplicating it.
+
+### What agents get
+
+| MCP tool | CLI | Purpose |
+| --- | --- | --- |
+| `list_stacks`, `stack_status` | `snapzy stacks status [stack] [--json]` | Services, phases, PIDs, ports/URLs, who started each one, branches, claims |
+| `start_stack`, `stop_stack`, `restart_stack` | `start`, `stop`, `restart` | Dependency-ordered; start/restart **wait for readiness** and return the last output of anything that crashed |
+| `read_logs` | `logs <stack> [service] -n 200 --grep re -f` | Plain-text output; pass the returned `cursor` as `after` to tail |
+| `list_ports`, `stop_port_process` | `ports [port] [--external]`, `kill-port <port> <pid>` | Every listening port with process, cwd, tty and the app it came from (Cursor, Terminal, Codex, Android Studio…) or the Snapzy service that owns it |
+| `git_status`, `list_branches`, `switch_branch`, `pull_repos` | `git`, `branches`, `switch <stack> <branch> [--stash|--carry]`, `fetch`, `pull` | Same stop → checkout → restart flow as the panel; uncommitted work fails unless `dirty=stash|carry` |
+| `claim_stack`, `release_stack` | `claim <stack> [note] --ttl 30`, `release` | Advisory lease: other agents get a `claimed` error (CLI exit 3) unless they pass `force` |
+| `recent_activity` | `events <stack>` | Starts, crashes, stops, branch switches — each with who caused it |
+| `stacks_guide`, `validate_stack`, `reload_stacks` | `agent-help`, `validate <file>`, `reload`, `where` | Authoring stacks: paths, a template, validation and start order |
+
+`snapzy mcp` is a stdio MCP server; if Snapzy isn't running, the first call launches it in the background. The CLI does the same.
+
+### Who owns what
+
+- **Actor identity.** Snapzy reads the caller's PID from the socket and walks its parent processes to find the app or agent CLI it runs inside (Cursor, Terminal, iTerm, Codex, Claude Code…). MCP clients add their own name from `initialize`; CLI callers can pass `--as <name>` / `--session <id>` or set `SNAPZY_AGENT` / `SNAPZY_AGENT_SESSION`. Labels look like `Codex · e2e in Cursor`.
+- **Ownership persists.** The owner is saved with the run record, survives relaunch/reattach and branch-switch restarts, and is cleared when the service stops. Activity rows show a chip for who did what.
+- **Claims** appear as a purple lock chip on the stack. You are never blocked by them; click the ✕ on the chip (or the menu) to release one.
+- **Live state without calls:** `~/Library/Application Support/Snapzy/Stacks/state.json` is rewritten within ~300 ms of any change (stacks, services, owners, branches, claims, log paths). Log files stay at `~/Library/Logs/Snapzy/Stacks/<stack>/<service>.log`.
+
+### Security
+
+The control socket is `~/Library/Application Support/Snapzy/Stacks/control.sock`, mode 0600 inside a 0700 folder, and Snapzy rejects peers with a different user ID. Anything that can run as your user can drive stacks — the same trust level as your shell. Secret values never appear in state, snapshots or API responses. `stop_port_process` only signals a PID after re-checking it still owns the port with the same start time, and refuses Snapzy-managed services.
+
 ## Local storage
 
 | Location | Contents |
@@ -141,6 +181,7 @@ Each service retains the latest 5,000 lines in memory. The All view interleaves 
 | `~/Library/Logs/Snapzy/Stacks/<stack>/<service>.log` | Output; truncated on start and at 50 MB, with append-mode writers |
 | `~/Library/Application Support/Snapzy/snapzy.db` | Live process records and up to 1,000 recent events |
 | Keychain service `Snapzy Stacks` | Secret values |
+| `~/Library/Application Support/Snapzy/Stacks/` | `control.sock`, `state.json`, `claims.json` for agents |
 
 The global configuration's `[stacks]` table exports `enabled`, `directory`, `quit_behavior`, `notify_on_crash`, and `auto_fetch_minutes`. Stack files, Keychain values, run records, and activity are not embedded in that export. Existing clipboard history and preferences are preserved; the old clipboard-selected flag migrates once to `history.selectedSection`.
 
