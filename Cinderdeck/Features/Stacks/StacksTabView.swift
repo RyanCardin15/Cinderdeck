@@ -25,6 +25,7 @@ struct StacksTabView: View {
       else { compactContent }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .stackHelpOverlay()
     .onChange(of: manager.searchText) { query in viewModel.stackFilter = query }
     .onChange(of: viewModel.hasAuxiliaryUI) { presented in
       if !presented, manager.panelIsVisible { manager.focusPanel() }

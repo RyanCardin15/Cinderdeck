@@ -63,6 +63,73 @@ extension View {
   func stackSurface(cornerRadius: CGFloat = 14, selected: Bool = false, tint: Color? = nil) -> some View {
     modifier(StackSurface(cornerRadius: cornerRadius, selected: selected, tint: tint))
   }
+
+  func stackHelp(_ text: String) -> some View { modifier(StackHelpModifier(text: text)) }
+
+  /// Render above the scroll views, without opening a popover or taking focus
+  /// from the non-activating history panel (which would dismiss unpinned Stacks).
+  func stackHelpOverlay() -> some View {
+    overlayPreferenceValue(StackHelpPreference.self) { help in
+      GeometryReader { geometry in
+        if let help {
+          StackHelpLayout(source: geometry[help.bounds]) {
+            Text(help.text)
+              .font(.system(size: 11)).foregroundColor(.primary)
+              .fixedSize(horizontal: false, vertical: true)
+              .padding(.horizontal, 10).padding(.vertical, 7)
+              .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+              .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.15)))
+              .shadow(color: .black.opacity(0.2), radius: 5, y: 2)
+          }
+        }
+      }
+      .allowsHitTesting(false).accessibilityHidden(true)
+    }
+  }
+}
+
+private struct StackHelpAnchor {
+  let text: String
+  let bounds: Anchor<CGRect>
+}
+
+private struct StackHelpPreference: PreferenceKey {
+  static var defaultValue: StackHelpAnchor? { nil }
+  static func reduce(value: inout StackHelpAnchor?, nextValue: () -> StackHelpAnchor?) {
+    if let next = nextValue() { value = next }
+  }
+}
+
+private struct StackHelpModifier: ViewModifier {
+  let text: String
+  @State private var hovering = false
+  func body(content: Content) -> some View {
+    content
+      .onHover { hovering = $0 }
+      .onDisappear { hovering = false }
+      .help(text)
+      .anchorPreference(key: StackHelpPreference.self, value: .bounds) { bounds in
+        hovering ? StackHelpAnchor(text: text, bounds: bounds) : nil
+      }
+  }
+}
+
+/// Keeps both long explanations and hints near the panel edges inside the panel.
+private struct StackHelpLayout: Layout {
+  let source: CGRect
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    proposal.replacingUnspecifiedDimensions()
+  }
+  func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    guard let tooltip = subviews.first else { return }
+    let width = min(320, max(0, bounds.width - 16))
+    let size = tooltip.sizeThatFits(ProposedViewSize(width: width, height: nil))
+    let x = max(8, min(source.midX - size.width / 2, bounds.width - size.width - 8))
+    let below = source.maxY + 6
+    let y = below + size.height <= bounds.height - 8 ? max(8, below) : max(8, source.minY - size.height - 6)
+    tooltip.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y), anchor: .topLeading,
+      proposal: ProposedViewSize(width: width, height: size.height))
+  }
 }
 
 /// Capsule action button: `.primary(color)` is filled, `.secondary` is glass.
@@ -137,7 +204,7 @@ struct StackIconButton: View {
     .buttonStyle(.plain)
     .opacity(isEnabled ? 1 : 0.35)
     .onHover { hovering = $0 }
-    .help(help)
+    .stackHelp(help)
     .accessibilityLabel(help)
   }
 }
@@ -148,17 +215,42 @@ struct StackChip: View {
   let text: String
   var tint: Color = .secondary
   var monospaced = false
+  var wraps = false
   private var neutral: Bool { tint == .secondary }
   var body: some View {
-    HStack(spacing: 4) {
+    HStack(alignment: .firstTextBaseline, spacing: 4) {
       if let systemImage { Image(systemName: systemImage).font(.system(size: 8.5, weight: .bold)).foregroundColor(neutral ? .secondary : tint) }
       Text(text).font(monospaced ? .system(size: 10, weight: .semibold, design: .monospaced) : .system(size: 10, weight: .semibold))
         .foregroundColor(neutral ? .secondary : .primary.opacity(0.9))
-        .lineLimit(1).truncationMode(.middle)
+        .lineLimit(wraps ? nil : 1).truncationMode(.middle)
+        .fixedSize(horizontal: false, vertical: true)
     }
     .padding(.horizontal, 7).padding(.vertical, 3)
-    .background(tint.opacity(neutral ? 0.1 : 0.2), in: Capsule())
-    .overlay(Capsule().strokeBorder(tint.opacity(neutral ? 0 : 0.3), lineWidth: 0.5))
+    .background(tint.opacity(neutral ? 0.1 : 0.2), in: RoundedRectangle(cornerRadius: 9))
+    .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(tint.opacity(neutral ? 0 : 0.3), lineWidth: 0.5))
+  }
+}
+
+/// A concrete string participates in layout on every tick. SwiftUI's relative
+/// date Text can grow without remeasuring inside fixed-size badges.
+struct StackElapsedTime: View {
+  let since: Date
+
+  static func label(since: Date, now: Date) -> String {
+    let seconds = max(0, Int(now.timeIntervalSince(since)))
+    if seconds >= 86_400 { return "\(seconds / 86_400)d \(seconds % 86_400 / 3_600)h" }
+    if seconds >= 3_600 { return "\(seconds / 3_600)h \(seconds % 3_600 / 60)m" }
+    if seconds >= 60 { return "\(seconds / 60)m \(seconds % 60)s" }
+    return "\(seconds)s"
+  }
+
+  var body: some View {
+    TimelineView(.periodic(from: .now, by: 1)) { context in
+      Text(Self.label(since: since, now: context.date))
+        .monospacedDigit().lineLimit(1).fixedSize()
+        .accessibilityLabel("Elapsed time: \(Self.label(since: since, now: context.date))")
+    }
+    .help("Started \(since.formatted(date: .abbreviated, time: .standard))")
   }
 }
 
@@ -169,7 +261,7 @@ struct StackStateBadge: View {
     HStack(spacing: 5) {
       StackStatusDot(label: label)
       Text(label).font(.system(size: 10.5, weight: .semibold))
-      if let since { Text(since, style: .relative).font(.system(size: 10.5, weight: .medium)).foregroundColor(.primary.opacity(0.6)).lineLimit(1) }
+      if let since { StackElapsedTime(since: since).font(.system(size: 10.5, weight: .medium)).foregroundColor(.primary.opacity(0.6)) }
     }
     .foregroundColor(label == "Stopped" ? .secondary : StackPalette.color(label: label))
     .padding(.horizontal, 8).padding(.vertical, 3.5)
