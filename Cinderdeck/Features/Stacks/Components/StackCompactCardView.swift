@@ -125,8 +125,8 @@ struct StackActionsMenu: View {
   @ObservedObject var manager: HistoryFloatingManager
   var body: some View {
     Menu {
-      Button("Edit stack…") { viewModel.edit(file) }
-      Button("Open stack file in editor") { viewModel.openInEditor(file) }
+      Button("Edit workspace…") { viewModel.edit(file) }
+      Button("Open workspace file in editor") { viewModel.openInEditor(file) }
       Button("Open terminal") { viewModel.showLogs(stack: file.id, service: nil) }
       if let stack = file.definition {
         Menu("Restart service") {
@@ -139,7 +139,7 @@ struct StackActionsMenu: View {
           }
         }
         if !stack.repos.isEmpty {
-          Button("Switch stack to branch…") { viewModel.select(file.id); viewModel.openStackBranchPicker() }
+          Button("Switch workspace to branch…") { viewModel.select(file.id); viewModel.openStackBranchPicker() }
             .disabled(viewModel.isBusy(file.id))
         }
       }
@@ -151,7 +151,7 @@ struct StackActionsMenu: View {
       Button("Agent access…") { viewModel.agentsSheet = true }
       Button("Refresh shell environment") { viewModel.refreshEnvironment(file.definition) }
     } label: { Image(systemName: "ellipsis").font(.system(size: 11, weight: .semibold)).frame(width: 18, height: 18) }
-      .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Stack actions").accessibilityLabel("Stack actions")
+      .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Workspace actions").accessibilityLabel("Workspace actions")
   }
 }
 

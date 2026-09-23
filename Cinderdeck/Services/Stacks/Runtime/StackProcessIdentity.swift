@@ -6,12 +6,12 @@ nonisolated struct StackProcessIdentity: Codable, Equatable, Sendable {
   let pgid: Int32
   let startTime: Double
 
-  static func startTime(pid: Int32) -> Double? {
+  static func startTime(pid: Int32, includingExited: Bool = false) -> Double? {
     var info = kinfo_proc()
     var size = MemoryLayout<kinfo_proc>.stride
     var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
     guard sysctl(&mib, UInt32(mib.count), &info, &size, nil, 0) == 0, size > 0,
-      info.kp_proc.p_stat != SZOMB else { return nil }
+      (includingExited || info.kp_proc.p_stat != SZOMB) else { return nil }
     let start = info.kp_proc.p_un.__p_starttime
     return Double(start.tv_sec) + Double(start.tv_usec) / 1_000_000
   }

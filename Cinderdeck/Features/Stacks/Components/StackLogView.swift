@@ -8,6 +8,8 @@ struct StackLogView: NSViewRepresentable {
   let autoScroll: Bool
   let focusRequest: Int
   let onFocus: () -> Void
+  var accessibilityTitle = "Service logs"
+  var accessibilityID = "stacks.logs"
 
   func makeCoordinator() -> Coordinator { Coordinator() }
   func makeNSView(context: Context) -> NSScrollView {
@@ -26,8 +28,8 @@ struct StackLogView: NSViewRepresentable {
     text.autoresizingMask = [.width]; text.isVerticallyResizable = true
     text.isHorizontallyResizable = false
     text.textContainer?.widthTracksTextView = true
-    text.setAccessibilityLabel("Service logs")
-    text.setAccessibilityIdentifier("stacks.logs")
+    text.setAccessibilityLabel(accessibilityTitle)
+    text.setAccessibilityIdentifier(accessibilityID)
     scroll.documentView = text
     context.coordinator.text = text
     return scroll

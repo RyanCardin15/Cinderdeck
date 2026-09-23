@@ -693,6 +693,11 @@ final class AppStatusBarController: ObservableObject {
       item.image = NSImage(systemSymbolName: "arrow.triangle.pull", accessibilityDescription: nil)
       return item
 
+    case .openWorkspaces:
+      let item = NSMenuItem(title: "Workspaces…", action: #selector(openWorkspacesAction), keyEquivalent: "")
+      item.target = self
+      item.image = NSImage(systemSymbolName: "square.stack.3d.up", accessibilityDescription: nil)
+      return item
     case .openHistory:
       let item = NSMenuItem(
         title: L10n.Actions.openHistory,
@@ -829,6 +834,8 @@ final class AppStatusBarController: ObservableObject {
       NSApp.activate(ignoringOtherApps: true)
     }
   }
+
+  @objc private func openWorkspacesAction() { WorkspaceWindowController.shared.show() }
 
   @objc private func openPullRequestsAction() { PullRequestsWindowController.shared.show() }
 

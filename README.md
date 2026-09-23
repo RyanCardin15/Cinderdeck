@@ -26,6 +26,12 @@ A web app, an API in another repository, a worker, a local database: bring whate
 
 **Cinderdeck is an independent fork of [Snapzy](https://github.com/duongductrong/Snapzy), created by Trong Duong Duc and its contributors.** Snapzy supplied the native capture, recording, annotation, and editing foundation. Cinderdeck extends that foundation into a development workspace with configurable stacks, service orchestration, agent controls, and local clipboard history. The original [BSD 3-Clause license](LICENSE) and attribution are preserved; see [NOTICE](NOTICE).
 
+## Services, tasks, and workflows
+
+Open **Workspaces…** from the menu bar. A workspace contains **Services** that keep running, **Tasks** that finish with a result, and **Workflows** that coordinate both. Run tests, builds, or migrations; inspect each step's logs and exit status; cancel a run; and keep completed results across relaunches. Agents use the same controls through the CLI and MCP.
+
+Existing stacks appear as workspaces without moving their files. **Tasks → Move service to Tasks** converts stopped commands you previously ran as services. [Read the workspace guide](docs/WORKSPACES.md).
+
 ## A place for the whole project
 
 - **Run any stack.** Add project folders and start commands, with optional Git repositories, environment variables, Keychain references, dependencies, and readiness checks.
@@ -40,7 +46,7 @@ Built with SwiftUI and AppKit. Local configuration, local history, no Cinderdeck
 
 ## Start with your own projects
 
-Build and open the app, then use **⌘⇧H → Stacks → Create stack**. Choose your folders and enter the commands you already use. Expand the panel with **⌘E** for logs and service controls. Shortcuts can be customized in Settings.
+Build and open the app, then use **Workspaces… → +**. Choose a name and project folder, then add Services, Tasks, or Workflows. The History quick panel remains available with **⌘⇧H**; expand it with **⌘E**. Shortcuts can be customized in Settings.
 
 Definitions are ordinary TOML files in `~/.config/cinderdeck/stacks/`. This example combines two independent projects; replace the paths and commands with your own:
 
@@ -73,7 +79,7 @@ Saving a definition reloads it. Starting services is explicit. Git is optional; 
 
 ## Terminal and coding agents
 
-In the Stacks panel, open **Agents & CLI** to install the command and view setup instructions. Or run:
+In Workspaces, open **Agents & CLI** to install the command and view setup instructions. Or run:
 
 ```sh
 /Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck stacks install-cli
@@ -111,7 +117,7 @@ The application has a new bundle identity, so macOS may ask you to grant capture
 
 ## Documentation and contributing
 
-[Stacks](docs/STACKS.md) · [Configuration](docs/CONFIGURATION.md) · [History](docs/HISTORY.md) · [Capture](docs/CAPTURE.md) · [Recording](docs/RECORDING.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+[Workspaces](docs/WORKSPACES.md) · [Services](docs/STACKS.md) · [Configuration](docs/CONFIGURATION.md) · [History](docs/HISTORY.md) · [Capture](docs/CAPTURE.md) · [Recording](docs/RECORDING.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 [Tiếng Việt](README.vi.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 

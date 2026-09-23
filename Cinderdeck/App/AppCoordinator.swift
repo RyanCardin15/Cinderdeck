@@ -72,6 +72,7 @@ final class AppCoordinator {
     ClipboardTextHistoryStore.shared.start()
     Task {
       await StackSupervisor.shared.bootstrap()
+      await WorkspaceRunner.shared.recover()
       StackControlService.shared.start()
     }
     DiagnosticLogger.shared.log(.debug, .lifecycle, "Background schedulers started")

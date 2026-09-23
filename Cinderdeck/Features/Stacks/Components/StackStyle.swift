@@ -309,6 +309,6 @@ struct StackClaimChip: View {
   private var helpText: String {
     let note: String = claim.note.map { ": " + $0 } ?? ""
     let expiry: String = DateFormatter.localizedString(from: claim.expiresAt, dateStyle: .none, timeStyle: .short)
-    return "\(claim.holder.label) claimed this stack\(note). Other agents must ask before changing it. Expires \(expiry)."
+    return "\(claim.holder.label) claimed this workspace\(note). Other agents must ask before changing it. Expires \(expiry)."
   }
 }

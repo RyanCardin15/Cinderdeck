@@ -42,6 +42,8 @@ nonisolated struct StackDefinition: Codable, Equatable, Identifiable, Sendable {
   var secrets: [String: String] = [:]
   var repos: [RepoDefinition] = []
   var services: [ServiceDefinition] = []
+  var tasks: [WorkspaceTaskDefinition] = []
+  var workflows: [WorkspaceWorkflowDefinition] = []
 
   var fingerprint: String {
     let encoder = JSONEncoder()
@@ -119,5 +121,27 @@ nonisolated struct StackLaunchDefinition: Codable, Equatable, Sendable {
     result["SNAPZY_STACK"] = stack.id
     result["SNAPZY_SERVICE"] = service.id
     return result
+  }
+}
+
+// Old saved service launches predate tasks and workflows. Keep them reconnectable.
+extension StackDefinition {
+  nonisolated enum CodingKeys: String, CodingKey {
+    case id, name, file, root, shell, restartOnBranchChange, environment, secrets, repos, services, tasks, workflows
+  }
+  nonisolated init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    id = try c.decode(String.self, forKey: .id)
+    name = try c.decode(String.self, forKey: .name)
+    file = try c.decode(URL.self, forKey: .file)
+    root = try c.decode(URL.self, forKey: .root)
+    shell = try c.decode(String.self, forKey: .shell)
+    restartOnBranchChange = try c.decode(Bool.self, forKey: .restartOnBranchChange)
+    environment = try c.decode([String: String].self, forKey: .environment)
+    secrets = try c.decode([String: String].self, forKey: .secrets)
+    repos = try c.decode([RepoDefinition].self, forKey: .repos)
+    services = try c.decode([ServiceDefinition].self, forKey: .services)
+    tasks = try c.decodeIfPresent([WorkspaceTaskDefinition].self, forKey: .tasks) ?? []
+    workflows = try c.decodeIfPresent([WorkspaceWorkflowDefinition].self, forKey: .workflows) ?? []
   }
 }

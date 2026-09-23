@@ -1,5 +1,7 @@
 # Documentation Map
 
+Workspaces now groups **Services, Tasks, Workflows, and Runs** in a dedicated window. Existing Stacks definitions and service controls remain compatible. See [WORKSPACES.md](WORKSPACES.md) for the task/workflow model, editors, lifecycle, and agent API.
+
 Flow-first entrypoint for humans and agents working in Cinderdeck. Docs are separated by domain and cross-linked; start here, then jump to the doc that owns your topic.
 
 ## Read First

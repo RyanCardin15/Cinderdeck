@@ -358,7 +358,7 @@ struct HistoryFloatingContentView: View {
   }
 
   private var stacksFilterPill: some View {
-    selectionPill(title: "Stacks", isSelected: manager.selectedSection == .stacks,
+    selectionPill(title: "Workspaces", isSelected: manager.selectedSection == .stacks,
       count: stacksViewModel.runningCount > 0 ? stacksViewModel.runningCount : nil) {
         manager.selectedSection = .stacks
         manager.focusPanel()

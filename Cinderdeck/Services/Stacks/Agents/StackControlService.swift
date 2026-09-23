@@ -6,7 +6,7 @@ import Foundation
 /// `state.json` current, and tracks advisory claims.
 @MainActor
 final class StackControlService: ObservableObject {
-  static let shared = StackControlService(supervisor: .shared)
+  static let shared = StackControlService(supervisor: .shared, runner: .shared)
 
   @Published private(set) var claims: [String: StackClaim] = [:]
   @Published private(set) var serverError: String?
@@ -15,10 +15,14 @@ final class StackControlService: ObservableObject {
   private var server: StackControlSocketServer?
   private var subscriptions = Set<AnyCancellable>()
   private var started = false
+  private let claimsFile: URL
   private let prViews: PRViewControlService
+  let workspaceRunner: WorkspaceRunner
 
-  init(supervisor: StackSupervisor, prViews: PRViewControlService? = nil) {
+  init(supervisor: StackSupervisor, prViews: PRViewControlService? = nil, runner: WorkspaceRunner? = nil, claimsFile: URL = StackControlPaths.claims) {
     self.supervisor = supervisor
+    self.claimsFile = claimsFile
+    self.workspaceRunner = runner ?? WorkspaceRunner(supervisor: supervisor, store: .init(directory: supervisor.logDirectory.appendingPathComponent("Runs")))
     self.prViews = prViews ?? PRViewControlService()
   }
 
@@ -79,23 +83,23 @@ final class StackControlService: ObservableObject {
   }
 
   private func loadClaims() {
-    guard let data = try? Data(contentsOf: StackControlPaths.claims),
+    guard let data = try? Data(contentsOf: claimsFile),
       let values = try? StackControlCoding.decoder().decode([StackClaim].self, from: data) else { return }
     claims = Dictionary(values.filter { !$0.isExpired }.map { ($0.stackID, $0) }, uniquingKeysWith: { $1 })
   }
 
   private func saveClaims() {
     do {
-      try StackControlPaths.ensureDirectory()
+      try FileManager.default.createDirectory(at: claimsFile.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
       let data = try StackControlCoding.encoder(pretty: true).encode(Array(claims.values).sorted { $0.stackID < $1.stackID })
-      try data.write(to: StackControlPaths.claims, options: .atomic)
+      try data.write(to: claimsFile, options: .atomic)
     } catch {
       DiagnosticLogger.shared.log(.warning, .system, "Could not save stack claims: \(error.localizedDescription)")
     }
   }
 
   /// Throws when another agent holds an unexpired claim and `force` is false.
-  private func checkClaim(_ id: String, actor: StackActor, force: Bool) throws {
+  func checkClaim(_ id: String, actor: StackActor, force: Bool) throws {
     guard let claim = claims[id], !claim.isExpired, claim.holder.key != actor.key, !force else { return }
     let name = supervisor.definition(id)?.name ?? id
     let until = DateFormatter.localizedString(from: claim.expiresAt, dateStyle: .none, timeStyle: .short)
@@ -187,6 +191,7 @@ final class StackControlService: ObservableObject {
   }
 
   func handle(_ method: String, params: JSONValue, actor: StackActor) async throws -> JSONValue {
+    if method.hasPrefix("workspace.") { return try await handleWorkspace(method, params: params, actor: actor) }
     if method.hasPrefix("prs.views.") { return try await prViews.handle(method, params: params) }
     switch method {
     case "ping":
@@ -248,7 +253,7 @@ final class StackControlService: ObservableObject {
 
   // MARK: Stack actions
 
-  private func stackFile(_ params: JSONValue) throws -> StackDefinitionFile {
+  func stackFile(_ params: JSONValue) throws -> StackDefinitionFile {
     guard let query = params["stack"]?.stringValue?.trimmingCharacters(in: .whitespaces), !query.isEmpty else {
       if supervisor.files.count == 1, let only = supervisor.files.first { return only }
       throw StackControlError.invalid("Pass stack (id or name). Stacks: " + supervisor.files.map(\.id).joined(separator: ", "))
@@ -272,6 +277,7 @@ final class StackControlService: ObservableObject {
   }
 
   private func requireIdle(_ file: StackDefinitionFile) throws {
+    if workspaceRunner.activeRun(file.id) != nil { throw StackControlError(code: "busy", message: "A task or workflow is running. Wait for it or cancel the run first.") }
     if supervisor.isBootstrapping { throw StackControlError(code: "busy", message: "Cinderdeck is still reconnecting to running services. Try again in a moment.") }
     if let operation = supervisor.states[file.id]?.operation {
       throw StackControlError(code: "busy", message: "\(file.name) is busy (\(operation)). Try again when it finishes.")

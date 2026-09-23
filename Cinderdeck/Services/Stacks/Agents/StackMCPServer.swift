@@ -42,6 +42,21 @@ nonisolated enum StackMCPServer {
   ])
 
   private static let tools: [Tool] = [
+    Tool(name: "list_workspaces", description: "List workspaces and their services, finite tasks, workflows, and active runs. Existing stacks are workspaces.", properties: [:], required: [], readOnly: true),
+    Tool(name: "workspace_details", description: "Get service status, task commands and requirements, workflow steps, and recent runs for a workspace.",
+      properties: ["workspace": stack], required: ["workspace"], readOnly: true),
+    Tool(name: "run_workspace_task", description: "Run a configured task once, after its required services are ready. Returns a durable run id immediately. Poll workspace_run_status; never repeat a start just because a wait timed out. No automatic retries.",
+      properties: ["workspace": stack, "task": property("string", "Configured task id"), "force": force], required: ["workspace", "task"], readOnly: false),
+    Tool(name: "run_workspace_workflow", description: "Run configured task and service steps in order. Failure skips later steps; optional cleanup stops only services started by this run. Returns a durable run id immediately.",
+      properties: ["workspace": stack, "workflow": property("string", "Configured workflow id"), "force": force], required: ["workspace", "workflow"], readOnly: false),
+    Tool(name: "workspace_run_status", description: "Read a run's current status, step results, exit codes, timestamps, and actor, including completed runs after app relaunch.",
+      properties: ["run": property("string", "Run UUID returned at start")], required: ["run"], readOnly: true),
+    Tool(name: "workspace_run_logs", description: "Read bounded task output for a run; optionally select a step UUID. ANSI is removed. Does not start or replay commands.",
+      properties: ["run": property("string", "Run UUID"), "step": property("string", "Optional step UUID"), "lines": property("number", "Maximum lines, 1–5000; default 200")], required: ["run"], readOnly: true),
+    Tool(name: "list_workspace_runs", description: "List recent task and workflow runs, optionally scoped to a workspace.",
+      properties: ["workspace": stack], required: [], readOnly: true),
+    Tool(name: "cancel_workspace_run", description: "Cancel a finite run, stop its process group, and skip remaining workflow steps. Does not stop pre-existing services unless the workflow already executed an explicit stop step.",
+      properties: ["run": property("string", "Run UUID"), "force": force], required: ["run"], readOnly: false),
     Tool(name: "list_pr_views", description: "List local Pull Request tabs, their filters and generated queries, active selection, hostname, and current GitHub account. Use before configuring PR views.",
       properties: ["hostname": prHost], required: [], readOnly: true),
     Tool(name: "upsert_pr_view", description: "Create or patch a custom Pull Request tab by stable id, without duplicates. Name is required on creation. Omitted fields stay unchanged; select=true activates it. Updates to an active saved view refresh its filters unless the user has unsaved changes. Built-ins cannot be edited. Local configuration only.",
@@ -232,6 +247,14 @@ nonisolated enum StackMCPServer {
     var params = arguments
     let wait = min(max(arguments["timeout"]?.doubleValue ?? 180, 1), 900)
     switch tool {
+    case "list_workspaces": return ("workspace.list", params, 30)
+    case "workspace_details": return ("workspace.get", params, 30)
+    case "run_workspace_task": return ("workspace.task.run", params, 30)
+    case "run_workspace_workflow": return ("workspace.workflow.run", params, 30)
+    case "workspace_run_status": return ("workspace.run.get", params, 30)
+    case "workspace_run_logs": return ("workspace.run.logs", params, 30)
+    case "list_workspace_runs": return ("workspace.runs", params, 30)
+    case "cancel_workspace_run": return ("workspace.run.cancel", params, 120)
     case "list_pr_views": return ("prs.views.list", params, 90)
     case "upsert_pr_view": return ("prs.views.upsert", params, 90)
     case "select_pr_view": return ("prs.views.select", params, 90)

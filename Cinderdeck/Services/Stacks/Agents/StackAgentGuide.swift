@@ -4,7 +4,12 @@ import Foundation
 /// and the block written into AGENTS.md / CLAUDE.md by `setup-agents`.
 nonisolated enum StackAgentGuide {
   static let mcpInstructions = """
-  Cinderdeck Stacks runs the user's local dev services (APIs, frontends, emulators) as named stacks. \
+  Cinderdeck Workspaces contains Services (long-running processes), Tasks (finite commands with exit status), and Workflows (ordered steps).
+  Use list_workspaces and workspace_details to discover configured tasks and workflows. run_workspace_task and run_workspace_workflow
+  return a run UUID immediately; poll workspace_run_status and workspace_run_logs. A waiting timeout is not a failed run: inspect
+  the existing UUID rather than starting another. cancel_workspace_run stops the command group and skips later steps.
+  Workflows stop on failure and can clean up only services they started. Task and workflow runs are recorded locally.
+  Existing stack tools continue controlling services. Cinderdeck Stacks runs the user's local dev services (APIs, frontends, emulators) as named stacks. \
   Prefer these tools over starting long-running dev servers in your own terminal: services started here keep running, \
   show up in the user's Cinderdeck panel, and are attributed to you. \
   Typical flow: list_stacks → claim_stack (while you depend on it) → start_stack (waits until ready and returns \
@@ -58,6 +63,17 @@ nonisolated enum StackAgentGuide {
     - Live state without any call: `\(StackControlPaths.state.path)`; log files: `~/Library/Logs/Cinderdeck/Stacks/<stack>/<service>.log`
     - Stack definitions are TOML files in `~/.config/cinderdeck/stacks/`. Validate with `\(command) stacks validate <file>`.
     - Respect claims held by other agents. Do not kill processes you did not start without asking the user.
+
+    ## Tasks and workflows
+
+    Workspaces contain services that stay running, tasks that finish, and workflows that run steps in order.
+    - Discover: `list_workspaces`, `workspace_details`; CLI `\(command) workspace list` / `workspace show <id>`.
+    - Run: `run_workspace_task`, `run_workspace_workflow`; CLI `workspace task <workspace> <task>` / `workspace workflow <workspace> <workflow>`.
+    - Keep the returned run UUID. Inspect it with `workspace_run_status`, `workspace_run_logs`, or CLI `workspace status <uuid>` / `workspace logs <uuid>`.
+    - Cancel with `cancel_workspace_run` or `workspace cancel <uuid>`. Never replay a run just because a wait timed out.
+    - Definitions use `[tasks.<id>] cmd = "..."` and `[workflows.<id>] steps = ["start:api", "task:test"]` in the existing stack TOML files.
+    - Tasks can set `requires_services = ["api"]` and `timeout = 600`. Workflows can set `cleanup_services = true` to stop only services started by that run.
+    - Optional CLI `--wait` waits and returns a nonzero exit code for failure; its `--timeout` stops waiting without cancelling the run.
 
     ## Pull Request views
 

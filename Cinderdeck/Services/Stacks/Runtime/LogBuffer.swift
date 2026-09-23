@@ -120,6 +120,13 @@ actor LogBuffer {
     let text = AnsiParser.plainText(value)
     reachedReadiness = readinessRegex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
   }
+  func finish() {
+    if let handle {
+      let size = (try? handle.seekToEnd()) ?? offset
+      while offset < size { let previous = offset; readAvailable(); if offset <= previous { break } }
+    }
+    if !partial.isEmpty { append(String(decoding: partial, as: UTF8.self)); partial.removeAll() }
+  }
   func close() {
     scheduledRead?.cancel(); scheduledRead = nil
     source?.cancel(); source = nil

@@ -47,7 +47,7 @@ actor ServiceProcess: ProcessLaunching {
     let result = posix_spawn(&pid, definition.stack.shell, &actions, &attributes, &argv, &envp)
     try checked(result)
     // Query immediately, before an exit source reaps a short-lived child.
-    guard let started = StackProcessIdentity.startTime(pid: pid) else {
+    guard let started = StackProcessIdentity.startTime(pid: pid, includingExited: true) else {
       kill(-pid, SIGKILL)
       var status: Int32 = 0
       waitpid(pid, &status, 0)

@@ -10,6 +10,7 @@ nonisolated enum StackCLI {
     guard arguments.count > 1 else { return nil }
     switch arguments[1] {
     case "stacks", "stack": return run(Array(arguments.dropFirst(2)))
+    case "workspace", "workspaces": return WorkspaceCLI.run(Array(arguments.dropFirst(2)))
     case "prs", "pull-requests": return PRViewsCLI.run(Array(arguments.dropFirst(2)))
     case "mcp": return StackMCPServer.run()
     case "help", "--help", "-h":

@@ -6,7 +6,7 @@ enum HistorySection: String, CaseIterable {
     switch self {
     case .captures: return "Search captures"
     case .clipboard: return "Search clipboard text"
-    case .stacks: return "Search stacks"
+    case .stacks: return "Search workspaces"
     }
   }
   static func stored(defaults: UserDefaults = .standard) -> HistorySection {

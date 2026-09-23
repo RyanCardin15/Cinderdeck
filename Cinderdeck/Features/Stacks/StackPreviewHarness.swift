@@ -23,7 +23,9 @@ enum StackPreviewHarness {
     NSApp.setActivationPolicy(.regular)
     Task {
       await StackSupervisor.shared.bootstrap()
+      await WorkspaceRunner.shared.recover()
       StackControlService.shared.start()
+      WorkspaceWindowController.shared.show()
       let manager = HistoryFloatingManager.shared
       manager.show(section: .stacks)
       if !manager.isPinned { manager.togglePin() }

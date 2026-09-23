@@ -5,7 +5,7 @@ struct StackDefinitionEditor: View {
   let file: URL?
   let onSaved: () -> Void
   @Environment(\.dismiss) private var dismiss
-  @State private var filename = "my-stack"
+  @State private var filename = "my-workspace"
   @State private var source = StackDefinitionLoader.template
   @State private var originalSource: String?
   @State private var issues: [StackDefinitionIssue] = []
@@ -21,14 +21,14 @@ struct StackDefinitionEditor: View {
     VStack(alignment: .leading, spacing: 12) {
       HStack {
         VStack(alignment: .leading, spacing: 4) {
-          Text(file == nil ? "Create a stack" : "Edit stack").font(.title2.weight(.semibold))
-          Text("Add any project folders and their start commands. Use the file below for dependencies and advanced settings.")
+          Text(file == nil ? "Create a workspace" : "Edit workspace").font(.title2.weight(.semibold))
+          Text("Services stay running. Tasks finish. Workflows run them in order. Add project folders or edit the definition below.")
             .font(.callout).foregroundColor(.secondary)
         }
         Spacer()
       }
       if file == nil {
-        HStack { Text("File name"); TextField("my-stack", text: $filename); Text(".toml").foregroundColor(.secondary) }.textFieldStyle(.roundedBorder)
+        HStack { Text("File name"); TextField("my-workspace", text: $filename); Text(".toml").foregroundColor(.secondary) }.textFieldStyle(.roundedBorder)
       }
       HStack {
         Button("Add project…", systemImage: "folder.badge.plus") { chooseProject() }
@@ -40,7 +40,7 @@ struct StackDefinitionEditor: View {
       TextEditor(text: $source).font(.system(size: 12, design: .monospaced)).disableAutocorrection(true)
         .padding(5).background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.2)))
-        .accessibilityLabel("Stack TOML configuration")
+        .accessibilityLabel("Workspace TOML configuration")
       if !issues.isEmpty {
         ScrollView {
           VStack(alignment: .leading, spacing: 4) {
@@ -54,7 +54,7 @@ struct StackDefinitionEditor: View {
         Spacer()
         Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
         Button("Save & open in editor") { save(openInEditor: true) }
-        Button("Save stack") { save(openInEditor: false) }.keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
+        Button("Save workspace") { save(openInEditor: false) }.keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
       }
     }.padding(20).frame(width: 730, height: 570)
       .onAppear {
@@ -76,7 +76,7 @@ struct StackDefinitionEditor: View {
         Toggle("Show Git branches for this project", isOn: $projectUsesGit)
         Spacer()
         Button("Cancel") { addingProject = false }
-        Button("Add to stack") { addProject() }.disabled(projectCommand.trimmingCharacters(in: .whitespaces).isEmpty || !StackDefinitionLoader.validID(projectID))
+        Button("Add service") { addProject() }.disabled(projectCommand.trimmingCharacters(in: .whitespaces).isEmpty || !StackDefinitionLoader.validID(projectID))
       }.font(.caption)
     }.padding(10).background(Color.accentColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
   }
@@ -103,7 +103,7 @@ struct StackDefinitionEditor: View {
       issues = [.init(severity: .error, message: "Choose a unique service name")]; return
     }
     if source == StackDefinitionLoader.template {
-      source = "# Group any local projects. Start services explicitly from Stacks.\nname = \(q(filename.replacingOccurrences(of: "-", with: " ").capitalized))\nroot = \(q("~"))\nrestart_on_branch_change = true\n"
+      source = "# Group any local projects. Start services explicitly from Workspaces.\nname = \(q(filename.replacingOccurrences(of: "-", with: " ").capitalized))\nroot = \(q("~"))\nrestart_on_branch_change = true\n"
     }
     if projectUsesGit { source += "\n[repos.\(projectID)]\npath = \(q(projectPath))\n" }
     source += "\n[services.\(projectID)]\n" + (projectUsesGit ? "repo = \(q(projectID))\n" : "cwd = \(q(projectPath))\n")
@@ -122,7 +122,7 @@ struct StackDefinitionEditor: View {
     validate()
     guard !issues.contains(where: { $0.severity == .error }) else { return }
     do {
-      if file == nil, FileManager.default.fileExists(atPath: destination.path) { throw StackError.message("A stack with that file name already exists. Choose another name.") }
+      if file == nil, FileManager.default.fileExists(atPath: destination.path) { throw StackError.message("A workspace with that file name already exists. Choose another name.") }
       if let file, let originalSource, try String(contentsOf: file, encoding: .utf8) != originalSource {
         throw StackError.message("The file changed in another editor. Reopen it before saving so those changes are preserved.")
       }

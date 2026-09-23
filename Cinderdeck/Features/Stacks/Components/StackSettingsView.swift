@@ -9,8 +9,8 @@ struct StackSettingsView: View {
   @State private var managesSecrets = false
   @State private var managesAgents = false
   var body: some View {
-    Section("Stacks") {
-      Toggle("Show Stacks in history", isOn: $enabled)
+    Section("Workspaces") {
+      Toggle("Show workspace quick controls in History", isOn: $enabled)
       HStack {
         Text("Stack definitions")
         TextField("~/.config/cinderdeck/stacks", text: $directory).textFieldStyle(.roundedBorder)
@@ -22,7 +22,7 @@ struct StackSettingsView: View {
       }
       Picker("When quitting with services running", selection: $quitBehavior) {
         Text("Ask every time").tag("ask")
-        Text("Stop stacks and quit").tag("stop")
+        Text("Stop services and quit").tag("stop")
         Text("Leave services running").tag("leave")
       }
       Toggle("Notify when a service crashes", isOn: $notify)
@@ -41,7 +41,7 @@ struct StackSettingsView: View {
         Button("Manage secrets…") { managesSecrets = true }
       }
       HStack {
-        Text("Let Cursor, Codex and Claude Code manage stacks through MCP or the cinderdeck CLI.").font(.caption).foregroundColor(.secondary)
+        Text("Let Cursor, Codex and Claude Code manage workspaces through MCP or the cinderdeck CLI.").font(.caption).foregroundColor(.secondary)
         Spacer()
         Button("Agent access…") { managesAgents = true }
       }
@@ -62,7 +62,7 @@ struct StackSecretsSheet: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       Text("Stack secrets").font(.title2.weight(.semibold))
-      Text("Reference a secret in your stack with [secrets], for example API_KEY = \"my-api-key\". Values are passed to services only when they start.")
+      Text("Reference a secret in your workspace with [secrets], for example API_KEY = \"my-api-key\". Values are passed to services and tasks only when they start.")
         .font(.callout).foregroundColor(.secondary)
       List(names, id: \.self) { name in
         HStack { Image(systemName: "key"); Text(name); Spacer(); Button("Remove…") { deleting = name } }
