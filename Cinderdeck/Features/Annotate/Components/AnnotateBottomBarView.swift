@@ -100,7 +100,7 @@ struct AnnotateBottomBarView: View {
     }
     .onReceive(eventRouter.publisher(for: .annotateCloudUpload)) { _ in
       // ⌘U shortcut: trigger cloud upload (with overwrite confirmation if needed)
-      let showCloudButton = cloudManager.isConfigured && QuickAccessActionConfigurationStore.shared.isEnabled(.uploadToCloud)
+      let showCloudButton = cloudManager.isAvailable && QuickAccessActionConfigurationStore.shared.isEnabled(.uploadToCloud)
       let needsReUpload = state.requiresRenderedOutputForSharing || state.isCloudStale
       let alreadyUploaded = state.cloudURL != nil && !needsReUpload
       guard showCloudButton, !isCloudUploading, !alreadyUploaded else { return }
@@ -356,7 +356,7 @@ struct AnnotateBottomBarView: View {
   }
 
   private var annotateActionButtons: some View {
-    let showCloudButton = cloudManager.isConfigured && QuickAccessActionConfigurationStore.shared.isEnabled(.uploadToCloud)
+    let showCloudButton = cloudManager.isAvailable && QuickAccessActionConfigurationStore.shared.isEnabled(.uploadToCloud)
     let cloudUploadShortcut = annotateShortcutManager.isActionShortcutEnabled(for: .cloudUpload)
       ? annotateShortcutManager.cloudUploadShortcut?.displayString : nil
     let togglePinShortcut = annotateShortcutManager.isActionShortcutEnabled(for: .togglePin)
@@ -516,7 +516,7 @@ struct AnnotateBottomBarView: View {
   }
 
   private func handleCloudUpload() {
-    guard cloudManager.isConfigured else {
+    guard cloudManager.isAvailable else {
       DiagnosticLogger.shared.log(.warning, .cloud, "Annotate cloud upload skipped; cloud not configured")
       showCloudNotConfiguredAlert = true
       return

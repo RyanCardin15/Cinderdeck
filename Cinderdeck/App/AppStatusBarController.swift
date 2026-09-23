@@ -683,7 +683,7 @@ final class AppStatusBarController: ObservableObject {
       applyConfiguredShortcut(item, for: .cloudUploads, using: shortcutManager)
       item.target = self
       item.image = NSImage(systemSymbolName: "icloud.and.arrow.up", accessibilityDescription: nil)
-      item.isEnabled = CloudManager.shared.isConfigured
+      item.isEnabled = CloudManager.shared.isAvailable
       return item
 
     case .openHistory:

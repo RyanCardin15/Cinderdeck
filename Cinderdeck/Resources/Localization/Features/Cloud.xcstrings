@@ -1,6 +1,30 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "cloud-settings.enable-cloud-description": {
+      "comment": "Description of the cloud storage toggle",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Upload captures to your cloud storage. Turning this off keeps your saved configuration."
+          }
+        }
+      }
+    },
+    "cloud-settings.enable-cloud": {
+      "comment": "Toggle for enabling cloud storage features",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable Cloud"
+          }
+        }
+      }
+    },
     "cloud-expire.1-day": {
       "extractionState": "stale",
       "localizations": {

@@ -59,33 +59,21 @@ struct CloudSettingsView: View {
 
   var body: some View {
     Form {
-      if showPasswordInit {
-        CloudPasswordInitView(
-          onComplete: {
-            showPasswordInit = false
-            passwordInitCompleted = true
-          }
-        )
-      } else if cloudManager.isConfigured && !isEditing {
-        configuredView
-      } else {
-        CloudCredentialFormView(
-          isEditing: isEditing,
-          importedPayload: importedPayload,
-          importNotice: importNotice,
-          onImport: handleImportTapped,
-          onSave: {
-            clearImportedDraft()
-            isEditing = false
-          },
-          onCancel: {
-            clearImportedDraft()
-            isEditing = false
-          }
-        )
+      Section {
+        SettingRow(
+          icon: "cloud",
+          title: L10n.CloudSettings.enableCloud,
+          description: L10n.CloudSettings.enableCloudDescription
+        ) {
+          Toggle(L10n.CloudSettings.enableCloud, isOn: $cloudManager.isEnabled)
+            .labelsHidden()
+        }
       }
 
-      uploadsWindowSection
+      if cloudManager.isEnabled {
+        cloudSettings
+        uploadsWindowSection
+      }
     }
     .formStyle(.grouped)
     .alert(L10n.CloudSettings.resetConfigurationTitle, isPresented: $showResetConfirmation) {
@@ -152,12 +140,42 @@ struct CloudSettingsView: View {
         )
       }
     }
+    .onChange(of: uploadsWindowPosition) { newValue in
+      CloudUploadHistoryWindowController.shared.updatePosition(newValue)
+    }
+  }
+
+  private var cloudSettings: some View {
+    Group {
+      if showPasswordInit {
+        CloudPasswordInitView(
+          onComplete: {
+            showPasswordInit = false
+            passwordInitCompleted = true
+          }
+        )
+      } else if cloudManager.isConfigured && !isEditing {
+        configuredView
+      } else {
+        CloudCredentialFormView(
+          isEditing: isEditing,
+          importedPayload: importedPayload,
+          importNotice: importNotice,
+          onImport: handleImportTapped,
+          onSave: {
+            clearImportedDraft()
+            isEditing = false
+          },
+          onCancel: {
+            clearImportedDraft()
+            isEditing = false
+          }
+        )
+      }
+    }
     .onAppear {
       cloudManager.refreshCloudSummaryForDisplay()
       usageService.hydrateCachedUsageIfAvailable()
-    }
-    .onChange(of: uploadsWindowPosition) { newValue in
-      CloudUploadHistoryWindowController.shared.updatePosition(newValue)
     }
   }
 

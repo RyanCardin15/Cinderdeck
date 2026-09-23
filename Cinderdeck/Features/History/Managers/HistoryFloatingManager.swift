@@ -331,7 +331,7 @@ final class HistoryFloatingManager: ObservableObject {
       return
     }
 
-    guard CloudManager.shared.isConfigured else {
+    guard CloudManager.shared.isAvailable else {
       AppToastManager.shared.show(message: L10n.CloudOperation.notConfigured, style: .warning, variant: .compact)
       DiagnosticLogger.shared.log(
         .warning,

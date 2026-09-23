@@ -23,7 +23,7 @@ struct VideoEditorBottomBar: View {
   @State private var showOverwriteConfirmation = false
 
   private var shouldShowCloudButton: Bool {
-    cloudManager.isConfigured && QuickAccessActionConfigurationStore.shared.isEnabled(.uploadToCloud)
+    cloudManager.isAvailable && QuickAccessActionConfigurationStore.shared.isEnabled(.uploadToCloud)
   }
 
   private var alreadyUploadedToCloud: Bool {
@@ -102,7 +102,7 @@ struct VideoEditorBottomBar: View {
   // MARK: - Cloud Upload Flow
 
   private func handleCloudUpload(overwrite: Bool = false) {
-    guard cloudManager.isConfigured else {
+    guard cloudManager.isAvailable else {
       showCloudNotConfiguredAlert = true
       return
     }
