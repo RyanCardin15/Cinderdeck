@@ -85,6 +85,24 @@ final class StackProcessIntegrationTests: XCTestCase {
     let remaining = try await StackCommandRunner.run("/usr/bin/pgrep", ["-g", pid])
     XCTAssertEqual(remaining.status, 1)
   }
+  func testCancellingCommandStopsItsProcessGroupBeforeTimeout() async throws {
+    let root = try StackTestSupport.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let task = Task {
+      try await StackCommandRunner.run("/bin/sh", ["-c", "echo $$ > pid; sleep 300 & wait"], directory: root, timeout: 30)
+    }
+    let file = root.appendingPathComponent("pid")
+    let deadline = Date().addingTimeInterval(3)
+    while !FileManager.default.fileExists(atPath: file.path), Date() < deadline {
+      try await Task.sleep(nanoseconds: 20_000_000)
+    }
+    task.cancel()
+    do { _ = try await task.value; XCTFail("Expected cancellation") }
+    catch { XCTAssertTrue(error is CancellationError) }
+    let pid = try String(contentsOf: file).trimmingCharacters(in: .whitespacesAndNewlines)
+    let remaining = try await StackCommandRunner.run("/usr/bin/pgrep", ["-g", pid])
+    XCTAssertEqual(remaining.status, 1)
+  }
   func testWrongStartTimeCannotReattachOrSignalLiveProcess() async throws {
     let root = try StackTestSupport.temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }

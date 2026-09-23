@@ -22,6 +22,8 @@ nonisolated struct GitHubRepository: Codable, Identifiable, Equatable, Sendable 
   var isArchived: Bool
   var viewerHasStarred: Bool
   var url: String
+  struct OwnerAccount: Codable, Equatable, Sendable { var kind: String }
+  var ownerAccount: OwnerAccount?
   var name: String { nameWithOwner.split(separator: "/").last.map(String.init) ?? nameWithOwner }
   var owner: String { nameWithOwner.split(separator: "/").first.map(String.init) ?? "" }
 }
@@ -159,6 +161,7 @@ nonisolated enum PRSort: String, Codable, CaseIterable, Identifiable {
 
 nonisolated struct PRFilters: Codable, Equatable, Sendable {
   var repository: String?
+  var organization: String?
   var state: PRStateFilter = .open
   var role: PRRoleFilter = .anyone
   var sort: PRSort = .updated
@@ -169,7 +172,7 @@ nonisolated struct PRFilters: Codable, Equatable, Sendable {
   func query(login: String) -> String {
     // The global inbox is deliberately scoped to the viewer. Selecting a repo
     // removes that implicit involvement filter so all of its PRs are visible.
-    let scope = repository.map { "repo:\($0)" } ?? (role == .anyone ? "involves:\(login)" : "")
+    let scope = repository.map { "repo:\($0)" } ?? organization.map { "org:\($0)" } ?? (role == .anyone ? "involves:\(login)" : "")
     let personal = role.query(login: login)
     let labelQuery = label.trimmingCharacters(in: .whitespacesAndNewlines)
     let labelClause = labelQuery.isEmpty ? "" : "label:\(Self.quote(labelQuery))"

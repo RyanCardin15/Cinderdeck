@@ -116,6 +116,70 @@ final class GitHubAccountTests: XCTestCase {
     XCTAssertEqual(PreferencesTab.github.title, "GitHub")
   }
 
+  func testHostValidationAndEnterpriseTokenSelection() {
+    XCTAssertEqual(GitHubHost.normalized(" GITHUB.Company.Test "), "github.company.test")
+    for invalid in ["https://github.com", "github.com/path", "github.com:443", "user@github.com", "--hostname", "github..com", "github.com?x=y"] {
+      XCTAssertNil(GitHubHost.normalized(invalid), invalid)
+    }
+    let cloud = GitHubCLIConfiguration(executable: "/unused", environment: ["GH_TOKEN": "placeholder"])
+    XCTAssertTrue(cloud.usesEnvironmentToken(hostname: "github.com"))
+    XCTAssertTrue(cloud.usesEnvironmentToken(hostname: "company.ghe.com"))
+    XCTAssertFalse(cloud.usesEnvironmentToken(hostname: "github.company.test"))
+    let enterprise = GitHubCLIConfiguration(executable: "/unused", environment: ["GH_ENTERPRISE_TOKEN": "placeholder"])
+    XCTAssertTrue(enterprise.usesEnvironmentToken(hostname: "github.company.test"))
+    XCTAssertFalse(enterprise.usesEnvironmentToken(hostname: "github.com"))
+  }
+
+  func testEnterpriseSignInTargetsAndValidatesChosenHost() async throws {
+    let executable = try fakeCLI("""
+      case "$*" in
+        'auth login --hostname github.company.test --web --skip-ssh-key') ;;
+        *) exit 8 ;;
+      esac
+      printf '! First copy your one-time code: ABCD-1234\n'
+      printf 'Open this URL to continue in your web browser: https://github.company.test/login/device\n'
+      /bin/sleep 0.3
+      """)
+    let service = GitHubAccountService(hostname: "github.company.test", configuration: { .init(executable: executable.path, environment: [:]) })
+    var received: GitHubSignInProgress?
+    _ = try await service.signIn { received = $0 }
+    XCTAssertEqual(received?.url?.host, "github.company.test")
+    XCTAssertNil(GitHubSignInProgress.parse("Open this URL: https://github.company.test.evil.test/login/device", hostname: "github.company.test").url)
+  }
+
+  func testChangingHostPersistsSelectionAndVerifiesNewAccount() async {
+    let name = "CinderdeckHostTests-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: name)!
+    defer { defaults.removePersistentDomain(forName: name) }
+    let service = AccountMock()
+    let model = GitHubAccountViewModel(service: service, defaults: defaults)
+    await model.refresh()
+    await model.useHost("github.company.test")
+    XCTAssertEqual(defaults.string(forKey: GitHubHost.preferenceKey), "github.company.test")
+    XCTAssertEqual(service.hostname, "github.company.test")
+    XCTAssertEqual(model.account.hostname, "github.company.test")
+    XCTAssertEqual(model.account.login, "signed-in-user")
+    await model.useHost("https://invalid.test")
+    XCTAssertNotNil(model.error)
+    XCTAssertEqual(model.account.hostname, "github.company.test")
+  }
+
+  func testGraphQLAndRESTCommandsBothUseEnterpriseHost() async throws {
+    let executable = try fakeCLI("""
+      [ "$1" = api ] && [ "$2" = --hostname ] && [ "$3" = github.company.test ] || exit 8
+      case "$4" in
+        graphql) printf '{"data":{"viewer":{"login":"enterprise-user"}}}' ;;
+        'repos/team/project/pulls/7/files?per_page=100&page=1') printf '[]' ;;
+        *) exit 9 ;;
+      esac
+      """)
+    let service = GitHubPRService(hostname: "github.company.test", configuration: { .init(executable: executable.path, environment: [:]) })
+    let login = try await service.viewer()
+    let files = try await service.files(repository: "team/project", number: 7, page: 1)
+    XCTAssertEqual(login, "enterprise-user")
+    XCTAssertTrue(files.isEmpty)
+  }
+
   private func fakeCLI(_ script: String) throws -> URL {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent("cinderdeck-gh-test-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
@@ -129,10 +193,11 @@ final class GitHubAccountTests: XCTestCase {
 
 @MainActor
 private final class AccountMock: GitHubAccountServing {
+  var hostname = "github.com"
   var fail = false
   var delay: UInt64 = 0
   var cancelled = false
-  func status() async -> GitHubAccountSnapshot { .init(login: "signed-in-user") }
+  func status() async -> GitHubAccountSnapshot { .init(login: "signed-in-user", hostname: hostname) }
   func signIn(progress: @escaping (GitHubSignInProgress) -> Void) async throws -> String? {
     progress(.init(code: "ABCD-1234", url: URL(string: "https://github.com/login/device")))
     if delay > 0 { try? await Task.sleep(nanoseconds: delay) }

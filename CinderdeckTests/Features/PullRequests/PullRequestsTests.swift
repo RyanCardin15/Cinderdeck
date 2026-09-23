@@ -207,6 +207,238 @@ final class PullRequestsTests: XCTestCase {
     XCTAssertFalse(GitHubPRService.validRepository("team/project/../../"))
   }
 
+  func testWarmTabsAndCustomQueriesOpenImmediatelyWithoutAnotherRequest() async throws {
+    let service = PRMockService()
+    let defaults = temporaryDefaults()
+    let setup = PullRequestsViewModel(service: service, defaults: defaults)
+    await setup.connect()
+    setup.filters = .init(text: "label:urgent", advanced: true)
+    XCTAssertTrue(setup.saveView(name: "Urgent"))
+    setup.selectView(PRSavedView.defaults[1])
+    let model = PullRequestsViewModel(service: service, defaults: defaults)
+    await model.connect()
+    try await eventually { Set(service.searchQueries).count >= 5 }
+    try await Task.sleep(nanoseconds: 30_000_000)
+    let count = service.searchQueries.count
+    for view in model.views {
+      model.selectView(view)
+      XCTAssertFalse(model.loading, view.name)
+      XCTAssertFalse(model.requests.isEmpty, view.name)
+    }
+    XCTAssertEqual(service.searchQueries.count, count)
+  }
+
+  func testCacheJoinsInFlightRequestAndLimitsParallelSearches() async throws {
+    let service = PRMockService(); service.searchDelay = 80_000_000
+    let cache = PRSearchCache()
+    let first = Task { try await cache.load("same", service: service) }
+    let second = Task { try await cache.load("same", service: service) }
+    _ = try await first.value; _ = try await second.value
+    XCTAssertEqual(service.searchQueries, ["same"])
+    let tasks = (0..<10).map { index in Task { try await cache.load("query-\(index)", service: service) } }
+    for task in tasks { _ = try await task.value }
+    XCTAssertEqual(service.maximumConcurrentSearches, 3)
+  }
+
+  func testStaleRefreshKeepsResultsAndTimestampOnFailure() async throws {
+    var clock = Date()
+    let cache = PRSearchCache(now: { clock })
+    let service = PRMockService()
+    let model = PullRequestsViewModel(service: service, defaults: temporaryDefaults(), cache: cache)
+    await model.connect()
+    try await eventually { !model.loading }
+    let updated = model.lastUpdated
+    clock = clock.addingTimeInterval(61)
+    service.failSearch = true; service.searchDelay = 30_000_000
+    model.scheduleSearch(immediate: true)
+    XCTAssertTrue(model.loading)
+    XCTAssertEqual(model.requests.first?.id, "PR-7")
+    try await eventually { !model.loading }
+    XCTAssertEqual(model.requests.first?.id, "PR-7")
+    XCTAssertEqual(model.lastUpdated, updated)
+    XCTAssertTrue(model.error?.contains("previously loaded") == true)
+  }
+
+  func testCachedPaginationRestoresAllLoadedRows() async throws {
+    let service = PRMockService(); service.paginate = true
+    let model = makeModel(service: service)
+    await model.connect()
+    try await eventually { !model.loading }
+    await model.loadMore()
+    model.selectView(PRSavedView.defaults[2])
+    model.selectView(PRSavedView.defaults[1])
+    XCTAssertEqual(model.requests.map(\.id), ["PR-7", "PR-8"])
+    XCTAssertFalse(model.canLoadMore)
+  }
+
+  func testOrganizationSelectionLoadsEveryPageAndKeepsScopeAcrossBuiltIns() async throws {
+    let service = PRMockService(); service.organizationPagination = true
+    let model = makeModel(service: service)
+    await model.connect()
+    XCTAssertEqual(model.organizations, ["other-team", "team"])
+    // Memberships appear before any repositories from the second org are loaded.
+    XCTAssertEqual(model.availableOrganizations, ["other-team", "team"])
+    XCTAssertFalse(model.repositories.contains { $0.owner == "other-team" })
+    model.selectRepository("team/project")
+    model.repositorySearch = "old-search"
+    model.starredOnly = true
+    model.selectOrganization("other-team")
+    XCTAssertEqual(model.hostname, "github.com")
+    XCTAssertEqual(service.hostname, "github.com")
+    XCTAssertEqual(model.repositorySearch, "")
+    XCTAssertFalse(model.starredOnly)
+    XCTAssertNil(model.filters.repository)
+    try await eventually { !model.loadingSelectedOrganization }
+    XCTAssertEqual(model.visibleRepositories.map(\.nameWithOwner).sorted(), ["other-team/one", "other-team/two"])
+    XCTAssertEqual(service.organizationCursors, [nil, "next"])
+    XCTAssertTrue(model.query.contains("org:other-team"))
+    XCTAssertFalse(model.query.contains("involves:"))
+    model.selectView(PRSavedView.defaults[2])
+    XCTAssertEqual(model.filters.organization, "other-team")
+    XCTAssertTrue(model.query.contains("review-requested:reviewer"))
+    model.selectRepository(nil)
+    XCTAssertNil(model.filters.organization)
+  }
+
+  func testDiscoveryFailureDoesNotMakeSuccessfulSearchLookEmptyOrFailed() async throws {
+    let service = PRMockService(); service.failRepositories = true
+    let model = makeModel(service: service)
+    await model.connect()
+    try await eventually { !model.loading }
+    XCTAssertNil(model.error)
+    XCTAssertNotNil(model.repositoryError)
+    XCTAssertFalse(model.requests.isEmpty)
+  }
+
+  func testSameLoginOnDifferentHostsHasSeparateViewsAndNoCachedRows() async throws {
+    let service = PRMockService()
+    let model = makeModel(service: service)
+    await model.connect()
+    try await eventually { !model.loading }
+    model.filters.text = "personal"
+    XCTAssertTrue(model.saveView(name: "Personal"))
+    service.searchDelay = 80_000_000
+    await model.connect(hostname: "github.company.test")
+    XCTAssertEqual(model.hostname, "github.company.test")
+    XCTAssertTrue(model.customViews.isEmpty)
+    XCTAssertTrue(model.requests.isEmpty)
+    model.filters.text = "enterprise"
+    XCTAssertTrue(model.saveView(name: "Enterprise"))
+    await model.connect(hostname: "github.com")
+    XCTAssertEqual(model.customViews.map(\.name), ["Personal"])
+    XCTAssertEqual(model.filters.text, "personal")
+  }
+
+  func testManualRefreshBypassesFreshCache() async throws {
+    let service = PRMockService()
+    let model = makeModel(service: service)
+    await model.connect()
+    try await eventually { !model.loading }
+    let query = model.query
+    let count = service.searchQueries.filter { $0 == query }.count
+    model.scheduleSearch(immediate: true, force: true)
+    try await eventually { !model.loading }
+    XCTAssertEqual(service.searchQueries.filter { $0 == query }.count, count + 1)
+  }
+
+  func testTimeoutRetriesOnceWithSmallerPageButRateLimitDoesNotRetry() async throws {
+    for message in ["GitHub query timed out", "API rate limit exceeded", "Command timed out after 45 seconds", "Query timed out: rate limit exceeded"] {
+      var sizes: [Int] = []
+      let service = GitHubPRService { _, payload in
+        let input = try XCTUnwrap(payload)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: input) as? [String: Any])
+        let variables = try XCTUnwrap(json["variables"] as? [String: Any])
+        sizes.append(try XCTUnwrap(variables["first"] as? Int))
+        throw GitHubPRError.message(message)
+      }
+      do { _ = try await service.search("is:pr", after: "cursor"); XCTFail("Expected failure") }
+      catch { XCTAssertEqual(error.localizedDescription, message) }
+      XCTAssertEqual(sizes, message == "GitHub query timed out" ? [25, 10] : [25])
+    }
+  }
+
+  func testRepositoryDiscoveryIncludesOwnerAffiliationsAndOrganizationCursor() async throws {
+    let service = GitHubPRService { _, payload in
+      let input = try XCTUnwrap(payload)
+      let json = try XCTUnwrap(JSONSerialization.jsonObject(with: input) as? [String: Any])
+      let query = try XCTUnwrap(json["query"] as? String)
+      let variables = try XCTUnwrap(json["variables"] as? [String: Any])
+      if query.contains("organization(login:") {
+        XCTAssertEqual(variables["organization"] as? String, "other-team")
+        XCTAssertEqual(variables["after"] as? String, "next")
+        return Data(#"{"data":{"organization":{"repositories":{"nodes":[],"pageInfo":{"hasNextPage":false}}}}}"#.utf8)
+      }
+      XCTAssertTrue(query.contains("ownerAffiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER]"))
+      return Data(#"{"data":{"viewer":{"repositories":{"nodes":[],"pageInfo":{"hasNextPage":false}}}}}"#.utf8)
+    }
+    _ = try await service.repositories(after: nil)
+    _ = try await service.repositories(organization: "other-team", after: "next")
+  }
+
+  func testCacheResetPreventsLateResultsFromReappearing() async throws {
+    let service = PRMockService()
+    let cache = PRSearchCache()
+    let task = Task { try await cache.load("slow", service: service) }
+    try await Task.sleep(nanoseconds: 10_000_000)
+    cache.reset()
+    do { _ = try await task.value; XCTFail("Cancelled data must not reappear") }
+    catch { XCTAssertTrue(error is CancellationError) }
+    XCTAssertNil(cache.entry(for: "slow"))
+  }
+
+  func testBackgroundSearchFailureDoesNotReplaceSelectedResults() async throws {
+    let service = PRMockService()
+    service.failedQuery = "review-requested:"
+    let model = makeModel(service: service)
+    await model.connect()
+    try await eventually { service.searchQueries.contains { $0.contains("review-requested:") } }
+    try await Task.sleep(nanoseconds: 30_000_000)
+    XCTAssertNil(model.error)
+    XCTAssertFalse(model.loading)
+    XCTAssertEqual(model.requests.first?.id, "PR-7")
+    model.selectView(PRSavedView.defaults[2])
+    try await eventually { !model.loading }
+    XCTAssertNotNil(model.error)
+    XCTAssertTrue(model.requests.isEmpty)
+  }
+
+  func testOrganizationsIncludeOutsideCollaborationsButExcludePersonalOwners() async {
+    let service = PRMockService()
+    var organizationRepo = PRFixtures.repository
+    organizationRepo.id = "outside"; organizationRepo.nameWithOwner = "outside-org/repo"
+    organizationRepo.ownerAccount = .init(kind: "Organization")
+    var personalRepo = PRFixtures.repository
+    personalRepo.id = "person"; personalRepo.nameWithOwner = "someone-else/repo"
+    personalRepo.ownerAccount = .init(kind: "User")
+    service.extraRepositories = [organizationRepo, personalRepo]
+    let model = makeModel(service: service)
+    await model.connect()
+    XCTAssertEqual(model.availableOrganizations, ["outside-org", "team"])
+  }
+
+  func testAllRepositoriesAreGroupedByOwnerWithPersonalRepositoriesFirst() async {
+    let service = PRMockService()
+    var personal = PRFixtures.repository
+    personal.id = "personal"; personal.nameWithOwner = "reviewer/personal"
+    var extra = PRFixtures.repository
+    extra.id = "another"; extra.nameWithOwner = "another-org/repo"
+    var favorite = PRFixtures.repository
+    favorite.id = "starred"; favorite.nameWithOwner = "team/z-favorite"; favorite.viewerHasStarred = true
+    service.extraRepositories = [personal, extra, favorite]
+    let model = makeModel(service: service)
+    await model.connect()
+    XCTAssertEqual(model.repositoryGroups.map(\.owner), ["reviewer", "another-org", "team"])
+    XCTAssertEqual(model.repositoryGroups.last?.repositories.map(\.nameWithOwner), ["team/z-favorite", "team/project"])
+    model.selectOrganization("team")
+    XCTAssertEqual(model.repositoryGroups.map(\.owner), ["team"])
+  }
+
+  private func eventually(_ condition: () -> Bool, file: StaticString = #filePath, line: UInt = #line) async throws {
+    let deadline = Date().addingTimeInterval(3)
+    while !condition(), Date() < deadline { try await Task.sleep(nanoseconds: 10_000_000) }
+    XCTAssertTrue(condition(), file: file, line: line)
+  }
+
   private func makeModel(service: PRMockService) -> PullRequestsViewModel { .init(service: service, defaults: temporaryDefaults()) }
   private func temporaryDefaults() -> UserDefaults {
     let name = "CinderdeckPRTests-\(UUID().uuidString)"
@@ -218,6 +450,33 @@ final class PullRequestsTests: XCTestCase {
 
 @MainActor
 private final class PRMockService: GitHubPRServing {
+  var hostname = "github.com"
+  var searchQueries: [String] = []
+  var searchDelay: UInt64 = 0
+  var failSearch = false
+  var failedQuery: String?
+  var extraRepositories: [GitHubRepository] = []
+  var failRepositories = false
+  var activeSearches = 0
+  var maximumConcurrentSearches = 0
+  var organizationPagination = false
+  var organizationCursors: [String?] = []
+  func organizations(after: String?) async throws -> GitHubConnection<GitHubActor> {
+    if organizationPagination {
+      return .init(nodes: [.init(login: after == nil ? "team" : "other-team")], pageInfo: .init(hasNextPage: after == nil, endCursor: after == nil ? "next" : nil))
+    }
+    return .init(nodes: [.init(login: "team")], pageInfo: .init(hasNextPage: false))
+  }
+  func repositories(organization: String, after: String?) async throws -> GitHubConnection<GitHubRepository> {
+    if organizationPagination {
+      organizationCursors.append(after)
+      var repo = PRFixtures.repository
+      repo.id = after ?? "first"
+      repo.nameWithOwner = "\(organization)/\(after == nil ? "one" : "two")"
+      return .init(nodes: [repo], pageInfo: .init(hasNextPage: after == nil, endCursor: after == nil ? "next" : nil))
+    }
+    return try await repositories(after: after)
+  }
   var account = "reviewer"
   var failStar = false
   var failViewer = false
@@ -227,9 +486,15 @@ private final class PRMockService: GitHubPRServing {
     return account
   }
   func repositories(after: String?) async throws -> GitHubConnection<GitHubRepository> {
-    .init(nodes: [PRFixtures.repository], pageInfo: .init(hasNextPage: false), totalCount: 1)
+    if failRepositories { throw GitHubPRError.message("Repository access failed") }
+    return .init(nodes: [PRFixtures.repository] + extraRepositories, pageInfo: .init(hasNextPage: false), totalCount: 1)
   }
   func search(_ query: String, after: String?) async throws -> PullRequestSearchPage {
+    searchQueries.append(query)
+    activeSearches += 1; maximumConcurrentSearches = max(maximumConcurrentSearches, activeSearches)
+    defer { activeSearches -= 1 }
+    if searchDelay > 0 { try await Task.sleep(nanoseconds: searchDelay) }
+    if failSearch || failedQuery.map({ query.contains($0) }) == true { throw GitHubPRError.message("Network unavailable") }
     if query.contains("slow") { try? await Task.sleep(nanoseconds: 100_000_000) }
     var request = PRFixtures.request
     if query.contains("latest") { request.title = "latest" }

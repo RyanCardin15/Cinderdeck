@@ -14,11 +14,32 @@ final class GitHubAccountViewModel: ObservableObject {
   @Published private(set) var progress = GitHubSignInProgress()
   @Published var error: String?
   @Published private(set) var notice: String?
-  private let service: GitHubAccountServing
+  private var service: GitHubAccountServing
+  private let defaults: UserDefaults
   private var signInTask: Task<Void, Never>?
   private var generation = UUID()
 
-  init(service: GitHubAccountServing? = nil) { self.service = service ?? GitHubAccountService() }
+  init(service: GitHubAccountServing? = nil, defaults: UserDefaults = .standard) {
+    self.service = service ?? GitHubAccountService()
+    self.defaults = defaults
+    account.hostname = self.service.hostname
+  }
+
+  func useHost(_ input: String) async {
+    guard !checking, !signingIn else { return }
+    guard let host = GitHubHost.normalized(input) else {
+      error = "Enter a hostname such as github.com or github.company.com, without https:// or a path."
+      return
+    }
+    guard service.hostname != host else { return }
+    generation = UUID()
+    service.hostname = host
+    defaults.set(host, forKey: GitHubHost.preferenceKey)
+    account = .init(hostname: host)
+    error = nil; notice = nil
+    NotificationCenter.default.post(name: .githubAccountChanged, object: nil, userInfo: ["hostname": host, "force": true])
+    await refresh()
+  }
 
   func refresh() async {
     guard !checking, !signingIn else { return }
@@ -29,7 +50,7 @@ final class GitHubAccountViewModel: ObservableObject {
     guard generation == self.generation else { return }
     account = snapshot
     checking = false
-    if previous != snapshot.login { NotificationCenter.default.post(name: .githubAccountChanged, object: nil, userInfo: ["login": snapshot.login ?? ""]) }
+    if previous != snapshot.login { NotificationCenter.default.post(name: .githubAccountChanged, object: nil, userInfo: ["login": snapshot.login ?? "", "hostname": snapshot.hostname]) }
   }
 
   func signIn() {
@@ -49,7 +70,7 @@ final class GitHubAccountViewModel: ObservableObject {
         signingIn = false; progress = .init()
         if let login = snapshot.login {
           notice = warning ?? "Signed in as \(login). Your pull requests are ready."
-          NotificationCenter.default.post(name: .githubAccountChanged, object: nil, userInfo: ["login": login, "force": true])
+          NotificationCenter.default.post(name: .githubAccountChanged, object: nil, userInfo: ["login": login, "hostname": snapshot.hostname, "force": true])
         } else { error = "GitHub authorization finished, but the connection could not be verified. Check your connection and refresh." }
       } catch {
         guard self.generation == generation, !Task.isCancelled else { return }
