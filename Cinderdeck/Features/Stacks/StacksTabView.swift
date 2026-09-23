@@ -20,6 +20,11 @@ struct StacksTabView: View {
         .padding(.horizontal, 10).padding(.vertical, 7)
         .stackSurface(cornerRadius: 10, tint: .orange)
       }
+      HStack {
+        Text("Services, tasks, and workflows").font(.caption).foregroundColor(.secondary)
+        Spacer()
+        Button("Open Workspaces") { WorkspaceWindowController.shared.show(workspace: viewModel.selectedStackID) }
+      }
       if viewModel.files.isEmpty { emptyState }
       else if expanded { expandedContent }
       else { compactContent }
@@ -41,9 +46,16 @@ struct StacksTabView: View {
       viewModel.command(command, manager: manager)
     }
     .sheet(item: $viewModel.editor) { context in
-      StackDefinitionEditor(file: context.file) {
-        viewModel.editor = nil
-        Task { await viewModel.supervisor.reloadDefinitions() }
+      if context.file == nil {
+        WorkspaceCreateView { id in
+          viewModel.editor = nil
+          Task { await viewModel.supervisor.reloadDefinitions(); viewModel.select(id) }
+        }
+      } else {
+        StackDefinitionEditor(file: context.file) {
+          viewModel.editor = nil
+          Task { await viewModel.supervisor.reloadDefinitions() }
+        }
       }
     }
     .sheet(isPresented: $viewModel.stackBranchPicker) {
@@ -63,10 +75,10 @@ struct StacksTabView: View {
         Image(systemName: "square.stack.3d.up.fill").font(.system(size: 24, weight: .semibold)).foregroundColor(.accentColor)
       }
       Text("Your projects, running together").font(.system(size: 15, weight: .semibold))
-      Text("Group local services into a stack — APIs, frontends, emulators — and start them in order with one click.\nYour coding agents can drive stacks too.")
+      Text("Create a workspace for your services, one-time tasks, and ordered workflows.\nYour coding agents can run them too.")
         .font(.system(size: 12)).foregroundColor(.secondary).multilineTextAlignment(.center).frame(maxWidth: 440)
       HStack(spacing: 8) {
-        Button { viewModel.create() } label: { Label("Create stack", systemImage: "plus") }
+        Button { viewModel.create() } label: { Label("Create workspace", systemImage: "plus") }
           .buttonStyle(StackPillButtonStyle(kind: .primary(.accentColor)))
           .accessibilityIdentifier("stacks.create")
         Button { viewModel.agentsSheet = true } label: { Label("Connect agents", systemImage: "sparkles") }
@@ -90,7 +102,7 @@ struct StacksTabView: View {
         .onChange(of: viewModel.selectedStackID) { id in if let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
       }
       VStack(spacing: 6) {
-        StackIconButton(systemName: "plus", help: "Create stack", size: 28) { viewModel.create() }
+        StackIconButton(systemName: "plus", help: "Create workspace", size: 28) { viewModel.create() }
         StackIconButton(systemName: "sparkles", help: "Agent access", tint: StackPalette.agent, size: 28) { viewModel.agentsSheet = true }
       }.padding(.top, 6)
     }
@@ -102,9 +114,9 @@ struct StacksTabView: View {
     HStack(spacing: 14) {
       VStack(alignment: .leading, spacing: 10) {
         HStack {
-          Text("STACKS").font(.system(size: 10, weight: .bold)).foregroundColor(.secondary).tracking(0.6)
+          Text("WORKSPACES").font(.system(size: 10, weight: .bold)).foregroundColor(.secondary).tracking(0.6)
           Spacer()
-          StackIconButton(systemName: "plus", help: "Create stack", size: 22) { viewModel.create() }
+          StackIconButton(systemName: "plus", help: "Create workspace", size: 22) { viewModel.create() }
         }
         ScrollView(showsIndicators: false) {
           LazyVStack(spacing: 6) {
@@ -114,13 +126,13 @@ struct StacksTabView: View {
         Spacer(minLength: 0)
         agentStatus
         Button { NSWorkspace.shared.open(StackDefinitionLoader.directory()) } label: {
-          Label("Open stacks folder", systemImage: "folder")
+          Label("Open workspace definitions", systemImage: "folder")
         }.buttonStyle(StackPillButtonStyle(compact: true))
       }.frame(width: 210)
       if let file = viewModel.selectedFile {
         StackExpandedView(file: file, viewModel: viewModel, manager: manager)
       } else {
-        Text("Select a stack").foregroundColor(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+        Text("Select a workspace").foregroundColor(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
       }
     }
   }

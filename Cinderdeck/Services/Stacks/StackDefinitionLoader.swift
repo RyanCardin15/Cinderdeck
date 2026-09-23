@@ -24,7 +24,7 @@ nonisolated enum StackDefinitionLoader {
       let document = try SimpleTOMLParser.parse(source, strict: true)
       var reader = StackDefinitionReader(root: document.root)
       if !validID(id) { reader.error("File name must use letters, numbers, hyphens or underscores.") }
-      reader.warnUnknown(document.root, allowed: ["name", "root", "shell", "restart_on_branch_change", "env", "secrets", "repos", "services"], at: "")
+      reader.warnUnknown(document.root, allowed: ["name", "root", "shell", "restart_on_branch_change", "env", "secrets", "repos", "services", "tasks", "workflows"], at: "")
       let root = resolve(reader.string(document.root, "root") ?? file.deletingLastPathComponent().path, relativeTo: file.deletingLastPathComponent())
       let shell = reader.string(document.root, "shell") ?? ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
       var stack = StackDefinition(id: id, name: reader.string(document.root, "name") ?? id, file: file,
@@ -93,7 +93,7 @@ nonisolated enum StackDefinitionLoader {
         }
         stack.services.append(service)
       }
-      if stack.services.isEmpty { reader.error("Define at least one [services.<name>] table") }
+      readWorkspaceComponents(document.root, into: &stack, reader: &reader, validatePaths: validatePaths)
       for service in stack.services {
         for dependency in service.dependencies where stack.service(dependency) == nil {
           reader.error("services.\(service.id) depends on unknown service \(dependency)")
@@ -118,30 +118,26 @@ nonisolated enum StackDefinitionLoader {
   }
 
   static let template = """
-  # Save this file; Cinderdeck reloads it automatically. Start is always explicit.
-  name = "My stack"
+  # A workspace contains services, tasks, and workflows. Nothing starts on save.
+  name = "My workspace"
   root = "~"
   restart_on_branch_change = true
 
-  # [repos.app]
-  # path = "Src/my-app"
-
-  [services.hello]
-  # repo = "app"
-  cmd = "echo 'READY — edit this stack to run your services'; sleep 3600"
-  ready.log = "READY"
-  restart = "no"
-  # port = 3000
-  # depends_on = ["database"]
-  # env.NODE_ENV = "development"
-  # autostart = false
-
-  # [secrets]
-  # API_KEY = "my-api-key" # Add the value in Settings > History > Manage secrets.
+  # Use Add project for long-running services.
+  # After saving, open Tasks or Workflows to add commands with the visual editors.
+  # Advanced examples:
+  # [tasks.test]
+  # cmd = "npm test"
+  # cwd = "Src/my-app"
+  # timeout = 600
+  # requires_services = ["api"]
+  # [workflows.verify]
+  # steps = ["start:api", "task:test"]
+  # cleanup_services = true
   """
 }
 
-nonisolated private struct StackDefinitionReader {
+nonisolated struct StackDefinitionReader {
   let root: [String: SimpleTOMLValue]
   var issues: [StackDefinitionIssue] = []
   mutating func error(_ text: String) { issues.append(.init(severity: .error, message: text)) }

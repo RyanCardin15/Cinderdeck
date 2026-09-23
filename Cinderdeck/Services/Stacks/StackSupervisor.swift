@@ -31,6 +31,7 @@ final class StackSupervisor: ObservableObject {
   private var stopping = Set<String>()
   private var subscriptions = Set<AnyCancellable>()
   private var reloadGeneration = 0
+  var activeWorkspaceRun: ((String) -> Bool)?
 
   init(store: StackRunStore?, defaults: UserDefaults = .standard, secrets: any StackSecretsStoring = StackSecretsStore(),
     git: GitService = .shared, logRoot: URL? = nil,
@@ -427,6 +428,9 @@ final class StackSupervisor: ObservableObject {
           affected[file.id, default: []].insert(name)
         }
       }
+    }
+    if affected.keys.contains(where: { activeWorkspaceRun?($0) == true }) {
+      throw StackError.message("A task or workflow is using this repository. Finish or cancel that run before changing branches or pulling.")
     }
     var restart: [String: Set<String>] = [:]
     for (stackID, services) in affected {

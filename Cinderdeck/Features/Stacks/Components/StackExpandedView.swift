@@ -4,6 +4,7 @@ struct StackExpandedView: View {
   let file: StackDefinitionFile
   @ObservedObject var viewModel: StacksViewModel
   @ObservedObject var manager: HistoryFloatingManager
+  var showsWorkspaceName = true
   private var state: StackRuntimeState { viewModel.selectedState }
 
   var body: some View {
@@ -25,7 +26,7 @@ struct StackExpandedView: View {
   private var header: some View {
     HStack(alignment: .center, spacing: 10) {
       VStack(alignment: .leading, spacing: 5) {
-        Text(file.name).font(.system(size: 19, weight: .bold)).lineLimit(1).help(file.name)
+        Text(showsWorkspaceName ? file.name : "Services").font(.system(size: 19, weight: .bold)).lineLimit(1).help(file.name)
         HStack(spacing: 6) {
           StackStateBadge(label: file.definition == nil ? "Degraded" : state.label, since: state.isActive ? state.startedAt : nil)
           if let operation = state.operation { StackChip(systemImage: "hourglass", text: operation + "…", tint: .orange) }
@@ -45,7 +46,7 @@ struct StackExpandedView: View {
         Button { viewModel.toggle(file.id) } label: { Label("Stop", systemImage: "stop.fill") }
           .buttonStyle(StackPillButtonStyle())
       } else {
-        Button { viewModel.toggle(file.id) } label: { Label("Start stack", systemImage: "play.fill") }
+        Button { viewModel.toggle(file.id) } label: { Label("Start services", systemImage: "play.fill") }
           .buttonStyle(StackPillButtonStyle(kind: .primary(StackPalette.color(phase: .ready))))
           .disabled(file.definition == nil || viewModel.isBusy(file.id))
       }

@@ -9,6 +9,7 @@ final class GitStatusMonitor: ObservableObject {
   private var refreshing = Set<URL>()
   private var wanted = Set<URL>()
   private var visibleTask: Task<Void, Never>?
+  private var visibleSources = Set<String>()
   private var fetchTask: Task<Void, Never>?
   private var generation = 0
   private var autoFetchMinutes = 0
@@ -49,9 +50,10 @@ final class GitStatusMonitor: ObservableObject {
       for path in wanted { group.addTask { await self.refresh(path) } }
     }
   }
-  func setVisible(_ visible: Bool) {
-    visibleTask?.cancel(); visibleTask = nil
-    guard visible else { return }
+  func setVisible(_ visible: Bool, source: String = "history") {
+    if visible { visibleSources.insert(source) } else { visibleSources.remove(source) }
+    guard !visibleSources.isEmpty else { visibleTask?.cancel(); visibleTask = nil; return }
+    guard visibleTask == nil else { return }
     visibleTask = Task { [weak self] in
       while !Task.isCancelled {
         await self?.refreshAll()
@@ -78,6 +80,7 @@ final class GitStatusMonitor: ObservableObject {
   func stop() {
     generation += 1
     visibleTask?.cancel(); fetchTask?.cancel()
+    visibleTask = nil; fetchTask = nil; visibleSources.removeAll()
     watchers.values.forEach { $0.stop() }; watchers.removeAll(); wanted.removeAll()
   }
 }

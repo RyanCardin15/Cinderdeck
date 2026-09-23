@@ -41,6 +41,7 @@ enum MenuBarItemKind: String, CaseIterable {
   case editVideo
   case cloudUploads
   case openHistory
+  case openWorkspaces
   case pullRequests
   case shortcutList
 
@@ -55,7 +56,7 @@ enum MenuBarItemKind: String, CaseIterable {
       return .capture
     case .recordScreen, .recordApplication:
       return .recording
-    case .openAnnotate, .combineImages, .editVideo, .cloudUploads, .openHistory, .pullRequests, .shortcutList:
+    case .openAnnotate, .combineImages, .editVideo, .cloudUploads, .openHistory, .openWorkspaces, .pullRequests, .shortcutList:
       return .tools
     case .checkForUpdates:
       return nil
@@ -87,6 +88,7 @@ enum MenuBarItemKind: String, CaseIterable {
     case .editVideo: return L10n.Menu.editVideo
     case .cloudUploads: return L10n.Actions.cloudUploads
     case .pullRequests: return "Pull requests"
+    case .openWorkspaces: return "Workspaces…"
     case .openHistory: return L10n.Actions.openHistory
     case .shortcutList: return L10n.Menu.keyboardShortcuts
     case .checkForUpdates: return L10n.Menu.checkForUpdates
@@ -112,6 +114,7 @@ enum MenuBarItemKind: String, CaseIterable {
     case .editVideo: return "film"
     case .cloudUploads: return "icloud.and.arrow.up"
     case .pullRequests: return "arrow.triangle.pull"
+    case .openWorkspaces: return "square.stack.3d.up"
     case .openHistory: return "clock.arrow.circlepath"
     case .shortcutList: return "list.bullet.rectangle"
     case .checkForUpdates: return "arrow.triangle.2.circlepath"

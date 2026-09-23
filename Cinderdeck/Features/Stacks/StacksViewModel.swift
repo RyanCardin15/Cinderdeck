@@ -84,7 +84,7 @@ final class StacksViewModel: ObservableObject {
   func claim(_ stack: String) -> StackClaim? { claims[stack].flatMap { $0.isExpired ? nil : $0 } }
   func releaseClaim(_ stack: String) {
     guard let claim = claim(stack), confirm(title: "Release \(claim.holder.name)'s claim?",
-      message: "\(claim.holder.label) is using this stack\(claim.note.map { " (" + $0 + ")" } ?? ""). Other agents will be able to change it again.",
+      message: "\(claim.holder.label) is using this workspace\(claim.note.map { " (" + $0 + ")" } ?? ""). Other agents will be able to change it again.",
       buttons: ["Release", "Cancel"]) == 0 else { return }
     StackControlService.shared.release(stack: stack)
   }
@@ -100,7 +100,7 @@ final class StacksViewModel: ObservableObject {
   func isBusy(_ stack: String) -> Bool { states[stack]?.operation != nil || supervisor.isBootstrapping }
   func status(_ repo: RepoDefinition) -> GitRepoStatus { repoStatuses[repo.path] ?? .init(branch: "Loading…") }
   func canSwitch(stack: String, repo: String) -> Bool {
-    guard !isBusy(stack) else { return false }
+    guard !isBusy(stack), supervisor.activeWorkspaceRun?(stack) != true else { return false }
     let services = files.first { $0.id == stack }?.definition?.services.filter { $0.repo == repo } ?? []
     return !services.contains { [.starting, .stopping, .waiting].contains(runtime(stack, $0.id).phase) }
   }
@@ -215,7 +215,7 @@ final class StacksViewModel: ObservableObject {
     let unchanged = stack.repos.filter { choice.branches[$0.id] == nil }.map(\.id)
     let message = "Switch \(choice.branches.count) of \(stack.repos.count) repos to \(choice.name)." +
       (unchanged.isEmpty ? "" : "\nThese repos stay on their current branch: \(unchanged.joined(separator: ", ")).")
-    guard confirm(title: "Switch stack branches?", message: message, buttons: ["Switch", "Cancel"]) == 0 else { return }
+    guard confirm(title: "Switch workspace branches?", message: message, buttons: ["Switch", "Cancel"]) == 0 else { return }
     Task { await switchBranches(stack: stack.id, choices: choice.branches) }
   }
 

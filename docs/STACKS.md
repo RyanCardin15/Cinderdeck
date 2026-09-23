@@ -1,21 +1,23 @@
-# Stacks
+# Services (formerly Stacks)
 
-Stacks runs any collection of local development projects from **⌘⇧H → Stacks**. Projects can be in different folders and use different languages or tools. Git is optional; several services can share one repository. Nothing starts automatically when you add a definition or open Cinderdeck.
+Workspaces now groups **Services, Tasks, Workflows, and Runs** in a dedicated window. Existing Stacks definitions and service controls remain compatible. See [WORKSPACES.md](WORKSPACES.md) for the task/workflow model, editors, lifecycle, and agent API.
 
-## Create your first stack
+Stacks runs any collection of local development projects from **Workspaces… → Services**. Projects can be in different folders and use different languages or tools. Git is optional; several services can share one repository. Nothing starts automatically when you add a definition or open Cinderdeck.
 
-1. Choose **Create stack** or **+**.
+## Add services to a workspace
+
+1. Choose **+** in Workspaces, name the workspace and choose its project folder. Then choose **Edit workspace**.
 2. Choose **Add project…**, select a folder, and enter the command you normally use to run it. Give each service a unique name. Add an optional port, and enable Git branch information if the folder is a Git working tree.
 3. Repeat for the other projects. The editor writes ordinary TOML and lets you add dependencies, readiness checks, environment variables, and optional services.
-4. Choose **Save stack**, then **Start**. **Save & open in editor** opens the file in your default editor instead.
+4. Choose **Save workspace**, then **Start**. **Save & open in editor** opens the file in your default editor instead.
 
-The initial commented template also works on its own: its harmless `hello` service prints a readiness message and waits. Adding your first project replaces that starter service. Service IDs and file names use letters, numbers, hyphens, and underscores.
+A new workspace starts empty. Add services here, or use the Tasks and Workflows tabs for commands that finish. Service IDs and file names use letters, numbers, hyphens, and underscores.
 
 Compact cards show service state and repository branches. Expand with **⌘E** for repositories, per-service controls, logs, and recent activity. Pin with **⌘P** while watching logs. Clicking a port opens localhost in your browser. The actions menu opens project folders in Finder or VS Code, edits the definition, refreshes the shell environment, or restarts an individual service.
 
 ## Definition format
 
-One file per stack lives in `~/.config/cinderdeck/stacks/<id>.toml`. Change the folder in **Settings → History → Stacks**. Files reload shortly after saving; a running service keeps its original launch settings until restarted. Invalid definitions show an error instead of launching. Unknown keys show warnings.
+One file per stack lives in `~/.config/cinderdeck/stacks/<id>.toml`. Change the folder in **Settings → History → Workspaces**. Files reload shortly after saving; a running service keeps its original launch settings until restarted. Invalid definitions show an error instead of launching. Unknown keys show warnings.
 
 This example uses arbitrary project names. Replace the paths and commands with yours:
 
@@ -92,7 +94,7 @@ Cinderdeck captures your login/interactive shell environment, including tool pat
 
 Precedence is shell → shared environment → service environment → Keychain secrets. Cinderdeck then sets color/buffering flags and `CINDERDECK_STACK` / `CINDERDECK_SERVICE`. `DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1` is supplied unless you explicitly set it. Commands run with `shell -c` using that resolved environment; startup files are not run a second time over your overrides.
 
-**Settings → History → Stacks → Manage secrets** adds, replaces, or removes generic-password items in the Keychain service `Cinderdeck Stacks`. Missing secrets prevent startup and name the missing reference. Values are never included in Cinderdeck configuration exports or run records. As with a terminal, a service can print its own environment, so treat its output files as local development logs.
+**Settings → History → Workspaces → Manage secrets** adds, replaces, or removes generic-password items in the Keychain service `Cinderdeck Stacks`. Missing secrets prevent startup and name the missing reference. Values are never included in Cinderdeck configuration exports or run records. As with a terminal, a service can print its own environment, so treat its output files as local development logs.
 
 ## Running, stopping, and recovery
 
@@ -100,7 +102,7 @@ Precedence is shell → shared environment → service environment → Keychain 
 - Independent services start together. A dependent starts as soon as its prerequisites are ready, even if an unrelated service is still starting.
 - Stop stack uses reverse dependency order. Stop service leaves its dependents running. **Option-click Restart** also restarts dependents.
 - Occupied ports show the owner and offer **Kill & start** or **Cancel**. Cinderdeck confirms and rechecks owner identity before signaling it. Remaining listeners after Stop are shown with a Kill action.
-- **Quit** offers Stop stacks and quit, Quit and leave running, or Cancel. Remembering the choice changes Settings → History → Stacks. Under Leave, stdout/stderr remain connected to files and services continue running.
+- **Quit** offers Stop stacks and quit, Quit and leave running, or Cancel. Remembering the choice changes Settings → History → Workspaces. Under Leave, stdout/stderr remain connected to files and services continue running.
 - On relaunch, Cinderdeck matches the saved process ID, process-group ID, and kernel start time before reconnecting. Dead/reused PIDs are discarded. Even a removed or invalid definition leaves controls for stopping an already running service.
 - Crash retries stop after three attempts within a minute. Crash notifications include recent output and a **Restart** action when notifications are allowed. For a reattached process, the original exit code is unavailable because Cinderdeck is no longer its parent; an unexpected exit is treated as a failure.
 
@@ -139,7 +141,7 @@ Each service retains the latest 5,000 lines in memory. The All view interleaves 
 
 Coding agents can run and inspect stacks, so they stop spawning their own dev servers in scattered terminals. Everything goes through one local control socket owned by Cinderdeck; services an agent starts appear in the panel with a purple ✦ badge naming it.
 
-**Set up:** Stacks → ✦ (or Settings → History → Stacks → **Agent access…**). Install the CLI, then **Add** Cursor, Codex and/or Claude Code. From a terminal the same thing is:
+**Set up:** Stacks → ✦ (or Settings → History → Workspaces → **Agent access…**). Install the CLI, then **Add** Cursor, Codex and/or Claude Code. From a terminal the same thing is:
 
 ```sh
 /Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck stacks install-cli   # links ~/.local/bin/cinderdeck

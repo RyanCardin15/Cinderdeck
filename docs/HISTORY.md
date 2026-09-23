@@ -1,5 +1,7 @@
 # Capture History
 
+Workspaces now groups **Services, Tasks, Workflows, and Runs** in a dedicated window. Existing Stacks definitions and service controls remain compatible. See [WORKSPACES.md](WORKSPACES.md) for the task/workflow model, editors, lifecycle, and agent API.
+
 Persistent history of screenshots, videos, and GIFs backed by GRDB SQLite, surfaced through a floating panel (compact carousel + expanded grid) and a restore-to-Quick-Access flow that reopens captures in Annotate or Video Editor with editable sessions. Code: `Cinderdeck/Features/History/` + `Cinderdeck/Services/History/`.
 
 ## Entry Points

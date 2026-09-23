@@ -41,7 +41,7 @@ struct StackBranchPickerSheet: View {
   @State private var query = ""
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
-      Text("Switch stack to branch").font(.title2.weight(.semibold))
+      Text("Switch workspace to branch").font(.title2.weight(.semibold))
       Text("Repos that do not have the branch keep their current branch.").foregroundColor(.secondary)
       TextField("Search branches", text: $query).textFieldStyle(.roundedBorder)
       if viewModel.loadingBranches { ProgressView() }

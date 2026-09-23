@@ -4,16 +4,17 @@ import AppKit
 enum StackQuitCoordinator {
   static func shouldTerminate(_ application: NSApplication) -> NSApplication.TerminateReply {
     let supervisor = StackSupervisor.shared
-    guard supervisor.hasRunningServices else { return .terminateNow }
+    let runner = WorkspaceRunner.shared
+    guard supervisor.hasRunningServices || runner.hasActiveRuns else { return .terminateNow }
     let defaults = UserDefaults.standard
     let behavior = defaults.string(forKey: PreferencesKeys.stacksQuitBehavior) ?? "ask"
     Task {
-      var choice = behavior
-      if behavior != "stop" && behavior != "leave" {
+      var choice = runner.hasActiveRuns ? "ask" : behavior
+      if choice != "stop" && choice != "leave" {
         let alert = NSAlert()
-        alert.messageText = "Dev services are still running"
-        alert.informativeText = "Stop your stacks before quitting, or leave them running. Cinderdeck can reconnect to them next time it opens."
-        alert.addButton(withTitle: "Stop stacks and quit")
+        alert.messageText = "Development work is still running"
+        alert.informativeText = "Active tasks and workflows will be cancelled before quitting. You can stop services too, or leave services running and reconnect next time."
+        alert.addButton(withTitle: "Stop services and quit")
         alert.addButton(withTitle: "Quit and leave running")
         alert.addButton(withTitle: "Cancel")
         alert.showsSuppressionButton = true
@@ -29,12 +30,14 @@ enum StackQuitCoordinator {
         }
         if alert.suppressionButton?.state == .on { defaults.set(choice, forKey: PreferencesKeys.stacksQuitBehavior) }
       }
+      await runner.cancelAll()
+      guard !runner.hasActiveRuns else { application.reply(toApplicationShouldTerminate: false); return }
       if choice == "stop" {
         await supervisor.stopAll()
         if supervisor.hasRunningServices {
           let alert = NSAlert()
           alert.messageText = "Some services could not be stopped"
-          alert.informativeText = "Open Stacks to review the error, or choose Leave running when quitting."
+          alert.informativeText = "Open Workspaces to review the error, or choose Leave running when quitting."
           alert.runModal()
           application.reply(toApplicationShouldTerminate: false)
           return
