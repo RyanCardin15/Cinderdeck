@@ -2,7 +2,7 @@
 
 The 48-second demo shows History, workspace services and repositories, ordered Workflows, saved run results, and GitHub pull requests. The full video has an original instrumental score; every feature is also explained onscreen, so it works muted.
 
-- [Play or download the full MP4](../assets/cinderdeck-promo.mp4?raw=true)
+- [Download the full MP4](../assets/cinderdeck-promo.mp4)
 - [Animated README version](../assets/cinderdeck-promo.gif)
 - [Static poster](../assets/cinderdeck-promo-poster.png)
 - In Cinderdeck: **Settings → About → Watch demo**. Playback is offline, has native controls and Replay, and stops when the demo window closes.
@@ -42,6 +42,6 @@ npm run dev
 
 To regenerate the original instrumental score, use Python with NumPy and run `python3 promo/scripts/score.py`. The checked-in WAV allows normal builds without Python audio dependencies. All soundtrack notes are synthesized locally; there is no stock music or external audio license.
 
-The render produces a 1920×1080, 30 fps H.264/AAC MP4 with its index at the beginning for fast playback; a looping 960×540, 10 fps GIF below 10 MB; and a full-resolution PNG poster. The Xcode project includes the MP4 directly from `assets/`, so the app and README share one source file. The GIF plays inline in README renderers supporting animated images; the adjacent MP4 link provides sound and controls. [GitHub’s media documentation](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/attaching-files) lists GIF support and recommends H.264 for video compatibility.
+The render produces a 1920×1080, 30 fps H.264/AAC MP4 with its index at the beginning for fast playback; a looping 960×540, 10 fps GIF below 10 MB; and a full-resolution PNG poster. The Xcode project includes the MP4 directly from `assets/`, so the app and README share one source file. The GIF plays inline in README renderers supporting animated images; the adjacent MP4 link opens GitHub’s file page, where **Download raw file** saves the full video with sound. The app provides native playback controls. [GitHub’s media documentation](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/attaching-files) lists GIF support and recommends H.264 for video compatibility.
 
 `promo/scripts/validate.py` fully decodes both shipped formats, checks dimensions, codecs, duration, MP4 fast start, GIF loop metadata and size, and writes [`assets/cinderdeck-promo.json`](../assets/cinderdeck-promo.json) with SHA-256 checksums. It does not replace visual review: inspect the opening, each feature, both workflow states, both Git shots, transitions, and the ending at README size after changing the source.

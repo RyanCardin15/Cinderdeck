@@ -13,11 +13,11 @@
 </p>
 
 <p align="center">
-  <a href="assets/cinderdeck-promo.mp4?raw=true">
+  <a href="assets/cinderdeck-promo.mp4">
     <img src="assets/cinderdeck-promo.gif" width="960" alt="Cinderdeck demo showing History, workspace services, ordered Workflows, run results, and GitHub pull requests." />
   </a>
   <br />
-  <a href="assets/cinderdeck-promo.mp4?raw=true"><strong>▶ Watch the 48-second demo with sound</strong></a>
+  <a href="assets/cinderdeck-promo.mp4"><strong>Download the 48-second MP4 with sound</strong></a>
 </p>
 
 The demo plays inline above as an animated GIF. [Read the scene-by-scene description](docs/PROMO.md). In the app, open **Settings → About → Watch demo** for the full video.
