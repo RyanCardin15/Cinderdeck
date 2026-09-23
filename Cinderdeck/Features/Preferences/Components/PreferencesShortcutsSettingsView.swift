@@ -30,6 +30,7 @@ struct ShortcutsSettingsView: View {
   @State private var videoEditorShortcut: ShortcutConfig?
   @State private var cloudUploadsShortcut: ShortcutConfig?
   @State private var shortcutListShortcut: ShortcutConfig?
+  @State private var pullRequestsShortcut: ShortcutConfig?
   @State private var historyShortcut: ShortcutConfig?
   @State private var openEditorShortcut: ShortcutConfig?
   @State private var openEditorShortcutEnabled: Bool
@@ -89,6 +90,7 @@ struct ShortcutsSettingsView: View {
     _videoEditorShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .videoEditor))
     _cloudUploadsShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .cloudUploads))
     _shortcutListShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .shortcutList))
+    _pullRequestsShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .pullRequests))
     _historyShortcut = State(initialValue: KeyboardShortcutManager.shared.shortcut(for: .history))
     _openEditorShortcut = State(initialValue: QuickAccessManager.shared.openEditorShortcut)
     _openEditorShortcutEnabled = State(initialValue: QuickAccessManager.shared.openEditorShortcutEnabled)
@@ -567,6 +569,18 @@ struct ShortcutsSettingsView: View {
           )
 
           ShortcutRecorderView(
+            label: "Open pull requests",
+            icon: "arrow.triangle.pull",
+            description: "Open your GitHub repositories and pull requests from anywhere.",
+            shortcut: $pullRequestsShortcut,
+            defaultShortcut: .defaultPullRequests,
+            isEnabled: globalEnabledBinding(for: .pullRequests),
+            validationIssue: globalValidationIssues[.pullRequests],
+            onShortcutChanged: { handleGlobalShortcutChange($0, for: .pullRequests) }
+          )
+          .accessibilityIdentifier("shortcuts.pullRequests")
+
+          ShortcutRecorderView(
             label: L10n.Actions.showShortcutList,
             icon: "list.bullet.rectangle",
             description: L10n.PreferencesShortcuts.shortcutListDescription,
@@ -916,9 +930,10 @@ struct ShortcutsSettingsView: View {
     annotateShortcut = .defaultAnnotate
     videoEditorShortcut = .defaultVideoEditor
     cloudUploadsShortcut = .defaultCloudUploads
+    pullRequestsShortcut = .defaultPullRequests
     shortcutListShortcut = .defaultShortcutList
 
-    let toolsKinds: [GlobalShortcutKind] = [.annotate, .videoEditor, .cloudUploads, .shortcutList]
+    let toolsKinds: [GlobalShortcutKind] = [.annotate, .videoEditor, .cloudUploads, .pullRequests, .shortcutList]
     for kind in toolsKinds {
       globalShortcutEnabled[kind] = true
       manager.setShortcutEnabled(true, for: kind)
@@ -928,6 +943,7 @@ struct ShortcutsSettingsView: View {
     manager.setAnnotateShortcut(.defaultAnnotate)
     manager.setVideoEditorShortcut(.defaultVideoEditor)
     manager.setCloudUploadsShortcut(.defaultCloudUploads)
+    manager.setPullRequestsShortcut(.defaultPullRequests)
     manager.setShortcutListShortcut(.defaultShortcutList)
 
     if refresh {
@@ -1155,6 +1171,9 @@ struct ShortcutsSettingsView: View {
       case .objectCutout:
         objectCutoutShortcut = config
         manager.setObjectCutoutShortcut(config)
+      case .pullRequests:
+        pullRequestsShortcut = config
+        manager.setPullRequestsShortcut(config)
       case .history:
         historyShortcut = config
         manager.setHistoryShortcut(config)

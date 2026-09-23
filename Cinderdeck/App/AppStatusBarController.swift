@@ -688,6 +688,7 @@ final class AppStatusBarController: ObservableObject {
 
     case .pullRequests:
       let item = NSMenuItem(title: "Pull requests…", action: #selector(openPullRequestsAction), keyEquivalent: "")
+      applyConfiguredShortcut(item, for: .pullRequests, using: shortcutManager)
       item.target = self
       item.image = NSImage(systemSymbolName: "arrow.triangle.pull", accessibilityDescription: nil)
       return item

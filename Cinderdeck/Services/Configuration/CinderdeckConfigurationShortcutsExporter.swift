@@ -165,6 +165,7 @@ extension GlobalShortcutKind {
     case .smartElement: return "smart_element"
     case .objectCutout: return "object_cutout"
     case .history: return "history"
+    case .pullRequests: return "pull_requests"
     }
   }
 }

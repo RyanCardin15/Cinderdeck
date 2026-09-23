@@ -390,6 +390,8 @@ final class ScreenCaptureViewModel: ObservableObject, KeyboardShortcutDelegate {
       }
     case .openShortcutList:
       ShortcutOverlayManager.shared.toggle()
+    case .openPullRequests:
+      PullRequestsWindowController.shared.show()
     case .openHistory:
       HistoryFloatingManager.shared.toggle()
     }

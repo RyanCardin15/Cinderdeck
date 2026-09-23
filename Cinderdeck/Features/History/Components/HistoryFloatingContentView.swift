@@ -333,10 +333,28 @@ struct HistoryFloatingContentView: View {
   }
 
   private var pullRequestsButton: some View {
-    selectionPill(title: "PRs", isSelected: false, count: nil) {
+    Button {
       manager.hide()
       PullRequestsWindowController.shared.show()
-    }.accessibilityIdentifier("history.pullRequests")
+    } label: {
+      Label("PRs", systemImage: "arrow.triangle.pull")
+        .font(.system(size: 12, weight: .semibold))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(unselectedPillBackground, in: Capsule())
+        .overlay(Capsule().stroke(chromeSurfaceBorder, lineWidth: 1))
+    }
+    .buttonStyle(.plain)
+    .help(pullRequestsHelp)
+    .accessibilityLabel("Open pull requests")
+    .accessibilityIdentifier("history.pullRequests")
+  }
+
+  private var pullRequestsHelp: String {
+    let keyboard = KeyboardShortcutManager.shared
+    guard keyboard.isEnabled, keyboard.isShortcutEnabled(for: .pullRequests),
+      let shortcut = keyboard.shortcut(for: .pullRequests) else { return "Open pull requests" }
+    return "Open pull requests (\(shortcut.displayString))"
   }
 
   private var stacksFilterPill: some View {

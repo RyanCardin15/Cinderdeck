@@ -120,6 +120,12 @@ struct ShortcutConfig: Equatable, Codable {
     modifiers: UInt32(cmdKey | shiftKey)
   )
 
+  /// Cmd + Shift + P
+  static let defaultPullRequests = ShortcutConfig(
+    keyCode: UInt32(kVK_ANSI_P),
+    modifiers: UInt32(cmdKey | shiftKey)
+  )
+
   var displayString: String {
     var parts: [String] = []
 
@@ -489,6 +495,7 @@ enum GlobalShortcutKind: String, CaseIterable, Codable {
   case smartElement
   case objectCutout
   case history
+  case pullRequests
 
   var isSystemConflictRelevant: Bool {
     switch self {
@@ -539,6 +546,8 @@ extension GlobalShortcutKind {
       return L10n.Actions.captureSmartElement
     case .objectCutout:
       return L10n.Actions.captureSubject
+    case .pullRequests:
+      return "Open pull requests"
     case .history:
       return L10n.Actions.openHistory
     }
@@ -568,6 +577,7 @@ enum ShortcutAction {
   case openCloudUploads
   case openShortcutList
   case openHistory
+  case openPullRequests
 }
 
 /// Protocol for handling shortcut events
@@ -602,6 +612,7 @@ final class KeyboardShortcutManager {
   private(set) var smartElementShortcut: ShortcutConfig
   private(set) var objectCutoutShortcut: ShortcutConfig
   private(set) var historyShortcut: ShortcutConfig
+  private(set) var pullRequestsShortcut: ShortcutConfig
   private(set) var activeWindowShortcut: ShortcutConfig
   private(set) var togglePenRecordingShortcut: ShortcutConfig
   private(set) var restartRecordingShortcut: ShortcutConfig
@@ -662,6 +673,7 @@ final class KeyboardShortcutManager {
   private var smartElementHotkeyRef: EventHotKeyRef?
   private var objectCutoutHotkeyRef: EventHotKeyRef?
   private var historyHotkeyRef: EventHotKeyRef?
+  private var pullRequestsHotkeyRef: EventHotKeyRef?
   private var activeWindowHotkeyRef: EventHotKeyRef?
   private var togglePenRecordingHotkeyRef: EventHotKeyRef?
   private var restartRecordingHotkeyRef: EventHotKeyRef?
@@ -695,6 +707,7 @@ final class KeyboardShortcutManager {
   private let restartRecordingHotkeyID = EventHotKeyID(signature: OSType(0x5A53_464A), id: 19)    // "ZSFJ"
   private let deleteRecordingHotkeyID = EventHotKeyID(signature: OSType(0x5A53_464B), id: 20)     // "ZSFK"
   private let repeatAreaHotkeyID = EventHotKeyID(signature: OSType(0x5A53_464C), id: 21)         // "ZSFL"
+  private let pullRequestsHotkeyID = EventHotKeyID(signature: OSType(0x5A53_464D), id: 22)  // "ZSFM"
 
   private var eventHandler: EventHandlerRef?
 
@@ -714,6 +727,7 @@ final class KeyboardShortcutManager {
   private let smartElementShortcutKey = PreferencesKeys.smartElementShortcut
   private let objectCutoutShortcutKey = "objectCutoutShortcut"
   private let historyShortcutKey = "historyShortcut"
+  private let pullRequestsShortcutKey = "pullRequestsShortcut"
   private let activeWindowShortcutKey = "activeWindowShortcut"
   private let togglePenRecordingShortcutKey = "togglePenRecordingShortcut"
   private let restartRecordingShortcutKey = "restartRecordingShortcut"
@@ -738,6 +752,7 @@ final class KeyboardShortcutManager {
     smartElementShortcut = .defaultSmartElement
     objectCutoutShortcut = .defaultObjectCutout
     historyShortcut = .defaultHistory
+    pullRequestsShortcut = .defaultPullRequests
     activeWindowShortcut = .defaultActiveWindowCapture
     togglePenRecordingShortcut = ShortcutConfig(keyCode: 0, modifiers: 0)
     restartRecordingShortcut = ShortcutConfig(keyCode: 0, modifiers: 0)
@@ -860,6 +875,7 @@ final class KeyboardShortcutManager {
     case .smartElement: return smartElementShortcut
     case .objectCutout: return objectCutoutShortcut
     case .history: return historyShortcut
+    case .pullRequests: return pullRequestsShortcut
     }
   }
 
@@ -1088,6 +1104,17 @@ final class KeyboardShortcutManager {
     }
   }
 
+  /// Update the pull requests shortcut
+  func setPullRequestsShortcut(_ config: ShortcutConfig?) {
+    mutateShortcutRegistration {
+      setShortcut(config, for: .pullRequests) {
+        pullRequestsShortcut = $0
+      }
+      saveShortcuts()
+      saveClearedShortcuts()
+    }
+  }
+
   private func setShortcut(
     _ config: ShortcutConfig?,
     for kind: GlobalShortcutKind,
@@ -1169,6 +1196,9 @@ final class KeyboardShortcutManager {
     }
     if let historyData = try? encoder.encode(historyShortcut) {
       UserDefaults.standard.set(historyData, forKey: historyShortcutKey)
+    }
+    if let pullRequestsData = try? encoder.encode(pullRequestsShortcut) {
+      UserDefaults.standard.set(pullRequestsData, forKey: pullRequestsShortcutKey)
     }
   }
 
@@ -1263,6 +1293,11 @@ final class KeyboardShortcutManager {
       let config = try? decoder.decode(ShortcutConfig.self, from: historyData)
     {
       historyShortcut = config
+    }
+    if let pullRequestsData = UserDefaults.standard.data(forKey: pullRequestsShortcutKey),
+      let config = try? decoder.decode(ShortcutConfig.self, from: pullRequestsData)
+    {
+      pullRequestsShortcut = config
     }
     if let activeWindowData = UserDefaults.standard.data(forKey: activeWindowShortcutKey),
       let config = try? decoder.decode(ShortcutConfig.self, from: activeWindowData)
@@ -1439,6 +1474,9 @@ final class KeyboardShortcutManager {
     case historyHotkeyID.id:
       actionName = "history"
       action = .openHistory
+    case pullRequestsHotkeyID.id:
+      actionName = "pullRequests"
+      action = .openPullRequests
     default:
       return
     }
@@ -1583,6 +1621,12 @@ final class KeyboardShortcutManager {
       config: shortcut(for: .history),
       hotkeyID: historyHotkeyID,
       ref: &historyHotkeyRef
+    )
+    registerShortcutIfNeeded(
+      kind: .pullRequests,
+      config: shortcut(for: .pullRequests),
+      hotkeyID: pullRequestsHotkeyID,
+      ref: &pullRequestsHotkeyRef
     )
 
     logRegistrationAudit()
@@ -1844,6 +1888,10 @@ final class KeyboardShortcutManager {
     if let ref = historyHotkeyRef {
       UnregisterEventHotKey(ref)
       historyHotkeyRef = nil
+    }
+    if let ref = pullRequestsHotkeyRef {
+      UnregisterEventHotKey(ref)
+      pullRequestsHotkeyRef = nil
     }
   }
 
