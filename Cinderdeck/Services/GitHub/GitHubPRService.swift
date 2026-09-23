@@ -25,14 +25,7 @@ final class GitHubPRService: GitHubPRServing {
   init(transport: Transport? = nil) { self.transport = transport ?? Self.execute }
 
   private static func execute(_ args: [String], payload: Data?) async throws -> Data {
-    var environment = try await ShellEnvironmentResolver.shared.resolve()
-    environment["GH_PROMPT_DISABLED"] = "1"
-    environment["GH_PAGER"] = "cat"
-    environment["GH_DEBUG"] = nil
-    let paths = (environment["PATH"] ?? "").split(separator: ":").map(String.init) + ["/opt/homebrew/bin", "/usr/local/bin"]
-    guard let executable = paths.map({ $0 + "/gh" }).first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
-      throw GitHubPRError.message("Install GitHub CLI from cli.github.com, then sign in with gh auth login. Cinderdeck uses that connection.")
-    }
+    let configuration = try await GitHubCLI.configuration()
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent("cinderdeck-github-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -43,7 +36,7 @@ final class GitHubPRService: GitHubPRServing {
       try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
       arguments += ["--input", file.path]
     }
-    let result = try await StackCommandRunner.run(executable, arguments, directory: directory, environment: environment, timeout: 45)
+    let result = try await StackCommandRunner.run(configuration.executable, arguments, directory: directory, environment: configuration.environment, timeout: 45)
     guard result.status == 0 else {
       // gh can return a structured GraphQL error in stdout even on failure.
       if let envelope = try? JSONDecoder().decode(GitHubErrorEnvelope.self, from: result.output),

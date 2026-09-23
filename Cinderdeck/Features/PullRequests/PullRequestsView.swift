@@ -32,6 +32,16 @@ struct PullRequestsView: View {
     .background(Color(nsColor: .windowBackgroundColor))
     .preferredColorScheme(theme.systemAppearance)
     .task { if model.login == nil { await model.connect() } }
+    .onReceive(NotificationCenter.default.publisher(for: .githubAccountChanged)) { notification in
+      guard notification.userInfo?["force"] as? Bool == true ||
+        (notification.userInfo?["login"] as? String) != (model.login ?? "") else { return }
+      Task {
+        while model.connecting || model.submitting || !model.starring.isEmpty {
+          do { try await Task.sleep(nanoseconds: 100_000_000) } catch { return }
+        }
+        await model.connect()
+      }
+    }
     .onChange(of: model.filters) { _ in model.scheduleSearch() }
     .sheet(item: $viewEditor) { context in PRSavedViewEditor(model: model, context: context) }
     .frame(minWidth: 1000, minHeight: 600)
@@ -89,6 +99,8 @@ struct PullRequestsView: View {
           Text("github.com").font(.system(size: 10)).foregroundStyle(.secondary)
         }
         Spacer(minLength: 2)
+        Button { PreferencesWindowController.shared.show(tab: .github) } label: { Image(systemName: "gearshape") }
+          .buttonStyle(.plain).help("GitHub preferences").accessibilityLabel("GitHub preferences")
         Button { Task { await model.connect() } } label: { Image(systemName: "arrow.triangle.2.circlepath") }
           .buttonStyle(.plain).disabled(model.connecting || model.submitting || !model.starring.isEmpty)
           .help("Reload repositories and reconnect to the active GitHub CLI account").accessibilityLabel("Reconnect GitHub")
@@ -251,15 +263,10 @@ struct PullRequestsView: View {
       if model.connecting { ProgressView().controlSize(.small) }
       else {
         if let error = model.error { Text(error).font(.callout).foregroundStyle(.orange).textSelection(.enabled).frame(maxWidth: 460) }
-        Text("Sign in with GitHub CLI, then connect here.").font(.callout)
-        HStack {
-          Text("gh auth login --hostname github.com").font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
-          Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString("gh auth login --hostname github.com", forType: .string) }
-        }.padding(12).background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
-        HStack {
-          Button("Get GitHub CLI") { PROpenURL.open("https://cli.github.com") }.buttonStyle(.bordered)
-          Button("Connect GitHub") { Task { await model.connect() } }.buttonStyle(.borderedProminent)
-        }
+        Text("Connect your account in Preferences → GitHub.").font(.callout)
+        Button("Open GitHub preferences") { PreferencesWindowController.shared.show(tab: .github) }
+          .buttonStyle(.borderedProminent)
+
       }
     }.padding(30).frame(maxWidth: .infinity, maxHeight: .infinity)
   }

@@ -105,6 +105,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     #if DEBUG
+    if CommandLine.arguments.contains("--github-preferences-preview") {
+      PreferencesWindowController.shared.show(tab: .github)
+      didFinishLaunching = true
+      return
+    }
     if CommandLine.arguments.contains("--pull-requests-preview") {
       NSApp.setActivationPolicy(.regular)
       PullRequestsWindowController.shared.show()
@@ -136,6 +141,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   func applicationWillTerminate(_ notification: Notification) {
+    GitHubAccountViewModel.shared.cancel()
     NSAppleEventManager.shared().removeEventHandler(
       forEventClass: AEEventClass(kInternetEventClass),
       andEventID: AEEventID(kAEGetURL)

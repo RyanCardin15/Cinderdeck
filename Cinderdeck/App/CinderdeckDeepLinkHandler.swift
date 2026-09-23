@@ -250,6 +250,8 @@ enum CinderdeckDeepLinkAction: Equatable {
       return .shortcuts
     case "permissions", "privacy":
       return .permissions
+    case "github", "git":
+      return .github
     case "cloud", "uploads":
       return .cloud
     case "advanced", "configuration", "config", "toml":
