@@ -8,6 +8,7 @@ struct PullRequestsView: View {
   @State private var showsAgentAccess = false
   @State private var showsFilters = true
   @State private var showsSidebar = true
+  @AppStorage("pullRequests.otherRepositoriesExpanded") private var showsOtherRepositories = true
 
   var body: some View {
     HSplitView {
@@ -113,17 +114,29 @@ struct PullRequestsView: View {
         }.padding(.horizontal, 14).padding(.bottom, 8)
       }
       ScrollView {
-        LazyVStack(spacing: 3) {
-          ForEach(model.repositoryGroups) { group in
-            if model.filters.organization == nil {
-              HStack {
-                Text(group.owner == model.login ? "Personal · \(group.owner)" : group.owner)
-                  .font(.system(size: 10, weight: .semibold)).lineLimit(1).truncationMode(.middle)
-                Spacer(minLength: 4)
-                Text("\(group.repositories.count)").font(.system(size: 10).monospacedDigit())
-              }.foregroundStyle(.secondary).padding(.horizontal, 8).padding(.top, 10).padding(.bottom, 3)
+        LazyVStack(alignment: .leading, spacing: 3) {
+          let favorites = repositoryGroups(starred: true)
+          let others = repositoryGroups(starred: false)
+          if !favorites.isEmpty {
+            repositorySectionLabel("Favorites", groups: favorites)
+              .padding(.horizontal, 8).padding(.top, 4).padding(.bottom, 3)
+            repositoryRows(favorites)
+          }
+          if !others.isEmpty {
+            if model.repositorySearch.isEmpty {
+              DisclosureGroup(isExpanded: $showsOtherRepositories) {
+                repositoryRows(others)
+              } label: {
+                repositorySectionLabel("Other repositories", groups: others)
+              }
+              .accessibilityIdentifier("prs.otherRepositories")
+              .padding(.top, favorites.isEmpty ? 4 : 12)
+            } else {
+              // Searching reveals every match without changing the saved fold.
+              repositorySectionLabel("Other repositories", groups: others)
+                .padding(.horizontal, 8).padding(.top, favorites.isEmpty ? 4 : 12).padding(.bottom, 3)
+              repositoryRows(others)
             }
-            ForEach(group.repositories) { repository in repositoryRow(repository) }
           }
           if model.visibleRepositories.isEmpty && !model.connecting && !(model.loadingRepositories || model.loadingSelectedOrganization) {
             Text(model.starredOnly ? "Star repositories to keep them here." : "No repositories found.")
@@ -149,6 +162,35 @@ struct PullRequestsView: View {
           .help("Reload repositories and reconnect to the active GitHub CLI account").accessibilityLabel("Reconnect GitHub")
       }.padding(16)
     }.background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+  }
+
+  private func repositoryGroups(starred: Bool) -> [PullRequestsViewModel.RepositoryGroup] {
+    model.repositoryGroups.compactMap { group in
+      let repositories = group.repositories.filter { $0.viewerHasStarred == starred }
+      return repositories.isEmpty ? nil : .init(owner: group.owner, repositories: repositories)
+    }
+  }
+
+  private func repositorySectionLabel(_ title: String, groups: [PullRequestsViewModel.RepositoryGroup]) -> some View {
+    HStack(spacing: 4) {
+      Text(title).fontWeight(.semibold).lineLimit(1)
+      Spacer(minLength: 0)
+      Text("\(groups.reduce(0) { $0 + $1.repositories.count })").monospacedDigit()
+    }.font(.system(size: 11)).foregroundStyle(.secondary)
+  }
+
+  private func repositoryRows(_ groups: [PullRequestsViewModel.RepositoryGroup]) -> some View {
+    ForEach(groups) { group in
+      if model.filters.organization == nil {
+        HStack {
+          Text(group.owner == model.login ? "Personal · \(group.owner)" : group.owner)
+            .font(.system(size: 10, weight: .semibold)).lineLimit(1).truncationMode(.middle)
+          Spacer(minLength: 4)
+          Text("\(group.repositories.count)").font(.system(size: 10).monospacedDigit())
+        }.foregroundStyle(.secondary).padding(.horizontal, 8).padding(.top, 10).padding(.bottom, 3)
+      }
+      ForEach(group.repositories) { repository in repositoryRow(repository) }
+    }
   }
 
   private func repositoryRow(_ repository: GitHubRepository) -> some View {
