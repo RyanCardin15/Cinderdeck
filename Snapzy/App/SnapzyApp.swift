@@ -105,6 +105,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       return
     }
 
+    #if DEBUG
+    if StackPreviewHarness.startIfRequested() { didFinishLaunching = true; return }
+    #endif
+
     AppIdentityManager.shared.refresh()
 
     guard ensureSandboxOffDataMigrationReadyForLaunch() else {
@@ -132,6 +136,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       andEventID: AEEventID(kAEGetURL)
     )
     coordinator?.applicationWillTerminate()
+  }
+
+  func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+    guard didFinishLaunching else { return .terminateNow }
+    return StackQuitCoordinator.shouldTerminate(sender)
   }
 
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

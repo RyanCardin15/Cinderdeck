@@ -70,6 +70,7 @@ final class AppCoordinator {
     RecordingMetadataCleanupScheduler.shared.start()
     CaptureHistoryRetentionService.shared.start()
     ClipboardTextHistoryStore.shared.start()
+    Task { await StackSupervisor.shared.bootstrap() }
     DiagnosticLogger.shared.log(.debug, .lifecycle, "Background schedulers started")
 
     AppStatusBarController.shared.setup(

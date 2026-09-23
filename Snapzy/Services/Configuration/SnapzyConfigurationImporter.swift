@@ -77,6 +77,7 @@ enum SnapzyConfigurationImporter {
     collectRecording(&reader, defaults: defaults, mutations: &mutations)
     collectQuickAccess(&reader, defaults: defaults, mutations: &mutations)
     collectHistory(&reader, defaults: defaults, mutations: &mutations)
+    StackConfiguration.collect(&reader, defaults: defaults, mutations: &mutations)
     collectCloud(&reader, defaults: defaults, mutations: &mutations)
     collectAnnotate(&reader, defaults: defaults, mutations: &mutations)
     collectShortcuts(&reader, mutations: &mutations)

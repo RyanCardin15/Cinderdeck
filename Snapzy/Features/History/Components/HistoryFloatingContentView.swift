@@ -16,7 +16,8 @@ struct HistoryFloatingContentView: View {
   @Environment(\.colorScheme) private var colorScheme
 
   @State private var selectedCompactFilter: CaptureHistoryType? = nil
-  @AppStorage(PreferencesKeys.historyClipboardTextSelected) private var showsClipboardText = false
+  @AppStorage(PreferencesKeys.stacksEnabled) private var stacksEnabled = true
+  @StateObject private var stacksViewModel = StacksViewModel()
   @State private var selectedClipboardID: UUID?
   @State private var usesExplicitCompactFilterSelection = false
   @State private var selectedId: UUID? = nil
@@ -101,8 +102,12 @@ struct HistoryFloatingContentView: View {
       .frame(width: scaledPanelSize.width, height: scaledPanelSize.height)
       .preferredColorScheme(themeManager.systemAppearance)
       .onAppear {
+        if !stacksEnabled && manager.selectedSection == .stacks { manager.selectedSection = .captures }
         syncSelectionIfNeeded()
         syncExpandedGridPresentation(for: manager.presentationMode)
+      }
+      .onChange(of: stacksEnabled) { enabled in
+        if !enabled && manager.selectedSection == .stacks { manager.selectedSection = .captures }
       }
       .onDisappear {
         expandedGridWarmupTask?.cancel()
@@ -122,22 +127,22 @@ struct HistoryFloatingContentView: View {
         syncExpandedGridPresentation(for: manager.presentationMode)
       }
       .onReceive(NotificationCenter.default.publisher(for: .historyCopySelection)) { notification in
-        guard !showsClipboardText else { return }
+        guard manager.selectedSection == .captures else { return }
         guard notification.object is HistoryFloatingPanel else { return }
         copySelectedRecord()
       }
       .onReceive(NotificationCenter.default.publisher(for: .historyActivateSelection)) { notification in
-        guard !showsClipboardText else { return }
+        guard manager.selectedSection == .captures else { return }
         guard notification.object is HistoryFloatingPanel else { return }
         openSelectedRecord()
       }
       .onReceive(NotificationCenter.default.publisher(for: .historyDeleteSelection)) { notification in
-        guard !showsClipboardText else { return }
+        guard manager.selectedSection == .captures else { return }
         guard notification.object is HistoryFloatingPanel else { return }
         deleteSelectedRecords()
       }
       .onReceive(NotificationCenter.default.publisher(for: .historySelectAll)) { notification in
-        guard !showsClipboardText else { return }
+        guard manager.selectedSection == .captures else { return }
         guard notification.object is HistoryFloatingPanel else { return }
         guard manager.presentationMode == .expanded else { return }
         selectAllExpandedRecords()
@@ -178,7 +183,9 @@ struct HistoryFloatingContentView: View {
     VStack(spacing: 18) {
       compactHeader
 
-      if showsClipboardText {
+      if manager.selectedSection == .stacks && stacksEnabled {
+        StacksTabView(viewModel: stacksViewModel, manager: manager)
+      } else if manager.selectedSection == .clipboard {
         clipboardContent
       } else if compactRecords.isEmpty {
         compactEmptyState
@@ -226,15 +233,16 @@ struct HistoryFloatingContentView: View {
       ForEach(Array(captureTypeFilters.enumerated()), id: \.offset) { _, filter in
         selectionPill(
           title: filter.title,
-          isSelected: !showsClipboardText && filter.type == effectiveCompactFilter,
+          isSelected: manager.selectedSection == .captures && filter.type == effectiveCompactFilter,
           count: nil,
           action: {
-            showsClipboardText = false
+            manager.selectedSection = .captures
             selectCompactFilter(filter.type)
           }
         )
       }
       clipboardFilterPill
+      if stacksEnabled { stacksFilterPill }
     }
   }
 
@@ -270,7 +278,9 @@ struct HistoryFloatingContentView: View {
       VStack(spacing: 18) {
         expandedHeader
 
-        if showsClipboardText {
+        if manager.selectedSection == .stacks && stacksEnabled {
+          StacksTabView(viewModel: stacksViewModel, manager: manager)
+        } else if manager.selectedSection == .clipboard {
           clipboardContent
         } else if expandedRecords.isEmpty {
           expandedEmptyState
@@ -281,7 +291,7 @@ struct HistoryFloatingContentView: View {
         }
       }
 
-      if !showsClipboardText && !expandedSelectedRecords.isEmpty {
+      if manager.selectedSection == .captures && !expandedSelectedRecords.isEmpty {
         expandedSelectionBar
       }
     }
@@ -300,7 +310,7 @@ struct HistoryFloatingContentView: View {
       HStack {
         expandedSearchBar
         Spacer()
-        expandedTimeFilters
+        if manager.selectedSection != .stacks { expandedTimeFilters }
       }
     }
   }
@@ -310,12 +320,21 @@ struct HistoryFloatingContentView: View {
   }
 
   private var clipboardFilterPill: some View {
-    selectionPill(title: "Clipboard text", isSelected: showsClipboardText, count: nil) {
-      showsClipboardText = true
+    selectionPill(title: "Clipboard text", isSelected: manager.selectedSection == .clipboard, count: nil) {
+      manager.selectedSection = .clipboard
       manager.searchText = ""
       manager.focusPanel()
     }
     .accessibilityIdentifier("history.clipboardTextTab")
+  }
+
+  private var stacksFilterPill: some View {
+    selectionPill(title: "Stacks", isSelected: manager.selectedSection == .stacks,
+      count: stacksViewModel.runningCount > 0 ? stacksViewModel.runningCount : nil) {
+        manager.selectedSection = .stacks
+        manager.focusPanel()
+      }
+      .accessibilityIdentifier("history.stacksTab")
   }
 
   private var expandedTypeFilters: some View {
@@ -323,7 +342,7 @@ struct HistoryFloatingContentView: View {
       ForEach(Array(captureTypeFilters.enumerated()), id: \.offset) { _, filter in
         selectionPill(
           title: filter.title,
-          isSelected: !showsClipboardText && manager.expandedFilter == filter.type,
+          isSelected: manager.selectedSection == .captures && manager.expandedFilter == filter.type,
           count: nil,
           horizontalPadding: 12,
           verticalPadding: 8,
@@ -331,13 +350,14 @@ struct HistoryFloatingContentView: View {
           minWidth: expandedTypeFilterMinWidth(for: filter.type),
           action: {
             withAnimation(.spring(response: 0.24, dampingFraction: 0.9)) {
-              showsClipboardText = false
+              manager.selectedSection = .captures
               manager.expandedFilter = filter.type
             }
           }
         )
       }
       clipboardFilterPill
+      if stacksEnabled { stacksFilterPill }
     }
   }
 
@@ -347,7 +367,7 @@ struct HistoryFloatingContentView: View {
         .font(.system(size: 12, weight: .semibold))
         .foregroundColor(.secondary.opacity(0.9))
 
-      TextField(showsClipboardText ? "Search clipboard text" : "Search captures", text: $manager.searchText)
+      TextField(manager.selectedSection == .stacks && stacksViewModel.logFocused ? "Filter logs…" : manager.selectedSection.searchPrompt, text: $manager.searchText)
         .textFieldStyle(.plain)
         .font(.system(size: 12, weight: .medium))
 

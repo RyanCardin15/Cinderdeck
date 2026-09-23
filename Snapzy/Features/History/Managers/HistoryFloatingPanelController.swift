@@ -95,6 +95,8 @@ final class HistoryFloatingPanelController {
     panel.makeKeyAndOrderFront(nil)
   }
 
+  var isKeyWindow: Bool { panel?.isKeyWindow == true }
+
   func updatePinnedState(_ isPinned: Bool) {
     panel?.updateWindowLevel(isPinned: isPinned)
   }
