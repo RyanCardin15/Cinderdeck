@@ -414,6 +414,8 @@ private extension KeyboardShortcutManager {
       setObjectCutoutShortcut(config)
     case .history:
       setHistoryShortcut(config)
+    case .pullRequests:
+      setPullRequestsShortcut(config)
     }
   }
 }

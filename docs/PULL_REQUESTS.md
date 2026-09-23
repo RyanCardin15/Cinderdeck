@@ -1,6 +1,8 @@
 # Pull requests
 
-Open **PRs** from the floating workspace or **Pull requests…** from Cinderdeck's menu bar menu. The resizable window keeps repositories, PR lists, and review details together. Launchers can also open `cinderdeck://prs`.
+Open the **PRs** icon in History (compact or expanded), press **⌘⇧P**, or choose **Pull requests…** from Cinderdeck's menu bar menu. The resizable window keeps repositories, PR lists, and review details together. Launchers can also open `cinderdeck://prs`.
+
+Change or disable the global shortcut under **Preferences → Shortcuts → Tools → Open pull requests**. The menu item and shortcut list use your configured binding. The app must be running with global shortcuts enabled.
 
 ## Connect
 

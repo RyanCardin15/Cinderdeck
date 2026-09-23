@@ -291,6 +291,7 @@ enum CinderdeckConfigurationDefaultDocument {
     case .smartElement: return nil
     case .objectCutout: return .defaultObjectCutout
     case .history: return .defaultHistory
+    case .pullRequests: return .defaultPullRequests
     }
   }
 
