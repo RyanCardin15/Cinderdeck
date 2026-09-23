@@ -90,6 +90,8 @@ struct CinderdeckDeepLinkHandler {
       if CloudUploadHistoryWindowController.shared.toggleWindow() {
         NSApp.activate(ignoringOtherApps: true)
       }
+    case .pullRequests:
+      PullRequestsWindowController.shared.show()
     case .openHistory:
       HistoryFloatingManager.shared.toggle()
     case .showShortcuts:
@@ -118,6 +120,7 @@ enum CinderdeckDeepLinkAction: Equatable {
   case openVideoEditor
   case openCloudUploads
   case openHistory
+  case pullRequests
   case showShortcuts
   case openSettings(PreferencesTab?)
 
@@ -132,6 +135,8 @@ enum CinderdeckDeepLinkAction: Equatable {
     let command = parts.joined(separator: "/")
 
     switch command {
+    case "prs", "pull-requests":
+      self = .pullRequests
     case "capture/fullscreen", "capture-screen", "capture-fullscreen", "fullscreen", "screenshot/fullscreen":
       self = .captureFullscreen
     case "capture/area", "capture-area", "area", "screenshot/area":
@@ -198,6 +203,7 @@ enum CinderdeckDeepLinkAction: Equatable {
     case .openCombine(let fileURLs): return "openCombine(\(fileURLs.count))"
     case .openVideoEditor: return "openVideoEditor"
     case .openCloudUploads: return "openCloudUploads"
+    case .pullRequests: return "pullRequests"
     case .openHistory: return "openHistory"
     case .showShortcuts: return "showShortcuts"
     case .openSettings(let tab): return "openSettings(\(String(describing: tab)))"

@@ -245,6 +245,7 @@ struct HistoryFloatingContentView: View {
       }
       clipboardFilterPill
       if stacksEnabled { stacksFilterPill }
+      pullRequestsButton
     }
   }
 
@@ -331,6 +332,13 @@ struct HistoryFloatingContentView: View {
     .accessibilityIdentifier("history.clipboardTextTab")
   }
 
+  private var pullRequestsButton: some View {
+    selectionPill(title: "PRs", isSelected: false, count: nil) {
+      manager.hide()
+      PullRequestsWindowController.shared.show()
+    }.accessibilityIdentifier("history.pullRequests")
+  }
+
   private var stacksFilterPill: some View {
     selectionPill(title: "Stacks", isSelected: manager.selectedSection == .stacks,
       count: stacksViewModel.runningCount > 0 ? stacksViewModel.runningCount : nil) {
@@ -361,6 +369,7 @@ struct HistoryFloatingContentView: View {
       }
       clipboardFilterPill
       if stacksEnabled { stacksFilterPill }
+      pullRequestsButton
     }
   }
 
