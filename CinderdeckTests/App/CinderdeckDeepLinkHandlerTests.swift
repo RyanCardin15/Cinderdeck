@@ -122,6 +122,8 @@ final class CinderdeckDeepLinkHandlerTests: XCTestCase {
       ("shortcuts", .shortcuts),
       ("permissions", .permissions),
       ("cloud", .cloud),
+      ("github", .github),
+      ("git", .github),
       ("advanced", .advanced),
       ("about", .about),
     ]

@@ -4,7 +4,11 @@ Open **PRs** from the floating workspace or **Pull requests…** from Cinderdeck
 
 ## Connect
 
-Cinderdeck uses the active **github.com** account in [GitHub CLI](https://cli.github.com). Install the CLI and run `gh auth login --hostname github.com` once if needed, then choose **Connect GitHub**. Cinderdeck never reads or stores the token. The reconnect button in the repository sidebar reloads repositories and picks up account changes.
+Open **Preferences → GitHub** (or the gear beside your account in the PR workspace). The tab shows your verified account and connection status. Choose **Sign in with GitHub**, then **Copy code and open GitHub** to finish authorization in your browser. The tab updates automatically and refreshes the PR workspace after sign-in. You can cancel a pending sign-in, check the connection, or connect another account. Launchers can open `cinderdeck://settings/github`.
+
+Cinderdeck uses the active **github.com** account in [GitHub CLI](https://cli.github.com). If it is missing, Preferences links to its installer. GitHub CLI handles authentication and credential storage; Cinderdeck never reads or stores its token. Signing in also changes the active account for other tools that use GitHub CLI. The flow preserves your configured Git protocol and does not upload SSH keys. An environment-token override is shown as managed by the environment instead of being silently replaced.
+
+One-time codes stay in memory and are cleared on completion, cancellation, or error. Pending sign-in expires after 15 minutes and is cancelled when the app quits. Failed authentication is not automatically retried. The reconnect button in the repository sidebar reloads repositories and picks up external account changes.
 
 The sidebar lists the repositories you own, collaborate on, or can access through an organization. Repository pages load automatically. The star beside a repository adds or removes your **GitHub star**; starred repositories sort first. The star above the repository list switches to starred repositories only. Stars are updated only after GitHub confirms the change.
 
