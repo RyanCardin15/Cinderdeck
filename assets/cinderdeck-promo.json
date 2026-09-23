@@ -1,0 +1,21 @@
+{
+  "duration_seconds": 48,
+  "native_ui": "SwiftUI/AppKit renders from PromoSnapshotTests",
+  "sample_data": true,
+  "files": {
+    "cinderdeck-promo.mp4": {
+      "bytes": 4473157,
+      "sha256": "cb7883ece3f4f36fd7ff762b32927a8c4a9a1d7504ece69bebd81738c1eabb97",
+      "width": 1920,
+      "height": 1080,
+      "codec": "h264"
+    },
+    "cinderdeck-promo.gif": {
+      "bytes": 5238861,
+      "sha256": "dea28d8997946075fe94eade5651d69f4dd9a218a0d110d35aca04f0d17788b2",
+      "width": 960,
+      "height": 540,
+      "codec": "gif"
+    }
+  }
+}
