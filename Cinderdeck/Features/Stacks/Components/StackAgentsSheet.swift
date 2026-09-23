@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Connects coding agents (Cursor, Codex, Claude Code, any shell) to Stacks.
+/// Connects coding agents (Cursor, Codex, Claude Code, any shell) to stacks and PR views.
 struct StackAgentsSheet: View {
   @Environment(\.dismiss) private var dismiss
   @ObservedObject private var control = StackControlService.shared
@@ -22,7 +22,7 @@ struct StackAgentsSheet: View {
         }
         VStack(alignment: .leading, spacing: 3) {
           Text("Agent access").font(.title2.weight(.semibold))
-          Text("Let Cursor, Codex, Claude Code or any shell start, stop and inspect stacks. Services they start are labeled with their name, and agents can claim a stack while they use it.")
+          Text("Let Cursor, Codex, Claude Code or any shell manage stacks and configure Pull Request tabs. Saved views update in the PR window immediately; services started by agents are labeled with their name.")
             .font(.callout).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
         }
       }
@@ -34,7 +34,7 @@ struct StackAgentsSheet: View {
           Spacer()
           Text(StackControlPaths.socket.path).font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary).textSelection(.enabled).lineLimit(1).truncationMode(.head)
         }
-        Text("Live state for agents that just read files: \(StackControlPaths.state.path)")
+        Text("Live stack state for agents that just read files: \(StackControlPaths.state.path)")
           .font(.system(size: 10.5)).foregroundColor(.secondary).textSelection(.enabled)
       }
 
@@ -48,7 +48,7 @@ struct StackAgentsSheet: View {
             catch { self.error = error.localizedDescription }
           }.buttonStyle(StackPillButtonStyle(compact: true))
         }
-        Text("Try: cinderdeck stacks status · cinderdeck stacks start <stack> · cinderdeck stacks ports · cinderdeck stacks logs <stack> -f")
+        Text("Try: cinderdeck prs views list · cinderdeck prs --help · cinderdeck stacks status")
           .font(.system(size: 10.5, design: .monospaced)).foregroundColor(.secondary).textSelection(.enabled)
       }
 

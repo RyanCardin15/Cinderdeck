@@ -23,7 +23,36 @@ nonisolated enum StackMCPServer {
   private static let stack = property("string", "Stack id or name (see list_stacks)")
   private static let force = property("boolean", "Override another agent's claim. Only with the user's approval.")
 
+  private static let prAccount = property("string", "Account returned by list_pr_views; must still be the active GitHub account")
+  private static let prID = property("string", "Exact view id from list_pr_views, or a new stable id (letters, numbers, hyphens, underscores)")
+  private static let prFilters: JSONValue = .object([
+    "type": .string("object"), "additionalProperties": .bool(false),
+    "description": .string("Partial filter update. Omitted fields are preserved; new views default to open, anyone, updated, My work."),
+    "properties": .object([
+      "repository": .object(["type": .array([.string("string"), .string("null")]), "description": .string("owner/name, or null for My work (involves the account by default)")]),
+      "state": property("string", "Ignored in advanced mode; closed means unmerged", values: PRViewAPI.states.keys.sorted()),
+      "role": property("string", "Personal scope; applies in both simple and advanced mode", values: PRViewAPI.roles.keys.sorted()),
+      "sort": property("string", "Result ordering", values: PRViewAPI.sorts.keys.sorted()),
+      "text": property("string", "Simple search text, or GitHub qualifiers when advanced=true. @me resolves to the account in query mode."),
+      "label": property("string", "Simple-mode label; empty string clears"),
+      "advanced": property("boolean", "Use text as a GitHub query instead of simple state/label/text. Repository and role scope still apply."),
+    ]),
+  ])
+
   private static let tools: [Tool] = [
+    Tool(name: "list_pr_views", description: "List local Pull Request tabs, their filters and generated queries, active selection, and current GitHub account. Use before configuring PR views.",
+      properties: [:], required: [], readOnly: true),
+    Tool(name: "upsert_pr_view", description: "Create or patch a custom Pull Request tab by stable id, without duplicates. Name is required on creation. Omitted fields stay unchanged; select=true activates it. Updates to an active saved view refresh its filters unless the user has unsaved changes. Built-ins cannot be edited. Local configuration only.",
+      properties: ["account": prAccount, "id": prID, "name": property("string", "Tab name, 1–40 characters"), "filters": prFilters,
+        "select": property("boolean", "Activate after saving, replacing current unsaved filters (default false)")],
+      required: ["account", "id"], readOnly: false),
+    Tool(name: "select_pr_view", description: "Activate a built-in or custom PR tab, replacing current unsaved filters. Built-in tabs retain the current repository; custom tabs restore their saved repository.",
+      properties: ["account": prAccount, "id": prID], required: ["account", "id"], readOnly: false),
+    Tool(name: "delete_pr_view", description: "Delete a custom PR tab. Deleting the active tab selects Active and retains repository scope. Built-ins are protected; deleting an already absent custom id is safe to repeat.",
+      properties: ["account": prAccount, "id": prID], required: ["account", "id"], readOnly: false),
+    Tool(name: "reorder_pr_views", description: "Set the custom PR tab order. Include every custom id exactly once; built-in tabs retain their positions.",
+      properties: ["account": prAccount, "ids": property("array", "Complete ordered list of custom view ids", items: "string")],
+      required: ["account", "ids"], readOnly: false),
     Tool(name: "list_stacks", description: "List every stack with service status, ports, URLs, PIDs, who started each service, Git branches and claims.",
       properties: [:], required: [], readOnly: true),
     Tool(name: "stack_status", description: "Full detail for one stack: services (phase, pid, port, url, owner, log file, command, cwd), repos and claim.",
@@ -76,6 +105,8 @@ nonisolated enum StackMCPServer {
     Tool(name: "reload_stacks", description: "Reload stack definitions from disk.", properties: [:], required: [], readOnly: false),
   ]
 
+  static var toolDescriptions: [JSONValue] { tools.map(describe) }
+
   // MARK: Loop
 
   static func run() -> Int32 {
@@ -101,13 +132,13 @@ nonisolated enum StackMCPServer {
         response["result"] = .object([
           "protocolVersion": .string(params["protocolVersion"]?.stringValue ?? "2025-06-18"),
           "capabilities": .object(["tools": .object(["listChanged": .bool(false)])]),
-          "serverInfo": .object(["name": .string("cinderdeck-stacks"), "title": .string("Cinderdeck Stacks"), "version": .string(version)]),
+          "serverInfo": .object(["name": .string("cinderdeck-stacks"), "title": .string("Cinderdeck"), "version": .string(version)]),
           "instructions": .string(StackAgentGuide.mcpInstructions),
         ])
       case "ping":
         response["result"] = .object([:])
       case "tools/list":
-        response["result"] = .object(["tools": .array(tools.map(describe))])
+        response["result"] = .object(["tools": .array(toolDescriptions)])
       case "tools/call":
         let name = params["name"]?.stringValue ?? ""
         let arguments = params["arguments"]?.objectValue ?? [:]
@@ -195,10 +226,15 @@ nonisolated enum StackMCPServer {
     ])
   }
 
-  private static func request(for tool: String, _ arguments: [String: JSONValue]) throws -> (String, [String: JSONValue], TimeInterval) {
+  static func request(for tool: String, _ arguments: [String: JSONValue]) throws -> (String, [String: JSONValue], TimeInterval) {
     var params = arguments
     let wait = min(max(arguments["timeout"]?.doubleValue ?? 180, 1), 900)
     switch tool {
+    case "list_pr_views": return ("prs.views.list", params, 90)
+    case "upsert_pr_view": return ("prs.views.upsert", params, 90)
+    case "select_pr_view": return ("prs.views.select", params, 90)
+    case "delete_pr_view": return ("prs.views.delete", params, 90)
+    case "reorder_pr_views": return ("prs.views.reorder", params, 90)
     case "list_stacks": return ("snapshot", [:], 30)
     case "stack_status": return ("stack.get", params, 30)
     case "start_stack": return ("stack.start", params, wait + 30)

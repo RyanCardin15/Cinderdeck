@@ -15,8 +15,12 @@ final class StackControlService: ObservableObject {
   private var server: StackControlSocketServer?
   private var subscriptions = Set<AnyCancellable>()
   private var started = false
+  private let prViews: PRViewControlService
 
-  init(supervisor: StackSupervisor) { self.supervisor = supervisor }
+  init(supervisor: StackSupervisor, prViews: PRViewControlService? = nil) {
+    self.supervisor = supervisor
+    self.prViews = prViews ?? PRViewControlService()
+  }
 
   // MARK: Lifecycle
 
@@ -182,7 +186,8 @@ final class StackControlService: ObservableObject {
       host: description.host, pid: peer > 0 ? peer : nil, tty: description.tty, cwd: client?.cwd)
   }
 
-  private func handle(_ method: String, params: JSONValue, actor: StackActor) async throws -> JSONValue {
+  func handle(_ method: String, params: JSONValue, actor: StackActor) async throws -> JSONValue {
+    if method.hasPrefix("prs.views.") { return try await prViews.handle(method, params: params) }
     switch method {
     case "ping":
       return try JSONValue(encoding: [
