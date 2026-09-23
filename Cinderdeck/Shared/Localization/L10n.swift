@@ -5295,6 +5295,16 @@ nonisolated enum L10n {
   }
 
   enum CloudSettings {
+    static let enableCloud = string(
+      "cloud-settings.enable-cloud",
+      defaultValue: "Enable Cloud",
+      comment: "Toggle for enabling cloud storage features"
+    )
+    static let enableCloudDescription = string(
+      "cloud-settings.enable-cloud-description",
+      defaultValue: "Upload captures to your cloud storage. Turning this off keeps your saved configuration.",
+      comment: "Description of the cloud storage toggle"
+    )
     static let resetConfigurationTitle = string(
       "cloud-settings.reset-configuration-title",
       defaultValue: "Reset Cloud Configuration?",

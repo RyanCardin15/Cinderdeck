@@ -276,7 +276,9 @@ final class CloudUsageService: ObservableObject {
 
   /// Fetch bucket usage by listing objects and checking lifecycle config.
   func fetchUsage(forceRefresh: Bool = false) async {
-    guard let config = CloudManager.shared.loadConfiguration() else {
+    guard CloudManager.shared.isAvailable,
+      let config = CloudManager.shared.loadConfiguration()
+    else {
       usageInfo = nil
       error = L10n.CloudUsage.notConfigured
       DiagnosticLogger.shared.log(.warning, .cloud, "Cloud usage fetch skipped; configuration missing")
@@ -417,7 +419,9 @@ final class CloudUsageService: ObservableObject {
   // MARK: - Helpers
 
   func hydrateCachedUsageIfAvailable() {
-    guard let config = CloudManager.shared.loadConfiguration() else {
+    guard CloudManager.shared.isAvailable,
+      let config = CloudManager.shared.loadConfiguration()
+    else {
       usageInfo = nil
       error = nil
       DiagnosticLogger.shared.log(.debug, .cloud, "Cloud usage cache hydrate skipped; configuration missing")

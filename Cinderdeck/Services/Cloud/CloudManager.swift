@@ -23,12 +23,19 @@ final class CloudManager: ObservableObject {
 
   // MARK: - Published State
 
+  @Published var isEnabled: Bool = false {
+    didSet {
+      UserDefaults.standard.set(isEnabled, forKey: PreferencesKeys.cloudEnabled)
+    }
+  }
   @Published private(set) var isConfigured: Bool = false
   @Published private(set) var providerType: CloudProviderType?
   @Published private(set) var cachedConfiguration: CloudConfiguration?
   @Published private(set) var cachedMaskedAccessKey: String = "••••••••"
   @Published var isUploading: Bool = false
   @Published var uploadProgress: Double = 0
+
+  var isAvailable: Bool { isEnabled && isConfigured }
 
   private enum DisplayStrings {
     static let hidden = "••••••••"
@@ -48,6 +55,7 @@ final class CloudManager: ObservableObject {
   }
 
   private func loadState() {
+    isEnabled = UserDefaults.standard.bool(forKey: PreferencesKeys.cloudEnabled)
     isConfigured = UserDefaults.standard.bool(forKey: PreferencesKeys.cloudConfigured)
     if let typeRaw = UserDefaults.standard.string(forKey: PreferencesKeys.cloudProviderType),
       let type = CloudProviderType(rawValue: typeRaw)
@@ -379,6 +387,7 @@ final class CloudManager: ObservableObject {
 
   /// Create the active cloud provider from saved configuration.
   func createProvider() -> CloudProvider? {
+    guard isAvailable else { return nil }
     guard let config = loadConfiguration() else {
       DiagnosticLogger.shared.log(.warning, .cloud, "Cloud provider creation skipped; configuration missing")
       return nil

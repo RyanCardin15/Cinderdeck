@@ -10,6 +10,7 @@ import SwiftUI
 struct HistoryContextMenu: View {
   let record: CaptureHistoryRecord
   @ObservedObject private var manager = HistoryFloatingManager.shared
+  @ObservedObject private var cloudManager = CloudManager.shared
 
   var body: some View {
     Button("Open in Finder") {
@@ -24,7 +25,7 @@ struct HistoryContextMenu: View {
       HistoryWindowController.shared.openItem(record)
     }
 
-    if CloudManager.shared.isConfigured {
+    if cloudManager.isAvailable {
       Button {
         manager.uploadToCloud(record)
       } label: {

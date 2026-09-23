@@ -754,7 +754,7 @@ final class VideoEditorWindowController: NSWindowController, NSWindowDelegate {
   // MARK: - Post-Export Cloud Upload Offer
 
   private func offerPostExportUpload(for fileURL: URL, completion: @escaping () -> Void) {
-    guard CloudManager.shared.isConfigured,
+    guard CloudManager.shared.isAvailable,
           QuickAccessActionConfigurationStore.shared.isEnabled(.uploadToCloud),
           let window = self.window,
           let state = state

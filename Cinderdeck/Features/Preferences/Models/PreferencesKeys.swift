@@ -177,6 +177,7 @@ enum PreferencesKeys {
   static let historyOpenOnLaunch = "history.openOnLaunch"
 
   // Cloud
+  static let cloudEnabled = "cloud.enabled"
   static let cloudProviderType = "cloud.providerType"
   static let cloudBucket = "cloud.bucket"
   static let cloudRegion = "cloud.region"
