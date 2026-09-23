@@ -127,7 +127,7 @@ struct StackActionsMenu: View {
     Menu {
       Button("Edit stack…") { viewModel.edit(file) }
       Button("Open stack file in editor") { viewModel.openInEditor(file) }
-      Button("Show logs") { viewModel.showLogs(stack: file.id, service: nil, manager: manager) }
+      Button("Open terminal") { viewModel.showLogs(stack: file.id, service: nil) }
       if let stack = file.definition {
         Menu("Restart service") {
           ForEach(stack.services) { service in Button(service.id) { viewModel.restart(file.id, service: service.id) } }

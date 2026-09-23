@@ -118,7 +118,9 @@ Git operations are serialized per repository, use the resolved shell environment
 
 ## Logs and shortcuts
 
-Each service retains the latest 5,000 lines in memory. The All view interleaves services by ingestion time with colored service prefixes. The console renders 16/256-color ANSI, bold, and dim, and strips cursor/terminal-control sequences. Use the service picker, text filter, Auto-scroll, Copy, and Clear. Clear affects the in-memory console only. With the log pane focused, the top search field filters logs.
+Terminals stay closed by default. Choose **Terminal** in an expanded stack, **Open terminal** in its actions menu, or the terminal button on a service to open a separate window. Each window stays attached to its stack when you navigate elsewhere. Stack and service badges identify the output, and colored service tabs switch between streams. Closing the window leaves the services running.
+
+Each service retains the latest 5,000 lines in memory. The All view interleaves services by ingestion time with colored service prefixes. The console renders 16/256-color ANSI, bold, and dim, and strips cursor/terminal-control sequences. Use the terminal's text filter, Auto-scroll, Copy, and Clear. Clear affects the in-memory console only. The Activity tab shows stack events.
 
 | Shortcut | Action |
 | --- | --- |
@@ -128,7 +130,7 @@ Each service retains the latest 5,000 lines in memory. The All view interleaves 
 | ⌘⇧R | Restart the selected service in expanded mode |
 | ⌘. | Stop the selected stack |
 | ⌘B | Open the first repo's branch picker, or the selected service's repo |
-| ⌘L | Expand and focus logs |
+| ⌘L | Open and focus the selected stack or service terminal |
 | ⌘E | Toggle compact/expanded |
 | ⌘P | Pin/unpin |
 | Delete | Does nothing on Stacks |
