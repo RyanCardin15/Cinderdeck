@@ -23,7 +23,7 @@ struct PullRequestsView: View {
             requestList.frame(minWidth: 360)
             if let request = model.selectedRequest {
               PullRequestInspector(model: model, request: request)
-                .frame(minWidth: 330, idealWidth: 405, maxWidth: 580)
+                .frame(minWidth: 380, idealWidth: 430, maxWidth: 580)
             }
           }
         }
@@ -224,7 +224,7 @@ struct PullRequestsView: View {
       } else {
         List(selection: Binding(get: { model.selectedID }, set: { model.select($0) })) {
           ForEach(model.requests) { request in
-            PullRequestRow(request: request).tag(request.id)
+            PullRequestRow(request: request, selected: model.selectedID == request.id).tag(request.id)
               .listRowSeparator(.hidden)
               .contextMenu {
                 Button("Open on GitHub") { PROpenURL.open(request.url) }
@@ -276,23 +276,26 @@ struct PullRequestsView: View {
 
 struct PullRequestRow: View {
   let request: PullRequest
+  var selected = false
+  private var secondary: Color { selected ? .white.opacity(0.85) : .secondary }
+  private func status(_ color: Color) -> Color { selected ? .white : color }
   var body: some View {
     HStack(alignment: .top, spacing: 11) {
       Image(systemName: request.state == "MERGED" ? "arrow.triangle.merge" : request.state == "CLOSED" ? "xmark.circle" : "arrow.triangle.pull")
-        .font(.system(size: 15, weight: .medium)).foregroundStyle(PRStyle.stateColor(request)).frame(width: 19).padding(.top, 3)
+        .font(.system(size: 15, weight: .medium)).foregroundStyle(status(PRStyle.stateColor(request))).frame(width: 19).padding(.top, 3)
       VStack(alignment: .leading, spacing: 7) {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
           Text(request.title).font(.system(size: 13, weight: .medium)).lineLimit(2)
-          Text("#\(request.number)").font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+          Text("#\(request.number)").font(.system(size: 11, design: .monospaced)).foregroundStyle(secondary)
         }
         Text("\(request.repository.nameWithOwner) · \(request.author?.login ?? "Deleted user")")
-          .font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+          .font(.system(size: 10.5)).foregroundStyle(secondary).lineLimit(1).truncationMode(.middle)
         HStack(spacing: 10) {
-          Text(request.stateLabel).foregroundStyle(PRStyle.stateColor(request))
-          Label(request.checks, systemImage: PRStyle.checkSymbol(request.checks)).foregroundStyle(PRStyle.checkColor(request.checks))
-          Text("+\(request.additions)").foregroundColor(.green) + Text(" −\(request.deletions)").foregroundColor(.red)
+          Text(request.stateLabel).foregroundStyle(status(PRStyle.stateColor(request)))
+          Label(request.checks, systemImage: PRStyle.checkSymbol(request.checks)).foregroundStyle(status(PRStyle.checkColor(request.checks)))
+          Text("+\(request.additions)").foregroundColor(status(.green)) + Text(" −\(request.deletions)").foregroundColor(status(.red))
           Spacer(minLength: 0)
-          Text(request.updatedLabel).foregroundStyle(.secondary)
+          Text(request.updatedLabel).foregroundStyle(secondary)
         }.font(.system(size: 10)).lineLimit(1)
       }
       Spacer(minLength: 0)
