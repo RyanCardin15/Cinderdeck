@@ -22,10 +22,10 @@ nonisolated enum StackCommandRunner {
       let output = folder.appendingPathComponent("out")
       let error = folder.appendingPathComponent("err")
       let outFD = open(output.path, O_CREAT | O_RDWR | O_CLOEXEC, 0o600)
-      guard outFD >= 0 else { throw StackError.message("Cannot create command output") }
+      guard outFD >= 0 else { throw StackError.message("Cannot create command output: \(String(cString: strerror(errno)))") }
       defer { close(outFD) }
       let errFD = open(error.path, O_CREAT | O_RDWR | O_CLOEXEC, 0o600)
-      guard errFD >= 0 else { throw StackError.message("Cannot create command error output") }
+      guard errFD >= 0 else { throw StackError.message("Cannot create command error output: \(String(cString: strerror(errno)))") }
       defer { close(errFD) }
       var actions: posix_spawn_file_actions_t?
       var attr: posix_spawnattr_t?
@@ -57,12 +57,27 @@ nonisolated enum StackCommandRunner {
         try? await Task.sleep(nanoseconds: 25_000_000)
       }
       let code = (status & 0x7f) == 0 ? (status >> 8) & 0xff : 128 + (status & 0x7f)
-      func read(_ url: URL) throws -> Data {
-        let handle = try FileHandle(forReadingFrom: url)
-        defer { try? handle.close() }
-        return try handle.read(upToCount: 8 * 1024 * 1024) ?? Data()
+      func read(_ fd: Int32) throws -> Data {
+        // Reuse the descriptor we already own instead of opening the file again
+        // while other commands and framework work compete for descriptors.
+        // pread leaves the child's shared file offset alone.
+        let limit = 8 * 1024 * 1024
+        var data = Data()
+        var chunk = [UInt8](repeating: 0, count: 64 * 1024)
+        while data.count < limit {
+          let count = chunk.withUnsafeMutableBytes {
+            pread(fd, $0.baseAddress, min($0.count, limit - data.count), off_t(data.count))
+          }
+          if count < 0 {
+            if errno == EINTR { continue }
+            throw StackError.message("Cannot read command output: \(String(cString: strerror(errno)))")
+          }
+          if count == 0 { break }
+          data.append(contentsOf: chunk[..<count])
+        }
+        return data
       }
-      return StackCommandResult(status: code, output: try read(output), error: try read(error))
+      return StackCommandResult(status: code, output: try read(outFD), error: try read(errFD))
     }
     return try await withTaskCancellationHandler {
       try await task.value

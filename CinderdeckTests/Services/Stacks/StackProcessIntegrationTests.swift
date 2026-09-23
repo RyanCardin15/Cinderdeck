@@ -85,6 +85,18 @@ final class StackProcessIntegrationTests: XCTestCase {
     let remaining = try await StackCommandRunner.run("/usr/bin/pgrep", ["-g", pid])
     XCTAssertEqual(remaining.status, 1)
   }
+  func testCommandOutputReadIsBoundedForBothStreams() async throws {
+    let result = try await StackCommandRunner.run("/bin/sh", ["-c", """
+      /bin/dd if=/dev/zero bs=1048576 count=9 2>/dev/null
+      { /bin/dd if=/dev/zero bs=1048576 count=9 2>/dev/null; } >&2
+      exit 7
+      """])
+    XCTAssertEqual(result.status, 7)
+    XCTAssertEqual(result.output.count, 8 * 1024 * 1024)
+    XCTAssertEqual(result.error.count, 8 * 1024 * 1024)
+    XCTAssertTrue(result.output.allSatisfy { $0 == 0 })
+    XCTAssertTrue(result.error.allSatisfy { $0 == 0 })
+  }
   func testCancellingCommandStopsItsProcessGroupBeforeTimeout() async throws {
     let root = try StackTestSupport.temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }
