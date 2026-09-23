@@ -204,6 +204,8 @@ struct HistoryFloatingContentView: View {
         .frame(maxWidth: .infinity)
 
       HStack(spacing: 8) {
+        preferencesButton()
+
         Spacer()
 
         controlButton(
@@ -303,6 +305,7 @@ struct HistoryFloatingContentView: View {
   private var expandedHeader: some View {
     VStack(spacing: 12) {
       HStack {
+        preferencesButton(size: 34)
         expandedTypeFilters
         Spacer()
         expandedControls
@@ -680,6 +683,20 @@ struct HistoryFloatingContentView: View {
   }
 
   // MARK: - Helpers
+
+  private func preferencesButton(size: CGFloat = 30) -> some View {
+    controlButton(
+      systemName: "gearshape",
+      help: L10n.Menu.preferences,
+      size: size,
+      action: {
+        manager.hide()
+        AppStatusBarController.shared.openPreferencesWindow()
+      }
+    )
+    .accessibilityLabel(L10n.Menu.preferences)
+    .accessibilityIdentifier("history.openPreferences")
+  }
 
   private func selectionPill(
     title: String,
