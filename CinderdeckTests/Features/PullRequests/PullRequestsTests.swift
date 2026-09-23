@@ -149,6 +149,26 @@ final class PullRequestsTests: XCTestCase {
     XCTAssertEqual(model.totalCount, 2)
   }
 
+  func testFailedReconnectClearsCancelledSearchLoadingState() async throws {
+    let service = PRMockService()
+    let model = makeModel(service: service)
+    await model.connect()
+    model.filters.text = "slow"
+    model.scheduleSearch(immediate: true)
+    try await Task.sleep(nanoseconds: 20_000_000)
+    XCTAssertTrue(model.loading)
+
+    service.failViewer = true
+    await model.connect()
+    XCTAssertFalse(model.loading)
+    XCTAssertFalse(model.connecting)
+    XCTAssertFalse(model.loadingRepositories)
+    XCTAssertNotNil(model.error)
+    try await Task.sleep(nanoseconds: 120_000_000)
+    XCTAssertTrue(model.requests.isEmpty)
+    XCTAssertFalse(model.loading)
+  }
+
   func testFilePaginationAndStarMutationUseExplicitTargets() async throws {
     var commands: [[String]] = []
     let service = GitHubPRService { args, payload in
@@ -200,8 +220,12 @@ final class PullRequestsTests: XCTestCase {
 private final class PRMockService: GitHubPRServing {
   var account = "reviewer"
   var failStar = false
+  var failViewer = false
   var paginate = false
-  func viewer() async throws -> String { account }
+  func viewer() async throws -> String {
+    if failViewer { throw GitHubPRError.message("Could not connect") }
+    return account
+  }
   func repositories(after: String?) async throws -> GitHubConnection<GitHubRepository> {
     .init(nodes: [PRFixtures.repository], pageInfo: .init(hasNextPage: false), totalCount: 1)
   }
