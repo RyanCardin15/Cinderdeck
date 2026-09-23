@@ -105,6 +105,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     #if DEBUG
+    if CommandLine.arguments.contains("--pull-requests-preview") {
+      NSApp.setActivationPolicy(.regular)
+      PullRequestsWindowController.shared.show()
+      didFinishLaunching = true
+      return
+    }
     if StackPreviewHarness.startIfRequested() { didFinishLaunching = true; return }
     #endif
 

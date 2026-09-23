@@ -686,6 +686,12 @@ final class AppStatusBarController: ObservableObject {
       item.isEnabled = CloudManager.shared.isAvailable
       return item
 
+    case .pullRequests:
+      let item = NSMenuItem(title: "Pull requests…", action: #selector(openPullRequestsAction), keyEquivalent: "")
+      item.target = self
+      item.image = NSImage(systemSymbolName: "arrow.triangle.pull", accessibilityDescription: nil)
+      return item
+
     case .openHistory:
       let item = NSMenuItem(
         title: L10n.Actions.openHistory,
@@ -822,6 +828,8 @@ final class AppStatusBarController: ObservableObject {
       NSApp.activate(ignoringOtherApps: true)
     }
   }
+
+  @objc private func openPullRequestsAction() { PullRequestsWindowController.shared.show() }
 
   @objc private func openHistoryAction() {
     logMenuAction("openHistory")
