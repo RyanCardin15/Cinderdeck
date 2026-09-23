@@ -9,9 +9,8 @@ struct StackCompactCardView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 9) {
-      HStack(alignment: .center, spacing: 6) {
-        Text(file.name).font(.system(size: 13.5, weight: .semibold)).lineLimit(1)
-        Spacer(minLength: 6)
+      VStack(alignment: .leading, spacing: 5) {
+        Text(file.name).font(.system(size: 13.5, weight: .semibold)).lineLimit(1).help(file.name)
         StackStateBadge(label: file.definition == nil ? "Degraded" : state.label, since: state.isActive ? state.startedAt : nil)
       }
       notices
@@ -160,20 +159,24 @@ struct StackBranchChip: View {
   let stack: String
   let repo: RepoDefinition
   @ObservedObject var viewModel: StacksViewModel
-  /// Long branch names keep their start and end: "feature/…-footnotes".
-  static func shortened(_ text: String, limit: Int = 24) -> String {
-    guard text.count > limit else { return text }
-    let head = text.prefix(limit / 2 - 1), tail = text.suffix(limit / 2 - 1)
-    return String(head) + "…" + String(tail)
+  var wraps = false
+  private var status: GitRepoStatus { viewModel.status(repo) }
+  private var helpText: String {
+    var text = "\(repo.id) · \(status.chip)\n\(repo.path.path)"
+    if let error = status.error { text += "\n\(error)" }
+    if viewModel.busyRepos.contains(repo.path) { text += "\nA Git operation is in progress." }
+    else if !viewModel.canSwitch(stack: stack, repo: repo.id) { text += "\nWait for services to finish starting or stopping before switching branches." }
+    else { text += "\nClick to switch branches." }
+    return text
   }
   var body: some View {
     Button { viewModel.openBranchPicker(stack: stack, repo: repo) } label: {
-      StackChip(systemImage: "arrow.triangle.branch", text: Self.shortened(viewModel.status(repo).chip),
-        tint: viewModel.status(repo).error != nil ? .secondary : viewModel.status(repo).isDirty ? .orange : StackPalette.branch)
-        .fixedSize()
+      StackChip(systemImage: "arrow.triangle.branch", text: status.chip,
+        tint: status.error != nil ? .secondary : status.isDirty ? .orange : StackPalette.branch, wraps: wraps)
+        .multilineTextAlignment(.leading)
     }
     .buttonStyle(.plain).disabled(!viewModel.canSwitch(stack: stack, repo: repo.id) || viewModel.busyRepos.contains(repo.path))
-    .help(viewModel.status(repo).error ?? repo.path.path)
+    .stackHelp(helpText)
     .accessibilityLabel("\(repo.id), branch \(viewModel.status(repo).chip)")
     .popover(isPresented: Binding(get: { viewModel.branchPicker?.id == stack + "/" + repo.id }, set: { if !$0 { viewModel.branchPicker = nil } })) {
       BranchPickerPopover(viewModel: viewModel)
