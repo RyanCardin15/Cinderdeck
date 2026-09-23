@@ -20,9 +20,9 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TMP_ROOT="${TMPDIR:-/tmp}"
-BINARY_PATH="${TMP_ROOT%/}/snapzy-scroll-capture-accuracy-benchmark"
-MODULE_CACHE_PATH="${TMP_ROOT%/}/snapzy-scroll-benchmark-module-cache"
-STDERR_PATH="${TMP_ROOT%/}/snapzy-scroll-capture-accuracy-benchmark.stderr"
+BINARY_PATH="${TMP_ROOT%/}/cinderdeck-scroll-capture-accuracy-benchmark"
+MODULE_CACHE_PATH="${TMP_ROOT%/}/cinderdeck-scroll-benchmark-module-cache"
+STDERR_PATH="${TMP_ROOT%/}/cinderdeck-scroll-capture-accuracy-benchmark.stderr"
 
 cd "$REPO_ROOT"
 
@@ -32,7 +32,7 @@ swiftc -parse-as-library \
   scripts/swift-tools/scrolling-capture-accuracy/scrolling-capture-accuracy-benchmark.swift \
   scripts/swift-tools/scrolling-capture-accuracy/scrolling-capture-accuracy-metrics.swift \
   scripts/swift-tools/scrolling-capture-accuracy/scrolling-capture-accuracy-support.swift \
-  Snapzy/Services/Capture/ScrollingCapture/ScrollingCaptureStitcher.swift
+  Cinderdeck/Services/Capture/ScrollingCapture/ScrollingCaptureStitcher.swift
 
 : > "$STDERR_PATH"
 set +e

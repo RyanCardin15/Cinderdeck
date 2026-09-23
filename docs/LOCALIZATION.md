@@ -1,13 +1,13 @@
 # Localization Architecture
 
-This doc describes how Snapzy localizes user-facing text today. Keep it synced with source, not with intended future work.
+This doc describes how Cinderdeck localizes user-facing text today. Keep it synced with source, not with intended future work.
 
 ## Current State
 
 - Source language: `en`
 - Supported app locales: `en`, `vi`, `zh-Hans`, `zh-Hant`, `es`, `ja`, `ko`, `ru`, `fr`, `de`
-- Language selection: Snapzy supports app language selection in Preferences and a first-run onboarding language step. Preferences still relies on the macOS app-language override plus relaunch behavior, while onboarding previews the selected locale immediately inside the onboarding flow and only commits the override when onboarding finishes.
-- Source-of-truth and runtime catalogs: centralized under `Snapzy/Resources/Localization/`, split into `Shared/*.xcstrings` and `Features/*.xcstrings`
+- Language selection: Cinderdeck supports app language selection in Preferences and a first-run onboarding language step. Preferences still relies on the macOS app-language override plus relaunch behavior, while onboarding previews the selected locale immediately inside the onboarding flow and only commits the override when onboarding finishes.
+- Source-of-truth and runtime catalogs: centralized under `Cinderdeck/Resources/Localization/`, split into `Shared/*.xcstrings` and `Features/*.xcstrings`
 - Coverage: menu bar, onboarding, preferences, capture flows, recording flows, Quick Access, Annotate, Video Editor, cloud dialogs, alerts, toasts, and scrolling capture HUD/status text
 
 ## Runtime Model
@@ -25,25 +25,25 @@ flowchart LR
 
 | Path | Owns |
 | --- | --- |
-| `Snapzy/Resources/Localization/Shared/*.xcstrings` | Cross-feature runtime String Catalog fragments |
-| `Snapzy/Resources/Localization/Features/*.xcstrings` | Feature-owned runtime String Catalog fragments |
-| `Snapzy/Resources/Localization/Generated/` | Reserved location for generated localization artifacts |
-| `Snapzy/Resources/Localization/manifest.json` | Prefix ownership for the split runtime catalogs |
+| `Cinderdeck/Resources/Localization/Shared/*.xcstrings` | Cross-feature runtime String Catalog fragments |
+| `Cinderdeck/Resources/Localization/Features/*.xcstrings` | Feature-owned runtime String Catalog fragments |
+| `Cinderdeck/Resources/Localization/Generated/` | Reserved location for generated localization artifacts |
+| `Cinderdeck/Resources/Localization/manifest.json` | Prefix ownership for the split runtime catalogs |
 | `tools/localization/CatalogTool.swift` | Audit and verify workflow for split catalogs |
-| `Snapzy/Shared/Localization/L10n.swift` | Shared localization bridge for AppKit strings, alerts, toasts, `displayName`, `errorDescription`, and text that does not auto-extract cleanly from SwiftUI |
-| `Snapzy/Resources/*.lproj/InfoPlist.strings` | Privacy usage descriptions per locale |
-| `Snapzy.xcodeproj/project.pbxproj` | Project regions and String Catalog related build settings |
+| `Cinderdeck/Shared/Localization/L10n.swift` | Shared localization bridge for AppKit strings, alerts, toasts, `displayName`, `errorDescription`, and text that does not auto-extract cleanly from SwiftUI |
+| `Cinderdeck/Resources/*.lproj/InfoPlist.strings` | Privacy usage descriptions per locale |
+| `Cinderdeck.xcodeproj/project.pbxproj` | Project regions and String Catalog related build settings |
 
 ## Working Rules
 
 - Localize all user-facing copy.
-- Edit the owning fragment in `Snapzy/Resources/Localization/Shared/` or `Snapzy/Resources/Localization/Features/`.
+- Edit the owning fragment in `Cinderdeck/Resources/Localization/Shared/` or `Cinderdeck/Resources/Localization/Features/`.
 - Prefer `L10n` for AppKit, service-layer errors, toasts, open-panel prompts, and shared model labels.
 - Keep raw ids and persisted values stable. Localize at the display layer, not in storage models.
 - Use `Text(verbatim:)` or other explicit verbatim rendering for tokens that should stay raw.
 - Keep keys inside the fragment that owns their prefix in `manifest.json`.
 - Keep these intentionally unlocalized unless product behavior changes:
-  - Brand names like `Snapzy`
+  - Brand names like `Cinderdeck`
   - File formats such as `PNG`, `JPEG`, `WebP`, `MOV`, `MP4`
   - Keyboard glyphs and shortcut key labels
   - MIME types, UTType ids, URL fragments, and file-name templates
@@ -71,7 +71,7 @@ swift -module-cache-path build/swift-module-cache tools/localization/CatalogTool
 - Build with:
 
 ```bash
-xcodebuild -project Snapzy.xcodeproj -scheme Snapzy -configuration Debug -derivedDataPath /tmp/SnapzyDerivedData build CODE_SIGNING_ALLOWED=NO
+xcodebuild -project Cinderdeck.xcodeproj -scheme Cinderdeck -configuration Debug -derivedDataPath /tmp/CinderdeckDerivedData build CODE_SIGNING_ALLOWED=NO
 ```
 
 - Hardcoded user-facing copy check should come back empty for app code outside previews/tests.

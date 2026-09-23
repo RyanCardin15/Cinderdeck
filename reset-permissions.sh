@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# reset-permissions.sh — Reset all TCC permissions for Snapzy
+# reset-permissions.sh — Reset all TCC permissions for Cinderdeck
 #
 # Usage:
 #   ./reset-permissions.sh           # Interactive mode (asks for confirmation)
@@ -8,9 +8,9 @@
 
 set -euo pipefail
 
-APP_NAME="Snapzy"
-APP_PATH="/Applications/Snapzy.app"
-FALLBACK_BUNDLE_ID="com.trongduong.snapzy"
+APP_NAME="Cinderdeck"
+APP_PATH="/Applications/Cinderdeck.app"
+FALLBACK_BUNDLE_ID="com.ryancardin.cinderdeck"
 
 # ─── Auto-detect bundle ID from app name ─────────────────────────
 resolve_bundle_id() {
@@ -135,7 +135,7 @@ echo -e "${YELLOW}  Resetting TCC Permissions                           ${NC}"
 echo -e "${YELLOW}═══════════════════════════════════════════════════════${NC}"
 echo ""
 
-# TCC services used by Snapzy
+# TCC services used by Cinderdeck
 TCC_SERVICES=(
   "ScreenCapture"
   "Microphone"

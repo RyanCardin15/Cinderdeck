@@ -4,8 +4,8 @@
 
 set -euo pipefail
 
-REPO="${GITHUB_REPOSITORY:-duongductrong/Snapzy}"
-TARGET_FILE="Snapzy/Features/Preferences/Models/AboutContributor.swift"
+REPO="${UPSTREAM_REPOSITORY:-duongductrong/Snapzy}"
+TARGET_FILE="Cinderdeck/Features/Preferences/Models/AboutContributor.swift"
 DRY_RUN=0
 
 if [[ "${1:-}" == "--dry-run" ]]; then
@@ -69,7 +69,7 @@ TMP_FILE=$(mktemp)
 cat << 'HEADER_EOF' > "$TMP_FILE"
 //
 //  AboutContributor.swift
-//  Snapzy
+//  Cinderdeck
 //
 //  Static metadata for contributors displayed in About preferences.
 //

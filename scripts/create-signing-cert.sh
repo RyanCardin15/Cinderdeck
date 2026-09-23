@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-CERT_NAME="${1:-Snapzy Self-Signed}"
+CERT_NAME="${1:-Cinderdeck Self-Signed}"
 VALIDITY_DAYS="${2:-3650}"  # 10 years default
 
 TEMP_DIR=$(mktemp -d)
@@ -30,7 +30,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "=== Snapzy Self-Signed Certificate Generator ==="
+echo "=== Cinderdeck Self-Signed Certificate Generator ==="
 echo ""
 echo "Certificate name: $CERT_NAME"
 echo "Validity: $VALIDITY_DAYS days"
@@ -56,7 +56,7 @@ x509_extensions    = codesign
 
 [ req_dn ]
 CN = $CERT_NAME
-O  = Snapzy
+O  = Cinderdeck
 
 [ codesign ]
 keyUsage         = critical, digitalSignature

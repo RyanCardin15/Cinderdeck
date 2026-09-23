@@ -19,9 +19,9 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TMP_ROOT="${TMPDIR:-/tmp}"
-BINARY_PATH="${TMP_ROOT%/}/snapzy-qr-detection-probe"
-MODULE_CACHE_PATH="${TMP_ROOT%/}/snapzy-qr-probe-module-cache"
-STDERR_PATH="${TMP_ROOT%/}/snapzy-qr-detection-probe.stderr"
+BINARY_PATH="${TMP_ROOT%/}/cinderdeck-qr-detection-probe"
+MODULE_CACHE_PATH="${TMP_ROOT%/}/cinderdeck-qr-probe-module-cache"
+STDERR_PATH="${TMP_ROOT%/}/cinderdeck-qr-detection-probe.stderr"
 
 cd "$REPO_ROOT"
 

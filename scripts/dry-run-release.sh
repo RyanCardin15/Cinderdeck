@@ -3,11 +3,11 @@
 # Allows testing the signing logic locally on a macOS machine without Apple Developer certificate secrets.
 set -euo pipefail
 
-APP_NAME="Snapzy"
-PROJECT="Snapzy.xcodeproj"
+APP_NAME="Cinderdeck"
+PROJECT="Cinderdeck.xcodeproj"
 BUILD_DIR="build"
-ARCHIVE_PATH="$BUILD_DIR/Snapzy.xcarchive"
-APP_PATH="$BUILD_DIR/Snapzy.app"
+ARCHIVE_PATH="$BUILD_DIR/Cinderdeck.xcarchive"
+APP_PATH="$BUILD_DIR/Cinderdeck.app"
 SPARKLE_FRAMEWORK="$APP_PATH/Contents/Frameworks/Sparkle.framework"
 
 # Colors for output
@@ -43,7 +43,7 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
 # Step 2: Build Release Archive (Unsigned)
-info "Archiving Snapzy app (without signing)..."
+info "Archiving Cinderdeck app (without signing)..."
 xcodebuild -project "$PROJECT" \
   -scheme "$APP_NAME" \
   -configuration Release \
@@ -55,10 +55,10 @@ success "Archive created at $ARCHIVE_PATH"
 
 # Step 3: Ditto from archive
 info "Extracting app bundle from archive..."
-if [ ! -d "$ARCHIVE_PATH/Products/Applications/Snapzy.app" ]; then
-  fail "Archive does not contain Snapzy.app at expected path."
+if [ ! -d "$ARCHIVE_PATH/Products/Applications/Cinderdeck.app" ]; then
+  fail "Archive does not contain Cinderdeck.app at expected path."
 fi
-ditto "$ARCHIVE_PATH/Products/Applications/Snapzy.app" "$APP_PATH"
+ditto "$ARCHIVE_PATH/Products/Applications/Cinderdeck.app" "$APP_PATH"
 success "App bundle extracted to $APP_PATH"
 
 # Step 4: Dry-Run Codesigning (using Ad-hoc identity "-" to test the CI pipeline structure)
@@ -102,11 +102,11 @@ fi
 info "Substituting entitlements template..."
 BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Contents/Info.plist")
 PROCESSED_ENTITLEMENTS="$BUILD_DIR/processed-entitlements-dryrun.plist"
-sed "s/\$(PRODUCT_BUNDLE_IDENTIFIER)/$BUNDLE_ID/g" Snapzy/Snapzy.entitlements > "$PROCESSED_ENTITLEMENTS"
+sed "s/\$(PRODUCT_BUNDLE_IDENTIFIER)/$BUNDLE_ID/g" Cinderdeck/Cinderdeck.entitlements > "$PROCESSED_ENTITLEMENTS"
 info "Processed entitlements created with bundle ID: $BUNDLE_ID"
 
 # Sign main app bundle
-info "Signing Snapzy.app main bundle (with hardened runtime)..."
+info "Signing Cinderdeck.app main bundle (with hardened runtime)..."
 codesign --force --sign "$SIGN_IDENTITY" \
   -o runtime \
   --entitlements "$PROCESSED_ENTITLEMENTS" \
@@ -132,16 +132,15 @@ success "Hardened runtime verified: $HR_FLAGS"
 if command -v create-dmg >/dev/null 2>&1; then
   info "create-dmg found. Generating preview DMG..."
   create-dmg \
-    --volname "Snapzy" \
-    --background "assets/dmg-background.png" \
+    --volname "Cinderdeck" \
     --window-size 660 400 \
     --icon-size 120 \
-    --icon "Snapzy.app" 180 170 \
+    --icon "Cinderdeck.app" 180 170 \
     --app-drop-link 480 170 \
     --no-internet-enable \
-    "$BUILD_DIR/Snapzy-dryrun.dmg" \
+    "$BUILD_DIR/Cinderdeck-dryrun.dmg" \
     "$APP_PATH"
-  success "Preview DMG created at $BUILD_DIR/Snapzy-dryrun.dmg"
+  success "Preview DMG created at $BUILD_DIR/Cinderdeck-dryrun.dmg"
 else
   warn "create-dmg not installed. Skipping DMG packaging preview (install with 'brew install create-dmg' to test)."
 fi

@@ -1,21 +1,21 @@
 #!/bin/bash
-# Automated end-to-end performance & leak profiling for Snapzy
+# Automated end-to-end performance & leak profiling for Cinderdeck
 set -e
 
-SCHEME="Snapzy"
-PROJECT="Snapzy.xcodeproj"
-LOG_DIR="$HOME/.config/snapzy/logs"
+SCHEME="Cinderdeck"
+PROJECT="Cinderdeck.xcodeproj"
+LOG_DIR="$HOME/.config/cinderdeck/logs"
 mkdir -p "$LOG_DIR"
 
 echo "=========================================================="
-echo "⚡ AUTOMATED SNAPZY PERFORMANCE & MEMORY LEAK BENCHMARK"
+echo "⚡ AUTOMATED CINDERDECK PERFORMANCE & MEMORY LEAK BENCHMARK"
 echo "=========================================================="
 
 PID=$(pgrep -x "$SCHEME" | head -n 1 || true)
 if [ -z "$PID" ]; then
-    echo "Launching Snapzy process..."
+    echo "Launching Cinderdeck process..."
     open -a "$SCHEME" 2>/dev/null || {
-        echo "Building and launching Snapzy Debug build..."
+        echo "Building and launching Cinderdeck Debug build..."
         xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Debug build -quiet
         BUILD_DIR=$(xcodebuild -project "$PROJECT" -scheme "$SCHEME" -showBuildSettings | grep -m1 'BUILT_PRODUCTS_DIR' | awk '{print $3}')
         APP_PATH="$BUILD_DIR/$SCHEME.app"
@@ -26,11 +26,11 @@ if [ -z "$PID" ]; then
 fi
 
 if [ -z "$PID" ]; then
-    echo "❌ Error: Unable to locate or launch Snapzy process."
+    echo "❌ Error: Unable to locate or launch Cinderdeck process."
     exit 1
 fi
 
-echo "Connected to Snapzy (PID: $PID)"
+echo "Connected to Cinderdeck (PID: $PID)"
 
 measure() {
     local label="$1"
@@ -77,19 +77,19 @@ printf "|------------------------|-------------|-------------|-------------|----
 measure "1. Idle Baseline" 5
 
 # Phase 2: Fullscreen Capture
-open "snapzy://capture/fullscreen" 2>/dev/null || true
+open "cinderdeck://capture/fullscreen" 2>/dev/null || true
 measure "2. Fullscreen Capture" 4
 
 # Phase 3: Annotate Window
-open "snapzy://open/annotate" 2>/dev/null || true
+open "cinderdeck://open/annotate" 2>/dev/null || true
 measure "3. Annotate Editor" 5
 
 # Phase 4: History Browser
-open "snapzy://open/history" 2>/dev/null || true
+open "cinderdeck://open/history" 2>/dev/null || true
 measure "4. Capture History" 4
 
 # Phase 5: Settings Window
-open "snapzy://settings" 2>/dev/null || true
+open "cinderdeck://settings" 2>/dev/null || true
 measure "5. Preferences View" 4
 
 # Phase 6: Post-test Idle

@@ -5,7 +5,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 # Output path
 OUTPUT_PATH = "assets/dmg-background.png"
-FONT_DIR = "/tmp/snapzy-fonts"
+FONT_DIR = "/tmp/cinderdeck-fonts"
 
 # Fontsource via jsDelivr CDN
 FONT_BOLD_URL = "https://cdn.jsdelivr.net/fontsource/fonts/plus-jakarta-sans@latest/latin-700-normal.ttf"
@@ -158,7 +158,7 @@ def draw_glow_effect(img, p0, p1, p2, color, blur_radius=15):
     return Image.alpha_composite(img, glow_blurred)
 
 def main():
-    print("Redesigning Snapzy DMG background image (Light Theme)...")
+    print("Redesigning Cinderdeck DMG background image (Light Theme)...")
     
     # Download fonts
     bold_path, medium_path = download_fonts()
@@ -195,7 +195,7 @@ def main():
             width=2
         )
         
-    # Draw a custom Snapzy dimension badge (Focal point: vibrant brand-blue capsule!)
+    # Draw a custom Cinderdeck dimension badge (Focal point: vibrant brand-blue capsule!)
     badge_text = "1320 x 800"
     badge_w, badge_h = 104, 28
     badge_x0, badge_y0 = crop_x0, crop_y0 - badge_h - 10
@@ -322,9 +322,9 @@ def main():
     bg_glass = (255, 255, 255, 150)     # White glass frosted card
     border_glass = (255, 255, 255, 220) # Clean white border
     
-    # Draw Left Dropzone (Snapzy App)
+    # Draw Left Dropzone (Cinderdeck App)
     draw_glass_card(base_img, p_src[0], p_src[1], 280, 280, 48, border_glass, bg_glass)
-    # Draw a thin target dash-ring inside Snapzy card (soft blue)
+    # Draw a thin target dash-ring inside Cinderdeck card (soft blue)
     draw.ellipse(
         [p_src[0] - 100, p_src[1] - 100, p_src[0] + 100, p_src[1] + 100],
         outline=(57, 95, 255, 30),
@@ -343,7 +343,7 @@ def main():
     # 6. Typography & Labels (Main Instruction at bottom)
     
     # Centered Main Instruction text at bottom (accent capsule with primary blue text!)
-    ins_text = "Drag Snapzy to Applications folder to install"
+    ins_text = "Drag Cinderdeck to Applications folder to install"
     ins_w, ins_h = 520, 48
     ins_x0, ins_y0 = 660 - ins_w//2, 690
     draw.rounded_rectangle(

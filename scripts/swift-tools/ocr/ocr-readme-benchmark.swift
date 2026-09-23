@@ -1,6 +1,6 @@
 //
 //  ocr-readme-benchmark.swift
-//  Snapzy
+//  Cinderdeck
 //
 //  Reproducible OCR benchmark used for README transparency notes.
 //
@@ -146,43 +146,43 @@ struct OCRReadmeBenchmark {
 
   private static func benchmarkCorpus() -> [CorpusEntry] {
     [
-      CorpusEntry(languageIdentifier: "en", text: "Snapzy keeps screenshots readable, searchable, and ready to share across your team."),
+      CorpusEntry(languageIdentifier: "en", text: "Cinderdeck keeps screenshots readable, searchable, and ready to share across your team."),
       CorpusEntry(languageIdentifier: "en", text: "Review notes before export so everyone copies the same clean text from the capture."),
       CorpusEntry(languageIdentifier: "en", text: "Fast OCR helps when release notes, code snippets, and settings panels need to be copied quickly."),
 
-      CorpusEntry(languageIdentifier: "vi", text: "Snapzy giúp trích xuất văn bản rõ ràng để bạn sao chép ghi chú từ ảnh chụp màn hình nhanh hơn."),
+      CorpusEntry(languageIdentifier: "vi", text: "Cinderdeck giúp trích xuất văn bản rõ ràng để bạn sao chép ghi chú từ ảnh chụp màn hình nhanh hơn."),
       CorpusEntry(languageIdentifier: "vi", text: "Khi cần chia sẻ hướng dẫn nội bộ, OCR chính xác sẽ giảm rất nhiều thời gian chỉnh sửa thủ công."),
       CorpusEntry(languageIdentifier: "vi", text: "Các khung cài đặt, đoạn mô tả dài và tiêu đề có dấu đều nên được giữ nguyên nội dung sau khi nhận dạng."),
 
-      CorpusEntry(languageIdentifier: "zh-Hans", text: "Snapzy 现在会优先保留正文内容，方便你直接复制截图里的长段落和标题。"),
+      CorpusEntry(languageIdentifier: "zh-Hans", text: "Cinderdeck 现在会优先保留正文内容，方便你直接复制截图里的长段落和标题。"),
       CorpusEntry(languageIdentifier: "zh-Hans", text: "如果一张截图里有多段说明文字，OCR 结果应该尽量保持自然分段与正确标点。"),
       CorpusEntry(languageIdentifier: "zh-Hans", text: "准确的中文识别对于整理笔记、产品说明和界面文案都非常重要。"),
 
-      CorpusEntry(languageIdentifier: "zh-Hant", text: "Snapzy 現在會優先保留正文內容，方便你直接複製截圖裡的長段落和標題。"),
+      CorpusEntry(languageIdentifier: "zh-Hant", text: "Cinderdeck 現在會優先保留正文內容，方便你直接複製截圖裡的長段落和標題。"),
       CorpusEntry(languageIdentifier: "zh-Hant", text: "如果一張截圖裡有多段說明文字，OCR 結果應該盡量保持自然分段與正確標點。"),
       CorpusEntry(languageIdentifier: "zh-Hant", text: "準確的中文辨識對整理筆記、產品說明和介面文案都非常重要。"),
 
-      CorpusEntry(languageIdentifier: "es", text: "Snapzy extrae texto limpio para que copiar instrucciones desde una captura sea un paso rápido y fiable."),
+      CorpusEntry(languageIdentifier: "es", text: "Cinderdeck extrae texto limpio para que copiar instrucciones desde una captura sea un paso rápido y fiable."),
       CorpusEntry(languageIdentifier: "es", text: "Cuando una pantalla contiene varios párrafos, el OCR debe mantener una lectura natural y coherente."),
       CorpusEntry(languageIdentifier: "es", text: "Los títulos, números y signos de puntuación también importan cuando compartes documentación interna."),
 
-      CorpusEntry(languageIdentifier: "ja", text: "Snapzy は長い説明文や見出しをそのままコピーしやすいように、読みやすい OCR を目指しています。"),
+      CorpusEntry(languageIdentifier: "ja", text: "Cinderdeck は長い説明文や見出しをそのままコピーしやすいように、読みやすい OCR を目指しています。"),
       CorpusEntry(languageIdentifier: "ja", text: "複数の段落があるスクリーンショットでも、自然な流れで文章を取り出せることが大切です。"),
       CorpusEntry(languageIdentifier: "ja", text: "設定画面、メモ、リリースノートの文字が正確に読めると作業がかなり速くなります。"),
 
-      CorpusEntry(languageIdentifier: "ko", text: "Snapzy 는 긴 설명 문장과 제목도 자연스럽게 복사할 수 있도록 읽기 쉬운 OCR 결과를 목표로 합니다."),
+      CorpusEntry(languageIdentifier: "ko", text: "Cinderdeck 는 긴 설명 문장과 제목도 자연스럽게 복사할 수 있도록 읽기 쉬운 OCR 결과를 목표로 합니다."),
       CorpusEntry(languageIdentifier: "ko", text: "여러 단락이 있는 화면이라도 문맥이 이어지도록 텍스트를 안정적으로 추출하는 것이 중요합니다."),
       CorpusEntry(languageIdentifier: "ko", text: "설정 화면, 메모, 릴리스 노트에 있는 한글 문장을 정확하게 읽어야 작업 속도가 빨라집니다."),
 
-      CorpusEntry(languageIdentifier: "ru", text: "Snapzy помогает быстро копировать длинные заметки и заголовки со скриншотов без ручного перепечатывания."),
+      CorpusEntry(languageIdentifier: "ru", text: "Cinderdeck помогает быстро копировать длинные заметки и заголовки со скриншотов без ручного перепечатывания."),
       CorpusEntry(languageIdentifier: "ru", text: "Если на изображении несколько абзацев, OCR должен сохранять естественный порядок чтения."),
       CorpusEntry(languageIdentifier: "ru", text: "Точные цифры, знаки препинания и подписи важны для внутренних инструкций и релизных заметок."),
 
-      CorpusEntry(languageIdentifier: "fr", text: "Snapzy extrait un texte propre pour que les captures d’écran deviennent faciles à relire et à partager."),
+      CorpusEntry(languageIdentifier: "fr", text: "Cinderdeck extrait un texte propre pour que les captures d’écran deviennent faciles à relire et à partager."),
       CorpusEntry(languageIdentifier: "fr", text: "Quand une image contient plusieurs paragraphes, l’OCR doit préserver une lecture naturelle et stable."),
       CorpusEntry(languageIdentifier: "fr", text: "Les titres, les chiffres et la ponctuation comptent aussi pour les notes produit et la documentation."),
 
-      CorpusEntry(languageIdentifier: "de", text: "Snapzy extrahiert sauberen Text, damit lange Hinweise und Überschriften schnell aus Screenshots kopiert werden können."),
+      CorpusEntry(languageIdentifier: "de", text: "Cinderdeck extrahiert sauberen Text, damit lange Hinweise und Überschriften schnell aus Screenshots kopiert werden können."),
       CorpusEntry(languageIdentifier: "de", text: "Wenn ein Bild mehrere Absätze enthält, sollte die OCR eine natürliche und konsistente Lesereihenfolge behalten."),
       CorpusEntry(languageIdentifier: "de", text: "Auch Zahlen, Satzzeichen und UI-Bezeichnungen müssen für interne Dokumentation zuverlässig erkannt werden.")
     ]

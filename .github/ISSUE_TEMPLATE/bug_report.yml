@@ -1,5 +1,5 @@
 name: 🐛 Bug Report
-description: Report a bug or unexpected behavior in Snapzy
+description: Report a bug or unexpected behavior in Cinderdeck
 title: "[Bug]: "
 labels: ["bug"]
 body:
@@ -23,7 +23,7 @@ body:
       label: Steps to Reproduce
       description: Steps to reproduce the behavior.
       placeholder: |
-        1. Open Snapzy
+        1. Open Cinderdeck
         2. Click on '...'
         3. See error
     validations:
@@ -56,10 +56,10 @@ body:
       required: false
 
   - type: input
-    id: snapzy-version
+    id: cinderdeck-version
     attributes:
-      label: Snapzy Version
-      description: Which version of Snapzy are you using?
+      label: Cinderdeck Version
+      description: Which version of Cinderdeck are you using?
       placeholder: e.g. 1.0.7
     validations:
       required: true
@@ -81,7 +81,7 @@ body:
     id: install-method
     attributes:
       label: Installation Method
-      description: How did you install Snapzy?
+      description: How did you install Cinderdeck?
       options:
         - Homebrew
         - DMG download

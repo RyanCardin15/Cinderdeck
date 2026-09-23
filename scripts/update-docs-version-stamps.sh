@@ -24,7 +24,7 @@ if ! [[ "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
 fi
 
 DEPLOYMENT_TARGET="13.0"
-PROJ_FILE="Snapzy.xcodeproj/project.pbxproj"
+PROJ_FILE="Cinderdeck.xcodeproj/project.pbxproj"
 if [ -f "$PROJ_FILE" ]; then
   DETECTED=$(grep -m1 'MACOSX_DEPLOYMENT_TARGET' "$PROJ_FILE" | sed 's/.*= //' | sed 's/;.*//' | tr -d ' ' || true)
   if [[ "$DETECTED" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then

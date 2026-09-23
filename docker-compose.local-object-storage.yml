@@ -1,9 +1,9 @@
-name: snapzy-local-object-storage
+name: cinderdeck-local-object-storage
 
 services:
   aws-s3:
     image: localstack/localstack:latest
-    container_name: snapzy-local-aws-s3
+    container_name: cinderdeck-local-aws-s3
     ports:
       - "${AWS_S3_PORT:-4566}:4566"
     environment:
@@ -13,14 +13,14 @@ services:
       AWS_DEFAULT_REGION: ${AWS_S3_REGION:-us-east-1}
       AWS_ACCESS_KEY_ID: ${AWS_S3_ACCESS_KEY_ID:-test}
       AWS_SECRET_ACCESS_KEY: ${AWS_S3_SECRET_ACCESS_KEY:-test}
-      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-snapzy-s3-local}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-cinderdeck-s3-local}
     volumes:
       - localstack-data:/var/lib/localstack
       - ./scripts/local-object-storage/bootstrap-localstack-s3.sh:/etc/localstack/init/ready.d/bootstrap-localstack-s3.sh:ro
 
   cloudflare-r2:
     image: minio/minio:latest
-    container_name: snapzy-local-cloudflare-r2
+    container_name: cinderdeck-local-cloudflare-r2
     command: server /data --console-address ":9001"
     ports:
       - "${R2_PORT:-9000}:9000"
@@ -33,14 +33,14 @@ services:
 
   cloudflare-r2-bootstrap:
     image: minio/mc:latest
-    container_name: snapzy-local-cloudflare-r2-bootstrap
+    container_name: cinderdeck-local-cloudflare-r2-bootstrap
     depends_on:
       - cloudflare-r2
     environment:
       R2_ENDPOINT: http://cloudflare-r2:9000
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-minioadmin}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-minioadmin123}
-      R2_BUCKET: ${R2_BUCKET:-snapzy-r2-local}
+      R2_BUCKET: ${R2_BUCKET:-cinderdeck-r2-local}
     entrypoint: ["/bin/sh", "/bootstrap/bootstrap-minio-r2.sh"]
     restart: "no"
     volumes:

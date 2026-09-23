@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-PBXPROJ="Snapzy.xcodeproj/project.pbxproj"
+PBXPROJ="Cinderdeck.xcodeproj/project.pbxproj"
 BUMP_TYPE="${1:-patch}"
 CHANNEL="${2:-stable}"
 

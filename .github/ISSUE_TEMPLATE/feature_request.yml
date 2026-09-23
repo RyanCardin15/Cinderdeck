@@ -1,5 +1,5 @@
 name: ✨ Feature Request
-description: Suggest a new feature or improvement for Snapzy
+description: Suggest a new feature or improvement for Cinderdeck
 title: "[Feature]: "
 labels: ["enhancement"]
 body:
@@ -22,7 +22,7 @@ body:
     attributes:
       label: Proposed Solution
       description: Describe the solution or feature you'd like to see.
-      placeholder: It would be great if Snapzy could...
+      placeholder: It would be great if Cinderdeck could...
     validations:
       required: true
 
@@ -38,7 +38,7 @@ body:
     id: feature-area
     attributes:
       label: Feature Area
-      description: Which part of Snapzy does this relate to?
+      description: Which part of Cinderdeck does this relate to?
       options:
         - Screenshots
         - Screen Recording

@@ -1,6 +1,6 @@
 //
 //  scrolling-capture-accuracy-benchmark.swift
-//  Snapzy
+//  Cinderdeck
 //
 //  Run from repository root:
 //  ./scripts/run-scrolling-capture-accuracy-benchmark.sh

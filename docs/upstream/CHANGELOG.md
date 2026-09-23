@@ -1,0 +1,2791 @@
+# Changelog
+
+All notable changes to Snapzy will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [1.32.3] - 2026-09-20
+
+### Features
+-  Add Sound Effects Toggle to Quick Access (#586) (1862794d)
+
+### Bug Fixes
+-  Fixed intermittent low-resolution window captures (#571) (cbf9811a)
+-  Restore pinned window dragging on macOS 27 (#584) (d082a7a4)
+
+### Contributors
+- @archibald-nice
+- @duongductrong
+- @github-actions[bot]
+- @rvanhorn
+
+## [1.32.2] - 2026-09-19
+
+### Bug Fixes
+- Merge pull request #588 from duongductrong/fix/quicklook-pdf-capture (c7800536)
+-  Fixed Quick Look previews in filtered captures (5e124ff6)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.32.1] - 2026-09-18
+
+### Features
+-  Added stroke border support to spotlight annotations (c41ad18c)
+
+### Bug Fixes
+-  Fixed recording annotation tool shortcuts bug (#579) (8beafc0a)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.32.0] - 2026-09-16
+
+### Features
+-  Added curve arrow control handle (#567) (beb8dcee)
+-  Added collapsible contributors section to About preferences (8e75afb2)
+-  Added pin action and shortcut to history floating panel (#552) (d860e7f6)
+-  Added camera overlay to screen recordings (#560) (41222250)
+-  Modernize preferences UI, settings navigation, and interactive onboarding flow (#557) (5b1e4393)
+-  Added drag-to-app to History cards with scroll-safe gesture arbitration (a8d633a8)
+-  Show progress and outcome for OCR capture (#505) (c81bd43b)
+-  Reduce friction in window/element capture — auto-detect under cursor, layered smart element detection (#472) (a30a9a02)
+
+### Bug Fixes
+-  Fixed recording-session shortcut gating timing bug (#517) (b48ee9ce)
+-  Fixed canvas hit testing under SwiftUI zoom/pan transforms (348bd768)
+-  Fixed selection chrome sizing during zoom (2dc8e9e5)
+-  Prevented corrupted seams during scrolling auto-scroll (#538) (e603c6af)
+-  Fixed selection tool active after selecting annotations (673984eb)
+-  Added AnnotateWindowEventRouter to isolate multi-window viewport (#553) (e204713b)
+-  Fixed Carbon hotkeys with CGEventTap for exact key matching (f591f320)
+-  Fixed allow drawing over existing annotations (#546) (126fc2e4)
+-  Fixed render canvas shadow in screenshot exports (#510) (4fa04df8)
+-  keep space-to-move selection locked to the pointer (#504) (cd39ebee)
+-  Fixed Pin DateFormatter to Gregorian locale for filename tokens (#486) (1bacf958)
+-  improve Japanese localization wording across Snapzy (#513) (2cc73e66)
+-  Update .gitignore content (af7095bc)
+-  Fixed percent-encode object-key path in AWS SigV4 presigned URLs (#491) (a9991aa4)
+-  Fixed surface hours in capture/video duration labels (#490) (5624a89b)
+
+### Chore
+- chore: Update README, SECURITY and APP_LIFECYCLE content (8ce63ad1)
+
+### Contributors
+- @BenjaminD2023
+- @RaviMaru20
+- @YuriNachos
+- @duongductrong
+- @github-actions[bot]
+- @lcopilot
+- @mukhtharcm
+- @tukuyomil032
+- @vxirau
+
+## [1.31.0] - 2026-08-15
+
+### Features
+-  enlarge screenshot magnifier and add pixel grid, crosshair, color picker (#466) (68e3d638)
+-  Add hover card action shortcuts and vsync hover performance optimizations (#485) (#487) (d66156fc)
+-  Add "Include window shadow in Application Capture" preference (#433) (#474) (c4986601)
+-  add repeat last area screenshot shortcut #460 (#475) (804c4e58)
+-  Add OCR text extraction (#468) (53f91eee)
+-  support copy, paste, and duplicate for annotation objects (#463) (48222557)
+-  Add Shift drawing constraints (#455) (815f742e)
+-  add text snapping for highlighter in annotate editor (#410) (938f46b7)
+-  add downloadable PP-OCR models and custom OCR endpoint support (#453) (1b0f52fe)
+-  add OCR result notification popup after text recognition (#450) (b5846ca8)
+-  add customizable menu bar menu and menu bar icon (#446) (bde6e57e)
+-  Gate recording session shortcuts to active recording sessions (5627a522)
+-  support line dash styles for stroke annotations (#444) (0d1b1d12)
+- : add crop edge snapping and auto-crop to content (#437) (#442) (7b861dbc)
+-  apply startup tool preference in standalone editor windows (eb181f2e)
+-  Add default and remembered annotation tools (#429) (fe8c99a3)
+-  Extend live capture passthrough to menu bar popovers (#430) (ea9fc3e4)
+-  Add Raycast integration and update documentation for automation tools (a6f8edf0)
+
+### Bug Fixes
+-  Fix non-retina draw non-exactly annotation (331fc30c)
+-  keep non-Retina screenshots at native pixel density (#452) (4747666e)
+-  publish selection pointer location to track crosshair and magnifier overlay during drag (f04cf634)
+-  recreate overlay window on space-membership loss in presentation watchdog (71f358e3)
+- : round-trip function-key shortcuts through export/import (#484) (368f30be)
+- : correct TOML string unescape so backslash+n/t round-trips on import (#481) (684b8353)
+-  pin Quick Access panel to capture screen on multi-display setups #467 (#479) (1f884f2d)
+-  retain hover states and transient UI in object cutout capture #422 (b7385ac1)
+-  verify area selection presentation via WindowServer and reassert space membership (05074a11)
+-  invalidate static drawing layers before item resize gesture (c34e1f03)
+-  handle first mouse in inline annotation canvas (ac27a33c)
+-  support layout-aware Settings menu item lookup for non-US keyboards (#311) (385ea09f)
+-  Preserve copied temp files on quick access dismiss and refine history defaults (#439) (4fbf4ffe)
+-  Fixed ja localization (#432) (2c285f76)
+
+### Chore
+- chore: fold beta entries and filter release noise in changelog scripts (e7ac9a59)
+- ci: fix ci build fails (3953cebe)
+- docs: update Raycast extension URLs in README files (af8b408a)
+- docs: add Japanese README (#465) (0405020e)
+- refactor: extract area selection presentation logic and add watchdog tests (819d1dc8)
+- refactor: remove downloadable PP-OCR models and custom OCR catalog (193f6775)
+- ci: fail release workflow on empty EdDSA signature (699322f9)
+- chore: update changelog shell (#441) (edf5c158)
+- ci: skip HotkeyUnregistrationTests on headless CI runners (01b09dcb)
+- fix: Fixed ja localization (#432) (2c285f76)
+
+### Contributors
+- @YuriNachos
+- @duongductrong
+- @github-actions[bot]
+- @kawarimidoll
+- @lcopilot
+- @motoish
+- @tukuyomil032
+
+## [1.30.1] - 2026-07-26
+
+### Features
+-  add scroll wheel magnifier zoom in live passthrough mode (d386a49)
+-  polish detected links floating prompt with native macOS material UI, copy actions, and window dragging (6500ddc)
+
+### Bug Fixes
+-  enable window drag and position persistence for visible toolbar (23dc9cf)
+-  add missing OCR link localization entries to Capture.xcstrings (a75c6cd)
+
+### Chore
+- style: elevate toast notifications with native macOS regularMaterial, continuous rounded corners, and spring animations (bafb0fd)
+- chore: update appcast, cask, readme, and docs for v1.30.0 (05425b9)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.30.0] - 2026-07-25
+
+### Features
+-  Preserve hover tooltips in live capture via event-tap passthrough (#416) (c2e922e)
+-  Reduce freeze-screen area capture latency (#411) (b8b5062)
+-  Added dim non-selected area preference for recording (#270) (#402) (d70d9fc)
+-  Enhance area selection session management (c5f1e9d)
+-  Add support for Fn key shortcuts and accessibility hints (f5a1a93)
+-  Implement endpoint editing for arrows and lines; update selection affordances (22766cb)
+-  Add double-sided arrow in the mark-up (#368) (b299bad)
+-  Enhance arrow features with new styles, types, and bend directions; update rendering and testing (#363) (7be2e80)
+-  Introduce arrow types and integrate into annotation features (#363) (ff259de)
+-  Update arrow styles to curvedRight and curvedLeft, enhancing annotation flexibility (#363) (edf0975)
+-  Add configurable recording controls and menu bar indicators (#369) (d5cbc30)
+-  Enable cloud upload for Video/GIF in Video Editor (#360) (2dbb53d)
+-  Detect hyperlinks in OCR captured text and offer to open them (#347) (7103bed)
+-  Implement combine session persistence and save behavior (d0edfef)
+-  Add Google Drive Cloud service and configuration support (#358) (e96a20e)
+
+### Bug Fixes
+-  Optimized rendering and undo management for annotation properties and status items (#335) (4fb0eff)
+-  Fixed screenshot overlay drag cursor handling (#336) (b70f187)
+-  Fixed coordinate indicator behavior during selection and drag events (056b044)
+-  Fixed coordinate indicator handling during layout passes and re-renders (2bcbfd4)
+-  Restore markup on combined images and enhance text editing (#377) (62f4782)
+-  Fixed area capture hang on macOS 13 when Snapzy is excluded from screenshots (#385) (97832ca)
+-  Fixed pause offset handling in RecordingSession and update ScreenRecordingManager and tests (#322) (70f7f36)
+-  Modify scrolling capture to resolve scrolling capture fails on an external display (#374) (048389b)
+-  Update localization strings for various actions and add new entries (a88af01)
+- : polish Chinese localization (#367) (1ec80af)
+
+### Chore
+- chore: update appcast and docs for v1.30.0-beta.16 (716bfe4)
+- chore: bump version to v1.30.0-beta.16 (#420) (a51b5e6)
+- ci: bump actions off nodejs 20 (#417) (fc9172e)
+- chore: update appcast and docs for v1.30.0-beta.15 (26cb548)
+- chore: bump version to v1.30.0-beta.15 (#415) (bcda01f)
+- chore: add Zed task configuration for build and run (5a4b0f4)
+- docs: update docs version stamps (#404) (43cdfcc)
+- chore: update appcast for v1.30.0-beta.14 (3d7df1e)
+- chore: bump version to v1.30.0-beta.14 (#403) (8b26082)
+- chore: update appcast for v1.30.0-beta.13 (3737ec2)
+- chore: bump version to v1.30.0-beta.13 (#400) (732cbcc)
+- chore: bump version to v1.30.0-beta.13 (#397) (3651df2)
+- chore: update appcast for v1.30.0-beta.12 (8c7e639)
+- chore: bump version to v1.30.0-beta.12 (#395) (01287cb)
+- chore: update appcast for v1.30.0-beta.11 (e824615)
+- chore: bump version to v1.30.0-beta.11 (#394) (480502a)
+- chore: update appcast for v1.30.0-beta.10 (7a86f6b)
+- chore: bump version to v1.30.0-beta.10 (#393) (c7d60e5)
+- chore: update appcast for v1.30.0-beta.9 (4da02cc)
+- chore: bump version to v1.30.0-beta.9 (#392) (d194cd0)
+- chore: update appcast for v1.30.0-beta.8 (5526b1c)
+- chore: bump version to v1.30.0-beta.8 (#391) (ed8b49e)
+- refactor: Improve QuickAccessPanelController transitions and add tests for edge cases (b50463c)
+- chore: update appcast for v1.30.0-beta.7 (94d58ce)
+- chore: bump version to v1.30.0-beta.7 (#390) (b7041ba)
+- refactor: Eliminate canvas lag and color flicker with layer-composition rendering (#389) (abdf8ae)
+- perf: Eliminate Quick Access card reappear jank on annotate save-and-close (#388) (af5dcf7)
+- chore: update appcast for v1.30.0-beta.6 (7cf924b)
+- chore: bump version to v1.30.0-beta.6 (#387) (6389972)
+- chore: update appcast for v1.30.0-beta.5 (91e46d6)
+- chore: bump version to v1.30.0-beta.5 (#386) (c1afcf6)
+- docs: Add documentation for new features and updates (0fe3ca6)
+- refactor: Remove upload to cloud functionality and related configurations (dd4ccd5)
+- chore: update appcast for v1.30.0-beta.4 (45ff8cd)
+- chore: bump version to v1.30.0-beta.4 (#383) (108e902)
+- chore: update appcast for v1.30.0-beta.3 (4885f57)
+- chore: bump version to v1.30.0-beta.3 (#376) (d624083)
+- chore: update appcast for v1.30.0-beta.2 (486424c)
+- chore: bump version to v1.30.0-beta.2 (#370) (47978d1)
+- chore: update appcast for v1.30.0-beta.1 (abb2850)
+- chore: bump version to v1.30.0-beta.1 (#361) (d03b231)
+- chore: update appcast, cask, and readme for v1.29.1 (74fcc44)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+- @menmer0859
+- @motoish
+- @omarshahine
+
+## [1.30.0-beta.16] - 2026-07-25
+
+### Features
+-  Preserve hover tooltips in live capture via event-tap passthrough (#416) (c2e922e)
+
+### Chore
+- ci: bump actions off nodejs 20 (#417) (fc9172e)
+- chore: update appcast and docs for v1.30.0-beta.15 (26cb548)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+- @motoish
+
+## [1.30.0-beta.15] - 2026-07-23
+
+### Features
+-  Reduce freeze-screen area capture latency (#411) (b8b5062)
+
+### Chore
+- chore: add Zed task configuration for build and run (5a4b0f4)
+- docs: update docs version stamps (#404) (43cdfcc)
+- chore: update appcast for v1.30.0-beta.14 (3d7df1e)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+- @motoish
+
+## [1.30.0-beta.14] - 2026-07-21
+
+### Features
+-  Added dim non-selected area preference for recording (#270) (#402) (d70d9fc)
+
+### Chore
+- chore: update appcast for v1.30.0-beta.13 (3737ec2)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.30.0-beta.13] - 2026-07-21
+
+### Bug Fixes
+-  Optimized rendering and undo management for annotation properties and status items (#335) (4fb0eff)
+
+### Chore
+- chore: bump version to v1.30.0-beta.13 (#397) (3651df2)
+- chore: update appcast for v1.30.0-beta.12 (8c7e639)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.30.0-beta.12] - 2026-07-20
+
+### Features
+-  Enhance area selection session management (c5f1e9d)
+
+### Chore
+- chore: update appcast for v1.30.0-beta.11 (e824615)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.30.0-beta.11] - 2026-07-20
+
+### Features
+-  Add support for Fn key shortcuts and accessibility hints (f5a1a93)
+
+### Chore
+- chore: update appcast for v1.30.0-beta.10 (7a86f6b)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.30.0-beta.10] - 2026-07-19
+
+### Bug Fixes
+-  Fixed screenshot overlay drag cursor handling (#336) (b70f187)
+
+### Chore
+- chore: update appcast for v1.30.0-beta.9 (4da02cc)
+
+### Contributors
+- @github-actions[bot]
+- @omarshahine
+
+## [1.30.0-beta.9] - 2026-07-19
+
+### Bug Fixes
+-  Fixed coordinate indicator behavior during selection and drag events (056b044)
+-  Fixed coordinate indicator handling during layout passes and re-renders (2bcbfd4)
+
+### Chore
+- chore: update appcast for v1.30.0-beta.8 (5526b1c)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.30.0-beta.8] - 2026-07-19
+
+### Chore
+- refactor: Improve QuickAccessPanelController transitions and add tests for edge cases (b50463c)
+- chore: update appcast for v1.30.0-beta.7 (94d58ce)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.30.0-beta.7] - 2026-07-19
+
+### Chore
+- refactor: Eliminate canvas lag and color flicker with layer-composition rendering (#389) (abdf8ae)
+- perf: Eliminate Quick Access card reappear jank on annotate save-and-close (#388) (af5dcf7)
+- chore: update appcast for v1.30.0-beta.6 (7cf924b)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.30.0-beta.6] - 2026-07-18
+
+### Bug Fixes
+-  Restore markup on combined images and enhance text editing (#377) (62f4782)
+
+### Chore
+- chore: update appcast for v1.30.0-beta.5 (91e46d6)
+
+### Contributors
+- @github-actions[bot]
+- @menmer0859
+
+## [1.30.0-beta.5] - 2026-07-18
+
+### Bug Fixes
+-  Fixed area capture hang on macOS 13 when Snapzy is excluded from screenshots (#385) (97832ca)
+
+### Chore
+- docs: Add documentation for new features and updates (0fe3ca6)
+- refactor: Remove upload to cloud functionality and related configurations (dd4ccd5)
+- chore: update appcast for v1.30.0-beta.4 (45ff8cd)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.30.0-beta.4] - 2026-07-17
+
+### Features
+-  Implement endpoint editing for arrows and lines; update selection affordances (22766cb)
+-  Add double-sided arrow in the mark-up (#368) (b299bad)
+
+### Bug Fixes
+-  Fixed pause offset handling in RecordingSession and update ScreenRecordingManager and tests (#322) (70f7f36)
+
+### Chore
+- chore: update appcast for v1.30.0-beta.3 (4885f57)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.30.0-beta.3] - 2026-07-15
+
+### Features
+-  Enhance arrow features with new styles, types, and bend directions; update rendering and testing (#363) (7be2e80)
+-  Introduce arrow types and integrate into annotation features (#363) (ff259de)
+-  Update arrow styles to curvedRight and curvedLeft, enhancing annotation flexibility (#363) (edf0975)
+
+### Bug Fixes
+-  Modify scrolling capture to resolve scrolling capture fails on an external display (#374) (048389b)
+-  Update localization strings for various actions and add new entries (a88af01)
+
+### Chore
+- chore: update appcast for v1.30.0-beta.2 (486424c)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+- @motoish
+
+## [1.30.0-beta.2] - 2026-07-14
+
+### Features
+-  Add configurable recording controls and menu bar indicators (#369) (d5cbc30)
+
+### Bug Fixes
+- : polish Chinese localization (#367) (1ec80af)
+
+### Chore
+- chore: update appcast for v1.30.0-beta.1 (abb2850)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+- @menmer0859
+
+## [1.30.0-beta.1] - 2026-07-13
+
+### Features
+-  Enable cloud upload for Video/GIF in Video Editor (#360) (2dbb53d)
+-  Detect hyperlinks in OCR captured text and offer to open them (#347) (7103bed)
+-  Implement combine session persistence and save behavior (d0edfef)
+-  Add Google Drive Cloud service and configuration support (#358) (e96a20e)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.29.1 (74fcc44)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+- @menmer0859
+- @omarshahine
+
+## [1.29.1] - 2026-07-12
+
+### Features
+-  Implement live area capture with mouse-up snapshots and add unit tests (#348) (cba47af)
+
+### Bug Fixes
+-  Prevent area selection dismissal after capturing a screenshot (#352) (8b7a8f3)
+-  Update Russian localization strings in Menubar (#345) (71e3658)
+
+### Chore
+- chore: update appcast for v1.29.1-beta.2 (670545c)
+- chore: bump version to v1.29.1-beta.2 (#353) (d4b1216)
+- chore: update appcast for v1.29.1-beta.1 (fac1a62)
+- chore: bump version to v1.29.1-beta.1 (#349) (765738f)
+- refactor: Remove unnecessary drawingGroup modifier from HistoryCardView and HistoryExpandedCaptureCardView (308ae6d)
+- chore: update appcast, cask, and readme for v1.29.0 (b2bef32)
+
+### Contributors
+- @5e3ru4o
+- @duongductrong
+- @github-actions[bot]
+
+## [1.29.1-beta.2] - 2026-07-11
+
+### Bug Fixes
+-  Prevent area selection dismissal after capturing a screenshot (#352) (8b7a8f3)
+
+### Chore
+- chore: update appcast for v1.29.1-beta.1 (fac1a62)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.29.1-beta.1] - 2026-07-09
+
+### Features
+-  Implement live area capture with mouse-up snapshots and add unit tests (#348) (cba47af)
+
+### Bug Fixes
+-  Update Russian localization strings in Menubar (#345) (71e3658)
+
+### Chore
+- refactor: Remove unnecessary drawingGroup modifier from HistoryCardView and HistoryExpandedCaptureCardView (308ae6d)
+- chore: update appcast, cask, and readme for v1.29.0 (b2bef32)
+
+### Contributors
+- @5e3ru4o
+- @duongductrong
+- @github-actions[bot]
+
+## [1.29.0] - 2026-07-07
+
+### Features
+-  Add stable/beta update channels support and preference UI (#339) (956a451)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.28.2 (f8ea345)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.28.2] - 2026-07-06
+
+### Bug Fixes
+-  Enhance mouse exit behavior to hide coordinate indicator and magnifier layers (8b6928f)
+-  lock window movement and resizing for overlay panels (266467e)
+-  reorder uninstall steps and enhance TCC permissions reset logic (51b179a)
+
+### Chore
+- docs: Add reset permissions section to README files for TCC management (7c8eeb5)
+- chore: Add reset-permissions script to manage TCC permissions for Snapzy (d441cfc)
+- chore: update appcast, cask, and readme for v1.28.1 (8b5daf4)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.28.1] - 2026-07-05
+
+### Bug Fixes
+-  Update size indicator appearance for improved contrast and readability (3bc3f92)
+-  Introduce RecaptureReason enum and update recapture logic for area selection (9957125)
+-  Simplify coordinate text generation in AreaSelectionOverlayView for improved readability (32e43ad)
+-  Update size indicator appearance and positioning for better visibility (caed9ee)
+-  Simplify coordinate indicator updates by removing selectionEnabled checks in AreaSelectionOverlayView (f7507c3)
+-  Enhance cursor handling for inactive application panels by posting synthetic mouse events (9585952)
+-  Ensure proper cursor rect evaluation by posting synthetic mouse-moved events for inactive application panels (97e9cb6)
+-  Implement pointer tracking for non-activated live sessions to enhance cross-display cursor behavior (7240d0c)
+-  Update area selection capture logic to use CGDisplayBounds for accurate coordinate space handling (f821e6c)
+
+### Chore
+- refactor: Refactor shadow configuration for crosshair and size indicators for improved readability (3e16293)
+- chore: update appcast, cask, and readme for v1.28.0 (ecfccec)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.28.0] - 2026-07-04
+
+### Features
+-  Integrate AreaSelectionMagnifier for enhanced zoom functionality in AreaSelectionOverlayView (b7c764b)
+-  Add reverse magnifier zoom direction preference and implement functionality in AreaSelectionOverlayView (#204) (2312952)
+-  Implement dynamic backdrop capture for live-mode luma calculations and enhance overlay behavior (7df98da)
+-  Add selection area overlay feature with localization and tests (#204) (b7be89f)
+-  Add history and quick access sections to shortcut overlay (d53ff1f)
+-  Add Cmd+A shortcut handling for selecting all records in HistoryFloatingPanel and HistoryMainView (f4d11df)
+-  Implement toggle mode shortcut for history panel (74f73db)
+-  Add GPU-cached drop shadow for Quick Access cards and corresponding unit tests (13d317e)
+-  Enhance microphone audio capture settings to ensure proper resampling and prevent spectral imaging artifacts (cabccfc)
+-  Refine audio level meter and waveform rendering for improved responsiveness (#313) (fa6a23b)
+-  Implement audio level metering for recording status bar waveform (#313) (566b1d4)
+-  Enhance capture context handling for filename templates (#314) (19bbbe1)
+-  Add speed segment functionality to Video Editor (#316) (b242b50)
+
+### Bug Fixes
+-  Update localization for "Annotate" and add open history description (8645fa6)
+-  Update translations for "Annotate" in multiple languages (c975f13)
+-  Add history shortcuts section and description to localization files (ff8d611)
+-  Integrate RecordingToolbarState into RecordingStatusBarView and RecordingToolbarWindow for improved state management (b0594a3)
+-  Implement Escape key handling for topmost capture-area overlay in RecordingCoordinator (1224976)
+-  Update CI handling in test scripts to improve package caching and directory creation (ec994e8)
+-  Add debug hooks for synthetic mouse events and adjust publish interval for testing in audio level meter (b8b9f5a)
+-  Implement mouse monitor suspension and resumption for quick access panels during capture operations (c709159)
+-  Update localization strings for Spanish and French (#321) (a03c540)
+-  Settings capture interaction block and cursor drop (2066ba9)
+
+### Chore
+- refactor: Add new configuration fields for menu bar icon, screenshot options, and quick access actions (b898080)
+- refactor: Enhance cursor appearance with custom application window cursor (c54f669)
+- refactor: Remove toggle mode shortcut settings from HistorySettingsView (b6cd5e1)
+- refactor: Implement transition re-freeze functionality for frozen sessions and add related tests (a5f0128)
+- refactor: Implement dynamic backdrop capture for magnifier zoom in backdrop-less sessions (430cf97)
+- refactor: Add cursor refresh functionality during selection phase and improve cursor handling in InlineAreaAnnotateSession (41ff375)
+- refactor: Improve luma sampling accuracy by deriving scale from image dimensions and add related tests (94fb7c4)
+- refactor: Enhance cursor rendering with improved shadow effects and color adjustments (24f3c56)
+- refactor: Add scripts for generating and testing DMG layout with custom background (e8b2b36)
+- refactor: Refactor and rename video editor components for clarity (c424708)
+- refactor: Remove DEBUG conditional compilation for synthetic mouse event handling and improve audio format handling in tests (fee5c75)
+- chore: automate minimum macOS version detection in appcast update (6f92993)
+- chore: update appcast, cask, and readme for v1.27.0 (0144134)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+- @jmcubel
+- @singularitti
+
+## [1.27.0] - 2026-06-29
+
+### Features
+-  Add quick access shortcut for editing the latest capture (adc00dd)
+-  Add a keyboard shortcut to edit the latest capture from its preview (#295) (1215697)
+-  Snap video trim handles to playhead (#300) (4aaf3c7)
+-  Add URL scheme integration toggle in advanced settings and update documentation (f65fd7f)
+
+### Bug Fixes
+-  Implement multi-display capture functionality for area screenshots (#308) (10bb15f)
+-  Enhance area screenshot functionality with multi-display correctness and selection modes (#308) (f5018dc)
+-  Support Fn key in shortcut recording and matching (#306) (2b673f1)
+
+### Chore
+- chore: Enhance discard edits and close logic with unsaved changes alert (5f37d68)
+- refactor: Add toggle for enabling/disabling open editor shortcut (42ac6e4)
+- chore: configure swiftformat settings and workflows (838bd2a)
+- chore: update appcast, cask, and readme for v1.26.0 (4854a9b)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+- @rv4no
+- @vxirau
+- @williamcachamwri
+
+## [1.26.0] - 2026-06-27
+
+### Features
+-  Add spotlight annotation tool with adjustable opacity and corner radius (#297) (4f9e5cb)
+-  Update area capture settings to allow live screen selection and add localization for freeze area option (e05bf57)
+
+### Bug Fixes
+-  increase menu bar icon scale (#301) (39aa146)
+
+### Chore
+- refactor: Add spotlight opacity property to annotation state and test persistence (21b9090)
+- chore: Add localization for menu bar icon descriptions and titles in multiple languages (c6c22fd)
+- chore: update appcast, cask, and readme for v1.25.2 (0609f2d)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+- @j178
+- @rv4no
+- @vxirau
+
+## [1.25.2] - 2026-06-26
+
+### Bug Fixes
+-  Improve drag-and-drop functionality for Quick Access customization and update drag payload handling (0177932)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.25.1 (6708e85)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.25.1] - 2026-06-25
+
+### Bug Fixes
+-  Enhance Quick Access customization with drag-and-drop reordering support (#271) (dec814f)
+-  restore activation policy when preferences window closes (#275) (d88b86f)
+
+### Chore
+- chore(ci): skip AppStatusBarControllerTests in GitHub Actions runner (#275) (5562b7e)
+- chore: update install.sh, homebrew cask, and readme for notarized app (143b158)
+- chore: update appcast, cask, and readme for v1.25.0 (67a9aaf)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.25.0] - 2026-06-25
+
+### Features
+-  Implement dry-run release script for local signing and verification (4140af8)
+-  Welcome Apple Notarization updates (b51ebb5)
+-  add optional global shortcuts for active recording toolbar features (4eb5528)
+
+### Bug Fixes
+- : prevent launch blocking on macOS 27 sandbox migration error (#277) (195d775)
+-  normalize export_location to tilde-relative path on export (#278) (24b34f6)
+
+### Chore
+- ci: Update release publish workflow to support secret-based release flags (fecaeaf)
+- chore: bump version to v1.25.0 (#280) (18432cf)
+- chore: Add localization for pause/resume recording shortcuts and update related tests (#273) (fda0eae)
+- chore: update appcast, cask, and readme for v1.24.0 (1be5ec1)
+- chore: bump version to v1.24.0 (#269) (6a55d58)
+- ci: Enhance release notes handling by saving to a file and updating appcast.xml with new variables (51bbe43)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+- @st1020
+
+## [1.24.0] - 2026-06-22
+
+### Features
+-  Introduce feature onboarding with "What's New" campaigns and localization support (a68f13e)
+-  Enhance Quick Access integration with video editor window management (61eb236)
+-  Smart element capture (#260) (dbc0dc5)
+-  Add quick access settings for hiding cards when windows are open and animation style selection (#224) (a45b2ce)
+
+### Bug Fixes
+-  Update app sandbox entitlement check in release publish workflow (b5f4b16)
+
+### Chore
+- ci: Enhance release notes handling by saving to a file and updating appcast.xml with new variables (51bbe43)
+- chore: bump version to v1.24.0 (#267) (0d56c92)
+- chore: bump version to v1.24.0 (#265) (cc27a3c)
+- chore: add missing localization strings and fix empty values (353585e)
+- chore: update appcast, cask, and readme for v1.23.0 (3a1237b)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.23.0] - 2026-06-20
+
+### Features
+-  Enhance shortcut handling for annotation tools and improve import validation (#257) (c9e2b82)
+-  add overlay-free active-window quick capture (#255) (03960c4)
+
+### Bug Fixes
+-  Support cross-display drag, resize, and reselect in recording region overlay (#253) (abd6443)
+-  Enhance area selection logging and improve screen resolution handling (#253) (bbbe99b)
+-  defer quick access dismiss cleanup (#256) (88adf94)
+
+### Chore
+- feat: add overlay-free active-window quick capture (#255) (03960c4)
+- chore: update appcast, cask, and readme for v1.22.4 (efd03ef)
+
+### Contributors
+- @chkzz
+- @duongductrong
+- @github-actions[bot]
+- @jjoanna2-debug
+
+## [1.22.4] - 2026-06-17
+
+### Bug Fixes
+-  Improve copyMediaFile utility for clipboard handling of media files (c4673fc)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.22.3 (a5d2394)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.22.3] - 2026-06-16
+
+### Features
+-  Implement swipe actions for Quick Access cards with customizable settings (72e645b)
+
+### Bug Fixes
+-  resolve localization catalog drift in QuickAccess.xcstrings (fd77aa8)
+-  Support both trackpad swipe directions for Quick Access dismiss with natural scrolling and improve OCR (#245) (cae702b)
+-  Restore cursor to arrow on window close to prevent persistence of incorrect cursor states (dcf8fa2)
+
+### Chore
+- refactor: Change default trackpad swipe mode to inverted and update related tests (1b38df3)
+- fix: Support both trackpad swipe directions for Quick Access dismiss with natural scrolling and improve OCR (#245) (cae702b)
+- refactor: Optimize window hiding delay and improve overlay rendering efficiency (cdae801)
+- chore: update appcast, cask, and readme for v1.22.2 (1d5dacd)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+- @williamcachamwri
+
+## [1.22.2] - 2026-06-12
+
+### Bug Fixes
+-  Optimize snapshot capturing with async task group and reuse mask layer (#242) (45e9f2d)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.22.1 (7cbef1d)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.22.1] - 2026-06-12
+
+### Bug Fixes
+-  retain and restore previously active application during area selection (#242) (8ab3030)
+-  commit first area-selection drag and apply cursor on capture start (#242) (#244) (66cd6eb)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.22.0 (3a7c3ff)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+- @omarshahine
+
+## [1.22.0] - 2026-06-11
+
+### Features
+-  Add two-finger swipe-to-dismiss functionality for Quick Access cards (#240) (591b0e4)
+
+### Bug Fixes
+-  Update app icon assets and add padded app icon generation (#241) (22baf56)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.21.0 (417da33)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.21.0] - 2026-06-09
+
+### Features
+-  Improve annotate item behavior blur and focus (1e6a002)
+-  Add new blur styles and corresponding tests for hexagonal, crystallized, pointillism, halftone, tape, and washi effects (950ea8a)
+-  Add auto redaction shortcut functionality (c18bab4)
+
+### Bug Fixes
+-  update deprecated stanza (#238) (923b4f1)
+
+### Chore
+- refactor: Simplify context chip rendering by removing full context condition and unused functions (eef8fd2)
+- chore: update appcast, cask, and readme for v1.20.8 (58cf7d6)
+
+### Contributors
+- @Justin24506
+- @duongductrong
+- @github-actions[bot]
+
+## [1.20.8] - 2026-06-07
+
+### Features
+-  Add new aspect ratio options (3:4 and 2:3) to export settings and update related tests (2f45526)
+-  Implement drag intent requirement for specific annotation tools and enhance drawing interaction logic (d445f35)
+-  Add arrow bend direction functionality to annotation tools (876f0e2)
+-  Enhance Quick Properties Bar and Inline Area Properties Bar with Editing State Management (fe48b6c)
+
+### Bug Fixes
+-  Update window activation logic for annotation and video editor windows (05ec70d)
+-  Reorder clipboard copy and Quick Access actions in PostCaptureActionHandler for improved performance (#234) (c8a3bad)
+
+### Chore
+- refactor: Enhance localization for video editor sidebar hints and common messages (266196c)
+- refactor: Refactor toolbar button and divider styles for improved UI consistency (21d0bb9)
+- refactor: Improve image scaling and promotion logic for screen captures and enhance test coverage for cropping functionality (97b0436)
+- chore: update appcast, cask, and readme for v1.20.7 (902c1ad)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.20.7] - 2026-06-06
+
+### Bug Fixes
+-  Enhance clipboard image copying to ensure sandbox extensions and support inline pasting (#234) (8aeda5a)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.20.6 (fc0a303)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.20.6] - 2026-06-05
+
+### Bug Fixes
+-  Implement database recovery flow and enhance error handling for database operations (#223) (5f438f3)
+
+### Chore
+- chore: Add mixdown input volume calculation and logging for audio sample formats (#210) (fe84ebe)
+- chore: update appcast, cask, and readme for v1.20.5 (35ef3e6)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.20.5] - 2026-06-05
+
+### Features
+-  Implement zoom functionality for Quick Access pin window with scroll and pinch gestures (d678ca9)
+
+### Bug Fixes
+- fix: handle database launch failures with repair/reset recovery instead of crashing silently (#223)
+
+### Chore
+- chore: Update localized strings for sponsor and donation buttons in Settings (26e37c4)
+- refactor: Refactor HistoryBackdropView for improved layout and styling in HistorySettingsView (8e93613)
+- chore: Enhance sponsor section with improved layout and action buttons (e5b8900)
+- chore: update appcast, cask, and readme for v1.20.4 (aa52e7c)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.20.4] - 2026-06-03
+
+### Features
+-  enhance image rotation functionality and add layout rect preservation for text annotations (bbf25c2)
+-  add 90° image rotation buttons to annotate editor (#226) (7ed1334)
+
+### Bug Fixes
+-  don't drop first click on area selection overlay while backdrop is pending (#228) (70b9dc0)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.20.3 (8eacd47)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+- @omarshahine
+
+## [1.20.3] - 2026-06-01
+
+### Features
+-  Add pinning functionality for screenshots in Quick Access and update related components (#225) (60ca604)
+-  Enhance keyboard shortcuts for inline annotation, adding Cmd+C for copying images and updating documentation (#217) (cda583a)
+
+### Chore
+- refactor: Implement stepped value binding for sliders to enhance user control in annotation and preferences settings (933ffa2)
+- chore: update appcast, cask, and readme for v1.20.2 (8ae6e65)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.20.2] - 2026-05-30
+
+### Features
+-  Update capture naming templates and improve directory handling for screenshots and recordings (#221) (355bfc8)
+
+### Bug Fixes
+-  Simplify drag handling and improve gesture classification in Quick Access components (#220) (787c6da)
+
+### Chore
+- refactor: Update debug configuration with separate bundle name and identifier for local development (a135921)
+- chore: update appcast, cask, and readme for v1.20.1 (999c47b)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.20.1] - 2026-05-27
+
+### Features
+-  Enhance color palette functionality with favorite selection and custom color drafting (1c6ac2a)
+-  add application capture and recording actions to deep link handler and update documentation (c45585e)
+
+### Chore
+- chore: Remove duplicate payment link from FUNDING.yml (33e9672)
+- chore: update appcast, cask, and readme for v1.20.0 (0a9f419)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.20.0] - 2026-05-24
+
+### Features
+-  Implement TOML configuration import/export with auto-apply on startup (#213) (5bac89a)
+-  Implement TOML configuration export and import for user preferences (#213) (84b8665)
+
+### Chore
+- chore: downgrade project version to 1.19.0 and update current project version to 107 (9f14cff)
+- refactor: Update sync test methods to use async/await for improved concurrency handling (2e6925b)
+- chore: bump version to v1.20.0 (#214) (e012c58)
+- refactor: Update onboarding flow to keep user on access step until confirmation (8a0981a)
+- refactor: Implement SnapzyConfigurationSyncCoordinator for background sync of config.toml (#213) (af7dbd9)
+- refactor: Implement configuration sync feature with user confirmation for external changes and localization updates (#213) (f5db99a)
+- refactor: Enhance restore defaults functionality with confirmation and localization updates (1489b6b)
+- refactor: Add diagnostics settings to advanced preferences and localization updates (de7704e)
+- chore: update appcast, cask, and readme for v1.19.0 (ef580c5)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.19.0] - 2026-05-23
+
+### Features
+-  Implement auto-scrolling functionality with accessibility support in scrolling capture (#106) (2ed9fa9)
+
+### Bug Fixes
+-  stabilize auto-scroll ci tests (08aefb0)
+
+### Chore
+- refactor: Refactor auto-scroll toggle logic and enhance related unit tests (7e97c9e)
+- chore: update appcast, cask, and readme for v1.18.0 (7307845)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.18.0] - 2026-05-22
+
+### Features
+-  Improve Quick Access card actions with enhanced state management and visual feedback (041abc1)
+-  Enhance screenshot preset auto-application with lightweight canvas effect rendering (2f87868)
+-  Implement persisted annotation session management (34ee68c)
+-  Implement screenshot preset auto-application and enhance annotation session management (#197) (dad78d4)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.17.2 (106a7bb)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.17.2] - 2026-05-22
+
+### Features
+-  Add quick properties synchronization feature for annotation tools (#189) (a35c277)
+-  Enhance Annotate functionality and preferences (#141) (a8fe89a)
+
+### Bug Fixes
+-  Implement vertical CJK OCR normalization and bitmap analysis (#184) (2fac38e)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.17.1 (c2a5e9a)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.17.1] - 2026-05-21
+
+### Chore
+- chore: Allow optional size for color swatch buttons and custom color picker (752bf24)
+- chore: Add build and run script for Snapzy (306409b)
+- chore: update appcast, cask, and readme for v1.17.0 (384851a)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.17.0] - 2026-05-20
+
+### Features
+-  Add clipboard image behavior settings and localization for Annotate (#104) (30f41b8)
+-  Implement color palette management for annotation tools (#189, #188) (77ffa22)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.16.4 (60a41c3)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.16.4] - 2026-05-19
+
+### Bug Fixes
+-  correct Simplified and Traditional Chinese UI translations (#202) (3b9a9d4)
+-  Update ClipboardHelper to write single pasteboard item with multiple representations (#199) (0d85eb8)
+-  Use native keyEquivalent column for overlay menu shortcuts (#200) (f5d3d9b)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.16.3 (639a01a)
+
+### Contributors
+- @duongductrong
+- @gengjiawen
+- @github-actions[bot]
+
+## [1.16.3] - 2026-05-19
+
+### Chore
+- refactor: Simplify thumbnail rendering and improve card shape handling in QuickAccessCardView (1725fe8)
+- docs: Add Trendshift badge to README files for visibility (9ea07ae)
+- chore: update appcast, cask, and readme for v1.16.2 (4bc5042)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.16.2] - 2026-05-17
+
+### Features
+-  Add microphone input selection for screen recordings (#192) (257a45e)
+-  Add cursor visibility option in recording settings and update related functionality (#196) (70ba706)
+
+### Chore
+- refactor: Synchronize window levels with focus state in Annotate and VideoEditor windows (27a6d3b)
+- refactor: Enhance QuickAccessPanel and QuickAccessManager with interaction metrics and mouse passthrough updates (fb7d9ca)
+- chore: update appcast, cask, and readme for v1.16.1 (6cb8a96)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.16.1] - 2026-05-17
+
+### Features
+-  use camera cursor in application capture mode (#193) (04363b8)
+
+### Chore
+- refactor: Update RecordingMouseTracker and its tests for MainActor compliance (ebb8ee0)
+- refactor: Enhance RecordingMouseTracker initialization with providers and improve file size retrieval in CaptureHistoryStore (1a9df3d)
+- chore: Add custom scrollbar and scroll view reader for history panel (25b5cf8)
+- docs: Add GitHub badges for stars, forks, and downloads to README files (6212e79)
+- docs: Add acknowledgments section to README files with inspiration source (44d13af)
+- chore: update appcast, cask, and readme for v1.16.0 (0ee625f)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+- @omarshahine
+
+## [1.16.0] - 2026-05-16
+
+### Features
+-  Implement toggle sidebar functionality with keyboard shortcut support (cmd+b) (e2c699a)
+-  add blurred background effects to annotation canvas (cab959d)
+-  Add background ratio and orientation options for annotation canvas (#185) (7f8e6dc)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.15.1 (60eff5b)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.15.1] - 2026-05-15
+
+### Chore
+- chore: Introduce default enabled actions for Quick Access and update reset logic (67053fd)
+- chore: update appcast, cask, and readme for v1.15.0 (1dc4122)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.15.0] - 2026-05-15
+
+### Features
+-  Implement pinned screenshot windows with QuickAccessPinWindow and manager (#183) (2464978)
+-  Add refresh icon to status bar menu for improved user experience (#182) (0b2c6f9)
+-  Enhance image cropping functionality with improved scaling and pixel alignment for multi-display support (ddabdaa)
+-  Enhance inline area annotation with multi-display support (#178) (0b46662)
+-  Enhance multi-display screenshot functionality and improve capture session management (#178) (b847718)
+-  Add cloud upload functionality for capture history items with localization support (13c242f)
+-  Implement Quick Access action customization and configuration (6ce0b1a)
+
+### Bug Fixes
+-  Enhance localization error reporting with detailed missing and extra keys (ed15e1d)
+-  Enhance multi-display capture functionality with target display selection (e5fe606)
+-  Improve capture markup sharpness by aligning cropped images to display pixel grid (#180) (3bf8565)
+
+### Chore
+- chore: Enhance Quick Access action configuration UI with improved layout and styling (ae428ee)
+- chore: update appcast, cask, and readme for v1.14.3 (e41eb87)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.14.3] - 2026-05-12
+
+### Features
+-  Add context menu and hover actions to Quick Access cards, including localization for "Move to Trash" (1778bf1)
+-  Implement default canvas preset functionality and update related UI components (#177) (a045a31)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.14.2 (8595a26)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.14.2] - 2026-05-11
+
+### Bug Fixes
+-  Enable default shortcut for area screenshot + inline annotate and update documentation (583787d)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.14.1 (ccc8a88)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.14.1] - 2026-05-11
+
+### Bug Fixes
+-  Improve Capture Markup inline doesn't work in macOS 15 and Add inline area control geometry tests for placement and insets (#40) (3e9ff1c)
+
+### Chore
+- docs: Update README and documentation to include inline area annotate feature details (eac5205)
+- chore: update appcast, cask, and readme for v1.14.0 (d74c7cf)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.14.0] - 2026-05-10
+
+### Features
+-  Add inline area annotate capture functionality (#160, #40) (2b7b9aa)
+
+### Chore
+- refactor: Add default shortcut support to shortcut recorder views (6d28e11)
+- refactor: Replace placeholder text with localized call-to-action views in shortcut recorders (34b6b80)
+- refactor: Refactor shortcut handling to support optional configurations (c834446)
+- refactor: Remove background color from AnnotateQuickPropertiesBar (23d3d27)
+- refactor: Enhance InlineAreaAnnotateRootView with dynamic properties bar width and content width tracking (8ce3c27)
+- refactor: Update content view to use InlineAreaHostingView and improve gesture handling (cc457e6)
+- refactor: Remove cloud upload functionality and related UI elements (327d895)
+- chore: Update localization strings for capture and annotation actions (c91e60b)
+- chore: update appcast, cask, and readme for v1.13.2 (40bfdf8)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.13.2] - 2026-05-09
+
+### Features
+-  Enhance audio handling in video editor with multitrack support (3d25ecf)
+
+### Bug Fixes
+-  Add audio encoding settings and compatibility exporter for mixed audio tracks (#171) (db0f2ee)
+
+### Chore
+- chore: Add localized strings for additional audio tracks and system audio in video editor (b264027)
+- chore: update appcast, cask, and readme for v1.13.1 (7adf178)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.13.1] - 2026-05-09
+
+### Features
+-  Enhance text annotation handling and layout adjustments (#168) (09fd7b8)
+-  add scripts for collecting crash logs and running tests (b76944b)
+
+### Bug Fixes
+-  Improve Chinese translations for General and Restart Onboarding (#158) (#169) (fee7786)
+-  Improve undo/redo functionality for text editing and annotation properties (#168) (89a909c)
+
+### Chore
+- refactor: Enhance changelog generation with GitHub usernames support in CI (38b784c)
+- chore: update contributor names in CHANGELOG.md (6747c00)
+- chore: update appcast, cask, and readme for v1.13.0 (64f6dc1)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.13.0] - 2026-05-08
+
+### Features
+-  open images from Finder's "Open With" menu in the annotate editor (#165) (2210c86)
+
+### Chore
+- refactor: Enhance diacritic normalization in OCR tests for improved accuracy (6d3a2b5)
+- refactor: Enhance microphone audio capturing and testing framework with session management and integration tests (89147e2)
+- refactor: Improve database directory handling for test environments in DatabaseManager (b1dae8d)
+- refactor: Simplify QuickAccessDraggableView by using AnyView and enhance OCRService with single visual row detection (66a251b)
+- chore: update appcast, cask, and readme for v1.12.7 (e073e20)
+
+### Contributors
+- @gengjiawen
+- @vnixx
+- @duongductrong
+- @github-actions[bot]
+
+## [1.12.7] - 2026-05-06
+
+### Bug Fixes
+-  Enhance VisionOCRProfile with additional language support and improve OCRService for diacritic handling (148909b)
+
+### Chore
+- refactor: Introduce AnnotateCanvasDefaults for consistent corner radius usage (f4c714d)
+- chore: update appcast, cask, and readme for v1.12.6 (a74c443)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.12.6] - 2026-05-04
+
+### Features
+-  Add crop orientation toggle and update aspect ratio handling (#151) (dee6414)
+-  Improve microphone capture and integrate with recording session (#150) (9761d9d)
+
+### Bug Fixes
+-  Enable microphone capture settings regardless of audio capture state (572584b)
+-  Improve history cleanup for Quick Access item deletions and add corresponding tests (b405215)
+
+### Chore
+- refactor: Refactor OCR and QR detection benchmarks (8832e33)
+- chore: update appcast, cask, and readme for v1.12.5 (af856ae)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.12.5] - 2026-05-03
+
+### Features
+-  Add support for space key in CaptureOverlayShortcut and related tests (#148) (9dc9972)
+
+### Chore
+- ci: Improve test step by adding build directory creation and logging (33761ec)
+- ci: Add step to run tests in CI workflow (7dc205e)
+- chore: update appcast, cask, and readme for v1.12.4 (05f00aa)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.12.4] - 2026-05-02
+
+### Chore
+- refactor: Implement frame management and safety tracking in scrolling capture subsystem (cb24445)
+- chore: update appcast, cask, and readme for v1.12.3 (1d9dc2e)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.12.3] - 2026-05-02
+
+### Bug Fixes
+-  Set sharingType to none for HUD and preview windows to prevent screen capture (dcd723b)
+-  Enhance cloud settings error handling and add graceful degradation for lifecycle permissions (9d942e7)
+
+### Chore
+- chore: Add localized warning for limited permissions in cloud settings (5c597e7)
+- docs: document test architecture and project structure for SnapzyTests and SnapzyUITests (7016ef8)
+- chore: update appcast, cask, and readme for v1.12.2 (ab11c2a)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.12.2] - 2026-04-30
+
+### Features
+-  Enhance annotation resizing and selection handling for line annotations; add support for highlighter selection bounds (#125) (49cd986)
+
+### Bug Fixes
+-  Trim fully transparent capture fringe in window capture for improved output quality (dec0e79)
+-  Enhance drag-to-app functionality with lazy file promise and rendered file-URL fallback; ensure edits are saved after successful drag (#141) (b67bb09)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.12.1 (1c159da)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.12.1] - 2026-04-29
+
+### Bug Fixes
+-  Implement dynamic width measurement for bottom bar components and enhance drag handle functionality (c5d8ee6)
+-  Implement history item restoration through Quick Access for consistent session behavior (795d581)
+-  Update drawPath method to accept dynamic stroke width for improved rendering (2ec88c1)
+-  Enhance annotation resizing functionality and improve selection bounds calculation (913609a)
+-  Update quarantine attribute command in installation instructions for macOS (4127637)
+
+### Chore
+- refactor: Refactor video editor state management and enhance playback handling (7de8dc5)
+- chore: update appcast, cask, and readme for v1.12.0 (2b7c3e5)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.12.0] - 2026-04-29
+
+### Features
+-  Improve annotation canvas and crop tool functionality (#128) (5665245)
+
+### Bug Fixes
+-  Implement recording save plan with processing directory management and update documentation (#126) (5819197)
+
+### Chore
+- chore: Add automated release notification workflow with Discord integration and update documentation (9eaf331)
+- refactor: Remove cache management from GeneralSettingsView and update PreferencesHistorySettingsView for capture storage handling (f579b40)
+- chore: update appcast, cask, and readme for v1.11.2 (9d85b27)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.11.2] - 2026-04-28
+
+### Bug Fixes
+-  Increase frozen snapshot window hide settle delay and add option to exclude own application in capture (6981740)
+
+### Contributors
+- @duongductrong
+
+## [1.11.1] - 2026-04-28
+
+### Bug Fixes
+-  Implement hidden window session management for improved capture handling (8eaa7c8)
+
+### Chore
+- docs: Add notarization note for macOS installation in README files (b536032)
+- chore: update appcast, cask, and readme for v1.11.0 (41ba8e2)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.11.0] - 2026-04-28
+
+### Features
+-  Add application capture mode recording functionality (ff0bead)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.10.0 (ecee085)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.10.0] - 2026-04-28
+
+### Features
+-  add automation URL scheme (#120) (e93292b)
+-  Add OCR scanning overlay and QR code detection support (77f5035)
+
+### Chore
+- refactor: Remove OCR scanning overlay localization strings (0331578)
+- refactor: Add toggle preference to enable or disable OCR success notifications (363a2df)
+- docs: Add contributors section and reformat markdown tables for consistency (b5377ac)
+- refactor: Update Discord community link in README files (5a59043)
+- refactor: Remove variant parameter from AppToastManager calls in CaptureViewModel (212a3f4)
+- refactor: Add menu bar processing indicator and enhance toast notifications with update support (44de5ba)
+- refactor: Remove OCR scanning overlay functionality and related preferences (2e59202)
+- chore: update appcast, cask, and readme for v1.9.8 (a715356)
+
+### Contributors
+- @Oltian Kadriu
+- @duongductrong
+- @github-actions[bot]
+
+## [1.9.8] - 2026-04-27
+
+### Bug Fixes
+-  Enhance recording functionality with improved state management and error handling (8935e48)
+
+### Chore
+- refactor: Refactor crash reporting to problem reporting (b4c0b5c)
+- refactor: Improve diagnostic logging retention settings and localization updates (a2eac24)
+- refactor: Enhance diagnostic logging across various services (286e825)
+- chore: update appcast, cask, and readme for v1.9.7 (16b398a)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.9.7] - 2026-04-27
+
+### Chore
+- chore: Refactor History Settings UI for improved structure and clarity (52dad5e)
+- chore: update appcast, cask, and readme for v1.9.6 (b919a97)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.9.6] - 2026-04-26
+
+### Features
+-  Improve Cloud Uploads to Floating UI (cea033f)
+-  Improve cloud upload functionality for Videos/Gifs (14ab2b0)
+-  Implement multi-selection and deletion functionality in history panel (548b30b)
+-  Enhance capture settings UI with segmented navigation for general, screenshot, and recording options (821c941)
+
+### Bug Fixes
+-  Adjust frame sizes and alignment for history settings UI elements (d11a3c1)
+-  Add size and mode hint indicators to area selection overlay (bd04f93)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.9.5 (f4ac35f)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.9.5] - 2026-04-25
+
+### Features
+-  Implement file change tracking and thumbnail reload for history records (d4badb5)
+-  Add watermark annotation feature with customizable properties (aa9eaf2)
+
+### Bug Fixes
+-  Implement dynamic font scaling for text annotations in overlay (#101) (aae0970)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.9.4 (957ee65)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.9.4] - 2026-04-25
+
+### Features
+-  Enhance crop interaction management with context restoration and keyboard shortcuts (e743310)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.9.3 (255c54a)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.9.3] - 2026-04-25
+
+### Features
+-  Enhance annotation features with counter tool and improved stroke width management (#105) (254223e)
+-  Add support for opening multiple independent annotate windows and improve localization for new window action (#107) (9b16d74)
+
+### Bug Fixes
+-  Improve drag-to-app preparation state management and enhance drag handle UI feedback (#107) (3a8989f)
+
+### Chore
+- refactor: Add new window button to bottom bar and remove duplicate from toolbar (8c7bca3)
+- chore: update appcast, cask, and readme for v1.9.2 (4c1a7c7)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.9.2] - 2026-04-24
+
+### Bug Fixes
+-  Update key code mapping to use active keyboard layout German for improved shortcut display (#111) (36ca328)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.9.1 (3ece56d)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.9.1] - 2026-04-24
+
+### Features
+-  Improve wallpaper management to load bundled default wallpapers and update related UI components (47d55c0)
+-  Add corner radius support for rectangle annotations and update related UI components (43141d8)
+
+### Bug Fixes
+-  Set selected annotation ID upon adding a new annotation (f1460bd)
+
+### Chore
+- chore: Enhance wallpaper management by adding custom wallpaper support and improving UI interactions (60c2bec)
+- refactor: Refactor annotation handling and improve selection features (0064bfd)
+- chore: Add docs for capture history feature with floating panel and browser for recent screenshots, videos, and GIFs (8b2ae68)
+- refactor: Enhance shareable content prefetching with desktop window inclusion options (c847439)
+- chore: update appcast, cask, and readme for v1.9.0 (ade6b87)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.9.0] - 2026-04-23
+
+### Features
+-  Add Capture History management and retention policies (ac7e76d)
+
+### Chore
+- chore: Implement HistoryCompactCarouselView for improved compact history display (d1c1861)
+- chore: Update CaptureHistoryStore with new file path after export (a6dbe19)
+- chore: Enhance history panel functionality with new selection activation and clipboard notifications (9c9d57f)
+- refactor: Refactor History Floating Panel and Thumbnail Generation (e69dc41)
+- chore: update appcast, cask, and readme for v1.8.2 (8948d52)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.8.2] - 2026-04-21
+
+### Bug Fixes
+-  Implement keyboard input handling for area screenshot sessions in AreaSelectionController and AreaSelectionWindow for resolve issue #99 (88ddfba)
+-  Resolve issue #100 by implement dynamic keyboard shortcut handling in AppStatusBarController (8452a16)
+-  Enhance clipboard functionality for edited captures in annotation and video editor workflows (ae19104)
+
+### Chore
+- refactor: Adjust padding and layout for VideoEditorGIFSettingsPanel in VideoEditorMainView (970303c)
+- refactor: Improve layout and responsiveness of GIF settings panel in VideoEditorMainView (8d43310)
+- refactor: Enhance video export settings and aspect ratio handling in VideoEditor components (f71b0b8)
+- refactor: Simplify layout and remove unnecessary styling in VideoEditor components (a1baf4d)
+- refactor: Enhance VideoEditor components with improved styling and layout adjustments (fe7a7ab)
+- refactor: Revamp VideoExportSettingsPanel with collapsible tabs and improved layout (1499a0a)
+- refactor: Remove shadow effect from trim handle for cleaner appearance (c0d4b65)
+- refactor: Refactor VideoEditorMainView and VideoControlsView for improved layout and functionality (e8449a2)
+- refactor: Enhance VideoEditorToolbarView with dynamic width measurement and improved layout (7192783)
+- chore: update appcast, cask, and readme for v1.8.1 (160cb29)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.8.1] - 2026-04-19
+
+### Features
+-  Implement OCR request handling and benchmarking for improved text recognition (8952333)
+
+### Chore
+- docs: Add comprehensive documentation for development, localization, capture flows, release workflow, and self-signed certificate setup (72d3964)
+- docs: Update shortcuts info and capture app feature (4a79ecc)
+- chore: update appcast, cask, and readme for v1.8.0 (1330058)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.8.0] - 2026-04-19
+
+### Features
+-  Add configurable Application Capture shortcut and enhance overlay functionality (af1827f)
+-  Implement application window selection mode in area capture (4140a87)
+
+### Chore
+- refactor: Remove custom application capture cursor and use pointing hand cursor instead (7c96bcb)
+- chore: Enhance area selection cursor functionality and add application capture cursor (1d5d768)
+- chore: update appcast, cask, and readme for v1.7.8 (4a1b7c7)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.7.8] - 2026-04-18
+
+### Features
+-  Improve Onboarding UI by replace black background with Opaque Background (67e794a)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.7.7 (b2bc28b)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.7.7] - 2026-04-18
+
+### Bug Fixes
+-  Enhance CloudKeychainStore with improved upsert logic and legacy migration handling (91a1dbc)
+
+### Chore
+- docs: Add community section with Discord link to README files (1d933c3)
+- chore: update appcast, cask, and readme for v1.7.6 (7ba9be5)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.7.6] - 2026-04-18
+
+### Features
+-  Enhance AppStatusBarController to maintain menu accessibility during recording and manage Preferences window exclusion (ed0f533)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.7.5 (0580563)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.7.5] - 2026-04-18
+
+### Features
+-  Enhance screen capture with fast snapshot support and improved session handling (023ca72)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.7.4 (0830ab6)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.7.4] - 2026-04-17
+
+### Features
+-  Enhance shareable content caching and prefetching logic (94aff44)
+-  Implement frozen area capture session (cmd+shift+3) for improved area selection (ce90757)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.7.3 (643a403)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.7.3] - 2026-04-16
+
+### Features
+- : add language selection step with immediate localization updates (8d025f1)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.7.2 (3a19aa2)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.7.2] - 2026-04-16
+
+### Features
+-  Add Vietnamese and Simplified Chinese localization to README files (a46311d)
+
+### Bug Fixes
+-  Enhance zoom functionality and image scaling across annotation features (cd72a9a)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.7.1 (62ddfd9)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.7.1] - 2026-04-14
+
+### Bug Fixes
+-  Correct case of CatalogTool.swift in CI workflow (c47093c)
+-  Correct Vietnamese translations in localization files (799d264)
+
+### Chore
+- docs: Update localization section in README to include flag emojis for languages (47f6aa9)
+- refactor: Simplify status item icon setup by using a dedicated method for idle status image (d6e2d2c)
+- refactor: Add localization support for permissions and restructure localization files (2634241)
+- chore: update appcast, cask, and readme for v1.7.0 (c82391c)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.7.0] - 2026-04-13
+
+### Features
+-  Add language selection feature in preferences with localization support (0de300f)
+-  Add localized privacy usage descriptions for multiple languages (3672c67)
+-  Add localization support for English and Vietnamese, update documentation (e9ffe51)
+-  Setup multi-language base (df24ddb)
+
+### Chore
+- refactor: Refactor code structure for improved readability and maintainability (200b4b2)
+- refactor: Refactor localization management and documentation (3b05971)
+- refactor: Refactor localization architecture and introduce catalog management tool (961e881)
+- chore: update appcast, cask, and readme for v1.6.3 (d13220c)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.6.3] - 2026-04-12
+
+### Chore
+- chore: enhance keychain security by enabling data protection and improving credential handling (d318651)
+- chore: update appcast, cask, and readme for v1.6.2 (8cd66da)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.6.2] - 2026-04-12
+
+### Chore
+- refactor: remove mode guidance drawing for scrolling capture in AreaSelectionOverlayView (149b2b3)
+- chore: update appcast, cask, and readme for v1.6.1 (2b39b62)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.6.1] - 2026-04-11
+
+### Features
+-  Enhance badge label display with animation and improved visibility in scrolling capture preview (0c42fd0)
+
+### Chore
+- docs: Enhance documentation and project structure (0b0485f)
+- chore: update appcast, cask, and readme for v1.6.0 (808c219)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.6.0] - 2026-04-11
+
+### Features
+-  Add preview image generation and scaling adjustments for scrolling capture (2de8353)
+-  Enhance scrolling capture feedback with boundary detection and status updates (52a4314)
+-  Introduce guidance system for scrolling capture with visual cues and state management (9bdf518)
+-  Enhance scrolling capture with finalizing state, preview truth management, and HUD updates (f938dcf)
+-  Implement Scrolling Capture Preview Renderer and Update Capture Flow (739cf63)
+-  Enhance zoom and pan functionality with dynamic limits and improved state management (cd3ff08)
+-  Add scrolling capture feature with keyboard shortcut and documentation (ec14757)
+-  Update shortcut display names and descriptions for clarity (839c54f)
+
+### Chore
+- refactor: Refactor scrolling capture implementation to remove auto-scroll functionality (5e3376a)
+- chore: update appcast, cask, and readme for v1.5.11 (857ee68)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [Unreleased]
+
+### Features
+- rework Scrolling Capture around a region-scoped live preview lane, latest-only commit scheduler, fast guided stitch matching, and frame-aware auto-scroll fallback handling
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## [1.5.11] - 2026-04-09
+
+### Features
+-  Add arrow styling options and update annotation handling for arrows (f54163a)
+-  Refactor background cutout button and update annotation tools group (b70da95)
+-  Implement quick properties bar for annotation tools with customizable options (1b02061)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.5.10 (00a7fff)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.5.10] - 2026-04-06
+
+### Features
+-  Add keyboard shortcut overlay with customizable shortcuts and navigation (dfb1b4f)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.5.9 (dc5266c)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.5.9] - 2026-04-05
+
+### Features
+-  Enable shadow for RecordingToolbarWindow and remove shadows from status bar and toolbar views (8cae763)
+-  Align custom wallpaper rendering with system wallpapers and remove unnecessary frame height (43acbb1)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.5.8 (f8ec52c)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.5.8] - 2026-04-05
+
+### Features
+-  Implement user-defined canvas presets with storage and management functionality (2b0d478)
+-  Enhance annotation functionality with embedded image support and improved import handling (4e5f3e2)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.5.7 (78b0f11)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.5.7] - 2026-04-05
+
+### Features
+-  Add zoom transition duration configuration and improve zoom transition functionality in video editor (db3f907)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.5.6 (68a15e9)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.5.6] - 2026-04-04
+
+### Features
+-  Implement cloud credential import and export functionality with password protection (65300a6)
+
+### Chore
+- refactor: replace boolean sheet toggle with identifiable selection state in CloudSettingsView (e259882)
+- chore: update appcast, cask, and readme for v1.5.5 (c414d49)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.5.5] - 2026-04-04
+
+### Bug Fixes
+-  extract Keychain logic to CloudKeychainStore and update CloudManager credential handling (1b01c27)
+
+### Contributors
+- @duongductrong
+
+## [1.5.4] - 2026-04-04
+
+### Chore
+- refactor: centralize cloud request context and improve error messaging for S3 and R2 providers (fc079c2)
+- chore: update appcast, cask, and readme for v1.5.3 (c536625)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.5.3] - 2026-04-04
+
+### Chore
+- docs: update installation version, add DeepWiki integration, and reorganize featured badges (746cd50)
+- chore: bump version to v1.5.2 (#63) (542a976)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.5.2] - 2026-04-04
+
+### Changes
+
+## [1.5.1] - 2026-04-02
+
+### Features
+-  Add validation highlighting and popover for shortcut recording (48d6d4c)
+-  Enhance shortcut management with validation and conflict detection (6464500)
+-  Implement keycap rendering for keyboard shortcuts and enhance shortcut recording UI (5894b7b)
+-  Enhance shortcut management and user experience (97bf2be)
+
+### Chore
+- chore: Enhance AppToast appearance with gradient icons and adaptive colors (845726d)
+- refactor: Update SoundManager to play native macOS screenshot sound and refactor sound playback logic (6762219)
+- chore: update appcast, cask, and readme for v1.5.0 (4b8d214)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.5.0] - 2026-03-31
+
+### Features
+-  Add background cutout auto-crop feature with user preference and UI updates (8437179)
+-  Implement object cutout feature with keyboard shortcut and UI updates (5403b01)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.4.8 (73cd237)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.4.8] - 2026-03-30
+
+### Features
+-  Add user preference for showing cursor in screenshots and recordings (53e4f6d)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.4.7 (3d7b4b1)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.4.7] - 2026-03-27
+
+### Features
+-  Optimize wallpaper loading and rendering with caching, limit displayed system wallpapers, and refine UI button hover effects. (162def4)
+
+### Bug Fixes
+-  Persist crop state and improve crop tool interaction with automatic sidebar management. (f83dd07)
+-  Introduce `AnnotationCanvasEffects` to persist and re-edit canvas visual effects in annotation sessions. (0ab7bf6)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.4.6 (bc2c83b)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.4.6] - 2026-03-25
+
+### Features
+-  Enhance video encoding with dynamic bitrate, HEVC/H.264 codec selection, pixel-aligned capture, and diagnostic logging for recording. (482d5cb)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.4.5 (2aaf49b)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.4.5] - 2026-03-24
+
+### Features
+-  Introduce user-configurable filename templates for screenshots and recordings. (bfc61f3)
+-  Add cloud upload feature description and detail its security implementation in documentation. (3ce50c7)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.4.4 (458fd17)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.4.4] - 2026-03-24
+
+### Features
+-  Refactor zoom segment layout and interaction to ensure a minimum visual width and improve UI adaptation for small blocks. (a82cc47)
+-  Align video preview zoom and pan calculations with export output for accuracy and update camera transition duration. (e414f8b)
+-  Enhance auto-focus engine with improved path generation, quality metrics, and canonical mouse sample handling. (e31b798)
+
+### Chore
+- refactor: Refactor `BlurEffectRenderer` to support separate source and destination regions for blur effects, improve coordinate mapping and clamping, and disable anti-aliasing for pixelated drawing. (00cec7d)
+- docs: document screen recording and Smart Camera (follow mouse) pipeline, runtime data layout, and metadata storage. (701c7fb)
+- chore: update appcast, cask, and readme for v1.4.3 (daec159)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.4.3] - 2026-03-24
+
+### Features
+-  Implement a dedicated save flow for temporary captured videos and GIFs, including dynamic primary action button text. (a88beda)
+
+### Bug Fixes
+-  Dynamically set video composition frame duration from source and log detailed recording frame statistics. (2f1a760)
+-  Enhance screen capture and recording by improving desktop icon and widget exclusion and preventing self-capture of UI elements. (de2f192)
+
+### Chore
+- refactor: improve clarity and conciseness of capture settings UI text for including app windows in captures. (1196918)
+- chore: update appcast, cask, and readme for v1.4.2 (b00ed3a)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.4.2] - 2026-03-23
+
+### Features
+-  Implement caching for cloud usage data and refactor CloudUsageService with a dedicated worker actor. (b46267b)
+-  Add masked endpoint display logic to CloudManager and integrate it into the Preferences view. (46d9cfb)
+-  Implement password protection for cloud credentials, including gate and initialization UI. (ff036e8)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.4.1 (f2c685e)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.4.1] - 2026-03-23
+
+### Bug Fixes
+-  Prevent cloud configuration save if S3 lifecycle rule application fails and refactor S3 lifecycle XML string formatting. (ef90e10)
+-  Resolve AWS S3 signature issues by removing manual Content-Length and refining header/URI encoding for signing, and update Keychain identifiers. (e755bac)
+
+### Chore
+- refactor: Remove the recent uploads section and its associated record row from the cloud settings view. (586eb16)
+- chore: update appcast, cask, and readme for v1.4.0 (e9742ad)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.4.0] - 2026-03-23
+
+### Features
+-  Implement LazyView for deferred SwiftUI tab loading and cache cloud configuration details. (ee0acdb)
+-  Enhance cloud upload records with content type and thumbnail support, and add advanced filtering, sorting, and display modes to the upload history view. (1de65df)
+-  Add cloud usage service to track and display bucket storage, object count, and lifecycle rules. (b57b9e0)
+-  Implement cloud object lifecycle management to configure and remove expiration rules for S3 and R2 storage providers. (da8451a)
+-  Improve UI of cloud configuration. (53097c7)
+-  Remove cloud overwrite confirmation alert and directly trigger cloud upload. (9920096)
+-  Ensure removes history records when overwrited upload screenshot (1b7a03f)
+-  Implement cloud storage integration with S3/R2 providers, preferences, and overwrite handling for annotated images. (8dcde11)
+
+### Bug Fixes
+-  Improve keystroke name resolution in `KeystrokeMonitorService` by using `keyCode`-based mapping for global monitor reliability. (e2c074e)
+-  Add support for punctuation, keypad, and navigation keys to `KeyboardShortcutManager`. (0f10b42)
+
+### Chore
+- refactor: reorder Share button to appear before the Cloud upload button in AnnotateBottomBarView. (a8633ce)
+- refactor: reimplement CloudUploadHistoryStore persistence using SQLite and GRDB, adding a new DatabaseManager and GRDB dependency. (6199fac)
+- chore: update appcast, cask, and readme for v1.3.5 (f01f845)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.3.5] - 2026-03-21
+
+### Chore
+- refactor: Enhance diagnostic logging with detailed system information, error context, and source location. (e45411d)
+- chore: update appcast, cask, and readme for v1.3.4 (9b583c3)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.3.4] - 2026-03-21
+
+### Bug Fixes
+-  Update Space key to function in text inputs and provide cursor feedback for pan mode. (4579a65)
+
+### Chore
+- docs: Add a comprehensive security policy document and link it from the README. (ce2dfa2)
+- docs: update and expand README features list with more detail and relocate requirements. (ccb69dd)
+- chore: update appcast, cask, and readme for v1.3.3 (4a45eaa)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.3.3] - 2026-03-21
+
+### Bug Fixes
+-  add `ScreenUtility` to accurately determine the active screen for multi-monitor UI positioning and capture operations. (d2ded2b)
+-  Write both NSURL and NSImage to the pasteboard for maximum compatibility across applications. (4f3bb18)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.3.2 (649c0f4)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.3.2] - 2026-03-21
+
+### Bug Fixes
+-  Always display the 'Copy' button in the Quick Access card hover overlay. (c6bbde1)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.3.1 (d3b32f8)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.3.1] - 2026-03-20
+
+### Bug Fixes
+-  enhance image rendering and screen capture quality with pixel-perfect techniques and dynamic scaling. (6b98c2c)
+
+### Chore
+- docs: Add comprehensive documentation detailing the screen capture pipeline, architecture, and post-capture actions. (0c252f2)
+- chore: update appcast, cask, and readme for v1.3.0 (0b21b54)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.3.0] - 2026-03-20
+
+### Features
+-  Implement canvas panning functionality using the Space key and mouse drag, and refine zoom range options. (696b8c3)
+-  Add keyboard shortcuts and trackpad gestures for zoom, expand zoom range, and animate transitions. (e8412ce)
+-  Include window shadows in screen capture for macOS 14.0+ by setting `ignoreShadowsSingleWindow` to false. (2c6fbd7)
+-  Introduce configurable shortcuts for the annotate editor's copy-and-close and toggle-pin actions, updating UI and event handling. (7fd3e48)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.2.6 (c7425ed)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.2.6] - 2026-03-19
+
+### Features
+-  Add a warning message about WebP encoding speed in capture settings. (88bdc90)
+-  Add .webp, .jpg image format support and format-aware clipboard copying for screenshots and annotations. (8b152dd)
+
+### Chore
+- refactor: Migrate WebP encoding from SDWebImageWebPCoder to Swift-WebP for optimized performance using raw pixel data. (e175285)
+- chore: update appcast, cask, and readme for v1.2.5 (545848f)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.2.5] - 2026-03-18
+
+### Features
+-  add splash screen skip functionality with a "Do not show again" option (c61f67e)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.2.4 (1053148)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.2.4] - 2026-03-17
+
+### Bug Fixes
+- : centralize sound playback management and solve issue sound playback calls across the application (4c04381)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.2.3 (24f5771)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.2.3] - 2026-03-17
+
+### Features
+-  Enhance text annotation editing with automatic commit on tool switch or click away, improve text editor sizing, and enable annotation movement in all tool modes. (a07568f)
+-  Implement multiline text editing for annotations with dynamic height and word wrapping (edc0dcd)
+
+### Bug Fixes
+-  resolve annotation drag/resize state management and updating the active tool upon selection. (07ee6b9)
+-  Enhance annotation selection and tool switching UX, improve keyboard shortcut reliability (94d5aef)
+-  fix select & deselect textbox (f7d6366)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.2.2 (6f4e07d)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.2.2] - 2026-03-16
+
+### Bug Fixes
+-  replace AnnotateDragSource with NSFilePromiseProvider for improved drag performance and compatibility (a5db39e)
+
+### Chore
+- chore: Update appcast styling to support dark mode. (cc6f159)
+- chore: update appcast, cask, and readme for v1.2.1 (c9d5535)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.2.1] - 2026-03-16
+
+### Features
+-  Implement window pinning for the Annotate feature with UI, state, and keyboard shortcut (c80faf8)
+-  Improve annotation save responsiveness with instant UI updates and background saving, refactor session data to use raw image data (98ae09b)
+-  implement annotation session caching and update clipboard actions (df26432)
+
+### Chore
+- refactor: Embed HTML release notes generated from changelog directly into appcast.xml for Sparkle updates. (b6e0c2c)
+- chore: add unikorn to README (939cc1c)
+- docs: Add Product Hunt badge to README (c44cdfe)
+- chore: remove duplicate contributor entry from CHANGELOG.md (498bb23)
+- chore: update appcast, cask, and readme for v1.2.0 (72c655d)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.2.0] - 2026-03-15
+
+### Features
+-  improve mouse event handling with caching, throttling, and animation control. (bee9b8b)
+-  Add configurable mouse click highlights and keystroke overlays with preferences persistence. (cbac32c)
+-  Add option to display keystrokes as an overlay during recording. (bfbeb25)
+-  Enhance mouse click highlighting to track mouse down, up, and drag events with updated visual effects. (26ec799)
+-  Implement mouse click highlighting during screen recording with a new toolbar option and dedicated services. (4c30bf0)
+-  implement dynamic scaling for QuickAccess card dimensions (5cfaf95)
+-  Add uninstallation instructions and update README.md (dce3e9b)
+
+### Bug Fixes
+-  read from /dev/tty for curl pipe compatibility (417a9fb)
+
+### Chore
+- chore: update default branch on uninstall script (0ef19c3)
+- chore: update CHANGELOG.md (c45c565)
+- chore: update appcast, cask, and readme for v1.1.0 (2244d1b)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.1.0] - 2026-03-14
+
+### Features
+-  improve quick access + capture + consume flow (#18) (2c8d08b)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.0.15 (4b5d26c)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.0.15] - 2026-03-14
+
+### Chore
+- chore: update appcast, cask, and readme for v1.0.14 (9e24997)
+
+### Contributors
+- @github-actions[bot]
+
+## [1.0.14] - 2026-03-14
+
+### Features
+-  enhance local update testing with detailed signing process and entitlements handling (95a5139)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.0.13 (9ed3218)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.0.13] - 2026-03-14
+
+### Chore
+- chore: update appcast, cask, and readme for v1.0.12 (2b57c97)
+
+### Contributors
+- @github-actions[bot]
+
+## [1.0.12] - 2026-03-14
+
+### Features
+-  improve self-signed certificate trust for code signing. (15a5c4f)
+-  Implement detailed update manager lifecycle logging (18d07f7)
+
+### Bug Fixes
+-  remove interactive trust setting for self-signed certificate in CI (b8c515a)
+-  Add self-signed certificate generation and TCC permission testing scripts (47ffa93)
+
+### Chore
+- chore: bump version to v1.0.11 (#22) (07eebc6)
+- chore: update appcast, cask, and readme for v1.0.10 (d23f684)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.0.11] - 2026-03-14
+
+### Features
+-  improve self-signed certificate trust for code signing. (15a5c4f)
+-  Implement detailed update manager lifecycle logging (18d07f7)
+
+### Bug Fixes
+-  Add self-signed certificate generation and TCC permission testing scripts (47ffa93)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.0.10 (d23f684)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.0.10] - 2026-03-13
+
+### Features
+-  Add cache management functionality with size calculation and clearing options (a9413da)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.0.9 (3a7c507)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.0.9] - 2026-03-13
+
+### Bug Fixes
+- : Enhance code signing process and update entitlements for improved security and functionality (b9ff8f2)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.0.8 (f291044)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.0.8] - 2026-03-13
+
+### Features
+-  Implement system screenshot shortcut conflict detection and user guidance in onboarding and preferences views (67cb711)
+-  Introduce agent guidance documentation for Antigravity and Claude, update funding options, and add an archive file. (f0b78af)
+-  add GitHub issue templates, agent guidance files, and an archive file. (98c1aaa)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.0.7 (61a4ba3)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.0.7] - 2026-03-11
+
+### Bug Fixes
+-  improve screen capture permission handling, and skip strict bundle signature validation in debug builds. (b92fbf6)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.0.6 (913a0e3)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.0.6] - 2026-03-11
+
+### Bug Fixes
+-  remove the `--options runtime` flag from release codesigning. (f80c523)
+
+### Chore
+- chore: update appcast, cask, and readme for v1.0.5 (946582e)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.0.5] - 2026-03-11
+
+### Features
+-  introduce agent guidance documents, update gitignore, and enhance Sparkle DMG signing reliability in release workflow. (8db5280)
+
+### Contributors
+- @duongductrong
+
+## [1.0.4] - 2026-03-11
+
+### Features
+-  enhance release workflow with ad-hoc signing and verification for fallback distribution (4f42ad1)
+-  Implement AppIdentityManager and DefaultsDomainMigrationService for bundle identity management and migration (151dbe0)
+-  Update DMG background image (cfdeac6)
+-  Update DMG creation process with create-dmg and add background image (17f7a65)
+-  Add derived data path for Xcode build process (74d94b6)
+
+### Bug Fixes
+-  Update bundle identifiers and dispatch queue labels to use the correct namespace (f96151d)
+-  Update dispatch queue labels to use the correct Snapzy prefix (8377024)
+
+### Chore
+- refactor: Remove DefaultsDomainMigrationService and streamline app initialization (5e4515d)
+- chore: update appcast, cask, and readme for v1.0.3 (b26e4b5)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]
+
+## [1.0.3] - 2026-03-10
+
+### Features
+-  Add installation script and update README with version-specific install instructions (21b6020)
+-  Add Homebrew installation instructions and compute SHA256 for DMG in release workflow (1f5aedb)
+-  Enhance release workflow with build number extraction, DMG signing, and appcast update automation (e21be0e)
+
+### Bug Fixes
+-  Update Sparkle key condition for DMG signing in release workflow (ed2b4a5)
+
+### Contributors
+- @duongductrong
+
+## [1.0.2] - 2026-03-10
+
+### Features
+-  Add release preparation and publishing workflows for automated versioning and changelog management (5ffe9c3)
+-  Add AI agent guidance documentation and a Git author correction script, while streamlining the release workflow by removing pull request creation and merging steps. (1c683ff)
+-  introduce AI agent guidance documents, update release workflow with force push, and add a Git author fix script. (e632a83)
+-  Add guidance documents for Antigravity and Claude agents, and update the release workflow to use pull requests for version bumps. (3c6e50c)
+-  add changelog generation and update script for version entries (58bdc85)
+-  update onboarding components to use adaptive dark/light theme colors (148b512)
+-  update Xcode version in CI and release workflows, enhance MainActor usage in various classes (dafbfd9)
+-  enhance CI and release workflows with improved error handling and environment variable checks (370d18f)
+-  enhance sponsor section layout and add color attributes to sponsor links (4a5e42b)
+-  update star history section in README for improved link and image sources (e3d4c0e)
+-  update license information from MIT to BSD 3-Clause License in README (78bba6e)
+-  update documentation for build instructions and licensing flow (53303bb)
+-  update macOS requirement from 14.0+ to 13.0+ in documentation (1bbf8a0)
+-  add CODE_OF_CONDUCT.md and CONTRIBUTING.md files to establish community guidelines and contribution process (c59d95e)
+-  add BSD 3-Clause License file to the repository (0379a01)
+-  remove outdated AGENTS.md and CLAUDE.md files; add project build and release workflow documentation (b6b942a)
+-  Implement auto-focus functionality with mouse tracking (#1) (556bf83)
+-  simplify ESC key handling by removing confirmation dialog and allowing immediate cancel (910aa02)
+-  optimize cropping logic in AnnotateCanvasView and simplify TextEditOverlay bounds calculation (a4c2066)
+-  enhance tooltip help for annotation tools and update icons for better clarity (27f9c53)
+-  implement prefetching of shareable content for improved capture performance (768aa2f)
+-  add options to include own application in screenshots and recordings, enhance exclusion logic for capture (8b85f1f)
+-  enhance crop toolbar visibility logic and improve layout structure in AnnotateCanvasView (e4e6877)
+-  enhance logging for annotation and shortcut management, improve window sizing logic (1795ead)
+-  Implement CI and release workflows with version bumping and changelog generation (b02a95e)
+-  Enhance area selection process with improved frame synchronization and logging for better debugging (bfdb17f)
+-  Enhance annotation state management with quick access item ID and implement image deletion confirmation (a3e1089)
+-  Update tab icons in PreferencesView and change picker styles to menu for better UI consistency (599fb88)
+-  Implement GIF resizing and export functionality, introducing a dedicated `GIFResizer` service and settings panel. (e392f91)
+-  Add save folder permission check and UI to preferences. (409a69b)
+-  Add a new filled rectangle annotation tool with corresponding UI, model, rendering, and property support. (219ac93)
+-  Refactor recording session timestamp handling to align all media to the first video frame and improve resource cleanup in recording windows. (3cc2cb5)
+-  Enable App Sandbox, introduce `SandboxFileAccessManager`, and adapt features for secure file access. (8c2c6a3)
+-  add crash report feature to about view (b7c7b31)
+-  Implement custom wallpaper removal functionality and add a new method to load current desktop wallpapers. (446d6d1)
+-  Add draggable diagnostic log to crash report alert and always display crash report menu item. (3e3ed2e)
+-  Introduce flattened project structure documentation, update agent guidance, and remove outdated research and planning documents. (746143a)
+-  Implement diagnostic logging and crash reporting with crash detection, user opt-in, and a submission flow. (06a1816)
+-  default `rememberLastArea` preference to true when not explicitly set in `ScreenCaptureViewModel`. (243a7e8)
+-  Add support for viewing animated GIFs in the video editor with a dedicated view and adapted UI. (8246378)
+-  Implement recording output mode selection (video/GIF) in the toolbar and integrate GIF conversion with Quick Access processing. (d332f1a)
+-  remove scout reports from local agent settings (86398f7)
+-  Improve crop display by rendering only the cropped image and canvas, and refine crop overlay visibility to active editing. (3f1dce4)
+-  Implement accurate rendering and clipping for cropped images and drawings, and add agent communication rules and a context compaction workflow. (aa2b41b)
+-  add macOS compatibility rule and new workflow for fixing hard issues using subagents. (0b3bc38)
+-  automatically configure Polar license provider's sandbox mode based on build configuration and update README formatting. (b95bcc5)
+-  Add dynamic log level filtering to the launch script and configure the VS Code task to use debug logging. (c70b911)
+-  Add macOS 13 compatibility by updating deployment target, implementing fallback UI for new APIs, and modernizing `onChange` syntax. (a94f0bc)
+-  Shift license activation limit enforcement to server-side, removing client-side checks and adding API-level error handling for activation limits. (8979f54)
+-  Implement background validation for cached licenses on startup and prompt users to reactivate or quit for invalid licenses. (98c8145)
+-  add .agent for agy (1b11c24)
+-  Add agent skills, workflows, and license management UI components. (057e4a5)
+-  add contact links (Website, GitHub, Report a Bug) to the About settings view. (83f7930)
+-  Add website, GitHub, and bug report links to About section and vertically center its content. (ba8d9c2)
+-  add yellow rounded border between trim handles and remove overlay from trim handle appearance (261a200)
+-  enhance VideoTimelineView with rounded corners and yellow border; clamp trim handles within timeline bounds (2de53a8)
+-  sync player mute with export settings and remove mute button from controls (81f29fe)
+-  remove vestigial Cloud Upload feature from Quick Access settings (5d81dcc)
+-  enhance navigation and structure in onboarding flow with improved back handling and transition animations (4d36013)
+-  enhance onboarding flow with skip confirmation screen and keyboard shortcuts (c68ff14)
+-  update onboarding restart logic to show onboarding notification (8c4eec5)
+-  unify onboarding flow within splash window, implement dark theme styling (ff6cfce)
+-  Implement splash screen with animated content and onboarding flow (3d0a77e)
+-  Reorganize Preferences Tabs for Improved Usability (17f321a)
+-  Add screenshot capture functionality to recording toolbar (ea606bc)
+-  Implement Phase 3 Defensive Improvements for Fast Screenshot Feature (43d4325)
+-  Enhance animation handling for quick access card insertion and deletion (cccea2b)
+-  Refactor area selection and recording overlay windows to use non-activating panels, preventing focus stealing from background applications (cd5657a)
+-  Add shortcut mode for annotation tools with configurable modifier and hold duration (458587a)
+-  Implement annotation tool context management and enhance keyboard event handling for recording features (da45fcc)
+-  Refactor annotation toolbar to use popover style and update layout handling (d1e0802)
+-  Enhance snap positioning logic in AnnotationToolbarSnapHelper for improved toolbar alignment (012671f)
+-  Extract FirstMouseVisualEffectView and implement AnnotationToolbarContentBuilder for modular toolbar content management (6fba863)
+-  Add AnnotationToolbarSnapHelper for improved snap functionality in recording toolbar (34b036b)
+-  Implement recording annotation overlay and toolbar (7098439)
+-  Override canBecomeKey property in RecordingToolbarWindow for improved window behavior (de2949e)
+-  Refactor RecordingStatusBarView and RecordingToolbarView to remove background styling for improved UI consistency feat: Enhance RecordingToolbarWindow with NSVisualEffectView for adaptive background behavior (7faeff7)
+-  Update background styling for RecordingStatusBarView and RecordingToolbarView to enhance UI consistency (7d8b4da)
+-  Refactor RecordingStatusBarView and StopButtonStyle for improved UI and accessibility (e23ec78)
+-  Update toolbar components to enhance hover effects and accessibility features (b30c64a)
+-  Add option to exclude desktop widgets during screen capture (7c620e9)
+-  Enhance screen capture functionality with desktop icon exclusion (f2dfd13)
+-  Add feature to hide desktop icons during screenshot capture (f4eddeb)
+-  Improve QuickAccess animations and card dismissal logic for smoother user experience (6b03758)
+-  Update app and menubar icons with new designs and sizes (b05c8fa)
+-  Add diagonal resize cursors for recording region handles (78830f4)
+-  Enhance recording region handles with L-shaped corners and edge lines (f6b53b8)
+-  Disable window animations for instant appearance in area selection and recording region overlays (40c5f98)
+-  Add option to remember last recording area in preferences (0821b82)
+-  Implement recording area persistence with UserDefaults (5153900)
+-  Disable focus effect on AnnotateCanvasView for improved user experience (3db563a)
+-  Add About section components including credit, feature, and link cards (27067db)
+-  Implement customizable single-key shortcuts for annotation tools (d9a63f2)
+-  Add confirmation alert for disabling keyboard shortcuts (5e4f7b5)
+-  Add support for recording and annotate shortcuts in settings (dab4975)
+-  Enhance status bar functionality to manage activation policy for Settings window (a181c49)
+-  Implement OCR text recognition feature using Vision framework (fc09a5e)
+-  Refactor recording toolbar components to use ObservableObject for state management and implement options popover (c747ec0)
+-  Add capture mode toggle for area selection and fullscreen in recording toolbar (4749943)
+-  Implement post-capture action handling and update preferences for screenshot and video captures (cd7854c)
+-  Enhance DMG build workflow with versioning and release notes input (e552109)
+-  Initialize and update crosshair position on area selection activation (831f106)
+-  Add build workflow and export options for macOS DMG creation (58b443b)
+-  Update app icon and descriptions to reflect new branding as Snapzy (9710b34)
+-  Add crosshair indicator for mouse position in area selection overlay (81a6e12)
+-  Implement ESC key handling with confirmation dialog for recording cancellation (de2972c)
+-  Enhance annotation management with regular app mode handling and improved window behavior (5d1da7a)
+-  Enhance crop functionality with improved editing modes, dynamic dimensions, and visual overlays (3c581a3)
+-  Enhance crop feature with aspect ratio presets, live dimensions, grid overlay, and improved visuals (4d41cb2)
+-  Enhance QuickAccess UI with shadow effects and immediate button feedback (c2e04f6)
+-  Implement drag-to-external-app support with QuickAccessDraggableView (2ed3be9)
+-  Refine swipe gesture handling for dismiss direction in QuickAccessCardView (e1a6e6e)
+-  Implement QuickAccess animations, progress indicators, and sound feedback (94eadfa)
+-  Remove disabled photo toolbar button from annotation toolbar (8072ec4)
+-  Enhance video compositor with caching for wallpapers and improve slider functionality in UI (4fefdd9)
+-  Update export dimension presets and adjust scaling logic for video preview background (cecaed7)
+-  Update preview calculations to use export dimensions for WYSIWYG behavior (ce96ebc)
+-  Enhance video export dimension handling and UI (2ef74d2)
+-  Implement export settings management with UI panel for video editor (cd8910e)
+-  Implement non-activating behavior for area selection and recording overlays to prevent focus stealing (21ec0bd)
+-  Enhance launch scripts with logging and error handling improvements (9f7a62d)
+-  Add right sidebar toggle functionality and update UI state management (0de9a78)
+-  Refactor VerticalTabItem layout for improved UI consistency and responsiveness (9a0a50e)
+-  Implement caching and performance optimizations for wallpaper rendering in VideoEditor (9efc797)
+-  Optimize wallpaper rendering in Annotate feature (c1de0ee)
+-  Apply design tokens to VideoDetailsSidebarView for consistency and improved maintainability (b4e0e05)
+-  Implement performance optimization plan for area capture (7cf6580)
+-  Add build and launch scripts for macOS app (4a846a4)
+-  Fix race condition causing menubar icon persistence by adjusting state update timing in ScreenRecordingManager (97aad56)
+-  Optimize slider performance with local state and caching for smoother interactions (731fa05)
+-  Implement SystemWallpaperManager service and integrate system wallpapers into the annotation sidebar (944b3cc)
+-  Implement UX improvements for Annotate sidebar (efc24b1)
+-  Add wallpaper presets and integrate them into the annotation background options (9f25200)
+-  Refactor AnnotateBottomBarView to streamline preview mode handling and enhance mode toggle functionality (84ad05f)
+-  Refactor editor mode handling in annotation features, including mockup and preview modes (39fd1ee)
+-  Implement phases 4-6 for Mockup Renderer including UI components, export functionality, and integration/testing (70a4ed2)
+-  Implement blur enhancement features including Gaussian blur renderer, performance optimizations, UI integration, and export functionality (37de501)
+-  Update slider ranges and enhance text input handling in CompactSliderRow (fec96d5)
+-  Comment out ratio section in AnnotateSidebarView for layout adjustments (718964f)
+-  Enhance image alignment handling and export functionality in Annotate features (d63873b)
+-  Remove font and frame settings from Save button in VideoEditorToolbarView (22257b7)
+-  Add implementation plan for Corner Radius and Button ViewModifiers (27f5f13)
+-  Implement vertical tab bar for video editor sidebar (c6d271b)
+-  Comment out drag handle and spacer in AnnotateBottomBarView for layout adjustments (26ad316)
+-  Add NSWindow extensions for custom corner radius and traffic light button positioning (0a0382c)
+-  Update status bar icon size for improved visibility in menu bar (6c445a8)
+-  Update StatusBarController to use resized app icons for menu bar and add MenubarIcon assets (912618c)
+-  Add macOS app icons in various sizes and update Contents.json for asset management (f2e3cae)
+-  Refactor updater management to use UpdaterManager singleton for improved update handling (5cd8234)
+-  Standardize onboarding persistence and improve window opening mechanism (a5ed78a)
+-  Implement StatusBarController for dynamic recording status and click-to-stop functionality (e87072a)
+-  Add Delete and Restart buttons to RecordingStatusBarView for enhanced recording control (772580c)
+-  Update corner radius and card width for improved QuickAccess layout consistency (7377662)
+-  Remove background colors from various video editor views for improved UI consistency (e91a24a)
+-  Remove background color from various annotation views for improved UI consistency (203ccb9)
+-  Implement window exclusion from screen capture in ScreenRecordingManager (ffa311b)
+-  Create dedicated sidebar components for VideoEditor and update VideoBackgroundSidebarView to use them (27e4add)
+-  Reduce sizes of gradient preset buttons and adjust grid layout for improved sidebar fit (99b148a)
+-  Add Video Editor Background & Padding Feature (fc0cd08)
+-  Remove zoom controls from VideoControlsView and implement hover-based zoom placeholder in ZoomTimelineTrack for improved user interaction (5940106)
+-  Refactor video info display by creating VideoDetailsSidebarView and integrating it into the main editor layout, replacing the VideoInfoPanel (bd9964b)
+-  Refactor ZoomColors to use macOS system colors and enhance UI consistency across video editor components (7405ce1)
+-  Improve unsaved changes tracking by refining zoom segment updates and change detection (e714896)
+-  Enhance onboarding flow with new CompletionView and improved PermissionsView (395ae8a)
+-  Standardize Preferences UI with settingRow helper and icons for improved layout (19548e8)
+-  Create AdvancedSettingsView with permissions section and integrate into PreferencesView (1860e43)
+-  Implement microphone capture functionality with toggle in recording toolbar (63d6152)
+-  Adjust crop rectangle calculation to account for CoreImage coordinate system (1092b13)
+-  Adjust padding and frame width in VideoEditor views for improved layout (c8838d2)
+-  Update video editor to support original file path for "Replace Original" functionality (9a44211)
+-  Enhance video editor with undo/redo support, toolbar integration, and improved export functionality (36a3698)
+-  Enhance zoom segment interaction by including disabled segments in selection (31e0fa1)
+-  Implement zoom feature in VideoEditor (95dd758)
+-  Adjust default window size of Annotate and Video Editor and traffic light positions (341d5a8)
+-  implement video editor empty state with drag & drop support (27ab219)
+-  add dimensions to banner image for improved display (217c4ff)
+-  update banner image for enhanced visual appeal (9b5d4db)
+-  update README.md for improved clarity and add banner image (361bb0e)
+-  rename app from ZapShot to ClaudeShot (9fbaab0)
+-  enhance QuickAccessCardView with drag support and refactor action buttons to use QuickAccessIconButton (b98db1d)
+-  centralize layout constants for QuickAccess panel and update related components (a98e9ac)
+-  update theme management to use systemAppearance for consistent color scheme across views (5fcce91)
+-  update theme management to use effectiveColorScheme for consistent appearance across views (dc3743b)
+-  implement theme management with appearance mode selection and update UI components for dynamic theming (c0d23d6)
+-  update app icon assets and configuration for ZapShot (3be3019)
+-  add edit and delete buttons to QuickAccessCardView with hover support (f5bea81)
+-  implement BlurCacheManager for optimized blur rendering and integrate with AnnotationRenderer (067ede7)
+-  add About tab in preferences and reorganize update settings (fd8dc0b)
+-  integrate Sparkle for update management and add update preferences in settings (d9c46fc)
+-  integrate Sparkle package for enhanced update management (d4220e9)
+-  add mute functionality and update video export logic to handle muted state (dbcbad6)
+-  implement video editor functionality with trimming, exporting, and playback controls (734349b)
+-  enhance AnnotateWindowController to manage QuickAccess item lifecycle and cleanup (6081837)
+-  implement unsaved changes tracking and enhance save functionality with keyboard shortcuts (042090a)
+-  enhance blur functionality with pixelated preview and integrate source image handling (610d7d4)
+-  add undo/redo functionality and improve annotation path handling (7dc6c10)
+-  implement recording toolbar with options menu, audio settings, and improved button styles (d08a6f3)
+-  add resizing functionality to recording region overlay with visual handles (53ec65e)
+-  add save confirmation dialog for replacing or saving copies of annotated files (0883c51)
+-  implement crop functionality with interactive overlay and state management (6e27018)
+-  add drag-and-drop support for quick access items with customizable drag preview (cb13915)
+-  enhance quick access functionality to support video items, including thumbnail generation and video editor integration (ef4dc47)
+-  implement quick access feature for screenshot management, including UI components and state management (9ed6a7a)
+-  add annotation functionality with drag-and-drop support and keyboard shortcuts. Improve the preparation recording phase by adding escape and re-range selection immediately (ebbb26e)
+-  add recording coordinator and allows user adjusting the select-area (f70f9b7)
+-  update layer priority (450d51b)
+-  Implement initial screen recording functionality and add extensive planning for various new features. (1923605)
+-  Introduce screen recording functionality with updated preferences, onboarding, and core capture logic, alongside extensive planning for future features. (892bfdd)
+-  Add comprehensive feature plans, project documentation, and initial implementations for preferences and onboarding. (9d8e370)
+-  Add comprehensive feature plans and refactor the application to a menu bar agent app. (0d3b0e9)
+-  Add extensive planning documents for future features and refactors, update the selection tool icon, and create a root README.md. (90f3892)
+-  Add comprehensive planning documents for multiple features and refine annotation canvas and text editing views. (6d553a5)
+-  Add extensive planning documents for multiple features and enhance the annotation module with new state, views, and rendering logic. (00055fb)
+-  add debug.sh to run and build ZapShot app (fc1697b)
+-  Implement initial onboarding flow and establish foundational plans for various upcoming features. (db6005b)
+-  Implement a comprehensive preferences window with general, quick access, and shortcut settings, alongside enhancements to the floating screenshot feature. (57fe19d)
+-  Add detailed plans and research for floating screenshots, annotation, canvas refactor, and custom keyboard shortcuts. (c4bfc6a)
+-  Add design documents for annotation, floating screenshot, canvas refactor, and custom keyboard shortcut features, and update floating screenshot components. (fe3255d)
+-  Add detailed plans for floating screenshots, canvas refactoring, annotation, and keyboard shortcuts, and outline the integration of the floating screenshot feature. (8550c1a)
+-  Add initial plans and research for annotation, floating screenshot, and custom keyboard shortcuts, while updating annotation canvas, sidebar, and floating card views. (8cf3429)
+-  Implement annotation feature with state management and UI components (80f1e26)
+-  Implement global keyboard shortcut manager for screen capture (8fb5f0d)
+-  Add core screen capture functionality and UI components (50397b1)
+
+### Bug Fixes
+-  Update bump-version script to use temporary files for sed replacements (f5a8c9a)
+-  refine window hiding logic to avoid hiding overlay panels and adjust collection behavior for area selection window (7b217c0)
+-  Update keyCodeToString method to join key characters with a space for better readability (e0ba181)
+-  Update debug visibility for sandbox indicators and troubleshooting suggestions in LicenseActivationView (cb214a6)
+-  Clamp blur and pixelation source regions to image bounds and proportionally adjust destination rectangles for accurate rendering. (60f3fe4)
+-  Update bug report URL from zapshot.app to snapzy.app. (8852b3f)
+-  Update task label in VSCode configuration and remove obsolete debug script (29071d7)
+-  Adjust aspect ratio handling in crop functionality to ensure correct dimensions during resizing (b98feb8)
+-  Add delay before area capture to prevent overlay artifacts (5967ff5)
+-  Improve cleanup function to provide feedback on app stopping status (f63fcfa)
+-  Update launch script to use Snapzy scheme and project name (1f720e0)
+-  Correct label formatting in build task for macOS app (6f5048c)
+
+### Chore
+- refactor: remove unnecessary coordinate conversion logic in screen capture process (635a807)
+- chore: remove setup of Secrets.xcconfig from CI and release workflows (c54fc82)
+- chore: adding sponsor info (b2df600)
+- chore: remove unused project files and user interface state to streamline project structure (46268e3)
+- chore: remove outdated workflow documents for application creation, debugging, deployment, enhancement, orchestration, planning, preview management, status display, testing, and UI/UX design. These changes streamline the agent's capabilities and focus on more relevant functionalities. (61e9f0c)
+- chore: add /plans directory to .gitignore to prevent tracking of plan files (59bb788)
+- chore: remove outdated plans and reports for the Zoom feature implementation, UI fixes, and Screen Studio analysis. These files are no longer relevant to the current development direction. (304dcef)
+- chore: bump version to v1.0.1 (12a6851)
+- refactor: improve QuickAccessCard drag-and-drop by implementing sandbox file access and managing drag source lifecycle with a new registry. (b9979d4)
+- docs: remove project structure refactoring and migration planning documents. (bf567fe)
+- docs: Add guidelines for plan storage location, structure, and naming convention. (eb43e9c)
+- refactor: rename StatusBarController to AppStatusBarController (ec92512)
+- refactor: Introduce AppCoordinator and AppEnvironment for improved app lifecycle management and dependency injection, removing ContentView. (57318fe)
+- chore: remove accidentally committed debug log file. (b458019)
+- refactor: Introduce `OnboardingStepContainer` for consistent layout and streamline onboarding navigation by removing the skip confirmation flow. (f37dfca)
+- refactor: enhanve .agent (4f35bc7)
+- chore: add `*.xcuserstate` to `.gitignore` to prevent committing IDE state files. (3bd2dd8)
+- refactor: Derive counter tool value dynamically from existing annotations instead of storing it as a published property. (1b7b5b4)
+- refactor: overhaul license management by removing trial and grace period logic, externalizing secrets, and simplifying validation. (fd79c94)
+- refactor: Wrap appearance mode picker in a `SettingRow` and compact `AppearanceThumbnailView` layout, also adding `.agent` to gitignore. (9baa1f7)
+- refactor: Simplify crosshair drawing logic in AreaSelectionOverlayView (966885d)
+- chore: Update build workflow to enable manual triggering and comment out push/release events (fdc60c6)
+- refactor!: rename the app to Snapzy (7861072)
+- refactor: update preferences section titles and remove unused menu bar icon toggle (cf618de)
+- refactor: reduce delay before screen capture and window hiding for improved UI responsiveness (1ad52c3)
+- chore: set default video extensions by loading from configs (54f5991)
+- docs: Add detailed implementation plans for annotation, floating screenshot, custom keyboard shortcuts, and canvas refactor features, and update screenshot sound to Glass. (029adcf)
+
+### Contributors
+- @duongductrong
+- @github-actions[bot]

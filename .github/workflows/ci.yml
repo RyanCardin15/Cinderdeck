@@ -2,9 +2,9 @@ name: CI Build Check
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+    branches: [main]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -34,62 +34,61 @@ jobs:
         env:
           # The following tests crash on GitHub Actions macOS runners (Swift concurrency /
           # headless CGS), so they are skipped in CI and run locally instead.
-          SNAPZY_CI_SKIP_TESTS: |
-            SnapzyTests/GoogleDriveTests
-            SnapzyTests/DatabaseManagerTests
-            SnapzyTests/QuickAccessCoreTests/testQuickAccessCountdownTimer_pauseResumePreservesRemainingTime
-            SnapzyTests/QuickAccessCoreTests/testQuickAccessCountdownTimer_cancelPreventsExpiration
-            SnapzyTests/QuickAccessCoreTests/testQuickAccessTrackpadSwipeModeStore_persistsMode
-            SnapzyTests/QuickAccessCoreTests/testQuickAccessTrackpadSwipeModeStore_resetToDefault
-            SnapzyTests/OCRRecognitionTests
-            SnapzyTests/CustomOCRModelStoreTests
-            SnapzyTests/OCRModelSelectionTests
-            SnapzyTests/PreferencesOCRModelSelectionTests
-            SnapzyTests/OCRKeychainStoreTests
-            SnapzyTests/RemoteOCRServiceTests
-            SnapzyTests/SmartElementCaptureControllerTests
-            SnapzyTests/SmartElementWindowOwnerResolverTests
-            SnapzyTests/SmartElementQueryServiceTests
-            SnapzyTests/SandboxOffDataMigrationServiceTests
-            SnapzyTests/AppStatusBarControllerTests
-            SnapzyTests/RecordingAudioLevelMeterTests
-            SnapzyTests/RecordingToolbarWindowTests/testShowRecordingStatusBar_alreadyVisibleWindow_enablesBackgroundDragging
-            SnapzyTests/CaptureViewModelTests/testHiddenWindowSession_restore_postsSyntheticMouseMovedEvent
-            SnapzyTests/AnnotateCreationTests/testCanExtractTextRequiresNormalAnnotateSourceImage
-            SnapzyTests/AnnotateExportSaveTests/testCopyToClipboardRunsWithoutCrashing
-            SnapzyTests/AnnotateExportSaveTests/testSaveAsIsCoveredByManualInteractionOnly
-            SnapzyTests/AnnotateBackgroundRedactionTests/testApplyBackgroundCutoutStartsProcessingOnSupportedOS
-            SnapzyTests/AnnotateBackgroundRedactionTests/testAutoRedactSensitiveDataStartsScan
-            SnapzyTests/AnnotateMockupTests/testMockupExporterRenderProducesImageWithSourceImage
-            SnapzyTests/AnnotateTextSnappingTests/testDetectorReportsTextNearTheImageTopWithAHighY
-            SnapzyTests/AnnotateBlurCacheManagerTests/testGetCachedBlur_nonBlockingSchedulesRender
-            SnapzyTests/InlineAreaAnnotateSessionTests/testAnnotateWindowConsumesCopyAndDuplicateWhenNothingIsSelected
-            SnapzyTests/InlineAreaAnnotateSessionTests/testUpdateSelectionPublishesPointerLocation
-            SnapzyTests/InlineAreaAnnotateSessionTests/testEndSelectionClearsPointerLocation
-            SnapzyTests/AreaSelectionMultiMonitorReconciliationTests
-            SnapzyTests/AreaSelectionSessionLifecycleTests
-            SnapzyTests/AreaSelectionHoverPerformanceTests
-            SnapzyTests/AreaSelectionControllerTests
-            SnapzyTests/AreaSelectionModelsTests
-            SnapzyTests/AreaSelectionOverlayPassthroughStaleLocationTests
-            SnapzyTests/AreaSelectionLivePassthroughWindowDetectionTests
-            SnapzyTests/AreaSelectionOverlayMagnifierLayoutTests/testMagnifierZoom_worksWithEmptyBackdropsInitially
-            SnapzyTests/PersistedCombineSessionTests/testCaptureStitchSaveReopen_persistsStitchEverywhere
-            SnapzyTests/BackgroundCursorControlTests
-            SnapzyTests/LivePassthroughInputLogicTests
-            SnapzyTests/HotkeyUnregistrationTests
-            SnapzyTests/RecordingSessionShortcutGatingTests
-            SnapzyTests/RecordingSessionHotkeyRegistrationTests
+          CINDERDECK_CI_SKIP_TESTS: |
+            CinderdeckTests/GoogleDriveTests
+            CinderdeckTests/DatabaseManagerTests
+            CinderdeckTests/QuickAccessCoreTests/testQuickAccessCountdownTimer_pauseResumePreservesRemainingTime
+            CinderdeckTests/QuickAccessCoreTests/testQuickAccessCountdownTimer_cancelPreventsExpiration
+            CinderdeckTests/QuickAccessCoreTests/testQuickAccessTrackpadSwipeModeStore_persistsMode
+            CinderdeckTests/QuickAccessCoreTests/testQuickAccessTrackpadSwipeModeStore_resetToDefault
+            CinderdeckTests/OCRRecognitionTests
+            CinderdeckTests/CustomOCRModelStoreTests
+            CinderdeckTests/OCRModelSelectionTests
+            CinderdeckTests/PreferencesOCRModelSelectionTests
+            CinderdeckTests/OCRKeychainStoreTests
+            CinderdeckTests/RemoteOCRServiceTests
+            CinderdeckTests/SmartElementCaptureControllerTests
+            CinderdeckTests/SmartElementWindowOwnerResolverTests
+            CinderdeckTests/SmartElementQueryServiceTests
+            CinderdeckTests/AppStatusBarControllerTests
+            CinderdeckTests/RecordingAudioLevelMeterTests
+            CinderdeckTests/RecordingToolbarWindowTests/testShowRecordingStatusBar_alreadyVisibleWindow_enablesBackgroundDragging
+            CinderdeckTests/CaptureViewModelTests/testHiddenWindowSession_restore_postsSyntheticMouseMovedEvent
+            CinderdeckTests/AnnotateCreationTests/testCanExtractTextRequiresNormalAnnotateSourceImage
+            CinderdeckTests/AnnotateExportSaveTests/testCopyToClipboardRunsWithoutCrashing
+            CinderdeckTests/AnnotateExportSaveTests/testSaveAsIsCoveredByManualInteractionOnly
+            CinderdeckTests/AnnotateBackgroundRedactionTests/testApplyBackgroundCutoutStartsProcessingOnSupportedOS
+            CinderdeckTests/AnnotateBackgroundRedactionTests/testAutoRedactSensitiveDataStartsScan
+            CinderdeckTests/AnnotateMockupTests/testMockupExporterRenderProducesImageWithSourceImage
+            CinderdeckTests/AnnotateTextSnappingTests/testDetectorReportsTextNearTheImageTopWithAHighY
+            CinderdeckTests/AnnotateBlurCacheManagerTests/testGetCachedBlur_nonBlockingSchedulesRender
+            CinderdeckTests/InlineAreaAnnotateSessionTests/testAnnotateWindowConsumesCopyAndDuplicateWhenNothingIsSelected
+            CinderdeckTests/InlineAreaAnnotateSessionTests/testUpdateSelectionPublishesPointerLocation
+            CinderdeckTests/InlineAreaAnnotateSessionTests/testEndSelectionClearsPointerLocation
+            CinderdeckTests/AreaSelectionMultiMonitorReconciliationTests
+            CinderdeckTests/AreaSelectionSessionLifecycleTests
+            CinderdeckTests/AreaSelectionHoverPerformanceTests
+            CinderdeckTests/AreaSelectionControllerTests
+            CinderdeckTests/AreaSelectionModelsTests
+            CinderdeckTests/AreaSelectionOverlayPassthroughStaleLocationTests
+            CinderdeckTests/AreaSelectionLivePassthroughWindowDetectionTests
+            CinderdeckTests/AreaSelectionOverlayMagnifierLayoutTests/testMagnifierZoom_worksWithEmptyBackdropsInitially
+            CinderdeckTests/PersistedCombineSessionTests/testCaptureStitchSaveReopen_persistsStitchEverywhere
+            CinderdeckTests/BackgroundCursorControlTests
+            CinderdeckTests/LivePassthroughInputLogicTests
+            CinderdeckTests/HotkeyUnregistrationTests
+            CinderdeckTests/RecordingSessionShortcutGatingTests
+            CinderdeckTests/RecordingSessionHotkeyRegistrationTests
         run: |
           set -euo pipefail
           mkdir -p build
           rm -rf build/ci-test.xcresult
           test_args=()
-          if [[ -n "${SNAPZY_CI_SKIP_TESTS:-}" ]]; then
-            skip_tests="${SNAPZY_CI_SKIP_TESTS//$'\n'/ }"
+          if [[ -n "${CINDERDECK_CI_SKIP_TESTS:-}" ]]; then
+            skip_tests="${CINDERDECK_CI_SKIP_TESTS//$'\n'/ }"
             skip_tests="${skip_tests//,/ }"
             skip_tests="${skip_tests//;/ }"
-            echo "Skipping XCTest identifiers from SNAPZY_CI_SKIP_TESTS:"
+            echo "Skipping XCTest identifiers from CINDERDECK_CI_SKIP_TESTS:"
             for test_id in $skip_tests; do
               [[ -z "$test_id" ]] && continue
               echo "  - $test_id"
@@ -98,8 +97,8 @@ jobs:
           fi
 
           if ! xcodebuild \
-            -project Snapzy.xcodeproj \
-            -scheme Snapzy \
+            -project Cinderdeck.xcodeproj \
+            -scheme Cinderdeck \
             -destination 'platform=macOS' \
             -derivedDataPath build/DerivedData \
             -resultBundlePath build/ci-test.xcresult \
@@ -133,8 +132,8 @@ jobs:
           mkdir -p build
 
           if ! xcodebuild \
-            -project Snapzy.xcodeproj \
-            -scheme Snapzy \
+            -project Cinderdeck.xcodeproj \
+            -scheme Cinderdeck \
             -configuration Release \
             -derivedDataPath build/DerivedData \
             CODE_SIGN_IDENTITY="" \
@@ -150,9 +149,9 @@ jobs:
 
       - name: Verify app bundle
         run: |
-          APP_PATH="build/DerivedData/Build/Products/Release/Snapzy.app"
+          APP_PATH="build/DerivedData/Build/Products/Release/Cinderdeck.app"
           if [ ! -d "$APP_PATH" ]; then
-            echo "::error::Snapzy.app not found at expected path"
+            echo "::error::Cinderdeck.app not found at expected path"
             exit 1
           fi
           echo "Build successful: $APP_PATH"

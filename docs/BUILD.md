@@ -1,146 +1,52 @@
-# Manual Build Guide
+# Building Cinderdeck
 
-Build Snapzy from source on your local machine.
+Cinderdeck supports macOS 13 or later. Building the current source requires Xcode 26.2 or later and its command-line tools. Dependencies resolve through Swift Package Manager.
 
-> If you only need first-time local setup and a basic debug run, start with [DEVELOPMENT.md](DEVELOPMENT.md).
+## Development
 
-## Prerequisites
+Open `Cinderdeck.xcodeproj`, select the **Cinderdeck** scheme, and run. The Debug product is **Cinderdeck Debug.app**, with a separate bundle identifier (`com.ryancardin.cinderdeck.debug`). It does not import your production Snapzy data.
 
-- macOS 13.0+
-- Xcode 15.0+
-- Command Line Tools: `xcode-select --install`
-
-## Quick Build (Xcode)
-
-```bash
-open Snapzy.xcodeproj
+```sh
+xcodebuild -project Cinderdeck.xcodeproj -scheme Cinderdeck \
+  -configuration Debug -destination 'platform=macOS' \
+  -derivedDataPath .build/development \
+  CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build
+open '.build/development/Build/Products/Debug/Cinderdeck Debug.app'
 ```
 
-Press ⌘R to build and run.
+## Signed local installation
 
-## Regenerate App Icon Assets
+Select your own Apple Development or Developer ID signing identity. No upstream developer team, certificate, or private key is included.
 
-After editing `Snapzy/SnapzyIcon.icon` in Icon Composer, regenerate the padded macOS asset catalog before building a release:
-
-```bash
-brew install imagemagick # one-time dependency if magick is missing
-scripts/generate-app-icon-assets.sh
+```sh
+export CINDERDECK_SIGNING_IDENTITY='Apple Development: Your Name (IDENTITY_ID)'
+export CINDERDECK_TEAM_ID='YOUR_TEAM_ID'
+xcodebuild -project Cinderdeck.xcodeproj -scheme Cinderdeck \
+  -configuration Release -destination 'platform=macOS' \
+  -derivedDataPath .build/release \
+  CODE_SIGN_IDENTITY="$CINDERDECK_SIGNING_IDENTITY" \
+  CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$CINDERDECK_TEAM_ID" \
+  'OTHER_SWIFT_FLAGS=$(inherited) -Xllvm -sil-disable-pass=PerfInliner' build
 ```
 
-The script renders the `.icon` package with Icon Composer's bundled `ictool`, then centers the rendered artwork in an 832 × 832 px box on a 1024 × 1024 px transparent canvas. This preserves the Icon Composer artwork while keeping Finder/Dock margins consistent with other macOS apps.
+The final flag works around a Swift 6.2.4 / Xcode 26.3 performance-inliner compiler crash inherited from the source baseline. It keeps the Release optimization level; remove it only after verifying a newer compiler no longer needs it.
 
-If you only have a manually exported Icon Composer PNG, use:
+Quit the running app and back up any existing installation, then copy `.build/release/Build/Products/Release/Cinderdeck.app` to `/Applications`. Keep the same signing identity for subsequent local builds. The new Cinderdeck identity has its own macOS permission grants; see [migration](MIGRATION.md).
 
-```bash
-scripts/generate-app-icon-assets.sh --source-png /path/to/IconComposerExport.png
+## Tests
+
+```sh
+scripts/run-tests.sh
+# Focused service, process, configuration, and database coverage:
+scripts/stacks-verify.sh test
 ```
 
-For other projects, copy `scripts/generate-icon-composer-appiconset.sh` and run it directly:
+Use `-only-testing:CinderdeckTests/TestClassName` with `scripts/run-tests.sh` to select a suite. `CinderdeckMigrationTests` covers database import with WAL records, preserving source and destination data, retry after failure, legacy links, and update isolation.
 
-```bash
-./generate-icon-composer-appiconset.sh /path/to/MyIcon.icon
-```
+## Artwork
 
-By default it writes `AppIcon.appiconset` next to the input `.icon` package. To target an existing asset catalog:
+`assets/cinderdeck-icon.png` is the master icon. The asset catalog contains every macOS size. To regenerate them using the existing asset script, install ImageMagick and run `scripts/generate-app-icon-assets.sh`. The menu-bar mark is drawn natively by `MenuBarIconRenderer` so it follows macOS light/dark appearance. See [branding](BRANDING.md) for provenance.
 
-```bash
-./generate-icon-composer-appiconset.sh /path/to/MyIcon.icon \
-  --appiconset /path/to/Assets.xcassets/AppIcon.appiconset
-```
+## Distribution
 
-## Command Line Build
-
-### Development Build
-
-```bash
-xcodebuild -project Snapzy.xcodeproj -scheme Snapzy -configuration Debug build
-```
-
-Output: `~/Library/Developer/Xcode/DerivedData/Snapzy-*/Build/Products/Debug/Snapzy.app`
-
-### Release Build (Unsigned)
-
-```bash
-xcodebuild -project Snapzy.xcodeproj \
-  -scheme Snapzy \
-  -configuration Release \
-  CODE_SIGN_IDENTITY="" \
-  CODE_SIGNING_REQUIRED=NO \
-  build
-```
-
-### Release Archive (Signed)
-
-Requires Apple Developer account.
-
-```bash
-# 1. Create archive
-xcodebuild -project Snapzy.xcodeproj \
-  -scheme Snapzy \
-  -configuration Release \
-  archive -archivePath Snapzy.xcarchive
-
-# 2. Export app bundle
-xcodebuild -exportArchive \
-  -archivePath Snapzy.xcarchive \
-  -exportPath ./exported_app \
-  -exportOptionsPlist ExportOptions.plist
-```
-
-### Create DMG
-
-After exporting, create distributable DMG:
-
-```bash
-# Using create-dmg (brew install create-dmg)
-create-dmg \
-  --volname "Snapzy" \
-  --background "assets/dmg-background.png" \
-  --window-size 660 400 \
-  --icon-size 120 \
-  --icon "Snapzy.app" 180 170 \
-  --app-drop-link 480 170 \
-  --no-internet-enable \
-  "Snapzy.dmg" \
-  "./exported_app/Snapzy.app"
-```
-
-## Build Locations
-
-| Build Type | Location |
-|------------|----------|
-| Debug | `DerivedData/Snapzy-*/Build/Products/Debug/` |
-| Release | `DerivedData/Snapzy-*/Build/Products/Release/` |
-| Archive | `./Snapzy.xcarchive` |
-| Export | `./exported_app/Snapzy.app` |
-
-## Troubleshooting
-
-### "archive not found" Error
-
-You used `build` instead of `archive`. The `build` command outputs to DerivedData, not `.xcarchive`.
-
-```bash
-# Wrong
-xcodebuild ... build
-xcodebuild -exportArchive -archivePath Snapzy.xcarchive ...  # Fails!
-
-# Correct
-xcodebuild ... archive -archivePath Snapzy.xcarchive
-xcodebuild -exportArchive -archivePath Snapzy.xcarchive ...  # Works!
-```
-
-### Code Signing Issues
-
-For local testing without signing:
-
-```bash
-xcodebuild ... CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO build
-```
-
-### Clean Build
-
-```bash
-xcodebuild -project Snapzy.xcodeproj -scheme Snapzy clean
-rm -rf ~/Library/Developer/Xcode/DerivedData/Snapzy-*
-```
+See [RELEASES.md](RELEASES.md) for signing, notarization, Sparkle setup, DMG packaging, and cask generation. A local Apple Development build is not a notarized public release.

@@ -1,0 +1,3 @@
+"NSMicrophoneUsageDescription" = "Cinderdeck cần quyền microphone để ghi âm cùng với bản ghi màn hình của bạn.";
+"NSCameraUsageDescription" = "Cinderdeck cần quyền truy cập camera để thêm hình ảnh camera vào bản ghi màn hình của bạn.";
+"NSScreenCaptureUsageDescription" = "Cinderdeck cần quyền ghi màn hình để chụp ảnh màn hình và quay màn hình của bạn.";

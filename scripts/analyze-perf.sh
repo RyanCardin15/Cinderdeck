@@ -1,6 +1,6 @@
 #!/bin/bash
 # Analyze recorded performance log from scripts/monitor-perf.sh
-LOG_FILE="$HOME/.config/snapzy/logs/perf_session.csv"
+LOG_FILE="$HOME/.config/cinderdeck/logs/perf_session.csv"
 
 if [ ! -f "$LOG_FILE" ]; then
     echo "No log file found at $LOG_FILE. Please run scripts/monitor-perf.sh first."
@@ -8,7 +8,7 @@ if [ ! -f "$LOG_FILE" ]; then
 fi
 
 echo "==========================================="
-echo "📊 SNAPZY USAGE PERFORMANCE ANALYSIS REPORT"
+echo "📊 CINDERDECK USAGE PERFORMANCE ANALYSIS REPORT"
 echo "==========================================="
 
 awk -F',' 'NR>1 {

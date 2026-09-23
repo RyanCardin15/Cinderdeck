@@ -19,23 +19,23 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TMP_ROOT="${TMPDIR:-/tmp}"
-BINARY_PATH="${TMP_ROOT%/}/snapzy-ocr-readme-benchmark"
-MODULE_CACHE_PATH="${TMP_ROOT%/}/snapzy-ocr-readme-benchmark-module-cache"
-STDERR_PATH="${TMP_ROOT%/}/snapzy-ocr-readme-benchmark.stderr"
+BINARY_PATH="${TMP_ROOT%/}/cinderdeck-ocr-readme-benchmark"
+MODULE_CACHE_PATH="${TMP_ROOT%/}/cinderdeck-ocr-readme-benchmark-module-cache"
+STDERR_PATH="${TMP_ROOT%/}/cinderdeck-ocr-readme-benchmark.stderr"
 
 cd "$REPO_ROOT"
 
 swiftc -module-cache-path "$MODULE_CACHE_PATH" \
   -o "$BINARY_PATH" \
   scripts/swift-tools/ocr/ocr-readme-benchmark.swift \
-  Snapzy/Services/Media/OCRService.swift \
-  Snapzy/Services/Media/OCR/VerticalCJKTextNormalizer.swift \
-  Snapzy/Services/Media/OCR/VerticalCJKBitmapAnalysis.swift \
-  Snapzy/Services/Media/OCR/OCRRequest.swift \
-  Snapzy/Services/Media/OCR/OCRResult.swift \
-  Snapzy/Services/Media/OCR/VisionOCRProfile.swift \
-  Snapzy/Services/Media/OCR/OCRBenchmarkMetrics.swift \
-  Snapzy/Services/Media/OCR/OCRBenchmarkHarness.swift
+  Cinderdeck/Services/Media/OCRService.swift \
+  Cinderdeck/Services/Media/OCR/VerticalCJKTextNormalizer.swift \
+  Cinderdeck/Services/Media/OCR/VerticalCJKBitmapAnalysis.swift \
+  Cinderdeck/Services/Media/OCR/OCRRequest.swift \
+  Cinderdeck/Services/Media/OCR/OCRResult.swift \
+  Cinderdeck/Services/Media/OCR/VisionOCRProfile.swift \
+  Cinderdeck/Services/Media/OCR/OCRBenchmarkMetrics.swift \
+  Cinderdeck/Services/Media/OCR/OCRBenchmarkHarness.swift
 
 : > "$STDERR_PATH"
 set +e

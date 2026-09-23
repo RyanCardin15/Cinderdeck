@@ -5,7 +5,7 @@
 # to production. Supports two signing strategies to compare.
 #
 # Prerequisites:
-#   - Self-signed cert "Snapzy Self-Signed" in keychain
+#   - Self-signed cert "Cinderdeck Self-Signed" in keychain
 #   - Sparkle EdDSA private key file (set SPARKLE_PRIVATE_KEY_FILE env var)
 #
 # Usage:
@@ -27,9 +27,9 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TEST_DIR="/tmp/test-sparkle-update"
-CERT_NAME="Snapzy Self-Signed"
-ENTITLEMENTS="$PROJECT_DIR/Snapzy/Snapzy.entitlements"
-INSTALL_PATH="/Applications/Snapzy.app"
+CERT_NAME="Cinderdeck Self-Signed"
+ENTITLEMENTS="$PROJECT_DIR/Cinderdeck/Cinderdeck.entitlements"
+INSTALL_PATH="/Applications/Cinderdeck.app"
 SERVER_PORT=8089
 
 V1_VERSION="99.0.0"
@@ -39,7 +39,7 @@ V2_BUILD="991"
 V3_VERSION="99.0.2-beta.1"
 V3_BUILD="992"
 
-BUNDLE_ID="com.duongductrong.Snapzy"
+BUNDLE_ID="com.ryancardin.cinderdeck"
 FEED_URL="http://localhost:${SERVER_PORT}/appcast.xml"
 
 # ─── Helpers ────────────────────────────────────────────────────────
@@ -89,7 +89,7 @@ check_prereqs() {
 }
 
 build_archive() {
-  local archive_path="$TEST_DIR/archive/Snapzy.xcarchive"
+  local archive_path="$TEST_DIR/archive/Cinderdeck.xcarchive"
 
   echo ""
   echo "=== Building archive ==="
@@ -103,8 +103,8 @@ build_archive() {
   echo "  → Building (this may take a few minutes)..."
 
   if ! xcodebuild archive \
-    -project "$PROJECT_DIR/Snapzy.xcodeproj" \
-    -scheme Snapzy \
+    -project "$PROJECT_DIR/Cinderdeck.xcodeproj" \
+    -scheme Cinderdeck \
     -configuration Release \
     -archivePath "$archive_path" \
     -derivedDataPath "$TEST_DIR/DerivedData" \
@@ -202,15 +202,15 @@ prepare_version() {
   local version="$2"     # e.g. "99.0.0"
   local build="$3"       # e.g. "990"
   local sign_mode="$4"   # "current" or "hybrid"
-  local archive_path="$TEST_DIR/archive/Snapzy.xcarchive"
-  local app_path="$TEST_DIR/$label/Snapzy.app"
+  local archive_path="$TEST_DIR/archive/Cinderdeck.xcarchive"
+  local app_path="$TEST_DIR/$label/Cinderdeck.app"
 
   echo ""
   echo "=== Preparing $label (v$version, build $build, mode: $sign_mode) ==="
 
   rm -rf "$TEST_DIR/$label"
   mkdir -p "$TEST_DIR/$label"
-  ditto "$archive_path/Products/Applications/Snapzy.app" "$app_path"
+  ditto "$archive_path/Products/Applications/Cinderdeck.app" "$app_path"
 
   # Patch version and feed URL
   echo "  → Patching Info.plist: v$version ($build), feed=$FEED_URL"
@@ -237,16 +237,16 @@ prepare_version() {
 install_v1() {
   echo ""
   echo "=== Installing v1 to $INSTALL_PATH ==="
-  killall Snapzy 2>/dev/null || true
+  killall Cinderdeck 2>/dev/null || true
   sleep 1
   rm -rf "$INSTALL_PATH"
-  ditto "$TEST_DIR/v1/Snapzy.app" "$INSTALL_PATH"
+  ditto "$TEST_DIR/v1/Cinderdeck.app" "$INSTALL_PATH"
   echo "  ✅ v1 installed"
 }
 
 create_dmg() {
   local label="${1:-v2}"
-  local dmg_name="${2:-Snapzy-test.dmg}"
+  local dmg_name="${2:-Cinderdeck-test.dmg}"
   local dmg_path="$TEST_DIR/server/$dmg_name"
 
   echo ""
@@ -255,8 +255,8 @@ create_dmg() {
   rm -f "$dmg_path"
 
   hdiutil create \
-    -volname "Snapzy" \
-    -srcfolder "$TEST_DIR/$label/Snapzy.app" \
+    -volname "Cinderdeck" \
+    -srcfolder "$TEST_DIR/$label/Cinderdeck.app" \
     -ov -format UDZO \
     "$dmg_path" \
     > /dev/null 2>&1
@@ -265,7 +265,7 @@ create_dmg() {
 }
 
 sign_dmg_eddsa() {
-  local dmg_name="${1:-Snapzy-test.dmg}"
+  local dmg_name="${1:-Cinderdeck-test.dmg}"
   local dmg_path="$TEST_DIR/server/$dmg_name"
 
   echo ""
@@ -286,7 +286,7 @@ sign_dmg_eddsa() {
 }
 
 generate_appcast() {
-  local dmg_path="$TEST_DIR/server/Snapzy-test.dmg"
+  local dmg_path="$TEST_DIR/server/Cinderdeck-test.dmg"
   local appcast_path="$TEST_DIR/server/appcast.xml"
 
   echo ""
@@ -301,7 +301,7 @@ generate_appcast() {
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
   <channel>
-    <title>Snapzy Test Updates</title>
+    <title>Cinderdeck Test Updates</title>
     <link>http://localhost:${SERVER_PORT}</link>
     <description>Local test appcast</description>
     <language>en</language>
@@ -312,7 +312,7 @@ generate_appcast() {
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <pubDate>${pub_date}</pubDate>
       <enclosure
-        url="http://localhost:${SERVER_PORT}/Snapzy-test.dmg"
+        url="http://localhost:${SERVER_PORT}/Cinderdeck-test.dmg"
         sparkle:edSignature="${ED_SIGNATURE}"
         length="${file_size}"
         type="application/octet-stream"/>
@@ -334,15 +334,15 @@ generate_channel_appcast() {
   echo "=== Generating local appcast.xml (stable + beta items) ==="
 
   local stable_size beta_size pub_date
-  stable_size=$(stat -f%z "$TEST_DIR/server/Snapzy-test.dmg")
-  beta_size=$(stat -f%z "$TEST_DIR/server/Snapzy-test-beta.dmg")
+  stable_size=$(stat -f%z "$TEST_DIR/server/Cinderdeck-test.dmg")
+  beta_size=$(stat -f%z "$TEST_DIR/server/Cinderdeck-test-beta.dmg")
   pub_date=$(date -u '+%a, %d %b %Y %H:%M:%S +0000')
 
   cat > "$appcast_path" <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
   <channel>
-    <title>Snapzy Test Updates</title>
+    <title>Cinderdeck Test Updates</title>
     <link>http://localhost:${SERVER_PORT}</link>
     <description>Local test appcast</description>
     <language>en</language>
@@ -354,7 +354,7 @@ generate_channel_appcast() {
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <pubDate>${pub_date}</pubDate>
       <enclosure
-        url="http://localhost:${SERVER_PORT}/Snapzy-test-beta.dmg"
+        url="http://localhost:${SERVER_PORT}/Cinderdeck-test-beta.dmg"
         sparkle:edSignature="${beta_sig}"
         length="${beta_size}"
         type="application/octet-stream"/>
@@ -366,7 +366,7 @@ generate_channel_appcast() {
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <pubDate>${pub_date}</pubDate>
       <enclosure
-        url="http://localhost:${SERVER_PORT}/Snapzy-test.dmg"
+        url="http://localhost:${SERVER_PORT}/Cinderdeck-test.dmg"
         sparkle:edSignature="${stable_sig}"
         length="${stable_size}"
         type="application/octet-stream"/>
@@ -397,7 +397,7 @@ start_server() {
   if kill -0 $SERVER_PID 2>/dev/null; then
     echo "  ✅ Server running (PID: $SERVER_PID)"
     echo "  → Appcast: http://localhost:$SERVER_PORT/appcast.xml"
-    echo "  → DMG:     http://localhost:$SERVER_PORT/Snapzy-test.dmg"
+    echo "  → DMG:     http://localhost:$SERVER_PORT/Cinderdeck-test.dmg"
   else
     echo "  ❌ Server failed to start"
     exit 1
@@ -447,7 +447,7 @@ run_test() {
   echo "║  Available: v$V2_VERSION (build $V2_BUILD)"
   echo "║                                                          ║"
   echo "║  Steps:                                                  ║"
-  echo "║  1. Open Snapzy from /Applications                      ║"
+  echo "║  1. Open Cinderdeck from /Applications                      ║"
   echo "║  2. Click menu bar icon → Preferences → About           ║"
   echo "║  3. Click 'Check for Updates'                            ║"
   echo "║  4. Observe: does the update install or error?           ║"
@@ -482,12 +482,12 @@ run_channel_test() {
 
   install_v1
 
-  create_dmg "v2" "Snapzy-test.dmg"
-  sign_dmg_eddsa "Snapzy-test.dmg"
+  create_dmg "v2" "Cinderdeck-test.dmg"
+  sign_dmg_eddsa "Cinderdeck-test.dmg"
   local stable_sig="$ED_SIGNATURE"
 
-  create_dmg "v3" "Snapzy-test-beta.dmg"
-  sign_dmg_eddsa "Snapzy-test-beta.dmg"
+  create_dmg "v3" "Cinderdeck-test-beta.dmg"
+  sign_dmg_eddsa "Cinderdeck-test-beta.dmg"
   local beta_sig="$ED_SIGNATURE"
 
   generate_channel_appcast "$stable_sig" "$beta_sig"
@@ -504,7 +504,7 @@ run_channel_test() {
   echo "║                                                          ║"
   echo "║  Scenario A — stable channel (default):                  ║"
   echo "║    defaults delete $BUNDLE_ID updates.channel            ║"
-  echo "║    Open Snapzy → About → Check for Updates               ║"
+  echo "║    Open Cinderdeck → About → Check for Updates               ║"
   echo "║    Expected: offered v$V2_VERSION, NEVER v$V3_VERSION"
   echo "║                                                          ║"
   echo "║  Scenario B — beta channel:                              ║"
@@ -544,12 +544,12 @@ case "$cmd" in
   clean)
     echo "Cleaning test artifacts..."
     stop_server
-    killall Snapzy 2>/dev/null || true
+    killall Cinderdeck 2>/dev/null || true
     rm -rf "$TEST_DIR"
     defaults delete "$BUNDLE_ID" updates.channel 2>/dev/null || true
     echo "✅ Cleaned $TEST_DIR (and reset updates.channel pref)"
     echo ""
-    echo "Note: /Applications/Snapzy.app was NOT removed."
+    echo "Note: /Applications/Cinderdeck.app was NOT removed."
     echo "Re-install from DMG or run test-tcc-local.sh to restore."
     ;;
 

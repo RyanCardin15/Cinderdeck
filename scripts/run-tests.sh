@@ -1,15 +1,15 @@
 #!/bin/bash
-# Run the Snapzy XCTest suite with CI-like local settings.
+# Run the Cinderdeck XCTest suite with CI-like local settings.
 #
 # Usage:
 #   ./scripts/run-tests.sh
-#   ./scripts/run-tests.sh -only-testing:SnapzyTests/SomeTests
+#   ./scripts/run-tests.sh -only-testing:CinderdeckTests/SomeTests
 #   ./scripts/run-tests.sh --open-result
 
 set -euo pipefail
 
-PROJECT="${PROJECT:-Snapzy.xcodeproj}"
-SCHEME="${SCHEME:-Snapzy}"
+PROJECT="${PROJECT:-Cinderdeck.xcodeproj}"
+SCHEME="${SCHEME:-Cinderdeck}"
 CONFIGURATION="${CONFIGURATION:-Debug}"
 DESTINATION="${DESTINATION:-platform=macOS}"
 BUILD_DIR="${BUILD_DIR:-build}"
@@ -72,8 +72,8 @@ Options:
 
 Examples:
   $0
-  $0 -only-testing:SnapzyTests/CaptureOutputNamingTests
-  SNAPZY_RUN_MICROPHONE_INTEGRATION=1 $0 -only-testing:SnapzyTests/MicrophoneAudioCapturerTests/testMicrophoneAudioCapturerStartStopRealMicrophoneIntegration
+  $0 -only-testing:CinderdeckTests/CaptureOutputNamingTests
+  CINDERDECK_RUN_MICROPHONE_INTEGRATION=1 $0 -only-testing:CinderdeckTests/MicrophoneAudioCapturerTests/testMicrophoneAudioCapturerStartStopRealMicrophoneIntegration
 EOF
 }
 

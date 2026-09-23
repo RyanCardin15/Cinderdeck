@@ -1,0 +1,143 @@
+//
+//  AnnotateTextStylingSection.swift
+//  Cinderdeck
+//
+//  Sidebar section for text annotation styling controls
+//
+
+import SwiftUI
+
+/// Sidebar section for styling text annotations
+struct TextStylingSection: View {
+  @ObservedObject var state: AnnotateState
+  @ObservedObject private var paletteStore = AnnotateColorPaletteStore.shared
+  @State private var draftBackgroundColor = Color.white
+
+  private let backgroundColumns = Array(repeating: GridItem(.fixed(24), spacing: 4), count: 8)
+
+  var body: some View {
+    if let annotation = state.selectedTextAnnotation {
+      VStack(alignment: .leading, spacing: 10) {
+        SidebarSectionHeader(title: L10n.AnnotateUI.textStyle)
+
+        // Font size slider
+        fontSizeSlider(for: annotation)
+
+        // Background color picker
+        backgroundColorPicker(for: annotation)
+      }
+    }
+  }
+
+  // MARK: - Font Size Slider
+
+  private func fontSizeSlider(for annotation: AnnotationItem) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      HStack {
+        Text(L10n.Common.size)
+          .font(.system(size: 10))
+          .foregroundColor(.secondary)
+        Spacer()
+        Text("\(Int(annotation.properties.fontSize))pt")
+          .font(.system(size: 10))
+          .foregroundColor(.secondary.opacity(0.7))
+      }
+      Slider(
+        value: Binding(
+          get: { annotation.properties.fontSize },
+          set: { state.updateAnnotationProperties(id: annotation.id, fontSize: $0, recordsUndo: true) }
+        ).stepped(by: 1, in: 12 ... 72),
+        in: 12 ... 72,
+        onEditingChanged: { state.setPropertySliderGestureEditing($0) }
+      )
+      .controlSize(.small)
+    }
+  }
+
+  // MARK: - Background Color Picker
+
+  private func backgroundColorPicker(for annotation: AnnotationItem) -> some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Text(L10n.Common.background)
+        .font(.system(size: 10))
+        .foregroundColor(.secondary)
+
+      LazyVGrid(columns: backgroundColumns, alignment: .leading, spacing: 4) {
+        // None/transparent button
+        Button {
+          state.updateAnnotationProperties(id: annotation.id, fillColor: .clear, recordsUndo: true)
+        } label: {
+          Text(L10n.Common.none)
+            .font(.system(size: 9))
+            .foregroundColor(.primary)
+            .frame(width: 36, height: 24)
+            .background(
+              RoundedRectangle(cornerRadius: 4)
+                .fill(AnnotateColorPaletteStore.isClear(annotation.properties.fillColor) ? Color.blue.opacity(0.3) : Color.primary.opacity(0.1))
+            )
+        }
+        .buttonStyle(.plain)
+
+        // Color swatches for background
+        ForEach(backgroundColors, id: \.self) { color in
+          Button {
+            state.updateAnnotationProperties(id: annotation.id, fillColor: color, recordsUndo: true)
+          } label: {
+            Circle()
+              .fill(color)
+              .frame(width: 24, height: 24)
+              .overlay(
+                Circle()
+                  .stroke(
+                    colorsMatch(annotation.properties.fillColor, color) ? Color.accentColor : Color.secondary.opacity(0.5),
+                    lineWidth: colorsMatch(annotation.properties.fillColor, color) ? 2 : 1
+                  )
+              )
+          }
+          .buttonStyle(.plain)
+        }
+
+        ForEach(paletteStore.customColors, id: \.self) { color in
+          AnnotateColorSwatchButton(
+            color: color,
+            isSelected: AnnotateColorPaletteStore.colorsMatch(annotation.properties.fillColor, color),
+            size: 24,
+            onDelete: {
+              paletteStore.removeColor(color)
+            }
+          ) {
+            state.updateAnnotationProperties(id: annotation.id, fillColor: color, recordsUndo: true)
+          }
+        }
+
+        AnnotateCustomColorPickerControl(
+          selectedColor: backgroundColorBinding(for: annotation),
+          draftColor: $draftBackgroundColor,
+          swatchSize: 24
+        )
+      }
+    }
+  }
+
+  // MARK: - Color Definitions
+
+  private var backgroundColors: [Color] {
+    [.white, .black, .yellow, .blue]
+  }
+
+  private func backgroundColorBinding(for annotation: AnnotationItem) -> Binding<Color> {
+    Binding(
+      get: { annotation.properties.fillColor },
+      set: { color in
+        state.updateAnnotationProperties(id: annotation.id, fillColor: color, recordsUndo: true)
+      }
+    )
+  }
+
+  /// Compare colors for UI selection state
+  /// - Note: Uses SwiftUI Color equality which may have precision limits across color spaces
+  ///   (e.g., sRGB vs Display P3). This is acceptable for UI selection purposes.
+  private func colorsMatch(_ a: Color, _ b: Color) -> Bool {
+    AnnotateColorPaletteStore.colorsMatch(a, b)
+  }
+}

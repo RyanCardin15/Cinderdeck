@@ -3,7 +3,7 @@
 # Usage: ./scripts/update-appcast.sh <version> <build_number> <dmg_path> [appcast_file] [ed_signature] [release_notes_html] [channel]
 #
 # Example:
-#   ./scripts/update-appcast.sh "1.2.3" "42" "build/Snapzy-v1.2.3.dmg" "appcast.xml" "abc123..." "<h3>Features</h3><ul><li>New feature</li></ul>" "beta"
+#   ./scripts/update-appcast.sh "1.2.3" "42" "build/Cinderdeck-v1.2.3.dmg" "appcast.xml" "abc123..." "<h3>Features</h3><ul><li>New feature</li></ul>" "beta"
 #
 # The release_notes_html argument should contain the inner HTML for the release notes
 # (everything inside the <body> tag). A default style block is automatically prepended.
@@ -31,27 +31,27 @@ fi
 
 # Detect minimum macOS system version
 get_minimum_macos_version() {
-  local app_plist="build/Snapzy.app/Contents/Info.plist"
-  local proj_file="Snapzy.xcodeproj/project.pbxproj"
+  local app_plist="build/Cinderdeck.app/Contents/Info.plist"
+  local proj_file="Cinderdeck.xcodeproj/project.pbxproj"
   local resolved_version=""
   local source=""
 
   # 1. Try to read from compiled app bundle Info.plist (macOS only via plutil)
   if [ -f "$app_plist" ] && command -v plutil >/dev/null 2>&1; then
     resolved_version=$(plutil -extract LSMinimumSystemVersion raw -o - "$app_plist" 2>/dev/null || echo "")
-    source="build/Snapzy.app/Contents/Info.plist"
+    source="build/Cinderdeck.app/Contents/Info.plist"
   fi
 
   # 2. Try to read from compiled app bundle Info.plist (macOS only via PlistBuddy)
   if [ -z "$resolved_version" ] && [ -f "$app_plist" ] && [ -f "/usr/libexec/PlistBuddy" ]; then
     resolved_version=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$app_plist" 2>/dev/null || echo "")
-    source="build/Snapzy.app/Contents/Info.plist (PlistBuddy)"
+    source="build/Cinderdeck.app/Contents/Info.plist (PlistBuddy)"
   fi
 
   # 3. Fallback: Parse MACOSX_DEPLOYMENT_TARGET from pbxproj file
   if [ -z "$resolved_version" ] && [ -f "$proj_file" ]; then
     resolved_version=$(grep -m 1 "MACOSX_DEPLOYMENT_TARGET =" "$proj_file" | cut -d'=' -f2 | tr -d ' ;"\t\r' 2>/dev/null || echo "")
-    source="Snapzy.xcodeproj/project.pbxproj"
+    source="Cinderdeck.xcodeproj/project.pbxproj"
   fi
 
   # 4. Final Fallback: hardcoded default
@@ -84,7 +84,7 @@ fi
 PUB_DATE=$(date -u '+%a, %d %b %Y %H:%M:%S +0000')
 
 # Download URL
-DOWNLOAD_URL="https://github.com/duongductrong/Snapzy/releases/download/v${VERSION}/Snapzy-v${VERSION}.dmg"
+DOWNLOAD_URL="https://github.com/RyanCardin15/Cinderdeck/releases/download/v${VERSION}/Cinderdeck-v${VERSION}.dmg"
 
 # Default release notes if none provided
 if [ -z "$RELEASE_NOTES_HTML" ]; then
