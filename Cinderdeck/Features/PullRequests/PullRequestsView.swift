@@ -10,8 +10,10 @@ struct PullRequestsView: View {
   @State private var showsSidebar = true
 
   var body: some View {
-    HStack(spacing: 0) {
-      if showsSidebar { sidebar.frame(width: 228); Divider() }
+    HSplitView {
+      if showsSidebar {
+        sidebar.frame(minWidth: 180, idealWidth: 228, maxWidth: 480)
+      }
       VStack(spacing: 0) {
         header
         if model.login == nil { connectionState }
@@ -29,6 +31,7 @@ struct PullRequestsView: View {
           }
         }
       }
+      .frame(minWidth: 740)
     }
     .background(Color(nsColor: .windowBackgroundColor))
     .preferredColorScheme(theme.systemAppearance)
