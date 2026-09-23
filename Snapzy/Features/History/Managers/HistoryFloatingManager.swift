@@ -96,6 +96,14 @@ final class HistoryFloatingManager: ObservableObject {
   @Published var expandedFilter: CaptureHistoryType? = nil
   @Published var expandedTimeFilter: HistoryFloatingTimeFilter = .all
   @Published var searchText: String = ""
+  @Published var selectedSection: HistorySection = .stored() {
+    didSet {
+      UserDefaults.standard.set(selectedSection.rawValue, forKey: PreferencesKeys.historySelectedSection)
+      searchText = ""
+    }
+  }
+  @Published var isPresentingAuxiliaryUI = false
+  @Published private(set) var panelIsVisible = false
   @Published private(set) var isPinned: Bool = false
   @Published private(set) var cloudUploadStates: [UUID: HistoryCloudUploadState] = [:]
 
@@ -219,6 +227,11 @@ final class HistoryFloatingManager: ObservableObject {
     showCompact()
   }
 
+  func show(section: HistorySection) {
+    selectedSection = section
+    isEnabled ? showCompact() : showExpanded()
+  }
+
   /// Toggle pinned state of the floating history panel
   func togglePin() {
     isPinned.toggle()
@@ -232,6 +245,7 @@ final class HistoryFloatingManager: ObservableObject {
 
   /// Hide the floating history panel
   func hide() {
+    panelIsVisible = false
     isPinned = false
     panelController.updatePinnedState(false)
     removeEscapeMonitors()
@@ -451,6 +465,7 @@ final class HistoryFloatingManager: ObservableObject {
   }
 
   private func presentCurrentMode() {
+    panelIsVisible = true
     panelController.show(
       panelContentView,
       size: preferredPanelSize,
@@ -470,7 +485,9 @@ final class HistoryFloatingManager: ObservableObject {
   }
 
   private func handlePanelDidResignKey() {
-    guard !isModalInteractionActive else {
+    // Alerts/popovers can return focus before their deferred resign callback runs.
+    guard !panelController.isKeyWindow else { return }
+    guard !isModalInteractionActive, !isPresentingAuxiliaryUI else {
       DiagnosticLogger.shared.log(.debug, .history, "Floating history resign-key ignored during modal interaction")
       return
     }
@@ -503,7 +520,7 @@ final class HistoryFloatingManager: ObservableObject {
 
     localEscapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
       guard event.keyCode == 53 else { return event }
-      guard self?.isModalInteractionActive == false else { return event }
+      guard self?.isModalInteractionActive == false, self?.isPresentingAuxiliaryUI == false else { return event }
       self?.hide()
       return nil
     }
@@ -512,7 +529,7 @@ final class HistoryFloatingManager: ObservableObject {
       guard event.keyCode == 53 else { return }
       Task { @MainActor [weak self] in
         guard let self else { return }
-        guard !self.isModalInteractionActive, !self.isPinned else { return }
+        guard !self.isModalInteractionActive, !self.isPresentingAuxiliaryUI, !self.isPinned else { return }
         self.hide()
       }
     }

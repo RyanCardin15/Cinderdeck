@@ -50,6 +50,11 @@ final class HistoryFloatingPanel: NSPanel {
     return responder is NSTextView || responder is NSTextField
   }
 
+  private var isEditableTextActive: Bool {
+    if let text = firstResponder as? NSTextView { return text.isEditable }
+    return firstResponder is NSTextField
+  }
+
   override func resignKey() {
     super.resignKey()
 
@@ -64,6 +69,23 @@ final class HistoryFloatingPanel: NSPanel {
     }
 
     let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+    if HistoryFloatingManager.shared.selectedSection == .stacks,
+      !HistoryFloatingManager.shared.isPresentingAuxiliaryUI {
+      let command: StackKeyboardCommand?
+      switch (event.keyCode, flags) {
+      case (15, .command): command = .restart
+      case (15, [.command, .shift]): command = .restartService
+      case (47, .command): command = .stop
+      case (11, .command): command = .branch
+      case (37, .command): command = .logs
+      default: command = nil
+      }
+      if let command {
+        NotificationCenter.default.post(name: .stacksCommand, object: self, userInfo: ["command": command.rawValue])
+        return true
+      }
+    }
 
     if event.keyCode == 8 && flags == .command {
       if isTextInputActive {
@@ -84,7 +106,7 @@ final class HistoryFloatingPanel: NSPanel {
     }
 
     if event.keyCode == 35 && flags == .command {
-      if isTextInputActive {
+      if isEditableTextActive {
         return super.performKeyEquivalent(with: event)
       }
 
@@ -96,7 +118,7 @@ final class HistoryFloatingPanel: NSPanel {
        let toggleShortcut = HistoryFloatingManager.shared.toggleModeShortcut,
        let eventShortcut = ShortcutConfig(from: event) {
       if eventShortcut.keyCode == toggleShortcut.keyCode && eventShortcut.modifiers == toggleShortcut.modifiers {
-        if isTextInputActive {
+        if isEditableTextActive {
           return super.performKeyEquivalent(with: event)
         }
         HistoryFloatingManager.shared.togglePresentationMode()
@@ -110,19 +132,25 @@ final class HistoryFloatingPanel: NSPanel {
   override func keyDown(with event: NSEvent) {
     let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
-    if UserDefaults.standard.bool(forKey: PreferencesKeys.historyClipboardTextSelected),
+    let section = HistoryFloatingManager.shared.selectedSection
+    if section != .captures,
       !isTextInputActive, flags.isEmpty, (123...126).contains(event.keyCode) {
       let delta = event.keyCode == 123 || event.keyCode == 126 ? -1 : 1
-      NotificationCenter.default.post(name: .historyMoveClipboardSelection, object: self, userInfo: ["delta": delta])
+      NotificationCenter.default.post(name: .historyMoveSelection, object: self, userInfo: ["delta": delta, "section": section.rawValue])
       return
     }
 
     if !isTextInputActive, flags.isEmpty, (event.keyCode == 51 || event.keyCode == 117) {
+      if section == .stacks { return }
       NotificationCenter.default.post(name: .historyDeleteSelection, object: self)
       return
     }
 
     if !isTextInputActive, flags.isEmpty, (event.keyCode == 36 || event.keyCode == 76) {
+      if section == .stacks {
+        NotificationCenter.default.post(name: .stacksCommand, object: self, userInfo: ["command": StackKeyboardCommand.toggle.rawValue])
+        return
+      }
       NotificationCenter.default.post(name: .historyActivateSelection, object: self)
       return
     }

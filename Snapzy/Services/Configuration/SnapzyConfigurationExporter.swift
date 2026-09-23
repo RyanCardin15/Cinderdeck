@@ -22,6 +22,7 @@ enum SnapzyConfigurationExporter {
     writeRecording(&writer, defaults: defaults)
     writeQuickAccess(&writer, defaults: defaults)
     writeHistory(&writer, defaults: defaults)
+    StackConfiguration.write(&writer, defaults: defaults)
     writeCloud(&writer, defaults: defaults)
     writeAnnotate(&writer, defaults: defaults)
     writeShortcuts(&writer)

@@ -8,10 +8,12 @@
 
 import Foundation
 
-enum SimpleTOMLParser {
-  static func parse(_ source: String) throws -> SimpleTOMLDocument {
+nonisolated enum SimpleTOMLParser {
+  static func parse(_ source: String, strict: Bool = false) throws -> SimpleTOMLDocument {
     var document = SimpleTOMLDocument()
     var currentPath: [String] = []
+    var assigned = Set<[String]>()
+    var declared = Set<[String]>()
 
     for (index, rawLine) in source.components(separatedBy: .newlines).enumerated() {
       let lineNumber = index + 1
@@ -24,6 +26,12 @@ enum SimpleTOMLParser {
         }
         let inner = String(line.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
         currentPath = try parseKeyPath(inner)
+        if strict {
+          guard declared.insert(currentPath).inserted,
+            !assigned.contains(where: { currentPath.starts(with: $0) }) else {
+            throw SimpleTOMLError.invalidLine(lineNumber, "Duplicate or conflicting table: \(inner)")
+          }
+        }
         try document.ensureTable(at: currentPath)
         continue
       }
@@ -34,7 +42,14 @@ enum SimpleTOMLParser {
       }
 
       let keyPath = try currentPath + parseKeyPath(keyText)
-      let value = try parseValue(valueText.trimmingCharacters(in: .whitespacesAndNewlines), line: lineNumber)
+      if strict {
+        guard !assigned.contains(where: { keyPath.starts(with: $0) || $0.starts(with: keyPath) }),
+          !declared.contains(where: { $0.starts(with: keyPath) }) else {
+          throw SimpleTOMLError.invalidLine(lineNumber, "Duplicate or conflicting key: \(keyText)")
+        }
+        assigned.insert(keyPath)
+      }
+      let value = try parseValue(valueText.trimmingCharacters(in: .whitespacesAndNewlines), line: lineNumber, strict: strict)
       try document.set(value, at: keyPath)
     }
 
@@ -114,9 +129,19 @@ enum SimpleTOMLParser {
     }
   }
 
-  private static func parseValue(_ value: String, line: Int) throws -> SimpleTOMLValue {
+  private static func parseValue(_ value: String, line: Int, strict: Bool = false) throws -> SimpleTOMLValue {
     if value.hasPrefix("\"") {
       guard value.hasSuffix("\"") else { throw SimpleTOMLError.invalidValue(line, value) }
+      if strict {
+        var escaped = false
+        let content = value.dropFirst().dropLast()
+        for character in content {
+          if escaped { escaped = false; continue }
+          if character == "\\" { escaped = true; continue }
+          if character == "\"" { throw SimpleTOMLError.invalidValue(line, value) }
+        }
+        if escaped || value.count < 2 { throw SimpleTOMLError.invalidValue(line, value) }
+      }
       return .string(unescape(String(value.dropFirst().dropLast())))
     }
     if value == "true" { return .bool(true) }
@@ -124,7 +149,7 @@ enum SimpleTOMLParser {
     if value.hasPrefix("[") {
       guard value.hasSuffix("]") else { throw SimpleTOMLError.invalidValue(line, value) }
       let inner = String(value.dropFirst().dropLast())
-      let values = try splitArray(inner).map { try parseValue($0, line: line) }
+      let values = try splitArray(inner).map { try parseValue($0, line: line, strict: strict) }
       return .array(values)
     }
     if let intValue = Int(value) { return .integer(intValue) }

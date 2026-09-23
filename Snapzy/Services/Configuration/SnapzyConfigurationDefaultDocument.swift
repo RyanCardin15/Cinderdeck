@@ -20,6 +20,7 @@ enum SnapzyConfigurationDefaultDocument {
     writeRecording(&writer)
     writeQuickAccess(&writer)
     writeHistory(&writer)
+    StackConfiguration.write(&writer)
     writeCloud(&writer)
     writeAnnotate(&writer)
     writeShortcuts(&writer)

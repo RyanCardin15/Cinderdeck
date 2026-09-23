@@ -199,6 +199,7 @@ struct HistorySettingsView: View {
           .tint(.red)
         }
       }
+      StackSettingsView()
     }
     .formStyle(.grouped)
     .alert("Clear clipboard text history?", isPresented: $confirmsClearClipboardText) {

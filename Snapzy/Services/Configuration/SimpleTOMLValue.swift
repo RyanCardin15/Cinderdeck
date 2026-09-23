@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum SimpleTOMLValue: Equatable {
+nonisolated enum SimpleTOMLValue: Equatable {
   case string(String)
   case bool(Bool)
   case integer(Int)
@@ -58,7 +58,7 @@ enum SimpleTOMLValue: Equatable {
   }
 }
 
-struct SimpleTOMLDocument {
+nonisolated struct SimpleTOMLDocument {
   private(set) var root: [String: SimpleTOMLValue] = [:]
 
   func value(at path: String...) -> SimpleTOMLValue? {
@@ -131,7 +131,7 @@ struct SimpleTOMLDocument {
   }
 }
 
-enum SimpleTOMLError: LocalizedError, Equatable {
+nonisolated enum SimpleTOMLError: LocalizedError, Equatable {
   case invalidLine(Int, String)
   case invalidKey(String)
   case invalidValue(Int, String)

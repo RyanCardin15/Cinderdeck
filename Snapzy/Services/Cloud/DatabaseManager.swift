@@ -154,6 +154,9 @@ final class DatabaseManager: @unchecked Sendable {
 
   private static func databaseDirectory() -> URL {
     #if DEBUG
+      if let path = ProcessInfo.processInfo.environment["SNAPZY_STACKS_PREVIEW_ROOT"], path.hasPrefix("/") {
+        return URL(fileURLWithPath: path).appendingPathComponent("Database", isDirectory: true)
+      }
       if isRunningUnderXCTest {
         let processID = ProcessInfo.processInfo.processIdentifier
         return FileManager.default.temporaryDirectory
@@ -247,6 +250,7 @@ final class DatabaseManager: @unchecked Sendable {
       }
     }
 
+    StackRunStore.registerMigrations(&migrator)
     return migrator
   }
 

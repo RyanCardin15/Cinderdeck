@@ -73,8 +73,9 @@ struct ClipboardTextHistoryView: View {
       guard notification.object is HistoryFloatingPanel, let selectedID else { return }
       store.remove(selectedID)
     }
-    .onReceive(NotificationCenter.default.publisher(for: .historyMoveClipboardSelection)) { notification in
+    .onReceive(NotificationCenter.default.publisher(for: .historyMoveSelection)) { notification in
       guard notification.object is HistoryFloatingPanel,
+        notification.userInfo?["section"] as? String == HistorySection.clipboard.rawValue,
         let delta = notification.userInfo?["delta"] as? Int, !records.isEmpty else { return }
       let index = records.firstIndex { $0.id == selectedID } ?? 0
       selectedID = records[min(max(index + delta, 0), records.count - 1)].id

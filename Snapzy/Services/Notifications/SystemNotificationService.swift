@@ -50,7 +50,7 @@ final class SystemNotificationService {
   /// Post a notification.
   /// - Returns: `true` when the request was handed to the notification center.
   @discardableResult
-  func post(title: String, body: String) async -> Bool {
+  func post(title: String, body: String, stackRestart: (stack: String, service: String)? = nil) async -> Bool {
     guard let center else {
       DiagnosticLogger.shared.log(.debug, .system, "System notification skipped: no bundle identifier")
       return false
@@ -65,6 +65,15 @@ final class SystemNotificationService {
     }
     // Snapzy plays its own capture sounds; a notification sound would double up.
     content.sound = nil
+    if let stackRestart {
+      let action = UNNotificationAction(identifier: "snapzy.stacks.restart", title: "Restart", options: [.foreground])
+      let category = UNNotificationCategory(identifier: "snapzy.stacks.crash", actions: [action], intentIdentifiers: [])
+      var categories = await center.notificationCategories()
+      categories.insert(category)
+      center.setNotificationCategories(categories)
+      content.categoryIdentifier = category.identifier
+      content.userInfo = ["stackID": stackRestart.stack, "serviceID": stackRestart.service]
+    }
 
     // A fresh identifier per call keeps one notification per action instead of
     // replacing the previous one.
@@ -154,6 +163,16 @@ final class SystemNotificationService {
 /// Keeps banners visible while Snapzy is the frontmost app, which happens whenever a
 /// capture is triggered from the menu bar or an open Snapzy window.
 private final class ForegroundPresentationDelegate: NSObject, UNUserNotificationCenterDelegate {
+  func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    guard response.notification.request.content.categoryIdentifier == "snapzy.stacks.crash",
+      let stack = response.notification.request.content.userInfo["stackID"] as? String,
+      let service = response.notification.request.content.userInfo["serviceID"] as? String else { return }
+    await MainActor.run { HistoryFloatingManager.shared.show(section: .stacks) }
+    if response.actionIdentifier == "snapzy.stacks.restart" {
+      await StackSupervisor.shared.restart(stack: stack, service: service)
+    }
+  }
+
   func userNotificationCenter(
     _ center: UNUserNotificationCenter,
     willPresent notification: UNNotification
