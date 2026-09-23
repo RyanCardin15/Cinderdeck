@@ -4,6 +4,25 @@ import XCTest
 @testable import Cinderdeck
 
 final class CinderdeckMigrationTests: XCTestCase {
+  func testLiveAgentSocketIsExcludedWhileClaimsArePreserved() throws {
+    let home = URL(fileURLWithPath: "/tmp/cdm-\(UUID().uuidString.prefix(8))")
+    let domain = "CinderdeckMigrationTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: domain)!
+    defer { try? FileManager.default.removeItem(at: home); defaults.removePersistentDomain(forName: domain) }
+    let old = home.appendingPathComponent("Library/Application Support/Snapzy/Stacks")
+    let server = StackControlSocketServer(path: old.appendingPathComponent("control.sock").path) { _, _ in Data() }
+    try server.start()
+    defer { server.stop() }
+    try Data("{\"legacy\":true}".utf8).write(to: old.appendingPathComponent("state.json"))
+    try Data("[]".utf8).write(to: old.appendingPathComponent("claims.json"))
+    try CinderdeckMigration.runIfNeeded(home: home, defaults: defaults, legacyPreferences: [:])
+    let imported = home.appendingPathComponent("Library/Application Support/Cinderdeck/Stacks")
+    XCTAssertFalse(FileManager.default.fileExists(atPath: imported.appendingPathComponent("control.sock").path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: imported.appendingPathComponent("state.json").path))
+    XCTAssertEqual(try Data(contentsOf: imported.appendingPathComponent("claims.json")), Data("[]".utf8))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: old.appendingPathComponent("control.sock").path))
+  }
+
   func testCopiesCommittedWALAndConfigurationWithoutChangingOriginals() throws {
     let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let domain = "CinderdeckMigrationTests.\(UUID().uuidString)"

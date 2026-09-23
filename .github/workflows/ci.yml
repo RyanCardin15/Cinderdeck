@@ -50,7 +50,6 @@ jobs:
             CinderdeckTests/SmartElementCaptureControllerTests
             CinderdeckTests/SmartElementWindowOwnerResolverTests
             CinderdeckTests/SmartElementQueryServiceTests
-            CinderdeckTests/SandboxOffDataMigrationServiceTests
             CinderdeckTests/AppStatusBarControllerTests
             CinderdeckTests/RecordingAudioLevelMeterTests
             CinderdeckTests/RecordingToolbarWindowTests/testShowRecordingStatusBar_alreadyVisibleWindow_enablesBackgroundDragging

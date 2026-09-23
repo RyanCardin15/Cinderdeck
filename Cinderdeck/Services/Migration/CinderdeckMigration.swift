@@ -36,7 +36,13 @@ nonisolated enum CinderdeckMigration {
       }
       try fm.moveItem(at: temporary, to: newDatabase)
     }
-    try copyMissing(from: source, to: destination, excluding: ["snapzy.db", "snapzy.db-wal", "snapzy.db-shm", "Agent"])
+    try copyMissing(from: source, to: destination,
+                    excluding: ["snapzy.db", "snapzy.db-wal", "snapzy.db-shm", "Agent", "Stacks", "Stacks-Debug"])
+    // Live sockets cannot be copied. The new server regenerates its state
+    // snapshot; persisted advisory claims remain useful across the rename.
+    try copyMissing(from: source.appendingPathComponent("Stacks"),
+                    to: destination.appendingPathComponent("Stacks"),
+                    excluding: ["control.sock", "state.json"])
     let oldConfig = home.appendingPathComponent(".config/snapzy")
     let newConfig = home.appendingPathComponent(".config/cinderdeck")
     let newConfigFile = newConfig.appendingPathComponent("config.toml")
@@ -76,10 +82,12 @@ nonisolated enum CinderdeckMigration {
     let fm = FileManager.default
     guard fm.fileExists(atPath: source.path) else { return }
     try fm.createDirectory(at: destination, withIntermediateDirectories: true)
-    for item in try fm.contentsOfDirectory(at: source, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey]) {
+    for item in try fm.contentsOfDirectory(at: source, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey]) {
       guard !excluding.contains(item.lastPathComponent) else { continue }
       let target = destination.appendingPathComponent(item.lastPathComponent)
-      let values = try item.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+      let values = try item.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey])
+      // Skip any other transient sockets/devices/FIFOs in imported folders.
+      guard values.isDirectory == true || values.isSymbolicLink == true || values.isRegularFile == true else { continue }
       if values.isDirectory == true && values.isSymbolicLink != true {
         try copyMissing(from: item, to: target)
       } else if !fm.fileExists(atPath: target.path) {
