@@ -92,7 +92,8 @@ final class ReproRecorderTests: XCTestCase {
     try await until { self.runner.run(run.id)?.status.isActive == false }
     try recorder.addMarker(label: "Total shows $42", outcome: .fail, kind: .check, by: "Test Agent")
 
-    let saved = try XCTUnwrap(try await stopRecording())
+    let stopped = try await stopRecording()
+    let saved = try XCTUnwrap(stopped)
     XCTAssertEqual(saved.status, .ready)
     XCTAssertNil(recorder.live)
     let lines = store.loadLines(saved.id)
@@ -143,11 +144,13 @@ final class ReproRecorderTests: XCTestCase {
 
     recorder.setScope(.only(["billing"]))
     events.send(.started(Date()))
-    XCTAssertNil(try await stopRecording(), "Output from unselected workspaces is not captured")
+    let unselected = try await stopRecording()
+    XCTAssertNil(unselected, "Output from unselected workspaces is not captured")
 
     recorder.setScope(.only(["shop"]))
     events.send(.started(Date()))
-    let saved = try XCTUnwrap(try await stopRecording())
+    let stopped = try await stopRecording()
+    let saved = try XCTUnwrap(stopped)
     XCTAssertEqual(saved.sources.map(\.id), ["shop/api"])
     XCTAssertEqual(saved.scope, "chosen in the recording toolbar")
 
@@ -174,7 +177,8 @@ final class ReproRecorderTests: XCTestCase {
     recorder.expect(request)
     events.send(.started(Date()))
     XCTAssertEqual(recorder.activeSessionID, request.id)
-    let saved = try XCTUnwrap(try await stopRecording())
+    let stopped = try await stopRecording()
+    let saved = try XCTUnwrap(stopped)
     XCTAssertEqual(saved.title, "Quiet check")
     XCTAssertEqual(saved.markers.first?.label, "Opening the app")
     XCTAssertEqual(saved.actor.name, "Codex")
