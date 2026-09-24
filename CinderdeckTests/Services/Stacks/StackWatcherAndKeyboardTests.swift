@@ -67,6 +67,14 @@ final class StackKeyboardTests: XCTestCase {
     _ = panel().performKeyEquivalent(with: event(15, flags: .command))
     wait(for: [restarted], timeout: 0.05)
   }
+  func testArrowNavigationAcceptsNativeFunctionAndNumericPadFlags() {
+    let panel = panel()
+    let moved = expectation(forNotification: .historyMoveSelection, object: panel) {
+      $0.userInfo?["section"] as? String == "stacks" && $0.userInfo?["delta"] as? Int == -1
+    }
+    panel.keyDown(with: event(123, flags: [.function, .numericPad]))
+    wait(for: [moved], timeout: 0.1)
+  }
   func testReadOnlyLogsAllowPinShortcutButEditableFieldsDoNot() {
     let manager = HistoryFloatingManager.shared
     let wasPinned = manager.isPinned

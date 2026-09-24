@@ -263,7 +263,7 @@ struct StackStateBadge: View {
       Text(label).font(.system(size: 10.5, weight: .semibold))
       if let since { StackElapsedTime(since: since).font(.system(size: 10.5, weight: .medium)).foregroundColor(.primary.opacity(0.6)) }
     }
-    .foregroundColor(label == "Stopped" ? .secondary : StackPalette.color(label: label))
+    .foregroundColor(label == "Stopped" ? .primary.opacity(0.75) : StackPalette.color(label: label))
     .padding(.horizontal, 8).padding(.vertical, 3.5)
     .background(StackPalette.color(label: label).opacity(label == "Stopped" ? 0.08 : 0.13), in: Capsule())
     .fixedSize()

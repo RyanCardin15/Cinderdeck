@@ -20,10 +20,12 @@ struct StacksTabView: View {
         .padding(.horizontal, 10).padding(.vertical, 7)
         .stackSurface(cornerRadius: 10, tint: .orange)
       }
-      HStack {
-        Text("Services, tasks, and workflows").font(.caption).foregroundColor(.secondary)
-        Spacer()
-        Button("Open Workspaces") { WorkspaceWindowController.shared.show(workspace: viewModel.selectedStackID) }
+      if expanded || viewModel.files.isEmpty {
+        HStack {
+          Text("Services, tasks, and workflows").font(.caption).foregroundColor(.secondary)
+          Spacer()
+          Button("Open Workspaces") { WorkspaceWindowController.shared.show(workspace: viewModel.selectedStackID) }
+        }
       }
       if viewModel.files.isEmpty { emptyState }
       else if expanded { expandedContent }
@@ -93,22 +95,42 @@ struct StacksTabView: View {
   // MARK: Compact
 
   private var compactContent: some View {
-    HStack(alignment: .top, spacing: 10) {
-      ScrollViewReader { proxy in
-        ScrollView(.horizontal, showsIndicators: false) {
-          LazyHStack(alignment: .top, spacing: 12) {
-            ForEach(viewModel.filteredFiles) { file in
-              StackCompactCardView(file: file, viewModel: viewModel, manager: manager).id(file.id)
-            }
-          }.padding(4)
+    GeometryReader { geometry in
+      let files = viewModel.filteredFiles
+      let page = StackCompactPage(width: geometry.size.width, count: files.count,
+        selectedIndex: files.firstIndex { $0.id == viewModel.selectedStackID } ?? 0)
+      VStack(spacing: 8) {
+        HStack(spacing: 6) {
+          Text(files.count == 1 ? "1 workspace" : "\(files.count) workspaces")
+            .font(.system(size: 11, weight: .semibold)).foregroundColor(.secondary)
+          if page.hasMultiplePages {
+            Text("· \(page.rangeLabel) of \(files.count)")
+              .font(.system(size: 11)).monospacedDigit().foregroundColor(.secondary)
+            StackIconButton(systemName: "chevron.left", help: "Previous workspaces", size: 24) {
+              viewModel.select(files[max(0, page.range.lowerBound - page.capacity)].id)
+            }.disabled(page.range.lowerBound == 0)
+            StackIconButton(systemName: "chevron.right", help: "Next workspaces", size: 24) {
+              viewModel.select(files[page.range.upperBound].id)
+            }.disabled(page.range.upperBound == files.count)
+          }
+          Spacer(minLength: 8)
+          StackIconButton(systemName: "arrow.triangle.branch", help: "Parallel lanes", size: 28) { viewModel.lanesSheet = true }
+          StackIconButton(systemName: "plus", help: "Create workspace", size: 28) { viewModel.create() }
+          StackIconButton(systemName: "sparkles", help: "Agent access", tint: StackPalette.agent, size: 28) { viewModel.agentsSheet = true }
+          Button { WorkspaceWindowController.shared.show(workspace: viewModel.selectedStackID) } label: { Label("Open Workspaces", systemImage: "arrow.up.forward.app") }
+            .buttonStyle(StackPillButtonStyle(compact: true))
+            .help("Open workspace services, tasks, and workflows")
         }
-        .onChange(of: viewModel.selectedStackID) { id in if let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
+        HStack(alignment: .top, spacing: StackCompactPage.spacing) {
+          ForEach(Array(files[page.range])) { file in
+            StackCompactCardView(file: file, viewModel: viewModel, manager: manager)
+              .frame(width: page.cardWidth)
+          }
+          if page.range.count < page.capacity { Spacer(minLength: 0) }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       }
-      VStack(spacing: 6) {
-        StackIconButton(systemName: "arrow.triangle.branch", help: "Parallel lanes", size: 28) { viewModel.lanesSheet = true }
-        StackIconButton(systemName: "plus", help: "Create workspace", size: 28) { viewModel.create() }
-        StackIconButton(systemName: "sparkles", help: "Agent access", tint: StackPalette.agent, size: 28) { viewModel.agentsSheet = true }
-      }.padding(.top, 6)
+      .padding(4)
     }
   }
 
@@ -189,6 +211,28 @@ struct StacksTabView: View {
       .padding(.horizontal, 10).padding(.vertical, 8)
       .stackSurface(cornerRadius: 11)
     }.buttonStyle(.plain)
+  }
+}
+
+/// Whole cards share the available width; selection and paging always agree.
+struct StackCompactPage {
+  static let spacing: CGFloat = 12
+  let capacity: Int
+  let cardWidth: CGFloat
+  let range: Range<Int>
+  let hasMultiplePages: Bool
+  var rangeLabel: String {
+    range.count == 1 ? "\(range.upperBound)" : "\(range.lowerBound + 1)–\(range.upperBound)"
+  }
+
+  init(width: CGFloat, count: Int, selectedIndex: Int) {
+    let available = max(0, width - 8)
+    capacity = max(1, min(3, Int((available + Self.spacing) / (270 + Self.spacing))))
+    cardWidth = (available - CGFloat(capacity - 1) * Self.spacing) / CGFloat(capacity)
+    let selection = min(max(0, selectedIndex), max(0, count - 1))
+    let start = selection / capacity * capacity
+    range = start..<min(start + capacity, count)
+    hasMultiplePages = count > capacity
   }
 }
 

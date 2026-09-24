@@ -2,6 +2,8 @@
 
 Open **Workspaces…** from the menu bar, or **History → Workspaces → Open Workspaces**. Launchers can use `cinderdeck://workspaces`. This is the new home for the existing Stacks feature.
 
+The compact History panel shows up to three complete workspace cards per page. Use the previous/next buttons for more workspaces, or the arrow keys to move the selection across pages. Service details scroll within each card while Start/Stop and workspace actions stay visible. **Open Workspaces** opens the full workspace window.
+
 A **workspace** groups a project's folders, environment, and reusable commands:
 
 - **Services** stay running: APIs, development servers, workers, databases. Start, stop, restart, readiness, automatic crash recovery, Git controls, and separate service terminals retain their existing behavior.

@@ -64,6 +64,33 @@ final class HistoryFloatingLayoutTests: XCTestCase {
     XCTAssertEqual(size, CGSize(width: 1040, height: 680))
   }
 
+  func testStackPanelGetsRoomForFullCardsWithoutChangingOtherSections() {
+    XCTAssertEqual(HistoryFloatingLayout.basePanelSize(for: .compact, section: .stacks), CGSize(width: 920, height: 400))
+    XCTAssertEqual(HistoryFloatingLayout.basePanelSize(for: .compact, section: .clipboard), CGSize(width: 920, height: 316))
+    XCTAssertEqual(HistoryFloatingLayout.basePanelSize(for: .expanded, section: .stacks), CGSize(width: 1040, height: 680))
+    let scale = HistoryFloatingLayout.effectiveScale(for: 1.4, mode: .compact, section: .stacks)
+    let size = HistoryFloatingLayout.panelSize(for: 1.4, mode: .compact, section: .stacks)
+    XCTAssertEqual(size.width, 920 * scale, accuracy: 0.001)
+    XCTAssertEqual(size.height, 400 * scale, accuracy: 0.001)
+  }
+
+  func testCompactStacksFitWholeCardsAndRevealKeyboardSelection() {
+    for width: CGFloat in [320, 600, 876] {
+      for count in [0, 1, 2, 3, 4, 10] {
+        for selection in 0..<max(1, count) {
+          let page = StackCompactPage(width: width, count: count, selectedIndex: selection)
+          let occupied = CGFloat(page.capacity) * page.cardWidth + CGFloat(page.capacity - 1) * StackCompactPage.spacing + 8
+          XCTAssertEqual(occupied, width, accuracy: 0.001)
+          XCTAssertLessThanOrEqual(page.range.upperBound, count)
+          if count > 0 { XCTAssertTrue(page.range.contains(selection)) }
+        }
+      }
+    }
+    XCTAssertEqual(StackCompactPage(width: 876, count: 3, selectedIndex: 0).range, 0..<3)
+    XCTAssertEqual(StackCompactPage(width: 876, count: 7, selectedIndex: 6).range, 6..<7)
+    XCTAssertEqual(StackCompactPage(width: 876, count: 2, selectedIndex: 6).range, 0..<2)
+  }
+
   // MARK: - baseCornerRadius
 
   func testBaseCornerRadius_compact() {
