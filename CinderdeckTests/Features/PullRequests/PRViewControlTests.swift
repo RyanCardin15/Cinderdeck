@@ -136,14 +136,14 @@ final class PRViewControlTests: XCTestCase {
   func testCLIAndMCPUseSameContract() async throws {
     let request = try PRViewsCLI.request(["views", "upsert", "mine", "--account", account, "--name=My reviews", "--repo", "team/project", "--query", "is:open author:@me", "--select", "--json"])
     let cliResult = try await control.handle(request.method, params: .object(request.params))
-    let (method, params, _) = try StackMCPServer.request(for: "list_pr_views", [:])
+    let (method, params, _) = try CinderdeckMCPServer.request(for: "list_pr_views", [:])
     let mcpResult = try await control.handle(method, params: .object(params))
     XCTAssertEqual(cliResult, mcpResult)
-    let descriptions = StackMCPServer.toolDescriptions.filter { $0["name"]?.stringValue?.contains("pr_view") == true }
+    let descriptions = CinderdeckMCPServer.toolDescriptions.filter { $0["name"]?.stringValue?.contains("pr_view") == true }
     XCTAssertEqual(descriptions.count, 5)
     for description in descriptions {
       let name = try XCTUnwrap(description["name"]?.stringValue)
-      let (method, _, _) = try StackMCPServer.request(for: name, [:])
+      let (method, _, _) = try CinderdeckMCPServer.request(for: name, [:])
       XCTAssertTrue(method.hasPrefix("prs.views."))
       XCTAssertEqual(description["annotations"]?["readOnlyHint"]?.boolValue, name == "list_pr_views")
     }

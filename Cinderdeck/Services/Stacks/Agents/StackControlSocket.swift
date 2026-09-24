@@ -187,6 +187,18 @@ nonisolated enum StackControlSocket {
   }
 }
 
+/// A connection that failed before an answer arrived. `notSent` means the app never received
+/// the request, so retrying cannot repeat an action.
+nonisolated enum StackControlTransportError: Error, LocalizedError, Equatable {
+  case notSent, closed
+  var errorDescription: String? {
+    switch self {
+    case .notSent: return "Lost connection to Cinderdeck"
+    case .closed: return "Cinderdeck closed the connection"
+    }
+  }
+}
+
 /// Synchronous client used by the `cinderdeck` command-line tool and MCP bridge.
 nonisolated final class StackControlConnection {
   private let fd: Int32
@@ -207,9 +219,9 @@ nonisolated final class StackControlConnection {
     let request = StackControlRequest(id: id, method: method, params: .object(params), client: client)
     var data = try StackControlCoding.encoder().encode(request)
     data.append(10)
-    guard StackControlSocket.write(fd, data) else { throw StackError.message("Lost connection to Cinderdeck") }
+    guard StackControlSocket.write(fd, data) else { throw StackControlTransportError.notSent }
     while true {
-      guard let line = try reader.readLine(timeout: timeout) else { throw StackError.message("Cinderdeck closed the connection") }
+      guard let line = try reader.readLine(timeout: timeout) else { throw StackControlTransportError.closed }
       let response = try StackControlCoding.decoder().decode(StackControlResponse.self, from: line)
       guard response.id == id else { continue }
       if let error = response.error { throw error }

@@ -138,7 +138,7 @@ enum CinderdeckDeepLinkAction: Equatable {
     let command = parts.joined(separator: "/")
 
     switch command {
-    case "workspaces", "workspace", "stacks", "open/workspaces":
+    case "workspaces", "workspace", "open/workspaces":
       self = .workspaces
     case "prs", "pull-requests":
       self = .pullRequests

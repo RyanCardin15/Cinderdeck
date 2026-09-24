@@ -1,5 +1,13 @@
 # Cinderdeck changelog
 
+## [Unreleased]
+
+- Rename the MCP tools from Stacks to Workspaces terminology: `list_workspaces`, `start_services`, `stop_services`, `restart_services`, `read_service_logs`, `claim_workspace`, `release_workspace`, `workspace_guide`, `validate_workspace`, and `reload_workspaces`. Tools take a `workspace` argument, and the old `*_stack` tool names are removed.
+- Let agents create workspaces and add, change, or delete services, tasks, and workflows through MCP, with the same validation as the Workspaces forms. `save_workspace_task` can move a stopped service to Tasks.
+- Add `wait_for_workspace_run`, which waits for a task or workflow and returns the failing step's output; `repro_recording_scope`; and `open_workspace`.
+- Run MCP tool calls concurrently, answer pings during long waits, honor cancellation, negotiate the protocol version, and reject unknown arguments. Results are compact JSON, and stopping services no longer reports a timeout while a slow stop finishes.
+- Rename the `cinderdeck stacks` CLI command to `cinderdeck services`, and name workspaces `workspaces` in `state.json` and CLI JSON output.
+
 ## [1.1.0] - 2026-09-24
 
 - Run branches side by side in Git worktree lanes, with separate service ports, logs, and agent claims. Create and manage lanes from the native Lanes view, `cinderdeck lane`, or MCP; services use `PORT` and `CINDERDECK_PORT_<SERVICE>` for their assigned ports.

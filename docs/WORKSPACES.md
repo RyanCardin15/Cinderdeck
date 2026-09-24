@@ -22,7 +22,7 @@ Saving a form does not run any command. If another editor changed the file while
 
 ## Existing stacks
 
-No file move or migration is needed. Existing `~/.config/cinderdeck/stacks/*.toml` files become workspaces with Services. Existing `[stacks]` preferences, custom definition folders, `cinderdeck stacks …`, MCP service tools, shortcuts, and saved running-service records still work. The internal stack IDs and storage keys stay stable. Starting services never launches tasks or workflows.
+No file move or migration is needed. Existing `~/.config/cinderdeck/stacks/*.toml` files become workspaces with Services. Existing `[stacks]` preferences, custom definition folders, shortcuts, and saved running-service records still work. The CLI manages services with `cinderdeck services …`. The internal stack IDs and storage keys stay stable. Starting services never launches tasks or workflows.
 
 ## Definition example
 
@@ -101,7 +101,9 @@ cinderdeck workspace cancel <run-uuid>
 
 Starts return a durable run UUID immediately. `--wait` waits for completion and exits 0 on success or nonzero on failure/cancellation. `--timeout` limits only the CLI wait; it does not cancel the underlying run. Keep the UUID and inspect it after a wait timeout. Never retry a start just because a response was lost.
 
-MCP tools: `list_workspaces`, `workspace_details`, `run_workspace_task`, `run_workspace_workflow`, `list_workspace_runs`, `workspace_run_status`, `workspace_run_logs`, `cancel_workspace_run`. Run logs accept an optional step UUID. Runs record the same agent identity used by services; starts and cancellation honor workspace claims. The human UI remains in control.
+MCP tools: `list_workspaces`, `workspace_details`, `run_workspace_task`, `run_workspace_workflow`, `wait_for_workspace_run`, `list_workspace_runs`, `workspace_run_status`, `workspace_run_logs`, `cancel_workspace_run`. `wait_for_workspace_run` waits in the app (default 600 seconds, at most 3,600) and returns the run with `finished`; a failed run also includes the failing step's last 30 lines. A wait that ends first returns `finished: false` and never cancels the run. Run logs accept an optional step UUID. Runs record the same agent identity used by services; starts and cancellation honor workspace claims. The human UI remains in control.
+
+Agents can also edit definitions through MCP, with the same validation and stale-file protection as the forms: `create_workspace` (name and project folder), `save_workspace_service`, `save_workspace_task` (`from_service` moves a stopped service to Tasks), `save_workspace_workflow`, and `delete_workspace_item`. Saving creates or updates one component and keeps every setting the call omits. Nothing starts on save, invalid results are refused without touching the file, lanes are read-only, and edits honor workspace claims. `open_workspace` shows a workspace and section to the user.
 
 ## Validation
 

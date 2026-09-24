@@ -29,19 +29,8 @@ struct WorkspaceCreateView: View {
   }
   private func save() {
     do {
-      let title = name.trimmingCharacters(in: .whitespacesAndNewlines)
-      var id = title.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "en_US_POSIX"))
-        .replacingOccurrences(of: "[^a-z0-9_-]+", with: "-", options: .regularExpression).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
-      if id.isEmpty { id = "workspace-" + UUID().uuidString.prefix(8).lowercased() }
-      let directory = StackDefinitionLoader.directory()
-      let file = directory.appendingPathComponent(id + ".toml")
-      guard !FileManager.default.fileExists(atPath: file.path) else { throw StackError.message("A workspace with this name already exists. Choose a different name.") }
-      let source = "name = \(WorkspaceDefinitionWriter.quote(title))\nroot = \(WorkspaceDefinitionWriter.quote(folder))\n"
-      let definition = StackDefinitionLoader.load(source, file: file)
-      guard definition.definition != nil else { throw StackError.message(definition.issues.map(\.message).joined(separator: "\n")) }
-      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-      try Data(source.utf8).write(to: file, options: .withoutOverwriting)
-      onSaved(id)
+      let file = try WorkspaceDefinitionWriter.createWorkspace(name: name, root: folder)
+      onSaved(file.deletingPathExtension().lastPathComponent)
     } catch { self.error = error.localizedDescription }
   }
 }

@@ -19,9 +19,9 @@ Cinderdeck は、プロジェクト、サービス、開発ツールを一か所
 アプリで **⌘⇧H → Stacks → Create stack** を開き、自分のフォルダとコマンドを設定します。既定の設定場所は `~/.config/cinderdeck/stacks/` です。特定のリポジトリ、フレームワーク、言語には依存しません。設定を保存するだけではサービスは起動しません。
 
 ```sh
-/Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck stacks install-cli
-cinderdeck stacks status
-cinderdeck stacks setup-agents --print
+/Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck services install-cli
+cinderdeck services status
+cinderdeck services setup-agents --print
 ```
 
 Release 版の初回起動では、カスタマイズ版 Snapzy のローカルデータをコピーします。元データは保持し、既存の Cinderdeck データを上書きしません。macOS が新しいアプリへの権限付与を求める場合があります。[移行の詳細](docs/MIGRATION.md)。

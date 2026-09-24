@@ -1,47 +1,46 @@
 import Foundation
 
-/// Text shown to coding agents: MCP server instructions, `cinderdeck stacks agent-help`,
+/// Text shown to coding agents: MCP server instructions, `cinderdeck services agent-help`,
 /// and the block written into AGENTS.md / CLAUDE.md by `setup-agents`.
 nonisolated enum StackAgentGuide {
   static let mcpInstructions = """
-  Cinderdeck Workspaces contains Services (long-running processes), Tasks (finite commands with exit status), and Workflows (ordered steps).
-  Use list_workspaces and workspace_details to discover configured tasks and workflows. run_workspace_task and run_workspace_workflow
-  return a run UUID immediately; poll workspace_run_status and workspace_run_logs. A waiting timeout is not a failed run: inspect
-  the existing UUID rather than starting another. cancel_workspace_run stops the command group and skips later steps.
-  Workflows stop on failure and can clean up only services they started. Task and workflow runs are recorded locally.
-  Existing stack tools continue controlling services. Cinderdeck Stacks runs the user's local dev services (APIs, frontends, emulators) as named stacks. \
-  Prefer these tools over starting long-running dev servers in your own terminal: services started here keep running, \
-  show up in the user's Cinderdeck panel, and are attributed to you. \
-  Typical flow: list_stacks → claim_stack (while you depend on it) → start_stack (waits until ready and returns \
-  crash output if something fails) → read_logs when debugging → release_stack when done. \
-  Before starting your own server, call list_ports to see who already owns the port (another agent's terminal, \
-  a Cinderdeck service, or the user). Never stop a stack claimed by someone else without asking the user. \
-  For concurrent branch work, prefer create_lane over switch_branch: it creates an independent worktree stack \
-  with unique ports and a claim in your name, leaving the original services running. Use the returned lane id or \
-  <source-stack>/<branch> with all stack tools. Commands must consume PORT and CINDERDECK_PORT_<UPPERCASE_SERVICE> \
-  (hyphens become underscores). Set start=false to install dependencies or prepare local configuration first. \
-  Claims expire; renew yours while using the lane. remove_lane preserves branches and refuses local or ignored files. \
-  switch_branch refuses to touch uncommitted work unless you pass dirty=stash or dirty=carry.
-  To configure local Pull Request tabs, call list_pr_views, then upsert_pr_view, select_pr_view, \
-  reorder_pr_views, or delete_pr_view with the returned account and hostname. Use stable ids to avoid duplicate tabs. \
-  These tools share the PR window's saved views and do not post to GitHub. Built-in tabs are read-only except selection.
-  Repros record the screen while capturing every service and task log on the video's timeline. Use them to reproduce \
-  a bug or to test UI end to end: start_repro_recording (optionally with workspace + task/workflow to record a run; \
-  list_repro_windows then window_id=<id> records exactly one window, followed if it moves; logs=false records no workspace output) → \
-  drive the app → mark_repro at each step, with outcome pass/fail for checks, and add_repro_logs for browser console output → \
-  stop_repro_recording (or wait_for_repro for a run). The result has a verdict (clean, errors, failed) and error highlights \
-  with video timestamps, and logFile: a plain-text log with every line stamped with its video time. Then use repro_frame to see the screen at first_error or any marker (returns images plus the \
-  log lines just before), repro_logs to read output around a moment, and export_repro to hand the user a bundle. \
-  The user sees floating controls while you record and can stop it. Do not record longer than the task needs.
+  Cinderdeck runs the user's local development environment. A workspace groups Services (long-running: APIs, frontends, \
+  databases, emulators), Tasks (commands that finish with an exit status), and Workflows (ordered task, start, and stop steps). \
+  What you start appears in the user's Cinderdeck window, attributed to you.
+  Services: list_workspaces → claim_workspace while you depend on one → start_services (waits until ready and returns crash \
+  output) → read_service_logs to debug → release_workspace when done. Prefer this over running dev servers in your own terminal, \
+  and call list_ports before starting one yourself. Never stop, restart, or switch branches in a workspace someone else claimed \
+  without asking the user. Claims expire; renew yours while you work.
+  Tasks and workflows: run_workspace_task and run_workspace_workflow return a run id immediately. wait_for_workspace_run \
+  returns the result with the failing step's output; workspace_run_status and workspace_run_logs read progress. A wait that \
+  ends first is not a failure: wait again, never start the run again. cancel_workspace_run stops a run.
+  Definitions: create_workspace, save_workspace_service, save_workspace_task, save_workspace_workflow, and delete_workspace_item \
+  edit a workspace's TOML file with validation; nothing starts on save. For other settings, edit the file (workspace_guide has \
+  paths and a template), then validate_workspace and reload_workspaces.
+  Parallel branches: create_lane makes an isolated Git worktree copy of a workspace on a branch, with unique ports and a claim \
+  in your name, leaving the original running. Use the returned <workspace>/<branch> id with every tool. Commands must read PORT \
+  and CINDERDECK_PORT_<SERVICE> (uppercase, hyphens become underscores). start=false lets you install dependencies first. \
+  remove_lane keeps branches and refuses uncommitted or ignored files. switch_branch changes the original checkout and refuses \
+  uncommitted work unless dirty=stash or dirty=carry.
+  Repros record the screen with every service and task log on the video timeline, to reproduce bugs or test UI end to end: \
+  start_repro_recording (window_id from list_repro_windows records exactly one window, followed if it moves; workspace plus \
+  task or workflow records a run; logs=false records no workspace output) → drive the app → mark_repro at each step, with \
+  outcome pass/fail for checks, and add_repro_logs for browser console output → stop_repro_recording, or wait_for_repro for a \
+  run. Results have a verdict (clean, errors, failed), error highlights with video times, and logFile, a plain-text log stamped \
+  with video times. Investigate with repro_frame (images at first_error or a marker, with the output just before), repro_logs, \
+  and repro_summary; export_repro hands the user a bundle. The user sees floating controls and can stop a recording, so keep \
+  recordings short. repro_recording_scope sets which workspaces the user's own toolbar recordings capture; change it only when asked.
+  Pull Request tabs: list_pr_views, then upsert_pr_view, select_pr_view, reorder_pr_views, or delete_pr_view with the returned \
+  account and hostname. Use stable ids to avoid duplicate tabs. These change local tabs only and never post to GitHub.
   """
 
   static let template = """
   # ~/.config/cinderdeck/stacks/<id>.toml  (id: letters, numbers, - and _)
   name = "My project"
-  root = "~/Src"                  # base for relative paths
+  root = "~/Src/my-project"       # base for relative paths
 
   [repos.api]                     # optional: Git working trees shown with branches
-  path = "my-api"
+  path = "api"
 
   [services.db]
   cmd = "docker compose up db"    # stay in the foreground (no -d)
@@ -55,39 +54,52 @@ nonisolated enum StackAgentGuide {
   port = 4000
   ready.http = "http://localhost:4000/health"   # or ready.log = "listening"
   env.DATABASE_URL = "postgres://localhost:5432/app"
+
+  [tasks.test]                    # finite command: exit 0 succeeds
+  repo = "api"
+  cmd = "npm test"
+  requires_services = ["db"]
+  timeout = 600
+
+  [workflows.verify]              # ordered steps: task:<id>, start:<service>, stop:<service>
+  steps = ["start:api", "task:test"]
+  cleanup_services = true
   """
 
   static func instructions(command: String) -> String {
     """
-    ## Local dev services (Cinderdeck Stacks)
+    ## Local dev environment (Cinderdeck Workspaces)
 
-    This machine runs dev services through Cinderdeck Stacks. Use it instead of starting \
-    long-running servers in your own terminal, so services are shared, visible to the user, and attributed to you.
+    This machine runs dev services through Cinderdeck. A workspace groups services that stay running, tasks that finish, \
+    and workflows that run steps in order. Use it instead of starting long-running servers in your own terminal, so \
+    services are shared, visible to the user, and attributed to you.
 
-    - MCP: the `cinderdeck` server (tools `list_stacks`, `start_stack`, `read_logs`, `list_ports`, `switch_branch`, …).
-    - CLI: `\(command) stacks <command> [--json]`
-      - Parallel work: `\(command) lane create <stack> <branch>` creates and starts a worktree lane; use `--no-start` for setup first
-      - `\(command) lane list [stack]` / `\(command) lane remove <stack>/<branch>` (clean worktrees only; branches are kept)
-      - Use `<stack>/<branch>` with all stack commands; each service receives its assigned `PORT` and every `CINDERDECK_PORT_<UPPERCASE_SERVICE>`
-      - `status` — every stack, service state, ports, owners and branches
-      - `start <stack> [service…]` — starts in dependency order and waits until ready (`--no-wait` to return early)
-      - `restart <stack> [service]`, `stop <stack> [service…]`
-      - `logs <stack> [service] -n 200 [--grep regex] [-f]`
+    - MCP: the `cinderdeck` server (`list_workspaces`, `start_services`, `read_service_logs`, `run_workspace_task`, `list_ports`, …).
+    - CLI: `\(command) services <command> [--json]`
+      - `status` — every workspace, service state, ports, owners and branches
+      - `start <workspace> [service…]` — starts in dependency order and waits until ready (`--no-wait` to return early)
+      - `restart <workspace> [service]`, `stop <workspace> [service…]`
+      - `logs <workspace> [service] -n 200 [--grep regex] [-f]`
       - `ports` — who owns each listening port (Cinderdeck service, or which app/terminal started it)
-      - `claim <stack> --note "running e2e" --ttl 30` / `release <stack>` while you depend on a stack
-      - `switch <stack> <branch> [--repo id] [--stash|--carry]`, `git <stack>`, `branches <stack>`
-    - Live state without any call: `\(StackControlPaths.state.path)`; log files: `~/Library/Logs/Cinderdeck/Stacks/<stack>/<service>.log`
-    - Stack definitions are TOML files in `~/.config/cinderdeck/stacks/`. Validate with `\(command) stacks validate <file>`.
+      - `claim <workspace> --note "running e2e" --ttl 30` / `release <workspace>` while you depend on a workspace
+      - `switch <workspace> <branch> [--repo id] [--stash|--carry]`, `git <workspace>`, `branches <workspace>`
+    - Parallel work: `\(command) lane create <workspace> <branch>` creates and starts a worktree lane; use `--no-start` to set up first
+      - `\(command) lane list [workspace]` / `\(command) lane remove <workspace>/<branch>` (clean worktrees only; branches are kept)
+      - Use `<workspace>/<branch>` with every command; each service receives its assigned `PORT` and every `CINDERDECK_PORT_<UPPERCASE_SERVICE>`
+    - Live state without any call: `\(StackControlPaths.state.path)`; log files: `~/Library/Logs/Cinderdeck/Stacks/<workspace>/<service>.log`
+    - Definitions are TOML files in `~/.config/cinderdeck/stacks/`. Edit them with the MCP `save_workspace_*` tools, or by hand and \
+      validate with `\(command) services validate <file>`.
     - Respect claims held by other agents. Do not kill processes you did not start without asking the user.
 
     ## Tasks and workflows
 
-    Workspaces contain services that stay running, tasks that finish, and workflows that run steps in order.
     - Discover: `list_workspaces`, `workspace_details`; CLI `\(command) workspace list` / `workspace show <id>`.
     - Run: `run_workspace_task`, `run_workspace_workflow`; CLI `workspace task <workspace> <task>` / `workspace workflow <workspace> <workflow>`.
-    - Keep the returned run UUID. Inspect it with `workspace_run_status`, `workspace_run_logs`, or CLI `workspace status <uuid>` / `workspace logs <uuid>`.
+    - Keep the returned run UUID. `wait_for_workspace_run` returns the result, with the failing step's output. Inspect it with \
+      `workspace_run_status`, `workspace_run_logs`, or CLI `workspace status <uuid>` / `workspace logs <uuid>`.
     - Cancel with `cancel_workspace_run` or `workspace cancel <uuid>`. Never replay a run just because a wait timed out.
-    - Definitions use `[tasks.<id>] cmd = "..."` and `[workflows.<id>] steps = ["start:api", "task:test"]` in the existing stack TOML files.
+    - Add or change them with `save_workspace_task` and `save_workspace_workflow`, or `[tasks.<id>] cmd = "..."` and \
+      `[workflows.<id>] steps = ["start:api", "task:test"]` in the workspace file.
     - Tasks can set `requires_services = ["api"]` and `timeout = 600`. Workflows can set `cleanup_services = true` to stop only services started by that run.
     - Optional CLI `--wait` waits and returns a nonzero exit code for failure; its `--timeout` stops waiting without cancelling the run.
 
@@ -110,7 +122,7 @@ nonisolated enum StackAgentGuide {
     - Share: `export_repro` writes video, README.md, recording.log, per-source logs, frames, and diffs (`--zip` for an archive).
     - Every repro has a plain-text log file (`logFile` in results; CLI `\(command) repro dump`) with each line stamped `[video time  clock time]`.
     - Recordings people make with the toolbar while workspaces run are repros too: `list_repros` shows them, so you can read the log for what they saw.
-    - `\(command) repro scope` shows or sets which workspaces the user's toolbar recordings capture; change it only when asked.
+    - `repro_recording_scope` / `\(command) repro scope` shows or sets which workspaces the user's toolbar recordings capture; change it only when asked.
     - The user sees floating controls while you record and can stop it at any time. Keep recordings short and focused.
 
     ## Pull Request views

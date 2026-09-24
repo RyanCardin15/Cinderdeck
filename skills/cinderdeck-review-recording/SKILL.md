@@ -18,7 +18,7 @@ cinderdeck repro list shop           # only recordings that captured workspace "
 
 - Every command takes a repro id or a unique prefix, and defaults to the **latest** recording. If the user describes a specific one ("the checkout one from this morning"), pick it by `title` and `recordedAt`, then pass its id every time.
 - If the user gives you a `.log` file path, read it directly. Its header names the video. Use `repro list` to find the matching id for frames.
-- A recording still in progress can't be dumped or exported. `cinderdeck repro status` shows it. Wait, or ask the user to stop it.
+- A recording still in progress can't be dumped or exported. `cinderdeck repro status` (`repro_status`) shows it. Wait, or ask the user to stop it.
 
 ## 2. Read the summary first
 
@@ -57,7 +57,9 @@ cinderdeck repro dump <id> --path    # where the .log file is
 cinderdeck repro dump <id>           # print it
 ```
 
-For long logs, don't print everything. Use `repro logs` with `--level warning`, `--source`, or `--grep`, and `-n` to limit lines.
+For long logs, don't print everything. Use `repro logs` with `--level warning`, `--source`, or `--grep`, and `-n` to limit lines. Over MCP, `repro_summary` returns the log file path as `logFile`.
+
+The recording holds only what was printed while it ran. For output from before or after it, read the service's log (`cinderdeck services logs <workspace> <service> -n 200`, MCP `read_service_logs`) or a task run's output (`cinderdeck workspace logs <run-uuid>`, MCP `workspace_run_logs`; run ids are in the summary's `runs`).
 
 ## 5. Report
 

@@ -1,21 +1,21 @@
 import Darwin
 import Foundation
 
-/// `cinderdeck stacks …` — the command-line face of the Stacks control API.
+/// `cinderdeck services …` — the command-line face of the workspace control API.
 /// Runs inside the app binary before any UI starts, so agents in any
-/// terminal (Cursor, Codex, Claude Code, …) can manage stacks.
+/// terminal (Cursor, Codex, Claude Code, …) can manage workspace services.
 nonisolated enum StackCLI {
   /// Returns an exit code when the arguments are a CLI invocation, nil to launch the app normally.
   static func runIfRequested(_ arguments: [String]) -> Int32? {
     guard arguments.count > 1 else { return nil }
     switch arguments[1] {
-    case "stacks", "stack": return run(Array(arguments.dropFirst(2)))
+    case "services", "service": return run(Array(arguments.dropFirst(2)))
     case "workspace", "workspaces": return WorkspaceCLI.run(Array(arguments.dropFirst(2)))
     case "prs", "pull-requests": return PRViewsCLI.run(Array(arguments.dropFirst(2)))
     case "repro", "repros": return ReproCLI.run(Array(arguments.dropFirst(2)))
     case "skills", "skill": return StackAgentSkills.run(Array(arguments.dropFirst(2)))
     case "lane", "lanes": return run(["lane"] + arguments.dropFirst(2))
-    case "mcp": return StackMCPServer.run()
+    case "mcp": return CinderdeckMCPServer.run()
     case "help", "--help", "-h":
       guard isCommandName(arguments[0]) else { return nil }
       print(usage); return 0
@@ -24,7 +24,7 @@ nonisolated enum StackCLI {
   }
 
   private static func isCommandName(_ argument: String) -> Bool {
-    ["cinderdeck", "snapzy"].contains((argument as NSString).lastPathComponent.lowercased())
+    (argument as NSString).lastPathComponent.lowercased() == "cinderdeck"
   }
 
   // MARK: Options
@@ -104,13 +104,13 @@ nonisolated enum StackCLI {
 
   static func clientInfo(_ options: Options) -> StackControlClientInfo {
     let environment = ProcessInfo.processInfo.environment
-    var name = options["as"] ?? (environment["CINDERDECK_AGENT"] ?? environment["SNAPZY_AGENT"])
+    var name = options["as"] ?? environment["CINDERDECK_AGENT"]
     if name == nil {
       if environment["CLAUDECODE"] == "1" { name = "Claude Code" }
       else if environment.keys.contains(where: { $0.hasPrefix("CODEX_") }) { name = "Codex" }
       else if environment["CURSOR_AGENT"] != nil { name = "Cursor" }
     }
-    return StackControlClientInfo(name: name, session: options["session"] ?? (environment["CINDERDECK_AGENT_SESSION"] ?? environment["SNAPZY_AGENT_SESSION"]),
+    return StackControlClientInfo(name: name, session: options["session"] ?? environment["CINDERDECK_AGENT_SESSION"],
       cwd: FileManager.default.currentDirectoryPath)
   }
 
@@ -131,7 +131,7 @@ nonisolated enum StackCLI {
       if let connection = try? StackControlConnection(path: path, client: client) { return connection }
       usleep(250_000)
     }
-    throw StackControlError(code: "not_running", message: "Launched Cinderdeck but its Stacks control socket did not appear at \(path).")
+    throw StackControlError(code: "not_running", message: "Launched Cinderdeck but its control socket did not appear at \(path).")
   }
 
   static func executablePath() -> String {
@@ -169,9 +169,9 @@ nonisolated enum StackCLI {
   private static func remote(_ command: String, _ arguments: [String], _ options: Options) throws {
     let connection = try connect(clientInfo(options))
     var params: [String: JSONValue] = [:]
-    func stackParam(required: Bool = true) throws {
-      if let stack = arguments.first { params["stack"] = .string(stack) }
-      else if required { throw StackControlError.invalid("Usage: cinderdeck stacks \(command) <stack> …") }
+    func workspaceParam(required: Bool = true) throws {
+      if let workspace = arguments.first { params["workspace"] = .string(workspace) }
+      else if required { throw StackControlError.invalid("Usage: cinderdeck services \(command) <workspace> …") }
     }
     if options.has("force") { params["force"] = .bool(true) }
     let waitTimeout = Double(options["timeout"] ?? "") ?? 180
@@ -180,21 +180,21 @@ nonisolated enum StackCLI {
       try lane(arguments, options, connection: connection)
     case "status", "ls", "list":
       if let stack = arguments.first {
-        let result = try connection.call("stack.get", ["stack": .string(stack)])
+        let result = try connection.call("services.status", ["workspace": .string(stack)])
         if options.json { printJSON(result) } else { printStacks([try result.decode(StackSnapshot.self)], detailed: true) }
       } else {
         let result = try connection.call("snapshot")
         if options.json { printJSON(result); return }
         let snapshot = try result.decode(StacksSnapshot.self)
-        if snapshot.stacks.isEmpty { print("No stacks yet. Add TOML files to \(snapshot.stacksDirectory) — see `cinderdeck stacks agent-help`.") }
-        printStacks(snapshot.stacks, detailed: snapshot.stacks.count == 1)
+        if snapshot.workspaces.isEmpty { print("No workspaces yet. Create one in Workspaces, or add TOML files to \(snapshot.workspacesDirectory) — see `cinderdeck services agent-help`.") }
+        printStacks(snapshot.workspaces, detailed: snapshot.workspaces.count == 1)
       }
     case "start", "up", "stop", "down", "restart":
-      try stackParam()
+      try workspaceParam()
       let services = Array(arguments.dropFirst())
-      let method = ["start", "up"].contains(command) ? "stack.start" : ["stop", "down"].contains(command) ? "stack.stop" : "stack.restart"
+      let method = ["start", "up"].contains(command) ? "services.start" : ["stop", "down"].contains(command) ? "services.stop" : "services.restart"
       if !services.isEmpty {
-        if method == "stack.restart" { params["service"] = .string(services[0]) }
+        if method == "services.restart" { params["service"] = .string(services[0]) }
         else { params["services"] = .array(services.map { JSONValue.string($0) }) }
       }
       params["wait"] = .bool(!options.has("no-wait"))
@@ -205,7 +205,7 @@ nonisolated enum StackCLI {
       }
       let result = try connection.call(method, params, timeout: waitTimeout + 30)
       if options.json { printJSON(result); return }
-      if let stack = try result["stack"]?.decode(StackSnapshot.self) { printStacks([stack], detailed: true) }
+      if let stack = try result["workspace"]?.decode(StackSnapshot.self) { printStacks([stack], detailed: true) }
       if result["timedOut"]?.boolValue == true { print(paint("Timed out waiting; services are still starting.", .yellow)) }
       if let problems = result["problems"]?.objectValue {
         for (service, problem) in problems.sorted(by: { $0.key < $1.key }) {
@@ -215,7 +215,7 @@ nonisolated enum StackCLI {
         throw StackControlError(code: "service_failed", message: "One or more services are not healthy")
       }
     case "logs", "log":
-      try stackParam()
+      try workspaceParam()
       if arguments.count > 1 { params["service"] = .string(arguments[1]) }
       params["lines"] = .number(Double(options["lines"] ?? "") ?? (options.has("follow") ? 50 : 200))
       if let grep = options["grep"] { params["grep"] = .string(grep) }
@@ -240,16 +240,16 @@ nonisolated enum StackCLI {
       if options.json { printJSON(result) } else { printPorts(try result.decode([StackPortListener].self)) }
     case "kill-port":
       guard let port = arguments.first.flatMap(Int.init), let pid = (arguments.dropFirst().first ?? options["pid"]).flatMap(Int.init) else {
-        throw StackControlError.invalid("Usage: cinderdeck stacks kill-port <port> <pid>   (see `cinderdeck stacks ports`)")
+        throw StackControlError.invalid("Usage: cinderdeck services kill-port <port> <pid>   (see `cinderdeck services ports`)")
       }
       let result = try connection.call("port.kill", ["port": .number(Double(port)), "pid": .number(Double(pid))], timeout: 30)
       if options.json { printJSON(result) } else { print("Stopped \(result["process"]?.stringValue ?? "process") (PID \(pid)) on port \(port).") }
     case "git":
-      try stackParam()
+      try workspaceParam()
       let result = try connection.call("git.status", params, timeout: 90)
       if options.json { printJSON(result) } else { printRepos(try result.decode([StackRepoSnapshot].self)) }
     case "branches":
-      try stackParam()
+      try workspaceParam()
       if let repo = options["repo"] ?? arguments.dropFirst().first { params["repo"] = .string(repo) }
       let result = try connection.call("git.branches", params, timeout: 90)
       if options.json { printJSON(result); return }
@@ -262,8 +262,8 @@ nonisolated enum StackCLI {
         if !remote.isEmpty { print("  remote: " + remote.prefix(30).joined(separator: ", ") + (remote.count > 30 ? " …" : "")) }
       }
     case "switch", "checkout":
-      guard arguments.count >= 2 else { throw StackControlError.invalid("Usage: cinderdeck stacks switch <stack> <branch> [--repo id] [--stash|--carry]") }
-      params["stack"] = .string(arguments[0]); params["branch"] = .string(arguments[1])
+      guard arguments.count >= 2 else { throw StackControlError.invalid("Usage: cinderdeck services switch <workspace> <branch> [--repo id] [--stash|--carry]") }
+      params["workspace"] = .string(arguments[0]); params["branch"] = .string(arguments[1])
       if let repo = options["repo"] { params["repo"] = .string(repo) }
       params["dirty"] = .string(options["dirty"] ?? (options.has("stash") ? "stash" : options.has("carry") ? "carry" : "fail"))
       let result = try connection.call("git.switch", params, timeout: 300)
@@ -271,12 +271,12 @@ nonisolated enum StackCLI {
       for line in result["switched"]?.arrayValue ?? [] { print(paint("✓ ", .green) + (line.stringValue ?? "")) }
       for line in result["skipped"]?.arrayValue ?? [] { print(paint("– skipped ", .dim) + (line.stringValue ?? "")) }
     case "fetch", "pull":
-      try stackParam()
+      try workspaceParam()
       if let repo = options["repo"] ?? arguments.dropFirst().first { params["repo"] = .string(repo) }
       let result = try connection.call(command == "pull" ? "git.pull" : "git.fetch", params, timeout: 300)
       if options.json { printJSON(result) } else { printRepos(try (result["repos"] ?? .array([])).decode([StackRepoSnapshot].self)) }
     case "claim":
-      try stackParam()
+      try workspaceParam()
       if let note = options["note"] ?? (arguments.count > 1 ? arguments.dropFirst().joined(separator: " ") : nil) { params["note"] = .string(note) }
       if let ttl = options["ttl"].flatMap(Double.init) { params["ttlMinutes"] = .number(ttl) }
       let result = try connection.call("claim", params)
@@ -284,11 +284,11 @@ nonisolated enum StackCLI {
       let claim = try result.decode(StackClaim.self)
       print("Claimed \(claim.stackID) as \(claim.holder.label) until \(timeString(claim.expiresAt)).")
     case "release":
-      try stackParam()
+      try workspaceParam()
       let result = try connection.call("release", params)
-      if options.json { printJSON(result) } else { print("Released \(result["released"]?.stringValue ?? "stack").") }
+      if options.json { printJSON(result) } else { print("Released \(result["released"]?.stringValue ?? "workspace").") }
     case "events", "activity":
-      try stackParam()
+      try workspaceParam()
       if let limit = options["limit"] ?? options["lines"] { params["limit"] = .number(Double(limit) ?? 40) }
       let result = try connection.call("events", params)
       if options.json { printJSON(result); return }
@@ -301,7 +301,7 @@ nonisolated enum StackCLI {
       }
     case "reload":
       _ = try connection.call("reload")
-      print("Reloaded stack definitions.")
+      print("Reloaded workspace definitions.")
     case "ping":
       let result = try connection.call("ping")
       if options.json { printJSON(result) } else { print("Cinderdeck is running (PID \(result["pid"]?.stringValue ?? "?")). You are \(result["you"]?.stringValue ?? "?").") }
@@ -311,7 +311,7 @@ nonisolated enum StackCLI {
   }
 
   private static func validate(_ arguments: [String], _ options: Options) throws {
-    guard let path = arguments.first else { throw StackControlError.invalid("Usage: cinderdeck stacks validate <file.toml>") }
+    guard let path = arguments.first else { throw StackControlError.invalid("Usage: cinderdeck services validate <file.toml>") }
     let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
     let source: String
     do { source = try String(contentsOf: url, encoding: .utf8) } catch { throw StackControlError.notFound("Cannot read \(url.path)") }
@@ -327,7 +327,7 @@ nonisolated enum StackCLI {
       for issue in file.issues { print(paint(issue.severity == .error ? "error: " : "warning: ", issue.severity == .error ? .red : .yellow) + issue.message) }
       if let definition = file.definition, errors.isEmpty {
         let order = ((try? definition.dependencyLayers()) ?? []).map { $0.joined(separator: " + ") }.joined(separator: " → ")
-        print(paint("✓ ", .green) + "\(definition.name): \(definition.services.count) services, start order \(order)")
+        print(paint("✓ ", .green) + "\(definition.name): \(definition.services.count) services, \(definition.tasks.count) tasks, \(definition.workflows.count) workflows, start order \(order)")
       }
     }
     if file.definition == nil || !errors.isEmpty { throw StackControlError(code: "invalid_definition", message: "\(url.lastPathComponent) is not valid") }
@@ -341,30 +341,30 @@ nonisolated enum StackCLI {
     if options.has("force") { params["force"] = .bool(true) }
     switch command {
     case "list", "ls", "status":
-      if let source = args.first { params["stack"] = .string(source) }
+      if let source = args.first { params["workspace"] = .string(source) }
       let result = try connection.call("lane.list", params)
       if options.json { printJSON(result) }
       else { printStacks(try result.decode([StackSnapshot].self), detailed: true) }
     case "create":
-      guard args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane create <stack> <branch> [--no-start] [--no-wait]") }
-      params["stack"] = .string(args[0]); params["branch"] = .string(args[1])
+      guard args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane create <workspace> <branch> [--no-start] [--no-wait]") }
+      params["workspace"] = .string(args[0]); params["branch"] = .string(args[1])
       params["start"] = .bool(!options.has("no-start")); params["wait"] = .bool(!options.has("no-wait"))
       let timeout = min(max(Double(options["timeout"] ?? "") ?? 180, 1), 900)
       params["timeout"] = .number(timeout)
       let result = try connection.call("lane.create", params, timeout: timeout + 300)
       if options.json { printJSON(result) }
-      else if let snapshot = try result["stack"]?.decode(StackSnapshot.self) {
+      else if let snapshot = try result["workspace"]?.decode(StackSnapshot.self) {
         printStacks([snapshot], detailed: true)
         if let lane = snapshot.lane {
           print("Lane: \(lane.reference)\nWorktrees: \(lane.directory.path)")
-          print("Use `cinderdeck stacks logs|stop|restart \(lane.reference)` to manage this lane.")
+          print("Use `cinderdeck services logs|stop|restart \(lane.reference)` to manage this lane.")
         }
       }
       if result["problems"] != nil { throw StackControlError(code: "service_failed", message: "Lane created, but one or more services failed. Inspect its logs, then restart the lane.") }
       if result["timedOut"]?.boolValue == true { throw StackControlError(code: "timeout", message: "Lane created; still waiting for readiness. Inspect lane status.") }
     case "remove", "rm":
-      guard args.count == 1 || args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane remove <stack>/<branch> (or <stack> <branch>)") }
-      params["stack"] = .string(args.joined(separator: "/"))
+      guard args.count == 1 || args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane remove <workspace>/<branch> (or <workspace> <branch>)") }
+      params["workspace"] = .string(args.joined(separator: "/"))
       let result = try connection.call("lane.remove", params, timeout: 300)
       if options.json { printJSON(result) } else { print("Removed lane worktrees. Git branches were kept.") }
     default: throw StackControlError.invalid("Unknown lane command. Use create, list or remove.")
@@ -375,11 +375,11 @@ nonisolated enum StackCLI {
     let values: [(String, String)] = [
       ("command", preferredCommandPath()), ("app", appBundlePath() ?? "?"),
       ("socket", StackControlPaths.socket.path), ("state", StackControlPaths.state.path),
-      ("stacks", StackDefinitionLoader.directory().path),
+      ("workspaces", StackDefinitionLoader.directory().path),
       ("logs", FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Cinderdeck/Stacks").path),
     ]
     if options.json { printJSON(.object(Dictionary(uniqueKeysWithValues: values.map { ($0.0, JSONValue.string($0.1)) }))); return }
-    for (name, value) in values { print(paint(name.padding(toLength: 8, withPad: " ", startingAt: 0), .dim) + value) }
+    for (name, value) in values { print(paint(name.padding(toLength: 11, withPad: " ", startingAt: 0), .dim) + value) }
   }
 
   /// Links `<directory>/cinderdeck` to this app's executable. Returns the link.
@@ -514,39 +514,43 @@ nonisolated enum StackCLI {
   }
 
   static let usage = """
-  WORKTREE LANES
-    cinderdeck lane create <stack> <branch>       Create and start an isolated worktree lane
-    cinderdeck lane list [stack]                 Original checkout and parallel lanes
-    cinderdeck lane remove <stack>/<branch>      Stop and remove clean worktrees; keep branches
-    --no-start                                  Create only, for dependency setup before starting
-    Use stacks status|logs|start|stop|restart <stack>/<branch> to manage a lane.
-
-  cinderdeck stacks — manage Cinderdeck dev stacks from any terminal or agent
+  cinderdeck services — manage Cinderdeck workspace services from any terminal or agent
 
   USAGE
-    cinderdeck stacks [status] [stack]            Stacks, services, ports, owners, branches
-    cinderdeck stacks start <stack> [service…]    Start in dependency order; waits until ready
-    cinderdeck stacks stop <stack> [service…]
-    cinderdeck stacks restart <stack> [service]   --dependents also restarts dependents
-    cinderdeck stacks logs <stack> [service]      -n 200  --grep <regex>  -f (follow)
-    cinderdeck stacks ports [port]                Who owns each listening port (--external)
-    cinderdeck stacks kill-port <port> <pid>      Stop a stray non-Cinderdeck listener
-    cinderdeck stacks git <stack>                 Branch, dirty state, ahead/behind per repo
-    cinderdeck stacks branches <stack> [repo]
-    cinderdeck stacks switch <stack> <branch>     --repo <id>  --stash | --carry
-    cinderdeck stacks fetch|pull <stack> [repo]
-    cinderdeck stacks claim <stack> [note]        --ttl <minutes> (default 30); advisory lock
-    cinderdeck stacks release <stack>
-    cinderdeck stacks events <stack>              Recent activity and who caused it
-    cinderdeck stacks validate <file.toml>        Check a stack definition
-    cinderdeck stacks reload | where | ping
-    cinderdeck stacks install-cli                 Link ~/.local/bin/cinderdeck to this app
-    cinderdeck stacks setup-agents                Add the Cinderdeck MCP server to Cursor, Codex, Claude Code, VS Code Copilot
-                                                  (--skills also installs the agent skills)
-    cinderdeck skills [list|install]              Agent skills that ship with Cinderdeck
-    cinderdeck stacks agent-help                  Instructions to paste into AGENTS.md
-    cinderdeck prs views                          Configure Pull Request tabs (prs --help)
-    cinderdeck mcp                                Run as an MCP server over stdio
+    cinderdeck services [status] [workspace]          Workspaces, services, ports, owners, branches
+    cinderdeck services start <workspace> [service…]  Start in dependency order; waits until ready
+    cinderdeck services stop <workspace> [service…]
+    cinderdeck services restart <workspace> [service] --dependents also restarts dependents
+    cinderdeck services logs <workspace> [service]    -n 200  --grep <regex>  -f (follow)
+    cinderdeck services ports [port]                  Who owns each listening port (--external)
+    cinderdeck services kill-port <port> <pid>        Stop a stray non-Cinderdeck listener
+    cinderdeck services git <workspace>               Branch, dirty state, ahead/behind per repo
+    cinderdeck services branches <workspace> [repo]
+    cinderdeck services switch <workspace> <branch>   --repo <id>  --stash | --carry
+    cinderdeck services fetch|pull <workspace> [repo]
+    cinderdeck services claim <workspace> [note]      --ttl <minutes> (default 30); advisory lock
+    cinderdeck services release <workspace>
+    cinderdeck services events <workspace>            Recent activity and who caused it
+    cinderdeck services validate <file.toml>          Check a workspace definition
+    cinderdeck services reload | where | ping
+    cinderdeck services install-cli                   Link ~/.local/bin/cinderdeck to this app
+    cinderdeck services setup-agents                  Add the Cinderdeck MCP server to Cursor, Codex, Claude Code, VS Code Copilot
+                                                      (--skills also installs the agent skills)
+    cinderdeck services agent-help                    Instructions to paste into AGENTS.md
+
+  WORKTREE LANES
+    cinderdeck lane create <workspace> <branch>       Create and start an isolated worktree lane
+    cinderdeck lane list [workspace]                  Original checkout and parallel lanes
+    cinderdeck lane remove <workspace>/<branch>       Stop and remove clean worktrees; keep branches
+    --no-start                                        Create only, for dependency setup before starting
+    Use services status|logs|start|stop|restart <workspace>/<branch> to manage a lane.
+
+  MORE
+    cinderdeck workspace --help                       Tasks, workflows, and runs
+    cinderdeck repro --help                           Screen recordings with synced logs
+    cinderdeck prs views                              Configure Pull Request tabs (prs --help)
+    cinderdeck skills [list|install]                  Agent skills that ship with Cinderdeck
+    cinderdeck mcp                                    Run as an MCP server over stdio
 
   OPTIONS
     --json          Machine-readable output        --no-wait     Don't wait for readiness

@@ -165,6 +165,7 @@ done
 | `export_repro` | Write the export bundle (`destination`, `zip`, `video`). |
 | `open_repro` | Open the repro in the video editor for the user. |
 | `delete_repro` | Delete a repro. Requires the exact id. |
+| `repro_recording_scope` | Show which workspaces the user's toolbar recordings capture, or set `mode` to `running`, `selected` (with `workspaces`), or `off`. Agents change it only when asked. |
 
 **Recording a window.** Pick it by `window_id` from `list_repro_windows`; `window` matches an app name or title and takes the frontmost match. The recording follows the window if it moves or resizes, keeping the video size from the start. It includes the window's app, so menus, dropdowns, and sheets appear, while other apps' windows passing over it do not. A window must be visible to be recorded, so a headless browser can't be; run it headed.
 

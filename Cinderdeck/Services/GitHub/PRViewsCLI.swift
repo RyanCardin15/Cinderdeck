@@ -112,6 +112,6 @@ nonisolated enum PRViewsCLI {
   Built-in tabs cannot be edited, deleted, or reordered. Changes are local per server and account.
   Use the same id to update a tab without duplicating it. --name is required on creation.
   --json is accepted; all results and errors are JSON. --as / --session identify the agent.
-  Connect agents with cinderdeck stacks setup-agents; the same MCP server exposes PR views.
+  Connect agents with cinderdeck services setup-agents; the same MCP server exposes PR views.
   """
 }

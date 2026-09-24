@@ -24,7 +24,7 @@ extension StackControlService {
         options.maxSeconds = seconds
       }
       if let names = params["workspaces"]?.stringsValue, !names.isEmpty {
-        options.workspaces = Set(try names.map { try stackFile(.object(["stack": .string($0)])).id })
+        options.workspaces = Set(try names.map { try workspaceFile(.object(["workspace": .string($0)])).id })
       }
       let task = params["task"]?.stringValue, workflow = params["workflow"]?.stringValue
       // logs: false records a plain video: no workspace output, only markers and lines the agent adds.
@@ -39,7 +39,7 @@ extension StackControlService {
         guard let workspaceName = params["workspace"]?.stringValue ?? options.workspaces?.first else {
           throw StackControlError.invalid("Pass workspace with task or workflow")
         }
-        let file = try stackFile(.object(["stack": .string(workspaceName)]))
+        let file = try workspaceFile(.object(["workspace": .string(workspaceName)]))
         try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
         let kind: WorkspaceRunKind = task != nil ? .task : .workflow
         let (session, run) = try await controller.startRun(options, workspace: file.id, kind: kind, definitionID: task ?? workflow ?? "",
@@ -50,7 +50,7 @@ extension StackControlService {
         return .object(result)
       }
       if let workspace = params["workspace"]?.stringValue, options.workspaces == nil {
-        options.workspaces = [try stackFile(.object(["stack": .string(workspace)])).id]
+        options.workspaces = [try workspaceFile(.object(["workspace": .string(workspace)])).id]
       }
       let session = try await controller.start(options, origin: .agent, actor: actor)
       var result = reproPayload(session, lines: [], compact: true)
@@ -163,7 +163,7 @@ extension StackControlService {
       return .object(["marker": markerValue(marker), "repro": .string(recorder.activeSessionID?.uuidString ?? "")])
 
     case "repro.list":
-      let workspace = try params["workspace"]?.stringValue.map { try stackFile(.object(["stack": .string($0)])).id }
+      let workspace = try params["workspace"]?.stringValue.map { try workspaceFile(.object(["workspace": .string($0)])).id }
       let limit = min(max(params["limit"]?.intValue ?? 20, 1), 200)
       var sessions = recorder.sessions
       if let current = recorder.activeSessionID.flatMap(recorder.current) { sessions.insert(current, at: 0) }
@@ -303,7 +303,7 @@ extension StackControlService {
         case "off", "none": recorder.setScope(.off)
         case "selected", "only":
           guard let names = params["workspaces"]?.stringsValue, !names.isEmpty else { throw StackControlError.invalid("Pass workspaces with mode selected") }
-          recorder.setScope(.only(Set(try names.map { try stackFile(.object(["stack": .string($0)])).id })))
+          recorder.setScope(.only(Set(try names.map { try workspaceFile(.object(["workspace": .string($0)])).id })))
         default: throw StackControlError.invalid("mode must be running, selected, or off")
         }
       }

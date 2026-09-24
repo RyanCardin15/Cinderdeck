@@ -86,8 +86,8 @@ steps = ["task:check"]
                     assert app.poll() is None, (root / "app.log").read_text()
                     time.sleep(0.1)
                 else: raise AssertionError("Preview control socket did not start")
-                base = cli("stacks", "start", "shop")["stack"]
-                first = cli("lane", "create", "shop", "agent/codex-1")["stack"]
+                base = cli("services", "start", "shop")["workspace"]
+                first = cli("lane", "create", "shop", "agent/codex-1")["workspace"]
                 mcp = subprocess.Popen([binary, "mcp"], env=dict(env, CINDERDECK_AGENT="Claude Code", CINDERDECK_AGENT_SESSION="lane-e2e"), text=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log)
                 request_id = 0
 
@@ -103,9 +103,10 @@ steps = ["task:check"]
                 rpc("initialize", dict(protocolVersion="2025-06-18", clientInfo=dict(name="claude-code", version="test")))
                 names = {tool["name"] for tool in rpc("tools/list", {})["tools"]}
                 assert {"create_lane", "list_lanes", "remove_lane"} <= names
-                result = rpc("tools/call", dict(name="create_lane", arguments=dict(stack="shop", branch="agent/claude-2")))
+                result = rpc("tools/call", dict(name="create_lane", arguments=dict(workspace="shop", branch="agent/claude-2")))
                 assert not result["isError"], result
-                second = json.loads(result["content"][0]["text"])["stack"]
+                assert json.loads(result["content"][0]["text"])["workspace"]["lane"], result
+                second = cli("services", "status", "shop/agent/claude-2")
                 lanes = cli("lane", "list", "shop")
                 assert len(lanes) == 3
                 assert len({stack["services"][0]["port"] for stack in lanes}) == 3
@@ -117,7 +118,7 @@ steps = ["task:check"]
                     assert int(payload["port"]) == service["port"]
                     assert Path(payload["cwd"]).resolve() == Path(service["cwd"]).resolve()
                     if stack.get("lane"): assert int(payload["api"]) == service["port"]
-                denied = cli("stacks", "stop", "shop/agent/codex-1", actor="Claude Code", expected=3)
+                denied = cli("services", "stop", "shop/agent/codex-1", actor="Claude Code", expected=3)
                 assert denied["error"]["code"] == "claimed"
                 assert git("branch", "--show-current") == "main"
                 run = cli("workspace", "workflow", "shop/agent/codex-1", "verify")
@@ -126,10 +127,10 @@ steps = ["task:check"]
                     if run["status"] in ("succeeded", "failed", "cancelled", "interrupted"): break
                     time.sleep(0.1)
                 assert run["status"] == "succeeded", run
-                assert cli("stacks", "status", "shop/agent/codex-1")["services"][0]["pid"] == first["services"][0]["pid"]
-                blocked = cli("stacks", "switch", "shop", "agent/codex-1", expected=1)
+                assert cli("services", "status", "shop/agent/codex-1")["services"][0]["pid"] == first["services"][0]["pid"]
+                blocked = cli("services", "switch", "shop", "agent/codex-1", expected=1)
                 assert "already checked out" in blocked["error"]["message"], blocked
-                assert cli("stacks", "status", "shop")["services"][0]["pid"] == base["services"][0]["pid"]
+                assert cli("services", "status", "shop")["services"][0]["pid"] == base["services"][0]["pid"]
                 print("PASS: CLI and MCP created three running environments with separate ports, worktrees and claims.", flush=True)
                 print("PASS: a workflow reached its own lane server; an occupied-branch switch preserved the source process.", flush=True)
                 if args.inspect:
@@ -141,8 +142,8 @@ steps = ["task:check"]
                         if time.monotonic() > deadline: raise TimeoutError("UI inspection exceeded ten minutes")
                         time.sleep(0.2)
                 cli("lane", "remove", "shop/agent/codex-1")
-                assert cli("stacks", "status", "shop")["services"][0]["pid"] == base["services"][0]["pid"]
-                assert cli("stacks", "status", "shop/agent/claude-2")["services"][0]["pid"] == second["services"][0]["pid"]
+                assert cli("services", "status", "shop")["services"][0]["pid"] == base["services"][0]["pid"]
+                assert cli("services", "status", "shop/agent/claude-2")["services"][0]["pid"] == second["services"][0]["pid"]
                 cli("lane", "remove", "shop/agent/claude-2", actor="Claude Code")
                 assert git("rev-parse", "refs/heads/agent/codex-1")
                 print("PASS: removal preserved the original and sibling processes and kept the Git branches.", flush=True)
@@ -151,9 +152,9 @@ steps = ["task:check"]
                     mcp.terminate(); mcp.wait(timeout=10)
                 if app.poll() is None:
                     try:
-                        snapshot = cli("stacks", "status")
-                        for stack in snapshot["stacks"]:
-                            cli("stacks", "stop", stack["id"], "--force")
+                        snapshot = cli("services", "status")
+                        for stack in snapshot["workspaces"]:
+                            cli("services", "stop", stack["id"], "--force")
                     finally:
                         app.terminate()
                         try: app.wait(timeout=10)

@@ -90,7 +90,7 @@ try {
 }
 ```
 
-The workspace TOML task, plus an optional workflow that starts the app first. Ask the user before you edit their workspace files in `~/.config/cinderdeck/stacks/`:
+The workspace task, plus an optional workflow that starts the app first. Ask the user before you change their workspace. With the Cinderdeck MCP server, add them with `save_workspace_task` (`task: "browser-session"`, `cmd`, `repo`, `requires_services`, `timeout`) and `save_workspace_workflow` (`workflow: "e2e"`, `steps`), which validate the definition and start nothing. Otherwise add this to the workspace file (`cinderdeck services where` shows the folder), then run `cinderdeck services validate <file>`:
 
 ```toml
 [tasks.browser-session]

@@ -24,9 +24,9 @@ Very old sandbox-only Snapzy installations should first upgrade to an unsandboxe
 
 - Existing Keychain service/account identifiers intentionally keep their Snapzy names. Migration never exports or logs credentials. macOS may request permission to access existing credentials from the new application; inaccessible items can be added through Manage secrets.
 - Both `cinderdeck://` and legacy `snapzy://` capture shortcuts are accepted.
-- `CINDERDECK_AGENT` and `CINDERDECK_AGENT_SESSION` are the primary CLI/MCP variables. The corresponding `SNAPZY_` variables remain accepted. Service environments export both old and new stack/service identity variables.
+- `CINDERDECK_AGENT` and `CINDERDECK_AGENT_SESSION` name the CLI/MCP caller. The `SNAPZY_` variables are no longer read. Service environments export both old and new stack/service identity variables.
 - Existing managed Git stashes with a `snapzy: before` prefix remain recognized.
-- Install the new CLI using `Cinderdeck.app/Contents/MacOS/Cinderdeck stacks install-cli`. Update MCP clients using `cinderdeck stacks setup-agents --print` or the Agents & CLI panel. The installer refuses to replace a regular file at the command’s destination.
+- Install the new CLI using `Cinderdeck.app/Contents/MacOS/Cinderdeck services install-cli`. Update MCP clients using `cinderdeck services setup-agents --print` or the Agents & CLI panel. The installer refuses to replace a regular file at the command’s destination.
 
 ## macOS permissions
 

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Registers the Cinderdeck MCP server with coding agents and, optionally, adds
-/// the Stacks instructions to their global instruction files.
+/// the Cinderdeck instructions to their global instruction files.
 nonisolated enum StackAgentSetup {
   struct Result: Sendable { let target: String; let detail: String; let ok: Bool }
 
@@ -207,7 +207,7 @@ nonisolated enum StackAgentSetup {
       { "servers": { "cinderdeck": { "type": "stdio", "command": "\(command)", "args": ["mcp"] } } }
 
     Any agent with a shell:
-      \(command) stacks agent-help
+      \(command) services agent-help
     """
   }
 }

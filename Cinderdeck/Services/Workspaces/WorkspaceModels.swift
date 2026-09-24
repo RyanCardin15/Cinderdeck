@@ -60,9 +60,9 @@ nonisolated struct WorkspaceRun: Codable, Equatable, Identifiable, Sendable {
 }
 
 extension StackDefinition {
-  func task(_ id: String) -> WorkspaceTaskDefinition? { tasks.first { $0.id == id } }
-  func workflow(_ id: String) -> WorkspaceWorkflowDefinition? { workflows.first { $0.id == id } }
-  func serviceDependencies(_ ids: Set<String>) -> Set<String> {
+  nonisolated func task(_ id: String) -> WorkspaceTaskDefinition? { tasks.first { $0.id == id } }
+  nonisolated func workflow(_ id: String) -> WorkspaceWorkflowDefinition? { workflows.first { $0.id == id } }
+  nonisolated func serviceDependencies(_ ids: Set<String>) -> Set<String> {
     var result = ids
     while true {
       let next = result.union(services.filter { result.contains($0.id) }.flatMap(\.dependencies))
