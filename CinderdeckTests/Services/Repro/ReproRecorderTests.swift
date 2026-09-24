@@ -205,6 +205,7 @@ final class ReproRecorderTests: XCTestCase {
     let deadline = Date().addingTimeInterval(10)
     while !recorder.sessions.contains(where: { $0.id == id }) && Date() < deadline {
       XCTAssertTrue(recorder.isRecordingOrSaving(id), "Neither recording nor saved")
+      XCTAssertEqual(try? recorder.resolve("latest").id, id, "latest finds the repro while it saves")
       try await Task.sleep(nanoseconds: 1_000_000)
     }
     XCTAssertFalse(recorder.isRecordingOrSaving(id))

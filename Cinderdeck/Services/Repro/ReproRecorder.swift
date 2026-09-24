@@ -104,6 +104,8 @@ final class ReproRecorder: ObservableObject {
   /// Repros that stopped and are being saved or discarded. They are neither
   /// recording nor in `sessions` yet, so waiters must not give up on them.
   private var finishing = Set<UUID>()
+  /// The stopped repro while its log file is written, so "latest" and its id still find it.
+  private var saving: ReproSession?
   /// The latest error line, published once per poll rather than per line.
   private var pendingLastError: String?
   private var lineCache: [UUID: [ReproLogLine]] = [:]
@@ -603,10 +605,12 @@ final class ReproRecorder: ObservableObject {
       resume(session.id, with: nil)
       return
     }
+    saving = session
     session.logFile = await writeLogFiles(for: session)?.path
     do { try store.save(session) } catch { lastError = "Could not save repro: \(error.localizedDescription)" }
     sessions.removeAll { $0.id == session.id }
     sessions.insert(session, at: 0)
+    saving = nil
     finishing.remove(session.id)
     resume(session.id, with: session)
     onSaved?(session)
@@ -719,7 +723,11 @@ final class ReproRecorder: ObservableObject {
   // MARK: Library
 
   /// The in-progress repro while recording, otherwise the saved one.
-  func current(_ id: UUID) -> ReproSession? { session?.id == id ? session : sessions.first { $0.id == id } }
+  func current(_ id: UUID) -> ReproSession? {
+    if session?.id == id { return session }
+    if saving?.id == id { return saving }
+    return sessions.first { $0.id == id }
+  }
 
   /// Finds a repro by id, unique id prefix, "latest", or "active".
   func resolve(_ query: String?) throws -> ReproSession {
@@ -729,10 +737,10 @@ final class ReproRecorder: ObservableObject {
       return session
     }
     if value == "latest" || value == "last" || value.isEmpty {
-      guard let latest = session ?? sessions.first else { throw StackControlError.notFound("No repros yet. Start one with start_repro_recording.") }
+      guard let latest = session ?? saving ?? sessions.first else { throw StackControlError.notFound("No repros yet. Start one with start_repro_recording.") }
       return latest
     }
-    let all = (session.map { [$0] } ?? []) + sessions
+    let all = [session, saving].compactMap { $0 } + sessions
     if let exact = all.first(where: { $0.id.uuidString.lowercased() == value }) { return exact }
     let matches = all.filter { $0.id.uuidString.lowercased().hasPrefix(value) || $0.title.lowercased() == value }
     if matches.count == 1 { return matches[0] }
@@ -784,6 +792,7 @@ final class ReproRecorder: ObservableObject {
 
   func delete(_ id: UUID) throws {
     guard session?.id != id else { throw StackError.message("Stop the recording before deleting this repro") }
+    guard saving?.id != id else { throw StackError.message("This repro is still being saved; try again in a moment") }
     try store.delete(id)
     sessions.removeAll { $0.id == id }
     lineCache[id] = nil
