@@ -50,13 +50,11 @@
 	<string>Cinderdeck needs screen recording permission to capture screenshots and record your screen.</string>
 	<key>SUFeedURL</key>
 	<string>https://raw.githubusercontent.com/RyanCardin15/Cinderdeck/main/appcast.xml</string>
-	<key>SUEnableInstallerLauncherService</key>
-	<true/>
 	<key>CinderdeckSignedUpdatesEnabled</key>
 	<false/>
 	<key>SUEnableAutomaticChecks</key>
-	<false/>
+	<true/>
 	<key>SUAutomaticallyUpdate</key>
-	<false/>
+	<true/>
 </dict>
 </plist>

@@ -93,6 +93,16 @@ cinderdeck stacks setup-agents --print
 
 Use the filename without `.toml` as the stack ID. `cinderdeck mcp` exposes the same controls over MCP stdio. Agent setup changes client configuration only when you run the setup command. Use `cinderdeck stacks agent-help` for the full command reference and agent instructions.
 
+## Install
+
+Requires macOS 13 or later. Download `Cinderdeck-v….dmg` from [Releases](https://github.com/RyanCardin15/Cinderdeck/releases) and drag Cinderdeck to Applications, or run:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/RyanCardin15/Cinderdeck/main/install.sh | bash
+```
+
+Cinderdeck then updates itself. It checks for new versions daily, downloads them in the background, and installs them when you quit, or right away from **Preferences → About → Restart to Update**. **Check for Updates** and **Download & Install** are in Preferences too, and automatic checks and downloads can be turned off in Preferences → General. If macOS says it can’t verify a downloaded release, open System Settings → Privacy & Security and choose **Open Anyway**.
+
 ## Build Cinderdeck
 
 Requires macOS 13 or later and **Xcode 26.2 or later** to build the current Swift source. Open `Cinderdeck.xcodeproj` and select the **Cinderdeck** scheme, or use:
@@ -107,7 +117,7 @@ xcodebuild -project Cinderdeck.xcodeproj -scheme Cinderdeck \
 open '.build/development/Build/Products/Debug/Cinderdeck Debug.app'
 ```
 
-For a signed app in `/Applications`, testing, and release packaging, see [the build guide](docs/BUILD.md). Cinderdeck starts its own version line at **1.0.0 (200)**. This source release does not claim Snapzy’s downloads, Homebrew package, notarization, or update signatures. Automatic updates stay off until Cinderdeck’s own signed release feed is configured; **Check for Updates** opens this repository’s releases.
+For a signed app in `/Applications`, testing, and release packaging, see [the build guide](docs/BUILD.md). Cinderdeck starts its own version line at **1.0.0 (200)** and does not use Snapzy’s downloads, Homebrew package, notarization, or update signatures. Debug builds never update themselves; release builds follow Cinderdeck’s signed feed. See [releases](docs/RELEASES.md).
 
 ## Coming from the customized Snapzy build
 

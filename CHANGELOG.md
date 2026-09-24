@@ -1,6 +1,6 @@
 # Cinderdeck changelog
 
-## 1.0.0 — 2026-09-23
+## [1.0.0] - 2026-09-23
 
 - Establish Cinderdeck as an independent native macOS development application, forked from Snapzy.
 - Configure arbitrary project folders and commands as stacks, with service dependencies, readiness checks, logs, ports, crash recovery, and Git workflows.

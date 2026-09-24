@@ -11,7 +11,7 @@
 # Usage:
 #   export SPARKLE_PRIVATE_KEY_FILE=~/path/to/sparkle_private_key.pem
 #
-#   ./scripts/test-update-local.sh test-current   # All self-signed (expect error 4005)
+#   ./scripts/test-update-local.sh test-current   # All self-signed, like the release workflow
 #   ./scripts/test-update-local.sh test-hybrid     # Hybrid signing (expect success)
 #   ./scripts/test-update-local.sh clean           # Remove test artifacts
 #
@@ -77,6 +77,9 @@ check_prereqs() {
     exit 1
   fi
   echo "  ✅ EdDSA key file found"
+  # Test builds must trust the key that signs the test DMG.
+  TEST_PUBLIC_KEY=$(swift "$PROJECT_DIR/scripts/sparkle-key-tool.swift" public-key < "$SPARKLE_PRIVATE_KEY_FILE")
+  echo "  ✅ Test builds will trust SUPublicEDKey $TEST_PUBLIC_KEY"
 
   # Check sign_update
   SIGN_UPDATE=$(find_sign_update)
@@ -131,6 +134,11 @@ patch_info_plist() {
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$plist"
   /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $build" "$plist"
   /usr/libexec/PlistBuddy -c "Set :SUFeedURL $feed_url" "$plist"
+  # Cinderdeck only starts its updater for builds with signed updates switched on.
+  /usr/libexec/PlistBuddy -c "Delete :SUPublicEDKey" "$plist" 2>/dev/null || true
+  /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string $TEST_PUBLIC_KEY" "$plist"
+  /usr/libexec/PlistBuddy -c "Delete :CinderdeckSignedUpdatesEnabled" "$plist" 2>/dev/null || true
+  /usr/libexec/PlistBuddy -c "Add :CinderdeckSignedUpdatesEnabled bool true" "$plist"
 }
 
 sign_sparkle_selfsigned() {
@@ -414,7 +422,7 @@ run_test() {
   local mode="$1"  # "current" or "hybrid"
   local mode_label
   if [ "$mode" = "current" ]; then
-    mode_label="ALL SELF-SIGNED (should reproduce error 4005)"
+    mode_label="ALL SELF-SIGNED, like the release workflow (should work)"
   else
     mode_label="HYBRID — Sparkle ad-hoc + main self-signed (should work)"
   fi
@@ -449,14 +457,10 @@ run_test() {
   echo "║  Steps:                                                  ║"
   echo "║  1. Open Cinderdeck from /Applications                      ║"
   echo "║  2. Click menu bar icon → Preferences → About           ║"
-  echo "║  3. Click 'Check for Updates'                            ║"
+  echo "║  3. Click 'Check for Updates', then 'Download & Install' ║"
   echo "║  4. Observe: does the update install or error?           ║"
   echo "║                                                          ║"
-  if [ "$mode" = "current" ]; then
-  echo "║  Expected: ❌ Error 4005 (XPC connection invalidated)   ║"
-  else
-  echo "║  Expected: ✅ Update installs successfully              ║"
-  fi
+  echo "║  Expected: ✅ Update installs and Cinderdeck relaunches ║"
   echo "║                                                          ║"
   echo "║  Press Ctrl+C to stop the server when done.             ║"
   echo "╚══════════════════════════════════════════════════════════╝"
@@ -560,7 +564,7 @@ case "$cmd" in
     echo "  SPARKLE_PRIVATE_KEY_FILE   Path to Sparkle EdDSA private key (required)"
     echo ""
     echo "Commands:"
-    echo "  test-current   Sign everything with self-signed cert (expect error 4005)"
+    echo "  test-current   Sign everything with self-signed cert, like the release workflow"
     echo "  test-hybrid    Sparkle helpers ad-hoc + main app self-signed (expect success)"
     echo "  test-channel   Stable + beta appcast items; verify channel filtering"
     echo "  clean          Remove test artifacts, stop server, reset channel pref"
@@ -568,7 +572,7 @@ case "$cmd" in
     echo "Test flow:"
     echo "  1. export SPARKLE_PRIVATE_KEY_FILE=~/path/to/key"
     echo "  2. ./scripts/test-update-local.sh test-current"
-    echo "     → Open app → Check for Updates → observe error 4005"
+    echo "     → Open app → Check for Updates → Download & Install → relaunches as v$V2_VERSION"
     echo "  3. ./scripts/test-update-local.sh test-hybrid"
     echo "     → Open app → Check for Updates → observe successful update"
     ;;

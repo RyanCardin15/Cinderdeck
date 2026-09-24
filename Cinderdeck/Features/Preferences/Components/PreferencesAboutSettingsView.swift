@@ -6,15 +6,11 @@
 //
 
 import AppKit
-import Sparkle
 import SwiftUI
 
 struct AboutSettingsView: View {
   @AppStorage(PreferencesKeys.updateChannel) private var updateChannel: String = UpdateChannel.stable.rawValue
-
-  private var updater: SPUUpdater {
-    UpdaterManager.shared.updater
-  }
+  @ObservedObject private var updates = UpdaterManager.shared
 
   private var appVersion: String {
     let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -143,7 +139,7 @@ struct AboutSettingsView: View {
 
   private var versionAndSupportCard: some View {
     VStack(spacing: 0) {
-      // App version + Check for Updates action
+      // App version + last update check
       HStack(alignment: .center) {
         VStack(alignment: .leading, spacing: 3) {
           Text(L10n.PreferencesAbout.appVersion)
@@ -155,7 +151,7 @@ struct AboutSettingsView: View {
               .font(.system(size: 11, weight: .regular))
               .foregroundStyle(Color.secondary)
 
-            if let lastCheck = updater.lastUpdateCheckDate {
+            if let lastCheck = updates.lastUpdateCheckDate {
               Text("•")
                 .font(.system(size: 10))
                 .foregroundStyle(Color.secondary.opacity(0.5))
@@ -166,34 +162,24 @@ struct AboutSettingsView: View {
               }
               .font(.system(size: 11, weight: .regular))
               .foregroundStyle(Color.secondary)
+              .help("\(L10n.PreferencesAbout.checkedLabel): \(lastCheck.formatted(date: .abbreviated, time: .shortened))")
             }
           }
         }
 
         Spacer()
-
-        Button(action: {
-          UpdaterManager.shared.checkForUpdates()
-        }) {
-          Text(L10n.PreferencesAbout.checkForUpdates)
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.regular)
-        .help(updater.lastUpdateCheckDate
-          .map { "\(L10n.PreferencesAbout.checkedLabel): \($0.formatted(date: .abbreviated, time: .shortened))" } ??
-          L10n.PreferencesAbout.checkForUpdates)
       }
       .padding(.horizontal, 16)
       .padding(.vertical, 12)
 
       divider
 
-      if !UpdaterManager.automaticUpdatesAvailable {
-        Text("Updates are available from Cinderdeck’s GitHub releases. Automatic updates will be enabled when signed releases are configured.")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .padding(16)
-      }
+      // Update status: Check for Updates, Download & Install, Restart to Update
+      PreferencesSoftwareUpdateView()
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+
+      divider
 
       // Update Channel
       HStack(alignment: .center) {
@@ -207,7 +193,7 @@ struct AboutSettingsView: View {
           Text(L10n.PreferencesAbout.updateChannelStable).tag(UpdateChannel.stable.rawValue)
           Text(L10n.PreferencesAbout.updateChannelBeta).tag(UpdateChannel.beta.rawValue)
         }
-        .disabled(!UpdaterManager.automaticUpdatesAvailable)
+        .disabled(updates.status == .unavailable)
         .pickerStyle(.menu)
         .labelsHidden()
         .fixedSize()
@@ -257,7 +243,7 @@ struct AboutSettingsView: View {
     .cardContainer(maxWidth: 480)
     .onChange(of: updateChannel) { _ in
       CinderdeckConfigurationSyncCoordinator.shared.scheduleSync(reason: .explicitChange)
-      UpdaterManager.shared.checkForUpdates()
+      updates.checkForUpdatesInPreferences()
     }
   }
 
