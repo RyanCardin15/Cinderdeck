@@ -15,13 +15,13 @@ nonisolated enum ReproLogLevel: String, Codable, CaseIterable, Comparable, Senda
 
   // Word-boundary matches keep "terror" or "errorless" identifiers from counting.
   private static let errorPattern = try! NSRegularExpression(
-    pattern: #"\b(error|errors|err|fatal|panic|panicked|exception|traceback|uncaught|unhandled|failed|failure|failing|segmentation fault|critical|crit|emerg|alert)\b|✖|✗|❌"#,
+    pattern: #"\b(error|errors|err|fatal|panic|panicked|exception|traceback|uncaught|unhandled|fail|failed|failure|failing|segmentation fault|critical|crit|emerg|alert)\b|✖|✗|❌"#,
     options: [.caseInsensitive])
   /// TypeError, NullPointerException, ECONNREFUSED-style names.
   private static let errorNamePattern = try! NSRegularExpression(
     pattern: #"\b[A-Z][A-Za-z0-9]*(Error|Exception)\b|\bE(CONNREFUSED|CONNRESET|ADDRINUSE|ACCES|NOENT|PIPE|TIMEDOUT)\b"#, options: [])
   private static let benignErrorPattern = try! NSRegularExpression(
-    pattern: #"\b(0|no|zero|without) (errors?|failures?|failed)\b|\berrors?: ?0\b|\bfailed: ?0\b|\b0 failed\b"#,
+    pattern: #"\b(0|no|zero|without) (errors?|failures?|failed|fail)\b|\berrors?: ?0\b|\bfail(ed)?: ?0\b"#,
     options: [.caseInsensitive])
   private static let warningPattern = try! NSRegularExpression(
     pattern: #"\b(warn|warning|warnings|deprecated|deprecation|retrying|timeout|timed out)\b|⚠"#, options: [.caseInsensitive])
@@ -29,6 +29,9 @@ nonisolated enum ReproLogLevel: String, Codable, CaseIterable, Comparable, Senda
     pattern: #"^\W{0,3}(debug|trace|verbose)\b|\[(debug|trace|verbose)\]|\blevel[=:]"?(debug|trace)\b"#, options: [.caseInsensitive])
   private static let httpPattern = try! NSRegularExpression(
     pattern: #"\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b.*?\s([1-5]\d\d)\b"#, options: [])
+  /// An access log entry for a successful request: `GET /api/errors 200` or `"GET /x HTTP/1.1" 304`.
+  private static let successPattern = try! NSRegularExpression(
+    pattern: #"\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+"?(/|https?://)\S*(\s+HTTP/[\d.]+"?)?\s+[1-3]\d\d\b"#, options: [])
 
   /// Heuristic level for one plain-text log line. Explicit level tokens and HTTP
   /// status codes win over incidental words.
@@ -41,8 +44,16 @@ nonisolated enum ReproLogLevel: String, Codable, CaseIterable, Comparable, Senda
       if code >= 400 { return .warning }
     }
     if matches(debugPattern) { return .debug }
-    if matches(errorNamePattern) || (matches(errorPattern) && !matches(benignErrorPattern)) { return .error }
-    if matches(warningPattern) { return .warning }
+    // In a successful request, words in the path (/api/errors) are not problems;
+    // only what follows the status can be.
+    var words = text
+    if let success = successPattern.firstMatch(in: text, range: range), let end = Range(success.range, in: text)?.upperBound {
+      words = String(text[end...])
+    }
+    let wordsRange = NSRange(words.startIndex..., in: words)
+    func found(_ regex: NSRegularExpression) -> Bool { regex.firstMatch(in: words, range: wordsRange) != nil }
+    if found(errorNamePattern) || (found(errorPattern) && !found(benignErrorPattern)) { return .error }
+    if found(warningPattern) { return .warning }
     return .info
   }
 }

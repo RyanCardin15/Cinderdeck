@@ -85,7 +85,7 @@ If you prefer to read logs next to the video, open the log panel from **Logs →
 | **Errors** | Error lines appeared, but nothing crashed or failed |
 | **Failed** | A service crashed, a check failed, or a recorded run failed |
 
-Error lines are recognized from common patterns: `Error`, `TypeError`, `Exception`, `panic`, `Traceback`, `ECONNREFUSED`, failure symbols, and HTTP 5xx responses. Warnings include deprecations, timeouts, retries, and HTTP 4xx responses. Summaries such as "0 errors" or "0 failed" are not counted.
+Error lines are recognized from common patterns: `Error`, `TypeError`, `Exception`, `panic`, `Traceback`, `ECONNREFUSED`, test failures such as `FAIL`, failure symbols, and HTTP 5xx responses. Warnings include deprecations, timeouts, retries, and HTTP 4xx responses. Summaries such as "0 errors" or "0 failed" are not counted, and neither are words in the path of a successful request, such as `GET /api/errors 200`.
 
 ## What is saved
 

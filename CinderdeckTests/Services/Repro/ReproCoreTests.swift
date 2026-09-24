@@ -50,6 +50,21 @@ final class ReproCoreTests: XCTestCase {
     XCTAssertTrue(ReproLogLevel.warning < .error && ReproLogLevel.debug < .info)
   }
 
+  func testSuccessfulRequestsIgnoreWordsInTheirPath() {
+    XCTAssertEqual(ReproLogLevel.classify("GET /api/errors 200 3ms"), .info)
+    XCTAssertEqual(ReproLogLevel.classify("INFO:     127.0.0.1:52100 - \"GET /api/errors HTTP/1.1\" 200 OK"), .info)
+    XCTAssertEqual(ReproLogLevel.classify("GET /api/cart 200 4ms - TypeError in middleware"), .error, "Words after the status still count")
+    XCTAssertEqual(ReproLogLevel.classify("POST /api/checkout failed after 120 ms: Error: ECONNREFUSED"), .error)
+    XCTAssertEqual(ReproLogLevel.classify("Error: GET request timed out after 300 retries"), .error)
+  }
+
+  func testTestRunnerFailures() {
+    XCTAssertEqual(ReproLogLevel.classify(" FAIL  src/cart.test.ts"), .error)
+    XCTAssertEqual(ReproLogLevel.classify("--- FAIL: TestCart (0.00s)"), .error)
+    XCTAssertEqual(ReproLogLevel.classify(" 0 fail"), .info)
+    XCTAssertEqual(ReproLogLevel.classify("failover to replica-2 complete"), .info)
+  }
+
   // MARK: Clock
 
   func testClockStartsAtFirstFrameAndRemovesPauses() {
