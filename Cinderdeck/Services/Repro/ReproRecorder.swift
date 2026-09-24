@@ -225,6 +225,7 @@ final class ReproRecorder: ObservableObject {
     var session = ReproSession(id: incoming.id, title: incoming.title ?? "", origin: incoming.origin, createdAt: date, actor: incoming.actor)
     session.capture = incoming.capture
     session.scope = incoming.workspaces == nil ? "all running workspaces"
+      : incoming.workspaces?.isEmpty == true ? "workspace logs off"
       : incoming.origin == .recording ? "chosen in the recording toolbar" : "chosen for this recording"
     do {
       try store.prepare(session.id)
@@ -336,12 +337,12 @@ final class ReproRecorder: ObservableObject {
     }
   }
 
-  private func ingest(_ line: StackLogLine, source: ReproSource, clock: ReproClock) {
+  private func ingest(_ line: StackLogLine, source: ReproSource, clock: ReproClock, level fixedLevel: ReproLogLevel? = nil) {
     guard session != nil else { return }
-    loadSecrets(source.workspace)
+    if source.kind != .external { loadSecrets(source.workspace) }
     let text = redactor.redact(AnsiParser.plainText(line.text))
     let position = clock.position(at: line.timestamp)
-    let level = ReproLogLevel.classify(text)
+    let level = fixedLevel ?? ReproLogLevel.classify(text)
     let beforeVideo = line.timestamp < clock.origin
     // Mutated in place: copying the session for every line would copy its arrays too.
     let index: Int
@@ -350,7 +351,7 @@ final class ReproRecorder: ObservableObject {
     } else {
       session!.sources.append(source)
       index = session!.sources.count - 1
-      if !capturedWorkspaces.contains(source.workspace) { captureContext(source.workspace) }
+      if source.kind != .external, !capturedWorkspaces.contains(source.workspace) { captureContext(source.workspace) }
     }
     session!.sources[index].lineCount += 1
     session!.lineCount += 1
@@ -397,6 +398,45 @@ final class ReproRecorder: ObservableObject {
     guard let session else { return }
     lastSave = Date()
     do { try store.save(session) } catch { lastError = "Could not save repro: \(error.localizedDescription)" }
+  }
+
+  // MARK: Agent output
+
+  /// A line an agent adds itself, such as browser console output or a test runner's progress.
+  struct ExternalLine: Sendable {
+    var text: String
+    var at: Date?
+    var level: ReproLogLevel?
+  }
+
+  /// Most lines one call may add; longer lines are cut.
+  nonisolated static let externalBatchLimit = 1000
+  nonisolated static let externalLineLimit = 8000
+
+  /// Adds lines from outside Cinderdeck to the recording under `source` (for example "browser"),
+  /// on the same timeline as workspace output. Returns how many lines were added.
+  @discardableResult
+  func appendExternal(_ lines: [ExternalLine], source name: String) throws -> Int {
+    guard session != nil, let clock, !stopRequested else { throw StackError.message("No repro is recording") }
+    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    let label = trimmed.isEmpty ? "agent" : String(trimmed.prefix(40))
+    guard lines.count <= Self.externalBatchLimit else {
+      throw StackError.message("Add at most \(Self.externalBatchLimit) lines per call")
+    }
+    let source = ReproSource(id: "external/\(label)", kind: .external, workspace: "", workspaceName: label, name: label)
+    let now = Date()
+    let earliest = (session?.createdAt ?? now).addingTimeInterval(-Self.preRoll)
+    var added = 0
+    for line in lines {
+      let text = String(line.text.prefix(Self.externalLineLimit))
+      guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+      // Timestamps from another clock are kept within the recording.
+      let at = min(max(line.at ?? now, earliest), now)
+      ingest(StackLogLine(service: label, text: text, timestamp: at), source: source, clock: clock, level: line.level)
+      added += 1
+    }
+    flush()
+    return added
   }
 
   // MARK: Markers

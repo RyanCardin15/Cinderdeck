@@ -45,12 +45,14 @@ nonisolated enum StackMCPServer {
   private static let reproTime = property("string", "Seconds or mm:ss.sss on the video, or first_error, last_error, end, marker:<label>")
 
   private static let reproTools: [Tool] = [
-    Tool(name: "start_repro_recording", description: "Record the screen while capturing workspace service and task output on the same timeline, for reproducing bugs and automated UI testing. Records the main display by default, or one app window. The user sees floating controls and can stop it. To record a test run, pass workspace plus task or workflow: recording starts, the run starts, step results become markers, and recording stops shortly after the run ends. Returns the repro id immediately.",
+    Tool(name: "start_repro_recording", description: "Record the screen while capturing workspace service and task output on the same timeline, for reproducing bugs and automated UI testing. Records the main display by default, or one window (window_id from list_repro_windows is exact; window matches app name or title). A recorded window is followed if it moves, and its app's menus and dropdowns are included. The user sees floating controls and can stop it. To record a test run, pass workspace plus task or workflow: recording starts, the run starts, step results become markers, and recording stops shortly after the run ends. Returns the repro id immediately.",
       properties: ["title": property("string", "What is being reproduced or tested"),
         "workspace": property("string", "Workspace id or name. Limits captured output to it; required with task or workflow"),
         "workspaces": property("array", "Capture output only from these workspaces (default: every workspace with output)", items: "string"),
+        "logs": property("boolean", "false records a plain video with no workspace output; your markers and add_repro_logs lines are still kept (default true)"),
         "task": property("string", "Run this configured task while recording"), "workflow": property("string", "Run this configured workflow while recording"),
-        "window": property("string", "Record one window: application name or window title, e.g. Safari or \"localhost:3000\""),
+        "window": property("string", "Record one window: application name or window title, e.g. Safari or \"localhost:3000\". The frontmost match wins"),
+        "window_id": property("number", "Record exactly this window, by id from list_repro_windows"),
         "display": property("string", "\"main\" (default) or a 1-based display number"),
         "max_seconds": property("number", "Stop automatically after this many seconds (default 300, max 3600)"),
         "system_audio": property("boolean", "Also record system audio (default false)"),
@@ -61,6 +63,14 @@ nonisolated enum StackMCPServer {
         "detail": property("string", "Optional detail, e.g. what you observed"),
         "outcome": property("string", "Check result; omit for a plain step marker", values: ["pass", "fail", "info"])],
       required: ["label"], readOnly: false),
+    Tool(name: "list_repro_windows", description: "Windows that can be recorded, frontmost first, with id, app, title, frame, display, and pid. Pass an id to start_repro_recording as window_id to record exactly that window.",
+      properties: ["query": property("string", "Only windows whose app or title contains this text")], required: [], readOnly: true),
+    Tool(name: "add_repro_logs", description: "Add your own output to the recording's log on the video timeline, for example browser console messages, failed network requests, or test runner output. Lines that look like errors count toward the verdict like workspace output.",
+      properties: ["lines": property("array", "Lines to add, in order. Each is stamped with the current moment of the video", items: "string"),
+        "text": property("string", "Alternatively, text to add; each line becomes a log line"),
+        "source": property("string", "Source name shown in the log, e.g. browser or console (default agent)"),
+        "level": property("string", "Level for every line; by default it is detected from the text", values: ["debug", "info", "warning", "error"])],
+      required: [], readOnly: false),
     Tool(name: "stop_repro_recording", description: "Stop the repro you started and save it. Returns the verdict (clean, errors, failed), error highlights with video timestamps, markers, and run results. Safe to call again: returns the saved repro.",
       properties: ["repro": repro], required: [], readOnly: false),
     Tool(name: "cancel_repro_recording", description: "Stop and discard the recording you started, deleting its video and captured output.",
@@ -256,7 +266,7 @@ nonisolated enum StackMCPServer {
     FileHandle.standardOutput.write(data)
   }
 
-  private static let nonDestructive: Set<String> = ["claim_stack", "start_repro_recording", "mark_repro", "stop_repro_recording",
+  private static let nonDestructive: Set<String> = ["claim_stack", "start_repro_recording", "mark_repro", "add_repro_logs", "stop_repro_recording",
     "export_repro", "open_repro"]
 
   private static func describe(_ tool: Tool) -> JSONValue {
@@ -354,6 +364,8 @@ nonisolated enum StackMCPServer {
     case "stacks_guide": return ("local.guide", [:], 5)
     case "start_repro_recording": return ("repro.start", params, 90)
     case "mark_repro": return ("repro.mark", params, 30)
+    case "list_repro_windows": return ("repro.windows", params, 30)
+    case "add_repro_logs": return ("repro.log", params, 30)
     case "stop_repro_recording": return ("repro.stop", params, 240)
     case "cancel_repro_recording": return ("repro.cancel", params, 60)
     case "repro_status": return ("repro.status", params, 30)

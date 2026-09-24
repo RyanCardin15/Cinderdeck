@@ -35,6 +35,9 @@ jobs:
           bash -n scripts/create-signing-cert.sh scripts/install-local.sh
           python3 scripts/tests/test_local_signing.py
 
+      - name: Verify agent skill copies
+        run: scripts/sync-agent-skills.sh --check
+
       - name: Run tests
         env:
           # The following tests crash on GitHub Actions macOS runners (Swift concurrency /

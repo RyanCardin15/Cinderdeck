@@ -27,7 +27,8 @@ nonisolated enum StackAgentGuide {
   These tools share the PR window's saved views and do not post to GitHub. Built-in tabs are read-only except selection.
   Repros record the screen while capturing every service and task log on the video's timeline. Use them to reproduce \
   a bug or to test UI end to end: start_repro_recording (optionally with workspace + task/workflow to record a run; \
-  window="Safari" records one app) → drive the app → mark_repro at each step, with outcome pass/fail for checks → \
+  list_repro_windows then window_id=<id> records exactly one window, followed if it moves; logs=false records no workspace output) → \
+  drive the app → mark_repro at each step, with outcome pass/fail for checks, and add_repro_logs for browser console output → \
   stop_repro_recording (or wait_for_repro for a run). The result has a verdict (clean, errors, failed) and error highlights \
   with video timestamps, and logFile: a plain-text log with every line stamped with its video time. Then use repro_frame to see the screen at first_error or any marker (returns images plus the \
   log lines just before), repro_logs to read output around a moment, and export_repro to hand the user a bundle. \
@@ -95,6 +96,11 @@ nonisolated enum StackAgentGuide {
     A repro is a screen recording plus all workspace output captured on the video's timeline, with markers for service \
     starts, crashes, workflow steps, and your own checks. Use it to reproduce bugs and to test UI changes end to end.
     - Record: `start_repro_recording` (MCP) or `\(command) repro start --title "Checkout" [--window Safari] [--max 120]`.
+    - Pick a window exactly: `list_repro_windows` / `\(command) repro windows`, then `window_id` / `--window-id <id>`. The capture follows the window \
+      if it moves and includes its app's menus and dropdowns. A headless browser has no window and cannot be recorded; run it headed.
+    - Choose logs: `workspace`/`workspaces` (CLI `--workspace a,b`), all running workspaces by default, or `logs: false` / `--no-logs` for none.
+    - Add your own output, such as browser console messages: `add_repro_logs` or `\(command) repro append "text" --source browser` \
+      (pipe lines on stdin to stream them).
     - Record a test run: pass `workspace` and `task` or `workflow`, or `\(command) repro run <workspace> <workflow> --workflow --wait` \
       (exit status 1 when a service crashed, a check failed, or the run failed).
     - While recording, mark each step: `mark_repro` with `label`, and `outcome` pass/fail for checks; CLI `repro mark "Total shows $42" --pass`.

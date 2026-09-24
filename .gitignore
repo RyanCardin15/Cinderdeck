@@ -1,5 +1,8 @@
-.claude
-.agents
+# Local agent state, except the shared skills (copied from skills/ by scripts/sync-agent-skills.sh)
+.claude/*
+!.claude/skills/
+.agents/*
+!.agents/skills/
 .agent1
 
 sparkle_private_key.pem

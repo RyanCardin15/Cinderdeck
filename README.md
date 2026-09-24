@@ -48,6 +48,8 @@ cinderdeck repro run shop e2e --workflow --wait   # record a workflow; exits 1 i
 cinderdeck repro frame --at first_error           # the video frame at the first error, with nearby logs
 ```
 
+Agents can record exactly one window (`cinderdeck repro windows`, then `--window-id`), record with or without workspace logs (`--no-logs`), and add browser console output to the log (`cinderdeck repro append`). The [`cinderdeck-record-session`](skills/cinderdeck-record-session/SKILL.md) and [`cinderdeck-review-recording`](skills/cinderdeck-review-recording/SKILL.md) skills teach Claude Code, Codex, and Cursor how to do this. Agents pick them up automatically in a clone of this repository, and you can link them into your own projects.
+
 [Read the recordings guide](docs/REPROS.md).
 
 ## A place for the whole project

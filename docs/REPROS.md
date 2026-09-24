@@ -123,12 +123,35 @@ Pass `--zip` (CLI) or `zip: true` (MCP) to create an archive instead of a folder
 
 Repros are available through the same MCP server and CLI as Workspaces. Reload the tool list in connected clients. Every recording shows the floating controls, so the person at the Mac can see it and stop it.
 
+### Agent skills
+
+Two skills teach Claude Code, Codex, Cursor, and other agents to use recordings well:
+
+| Skill | Use |
+| --- | --- |
+| [`cinderdeck-record-session`](../skills/cinderdeck-record-session/SKILL.md) | Record a browser or app session: pick the window, a new window, an automation browser, or a display; choose workspace logs or none; mark each action; add browser console output; review the result. Explains why headless browsers can't be recorded and what to do instead. |
+| [`cinderdeck-review-recording`](../skills/cinderdeck-review-recording/SKILL.md) | Investigate a recording, yours or the user's: verdict, frames at errors and marks, logs around a moment, and an export. |
+
+In a clone of this repository, agents find them automatically: Claude Code reads `.claude/skills/`, Codex reads `.agents/skills/`, and Cursor reads both. To use them in your other projects, link them into your user skills folders:
+
+```sh
+mkdir -p ~/.claude/skills ~/.agents/skills
+for skill in "$PWD"/skills/*/; do
+  ln -s "${skill%/}" ~/.claude/skills/   # Claude Code
+  ln -s "${skill%/}" ~/.agents/skills/   # Codex and Cursor
+done
+```
+
+`skills/` is the source. After editing a skill there, run `scripts/sync-agent-skills.sh` to update the copies; CI checks that they match.
+
 ### MCP tools
 
 | Tool | Purpose |
 | --- | --- |
-| `start_repro_recording` | Start recording. Optional: `title`, `workspace`/`workspaces` to scope output, `window` (app name or title) or `display`, `max_seconds`, `system_audio`, `note`. Pass `workspace` with `task` or `workflow` to record a run. |
+| `list_repro_windows` | Windows that can be recorded, frontmost first, with `id`, app, title, frame, display, and pid. Optional `query` filters by app or title. |
+| `start_repro_recording` | Start recording. Optional: `title`, `workspace`/`workspaces` to scope output or `logs: false` for none, `window_id` (from `list_repro_windows`), `window` (app name or title), or `display`, `max_seconds`, `system_audio`, `note`. Pass `workspace` with `task` or `workflow` to record a run. |
 | `mark_repro` | Add a marker now. `outcome: pass`/`fail` records a check; failed checks make the verdict **Failed**. |
+| `add_repro_logs` | Add your own lines to the log now, such as browser console messages or failed requests, under a `source` name. Lines that look like errors count toward the verdict. |
 | `stop_repro_recording` | Stop and save. Returns the verdict, headline, errors with timestamps, markers, runs, and `logFile`, the path of the log file. Calling it again returns the saved repro. |
 | `wait_for_repro` | Wait for a recording that stops itself, such as a recorded run. |
 | `cancel_repro_recording` | Stop and discard. |
@@ -141,14 +164,20 @@ Repros are available through the same MCP server and CLI as Workspaces. Reload t
 | `open_repro` | Open the repro in the video editor for the user. |
 | `delete_repro` | Delete a repro. Requires the exact id. |
 
+**Recording a window.** Pick it by `window_id` from `list_repro_windows`; `window` matches an app name or title and takes the frontmost match. The recording follows the window if it moves or resizes, keeping the video size from the start. It includes the window's app, so menus, dropdowns, and sheets appear, while other apps' windows passing over it do not. A window must be visible to be recorded, so a headless browser can't be; run it headed.
+
+**Choosing logs.** By default an agent recording captures every running workspace. Pass `workspace` or `workspaces` to narrow it, or `logs: false` for a plain video. With `logs: false`, markers and lines from `add_repro_logs` are still saved.
+
 Times are seconds or `mm:ss.sss` on the video. You can also use `first_error`, `last_error`, `start`, `end`, or `marker:<label or id prefix>`. Repro ids can be shortened to a unique prefix, and `latest` is the default.
 
 ### A test loop
 
 ```text
-start_repro_recording  title="Checkout with saved card"  workspace="shop"  window="Safari"
+list_repro_windows  query="localhost:3000"
+start_repro_recording  title="Checkout with saved card"  workspace="shop"  window_id=4312
 mark_repro  label="Open /cart"
 …drive the browser…
+add_repro_logs  source="browser"  lines=["Uncaught TypeError: price is undefined"]
 mark_repro  label="Total shows $42.00"  outcome="pass"
 mark_repro  label="Pay succeeds"  outcome="fail"  detail="Spinner never finished"
 stop_repro_recording
@@ -168,13 +197,19 @@ repro_frame  times=["first_error", "end"]
 ### CLI
 
 ```sh
-cinderdeck repro start --title "Checkout" --workspace shop --window Safari --max 120
+cinderdeck repro windows localhost:3000        # ids, apps, titles; frontmost first
+cinderdeck repro start --title "Checkout" --workspace shop --window-id 4312 --max 120
 cinderdeck repro mark "Total shows \$42" --pass
+cinderdeck repro append "Uncaught TypeError: price is undefined" --source browser
 cinderdeck repro mark "Pay succeeds" --fail --detail "Spinner never finished"
 cinderdeck repro stop
 cinderdeck repro logs --around first_error --span 5 --level warning
 cinderdeck repro frame --at first_error --out ~/Desktop/failure.jpg
 cinderdeck repro export --zip
+
+# A plain video with no workspace output, and a log streamed in from elsewhere
+cinderdeck repro start --no-logs --window Safari
+tail -n 0 -F /tmp/app.log | cinderdeck repro append --source app &
 
 # Record a workflow and exit 1 if anything failed, for scripts and CI-style loops
 cinderdeck repro run shop e2e --workflow --wait
@@ -192,7 +227,7 @@ cinderdeck repro scope shop        # only Shop; also: scope running, scope off
 
 ### Socket methods
 
-For custom clients, the control socket exposes `repro.start`, `repro.stop`, `repro.cancel`, `repro.status`, `repro.mark`, `repro.list`, `repro.get`, `repro.logs`, `repro.dump`, `repro.scope`, `repro.frame`, `repro.wait`, `repro.export`, `repro.open`, and `repro.delete`, with the same parameters as the MCP tools. Frame responses include `imageBase64` while they fit within the 4 MB message limit. Every frame is also saved to disk, and its path is returned.
+For custom clients, the control socket exposes `repro.windows`, `repro.start`, `repro.stop`, `repro.cancel`, `repro.status`, `repro.mark`, `repro.log`, `repro.list`, `repro.get`, `repro.logs`, `repro.dump`, `repro.scope`, `repro.frame`, `repro.wait`, `repro.export`, `repro.open`, and `repro.delete`, with the same parameters as the MCP tools. `repro.log` also accepts `lines` as objects `{text, at, level}`, where `at` is epoch seconds or ISO 8601, to place lines that were read after the fact. Frame responses include `imageBase64` while they fit within the 4 MB message limit. Every frame is also saved to disk, and its path is returned.
 
 ## Permissions and privacy
 

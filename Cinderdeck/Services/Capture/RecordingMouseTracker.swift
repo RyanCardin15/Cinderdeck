@@ -19,7 +19,7 @@ final class RecordingMouseTracker {
     let p95IntervalMs: Double
   }
 
-  private let recordingRect: CGRect
+  private var recordingRect: CGRect
   private let samplesPerSecondValue: Int
   private let sampleInterval: TimeInterval
   private let uptimeProvider: () -> TimeInterval
@@ -61,6 +61,12 @@ final class RecordingMouseTracker {
     self.mouseLocationProvider = mouseLocationProvider
     self.mouseMonitorInstaller = mouseMonitorInstaller
     self.mouseMonitorRemover = mouseMonitorRemover
+  }
+
+  /// The capture area moved, for example with a followed window. Later samples use the new area.
+  func updateRecordingRect(_ rect: CGRect) {
+    guard rect.width > 0, rect.height > 0 else { return }
+    recordingRect = rect
   }
 
   var samplesPerSecond: Int {
