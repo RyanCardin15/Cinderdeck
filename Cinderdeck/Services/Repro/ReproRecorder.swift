@@ -84,6 +84,9 @@ final class ReproRecorder: ObservableObject {
   private var clock: ReproClock?
   private var writer: ReproLineWriter?
   private var redactor = ReproRedactor(secrets: [:])
+  /// Secret values by label, and the workspaces whose secrets were already read.
+  private var secretValues: [String: String] = [:]
+  private var secretWorkspaces = Set<String>()
   private var nextLineID = 1
   private var pending: [ReproLogLine] = []
   private var cursors: [ObjectIdentifier: Cursor] = [:]
@@ -234,6 +237,7 @@ final class ReproRecorder: ObservableObject {
     expectedRequest = incoming
     stopRequested = false
     nextLineID = 1; pending = []; retired = []; cursors = [:]; capturedWorkspaces = []; contextTasks = []; pendingLastError = nil
+    secretValues = [:]; secretWorkspaces = []; redactor = ReproRedactor(secrets: [:])
     live = Live(id: session.id, title: displayTitle(session), origin: session.origin, actor: session.actor.label, startedAt: date)
 
     // Only state changes during the recording become markers.
@@ -242,14 +246,12 @@ final class ReproRecorder: ObservableObject {
     runSteps = [:]; runStatus = [:]
     for run in runner.runs where run.status.isActive && inScope(run.workspaceID) { track(run, at: date, alreadyRunning: true) }
 
-    var secretValues: [String: String] = [:]
     for file in supervisor.files {
-      guard let definition = file.definition, inScope(file.id), supervisor.states[file.id]?.isActive == true
+      guard file.definition != nil, inScope(file.id), supervisor.states[file.id]?.isActive == true
         || runner.activeRun(file.id) != nil || incoming.workspaces != nil else { continue }
       captureContext(file.id)
-      for (variable, name) in definition.secrets { if let value = try? secrets.read(name) { secretValues[variable] = value } }
+      loadSecrets(file.id)
     }
-    redactor = ReproRedactor(secrets: secretValues)
     if let note = incoming.note, !note.isEmpty { _ = try? addMarker(label: note, kind: .note, by: incoming.actor.label) }
 
     pollTask = Task { [weak self] in
@@ -260,6 +262,21 @@ final class ReproRecorder: ObservableObject {
     }
   }
   private var expectedRequest: ReproRequest?
+
+  /// Reads a workspace's Keychain secrets the first time it appears in the
+  /// recording, so workspaces that start while recording are redacted too.
+  private func loadSecrets(_ workspace: String) {
+    guard secretWorkspaces.insert(workspace).inserted, let definition = supervisor.definition(workspace) else { return }
+    var added = false
+    for (variable, name) in definition.secrets.sorted(by: { $0.key < $1.key }) {
+      guard let value = try? secrets.read(name) else { continue }
+      // The same variable name in two workspaces can hold different values; keep both.
+      let label = (secretValues[variable] ?? value) == value ? variable : "\(workspace)/\(variable)"
+      secretValues[label] = value
+      added = true
+    }
+    if added { redactor = ReproRedactor(secrets: secretValues) }
+  }
 
   private func inScope(_ workspace: String) -> Bool {
     guard let scope = expectedRequest?.workspaces else { return true }
@@ -319,6 +336,7 @@ final class ReproRecorder: ObservableObject {
 
   private func ingest(_ line: StackLogLine, source: ReproSource, clock: ReproClock) {
     guard session != nil else { return }
+    loadSecrets(source.workspace)
     let text = redactor.redact(AnsiParser.plainText(line.text))
     let position = clock.position(at: line.timestamp)
     let level = ReproLogLevel.classify(text)
@@ -405,6 +423,7 @@ final class ReproRecorder: ObservableObject {
         let previous = phases[key]
         phases[key] = runtime.phase
         guard let previous, previous != runtime.phase else { continue }
+        loadSecrets(stack)
         let by = runtime.owner?.label
         switch runtime.phase {
         case .starting where !previous.isActive || previous == .waiting:
@@ -432,6 +451,7 @@ final class ReproRecorder: ObservableObject {
 
   private func track(_ run: WorkspaceRun, at date: Date, alreadyRunning: Bool) {
     guard session != nil else { return }
+    loadSecrets(run.workspaceID)
     let t = clock?.position(at: date).t ?? 0
     if runStatus[run.id] == nil {
       runStatus[run.id] = run.status
@@ -671,7 +691,7 @@ final class ReproRecorder: ObservableObject {
     session = nil; clock = nil; live = nil; expectedRequest = nil
     cursors = [:]; retired = []; pending = []; phases = [:]; runSteps = [:]; runStatus = [:]
     stopRequested = false; lastFirstFrame = nil; pendingLastError = nil
-    redactor = ReproRedactor(secrets: [:])
+    redactor = ReproRedactor(secrets: [:]); secretValues = [:]; secretWorkspaces = []
   }
 
   private func resume(_ id: UUID, with session: ReproSession?) {
