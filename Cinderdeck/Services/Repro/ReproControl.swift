@@ -212,9 +212,12 @@ extension StackControlService {
       let session = try recorder.resolve(params["repro"]?.stringValue ?? "latest")
       let timeout = min(max(params["timeout"]?.doubleValue ?? 600, 1), 3600)
       let deadline = Date().addingTimeInterval(timeout)
-      while recorder.activeSessionID == session.id, Date() < deadline { try? await Task.sleep(nanoseconds: 250_000_000) }
-      guard recorder.activeSessionID != session.id else {
-        throw StackControlError(code: "wait_timeout", message: "The repro is still recording. Stop it with stop_repro_recording or wait again.")
+      // Also waits while the stopped repro's log file is written, before it joins the library.
+      while recorder.isRecordingOrSaving(session.id), Date() < deadline { try? await Task.sleep(nanoseconds: 250_000_000) }
+      guard !recorder.isRecordingOrSaving(session.id) else {
+        let saving = recorder.activeSessionID != session.id
+        throw StackControlError(code: "wait_timeout", message: saving ? "The repro is still being saved. Wait again."
+          : "The repro is still recording. Stop it with stop_repro_recording or wait again.")
       }
       guard let saved = recorder.current(session.id) else { throw StackControlError.notFound("The repro was discarded before it was saved") }
       return .object(reproPayload(saved, lines: await recorder.lines(for: saved.id)))

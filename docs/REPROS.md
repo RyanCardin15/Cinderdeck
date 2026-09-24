@@ -202,7 +202,7 @@ Recording requires Screen Recording permission for Cinderdeck. When permission i
 
 - `ReproCoreTests` covers log level classification, the video clock (first frame, pauses, stop), the log file format, workspace choices, millisecond timestamps, queries, verdicts, reports, secret redaction, storage, and the export bundle.
 - `ReproAgentAPITests` covers CLI parsing and MCP tool mapping.
-- `ReproRecorderTests` runs real services and tasks through the capture engine. It covers placing lines on the video timeline, events, redaction, the log file next to the video, the workspace choice, plain videos, and discarding empty recordings.
+- `ReproRecorderTests` runs real services and tasks through the capture engine. It covers placing lines on the video timeline, events, redaction, the log file next to the video, the workspace choice, plain videos (including for people without workspaces), discarding empty recordings, and waiting on a repro while it is being saved.
 
 ```sh
 scripts/run-tests.sh -only-testing:CinderdeckTests/ReproCoreTests \

@@ -235,6 +235,40 @@ final class ReproCoreTests: XCTestCase {
     XCTAssertEqual(ReproFormat.list(["A", "B", "C"]), "A, B, and C")
   }
 
+  func testTimestampEdgeCases() {
+    XCTAssertEqual(ReproFormat.timestamp(0.0005), "00:00.001")
+    XCTAssertEqual(ReproFormat.timestamp(59.9996), "01:00.000")
+    XCTAssertEqual(ReproFormat.timestamp(36_061.007), "10:01:01.007")
+    XCTAssertEqual(ReproFormat.timestamp(-3), "00:00.000")
+    XCTAssertEqual(ReproFormat.timestamp(.nan), "00:00.000")
+  }
+
+  func testDistinctErrorsIgnoreNumbersAndPreRoll() {
+    XCTAssertEqual(ReproSummary.errorKey("timeout after 30ms (attempt 2)"), "timeout after #ms (attempt #)")
+    XCTAssertEqual(ReproSummary.errorKey("✖ échec 42"), "✖ échec #")
+    let lines = [
+      line(1, 0, "shop/api", "Error: from before recording", offscreen: true),
+      line(2, 4, "shop/api", "Error: while paused", offscreen: true),
+      line(3, 5, "shop/api", "Error: real"),
+    ]
+    var repro = session(lines: lines)
+    repro.errorCount = 2
+    let summary = ReproSummary(session: repro, lines: lines)
+    XCTAssertEqual(summary.firstError?.text, "Error: while paused")
+    XCTAssertEqual(summary.topErrors.map(\.text), ["Error: while paused", "Error: real"])
+    repro.errorCount = 0
+    XCTAssertTrue(ReproSummary(session: repro, lines: [lines[0]]).topErrors.isEmpty, "A clean recording lists no errors")
+  }
+
+  func testTruncatedLogFileSaysWhatWasKept() {
+    var repro = session()
+    repro.lineCount = 12
+    repro.truncated = true
+    let lines = (1...10).map { line($0, Double($0), "shop/api", "line \($0)") }
+    XCTAssertTrue(ReproReport.logFile(repro, lines: lines, videoName: "v.mov")
+      .contains("Note:       Only the first 10 lines were saved; 2 later lines were counted but not saved."))
+  }
+
   func testRedactorReplacesSecretValues() {
     let redactor = ReproRedactor(secrets: ["STRIPE_KEY": "sk_test_12345", "PIN": "42"])
     XCTAssertEqual(redactor.redact("auth sk_test_12345 ok 42"), "auth [secret STRIPE_KEY] ok 42")
@@ -272,7 +306,9 @@ final class ReproCoreTests: XCTestCase {
     let second = try ReproBundleExporter.export(repro, lines: [], store: store, to: root.appendingPathComponent("out"))
     XCTAssertNotEqual(second.folder, exported.folder)
 
+    XCTAssertTrue(store.hasLines(repro.id))
     try store.delete(repro.id)
+    XCTAssertFalse(store.hasLines(repro.id))
     XCTAssertTrue(store.loadSessions().isEmpty)
   }
 }

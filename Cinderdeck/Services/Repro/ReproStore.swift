@@ -62,6 +62,11 @@ nonisolated struct ReproStore: Sendable {
     return lines.sorted { $0.t == $1.t ? $0.id < $1.id : $0.t < $1.t }
   }
 
+  /// Whether any output was written for this repro.
+  func hasLines(_ id: UUID) -> Bool {
+    ((try? FileManager.default.attributesOfItem(atPath: linesURL(id).path)[.size] as? Int) ?? 0) > 0
+  }
+
   func delete(_ id: UUID) throws {
     let url = folder(id)
     if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }

@@ -190,6 +190,43 @@ final class ReproRecorderTests: XCTestCase {
     try await until { !FileManager.default.fileExists(atPath: self.store.folder(cancelled).path) }
   }
 
+  func testStoppedReproIsNeverMissingWhileItSaves() async throws {
+    try await load("[services.api]\ncmd = \"while true; do echo tick; sleep 0.05; done\"\n")
+    await supervisor.start(stack: "shop", services: ["api"])
+    try await until { self.supervisor.runtime("shop", "api").phase == .ready }
+    events.send(.started(Date()))
+    let id = try XCTUnwrap(recorder.activeSessionID)
+    try await Task.sleep(nanoseconds: 500_000_000)
+    events.send(.stopping(Date()))
+    let video = root.appendingPathComponent("recording.mov")
+    try Data("not a real movie".utf8).write(to: video)
+    events.send(.finished(video))
+    // Agents waiting on a repro must not see a gap between recording and the library.
+    let deadline = Date().addingTimeInterval(10)
+    while !recorder.sessions.contains(where: { $0.id == id }) && Date() < deadline {
+      XCTAssertTrue(recorder.isRecordingOrSaving(id), "Neither recording nor saved")
+      try await Task.sleep(nanoseconds: 1_000_000)
+    }
+    XCTAssertFalse(recorder.isRecordingOrSaving(id))
+    let saved = await recorder.waitUntilSaved(id)
+    XCTAssertEqual(saved?.id, id)
+  }
+
+  func testPeopleWithoutWorkspacesGetPlainVideos() async throws {
+    XCTAssertTrue(supervisor.files.isEmpty)
+    events.send(.started(Date()))
+    XCTAssertNil(recorder.activeSessionID, "No capture runs behind ordinary recordings without workspaces")
+    XCTAssertNil(recorder.live, "The recording bar shows no logs indicator")
+    events.send(.cancelled)
+
+    let request = ReproRequest(title: "Agent check", origin: .agent, actor: StackActor(kind: .agent, name: "Codex"))
+    recorder.expect(request)
+    events.send(.started(Date()))
+    XCTAssertEqual(recorder.activeSessionID, request.id, "Explicit requests still record")
+    let stopped = try await stopRecording()
+    XCTAssertEqual(stopped?.title, "Agent check")
+  }
+
   func testDisabledPreferenceSkipsOrdinaryRecordings() async throws {
     let defaults = UserDefaults(suiteName: "ReproTests-off-\(UUID())")!
     defaults.set("off", forKey: PreferencesKeys.reproLogScope)

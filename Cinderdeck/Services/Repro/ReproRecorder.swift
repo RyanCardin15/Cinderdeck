@@ -98,6 +98,11 @@ final class ReproRecorder: ObservableObject {
   private var lastSave = Date.distantPast
   private var lastFirstFrame: Date?
   private var waiters: [UUID: [CheckedContinuation<ReproSession?, Never>]] = [:]
+  /// Repros that stopped and are being saved or discarded. They are neither
+  /// recording nor in `sessions` yet, so waiters must not give up on them.
+  private var finishing = Set<UUID>()
+  /// The latest error line, published once per poll rather than per line.
+  private var pendingLastError: String?
   private var lineCache: [UUID: [ReproLogLine]] = [:]
   private var lineCacheOrder: [UUID] = []
 
@@ -129,6 +134,12 @@ final class ReproRecorder: ObservableObject {
     guard !started else { return }
     started = true
     var loaded = store.loadSessions()
+    // An ordinary recording that was interrupted before any output arrived is just a video.
+    loaded.removeAll { session in
+      guard session.status.isActive, session.origin == .recording, session.markers.isEmpty, !store.hasLines(session.id) else { return false }
+      try? store.delete(session.id)
+      return true
+    }
     for index in loaded.indices where loaded[index].status.isActive {
       loaded[index].status = .failed
       loaded[index].detail = "Cinderdeck closed while this was recording. Captured output was kept."
@@ -198,7 +209,8 @@ final class ReproRecorder: ObservableObject {
     scope = ReproLogScope.load(from: defaults)
     // Explicit requests (agents, Workspaces) choose their own workspaces; ordinary
     // recordings follow the toolbar choice, and "off" means a plain video.
-    guard session == nil, expected != nil || !scope.isOff else { return }
+    // People without workspaces get plain videos, with no capture running behind them.
+    guard session == nil, expected != nil || (!scope.isOff && !supervisor.files.isEmpty) else { return }
     let incoming = expected ?? ReproRequest(origin: .recording, actor: .user,
       workspaces: scope == .running ? nil : Set(scope.workspaces))
     var clock = ReproClock(start: date)
@@ -221,7 +233,7 @@ final class ReproRecorder: ObservableObject {
     self.clock = clock
     expectedRequest = incoming
     stopRequested = false
-    nextLineID = 1; pending = []; retired = []; cursors = [:]; capturedWorkspaces = []; contextTasks = []
+    nextLineID = 1; pending = []; retired = []; cursors = [:]; capturedWorkspaces = []; contextTasks = []; pendingLastError = nil
     live = Live(id: session.id, title: displayTitle(session), origin: session.origin, actor: session.actor.label, startedAt: date)
 
     // Only state changes during the recording become markers.
@@ -306,36 +318,39 @@ final class ReproRecorder: ObservableObject {
   }
 
   private func ingest(_ line: StackLogLine, source: ReproSource, clock: ReproClock) {
-    guard var session else { return }
+    guard session != nil else { return }
     let text = redactor.redact(AnsiParser.plainText(line.text))
     let position = clock.position(at: line.timestamp)
     let level = ReproLogLevel.classify(text)
     let beforeVideo = line.timestamp < clock.origin
-    if !session.sources.contains(where: { $0.id == source.id }) {
-      session.sources.append(source)
+    // Mutated in place: copying the session for every line would copy its arrays too.
+    let index: Int
+    if let existing = session!.sources.firstIndex(where: { $0.id == source.id }) {
+      index = existing
+    } else {
+      session!.sources.append(source)
+      index = session!.sources.count - 1
       if !capturedWorkspaces.contains(source.workspace) { captureContext(source.workspace) }
     }
-    let index = session.sources.firstIndex { $0.id == source.id }!
-    session.sources[index].lineCount += 1
-    session.lineCount += 1
+    session!.sources[index].lineCount += 1
+    session!.lineCount += 1
     // Pre-roll output is context; it does not count against the recording.
     if !beforeVideo {
-      if level == .error { session.sources[index].errorCount += 1; session.errorCount += 1 }
-      if level == .warning { session.sources[index].warningCount += 1; session.warningCount += 1 }
+      if level == .error { session!.sources[index].errorCount += 1; session!.errorCount += 1 }
+      if level == .warning { session!.sources[index].warningCount += 1; session!.warningCount += 1 }
     }
-    if session.lineCount > Self.lineLimit {
-      session.truncated = true
+    if session!.lineCount > Self.lineLimit {
+      session!.truncated = true
     } else {
       let entry = ReproLogLine(id: nextLineID, t: position.t, at: line.timestamp, source: source.id, text: text, level: level,
         offscreen: position.visible ? nil : true)
       nextLineID += 1
       pending.append(entry)
       if level == .error && !beforeVideo {
-        if session.firstErrorLine == nil { session.firstErrorLine = entry.id }
-        live?.lastError = String(text.prefix(160))
+        if session!.firstErrorLine == nil { session!.firstErrorLine = entry.id }
+        pendingLastError = String(text.prefix(160))
       }
     }
-    self.session = session
   }
 
   private func flush() {
@@ -352,6 +367,7 @@ final class ReproRecorder: ObservableObject {
       updated.sources = session.sources.count
       updated.markers = session.markers.count
       updated.workspaces = session.workspaceNames
+      if let error = pendingLastError { updated.lastError = error; pendingLastError = nil }
       if updated != live { live = updated }
     }
     if Date().timeIntervalSince(lastSave) > 5 { save() }
@@ -544,10 +560,11 @@ final class ReproRecorder: ObservableObject {
   }
 
   private func finalize(video url: URL) async {
-    guard session != nil else { return }
+    guard let id = session?.id else { return }
+    finishing.insert(id)
     live?.isFinalizing = true
     await settleCapture()
-    guard var session else { return }
+    guard var session else { finishing.remove(id); resume(id, with: nil); return }
     let keepEmpty = session.origin != .recording
     session.duration = clock?.duration ?? 0
     if let seconds = try? await AVURLAsset(url: url).load(.duration).seconds, seconds.isFinite, seconds > 0 { session.duration = seconds }
@@ -562,6 +579,7 @@ final class ReproRecorder: ObservableObject {
     reset()
     guard keepEmpty || session.lineCount > 0 || !session.runs.isEmpty else {
       try? store.delete(session.id)
+      finishing.remove(session.id)
       resume(session.id, with: nil)
       return
     }
@@ -569,6 +587,7 @@ final class ReproRecorder: ObservableObject {
     do { try store.save(session) } catch { lastError = "Could not save repro: \(error.localizedDescription)" }
     sessions.removeAll { $0.id == session.id }
     sessions.insert(session, at: 0)
+    finishing.remove(session.id)
     resume(session.id, with: session)
     onSaved?(session)
   }
@@ -639,17 +658,19 @@ final class ReproRecorder: ObservableObject {
   }
 
   private func discard() async {
-    await settleCapture()
     guard let id = session?.id else { return }
+    finishing.insert(id)
+    await settleCapture()
     reset()
     try? store.delete(id)
+    finishing.remove(id)
     resume(id, with: nil)
   }
 
   private func reset() {
     session = nil; clock = nil; live = nil; expectedRequest = nil
     cursors = [:]; retired = []; pending = []; phases = [:]; runSteps = [:]; runStatus = [:]
-    stopRequested = false; lastFirstFrame = nil
+    stopRequested = false; lastFirstFrame = nil; pendingLastError = nil
     redactor = ReproRedactor(secrets: [:])
   }
 
@@ -659,9 +680,12 @@ final class ReproRecorder: ObservableObject {
 
   /// Waits for a stopped repro to be saved. Returns nil if it was discarded.
   func waitUntilSaved(_ id: UUID) async -> ReproSession? {
-    if session?.id != id { return sessions.first { $0.id == id } }
+    guard isRecordingOrSaving(id) else { return sessions.first { $0.id == id } }
     return await withCheckedContinuation { continuation in waiters[id, default: []].append(continuation) }
   }
+
+  /// True from the start of a recording until it is saved or discarded.
+  func isRecordingOrSaving(_ id: UUID) -> Bool { session?.id == id || finishing.contains(id) }
 
   private func displayTitle(_ session: ReproSession) -> String {
     if !session.title.isEmpty { return session.title }
