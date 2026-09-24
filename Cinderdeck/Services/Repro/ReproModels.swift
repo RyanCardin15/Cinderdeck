@@ -62,6 +62,9 @@ nonisolated struct ReproLogLine: Codable, Equatable, Identifiable, Sendable {
   var offscreen: Bool?
 
   var isOffscreen: Bool { offscreen == true }
+  /// Written in the seconds before the video started. Kept as context, but not
+  /// counted as an error or warning of the recording.
+  var isPreRoll: Bool { isOffscreen && t == 0 }
 }
 
 // Clock times are stored as epoch seconds with milliseconds; ISO 8601 dates
@@ -365,8 +368,14 @@ nonisolated enum ReproFormat {
     let totalMillis = Int((value * 1000).rounded())
     let hours = totalMillis / 3_600_000, minutes = (totalMillis / 60_000) % 60
     let secs = (totalMillis / 1000) % 60, millis = totalMillis % 1000
-    let base = hours > 0 ? String(format: "%d:%02d:%02d", hours, minutes, secs) : String(format: "%02d:%02d", minutes, secs)
-    return precise ? base + String(format: ".%03d", millis) : base
+    // Formatted by hand: this runs for every line of large logs, and String(format:) is slow.
+    func padded(_ value: Int, _ width: Int) -> String {
+      let digits = String(value)
+      return digits.count >= width ? digits : String(repeating: "0", count: width - digits.count) + digits
+    }
+    var text = hours > 0 ? "\(hours):\(padded(minutes, 2)):\(padded(secs, 2))" : "\(padded(minutes, 2)):\(padded(secs, 2))"
+    if precise { text += "." + padded(millis, 3) }
+    return text
   }
 
   /// Accepts seconds ("12.5") or clock notation ("1:02.5", "0:01:02").
@@ -459,7 +468,7 @@ nonisolated struct ReproSummary: Codable, Equatable, Sendable {
   enum Verdict: String, Codable, Sendable {
     /// No error output, crashes, failed checks, or failed runs.
     case clean
-    /// Errors or warnings appeared, but nothing crashed or failed.
+    /// Error lines appeared, but nothing crashed or failed.
     case errors
     /// A service crashed, a check or run failed.
     case failed
@@ -483,8 +492,10 @@ nonisolated struct ReproSummary: Codable, Equatable, Sendable {
   var firstError: Highlight?
   var topErrors: [Highlight]
 
+  /// Verdict and headline come from the session's counts and markers; `lines`
+  /// only adds the first and distinct errors, so pass [] when those are not shown.
   init(session: ReproSession, lines: [ReproLogLine]) {
-    let errorLines = lines.filter { $0.level == .error }
+    let errorLines = lines.filter { $0.level == .error && !$0.isPreRoll }
     let checks = session.markers.filter { $0.kind == .check }
     checksPassed = checks.filter { $0.outcome == .pass }.count
     checksFailed = checks.filter { $0.outcome == .fail }.count
@@ -501,8 +512,7 @@ nonisolated struct ReproSummary: Codable, Equatable, Sendable {
     // Distinct messages, so one error repeated in a loop does not hide the others.
     var seen = Set<String>(), top: [Highlight] = []
     for line in errorLines {
-      let key = line.text.replacingOccurrences(of: #"\d+"#, with: "#", options: .regularExpression).prefix(160)
-      guard seen.insert(String(key)).inserted else { continue }
+      guard seen.insert(Self.errorKey(line.text)).inserted else { continue }
       top.append(highlight(line))
       if top.count == 8 { break }
     }
@@ -518,6 +528,22 @@ nonisolated struct ReproSummary: Codable, Equatable, Sendable {
     if warnings > 0 { parts.append("\(warnings) warning\(warnings == 1 ? "" : "s")") }
     if checksPassed > 0 && checksFailed == 0 { parts.append("\(checksPassed) check\(checksPassed == 1 ? "" : "s") passed") }
     headline = parts.isEmpty ? "No errors in \(session.lineCount) log lines" : parts.joined(separator: " · ")
+  }
+
+  /// The first 160 bytes of a message with each run of digits collapsed to "#",
+  /// so "timeout after 30ms (attempt 2)" and "(attempt 3)" group together.
+  static func errorKey(_ text: String) -> String {
+    var bytes: [UInt8] = []
+    bytes.reserveCapacity(160)
+    var inDigits = false
+    for byte in text.utf8 {
+      let isDigit = byte >= 0x30 && byte <= 0x39
+      if isDigit && inDigits { continue }
+      inDigits = isDigit
+      bytes.append(isDigit ? 0x23 : byte)
+      if bytes.count == 160 { break }
+    }
+    return String(decoding: bytes, as: UTF8.self)
   }
 }
 
@@ -634,7 +660,9 @@ nonisolated enum ReproReport {
     let captured = names.isEmpty ? "No workspace output" : ReproFormat.list(names)
     out += "Captured:   \(captured)" + (session.scope.map { " (\($0))" } ?? "") + "\n"
     out += "Result:     \(summary.verdict.rawValue.capitalized) — \(summary.headline)\n"
-    if session.truncated { out += "Note:       Output passed the \(session.lineCount - lines.count) line limit; later lines were counted but not saved.\n" }
+    if session.truncated {
+      out += "Note:       Only the first \(lines.count) lines were saved; \(max(0, session.lineCount - lines.count)) later lines were counted but not saved.\n"
+    }
 
     out += "\nSources\n"
     let sourceWidth = max(width, 12)
