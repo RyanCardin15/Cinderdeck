@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Workspaces → Repros: record the screen with this workspace's output, and
-/// review saved repros with their verdicts, errors, markers, and Git state.
+/// Workspaces → Recordings: screen recordings saved with workspace logs. The log
+/// file (every line stamped with its video time) is the main thing people take away.
 struct WorkspaceReprosView: View {
   let file: StackDefinitionFile
   @ObservedObject var recorder: ReproRecorder
@@ -20,6 +20,10 @@ struct WorkspaceReprosView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       toolbar
+      HStack(spacing: 6) {
+        WorkspaceLogScopeMenu()
+        Text("Change this anytime from the logs button on the recording toolbar.").font(.caption).foregroundColor(.secondary)
+      }
       if let error {
         HStack { Label(error, systemImage: "exclamationmark.triangle").textSelection(.enabled); Spacer(); Button("Dismiss") { self.error = nil } }
           .font(.callout).foregroundColor(.orange)
@@ -42,14 +46,14 @@ struct WorkspaceReprosView: View {
 
   private var toolbar: some View {
     HStack {
-      Text("\(repros.count) \(repros.count == 1 ? "repro" : "repros")").foregroundColor(.secondary)
-      Picker("Scope", selection: $allWorkspaces) {
-        Text("This workspace").tag(false)
-        Text("All").tag(true)
+      Text("\(repros.count) \(repros.count == 1 ? "recording" : "recordings")").foregroundColor(.secondary)
+      Picker("Show", selection: $allWorkspaces) {
+        Text("With \(file.name)").tag(false)
+        Text("All workspaces").tag(true)
       }.pickerStyle(.segmented).labelsHidden().fixedSize()
       Spacer()
       Menu {
-        Button { record() } label: { Label("Record screen", systemImage: "record.circle") }
+        Button { record() } label: { Label("Record the screen with \(file.name) logs", systemImage: "record.circle") }
         Button { NSWorkspace.shared.open(URL(string: "cinderdeck://record")!) } label: { Label("Record an area or window…", systemImage: "rectangle.dashed") }
         if let workspace = file.definition, !(workspace.tasks.isEmpty && workspace.workflows.isEmpty) {
           Divider()
@@ -61,13 +65,13 @@ struct WorkspaceReprosView: View {
           }
         }
       } label: {
-        Label(starting ? "Starting…" : "Record repro", systemImage: "record.circle.fill")
+        Label(starting ? "Starting…" : "Record with Logs", systemImage: "record.circle.fill")
       } primaryAction: {
         record()
       }
       .fixedSize()
       .disabled(recorder.isCapturing || starting)
-      .help("Record the screen with this workspace's logs on the same timeline")
+      .help("Record the screen and save \(file.name)'s logs with it, stamped with video times")
       .accessibilityIdentifier("workspace.recordRepro")
     }
   }
@@ -97,16 +101,16 @@ struct WorkspaceReprosView: View {
   private var emptyState: some View {
     VStack(spacing: 14) {
       Image(systemName: "film.stack").font(.system(size: 34)).foregroundColor(.accentColor)
-      Text("Record a repro").font(.title2.bold())
-      Text("Capture your screen together with every log line from \(file.name). Scrub the video and the output follows; errors, crashes, and workflow steps are marked on the timeline. Agents can record and inspect repros too.")
-        .foregroundColor(.secondary).multilineTextAlignment(.center).frame(maxWidth: 460)
+      Text("Recordings with logs").font(.title2.bold())
+      Text("When you record your screen, everything \(file.name) prints is saved to a .log file next to the video. Every line is stamped with its time in the video, so you can see what the app logged at the moment something went wrong.")
+        .foregroundColor(.secondary).multilineTextAlignment(.center).frame(maxWidth: 480)
       HStack {
-        Button("Record screen") { record() }.buttonStyle(.borderedProminent)
+        Button("Record Screen with Logs") { record() }.buttonStyle(.borderedProminent)
         if let workflow = file.definition?.workflows.first {
           Button("Record \(workflow.name)") { record(kind: .workflow, id: workflow.id) }
         }
       }.disabled(recorder.isCapturing || starting)
-      Text("Screen recordings you make while services run are saved here automatically.").font(.caption).foregroundColor(.secondary)
+      Text("Recordings you make with the usual toolbar or shortcut show up here too, whenever this workspace is running.").font(.caption).foregroundColor(.secondary)
     }.frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
@@ -146,7 +150,7 @@ struct WorkspaceReprosView: View {
           let (session, _) = try await controller.startRun(options, workspace: file.id, kind: kind, definitionID: id, actor: .user, runner: runner, origin: .workspace)
           selected = session.id
         } else {
-          options.title = "\(file.name) repro"
+          options.title = "\(file.name) recording"
           selected = try await controller.start(options, origin: .workspace, actor: .user).id
         }
       } catch let failure as StackControlError { error = failure.message }
@@ -159,8 +163,8 @@ struct WorkspaceReprosView: View {
     alert.messageText = "Delete “\(session.title)”?"
     let keepsVideo = session.videoPath.map { !$0.hasPrefix(recorder.store.folder(session.id).path) } ?? false
     alert.informativeText = keepsVideo
-      ? "Captured output and markers are removed. The video stays where it was saved."
-      : "The video, captured output, and markers are removed."
+      ? "The video and the .log file next to it stay where they were saved. Cinderdeck's copy of the logs and markers is removed."
+      : "The video, its log file, and markers are removed."
     alert.addButton(withTitle: "Delete"); alert.addButton(withTitle: "Cancel")
     guard alert.runModal() == .alertFirstButtonReturn else { return }
     do { try recorder.delete(session.id) } catch { self.error = error.localizedDescription }
@@ -181,6 +185,9 @@ private struct WorkspaceReproRow: View {
       }
       Text("\(session.createdAt.formatted(date: .abbreviated, time: .shortened)) · \(ReproFormat.duration(session.duration))")
         .font(.caption).foregroundColor(.secondary)
+      if !session.workspaceNames.isEmpty {
+        Label(ReproFormat.list(session.workspaceNames), systemImage: "square.stack.3d.up").font(.caption).foregroundColor(.secondary).lineLimit(1)
+      }
       HStack(spacing: 8) {
         if session.actor.isAgent { Label(session.actor.name, systemImage: "sparkles").font(.caption2).foregroundColor(.purple) }
         Text("\(session.lineCount) lines").font(.caption2).foregroundColor(.secondary)
@@ -213,20 +220,30 @@ private struct WorkspaceReproDetail: View {
           }
           Text(summary.headline).foregroundColor(.secondary)
           Text(meta).font(.caption).foregroundColor(.secondary).textSelection(.enabled)
+          if let log = session.logFile {
+            Label(log.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"), systemImage: "doc.text")
+              .font(.caption).foregroundColor(.secondary).textSelection(.enabled).lineLimit(1).truncationMode(.middle)
+          }
           if let detail = session.detail { Text(detail).font(.callout).foregroundColor(.orange) }
         }
         HStack {
-          Button { ReproLibraryActions.open(session) } label: { Label("Open", systemImage: "play.rectangle") }
-            .buttonStyle(.borderedProminent).disabled(session.videoURL == nil)
-          Button { ReproLibraryActions.export(session) } label: { Label("Export…", systemImage: "square.and.arrow.up") }
+          Button { Task { await ReproLibraryActions.revealLog(session) } } label: { Label("Show Log File", systemImage: "doc.text.magnifyingglass") }
+            .buttonStyle(.borderedProminent)
+            .help("The .log file with every line stamped with its video time")
           Button {
-            Task { await ReproLibraryActions.copySummary(session); copied = true; try? await Task.sleep(nanoseconds: 2_000_000_000); copied = false }
-          } label: { Label(copied ? "Copied" : "Copy summary", systemImage: copied ? "checkmark" : "doc.on.clipboard") }
-            .help("Markdown with errors, markers, Git state, and the repro id for agents")
+            Task { await ReproLibraryActions.copyLog(session); copied = true; try? await Task.sleep(nanoseconds: 2_000_000_000); copied = false }
+          } label: { Label(copied ? "Copied" : "Copy Log", systemImage: copied ? "checkmark" : "doc.on.clipboard") }
+            .help("Copy the whole log to paste into an issue or an agent")
+          Button { ReproLibraryActions.open(session) } label: { Label("Open Video", systemImage: "play.rectangle") }
+            .disabled(session.videoURL == nil)
+            .help("Open the video in the editor with its log panel")
           Menu {
+            Button("Export Bundle…") { ReproLibraryActions.export(session) }
+            Button("Copy Summary for an Agent") { Task { await ReproLibraryActions.copySummary(session) } }
+            Divider()
+            Button("Show Video in Finder") { NSWorkspace.shared.activateFileViewerSelecting([session.videoURL ?? recorder.store.folder(session.id)]) }
             Button("Rename…") { newTitle = session.title; renaming = true }
-            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([session.videoURL ?? recorder.store.folder(session.id)]) }
-            Button("Copy repro id") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(session.id.uuidString, forType: .string) }
+            Button("Copy Recording ID") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(session.id.uuidString, forType: .string) }
           } label: { Image(systemName: "ellipsis.circle") }.menuStyle(.borderlessButton).fixedSize()
         }
         .disabled(session.status.isActive)
@@ -306,7 +323,7 @@ private struct WorkspaceReproDetail: View {
       lines = await recorder.lines(for: session.id)
       loaded = true
     }
-    .alert("Rename repro", isPresented: $renaming) {
+    .alert("Rename recording", isPresented: $renaming) {
       TextField("Title", text: $newTitle)
       Button("Rename") { recorder.rename(session.id, to: newTitle) }
       Button("Cancel", role: .cancel) {}

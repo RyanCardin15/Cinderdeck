@@ -75,7 +75,8 @@ extension StackControlService {
         ])
       }
       if let run = controller.linkedRun { result["run"] = .string(run.uuidString) }
-      result["captureEnabled"] = .bool(recorder.isEnabled)
+      result["recordingScope"] = .object(["mode": .string(recorder.scope.mode),
+        "workspaces": .array(recorder.scope.workspaces.map(JSONValue.string))])
       return .object(result)
 
     case "repro.mark":
@@ -218,6 +219,31 @@ extension StackControlService {
       guard let saved = recorder.current(session.id) else { throw StackControlError.notFound("The repro was discarded before it was saved") }
       return .object(reproPayload(saved, lines: await recorder.lines(for: saved.id)))
 
+    case "repro.dump":
+      let session = try recorder.resolve(params["repro"]?.stringValue)
+      guard !session.status.isActive else { throw StackControlError(code: "busy", message: "The log file is written when the recording stops") }
+      guard let url = await recorder.logFileURL(for: session) else { throw StackControlError.notFound("This recording has no saved output") }
+      let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+      return .object(["repro": .string(session.id.uuidString), "path": .string(url.path), "bytes": .number(Double(size)),
+        "lines": .number(Double(session.lineCount)), "library": .string(recorder.store.logURL(session.id).path)])
+
+    case "repro.scope":
+      if let mode = params["mode"]?.stringValue?.lowercased() {
+        switch mode {
+        case "running", "all", "auto": recorder.setScope(.running)
+        case "off", "none": recorder.setScope(.off)
+        case "selected", "only":
+          guard let names = params["workspaces"]?.stringsValue, !names.isEmpty else { throw StackControlError.invalid("Pass workspaces with mode selected") }
+          recorder.setScope(.only(Set(try names.map { try stackFile(.object(["stack": .string($0)])).id })))
+        default: throw StackControlError.invalid("mode must be running, selected, or off")
+        }
+      }
+      let names = Dictionary(uniqueKeysWithValues: supervisor.files.map { ($0.id, $0.name) })
+      return .object(["mode": .string(recorder.scope.isOff ? "off" : recorder.scope.mode),
+        "workspaces": .array(recorder.scope.workspaces.map(JSONValue.string)),
+        "summary": .string(recorder.scope.summary(names: names)),
+        "logNextToVideo": .bool(recorder.logsNextToVideo)])
+
     case "repro.open":
       let session = try recorder.resolve(params["repro"]?.stringValue)
       guard let video = session.videoURL, FileManager.default.fileExists(atPath: video.path) else {
@@ -295,6 +321,8 @@ extension StackControlService {
     ]
     if let capture = session.capture { object["capture"] = .string(capture) }
     if let video = session.videoPath { object["video"] = .string(video) }
+    if let log = session.logFile { object["logFile"] = .string(log) }
+    if !session.workspaceNames.isEmpty { object["workspaceNames"] = .array(session.workspaceNames.map(JSONValue.string)) }
     if let detail = session.detail { object["detail"] = .string(detail) }
     if session.truncated { object["truncated"] = .bool(true) }
     guard !compact || !session.status.isActive else { return object }

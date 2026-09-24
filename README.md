@@ -32,26 +32,30 @@ Open **Workspaces…** from the menu bar. A workspace contains **Services** that
 
 Existing stacks appear as workspaces without moving their files. **Tasks → Move service to Tasks** converts stopped commands you previously ran as services. [Read the workspace guide](docs/WORKSPACES.md).
 
-## Repros: recordings with synchronized logs
+## Recordings with workspace logs
 
-Record your screen and every service and task log line lands on the same timeline. Scrub the video and the output follows. Click an error and the video jumps to the moment it happened. Crashes, workflow steps, and markers are flagged on the timeline. Each repro also saves the branch, commit, and uncommitted changes of every repository at the start of recording. Recordings you make while services run are captured automatically. You can also start one from **Workspaces → Repros**, including one that records a workflow run from start to finish.
+Record your screen the way you already do, and Cinderdeck saves a `.log` file next to the video. It holds everything your running workspaces printed, and every line is stamped with its position in the video and its clock time. When the bug shows up at 0:42, read the log at `[00:42.000 …]`.
 
-Agents can record repros themselves. They drive the app, mark each step as passed or failed, then look at the frames (returned as images) and the logs around any error:
+- **Pick the workspaces.** The logs button on the recording toolbar saves all running workspaces by default. You can narrow it to specific workspaces or turn it off for a plain video.
+- **Mark the moment.** Click the logs indicator while recording to drop a `▶ Marked` line into the log.
+- **Grab the log.** After stopping, use **Show Log** or **Copy Log**. Workspaces → Recordings and the video editor have the same buttons.
+
+The log also records service crashes, workflow steps, and each repository's branch, commit, and uncommitted changes at the start of recording. Keychain secrets are redacted. Agents can record, too: they drive the app, mark each step as passed or failed, then look at the frames (returned as images) and the logs around any error.
 
 ```sh
-cinderdeck repro run shop e2e --workflow --wait   # exits 1 if anything crashed or failed
-cinderdeck repro frame --at first_error
-cinderdeck repro export --zip                     # video, README, timeline, logs, diffs
+cinderdeck repro dump                             # print the latest recording's log file
+cinderdeck repro run shop e2e --workflow --wait   # record a workflow; exits 1 if anything failed
+cinderdeck repro frame --at first_error           # the video frame at the first error, with nearby logs
 ```
 
-[Read the repro guide](docs/REPROS.md).
+[Read the recordings guide](docs/REPROS.md).
 
 ## A place for the whole project
 
 - **Run any stack.** Add project folders and start commands, with optional Git repositories, environment variables, Keychain references, dependencies, and readiness checks.
 - **See what is running.** Service status, listening ports, process ownership, live logs, crash output, and activity live together. Start, stop, or restart individual services or an entire stack.
 - **Work across repositories.** Inspect branches and changes, fetch or pull, and switch branches with explicit stash/carry choices.
-- **Record repros.** Screen recordings keep workspace output on the video's timeline, with markers for crashes, steps, and checks. Export them as bundles, or let agents test with them end to end. [Repros](docs/REPROS.md).
+- **Record with logs.** Screen recordings save a `.log` file next to the video with your workspaces' output, stamped with video times. You choose which workspaces, or record a plain video. [Recordings with logs](docs/REPROS.md).
 - **Give agents the same controls.** The `cinderdeck` CLI and local MCP server work with Codex, Cursor, Claude Code, and other clients. Agent identity and advisory claims make ownership visible.
 - **Organize your GitHub work.** Browse repositories, sync GitHub stars, filter pull requests, save custom views, inspect changes, and submit reviews in a native PRs workspace. [Explore pull requests](docs/PULL_REQUESTS.md).
 - **Keep useful context nearby.** Local text clipboard history, capture history, and search sit alongside your stacks.

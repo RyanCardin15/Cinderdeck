@@ -170,8 +170,12 @@ enum PreferencesKeys {
   nonisolated static let stacksQuitBehavior = "stacks.quitBehavior"
   nonisolated static let stacksNotifyOnCrash = "stacks.notifyOnCrash"
   nonisolated static let stacksAutoFetchMinutes = "stacks.autoFetchMinutes"
-  /// Attach workspace service and task output to screen recordings as a repro.
-  nonisolated static let reproCaptureLogs = "repro.captureLogs"
+  /// Which workspaces' logs screen recordings capture: "running" (default), "selected", or "off".
+  nonisolated static let reproLogScope = "repro.logScope"
+  /// Workspace ids for the "selected" log scope.
+  nonisolated static let reproLogWorkspaces = "repro.logWorkspaces"
+  /// Also save the .log file next to the video (default true).
+  nonisolated static let reproLogNextToVideo = "repro.logNextToVideo"
   static let historyRetentionDays = "history.retentionDays"
   static let historyMaxCount = "history.maxCount"
   static let historyBackgroundStyle = "history.backgroundStyle"

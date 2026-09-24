@@ -164,6 +164,77 @@ final class ReproCoreTests: XCTestCase {
       ["[00:01.000] api | listening", "[00:02.000] ▶ Clicked Pay", "[00:03.000] api | Error: payment | declined"])
   }
 
+  // MARK: Log file
+
+  func testLogFileStampsVideoAndClockTimeAndExplainsItself() {
+    let base = Date(timeIntervalSince1970: 1_790_000_000.25)
+    var lines = [
+      line(1, 0, "shop/api", "listening on 4000", offscreen: true),
+      line(2, 1.5, "shop/web", "GET /cart 200"),
+      line(3, 3.125, "shop/api", "Error: payment declined"),
+    ]
+    for index in lines.indices { lines[index].at = base.addingTimeInterval(lines[index].t) }
+    var repro = session(lines: lines, markers: [
+      ReproMarker(t: 3.125, at: base.addingTimeInterval(3.125), kind: .check, label: "Pay succeeds", detail: "spinner", outcome: .fail, by: "Codex"),
+    ])
+    repro.scope = "all running workspaces"
+    repro.sources[0].lineCount = 2
+    repro.sources[0].errorCount = 1
+    repro.workspaces = [ReproWorkspaceContext(id: "billing", name: "Billing", root: "/b", definitionFingerprint: "", environmentKeys: [],
+      secretKeys: [], services: [], repos: [])]
+    let text = ReproReport.logFile(repro, lines: lines, videoName: "Recording.mov", timeZone: TimeZone(identifier: "UTC")!)
+    let rows = text.components(separatedBy: "\n")
+    XCTAssertTrue(text.hasPrefix("Cinderdeck workspace log"))
+    XCTAssertTrue(rows.contains("Video:      Recording.mov"))
+    XCTAssertTrue(rows.contains { $0.hasPrefix("Captured:   Billing and Shop (all running workspaces)") }, text)
+    XCTAssertTrue(rows.contains { $0.hasPrefix("  Billing") && $0.contains("printed nothing") })
+    XCTAssertTrue(rows.contains { $0.hasPrefix("  api") && $0.contains("2 lines, 1 error") })
+    XCTAssertTrue(rows.contains("[00:00.000  14:13:20.250] ~ api  listening on 4000"), text)
+    XCTAssertTrue(rows.contains("[00:01.500  14:13:21.750]   web  GET /cart 200"), text)
+    let check = rows.firstIndex { $0.contains("▶ Pay succeeds — spinner  [FAIL]  (Codex)") }
+    let error = rows.firstIndex { $0.hasSuffix("api  ERROR  Error: payment declined") }
+    XCTAssertNotNil(check); XCTAssertNotNil(error)
+    XCTAssertLessThan(check ?? 0, error ?? 0, "Events come before output at the same moment")
+  }
+
+  func testLogFileQualifiesSourcesWhenWorkspacesMix() {
+    var repro = session()
+    repro.sources.append(ReproSource(id: "billing/api", kind: .service, workspace: "billing", workspaceName: "Billing", name: "api"))
+    XCTAssertEqual(ReproReport.sourceLabels(repro)["shop/api"], "shop/api")
+    XCTAssertEqual(ReproReport.sourceLabels(repro)["billing/api"], "billing/api")
+    XCTAssertEqual(ReproReport.sourceLabels(session())["shop/api"], "api")
+    XCTAssertTrue(ReproReport.logFile(ReproSession(title: "x", origin: .recording, actor: .user), lines: [], videoName: nil).contains("(nothing was captured)"))
+  }
+
+  func testLinesAndMarkersKeepMillisecondClockTimes() throws {
+    let date = Date(timeIntervalSince1970: 1_790_000_000.123)
+    let entry = ReproLogLine(id: 1, t: 1.23456, at: date, source: "shop/api", text: "x", level: .info)
+    let decoded = try StackControlCoding.decoder().decode(ReproLogLine.self, from: StackControlCoding.encoder().encode(entry))
+    XCTAssertEqual(decoded.at.timeIntervalSince1970, 1_790_000_000.123, accuracy: 0.0005)
+    XCTAssertEqual(decoded.t, 1.235, accuracy: 0.0001)
+    let marker = ReproMarker(t: 2, at: date, kind: .note, label: "Mark")
+    let restored = try StackControlCoding.decoder().decode(ReproMarker.self, from: StackControlCoding.encoder().encode(marker))
+    XCTAssertEqual(restored.at.timeIntervalSince1970, 1_790_000_000.123, accuracy: 0.0005)
+    XCTAssertEqual(restored.id, marker.id)
+  }
+
+  func testScopeChoices() {
+    XCTAssertEqual(ReproLogScope(mode: nil, workspaces: nil), .running)
+    XCTAssertEqual(ReproLogScope(mode: "off", workspaces: ["shop"]), .off)
+    let selected = ReproLogScope(mode: "selected", workspaces: ["shop", "billing"])
+    XCTAssertTrue(selected.includes("shop"))
+    XCTAssertFalse(selected.includes("docs"))
+    XCTAssertEqual(selected.mode, "selected")
+    XCTAssertEqual(selected.workspaces, ["billing", "shop"])
+    XCTAssertEqual(ReproLogScope.running.toggling("shop"), .only(["shop"]))
+    XCTAssertEqual(ReproLogScope.only(["shop"]).toggling("shop"), .off)
+    XCTAssertEqual(ReproLogScope.only(["shop"]).toggling("billing"), .only(["shop", "billing"]))
+    XCTAssertTrue(ReproLogScope.only([]).isOff)
+    XCTAssertFalse(ReproLogScope.off.includes("shop"))
+    XCTAssertEqual(selected.summary(names: ["shop": "Shop", "billing": "Billing"]), "Billing and Shop")
+    XCTAssertEqual(ReproFormat.list(["A", "B", "C"]), "A, B, and C")
+  }
+
   func testRedactorReplacesSecretValues() {
     let redactor = ReproRedactor(secrets: ["STRIPE_KEY": "sk_test_12345", "PIN": "42"])
     XCTAssertEqual(redactor.redact("auth sk_test_12345 ok 42"), "auth [secret STRIPE_KEY] ok 42")
@@ -197,7 +268,7 @@ final class ReproCoreTests: XCTestCase {
     try "diff --git a/x b/x".write(to: store.gitFolder(repro.id).appendingPathComponent("app.diff"), atomically: true, encoding: .utf8)
     let exported = try ReproBundleExporter.export(repro, lines: store.loadLines(repro.id), store: store, to: root.appendingPathComponent("out"))
     let files = try FileManager.default.subpathsOfDirectory(atPath: exported.folder.path).sorted()
-    XCTAssertEqual(files, ["README.md", "git", "git/app.diff", "logs", "logs/api.log", "logs/web.log", "repro.json", "summary.json", "timeline.log"])
+    XCTAssertEqual(files, ["README.md", "git", "git/app.diff", "logs", "logs/api.log", "logs/web.log", "recording.log", "repro.json", "summary.json"])
     let second = try ReproBundleExporter.export(repro, lines: [], store: store, to: root.appendingPathComponent("out"))
     XCTAssertNotEqual(second.folder, exported.folder)
 

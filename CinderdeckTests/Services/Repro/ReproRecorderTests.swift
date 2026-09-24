@@ -33,7 +33,7 @@ final class ReproRecorderTests: XCTestCase {
     events = PassthroughSubject()
     store = ReproStore(directory: root.appendingPathComponent("repros"))
     recorder = ReproRecorder(supervisor: supervisor, runner: runner, store: store, events: events.eraseToAnyPublisher(),
-      defaults: defaults, secrets: FixedSecrets(), snapshot: { control.stackSnapshot($0) })
+      defaults: defaults, secrets: FixedSecrets(), snapshot: { control.stackSnapshot($0) }, isTemporary: { _ in false })
     recorder.start()
   }
 
@@ -125,6 +125,36 @@ final class ReproRecorderTests: XCTestCase {
     XCTAssertEqual(recorder.sessions.first?.id, saved.id)
     XCTAssertEqual(recorder.session(forVideo: root.appendingPathComponent("recording.mov"))?.id, saved.id)
     XCTAssertEqual(try recorder.resolve(String(saved.id.uuidString.prefix(8))).id, saved.id)
+
+    // The readable log sits next to the video, with a library copy.
+    XCTAssertEqual(saved.logFile, root.appendingPathComponent("recording.log").path)
+    let log = try String(contentsOf: root.appendingPathComponent("recording.log"), encoding: .utf8)
+    XCTAssertTrue(log.contains("Video:      recording.mov"))
+    XCTAssertTrue(log.contains("ERROR  TypeError: total is undefined"))
+    XCTAssertTrue(log.contains("auth [secret TOKEN]"))
+    XCTAssertTrue(log.contains("▶ api ready"))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: store.logURL(saved.id).path))
+  }
+
+  func testSelectedWorkspacesLimitCaptureAndOffRecordsPlainVideo() async throws {
+    try await load("[services.api]\ncmd = \"while true; do echo tick; sleep 0.1; done\"\n")
+    await supervisor.start(stack: "shop", services: ["api"])
+    try await until { self.supervisor.runtime("shop", "api").phase == .ready }
+
+    recorder.setScope(.only(["billing"]))
+    events.send(.started(Date()))
+    XCTAssertNil(try await stopRecording(), "Output from unselected workspaces is not captured")
+
+    recorder.setScope(.only(["shop"]))
+    events.send(.started(Date()))
+    let saved = try XCTUnwrap(try await stopRecording())
+    XCTAssertEqual(saved.sources.map(\.id), ["shop/api"])
+    XCTAssertEqual(saved.scope, "chosen in the recording toolbar")
+
+    recorder.setScope(.off)
+    events.send(.started(Date()))
+    XCTAssertNil(recorder.activeSessionID, "Logs off means a plain video")
+    recorder.setScope(.running)
   }
 
   func testRecordingWithoutWorkspaceOutputIsDiscarded() async throws {
@@ -158,7 +188,7 @@ final class ReproRecorderTests: XCTestCase {
 
   func testDisabledPreferenceSkipsOrdinaryRecordings() async throws {
     let defaults = UserDefaults(suiteName: "ReproTests-off-\(UUID())")!
-    defaults.set(false, forKey: PreferencesKeys.reproCaptureLogs)
+    defaults.set("off", forKey: PreferencesKeys.reproLogScope)
     let subject = PassthroughSubject<RecordingLifecycleEvent, Never>()
     let quiet = ReproRecorder(supervisor: supervisor, runner: runner, store: store, events: subject.eraseToAnyPublisher(),
       defaults: defaults, secrets: FixedSecrets(), snapshot: { _ in fatalError("Not used when capture is off") })

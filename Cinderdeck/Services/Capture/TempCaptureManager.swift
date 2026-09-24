@@ -19,6 +19,11 @@ struct RecordingSavePlan {
 }
 
 /// Manages lifecycle of temporary capture files when auto-save is disabled
+extension Notification.Name {
+  /// A temporary capture was moved to the export folder. userInfo: "from" and "to" URLs.
+  static let captureSavedFromTemp = Notification.Name("CinderdeckCaptureSavedFromTemp")
+}
+
 @MainActor
 final class TempCaptureManager {
   static let shared = TempCaptureManager()
@@ -210,6 +215,9 @@ final class TempCaptureManager {
 
       // Also move recording metadata if it exists (for video files)
       moveRecordingMetadataIfNeeded(from: tempURL, to: destinationURL)
+      // Repros follow the video and write its log file beside the new location.
+      NotificationCenter.default.post(name: .captureSavedFromTemp, object: nil,
+        userInfo: ["from": tempURL, "to": destinationURL])
       pruneEmptyTempDirectories(startingAt: tempURL.deletingLastPathComponent())
 
       logger.info("Saved temp file to export: \(destinationURL.lastPathComponent)")

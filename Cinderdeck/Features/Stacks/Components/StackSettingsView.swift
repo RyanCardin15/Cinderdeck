@@ -6,7 +6,6 @@ struct StackSettingsView: View {
   @AppStorage(PreferencesKeys.stacksQuitBehavior) private var quitBehavior = "ask"
   @AppStorage(PreferencesKeys.stacksNotifyOnCrash) private var notify = true
   @AppStorage(PreferencesKeys.stacksAutoFetchMinutes) private var autoFetch = 0
-  @AppStorage(PreferencesKeys.reproCaptureLogs) private var captureRepros = true
   @State private var managesSecrets = false
   @State private var managesAgents = false
   var body: some View {
@@ -27,11 +26,6 @@ struct StackSettingsView: View {
         Text("Leave services running").tag("leave")
       }
       Toggle("Notify when a service crashes", isOn: $notify)
-      VStack(alignment: .leading, spacing: 2) {
-        Toggle("Attach workspace logs to screen recordings", isOn: $captureRepros)
-        Text("Recordings made while services or tasks run keep their output on the video's timeline. Find them in Workspaces → Repros. Agent recordings always capture logs.")
-          .font(.caption).foregroundColor(.secondary)
-      }
       HStack {
         Text("Fetch Git remotes automatically")
         Spacer()
@@ -51,6 +45,9 @@ struct StackSettingsView: View {
         Spacer()
         Button("Agent access…") { managesAgents = true }
       }
+    }
+    Section("Workspace logs in screen recordings") {
+      WorkspaceLogSettingsRows()
     }
     .sheet(isPresented: $managesSecrets) { StackSecretsSheet() }
     .sheet(isPresented: $managesAgents) { StackAgentsSheet() }

@@ -11,7 +11,10 @@ final class ReproControlsPanel {
   enum Phase: Equatable {
     case recording
     case finalizing
+    /// An agent or Workspaces recording finished.
     case saved(ReproSession)
+    /// An ordinary recording was saved with workspace logs.
+    case captured(ReproSession)
   }
 
   final class Model: ObservableObject {
@@ -25,10 +28,30 @@ final class ReproControlsPanel {
   func showRecording() { show(.recording) }
   func showFinalizing() { show(.finalizing) }
 
-  func showSaved(_ session: ReproSession) {
-    show(.saved(session))
+  func showSaved(_ session: ReproSession) { showBriefly(.saved(session)) }
+
+  /// Confirms that an ordinary recording kept its workspace logs, and where.
+  func showCaptured(_ session: ReproSession) { showBriefly(.captured(session)) }
+
+  private func showBriefly(_ phase: Phase) {
+    show(phase)
     hideTask = Task { [weak self] in
-      try? await Task.sleep(nanoseconds: 9_000_000_000)
+      try? await Task.sleep(nanoseconds: 10_000_000_000)
+      guard !Task.isCancelled else { return }
+      self?.hide()
+    }
+  }
+
+  /// Keeps the confirmation up while the pointer is over it.
+  func holdOpen(_ hovering: Bool) {
+    switch model.phase {
+    case .recording, .finalizing: return
+    case .saved, .captured: break
+    }
+    if hovering { hideTask?.cancel(); hideTask = nil; return }
+    guard hideTask == nil, panel?.isVisible == true else { return }
+    hideTask = Task { [weak self] in
+      try? await Task.sleep(nanoseconds: 4_000_000_000)
       guard !Task.isCancelled else { return }
       self?.hide()
     }
@@ -49,7 +72,7 @@ final class ReproControlsPanel {
   }
 
   private func makePanel() -> NSPanel {
-    let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 440, height: 64),
+    let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 528, height: 64),
       styleMask: [.nonactivatingPanel, .borderless], backing: .buffered, defer: false)
     panel.isFloatingPanel = true
     panel.level = .statusBar
@@ -60,7 +83,8 @@ final class ReproControlsPanel {
     panel.hidesOnDeactivate = false
     panel.isMovableByWindowBackground = true
     panel.sharingType = .none
-    let host = NSHostingView(rootView: ReproControlsView(model: model, recorder: .shared, controller: .shared) { [weak self] in self?.hide() })
+    let host = NSHostingView(rootView: ReproControlsView(model: model, recorder: .shared, controller: .shared,
+      close: { [weak self] in self?.hide() }, hover: { [weak self] in self?.holdOpen($0) }))
     host.frame = panel.contentRect(forFrameRect: panel.frame)
     host.autoresizingMask = [.width, .height]
     panel.contentView = host
@@ -81,18 +105,23 @@ private struct ReproControlsView: View {
   @ObservedObject var controller: ReproRecordingController
   @ObservedObject private var screen = ScreenRecordingManager.shared
   let close: () -> Void
+  let hover: (Bool) -> Void
   @State private var pulse = false
+  @State private var copied = false
 
   var body: some View {
     HStack(spacing: 12) {
       switch model.phase {
       case .recording: recording
       case .finalizing: finalizing
-      case .saved(let session): saved(session)
+      case .saved(let session): finished(session, agent: true)
+      case .captured(let session): finished(session, agent: false)
       }
     }
+    .onHover(perform: hover)
+    .onChange(of: model.phase) { _ in copied = false }
     .padding(.horizontal, 14)
-    .frame(width: 440, height: 56)
+    .frame(width: 520, height: 56)
     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
     .padding(4)
@@ -107,7 +136,7 @@ private struct ReproControlsView: View {
         .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
         .onAppear { pulse = true }
       VStack(alignment: .leading, spacing: 2) {
-        Text(recorder.live?.title ?? "Recording repro").font(.system(size: 12, weight: .semibold)).lineLimit(1)
+        Text(recorder.live?.title ?? "Recording with logs").font(.system(size: 12, weight: .semibold)).lineLimit(1)
         TimelineView(.periodic(from: .now, by: 1)) { _ in
           Text(subtitle).font(.system(size: 10.5)).foregroundColor(.secondary).monospacedDigit().lineLimit(1)
         }
@@ -157,24 +186,37 @@ private struct ReproControlsView: View {
     }
   }
 
-  private func saved(_ session: ReproSession) -> some View {
-    let summary = ReproSummary(session: session, lines: [])
-    return Group {
-      Image(systemName: "checkmark.circle.fill").foregroundColor(.green).font(.system(size: 18))
+  private func finished(_ session: ReproSession, agent: Bool) -> some View {
+    Group {
+      Image(systemName: session.errorCount > 0 ? "text.badge.xmark" : "text.badge.checkmark")
+        .foregroundColor(session.errorCount > 0 ? .orange : .green).font(.system(size: 17, weight: .semibold))
       VStack(alignment: .leading, spacing: 2) {
-        Text("Repro saved").font(.system(size: 12, weight: .semibold))
-        Text("\(ReproFormat.duration(session.duration)) · \(summary.headline)").font(.system(size: 10.5)).foregroundColor(.secondary).lineLimit(1)
+        Text(agent ? "Recording saved with logs" : "Logs saved with your video").font(.system(size: 12, weight: .semibold)).lineLimit(1)
+        Text(detail(session)).font(.system(size: 10.5)).foregroundColor(.secondary).lineLimit(1).truncationMode(.middle)
       }
       Spacer(minLength: 4)
-      Button("Open") {
-        ReproLibraryActions.open(session)
-        close()
-      }.controlSize(.small)
-      iconButton("folder", help: "Show in Finder") {
-        NSWorkspace.shared.activateFileViewerSelecting([session.videoURL ?? recorder.store.folder(session.id)])
+      Button("Show Log") {
+        Task { await ReproLibraryActions.revealLog(session) }
+      }
+      .controlSize(.small).help(session.logFile ?? "Show the log file in Finder")
+      Button(copied ? "Copied" : "Copy Log") {
+        Task { await ReproLibraryActions.copyLog(session); copied = true }
+      }
+      .controlSize(.small).help("Copy the whole log, stamped with video times, to paste into an issue or an agent")
+      if agent {
+        iconButton("play.rectangle", help: "Open the video with its logs") { ReproLibraryActions.open(session); close() }
       }
       iconButton("xmark", help: "Dismiss") { close() }
     }
+  }
+
+  private func detail(_ session: ReproSession) -> String {
+    var parts = ["\(session.lineCount.formatted()) lines"]
+    let names = session.workspaceNames
+    if !names.isEmpty { parts[0] += " from \(ReproFormat.list(names))" }
+    if session.errorCount > 0 { parts.append("\(session.errorCount) error\(session.errorCount == 1 ? "" : "s")") }
+    if !session.markers.filter(\.isFailure).isEmpty { parts.append("\(session.markers.filter(\.isFailure).count) failed") }
+    return parts.joined(separator: " · ")
   }
 
   private func iconButton(_ icon: String, help: String, action: @escaping () -> Void) -> some View {
@@ -198,6 +240,25 @@ enum ReproLibraryActions {
     if let t { VideoEditorReproModel.requestSeek(t, video: video) }
     VideoEditorManager.shared.openEditor(for: video)
     NSApp.activate(ignoringOtherApps: true)
+  }
+
+  /// Shows the log file in Finder: beside the video when it is there.
+  static func revealLog(_ session: ReproSession) async {
+    let recorder = ReproRecorder.shared
+    let current = recorder.current(session.id) ?? session
+    if let url = await recorder.logFileURL(for: current) {
+      NSWorkspace.shared.activateFileViewerSelecting([url])
+    } else {
+      NSWorkspace.shared.activateFileViewerSelecting([recorder.store.folder(session.id)])
+    }
+  }
+
+  /// Copies the whole log file text: header, sources, and every stamped line.
+  static func copyLog(_ session: ReproSession) async {
+    let recorder = ReproRecorder.shared
+    let text = await recorder.logText(for: recorder.current(session.id) ?? session)
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(text, forType: .string)
   }
 
   static func copySummary(_ session: ReproSession) async {

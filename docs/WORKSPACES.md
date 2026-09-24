@@ -8,7 +8,7 @@ A **workspace** groups a project's folders, environment, and reusable commands:
 - **Tasks** run once: tests, builds, linting, migrations, or scripts. Exit 0 succeeds; any other exit code fails. Tasks never restart automatically. Output, start/end times, duration, and exit code are recorded.
 - **Workflows** run an ordered sequence of task and service actions. Start waits for readiness; a task must succeed before the next step runs. A failure or cancellation skips remaining steps.
 - **Runs** shows live progress and past results for the selected workspace. Select a step to filter output, search the log, copy text, cancel an active run, or run again using the current definition.
-- **Repros** lists screen recordings that captured this workspace's output on the video timeline. **Record repro** records the screen, or records a task or workflow run with each step marked. See [REPROS.md](REPROS.md).
+- **Recordings** lists screen recordings saved with this workspace's logs, each with a `.log` file stamped with video times. **Record with Logs** records the screen, or records a task or workflow run with each step marked. It also sets which workspaces toolbar recordings capture. See [REPROS.md](REPROS.md).
 
 ## Create and edit
 

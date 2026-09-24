@@ -24,7 +24,7 @@ nonisolated enum StackAgentGuide {
   a bug or to test UI end to end: start_repro_recording (optionally with workspace + task/workflow to record a run; \
   window="Safari" records one app) → drive the app → mark_repro at each step, with outcome pass/fail for checks → \
   stop_repro_recording (or wait_for_repro for a run). The result has a verdict (clean, errors, failed) and error highlights \
-  with video timestamps. Then use repro_frame to see the screen at first_error or any marker (returns images plus the \
+  with video timestamps, and logFile: a plain-text log with every line stamped with its video time. Then use repro_frame to see the screen at first_error or any marker (returns images plus the \
   log lines just before), repro_logs to read output around a moment, and export_repro to hand the user a bundle. \
   The user sees floating controls while you record and can stop it. Do not record longer than the task needs.
   """
@@ -94,7 +94,9 @@ nonisolated enum StackAgentGuide {
     - Investigate: `repro_frame` (`at`: first_error, seconds, mm:ss, or marker:<label>) returns the frame as an image with the output just \
       before it; `repro_logs` filters by `around`, `from`/`to`, `source`, `level`, `grep`; `repro_summary` includes Git state and uncommitted files.
     - Share: `export_repro` writes video, README.md, timeline.log, per-source logs, frames, and diffs (`--zip` for an archive).
-    - Recordings people make while services run are repros too: `list_repros` shows them, so you can read logs for what they saw.
+    - Every repro has a plain-text log file (`logFile` in results; CLI `\(command) repro dump`) with each line stamped `[video time  clock time]`.
+    - Recordings people make with the toolbar while workspaces run are repros too: `list_repros` shows them, so you can read the log for what they saw.
+    - `\(command) repro scope` shows or sets which workspaces the user's toolbar recordings capture; change it only when asked.
     - The user sees floating controls while you record and can stop it at any time. Keep recordings short and focused.
 
     ## Pull Request views

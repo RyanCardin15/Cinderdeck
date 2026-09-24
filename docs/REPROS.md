@@ -1,36 +1,81 @@
-# Repros: recordings with synchronized logs
+# Recordings with workspace logs
 
-A **repro** is a screen recording together with everything your workspace printed while it was recorded. Every service and task log line is placed on the video's timeline, so scrubbing the video scrolls the logs, and clicking a log line jumps the video to that moment. Service starts, crashes, workflow steps, and your own markers appear on the timeline too.
+When you record your screen while your workspaces are running, Cinderdeck saves a **log file next to the video** with everything those workspaces printed. Every line is stamped with its **position in the video** and the clock time it was written. When something goes wrong at 0:42 in the video, look at `[00:42.000 …]` in the log.
 
-Use repros to:
+Nothing changes for plain videos. If nothing is running, or you turn logs off, you get a normal video.
 
-- **Report a bug** with the video, the exact output behind it, and the Git state it happened on.
-- **Debug** by seeing what the API logged at the second the UI broke.
-- **Test end to end with agents.** An agent records the screen, drives the app, marks each step as passed or failed, then reads the frames and logs itself.
+In the CLI and MCP tools, a recording with logs is called a **repro**.
 
 ## Recording
 
-There are three ways to record, and all three produce the same kind of repro.
+**Record the way you already do.** Use the recording toolbar, the shortcut, or the menu bar. When the toolbar appears, the **Workspace logs** button, next to the microphone and audio controls, shows what will happen. Hover over it for a one-line description, such as "Logs from Shop and Billing are saved with the video." Click it to choose:
 
-**Any screen recording.** Record the way you already do (toolbar, shortcut, or menu bar). If workspace services or tasks produce output while you record, that output is attached automatically. Recordings with no workspace output are left as plain videos. Turn this off in **Preferences → Workspaces → Attach workspace logs to screen recordings**.
+| Choice | What gets saved |
+| --- | --- |
+| **All running workspaces** (default) | Logs from every workspace that has a service or task running, including ones that start while you record |
+| **Only these workspaces** | Logs from the workspaces you tick, and nothing else. Use this when several workspaces are running and only one matters. |
+| **Don't save logs (plain video)** | Just the video |
 
-**Workspaces → Repros → Record repro.** Records the main display right away and captures only this workspace's output. The menu can also record a workflow or task: recording starts, the run starts, each step becomes a marker, and recording stops about 1.5 seconds after the run ends. **Record an area or window…** opens the regular recording toolbar.
+Your choice is remembered for the next recording, like the microphone choice. The button only appears once you have at least one workspace, so people who only record videos never see it. The same choice is in **Preferences → Capture → Recording → Workspace logs**, and at the top of **Workspaces → Recordings**.
 
-**Agents and the CLI.** See [Agents](#agents) below.
+While recording, the recording bar shows a **logs** indicator with a live line count and a red error count. Hover over it to see which workspaces are being saved. **Click it to mark the moment**, for example "the bug happened here". A `▶ Marked` line appears in the log at that exact video time.
 
-Recordings started from Workspaces or by an agent show floating controls at the top of the screen with who is recording, elapsed time, line and error counts, and **Pause**, **Mark**, and **Stop**. Cinderdeck's own windows are excluded from these recordings, so the controls never appear in the video. The menu bar stop item and the recording shortcut also stop them. Agent recordings stop automatically after five minutes unless the agent asks for a different limit, up to one hour.
+When you stop, a short confirmation shows how many lines were saved and from which workspaces, with **Show Log** and **Copy Log**.
 
-## Reviewing
+**One click from Workspaces.** **Workspaces → Recordings → Record with Logs** records the main display right away and saves only that workspace's logs. Its menu can also record a workflow or task run: recording starts, the run starts, each step is marked, and recording stops about 1.5 seconds after the run ends. Agents can record too; see [Agents](#agents).
 
-Open a repro from **Workspaces → Repros**, from the floating controls after saving, or open its video in the video editor. The editor finds the repro for the video even if you renamed or moved the file.
+Recordings started from Workspaces or by an agent show floating controls at the top of the screen with who is recording, elapsed time, line and error counts, and **Pause**, **Mark**, and **Stop**. Cinderdeck's own windows are left out of every recording. The menu bar stop item and the recording shortcut also stop these recordings. Agent recordings stop automatically after five minutes unless the agent asks for a different limit, up to one hour.
 
-- **Logs panel** (⇧⌘L, or the text icon in the toolbar) lists output and markers in video order. Output after the playhead is dimmed, and the line at the playhead is highlighted. With **Follow** on (the scope icon), the list scrolls during playback.
-- Click any line or marker to seek to it. The chevron buttons jump to the previous or next error.
-- Filter by level (All, Warnings, Errors), by source, or by text. Right-click a line to copy it or show only its source.
-- The timeline shows red ticks for error lines, orange ticks for warnings, and colored flags for markers. Red flags are failures, green ones are passes or ready services, purple ones are notes and checks, and blue ones are workflow steps.
-- **Export…** writes a shareable folder. **Copy summary** copies a Markdown report with the repro id for pasting into an issue or an agent.
+## The log file
 
-In Workspaces, each repro shows its verdict, the headline, a clickable timeline of markers, distinct errors, services and repositories at the start of recording, and per-source line counts. Clicking a marker or error opens the video at that moment.
+The log file is named after the video (`Screen Recording 10.32.mov` → `Screen Recording 10.32.log`) and saved in the same folder. `.log` files open in Console by default, which handles very large logs, and any editor or `grep` works too.
+
+```text
+Cinderdeck workspace log
+========================
+Video:      Screen Recording 10.32.mov
+Recorded:   2026-09-24 10:32:11 PDT · 1m 12s
+Captured:   Shop and Billing (all running workspaces)
+Result:     Failed — 1 crash · 4 error lines · 2 warnings
+
+Sources
+  shop/api        812 lines, 3 errors
+  shop/web        120 lines
+  billing/api     272 lines, 1 error, 2 warnings
+  Docs            running, but printed nothing during the recording
+
+How to read this file
+  [video time  clock time]  source  message
+  …
+------------------------------------------------------------------------------
+[00:00.000  10:32:10.912] ~ shop/api     listening on :4000
+[00:04.210  10:32:16.446] ▶ api ready
+[00:12.001  10:32:24.237]   shop/api     ERROR  Error: payment declined
+[00:12.480  10:32:24.716] ▶ Marked  (You)
+[00:31.002  10:32:43.238] ▶ billing/api crashed — Exited with status 1  [FAIL]
+```
+
+- **Video time** (`00:12.001`) is the position in the video. Seek there to see what was on screen.
+- **Clock time** is local time, for matching against other logs, such as a browser console or a server you did not start with Cinderdeck.
+- **Sources** are `service` names when one workspace was captured, and `workspace/service` when several were. The header lists every workspace that was included, including running ones that printed nothing, so you know nothing was missed.
+- `ERROR` and `WARN` flag lines that look like errors or warnings. `▶` lines are events: services starting, becoming ready, or crashing, workflow steps, and your marks.
+- `~` marks output from up to three seconds before the video started, or written while it was paused. It is kept for context and pinned to the nearest recorded moment.
+
+**Where it goes:**
+
+- **Next to the video**, whenever the video is saved to a folder. If you record with auto-save off, the video waits in a temporary folder until you save it from Quick Access. The log file is written beside it the moment you do. An existing file with the same name is never replaced; Cinderdeck uses `<name> (workspace logs).log` instead.
+- **In the Recordings library**, always, as `recording.log`. **Show Log** and **Copy Log** use the copy next to the video when it exists.
+- Turn off **Save the log file next to the video** in Preferences to keep logs only in the library.
+
+## Finding logs later
+
+- **Workspaces → Recordings** lists every recording that saved this workspace's logs (switch to **All workspaces** to see all of them). Each one shows where its log file is, with **Show Log File**, **Copy Log**, and **Open Video**. It also shows a timeline of marks and events, the distinct errors, and the services and repositories at the start of recording. Clicking a mark or error opens the video at that moment.
+- **In the video editor**, a **Logs** button appears for videos that have logs, with Show Log File, Copy Log, the log panel (⇧⌘L), and Export. The editor finds the logs even if you renamed or moved the video.
+- **In a terminal**: `cinderdeck repro dump` prints the latest recording's log file, and `cinderdeck repro dump --path` prints its path.
+
+### The log panel (optional)
+
+If you prefer to read logs next to the video, open the log panel from **Logs → Show Log Panel** (⇧⌘L). It lists output and events in video order and dims lines after the playhead. Click a line to jump the video there, and use the chevrons to step through errors. You can filter by level, source, or text. The timeline shows red ticks for errors, orange ticks for warnings, and flags for events.
 
 ### Verdicts
 
@@ -38,35 +83,35 @@ In Workspaces, each repro shows its verdict, the headline, a clickable timeline 
 | --- | --- |
 | **Clean** | No error output, crashes, failed checks, or failed runs |
 | **Errors** | Error lines appeared, but nothing crashed or failed |
-| **Failed** | A service crashed, a check marker failed, or a recorded run failed |
+| **Failed** | A service crashed, a check failed, or a recorded run failed |
 
-Error lines are recognized from common patterns: `Error`, `TypeError`, `Exception`, `panic`, `Traceback`, `ECONNREFUSED`, failure symbols, and HTTP 5xx responses. Warnings include deprecations, timeouts, retries, and HTTP 4xx responses. Summaries such as “0 errors” or “0 failed” are not counted.
+Error lines are recognized from common patterns: `Error`, `TypeError`, `Exception`, `panic`, `Traceback`, `ECONNREFUSED`, failure symbols, and HTTP 5xx responses. Warnings include deprecations, timeouts, retries, and HTTP 4xx responses. Summaries such as "0 errors" or "0 failed" are not counted.
 
-## What a repro contains
+## What is saved
 
-- **Output** from every service and task in scope, with ANSI color removed. Each line has a position on the video. Output from up to three seconds before recording started, or written while it was paused, is kept for context, pinned to the nearest recorded moment, and shown dimmed. It is not counted in error totals. A repro stores up to 250,000 lines; anything beyond that is counted but not stored.
-- **Markers** for service starting, ready, readiness failing, crashed, and stopped; runs starting and finishing; each workflow step with its exit status and duration; and notes and checks added by you or an agent.
+- **Output** from the chosen workspaces' services and tasks, with ANSI color removed. Up to 250,000 lines are saved per recording; beyond that, lines are counted but not saved.
+- **Events**: service starting, ready, readiness failing, crashed, and stopped; runs starting and finishing; each workflow step with its exit status and duration; and your marks, plus checks added by agents.
 - **Workspace state when recording started**: service status, commands, and ports; each repository's branch, commit, ahead and behind counts, uncommitted files, and the uncommitted diff (up to 2 MB).
 - **Environment variable names** set by the workspace. Values are never stored.
 - **Secrets are redacted.** Keychain secret values that appear in output are replaced with `[secret NAME]` before anything is written.
 
-Line positions come from when Cinderdeck reads each line, which is usually within a tenth of a second of when it was written.
+A line's video time comes from when Cinderdeck reads it, which is usually within a tenth of a second of when it was written.
 
 ### Storage
 
-Repros are stored in `~/Library/Application Support/Cinderdeck/Stacks/Repros/<id>/` (Debug builds use `Stacks-Debug`). Each folder contains `session.json`, `lines.jsonl`, `git/*.diff`, and extracted `frames/`. Agent and Workspaces recordings also save their video in that folder. Videos from regular recordings stay where your recording settings save them.
+The library is `~/Library/Application Support/Cinderdeck/Stacks/Repros/<id>/` (Debug builds use `Stacks-Debug`). Each folder contains `recording.log`, `session.json`, `lines.jsonl` (one JSON object per line, with `t` in video seconds and `at` in epoch seconds), `git/*.diff`, and extracted `frames/`. Recordings started from Workspaces or by agents also keep their video there. Videos from regular recordings stay where your recording settings save them.
 
-Deleting a repro removes its folder. A video saved elsewhere is kept. If Cinderdeck quits while recording, the repro is marked **Failed** and the output captured so far is kept.
+Deleting a recording from Workspaces removes its library folder. A video saved elsewhere, and the log file next to it, are kept. If Cinderdeck quits while recording, the recording is marked **Failed** and the output captured so far is kept.
 
 ### Export bundle
 
-**Export** writes `<title>-<date>/`. By default agents and the CLI write it to `~/Downloads/Cinderdeck Repros/`. The folder contains:
+**Export Bundle…** writes `<title>-<date>/`, and agents and the CLI write it to `~/Downloads/Cinderdeck Repros/` by default:
 
 | File | Contents |
 | --- | --- |
-| `README.md` | Verdict, headline, marker table, distinct errors, output around the first error, runs, workspace services, Git state, and sources |
 | `recording.mp4` / `.mov` | The video |
-| `timeline.log` | All output and markers merged: `[01:02.345] api \| message` |
+| `recording.log` | The log file described above |
+| `README.md` | Verdict, headline, events, distinct errors, output around the first error, runs, services, Git state, and sources |
 | `logs/<source>.log` | One file per service or task |
 | `repro.json`, `summary.json` | Full metadata and the machine-readable summary |
 | `frames/` | Frames at the first error and at each failure |
@@ -84,7 +129,7 @@ Repros are available through the same MCP server and CLI as Workspaces. Reload t
 | --- | --- |
 | `start_repro_recording` | Start recording. Optional: `title`, `workspace`/`workspaces` to scope output, `window` (app name or title) or `display`, `max_seconds`, `system_audio`, `note`. Pass `workspace` with `task` or `workflow` to record a run. |
 | `mark_repro` | Add a marker now. `outcome: pass`/`fail` records a check; failed checks make the verdict **Failed**. |
-| `stop_repro_recording` | Stop and save. Returns the verdict, headline, errors with timestamps, markers, and runs. Calling it again returns the saved repro. |
+| `stop_repro_recording` | Stop and save. Returns the verdict, headline, errors with timestamps, markers, runs, and `logFile`, the path of the log file. Calling it again returns the saved repro. |
 | `wait_for_repro` | Wait for a recording that stops itself, such as a recorded run. |
 | `cancel_repro_recording` | Stop and discard. |
 | `repro_status` | Live elapsed time and line, error, and marker counts. |
@@ -135,20 +180,31 @@ cinderdeck repro export --zip
 cinderdeck repro run shop e2e --workflow --wait
 ```
 
+Two more commands help with toolbar recordings:
+
+```sh
+cinderdeck repro dump              # print the latest recording's log file (--path for its location)
+cinderdeck repro scope             # which workspaces toolbar recordings save logs from
+cinderdeck repro scope shop        # only Shop; also: scope running, scope off
+```
+
 `repro stop`, `repro wait`, and `repro run … --wait` exit with status 1 when the verdict is **Failed**. `logs` prints readable lines; add `--json` for structured output. The other commands print JSON. Run `cinderdeck repro --help` for every option.
 
 ### Socket methods
 
-For custom clients, the control socket exposes `repro.start`, `repro.stop`, `repro.cancel`, `repro.status`, `repro.mark`, `repro.list`, `repro.get`, `repro.logs`, `repro.frame`, `repro.wait`, `repro.export`, `repro.open`, and `repro.delete`, with the same parameters as the MCP tools. Frame responses include `imageBase64` while they fit within the 4 MB message limit. Every frame is also saved to disk, and its path is returned.
+For custom clients, the control socket exposes `repro.start`, `repro.stop`, `repro.cancel`, `repro.status`, `repro.mark`, `repro.list`, `repro.get`, `repro.logs`, `repro.dump`, `repro.scope`, `repro.frame`, `repro.wait`, `repro.export`, `repro.open`, and `repro.delete`, with the same parameters as the MCP tools. Frame responses include `imageBase64` while they fit within the 4 MB message limit. Every frame is also saved to disk, and its path is returned.
 
 ## Permissions and privacy
 
-Recording requires Screen Recording permission for Cinderdeck. When permission is missing, agents get an error that explains where to grant it. System audio is off for agent recordings unless requested, and the microphone is never recorded. Repros stay on your Mac unless you export them.
+Recording requires Screen Recording permission for Cinderdeck. When permission is missing, agents get an error that explains where to grant it. System audio is off for agent recordings unless requested, and the microphone is never recorded. Recordings and their logs stay on your Mac unless you export them.
 
 ## Verification
 
-`CinderdeckTests/Services/Repro/ReproCoreTests.swift` covers log level classification, the video clock (first frame, pauses, stop), time parsing, queries, verdicts and summaries, the Markdown report and timeline, secret redaction, storage (including crash-truncated output), and the export bundle layout.
+- `ReproCoreTests` covers log level classification, the video clock (first frame, pauses, stop), the log file format, workspace choices, millisecond timestamps, queries, verdicts, reports, secret redaction, storage, and the export bundle.
+- `ReproAgentAPITests` covers CLI parsing and MCP tool mapping.
+- `ReproRecorderTests` runs real services and tasks through the capture engine. It covers placing lines on the video timeline, events, redaction, the log file next to the video, the workspace choice, plain videos, and discarding empty recordings.
 
 ```sh
-scripts/run-tests.sh -only-testing:CinderdeckTests/ReproCoreTests
+scripts/run-tests.sh -only-testing:CinderdeckTests/ReproCoreTests \
+  -only-testing:CinderdeckTests/ReproAgentAPITests -only-testing:CinderdeckTests/ReproRecorderTests
 ```

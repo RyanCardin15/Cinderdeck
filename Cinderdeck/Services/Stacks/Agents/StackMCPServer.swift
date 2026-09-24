@@ -72,7 +72,7 @@ nonisolated enum StackMCPServer {
     Tool(name: "list_repros", description: "Recent repros, newest first, with verdicts and counts. Includes recordings people made while workspace services ran.",
       properties: ["workspace": property("string", "Only repros that captured this workspace"), "limit": property("number", "Default 20")],
       required: [], readOnly: true),
-    Tool(name: "repro_summary", description: "Full result of a repro: verdict, headline, distinct errors with timestamps, crashes, failed checks and steps, markers, runs, per-source counts, and the Git branch, commit, and uncommitted files of each workspace when recording started.",
+    Tool(name: "repro_summary", description: "Full result of a repro: verdict, headline, distinct errors with timestamps, crashes, failed checks and steps, markers, runs, per-source counts, the Git branch, commit, and uncommitted files of each workspace when recording started, and logFile: a plain-text log with every line stamped with its video time and clock time.",
       properties: ["repro": repro], required: [], readOnly: true),
     Tool(name: "repro_logs", description: "Captured output on the video timeline. Filter by time (around a moment, or from/to), source, minimum level, or text/regex. Each line has t (seconds into the video).",
       properties: ["repro": repro, "around": reproTime, "window": property("number", "Seconds either side of around (default 5)"),

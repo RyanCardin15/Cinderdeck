@@ -5,6 +5,7 @@ import Foundation
 ///     Repros/<id>/session.json    metadata, markers, sources, workspace state
 ///     Repros/<id>/lines.jsonl     one log line per row, appended while recording
 ///     Repros/<id>/git/<repo>.diff uncommitted changes when the recording started
+///     Repros/<id>/recording.log   the readable log file (also saved next to the video)
 ///     Repros/<id>/frames/         frames extracted for agents and exports
 ///     Repros/<id>/recording.mov   agent and workspace recordings (user recordings stay where they were saved)
 nonisolated struct ReproStore: Sendable {
@@ -16,6 +17,8 @@ nonisolated struct ReproStore: Sendable {
   func folder(_ id: UUID) -> URL { directory.appendingPathComponent(id.uuidString, isDirectory: true) }
   func sessionURL(_ id: UUID) -> URL { folder(id).appendingPathComponent("session.json") }
   func linesURL(_ id: UUID) -> URL { folder(id).appendingPathComponent("lines.jsonl") }
+  /// The library copy of the readable log file. Always present for saved repros with output.
+  func logURL(_ id: UUID) -> URL { folder(id).appendingPathComponent("recording.log") }
   func framesFolder(_ id: UUID) -> URL { folder(id).appendingPathComponent("frames", isDirectory: true) }
   func gitFolder(_ id: UUID) -> URL { folder(id).appendingPathComponent("git", isDirectory: true) }
 
@@ -145,8 +148,9 @@ nonisolated enum ReproBundleExporter {
     }
 
     let readme = folder.appendingPathComponent("README.md")
-    try ReproReport.markdown(session, lines: lines, videoFile: videoName).write(to: readme, atomically: true, encoding: .utf8)
-    try ReproReport.timeline(session, lines: lines).write(to: folder.appendingPathComponent("timeline.log"), atomically: true, encoding: .utf8)
+    try ReproReport.markdown(session, lines: lines, videoFile: videoName, logFile: "recording.log").write(to: readme, atomically: true, encoding: .utf8)
+    try ReproReport.logFile(session, lines: lines, videoName: videoName ?? session.videoURL?.lastPathComponent)
+      .write(to: folder.appendingPathComponent("recording.log"), atomically: true, encoding: .utf8)
 
     let logs = folder.appendingPathComponent("logs", isDirectory: true)
     try manager.createDirectory(at: logs, withIntermediateDirectories: true)

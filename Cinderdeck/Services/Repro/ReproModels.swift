@@ -64,6 +64,32 @@ nonisolated struct ReproLogLine: Codable, Equatable, Identifiable, Sendable {
   var isOffscreen: Bool { offscreen == true }
 }
 
+// Clock times are stored as epoch seconds with milliseconds; ISO 8601 dates
+// would drop the fraction the log file shows.
+extension ReproLogLine {
+  nonisolated private enum CodingKeys: String, CodingKey { case id, t, at, source, text, level, offscreen }
+  nonisolated init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    id = try c.decode(Int.self, forKey: .id)
+    t = try c.decode(Double.self, forKey: .t)
+    at = Date(timeIntervalSince1970: try c.decode(Double.self, forKey: .at))
+    source = try c.decode(String.self, forKey: .source)
+    text = try c.decode(String.self, forKey: .text)
+    level = try c.decode(ReproLogLevel.self, forKey: .level)
+    offscreen = try c.decodeIfPresent(Bool.self, forKey: .offscreen)
+  }
+  nonisolated func encode(to encoder: Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(id, forKey: .id)
+    try c.encode((t * 1000).rounded() / 1000, forKey: .t)
+    try c.encode((at.timeIntervalSince1970 * 1000).rounded() / 1000, forKey: .at)
+    try c.encode(source, forKey: .source)
+    try c.encode(text, forKey: .text)
+    try c.encode(level, forKey: .level)
+    try c.encodeIfPresent(offscreen, forKey: .offscreen)
+  }
+}
+
 nonisolated struct ReproSource: Codable, Equatable, Identifiable, Sendable {
   enum Kind: String, Codable, Sendable { case service, task }
   var id: String
@@ -93,6 +119,34 @@ nonisolated struct ReproMarker: Codable, Equatable, Identifiable, Sendable {
   var by: String?
 
   var isFailure: Bool { outcome == .fail }
+}
+
+extension ReproMarker {
+  nonisolated private enum CodingKeys: String, CodingKey { case id, t, at, kind, label, detail, outcome, source, by }
+  nonisolated init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    id = try c.decode(UUID.self, forKey: .id)
+    t = try c.decode(Double.self, forKey: .t)
+    at = Date(timeIntervalSince1970: try c.decode(Double.self, forKey: .at))
+    kind = try c.decode(Kind.self, forKey: .kind)
+    label = try c.decode(String.self, forKey: .label)
+    detail = try c.decodeIfPresent(String.self, forKey: .detail)
+    outcome = try c.decodeIfPresent(Outcome.self, forKey: .outcome)
+    source = try c.decodeIfPresent(String.self, forKey: .source)
+    by = try c.decodeIfPresent(String.self, forKey: .by)
+  }
+  nonisolated func encode(to encoder: Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(id, forKey: .id)
+    try c.encode(t, forKey: .t)
+    try c.encode((at.timeIntervalSince1970 * 1000).rounded() / 1000, forKey: .at)
+    try c.encode(kind, forKey: .kind)
+    try c.encode(label, forKey: .label)
+    try c.encodeIfPresent(detail, forKey: .detail)
+    try c.encodeIfPresent(outcome, forKey: .outcome)
+    try c.encodeIfPresent(source, forKey: .source)
+    try c.encodeIfPresent(by, forKey: .by)
+  }
 }
 
 nonisolated struct ReproRepoState: Codable, Equatable, Sendable {
@@ -147,10 +201,64 @@ nonisolated enum ReproStatus: String, Codable, Sendable {
   var isActive: Bool { self == .recording || self == .finalizing }
 }
 
+/// Which workspaces' output a screen recording captures.
+nonisolated enum ReproLogScope: Equatable, Sendable {
+  /// Every workspace with a service or run producing output. The default.
+  case running
+  /// Only these workspace ids.
+  case only(Set<String>)
+  /// Plain videos: nothing is captured.
+  case off
+
+  init(mode: String?, workspaces: [String]?) {
+    switch mode {
+    case "off": self = .off
+    case "selected": self = .only(Set(workspaces ?? []))
+    default: self = .running
+    }
+  }
+  var mode: String {
+    switch self { case .running: return "running"; case .only: return "selected"; case .off: return "off" }
+  }
+  var workspaces: [String] { if case .only(let ids) = self { return ids.sorted() }; return [] }
+
+  func includes(_ workspace: String) -> Bool {
+    switch self {
+    case .running: return true
+    case .only(let ids): return ids.contains(workspace)
+    case .off: return false
+    }
+  }
+  var isOff: Bool {
+    switch self { case .off: return true; case .only(let ids): return ids.isEmpty; case .running: return false }
+  }
+
+  /// Selecting a workspace from "all running" narrows to it; toggling the last one off turns logs off.
+  func toggling(_ workspace: String) -> ReproLogScope {
+    switch self {
+    case .running, .off: return .only([workspace])
+    case .only(var ids):
+      if ids.contains(workspace) { ids.remove(workspace) } else { ids.insert(workspace) }
+      return ids.isEmpty ? .off : .only(ids)
+    }
+  }
+
+  /// "All running workspaces", "Shop and Billing", or "Off".
+  func summary(names: [String: String]) -> String {
+    switch self {
+    case .running: return "All running workspaces"
+    case .off: return "Off"
+    case .only(let ids):
+      let labels = ids.map { names[$0] ?? $0 }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+      return labels.isEmpty ? "Off" : ReproFormat.list(labels)
+    }
+  }
+}
+
 nonisolated enum ReproOrigin: String, Codable, Sendable {
   /// Any screen recording made while workspace services or runs were active.
   case recording
-  /// Started from Workspaces → Repros.
+  /// Started from Workspaces → Recordings.
   case workspace
   /// Started by an agent or the CLI.
   case agent
@@ -179,8 +287,17 @@ nonisolated struct ReproSession: Codable, Equatable, Identifiable, Sendable {
   var firstErrorLine: Int?
   var truncated = false
   var detail: String?
+  /// How the workspaces were chosen, e.g. "All running workspaces".
+  var scope: String?
+  /// The log file people see: next to the video when it was saved there.
+  var logFile: String?
   var videoURL: URL? { videoPath.map { URL(fileURLWithPath: $0) } }
   var workspaceIDs: [String] { workspaces.map(\.id) }
+
+  /// Workspaces with captured state or output, in first-seen order.
+  var workspaceNames: [String] {
+    (workspaces.map(\.name) + sources.map(\.workspaceName)).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+  }
 
   func source(_ id: String) -> ReproSource? { sources.first { $0.id == id } }
   func label(for source: String) -> String { self.source(source)?.name ?? source }
@@ -264,6 +381,16 @@ nonisolated enum ReproFormat {
       total = total * 60 + value
     }
     return total
+  }
+
+  /// "A", "A and B", "A, B, and C".
+  static func list(_ items: [String]) -> String {
+    switch items.count {
+    case 0: return ""
+    case 1: return items[0]
+    case 2: return "\(items[0]) and \(items[1])"
+    default: return items.dropLast().joined(separator: ", ") + ", and " + items.last!
+    }
   }
 
   static func duration(_ seconds: Double) -> String {
@@ -414,7 +541,7 @@ nonisolated enum ReproReport {
   }
 
   /// A self-contained Markdown summary for bug reports and agent prompts.
-  static func markdown(_ session: ReproSession, lines: [ReproLogLine], videoFile: String? = nil) -> String {
+  static func markdown(_ session: ReproSession, lines: [ReproLogLine], videoFile: String? = nil, logFile: String? = nil) -> String {
     let summary = ReproSummary(session: session, lines: lines)
     let date = ISO8601DateFormatter().string(from: session.createdAt)
     var out = "# \(session.title)\n\n"
@@ -422,7 +549,8 @@ nonisolated enum ReproReport {
     out += "- Recorded: \(date) by \(session.actor.label)\n"
     out += "- Duration: \(ReproFormat.duration(session.duration)) · \(session.lineCount) log lines from \(session.sources.count) source\(session.sources.count == 1 ? "" : "s")\n"
     if let capture = session.capture { out += "- Captured: \(capture)\n" }
-    if let videoFile { out += "- Video: `\(videoFile)` (log timestamps are positions in this video)\n" }
+    if let videoFile { out += "- Video: `\(videoFile)`\n" }
+    if let logFile { out += "- Log file: `\(logFile)` (every line is stamped with its position in the video)\n" }
     if session.truncated { out += "- Note: output exceeded the capture limit; later lines were counted but not stored.\n" }
     if !session.markers.isEmpty {
       out += "\n## Timeline\n\n| Time | Event | Result |\n| --- | --- | --- |\n"
@@ -477,6 +605,82 @@ nonisolated enum ReproReport {
       }
     }
     return out
+  }
+
+  /// "api" when one workspace was captured; "shop/api" when several are mixed.
+  static func sourceLabels(_ session: ReproSession) -> [String: String] {
+    let multiple = Set(session.sources.map(\.workspace)).count > 1
+    return Dictionary(uniqueKeysWithValues: session.sources.map { ($0.id, multiple ? "\($0.workspace)/\($0.name)" : $0.name) })
+  }
+
+  /// The plain-text log saved with a recording: every captured line and event in
+  /// video order, each stamped with its video position and clock time.
+  static func logFile(_ session: ReproSession, lines: [ReproLogLine], videoName: String?, timeZone: TimeZone = .current) -> String {
+    let posix = Locale(identifier: "en_US_POSIX")
+    let clock = DateFormatter()
+    clock.locale = posix; clock.timeZone = timeZone; clock.dateFormat = "HH:mm:ss.SSS"
+    let day = DateFormatter()
+    day.locale = posix; day.timeZone = timeZone; day.dateFormat = "yyyy-MM-dd HH:mm:ss zzz"
+    let summary = ReproSummary(session: session, lines: lines)
+    let labels = sourceLabels(session)
+    let width = min(24, labels.values.map(\.count).max() ?? 0)
+    func pad(_ text: String, _ count: Int) -> String { text.count >= count ? text : text + String(repeating: " ", count: count - text.count) }
+    func stamp(_ t: Double, _ date: Date) -> String { "[\(ReproFormat.timestamp(t))  \(clock.string(from: date))]" }
+
+    var out = "Cinderdeck workspace log\n========================\n"
+    out += "Video:      \(videoName ?? "(not saved)")\n"
+    out += "Recorded:   \(day.string(from: session.createdAt)) · \(ReproFormat.duration(session.duration))\n"
+    let names = session.workspaceNames
+    let captured = names.isEmpty ? "No workspace output" : ReproFormat.list(names)
+    out += "Captured:   \(captured)" + (session.scope.map { " (\($0))" } ?? "") + "\n"
+    out += "Result:     \(summary.verdict.rawValue.capitalized) — \(summary.headline)\n"
+    if session.truncated { out += "Note:       Output passed the \(session.lineCount - lines.count) line limit; later lines were counted but not saved.\n" }
+
+    out += "\nSources\n"
+    let sourceWidth = max(width, 12)
+    for source in session.sources {
+      var row = "  " + pad(labels[source.id] ?? source.name, sourceWidth) + "  " + "\(source.lineCount) line\(source.lineCount == 1 ? "" : "s")"
+      if source.errorCount > 0 { row += ", \(source.errorCount) error\(source.errorCount == 1 ? "" : "s")" }
+      if source.warningCount > 0 { row += ", \(source.warningCount) warning\(source.warningCount == 1 ? "" : "s")" }
+      out += row + "\n"
+    }
+    for workspace in session.workspaces where !session.sources.contains(where: { $0.workspace == workspace.id }) {
+      out += "  " + pad(workspace.name, sourceWidth) + "  running, but printed nothing during the recording\n"
+    }
+    if session.sources.isEmpty && session.workspaces.isEmpty { out += "  (none)\n" }
+
+    let zone = timeZone.abbreviation(for: session.createdAt) ?? timeZone.identifier
+    out += """
+
+    How to read this file
+      [video time  clock time]  source  message
+      Video time 00:00.000 is the first frame of the video. Seek the video there to see that moment.
+      Clock times are local (\(zone)).
+      ERROR and WARN mark lines that look like errors or warnings.
+      ▶ marks events: services starting, becoming ready, or crashing, workflow steps, and marks you added.
+      ~ marks output written just before recording started or while it was paused.
+
+    """
+    out += String(repeating: "-", count: 78) + "\n"
+
+    // Events sort before output at the same instant: the step explains the output.
+    var rows: [(t: Double, order: Int, text: String)] = []
+    for (index, marker) in session.markers.enumerated() {
+      var text = "\(stamp(marker.t, marker.at)) ▶ \(marker.label)"
+      if let detail = marker.detail, !detail.isEmpty { text += " — " + detail.replacingOccurrences(of: "\n", with: " ") }
+      if let outcome = marker.outcome, outcome != .info { text += "  [\(outcome.rawValue.uppercased())]" }
+      if let by = marker.by, marker.kind == .note || marker.kind == .check { text += "  (\(by))" }
+      rows.append((marker.t, index - 1_000_000, text))
+    }
+    for line in lines {
+      let level = line.level == .error ? "ERROR  " : line.level == .warning ? "WARN   " : ""
+      let text = "\(stamp(line.t, line.at)) \(line.isOffscreen ? "~" : " ") \(pad(labels[line.source] ?? line.source, width))  \(level)\(line.text)"
+      rows.append((line.t, line.id, text))
+    }
+    rows.sort { $0.t == $1.t ? $0.order < $1.order : $0.t < $1.t }
+    out += rows.map(\.text).joined(separator: "\n")
+    if rows.isEmpty { out += "(nothing was captured)" }
+    return out + "\n"
   }
 
   /// A filesystem-safe name fragment.

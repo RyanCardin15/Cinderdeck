@@ -40,6 +40,20 @@ final class ReproAgentAPITests: XCTestCase {
     XCTAssertEqual(try request([]).method, "repro.status")
   }
 
+  func testDumpAndScopeCommands() throws {
+    XCTAssertEqual(try request(["dump"]).method, "repro.dump")
+    XCTAssertEqual(try request(["dump", "ab12", "--path"]).params["repro"]?.stringValue, "ab12")
+    XCTAssertTrue(try ReproCLI.parse(["dump", "--path"]).has("path"))
+    XCTAssertEqual(try request(["logs"]).method, "repro.logs", "logs is not shadowed by dump")
+    XCTAssertNil(try request(["scope"]).params["mode"], "No argument shows the current choice")
+    XCTAssertEqual(try request(["scope", "off"]).params["mode"]?.stringValue, "off")
+    XCTAssertEqual(try request(["scope", "running"]).params["mode"]?.stringValue, "running")
+    let selected = try request(["scope", "shop", "billing"])
+    XCTAssertEqual(selected.method, "repro.scope")
+    XCTAssertEqual(selected.params["mode"]?.stringValue, "selected")
+    XCTAssertEqual(selected.params["workspaces"]?.stringsValue, ["shop", "billing"])
+  }
+
   func testRejectsMistakes() {
     XCTAssertThrowsError(try ReproCLI.parse(["start", "--bogus"]))
     XCTAssertThrowsError(try ReproCLI.parse(["start", "--title"]))

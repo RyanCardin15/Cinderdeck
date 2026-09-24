@@ -2,6 +2,17 @@ import AVFoundation
 import Combine
 import Foundation
 
+extension ReproLogScope {
+  static func load(from defaults: UserDefaults) -> ReproLogScope {
+    ReproLogScope(mode: defaults.string(forKey: PreferencesKeys.reproLogScope),
+      workspaces: defaults.stringArray(forKey: PreferencesKeys.reproLogWorkspaces))
+  }
+  func save(to defaults: UserDefaults) {
+    defaults.set(mode, forKey: PreferencesKeys.reproLogScope)
+    defaults.set(workspaces, forKey: PreferencesKeys.reproLogWorkspaces)
+  }
+}
+
 /// What the next screen recording should capture. Agents and the Workspaces
 /// window set this before starting a recording; ordinary recordings use defaults.
 struct ReproRequest: Sendable {
@@ -37,6 +48,8 @@ final class ReproRecorder: ObservableObject {
     var sources = 0
     var markers = 0
     var lastError: String?
+    /// Names of workspaces with output so far.
+    var workspaces: [String] = []
     var isPaused = false
     var isFinalizing = false
   }
@@ -49,6 +62,11 @@ final class ReproRecorder: ObservableObject {
   @Published private(set) var live: Live?
   @Published private(set) var sessions: [ReproSession] = []
   @Published private(set) var lastError: String?
+  /// Which workspaces ordinary screen recordings capture. Shared by the recording
+  /// toolbar, Preferences, and the CLI.
+  @Published private(set) var scope: ReproLogScope
+  /// Called after a repro is saved with its log file, for the confirmation toast.
+  var onSaved: ((ReproSession) -> Void)?
 
   let supervisor: StackSupervisor
   let runner: WorkspaceRunner
@@ -56,6 +74,7 @@ final class ReproRecorder: ObservableObject {
   private let defaults: UserDefaults
   private let secrets: any StackSecretsStoring
   private let snapshot: (StackDefinitionFile) -> StackSnapshot
+  private let isTemporary: (URL) -> Bool
   private var subscriptions = Set<AnyCancellable>()
   private var started = false
 
@@ -91,10 +110,17 @@ final class ReproRecorder: ObservableObject {
   init(supervisor: StackSupervisor, runner: WorkspaceRunner, store: ReproStore,
     events: AnyPublisher<RecordingLifecycleEvent, Never>, defaults: UserDefaults = .standard,
     secrets: any StackSecretsStoring = StackSecretsStore(),
-    snapshot: ((StackDefinitionFile) -> StackSnapshot)? = nil) {
+    snapshot: ((StackDefinitionFile) -> StackSnapshot)? = nil, isTemporary: ((URL) -> Bool)? = nil) {
     self.supervisor = supervisor; self.runner = runner; self.store = store
     self.defaults = defaults; self.secrets = secrets
     self.snapshot = snapshot ?? { StackControlService.shared.stackSnapshot($0) }
+    self.isTemporary = isTemporary ?? { TempCaptureManager.shared.isTempFile($0) }
+    scope = ReproLogScope.load(from: defaults)
+    NotificationCenter.default.publisher(for: .captureSavedFromTemp)
+      .sink { [weak self] note in
+        guard let from = note.userInfo?["from"] as? URL, let to = note.userInfo?["to"] as? URL else { return }
+        self?.videoMoved(from: from, to: to)
+      }.store(in: &subscriptions)
     events.sink { [weak self] event in self?.handle(event) }.store(in: &subscriptions)
   }
 
@@ -124,7 +150,13 @@ final class ReproRecorder: ObservableObject {
 
   var isCapturing: Bool { session != nil }
   var activeSessionID: UUID? { session?.id }
-  var isEnabled: Bool { defaults.object(forKey: PreferencesKeys.reproCaptureLogs) as? Bool ?? true }
+  var logsNextToVideo: Bool { defaults.object(forKey: PreferencesKeys.reproLogNextToVideo) as? Bool ?? true }
+
+  func setScope(_ scope: ReproLogScope) {
+    let normalized: ReproLogScope = scope.isOff ? .off : scope
+    normalized.save(to: defaults)
+    self.scope = normalized
+  }
 
   /// The next recording that starts within ten minutes becomes this repro.
   func expect(_ request: ReproRequest) { self.request = request }
@@ -163,14 +195,20 @@ final class ReproRecorder: ObservableObject {
     // Generous: a Screen Recording permission prompt can sit between request and start.
     let expected = request.flatMap { date.timeIntervalSince($0.requestedAt) < 600 ? $0 : nil }
     request = nil
-    guard session == nil, expected != nil || isEnabled else { return }
-    let incoming = expected ?? ReproRequest(origin: .recording, actor: .user)
+    scope = ReproLogScope.load(from: defaults)
+    // Explicit requests (agents, Workspaces) choose their own workspaces; ordinary
+    // recordings follow the toolbar choice, and "off" means a plain video.
+    guard session == nil, expected != nil || !scope.isOff else { return }
+    let incoming = expected ?? ReproRequest(origin: .recording, actor: .user,
+      workspaces: scope == .running ? nil : Set(scope.workspaces))
     var clock = ReproClock(start: date)
     // The first frame can arrive just before the recorder reports that it started.
     if let lastFirstFrame, lastFirstFrame.timeIntervalSince(date) > -3 { clock.firstFrame(at: lastFirstFrame) }
     lastFirstFrame = nil
     var session = ReproSession(id: incoming.id, title: incoming.title ?? "", origin: incoming.origin, createdAt: date, actor: incoming.actor)
     session.capture = incoming.capture
+    session.scope = incoming.workspaces == nil ? "all running workspaces"
+      : incoming.origin == .recording ? "chosen in the recording toolbar" : "chosen for this recording"
     do {
       try store.prepare(session.id)
       try store.save(session)
@@ -313,6 +351,7 @@ final class ReproRecorder: ObservableObject {
       updated.warnings = session.warningCount
       updated.sources = session.sources.count
       updated.markers = session.markers.count
+      updated.workspaces = session.workspaceNames
       if updated != live { live = updated }
     }
     if Date().timeIntervalSince(lastSave) > 5 { save() }
@@ -526,10 +565,77 @@ final class ReproRecorder: ObservableObject {
       resume(session.id, with: nil)
       return
     }
+    session.logFile = await writeLogFiles(for: session)?.path
     do { try store.save(session) } catch { lastError = "Could not save repro: \(error.localizedDescription)" }
     sessions.removeAll { $0.id == session.id }
     sessions.insert(session, at: 0)
     resume(session.id, with: session)
+    onSaved?(session)
+  }
+
+  // MARK: Log files
+
+  /// Writes the readable log to the library, and next to the video when it was
+  /// saved somewhere permanent. Returns the file people should see.
+  @discardableResult
+  private func writeLogFiles(for session: ReproSession) async -> URL? {
+    let store = store
+    let canonical = store.logURL(session.id)
+    var sidecar: URL?
+    if logsNextToVideo, let video = session.videoURL, FileManager.default.fileExists(atPath: video.path),
+      !video.standardizedFileURL.path.hasPrefix(store.folder(session.id).standardizedFileURL.path), !isTemporary(video) {
+      sidecar = Self.sidecarURL(for: video, current: session.logFile)
+    }
+    let videoName = session.videoURL?.lastPathComponent
+    let written = await Task.detached { () -> (Bool, Bool) in
+      let text = ReproReport.logFile(session, lines: store.loadLines(session.id), videoName: videoName)
+      let data = Data(text.utf8)
+      let savedCanonical = (try? data.write(to: canonical, options: .atomic)) != nil
+      let savedSidecar = sidecar.map { (try? data.write(to: $0, options: .atomic)) != nil } ?? false
+      return (savedCanonical, savedSidecar)
+    }.value
+    if sidecar != nil && !written.1 { lastError = "Could not save the log file next to the video; it is in the Recordings library." }
+    return written.1 ? sidecar : (written.0 ? canonical : nil)
+  }
+
+  /// "<video name>.log" beside the video, without replacing a file Cinderdeck did not write.
+  private nonisolated static func sidecarURL(for video: URL, current: String?) -> URL {
+    let base = video.deletingPathExtension()
+    let preferred = base.appendingPathExtension("log")
+    if !FileManager.default.fileExists(atPath: preferred.path) || preferred.path == current { return preferred }
+    return base.deletingLastPathComponent().appendingPathComponent(base.lastPathComponent + " (workspace logs).log")
+  }
+
+  /// The log file for a repro: beside the video when it is there, otherwise the
+  /// library copy, rebuilt if it is missing.
+  func logFileURL(for session: ReproSession) async -> URL? {
+    if let path = session.logFile, FileManager.default.fileExists(atPath: path) { return URL(fileURLWithPath: path) }
+    let canonical = store.logURL(session.id)
+    if FileManager.default.fileExists(atPath: canonical.path) { return canonical }
+    guard !session.status.isActive else { return nil }
+    return await writeLogFiles(for: session)
+  }
+
+  func logText(for session: ReproSession) async -> String {
+    if !session.status.isActive, let url = await logFileURL(for: session), let text = try? String(contentsOf: url, encoding: .utf8) { return text }
+    return ReproReport.logFile(session, lines: await lines(for: session.id), videoName: session.videoURL?.lastPathComponent)
+  }
+
+  /// Keeps a repro attached when its video is saved from the temporary capture
+  /// folder, and puts the log file beside the video's new location.
+  func videoMoved(from source: URL, to destination: URL) {
+    let path = source.standardizedFileURL.path
+    guard let index = sessions.firstIndex(where: { $0.videoPath.map { URL(fileURLWithPath: $0).standardizedFileURL.path } == path }) else { return }
+    sessions[index].videoPath = destination.path
+    sessions[index].videoBookmark = try? destination.bookmarkData()
+    let session = sessions[index]
+    try? store.save(session)
+    Task { [weak self] in
+      guard let self, let url = await self.writeLogFiles(for: session),
+        let current = self.sessions.firstIndex(where: { $0.id == session.id }) else { return }
+      self.sessions[current].logFile = url.path
+      try? self.store.save(self.sessions[current])
+    }
   }
 
   private func discard() async {
@@ -563,7 +669,7 @@ final class ReproRecorder: ObservableObject {
     let formatter = DateFormatter()
     formatter.dateStyle = .medium; formatter.timeStyle = .short
     let date = formatter.string(from: session.createdAt)
-    return names.isEmpty ? "Repro · \(date)" : "\(names.joined(separator: ", ")) · \(date)"
+    return names.isEmpty ? "Recording · \(date)" : "\(names.joined(separator: ", ")) · \(date)"
   }
 
   // MARK: Library

@@ -15,7 +15,7 @@ nonisolated enum ReproCLI {
     "around", "span", "source", "level", "grep", "lines", "n", "at", "marker", "size", "dest", "out", "timeout", "limit",
     "as", "session"]
   static let booleans: Set<String> = ["audio", "wait", "json", "zip", "no-video", "pass", "fail", "force", "first-error", "help",
-    "task", "workflow"]
+    "task", "workflow", "path"]
 
   static func parse(_ arguments: [String]) throws -> Options {
     var options = Options()
@@ -123,6 +123,16 @@ nonisolated enum ReproCLI {
       return ("repro.export", params, 600)
     case "open":
       try noExtra(1, "open [repro]"); repro(); return ("repro.open", params, 30)
+    case "dump":
+      try noExtra(1, "dump [repro] [--path]"); repro(); return ("repro.dump", params, 60)
+    case "scope":
+      if let first = args.first {
+        switch first.lowercased() {
+        case "running", "all", "auto", "off", "none": params["mode"] = .string(first.lowercased())
+        default: params["mode"] = .string("selected"); params["workspaces"] = .array(args.map { .string($0) })
+        }
+      }
+      return ("repro.scope", params, 30)
     case "delete", "rm":
       guard args.count == 1 else { throw StackControlError.invalid("Use: cinderdeck repro delete <repro-id>") }
       repro(); return ("repro.delete", params, 60)
@@ -163,6 +173,15 @@ nonisolated enum ReproCLI {
         print(JSONValue.object(["repro": result["repro"] ?? .null, "frames": .array(trimmed)]).prettyString())
       case "repro.stop", "repro.wait":
         return finish(result, options: options)
+      case "repro.dump" where !options.json:
+        guard let path = result["path"]?.stringValue else { throw StackControlError.notFound("No log file") }
+        if options.has("path") { print(path); return 0 }
+        guard let handle = FileHandle(forReadingAtPath: path) else { throw StackControlError.notFound("Cannot read \(path)") }
+        defer { try? handle.close() }
+        // Stream large logs instead of loading them whole.
+        while let chunk = try handle.read(upToCount: 1 << 20), !chunk.isEmpty { FileHandle.standardOutput.write(chunk) }
+      case "repro.scope" where !options.json:
+        print(result["summary"]?.stringValue.map { "Toolbar recordings save logs from: \($0)" } ?? result.prettyString())
       default:
         print(result.prettyString())
       }
@@ -221,6 +240,8 @@ nonisolated enum ReproCLI {
     frame [repro] [--at T,T…|--marker L]   Save video frames (default: first error) with nearby output
           [--first-error] [--out FILE]
     export [repro] [--dest DIR] [--zip]    Shareable folder: video, README, timeline, logs, diffs
+    dump [repro] [--path]                  Print the recording's .log file (or just its path)
+    scope [running|off|<workspace>…]       Show or set which workspaces toolbar recordings capture
     open [repro]                           Open in the video editor with synced logs
     delete <repro-id>                      Delete a saved repro
 

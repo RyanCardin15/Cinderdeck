@@ -1290,12 +1290,15 @@ final class VideoEditorState: ObservableObject {
     isRightSidebarVisible.toggle()
   }
 
-  /// Finds the repro recorded with this video and shows its synced output.
+  /// Finds the workspace logs recorded with this video. The log panel opens
+  /// only when asked for, or when opened at a specific moment.
   func loadRepro() async {
     guard !isGIF, await reproModel.load(for: [sourceURL, originalURL]) else { return }
     hasRepro = true
-    isReproPanelVisible = true
-    if let t = reproModel.takePendingSeek() { seek(to: CMTime(seconds: t, preferredTimescale: 600)) }
+    if let t = reproModel.takePendingSeek() {
+      isReproPanelVisible = true
+      seek(to: CMTime(seconds: t, preferredTimescale: 600))
+    }
   }
 
   func toggleReproPanel() {

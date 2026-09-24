@@ -206,17 +206,20 @@ struct VideoEditorReproPanel: View {
 
   private func footer(_ session: ReproSession) -> some View {
     HStack(spacing: 8) {
-      Button { exportBundle() } label: {
-        if model.isExporting { ProgressView().controlSize(.small) } else { Label("Export…", systemImage: "square.and.arrow.up") }
-      }
-      .disabled(model.isExporting).help("Save the video, summary, logs, and diffs as a shareable folder")
-      Button { copy(model.agentBrief()); model.message = "Summary copied" } label: { Label("Copy summary", systemImage: "doc.on.clipboard") }
-        .help("Copy a Markdown summary with errors, markers, and the repro id for agents")
+      Button { Task { await ReproLibraryActions.revealLog(session) } } label: { Label("Show Log File", systemImage: "doc.text.magnifyingglass") }
+        .help("The .log file with every line stamped with its video time")
+      Button { Task { await ReproLibraryActions.copyLog(session); model.message = "Log copied" } } label: { Label("Copy Log", systemImage: "doc.on.clipboard") }
+        .help("Copy the whole log to paste into an issue or an agent")
       Spacer(minLength: 0)
       if let message = model.message {
         Text(message).font(.system(size: 10)).foregroundColor(.secondary).lineLimit(1)
           .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { model.message = nil } }
       }
+      Menu {
+        Button("Export Bundle…") { exportBundle() }
+        Button("Copy Summary for an Agent") { copy(model.agentBrief()); model.message = "Summary copied" }
+      } label: { Image(systemName: "ellipsis.circle") }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().disabled(model.isExporting)
     }
     .controlSize(.small)
     .padding(.horizontal, 12).padding(.vertical, 8)
