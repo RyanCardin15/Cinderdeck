@@ -74,13 +74,14 @@ struct HistoryFloatingContentView: View {
   }
 
   private var basePanelSize: CGSize {
-    HistoryFloatingLayout.basePanelSize(for: manager.presentationMode)
+    HistoryFloatingLayout.basePanelSize(for: manager.presentationMode, section: manager.selectedSection)
   }
 
   private var resolvedPanelScale: CGFloat {
     HistoryFloatingLayout.effectiveScale(
       for: manager.panelScale,
       mode: manager.presentationMode,
+      section: manager.selectedSection,
       on: ScreenUtility.activeScreen()
     )
   }
@@ -89,6 +90,7 @@ struct HistoryFloatingContentView: View {
     HistoryFloatingLayout.panelSize(
       for: manager.panelScale,
       mode: manager.presentationMode,
+      section: manager.selectedSection,
       on: ScreenUtility.activeScreen()
     )
   }

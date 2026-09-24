@@ -133,8 +133,10 @@ final class HistoryFloatingPanel: NSPanel {
     let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
     let section = HistoryFloatingManager.shared.selectedSection
+    // Arrow events can include numeric-pad/function flags even with no modifier held.
+    let navigationModifiers = flags.intersection([.command, .control, .option, .shift])
     if section != .captures,
-      !isTextInputActive, flags.isEmpty, (123...126).contains(event.keyCode) {
+      !isTextInputActive, navigationModifiers.isEmpty, (123...126).contains(event.keyCode) {
       let delta = event.keyCode == 123 || event.keyCode == 126 ? -1 : 1
       NotificationCenter.default.post(name: .historyMoveSelection, object: self, userInfo: ["delta": delta, "section": section.rawValue])
       return

@@ -100,6 +100,7 @@ final class HistoryFloatingManager: ObservableObject {
     didSet {
       UserDefaults.standard.set(selectedSection.rawValue, forKey: PreferencesKeys.historySelectedSection)
       searchText = ""
+      if selectedSection != oldValue { refreshPanel() }
     }
   }
   @Published var isPresentingAuxiliaryUI = false
@@ -448,6 +449,7 @@ final class HistoryFloatingManager: ObservableObject {
     HistoryFloatingLayout.panelSize(
       for: panelScale,
       mode: presentationMode,
+      section: selectedSection,
       on: ScreenUtility.activeScreen()
     )
   }
@@ -460,6 +462,7 @@ final class HistoryFloatingManager: ObservableObject {
     HistoryFloatingLayout.cornerRadius(
       for: panelScale,
       mode: presentationMode,
+      section: selectedSection,
       on: ScreenUtility.activeScreen()
     )
   }
@@ -586,16 +589,17 @@ enum HistoryFloatingTimeFilter: String, CaseIterable, Identifiable, Equatable {
 
 enum HistoryFloatingLayout {
   static let compactBasePanelSize = CGSize(width: 920, height: 316)
+  static let compactStacksPanelSize = CGSize(width: 920, height: 400)
   static let expandedBasePanelSize = CGSize(width: 1_040, height: 680)
   static let compactBaseCornerRadius: CGFloat = 30
   static let expandedBaseCornerRadius: CGFloat = 32
   static let defaultScale = 1.0
   static let scaleRange: ClosedRange<Double> = 0.8...1.4
 
-  static func basePanelSize(for mode: HistoryFloatingPresentationMode) -> CGSize {
+  static func basePanelSize(for mode: HistoryFloatingPresentationMode, section: HistorySection = .captures) -> CGSize {
     switch mode {
     case .compact:
-      return compactBasePanelSize
+      return section == .stacks ? compactStacksPanelSize : compactBasePanelSize
     case .expanded:
       return expandedBasePanelSize
     }
@@ -621,10 +625,11 @@ enum HistoryFloatingLayout {
   static func effectiveScale(
     for scale: Double,
     mode: HistoryFloatingPresentationMode,
+    section: HistorySection = .captures,
     on screen: NSScreen = ScreenUtility.activeScreen()
   ) -> CGFloat {
     let requestedScale = CGFloat(clampedScale(scale))
-    let baseSize = basePanelSize(for: mode)
+    let baseSize = basePanelSize(for: mode, section: section)
     let safeFrame = screen.visibleFrame.insetBy(
       dx: mode == .expanded ? 42 : 24,
       dy: mode == .expanded ? 42 : 24
@@ -636,10 +641,11 @@ enum HistoryFloatingLayout {
   static func panelSize(
     for scale: Double,
     mode: HistoryFloatingPresentationMode,
+    section: HistorySection = .captures,
     on screen: NSScreen = ScreenUtility.activeScreen()
   ) -> CGSize {
-    let resolvedScale = effectiveScale(for: scale, mode: mode, on: screen)
-    let baseSize = basePanelSize(for: mode)
+    let resolvedScale = effectiveScale(for: scale, mode: mode, section: section, on: screen)
+    let baseSize = basePanelSize(for: mode, section: section)
     return CGSize(
       width: baseSize.width * resolvedScale,
       height: baseSize.height * resolvedScale
@@ -649,8 +655,9 @@ enum HistoryFloatingLayout {
   static func cornerRadius(
     for scale: Double,
     mode: HistoryFloatingPresentationMode,
+    section: HistorySection = .captures,
     on screen: NSScreen = ScreenUtility.activeScreen()
   ) -> CGFloat {
-    baseCornerRadius(for: mode) * effectiveScale(for: scale, mode: mode, on: screen)
+    baseCornerRadius(for: mode) * effectiveScale(for: scale, mode: mode, section: section, on: screen)
   }
 }

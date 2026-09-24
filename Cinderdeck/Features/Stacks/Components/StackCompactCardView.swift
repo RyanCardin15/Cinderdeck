@@ -9,29 +9,35 @@ struct StackCompactCardView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 9) {
-      VStack(alignment: .leading, spacing: 5) {
-        Text(file.name).font(.system(size: 13.5, weight: .semibold)).lineLimit(1).help(file.name)
+      VStack(alignment: .leading, spacing: 6) {
+        Text(file.name).font(.system(size: 13.5, weight: .semibold))
+          .lineLimit(2, reservesSpace: true)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .help(file.name)
         StackStateBadge(label: file.definition == nil ? "Degraded" : state.label, since: state.isActive ? state.startedAt : nil)
       }
-      notices
-      ScrollView(showsIndicators: false) {
-        VStack(spacing: 5) {
+      ScrollView(.vertical, showsIndicators: true) {
+        VStack(alignment: .leading, spacing: 8) {
+          notices
           ForEach(services) { service in serviceRow(service) }
           // Repos without services still show branch information.
           ForEach((file.definition?.repos ?? []).filter { repo in !services.contains { $0.repo == repo.id } }) { repo in
-            HStack(spacing: 6) {
-              Image(systemName: "folder").font(.system(size: 9)).foregroundColor(.secondary).frame(width: 14)
-              Text(repo.id).font(.system(size: 11, weight: .medium)).foregroundColor(.secondary)
-              Spacer(minLength: 2)
+            VStack(alignment: .leading, spacing: 4) {
+              Label(repo.id, systemImage: "folder")
+                .font(.system(size: 11, weight: .medium)).foregroundColor(.primary)
+                .lineLimit(1).help(repo.id)
               StackBranchChip(stack: file.id, repo: repo, viewModel: viewModel)
             }
           }
         }
-      }.frame(maxHeight: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
+      }.frame(minHeight: 0, maxHeight: .infinity)
+      Divider()
       footer
+        .fixedSize(horizontal: false, vertical: true)
     }
     .padding(12)
-    .frame(width: 300, height: 212)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .stackSurface(cornerRadius: 16, selected: selected)
     .contentShape(RoundedRectangle(cornerRadius: 16))
     .onTapGesture { viewModel.select(file.id) }
@@ -68,21 +74,25 @@ struct StackCompactCardView: View {
 
   private func serviceRow(_ service: ServiceDefinition) -> some View {
     let runtime = viewModel.runtime(file.id, service.id)
-    return HStack(spacing: 6) {
-      StackStatusDot(phase: runtime.phase, size: 7)
-      Text(service.id).font(.system(size: 11.5, weight: .medium)).lineLimit(1)
-        .foregroundColor(runtime.phase == .stopped ? .secondary : .primary)
-      if runtime.process != nil, let owner = runtime.owner, owner.isAgent {
-        Image(systemName: "sparkles").font(.system(size: 9, weight: .bold)).foregroundColor(StackPalette.agent)
-          .help(StackOwnerBadge.help(owner))
-      }
-      Spacer(minLength: 2)
-      if let port = service.port ?? { if case .port(let port) = service.readiness { return port }; return nil }() {
-        Button { viewModel.openPort(port) } label: { StackChip(text: ":\(String(port))", tint: runtime.phase == .ready ? .accentColor : .secondary, monospaced: true) }
-          .buttonStyle(.plain).help("Open http://localhost:\(String(port))").fixedSize()
+    return VStack(alignment: .leading, spacing: 3) {
+      HStack(spacing: 6) {
+        StackStatusDot(phase: runtime.phase, size: 7)
+        Text(service.id).font(.system(size: 11.5, weight: .medium)).lineLimit(1)
+          .foregroundColor(.primary)
+          .help(service.id)
+        if runtime.process != nil, let owner = runtime.owner, owner.isAgent {
+          Image(systemName: "sparkles").font(.system(size: 9, weight: .bold)).foregroundColor(StackPalette.agent)
+            .help(StackOwnerBadge.help(owner))
+        }
+        Spacer(minLength: 2)
+        if let port = service.port ?? { if case .port(let port) = service.readiness { return port }; return nil }() {
+          Button { viewModel.openPort(port) } label: { StackChip(text: ":\(String(port))", tint: runtime.phase == .ready ? .accentColor : .secondary, monospaced: true) }
+            .buttonStyle(.plain).help("Open http://localhost:\(String(port))").fixedSize()
+        }
       }
       if let repo = service.repo.flatMap({ file.definition?.repo($0) }) {
         StackBranchChip(stack: file.id, repo: repo, viewModel: viewModel)
+          .padding(.leading, 19)
       }
     }
     .padding(.vertical, 1)
