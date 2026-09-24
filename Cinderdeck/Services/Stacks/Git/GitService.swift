@@ -16,6 +16,9 @@ actor GitService {
   func gitDirectories(at path: URL) async throws -> [URL] { try await repository(path).directories() }
   func fetch(at path: URL) async throws { try await repository(path).fetch() }
   func pull(at path: URL) async throws { try await repository(path).pull() }
+  func requireBranchAvailable(_ branch: GitBranch, at path: URL) async throws {
+    try await repository(path).requireBranchAvailable(branch)
+  }
   func switchBranch(_ branch: GitBranch, at path: URL, dirty: GitDirtyStrategy) async throws {
     try await repository(path).switchBranch(branch, dirty: dirty)
   }
@@ -119,6 +122,7 @@ private actor GitRepositoryCommands {
     await acquire(); defer { release() }
     guard !branch.name.hasPrefix("-"), !branch.name.contains("\0") else { throw StackError.message("Invalid branch name") }
     _ = try await command(["check-ref-format", "--branch", branch.name])
+    try await checkBranchWorktree(branch)
     let status = try await readStatus()
     if let operation = status.operation { throw StackError.message(operation + " — resolve in a terminal") }
     if status.isDirty {
@@ -132,6 +136,27 @@ private actor GitRepositoryCommands {
       guard branch.reference.hasPrefix("refs/remotes/") else { throw StackError.message("Invalid remote branch") }
       _ = try await command(["switch", "--track", "--", String(branch.reference.dropFirst("refs/remotes/".count))])
     } else { _ = try await command(["switch", "--", branch.name]) }
+  }
+  // Run before services are stopped, and again inside the checkout transaction
+  // before stashing. A branch owned by another worktree cannot be switched to.
+  func requireBranchAvailable(_ branch: GitBranch) async throws {
+    await acquire(); defer { release() }
+    try await checkBranchWorktree(branch)
+  }
+  private func checkBranchWorktree(_ branch: GitBranch) async throws {
+    guard !branch.isRemote else { return }
+    let root = URL(fileURLWithPath: try await command(["rev-parse", "--show-toplevel"])
+      .trimmingCharacters(in: .whitespacesAndNewlines)).resolvingSymlinksInPath().standardizedFileURL
+    let output = try await command(["worktree", "list", "--porcelain", "-z"])
+    var worktree: URL?
+    for field in output.split(separator: "\0") {
+      if field.hasPrefix("worktree ") {
+        worktree = URL(fileURLWithPath: String(field.dropFirst("worktree ".count)))
+          .resolvingSymlinksInPath().standardizedFileURL
+      } else if field == "branch refs/heads/" + branch.name, let worktree, worktree != root {
+        throw StackError.message("Branch \(branch.name) is already checked out at \(worktree.path). Open that lane or choose another branch.")
+      }
+    }
   }
   private func readStashes() async throws -> [GitStash] {
     try await command(["stash", "list", "--format=%gd%x00%H%x00%gs"]).split(separator: "\n").compactMap { line in

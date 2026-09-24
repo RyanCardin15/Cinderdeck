@@ -44,6 +44,7 @@ nonisolated struct StackDefinition: Codable, Equatable, Identifiable, Sendable {
   var services: [ServiceDefinition] = []
   var tasks: [WorkspaceTaskDefinition] = []
   var workflows: [WorkspaceWorkflowDefinition] = []
+  var lane: StackLaneInfo?
 
   var fingerprint: String {
     let encoder = JSONEncoder()
@@ -94,7 +95,9 @@ nonisolated struct StackDefinitionFile: Identifiable, Equatable, Sendable {
   let file: URL
   var definition: StackDefinition?
   var issues: [StackDefinitionIssue] = []
-  var name: String { definition?.name ?? file.deletingPathExtension().lastPathComponent }
+  var savedLane: StackLaneInfo?
+  var lane: StackLaneInfo? { definition?.lane ?? savedLane }
+  var name: String { definition?.name ?? savedLane?.reference ?? file.deletingPathExtension().lastPathComponent }
 }
 
 nonisolated enum StackError: LocalizedError {
@@ -117,6 +120,13 @@ nonisolated struct StackLaunchDefinition: Codable, Equatable, Sendable {
     if result["DOTNET_WATCH_RESTART_ON_RUDE_EDIT"] == nil { result["DOTNET_WATCH_RESTART_ON_RUDE_EDIT"] = "1" }
     result["CINDERDECK_STACK"] = stack.id
     result["CINDERDECK_SERVICE"] = service.id
+    if let lane = stack.lane {
+      result["CINDERDECK_LANE"] = lane.name
+      result["CINDERDECK_SOURCE_STACK"] = lane.sourceStackID
+      for (name, port) in lane.ports { result[StackLaneInfo.portVariable(name)] = String(port) }
+      // Assigned ports must win over shell, TOML and secrets, including a stale PORT.
+      if service.port != nil, let port = lane.ports[service.id] { result["PORT"] = String(port) }
+    }
     // Compatibility for existing project scripts.
     result["SNAPZY_STACK"] = stack.id
     result["SNAPZY_SERVICE"] = service.id
@@ -127,7 +137,7 @@ nonisolated struct StackLaunchDefinition: Codable, Equatable, Sendable {
 // Old saved service launches predate tasks and workflows. Keep them reconnectable.
 extension StackDefinition {
   nonisolated enum CodingKeys: String, CodingKey {
-    case id, name, file, root, shell, restartOnBranchChange, environment, secrets, repos, services, tasks, workflows
+    case id, name, file, root, shell, restartOnBranchChange, environment, secrets, repos, services, tasks, workflows, lane
   }
   nonisolated init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -143,5 +153,6 @@ extension StackDefinition {
     services = try c.decode([ServiceDefinition].self, forKey: .services)
     tasks = try c.decodeIfPresent([WorkspaceTaskDefinition].self, forKey: .tasks) ?? []
     workflows = try c.decodeIfPresent([WorkspaceWorkflowDefinition].self, forKey: .workflows) ?? []
+    lane = try c.decodeIfPresent(StackLaneInfo.self, forKey: .lane)
   }
 }

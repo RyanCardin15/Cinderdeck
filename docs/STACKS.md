@@ -108,6 +108,55 @@ Precedence is shell → shared environment → service environment → Keychain 
 
 Services must remain in the foreground. A daemon that calls `setsid`, or `docker compose up -d`, escapes normal group ownership. Use `docker compose up` without `-d` and configure ports so surviving listeners can be identified. Cinderdeck does not otherwise manage containers. The console is read-only; commands that require terminal input need to be configured for unattended development use.
 
+## Parallel worktree lanes
+
+Use a lane when agents need different branches running at the same time:
+
+```sh
+cinderdeck lane create shop agent/codex-1 --as Codex --session codex-1
+cinderdeck lane create shop agent/claude-2 --as "Claude Code" --session claude-2
+cinderdeck lane list shop
+cinderdeck stacks logs shop/agent/codex-1
+cinderdeck stacks stop shop/agent/codex-1
+cinderdeck stacks start shop/agent/codex-1
+cinderdeck lane remove shop/agent/codex-1
+```
+
+`lane create <stack> <branch>` snapshots the stack definition, creates a worktree for each independent repository, claims the lane for the caller, and starts its services in dependency order. It uses an existing local branch or creates one from each repository's current `HEAD`. A branch already checked out in another worktree is rejected. The original checkout, local edits, and running services stay in place. A lane can be addressed by its returned ID or `<source-stack>/<branch>` with all stack commands, including claims, logs, Git status, and restart.
+
+Open **Lanes** from any section of the Workspaces window, the expanded stack view, or the branch icon in compact view to see the original checkout and its lanes side by side, with owners, claims, service states, and ports. Each card controls only that lane. You can also create a lane there and inspect its services in the main view. MCP exposes `create_lane`, `list_lanes`, and `remove_lane`.
+
+Every lane service receives its own `PORT`, plus `CINDERDECK_PORT_<SERVICE>` for **every service in that lane**, including services that are not started. Service names are uppercased and hyphens become underscores: `web-app` becomes `CINDERDECK_PORT_WEB_APP`. These assignments override shell, TOML, and secret values. `CINDERDECK_LANE` contains the lane's original branch name; `CINDERDECK_SOURCE_STACK` identifies the source stack. Assignments persist while a lane exists, including across stops and app restarts. The allocator excludes configured base ports, other lanes, live launches, and occupied IPv4/IPv6 ports. If an outside process later takes a saved port, normal conflict handling reports it without killing that process.
+
+Service commands must consume these variables. Cinderdeck remaps working directories and port/localhost HTTP readiness checks; it does not rewrite shell commands or arbitrary environment values. For example:
+
+```toml
+[services.api]
+repo = "app"
+cmd = "npm run dev -- --port \"$PORT\""
+port = 4000
+env.PORT = "4000" # Original checkout; overridden in lanes
+ready.http = "http://localhost:4000/health"
+
+[services.web]
+repo = "app"
+cmd = "API_URL=http://localhost:${CINDERDECK_PORT_API:-4000} npm run dev -- --port \"$PORT\""
+port = 3000
+env.PORT = "3000"
+ready.port = 3000
+depends_on = ["api"]
+```
+
+Use `--no-start` (MCP `start=false`) to create the worktrees first, then install dependencies or prepare local configuration in the returned service directories before calling `stacks start`. Uncommitted files, ignored files such as `.env` and `node_modules`, and external databases or Docker resources are not copied or isolated automatically. Avoid hardcoded checkout paths and fixed container ports/names. Lanes currently support independent Git repositories and one port per service; nested repositories and HTTP readiness against a different host/port are rejected.
+
+Tasks and workflows are copied into the lane snapshot too. Task working directories and named port variables point into the lane, and lane removal waits for finite runs to finish or be cancelled.
+
+Lane definitions are snapshots, stored with worktree metadata under `<stacks-directory>/.lanes/<lane-id>/lane.json`; editing the original TOML affects future lanes. Services, logs, saved process identities, and claims use the lane's unique ID. Claims are advisory leases (30 minutes by default); renew them while using a lane. The creation owner remains visible after a lease expires.
+
+If you switch branches inside a lane later, its alias stays the same and the Lanes view shows the differing repository branch. Switching to a branch already checked out in another worktree is rejected before services are stopped or local changes are stashed.
+
+`lane remove` stops only that lane, removes its clean worktrees, and releases its claim. It preserves Git branches and logs. Removal refuses tracked changes, untracked files, and ignored files; move or clean those files yourself first. `--force` only overrides another agent's claim, never Git's data protection. Failed starts keep the lane for inspection; interrupted creation leaves a recovery record. The original stack cannot be removed with this command.
+
 ## Branches
 
 Branch chips show `*` for local changes and `↑n ↓n` for upstream differences. Click a chip or press **⌘B** for Recent, Local, and Remote branches. Remote-only branches create local tracking branches. Merge, rebase, cherry-pick, and revert operations block checkout.
@@ -190,6 +239,8 @@ The control socket is `~/Library/Application Support/Cinderdeck/Stacks/control.s
 The global configuration's `[stacks]` table exports `enabled`, `directory`, `quit_behavior`, `notify_on_crash`, and `auto_fetch_minutes`. Stack files, Keychain values, run records, and activity are not embedded in that export. Existing clipboard history and preferences are preserved; the old clipboard-selected flag migrates once to `history.selectedSection`.
 
 ## Development verification
+
+Lane integration tests are included in `bash scripts/stacks-verify.sh test`. After building Debug, run `python3 scripts/lanes-e2e.py` for a real app/socket/CLI/MCP smoke test with throwaway Git repositories and HTTP services. `--inspect` pauses with the fixture UI open for checking the Lanes view; creating the printed continuation file verifies removal and cleans up the app and services.
 
 See [the implementation record](STACKS_IMPLEMENTATION.md) for test evidence. Tests use temporary repositories, processes, and databases. They never switch branches in your own projects. The optional Debug environment variable `CINDERDECK_STACKS_PREVIEW_ROOT=/absolute/fixture/folder` launches the real panel with definitions in that folder's `stacks/` subfolder and separate database/log folders, without normal capture startup or configuration sync. This harness is absent from Release builds.
 

@@ -16,6 +16,7 @@ final class StackSupervisor: ObservableObject {
   private let environment: @Sendable (String) async throws -> [String: String]
   private let inspectPort: @Sendable (Int) async throws -> StackPortConflict?
   private let probe: @Sendable (StackReadiness, Date, LogBuffer?) async -> Bool
+  private let loadFiles: @Sendable (URL) async throws -> [StackDefinitionFile]
   private let logRoot: URL
   private var watcher: StackDefinitionWatcher?
   private var watchedDirectory: URL?
@@ -31,20 +32,29 @@ final class StackSupervisor: ObservableObject {
   private var stopping = Set<String>()
   private var subscriptions = Set<AnyCancellable>()
   private var reloadGeneration = 0
+  private var reloadTask: Task<Void, Never>?
   var activeWorkspaceRun: ((String) -> Bool)?
   /// Called before a service's log buffer is replaced by a relaunch, so a repro
   /// capture can read the final lines of the previous process.
   var logBufferRetiring: ((_ stack: String, _ service: String, _ buffer: LogBuffer) -> Void)?
+  private var laneMutationInProgress = false
+  private var removingLanes = Set<String>()
 
   init(store: StackRunStore?, defaults: UserDefaults = .standard, secrets: any StackSecretsStoring = StackSecretsStore(),
     git: GitService = .shared, logRoot: URL? = nil,
     makeProcess: @escaping @Sendable () -> any ProcessLaunching = { ServiceProcess() },
     environment: @escaping @Sendable (String) async throws -> [String: String] = { try await ShellEnvironmentResolver.shared.resolve(shell: $0) },
     inspectPort: @escaping @Sendable (Int) async throws -> StackPortConflict? = { try await PortInspector.conflict(on: $0) },
-    probe: @escaping @Sendable (StackReadiness, Date, LogBuffer?) async -> Bool = { await ReadinessProbe.check($0, startedAt: $1, log: $2) }
+    probe: @escaping @Sendable (StackReadiness, Date, LogBuffer?) async -> Bool = { await ReadinessProbe.check($0, startedAt: $1, log: $2) },
+    loadFiles: @escaping @Sendable (URL) async throws -> [StackDefinitionFile] = { directory in
+      try await Task.detached {
+        try StackDefinitionLoader.loadDirectory(directory) + StackLaneStore.files(in: StackLaneStore.directory(for: directory))
+      }.value
+    }
   ) {
     self.store = store; self.defaults = defaults; self.secrets = secrets
     self.makeProcess = makeProcess; self.environment = environment; self.inspectPort = inspectPort; self.probe = probe
+    self.loadFiles = loadFiles
     self.gitMonitor = GitStatusMonitor(git: git)
     #if DEBUG
     self.logRoot = logRoot ?? StackPreviewHarness.root?.appendingPathComponent("Logs") ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Cinderdeck/Stacks")
@@ -120,11 +130,26 @@ final class StackSupervisor: ObservableObject {
 
   func reloadDefinitions() async {
     reloadGeneration += 1
-    let generation = reloadGeneration
+    // Every caller waits for the latest requested snapshot. A watcher must not
+    // make createLane return before its saved definition has been published.
+    if let reloadTask { await reloadTask.value; return }
+    let task = Task {
+      defer { reloadTask = nil }
+      while !Task.isCancelled {
+        let generation = reloadGeneration
+        await loadDefinitions(generation: generation)
+        if generation == reloadGeneration { break }
+      }
+    }
+    reloadTask = task
+    await task.value
+  }
+
+  private func loadDefinitions(generation: Int) async {
     let directory = StackDefinitionLoader.directory(defaults: defaults)
     do {
-      let loaded = try await Task.detached { try StackDefinitionLoader.loadDirectory(directory) }.value
-      guard generation == reloadGeneration else { return }
+      let loaded = try await loadFiles(directory)
+      guard generation == reloadGeneration, !Task.isCancelled else { return }
       var updated = loaded
       for file in files where !loaded.contains(where: { $0.id == file.id }) && states[file.id]?.isActive == true {
         updated.append(.init(id: file.id, file: file.file, issues: [.init(severity: .warning,
@@ -144,13 +169,15 @@ final class StackSupervisor: ObservableObject {
       }
       gitMonitor.configure(files.compactMap(\.definition).flatMap(\.repos))
       gitMonitor.setAutoFetch(minutes: defaults.integer(forKey: PreferencesKeys.stacksAutoFetchMinutes))
-    } catch { errorMessage = "Cannot load stacks: \(error.localizedDescription)" }
+    } catch {
+      if generation == reloadGeneration, !Task.isCancelled { errorMessage = "Cannot load stacks: \(error.localizedDescription)" }
+    }
   }
 
   /// `actor` records who asked for the start. nil keeps the current owner
   /// (used for dependency wake-ups and automatic restarts).
   func start(stack id: String, services: Set<String>? = nil, actor: StackActor? = nil) async {
-    guard !isBootstrapping, states[id]?.operation == nil, let definition = definition(id) else { return }
+    guard !isBootstrapping, !removingLanes.contains(id), states[id]?.operation == nil, let definition = definition(id) else { return }
     states[id, default: .init()].operation = "Starting"
     states[id]?.error = nil
     let epoch = epochs[id, default: 0]
@@ -383,7 +410,7 @@ final class StackSupervisor: ObservableObject {
   }
 
   func restart(stack id: String, service: String? = nil, includeDependents: Bool = false, actor: StackActor? = nil) async {
-    guard states[id]?.operation == nil else { return }
+    guard !removingLanes.contains(id), states[id]?.operation == nil else { return }
     let selected = service.map { includeDependents ? definition(id)?.includingDependents(of: [$0]) ?? [$0] : [$0] }
     // Keep the original owner unless someone else asked for the restart.
     let owners = Dictionary(uniqueKeysWithValues: (states[id]?.services ?? [:]).compactMap { name, runtime in runtime.owner.map { (name, $0) } })
@@ -396,6 +423,67 @@ final class StackSupervisor: ObservableObject {
 
   func stopAll() async {
     for id in states.keys.sorted() { await stop(stack: id) }
+  }
+
+  // MARK: Worktree lanes
+
+  var lanesDirectory: URL { StackLaneStore.directory(for: StackDefinitionLoader.directory(defaults: defaults)) }
+  func isRemovingLane(_ id: String) -> Bool { removingLanes.contains(id) }
+
+  func createLane(stack id: String, branch: String, actor: StackActor) async throws -> StackDefinitionFile {
+    guard !isBootstrapping, !laneMutationInProgress else { throw StackError.message("A lane operation is in progress. Try again when it finishes.") }
+    guard let source = definition(id) else { throw StackError.message("This stack needs a valid definition") }
+    laneMutationInProgress = true
+    defer { laneMutationInProgress = false }
+    let definitions = files.compactMap(\.definition) + states.values.flatMap { $0.services.values.compactMap { $0.launchDefinition?.stack } }
+    var ports = Set(definitions.flatMap { $0.services.compactMap(\.port) })
+    for service in definitions.flatMap(\.services) {
+      if case .port(let port) = service.readiness { ports.insert(port) }
+      if case .http(let url) = service.readiness, let port = url.port { ports.insert(port) }
+    }
+    // Include interrupted lanes, whose worktrees may not currently be loadable.
+    for record in try StackLaneStore.records(in: lanesDirectory) { ports.formUnion(record.definition.lane?.ports.values.map { $0 } ?? []) }
+    do {
+      let record = try await StackLaneStore.create(source: source, branch: branch, owner: actor,
+        directory: lanesDirectory, occupiedPorts: ports)
+      await reloadDefinitions()
+      guard let file = files.first(where: { $0.id == record.definition.id }), file.definition != nil else {
+        throw StackError.message("Lane was saved but could not be loaded. Reload stacks to inspect it.")
+      }
+      await event(file.id, nil, "laneCreated", detail: branch, actor: actor)
+      return file
+    } catch {
+      await reloadDefinitions()
+      throw error
+    }
+  }
+
+  func removeLane(_ id: String, actor: StackActor) async throws {
+    guard !isBootstrapping, !laneMutationInProgress else { throw StackError.message("A lane operation is in progress. Try again when it finishes.") }
+    guard activeWorkspaceRun?(id) != true else { throw StackError.message("Wait for this lane's task or workflow to finish, or cancel its run before removing it.") }
+    guard let record = try StackLaneStore.record(id: id, in: lanesDirectory) else {
+      throw StackError.message("Select a worktree lane. The original checkout cannot be removed.")
+    }
+    guard states[id]?.operation == nil else { throw StackError.message("Wait for this lane to finish its current operation.") }
+    laneMutationInProgress = true; removingLanes.insert(id)
+    defer { laneMutationInProgress = false; removingLanes.remove(id) }
+    try await StackLaneStore.requireClean(record)
+    await stop(stack: id, actor: actor)
+    guard states[id]?.isActive != true else { throw StackError.message("Could not stop all lane services. Worktrees were kept.") }
+    do { try await StackLaneStore.remove(record) }
+    catch { await reloadDefinitions(); throw error }
+    await event(id, nil, "laneRemoved", detail: record.definition.lane?.name, actor: actor)
+    for service in record.definition.services {
+      let k = key(id, service.id)
+      if let buffer = logs.removeValue(forKey: k) {
+        logBufferRetiring?(id, service.id, buffer)
+        await buffer.close()
+      }
+      launchTasks.removeValue(forKey: k)?.cancel()
+      restartPolicies[k] = nil
+    }
+    states[id] = nil
+    await reloadDefinitions()
   }
 
   /// Settle pending launches before quitting so every surviving child has a
@@ -438,7 +526,7 @@ final class StackSupervisor: ObservableObject {
     }
     var restart: [String: Set<String>] = [:]
     for (stackID, services) in affected {
-      guard states[stackID]?.operation == nil,
+      guard !removingLanes.contains(stackID), states[stackID]?.operation == nil,
         !services.contains(where: { [.starting, .stopping, .waiting].contains(runtime(stackID, $0).phase) }) else {
         throw StackError.message("Wait for services using this repo to finish starting or stopping")
       }
@@ -519,6 +607,8 @@ final class StackSupervisor: ObservableObject {
 
   /// Releases observers without signaling services. Used when leaving them running.
   func shutdownMonitoring() async {
+    reloadTask?.cancel()
+    await reloadTask?.value
     watcher?.stop(); watcher = nil; watchedDirectory = nil
     subscriptions.removeAll(); gitMonitor.stop()
     readinessTasks.values.forEach { $0.cancel() }; readinessTasks.removeAll()

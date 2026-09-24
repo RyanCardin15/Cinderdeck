@@ -16,6 +16,11 @@ nonisolated enum StackAgentGuide {
   crash output if something fails) → read_logs when debugging → release_stack when done. \
   Before starting your own server, call list_ports to see who already owns the port (another agent's terminal, \
   a Cinderdeck service, or the user). Never stop a stack claimed by someone else without asking the user. \
+  For concurrent branch work, prefer create_lane over switch_branch: it creates an independent worktree stack \
+  with unique ports and a claim in your name, leaving the original services running. Use the returned lane id or \
+  <source-stack>/<branch> with all stack tools. Commands must consume PORT and CINDERDECK_PORT_<UPPERCASE_SERVICE> \
+  (hyphens become underscores). Set start=false to install dependencies or prepare local configuration first. \
+  Claims expire; renew yours while using the lane. remove_lane preserves branches and refuses local or ignored files. \
   switch_branch refuses to touch uncommitted work unless you pass dirty=stash or dirty=carry.
   To configure local Pull Request tabs, call list_pr_views, then upsert_pr_view, select_pr_view, \
   reorder_pr_views, or delete_pr_view with the returned account and hostname. Use stable ids to avoid duplicate tabs. \
@@ -60,6 +65,9 @@ nonisolated enum StackAgentGuide {
 
     - MCP: the `cinderdeck` server (tools `list_stacks`, `start_stack`, `read_logs`, `list_ports`, `switch_branch`, …).
     - CLI: `\(command) stacks <command> [--json]`
+      - Parallel work: `\(command) lane create <stack> <branch>` creates and starts a worktree lane; use `--no-start` for setup first
+      - `\(command) lane list [stack]` / `\(command) lane remove <stack>/<branch>` (clean worktrees only; branches are kept)
+      - Use `<stack>/<branch>` with all stack commands; each service receives its assigned `PORT` and every `CINDERDECK_PORT_<UPPERCASE_SERVICE>`
       - `status` — every stack, service state, ports, owners and branches
       - `start <stack> [service…]` — starts in dependency order and waits until ready (`--no-wait` to return early)
       - `restart <stack> [service]`, `stop <stack> [service…]`

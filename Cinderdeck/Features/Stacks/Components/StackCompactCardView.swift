@@ -125,8 +125,8 @@ struct StackActionsMenu: View {
   @ObservedObject var manager: HistoryFloatingManager
   var body: some View {
     Menu {
-      Button("Edit workspace…") { viewModel.edit(file) }
-      Button("Open workspace file in editor") { viewModel.openInEditor(file) }
+      Button(file.lane == nil ? "Edit workspace…" : "Edit source workspace…") { viewModel.edit(file) }
+      Button(file.lane == nil ? "Open workspace file in editor" : "Open source workspace file in editor") { viewModel.openInEditor(file) }
       Button("Open terminal") { viewModel.showLogs(stack: file.id, service: nil) }
       if let stack = file.definition {
         Menu("Restart service") {
