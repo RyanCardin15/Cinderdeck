@@ -41,6 +41,61 @@ nonisolated enum StackMCPServer {
     ]),
   ])
 
+  private static let repro = property("string", "Repro id (or unique prefix) from start_repro_recording or list_repros. Defaults to the latest.")
+  private static let reproTime = property("string", "Seconds or mm:ss.sss on the video, or first_error, last_error, end, marker:<label>")
+
+  private static let reproTools: [Tool] = [
+    Tool(name: "start_repro_recording", description: "Record the screen while capturing workspace service and task output on the same timeline, for reproducing bugs and automated UI testing. Records the main display by default, or one app window. The user sees floating controls and can stop it. To record a test run, pass workspace plus task or workflow: recording starts, the run starts, step results become markers, and recording stops shortly after the run ends. Returns the repro id immediately.",
+      properties: ["title": property("string", "What is being reproduced or tested"),
+        "workspace": property("string", "Workspace id or name. Limits captured output to it; required with task or workflow"),
+        "workspaces": property("array", "Capture output only from these workspaces (default: every workspace with output)", items: "string"),
+        "task": property("string", "Run this configured task while recording"), "workflow": property("string", "Run this configured workflow while recording"),
+        "window": property("string", "Record one window: application name or window title, e.g. Safari or \"localhost:3000\""),
+        "display": property("string", "\"main\" (default) or a 1-based display number"),
+        "max_seconds": property("number", "Stop automatically after this many seconds (default 300, max 3600)"),
+        "system_audio": property("boolean", "Also record system audio (default false)"),
+        "note": property("string", "Optional first marker, e.g. the steps you are about to perform"), "force": force],
+      required: [], readOnly: false),
+    Tool(name: "mark_repro", description: "Add a marker at the current moment of the recording. Use one per test step or action. Set outcome to pass or fail to record a check; failed checks make the repro's verdict failed.",
+      properties: ["label": property("string", "Step, action, or expectation, e.g. \"Click Pay\" or \"Order total shows $42\""),
+        "detail": property("string", "Optional detail, e.g. what you observed"),
+        "outcome": property("string", "Check result; omit for a plain step marker", values: ["pass", "fail", "info"])],
+      required: ["label"], readOnly: false),
+    Tool(name: "stop_repro_recording", description: "Stop the repro you started and save it. Returns the verdict (clean, errors, failed), error highlights with video timestamps, markers, and run results. Safe to call again: returns the saved repro.",
+      properties: ["repro": repro], required: [], readOnly: false),
+    Tool(name: "cancel_repro_recording", description: "Stop and discard the recording you started, deleting its video and captured output.",
+      properties: [:], required: [], readOnly: false),
+    Tool(name: "repro_status", description: "Whether a repro is recording, with elapsed time and live line, error, and marker counts.",
+      properties: [:], required: [], readOnly: true),
+    Tool(name: "wait_for_repro", description: "Wait until a repro finishes recording (for example one recording a workflow run) and return its summary.",
+      properties: ["repro": repro, "timeout": property("number", "Seconds to wait (default 600)")], required: [], readOnly: true),
+    Tool(name: "list_repros", description: "Recent repros, newest first, with verdicts and counts. Includes recordings people made while workspace services ran.",
+      properties: ["workspace": property("string", "Only repros that captured this workspace"), "limit": property("number", "Default 20")],
+      required: [], readOnly: true),
+    Tool(name: "repro_summary", description: "Full result of a repro: verdict, headline, distinct errors with timestamps, crashes, failed checks and steps, markers, runs, per-source counts, the Git branch, commit, and uncommitted files of each workspace when recording started, and logFile: a plain-text log with every line stamped with its video time and clock time.",
+      properties: ["repro": repro], required: [], readOnly: true),
+    Tool(name: "repro_logs", description: "Captured output on the video timeline. Filter by time (around a moment, or from/to), source, minimum level, or text/regex. Each line has t (seconds into the video).",
+      properties: ["repro": repro, "around": reproTime, "window": property("number", "Seconds either side of around (default 5)"),
+        "from": reproTime, "to": reproTime, "source": property("array", "Service or task names", items: "string"),
+        "level": property("string", "Minimum level", values: ["debug", "info", "warning", "error"]),
+        "grep": property("string", "Case-insensitive text or regex"), "lines": property("number", "Maximum lines (default 300, max 5000)"),
+        "offscreen": property("boolean", "Include output from just before recording or while paused (default true)")],
+      required: [], readOnly: true),
+    Tool(name: "repro_frame", description: "Look at the recording: returns the video frame at a moment as an image, plus the log lines and markers just before it. Defaults to the first error, or the final frame when there are none. Pass times for up to 6 frames to see a sequence.",
+      properties: ["repro": repro, "at": reproTime, "times": property("array", "Up to 6 moments (seconds, mm:ss, first_error, marker:<label>)", items: "string"),
+        "marker": property("string", "Marker label or id"), "max_size": property("number", "Longest side in pixels (default 1280, or 960 for several)"),
+        "window": property("number", "Seconds of output before each frame to include (default 3)")],
+      required: [], readOnly: true),
+    Tool(name: "export_repro", description: "Write a shareable repro folder (or .zip): video, README.md summary, recording.log (every line stamped with its video time), per-source logs, markers, frames at failures, and uncommitted diffs. Defaults to ~/Downloads/Cinderdeck Repros.",
+      properties: ["repro": repro, "destination": property("string", "Folder to write into"), "zip": property("boolean", "Create a .zip instead of a folder"),
+        "video": property("boolean", "Include the video (default true)")],
+      required: [], readOnly: false),
+    Tool(name: "open_repro", description: "Open a repro in Cinderdeck's video editor for the user, with its logs synced to the playhead.",
+      properties: ["repro": repro], required: [], readOnly: false),
+    Tool(name: "delete_repro", description: "Delete a saved repro and its captured output. Videos saved in the user's own capture folder are kept. Requires the exact id.",
+      properties: ["repro": property("string", "Exact repro id")], required: ["repro"], readOnly: false),
+  ]
+
   private static let tools: [Tool] = [
     Tool(name: "list_workspaces", description: "List workspaces and their services, finite tasks, workflows, and active runs. Existing stacks are workspaces.", properties: [:], required: [], readOnly: true),
     Tool(name: "workspace_details", description: "Get service status, task commands and requirements, workflow steps, and recent runs for a workspace.",
@@ -120,7 +175,7 @@ nonisolated enum StackMCPServer {
     Tool(name: "validate_stack", description: "Validate a stack definition (file path or TOML source) and show its start order. Call reload_stacks after saving a file.",
       properties: ["path": property("string", "Path to a .toml file"), "source": property("string", "TOML text")], required: [], readOnly: true),
     Tool(name: "reload_stacks", description: "Reload stack definitions from disk.", properties: [:], required: [], readOnly: false),
-  ]
+  ] + reproTools
 
   static var toolDescriptions: [JSONValue] { tools.map(describe) }
 
@@ -193,12 +248,15 @@ nonisolated enum StackMCPServer {
     FileHandle.standardOutput.write(data)
   }
 
+  private static let nonDestructive: Set<String> = ["claim_stack", "start_repro_recording", "mark_repro", "stop_repro_recording",
+    "export_repro", "open_repro"]
+
   private static func describe(_ tool: Tool) -> JSONValue {
     var schema: [String: JSONValue] = ["type": .string("object"), "properties": .object(tool.properties)]
     if !tool.required.isEmpty { schema["required"] = .array(tool.required.map { JSONValue.string($0) }) }
     return .object([
       "name": .string(tool.name), "description": .string(tool.description), "inputSchema": .object(schema),
-      "annotations": .object(["readOnlyHint": .bool(tool.readOnly), "destructiveHint": .bool(!tool.readOnly && tool.name != "claim_stack"),
+      "annotations": .object(["readOnlyHint": .bool(tool.readOnly), "destructiveHint": .bool(!tool.readOnly && !nonDestructive.contains(tool.name)),
         "openWorldHint": .bool(false)]),
     ])
   }
@@ -223,6 +281,7 @@ nonisolated enum StackMCPServer {
           result = try connection!.call(method, params, timeout: timeout)
         }
       }
+      if name == "repro_frame" { return .object(["content": .array(frameContent(result)), "isError": .bool(false)]) }
       return .object(["content": .array([.object(["type": .string("text"), "text": .string(render(name, result))])]), "isError": .bool(false)])
     } catch let error as StackControlError {
       return errorResult("\(error.message) [\(error.code)]")
@@ -282,13 +341,57 @@ nonisolated enum StackMCPServer {
     case "validate_stack": return ("validate", params, 30)
     case "reload_stacks": return ("reload", [:], 30)
     case "stacks_guide": return ("local.guide", [:], 5)
+    case "start_repro_recording": return ("repro.start", params, 90)
+    case "mark_repro": return ("repro.mark", params, 30)
+    case "stop_repro_recording": return ("repro.stop", params, 240)
+    case "cancel_repro_recording": return ("repro.cancel", params, 60)
+    case "repro_status": return ("repro.status", params, 30)
+    case "wait_for_repro":
+      let timeout = min(max(arguments["timeout"]?.doubleValue ?? 600, 1), 3600)
+      return ("repro.wait", params, timeout + 60)
+    case "list_repros": return ("repro.list", params, 30)
+    case "repro_summary": return ("repro.get", params, 60)
+    case "repro_logs": return ("repro.logs", params, 60)
+    case "repro_frame": return ("repro.frame", params, 120)
+    case "export_repro": return ("repro.export", params, 600)
+    case "open_repro": return ("repro.open", params, 30)
+    case "delete_repro": return ("repro.delete", params, 60)
     default: throw StackControlError(code: "unknown_tool", message: "Unknown tool \(tool)")
     }
+  }
+
+  /// Each frame as an image block followed by its timestamp, markers, and output.
+  static func frameContent(_ result: JSONValue) -> [JSONValue] {
+    var content: [JSONValue] = []
+    for frame in result["frames"]?.arrayValue ?? [] {
+      if let data = frame["imageBase64"]?.stringValue {
+        content.append(.object(["type": .string("image"), "data": .string(data), "mimeType": .string(frame["mimeType"]?.stringValue ?? "image/jpeg")]))
+      }
+      var text = "Frame at \(frame["time"]?.stringValue ?? "?") (\(frame["width"]?.intValue ?? 0)×\(frame["height"]?.intValue ?? 0)), saved to \(frame["path"]?.stringValue ?? "")"
+      let markers = (frame["markers"]?.arrayValue ?? []).map { marker in
+        "  [\(marker["time"]?.stringValue ?? "")] ▶ \(marker["label"]?.stringValue ?? "")" + (marker["outcome"]?.stringValue.map { " [\($0.uppercased())]" } ?? "")
+      }
+      if !markers.isEmpty { text += "\nMarkers:\n" + markers.joined(separator: "\n") }
+      let logs = (frame["logs"]?.arrayValue ?? []).map(logText)
+      text += logs.isEmpty ? "\n(no output in this window)" : "\nOutput before this frame:\n" + logs.joined(separator: "\n")
+      content.append(.object(["type": .string("text"), "text": .string(text)]))
+    }
+    return content.isEmpty ? [.object(["type": .string("text"), "text": .string(result.prettyString())])] : content
+  }
+
+  private static func logText(_ line: JSONValue) -> String {
+    let level = line["level"]?.stringValue ?? "info"
+    let badge = level == "error" ? " ERROR" : level == "warning" ? " WARN" : ""
+    return "[\(line["time"]?.stringValue ?? "")]\(badge) \(line["source"]?.stringValue ?? "") | \(line["text"]?.stringValue ?? "")"
   }
 
   /// Compact, model-friendly text for list-style results; JSON for the rest.
   private static func render(_ tool: String, _ result: JSONValue) -> String {
     switch tool {
+    case "repro_logs":
+      let lines = (result["lines"]?.arrayValue ?? []).map(logText)
+      let header = "\(result["returned"]?.intValue ?? lines.count) of \(result["total"]?.intValue ?? 0) lines · video \(ReproFormat.timestamp(result["duration"]?.doubleValue ?? 0))"
+      return header + "\n" + (lines.isEmpty ? "(no matching output)" : lines.joined(separator: "\n"))
     case "list_stacks":
       guard let snapshot = try? result.decode(StacksSnapshot.self) else { return result.prettyString() }
       if snapshot.stacks.isEmpty {

@@ -205,9 +205,48 @@ struct VideoEditorToolbarView: View {
 
   private var rightSection: some View {
     HStack(spacing: WindowSpacingConfiguration.default.toolbarItemSpacing) {
+      if state.hasRepro {
+        workspaceLogsMenu
+      }
       if !state.isGIF {
         rightSidebarToggleButton
       }
+    }
+  }
+
+  /// Shown when workspace logs were saved with this recording.
+  private var workspaceLogsMenu: some View {
+    let session = state.reproModel.session
+    return Menu {
+      Button("Show Log File in Finder") {
+        if let session { Task { await ReproLibraryActions.revealLog(session) } }
+      }
+      Button("Copy Log") {
+        if let session { Task { await ReproLibraryActions.copyLog(session) } }
+      }
+      Divider()
+      Button(state.isReproPanelVisible ? "Hide Log Panel" : "Show Log Panel  ⇧⌘L") { state.toggleReproPanel() }
+      Button("Export Bundle…") { if let session { ReproLibraryActions.export(session) } }
+    } label: {
+      HStack(spacing: 4) {
+        Image(systemName: "text.alignleft").font(.system(size: 13, weight: .medium))
+        Text("Logs").font(.system(size: 12, weight: .medium))
+        if let errors = session?.errorCount, errors > 0 {
+          Text("\(errors)").font(.system(size: 9, weight: .bold)).foregroundColor(.white)
+            .padding(.horizontal, 4).frame(minHeight: 14).background(Capsule().fill(Color.red))
+        }
+      }
+      .padding(.horizontal, 8).frame(height: 28)
+      .background(RoundedRectangle(cornerRadius: 6).fill(state.isReproPanelVisible ? ZoomColors.primary.opacity(0.3) : Color.primary.opacity(0.06)))
+    }
+    .menuStyle(.borderlessButton)
+    .menuIndicator(.hidden)
+    .fixedSize()
+    .help(session.map { "Workspace logs saved with this video: \($0.lineCount.formatted()) lines from \(ReproFormat.list($0.workspaceNames))" } ?? "Workspace logs")
+    .background {
+      Button("") { state.toggleReproPanel() }
+        .keyboardShortcut("l", modifiers: [.command, .shift])
+        .opacity(0).frame(width: 0, height: 0)
     }
   }
 

@@ -5,7 +5,7 @@
 //  Status bar shown during active recording with timer and controls
 //  Styled to match Apple's native macOS recording toolbar aesthetic
 //
-//  Layout: [≡] | [● 00:00:00] | [⏸] [✏️] | [↺] | [🗑] | [Stop]
+//  Layout: [≡] | [● 00:00:00] | [logs] | [⏸] [✏️] | [↺] | [🗑] | [Stop]
 //
 
 import SwiftUI
@@ -71,6 +71,9 @@ struct RecordingStatusBarView: View {
           .foregroundColor(recorder.isPaused ? .primary.opacity(0.5) : .primary)
       }
       .padding(.horizontal, 8)
+
+      // Workspace logs being saved with this recording (hidden when none are)
+      RecordingLogsIndicator()
 
       RecordingToolbarDivider()
 

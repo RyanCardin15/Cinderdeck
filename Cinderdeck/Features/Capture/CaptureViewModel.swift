@@ -2097,6 +2097,11 @@ final class ScreenCaptureViewModel: ObservableObject, KeyboardShortcutDelegate {
   /// Reuses `RecordingCoordinator.stopFromStatusItem()` which is state-aware
   /// (`.recording`/`.paused` → stop, `.preparing` → cancel, `.idle`/`.stopping` → no-op).
   func toggleRecordingFromShortcut(initialInteractionMode: AreaSelectionInteractionMode) {
+    if ReproRecordingController.shared.ownsRecording {
+      DiagnosticLogger.shared.log(.info, .recording, "Recording shortcut: stop repro recording")
+      RecordingCoordinator.shared.stopFromStatusItem()
+      return
+    }
     if RecordingCoordinator.shared.isActive {
       DiagnosticLogger.shared.log(.info, .recording, "Recording shortcut: stop", context: [
         "recorderState": "\(ScreenRecordingManager.shared.state)",

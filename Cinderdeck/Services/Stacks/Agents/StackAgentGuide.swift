@@ -20,6 +20,13 @@ nonisolated enum StackAgentGuide {
   To configure local Pull Request tabs, call list_pr_views, then upsert_pr_view, select_pr_view, \
   reorder_pr_views, or delete_pr_view with the returned account and hostname. Use stable ids to avoid duplicate tabs. \
   These tools share the PR window's saved views and do not post to GitHub. Built-in tabs are read-only except selection.
+  Repros record the screen while capturing every service and task log on the video's timeline. Use them to reproduce \
+  a bug or to test UI end to end: start_repro_recording (optionally with workspace + task/workflow to record a run; \
+  window="Safari" records one app) → drive the app → mark_repro at each step, with outcome pass/fail for checks → \
+  stop_repro_recording (or wait_for_repro for a run). The result has a verdict (clean, errors, failed) and error highlights \
+  with video timestamps, and logFile: a plain-text log with every line stamped with its video time. Then use repro_frame to see the screen at first_error or any marker (returns images plus the \
+  log lines just before), repro_logs to read output around a moment, and export_repro to hand the user a bundle. \
+  The user sees floating controls while you record and can stop it. Do not record longer than the task needs.
   """
 
   static let template = """
@@ -74,6 +81,23 @@ nonisolated enum StackAgentGuide {
     - Definitions use `[tasks.<id>] cmd = "..."` and `[workflows.<id>] steps = ["start:api", "task:test"]` in the existing stack TOML files.
     - Tasks can set `requires_services = ["api"]` and `timeout = 600`. Workflows can set `cleanup_services = true` to stop only services started by that run.
     - Optional CLI `--wait` waits and returns a nonzero exit code for failure; its `--timeout` stops waiting without cancelling the run.
+
+    ## Repros: screen recordings with synced logs
+
+    A repro is a screen recording plus all workspace output captured on the video's timeline, with markers for service \
+    starts, crashes, workflow steps, and your own checks. Use it to reproduce bugs and to test UI changes end to end.
+    - Record: `start_repro_recording` (MCP) or `\(command) repro start --title "Checkout" [--window Safari] [--max 120]`.
+    - Record a test run: pass `workspace` and `task` or `workflow`, or `\(command) repro run <workspace> <workflow> --workflow --wait` \
+      (exit status 1 when a service crashed, a check failed, or the run failed).
+    - While recording, mark each step: `mark_repro` with `label`, and `outcome` pass/fail for checks; CLI `repro mark "Total shows $42" --pass`.
+    - Finish: `stop_repro_recording` / `repro stop`, or `wait_for_repro` / `repro wait` for a run. Read the verdict and highlights.
+    - Investigate: `repro_frame` (`at`: first_error, seconds, mm:ss, or marker:<label>) returns the frame as an image with the output just \
+      before it; `repro_logs` filters by `around`, `from`/`to`, `source`, `level`, `grep`; `repro_summary` includes Git state and uncommitted files.
+    - Share: `export_repro` writes video, README.md, recording.log, per-source logs, frames, and diffs (`--zip` for an archive).
+    - Every repro has a plain-text log file (`logFile` in results; CLI `\(command) repro dump`) with each line stamped `[video time  clock time]`.
+    - Recordings people make with the toolbar while workspaces run are repros too: `list_repros` shows them, so you can read the log for what they saw.
+    - `\(command) repro scope` shows or sets which workspaces the user's toolbar recordings capture; change it only when asked.
+    - The user sees floating controls while you record and can stop it at any time. Keep recordings short and focused.
 
     ## Pull Request views
 

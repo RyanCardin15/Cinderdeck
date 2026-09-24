@@ -40,6 +40,8 @@ final class StacksViewModel: ObservableObject {
   @Published private(set) var busyRepos = Set<URL>()
   @Published private(set) var claims: [String: StackClaim] = [:]
   @Published var agentsSheet = false
+  /// Set to open the Workspaces window on a section, e.g. Recordings.
+  @Published var requestedSection: WorkspaceSection?
   let supervisor: StackSupervisor
   private let git: GitService
   private var subscriptions = Set<AnyCancellable>()

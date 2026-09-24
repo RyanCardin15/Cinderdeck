@@ -557,6 +557,21 @@ enum RecordingState: Equatable {
   }
 }
 
+// MARK: - Recording Lifecycle
+
+/// Timing events for observers that align other data with the video, such as
+/// repro log capture. Dates are wall-clock times of each transition.
+enum RecordingLifecycleEvent {
+  case started(Date)
+  /// The first video frame arrived. The video timeline starts here.
+  case firstFrame(Date)
+  case paused(Date)
+  case resumed(Date)
+  case stopping(Date)
+  case finished(URL)
+  case cancelled
+}
+
 // MARK: - Recording Error
 
 enum RecordingError: Error, LocalizedError {
@@ -595,6 +610,7 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
   @Published private(set) var state: RecordingState = .idle
   @Published private(set) var elapsedSeconds: Int = 0
   @Published private(set) var error: RecordingError?
+  let lifecycle = PassthroughSubject<RecordingLifecycleEvent, Never>()
 
   var formattedDuration: String {
     let mins = elapsedSeconds / 60
@@ -1009,8 +1025,10 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
 
     session.isCapturing = true
     session.setOnFirstVideoFrame { [weak self] in
+      let firstFrameAt = Date()
       Task { @MainActor [weak self] in
         self?.mouseTracker?.start()
+        self?.lifecycle.send(.firstFrame(firstFrameAt))
       }
     }
 
@@ -1045,6 +1063,7 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
     elapsedSeconds = 0
     pausedDuration = 0
     startTimer()
+    lifecycle.send(.started(startTime ?? Date()))
   }
 
   /// Pause the recording
@@ -1058,6 +1077,7 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
     audioLevelMeter.freeze()
     pauseStartTime = Date()
     state = .paused
+    lifecycle.send(.paused(pauseStartTime ?? Date()))
     DiagnosticLogger.shared.log(.info, .recording, "Recording paused")
   }
 
@@ -1078,6 +1098,7 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
     mouseTracker?.resume()
     audioLevelMeter.unfreeze()
     state = .recording
+    lifecycle.send(.resumed(Date()))
     DiagnosticLogger.shared.log(.info, .recording, "Recording resumed", context: [
       "pauseOffsetSeconds": String(format: "%.3f", pausedDuration)
     ])
@@ -1162,6 +1183,7 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
     session.setOnFirstVideoFrame(nil)
 
     state = .stopping
+    lifecycle.send(.stopping(Date()))
 
     timer?.invalidate()
     timer = nil
@@ -1240,6 +1262,7 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
     // Reset state
     cleanup()
 
+    lifecycle.send(url.map { .finished($0) } ?? .cancelled)
     return url
   }
 
@@ -1249,6 +1272,7 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
       DiagnosticLogger.shared.log(.debug, .recording, "cancelRecording ignored: recorder idle")
       return
     }
+    lifecycle.send(.cancelled)
     DiagnosticLogger.shared.log(.info, .recording, "Recording cancel requested", context: [
       "state": "\(state)",
       "outputFile": outputURL?.lastPathComponent ?? "nil",

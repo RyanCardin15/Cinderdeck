@@ -103,6 +103,10 @@ final class VideoEditorState: ObservableObject {
   let asset: AVAsset
   let player: AVPlayer
   let playbackState = VideoEditorPlaybackState()
+  /// Workspace output captured with this recording, when it is a repro.
+  let reproModel = VideoEditorReproModel()
+  @Published var isReproPanelVisible = false
+  @Published private(set) var hasRepro = false
 
   // MARK: - Metadata
 
@@ -1284,6 +1288,22 @@ final class VideoEditorState: ObservableObject {
   /// Toggle the right zoom configuration sidebar visibility.
   func toggleRightSidebar() {
     isRightSidebarVisible.toggle()
+  }
+
+  /// Finds the workspace logs recorded with this video. The log panel opens
+  /// only when asked for, or when opened at a specific moment.
+  func loadRepro() async {
+    guard !isGIF, await reproModel.load(for: [sourceURL, originalURL]) else { return }
+    hasRepro = true
+    if let t = reproModel.takePendingSeek() {
+      isReproPanelVisible = true
+      seek(to: CMTime(seconds: t, preferredTimescale: 600))
+    }
+  }
+
+  func toggleReproPanel() {
+    guard hasRepro else { return }
+    isReproPanelVisible.toggle()
   }
 
   // MARK: - Export Settings Methods

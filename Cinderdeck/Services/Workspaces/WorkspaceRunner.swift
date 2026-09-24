@@ -16,6 +16,9 @@ final class WorkspaceRunner: ObservableObject {
   private var processes: [UUID: ServiceProcess] = [:]
   private var buffers: [UUID: LogBuffer] = [:]
   private var recovered = false
+  /// Called with a step's buffer just before it is released, so a repro capture
+  /// can read output written after its last poll.
+  var stepOutputFinishing: ((_ run: UUID, _ step: UUID, _ buffer: LogBuffer) -> Void)?
 
   init(supervisor: StackSupervisor, store: WorkspaceRunStore, secrets: any StackSecretsStoring = StackSecretsStore(),
     environment: @escaping @Sendable (String) async throws -> [String: String] = { try await ShellEnvironmentResolver.shared.resolve(shell: $0) }) {
@@ -222,6 +225,7 @@ final class WorkspaceRunner: ObservableObject {
     processes[runID] = nil
     await buffer.finish()
     await buffer.close()
+    stepOutputFinishing?(runID, step.id, buffer)
     buffers[step.id] = nil
     change(runID) { $0.steps[stepIndex].exitCode = result.code; $0.steps[stepIndex].process = nil }
     try Task.checkCancellation()
@@ -235,6 +239,13 @@ final class WorkspaceRunner: ObservableObject {
       supervisor.runtime(saved.workspaceID, service).process == identity ? service : nil
     })
     if !owned.isEmpty { await supervisor.stop(stack: saved.workspaceID, services: owned, actor: saved.actor) }
+  }
+
+  /// Output buffers of steps that are running now.
+  func liveStepBuffers() -> [(run: WorkspaceRun, step: WorkspaceRunStep, buffer: LogBuffer)] {
+    runs.filter { $0.status.isActive }.flatMap { run in
+      run.steps.compactMap { step in buffers[step.id].map { (run: run, step: step, buffer: $0) } }
+    }
   }
 
   func output(_ runID: UUID, stepID: UUID? = nil) async -> [StackLogLine] {

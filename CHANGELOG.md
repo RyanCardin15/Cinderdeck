@@ -1,5 +1,16 @@
 # Cinderdeck changelog
 
+## Unreleased
+
+- Save a `.log` file next to screen recordings with the output of your running workspaces. Every line is stamped with its video position and clock time, and the file includes service events, workflow steps, and Git state. Keychain secret values are redacted.
+- Choose which workspaces a recording captures from the new logs button on the recording toolbar: all running workspaces, selected ones, or none for a plain video. The choice is also in Preferences and Workspaces → Recordings.
+- Show a live logs indicator while recording (click it to mark the moment), and a confirmation with Show Log and Copy Log afterwards.
+- Keep the log file with the video when a temporary recording is saved from Quick Access.
+- Add Workspaces → Recordings to record the screen or a task or workflow run with logs, and to find past recordings, their log files, errors, and events.
+- Add a Logs menu and an optional synchronized log panel (⇧⌘L) to the video editor.
+- Let agents record and inspect repros through new MCP tools (`start_repro_recording`, `mark_repro`, `repro_frame`, `repro_logs`, and more) and `cinderdeck repro`, including `repro dump`, `repro scope`, frames returned as images, and a failing exit status for scripted test runs.
+- Export recordings as folders or zip archives with the video, log file, Markdown summary, per-source logs, frames at failures, and uncommitted diffs.
+
 ## 1.0.0 — 2026-09-23
 
 - Establish Cinderdeck as an independent native macOS development application, forked from Snapzy.
