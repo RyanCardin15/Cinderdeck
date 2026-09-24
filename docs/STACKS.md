@@ -190,15 +190,20 @@ Each service retains the latest 5,000 lines in memory. The All view interleaves 
 
 Coding agents can run and inspect stacks, so they stop spawning their own dev servers in scattered terminals. Everything goes through one local control socket owned by Cinderdeck; services an agent starts appear in the panel with a purple ✦ badge naming it.
 
-**Set up:** Stacks → ✦ (or Settings → History → Workspaces → **Agent access…**). Install the CLI, then **Add** Cursor, Codex and/or Claude Code. From a terminal the same thing is:
+**Set up:** Stacks → ✦ (or Settings → History → Workspaces → **Agent access…**). Install the CLI, then **Add** Cursor, Codex, Claude Code, and/or VS Code Copilot. The **Agent skills** section installs the skills that ship with Cinderdeck, such as recording a browser session with its logs, for each agent. From a terminal the same thing is:
 
 ```sh
 /Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck stacks install-cli   # links ~/.local/bin/cinderdeck
-cinderdeck stacks setup-agents --instructions                           # Cursor, Codex, Claude Code (+ AGENTS.md/CLAUDE.md notes)
+cinderdeck stacks setup-agents --instructions                           # Cursor, Codex, Claude Code, VS Code Copilot (+ AGENTS.md/CLAUDE.md notes)
+cinderdeck stacks setup-agents --skills                                 # also install the agent skills
 cinderdeck stacks setup-agents --print                                  # just show the config snippets
+cinderdeck skills list                                                  # bundled skills and where each agent has them
+cinderdeck skills install --all                                         # or --claude, --codex, --cursor, --copilot
 ```
 
-`setup-agents` backs up each file it edits (`*.cinderdeck-backup`), writes `mcpServers.cinderdeck` in `~/.cursor/mcp.json`, `[mcp_servers.cinderdeck]` in `~/.codex/config.toml` (with a 15-minute tool timeout because starts wait for readiness), and runs `claude mcp add --scope user` when the Claude CLI is installed. `--instructions` adds a marked block to `~/.codex/AGENTS.md` and `~/.claude/CLAUDE.md`; re-running replaces the block instead of duplicating it.
+`setup-agents` backs up each file it edits (`*.cinderdeck-backup`), writes `mcpServers.cinderdeck` in `~/.cursor/mcp.json`, `[mcp_servers.cinderdeck]` in `~/.codex/config.toml` (with a 15-minute tool timeout because starts wait for readiness), runs `claude mcp add --scope user` when the Claude CLI is installed, and writes `servers.cinderdeck` in VS Code's user `mcp.json` (`~/Library/Application Support/Code/User/`, and `Code - Insiders` when installed). `--instructions` adds a marked block to `~/.codex/AGENTS.md` and `~/.claude/CLAUDE.md`; re-running replaces the block instead of duplicating it.
+
+Skills are copied to `~/.claude/skills` (Claude Code), `~/.agents/skills` (Codex), `~/.cursor/skills` (Cursor), and `~/.copilot/skills` (VS Code Copilot). Cursor and VS Code Copilot also read the Claude Code and Codex folders, so a copy already there counts and is updated in place rather than duplicated. Each copy has a `.cinderdeck-skill` file. **Update** appears when a newer Cinderdeck ships a changed skill, and only copies with that file are replaced. A skill you manage yourself, such as a link to a clone of this repository, is never replaced. New skills added to `skills/` in the repository ship with the next build and appear in the list automatically.
 
 ### What agents get
 

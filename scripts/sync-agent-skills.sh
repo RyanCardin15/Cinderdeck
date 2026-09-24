@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copy the agent skills in skills/ to the folders coding agents read in a clone:
 #   .claude/skills/  Claude Code
-#   .agents/skills/  Codex, Cursor, and other Agent Skills clients
+#   .agents/skills/  Codex, Cursor, VS Code Copilot, and other Agent Skills clients
 #
 # Usage:
 #   scripts/sync-agent-skills.sh           # update the copies after editing skills/

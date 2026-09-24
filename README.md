@@ -48,7 +48,7 @@ cinderdeck repro run shop e2e --workflow --wait   # record a workflow; exits 1 i
 cinderdeck repro frame --at first_error           # the video frame at the first error, with nearby logs
 ```
 
-Agents can record exactly one window (`cinderdeck repro windows`, then `--window-id`), record with or without workspace logs (`--no-logs`), and add browser console output to the log (`cinderdeck repro append`). The [`cinderdeck-record-session`](skills/cinderdeck-record-session/SKILL.md) and [`cinderdeck-review-recording`](skills/cinderdeck-review-recording/SKILL.md) skills teach Claude Code, Codex, and Cursor how to do this. Agents pick them up automatically in a clone of this repository, and you can link them into your own projects.
+Agents can record exactly one window (`cinderdeck repro windows`, then `--window-id`), record with or without workspace logs (`--no-logs`), and add browser console output to the log (`cinderdeck repro append`). The [`cinderdeck-record-session`](skills/cinderdeck-record-session/SKILL.md) and [`cinderdeck-review-recording`](skills/cinderdeck-review-recording/SKILL.md) skills teach Claude Code, Codex, Cursor, and VS Code Copilot how to do this. Install them for each agent from **Agent access**, or with `cinderdeck skills install --all`. Agents also pick them up automatically in a clone of this repository.
 
 [Read the recordings guide](docs/REPROS.md).
 
@@ -58,7 +58,7 @@ Agents can record exactly one window (`cinderdeck repro windows`, then `--window
 - **See what is running.** Service status, listening ports, process ownership, live logs, crash output, and activity live together. Start, stop, or restart individual services or an entire stack.
 - **Work across repositories.** Inspect branches and changes, fetch or pull, and switch branches with explicit stash/carry choices.
 - **Record with logs.** Screen recordings save a `.log` file next to the video with your workspaces' output, stamped with video times. You choose which workspaces, or record a plain video. [Recordings with logs](docs/REPROS.md).
-- **Give agents the same controls.** The `cinderdeck` CLI and local MCP server work with Codex, Cursor, Claude Code, and other clients. Agent identity and advisory claims make ownership visible.
+- **Give agents the same controls.** The `cinderdeck` CLI and local MCP server work with Codex, Cursor, Claude Code, VS Code Copilot, and other clients. **Agent access** adds the MCP server and the bundled agent skills to each one. Agent identity and advisory claims make ownership visible.
 - **Organize your GitHub work.** Browse repositories, sync GitHub stars, filter pull requests, save custom views, inspect changes, and submit reviews in a native PRs workspace. [Explore pull requests](docs/PULL_REQUESTS.md).
 - **Keep useful context nearby.** Local text clipboard history, capture history, and search sit alongside your stacks.
 - **Capture what you are building.** Screenshots, scrolling capture, screen recording, annotation, OCR, and video editing remain available from the Snapzy foundation.

@@ -125,20 +125,22 @@ Repros are available through the same MCP server and CLI as Workspaces. Reload t
 
 ### Agent skills
 
-Two skills teach Claude Code, Codex, Cursor, and other agents to use recordings well:
+Two skills teach Claude Code, Codex, Cursor, VS Code Copilot, and other agents to use recordings well:
 
 | Skill | Use |
 | --- | --- |
 | [`cinderdeck-record-session`](../skills/cinderdeck-record-session/SKILL.md) | Record a browser or app session: pick the window, a new window, an automation browser, or a display; choose workspace logs or none; mark each action; add browser console output; review the result. Explains why headless browsers can't be recorded and what to do instead. |
 | [`cinderdeck-review-recording`](../skills/cinderdeck-review-recording/SKILL.md) | Investigate a recording, yours or the user's: verdict, frames at errors and marks, logs around a moment, and an export. |
 
-In a clone of this repository, agents find them automatically: Claude Code reads `.claude/skills/`, Codex reads `.agents/skills/`, and Cursor reads both. To use them in your other projects, link them into your user skills folders:
+To install them for your agents, open **Agent access** and click **Add** next to each agent under **Agent skills**, or run `cinderdeck skills install --all`. The skills ship inside the app, and **Update** appears when a new version changes them.
+
+In a clone of this repository, agents find them automatically: Claude Code reads `.claude/skills/`, Codex reads `.agents/skills/`, and Cursor and VS Code Copilot read both. To use the repository version everywhere instead, link it into your user skills folders:
 
 ```sh
 mkdir -p ~/.claude/skills ~/.agents/skills
 for skill in "$PWD"/skills/*/; do
   ln -s "${skill%/}" ~/.claude/skills/   # Claude Code
-  ln -s "${skill%/}" ~/.agents/skills/   # Codex and Cursor
+  ln -s "${skill%/}" ~/.agents/skills/   # Codex, Cursor, VS Code Copilot
 done
 ```
 
