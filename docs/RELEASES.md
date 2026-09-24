@@ -8,19 +8,20 @@ People install Cinderdeck once from a release (the DMG or `install.sh`). After t
 
 Releases refuse to publish until update signing is configured, because a release that cannot verify updates would strand every copy installed from it.
 
-On your Mac, with the [GitHub CLI](https://cli.github.com) signed in (`gh auth login`), run:
+On your Mac, on an up-to-date `main`, with the [GitHub CLI](https://cli.github.com) signed in (`gh auth login`), run:
 
 ```bash
 ./scripts/setup-release-signing.sh
 ```
 
-The script:
+It asks before each change to GitHub (`--yes` answers for you) and:
 
 1. Creates Cinderdeck's Sparkle EdDSA key in your login keychain (keychain account `cinderdeck`), or reuses it. The private key goes straight to the `SPARKLE_PRIVATE_KEY` Actions secret and is never printed.
-2. Writes the matching public key to `SUPublicEDKey` in `Cinderdeck/Resources/Info.plist` and sets `CinderdeckSignedUpdatesEnabled` to true.
-3. If the repository has no code-signing secret, creates the **Cinderdeck Self-Signed** certificate and uploads `SELF_SIGNED_CERT_P12` and `SELF_SIGNED_CERT_PASSWORD`. It leaves existing `DEVELOPER_ID_P12` or `SELF_SIGNED_CERT_P12` secrets alone.
+2. If the repository has no code-signing secret, creates the **Cinderdeck Self-Signed** certificate and uploads `SELF_SIGNED_CERT_P12` and `SELF_SIGNED_CERT_PASSWORD`. Existing `DEVELOPER_ID_P12` or `SELF_SIGNED_CERT_P12` secrets are left alone.
+3. Commits the matching `SUPublicEDKey` and `CinderdeckSignedUpdatesEnabled = true` to `Cinderdeck/Resources/Info.plist` on `main` through the GitHub API.
+4. Runs **Release Prepare** (a `minor` bump by default; `--bump patch|minor|major`, or `--no-release` to stop here) and opens the release pull request itself if GitHub Actions is not allowed to. You review and merge that pull request on GitHub; the script waits, follows **Release Publish**, and offers to install the new release into `/Applications`.
 
-Commit the Info.plist change and merge it to `main`. Then back up the key: Keychain Access lists it as **Private key for signing Sparkle updates**. Without it, new releases cannot update copies already installed. If the Info.plist already trusts a different key, the script stops instead of replacing it; see [Changing the update key](#changing-the-update-key).
+Back up the key afterwards: Keychain Access lists it as **Private key for signing Sparkle updates**. Without it, new releases cannot update copies already installed. If `main` already trusts a different key, the script stops instead of replacing it; see [Changing the update key](#changing-the-update-key).
 
 Code signing options, best first:
 
@@ -30,12 +31,12 @@ Code signing options, best first:
 | `SELF_SIGNED_CERT_P12`, `SELF_SIGNED_CERT_PASSWORD` | macOS asks users to approve the first install from a browser download (System Settings → Privacy & Security → Open Anyway). Updates and permissions carry over afterwards. |
 | `ALLOW_ADHOC_RELEASE=true` | Not recommended: permissions may reset on every update. |
 
-The repository setting **Allow GitHub Actions to create and approve pull requests** must be on for the prepare workflow to open release pull requests.
+With the repository setting **Allow GitHub Actions to create and approve pull requests** off, Release Prepare still pushes the `release/v…` branch and warns with a link for opening the pull request by hand.
 
 ## Publishing a release
 
 1. Run **Actions → Release Prepare** (or `gh workflow run release-prepare.yml -f version_type=patch -f channel=stable`). A push to `main` whose commit message starts with `release(patch):`, `release(minor):`, or `release(major):` (with `-beta` for a beta, such as `release(patch-beta):`) does the same. The first release must be stable, because beta numbering is based on existing tags.
-2. The workflow bumps the version and build number, adds a `CHANGELOG.md` entry, and opens a `release/v…` pull request. The first release's notes start at the Cinderdeck fork point rather than Snapzy's history.
+2. The workflow bumps the version and build number, turns the `## Unreleased` section of `CHANGELOG.md` into the release's entry (or, without one, generates notes from conventional commits since the last tag, or since the Cinderdeck fork point for the first release), and opens a `release/v…` pull request. Those notes become the GitHub release text and the notes in Sparkle's update window.
 3. Merge that pull request. **Release Publish** then:
    - checks that `SPARKLE_PRIVATE_KEY` matches `SUPublicEDKey` and that signed updates are on, before building anything;
    - builds, signs Sparkle's helpers and the app with hardened runtime (library validation is disabled only for signing identities without an Apple Team ID, as in `scripts/install-local.sh`), and confirms the signed app launches;

@@ -620,55 +620,11 @@ jobs:
       - name: Convert changelog to HTML for appcast
         id: release_notes
         run: |
-          # Convert markdown changelog to clean HTML for Sparkle update dialog
-          # Only keep Features and Bug Fixes sections (skip Chore/Contributors/Distribution Notes)
-          NOTES_HTML=""
-          CURRENT_SECTION=""
-          IN_RELEVANT_SECTION=false
-
-          while IFS= read -r line; do
-            if echo "$line" | grep -qE '^### Features'; then
-              if [ -n "$CURRENT_SECTION" ]; then
-                NOTES_HTML="${NOTES_HTML}</ul>"
-              fi
-              NOTES_HTML="${NOTES_HTML}<h3>✨ Features</h3><ul>"
-              CURRENT_SECTION="features"
-              IN_RELEVANT_SECTION=true
-            elif echo "$line" | grep -qE '^### Bug Fixes'; then
-              if [ -n "$CURRENT_SECTION" ]; then
-                NOTES_HTML="${NOTES_HTML}</ul>"
-              fi
-              NOTES_HTML="${NOTES_HTML}<h3>🐛 Bug Fixes</h3><ul>"
-              CURRENT_SECTION="bugfixes"
-              IN_RELEVANT_SECTION=true
-            elif echo "$line" | grep -qE '^### '; then
-              # Other sections (Chore, Contributors, etc.) — skip
-              if [ -n "$CURRENT_SECTION" ]; then
-                NOTES_HTML="${NOTES_HTML}</ul>"
-              fi
-              CURRENT_SECTION=""
-              IN_RELEVANT_SECTION=false
-            elif [ "$IN_RELEVANT_SECTION" = true ] && echo "$line" | grep -qE '^- '; then
-              # Extract list item text, strip commit hashes and PR refs
-              ITEM=$(echo "$line" | sed 's/^- *//' | sed 's/ ([a-f0-9]\{7\})$//' | sed 's/ (#[0-9]*)//g' | sed 's/^ *//')
-              if [ -n "$ITEM" ]; then
-                NOTES_HTML="${NOTES_HTML}<li>${ITEM}</li>"
-              fi
-            fi
-          done < "${{ steps.changelog.outputs.changelog_path }}"
-
-          # Close last open list
-          if [ -n "$CURRENT_SECTION" ]; then
-            NOTES_HTML="${NOTES_HTML}</ul>"
-          fi
-
-          # Fallback if no relevant sections found
-          if [ -z "$NOTES_HTML" ]; then
-            NOTES_HTML="<h3>🔧 Maintenance</h3><ul><li>Bug fixes and improvements</li></ul>"
-          fi
-
+          set -euo pipefail
+          # Sparkle's update window shows these notes; pipeline sections are left out.
           RELEASE_NOTES_PATH="build/release-notes.html"
-          printf '%s' "$NOTES_HTML" > "$RELEASE_NOTES_PATH"
+          python3 scripts/changelog-to-html.py "${{ steps.changelog.outputs.changelog_path }}" > "$RELEASE_NOTES_PATH"
+          cat "$RELEASE_NOTES_PATH"
           echo "release_notes_path=$RELEASE_NOTES_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Update appcast.xml
