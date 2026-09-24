@@ -35,6 +35,8 @@ final class ReproRecorderTests: XCTestCase {
     recorder = ReproRecorder(supervisor: supervisor, runner: runner, store: store, events: events.eraseToAnyPublisher(),
       defaults: defaults, secrets: FixedSecrets(), snapshot: { control.stackSnapshot($0) }, isTemporary: { _ in false })
     recorder.start()
+    // Most tests exercise capture; toolbar recordings default to plain videos.
+    recorder.setScope(.running)
   }
 
   override func tearDown() async throws {
@@ -236,5 +238,19 @@ final class ReproRecorderTests: XCTestCase {
       defaults: defaults, secrets: FixedSecrets(), snapshot: { _ in fatalError("Not used when capture is off") })
     subject.send(.started(Date()))
     XCTAssertNil(quiet.activeSessionID)
+  }
+
+  func testToolbarRecordingsDefaultToNoWorkspace() async throws {
+    try await load("[services.api]\ncmd = \"while true; do echo tick; sleep 0.1; done\"\n")
+    await supervisor.start(stack: "shop", services: ["api"])
+    try await until { self.supervisor.runtime("shop", "api").phase == .ready }
+
+    let defaults = UserDefaults(suiteName: "ReproTests-default-\(UUID())")!
+    let subject = PassthroughSubject<RecordingLifecycleEvent, Never>()
+    let fresh = ReproRecorder(supervisor: supervisor, runner: runner, store: store, events: subject.eraseToAnyPublisher(),
+      defaults: defaults, secrets: FixedSecrets(), snapshot: { _ in fatalError("Not used when no workspace is chosen") })
+    XCTAssertEqual(fresh.scope, .off, "No workspace is chosen until someone picks one")
+    subject.send(.started(Date()))
+    XCTAssertNil(fresh.activeSessionID, "A running workspace is not captured unless it was chosen")
   }
 }
