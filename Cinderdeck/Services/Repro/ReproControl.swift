@@ -153,7 +153,9 @@ extension StackControlService {
         }
       } else {
         let marker = params["marker"]?.stringValue.map { JSONValue.string("marker:" + $0) }
-        if let t = try time(params["at"] ?? marker ?? .string("first_error"), session: session, lines: lines) { moments = [t] }
+        // Default to the first error; a clean repro shows its final frame.
+        let fallback = JSONValue.string(lines.contains { $0.level == .error && !$0.isOffscreen } ? "first_error" : "end")
+        if let t = try time(params["at"] ?? marker ?? fallback, session: session, lines: lines) { moments = [t] }
       }
       guard !moments.isEmpty else { throw StackControlError.invalid("Pass at (seconds, mm:ss, first_error, last_error, or marker:<label>)") }
       guard moments.count <= 6 else { throw StackControlError.invalid("Request at most 6 frames at once") }
@@ -199,6 +201,9 @@ extension StackControlService {
         throw StackControlError.invalid("Pass the exact repro id to delete")
       }
       let session = try recorder.resolve(query)
+      guard session.id.uuidString.caseInsensitiveCompare(query.trimmingCharacters(in: .whitespaces)) == .orderedSame else {
+        throw StackControlError.invalid("Pass the full repro id to delete (\(session.id.uuidString))")
+      }
       do { try recorder.delete(session.id) } catch { throw StackControlError(code: "busy", message: error.localizedDescription) }
       return .object(["deleted": .string(session.id.uuidString)])
 

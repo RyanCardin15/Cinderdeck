@@ -81,7 +81,7 @@ nonisolated enum StackMCPServer {
         "grep": property("string", "Case-insensitive text or regex"), "lines": property("number", "Maximum lines (default 300, max 5000)"),
         "offscreen": property("boolean", "Include output from just before recording or while paused (default true)")],
       required: [], readOnly: true),
-    Tool(name: "repro_frame", description: "Look at the recording: returns the video frame at a moment as an image, plus the log lines and markers just before it. Defaults to the first error. Pass times for up to 6 frames to see a sequence.",
+    Tool(name: "repro_frame", description: "Look at the recording: returns the video frame at a moment as an image, plus the log lines and markers just before it. Defaults to the first error, or the final frame when there are none. Pass times for up to 6 frames to see a sequence.",
       properties: ["repro": repro, "at": reproTime, "times": property("array", "Up to 6 moments (seconds, mm:ss, first_error, marker:<label>)", items: "string"),
         "marker": property("string", "Marker label or id"), "max_size": property("number", "Longest side in pixels (default 1280, or 960 for several)"),
         "window": property("number", "Seconds of output before each frame to include (default 3)")],

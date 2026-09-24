@@ -91,7 +91,7 @@ Repros are available through the same MCP server and CLI as Workspaces. Reload t
 | `list_repros` | Recent repros with verdicts, including recordings people made. |
 | `repro_summary` | Full result, including Git state and per-source counts. |
 | `repro_logs` | Output filtered by `around` + `window`, `from`/`to`, `source`, `level`, `grep`, and `lines`. |
-| `repro_frame` | The video frame at `at` (default `first_error`), returned as an image with the output and markers just before it. `times` returns up to six frames. |
+| `repro_frame` | The video frame at `at`, returned as an image with the output and markers just before it. Defaults to the first error, or the last frame when there are no errors. `times` returns up to six frames. |
 | `export_repro` | Write the export bundle (`destination`, `zip`, `video`). |
 | `open_repro` | Open the repro in the video editor for the user. |
 | `delete_repro` | Delete a repro. Requires the exact id. |
