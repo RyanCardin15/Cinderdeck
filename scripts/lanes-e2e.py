@@ -46,6 +46,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(dict(cwd=os.getcwd(), port=os.environ['PORT'], api=os.environ.get('CINDERDECK_PORT_API'))).encode())
 http.server.HTTPServer(('127.0.0.1', int(os.environ['PORT'])), Handler).serve_forever()
 """)
+        (repo / "check.py").write_text("""import json, os, pathlib, urllib.request
+port = os.environ['CINDERDECK_PORT_API']
+with urllib.request.urlopen('http://127.0.0.1:' + port, timeout=5) as response:
+    body = json.load(response)
+assert pathlib.Path(body['cwd']).resolve() == pathlib.Path.cwd().resolve()
+assert body['port'] == port
+print('Task verified its own lane server on port ' + port)
+""")
         git("add", "."); git("-c", "commit.gpgsign=false", "commit", "-m", "fixture")
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0)); base_port = listener.getsockname()[1]
@@ -62,6 +70,12 @@ env.PORT = "{base_port}"
 ready.port = {base_port}
 ready.timeout = 10
 restart = "no"
+[tasks.check]
+repo = "app"
+cmd = "/usr/bin/python3 check.py"
+requires_services = ["api"]
+[workflows.verify]
+steps = ["task:check"]
 ''')
         with (root / "app.log").open("w") as log:
             app = subprocess.Popen([binary], env=env, stdout=log, stderr=log)
@@ -106,7 +120,18 @@ restart = "no"
                 denied = cli("stacks", "stop", "shop/agent/codex-1", actor="Claude Code", expected=3)
                 assert denied["error"]["code"] == "claimed"
                 assert git("branch", "--show-current") == "main"
+                run = cli("workspace", "workflow", "shop/agent/codex-1", "verify")
+                for _ in range(100):
+                    run = cli("workspace", "status", run["id"])
+                    if run["status"] in ("succeeded", "failed", "cancelled", "interrupted"): break
+                    time.sleep(0.1)
+                assert run["status"] == "succeeded", run
+                assert cli("stacks", "status", "shop/agent/codex-1")["services"][0]["pid"] == first["services"][0]["pid"]
+                blocked = cli("stacks", "switch", "shop", "agent/codex-1", expected=1)
+                assert "already checked out" in blocked["error"]["message"], blocked
+                assert cli("stacks", "status", "shop")["services"][0]["pid"] == base["services"][0]["pid"]
                 print("PASS: CLI and MCP created three running environments with separate ports, worktrees and claims.", flush=True)
+                print("PASS: a workflow reached its own lane server; an occupied-branch switch preserved the source process.", flush=True)
                 if args.inspect:
                     print(f"Preview PID {app.pid}; fixture {root}", flush=True)
                     proceed = root / "continue"

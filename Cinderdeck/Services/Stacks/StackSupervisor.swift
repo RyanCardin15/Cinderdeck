@@ -438,7 +438,7 @@ final class StackSupervisor: ObservableObject {
   func removeLane(_ id: String, actor: StackActor) async throws {
     guard !isBootstrapping, !laneMutationInProgress else { throw StackError.message("A lane operation is in progress. Try again when it finishes.") }
     guard activeWorkspaceRun?(id) != true else { throw StackError.message("Wait for this lane's task or workflow to finish, or cancel its run before removing it.") }
-    guard let record = try StackLaneStore.records(in: lanesDirectory).first(where: { $0.definition.id == id }) else {
+    guard let record = try StackLaneStore.record(id: id, in: lanesDirectory) else {
       throw StackError.message("Select a worktree lane. The original checkout cannot be removed.")
     }
     guard states[id]?.operation == nil else { throw StackError.message("Wait for this lane to finish its current operation.") }

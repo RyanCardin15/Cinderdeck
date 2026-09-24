@@ -30,10 +30,12 @@ struct WorkspaceView: View {
         if let file = model.selectedFile {
           HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
-              Text(file.name).font(.largeTitle.bold())
+              Text(file.name).font(.largeTitle.bold()).lineLimit(2).help(file.name)
               Text(workspace?.root.path ?? file.file.path).font(.caption).foregroundColor(.secondary).textSelection(.enabled)
             }
             Spacer()
+            Button { model.lanesSheet = true } label: { Label("Lanes", systemImage: "arrow.triangle.branch") }
+              .accessibilityIdentifier("stacks.lanes")
             Button { model.edit(file) } label: { Label(file.lane == nil ? "Edit workspace" : "Edit source workspace", systemImage: "slider.horizontal.3") }
             Button { model.agentsSheet = true } label: { Image(systemName: "sparkles") }.help("Connect agents and CLI")
           }
@@ -41,6 +43,10 @@ struct WorkspaceView: View {
             ForEach(WorkspaceSection.allCases, id: \.self) { Text($0.rawValue).tag($0) }
           }.pickerStyle(.segmented).labelsHidden().accessibilityIdentifier("workspace.sections")
           Text(section.explanation).foregroundColor(.secondary).font(.callout)
+          if file.lane != nil {
+            Text("This lane uses a snapshot of its source workspace. To change services, tasks, or workflows, edit the source and recreate the lane.")
+              .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+          }
           if let error = model.error ?? runner.storageError {
             HStack { Label(error, systemImage: "exclamationmark.triangle").textSelection(.enabled); Spacer(); Button("Dismiss") { model.error = nil } }
               .font(.callout).foregroundColor(.orange)
@@ -60,7 +66,9 @@ struct WorkspaceView: View {
           switch section {
           case .services:
             if workspace?.services.isEmpty == true {
-              empty("No services yet", "Add the commands that should keep running, such as an API or database.", action: "Add services") { model.edit(file) }
+              empty(file.lane == nil ? "No services yet" : "No services in this lane",
+                file.lane == nil ? "Add the commands that should keep running, such as an API or database." : "Services added to the source workspace will be available in new lanes.",
+                action: file.lane == nil ? "Add services" : "Edit source workspace") { model.edit(file) }
             } else {
               StackExpandedView(file: file, viewModel: model, manager: HistoryFloatingManager.shared, showsWorkspaceName: false)
             }
@@ -128,9 +136,9 @@ struct WorkspaceView: View {
   private func tasks(_ file: StackDefinitionFile) -> some View {
     VStack(alignment: .leading, spacing: 12) {
       HStack {
-        Text("\(workspace?.tasks.count ?? 0) tasks").foregroundColor(.secondary)
+        Text("\(workspace?.tasks.count ?? 0) \(workspace?.tasks.count == 1 ? "task" : "tasks")").foregroundColor(.secondary)
         Spacer()
-        if let workspace, !workspace.services.isEmpty {
+        if let workspace, workspace.lane == nil, !workspace.services.isEmpty {
           Menu("Move service to Tasks") {
             ForEach(workspace.services) { service in
               Button(service.id) { editing = .init(workspace: workspace, kind: .task, componentID: nil, sourceServiceID: service.id) }
@@ -138,10 +146,13 @@ struct WorkspaceView: View {
             }
           }.help("Convert a stopped service that should run once, such as a build or test command")
         }
-        Button("New task") { edit(file, kind: .task) }.disabled(workspace == nil)
+        Button("New task") { edit(file, kind: .task) }.disabled(workspace == nil || file.lane != nil)
       }
       if workspace?.tasks.isEmpty != false {
-        empty("Turn commands into reusable tasks", "Tests, builds, linting, and migrations run once and produce a result.", action: "Create task") { edit(file, kind: .task) }
+        empty("Turn commands into reusable tasks", "Tests, builds, linting, and migrations run once and produce a result.",
+          action: file.lane == nil ? "Create task" : "Edit source workspace") {
+          if file.lane == nil { edit(file, kind: .task) } else { model.edit(file) }
+        }
       } else {
         ScrollView {
           LazyVStack(spacing: 10) {
@@ -151,10 +162,10 @@ struct WorkspaceView: View {
                   Label(task.name, systemImage: "terminal").font(.headline)
                   Spacer()
                   if let last = workspaceRuns.first(where: { $0.kind == .task && $0.definitionID == task.id }) { WorkspaceStatusLabel(status: last.status) }
-                  Button("Edit") { edit(file, kind: .task, id: task.id) }
+                  Button("Edit") { edit(file, kind: .task, id: task.id) }.disabled(file.lane != nil)
                   Menu {
                     Button("Delete task", role: .destructive) { remove(file, kind: .task, id: task.id) }
-                  } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).fixedSize()
+                  } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).fixedSize().disabled(file.lane != nil)
                   Button { start(file.id, .task, task.id) } label: { Label("Run", systemImage: "play.fill") }
                     .disabled(runner.activeRun(file.id) != nil).accessibilityIdentifier("workspace.runTask.\(task.id)")
                 }
@@ -170,9 +181,12 @@ struct WorkspaceView: View {
   }
   private func workflows(_ file: StackDefinitionFile) -> some View {
     VStack(alignment: .leading, spacing: 12) {
-      HStack { Text("\(workspace?.workflows.count ?? 0) workflows").foregroundColor(.secondary); Spacer(); Button("New workflow") { edit(file, kind: .workflow) }.disabled(workspace == nil) }
+      HStack { Text("\(workspace?.workflows.count ?? 0) \(workspace?.workflows.count == 1 ? "workflow" : "workflows")").foregroundColor(.secondary); Spacer(); Button("New workflow") { edit(file, kind: .workflow) }.disabled(workspace == nil || file.lane != nil) }
       if workspace?.workflows.isEmpty != false {
-        empty("Build a repeatable sequence", "For example: start your API, run integration tests, then build the app.", action: "Create workflow") { edit(file, kind: .workflow) }
+        empty("Build a repeatable sequence", "For example: start your API, run integration tests, then build the app.",
+          action: file.lane == nil ? "Create workflow" : "Edit source workspace") {
+          if file.lane == nil { edit(file, kind: .workflow) } else { model.edit(file) }
+        }
       } else {
         ScrollView {
           LazyVStack(spacing: 10) {
@@ -181,10 +195,10 @@ struct WorkspaceView: View {
                 HStack {
                   Label(workflow.name, systemImage: "arrow.triangle.branch").font(.headline)
                   Spacer()
-                  Button("Edit") { edit(file, kind: .workflow, id: workflow.id) }
+                  Button("Edit") { edit(file, kind: .workflow, id: workflow.id) }.disabled(file.lane != nil)
                   Menu {
                     Button("Delete workflow", role: .destructive) { remove(file, kind: .workflow, id: workflow.id) }
-                  } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).fixedSize()
+                  } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).fixedSize().disabled(file.lane != nil)
                   Button { start(file.id, .workflow, workflow.id) } label: { Label("Run workflow", systemImage: "play.fill") }
                     .disabled(runner.activeRun(file.id) != nil).accessibilityIdentifier("workspace.runWorkflow.\(workflow.id)")
                 }

@@ -533,6 +533,7 @@ final class StackControlService: ObservableObject {
       let status = try await git.status(at: repo.path)
       if let operation = status.operation { throw StackControlError(code: "git_blocked", message: "\(repo.id): \(operation) — resolve it in a terminal first") }
       if status.branchLabel == match.name && !match.isRemote { skipped.append(repo.id + " (already on it)"); continue }
+      try await git.requireBranchAvailable(match, at: repo.path)
       if status.isDirty { dirty.append("\(repo.id) (\(status.changedFiles) changed)") }
       choices[repo.id] = match
       transitions.append("\(repo.id): \(status.branchLabel) → \(match.name)")

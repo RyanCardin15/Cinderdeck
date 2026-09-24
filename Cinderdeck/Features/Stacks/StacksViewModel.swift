@@ -233,6 +233,7 @@ final class StacksViewModel: ObservableObject {
       var transitions: [String] = []
       for repo in repos {
         let status = try await git.status(at: repo.path)
+        if let branch = choices[repo.id] { try await git.requireBranchAvailable(branch, at: repo.path) }
         if let branch = choices[repo.id] { transitions.append("\(repo.id): \(status.branchLabel) → \(branch.name)") }
         if let operation = status.operation { throw StackError.message("\(repo.id): \(operation) — resolve in a terminal") }
         if status.isDirty { dirty.append(repo.id) }

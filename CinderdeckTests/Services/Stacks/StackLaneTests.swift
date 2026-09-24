@@ -291,6 +291,63 @@ final class StackLaneTests: XCTestCase {
     XCTAssertNil(supervisor.files.first { $0.id == file.id })
   }
 
+  func testMalformedSiblingDoesNotPreventRemovingHealthyLane() async throws {
+    try await load()
+    let lane = try await supervisor.createLane(stack: "shop", branch: "healthy", actor: codex)
+    let damaged = supervisor.lanesDirectory.appendingPathComponent("damaged")
+    try FileManager.default.createDirectory(at: damaged, withIntermediateDirectories: true)
+    let manifest = damaged.appendingPathComponent("lane.json")
+    try "broken".write(to: manifest, atomically: true, encoding: .utf8)
+    await supervisor.reloadDefinitions()
+    try await supervisor.removeLane(lane.id, actor: codex)
+    XCTAssertNil(supervisor.files.first { $0.id == lane.id })
+    XCTAssertEqual(try String(contentsOf: manifest), "broken")
+    XCTAssertNotNil(supervisor.definition("shop"))
+    XCTAssertTrue(supervisor.files.first { $0.id == "damaged" }?.issues.contains { $0.severity == .error } == true)
+  }
+
+  func testSwitchToAnotherLanesBranchDoesNotStopServicesOrStashChanges() async throws {
+    try await load()
+    await supervisor.start(stack: "shop", actor: codex)
+    let original = try XCTUnwrap(supervisor.runtime("shop", "api").process)
+    let lane = try await supervisor.createLane(stack: "shop", branch: "occupied", actor: claude)
+    await supervisor.start(stack: lane.id, actor: claude)
+    let sibling = try XCTUnwrap(supervisor.runtime(lane.id, "api").process)
+    try "keep my edits".write(to: repo.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)
+    do {
+      _ = try await control.handle("git.switch", params: .object([
+        "stack": .string("shop"), "branch": .string("occupied"), "dirty": .string("stash")]), actor: codex)
+      XCTFail("Switched to another lane's branch")
+    } catch { XCTAssertTrue(error.localizedDescription.contains("already checked out")) }
+    XCTAssertEqual(supervisor.runtime("shop", "api").process, original)
+    XCTAssertTrue(original.matchesLiveProcess)
+    XCTAssertEqual(supervisor.runtime(lane.id, "api").process, sibling)
+    XCTAssertTrue(sibling.matchesLiveProcess)
+    XCTAssertEqual(try String(contentsOf: repo.appendingPathComponent("tracked.txt")), "keep my edits")
+    let stashes = try await StackLaneStore.git(["stash", "list"], at: repo)
+    XCTAssertTrue(stashes.isEmpty)
+  }
+
+  func testTasksOnlyWorkspaceCreatesAnIsolatedLane() async throws {
+    let source = """
+    root = "\(repo.path)"
+    shell = "/bin/sh"
+    [tasks.check]
+    cmd = "pwd"
+    """
+    try source.write(to: definitions.appendingPathComponent("shop.toml"), atomically: true, encoding: .utf8)
+    await supervisor.reloadDefinitions()
+    let file = try await supervisor.createLane(stack: "shop", branch: "tasks-only", actor: codex)
+    let lane = try XCTUnwrap(file.definition)
+    XCTAssertTrue(lane.services.isEmpty)
+    XCTAssertEqual(lane.lane?.ports, [:])
+    XCTAssertEqual(lane.tasks.first?.directory, lane.root)
+    XCTAssertNotEqual(lane.root, repo)
+    let branch = try await StackLaneStore.git(["branch", "--show-current"], at: lane.root)
+    XCTAssertEqual(branch, "tasks-only")
+    try await supervisor.removeLane(file.id, actor: codex)
+  }
+
   func testIncompleteJournalCannotLaunchAndOccupiedPortsAreSkipped() async throws {
     try await load()
     let file = try await supervisor.createLane(stack: "shop", branch: "journal", actor: codex)

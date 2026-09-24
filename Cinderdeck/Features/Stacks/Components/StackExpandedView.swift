@@ -38,9 +38,11 @@ struct StackExpandedView: View {
         }
       }
       Spacer(minLength: 6)
-      Button { viewModel.lanesSheet = true } label: { Label("Lanes", systemImage: "arrow.triangle.branch") }
-        .buttonStyle(StackPillButtonStyle())
-        .accessibilityIdentifier("stacks.lanes")
+      if showsWorkspaceName {
+        Button { viewModel.lanesSheet = true } label: { Label("Lanes", systemImage: "arrow.triangle.branch") }
+          .buttonStyle(StackPillButtonStyle())
+          .accessibilityIdentifier("stacks.lanes")
+      }
       Button { viewModel.showLogs(stack: file.id, service: nil) } label: {
         Label("Terminal", systemImage: "terminal")
       }

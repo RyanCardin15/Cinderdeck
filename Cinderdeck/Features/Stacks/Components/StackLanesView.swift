@@ -22,14 +22,14 @@ struct StackLanesView: View {
       HStack {
         VStack(alignment: .leading, spacing: 4) {
           Text("\(source?.name ?? "Stack") lanes").font(.title2.bold())
-          Text("Run branches side by side, each with its own services and ports.").foregroundColor(.secondary)
+          Text("Run branches side by side in isolated working folders.").foregroundColor(.secondary)
         }
         Spacer()
         Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
       }
-      ScrollView(.horizontal) {
+      ScrollView([.horizontal, .vertical]) {
         HStack(alignment: .top, spacing: 12) { ForEach(lanes) { card($0) } }.padding(3)
-      }
+      }.frame(maxHeight: 320)
       Divider()
       Text("Create a lane").font(.headline)
       HStack {
@@ -39,8 +39,12 @@ struct StackLanesView: View {
           .disabled(working || branch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || source?.definition == nil)
           .accessibilityIdentifier("stacks.createLane")
       }
-      Toggle("Start services after creation", isOn: $startAfterCreation).disabled(working)
-      Text("Uses an existing local branch or creates one from each repository’s HEAD. Uncheck start to install dependencies first. Services must use PORT and CINDERDECK_PORT_<SERVICE> for their assigned ports.")
+      if source?.definition?.services.isEmpty == false {
+        Toggle("Start services after creation", isOn: $startAfterCreation).disabled(working)
+      }
+      Text(source?.definition?.services.isEmpty == true
+        ? "Uses an existing local branch or creates one from each repository’s HEAD. Tasks and workflows run inside the new lane’s working folders."
+        : "Uses an existing local branch or creates one from each repository’s HEAD. Uncheck start to install dependencies first. Services must use PORT and CINDERDECK_PORT_<SERVICE> for their assigned ports.")
         .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
       if let error { Text(error).foregroundColor(.red).textSelection(.enabled).fixedSize(horizontal: false, vertical: true) }
     }
@@ -58,14 +62,29 @@ struct StackLanesView: View {
   private func card(_ file: StackDefinitionFile) -> some View {
     let lane = file.lane
     let state = viewModel.states[file.id] ?? .init()
+    let hasServices = file.definition?.services.isEmpty == false || state.isActive
     let branches = file.definition?.repos.compactMap { viewModel.repoStatuses[$0.path]?.branchLabel } ?? []
     return VStack(alignment: .leading, spacing: 10) {
       HStack {
-        StackStatusDot(label: state.label)
+        if hasServices || file.definition == nil { StackStatusDot(label: state.label) }
         Text(lane?.name ?? branches.first ?? "Original checkout").font(.headline).lineLimit(2)
       }
       Text(lane?.owner.label ?? "Original checkout").font(.caption).foregroundColor(.secondary)
-      Text(state.operation ?? state.label).font(.caption).foregroundColor(.secondary)
+      if let definition = file.definition {
+        ForEach(definition.repos.filter { repo in
+          guard let branch = viewModel.repoStatuses[repo.path]?.branchLabel else { return false }
+          return branch != (lane?.name ?? branches.first)
+        }) { repo in
+          Label("\(repo.id): \(viewModel.repoStatuses[repo.path]?.branchLabel ?? "")", systemImage: "arrow.triangle.branch")
+            .font(.caption).foregroundColor(.secondary).lineLimit(2)
+        }
+      }
+      if hasServices || file.definition == nil {
+        Text(state.operation ?? state.label).font(.caption).foregroundColor(.secondary)
+      } else if let definition = file.definition {
+        Text("\(definition.tasks.count) \(definition.tasks.count == 1 ? "task" : "tasks") · \(definition.workflows.count) \(definition.workflows.count == 1 ? "workflow" : "workflows")")
+          .font(.caption).foregroundColor(.secondary)
+      }
       ForEach(file.issues) { issue in Text(issue.message).font(.caption).foregroundColor(.orange).lineLimit(3) }
       ForEach(file.definition?.services ?? []) { service in
         HStack(spacing: 6) {
@@ -81,9 +100,11 @@ struct StackLanesView: View {
         Label("Claimed by \(claim.holder.name)", systemImage: "lock.fill").font(.caption).foregroundColor(StackPalette.agent)
       }
       HStack {
-        Button(state.isActive ? "Stop" : "Start") { viewModel.toggle(file.id) }
-          .disabled(!state.isActive && file.definition == nil)
-        Button("Logs") { viewModel.showLogs(stack: file.id, service: nil) }
+        if hasServices {
+          Button(state.isActive ? "Stop" : "Start") { viewModel.toggle(file.id) }
+            .disabled(!state.isActive && file.definition == nil)
+          Button("Logs") { viewModel.showLogs(stack: file.id, service: nil) }
+        }
         Button("Inspect") { viewModel.select(file.id); dismiss() }
       }.disabled(working || viewModel.isBusy(file.id))
       if let lane {

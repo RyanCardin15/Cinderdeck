@@ -31,12 +31,29 @@ nonisolated struct StackLaneRecord: Codable, Sendable {
 nonisolated enum StackLaneStore {
   static func directory(for definitions: URL) -> URL { definitions.appendingPathComponent(".lanes", isDirectory: true) }
 
+  static func record(id: String, in directory: URL) throws -> StackLaneRecord? {
+    guard StackDefinitionLoader.validID(id) else { return nil }
+    let folder = directory.appendingPathComponent(id, isDirectory: true)
+    let file = folder.appendingPathComponent("lane.json")
+    guard FileManager.default.fileExists(atPath: file.path) else { return nil }
+    do {
+      let record = try StackControlCoding.decoder().decode(StackLaneRecord.self, from: Data(contentsOf: file))
+      guard record.definition.id == id,
+        record.definition.lane?.directory.standardizedFileURL == folder.standardizedFileURL else {
+        throw StackError.message("Lane identity does not match its folder")
+      }
+      return record
+    } catch {
+      throw StackError.message("Cannot read lane record at \(file.path): \(error.localizedDescription). Repair this record before changing the lane.")
+    }
+  }
+
   static func records(in directory: URL) throws -> [StackLaneRecord] {
     guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
     return try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
       .filter { FileManager.default.fileExists(atPath: $0.appendingPathComponent("lane.json").path) }
       .sorted { $0.path < $1.path }
-      .map { try StackControlCoding.decoder().decode(StackLaneRecord.self, from: Data(contentsOf: $0.appendingPathComponent("lane.json"))) }
+      .compactMap { try record(id: $0.lastPathComponent, in: directory) }
   }
 
   static func files(in directory: URL) throws -> [StackDefinitionFile] {
@@ -89,7 +106,8 @@ nonisolated enum StackLaneStore {
       throw StackError.message("Service names must have distinct uppercase port variables (hyphens become underscores).")
     }
     // Discover repositories even when a simple stack has no [repos] tables.
-    let paths = source.repos.map(\.path) + source.services.map(\.directory) + source.tasks.map(\.directory)
+    let paths = Set((source.repos.map(\.path) + source.services.map(\.directory) + source.tasks.map(\.directory))
+      .map { $0.resolvingSymlinksInPath().standardizedFileURL }).sorted { $0.path < $1.path }
     var roots: [URL] = []
     for path in paths {
       let root = URL(fileURLWithPath: try await git(["rev-parse", "--show-toplevel"], at: path)).resolvingSymlinksInPath().standardizedFileURL
