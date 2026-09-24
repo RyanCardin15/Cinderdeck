@@ -10,6 +10,11 @@ nonisolated struct StackLogLine: Identifiable, Equatable, Sendable {
   }
 }
 
+nonisolated struct LogBufferRevision: Equatable, Sendable {
+  let buffer: ObjectIdentifier
+  let revision: Int
+}
+
 actor LogBuffer {
   static let capacity = 5_000
   static let maximumFileBytes: UInt64 = 50 * 1024 * 1024
@@ -22,6 +27,8 @@ actor LogBuffer {
   private var offset: UInt64 = 0
   private var scheduledRead: Task<Void, Never>?
   private var version = 0
+  /// Total lines ever appended; unlike `version`, clear() does not move it.
+  private var appended = 0
   private var truncatedPartial = false
   private let readinessPattern: String?
   private let readinessRegex: NSRegularExpression?
@@ -84,13 +91,20 @@ actor LogBuffer {
 
   func consume(_ data: Data) {
     partial.append(data)
-    while let end = partial.firstIndex(of: 10) {
-      let line = partial[..<end]
-      let text = String(decoding: line, as: UTF8.self)
-      append(text.replacingOccurrences(of: "\r", with: "") + (truncatedPartial ? " [long line truncated]" : ""))
-      partial.removeSubrange(...end)
+    // Walk the chunk once and drop consumed bytes at the end. Removing each line
+    // from the front of `partial` is quadratic for a burst of short lines.
+    var start = partial.startIndex
+    let date = Date()
+    while let end = partial[start...].firstIndex(of: 10) {
+      let line = partial[start..<end]
+      var text = String(decoding: line, as: UTF8.self)
+      if line.contains(13) { text = text.replacingOccurrences(of: "\r", with: "") }
+      appendLine(text + (truncatedPartial ? " [long line truncated]" : ""), at: date)
+      start = partial.index(after: end)
       truncatedPartial = false
     }
+    if start != partial.startIndex { partial = Data(partial[start...]) }
+    trim()
     if partial.count > 64 * 1024 {
       partial = Data(partial.suffix(64 * 1024))
       truncatedPartial = true
@@ -99,13 +113,27 @@ actor LogBuffer {
   }
 
   func append(_ text: String, at date: Date = Date()) {
+    appendLine(text, at: date)
+    trim()
+  }
+  private func appendLine(_ text: String, at date: Date) {
     checkReadiness(text)
-    lines.append(.init(service: service, text: String(text.prefix(64 * 1024)), timestamp: date))
-    if lines.count > capacity { lines.removeFirst(lines.count - capacity) }
+    lines.append(.init(service: service, text: text.utf8.count > 64 * 1024 ? String(text.prefix(64 * 1024)) : text, timestamp: date))
+    appended += 1
     version += 1
+  }
+  /// Evicts once per batch; trimming per line would shift the whole ring for every line.
+  private func trim() {
+    if lines.count > capacity { lines.removeFirst(lines.count - capacity) }
   }
   func snapshot() -> [StackLogLine] { lines }
   func revision() -> Int { version }
+  /// Lines appended after `position`, a value this method returned earlier (0 at first).
+  /// Followers use it to copy only new output instead of the whole ring.
+  func lines(after position: Int) -> (lines: [StackLogLine], next: Int) {
+    let fresh = min(lines.count, max(0, appended - position))
+    return (fresh == 0 ? [] : Array(lines.suffix(fresh)), appended)
+  }
   func clear() { lines.removeAll(); partial.removeAll(); version += 1 }
   func matches(_ pattern: String) -> Bool {
     if pattern == readinessPattern { return reachedReadiness }
@@ -133,9 +161,23 @@ actor LogBuffer {
     handle = nil
   }
   deinit { scheduledRead?.cancel(); source?.cancel() }
+  /// Each buffer is already in arrival order, so a k-way merge replaces a full sort.
+  /// Ties keep the earlier buffer first.
   static func merged(_ buffers: [[StackLogLine]]) -> [StackLogLine] {
-    buffers.flatMap { $0 }.sorted {
-      $0.timestamp == $1.timestamp ? $0.id.uuidString < $1.id.uuidString : $0.timestamp < $1.timestamp
+    let buffers = buffers.filter { !$0.isEmpty }
+    if buffers.count <= 1 { return buffers.first ?? [] }
+    var result: [StackLogLine] = []
+    result.reserveCapacity(buffers.reduce(0) { $0 + $1.count })
+    var heads = [Int](repeating: 0, count: buffers.count)
+    while true {
+      var next: Int?
+      for index in buffers.indices where heads[index] < buffers[index].count {
+        if let current = next, buffers[current][heads[current]].timestamp <= buffers[index][heads[index]].timestamp { continue }
+        next = index
+      }
+      guard let next else { return result }
+      result.append(buffers[next][heads[next]])
+      heads[next] += 1
     }
   }
 }

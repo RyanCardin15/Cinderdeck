@@ -62,7 +62,7 @@ final class StacksViewModel: ObservableObject {
         self.selectedServiceID = nil
       }
     }.store(in: &subscriptions)
-    supervisor.$states.assign(to: &$states)
+    supervisor.$states.removeDuplicates().assign(to: &$states)
     supervisor.gitMonitor.$statuses.assign(to: &$repoStatuses)
     supervisor.$errorMessage.compactMap { $0 }.sink { [weak self] in self?.error = $0 }.store(in: &subscriptions)
     StackControlService.shared.$claims.assign(to: &$claims)

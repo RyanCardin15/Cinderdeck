@@ -8,6 +8,7 @@
 import AppKit
 import AVFoundation
 import Foundation
+import ImageIO
 import os.log
 
 private let logger = Logger(subsystem: "Cinderdeck", category: "ThumbnailGenerator")
@@ -93,6 +94,7 @@ enum ThumbnailGenerator {
   private static func generateFromImage(url: URL, maxSize: CGFloat) async -> NSImage? {
     // Retry with backoff: 0ms, 100ms, 300ms
     let delays: [UInt64] = [0, 100, 300]
+    let screenScale = NSScreen.main?.backingScaleFactor ?? 1.0
 
     for (attempt, delayMs) in delays.enumerated() {
       if delayMs > 0 {
@@ -104,6 +106,16 @@ enum ThumbnailGenerator {
         continue
       }
 
+      // Decoding a full-resolution screenshot and redrawing it took tens of
+      // milliseconds on the main thread after every capture. ImageIO reads only
+      // the pixels the thumbnail needs, off the main actor.
+      if let thumbnail = await Task.detached(priority: .userInitiated, operation: {
+        downsampledImage(at: url, maxSize: maxSize, screenScale: screenScale)
+      }).value {
+        return NSImage(cgImage: thumbnail.image, size: thumbnail.size)
+      }
+
+      // Formats ImageIO cannot read, such as PDF.
       if let image = NSImage(contentsOf: url) {
         let normalizedImage = normalizeRetinaLogicalSizeIfNeeded(image)
         let originalSize = normalizedImage.size
@@ -141,6 +153,45 @@ enum ThumbnailGenerator {
 
     logger.error("Thumbnail generation failed after \(delays.count) attempts: \(url.lastPathComponent)")
     return nil
+  }
+
+  private struct Downsampled: @unchecked Sendable {
+    let image: CGImage
+    let size: CGSize
+  }
+
+  /// The thumbnail and the point size NSImage would give it, including the
+  /// Retina adjustment `normalizeRetinaLogicalSizeIfNeeded` makes.
+  private nonisolated static func downsampledImage(at url: URL, maxSize: CGFloat, screenScale: CGFloat) -> Downsampled? {
+    guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
+      CGImageSourceGetCount(source) > 0,
+      let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+      var pixelWidth = (properties[kCGImagePropertyPixelWidth] as? NSNumber).map({ CGFloat($0.doubleValue) }),
+      var pixelHeight = (properties[kCGImagePropertyPixelHeight] as? NSNumber).map({ CGFloat($0.doubleValue) }),
+      pixelWidth > 0, pixelHeight > 0 else { return nil }
+    var dpiWidth = (properties[kCGImagePropertyDPIWidth] as? NSNumber).map { CGFloat($0.doubleValue) } ?? 72
+    var dpiHeight = (properties[kCGImagePropertyDPIHeight] as? NSNumber).map { CGFloat($0.doubleValue) } ?? 72
+    if dpiWidth <= 0 { dpiWidth = 72 }
+    if dpiHeight <= 0 { dpiHeight = 72 }
+    if let orientation = (properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue, (5...8).contains(orientation) {
+      swap(&pixelWidth, &pixelHeight); swap(&dpiWidth, &dpiHeight)
+    }
+    var size = CGSize(width: pixelWidth * 72 / dpiWidth, height: pixelHeight * 72 / dpiHeight)
+    if screenScale > 1, abs(size.width - pixelWidth) < 0.5, abs(size.height - pixelHeight) < 0.5 {
+      size = CGSize(width: pixelWidth / screenScale, height: pixelHeight / screenScale)
+    }
+    let scale = min(maxSize / max(size.width, size.height), 1.0)
+    let target = CGSize(width: size.width * scale, height: size.height * scale)
+    // As many pixels as the old redraw produced on this screen, never more than the source.
+    let maxPixels = min(max(pixelWidth, pixelHeight), ceil(max(target.width, target.height) * max(screenScale, 1)))
+    let options: [CFString: Any] = [
+      kCGImageSourceCreateThumbnailFromImageAlways: true,
+      kCGImageSourceCreateThumbnailWithTransform: true,
+      kCGImageSourceShouldCacheImmediately: true,
+      kCGImageSourceThumbnailMaxPixelSize: maxPixels,
+    ]
+    guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+    return Downsampled(image: image, size: target)
   }
 
   private static func generateFromVideo(url: URL, maxSize: CGFloat) async -> ThumbnailResult {

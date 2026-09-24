@@ -301,7 +301,9 @@ final class StackSupervisor: ObservableObject {
             wakeWaiting(id)
           }
         }
-        try? await Task.sleep(nanoseconds: 500_000_000)
+        // Probe quickly while starting. Afterwards this is a health check for the
+        // life of the service; at 2 Hz per service, many running workspaces add up.
+        try? await Task.sleep(nanoseconds: reachedReadiness ? 2_000_000_000 : 500_000_000)
       }
     }
   }
@@ -577,6 +579,15 @@ final class StackSupervisor: ObservableObject {
     change(id, service) { $0.conflict = nil; $0.detail = nil; if $0.process == nil { $0.phase = .stopped } }
   }
 
+  /// Identifies the buffers behind `logLines` and how far each has changed, so
+  /// pollers can skip copying and merging output that has not moved.
+  func logRevision(stack id: String, service: String? = nil) async -> [LogBufferRevision] {
+    var result: [LogBufferRevision] = []
+    for name in states[id]?.services.keys.sorted() ?? [] where service == nil || service == name {
+      if let buffer = logs[key(id, name)] { result.append(.init(buffer: ObjectIdentifier(buffer), revision: await buffer.revision())) }
+    }
+    return result
+  }
   func logLines(stack id: String, service: String? = nil) async -> [StackLogLine] {
     var buffers: [[StackLogLine]] = []
     for name in states[id]?.services.keys.sorted() ?? [] where service == nil || service == name {
