@@ -16,6 +16,7 @@ final class StackSupervisor: ObservableObject {
   private let environment: @Sendable (String) async throws -> [String: String]
   private let inspectPort: @Sendable (Int) async throws -> StackPortConflict?
   private let probe: @Sendable (StackReadiness, Date, LogBuffer?) async -> Bool
+  private let loadFiles: @Sendable (URL) async throws -> [StackDefinitionFile]
   private let logRoot: URL
   private var watcher: StackDefinitionWatcher?
   private var watchedDirectory: URL?
@@ -31,6 +32,7 @@ final class StackSupervisor: ObservableObject {
   private var stopping = Set<String>()
   private var subscriptions = Set<AnyCancellable>()
   private var reloadGeneration = 0
+  private var reloadTask: Task<Void, Never>?
   var activeWorkspaceRun: ((String) -> Bool)?
   /// Called before a service's log buffer is replaced by a relaunch, so a repro
   /// capture can read the final lines of the previous process.
@@ -43,10 +45,16 @@ final class StackSupervisor: ObservableObject {
     makeProcess: @escaping @Sendable () -> any ProcessLaunching = { ServiceProcess() },
     environment: @escaping @Sendable (String) async throws -> [String: String] = { try await ShellEnvironmentResolver.shared.resolve(shell: $0) },
     inspectPort: @escaping @Sendable (Int) async throws -> StackPortConflict? = { try await PortInspector.conflict(on: $0) },
-    probe: @escaping @Sendable (StackReadiness, Date, LogBuffer?) async -> Bool = { await ReadinessProbe.check($0, startedAt: $1, log: $2) }
+    probe: @escaping @Sendable (StackReadiness, Date, LogBuffer?) async -> Bool = { await ReadinessProbe.check($0, startedAt: $1, log: $2) },
+    loadFiles: @escaping @Sendable (URL) async throws -> [StackDefinitionFile] = { directory in
+      try await Task.detached {
+        try StackDefinitionLoader.loadDirectory(directory) + StackLaneStore.files(in: StackLaneStore.directory(for: directory))
+      }.value
+    }
   ) {
     self.store = store; self.defaults = defaults; self.secrets = secrets
     self.makeProcess = makeProcess; self.environment = environment; self.inspectPort = inspectPort; self.probe = probe
+    self.loadFiles = loadFiles
     self.gitMonitor = GitStatusMonitor(git: git)
     #if DEBUG
     self.logRoot = logRoot ?? StackPreviewHarness.root?.appendingPathComponent("Logs") ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Cinderdeck/Stacks")
@@ -122,13 +130,26 @@ final class StackSupervisor: ObservableObject {
 
   func reloadDefinitions() async {
     reloadGeneration += 1
-    let generation = reloadGeneration
+    // Every caller waits for the latest requested snapshot. A watcher must not
+    // make createLane return before its saved definition has been published.
+    if let reloadTask { await reloadTask.value; return }
+    let task = Task {
+      defer { reloadTask = nil }
+      while !Task.isCancelled {
+        let generation = reloadGeneration
+        await loadDefinitions(generation: generation)
+        if generation == reloadGeneration { break }
+      }
+    }
+    reloadTask = task
+    await task.value
+  }
+
+  private func loadDefinitions(generation: Int) async {
     let directory = StackDefinitionLoader.directory(defaults: defaults)
     do {
-      let loaded = try await Task.detached {
-        try StackDefinitionLoader.loadDirectory(directory) + StackLaneStore.files(in: StackLaneStore.directory(for: directory))
-      }.value
-      guard generation == reloadGeneration else { return }
+      let loaded = try await loadFiles(directory)
+      guard generation == reloadGeneration, !Task.isCancelled else { return }
       var updated = loaded
       for file in files where !loaded.contains(where: { $0.id == file.id }) && states[file.id]?.isActive == true {
         updated.append(.init(id: file.id, file: file.file, issues: [.init(severity: .warning,
@@ -148,7 +169,9 @@ final class StackSupervisor: ObservableObject {
       }
       gitMonitor.configure(files.compactMap(\.definition).flatMap(\.repos))
       gitMonitor.setAutoFetch(minutes: defaults.integer(forKey: PreferencesKeys.stacksAutoFetchMinutes))
-    } catch { errorMessage = "Cannot load stacks: \(error.localizedDescription)" }
+    } catch {
+      if generation == reloadGeneration, !Task.isCancelled { errorMessage = "Cannot load stacks: \(error.localizedDescription)" }
+    }
   }
 
   /// `actor` records who asked for the start. nil keeps the current owner
@@ -584,6 +607,8 @@ final class StackSupervisor: ObservableObject {
 
   /// Releases observers without signaling services. Used when leaving them running.
   func shutdownMonitoring() async {
+    reloadTask?.cancel()
+    await reloadTask?.value
     watcher?.stop(); watcher = nil; watchedDirectory = nil
     subscriptions.removeAll(); gitMonitor.stop()
     readinessTasks.values.forEach { $0.cancel() }; readinessTasks.removeAll()

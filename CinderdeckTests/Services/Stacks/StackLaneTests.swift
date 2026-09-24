@@ -3,6 +3,29 @@ import Foundation
 import XCTest
 @testable import Cinderdeck
 
+private actor LaneReloadGate {
+  private var reads = 0
+  private var pending: [Int: CheckedContinuation<Void, Never>] = [:]
+  private var observers: [(Int, CheckedContinuation<Void, Never>)] = []
+
+  func read(_ directory: URL) async throws -> [StackDefinitionFile] {
+    let snapshot = try StackDefinitionLoader.loadDirectory(directory)
+      + StackLaneStore.files(in: StackLaneStore.directory(for: directory))
+    reads += 1
+    let number = reads
+    let ready = observers.filter { $0.0 <= reads }
+    observers.removeAll { $0.0 <= reads }
+    ready.forEach { $0.1.resume() }
+    if number <= 2 { await withCheckedContinuation { pending[number] = $0 } }
+    return snapshot
+  }
+  func waitForRead(_ number: Int) async {
+    if reads >= number { return }
+    await withCheckedContinuation { observers.append((number, $0)) }
+  }
+  func release(_ number: Int) { pending.removeValue(forKey: number)?.resume() }
+}
+
 @MainActor
 final class StackLaneTests: XCTestCase {
   private var root: URL!
@@ -346,6 +369,40 @@ final class StackLaneTests: XCTestCase {
     let branch = try await StackLaneStore.git(["branch", "--show-current"], at: lane.root)
     XCTAssertEqual(branch, "tasks-only")
     try await supervisor.removeLane(file.id, actor: codex)
+  }
+
+  func testOverlappingReloadWaitsUntilLatestDefinitionsArePublished() async throws {
+    try await load()
+    await supervisor.shutdownMonitoring()
+    let gate = LaneReloadGate()
+    supervisor = StackSupervisor(store: nil, defaults: defaults, logRoot: root.appendingPathComponent("reload-logs"),
+      loadFiles: { try await gate.read($0) })
+    var firstFinished = false
+    var firstName: String?
+    let first = Task {
+      await supervisor.reloadDefinitions()
+      firstName = supervisor.definition("shop")?.name
+      firstFinished = true
+    }
+    await gate.waitForRead(1)
+    let file = definitions.appendingPathComponent("shop.toml")
+    try String(contentsOf: file).replacingOccurrences(of: "name = \"Shop\"", with: "name = \"Latest Shop\"")
+      .write(to: file, atomically: true, encoding: .utf8)
+    let secondStarted = expectation(description: "Concurrent watcher reload requested")
+    let second = Task {
+      secondStarted.fulfill()
+      await supervisor.reloadDefinitions()
+    }
+    await fulfillment(of: [secondStarted], timeout: 2)
+    await gate.release(1)
+    await gate.waitForRead(2)
+    try await Task.sleep(nanoseconds: 100_000_000)
+    XCTAssertFalse(firstFinished, "A superseded reload must wait until the newest snapshot is published")
+    await gate.release(2)
+    await first.value
+    await second.value
+    XCTAssertEqual(firstName, "Latest Shop")
+    XCTAssertEqual(supervisor.definition("shop")?.name, "Latest Shop")
   }
 
   func testIncompleteJournalCannotLaunchAndOccupiedPortsAreSkipped() async throws {
