@@ -21,6 +21,7 @@ struct WorkspaceView: View {
   @State private var selectedRun: UUID?
   @State private var search = ""
   private var workspace: StackDefinition? { model.selectedDefinition }
+  private var navigation: WorkspaceNavigation { model.workspaceNavigation }
   private var workspaceRuns: [WorkspaceRun] { runner.runs.filter { $0.workspaceID == model.selectedStackID } }
 
   var body: some View {
@@ -43,9 +44,18 @@ struct WorkspaceView: View {
             ForEach(WorkspaceSection.allCases, id: \.self) { Text($0.rawValue).tag($0) }
           }.pickerStyle(.segmented).labelsHidden().accessibilityIdentifier("workspace.sections")
           Text(section.explanation).foregroundColor(.secondary).font(.callout)
-          if file.lane != nil {
-            Text("This lane uses a snapshot of its source workspace. To change services, tasks, or workflows, edit the source and recreate the lane.")
-              .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+          if model.selectedWorkspaceID != file.id {
+            HStack {
+              Label(file.lane.map { "Lane: \($0.name)" } ?? "Lane workspace", systemImage: "arrow.triangle.branch")
+              Spacer()
+              if let source = navigation.workspaces.first(where: { $0.id == model.selectedWorkspaceID }) {
+                Button("Back to \(source.name)") { model.select(source.id) }
+              }
+            }.font(.callout)
+            if file.lane != nil {
+              Text("This lane uses a snapshot of its source workspace. To change services, tasks, or workflows, edit the source and recreate the lane.")
+                .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
           }
           if let error = model.error ?? runner.storageError {
             HStack { Label(error, systemImage: "exclamationmark.triangle").textSelection(.enabled); Spacer(); Button("Dismiss") { model.error = nil } }
@@ -110,20 +120,15 @@ struct WorkspaceView: View {
       TextField("Find a workspace", text: $search).textFieldStyle(.roundedBorder)
       ScrollView {
         LazyVStack(spacing: 6) {
-          ForEach(model.files.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { file in
-            Button { model.select(file.id) } label: {
-              HStack {
-                Image(systemName: "square.stack.3d.up.fill").foregroundColor(.accentColor)
-                VStack(alignment: .leading, spacing: 4) {
-                  Text(file.name).fontWeight(.semibold).lineLimit(1)
-                  Text(runner.activeRun(file.id).map { "\($0.kind.rawValue.capitalized) running" }
-                    ?? (file.definition == nil ? "Needs attention" : "\(file.definition?.services.count ?? 0) \(file.definition?.services.count == 1 ? "service" : "services") · \(file.definition?.tasks.count ?? 0) \(file.definition?.tasks.count == 1 ? "task" : "tasks")"))
-                    .font(.caption).foregroundColor(.secondary).lineLimit(1)
-                }
-                Spacer(minLength: 0)
-              }.padding(10).contentShape(Rectangle())
-                .background(model.selectedStackID == file.id ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
-            }.buttonStyle(.plain)
+          ForEach(navigation.workspaces.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { file in
+            sidebarRow(file, isWorkspace: true)
+          }
+          if !navigation.unattachedLanes.isEmpty {
+            Text("Lanes without a workspace").font(.caption).foregroundColor(.secondary)
+              .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+            ForEach(navigation.unattachedLanes.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { file in
+              sidebarRow(file, isWorkspace: false)
+            }
           }
         }
       }
@@ -131,6 +136,28 @@ struct WorkspaceView: View {
       Text("Services stay running.\nTasks finish.\nWorkflows bring them together.").font(.caption).foregroundColor(.secondary)
       Button("Open definitions folder") { NSWorkspace.shared.open(StackDefinitionLoader.directory()) }.font(.caption)
     }.padding(16).frame(maxHeight: .infinity).background(Color(nsColor: .controlBackgroundColor))
+  }
+
+  private func sidebarRow(_ file: StackDefinitionFile, isWorkspace: Bool) -> some View {
+    let laneCount = isWorkspace ? navigation.lanes(for: file.id).count : 0
+    let selected = isWorkspace ? model.selectedWorkspaceID == file.id : model.selectedStackID == file.id
+    return Button { model.select(file.id) } label: {
+      HStack {
+        Image(systemName: isWorkspace ? "square.stack.3d.up.fill" : "arrow.triangle.branch").foregroundColor(.accentColor)
+        VStack(alignment: .leading, spacing: 4) {
+          Text(file.name).fontWeight(.semibold).lineLimit(1)
+          Text(runner.activeRun(file.id).map { "\($0.kind.rawValue.capitalized) running" }
+            ?? (file.definition == nil ? "Needs attention" : "\(file.definition?.services.count ?? 0) \(file.definition?.services.count == 1 ? "service" : "services") · \(file.definition?.tasks.count ?? 0) \(file.definition?.tasks.count == 1 ? "task" : "tasks")"))
+            .font(.caption).foregroundColor(.secondary).lineLimit(1)
+          if laneCount > 0 {
+            Label("\(laneCount) \(laneCount == 1 ? "lane" : "lanes")", systemImage: "arrow.triangle.branch")
+              .font(.caption).foregroundColor(.secondary)
+          }
+        }
+        Spacer(minLength: 0)
+      }.padding(10).contentShape(Rectangle())
+        .background(selected ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
+    }.buttonStyle(.plain).accessibilityIdentifier("workspace.sidebar.\(file.id)")
   }
 
   private func tasks(_ file: StackDefinitionFile) -> some View {

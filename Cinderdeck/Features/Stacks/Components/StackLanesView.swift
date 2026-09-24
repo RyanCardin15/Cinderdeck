@@ -11,10 +11,11 @@ struct StackLanesView: View {
   @State private var error: String?
   @State private var removing: StackDefinitionFile?
 
-  private var sourceID: String? { viewModel.selectedFile?.lane?.sourceStackID ?? viewModel.selectedStackID }
+  private var sourceID: String? { viewModel.selectedWorkspaceID ?? viewModel.selectedStackID }
   private var source: StackDefinitionFile? { viewModel.files.first { $0.id == sourceID } }
   private var lanes: [StackDefinitionFile] {
-    viewModel.files.filter { $0.id == sourceID || $0.lane?.sourceStackID == sourceID }
+    guard let sourceID else { return [] }
+    return [source].compactMap { $0 } + viewModel.workspaceNavigation.lanes(for: sourceID)
   }
 
   var body: some View {
@@ -67,9 +68,10 @@ struct StackLanesView: View {
     return VStack(alignment: .leading, spacing: 10) {
       HStack {
         if hasServices || file.definition == nil { StackStatusDot(label: state.label) }
-        Text(lane?.name ?? branches.first ?? "Original checkout").font(.headline).lineLimit(2)
+        Text(lane?.name ?? (file.id == sourceID ? branches.first ?? "Original checkout" : file.name)).font(.headline).lineLimit(2)
       }
-      Text(lane?.owner.label ?? "Original checkout").font(.caption).foregroundColor(.secondary)
+      Text(lane?.owner.label ?? (file.id == sourceID ? "Original checkout" : "Workspace in lane"))
+        .font(.caption).foregroundColor(.secondary)
       if let definition = file.definition {
         ForEach(definition.repos.filter { repo in
           guard let branch = viewModel.repoStatuses[repo.path]?.branchLabel else { return false }
