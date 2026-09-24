@@ -81,7 +81,27 @@ final class PullRequestsViewModel: ObservableObject {
     if selectedView?.isBuiltIn == true { saved.repository = filters.repository; saved.organization = filters.organization }
     return saved != filters
   }
-  var visibleRepositories: [GitHubRepository] {
+  var visibleRepositories: [GitHubRepository] { repositoryListing.visible }
+  /// The sidebar reads the filtered, sorted repositories several times per render,
+  /// and renders on every keystroke and loading flag. Sort once per change instead.
+  private struct RepositoryListingKey: Equatable {
+    var repositories: [GitHubRepository]
+    var organization: String?
+    var starredOnly: Bool
+    var search: String
+    var login: String?
+  }
+  private var repositoryListingCache: (key: RepositoryListingKey, visible: [GitHubRepository], groups: [RepositoryGroup])?
+  private var repositoryListing: (visible: [GitHubRepository], groups: [RepositoryGroup]) {
+    let key = RepositoryListingKey(repositories: repositories, organization: filters.organization, starredOnly: starredOnly,
+      search: repositorySearch, login: login)
+    if let cache = repositoryListingCache, cache.key == key { return (cache.visible, cache.groups) }
+    let visible = computeVisibleRepositories()
+    let groups = computeRepositoryGroups(visible)
+    repositoryListingCache = (key, visible, groups)
+    return (visible, groups)
+  }
+  private func computeVisibleRepositories() -> [GitHubRepository] {
     repositories.filter { (filters.organization == nil || $0.owner.lowercased() == filters.organization?.lowercased()) && (!starredOnly || $0.viewerHasStarred) &&
       (repositorySearch.isEmpty || $0.nameWithOwner.localizedCaseInsensitiveContains(repositorySearch)) }
       .sorted {
@@ -94,8 +114,9 @@ final class PullRequestsViewModel: ObservableObject {
     var repositories: [GitHubRepository]
     var id: String { owner }
   }
-  var repositoryGroups: [RepositoryGroup] {
-    Dictionary(grouping: visibleRepositories, by: \.owner)
+  var repositoryGroups: [RepositoryGroup] { repositoryListing.groups }
+  private func computeRepositoryGroups(_ visible: [GitHubRepository]) -> [RepositoryGroup] {
+    Dictionary(grouping: visible, by: \.owner)
       .map { RepositoryGroup(owner: $0.key, repositories: $0.value) }
       .sorted {
         if ($0.owner.lowercased() == login?.lowercased()) != ($1.owner.lowercased() == login?.lowercased()) {

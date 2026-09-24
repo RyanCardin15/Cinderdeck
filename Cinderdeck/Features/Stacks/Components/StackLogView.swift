@@ -28,6 +28,8 @@ struct StackLogView: NSViewRepresentable {
     text.autoresizingMask = [.width]; text.isVerticallyResizable = true
     text.isHorizontallyResizable = false
     text.textContainer?.widthTracksTextView = true
+    // Lay out only what is visible; a console can hold tens of thousands of lines.
+    text.layoutManager?.allowsNonContiguousLayout = true
     text.setAccessibilityLabel(accessibilityTitle)
     text.setAccessibilityIdentifier(accessibilityID)
     scroll.documentView = text
@@ -42,42 +44,82 @@ struct StackLogView: NSViewRepresentable {
       coordinator.focusRequest = focusRequest
       if focusRequest > 0 { text.window?.makeFirstResponder(text) }
     }
-    guard lines.map(\.id) != coordinator.ids || allServices != coordinator.allServices else { return }
+    let ids = lines.map(\.id)
+    guard ids != coordinator.ids || allServices != coordinator.allServices else { return }
     let oldOrigin = scroll.contentView.bounds.origin
     let selected = text.selectedRange()
     let storage = text.textStorage!
     storage.beginEditing()
-    // Append only the new suffix. Filtering, clearing or ring eviction rebuilds
-    // bounded text; ordinary noisy output doesn't reparse the existing console.
-    let appends = allServices == coordinator.allServices && lines.count >= coordinator.ids.count && Array(lines.prefix(coordinator.ids.count).map(\.id)) == coordinator.ids
-    let start: Int
-    if appends { start = coordinator.ids.count }
-    else { storage.setAttributedString(NSAttributedString()); coordinator.styles = [:]; start = 0 }
+    // Output normally changes by appending at the end and evicting old lines from
+    // the ring (anywhere in a merged view). Apply just those edits; filtering or
+    // clearing rebuilds. Reparsing thousands of lines on every tick of a full,
+    // noisy buffer is what made busy consoles expensive.
+    var start = 0
+    if allServices == coordinator.allServices, let plan = Self.edits(from: coordinator.ids, to: ids) {
+      for range in plan.removed.reversed() {
+        let location = coordinator.offsets[range.lowerBound]
+        storage.deleteCharacters(in: NSRange(location: location, length: coordinator.offsets[range.upperBound] - location))
+      }
+      var kept: [Int] = [], offset = 0, removed = plan.removed.makeIterator(), nextRemoved = removed.next()
+      kept.reserveCapacity(ids.count + 1)
+      for index in coordinator.ids.indices {
+        if let range = nextRemoved, range.contains(index) {
+          if index == range.upperBound - 1 { nextRemoved = removed.next() }
+          continue
+        }
+        kept.append(offset)
+        offset += coordinator.offsets[index + 1] - coordinator.offsets[index]
+      }
+      kept.append(offset)
+      coordinator.offsets = kept
+      start = plan.kept
+    } else {
+      storage.setAttributedString(NSAttributedString()); coordinator.styles = [:]; coordinator.offsets = [0]
+    }
     for line in lines.dropFirst(start) {
       if allServices {
         let color = Self.palette[StackPalette.serviceIndex(line.service, in: serviceOrder)]
-        storage.append(NSAttributedString(string: "\(line.service) ", attributes: [.font: NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold), .foregroundColor: color]))
-        storage.append(NSAttributedString(string: "│ ", attributes: [.font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular), .foregroundColor: NSColor(white: 1, alpha: 0.18)]))
+        storage.append(NSAttributedString(string: "\(line.service) ", attributes: [.font: Self.serviceFont, .foregroundColor: color]))
+        storage.append(NSAttributedString(string: "│ ", attributes: [.font: Self.regularFont, .foregroundColor: Self.separator]))
       }
       var parser = coordinator.styles[line.service] ?? .init()
       for run in parser.parse(line.text) {
         let color = run.style.foreground.map(Self.color) ?? Self.foreground
         storage.append(NSAttributedString(string: run.text, attributes: [
-          .font: NSFont.monospacedSystemFont(ofSize: 11, weight: run.style.bold ? .bold : .regular),
+          .font: run.style.bold ? Self.boldFont : Self.regularFont,
           .foregroundColor: run.style.dim ? color.withAlphaComponent(0.55) : color,
         ]))
       }
       coordinator.styles[line.service] = parser
       storage.append(NSAttributedString(string: "\n"))
+      coordinator.offsets.append(storage.length)
     }
     storage.endEditing()
-    coordinator.ids = lines.map(\.id); coordinator.allServices = allServices
+    coordinator.ids = ids; coordinator.allServices = allServices
     if autoScroll { text.scrollToEndOfDocument(nil) }
     else {
       if selected.location + selected.length <= storage.length { text.setSelectedRange(selected) }
       scroll.contentView.scroll(to: oldOrigin); scroll.reflectScrolledClipView(scroll.contentView)
     }
   }
+  /// The lines to delete from `old` (as index ranges) and how many of `new` are
+  /// already on screen, when `new` is `old` minus some lines plus lines at the end.
+  /// nil when most lines changed and a rebuild is cheaper.
+  static func edits(from old: [UUID], to new: [UUID]) -> (removed: [Range<Int>], kept: Int)? {
+    var removed: [Range<Int>] = [], i = 0, j = 0, removedCount = 0
+    while i < old.count {
+      if j < new.count, old[i] == new[j] { i += 1; j += 1; continue }
+      if let last = removed.last, last.upperBound == i { removed[removed.count - 1] = last.lowerBound..<(i + 1) }
+      else { removed.append(i..<(i + 1)) }
+      removedCount += 1; i += 1
+    }
+    guard old.isEmpty || removedCount * 2 <= old.count else { return nil }
+    return (removed, j)
+  }
+  static let serviceFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold)
+  static let regularFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+  static let boldFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .bold)
+  static let separator = NSColor(white: 1, alpha: 0.18)
   static let background = NSColor(srgbRed: 0.07, green: 0.075, blue: 0.09, alpha: 1)
   static let foreground = NSColor(white: 0.86, alpha: 1)
   static let palette: [NSColor] = StackPalette.services.map { NSColor($0) }
@@ -93,6 +135,8 @@ struct StackLogView: NSViewRepresentable {
   final class Coordinator {
     weak var text: NSTextView?
     var ids: [UUID] = []
+    /// Character offset where each line starts, plus the end: offsets[i]..<offsets[i + 1] is line i.
+    var offsets: [Int] = [0]
     var styles: [String: AnsiParser.State] = [:]
     var allServices = true
     var focusRequest = 0

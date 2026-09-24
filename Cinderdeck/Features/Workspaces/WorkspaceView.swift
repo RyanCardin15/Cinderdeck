@@ -374,7 +374,8 @@ private struct WorkspaceRunDetail: View {
         while !Task.isCancelled {
           let output = await runner.output(run.id, stepID: selectedStep)
           guard !Task.isCancelled else { return }
-          if lines.map(\.text) != output.map(\.text) || lines.map(\.service) != output.map(\.service) { lines = output }
+          // Line ids are stable for live and finished steps, so they identify new output.
+          if lines.count != output.count || lines.last?.id != output.last?.id || lines.map(\.id) != output.map(\.id) { lines = output }
           if runner.run(run.id)?.status.isActive != true { return }
           do { try await Task.sleep(nanoseconds: 250_000_000) } catch { return }
         }

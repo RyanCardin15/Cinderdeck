@@ -44,12 +44,26 @@ final class GitStatusMonitor: ObservableObject {
     guard !refreshing.contains(path) else { return }
     refreshing.insert(path)
     defer { refreshing.remove(path) }
-    do { statuses[path] = try await git.status(at: path) }
-    catch { statuses[path] = GitRepoStatus(error: error.localizedDescription) }
+    let status: GitRepoStatus
+    do { status = try await git.status(at: path) }
+    catch { status = GitRepoStatus(error: error.localizedDescription) }
+    // Publishing an unchanged status redraws every workspace view and rewrites the agent state file.
+    if statuses[path] != status { statuses[path] = status }
   }
+  /// A few repositories at a time: each refresh spawns Git, and many workspaces
+  /// can share one 30-second tick.
   func refreshAll() async {
+    let paths = Array(wanted)
     await withTaskGroup(of: Void.self) { group in
-      for path in wanted { group.addTask { await self.refresh(path) } }
+      var next = 0
+      for _ in 0..<min(4, paths.count) {
+        let path = paths[next]; next += 1
+        group.addTask { await self.refresh(path) }
+      }
+      while await group.next() != nil, next < paths.count {
+        let path = paths[next]; next += 1
+        group.addTask { await self.refresh(path) }
+      }
     }
   }
   func setVisible(_ visible: Bool, source: String = "history") {

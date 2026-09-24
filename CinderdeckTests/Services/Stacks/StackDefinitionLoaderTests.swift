@@ -211,6 +211,43 @@ final class LogBufferTests: XCTestCase {
     XCTAssertEqual(LogBuffer.merged([lines, [earlier]]).first?.text, "earlier")
     await buffer.clear(); lines = await buffer.snapshot(); XCTAssertTrue(lines.isEmpty)
   }
+  func testBurstKeepsNewestLinesAndFollowersReadOnlyNewOutput() async {
+    let buffer = LogBuffer(service: "api", capacity: 3)
+    await buffer.consume(Data((0..<10).map { "line \($0)\r\n" }.joined().utf8))
+    var lines = await buffer.snapshot()
+    XCTAssertEqual(lines.map(\.text), ["line 7", "line 8", "line 9"])
+    var delta = await buffer.lines(after: 0)
+    XCTAssertEqual(delta.lines.map(\.text), ["line 7", "line 8", "line 9"])
+    await buffer.append("line 10")
+    delta = await buffer.lines(after: delta.next)
+    XCTAssertEqual(delta.lines.map(\.text), ["line 10"])
+    let unchanged = await buffer.lines(after: delta.next)
+    XCTAssertTrue(unchanged.lines.isEmpty)
+    await buffer.clear()
+    let cleared = await buffer.lines(after: 0)
+    XCTAssertTrue(cleared.lines.isEmpty)
+    await buffer.append("after clear")
+    lines = await buffer.lines(after: delta.next).lines
+    XCTAssertEqual(lines.map(\.text), ["after clear"])
+  }
+  func testMergedKeepsEachBufferInOrderAndEarlierBufferFirstOnTies() {
+    let now = Date()
+    let api = [StackLogLine(service: "api", text: "a1", timestamp: now), StackLogLine(service: "api", text: "a2", timestamp: now.addingTimeInterval(2))]
+    let web = [StackLogLine(service: "web", text: "w1", timestamp: now), StackLogLine(service: "web", text: "w2", timestamp: now.addingTimeInterval(1))]
+    XCTAssertEqual(LogBuffer.merged([api, web, []]).map(\.text), ["a1", "w1", "w2", "a2"])
+  }
+  func testConsoleEditsRemoveEvictedLinesAndAppendNewOnes() throws {
+    let ids = (0..<6).map { _ in UUID() }
+    // Ring eviction in a merged view: lines leave from anywhere, new ones arrive at the end.
+    let plan = try XCTUnwrap(StackLogView.edits(from: Array(ids[0..<5]), to: [ids[0], ids[2], ids[3], ids[4], ids[5]]))
+    XCTAssertEqual(plan.removed, [1..<2])
+    XCTAssertEqual(plan.kept, 4)
+    let head = try XCTUnwrap(StackLogView.edits(from: Array(ids[0..<4]), to: [ids[2], ids[3], ids[5]]))
+    XCTAssertEqual(head.removed, [0..<2])
+    XCTAssertEqual(head.kept, 2)
+    XCTAssertNil(StackLogView.edits(from: Array(ids[0..<4]), to: [ids[5]]))
+    XCTAssertEqual(StackLogView.edits(from: [], to: ids)?.kept, 0)
+  }
   func testFileFollowingAndTruncation() async throws {
     let root = try StackTestSupport.temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }

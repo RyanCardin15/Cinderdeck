@@ -13,7 +13,7 @@ nonisolated enum StackServicePhase: String, Codable, Sendable {
   }
 }
 
-nonisolated struct StackServiceRuntime: Sendable {
+nonisolated struct StackServiceRuntime: Equatable, Sendable {
   var phase: StackServicePhase = .stopped
   var process: StackProcessIdentity?
   var startedAt: Date?
@@ -26,7 +26,7 @@ nonisolated struct StackServiceRuntime: Sendable {
   var owner: StackActor?
 }
 
-nonisolated struct StackRuntimeState: Sendable {
+nonisolated struct StackRuntimeState: Equatable, Sendable {
   var services: [String: StackServiceRuntime] = [:]
   var operation: String?
   var error: String?

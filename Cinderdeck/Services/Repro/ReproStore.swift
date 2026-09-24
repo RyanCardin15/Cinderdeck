@@ -86,6 +86,8 @@ nonisolated final class ReproLineWriter: @unchecked Sendable {
   private let handle: FileHandle
   private let encoder = StackControlCoding.encoder()
   private let lock = NSLock()
+  private let queue = DispatchQueue(label: "Cinderdeck.ReproLineWriter", qos: .utility)
+  private var failure: Error?
 
   init(url: URL) throws {
     if !FileManager.default.fileExists(atPath: url.path) {
@@ -108,7 +110,26 @@ nonisolated final class ReproLineWriter: @unchecked Sendable {
     try handle.write(contentsOf: data)
   }
 
+  /// Encodes and writes on the writer's queue, keeping busy output off the main thread.
+  /// A failure is kept for `takeFailure()`.
+  func enqueue(_ lines: [ReproLogLine]) {
+    guard !lines.isEmpty else { return }
+    queue.async { [self] in
+      do { try append(lines) } catch { lock.withLock { if failure == nil { failure = error } } }
+    }
+  }
+
+  func waitForPendingWrites() { queue.sync {} }
+
+  func takeFailure() -> Error? {
+    lock.withLock {
+      defer { failure = nil }
+      return failure
+    }
+  }
+
   func close() {
+    waitForPendingWrites()
     lock.lock(); defer { lock.unlock() }
     try? handle.synchronize()
     try? handle.close()

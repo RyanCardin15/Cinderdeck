@@ -17,7 +17,10 @@ struct HistoryFloatingContentView: View {
 
   @State private var selectedCompactFilter: CaptureHistoryType? = nil
   @AppStorage(PreferencesKeys.stacksEnabled) private var stacksEnabled = true
-  @StateObject private var stacksViewModel = StacksViewModel()
+  // Held without observing: service, Git, and claim updates redraw the Workspaces
+  // views that read them, not the whole panel and its capture grid.
+  @State private var stacksHolder = StacksViewModelHolder()
+  private var stacksViewModel: StacksViewModel { stacksHolder.model }
   @State private var selectedClipboardID: UUID?
   @State private var usesExplicitCompactFilterSelection = false
   @State private var selectedId: UUID? = nil
@@ -360,12 +363,13 @@ struct HistoryFloatingContentView: View {
   }
 
   private var stacksFilterPill: some View {
-    selectionPill(title: "Workspaces", isSelected: manager.selectedSection == .stacks,
-      count: stacksViewModel.runningCount > 0 ? stacksViewModel.runningCount : nil) {
+    StacksRunningCount(viewModel: stacksViewModel) { count in
+      selectionPill(title: "Workspaces", isSelected: manager.selectedSection == .stacks, count: count) {
         manager.selectedSection = .stacks
         manager.focusPanel()
       }
-      .accessibilityIdentifier("history.stacksTab")
+    }
+    .accessibilityIdentifier("history.stacksTab")
   }
 
   private var expandedTypeFilters: some View {
@@ -1037,4 +1041,15 @@ struct HistoryFloatingContentView: View {
       }
     }
   }
+}
+
+private final class StacksViewModelHolder {
+  lazy var model = StacksViewModel()
+}
+
+/// Observes the Workspaces model for the running-count badge alone.
+private struct StacksRunningCount<Content: View>: View {
+  @ObservedObject var viewModel: StacksViewModel
+  let content: (Int?) -> Content
+  var body: some View { content(viewModel.runningCount > 0 ? viewModel.runningCount : nil) }
 }

@@ -60,13 +60,20 @@ private actor GitRepositoryCommands {
     }
     throw StackError.message("Git command failed")
   }
+  /// A repository's Git directories rarely move; reuse them so a status refresh spawns one process, not two.
+  private var knownDirectories: [URL]?
   private func readDirectories() async throws -> [URL] {
-    try await command(["rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"])
+    let directories = try await command(["rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"])
       .split(separator: "\n").map { StackDefinitionLoader.resolve(String($0), relativeTo: path) }
+    knownDirectories = directories
+    return directories
   }
   private func readStatus() async throws -> GitRepoStatus {
-    let output = try await command(["status", "--porcelain=v2", "--branch", "-z"])
-    let directories = try await readDirectories()
+    let output: String
+    do { output = try await command(["status", "--porcelain=v2", "--branch", "-z"]) }
+    catch { knownDirectories = nil; throw error }
+    let directories: [URL]
+    if let knownDirectories { directories = knownDirectories } else { directories = try await readDirectories() }
     var operation: String?
     for directory in directories {
       for (file, label) in [("MERGE_HEAD", "Merge in progress"), ("rebase-merge", "Rebase in progress"),

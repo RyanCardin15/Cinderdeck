@@ -113,8 +113,8 @@ final class ReproRecorder: ObservableObject {
 
   private struct Cursor {
     let buffer: LogBuffer
-    var revision: Int
-    var lastID: UUID?
+    /// Position from `LogBuffer.lines(after:)`.
+    var position: Int
   }
 
   init(supervisor: StackSupervisor, runner: WorkspaceRunner, store: ReproStore,
@@ -319,28 +319,33 @@ final class ReproRecorder: ObservableObject {
   private func drain(_ buffer: LogBuffer, source: ReproSource) async {
     guard let clock, let start = session?.createdAt else { return }
     let key = ObjectIdentifier(buffer)
-    let revision = await buffer.revision()
-    if let cursor = cursors[key], cursor.revision == revision { return }
-    let lines = await buffer.snapshot()
+    // Copy only lines written since the last poll, not the whole ring.
+    let delta = await buffer.lines(after: cursors[key]?.position ?? 0)
+    cursors[key] = Cursor(buffer: buffer, position: delta.next)
+    var fresh = delta.lines
     let cutoff = start.addingTimeInterval(-Self.preRoll)
-    var fresh: [StackLogLine] = []
-    for line in lines.reversed() {
-      if let last = cursors[key]?.lastID, line.id == last { break }
-      if line.timestamp < cutoff { break }
-      fresh.append(line)
-    }
-    cursors[key] = Cursor(buffer: buffer, revision: revision, lastID: lines.last?.id)
+    if let old = fresh.lastIndex(where: { $0.timestamp < cutoff }) { fresh.removeFirst(old + 1) }
+    if let stoppedAt = clock.stoppedAt { fresh.removeAll { $0.timestamp > stoppedAt } }
     guard session != nil, !fresh.isEmpty else { return }
-    for line in fresh.reversed() {
-      if let stoppedAt = clock.stoppedAt, line.timestamp > stoppedAt { continue }
-      ingest(line, source: source, clock: clock)
-    }
+    if source.kind != .external { loadSecrets(source.workspace) }
+    // Stripping, redacting, and classifying runs several regular expressions per
+    // line; do it off the main actor so noisy services cannot stall the UI while recording.
+    let redactor = redactor
+    let prepared = await Task.detached(priority: .utility) {
+      fresh.map { line in
+        let text = redactor.redact(AnsiParser.plainText(line.text))
+        return (line: line, text: text, level: ReproLogLevel.classify(text))
+      }
+    }.value
+    guard session != nil else { return }
+    for entry in prepared { ingest(entry.line, source: source, clock: clock, level: entry.level, text: entry.text) }
   }
 
-  private func ingest(_ line: StackLogLine, source: ReproSource, clock: ReproClock, level fixedLevel: ReproLogLevel? = nil) {
+  private func ingest(_ line: StackLogLine, source: ReproSource, clock: ReproClock, level fixedLevel: ReproLogLevel? = nil,
+    text prepared: String? = nil) {
     guard session != nil else { return }
     if source.kind != .external { loadSecrets(source.workspace) }
-    let text = redactor.redact(AnsiParser.plainText(line.text))
+    let text = prepared ?? redactor.redact(AnsiParser.plainText(line.text))
     let position = clock.position(at: line.timestamp)
     let level = fixedLevel ?? ReproLogLevel.classify(text)
     let beforeVideo = line.timestamp < clock.origin
@@ -377,9 +382,10 @@ final class ReproRecorder: ObservableObject {
   private func flush() {
     guard let session else { return }
     if !pending.isEmpty {
-      do { try writer?.append(pending) } catch { lastError = "Could not save repro output: \(error.localizedDescription)" }
+      writer?.enqueue(pending)
       pending.removeAll(keepingCapacity: true)
     }
+    if let error = writer?.takeFailure() { lastError = "Could not save repro output: \(error.localizedDescription)" }
     // One publish per poll keeps the controls and Workspaces cheap to redraw.
     if var updated = live {
       updated.lines = session.lineCount
@@ -810,8 +816,8 @@ final class ReproRecorder: ObservableObject {
   func lines(for id: UUID) async -> [ReproLogLine] {
     if session?.id == id {
       flush()
-      let store = store
-      return await Task.detached { store.loadLines(id) }.value
+      let store = store, writer = writer
+      return await Task.detached { writer?.waitForPendingWrites(); return store.loadLines(id) }.value
     }
     if let cached = lineCache[id] { return cached }
     let store = store

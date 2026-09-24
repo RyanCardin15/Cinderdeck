@@ -8,9 +8,11 @@ final class StackConsoleViewModel: ObservableObject {
   @Published private(set) var file: StackDefinitionFile
   @Published private(set) var state = StackRuntimeState()
   @Published private(set) var logService: String?
-  @Published private(set) var logLines: [StackLogLine] = []
+  @Published private(set) var logLines: [StackLogLine] = [] { didSet { updateFilteredLogs() } }
+  /// Cached: filtering strips ANSI from every line, too costly to repeat on each render.
+  @Published private(set) var filteredLogs: [StackLogLine] = []
   @Published private(set) var activity: [StackEventRecord] = []
-  @Published var logFilter = ""
+  @Published var logFilter = "" { didSet { if logFilter != oldValue { updateFilteredLogs() } } }
   @Published var autoScroll = true
   @Published var showsActivity = false
   @Published private(set) var logFocusRequest = 0
@@ -18,6 +20,7 @@ final class StackConsoleViewModel: ObservableObject {
   private var subscriptions = Set<AnyCancellable>()
   private var logTask: Task<Void, Never>?
   private var selectionRevision = 0
+  private var loadedRevision: [LogBufferRevision]?
 
   init(file: StackDefinitionFile, supervisor: StackSupervisor) {
     self.stackID = file.id
@@ -27,9 +30,10 @@ final class StackConsoleViewModel: ObservableObject {
       guard let self, let file = files.first(where: { $0.id == self.stackID }) else { return }
       self.file = file
     }.store(in: &subscriptions)
-    supervisor.$states.sink { [weak self] states in
-      guard let self else { return }
-      state = states[stackID] ?? .init()
+    // Only this stack's changes: other workspaces starting and stopping must not redraw this console.
+    let stackID = file.id
+    supervisor.$states.map { $0[stackID] ?? .init() }.removeDuplicates().sink { [weak self] state in
+      self?.state = state
     }.store(in: &subscriptions)
   }
 
@@ -45,14 +49,16 @@ final class StackConsoleViewModel: ObservableObject {
     }
     return services.sorted { $0.id < $1.id }
   }
-  var filteredLogs: [StackLogLine] {
-    logLines.filter { logFilter.isEmpty || AnsiParser.plainText($0.text).localizedCaseInsensitiveContains(logFilter) }
+  private func updateFilteredLogs() {
+    filteredLogs = logFilter.isEmpty ? logLines
+      : logLines.filter { AnsiParser.plainText($0.text).localizedCaseInsensitiveContains(logFilter) }
   }
   func runtime(_ service: String) -> StackServiceRuntime { state.services[service] ?? .init() }
 
   func selectService(_ service: String?) {
     selectionRevision += 1
     logService = service
+    loadedRevision = nil
     logLines = []
     Task { [weak self] in await self?.refreshLogs() }
   }
@@ -86,9 +92,13 @@ final class StackConsoleViewModel: ObservableObject {
 
   private func refreshLogs() async {
     let revision = selectionRevision
+    // Most ticks nothing was written: compare revisions before copying and merging every line.
+    let current = await supervisor.logRevision(stack: stackID, service: logService)
+    guard !Task.isCancelled, revision == selectionRevision, current != loadedRevision else { return }
     let lines = await supervisor.logLines(stack: stackID, service: logService)
     guard !Task.isCancelled, revision == selectionRevision else { return }
-    if lines != logLines { logLines = lines }
+    loadedRevision = current
+    logLines = lines
   }
 
   private func refreshActivity() async {
@@ -107,6 +117,7 @@ final class StackConsoleViewModel: ObservableObject {
     Task { [weak self] in
       guard let self else { return }
       await supervisor.clearLogs(stack: stackID, service: service)
+      loadedRevision = nil
       await refreshLogs()
     }
   }

@@ -15,6 +15,10 @@ final class WorkspaceRunner: ObservableObject {
   private var workers: [UUID: Task<Void, Never>] = [:]
   private var processes: [UUID: ServiceProcess] = [:]
   private var buffers: [UUID: LogBuffer] = [:]
+  /// Output of finished steps, read from their log once. The run view polls while
+  /// later steps run; rereading and reparsing every earlier step each tick is waste.
+  private var finishedOutput: [UUID: [StackLogLine]] = [:]
+  private var finishedOutputOrder: [UUID] = []
   private var recovered = false
   /// Called with a step's buffer just before it is released, so a repro capture
   /// can read output written after its last poll.
@@ -253,6 +257,7 @@ final class WorkspaceRunner: ObservableObject {
     var result: [StackLogLine] = []
     for step in run.steps where stepID == nil || step.id == stepID {
       if let buffer = buffers[step.id] { result += await buffer.snapshot() }
+      else if let cached = finishedOutput[step.id] { result += cached }
       else {
         let url = store.logURL(runID, step.id)
         let text = await Task.detached {
@@ -262,8 +267,15 @@ final class WorkspaceRunner: ObservableObject {
           try? handle.seek(toOffset: size > 512 * 1024 ? size - 512 * 1024 : 0)
           return String(decoding: (try? handle.readToEnd()) ?? Data(), as: UTF8.self)
         }.value
-        result += text.split(separator: "\n", omittingEmptySubsequences: false).filter { !$0.isEmpty }
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).filter { !$0.isEmpty }
           .suffix(LogBuffer.capacity).map { StackLogLine(service: step.title, text: String($0), timestamp: step.startedAt ?? run.createdAt) }
+        result += lines
+        // Only settled steps: a queued or running step's file is still growing.
+        if !step.status.isActive, buffers[step.id] == nil, self.run(runID)?.steps.first(where: { $0.id == step.id })?.status.isActive == false {
+          finishedOutput[step.id] = lines
+          finishedOutputOrder.append(step.id)
+          while finishedOutputOrder.count > 32 { finishedOutput[finishedOutputOrder.removeFirst()] = nil }
+        }
       }
     }
     return Array(result.suffix(LogBuffer.capacity))
