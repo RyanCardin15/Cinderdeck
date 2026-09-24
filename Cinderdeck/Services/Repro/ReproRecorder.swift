@@ -55,6 +55,7 @@ final class ReproRecorder: ObservableObject {
   let store: ReproStore
   private let defaults: UserDefaults
   private let secrets: any StackSecretsStoring
+  private let snapshot: (StackDefinitionFile) -> StackSnapshot
   private var subscriptions = Set<AnyCancellable>()
   private var started = false
 
@@ -89,9 +90,11 @@ final class ReproRecorder: ObservableObject {
 
   init(supervisor: StackSupervisor, runner: WorkspaceRunner, store: ReproStore,
     events: AnyPublisher<RecordingLifecycleEvent, Never>, defaults: UserDefaults = .standard,
-    secrets: any StackSecretsStoring = StackSecretsStore()) {
+    secrets: any StackSecretsStoring = StackSecretsStore(),
+    snapshot: ((StackDefinitionFile) -> StackSnapshot)? = nil) {
     self.supervisor = supervisor; self.runner = runner; self.store = store
     self.defaults = defaults; self.secrets = secrets
+    self.snapshot = snapshot ?? { StackControlService.shared.stackSnapshot($0) }
     events.sink { [weak self] event in self?.handle(event) }.store(in: &subscriptions)
   }
 
@@ -123,7 +126,7 @@ final class ReproRecorder: ObservableObject {
   var activeSessionID: UUID? { session?.id }
   var isEnabled: Bool { defaults.object(forKey: PreferencesKeys.reproCaptureLogs) as? Bool ?? true }
 
-  /// The next recording that starts within a minute becomes this repro.
+  /// The next recording that starts within ten minutes becomes this repro.
   func expect(_ request: ReproRequest) { self.request = request }
   func clearExpectation(_ id: UUID) { if request?.id == id { request = nil } }
 
@@ -140,6 +143,7 @@ final class ReproRecorder: ObservableObject {
     case .resumed(let date):
       clock?.resume(at: date); live?.isPaused = false
     case .stopping(let date):
+      lastFirstFrame = nil
       guard session != nil else { return }
       stopRequested = true
       clock?.stop(at: date)
@@ -148,6 +152,7 @@ final class ReproRecorder: ObservableObject {
       guard session != nil else { return }
       Task { await finalize(video: url) }
     case .cancelled:
+      lastFirstFrame = nil
       // Either the recording was deleted, or stopping produced no video.
       guard session != nil else { return }
       Task { await discard() }
@@ -155,12 +160,15 @@ final class ReproRecorder: ObservableObject {
   }
 
   private func begin(at date: Date) {
-    let expected = request.flatMap { date.timeIntervalSince($0.requestedAt) < 60 ? $0 : nil }
+    // Generous: a Screen Recording permission prompt can sit between request and start.
+    let expected = request.flatMap { date.timeIntervalSince($0.requestedAt) < 600 ? $0 : nil }
     request = nil
     guard session == nil, expected != nil || isEnabled else { return }
     let incoming = expected ?? ReproRequest(origin: .recording, actor: .user)
     var clock = ReproClock(start: date)
-    if let lastFirstFrame, abs(lastFirstFrame.timeIntervalSince(date)) < 10 { clock.firstFrame(at: lastFirstFrame) }
+    // The first frame can arrive just before the recorder reports that it started.
+    if let lastFirstFrame, lastFirstFrame.timeIntervalSince(date) > -3 { clock.firstFrame(at: lastFirstFrame) }
+    lastFirstFrame = nil
     var session = ReproSession(id: incoming.id, title: incoming.title ?? "", origin: incoming.origin, createdAt: date, actor: incoming.actor)
     session.capture = incoming.capture
     do {
@@ -298,11 +306,15 @@ final class ReproRecorder: ObservableObject {
       do { try writer?.append(pending) } catch { lastError = "Could not save repro output: \(error.localizedDescription)" }
       pending.removeAll(keepingCapacity: true)
     }
-    live?.lines = session.lineCount
-    live?.errors = session.errorCount
-    live?.warnings = session.warningCount
-    live?.sources = session.sources.count
-    live?.markers = session.markers.count
+    // One publish per poll keeps the controls and Workspaces cheap to redraw.
+    if var updated = live {
+      updated.lines = session.lineCount
+      updated.errors = session.errorCount
+      updated.warnings = session.warningCount
+      updated.sources = session.sources.count
+      updated.markers = session.markers.count
+      if updated != live { live = updated }
+    }
     if Date().timeIntervalSince(lastSave) > 5 { save() }
   }
 
@@ -415,9 +427,8 @@ final class ReproRecorder: ObservableObject {
   private func captureContext(_ workspace: String) {
     guard let session, let file = supervisor.files.first(where: { $0.id == workspace }), let definition = file.definition else { return }
     capturedWorkspaces.insert(workspace)
-    let snapshot = StackControlService.shared.stackSnapshot(file)
-    let services = snapshot.services.map { service in
-      ReproServiceState(name: service.name, status: service.status, command: service.command, port: service.port, url: service.url,
+    let services = snapshot(file).services.map { service in
+      ReproServiceState(name: service.name, status: service.status, command: service.command ?? "", port: service.port, url: service.url,
         pid: service.pid, startedBy: service.owner?.label)
     }
     var keys = Set(definition.environment.keys)

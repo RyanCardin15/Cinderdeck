@@ -85,7 +85,7 @@ final class ReproRecordingController: ObservableObject {
 
   /// Records while a task or workflow runs, then stops a moment after it finishes.
   func startRun(_ options: Options, workspace: String, kind: WorkspaceRunKind, definitionID: String, actor: StackActor,
-    runner: WorkspaceRunner) async throws -> (ReproSession, WorkspaceRun) {
+    runner: WorkspaceRunner, origin: ReproOrigin = .agent) async throws -> (ReproSession, WorkspaceRun) {
     var options = options
     options.workspaces = options.workspaces ?? [workspace]
     if options.title == nil {
@@ -94,7 +94,7 @@ final class ReproRecordingController: ObservableObject {
       options.title = "\(name ?? definitionID) · \(definition?.name ?? workspace)"
     }
     options.maxSeconds = max(options.maxSeconds, 60)
-    let session = try await start(options, origin: .agent, actor: actor)
+    let session = try await start(options, origin: origin, actor: actor)
     // Let the first frames land so the run's first output is visible in the video.
     try? await Task.sleep(nanoseconds: 700_000_000)
     await runner.recover()

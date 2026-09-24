@@ -32,11 +32,26 @@ Open **Workspaces…** from the menu bar. A workspace contains **Services** that
 
 Existing stacks appear as workspaces without moving their files. **Tasks → Move service to Tasks** converts stopped commands you previously ran as services. [Read the workspace guide](docs/WORKSPACES.md).
 
+## Repros: recordings with synchronized logs
+
+Record your screen and every service and task log line lands on the same timeline. Scrub the video and the output follows. Click an error and the video jumps to the moment it happened. Crashes, workflow steps, and markers are flagged on the timeline. Each repro also saves the branch, commit, and uncommitted changes of every repository at the start of recording. Recordings you make while services run are captured automatically. You can also start one from **Workspaces → Repros**, including one that records a workflow run from start to finish.
+
+Agents can record repros themselves. They drive the app, mark each step as passed or failed, then look at the frames (returned as images) and the logs around any error:
+
+```sh
+cinderdeck repro run shop e2e --workflow --wait   # exits 1 if anything crashed or failed
+cinderdeck repro frame --at first_error
+cinderdeck repro export --zip                     # video, README, timeline, logs, diffs
+```
+
+[Read the repro guide](docs/REPROS.md).
+
 ## A place for the whole project
 
 - **Run any stack.** Add project folders and start commands, with optional Git repositories, environment variables, Keychain references, dependencies, and readiness checks.
 - **See what is running.** Service status, listening ports, process ownership, live logs, crash output, and activity live together. Start, stop, or restart individual services or an entire stack.
 - **Work across repositories.** Inspect branches and changes, fetch or pull, and switch branches with explicit stash/carry choices.
+- **Record repros.** Screen recordings keep workspace output on the video's timeline, with markers for crashes, steps, and checks. Export them as bundles, or let agents test with them end to end. [Repros](docs/REPROS.md).
 - **Give agents the same controls.** The `cinderdeck` CLI and local MCP server work with Codex, Cursor, Claude Code, and other clients. Agent identity and advisory claims make ownership visible.
 - **Organize your GitHub work.** Browse repositories, sync GitHub stars, filter pull requests, save custom views, inspect changes, and submit reviews in a native PRs workspace. [Explore pull requests](docs/PULL_REQUESTS.md).
 - **Keep useful context nearby.** Local text clipboard history, capture history, and search sit alongside your stacks.

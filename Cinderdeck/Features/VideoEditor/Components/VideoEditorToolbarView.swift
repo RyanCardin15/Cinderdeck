@@ -205,10 +205,27 @@ struct VideoEditorToolbarView: View {
 
   private var rightSection: some View {
     HStack(spacing: WindowSpacingConfiguration.default.toolbarItemSpacing) {
+      if state.hasRepro {
+        reproPanelToggleButton
+      }
       if !state.isGIF {
         rightSidebarToggleButton
       }
     }
+  }
+
+  /// Shown when this recording captured workspace output.
+  private var reproPanelToggleButton: some View {
+    ToolbarButton(
+      icon: "text.alignleft",
+      isSelected: state.isReproPanelVisible,
+      highlightColor: ZoomColors.primary,
+      selectedBadgeIcon: state.reproModel.session.map { $0.errorCount > 0 } == true ? "exclamationmark" : nil
+    ) {
+      state.toggleReproPanel()
+    }
+    .keyboardShortcut("l", modifiers: [.command, .shift])
+    .help(state.isReproPanelVisible ? "Hide workspace logs (⇧⌘L)" : "Show workspace logs recorded with this video (⇧⌘L)")
   }
 
   // MARK: - Helpers

@@ -88,6 +88,7 @@ struct VideoEditorMainView: View {
     .ignoresSafeArea(.all, edges: .top)
     .task {
       await state.loadMetadata()
+      await state.loadRepro()
       await state.extractFrames()
     }
   }
@@ -141,6 +142,14 @@ struct VideoEditorMainView: View {
 
       videoPlayerColumn
 
+      if state.isReproPanelVisible && state.hasRepro {
+        Divider()
+
+        VideoEditorReproPanel(state: state)
+          .frame(minWidth: 300, idealWidth: 380, maxWidth: 460)
+          .transition(.move(edge: .trailing).combined(with: .opacity))
+      }
+
       if state.isRightSidebarVisible {
         Divider()
 
@@ -153,6 +162,7 @@ struct VideoEditorMainView: View {
     }
     .animation(.easeInOut(duration: 0.2), value: state.isLeftSidebarVisible)
     .animation(.easeInOut(duration: 0.2), value: state.isRightSidebarVisible)
+    .animation(.easeInOut(duration: 0.2), value: state.isReproPanelVisible)
   }
 
   private var videoPlayerColumn: some View {

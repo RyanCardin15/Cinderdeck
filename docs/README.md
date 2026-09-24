@@ -17,6 +17,8 @@ Flow-first entrypoint for humans and agents working in Cinderdeck. Docs are sepa
 | Doc | Covers |
 | --- | --- |
 | [STACKS.md](STACKS.md) | Arbitrary projects, services, logs, Git, CLI, and MCP agents |
+| [WORKSPACES.md](WORKSPACES.md) | Tasks, workflows, runs, and their agent API |
+| [REPROS.md](REPROS.md) | Screen recordings with synchronized workspace logs, markers, export bundles, and agent testing |
 | [MIGRATION.md](MIGRATION.md) | Moving existing Snapzy data into Cinderdeck |
 | [BRANDING.md](BRANDING.md) | Product identity, artwork, and upstream credit |
 
