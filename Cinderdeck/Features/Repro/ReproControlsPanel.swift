@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// Floating controls for repros recorded without the toolbar: who is recording,
