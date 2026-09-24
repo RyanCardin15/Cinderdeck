@@ -64,7 +64,7 @@ final class WorkspaceRunner: ObservableObject {
     guard recovered && !recovering else { throw StackError.message("Run recovery is still in progress") }
     if let storageError { throw StackError.message(storageError) }
     guard activeRun(id) == nil else { throw StackError.message("A task or workflow is already running in this workspace") }
-    guard !supervisor.isBootstrapping, supervisor.states[id]?.operation == nil,
+    guard !supervisor.isBootstrapping, !supervisor.isRemovingLane(id), supervisor.states[id]?.operation == nil,
       let workspace = supervisor.definition(id) else { throw StackError.message("Workspace is unavailable or busy") }
     let references: [String], name: String, cleanupServices: Bool
     switch kind {

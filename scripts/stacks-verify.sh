@@ -40,6 +40,7 @@ do_test() {
     -only-testing:CinderdeckTests/StackConfigurationTests -only-testing:CinderdeckTests/StackDefinitionWatcherTests \
     -only-testing:CinderdeckTests/StackKeyboardTests -only-testing:CinderdeckTests/StackCrashRecoveryTests \
     -only-testing:CinderdeckTests/StackEnvironmentAndSecretsTests -only-testing:CinderdeckTests/StackControlTests \
+    -only-testing:CinderdeckTests/StackLaneTests \
     -only-testing:CinderdeckTests/DatabaseManagerTests -only-testing:CinderdeckTests/ClipboardTextHistoryStoreTests \
     -only-testing:CinderdeckTests/SimpleTOMLParserTests > "$OUT/test.log" 2>&1
   local status=$?

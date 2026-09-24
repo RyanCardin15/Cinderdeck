@@ -64,6 +64,9 @@ struct StacksTabView: View {
     .sheet(isPresented: $viewModel.agentsSheet) {
       StackAgentsSheet()
     }
+    .sheet(isPresented: $viewModel.lanesSheet) {
+      StackLanesView(viewModel: viewModel)
+    }
   }
 
   // MARK: Empty
@@ -102,6 +105,7 @@ struct StacksTabView: View {
         .onChange(of: viewModel.selectedStackID) { id in if let id { withAnimation { proxy.scrollTo(id, anchor: .center) } } }
       }
       VStack(spacing: 6) {
+        StackIconButton(systemName: "arrow.triangle.branch", help: "Parallel lanes", size: 28) { viewModel.lanesSheet = true }
         StackIconButton(systemName: "plus", help: "Create workspace", size: 28) { viewModel.create() }
         StackIconButton(systemName: "sparkles", help: "Agent access", tint: StackPalette.agent, size: 28) { viewModel.agentsSheet = true }
       }.padding(.top, 6)

@@ -117,6 +117,7 @@ nonisolated struct StackSnapshot: Codable, Sendable {
   let claim: StackClaim?
   let services: [StackServiceSnapshot]
   let repos: [StackRepoSnapshot]
+  var lane: StackLaneInfo?
 }
 
 nonisolated struct StacksSnapshot: Codable, Sendable {

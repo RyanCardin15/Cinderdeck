@@ -148,7 +148,7 @@ final class StackControlService: ObservableObject {
         return StackRepoSnapshot(id: repo.id, path: repo.path.path, branch: status.branchLabel, dirty: status.isDirty,
           changedFiles: status.changedFiles, ahead: status.ahead, behind: status.behind, upstream: status.upstream,
           operation: status.operation, error: status.error)
-      })
+      }, lane: file.lane)
   }
 
   private func writeState(appRunning: Bool = true) {
@@ -209,6 +209,28 @@ final class StackControlService: ObservableObject {
     case "stack.start": return try await start(params, actor: actor)
     case "stack.stop": return try await stop(params, actor: actor)
     case "stack.restart": return try await restart(params, actor: actor)
+    case "lane.list":
+      let source = try params["stack"].map { _ in try stackFile(params) }
+      let sourceID = source?.lane?.sourceStackID ?? source?.id
+      let files = supervisor.files.filter { sourceID == nil || $0.id == sourceID || $0.lane?.sourceStackID == sourceID }
+      return try JSONValue(encoding: files.map { stackSnapshot($0) })
+    case "lane.create":
+      let source = try stackFile(params)
+      guard let branch = params["branch"]?.stringValue else { throw StackControlError.invalid("Pass a branch name for the new lane.") }
+      try requireIdle(source)
+      // Cloning a claimed source does not change it or use its service ports.
+      let file = try await supervisor.createLane(stack: source.id, branch: branch, actor: actor)
+      _ = try claim(.object(["stack": .string(file.id), "note": .string("Worktree lane " + branch)]), actor: actor)
+      if params["start"]?.boolValue == false { return try JSONValue(encoding: ["stack": stackSnapshot(file)]) }
+      let supervisor = supervisor
+      let timedOut = await settle(file, params: params) { await supervisor.start(stack: file.id, actor: actor) }
+      return await actionResult(file, timedOut: timedOut, waited: params["wait"]?.boolValue ?? true)
+    case "lane.remove":
+      let file = try stackFile(params)
+      try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
+      try await supervisor.removeLane(file.id, actor: actor)
+      release(stack: file.id)
+      return .object(["removed": .string(file.id)])
     case "logs": return try await logs(params)
     case "events":
       let file = try stackFile(params)
@@ -261,6 +283,7 @@ final class StackControlService: ObservableObject {
     }
     let files = supervisor.files
     if let exact = files.first(where: { $0.id == query }) { return exact }
+    if let lane = files.first(where: { $0.lane?.reference == query }) { return lane }
     if let named = files.first(where: { $0.name.caseInsensitiveCompare(query) == .orderedSame || $0.id.caseInsensitiveCompare(query) == .orderedSame }) { return named }
     let prefixed = files.filter { $0.id.lowercased().hasPrefix(query.lowercased()) || $0.name.lowercased().hasPrefix(query.lowercased()) }
     if prefixed.count == 1 { return prefixed[0] }

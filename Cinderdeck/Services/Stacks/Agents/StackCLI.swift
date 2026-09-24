@@ -13,6 +13,7 @@ nonisolated enum StackCLI {
     case "workspace", "workspaces": return WorkspaceCLI.run(Array(arguments.dropFirst(2)))
     case "prs", "pull-requests": return PRViewsCLI.run(Array(arguments.dropFirst(2)))
     case "repro", "repros": return ReproCLI.run(Array(arguments.dropFirst(2)))
+    case "lane", "lanes": return run(["lane"] + arguments.dropFirst(2))
     case "mcp": return StackMCPServer.run()
     case "help", "--help", "-h":
       guard isCommandName(arguments[0]) else { return nil }
@@ -66,6 +67,9 @@ nonisolated enum StackCLI {
     let options = parse(arguments)
     var positionals = options.positionals
     let command = positionals.isEmpty ? "status" : positionals.removeFirst()
+    if ["lane", "lanes"].contains(command), options.has("help") || positionals.first == "help" {
+      print(usage); return 0
+    }
     do {
       switch command {
       case "help", "-h": print(usage)
@@ -167,6 +171,8 @@ nonisolated enum StackCLI {
     if options.has("force") { params["force"] = .bool(true) }
     let waitTimeout = Double(options["timeout"] ?? "") ?? 180
     switch command {
+    case "lane", "lanes":
+      try lane(arguments, options, connection: connection)
     case "status", "ls", "list":
       if let stack = arguments.first {
         let result = try connection.call("stack.get", ["stack": .string(stack)])
@@ -322,6 +328,44 @@ nonisolated enum StackCLI {
     if file.definition == nil || !errors.isEmpty { throw StackControlError(code: "invalid_definition", message: "\(url.lastPathComponent) is not valid") }
   }
 
+  private static func lane(_ arguments: [String], _ options: Options, connection: StackControlConnection) throws {
+    let command = arguments.first ?? "list"
+    if options.has("help") || command == "help" { print(usage); return }
+    let args = Array(arguments.dropFirst())
+    var params: [String: JSONValue] = [:]
+    if options.has("force") { params["force"] = .bool(true) }
+    switch command {
+    case "list", "ls", "status":
+      if let source = args.first { params["stack"] = .string(source) }
+      let result = try connection.call("lane.list", params)
+      if options.json { printJSON(result) }
+      else { printStacks(try result.decode([StackSnapshot].self), detailed: true) }
+    case "create":
+      guard args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane create <stack> <branch> [--no-start] [--no-wait]") }
+      params["stack"] = .string(args[0]); params["branch"] = .string(args[1])
+      params["start"] = .bool(!options.has("no-start")); params["wait"] = .bool(!options.has("no-wait"))
+      let timeout = min(max(Double(options["timeout"] ?? "") ?? 180, 1), 900)
+      params["timeout"] = .number(timeout)
+      let result = try connection.call("lane.create", params, timeout: timeout + 300)
+      if options.json { printJSON(result) }
+      else if let snapshot = try result["stack"]?.decode(StackSnapshot.self) {
+        printStacks([snapshot], detailed: true)
+        if let lane = snapshot.lane {
+          print("Lane: \(lane.reference)\nWorktrees: \(lane.directory.path)")
+          print("Use `cinderdeck stacks logs|stop|restart \(lane.reference)` to manage this lane.")
+        }
+      }
+      if result["problems"] != nil { throw StackControlError(code: "service_failed", message: "Lane created, but one or more services failed. Inspect its logs, then restart the lane.") }
+      if result["timedOut"]?.boolValue == true { throw StackControlError(code: "timeout", message: "Lane created; still waiting for readiness. Inspect lane status.") }
+    case "remove", "rm":
+      guard args.count == 1 || args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane remove <stack>/<branch> (or <stack> <branch>)") }
+      params["stack"] = .string(args.joined(separator: "/"))
+      let result = try connection.call("lane.remove", params, timeout: 300)
+      if options.json { printJSON(result) } else { print("Removed lane worktrees. Git branches were kept.") }
+    default: throw StackControlError.invalid("Unknown lane command. Use create, list or remove.")
+    }
+  }
+
   private static func printPaths(_ options: Options) {
     let values: [(String, String)] = [
       ("command", preferredCommandPath()), ("app", appBundlePath() ?? "?"),
@@ -394,6 +438,7 @@ nonisolated enum StackCLI {
       if index > 0 { print("") }
       let started = stack.services.compactMap(\.startedAt).min()
       var header = paint(stack.name, .bold) + paint("  (\(stack.id))", .dim) + "  " + stack.state
+      if let lane = stack.lane { header += "  lane " + lane.reference + " · " + lane.owner.label }
       if let started { header += paint("  up " + age(started), .dim) }
       if let operation = stack.operation { header += paint("  " + operation + "…", .yellow) }
       print(header)
@@ -464,6 +509,13 @@ nonisolated enum StackCLI {
   }
 
   static let usage = """
+  WORKTREE LANES
+    cinderdeck lane create <stack> <branch>       Create and start an isolated worktree lane
+    cinderdeck lane list [stack]                 Original checkout and parallel lanes
+    cinderdeck lane remove <stack>/<branch>      Stop and remove clean worktrees; keep branches
+    --no-start                                  Create only, for dependency setup before starting
+    Use stacks status|logs|start|stop|restart <stack>/<branch> to manage a lane.
+
   cinderdeck stacks — manage Cinderdeck dev stacks from any terminal or agent
 
   USAGE

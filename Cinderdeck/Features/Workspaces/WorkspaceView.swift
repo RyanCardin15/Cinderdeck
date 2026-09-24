@@ -34,7 +34,7 @@ struct WorkspaceView: View {
               Text(workspace?.root.path ?? file.file.path).font(.caption).foregroundColor(.secondary).textSelection(.enabled)
             }
             Spacer()
-            Button { model.edit(file) } label: { Label("Edit workspace", systemImage: "slider.horizontal.3") }
+            Button { model.edit(file) } label: { Label(file.lane == nil ? "Edit workspace" : "Edit source workspace", systemImage: "slider.horizontal.3") }
             Button { model.agentsSheet = true } label: { Image(systemName: "sparkles") }.help("Connect agents and CLI")
           }
           Picker("Workspace component", selection: $section) {
@@ -89,6 +89,7 @@ struct WorkspaceView: View {
       WorkspaceComponentEditor(context: context) { editing = nil; Task { await model.supervisor.reloadDefinitions() } }
     }
     .sheet(isPresented: $model.agentsSheet) { StackAgentsSheet() }
+    .sheet(isPresented: $model.lanesSheet) { StackLanesView(viewModel: model) }
     .sheet(isPresented: $model.stackBranchPicker) { StackBranchPickerSheet(viewModel: model) }
     .onChange(of: model.selectedStackID) { _ in selectedRun = nil }
     .onAppear { consumeSectionRequest() }
@@ -133,7 +134,7 @@ struct WorkspaceView: View {
           Menu("Move service to Tasks") {
             ForEach(workspace.services) { service in
               Button(service.id) { editing = .init(workspace: workspace, kind: .task, componentID: nil, sourceServiceID: service.id) }
-                .disabled(model.runtime(file.id, service.id).phase.isActive || runner.activeRun(file.id) != nil)
+                .disabled(workspace.lane != nil || model.runtime(file.id, service.id).phase.isActive || runner.activeRun(file.id) != nil)
             }
           }.help("Convert a stopped service that should run once, such as a build or test command")
         }
@@ -227,6 +228,7 @@ struct WorkspaceView: View {
     model.requestedSection = nil
   }
   private func remove(_ file: StackDefinitionFile, kind: WorkspaceRunKind, id: String) {
+    guard file.lane == nil else { model.error = "Lane definitions are snapshots. Edit the source workspace and recreate the lane to change its tasks or workflows."; return }
     let alert = NSAlert()
     alert.messageText = "Delete \(kind.rawValue) \(id)?"
     alert.informativeText = "Saved run results are kept. Workflows that reference this task must be updated first."
@@ -240,6 +242,7 @@ struct WorkspaceView: View {
     } catch { model.error = error.localizedDescription }
   }
   private func edit(_ file: StackDefinitionFile, kind: WorkspaceRunKind, id: String? = nil) {
+    guard file.lane == nil else { model.error = "Lane definitions are snapshots. Edit the source workspace and recreate the lane to change its tasks or workflows."; return }
     guard let workspace = file.definition else { return }
     editing = .init(workspace: workspace, kind: kind, componentID: id)
   }

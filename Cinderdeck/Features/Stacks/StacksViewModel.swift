@@ -42,6 +42,7 @@ final class StacksViewModel: ObservableObject {
   @Published var agentsSheet = false
   /// Set to open the Workspaces window on a section, e.g. Recordings.
   @Published var requestedSection: WorkspaceSection?
+  @Published var lanesSheet = false
   let supervisor: StackSupervisor
   private let git: GitService
   private var subscriptions = Set<AnyCancellable>()
@@ -82,7 +83,7 @@ final class StacksViewModel: ObservableObject {
     }
     return services.sorted { $0.id < $1.id }
   }
-  var hasAuxiliaryUI: Bool { branchPicker != nil || stackBranchPicker || editor != nil || isConfirming || agentsSheet }
+  var hasAuxiliaryUI: Bool { branchPicker != nil || stackBranchPicker || editor != nil || isConfirming || agentsSheet || lanesSheet }
   func claim(_ stack: String) -> StackClaim? { claims[stack].flatMap { $0.isExpired ? nil : $0 } }
   func releaseClaim(_ stack: String) {
     guard let claim = claim(stack), confirm(title: "Release \(claim.holder.name)'s claim?",

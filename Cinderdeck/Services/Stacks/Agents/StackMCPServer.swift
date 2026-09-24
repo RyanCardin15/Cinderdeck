@@ -20,7 +20,7 @@ nonisolated enum StackMCPServer {
     return .object(object)
   }
 
-  private static let stack = property("string", "Stack id or name (see list_stacks)")
+  private static let stack = property("string", "Stack/lane id or name, or <source-stack>/<lane-branch> (see list_stacks)")
   private static let force = property("boolean", "Override another agent's claim. Only with the user's approval.")
 
   private static let prHost = property("string", "GitHub hostname from list_pr_views. Defaults to the server selected in Cinderdeck. Specify it to pin the target server without switching the UI.")
@@ -125,6 +125,14 @@ nonisolated enum StackMCPServer {
     Tool(name: "reorder_pr_views", description: "Set the custom PR tab order. Include every custom id exactly once; built-in tabs retain their positions.",
       properties: ["hostname": prHost, "account": prAccount, "ids": property("array", "Complete ordered list of custom view ids", items: "string")],
       required: ["account", "ids"], readOnly: false),
+    Tool(name: "list_lanes", description: "Show original checkouts and parallel worktree lanes, including each lane's ports, owner, paths and service state.",
+      properties: ["stack": stack], required: [], readOnly: true),
+    Tool(name: "create_lane", description: "Create an isolated Git worktree copy of a stack on an existing or new local branch, claim it, and start its services with unique ports. Leaves the source running. Commands must use PORT and CINDERDECK_PORT_<UPPERCASE_SERVICE>. Use start=false to install dependencies in the returned paths first. Branch must not already be checked out.",
+      properties: ["stack": stack, "branch": property("string", "Existing or new local branch, also the lane name, e.g. agent/codex-1"),
+        "start": property("boolean", "Start services after creation (default true)"), "wait": property("boolean", "Wait for readiness (default true)"),
+        "timeout": property("number", "Seconds to wait for services (default 180)")], required: ["stack", "branch"], readOnly: false),
+    Tool(name: "remove_lane", description: "Stop a lane and remove its worktrees. Refuses tracked, untracked or ignored changes and respects claims. Keeps Git branches. Never removes the original checkout.",
+      properties: ["stack": property("string", "Lane id or <source-stack>/<branch> from create_lane"), "force": force], required: ["stack"], readOnly: false),
     Tool(name: "list_stacks", description: "List every stack with service status, ports, URLs, PIDs, who started each service, Git branches and claims.",
       properties: [:], required: [], readOnly: true),
     Tool(name: "stack_status", description: "Full detail for one stack: services (phase, pid, port, url, owner, log file, command, cwd), repos and claim.",
@@ -319,6 +327,9 @@ nonisolated enum StackMCPServer {
     case "select_pr_view": return ("prs.views.select", params, 90)
     case "delete_pr_view": return ("prs.views.delete", params, 90)
     case "reorder_pr_views": return ("prs.views.reorder", params, 90)
+    case "list_lanes": return ("lane.list", params, 30)
+    case "create_lane": return ("lane.create", params, wait + 300)
+    case "remove_lane": return ("lane.remove", params, 300)
     case "list_stacks": return ("snapshot", [:], 30)
     case "stack_status": return ("stack.get", params, 30)
     case "start_stack": return ("stack.start", params, wait + 30)
@@ -425,6 +436,7 @@ nonisolated enum StackMCPServer {
         }),
       ]
       if let operation = stack.operation { object["busy"] = .string(operation) }
+      if let lane = stack.lane { object["lane"] = try? JSONValue(encoding: lane) }
       if let claim = stack.claim {
         object["claim"] = .object(["by": .string(claim.holder.label), "note": .string(claim.note ?? ""),
           "until": .string(ISO8601DateFormatter().string(from: claim.expiresAt))])
