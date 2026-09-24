@@ -217,18 +217,18 @@ nonisolated enum ReproStatus: String, Codable, Sendable {
 
 /// Which workspaces' output a screen recording captures.
 nonisolated enum ReproLogScope: Equatable, Sendable {
-  /// Every workspace with a service or run producing output. The default.
+  /// Every workspace with a service or run producing output.
   case running
   /// Only these workspace ids.
   case only(Set<String>)
-  /// Plain videos: nothing is captured.
+  /// Plain videos: nothing is captured. The default until a workspace is chosen.
   case off
 
   init(mode: String?, workspaces: [String]?) {
     switch mode {
-    case "off": self = .off
+    case "running": self = .running
     case "selected": self = .only(Set(workspaces ?? []))
-    default: self = .running
+    default: self = .off
     }
   }
   var mode: String {

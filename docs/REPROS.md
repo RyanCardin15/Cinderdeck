@@ -1,22 +1,22 @@
 # Recordings with workspace logs
 
-When you record your screen while your workspaces are running, Cinderdeck saves a **log file next to the video** with everything those workspaces printed. Every line is stamped with its **position in the video** and the clock time it was written. When something goes wrong at 0:42 in the video, look at `[00:42.000 …]` in the log.
+When you record your screen with a workspace selected and running, Cinderdeck saves a **log file next to the video** with everything those workspaces printed. Every line is stamped with its **position in the video** and the clock time it was written. When something goes wrong at 0:42 in the video, look at `[00:42.000 …]` in the log.
 
-Nothing changes for plain videos. If nothing is running, or you turn logs off, you get a normal video.
+Nothing changes for plain videos. Recordings capture no logs until you pick a workspace in the recording toolbar. If nothing is running, you also get a normal video.
 
 In the CLI and MCP tools, a recording with logs is called a **repro**.
 
 ## Recording
 
-**Record the way you already do.** Use the recording toolbar, the shortcut, or the menu bar. When the toolbar appears, the **Workspace logs** button, next to the microphone and audio controls, shows what will happen. Hover over it for a one-line description, such as "Logs from Shop and Billing are saved with the video." Click it to choose:
+**Record the way you already do.** Use the recording toolbar, the shortcut, or the menu bar. When the toolbar appears, the **Workspace** picker, next to the microphone and audio controls, shows whose logs will be saved. It starts at **None**, so a recording is a plain video until you pick a workspace. Hover over it for a one-line description, such as "Logs from Shop are saved with the video." Click it to choose:
 
 | Choice | What gets saved |
 | --- | --- |
-| **All running workspaces** (default) | Logs from every workspace that has a service or task running, including ones that start while you record |
-| **Only these workspaces** | Logs from the workspaces you tick, and nothing else. Use this when several workspaces are running and only one matters. |
-| **Don't save logs (plain video)** | Just the video |
+| **None** (default) | Just the video |
+| **A workspace** | Logs from that workspace, and nothing else, including output that starts while you record |
+| **All running workspaces** | Logs from every workspace that has a service or task running, including ones that start while you record |
 
-Your choice is remembered for the next recording, like the microphone choice. The button only appears once you have at least one workspace, so people who only record videos never see it. The same choice is in **Preferences → Capture → Recording → Workspace logs**, and at the top of **Workspaces → Recordings**.
+Your choice is remembered for the next recording, like the microphone choice. To capture several specific workspaces, pick them in **Preferences → Capture → Recording → Workspace logs**, where the picker then shows "2 workspaces". The same choice is at the top of **Workspaces → Recordings**.
 
 While recording, the recording bar shows a **logs** indicator with a live line count and a red error count. Hover over it to see which workspaces are being saved. **Click it to mark the moment**, for example "the bug happened here". A `▶ Marked` line appears in the log at that exact video time.
 

@@ -5,7 +5,7 @@
 //  Pre-record toolbar with options menu and record/cancel buttons
 //  Styled to match Apple's native macOS recording toolbar aesthetic
 //
-//  Layout: [✕] | [📷] | [□ □] | [🎥 🎙 🔊] | [logs] | [Options▾] [Record]
+//  Layout: [✕] | [📷] | [□ □] | [🎥 🎙 🔊] | [Workspace▾] | [Options▾] [Record]
 //
 
 import SwiftUI
@@ -48,8 +48,8 @@ struct RecordingToolbarView: View {
         ToolbarSystemAudioToggleButton(state: state)
       }
 
-      // Which workspaces' logs are saved with the video (hidden without workspaces)
-      ToolbarWorkspaceLogsButton()
+      // Which workspace's logs are saved with the video (None by default)
+      ToolbarWorkspacePicker()
 
       RecordingToolbarDivider()
 

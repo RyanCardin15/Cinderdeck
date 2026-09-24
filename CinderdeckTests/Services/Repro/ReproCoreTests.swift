@@ -234,7 +234,8 @@ final class ReproCoreTests: XCTestCase {
   }
 
   func testScopeChoices() {
-    XCTAssertEqual(ReproLogScope(mode: nil, workspaces: nil), .running)
+    XCTAssertEqual(ReproLogScope(mode: nil, workspaces: nil), .off, "No workspace until one is chosen")
+    XCTAssertEqual(ReproLogScope(mode: "running", workspaces: nil), .running)
     XCTAssertEqual(ReproLogScope(mode: "off", workspaces: ["shop"]), .off)
     let selected = ReproLogScope(mode: "selected", workspaces: ["shop", "billing"])
     XCTAssertTrue(selected.includes("shop"))
@@ -248,6 +249,19 @@ final class ReproCoreTests: XCTestCase {
     XCTAssertFalse(ReproLogScope.off.includes("shop"))
     XCTAssertEqual(selected.summary(names: ["shop": "Shop", "billing": "Billing"]), "Billing and Shop")
     XCTAssertEqual(ReproFormat.list(["A", "B", "C"]), "A, B, and C")
+  }
+
+  func testToolbarWorkspacePickerTitles() {
+    let choices = [
+      WorkspaceLogChoice(id: "shop", name: "Shop", runningServices: 1, hasActiveRun: false),
+      WorkspaceLogChoice(id: "billing", name: "Billing", runningServices: 0, hasActiveRun: false),
+    ]
+    XCTAssertEqual(ToolbarWorkspacePicker.title(scope: .off, choices: choices), "None")
+    XCTAssertEqual(ToolbarWorkspacePicker.title(scope: .only([]), choices: choices), "None")
+    XCTAssertEqual(ToolbarWorkspacePicker.title(scope: .only(["shop"]), choices: choices), "Shop")
+    XCTAssertEqual(ToolbarWorkspacePicker.title(scope: .only(["gone"]), choices: choices), "gone", "A deleted workspace shows its id")
+    XCTAssertEqual(ToolbarWorkspacePicker.title(scope: .only(["shop", "billing"]), choices: choices), "2 workspaces")
+    XCTAssertEqual(ToolbarWorkspacePicker.title(scope: .running, choices: choices), "All running")
   }
 
   func testTimestampEdgeCases() {
