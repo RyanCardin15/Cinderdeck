@@ -12,6 +12,7 @@ nonisolated enum StackCLI {
     case "stacks", "stack": return run(Array(arguments.dropFirst(2)))
     case "workspace", "workspaces": return WorkspaceCLI.run(Array(arguments.dropFirst(2)))
     case "prs", "pull-requests": return PRViewsCLI.run(Array(arguments.dropFirst(2)))
+    case "repro", "repros": return ReproCLI.run(Array(arguments.dropFirst(2)))
     case "mcp": return StackMCPServer.run()
     case "help", "--help", "-h":
       guard isCommandName(arguments[0]) else { return nil }

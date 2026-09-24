@@ -32,11 +32,30 @@ Open **Workspaces…** from the menu bar. A workspace contains **Services** that
 
 Existing stacks appear as workspaces without moving their files. **Tasks → Move service to Tasks** converts stopped commands you previously ran as services. [Read the workspace guide](docs/WORKSPACES.md).
 
+## Recordings with workspace logs
+
+Record your screen the way you already do, and Cinderdeck saves a `.log` file next to the video. It holds everything your running workspaces printed, and every line is stamped with its position in the video and its clock time. When the bug shows up at 0:42, read the log at `[00:42.000 …]`.
+
+- **Pick the workspaces.** The logs button on the recording toolbar saves all running workspaces by default. You can narrow it to specific workspaces or turn it off for a plain video.
+- **Mark the moment.** Click the logs indicator while recording to drop a `▶ Marked` line into the log.
+- **Grab the log.** After stopping, use **Show Log** or **Copy Log**. Workspaces → Recordings and the video editor have the same buttons.
+
+The log also records service crashes, workflow steps, and each repository's branch, commit, and uncommitted changes at the start of recording. Keychain secrets are redacted. Agents can record, too: they drive the app, mark each step as passed or failed, then look at the frames (returned as images) and the logs around any error.
+
+```sh
+cinderdeck repro dump                             # print the latest recording's log file
+cinderdeck repro run shop e2e --workflow --wait   # record a workflow; exits 1 if anything failed
+cinderdeck repro frame --at first_error           # the video frame at the first error, with nearby logs
+```
+
+[Read the recordings guide](docs/REPROS.md).
+
 ## A place for the whole project
 
 - **Run any stack.** Add project folders and start commands, with optional Git repositories, environment variables, Keychain references, dependencies, and readiness checks.
 - **See what is running.** Service status, listening ports, process ownership, live logs, crash output, and activity live together. Start, stop, or restart individual services or an entire stack.
 - **Work across repositories.** Inspect branches and changes, fetch or pull, and switch branches with explicit stash/carry choices.
+- **Record with logs.** Screen recordings save a `.log` file next to the video with your workspaces' output, stamped with video times. You choose which workspaces, or record a plain video. [Recordings with logs](docs/REPROS.md).
 - **Give agents the same controls.** The `cinderdeck` CLI and local MCP server work with Codex, Cursor, Claude Code, and other clients. Agent identity and advisory claims make ownership visible.
 - **Organize your GitHub work.** Browse repositories, sync GitHub stars, filter pull requests, save custom views, inspect changes, and submit reviews in a native PRs workspace. [Explore pull requests](docs/PULL_REQUESTS.md).
 - **Keep useful context nearby.** Local text clipboard history, capture history, and search sit alongside your stacks.

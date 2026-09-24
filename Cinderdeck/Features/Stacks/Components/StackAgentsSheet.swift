@@ -22,7 +22,7 @@ struct StackAgentsSheet: View {
         }
         VStack(alignment: .leading, spacing: 3) {
           Text("Agent access").font(.title2.weight(.semibold))
-          Text("Let Cursor, Codex, Claude Code or any shell run services, tasks, workflows, and configure Pull Request tabs. Saved views update in the PR window immediately; services started by agents are labeled with their name.")
+          Text("Let Cursor, Codex, Claude Code or any shell run services, tasks, workflows, and screen-recorded repros, and configure Pull Request tabs. Saved views update in the PR window immediately; services started by agents are labeled with their name.")
             .font(.callout).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
         }
       }

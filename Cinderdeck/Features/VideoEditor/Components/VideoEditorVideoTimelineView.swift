@@ -36,6 +36,16 @@ struct VideoTimelineView: View {
             isLoading: state.isExtractingFrames
           )
 
+          // Errors and markers from the repro recorded with this video
+          if state.hasRepro {
+            VideoEditorReproTimelineMarks(
+              model: state.reproModel,
+              duration: CMTimeGetSeconds(state.duration),
+              width: timelineWidth,
+              height: frameStripHeight
+            )
+          }
+
           // Trim handles overlay
           VideoTrimHandlesView(state: state, timelineWidth: timelineWidth)
 

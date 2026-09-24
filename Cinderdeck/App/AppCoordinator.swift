@@ -70,6 +70,11 @@ final class AppCoordinator {
     RecordingMetadataCleanupScheduler.shared.start()
     CaptureHistoryRetentionService.shared.start()
     ClipboardTextHistoryStore.shared.start()
+    ReproRecorder.shared.start()
+    ReproRecorder.shared.onSaved = { session in
+      // Agent and Workspaces recordings confirm through their own controls.
+      if session.origin == .recording { ReproControlsPanel.shared.showCaptured(session) }
+    }
     Task {
       await StackSupervisor.shared.bootstrap()
       await WorkspaceRunner.shared.recover()

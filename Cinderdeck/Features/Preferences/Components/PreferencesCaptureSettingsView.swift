@@ -555,6 +555,14 @@ struct CaptureSettingsView: View {
           }
         }
 
+        // MARK: - Workspace Logs
+
+        if selectedPane == .recording && !StackSupervisor.shared.files.isEmpty {
+          Section("Workspace logs") {
+            WorkspaceLogSettingsRows()
+          }
+        }
+
         // MARK: - Recording Controls
 
         if selectedPane == .recording {

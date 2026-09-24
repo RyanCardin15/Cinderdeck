@@ -1,13 +1,14 @@
 import SwiftUI
 
-private enum WorkspaceSection: String, CaseIterable {
-  case services = "Services", tasks = "Tasks", workflows = "Workflows", runs = "Runs"
+enum WorkspaceSection: String, CaseIterable {
+  case services = "Services", tasks = "Tasks", workflows = "Workflows", runs = "Runs", recordings = "Recordings"
   var explanation: String {
     switch self {
     case .services: return "Keep APIs, databases, and development servers running together."
     case .tasks: return "Run a command once. Keep its result, duration, and output."
     case .workflows: return "Run tasks and service actions in order. A failed step stops the workflow."
     case .runs: return "Inspect progress and results. Completed runs stay available after relaunch."
+    case .recordings: return "Screen recordings saved with this workspace's logs. Every log line is stamped with its position in the video."
     }
   }
 }
@@ -66,6 +67,7 @@ struct WorkspaceView: View {
           case .tasks: tasks(file)
           case .workflows: workflows(file)
           case .runs: runs
+          case .recordings: WorkspaceReprosView(file: file, recorder: .shared, controller: .shared, runner: runner)
           }
         } else {
           empty("Your development work, together", "A workspace contains services that stay running, tasks that finish, and workflows that coordinate both.", action: "Create workspace") { model.create() }
@@ -89,6 +91,8 @@ struct WorkspaceView: View {
     .sheet(isPresented: $model.agentsSheet) { StackAgentsSheet() }
     .sheet(isPresented: $model.stackBranchPicker) { StackBranchPickerSheet(viewModel: model) }
     .onChange(of: model.selectedStackID) { _ in selectedRun = nil }
+    .onAppear { consumeSectionRequest() }
+    .onChange(of: model.requestedSection) { _ in consumeSectionRequest() }
   }
 
   private var sidebar: some View {
@@ -216,6 +220,11 @@ struct WorkspaceView: View {
           .id(run.id)
       } else { Spacer() }
     }
+  }
+  private func consumeSectionRequest() {
+    guard let requested = model.requestedSection else { return }
+    section = requested
+    model.requestedSection = nil
   }
   private func remove(_ file: StackDefinitionFile, kind: WorkspaceRunKind, id: String) {
     let alert = NSAlert()

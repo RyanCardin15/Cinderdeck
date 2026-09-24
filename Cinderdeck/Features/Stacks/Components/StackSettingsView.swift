@@ -46,6 +46,9 @@ struct StackSettingsView: View {
         Button("Agent access…") { managesAgents = true }
       }
     }
+    Section("Workspace logs in screen recordings") {
+      WorkspaceLogSettingsRows()
+    }
     .sheet(isPresented: $managesSecrets) { StackSecretsSheet() }
     .sheet(isPresented: $managesAgents) { StackAgentsSheet() }
   }

@@ -22,8 +22,9 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
     model.supervisor.gitMonitor.setVisible(false, source: "workspaces")
   }
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-  func show(workspace: String? = nil) {
+  func show(workspace: String? = nil, section: WorkspaceSection? = nil) {
     if let workspace { model.select(workspace) }
+    if let section { model.requestedSection = section }
     showWindow(nil)
     window?.makeKeyAndOrderFront(nil)
     model.supervisor.gitMonitor.setVisible(true, source: "workspaces")
