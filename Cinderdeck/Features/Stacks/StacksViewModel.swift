@@ -54,8 +54,13 @@ final class StacksViewModel: ObservableObject {
     self.supervisor = supervisor; self.git = git
     supervisor.$files.sink { [weak self] files in
       guard let self else { return }
+      let previousWorkspaceID = self.selectedWorkspaceID
       self.files = files
-      if !files.contains(where: { $0.id == self.selectedStackID }) { self.selectedStackID = files.first?.id }
+      if !files.contains(where: { $0.id == self.selectedStackID }) {
+        self.selectedStackID = self.workspaceNavigation.workspaces.first { $0.id == previousWorkspaceID }?.id
+          ?? self.workspaceNavigation.workspaces.first?.id ?? files.first?.id
+        self.selectedServiceID = nil
+      }
     }.store(in: &subscriptions)
     supervisor.$states.assign(to: &$states)
     supervisor.gitMonitor.$statuses.assign(to: &$repoStatuses)
@@ -70,6 +75,8 @@ final class StacksViewModel: ObservableObject {
   }
 
   var runningCount: Int { states.values.filter(\.isActive).count }
+  var workspaceNavigation: WorkspaceNavigation { WorkspaceNavigation(files: files, lanesDirectory: supervisor.lanesDirectory) }
+  var selectedWorkspaceID: String? { workspaceNavigation.workspaceID(for: selectedStackID) }
   var filteredFiles: [StackDefinitionFile] {
     files.filter { stackFilter.isEmpty || $0.name.localizedCaseInsensitiveContains(stackFilter) || $0.id.localizedCaseInsensitiveContains(stackFilter) }
   }
