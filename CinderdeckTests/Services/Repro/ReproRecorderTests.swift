@@ -192,6 +192,39 @@ final class ReproRecorderTests: XCTestCase {
     try await until { !FileManager.default.fileExists(atPath: self.store.folder(cancelled).path) }
   }
 
+  func testLogsOffCapturesNoWorkspaceOutputButKeepsAgentLines() async throws {
+    try await load("[services.api]\ncmd = \"while true; do echo tick; sleep 0.1; done\"\n")
+    await supervisor.start(stack: "shop", services: ["api"])
+    try await until { self.supervisor.runtime("shop", "api").phase == .ready }
+
+    let request = ReproRequest(title: "Plain", origin: .agent, actor: StackActor(kind: .agent, name: "Codex"), workspaces: [])
+    recorder.expect(request)
+    events.send(.started(Date()))
+    XCTAssertEqual(recorder.activeSessionID, request.id)
+    let added = try recorder.appendExternal([
+      .init(text: "[browser:log] cart loaded"),
+      .init(text: "Uncaught TypeError: price is undefined"),
+      .init(text: "GET /api/cart 404", level: .warning),
+      .init(text: "   "),
+    ], source: "browser")
+    XCTAssertEqual(added, 3, "Blank lines are skipped")
+    let stopped = try await stopRecording()
+    let saved = try XCTUnwrap(stopped)
+    XCTAssertEqual(saved.sources.map(\.id), ["external/browser"], "No workspace output when logs are off")
+    XCTAssertEqual(saved.sources.first?.kind, .external)
+    XCTAssertTrue(saved.workspaceNames.isEmpty)
+    XCTAssertEqual(saved.scope, "workspace logs off")
+    XCTAssertEqual(saved.errorCount, 1)
+    XCTAssertEqual(saved.warningCount, 1)
+
+    let lines = await recorder.lines(for: saved.id)
+    let log = ReproReport.logFile(saved, lines: lines, videoName: "recording.mov")
+    XCTAssertTrue(log.contains("Captured:   No workspace output (workspace logs off)"), log)
+    XCTAssertTrue(log.contains("browser  ERROR  Uncaught TypeError: price is undefined"), log)
+    XCTAssertFalse(log.contains("tick"))
+    XCTAssertThrowsError(try recorder.appendExternal([.init(text: "late")], source: "browser"), "Only while recording")
+  }
+
   func testStoppedReproIsNeverMissingWhileItSaves() async throws {
     try await load("[services.api]\ncmd = \"while true; do echo tick; sleep 0.05; done\"\n")
     await supervisor.start(stack: "shop", services: ["api"])

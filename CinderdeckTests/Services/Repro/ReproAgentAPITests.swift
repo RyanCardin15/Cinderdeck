@@ -54,6 +54,35 @@ final class ReproAgentAPITests: XCTestCase {
     XCTAssertEqual(selected.params["workspaces"]?.stringsValue, ["shop", "billing"])
   }
 
+  func testStartChoosesWindowAndLogs() throws {
+    let exact = try request(["start", "--window-id", "4312", "--no-logs", "--title", "Checkout"])
+    XCTAssertEqual(exact.method, "repro.start")
+    XCTAssertEqual(exact.params["window_id"]?.intValue, 4312)
+    XCTAssertEqual(exact.params["logs"]?.boolValue, false)
+    XCTAssertNil(exact.params["workspace"])
+
+    let several = try request(["start", "--workspace", "shop, billing"])
+    XCTAssertEqual(several.params["workspaces"]?.stringsValue, ["shop", "billing"])
+    XCTAssertNil(several.params["workspace"])
+    XCTAssertEqual(try request(["start", "--workspace", "shop"]).params["workspace"]?.stringValue, "shop")
+
+    let windows = try request(["windows", "chrome"])
+    XCTAssertEqual(windows.method, "repro.windows")
+    XCTAssertEqual(windows.params["query"]?.stringValue, "chrome")
+  }
+
+  func testAppendAddsAgentOutput() throws {
+    let append = try request(["append", "TypeError: price is undefined", "--source", "browser", "--level", "error"])
+    XCTAssertEqual(append.method, "repro.log")
+    XCTAssertEqual(append.params["text"]?.stringValue, "TypeError: price is undefined")
+    XCTAssertEqual(append.params["source"]?.stringValue, "browser")
+    XCTAssertEqual(append.params["level"]?.stringValue, "error")
+    let piped = try request(["append", "-"])
+    XCTAssertNil(piped.params["text"], "No text streams standard input")
+    XCTAssertEqual(piped.params["source"]?.stringValue, "agent")
+    XCTAssertEqual(try request(["log"]).method, "repro.logs", "log still reads output")
+  }
+
   func testRejectsMistakes() {
     XCTAssertThrowsError(try ReproCLI.parse(["start", "--bogus"]))
     XCTAssertThrowsError(try ReproCLI.parse(["start", "--title"]))
@@ -61,13 +90,16 @@ final class ReproAgentAPITests: XCTestCase {
     XCTAssertThrowsError(try request(["start", "extra"]))
     XCTAssertThrowsError(try request(["run", "shop"]))
     XCTAssertThrowsError(try request(["start", "--max", "soon"]))
+    XCTAssertThrowsError(try request(["start", "--window-id", "front"]))
+    XCTAssertThrowsError(try request(["start", "--workspace", "shop", "--no-logs"]))
   }
 
   func testMCPToolsMapToControlMethods() throws {
     let names = StackMCPServer.toolDescriptions.compactMap { $0["name"]?.stringValue }
     XCTAssertEqual(Set(names).count, names.count, "Tool names are unique")
     for tool in ["start_repro_recording", "mark_repro", "stop_repro_recording", "cancel_repro_recording", "repro_status", "wait_for_repro",
-      "list_repros", "repro_summary", "repro_logs", "repro_frame", "export_repro", "open_repro", "delete_repro"] {
+      "list_repros", "repro_summary", "repro_logs", "repro_frame", "export_repro", "open_repro", "delete_repro",
+      "list_repro_windows", "add_repro_logs"] {
       XCTAssertTrue(names.contains(tool), tool)
       let (method, _, timeout) = try StackMCPServer.request(for: tool, [:])
       XCTAssertTrue(method.hasPrefix("repro."), method)

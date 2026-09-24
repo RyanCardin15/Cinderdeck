@@ -13,9 +13,9 @@ nonisolated enum ReproCLI {
 
   static let valued: Set<String> = ["title", "workspace", "window", "display", "max", "note", "detail", "outcome", "from", "to",
     "around", "span", "source", "level", "grep", "lines", "n", "at", "marker", "size", "dest", "out", "timeout", "limit",
-    "as", "session"]
+    "as", "session", "window-id"]
   static let booleans: Set<String> = ["audio", "wait", "json", "zip", "no-video", "pass", "fail", "force", "first-error", "help",
-    "task", "workflow", "path"]
+    "task", "workflow", "path", "no-logs"]
 
   static func parse(_ arguments: [String]) throws -> Options {
     var options = Options()
@@ -60,8 +60,20 @@ nonisolated enum ReproCLI {
     if options.has("force") { params["force"] = .bool(true) }
     switch command {
     case "start", "record":
-      try noExtra(0, "start [--title T] [--workspace W] [--window APP | --display N] [--max SECONDS]")
-      take("title"); take("window"); take("display"); take("note"); take("workspace")
+      try noExtra(0, "start [--title T] [--workspace W[,W…] | --no-logs] [--window APP | --window-id ID | --display N] [--max SECONDS]")
+      take("title"); take("window"); take("display"); take("note")
+      if let workspace = options["workspace"] {
+        let names = workspace.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        if names.count > 1 { params["workspaces"] = .array(names.map { .string($0) }) } else { params["workspace"] = .string(workspace) }
+      }
+      if options.has("no-logs") {
+        guard options["workspace"] == nil else { throw StackControlError.invalid("Pass --workspace or --no-logs, not both") }
+        params["logs"] = .bool(false)
+      }
+      if let id = options["window-id"] {
+        guard let value = Int(id), value > 0 else { throw StackControlError.invalid("--window-id must be a window id from `cinderdeck repro windows`") }
+        params["window_id"] = .number(Double(value))
+      }
       if let max = try number(options, "max") { params["max_seconds"] = max }
       if options.has("audio") { params["system_audio"] = .bool(true) }
       return ("repro.start", params, 90)
@@ -72,6 +84,16 @@ nonisolated enum ReproCLI {
       take("title"); take("window"); take("display"); take("note")
       if let max = try number(options, "max") { params["max_seconds"] = max }
       return ("repro.start", params, 90)
+    case "windows":
+      try noExtra(1, "windows [text]")
+      if let first = args.first { params["query"] = .string(first) }
+      return ("repro.windows", params, 30)
+    case "append", "add":
+      try noExtra(1, "append \"<text>\" [--source NAME] [--level error]   (or pipe lines: … | cinderdeck repro append --source NAME)")
+      if let first = args.first, first != "-" { params["text"] = .string(first) }
+      params["source"] = .string(options["source"] ?? "agent")
+      take("level")
+      return ("repro.log", params, 30)
     case "stop":
       try noExtra(1, "stop [repro]"); repro(); return ("repro.stop", params, 240)
     case "cancel", "discard":
@@ -147,6 +169,9 @@ nonisolated enum ReproCLI {
       let options = try parse(arguments)
       let request = try request(options)
       let connection = try StackCLI.connect(clientInfo(options))
+      if request.method == "repro.log", request.params["text"] == nil {
+        return try appendStandardInput(connection, params: request.params, options: options)
+      }
       let result = try connection.call(request.method, request.params, timeout: request.timeout)
       let command = options.positionals.first ?? "status"
       if options.has("wait"), ["run", "test", "start", "record"].contains(command), let id = result["repro"]?.stringValue {
@@ -193,6 +218,43 @@ nonisolated enum ReproCLI {
     }
   }
 
+  /// Streams standard input into the recording, stamping each line when it is read, until
+  /// input ends or the recording stops. For example: `tail -F app.log | cinderdeck repro append --source app`.
+  private static func appendStandardInput(_ connection: StackControlConnection, params: [String: JSONValue], options: Options) throws -> Int32 {
+    // A reader thread stamps lines as they arrive; this loop sends them every 0.2 s, so a
+    // quiet stream never holds lines back.
+    final class Inbox: @unchecked Sendable {
+      let lock = NSLock()
+      var lines: [JSONValue] = []
+      var finished = false
+    }
+    let inbox = Inbox()
+    Thread.detachNewThread {
+      while let line = Swift.readLine(strippingNewline: true) {
+        let entry = JSONValue.object(["text": .string(line), "at": .number(Date().timeIntervalSince1970)])
+        inbox.lock.lock(); inbox.lines.append(entry); inbox.lock.unlock()
+      }
+      inbox.lock.lock(); inbox.finished = true; inbox.lock.unlock()
+    }
+    var total = 0
+    while true {
+      inbox.lock.lock()
+      let pending = inbox.lines, finished = inbox.finished
+      inbox.lines.removeAll(keepingCapacity: true)
+      inbox.lock.unlock()
+      for start in stride(from: 0, to: pending.count, by: ReproRecorder.externalBatchLimit) {
+        var request = params
+        request["lines"] = .array(Array(pending[start..<min(start + ReproRecorder.externalBatchLimit, pending.count)]))
+        total += try connection.call("repro.log", request, timeout: 30)["added"]?.intValue ?? 0
+      }
+      if finished { break }
+      Thread.sleep(forTimeInterval: 0.2)
+    }
+    if options.json { print(JSONValue.object(["added": .number(Double(total))]).prettyString()) }
+    else { FileHandle.standardError.write(Data("Added \(total) line\(total == 1 ? "" : "s")\n".utf8)) }
+    return 0
+  }
+
   /// Prints the result and exits 0 for clean or error-only repros, 1 when something failed.
   private static func finish(_ result: JSONValue, options: Options) -> Int32 {
     print(result.prettyString())
@@ -225,10 +287,14 @@ nonisolated enum ReproCLI {
   static let usage = """
   cinderdeck repro — screen recordings with workspace output on the same timeline
 
-    start [--title T] [--workspace W]      Record the main display (or --window APP, --display N)
-          [--max SECONDS] [--note TEXT]    Stops automatically after --max (default 300)
+    start [--title T] [--workspace W[,W…]] Record the main display (or --window APP|TITLE,
+          [--max SECONDS] [--note TEXT]      --window-id ID, --display N); stops after --max (default 300)
+          [--no-logs]                      Plain video: no workspace output (agent lines and marks still kept)
+    windows [text]                         Windows you can record, frontmost first, with ids and titles
     run <workspace> <task> [--workflow]    Record while a task (or workflow) runs; stops after it ends
     mark "<label>" [--pass|--fail]         Add a step marker or a check result at this moment
+    append "<text>" [--source NAME]        Add your own output (e.g. a browser console) to the log; pipe
+           [--level error]                   lines on stdin to stream them until input ends
     stop [repro]                           Stop and save; prints verdict, errors, and markers
     cancel                                 Stop and discard the recording
     status                                 What is recording now

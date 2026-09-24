@@ -18,6 +18,8 @@ final class ReproRecordingController: ObservableObject {
     var display: String?
     /// Application name or window title to record instead of a display.
     var window: String?
+    /// Exact window to record, from `repro.windows`. Takes precedence over `window`.
+    var windowID: CGWindowID?
     var workspaces: Set<String>?
     var maxSeconds: Double = 300
     var systemAudio = false
@@ -57,7 +59,8 @@ final class ReproRecordingController: ObservableObject {
     do {
       try await recorder.prepareRecording(rect: target.rect, windowTarget: target.window, format: .mp4, quality: quality, fps: fps,
         captureSystemAudio: options.systemAudio, captureMicrophone: false, showCursor: true,
-        saveDirectory: store.folder(id), fileName: "recording", excludeOwnApplication: true)
+        saveDirectory: store.folder(id), fileName: "recording", excludeOwnApplication: true,
+        followsWindowTarget: target.window != nil, includesWindowTargetApplication: target.window != nil)
       try await recorder.startRecording()
     } catch {
       repros.clearExpectation(id)
@@ -160,12 +163,24 @@ final class ReproRecordingController: ObservableObject {
     let description: String
   }
 
+  /// Windows that can be recorded, frontmost first.
+  func windows() async throws -> [WindowSelectionCandidate] {
+    guard let snapshot = await WindowSelectionQueryService.prepareSnapshot(prefetchedContentTask: nil, excludeOwnApplication: true) else {
+      throw StackControlError(code: "recording_failed", message: "Could not list windows. Check Screen Recording permission for Cinderdeck.")
+    }
+    return snapshot.orderedCandidates.filter { $0.target.kind == .normal }
+  }
+
   private func resolveTarget(_ options: Options) async throws -> Target {
-    if let query = options.window?.trimmingCharacters(in: .whitespacesAndNewlines), !query.isEmpty {
-      guard let snapshot = await WindowSelectionQueryService.prepareSnapshot(prefetchedContentTask: nil, excludeOwnApplication: true) else {
-        throw StackControlError(code: "recording_failed", message: "Could not list windows. Check Screen Recording permission for Cinderdeck.")
+    if let windowID = options.windowID {
+      guard let match = try await windows().first(where: { $0.target.windowID == windowID }) else {
+        throw StackControlError.notFound("Window \(windowID) is not visible. Run `cinderdeck repro windows` (MCP list_repro_windows) for current ids; ids change when a window is closed and reopened.")
       }
-      let candidates = snapshot.orderedCandidates.filter { $0.target.kind == .normal }
+      let title = match.target.title.map { " — \($0)" } ?? ""
+      return Target(rect: match.target.frame, window: match.target, description: "Window: \(match.ownerName)\(title)")
+    }
+    if let query = options.window?.trimmingCharacters(in: .whitespacesAndNewlines), !query.isEmpty {
+      let candidates = try await windows()
       let lower = query.lowercased()
       func owner(_ candidate: WindowSelectionCandidate) -> String { candidate.ownerName.lowercased() }
       func title(_ candidate: WindowSelectionCandidate) -> String { (candidate.target.title ?? "").lowercased() }
@@ -173,7 +188,7 @@ final class ReproRecordingController: ObservableObject {
         ?? candidates.first { owner($0).contains(lower) } ?? candidates.first { title($0).contains(lower) }
       guard let match else {
         let names = candidates.map(\.ownerName).reduce(into: [String]()) { if !$1.isEmpty && !$0.contains($1) { $0.append($1) } }
-        throw StackControlError.notFound("No visible window matches \"\(query)\". Visible apps: \(names.prefix(15).joined(separator: ", "))")
+        throw StackControlError.notFound("No visible window matches \"\(query)\". Visible apps: \(names.prefix(15).joined(separator: ", ")). Run `cinderdeck repro windows` to see titles and ids.")
       }
       let title = match.target.title.map { " — \($0)" } ?? ""
       return Target(rect: match.target.frame, window: match.target, description: "Window: \(match.ownerName)\(title)")

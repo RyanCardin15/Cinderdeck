@@ -6,8 +6,10 @@ nonisolated enum StackAgentSetup {
   struct Result: Sendable { let target: String; let detail: String; let ok: Bool }
 
   static func run(_ options: StackCLI.Options) throws {
-    var targets = Set(["cursor", "codex", "claude"].filter { options.has($0) })
-    if targets.isEmpty || options.has("all") { targets = ["cursor", "codex", "claude"] }
+    let all = ["cursor", "codex", "claude", "copilot"]
+    var targets = Set(all.filter { options.has($0) })
+    if options.has("vscode") { targets.insert("copilot") }
+    if targets.isEmpty || options.has("all") { targets = Set(all) }
     let command = StackCLI.preferredCommandPath()
     if options.has("print") {
       print(snippets(command: command))
@@ -15,6 +17,13 @@ nonisolated enum StackAgentSetup {
     }
     for result in apply(targets: targets, command: command, instructions: options.has("instructions")) {
       print(StackCLI.paint(result.ok ? "✓ " : "• ", result.ok ? .green : .yellow) + result.target + ": " + result.detail)
+    }
+    if options.has("skills") {
+      let skills = StackAgentSkills.skills()
+      for agent in StackAgentSkills.agents where targets.contains(agent.id) {
+        do { for note in try StackAgentSkills.install(skills, for: agent) { print(StackCLI.paint("✓ ", .green) + "\(agent.name) skills: " + note) } }
+        catch { print(StackCLI.paint("• ", .yellow) + "\(agent.name) skills: " + error.localizedDescription) }
+      }
     }
     if !options.has("instructions") {
       print(StackCLI.paint("Tip: add --instructions to also write usage notes into ~/.codex/AGENTS.md and ~/.claude/CLAUDE.md.", .dim))
@@ -28,6 +37,7 @@ nonisolated enum StackAgentSetup {
       results.append(capture("Codex") { try codex(command: command) })
       if instructions { results.append(capture("Codex instructions") { try writeInstructions(to: home(".codex/AGENTS.md"), command: command) }) }
     }
+    if targets.contains("copilot") { results.append(capture("VS Code Copilot") { try copilot(command: command) }) }
     if targets.contains("claude") {
       results.append(capture("Claude Code") { try claude(command: command) })
       if instructions { results.append(capture("Claude Code instructions") { try writeInstructions(to: home(".claude/CLAUDE.md"), command: command) }) }
@@ -66,6 +76,32 @@ nonisolated enum StackAgentSetup {
     let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
     try data.write(to: url, options: .atomic)
     return "added to \(url.path) (restart Cursor or toggle the server in Settings → MCP)"
+  }
+
+  /// VS Code's user mcp.json → servers.cinderdeck, for VS Code and VS Code Insiders when installed.
+  static func copilot(command: String, support: URL = home("Library/Application Support")) throws -> String {
+    let editions = ["Code", "Code - Insiders"].filter { FileManager.default.fileExists(atPath: support.appendingPathComponent($0).path) }
+    let folders = editions.isEmpty ? ["Code"] : editions
+    var written: [String] = []
+    for folder in folders {
+      let url = support.appendingPathComponent(folder).appendingPathComponent("User/mcp.json")
+      var root: [String: Any] = [:]
+      if let data = try? Data(contentsOf: url), !data.isEmpty {
+        guard let object = try? JSONSerialization.jsonObject(with: data, options: [.json5Allowed]) as? [String: Any] else {
+          throw StackError.message("\(url.path) could not be read as JSON; add the server manually (see --print)")
+        }
+        root = object
+        backup(url)
+      }
+      var servers = root["servers"] as? [String: Any] ?? [:]
+      servers["cinderdeck"] = ["type": "stdio", "command": command, "args": ["mcp"]]
+      root["servers"] = servers
+      try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+      let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+      try data.write(to: url, options: .atomic)
+      written.append(url.path)
+    }
+    return "added to \(written.joined(separator: " and ")) (use it from Copilot Chat in Agent mode)"
   }
 
   /// ~/.codex/config.toml → [mcp_servers.cinderdeck]
@@ -166,6 +202,9 @@ nonisolated enum StackAgentSetup {
 
     Claude Code:
       claude mcp add --scope user cinderdeck -- "\(command)" mcp
+
+    VS Code Copilot (~/Library/Application Support/Code/User/mcp.json, or .vscode/mcp.json in a project):
+      { "servers": { "cinderdeck": { "type": "stdio", "command": "\(command)", "args": ["mcp"] } } }
 
     Any agent with a shell:
       \(command) stacks agent-help

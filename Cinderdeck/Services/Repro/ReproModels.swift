@@ -105,7 +105,8 @@ extension ReproLogLine {
 }
 
 nonisolated struct ReproSource: Codable, Equatable, Identifiable, Sendable {
-  enum Kind: String, Codable, Sendable { case service, task }
+  /// `external` is output an agent added itself, such as a browser console; it belongs to no workspace.
+  enum Kind: String, Codable, Sendable { case service, task, external }
   var id: String
   var kind: Kind
   var workspace: String
@@ -310,7 +311,7 @@ nonisolated struct ReproSession: Codable, Equatable, Identifiable, Sendable {
 
   /// Workspaces with captured state or output, in first-seen order.
   var workspaceNames: [String] {
-    (workspaces.map(\.name) + sources.map(\.workspaceName)).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+    (workspaces.map(\.name) + sources.filter { $0.kind != .external }.map(\.workspaceName)).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
   }
 
   func source(_ id: String) -> ReproSource? { sources.first { $0.id == id } }
@@ -639,7 +640,8 @@ nonisolated enum ReproReport {
     if !session.sources.isEmpty {
       out += "\n## Sources\n\n| Source | Lines | Errors | Warnings |\n| --- | --- | --- | --- |\n"
       for source in session.sources {
-        out += "| \(source.workspaceName) / \(source.name) | \(source.lineCount) | \(source.errorCount) | \(source.warningCount) |\n"
+        let name = source.kind == .external ? source.name : "\(source.workspaceName) / \(source.name)"
+        out += "| \(name) | \(source.lineCount) | \(source.errorCount) | \(source.warningCount) |\n"
       }
     }
     return out
@@ -647,8 +649,10 @@ nonisolated enum ReproReport {
 
   /// "api" when one workspace was captured; "shop/api" when several are mixed.
   static func sourceLabels(_ session: ReproSession) -> [String: String] {
-    let multiple = Set(session.sources.map(\.workspace)).count > 1
-    return Dictionary(uniqueKeysWithValues: session.sources.map { ($0.id, multiple ? "\($0.workspace)/\($0.name)" : $0.name) })
+    let multiple = Set(session.sources.filter { $0.kind != .external }.map(\.workspace)).count > 1
+    return Dictionary(uniqueKeysWithValues: session.sources.map {
+      ($0.id, multiple && $0.kind != .external ? "\($0.workspace)/\($0.name)" : $0.name)
+    })
   }
 
   /// The plain-text log saved with a recording: every captured line and event in

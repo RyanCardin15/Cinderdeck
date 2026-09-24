@@ -31,7 +31,7 @@ Use **+** beside the tabs to save the current repository, search, filters, and s
 
 ## Configure views with agents or scripts
 
-Choose **Agent access** (the sparkles button in the PR window) to connect Codex, Cursor, or Claude Code. The existing Cinderdeck MCP server now exposes `list_pr_views`, `upsert_pr_view`, `select_pr_view`, `reorder_pr_views`, and `delete_pr_view`; existing connections need only reload their tools or restart their client. Agent setup instructions include both stacks and PR views. The CLI is the same `cinderdeck` command installed from Agent access.
+Choose **Agent access** (the sparkles button in the PR window) to connect Codex, Cursor, Claude Code, or VS Code Copilot. The existing Cinderdeck MCP server now exposes `list_pr_views`, `upsert_pr_view`, `select_pr_view`, `reorder_pr_views`, and `delete_pr_view`; existing connections need only reload their tools or restart their client. Agent setup instructions include both stacks and PR views. The CLI is the same `cinderdeck` command installed from Agent access.
 
 Start by listing views. The result includes the GitHub hostname and active account, every tab's exact id, filters and generated query, plus the current selection and workspace filters. Supply that account on subsequent changes; Cinderdeck refuses the change if the active GitHub account has switched. Use `--host <hostname>` (MCP `hostname`) to pin the server returned by the list call. When omitted, the server selected in Cinderdeck is used. An explicit host does not switch the UI to a different server.
 

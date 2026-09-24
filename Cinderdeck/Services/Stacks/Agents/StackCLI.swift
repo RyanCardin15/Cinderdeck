@@ -13,6 +13,7 @@ nonisolated enum StackCLI {
     case "workspace", "workspaces": return WorkspaceCLI.run(Array(arguments.dropFirst(2)))
     case "prs", "pull-requests": return PRViewsCLI.run(Array(arguments.dropFirst(2)))
     case "repro", "repros": return ReproCLI.run(Array(arguments.dropFirst(2)))
+    case "skills", "skill": return StackAgentSkills.run(Array(arguments.dropFirst(2)))
     case "lane", "lanes": return run(["lane"] + arguments.dropFirst(2))
     case "mcp": return StackMCPServer.run()
     case "help", "--help", "-h":
@@ -536,7 +537,9 @@ nonisolated enum StackCLI {
     cinderdeck stacks validate <file.toml>        Check a stack definition
     cinderdeck stacks reload | where | ping
     cinderdeck stacks install-cli                 Link ~/.local/bin/cinderdeck to this app
-    cinderdeck stacks setup-agents                Add the Cinderdeck MCP server to Cursor, Codex, Claude Code
+    cinderdeck stacks setup-agents                Add the Cinderdeck MCP server to Cursor, Codex, Claude Code, VS Code Copilot
+                                                  (--skills also installs the agent skills)
+    cinderdeck skills [list|install]              Agent skills that ship with Cinderdeck
     cinderdeck stacks agent-help                  Instructions to paste into AGENTS.md
     cinderdeck prs views                          Configure Pull Request tabs (prs --help)
     cinderdeck mcp                                Run as an MCP server over stdio

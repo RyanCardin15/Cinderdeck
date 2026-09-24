@@ -13,6 +13,10 @@ extension StackControlService {
       options.title = params["title"]?.stringValue
       options.display = params["display"]?.stringValue
       options.window = params["window"]?.stringValue
+      if let raw = params["window_id"] ?? params["windowId"] {
+        guard let value = raw.intValue, value > 0, value <= Int(UInt32.max) else { throw StackControlError.invalid("window_id must be a window id from list_repro_windows") }
+        options.windowID = CGWindowID(value)
+      }
       options.note = params["note"]?.stringValue
       options.systemAudio = params["system_audio"]?.boolValue ?? params["systemAudio"]?.boolValue ?? false
       if let seconds = params["max_seconds"]?.doubleValue ?? params["maxSeconds"]?.doubleValue {
@@ -23,6 +27,13 @@ extension StackControlService {
         options.workspaces = Set(try names.map { try stackFile(.object(["stack": .string($0)])).id })
       }
       let task = params["task"]?.stringValue, workflow = params["workflow"]?.stringValue
+      // logs: false records a plain video: no workspace output, only markers and lines the agent adds.
+      let logsOff = params["logs"]?.boolValue == false
+      if logsOff {
+        guard task == nil, workflow == nil else { throw StackControlError.invalid("logs: false cannot record a task or workflow run; its output is the point") }
+        guard params["workspace"] == nil, params["workspaces"] == nil else { throw StackControlError.invalid("Pass workspace or logs: false, not both") }
+        options.workspaces = []
+      }
       if task != nil || workflow != nil {
         guard task == nil || workflow == nil else { throw StackControlError.invalid("Pass task or workflow, not both") }
         guard let workspaceName = params["workspace"]?.stringValue ?? options.workspaces?.first else {
@@ -45,6 +56,61 @@ extension StackControlService {
       var result = reproPayload(session, lines: [], compact: true)
       result["next"] = .string("Recording. Reproduce the issue, call mark_repro at each step (outcome pass/fail for checks), then stop_repro_recording.")
       return .object(result)
+
+    case "repro.windows":
+      let candidates = try await controller.windows()
+      let screens = NSScreen.screens
+      let query = params["query"]?.stringValue?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
+      let matching = candidates.filter { candidate in
+        query.isEmpty || candidate.ownerName.lowercased().contains(query) || (candidate.target.title ?? "").lowercased().contains(query)
+      }
+      return .object(["windows": .array(matching.enumerated().map { index, candidate in
+        let target = candidate.target
+        var object: [String: JSONValue] = [
+          "id": .number(Double(target.windowID)), "app": .string(candidate.ownerName), "title": .string(target.title ?? ""),
+          "order": .number(Double(index)),
+          "frame": .object(["x": .number(target.frame.minX), "y": .number(target.frame.minY),
+            "width": .number(target.frame.width), "height": .number(target.frame.height)]),
+        ]
+        if let pid = target.ownerPID { object["pid"] = .number(Double(pid)) }
+        if let bundle = target.bundleIdentifier { object["bundleId"] = .string(bundle) }
+        if let display = screens.firstIndex(where: { $0.displayID == target.displayID }) { object["display"] = .number(Double(display + 1)) }
+        return .object(object)
+      }), "next": .string("Record one with start_repro_recording window_id=<id> (CLI: repro start --window-id <id>). order 0 is frontmost.")])
+
+    case "repro.log":
+      var entries: [ReproRecorder.ExternalLine] = []
+      func level(_ value: JSONValue?) throws -> ReproLogLevel? {
+        guard let raw = value?.stringValue?.lowercased(), !raw.isEmpty else { return nil }
+        let normalized = raw == "warn" ? "warning" : raw == "log" ? "info" : raw
+        guard let value = ReproLogLevel(rawValue: normalized) else { throw StackControlError.invalid("level must be debug, info, warning, or error") }
+        return value
+      }
+      let defaultLevel = try level(params["level"])
+      if let text = params["text"]?.stringValue {
+        entries += text.split(whereSeparator: \.isNewline).map { ReproRecorder.ExternalLine(text: String($0), level: defaultLevel) }
+      }
+      for item in params["lines"]?.arrayValue ?? [] {
+        if let text = item.stringValue {
+          entries.append(.init(text: text, level: defaultLevel))
+        } else if let object = item.objectValue, let text = object["text"]?.stringValue {
+          // at: epoch seconds, or ISO 8601, for lines read after the fact, such as a console buffer.
+          var at: Date?
+          if let seconds = object["at"]?.doubleValue { at = Date(timeIntervalSince1970: seconds > 1e11 ? seconds / 1000 : seconds) }
+          else if let iso = object["at"]?.stringValue { at = ISO8601DateFormatter().date(from: iso) }
+          entries.append(.init(text: text, at: at, level: try level(object["level"]) ?? defaultLevel))
+        } else {
+          throw StackControlError.invalid("Each line is a string or {text, at?, level?}")
+        }
+      }
+      guard !entries.isEmpty else { throw StackControlError.invalid("Pass text or lines") }
+      let source = params["source"]?.stringValue ?? "agent"
+      guard recorder.isCapturing else { throw StackControlError.notFound("No repro is recording. Start one with start_repro_recording.") }
+      let added: Int
+      do { added = try recorder.appendExternal(entries, source: source) }
+      catch { throw StackControlError.invalid(error.localizedDescription) }
+      return .object(["added": .number(Double(added)), "source": .string(source), "repro": .string(recorder.activeSessionID?.uuidString ?? ""),
+        "t": .number((recorder.now * 1000).rounded() / 1000)])
 
     case "repro.stop":
       if controller.ownsRecording {

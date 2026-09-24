@@ -309,9 +309,9 @@ private struct WorkspaceReproDetail: View {
           section("Sources") {
             ForEach(session.sources) { source in
               HStack {
-                Image(systemName: source.kind == .task ? "terminal" : "server.rack").foregroundColor(.secondary).font(.caption)
+                Image(systemName: source.kind == .task ? "terminal" : source.kind == .external ? "text.bubble" : "server.rack").foregroundColor(.secondary).font(.caption)
                 Text(source.name).font(.callout)
-                if source.workspace != session.workspaceIDs.first { Text(source.workspaceName).font(.caption).foregroundColor(.secondary) }
+                if source.kind != .external, source.workspace != session.workspaceIDs.first { Text(source.workspaceName).font(.caption).foregroundColor(.secondary) }
                 Spacer()
                 Text("\(source.lineCount)").font(.caption.monospacedDigit()).foregroundColor(.secondary)
                 if source.errorCount > 0 { Text("\(source.errorCount) errors").font(.caption).foregroundColor(.red) }

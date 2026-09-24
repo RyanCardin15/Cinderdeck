@@ -662,6 +662,16 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
   private var excludeDesktopIconsFromCapture: Bool = false
   private var excludeDesktopWidgetsFromCapture: Bool = false
   private var captureWindowTarget: WindowCaptureTarget?
+  /// Agent recordings keep the capture on the window when it moves or resizes.
+  private var followsCaptureWindow = false
+  /// Agent recordings include the window's app, so its menus, dropdowns, and sheets show up.
+  private var includesCaptureWindowApplication = false
+  private var windowFollowTimer: Timer?
+  private var windowFollowFrame: CGRect?
+  private var windowFollowUpdating = false
+  private var activeStreamConfiguration: SCStreamConfiguration?
+  private var activeCaptureDisplay: SCDisplay?
+  private var activeCaptureScale: CGFloat = 2
   private var excludedWindowIDs = Set<CGWindowID>()
   private var exceptedWindowIDs = Set<CGWindowID>()
   private var outputURL: URL?
@@ -722,7 +732,9 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
     excludeDesktopWidgets: Bool = false,
     excludeOwnApplication: Bool = true,
     excludedWindowIDs: [CGWindowID] = [],
-    context: CaptureContext = .empty
+    context: CaptureContext = .empty,
+    followsWindowTarget: Bool = false,
+    includesWindowTargetApplication: Bool = false
   ) async throws {
     guard state == .idle else {
       DiagnosticLogger.shared.log(.debug, .recording, "prepareRecording blocked: recorder busy", context: [
@@ -764,6 +776,8 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
     self.excludeDesktopIconsFromCapture = excludeDesktopIcons
     self.excludeDesktopWidgetsFromCapture = excludeDesktopWidgets
     self.captureWindowTarget = windowTarget
+    self.followsCaptureWindow = followsWindowTarget && windowTarget != nil
+    self.includesCaptureWindowApplication = includesWindowTargetApplication && windowTarget != nil
     self.excludedWindowIDs = Set(excludedWindowIDs)
     self.exceptedWindowIDs.removeAll()
 
@@ -883,6 +897,8 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
       throw error
     }
     self.recordingRect = captureGeometry.globalCaptureRect
+    self.activeCaptureDisplay = display
+    self.activeCaptureScale = scaleFactor
     DiagnosticLogger.shared.log(.debug, .recording, "Recording geometry resolved", context: [
       "displayID": "\(display.displayID)",
       "sourceRect": String(
@@ -1051,6 +1067,7 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
     microphoneCapturer?.start()
 
     state = .recording
+    startFollowingCaptureWindow()
     DiagnosticLogger.shared.log(.info, .recording, "Recording started", context: [
       "rect": "\(Int(recordingRect.width))x\(Int(recordingRect.height))",
       "fps": "\(fps)",
@@ -1832,6 +1849,7 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
       }
     }
 
+    activeStreamConfiguration = config
     stream = SCStream(filter: filter, configuration: config, delegate: self)
     registeredOutputTypes.removeAll()
     try stream?.addStreamOutput(self, type: .screen, sampleHandlerQueue: videoProcessingQueue)
@@ -1859,7 +1877,74 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
     ])
   }
 
+  // MARK: - Following a window
+
+  private func startFollowingCaptureWindow() {
+    stopFollowingCaptureWindow()
+    guard followsCaptureWindow, let target = captureWindowTarget else { return }
+    windowFollowFrame = target.frame
+    let timer = Timer(timeInterval: 0.2, repeats: true) { [weak self] _ in
+      Task { @MainActor [weak self] in await self?.followCaptureWindow() }
+    }
+    windowFollowTimer = timer
+    RunLoop.main.add(timer, forMode: .common)
+  }
+
+  private func stopFollowingCaptureWindow() {
+    windowFollowTimer?.invalidate()
+    windowFollowTimer = nil
+    windowFollowFrame = nil
+  }
+
+  /// Moves the capture area with the window. The video keeps its size; a resized
+  /// window is scaled to fit it.
+  private func followCaptureWindow() async {
+    guard state == .recording || state == .paused, !windowFollowUpdating, let target = captureWindowTarget,
+      let display = activeCaptureDisplay, let config = activeStreamConfiguration, let activeStream = stream,
+      let frame = Self.currentFrame(of: target.windowID), let previous = windowFollowFrame else { return }
+    guard abs(frame.minX - previous.minX) > 0.5 || abs(frame.minY - previous.minY) > 0.5
+      || abs(frame.width - previous.width) > 0.5 || abs(frame.height - previous.height) > 0.5 else { return }
+    // A window moved entirely onto another display stays where it was last seen.
+    guard let geometry = try? resolveCaptureGeometry(display: display, rect: frame, scaleFactor: activeCaptureScale) else { return }
+    windowFollowUpdating = true
+    defer { windowFollowUpdating = false }
+    config.sourceRect = geometry.sourceRect
+    do {
+      try await activeStream.updateConfiguration(config)
+      windowFollowFrame = frame
+      recordingRect = geometry.globalCaptureRect
+      mouseTracker?.updateRecordingRect(geometry.globalCaptureRect)
+      DiagnosticLogger.shared.log(.debug, .recording, "Recording followed window", context: [
+        "windowID": "\(target.windowID)",
+        "frame": "\(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))x\(Int(frame.height))",
+      ])
+    } catch {
+      // Try again on the next tick.
+      DiagnosticLogger.shared.logError(.recording, error, "Could not follow the recorded window")
+    }
+  }
+
+  /// The window's current frame in AppKit global coordinates, or nil when it is closed or hidden.
+  private static func currentFrame(of windowID: CGWindowID) -> CGRect? {
+    guard let info = (CGWindowListCopyWindowInfo([.optionIncludingWindow], windowID) as? [[String: Any]])?.first,
+      (info[kCGWindowIsOnscreen as String] as? Bool) != false,
+      let bounds = info[kCGWindowBounds as String] as? NSDictionary,
+      let quartz = CGRect(dictionaryRepresentation: bounds)?.standardized else { return nil }
+    let mainHeight = NSScreen.screens.first(where: { $0.displayID == CGMainDisplayID() })?.frame.height
+      ?? CGDisplayBounds(CGMainDisplayID()).height
+    return CGRect(x: quartz.minX, y: mainHeight - quartz.maxY, width: quartz.width, height: quartz.height).integral
+  }
+
   private func makeContentFilter(display: SCDisplay, content: SCShareableContent) -> SCContentFilter {
+    // Every window of the target's app, cropped to the target: browser dropdowns, menus, and
+    // sheets are separate windows, and other apps' windows passing over it stay out of the video.
+    if includesCaptureWindowApplication, let captureWindowTarget, let pid = captureWindowTarget.ownerPID,
+       content.windows.contains(where: { $0.windowID == captureWindowTarget.windowID && $0.isOnScreen }),
+       let application = content.applications.first(where: { $0.processID == pid }) {
+      return SCContentFilter(display: display, including: [application],
+        exceptingWindows: content.windows.filter { excludedWindowIDs.contains($0.windowID) })
+    }
+
     if let captureWindowTarget,
        let primaryWindow = content.windows.first(where: {
          $0.windowID == captureWindowTarget.windowID && $0.isOnScreen
@@ -2077,6 +2162,11 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
     excludedWindowIDs.removeAll()
     exceptedWindowIDs.removeAll()
     captureWindowTarget = nil
+    stopFollowingCaptureWindow()
+    followsCaptureWindow = false
+    includesCaptureWindowApplication = false
+    activeStreamConfiguration = nil
+    activeCaptureDisplay = nil
     session.setOnFirstVideoFrame(nil)
     microphoneDeviceID = nil
     showCursorInRecording = true

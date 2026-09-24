@@ -108,6 +108,7 @@
 				A364629F2F18EEDA0003453D /* Sources */,
 				A36462A02F18EEDA0003453D /* Frameworks */,
 				A36462A12F18EEDA0003453D /* Resources */,
+				D00100302F9F000000000030 /* Bundle Agent Skills */,
 			);
 			buildRules = (
 			);
@@ -237,6 +238,26 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "if which swiftformat >/dev/null; then\n  # swiftformat \"${SRCROOT}/Cinderdeck\" \"${SRCROOT}/CinderdeckTests\"\n  echo \"SwiftFormat is configured but disabled by default.\"\nelse\n  echo \"warning: SwiftFormat not installed. Install via 'brew install swiftformat'.\"\nfi\n";
+		};
+		D00100302F9F000000000030 /* Bundle Agent Skills */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Agent Skills";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\n# Agent skills from skills/ ship in the app so Agent access can install them.\ndestination=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/AgentSkills\"\nrm -rf \"$destination\"\nmkdir -p \"$destination\"\ncp -R \"${SRCROOT}/skills/\" \"$destination/\"\n";
+			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
 
