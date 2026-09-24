@@ -202,14 +202,16 @@ private struct WorkspaceReproRow: View {
 private struct WorkspaceReproDetail: View {
   let session: ReproSession
   @ObservedObject var recorder: ReproRecorder
-  @State private var lines: [ReproLogLine] = []
+  /// Distinct errors, found once per repro: the recorder publishes several times a
+  /// second while anything records, and scanning every line on each redraw is slow.
+  @State private var topErrors: [ReproSummary.Highlight] = []
   @State private var loaded = false
   @State private var renaming = false
   @State private var newTitle = ""
   @State private var copied = false
 
   var body: some View {
-    let summary = ReproSummary(session: session, lines: lines)
+    let summary = ReproSummary(session: session, lines: [])
     ScrollView {
       VStack(alignment: .leading, spacing: 16) {
         VStack(alignment: .leading, spacing: 6) {
@@ -264,9 +266,9 @@ private struct WorkspaceReproDetail: View {
           }
         }
 
-        if !summary.topErrors.isEmpty {
+        if !topErrors.isEmpty {
           section("Errors") {
-            ForEach(Array(summary.topErrors.enumerated()), id: \.offset) { _, error in
+            ForEach(Array(topErrors.enumerated()), id: \.offset) { _, error in
               Button { ReproLibraryActions.open(session, at: error.t) } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                   Text(error.time).font(.system(.caption, design: .monospaced)).foregroundColor(.secondary)
@@ -320,7 +322,9 @@ private struct WorkspaceReproDetail: View {
       }.padding(.leading, 12).padding(.bottom, 12)
     }
     .task(id: session.id) {
-      lines = await recorder.lines(for: session.id)
+      let lines = await recorder.lines(for: session.id)
+      let session = session
+      topErrors = await Task.detached { ReproSummary(session: session, lines: lines).topErrors }.value
       loaded = true
     }
     .alert("Rename recording", isPresented: $renaming) {

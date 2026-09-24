@@ -7,9 +7,13 @@ import SwiftUI
 struct VideoEditorReproPanel: View {
   @ObservedObject var state: VideoEditorState
   @ObservedObject var model: VideoEditorReproModel
-  @ObservedObject var playback: VideoEditorPlaybackState
-  @State private var playhead: Double = 0
-  @State private var lastScrolledID: String?
+  /// Not observed: the playhead moves 30 times a second while playing. The panel
+  /// follows it through `anchor` instead.
+  let playback: VideoEditorPlaybackState
+  /// Time of the last entry at or before the playhead. Rows depend only on this,
+  /// so the list redraws when the playhead passes an entry, not on every frame.
+  @State private var anchor = -Double.infinity
+  @State private var lastScrolledID: Int?
 
   init(state: VideoEditorState) {
     self.state = state
@@ -33,15 +37,17 @@ struct VideoEditorReproPanel: View {
     .background(Color(nsColor: .controlBackgroundColor).opacity(0.35))
     .onReceive(playback.$currentTime) { time in
       let seconds = CMTimeGetSeconds(time)
-      guard seconds.isFinite, abs(seconds - playhead) >= 0.04 else { return }
-      playhead = seconds
+      guard seconds.isFinite else { return }
+      updateAnchor(seconds)
     }
+    .onChange(of: model.revision) { _ in updateAnchor(playheadSeconds) }
   }
 
   // MARK: Header
 
   private func header(_ session: ReproSession) -> some View {
-    let summary = ReproSummary(session: session, lines: model.lines)
+    // The verdict and headline come from the session's counts; no need to scan every line.
+    let summary = ReproSummary(session: session, lines: [])
     return VStack(alignment: .leading, spacing: 6) {
       HStack(spacing: 8) {
         ReproVerdictBadge(verdict: summary.verdict)
@@ -120,7 +126,7 @@ struct VideoEditorReproPanel: View {
   // MARK: List
 
   private var list: some View {
-    let currentID = model.entryIndex(at: playhead).map { model.entries[$0].id }
+    let currentID = model.entryIndex(at: anchor).map { model.entries[$0].id }
     return ScrollViewReader { proxy in
       ScrollView {
         LazyVStack(alignment: .leading, spacing: 0) {
@@ -129,7 +135,7 @@ struct VideoEditorReproPanel: View {
               .font(.system(size: 12)).foregroundColor(.secondary).frame(maxWidth: .infinity).padding(.top, 24)
           }
           ForEach(model.entries) { entry in
-            row(entry, isCurrent: entry.id == currentID, isFuture: entry.t > playhead + 0.0005)
+            row(entry, isCurrent: entry.id == currentID, isFuture: entry.t > anchor + 0.0005)
               .id(entry.id)
           }
         }
@@ -227,14 +233,24 @@ struct VideoEditorReproPanel: View {
 
   // MARK: Actions
 
+  private var playheadSeconds: Double {
+    let seconds = CMTimeGetSeconds(playback.currentTime)
+    return seconds.isFinite ? seconds : 0
+  }
+
+  private func updateAnchor(_ seconds: Double) {
+    let next = model.entryIndex(at: seconds).map { model.entries[$0].t } ?? -Double.infinity
+    if next != anchor { anchor = next }
+  }
+
   private func seek(_ t: Double) {
     state.pause()
     state.seek(to: CMTime(seconds: t, preferredTimescale: 600))
-    playhead = t
+    updateAnchor(t)
   }
 
   private func jumpToError(forward: Bool) {
-    guard let t = model.error(after: playhead, forward: forward) else { return }
+    guard let t = model.error(after: playheadSeconds, forward: forward) else { return }
     if model.level == .all, !model.search.isEmpty { model.search = "" }
     seek(t)
   }

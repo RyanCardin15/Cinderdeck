@@ -93,7 +93,7 @@ nonisolated enum StackAgentGuide {
     - Finish: `stop_repro_recording` / `repro stop`, or `wait_for_repro` / `repro wait` for a run. Read the verdict and highlights.
     - Investigate: `repro_frame` (`at`: first_error, seconds, mm:ss, or marker:<label>) returns the frame as an image with the output just \
       before it; `repro_logs` filters by `around`, `from`/`to`, `source`, `level`, `grep`; `repro_summary` includes Git state and uncommitted files.
-    - Share: `export_repro` writes video, README.md, timeline.log, per-source logs, frames, and diffs (`--zip` for an archive).
+    - Share: `export_repro` writes video, README.md, recording.log, per-source logs, frames, and diffs (`--zip` for an archive).
     - Every repro has a plain-text log file (`logFile` in results; CLI `\(command) repro dump`) with each line stamped `[video time  clock time]`.
     - Recordings people make with the toolbar while workspaces run are repros too: `list_repros` shows them, so you can read the log for what they saw.
     - `\(command) repro scope` shows or sets which workspaces the user's toolbar recordings capture; change it only when asked.

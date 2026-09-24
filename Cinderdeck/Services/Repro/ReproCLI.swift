@@ -239,7 +239,7 @@ nonisolated enum ReproCLI {
          [--level error] [--source api]      --grep TEXT, -n LINES, --json
     frame [repro] [--at T,T…|--marker L]   Save video frames (default: first error) with nearby output
           [--first-error] [--out FILE]
-    export [repro] [--dest DIR] [--zip]    Shareable folder: video, README, timeline, logs, diffs
+    export [repro] [--dest DIR] [--zip]    Shareable folder: video, README, log file, diffs
     dump [repro] [--path]                  Print the recording's .log file (or just its path)
     scope [running|off|<workspace>…]       Show or set which workspaces toolbar recordings capture
     open [repro]                           Open in the video editor with synced logs

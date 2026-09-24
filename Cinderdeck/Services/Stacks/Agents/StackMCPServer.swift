@@ -86,7 +86,7 @@ nonisolated enum StackMCPServer {
         "marker": property("string", "Marker label or id"), "max_size": property("number", "Longest side in pixels (default 1280, or 960 for several)"),
         "window": property("number", "Seconds of output before each frame to include (default 3)")],
       required: [], readOnly: true),
-    Tool(name: "export_repro", description: "Write a shareable repro folder (or .zip): video, README.md summary, merged timeline.log, per-source logs, markers, frames at failures, and uncommitted diffs. Defaults to ~/Downloads/Cinderdeck Repros.",
+    Tool(name: "export_repro", description: "Write a shareable repro folder (or .zip): video, README.md summary, recording.log (every line stamped with its video time), per-source logs, markers, frames at failures, and uncommitted diffs. Defaults to ~/Downloads/Cinderdeck Repros.",
       properties: ["repro": repro, "destination": property("string", "Folder to write into"), "zip": property("boolean", "Create a .zip instead of a folder"),
         "video": property("boolean", "Include the video (default true)")],
       required: [], readOnly: false),

@@ -7,7 +7,9 @@ struct VideoEditorReproEntry: Identifiable, Equatable {
     case line(ReproLogLine)
     case marker(ReproMarker)
   }
-  let id: String
+  /// Line ids for output, negative marker positions for markers. Integers keep
+  /// diffing large lists cheap.
+  let id: Int
   let t: Double
   let content: Content
 }
@@ -25,6 +27,11 @@ final class VideoEditorReproModel: ObservableObject {
   @Published private(set) var session: ReproSession?
   @Published private(set) var lines: [ReproLogLine] = []
   @Published private(set) var entries: [VideoEditorReproEntry] = []
+  /// Changes whenever `entries` is rebuilt, so views can react without comparing every entry.
+  @Published private(set) var revision = 0
+  /// Computed once per load: the panel and the timeline read these on every redraw.
+  private(set) var errorTimes: [Double] = []
+  private(set) var warningTimes: [Double] = []
   @Published var level = LevelFilter.all { didSet { rebuild() } }
   @Published var hiddenSources = Set<String>() { didSet { rebuild() } }
   @Published var search = "" { didSet { scheduleRebuild() } }
@@ -45,7 +52,10 @@ final class VideoEditorReproModel: ObservableObject {
     let recorder = ReproRecorder.shared
     guard let session = urls.lazy.compactMap({ recorder.session(forVideo: $0) }).first else { return false }
     self.session = session
-    lines = await recorder.lines(for: session.id)
+    let loaded = await recorder.lines(for: session.id)
+    errorTimes = loaded.filter { $0.level == .error && !$0.isOffscreen }.map(\.t)
+    warningTimes = loaded.filter { $0.level == .warning && !$0.isOffscreen }.map(\.t)
+    lines = loaded
     for url in urls { if let t = Self.pendingSeeks.removeValue(forKey: Self.key(url)) { pendingSeek = t } }
     rebuild()
     return true
@@ -71,14 +81,16 @@ final class VideoEditorReproModel: ObservableObject {
     var query = ReproLogQuery(minimumLevel: level.minimum, limit: 0)
     query.text = search.trimmingCharacters(in: .whitespaces)
     let matched = query.filter(lines).filter { visibleSources.contains($0.source) || session.source($0.source) == nil }
-    var result = matched.map { VideoEditorReproEntry(id: "l\($0.id)", t: $0.t, content: .line($0)) }
+    var result = matched.map { VideoEditorReproEntry(id: $0.id, t: $0.t, content: .line($0)) }
     if showMarkers && query.text?.isEmpty != false {
-      let markers = session.markers.filter { level == .all || $0.isFailure }
-      result += markers.map { VideoEditorReproEntry(id: "m\($0.id.uuidString)", t: $0.t, content: .marker($0)) }
+      for (index, marker) in session.markers.enumerated() where level == .all || marker.isFailure {
+        result.append(VideoEditorReproEntry(id: -(index + 1), t: marker.t, content: .marker(marker)))
+      }
       // Markers sort before lines at the same instant: the step explains the output.
-      result.sort { $0.t == $1.t ? ($0.id.hasPrefix("m") && !$1.id.hasPrefix("m")) : $0.t < $1.t }
+      result.sort { $0.t == $1.t ? ($0.id < 0 && $1.id > 0) : $0.t < $1.t }
     }
     entries = result
+    revision += 1
   }
 
   /// Index of the last entry at or before `t`.
@@ -90,9 +102,6 @@ final class VideoEditorReproModel: ObservableObject {
     }
     return result
   }
-
-  var errorTimes: [Double] { lines.filter { $0.level == .error && !$0.isOffscreen }.map(\.t) }
-  var warningTimes: [Double] { lines.filter { $0.level == .warning && !$0.isOffscreen }.map(\.t) }
 
   /// Next or previous error relative to the playhead, wrapping around.
   func error(after t: Double, forward: Bool) -> Double? {
