@@ -815,6 +815,19 @@ nonisolated enum L10n {
       defaultValue: "Check for Updates...",
       comment: "Status bar menu item title for update checking"
     )
+    static func updateAvailable(_ version: String) -> String {
+      format(
+        "menu.update-available",
+        defaultValue: "Update Available (%@)...",
+        comment: "Status bar menu item title when an update can be installed. %@ is the new version number.",
+        version
+      )
+    }
+    static let restartToUpdate = string(
+      "menu.restart-to-update",
+      defaultValue: "Restart to Update",
+      comment: "Status bar menu item title that installs a downloaded update and relaunches Cinderdeck"
+    )
     static let preferences = string(
       "menu.preferences",
       defaultValue: "Preferences...",
@@ -4509,6 +4522,135 @@ nonisolated enum L10n {
       "preferences-about.update-channel-beta-warning",
       defaultValue: "Beta builds are early previews and may contain bugs or unfinished features. If you switch back to Stable, this beta stays installed until the next stable release is newer than it.",
       comment: "Warning shown when the beta update channel is selected"
+    )
+    static let updateStatusUnavailable = string(
+      "preferences-about.update-status-unavailable",
+      defaultValue: "This build can’t update itself",
+      comment: "Update status when this copy of Cinderdeck was built without update signing, such as a development build"
+    )
+    static let updateStatusUnavailableDetail = string(
+      "preferences-about.update-status-unavailable-detail",
+      defaultValue: "Install Cinderdeck from GitHub Releases to get automatic updates.",
+      comment: "Explanation below the update status when this build cannot update itself"
+    )
+    static let updateStatusAutomatic = string(
+      "preferences-about.update-status-automatic",
+      defaultValue: "Cinderdeck checks for updates automatically",
+      comment: "Update status before any check has finished, when automatic checks are on"
+    )
+    static let updateStatusManual = string(
+      "preferences-about.update-status-manual",
+      defaultValue: "Automatic update checks are off",
+      comment: "Update status before any check has finished, when automatic checks are off"
+    )
+    static let updateStatusChecking = string(
+      "preferences-about.update-status-checking",
+      defaultValue: "Checking for updates…",
+      comment: "Update status while checking the update feed"
+    )
+    static let updateStatusUpToDate = string(
+      "preferences-about.update-status-up-to-date",
+      defaultValue: "Cinderdeck is up to date",
+      comment: "Update status when no newer version exists"
+    )
+    static func updateStatusAvailable(_ version: String) -> String {
+      format(
+        "preferences-about.update-status-available",
+        defaultValue: "Cinderdeck %@ is available",
+        comment: "Update status when a newer version exists. %@ is the new version number.",
+        version
+      )
+    }
+    static func updateStatusCurrentVersion(_ version: String) -> String {
+      format(
+        "preferences-about.update-status-current-version",
+        defaultValue: "You have version %@.",
+        comment: "Shown below an available update. %@ is the installed version number.",
+        version
+      )
+    }
+    static let updateStatusInformationOnlyDetail = string(
+      "preferences-about.update-status-information-only-detail",
+      defaultValue: "Download this version from its release page.",
+      comment: "Shown below an available update that cannot be installed automatically"
+    )
+    static let updateStatusDownloading = string(
+      "preferences-about.update-status-downloading",
+      defaultValue: "Downloading update…",
+      comment: "Update status while the update downloads"
+    )
+    static let updateStatusExtracting = string(
+      "preferences-about.update-status-extracting",
+      defaultValue: "Preparing update…",
+      comment: "Update status while the downloaded update is unpacked and verified"
+    )
+    static func updateStatusReady(_ version: String) -> String {
+      format(
+        "preferences-about.update-status-ready",
+        defaultValue: "Cinderdeck %@ is ready to install",
+        comment: "Update status when an update has downloaded. %@ is the new version number.",
+        version
+      )
+    }
+    static let updateStatusReadyGeneric = string(
+      "preferences-about.update-status-ready-generic",
+      defaultValue: "An update is ready to install",
+      comment: "Update status when an update has downloaded and its version is unknown"
+    )
+    static let updateStatusReadyDetail = string(
+      "preferences-about.update-status-ready-detail",
+      defaultValue: "It installs automatically the next time Cinderdeck quits.",
+      comment: "Shown below a downloaded update"
+    )
+    static let updateStatusInstalling = string(
+      "preferences-about.update-status-installing",
+      defaultValue: "Installing update…",
+      comment: "Update status while Cinderdeck quits to install an update"
+    )
+    static let updateStatusInstallingDetail = string(
+      "preferences-about.update-status-installing-detail",
+      defaultValue: "Cinderdeck will quit and relaunch. If quitting was cancelled, choose Quit and Install.",
+      comment: "Shown below the installing status. Quit and Install is the button title."
+    )
+    static let updateStatusFailed = string(
+      "preferences-about.update-status-failed",
+      defaultValue: "Couldn’t update Cinderdeck",
+      comment: "Update status after a check, download, or install failed. The reason appears below."
+    )
+    static let updateDownloadAndInstall = string(
+      "preferences-about.update-download-and-install",
+      defaultValue: "Download & Install",
+      comment: "Button that downloads, installs, and relaunches into the available update"
+    )
+    static let updateRestartToUpdate = string(
+      "preferences-about.update-restart-to-update",
+      defaultValue: "Restart to Update",
+      comment: "Button that installs a downloaded update and relaunches Cinderdeck"
+    )
+    static let updateQuitAndInstall = string(
+      "preferences-about.update-quit-and-install",
+      defaultValue: "Quit and Install",
+      comment: "Button that asks Cinderdeck to quit again so an update can install"
+    )
+    static let updateTryAgain = string(
+      "preferences-about.update-try-again",
+      defaultValue: "Try Again",
+      comment: "Button that retries a failed update check"
+    )
+    static let updateViewRelease = string(
+      "preferences-about.update-view-release",
+      defaultValue: "View Release",
+      comment: "Button that opens the release page of an update that cannot be installed automatically"
+    )
+    static let updateReleaseNotes = string(
+      "preferences-about.update-release-notes",
+      defaultValue: "Release Notes",
+      comment: "Link to the release notes of an available update"
+    )
+    static let updateOpenReleases = string(
+      "preferences-about.update-open-releases",
+      defaultValue: "Open Releases",
+      comment: "Button that opens Cinderdeck's GitHub Releases page"
     )
   }
 

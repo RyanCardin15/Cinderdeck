@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import Sparkle
 
 struct GeneralSettingsView: View {
   @AppStorage(PreferencesKeys.playSounds) private var playSounds = true
@@ -16,11 +15,8 @@ struct GeneralSettingsView: View {
   @ObservedObject private var themeManager = ThemeManager.shared
 
   @State private var startAtLogin = LoginItemManager.isEnabled
+  @ObservedObject private var updates = UpdaterManager.shared
   private let fileAccessManager = SandboxFileAccessManager.shared
-
-  private var updater: SPUUpdater {
-    UpdaterManager.shared.updater
-  }
 
   var body: some View {
     Form {
@@ -66,32 +62,35 @@ struct GeneralSettingsView: View {
       }
 
       Section(L10n.PreferencesGeneral.updatesSection) {
+        PreferencesSoftwareUpdateView()
+
         SettingRow(icon: "arrow.triangle.2.circlepath", title: L10n.PreferencesGeneral.checkAutomaticallyTitle, description: L10n.PreferencesGeneral.checkAutomaticallyDescription) {
           Toggle("", isOn: Binding(
-            get: { UpdaterManager.automaticUpdatesAvailable && updater.automaticallyChecksForUpdates },
+            get: { updates.automaticallyChecksForUpdates },
             set: {
-              updater.automaticallyChecksForUpdates = $0
+              updates.automaticallyChecksForUpdates = $0
               CinderdeckConfigurationSyncCoordinator.shared.scheduleSync(reason: .explicitChange)
             }
           ))
           .labelsHidden()
-          .disabled(!UpdaterManager.automaticUpdatesAvailable)
+          .disabled(updates.status == .unavailable)
         }
 
         SettingRow(icon: "arrow.down.circle", title: L10n.PreferencesGeneral.downloadAutomaticallyTitle, description: L10n.PreferencesGeneral.downloadAutomaticallyDescription) {
           Toggle("", isOn: Binding(
-            get: { UpdaterManager.automaticUpdatesAvailable && updater.automaticallyDownloadsUpdates },
+            get: { updates.automaticallyDownloadsUpdates },
             set: {
-              updater.automaticallyDownloadsUpdates = $0
+              updates.automaticallyDownloadsUpdates = $0
               CinderdeckConfigurationSyncCoordinator.shared.scheduleSync(reason: .explicitChange)
             }
           ))
           .labelsHidden()
-          .disabled(!UpdaterManager.automaticUpdatesAvailable)
+          // Automatic downloads only happen during automatic checks.
+          .disabled(updates.status == .unavailable || !updates.automaticallyChecksForUpdates)
         }
 
         SettingRow(icon: "clock", title: L10n.PreferencesGeneral.lastCheckedTitle, description: nil) {
-          if let lastCheck = updater.lastUpdateCheckDate {
+          if let lastCheck = updates.lastUpdateCheckDate {
             Text(lastCheck, style: .relative)
               .font(.caption)
               .foregroundColor(.secondary)

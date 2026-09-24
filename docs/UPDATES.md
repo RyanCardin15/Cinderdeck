@@ -1,36 +1,50 @@
 # Updates, Diagnostics & Problem Reporting
 
-> Cinderdeck’s automatic updates are disabled until its own signed feed is configured. Manual checks open GitHub releases. The updater architecture below applies after that setup; see [RELEASES.md](RELEASES.md).
-
 Sparkle-based app updates, local diagnostic logging, crash detection, and the manual problem-report bundle. No telemetry anywhere — logs stay on the user's Mac.
 
-Verified against `Cinderdeck/Services/Updates/UpdaterManager.swift`, `Cinderdeck/Features/Updates/`, `Cinderdeck/Services/Diagnostics/`, `Cinderdeck/Features/CrashReport/`, `Cinderdeck/Resources/Info.plist`, and `appcast.xml` at HEAD (`v1.0.0`).
+Verified against `Cinderdeck/Services/Updates/`, `Cinderdeck/Features/Preferences/Components/PreferencesSoftwareUpdateView.swift`, `Cinderdeck/Services/Diagnostics/`, `Cinderdeck/Features/CrashReport/`, `Cinderdeck/Resources/Info.plist`, and `appcast.xml`. Publishing and signing are in [RELEASES.md](RELEASES.md).
 
 ## Sparkle updates
 
+Installed releases keep themselves current. By default Sparkle checks the feed daily (`SUEnableAutomaticChecks`), downloads a new version in the background (`SUAutomaticallyUpdate`), and installs it when Cinderdeck quits. Preferences and the menu bar offer to install it immediately.
+
 ```mermaid
 flowchart TD
-    A["UpdaterManager.shared init<br/>(first access)"] --> B["SPUStandardUpdaterController<br/>startingUpdater: true"]
-    B --> C["Sparkle fetches appcast<br/>SUFeedURL"]
-    C --> D{"allowedChannels(for:)"}
-    D -- "updates.channel = beta" --> E["allowed: [beta]<br/>stable + beta items eligible"]
-    D -- "stable (default)" --> F["allowed: []<br/>untagged stable items only"]
-    E --> G["Sparkle presents update"]
-    F --> G
-    G --> H["download / install<br/>(installer launcher service)"]
+    A["UpdaterManager.shared<br/>(first access)"] --> B{"CinderdeckUpdatePolicy<br/>signed updates configured?"}
+    B -- no --> U["status .unavailable<br/>Check for Updates opens GitHub Releases"]
+    B -- yes --> C["SPUUpdater.start()<br/>user driver: CinderdeckUpdateUserDriver"]
+    C --> D["daily check of SUFeedURL<br/>allowedChannels: stable or beta"]
+    D -- "automatic downloads on" --> E["silent download + extract"]
+    E --> F["willInstallUpdateOnQuit<br/>status .readyToInstall"]
+    F -- "Restart to Update" --> G["immediate install + relaunch"]
+    F -- "user quits" --> H["installs on quit"]
+    D -- "automatic downloads off" --> I["status .available<br/>menu bar: Update Available (v…)"]
+    I -- "Download & Install" --> J["Preferences session:<br/>download → install → relaunch inline"]
+    I -- "menu item" --> K["Sparkle's standard update window"]
 ```
 
-- `UpdaterManager.shared` (`Cinderdeck/Services/Updates/UpdaterManager.swift`) wraps `SPUStandardUpdaterController` (auto-started on first access) and implements `SPUUpdaterDelegate` with lifecycle logging in the `.update` category (appcast load, update found/downloaded/installing, aborts).
-- Feed: `SUFeedURL` = `https://raw.githubusercontent.com/RyanCardin15/Cinderdeck/main/appcast.xml` (`Cinderdeck/Resources/Info.plist`), EdDSA signed via `SUPublicEDKey`; `appcast.xml` lives at the repo root.
-- Channels: `UpdateChannel { stable, beta }` persisted under `updates.channel` (`PreferencesKeys.updateChannel`); `allowedChannels(for:)` returns `["beta"]` on beta, `[]` on stable. The appcast mixes untagged stable items with `<sparkle:channel>beta</sparkle:channel>` items, so beta users see both, stable users only untagged.
-- `SUEnableInstallerLauncherService` = true, paired with the mach-lookup entitlements `$(PRODUCT_BUNDLE_IDENTIFIER)-spks` / `-spki` (see [APP_LIFECYCLE.md](APP_LIFECYCLE.md)).
-- Entry points:
-  - Menu bar → Check for Updates → `UpdaterManager.shared.checkForUpdates()`.
-  - Settings → About → Check for Updates button + last-checked label (`AboutSettingsView`).
-  - Settings → General → Updates: auto-check / auto-download toggles bound to `SPUUpdater` (`automaticallyChecksForUpdates`, `automaticallyDownloadsUpdates`); each change schedules a TOML sync.
-  - `CheckForUpdatesView` (`Cinderdeck/Features/Updates/UpdatesCheckForUpdatesView.swift`) — reusable Sparkle check button.
-- Channel picker: `UpdateChannelSectionView` (`PreferencesUpdateChannelSection.swift`) in Settings → About.
-- Release engineering: see [RELEASES.md](RELEASES.md) and [UPDATE_TESTING.md](UPDATE_TESTING.md).
+### Components
+
+- `UpdaterManager.shared` (`Cinderdeck/Services/Updates/UpdaterManager.swift`) owns the `SPUUpdater`, implements `SPUUpdaterDelegate` and the gentle-reminder parts of `SPUStandardUserDriverDelegate`, and publishes `status`, `canCheckForUpdates`, and `lastUpdateCheckDate` for SwiftUI. It logs the lifecycle in the `.update` category.
+- `CinderdeckUpdateUserDriver` (`CinderdeckUpdateUserDriver.swift`) wraps `SPUStandardUserDriver`. Sessions started from Preferences (`PreferencesUpdateIntent.check` or `.install`) report progress to Preferences instead of opening Sparkle's windows: a check replies *dismiss* so Preferences can offer the update; an install replies *install* at each prompt because the user already chose it. Every other session (menu bar checks, scheduled alerts, permission and authorization prompts, informational and critical updates) uses Sparkle's standard windows. Every session reports its progress so Preferences and the menu bar stay current.
+- `UpdateStatusMachine` (`UpdateStatus.swift`) folds Sparkle's events into one `UpdateStatus`: `unavailable`, `idle`, `checking`, `upToDate`, `available`, `downloading` (with progress), `extracting`, `readyToInstall`, `installing`, `failed`. It has no Sparkle types and is covered by `UpdateStatusMachineTests`.
+
+### Entry points
+
+- **Preferences → About** and **Preferences → General → Updates** show `PreferencesSoftwareUpdateView`: the current status with **Check for Updates**, **Download & Install** (or **View Release** for informational updates), **Cancel** during a check or download, **Restart to Update** once downloaded, **Quit and Install** if quitting was cancelled mid-install, and **Try Again** after a failure. General also has the automatic check/download toggles (downloads are disabled while checks are off) and Last Checked.
+- The Preferences sidebar badge shows an arrow when an update is waiting; clicking it opens About and checks if nothing is pending.
+- The menu bar's **Check for Updates…** item (hideable in Preferences → Menu Bar) becomes **Update Available (v…)…** (opens Sparkle's update window) or **Restart to Update** (installs now).
+- Scheduled alerts: Sparkle shows its alert when it can come to the front (near launch) or for critical updates; otherwise the menu bar item and Preferences serve as the reminder, since an alert would open behind other apps (`supportsGentleScheduledUpdateReminders`).
+- Silently downloaded updates: `willInstallUpdateOnQuit` hands over Sparkle's immediate-install handler, which **Restart to Update** calls; critical updates stay with Sparkle so it can present them. Quitting can be cancelled by Cinderdeck's running-work prompt (`StackQuitCoordinator`); the update still installs at the next quit.
+
+### Configuration
+
+- Feed: `SUFeedURL` = `https://raw.githubusercontent.com/RyanCardin15/Cinderdeck/main/appcast.xml`; archives are EdDSA signed and verified against `SUPublicEDKey` (written by `scripts/setup-release-signing.sh`).
+- Channels: `UpdateChannel { stable, beta }` persisted under `updates.channel` (`PreferencesKeys.updateChannel`); `allowedChannels(for:)` returns `["beta"]` on beta, `[]` on stable. Stable items are untagged; beta items carry `<sparkle:channel>beta</sparkle:channel>`. Changing the channel checks again from Preferences.
+- The installer runs in-process (no `SUEnableInstallerLauncherService`): Cinderdeck is not sandboxed, and Sparkle's launcher XPC service is only for sandboxed apps. The leftover `-spks`/`-spki` mach-lookup entitlements have no effect outside the sandbox.
+- `CinderdeckUpdatePolicy.isConfigured` requires `CinderdeckSignedUpdatesEnabled`, the release bundle identifier (Debug builds never update), Cinderdeck's feed (or `scripts/test-update-local.sh`'s localhost feed), and a 32-byte key other than upstream Snapzy's.
+- TOML sync: `[updates] check_automatically`, `download_automatically`, `channel` (see [CONFIGURATION.md](CONFIGURATION.md)).
+- Testing: [UPDATE_TESTING.md](UPDATE_TESTING.md).
 
 ## Diagnostics
 

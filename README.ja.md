@@ -26,7 +26,7 @@ cinderdeck stacks setup-agents --print
 
 Release 版の初回起動では、カスタマイズ版 Snapzy のローカルデータをコピーします。元データは保持し、既存の Cinderdeck データを上書きしません。macOS が新しいアプリへの権限付与を求める場合があります。[移行の詳細](docs/MIGRATION.md)。
 
-Cinderdeck 独自のバージョンは **1.0.0 (200)** から始まります。専用の署名済み更新フィードを設定するまで、自動更新は無効です。Snapzy の Homebrew パッケージやリリースを Cinderdeck の代わりに使用しないでください。
+Cinderdeck 独自のバージョンは **1.0.0 (200)** から始まります。リリース版は Cinderdeck の署名済み更新フィードから自動的にアップデートされます（Debug ビルドを除く）。Snapzy の Homebrew パッケージやリリースを Cinderdeck の代わりに使用しないでください。
 
 ## クレジット
 

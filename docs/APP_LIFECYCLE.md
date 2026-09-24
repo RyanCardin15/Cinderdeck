@@ -146,14 +146,14 @@ The Permissions tab reflects unhealthy identity as `grantedButUnavailableDueToAp
 - `com.apple.security.files.user-selected.read-write` — user-picked files/folders.
 - `com.apple.security.device.audio-input` — microphone for recordings.
 - `com.apple.security.temporary-exception.shared-preference.read-only` → `com.apple.symbolichotkeys` — system screenshot shortcut conflict detection (see [SHORTCUTS.md](SHORTCUTS.md)).
-- `com.apple.security.temporary-exception.mach-lookup.global-name` → `$(PRODUCT_BUNDLE_IDENTIFIER)-spks` / `-spki` — Sparkle installer launcher service (paired with `SUEnableInstallerLauncherService`).
+- `com.apple.security.temporary-exception.mach-lookup.global-name` → `$(PRODUCT_BUNDLE_IDENTIFIER)-spks` / `-spki` — left over from the sandboxed Snapzy build's Sparkle installer launcher service; inert without the sandbox, since Cinderdeck no longer sets `SUEnableInstallerLauncherService`.
 
 `Cinderdeck/Resources/Info.plist`:
 
 - `CFBundleURLTypes`: `cinderdeck://` scheme (deep links — see [SHORTCUTS.md](SHORTCUTS.md)).
 - `CFBundleDocumentTypes`: Editor role (rank `Alternate`) for `public.png`, `public.jpeg`, `public.heic`, `public.heif`, `public.tiff`, `com.compuserve.gif`, `org.webmproject.webp`, `public.bmp` — routes "Open With" into the Annotate editor.
 - `NSMicrophoneUsageDescription`, `NSScreenCaptureUsageDescription`.
-- Sparkle keys: `SUFeedURL`, `SUPublicEDKey`, `SUEnableInstallerLauncherService` — see [UPDATES.md](UPDATES.md).
+- Sparkle keys: `SUFeedURL`, `SUPublicEDKey`, `SUEnableAutomaticChecks`, `SUAutomaticallyUpdate`, plus Cinderdeck's `CinderdeckSignedUpdatesEnabled` — see [UPDATES.md](UPDATES.md).
 
 Security-scoped bookmarks persisted in UserDefaults: `exportLocation.bookmark` (save folder), `configuration.fileBookmark` / `configuration.directoryBookmark` (TOML config), `wallpaper.directoryBookmark` / `wallpaper.customBookmarks`.
 

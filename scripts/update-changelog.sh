@@ -1,5 +1,6 @@
 #!/bin/bash
-# update-changelog.sh - Prepends a versioned changelog entry to CHANGELOG.md
+# update-changelog.sh - Adds a versioned entry to CHANGELOG.md: the "## Unreleased" section
+# when it has entries, otherwise the generated content file.
 # Usage: ./scripts/update-changelog.sh <version> <changelog_content_file>
 #
 # Example:
@@ -22,13 +23,23 @@ if [ ! -f "$CHANGELOG_FILE" ]; then
 fi
 
 CONTENT=$(cat "$CONTENT_FILE")
+DATE=$(date +%Y-%m-%d)
 
-if [ -z "$CONTENT" ]; then
+# A hand-written "## Unreleased" section with entries becomes this release's notes;
+# the generated content is used only when there is none.
+has_unreleased_notes() {
+  awk '
+    /^## Unreleased[[:space:]]*$/ { inside = 1; next }
+    inside && /^## / { exit }
+    inside && NF { found = 1; exit }
+    END { exit !found }
+  ' "$CHANGELOG_FILE"
+}
+
+if ! has_unreleased_notes && [ -z "$CONTENT" ]; then
   echo "::warning::Changelog content is empty, skipping update"
   exit 0
 fi
-
-DATE=$(date +%Y-%m-%d)
 
 # Build the new entry
 NEW_ENTRY="## [${VERSION}] - ${DATE}
@@ -50,7 +61,12 @@ print_without_trailing_blanks() {
 # Find the first version entry (Keep a Changelog "## [x.y.z]" heading).
 HEADER_END=$(awk '/^## \[/ { print NR; exit }' "$CHANGELOG_FILE")
 
-{
+if has_unreleased_notes; then
+  awk -v heading="## [${VERSION}] - ${DATE}" '
+    !done && /^## Unreleased[[:space:]]*$/ { print heading; done = 1; next }
+    { print }
+  ' "$CHANGELOG_FILE" > "${CHANGELOG_FILE}.tmp"
+else {
   if [ -n "$HEADER_END" ]; then
     # Keep the preamble only; drop any blank lines that accumulated before
     # the first version heading, then insert the new entry.
@@ -68,6 +84,7 @@ HEADER_END=$(awk '/^## \[/ { print NR; exit }' "$CHANGELOG_FILE")
     tail -n +$((HEADER_END)) "$CHANGELOG_FILE"
   fi
 } > "${CHANGELOG_FILE}.tmp"
+fi
 
 # When publishing a stable version, remove the prerelease entries of the same
 # base version (e.g. [1.2.3-beta.1] when releasing [1.2.3]): their commits are

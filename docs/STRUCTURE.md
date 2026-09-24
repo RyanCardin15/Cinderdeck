@@ -265,7 +265,7 @@ CinderdeckUITests/
 | `Services/Security/` | Keychain storage for custom OCR endpoint API keys (`OCRKeychainStore`) |
 | `Services/Shortcuts/` | Global shortcuts, conflict detection, system shortcut checks |
 | `Services/Diagnostics/` | Crash sentinel, logs, toasts, cleanup |
-| `Services/Updates/` | Sparkle updater bootstrap |
+| `Services/Updates/` | Sparkle updater (`UpdaterManager`), Preferences-aware user driver, update status model |
 | `Services/Wallpaper/` | Desktop icon and wallpaper helpers used by capture/editor UX |
 | `Services/Appearance/` | Theme and appearance mode management |
 | `Shared/Localization/` | Shared localization helpers for AppKit, service copy, alerts, toasts, and display labels |

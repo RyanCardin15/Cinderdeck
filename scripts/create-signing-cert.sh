@@ -68,10 +68,13 @@ openssl req -x509 -newkey rsa:2048 -nodes \
 
 if [[ "$LOCAL_ONLY" == 1 ]]; then
   P12_PASSWORD=$(uuidgen)
+elif [[ -n "${CINDERDECK_P12_PASSWORD:-}" ]]; then
+  # Supplied by setup-release-signing.sh, which uploads the export itself.
+  P12_PASSWORD="$CINDERDECK_P12_PASSWORD"
 else
-  printf 'Password for the P12 export (SELF_SIGNED_CERT_PASSWORD): '
+  printf 'Password for the P12 export (SELF_SIGNED_CERT_PASSWORD): ' >&2
   read -rs P12_PASSWORD
-  printf '\n'
+  printf '\n' >&2
   [[ -n "$P12_PASSWORD" ]] || fail "Password cannot be empty."
 fi
 # macOS security import cannot read OpenSSL 3's default PKCS#12 encryption.

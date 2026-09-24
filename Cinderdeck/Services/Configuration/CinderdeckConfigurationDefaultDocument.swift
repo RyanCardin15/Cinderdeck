@@ -40,7 +40,7 @@ enum CinderdeckConfigurationDefaultDocument {
 
     writer.section("updates")
     writer.value("check_automatically", true)
-    writer.value("download_automatically", false)
+    writer.value("download_automatically", true)
 
     writer.section("diagnostics")
     writer.value("enabled", true)
