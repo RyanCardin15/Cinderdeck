@@ -70,6 +70,7 @@ final class AppCoordinator {
     RecordingMetadataCleanupScheduler.shared.start()
     CaptureHistoryRetentionService.shared.start()
     ClipboardTextHistoryStore.shared.start()
+    ReproRecorder.shared.start()
     Task {
       await StackSupervisor.shared.bootstrap()
       await WorkspaceRunner.shared.recover()

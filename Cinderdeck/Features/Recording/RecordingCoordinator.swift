@@ -149,6 +149,11 @@ final class RecordingCoordinator: ObservableObject {
     DiagnosticLogger.shared.log(.debug, .recording, "Stop requested from status item", context: [
       "recorderState": "\(recorder.state)"
     ])
+    // Repro recordings started by agents or Workspaces have no toolbar session.
+    if ReproRecordingController.shared.ownsRecording {
+      Task { _ = try? await ReproRecordingController.shared.stop() }
+      return
+    }
     switch recorder.state {
     case .recording, .paused:
       stopRecording()

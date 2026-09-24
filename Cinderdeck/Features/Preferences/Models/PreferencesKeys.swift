@@ -170,6 +170,8 @@ enum PreferencesKeys {
   nonisolated static let stacksQuitBehavior = "stacks.quitBehavior"
   nonisolated static let stacksNotifyOnCrash = "stacks.notifyOnCrash"
   nonisolated static let stacksAutoFetchMinutes = "stacks.autoFetchMinutes"
+  /// Attach workspace service and task output to screen recordings as a repro.
+  nonisolated static let reproCaptureLogs = "repro.captureLogs"
   static let historyRetentionDays = "history.retentionDays"
   static let historyMaxCount = "history.maxCount"
   static let historyBackgroundStyle = "history.backgroundStyle"

@@ -32,6 +32,9 @@ final class StackSupervisor: ObservableObject {
   private var subscriptions = Set<AnyCancellable>()
   private var reloadGeneration = 0
   var activeWorkspaceRun: ((String) -> Bool)?
+  /// Called before a service's log buffer is replaced by a relaunch, so a repro
+  /// capture can read the final lines of the previous process.
+  var logBufferRetiring: ((_ stack: String, _ service: String, _ buffer: LogBuffer) -> Void)?
 
   init(store: StackRunStore?, defaults: UserDefaults = .standard, secrets: any StackSecretsStoring = StackSecretsStore(),
     git: GitService = .shared, logRoot: URL? = nil,
@@ -234,6 +237,7 @@ final class StackSupervisor: ObservableObject {
         try? await store?.delete(stack: id, service: service)
         throw error
       }
+      if let previous = logs[k] { logBufferRetiring?(id, service, previous) }
       await logs[k]?.close(); logs[k] = buffer
       change(id, service) { $0.process = identity; $0.startedAt = started; $0.launchDefinition = launch; $0.conflict = nil }
       if !current() { return } // Stop is waiting on this launch and will own cleanup.
@@ -490,6 +494,13 @@ final class StackSupervisor: ObservableObject {
       if let buffer = logs[key(id, name)] { buffers.append(await buffer.snapshot()) }
     }
     return LogBuffer.merged(buffers)
+  }
+  /// Every service buffer that has output this session, for live followers.
+  func logBuffers() -> [(stack: String, service: String, buffer: LogBuffer)] {
+    logs.compactMap { key, buffer in
+      let parts = key.split(separator: "/", maxSplits: 1).map(String.init)
+      return parts.count == 2 ? (parts[0], parts[1], buffer) : nil
+    }
   }
   func clearLogs(stack id: String, service: String?) async {
     for name in states[id]?.services.keys.sorted() ?? [] where service == nil || service == name { await logs[key(id, name)]?.clear() }

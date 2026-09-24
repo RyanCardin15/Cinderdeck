@@ -193,6 +193,7 @@ final class StackControlService: ObservableObject {
   func handle(_ method: String, params: JSONValue, actor: StackActor) async throws -> JSONValue {
     if method.hasPrefix("workspace.") { return try await handleWorkspace(method, params: params, actor: actor) }
     if method.hasPrefix("prs.views.") { return try await prViews.handle(method, params: params) }
+    if method.hasPrefix("repro.") { return try await handleRepro(method, params: params, actor: actor) }
     switch method {
     case "ping":
       return try JSONValue(encoding: [
