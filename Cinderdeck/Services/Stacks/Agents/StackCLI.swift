@@ -146,6 +146,10 @@ nonisolated enum StackCLI {
     return components[...index].joined(separator: "/")
   }
 
+  /// The app bundle this binary belongs to. `Bundle.main` misses it when the binary runs through
+  /// the `~/.local/bin` link, because it looks beside the link instead of the real executable.
+  static var appBundle: Bundle { appBundlePath().flatMap { Bundle(path: $0) } ?? .main }
+
   static var installedLink: URL {
     FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/cinderdeck")
   }

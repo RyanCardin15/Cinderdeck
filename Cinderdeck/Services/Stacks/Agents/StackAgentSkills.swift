@@ -46,7 +46,7 @@ nonisolated enum StackAgentSkills {
 
   // MARK: Bundled skills
 
-  static func bundledFolder(_ bundle: Bundle = .main) -> URL? {
+  static func bundledFolder(_ bundle: Bundle = StackCLI.appBundle) -> URL? {
     guard let url = bundle.resourceURL?.appendingPathComponent("AgentSkills", isDirectory: true),
       FileManager.default.fileExists(atPath: url.path) else { return nil }
     return url

@@ -245,7 +245,7 @@ nonisolated enum StackMCPServer {
   }
 
   private static var version: String {
-    Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+    StackCLI.appBundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
   }
 
   /// Friendly names for common MCP client identifiers.
