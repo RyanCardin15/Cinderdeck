@@ -603,6 +603,7 @@ nonisolated enum ReproReport {
     }
     for workspace in session.workspaces {
       out += "\n## Workspace: \(workspace.name)\n\n"
+      if workspace.services.isEmpty && workspace.repos.isEmpty { out += "No services or repositories were recorded for this workspace.\n" }
       if !workspace.services.isEmpty {
         out += "| Service | Status at start | Command |\n| --- | --- | --- |\n"
         for service in workspace.services {
