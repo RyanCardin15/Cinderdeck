@@ -125,7 +125,7 @@ export_location = "~/Desktop"
 
 [updates]
 check_automatically = true
-download_automatically = false
+download_automatically = true
 channel = "stable" # "stable" | "beta" — invalid values are rejected on import
 
 [menu_bar]

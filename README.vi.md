@@ -26,7 +26,7 @@ cinderdeck stacks setup-agents --print
 
 Bản Release đầu tiên sẽ sao chép dữ liệu từ bản Snapzy tùy chỉnh, giữ nguyên bản gốc và không ghi đè dữ liệu Cinderdeck hiện có. macOS có thể yêu cầu cấp lại quyền cho ứng dụng mới. [Chi tiết chuyển đổi](docs/MIGRATION.md).
 
-Cinderdeck bắt đầu với phiên bản **1.0.0 (200)**. Cập nhật tự động bị tắt cho đến khi có kênh phát hành và khóa ký riêng. Không dùng gói Homebrew hoặc bản phát hành Snapzy thay cho Cinderdeck.
+Cinderdeck bắt đầu với phiên bản **1.0.0 (200)**. Các bản phát hành tự động cập nhật qua kênh phát hành đã ký của Cinderdeck (trừ bản Debug). Không dùng gói Homebrew hoặc bản phát hành Snapzy thay cho Cinderdeck.
 
 ## Ghi công
 

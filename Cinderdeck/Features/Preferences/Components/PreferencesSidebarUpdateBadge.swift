@@ -6,14 +6,35 @@
 //
 
 import AppKit
-import Sparkle
 import SwiftUI
 
 struct PreferencesSidebarUpdateBadge: View {
   @AppStorage(PreferencesKeys.updateChannel)
   private var updateChannel: String = UpdateChannel.stable.rawValue
+  @ObservedObject private var updates = UpdaterManager.shared
 
   @State private var isHovering = false
+
+  /// An update is available or downloaded and waiting to install.
+  private var hasPendingUpdate: Bool {
+    switch updates.status {
+    case .available, .readyToInstall:
+      return true
+    default:
+      return false
+    }
+  }
+
+  private var helpText: String {
+    switch updates.status {
+    case let .available(offer):
+      return L10n.PreferencesAbout.updateStatusAvailable(offer.version)
+    case .readyToInstall:
+      return L10n.PreferencesAbout.updateStatusReadyGeneric
+    default:
+      return L10n.Menu.checkForUpdates
+    }
+  }
 
   private var isBeta: Bool {
     updateChannel == UpdateChannel.beta.rawValue
@@ -30,7 +51,7 @@ struct PreferencesSidebarUpdateBadge: View {
         .opacity(0.4)
 
       Button {
-        UpdaterManager.shared.checkForUpdates()
+        showUpdates()
       } label: {
         HStack(spacing: 10) {
           Image(nsImage: NSApp.applicationIconImage)
@@ -54,10 +75,19 @@ struct PreferencesSidebarUpdateBadge: View {
               channelBadge
             }
 
-            Text(appVersion)
-              .font(.system(size: 10.5))
-              .foregroundStyle(.secondary)
-              .lineLimit(1)
+            HStack(spacing: 4) {
+              Text(appVersion)
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+              if hasPendingUpdate {
+                Image(systemName: "arrow.down.circle.fill")
+                  .font(.system(size: 10))
+                  .foregroundStyle(Color.accentColor)
+                  .accessibilityHidden(true)
+              }
+            }
           }
         }
         .padding(.horizontal, 10)
@@ -76,10 +106,10 @@ struct PreferencesSidebarUpdateBadge: View {
       .onHover { hovering in
         isHovering = hovering
       }
-      .help(L10n.Menu.checkForUpdates)
+      .help(helpText)
       .contextMenu {
         Button(L10n.Menu.checkForUpdates) {
-          UpdaterManager.shared.checkForUpdates()
+          showUpdates()
         }
 
         Divider()
@@ -129,11 +159,18 @@ struct PreferencesSidebarUpdateBadge: View {
       )
   }
 
+  /// Opens About, where update progress and actions live, and checks unless an update is already known.
+  private func showUpdates() {
+    PreferencesNavigationState.shared.select(.about)
+    guard !hasPendingUpdate, !updates.status.isWorking else { return }
+    updates.checkForUpdatesInPreferences()
+  }
+
   private func setChannel(_ channel: UpdateChannel) {
     guard updateChannel != channel.rawValue else { return }
     updateChannel = channel.rawValue
     CinderdeckConfigurationSyncCoordinator.shared.scheduleSync(reason: .explicitChange)
-    UpdaterManager.shared.checkForUpdates()
+    updates.checkForUpdatesInPreferences()
   }
 }
 

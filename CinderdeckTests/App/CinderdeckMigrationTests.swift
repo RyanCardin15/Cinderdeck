@@ -88,8 +88,11 @@ final class CinderdeckMigrationTests: XCTestCase {
     XCTAssertFalse(CinderdeckUpdatePolicy.isConfigured([:]))
     XCTAssertFalse(CinderdeckUpdatePolicy.isConfigured(["SUFeedURL": feed, "SUPublicEDKey": key]))
     XCTAssertFalse(CinderdeckUpdatePolicy.isConfigured(["CinderdeckSignedUpdatesEnabled": true, "SUFeedURL": "https://raw.githubusercontent.com/duongductrong/Snapzy/master/appcast.xml", "SUPublicEDKey": key]))
-    XCTAssertFalse(CinderdeckUpdatePolicy.isConfigured(["CinderdeckSignedUpdatesEnabled": true, "SUFeedURL": feed, "SUPublicEDKey": "zcoJ90nh+SEFg6ZEkb9fwQCEK51vSIRwyn6tOsQisL0="]))
-    XCTAssertTrue(CinderdeckUpdatePolicy.isConfigured(["CinderdeckSignedUpdatesEnabled": true, "SUFeedURL": feed, "SUPublicEDKey": key]))
+    XCTAssertFalse(CinderdeckUpdatePolicy.isConfigured(["CinderdeckSignedUpdatesEnabled": true, "CFBundleIdentifier": "com.ryancardin.cinderdeck", "SUFeedURL": feed, "SUPublicEDKey": "zcoJ90nh+SEFg6ZEkb9fwQCEK51vSIRwyn6tOsQisL0="]))
+    XCTAssertFalse(CinderdeckUpdatePolicy.isConfigured(["CinderdeckSignedUpdatesEnabled": true, "CFBundleIdentifier": "com.ryancardin.cinderdeck.debug", "SUFeedURL": feed, "SUPublicEDKey": key]))
+    XCTAssertTrue(CinderdeckUpdatePolicy.isConfigured(["CinderdeckSignedUpdatesEnabled": true, "CFBundleIdentifier": "com.ryancardin.cinderdeck", "SUFeedURL": feed, "SUPublicEDKey": key]))
+    XCTAssertTrue(CinderdeckUpdatePolicy.isConfigured(["CinderdeckSignedUpdatesEnabled": true, "CFBundleIdentifier": "com.ryancardin.cinderdeck", "SUFeedURL": CinderdeckUpdatePolicy.localTestFeedURL, "SUPublicEDKey": key]))
+    XCTAssertFalse(CinderdeckUpdatePolicy.isConfigured(["CinderdeckSignedUpdatesEnabled": true, "CFBundleIdentifier": "com.ryancardin.cinderdeck", "SUFeedURL": "http://example.com/appcast.xml", "SUPublicEDKey": key]))
   }
 
   @MainActor

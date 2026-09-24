@@ -1,6 +1,6 @@
 # Local Sparkle Update Testing
 
-> Cinderdeck’s automatic updates are disabled until its own signed feed is configured. Manual checks open GitHub releases. The updater architecture below applies after that setup; see [RELEASES.md](RELEASES.md).
+> Test builds serve updates from `http://localhost:8089/appcast.xml` and trust the key in `SPARKLE_PRIVATE_KEY_FILE`. `CinderdeckUpdatePolicy` accepts that feed only for this harness; see [UPDATES.md](UPDATES.md).
 
 Test the full Sparkle in-app update flow locally before pushing releases. This validates that code signing configurations work correctly with Sparkle's XPC installer in sandboxed mode.
 
@@ -15,10 +15,13 @@ Test the full Sparkle in-app update flow locally before pushing releases. This v
    ./scripts/create-signing-cert.sh
    ```
 
-2. **Sparkle EdDSA private key** file (same key used in `SPARKLE_PRIVATE_KEY` GitHub secret):
+2. **Sparkle EdDSA private key** file. Export the release key that `scripts/setup-release-signing.sh` stored in your keychain, and delete the file when you finish:
    ```bash
-   export SPARKLE_PRIVATE_KEY_FILE=~/path/to/sparkle_private_key.pem
+   GENERATE_KEYS=$(find build ~/Library/Developer/Xcode/DerivedData -path '*/sparkle/Sparkle/bin/generate_keys' | head -1)
+   "$GENERATE_KEYS" --account cinderdeck -x ~/cinderdeck-sparkle-key
+   export SPARKLE_PRIVATE_KEY_FILE=~/cinderdeck-sparkle-key
    ```
+   The harness derives the public key from this file and writes it to the test builds, so any key works for local testing.
 
 3. **Built Sparkle artifacts** (the `sign_update` binary):
    - Build the project once in Xcode (`Cmd+B`) to populate SPM artifacts
@@ -47,7 +50,7 @@ The script creates a simulated update scenario:
 
 | Mode | Sparkle helpers | Main app | Purpose |
 |---|---|---|---|
-| `test-current` | Self-signed cert | Self-signed cert | Reproduce error 4005 |
+| `test-current` | Self-signed cert | Self-signed cert | Match the release workflow |
 | `test-hybrid` | Ad-hoc (`-`) | Self-signed cert | Validate hybrid fix |
 | `test-channel` | Ad-hoc (`-`) | Self-signed cert | Validate stable/beta channel filtering |
 
@@ -55,7 +58,7 @@ The script creates a simulated update scenario:
 
 ## Usage
 
-### Test current signing (reproduce error 4005)
+### Test release-style signing
 
 ```bash
 export SPARKLE_PRIVATE_KEY_FILE=~/path/to/sparkle_private_key.pem
@@ -64,9 +67,11 @@ export SPARKLE_PRIVATE_KEY_FILE=~/path/to/sparkle_private_key.pem
 
 1. Wait for build + server start
 2. Open Cinderdeck from `/Applications`
-3. Menu bar → Preferences → About → **Check for Updates**
-4. **Expected**: Error 4005 — "remote port connection was invalidated"
+3. Menu bar → Preferences → About → **Check for Updates**, then **Download & Install**
+4. **Expected**: the download progresses in Preferences, Cinderdeck quits and relaunches as v99.0.1
 5. `Ctrl+C` to stop server
+
+Error 4005 ("An error occurred while connecting to the installer") came from `SUEnableInstallerLauncherService`, Sparkle's installer XPC service for sandboxed apps. Cinderdeck is not sandboxed and no longer enables it, so this mode should succeed. If it fails, the error appears in Preferences and in `~/Library/Logs/Cinderdeck`.
 
 ### Test hybrid signing (validate fix)
 
@@ -76,7 +81,7 @@ export SPARKLE_PRIVATE_KEY_FILE=~/path/to/sparkle_private_key.pem
 
 1. Wait for build + server start
 2. Open Cinderdeck from `/Applications`
-3. Menu bar → Preferences → About → **Check for Updates**
+3. Menu bar → Preferences → About → **Check for Updates**, then **Download & Install**
 4. **Expected**: Update downloads and installs — app relaunches as v99.0.1
 5. `Ctrl+C` to stop server
 

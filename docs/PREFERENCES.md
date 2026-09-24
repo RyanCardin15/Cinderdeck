@@ -21,7 +21,7 @@ Reference for the Settings window: tab structure, every section, and how prefere
 - **Startup**: Start at Login (`LoginItemManager` / SMAppService), Play Sounds (`playSounds`), Show Menu Bar Icon (`showMenuBarIcon`).
 - **Appearance**: Language row (`PreferencesLanguageSettingRow`), theme picker (`AppearanceModePicker` → `appearanceMode`).
 - **Storage**: Save Location (`exportLocation` + `exportLocation.bookmark`, via `SandboxFileAccessManager`).
-- **Updates**: Check Automatically / Download Automatically (bound to `SPUUpdater`), Last Checked — see [UPDATES.md](UPDATES.md).
+- **Updates**: update status with Check for Updates / Download & Install / Restart to Update (`PreferencesSoftwareUpdateView`), Check Automatically / Download Automatically (via `UpdaterManager`; downloads disabled while checks are off), Last Checked — see [UPDATES.md](UPDATES.md).
 - **Help**: Restart Onboarding (`OnboardingFlowView.resetOnboarding()` + `.showOnboarding`), Report Issue (opens bug-report page; full bundle flow in [UPDATES.md](UPDATES.md)).
 
 ### Menu Bar (`PreferencesMenuBarSettingsView.swift`)
@@ -121,7 +121,7 @@ Provider configuration, credentials, expiration, usage stats, and the Cloud Uplo
 
 - App icon/name/version+build, last update check.
 - Creator attribution ("Made by") & Special thanks section honoring contributors (featured list in default view with inline "See more" expansion to all-time contributors using `PreferencesFlowLayout`, individual GitHub profile links for each contributor, and repository contributors anchor link).
-- Check for Updates + Report a Problem (`CrashReportService.presentAlert()`) — see [UPDATES.md](UPDATES.md).
+- Update status and actions (`PreferencesSoftwareUpdateView`: Check for Updates, Download & Install, Restart to Update) + Report a Problem (`CrashReportService.presentAlert()`) — see [UPDATES.md](UPDATES.md).
 - Update channel picker (`UpdateChannelSectionView` / `PreferencesUpdateChannelSection.swift`) — stable/beta.
 - Sponsor links (`SponsorLinks`), website/GitHub/issues link row.
 

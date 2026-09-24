@@ -723,14 +723,33 @@ final class AppStatusBarController: ObservableObject {
       return item
 
     case .checkForUpdates:
-      let item = NSMenuItem(
-        title: L10n.Menu.checkForUpdates,
-        action: #selector(checkForUpdatesAction),
-        keyEquivalent: ""
-      )
+      // Doubles as the update reminder: Sparkle's alert would otherwise open behind other apps.
+      let item: NSMenuItem
+      switch UpdaterManager.shared.status {
+      case .readyToInstall:
+        item = NSMenuItem(
+          title: L10n.Menu.restartToUpdate,
+          action: #selector(installUpdateAction),
+          keyEquivalent: ""
+        )
+        item.image = NSImage(systemSymbolName: "arrow.clockwise.circle", accessibilityDescription: nil)
+      case let .available(offer):
+        item = NSMenuItem(
+          title: L10n.Menu.updateAvailable(offer.version),
+          action: #selector(checkForUpdatesAction),
+          keyEquivalent: ""
+        )
+        item.image = NSImage(systemSymbolName: "arrow.down.circle", accessibilityDescription: nil)
+      default:
+        item = NSMenuItem(
+          title: L10n.Menu.checkForUpdates,
+          action: #selector(checkForUpdatesAction),
+          keyEquivalent: ""
+        )
+        item.image = NSImage(
+          systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: nil)
+      }
       item.target = self
-      item.image = NSImage(
-        systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: nil)
       item.isEnabled = true
       return item
     }
@@ -857,6 +876,11 @@ final class AppStatusBarController: ObservableObject {
   @objc private func checkForUpdatesAction() {
     logMenuAction("checkForUpdates")
     UpdaterManager.shared.checkForUpdates()
+  }
+
+  @objc private func installUpdateAction() {
+    logMenuAction("installUpdate")
+    UpdaterManager.shared.installUpdate()
   }
 
   @objc private func showPendingFeatureIntroAction() {
