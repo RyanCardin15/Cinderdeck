@@ -1,7 +1,9 @@
 # Cinderdeck changelog
 
-## Unreleased
+## [1.1.0] - 2026-09-24
 
+- Run branches side by side in Git worktree lanes, with separate service ports, logs, and agent claims. Create and manage lanes from the native Lanes view, `cinderdeck lane`, or MCP; services use `PORT` and `CINDERDECK_PORT_<SERVICE>` for their assigned ports.
+- Run finite tasks and ordered workflows alongside long-running services in Workspaces, with saved results and logs. Lane tasks and workflows run inside their own working folders.
 - Update Cinderdeck automatically. Installed releases check for new versions daily, download them in the background, and install them when Cinderdeck quits.
 - Check for, download, and install updates from Preferences → About and General → Updates, with progress shown in place, Restart to Update for a downloaded update, and Cancel or Try Again when needed. The menu bar shows Update Available or Restart to Update, and the Preferences sidebar marks a waiting update.
 - Save a `.log` file next to screen recordings with the output of your running workspaces. Every line is stamped with its video position and clock time, and the file includes service events, workflow steps, and Git state. Keychain secret values are redacted.
