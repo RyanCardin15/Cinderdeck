@@ -13,7 +13,7 @@ final class WorkspaceControlTests: XCTestCase {
       (["logs", run], "workspace_run_logs", ["run": .string(run)]),
     ] {
       let cli = try WorkspaceCLI.request(StackCLI.parse(args))
-      let mcp = try StackMCPServer.request(for: tool, params)
+      let mcp = try CinderdeckMCPServer.request(for: tool, params)
       XCTAssertEqual(cli.method, mcp.0)
       XCTAssertEqual(JSONValue.object(cli.params), JSONValue.object(mcp.1))
     }
@@ -44,7 +44,7 @@ final class WorkspaceControlTests: XCTestCase {
     let other = StackActor(kind: .agent, name: "Other Agent")
     let listed = try await control.handle("workspace.list", params: .object([:]), actor: actor)
     XCTAssertEqual(listed.arrayValue?.first?["tasks"]?.stringsValue, ["wait"])
-    _ = try await control.handle("claim", params: .object(["stack": .string("demo")]), actor: actor)
+    _ = try await control.handle("claim", params: .object(["workspace": .string("demo")]), actor: actor)
     let params: JSONValue = .object(["workspace": .string("demo"), "task": .string("wait")])
     do { _ = try await control.handle("workspace.task.run", params: params, actor: other); XCTFail("Expected claim refusal") }
     catch { XCTAssertEqual((error as? StackControlError)?.code, "claimed") }
@@ -62,7 +62,7 @@ final class WorkspaceControlTests: XCTestCase {
   }
 
   func testWorkspaceDeepLinksDoNotExecuteCommands() {
-    for path in ["workspaces", "workspace", "stacks", "open/workspaces"] {
+    for path in ["workspaces", "workspace", "open/workspaces"] {
       XCTAssertEqual(CinderdeckDeepLinkAction(url: URL(string: "cinderdeck://" + path)!), .workspaces)
     }
     XCTAssertNil(CinderdeckDeepLinkAction(url: URL(string: "cinderdeck://workspace/task/test")!))

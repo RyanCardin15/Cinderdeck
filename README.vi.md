@@ -19,9 +19,9 @@ Xây dựng từ mã nguồn bằng **Xcode 26.2 trở lên**; ứng dụng hỗ
 Trong ứng dụng, mở **⌘⇧H → Stacks → Create stack** để chọn thư mục và lệnh của bạn. Cấu hình mặc định nằm tại `~/.config/cinderdeck/stacks/`. Không yêu cầu repository, framework hoặc ngôn ngữ cụ thể. Lưu cấu hình không tự khởi động dịch vụ.
 
 ```sh
-/Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck stacks install-cli
-cinderdeck stacks status
-cinderdeck stacks setup-agents --print
+/Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck services install-cli
+cinderdeck services status
+cinderdeck services setup-agents --print
 ```
 
 Bản Release đầu tiên sẽ sao chép dữ liệu từ bản Snapzy tùy chỉnh, giữ nguyên bản gốc và không ghi đè dữ liệu Cinderdeck hiện có. macOS có thể yêu cầu cấp lại quyền cho ứng dụng mới. [Chi tiết chuyển đổi](docs/MIGRATION.md).

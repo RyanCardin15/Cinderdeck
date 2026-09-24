@@ -84,7 +84,7 @@ nonisolated enum WorkspaceCLI {
   Add --wait to task/workflow to wait for completion (exit 0 for success, 1 otherwise).
   --timeout <seconds> limits waiting only (default 600); expiry does not cancel the run.
   --as <agent> / --session <id> identify the caller. --force overrides an advisory claim.
-  All output is JSON. Existing cinderdeck stacks commands continue managing services.
+  All output is JSON. cinderdeck services manages long-running services.
   Definitions remain in ~/.config/cinderdeck/stacks/*.toml; see docs/WORKSPACES.md.
   """
 }

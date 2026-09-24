@@ -2,7 +2,7 @@ import Combine
 import Darwin
 import Foundation
 
-/// Serves the Stacks control API to agents and the `cinderdeck` CLI, keeps
+/// Serves the workspace control API to agents and the `cinderdeck` CLI, keeps
 /// `state.json` current, and tracks advisory claims.
 @MainActor
 final class StackControlService: ObservableObject {
@@ -43,7 +43,7 @@ final class StackControlService: ObservableObject {
       serverError = nil
     } catch {
       serverError = error.localizedDescription
-      DiagnosticLogger.shared.log(.warning, .system, "Stacks control socket unavailable: \(error.localizedDescription)")
+      DiagnosticLogger.shared.log(.warning, .system, "Control socket unavailable: \(error.localizedDescription)")
     }
     Publishers.Merge4(
       supervisor.$states.map { _ in () },
@@ -113,9 +113,9 @@ final class StackControlService: ObservableObject {
   func snapshot(appRunning: Bool = true) -> StacksSnapshot {
     StacksSnapshot(updatedAt: Date(), appRunning: appRunning, appPID: getpid(),
       socket: StackControlPaths.socket.path,
-      stacksDirectory: StackDefinitionLoader.directory().path,
+      workspacesDirectory: supervisor.definitionsDirectory.path,
       logsDirectory: supervisor.logDirectory.path,
-      stacks: supervisor.files.map { stackSnapshot($0) })
+      workspaces: supervisor.files.map { stackSnapshot($0) })
   }
 
   func stackSnapshot(_ file: StackDefinitionFile) -> StackSnapshot {
@@ -201,39 +201,39 @@ final class StackControlService: ObservableObject {
         "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
         "socket": StackControlPaths.socket.path, "you": actor.label,
       ])
-    case "snapshot", "stacks.list":
+    case "snapshot":
       return try JSONValue(encoding: snapshot())
-    case "stack.get":
-      let file = try stackFile(params)
+    case "services.status":
+      let file = try workspaceFile(params)
       return try JSONValue(encoding: stackSnapshot(file))
-    case "stack.start": return try await start(params, actor: actor)
-    case "stack.stop": return try await stop(params, actor: actor)
-    case "stack.restart": return try await restart(params, actor: actor)
+    case "services.start": return try await start(params, actor: actor)
+    case "services.stop": return try await stop(params, actor: actor)
+    case "services.restart": return try await restart(params, actor: actor)
     case "lane.list":
-      let source = try params["stack"].map { _ in try stackFile(params) }
+      let source = try params["workspace"].map { _ in try workspaceFile(params) }
       let sourceID = source?.lane?.sourceStackID ?? source?.id
       let files = supervisor.files.filter { sourceID == nil || $0.id == sourceID || $0.lane?.sourceStackID == sourceID }
       return try JSONValue(encoding: files.map { stackSnapshot($0) })
     case "lane.create":
-      let source = try stackFile(params)
+      let source = try workspaceFile(params)
       guard let branch = params["branch"]?.stringValue else { throw StackControlError.invalid("Pass a branch name for the new lane.") }
       try requireIdle(source)
       // Cloning a claimed source does not change it or use its service ports.
       let file = try await supervisor.createLane(stack: source.id, branch: branch, actor: actor)
-      _ = try claim(.object(["stack": .string(file.id), "note": .string("Worktree lane " + branch)]), actor: actor)
-      if params["start"]?.boolValue == false { return try JSONValue(encoding: ["stack": stackSnapshot(file)]) }
+      _ = try claim(.object(["workspace": .string(file.id), "note": .string("Worktree lane " + branch)]), actor: actor)
+      if params["start"]?.boolValue == false { return try JSONValue(encoding: ["workspace": stackSnapshot(file)]) }
       let supervisor = supervisor
       let timedOut = await settle(file, params: params) { await supervisor.start(stack: file.id, actor: actor) }
       return await actionResult(file, timedOut: timedOut, waited: params["wait"]?.boolValue ?? true)
     case "lane.remove":
-      let file = try stackFile(params)
+      let file = try workspaceFile(params)
       try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
       try await supervisor.removeLane(file.id, actor: actor)
       release(stack: file.id)
       return .object(["removed": .string(file.id)])
     case "logs": return try await logs(params)
     case "events":
-      let file = try stackFile(params)
+      let file = try workspaceFile(params)
       let events = await supervisor.events(stack: file.id, limit: params["limit"]?.intValue ?? 40)
       return .array(events.map { event in
         var object: [String: JSONValue] = ["kind": .string(event.kind), "at": .string(ISO8601DateFormatter().string(from: event.occurredAt))]
@@ -245,7 +245,7 @@ final class StackControlService: ObservableObject {
     case "ports": return try await ports(params)
     case "port.kill": return try await killPort(params, actor: actor)
     case "git.status":
-      let file = try stackFile(params)
+      let file = try workspaceFile(params)
       for repo in file.definition?.repos ?? [] { await supervisor.gitMonitor.refresh(repo.path) }
       return try JSONValue(encoding: stackSnapshot(file).repos)
     case "git.branches": return try await branches(params)
@@ -253,7 +253,7 @@ final class StackControlService: ObservableObject {
     case "git.fetch", "git.pull": return try await fetchOrPull(params, pull: method == "git.pull", actor: actor)
     case "claim": return try claim(params, actor: actor)
     case "release":
-      let file = try stackFile(params)
+      let file = try workspaceFile(params)
       if let claim = claims[file.id], !claim.isExpired, claim.holder.key != actor.key, params["force"]?.boolValue != true {
         throw StackControlError(code: "claimed", message: "\(file.name) is claimed by \(claim.holder.label). Pass force=true to release someone else's claim.")
       }
@@ -266,7 +266,7 @@ final class StackControlService: ObservableObject {
     case "paths":
       return .object([
         "socket": .string(StackControlPaths.socket.path), "state": .string(StackControlPaths.state.path),
-        "stacksDirectory": .string(StackDefinitionLoader.directory().path), "logsDirectory": .string(supervisor.logDirectory.path),
+        "workspacesDirectory": .string(supervisor.definitionsDirectory.path), "logsDirectory": .string(supervisor.logDirectory.path),
         "template": .string(StackAgentGuide.template),
       ])
     default:
@@ -276,10 +276,11 @@ final class StackControlService: ObservableObject {
 
   // MARK: Stack actions
 
-  func stackFile(_ params: JSONValue) throws -> StackDefinitionFile {
-    guard let query = params["stack"]?.stringValue?.trimmingCharacters(in: .whitespaces), !query.isEmpty else {
+  /// Resolves `workspace` by id, name, lane reference (<workspace>/<branch>), or unique prefix.
+  func workspaceFile(_ params: JSONValue) throws -> StackDefinitionFile {
+    guard let query = params["workspace"]?.stringValue?.trimmingCharacters(in: .whitespaces), !query.isEmpty else {
       if supervisor.files.count == 1, let only = supervisor.files.first { return only }
-      throw StackControlError.invalid("Pass stack (id or name). Stacks: " + supervisor.files.map(\.id).joined(separator: ", "))
+      throw StackControlError.invalid("Pass workspace (id or name). Workspaces: " + supervisor.files.map(\.id).joined(separator: ", "))
     }
     let files = supervisor.files
     if let exact = files.first(where: { $0.id == query }) { return exact }
@@ -287,7 +288,7 @@ final class StackControlService: ObservableObject {
     if let named = files.first(where: { $0.name.caseInsensitiveCompare(query) == .orderedSame || $0.id.caseInsensitiveCompare(query) == .orderedSame }) { return named }
     let prefixed = files.filter { $0.id.lowercased().hasPrefix(query.lowercased()) || $0.name.lowercased().hasPrefix(query.lowercased()) }
     if prefixed.count == 1 { return prefixed[0] }
-    throw StackControlError.notFound("No stack matches \"\(query)\". Stacks: " + files.map(\.id).joined(separator: ", "))
+    throw StackControlError.notFound("No workspace matches \"\(query)\". Workspaces: " + files.map(\.id).joined(separator: ", "))
   }
 
   private func services(_ params: JSONValue, in file: StackDefinitionFile, key: String = "services") throws -> Set<String>? {
@@ -322,9 +323,9 @@ final class StackControlService: ObservableObject {
   private func actionResult(_ file: StackDefinitionFile, timedOut: Bool, waited: Bool) async -> JSONValue {
     let refreshed = supervisor.files.first { $0.id == file.id } ?? file
     let snapshot = stackSnapshot(refreshed)
-    var object: [String: JSONValue] = ["stack": (try? JSONValue(encoding: snapshot)) ?? .null]
+    var object: [String: JSONValue] = ["workspace": (try? JSONValue(encoding: snapshot)) ?? .null]
     object["timedOut"] = .bool(timedOut)
-    if !waited { object["note"] = .string("Returned without waiting. Poll stack.get or pass wait=true.") }
+    if !waited { object["note"] = .string("Returned without waiting. Poll workspace_details (CLI: services status) or pass wait=true.") }
     // Crashed services come back with their recent output so agents can react.
     var failures: [String: JSONValue] = [:]
     for service in snapshot.services where service.phase == StackServicePhase.crashed.rawValue || service.phase == StackServicePhase.unhealthy.rawValue {
@@ -337,7 +338,7 @@ final class StackControlService: ObservableObject {
   }
 
   private func start(_ params: JSONValue, actor: StackActor) async throws -> JSONValue {
-    let file = try stackFile(params)
+    let file = try workspaceFile(params)
     guard file.definition != nil else {
       throw StackControlError(code: "invalid_definition", message: "\(file.name) has errors: " + file.issues.map(\.message).joined(separator: "; "))
     }
@@ -350,7 +351,7 @@ final class StackControlService: ObservableObject {
   }
 
   private func stop(_ params: JSONValue, actor: StackActor) async throws -> JSONValue {
-    let file = try stackFile(params)
+    let file = try workspaceFile(params)
     try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
     let selected = try services(params, in: file)
     let supervisor = supervisor
@@ -359,14 +360,14 @@ final class StackControlService: ObservableObject {
   }
 
   private func restart(_ params: JSONValue, actor: StackActor) async throws -> JSONValue {
-    let file = try stackFile(params)
+    let file = try workspaceFile(params)
     guard file.definition != nil else {
       throw StackControlError(code: "invalid_definition", message: "\(file.name) has errors: " + file.issues.map(\.message).joined(separator: "; "))
     }
     try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
     try requireIdle(file)
     let selected = try services(params, in: file)
-    guard selected == nil || selected!.count == 1 else { throw StackControlError.invalid("Restart one service at a time, or omit service to restart the stack") }
+    guard selected == nil || selected!.count == 1 else { throw StackControlError.invalid("Restart one service at a time, or omit service to restart the workspace") }
     let dependents = params["dependents"]?.boolValue ?? false
     let supervisor = supervisor
     let timedOut = await settle(file, params: params) {
@@ -405,7 +406,7 @@ final class StackControlService: ObservableObject {
   }
 
   private func logs(_ params: JSONValue) async throws -> JSONValue {
-    let file = try stackFile(params)
+    let file = try workspaceFile(params)
     let service = try services(params, in: file, key: "service")?.first
     let limit = min(max(params["lines"]?.intValue ?? 200, 1), 5000)
     let after = params["after"]?.doubleValue
@@ -426,7 +427,7 @@ final class StackControlService: ObservableObject {
     var files: [String: JSONValue] = [:]
     for name in names { files[name] = .string(supervisor.logURL(stack: file.id, service: name).path) }
     return .object([
-      "stack": .string(file.id),
+      "workspace": .string(file.id),
       "lines": .array(lines.map { .object(["service": .string($0.service), "at": .string(formatter.string(from: $0.timestamp)),
         "text": .string(AnsiParser.plainText($0.text))]) }),
       "cursor": .number(lines.last?.timestamp.timeIntervalSince1970 ?? after ?? Date().timeIntervalSince1970),
@@ -463,7 +464,7 @@ final class StackControlService: ObservableObject {
       throw StackControlError.notFound("PID \(pid) is not listening on port \(port) anymore")
     }
     if let managed = listener.managed {
-      throw StackControlError(code: "managed", message: "Port \(port) belongs to \(managed.stackName)/\(managed.service). Use stack.stop instead.")
+      throw StackControlError(code: "managed", message: "Port \(port) belongs to \(managed.stackName)/\(managed.service). Stop it with stop_services (CLI: services stop) instead.")
     }
     let owner = StackPortOwner(pid: pid, name: listener.process, startTime: StackProcessIdentity.startTime(pid: pid))
     try await PortInspector.terminate(StackPortConflict(port: port, owners: [owner]))
@@ -485,7 +486,7 @@ final class StackControlService: ObservableObject {
   }
 
   private func branches(_ params: JSONValue) async throws -> JSONValue {
-    let file = try stackFile(params)
+    let file = try workspaceFile(params)
     guard let stack = file.definition else { throw StackControlError(code: "invalid_definition", message: "\(file.name) has errors") }
     var result: [String: JSONValue] = [:]
     for repo in try repos(params, in: stack) {
@@ -503,7 +504,7 @@ final class StackControlService: ObservableObject {
   }
 
   private func switchBranch(_ params: JSONValue, actor: StackActor) async throws -> JSONValue {
-    let file = try stackFile(params)
+    let file = try workspaceFile(params)
     guard let stack = file.definition else { throw StackControlError(code: "invalid_definition", message: "\(file.name) has errors") }
     guard let target = params["branch"]?.stringValue?.trimmingCharacters(in: .whitespaces), !target.isEmpty else {
       throw StackControlError.invalid("Pass branch")
@@ -563,12 +564,12 @@ final class StackControlService: ObservableObject {
     return .object([
       "switched": .array(transitions.map(JSONValue.string)),
       "skipped": .array(skipped.map(JSONValue.string)),
-      "stack": (try? JSONValue(encoding: stackSnapshot(refreshed))) ?? .null,
+      "workspace": (try? JSONValue(encoding: stackSnapshot(refreshed))) ?? .null,
     ])
   }
 
   private func fetchOrPull(_ params: JSONValue, pull: Bool, actor: StackActor) async throws -> JSONValue {
-    let file = try stackFile(params)
+    let file = try workspaceFile(params)
     guard let stack = file.definition else { throw StackControlError(code: "invalid_definition", message: "\(file.name) has errors") }
     let git = supervisor.gitMonitor.git
     var done: [String] = []
@@ -592,7 +593,7 @@ final class StackControlService: ObservableObject {
   // MARK: Claims and definitions
 
   private func claim(_ params: JSONValue, actor: StackActor) throws -> JSONValue {
-    let file = try stackFile(params)
+    let file = try workspaceFile(params)
     try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
     let minutes = min(max(params["ttlMinutes"]?.doubleValue ?? params["ttl"]?.doubleValue ?? 30, 1), 480)
     let existing = claims[file.id].flatMap { $0.holder.key == actor.key && !$0.isExpired ? $0 : nil }
@@ -608,7 +609,7 @@ final class StackControlService: ObservableObject {
     let url: URL
     if let text = params["source"]?.stringValue {
       source = text
-      url = StackDefinitionLoader.directory().appendingPathComponent((params["id"]?.stringValue ?? "untitled") + ".toml")
+      url = supervisor.definitionsDirectory.appendingPathComponent((params["id"]?.stringValue ?? "untitled") + ".toml")
     } else if let path = params["path"]?.stringValue {
       url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
       do { source = try String(contentsOf: url, encoding: .utf8) }
@@ -622,6 +623,8 @@ final class StackControlService: ObservableObject {
     if let definition = file.definition {
       result["name"] = .string(definition.name)
       result["services"] = .array(definition.services.map { .string($0.id) })
+      result["tasks"] = .array(definition.tasks.map { .string($0.id) })
+      result["workflows"] = .array(definition.workflows.map { .string($0.id) })
       result["repos"] = .array(definition.repos.map { .string($0.id) })
       result["startOrder"] = .array(((try? definition.dependencyLayers()) ?? []).map { .array($0.map(JSONValue.string)) })
     }

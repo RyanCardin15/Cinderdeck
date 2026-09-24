@@ -91,37 +91,37 @@ do_e2e() {
   "$BIN" -AppleLanguages "(en)" > "$OUT/app.log" 2>&1 &
   echo "app pid $!" >> "$log"
   for i in $(seq 1 60); do [ -S "$FIX/Agent/control.sock" ] && break; sleep 0.5; done
-  run stacks ping
-  run stacks status
-  run stacks start demo --as Codex --session e2e
-  run stacks status demo --json
-  run stacks logs demo -n 20
+  run services ping
+  run services status
+  run services start demo --as Codex --session e2e
+  run services status demo --json
+  run services logs demo -n 20
   (cd "$FIX/projects/api" && exec python3 -m http.server 47813 --bind 127.0.0.1 > /dev/null 2>&1) &
   local stray=$!
   sleep 1.5
-  run stacks ports --external
-  run stacks ports 47811
-  run stacks claim demo "running e2e tests" --as Codex --session e2e --ttl 10
-  run stacks restart demo worker --as Cursor
-  run stacks restart demo worker --as Codex --session e2e
-  run stacks switch demo feature/demo --as Codex --session e2e
-  run stacks git demo
-  run stacks events demo
-  run stacks validate "$FIX/stacks/demo.toml"
-  run stacks kill-port 47813 $stray --as Codex --session e2e
-  echo >> "$log"; echo '$ cinderdeck mcp  (initialize, tools/list, list_stacks, read_logs, list_ports)' >> "$log"
+  run services ports --external
+  run services ports 47811
+  run services claim demo "running e2e tests" --as Codex --session e2e --ttl 10
+  run services restart demo worker --as Cursor
+  run services restart demo worker --as Codex --session e2e
+  run services switch demo feature/demo --as Codex --session e2e
+  run services git demo
+  run services events demo
+  run services validate "$FIX/stacks/demo.toml"
+  run services kill-port 47813 $stray --as Codex --session e2e
+  echo >> "$log"; echo '$ cinderdeck mcp  (initialize, tools/list, list_workspaces, read_service_logs, start_services)' >> "$log"
   printf '%s\n' \
     '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"cursor-vscode","version":"1"},"capabilities":{}}}' \
     '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
     '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
-    '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_stacks","arguments":{}}}' \
-    '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"read_logs","arguments":{"stack":"demo","service":"worker","lines":3}}}' \
-    '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"start_stack","arguments":{"stack":"demo"}}}' \
+    '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_workspaces","arguments":{}}}' \
+    '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"read_service_logs","arguments":{"workspace":"demo","service":"worker","lines":3}}}' \
+    '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"start_services","arguments":{"workspace":"demo"}}}' \
     | "$BIN" mcp >> "$log" 2>&1
   echo "[exit $?]" >> "$log"
   cp "$FIX/Agent/state.json" "$OUT/state.json" 2>/dev/null
-  run stacks release demo --as Codex --session e2e
-  run stacks status
+  run services release demo --as Codex --session e2e
+  run services status
   echo 0 > "$OUT/e2e.status"
   echo "[e2e] done — app left running for inspection (pkill -f '$BIN' to quit)"
 }

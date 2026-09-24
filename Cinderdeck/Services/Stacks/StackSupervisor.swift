@@ -427,7 +427,8 @@ final class StackSupervisor: ObservableObject {
 
   // MARK: Worktree lanes
 
-  var lanesDirectory: URL { StackLaneStore.directory(for: StackDefinitionLoader.directory(defaults: defaults)) }
+  var definitionsDirectory: URL { StackDefinitionLoader.directory(defaults: defaults) }
+  var lanesDirectory: URL { StackLaneStore.directory(for: definitionsDirectory) }
   func isRemovingLane(_ id: String) -> Bool { removingLanes.contains(id) }
 
   func createLane(stack id: String, branch: String, actor: StackActor) async throws -> StackDefinitionFile {

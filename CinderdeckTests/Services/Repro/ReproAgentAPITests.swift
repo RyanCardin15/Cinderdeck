@@ -95,17 +95,17 @@ final class ReproAgentAPITests: XCTestCase {
   }
 
   func testMCPToolsMapToControlMethods() throws {
-    let names = StackMCPServer.toolDescriptions.compactMap { $0["name"]?.stringValue }
+    let names = CinderdeckMCPServer.toolDescriptions.compactMap { $0["name"]?.stringValue }
     XCTAssertEqual(Set(names).count, names.count, "Tool names are unique")
     for tool in ["start_repro_recording", "mark_repro", "stop_repro_recording", "cancel_repro_recording", "repro_status", "wait_for_repro",
       "list_repros", "repro_summary", "repro_logs", "repro_frame", "export_repro", "open_repro", "delete_repro",
       "list_repro_windows", "add_repro_logs"] {
       XCTAssertTrue(names.contains(tool), tool)
-      let (method, _, timeout) = try StackMCPServer.request(for: tool, [:])
+      let (method, _, timeout) = try CinderdeckMCPServer.request(for: tool, [:])
       XCTAssertTrue(method.hasPrefix("repro."), method)
       XCTAssertGreaterThan(timeout, 0)
     }
-    XCTAssertEqual(try StackMCPServer.request(for: "wait_for_repro", ["timeout": .number(30)]).2, 90)
+    XCTAssertEqual(try CinderdeckMCPServer.request(for: "wait_for_repro", ["timeout": .number(30)]).2, 90)
   }
 
   func testFramesBecomeImageContent() {
@@ -114,14 +114,14 @@ final class ReproAgentAPITests: XCTestCase {
       "path": .string("/tmp/f.jpg"), "markers": .array([.object(["time": .string("00:00.500"), "label": .string("Pay"), "outcome": .string("fail")])]),
       "logs": .array([.object(["time": .string("00:00.900"), "level": .string("error"), "source": .string("api"), "text": .string("boom")])]),
     ])])])
-    let content = StackMCPServer.frameContent(result)
+    let content = CinderdeckMCPServer.frameContent(result)
     XCTAssertEqual(content.count, 2)
     XCTAssertEqual(content[0]["type"]?.stringValue, "image")
     XCTAssertEqual(content[0]["mimeType"]?.stringValue, "image/jpeg")
     let text = content[1]["text"]?.stringValue ?? ""
     XCTAssertTrue(text.contains("▶ Pay [FAIL]"))
     XCTAssertTrue(text.contains("ERROR api | boom"))
-    XCTAssertEqual(StackMCPServer.frameContent(.object([:])).first?["type"]?.stringValue, "text")
+    XCTAssertEqual(CinderdeckMCPServer.frameContent(.object([:])).first?["type"]?.stringValue, "text")
   }
 
   func testAgentGuideDescribesRepros() {

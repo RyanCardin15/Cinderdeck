@@ -126,9 +126,9 @@ nonisolated struct StacksSnapshot: Codable, Sendable {
   let appRunning: Bool
   let appPID: Int32
   let socket: String
-  let stacksDirectory: String
+  let workspacesDirectory: String
   let logsDirectory: String
-  let stacks: [StackSnapshot]
+  let workspaces: [StackSnapshot]
 }
 
 nonisolated struct StackPortListener: Codable, Sendable {
@@ -284,6 +284,12 @@ nonisolated enum JSONValue: Codable, Equatable, Sendable {
 
   func prettyString() -> String {
     guard let data = try? StackControlCoding.encoder(pretty: true).encode(self) else { return "null" }
+    return String(decoding: data, as: UTF8.self)
+  }
+
+  /// One-line JSON with sorted keys, for results read by models.
+  func compactString() -> String {
+    guard let data = try? StackControlCoding.encoder().encode(self) else { return "null" }
     return String(decoding: data, as: UTF8.self)
   }
 }

@@ -19,9 +19,9 @@ Cinderdeck 是一款原生 Mac 应用，将项目、服务和开发工具集中�
 在应用中打开 **⌘⇧H → Stacks → Create stack**，选择自己的文件夹和命令。默认配置目录为 `~/.config/cinderdeck/stacks/`。不限定仓库、框架或语言；保存配置不会自动启动服务。
 
 ```sh
-/Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck stacks install-cli
-cinderdeck stacks status
-cinderdeck stacks setup-agents --print
+/Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck services install-cli
+cinderdeck services status
+cinderdeck services setup-agents --print
 ```
 
 Release 版首次启动时会复制定制版 Snapzy 的本地数据，保留原件，并且不覆盖现有 Cinderdeck 数据。macOS 可能要求为新应用重新授予权限。参阅[迁移说明](docs/MIGRATION.md)。

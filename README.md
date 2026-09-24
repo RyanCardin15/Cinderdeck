@@ -103,16 +103,16 @@ Saving a definition reloads it. Starting services is explicit. Git is optional; 
 In Workspaces, open **Agents & CLI** to install the command and view setup instructions. Or run:
 
 ```sh
-/Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck stacks install-cli
+/Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck services install-cli
 # Make sure ~/.local/bin is on your PATH.
-cinderdeck stacks status
-cinderdeck stacks start my-workspace --as Codex
-cinderdeck stacks logs my-workspace -f
-cinderdeck stacks stop my-workspace
-cinderdeck stacks setup-agents --print
+cinderdeck services status
+cinderdeck services start my-workspace --as Codex
+cinderdeck services logs my-workspace -f
+cinderdeck services stop my-workspace
+cinderdeck services setup-agents --print
 ```
 
-Use the filename without `.toml` as the stack ID. `cinderdeck mcp` exposes the same controls over MCP stdio. Agent setup changes client configuration only when you run the setup command. Use `cinderdeck stacks agent-help` for the full command reference and agent instructions.
+Use the filename without `.toml` as the workspace ID. `cinderdeck mcp` exposes the same controls over MCP stdio, and agents can also create workspaces and add services, tasks, and workflows through it. Agent setup changes client configuration only when you run the setup command. Use `cinderdeck services agent-help` for the full command reference and agent instructions.
 
 ## Install
 

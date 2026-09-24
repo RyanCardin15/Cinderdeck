@@ -11,12 +11,16 @@ Use the `cinderdeck` CLI. It works the same in Claude Code, Codex, Cursor, and a
 
 | CLI | MCP |
 | --- | --- |
+| `repro status` | `repro_status` |
+| `workspace list` | `list_workspaces` |
 | `repro windows` | `list_repro_windows` |
 | `repro start` | `start_repro_recording` |
 | `repro mark` | `mark_repro` |
 | `repro append` | `add_repro_logs` |
-| `repro stop` | `stop_repro_recording` |
+| `repro stop` / `cancel` | `stop_repro_recording` / `cancel_repro_recording` |
+| `repro run <ws> <task> --wait` | `start_repro_recording` with `workspace` + `task` (or `workflow`), then `wait_for_repro` |
 | `repro frame` / `logs` / `export` | `repro_frame` / `repro_logs` / `export_repro` |
+| `workspace task <ws> <task> --wait` | `run_workspace_task`, then `wait_for_workspace_run` |
 
 Every command prints JSON unless noted. To investigate a recording afterwards, including one the user made, use the `cinderdeck-review-recording` skill.
 
@@ -24,12 +28,13 @@ Every command prints JSON unless noted. To investigate a recording afterwards, i
 
 ```bash
 cinderdeck repro status        # must show "recording": false. Only one recording at a time
-cinderdeck workspace list      # workspace ids, if you need logs
+cinderdeck workspace list      # workspace ids, if you need logs (MCP list_workspaces)
 ```
 
 - `cinderdeck: command not found`: the app or its CLI link is missing. Ask the user to install Cinderdeck.
 - `Could not list windows` or `needs Screen Recording permission`: tell the user to grant **Cinderdeck** access in System Settings → Privacy & Security → Screen & System Audio Recording, then relaunch Cinderdeck. You cannot grant this yourself. Do not retry in a loop.
 - `busy`: someone else is recording. Do not cancel their recording. Wait, or ask the user.
+- `repro status` also shows which workspaces the user's own toolbar recordings capture. That setting is theirs: change it (`repro scope`, MCP `repro_recording_scope`) only when they ask. It does not affect your recordings.
 - `Unknown command "windows"` or `Unknown option --window-id`: the installed Cinderdeck is older than this skill. Fall back to `--window "<title>"` and to putting console output in mark `--detail`.
 
 ## 1. Choose the capture target
@@ -135,14 +140,15 @@ cinderdeck repro run shop e2e --workflow --wait             # a workflow (start:
 ```
 
 - `repro run` records a **display**. The task opens the browser after recording has started, so leave out `--window` and `--window-id`. Use `--display N` for a display other than the main one.
-- The script must run the browser **headed** and print browser events to stdout. See the [Playwright script and task TOML](references/browser-recipes.md#scripted-run-with-console-and-network-logs).
+- The script must run the browser **headed** and print browser events to stdout. See the [Playwright script and task](references/browser-recipes.md#scripted-run-with-console-and-network-logs).
+- If the task does not exist yet, ask the user before adding it to their workspace. With the MCP server, use `save_workspace_task` and `save_workspace_workflow`: they validate the definition and start nothing.
 - Exit status 1 means a service crashed, a check failed, or the run failed.
 
 ## Headless browsers
 
 A headless browser has no window on screen, so **Cinderdeck cannot record it**. Choose one of these, in order:
 1. **Run it headed.** Playwright `headless: false`. Playwright MCP runs headed unless it was started with `--headless`. Puppeteer `headless: false`. Then record its window by id, or the display.
-2. **Headless is required** (no GUI session, CI): skip the Cinderdeck video. Use the browser's own recording (Playwright `recordVideo` and `tracing`). Run the script as a workspace task (`cinderdeck workspace task <ws> <task> --wait`), so its output is still captured and attributed. Tell the user that this output is not synced with a Cinderdeck video.
+2. **Headless is required** (no GUI session, CI): skip the Cinderdeck video. Use the browser's own recording (Playwright `recordVideo` and `tracing`). Run the script as a workspace task (`cinderdeck workspace task <ws> <task> --wait`, or MCP `run_workspace_task` then `wait_for_workspace_run`), so its output is still captured and attributed. Tell the user that this output is not synced with a Cinderdeck video.
 
 Never report a headless session as "recorded" by Cinderdeck.
 

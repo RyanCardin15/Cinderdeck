@@ -74,7 +74,7 @@ struct StackAgentsSheet: View {
             catch { self.error = error.localizedDescription }
           }.buttonStyle(StackPillButtonStyle(compact: true))
         }
-        Text("Try: cinderdeck prs views list · cinderdeck prs --help · cinderdeck stacks status")
+        Text("Try: cinderdeck prs views list · cinderdeck prs --help · cinderdeck services status")
           .font(.system(size: 10.5, design: .monospaced)).foregroundColor(.secondary).textSelection(.enabled)
       }
 

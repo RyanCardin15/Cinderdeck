@@ -152,9 +152,9 @@ final class StackLaneTests: XCTestCase {
     await supervisor.reloadDefinitions()
     XCTAssertEqual(supervisor.definition(codexFile.id)?.lane?.ports, codexStack.lane?.ports)
     XCTAssertFalse(supervisor.definitionChanged(codexFile.id))
-    let list = try await control.handle("lane.list", params: .object(["stack": .string("shop")]), actor: codex)
+    let list = try await control.handle("lane.list", params: .object(["workspace": .string("shop")]), actor: codex)
     XCTAssertEqual(list.arrayValue?.count, 3)
-    let alias = try await control.handle("stack.get", params: .object(["stack": .string("shop/agent/codex-1")]), actor: codex)
+    let alias = try await control.handle("services.status", params: .object(["workspace": .string("shop/agent/codex-1")]), actor: codex)
     XCTAssertEqual(alias["id"]?.stringValue, codexFile.id)
     try await supervisor.removeLane(codexFile.id, actor: codex)
     XCTAssertNil(supervisor.definition(codexFile.id))
@@ -220,19 +220,19 @@ final class StackLaneTests: XCTestCase {
 
   func testControlCreatesClaimsAndProtectsOnlyTheOwnedLane() async throws {
     try await load()
-    _ = try await control.handle("claim", params: .object(["stack": .string("shop")]), actor: claude)
+    _ = try await control.handle("claim", params: .object(["workspace": .string("shop")]), actor: claude)
     let created = try await control.handle("lane.create", params: .object([
-      "stack": .string("shop"), "branch": .string("agent/codex"), "start": .bool(false)]), actor: codex)
-    let id = try XCTUnwrap(created["stack"]?["id"]?.stringValue)
+      "workspace": .string("shop"), "branch": .string("agent/codex"), "start": .bool(false)]), actor: codex)
+    let id = try XCTUnwrap(created["workspace"]?["id"]?.stringValue)
     XCTAssertEqual(control.claims[id]?.holder, codex)
     XCTAssertEqual(control.claims["shop"]?.holder, claude)
-    for method in ["stack.start", "stack.stop", "stack.restart", "lane.remove"] {
+    for method in ["services.start", "services.stop", "services.restart", "lane.remove"] {
       do {
-        _ = try await control.handle(method, params: .object(["stack": .string("shop/agent/codex")]), actor: claude)
+        _ = try await control.handle(method, params: .object(["workspace": .string("shop/agent/codex")]), actor: claude)
         XCTFail("Ignored claim for \(method)")
       } catch { XCTAssertEqual((error as? StackControlError)?.code, "claimed") }
     }
-    _ = try await control.handle("lane.remove", params: .object(["stack": .string(id)]), actor: codex)
+    _ = try await control.handle("lane.remove", params: .object(["workspace": .string(id)]), actor: codex)
     XCTAssertNil(control.claims[id])
     XCTAssertEqual(control.claims["shop"]?.holder, claude)
   }
@@ -307,10 +307,10 @@ final class StackLaneTests: XCTestCase {
     let tree = try XCTUnwrap(record.worktrees.first)
     _ = try await StackLaneStore.git(["worktree", "remove", tree.path.path], at: tree.source)
     await supervisor.reloadDefinitions()
-    let status = try await control.handle("stack.get", params: .object(["stack": .string("shop/missing")]), actor: codex)
+    let status = try await control.handle("services.status", params: .object(["workspace": .string("shop/missing")]), actor: codex)
     XCTAssertEqual(status["id"]?.stringValue, file.id)
     XCTAssertFalse(status["issues"]?.arrayValue?.isEmpty ?? true)
-    _ = try await control.handle("lane.remove", params: .object(["stack": .string("shop/missing")]), actor: codex)
+    _ = try await control.handle("lane.remove", params: .object(["workspace": .string("shop/missing")]), actor: codex)
     XCTAssertNil(supervisor.files.first { $0.id == file.id })
   }
 
@@ -339,7 +339,7 @@ final class StackLaneTests: XCTestCase {
     try "keep my edits".write(to: repo.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)
     do {
       _ = try await control.handle("git.switch", params: .object([
-        "stack": .string("shop"), "branch": .string("occupied"), "dirty": .string("stash")]), actor: codex)
+        "workspace": .string("shop"), "branch": .string("occupied"), "dirty": .string("stash")]), actor: codex)
       XCTFail("Switched to another lane's branch")
     } catch { XCTAssertTrue(error.localizedDescription.contains("already checked out")) }
     XCTAssertEqual(supervisor.runtime("shop", "api").process, original)

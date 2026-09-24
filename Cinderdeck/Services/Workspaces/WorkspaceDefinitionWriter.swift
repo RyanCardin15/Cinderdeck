@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// Changes one named component while preserving unrelated tables and comments.
@@ -8,9 +9,58 @@ nonisolated enum WorkspaceDefinitionWriter {
       .replacingOccurrences(of: "\t", with: "\\t") + "\""
   }
   static func array(_ values: [String]) -> String { "[" + values.map(quote).joined(separator: ", ") + "]" }
+  static func number(_ value: Double) -> String { value.rounded() == value ? String(Int(value)) : String(value) }
+
+  /// File name for a new workspace: the name folded to letters, numbers, hyphens and underscores.
+  static func workspaceID(for name: String) -> String {
+    let id = name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+      .replacingOccurrences(of: "[^a-z0-9_-]+", with: "-", options: .regularExpression).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+    return id.isEmpty ? "workspace-" + UUID().uuidString.prefix(8).lowercased() : id
+  }
+
+  /// Writes a new, empty workspace definition. Refuses to replace an existing file.
+  @discardableResult
+  static func createWorkspace(name: String, root: String, id: String? = nil, directory: URL = StackDefinitionLoader.directory()) throws -> URL {
+    let title = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !title.isEmpty else { throw StackError.message("Enter a workspace name") }
+    let id = id ?? workspaceID(for: title)
+    guard StackDefinitionLoader.validID(id) else { throw StackError.message("Use letters, numbers, hyphens, or underscores for the workspace ID") }
+    let file = directory.appendingPathComponent(id + ".toml")
+    guard !FileManager.default.fileExists(atPath: file.path) else { throw StackError.message("A workspace with this name already exists. Choose a different name.") }
+    let source = "name = \(quote(title))\nroot = \(quote(root))\n"
+    let definition = StackDefinitionLoader.load(source, file: file)
+    guard definition.definition != nil else { throw StackError.message(definition.issues.map(\.message).joined(separator: "\n")) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try Data(source.utf8).write(to: file, options: .withoutOverwriting)
+    return file
+  }
+
+  static func repo(id: String, path: URL) -> String { "[repos.\(id)]\npath = \(quote(path.path))" }
+
+  /// Every setting that differs from the loader's defaults. `base` is the folder `cwd` is relative to.
+  static func service(_ service: ServiceDefinition, base: URL) -> String {
+    var lines = ["[services.\(service.id)]", "cmd = \(quote(service.command))"]
+    if let repo = service.repo { lines.append("repo = \(quote(repo))") }
+    if service.directory.standardizedFileURL.path != base.standardizedFileURL.path { lines.append("cwd = \(quote(service.directory.path))") }
+    if !service.dependencies.isEmpty { lines.append("depends_on = \(array(service.dependencies))") }
+    if let port = service.port { lines.append("port = \(port)") }
+    if !service.autostart { lines.append("autostart = false") }
+    if !service.restartOnFailure { lines.append("restart = \"no\"") }
+    if service.stopSignal == SIGINT { lines.append("stop_signal = \"INT\"") }
+    if service.stopTimeout != 10 { lines.append("stop_timeout = \(number(service.stopTimeout))") }
+    switch service.readiness {
+    case .alive: break
+    case .port(let port): lines.append("ready.port = \(port)")
+    case .http(let url): lines.append("ready.http = \(quote(url.absoluteString))")
+    case .log(let pattern): lines.append("ready.log = \(quote(pattern))")
+    }
+    if service.readyTimeout != 90 { lines.append("ready.timeout = \(number(service.readyTimeout))") }
+    for key in service.environment.keys.sorted() { lines.append("env.\(key) = \(quote(service.environment[key]!))") }
+    return lines.joined(separator: "\n")
+  }
   static func task(_ task: WorkspaceTaskDefinition) -> String {
     var lines = ["[tasks.\(task.id)]", "name = \(quote(task.name))", "cmd = \(quote(task.command))", "cwd = \(quote(task.directory.path))",
-      "timeout = \(task.timeout)", "requires_services = \(array(task.requiresServices))"]
+      "timeout = \(number(task.timeout))", "requires_services = \(array(task.requiresServices))"]
     if let repo = task.repo { lines.append("repo = \(quote(repo))") }
     for key in task.environment.keys.sorted() { lines.append("env.\(key) = \(quote(task.environment[key]!))") }
     return lines.joined(separator: "\n")
@@ -18,6 +68,7 @@ nonisolated enum WorkspaceDefinitionWriter {
   static func workflow(_ workflow: WorkspaceWorkflowDefinition) -> String {
     "[workflows.\(workflow.id)]\nname = \(quote(workflow.name))\nsteps = \(array(workflow.steps))\ncleanup_services = \(workflow.cleanupServices)"
   }
+  /// Removes `section` and its subtables, then appends `replacement` (nothing when empty).
   static func replacing(_ source: String, section: String, with replacement: String) throws -> String {
     // Refuse forms that could leave a stale definition alongside the edited table.
     let document = try SimpleTOMLParser.parse(source, strict: true)
@@ -34,23 +85,26 @@ nonisolated enum WorkspaceDefinitionWriter {
       }
       if !removing { result.append(line) }
     }
-    return result.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines) + "\n\n" + replacement + "\n"
+    let kept = result.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    return replacement.isEmpty ? kept + "\n" : kept + "\n\n" + replacement + "\n"
   }
   static func convertService(file: URL, original: String, service: String, taskSection: String, replacement: String) throws {
-    let withoutService = try replacing(original, section: "services." + service, with: "")
-    let updated = try replacing(withoutService, section: taskSection, with: replacement)
-    guard try String(contentsOf: file, encoding: .utf8) == original else { throw StackError.message("This workspace changed. Reopen the form before saving.") }
-    let loaded = StackDefinitionLoader.load(updated, file: file)
-    guard loaded.definition != nil else {
-      throw StackError.message("Update references to this service before converting it: " + loaded.issues.map(\.message).joined(separator: "; "))
+    do {
+      try save(file: file, original: original, changes: [("services." + service, ""), (taskSection, replacement)])
+    } catch StackError.message(let message) where !message.hasPrefix("This workspace changed") {
+      throw StackError.message("Update references to this service before converting it: " + message)
     }
-    try updated.write(to: file, atomically: true, encoding: .utf8)
   }
   static func save(file: URL, original: String, section: String, replacement: String) throws {
+    try save(file: file, original: original, changes: [(section, replacement)])
+  }
+  /// Applies each section change in order, validates the result, and writes it only if the file is unchanged since `original` was read.
+  static func save(file: URL, original: String, changes: [(section: String, replacement: String)]) throws {
     guard try String(contentsOf: file, encoding: .utf8) == original else {
       throw StackError.message("This workspace changed in another editor. Close and reopen this form to load those changes.")
     }
-    let source = try replacing(original, section: section, with: replacement)
+    var source = original
+    for change in changes { source = try replacing(source, section: change.section, with: change.replacement) }
     let loaded = StackDefinitionLoader.load(source, file: file)
     guard loaded.definition != nil else { throw StackError.message(loaded.issues.map(\.message).joined(separator: "\n")) }
     try source.write(to: file, atomically: true, encoding: .utf8)

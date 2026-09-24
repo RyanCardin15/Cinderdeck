@@ -63,14 +63,14 @@ final class StackControlTests: XCTestCase {
     let text = try String(contentsOf: file, encoding: .utf8)
     XCTAssertTrue(text.hasPrefix("# Mine\n\nKeep this."))
     XCTAssertEqual(text.components(separatedBy: StackAgentSetup.beginMarker).count, 2)
-    XCTAssertTrue(text.contains("cinderdeck stacks") || text.contains("/usr/local/bin/cinderdeck stacks"))
+    XCTAssertTrue(text.contains("/usr/local/bin/cinderdeck services"))
   }
 
   func testMCPClientNames() {
-    XCTAssertEqual(StackMCPServer.displayName("cursor-vscode"), "Cursor")
-    XCTAssertEqual(StackMCPServer.displayName("codex-mcp-client"), "Codex")
-    XCTAssertEqual(StackMCPServer.displayName("claude-code"), "Claude Code")
-    XCTAssertEqual(StackMCPServer.displayName("my-agent"), "my-agent")
+    XCTAssertEqual(CinderdeckMCPServer.displayName("cursor-vscode"), "Cursor")
+    XCTAssertEqual(CinderdeckMCPServer.displayName("codex-mcp-client"), "Codex")
+    XCTAssertEqual(CinderdeckMCPServer.displayName("claude-code"), "Claude Code")
+    XCTAssertEqual(CinderdeckMCPServer.displayName("my-agent"), "my-agent")
   }
 
   func testSocketRoundTripIdentifiesPeer() throws {

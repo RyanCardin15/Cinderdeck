@@ -116,9 +116,9 @@ Use a lane when agents need different branches running at the same time:
 cinderdeck lane create shop agent/codex-1 --as Codex --session codex-1
 cinderdeck lane create shop agent/claude-2 --as "Claude Code" --session claude-2
 cinderdeck lane list shop
-cinderdeck stacks logs shop/agent/codex-1
-cinderdeck stacks stop shop/agent/codex-1
-cinderdeck stacks start shop/agent/codex-1
+cinderdeck services logs shop/agent/codex-1
+cinderdeck services stop shop/agent/codex-1
+cinderdeck services start shop/agent/codex-1
 cinderdeck lane remove shop/agent/codex-1
 ```
 
@@ -147,7 +147,7 @@ ready.port = 3000
 depends_on = ["api"]
 ```
 
-Use `--no-start` (MCP `start=false`) to create the worktrees first, then install dependencies or prepare local configuration in the returned service directories before calling `stacks start`. Uncommitted files, ignored files such as `.env` and `node_modules`, and external databases or Docker resources are not copied or isolated automatically. Avoid hardcoded checkout paths and fixed container ports/names. Lanes currently support independent Git repositories and one port per service; nested repositories and HTTP readiness against a different host/port are rejected.
+Use `--no-start` (MCP `start=false`) to create the worktrees first, then install dependencies or prepare local configuration in the returned service directories before calling `services start`. Uncommitted files, ignored files such as `.env` and `node_modules`, and external databases or Docker resources are not copied or isolated automatically. Avoid hardcoded checkout paths and fixed container ports/names. Lanes currently support independent Git repositories and one port per service; nested repositories and HTTP readiness against a different host/port are rejected.
 
 Tasks and workflows are copied into the lane snapshot too. Task working directories and named port variables point into the lane, and lane removal waits for finite runs to finish or be cancelled.
 
@@ -193,10 +193,10 @@ Coding agents can run and inspect stacks, so they stop spawning their own dev se
 **Set up:** Stacks → ✦ (or Settings → History → Workspaces → **Agent access…**). Install the CLI, then **Add** Cursor, Codex, Claude Code, and/or VS Code Copilot. The **Agent skills** section installs the skills that ship with Cinderdeck, such as recording a browser session with its logs, for each agent. From a terminal the same thing is:
 
 ```sh
-/Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck stacks install-cli   # links ~/.local/bin/cinderdeck
-cinderdeck stacks setup-agents --instructions                           # Cursor, Codex, Claude Code, VS Code Copilot (+ AGENTS.md/CLAUDE.md notes)
-cinderdeck stacks setup-agents --skills                                 # also install the agent skills
-cinderdeck stacks setup-agents --print                                  # just show the config snippets
+/Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck services install-cli   # links ~/.local/bin/cinderdeck
+cinderdeck services setup-agents --instructions                           # Cursor, Codex, Claude Code, VS Code Copilot (+ AGENTS.md/CLAUDE.md notes)
+cinderdeck services setup-agents --skills                                 # also install the agent skills
+cinderdeck services setup-agents --print                                  # just show the config snippets
 cinderdeck skills list                                                  # bundled skills and where each agent has them
 cinderdeck skills install --all                                         # or --claude, --codex, --cursor, --copilot
 ```
@@ -207,18 +207,20 @@ Skills are copied to `~/.claude/skills` (Claude Code), `~/.agents/skills` (Codex
 
 ### What agents get
 
-| MCP tool | CLI | Purpose |
+| MCP tool | CLI (`cinderdeck services …`) | Purpose |
 | --- | --- | --- |
-| `list_stacks`, `stack_status` | `cinderdeck stacks status [stack] [--json]` | Services, phases, PIDs, ports/URLs, who started each one, branches, claims |
-| `start_stack`, `stop_stack`, `restart_stack` | `start`, `stop`, `restart` | Dependency-ordered; start/restart **wait for readiness** and return the last output of anything that crashed |
-| `read_logs` | `logs <stack> [service] -n 200 --grep re -f` | Plain-text output; pass the returned `cursor` as `after` to tail |
+| `list_workspaces`, `workspace_details` | `status [workspace] [--json]` | Services, phases, PIDs, ports/URLs, who started each one, branches, claims, tasks, workflows, and active runs |
+| `start_services`, `stop_services`, `restart_services` | `start`, `stop`, `restart` | Dependency-ordered; each **waits** (start/restart for readiness) and returns the last output of anything that crashed |
+| `read_service_logs` | `logs <workspace> [service] -n 200 --grep re -f` | Plain-text output; pass the returned `cursor` as `after` to tail |
 | `list_ports`, `stop_port_process` | `ports [port] [--external]`, `kill-port <port> <pid>` | Every listening port with process, cwd, tty and the app it came from (Cursor, Terminal, Codex, Android Studio…) or the Cinderdeck service that owns it |
 | `git_status`, `list_branches`, `switch_branch`, `pull_repos` | `git`, `branches`, `switch <stack> <branch> [--stash|--carry]`, `fetch`, `pull` | Same stop → checkout → restart flow as the panel; uncommitted work fails unless `dirty=stash|carry` |
-| `claim_stack`, `release_stack` | `claim <stack> [note] --ttl 30`, `release` | Advisory lease: other agents get a `claimed` error (CLI exit 3) unless they pass `force` |
-| `recent_activity` | `events <stack>` | Starts, crashes, stops, branch switches — each with who caused it |
-| `stacks_guide`, `validate_stack`, `reload_stacks` | `agent-help`, `validate <file>`, `reload`, `where` | Authoring stacks: paths, a template, validation and start order |
+| `claim_workspace`, `release_workspace` | `claim <workspace> [note] --ttl 30`, `release` | Advisory lease: other agents get a `claimed` error (CLI exit 3) unless they pass `force` |
+| `recent_activity` | `events <workspace>` | Starts, crashes, stops, branch switches — each with who caused it |
+| `create_workspace`, `save_workspace_service`, `save_workspace_task`, `save_workspace_workflow`, `delete_workspace_item` | Workspaces window | Validated definition edits; nothing starts on save |
+| `workspace_guide`, `validate_workspace`, `reload_workspaces` | `agent-help`, `validate <file>`, `reload`, `where` | Authoring by hand: paths, a template, validation and start order |
+| `create_lane`, `list_lanes`, `remove_lane` | `cinderdeck lane …` | Parallel Git worktree lanes |
 
-`cinderdeck mcp` is a stdio MCP server; if Cinderdeck isn't running, the first call launches it in the background. The CLI does the same.
+`cinderdeck mcp` is a stdio MCP server; if Cinderdeck isn't running, the first call launches it in the background. The CLI does the same. Tool calls run concurrently on pooled connections, so a long wait never blocks other calls or pings, and unknown or misspelled arguments are rejected with the valid names. Reload the tool list in connected clients after updating Cinderdeck.
 
 ### Who owns what
 
