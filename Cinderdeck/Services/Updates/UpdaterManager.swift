@@ -55,7 +55,12 @@ final class UpdaterManager: NSObject, ObservableObject, SPUUpdaterDelegate, SPUS
   @Published private(set) var canCheckForUpdates = false
   @Published private(set) var lastUpdateCheckDate: Date?
 
-  private(set) var updater: SPUUpdater!
+  /// Sparkle's updater. Callers get a plain `SPUUpdater`; the storage is only unset during `init`.
+  var updater: SPUUpdater {
+    sparkleUpdater
+  }
+
+  private var sparkleUpdater: SPUUpdater!
   private var userDriver: CinderdeckUpdateUserDriver!
   private var statusMachine: UpdateStatusMachine
   /// Installs a silently downloaded update and relaunches; Sparkle hands it over in `willInstallUpdateOnQuit`.
@@ -79,7 +84,7 @@ final class UpdaterManager: NSObject, ObservableObject, SPUUpdaterDelegate, SPUS
     )
     let updater = SPUUpdater(hostBundle: .main, applicationBundle: .main, userDriver: userDriver, delegate: self)
     self.userDriver = userDriver
-    self.updater = updater
+    sparkleUpdater = updater
     updater.publisher(for: \.canCheckForUpdates)
       .assign(to: &$canCheckForUpdates)
     lastUpdateCheckDate = updater.lastUpdateCheckDate
@@ -193,7 +198,7 @@ final class UpdaterManager: NSObject, ObservableObject, SPUUpdaterDelegate, SPUS
     if status != statusMachine.status {
       status = statusMachine.status
     }
-    let checkDate = updater?.lastUpdateCheckDate
+    let checkDate = sparkleUpdater?.lastUpdateCheckDate
     if lastUpdateCheckDate != checkDate {
       lastUpdateCheckDate = checkDate
     }
