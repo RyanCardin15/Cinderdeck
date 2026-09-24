@@ -2,7 +2,7 @@
 
 Global keyboard shortcuts, in-overlay capture shortcuts, Annotate editor shortcuts, conflict detection, the cheat-sheet overlay, and the `cinderdeck://` deep-link route table.
 
-Verified against `Cinderdeck/Services/Shortcuts/`, `Cinderdeck/Features/Shortcuts/`, `Cinderdeck/Features/Annotate/Services/AnnotateShortcutManager.swift`, `Cinderdeck/App/CinderdeckDeepLinkHandler.swift`, `Cinderdeck/Services/Capture/CaptureOverlayShortcutSettings.swift` at HEAD (`v1.0.0`).
+Verified against `Cinderdeck/Services/Shortcuts/`, `Cinderdeck/Features/Shortcuts/`, `Cinderdeck/Features/Annotate/Services/AnnotateShortcutManager.swift`, `Cinderdeck/App/CinderdeckDeepLinkHandler.swift`, `Cinderdeck/Services/Capture/CaptureOverlayShortcutSettings.swift` at HEAD (`v1.1.0`).
 
 ## Global shortcut mechanism
 

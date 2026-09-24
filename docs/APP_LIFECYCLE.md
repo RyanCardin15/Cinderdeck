@@ -2,7 +2,7 @@
 
 How Cinderdeck launches, runs onboarding, lives in the menu bar, and shuts down. Covers `Cinderdeck/App/`, splash/onboarding, app identity, theme, data migrations, and the entitlements/Info.plist contract.
 
-Current as of HEAD (`v1.0.0`, build 200, macOS 13.0+ deployment target).
+Current as of HEAD (`v1.1.0`, build 201, macOS 13.0+ deployment target).
 
 ## Platform shape
 

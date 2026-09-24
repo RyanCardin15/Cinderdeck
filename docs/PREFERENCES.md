@@ -1,6 +1,6 @@
 # Preferences
 
-Reference for the Settings window: tab structure, every section, and how preferences are stored. Verified against `Cinderdeck/Features/Preferences/` at HEAD (`v1.0.0`).
+Reference for the Settings window: tab structure, every section, and how preferences are stored. Verified against `Cinderdeck/Features/Preferences/` at HEAD (`v1.1.0`).
 
 ## Root
 

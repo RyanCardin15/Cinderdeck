@@ -5,5 +5,21 @@
     <link>https://github.com/RyanCardin15/Cinderdeck/releases</link>
     <description>Signed releases of Cinderdeck for macOS. No releases published yet.</description>
     <language>en</language>
+    <item>
+      <title>Version 1.1.0</title>
+      <sparkle:version>201</sparkle:version>
+      <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <pubDate>Thu, 24 Sep 2026 13:45:44 +0000</pubDate>
+      <description><![CDATA[
+        <style>:root { color-scheme: light dark; } body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 13px; line-height: 1.5; padding: 8px 16px; } h3 { font-size: 14px; margin: 12px 0 6px; } ul { padding-left: 20px; margin: 4px 0; } li { margin: 3px 0; }</style>
+        <ul><li>Run branches side by side in Git worktree lanes, with separate service ports, logs, and agent claims. Create and manage lanes from the native Lanes view, <code>cinderdeck lane</code>, or MCP; services use <code>PORT</code> and <code>CINDERDECK_PORT_&lt;SERVICE&gt;</code> for their assigned ports.</li><li>Run finite tasks and ordered workflows alongside long-running services in Workspaces, with saved results and logs. Lane tasks and workflows run inside their own working folders.</li><li>Update Cinderdeck automatically. Installed releases check for new versions daily, download them in the background, and install them when Cinderdeck quits.</li><li>Check for, download, and install updates from Preferences → About and General → Updates, with progress shown in place, Restart to Update for a downloaded update, and Cancel or Try Again when needed. The menu bar shows Update Available or Restart to Update, and the Preferences sidebar marks a waiting update.</li><li>Save a <code>.log</code> file next to screen recordings with the output of your running workspaces. Every line is stamped with its video position and clock time, and the file includes service events, workflow steps, and Git state. Keychain secret values are redacted.</li><li>Choose which workspaces a recording captures from the new logs button on the recording toolbar: all running workspaces, selected ones, or none for a plain video. The choice is also in Preferences and Workspaces → Recordings.</li><li>Show a live logs indicator while recording (click it to mark the moment), and a confirmation with Show Log and Copy Log afterwards.</li><li>Keep the log file with the video when a temporary recording is saved from Quick Access.</li><li>Add Workspaces → Recordings to record the screen or a task or workflow run with logs, and to find past recordings, their log files, errors, and events.</li><li>Add a Logs menu and an optional synchronized log panel (⇧⌘L) to the video editor.</li><li>Let agents record and inspect repros through new MCP tools (<code>start_repro_recording</code>, <code>mark_repro</code>, <code>repro_frame</code>, <code>repro_logs</code>, and more) and <code>cinderdeck repro</code>, including <code>repro dump</code>, <code>repro scope</code>, frames returned as images, and a failing exit status for scripted test runs.</li><li>Export recordings as folders or zip archives with the video, log file, Markdown summary, per-source logs, frames at failures, and uncommitted diffs.</li></ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/RyanCardin15/Cinderdeck/releases/download/v1.1.0/Cinderdeck-v1.1.0.dmg"
+        sparkle:edSignature="oP0qRPzeNC74lQw6Wgz5buEkpZu9XhTHBrXvmTXDP9h9PfugiFCYHCDvTTb2nynezYRTyFvY380/rgYfCbK2CA=="
+        length="53269774"
+        type="application/octet-stream"/>
+    </item>
   </channel>
 </rss>
