@@ -1,6 +1,6 @@
 # Cinderdeck changelog
 
-## Unreleased
+## [1.1.0] - 2026-09-24
 
 - Update Cinderdeck automatically. Installed releases check for new versions daily, download them in the background, and install them when Cinderdeck quits.
 - Check for, download, and install updates from Preferences → About and General → Updates, with progress shown in place, Restart to Update for a downloaded update, and Cancel or Try Again when needed. The menu bar shows Update Available or Restart to Update, and the Preferences sidebar marks a waiting update.
