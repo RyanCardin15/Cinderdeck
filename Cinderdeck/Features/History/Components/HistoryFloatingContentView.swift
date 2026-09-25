@@ -22,6 +22,7 @@ struct HistoryFloatingContentView: View {
   @State private var stacksHolder = StacksViewModelHolder()
   private var stacksViewModel: StacksViewModel { stacksHolder.model }
   @State private var selectedClipboardID: UUID?
+  @State private var selectedClipboardCollectionID: UUID?
   @State private var usesExplicitCompactFilterSelection = false
   @State private var selectedId: UUID? = nil
   @State private var expandedSelectedIds: Set<UUID> = []
@@ -353,7 +354,12 @@ struct HistoryFloatingContentView: View {
   }
 
   private var clipboardContent: some View {
-    ClipboardTextHistoryView(manager: manager, selectedID: $selectedClipboardID)
+    ClipboardTextHistoryView(
+      manager: manager,
+      selectedID: $selectedClipboardID,
+      selectedCollectionID: $selectedClipboardCollectionID,
+      isExpanded: manager.presentationMode == .expanded
+    )
   }
 
   private var clipboardFilterPill: some View {
@@ -366,7 +372,7 @@ struct HistoryFloatingContentView: View {
   }
 
   private var savedFilterPill: some View {
-    selectionPill(title: "Saved", isSelected: manager.selectedSection == .saved, count: nil) {
+    selectionPill(title: "Favorites & groups", isSelected: manager.selectedSection == .saved, count: nil) {
       manager.selectedSection = .saved
       manager.focusPanel()
     }
