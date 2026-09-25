@@ -68,11 +68,13 @@ cinderdeck repro start --window-id 4312 --title "Checkout with saved card" --max
 | User wants | Flag (CLI) | MCP |
 | --- | --- | --- |
 | One workspace | `--workspace shop` | `workspace: "shop"` |
-| Several workspaces | `--workspace shop,billing` | `workspaces: ["shop", "billing"]` |
+| Several workspaces | `--workspace shop,billing` (or repeat `--workspace`) | `workspaces: ["shop", "billing"]` |
 | Everything running (default) | nothing | nothing |
 | **No workspace logs** (plain video) | `--no-logs` | `logs: false` |
 
 With `--no-logs`, workspace output is not recorded, but your marks and `repro append` lines still are. If the user said "no workspace" or "just the video", use it.
+
+**Recording a worktree lane** (a branch running beside the original checkout; see the `cinderdeck-parallel-lanes` skill): pass the lane as the workspace, `--workspace shop/agent/codex-1`, and add the original workspace too (`--workspace shop/agent/codex-1,shop`) when the lane uses its shared services such as a database. Open the **lane's** URL, not the port in the definition: take it from `cinderdeck lane list shop --json` (each service's `url`) or `cinderdeck lane env shop/agent/codex-1 --export` (`CINDERDECK_URL_<SERVICE>`). With `[lanes] hosts = true` the URL is `http://<lane>.<workspace>.localhost:<port>`, so filter `repro windows` by the lane name or port instead of `localhost`.
 
 ## 3. Record, and mark every action
 
@@ -141,6 +143,7 @@ cinderdeck repro run shop browser-session --wait            # a task
 cinderdeck repro run shop e2e --workflow --wait             # a workflow (start:web → task:browser-session)
 ```
 
+- To also capture another workspace's output, such as the API the browser calls, add `--workspace api` (MCP: `workspaces: ["api"]`). The run's own workspace is always captured.
 - `repro run` records a **display**. The task opens the browser after recording has started, so leave out `--window` and `--window-id`. Use `--display N` for a display other than the main one.
 - The script must run the browser **headed** and print browser events to stdout. See the [Playwright script and task](references/browser-recipes.md#scripted-run-with-console-and-network-logs).
 - If the task does not exist yet, ask the user before adding it to their workspace. With the MCP server, use `save_workspace_task` and `save_workspace_workflow`: they validate the definition and start nothing.
@@ -158,7 +161,7 @@ Never report a headless session as "recorded" by Cinderdeck.
 
 - [ ] `repro status` is idle, and permission errors have been handled
 - [ ] The target window is open, loaded, and visible, and was chosen by id from `repro windows`
-- [ ] Workspace logs match the request: `--workspace`, the default, or `--no-logs`
+- [ ] Workspace logs match the request: `--workspace`, the default, or `--no-logs` (for a lane: the lane, plus its source when it uses shared services)
 - [ ] `--title` and `--max` are set
 - [ ] A mark before every action, and `--pass` or `--fail` after every check
 - [ ] Browser console and network errors appended with `--source browser` and `--source network`

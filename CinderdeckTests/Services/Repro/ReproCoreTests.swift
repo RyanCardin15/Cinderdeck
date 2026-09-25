@@ -385,6 +385,28 @@ final class ReproCoreTests: XCTestCase {
     XCTAssertTrue(web.contains("] ~ compiling"), "Offscreen lines keep their mark: \(web)")
   }
 
+  func testVideolessBundlePointsAtTheSavedVideo() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("repro-tests-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = ReproStore(directory: root.appendingPathComponent("library"))
+    let video = root.appendingPathComponent("Screen Recording.mov")
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    try Data([0x00]).write(to: video)
+    var repro = session(lines: [line(1, 1, "shop/api", "listening")])
+    repro.videoPath = video.path
+    try store.save(repro)
+
+    let exported = try ReproBundleExporter.export(repro, lines: store.loadLines(repro.id), store: store, to: root.appendingPathComponent("out"), includeVideo: false)
+    XCTAssertNil(exported.video)
+    XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: exported.folder.path).contains { $0.hasPrefix("recording.mov") })
+    let readme = try String(contentsOf: exported.readme, encoding: .utf8)
+    XCTAssertTrue(readme.contains("- Video: `\(video.path)`"), readme)
+
+    try FileManager.default.removeItem(at: video)
+    let missing = try ReproBundleExporter.export(repro, lines: [], store: store, to: root.appendingPathComponent("out"), includeVideo: false)
+    XCTAssertFalse(try String(contentsOf: missing.readme, encoding: .utf8).contains("- Video:"), "No path to a video that is gone")
+  }
+
   func testLogBufferReportsLinesEvictedBetweenReads() async {
     let buffer = LogBuffer(service: "api", capacity: 5)
     for index in 0..<3 { await buffer.append("line \(index)") }

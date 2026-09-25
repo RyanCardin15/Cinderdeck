@@ -250,6 +250,8 @@ private struct WorkspaceReproDetail: View {
         }
         .disabled(session.status.isActive)
 
+        ReproAgentDragCard(session: session)
+
         if !session.markers.isEmpty {
           section("Timeline") {
             ForEach(session.markers) { marker in

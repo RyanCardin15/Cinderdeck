@@ -17,6 +17,20 @@ final class ReproAgentAPITests: XCTestCase {
     XCTAssertEqual(try request(["run", "shop", "test"]).params["task"]?.stringValue, "test")
   }
 
+  func testStartAndRunTakeSeveralWorkspaces() throws {
+    XCTAssertEqual(try request(["start", "--workspace", "shop,billing"]).params["workspaces"]?.stringsValue, ["shop", "billing"])
+    let repeated = try request(["start", "--workspace", "shop", "--workspace=billing"])
+    XCTAssertEqual(repeated.params["workspaces"]?.stringsValue, ["shop", "billing"], "A repeated flag adds, not replaces")
+    XCTAssertNil(repeated.params["workspace"])
+    XCTAssertEqual(try request(["start", "--workspace", "shop"]).params["workspace"]?.stringValue, "shop")
+
+    let run = try request(["run", "web", "e2e", "--workspace", "api"])
+    XCTAssertEqual(run.params["workspace"]?.stringValue, "web", "The run's workspace stays the positional one")
+    XCTAssertEqual(run.params["task"]?.stringValue, "e2e")
+    XCTAssertEqual(run.params["workspaces"]?.stringsValue, ["api"])
+    XCTAssertTrue(ReproCLI.usage.contains("Also save logs from these workspaces"))
+  }
+
   func testMarksChecksAndQueriesLogs() throws {
     let mark = try request(["mark", "Total shows $42", "--fail", "--detail", "showed $0"])
     XCTAssertEqual(mark.method, "repro.mark")
