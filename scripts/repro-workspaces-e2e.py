@@ -19,6 +19,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import tempfile
 import time
@@ -94,14 +95,21 @@ cmd = "/bin/sh -c 'for i in 1 2 3 4 5; do echo {name}-task step $i; sleep 0.3; d
             return started["repro"]
 
         with (root / "app.log").open("w") as log:
-            app = subprocess.Popen([binary], env=env, stdout=log, stderr=log)
+            # Launched through LaunchServices so macOS checks the app's own Screen Recording
+            # permission, not the terminal's that started this script.
+            bundle = str(Path(binary).parents[2])
+            launcher = subprocess.Popen(["/usr/bin/open", "-W", "-n", "-g", "-a", bundle, "--stdout", str(root / "app.log"), "--stderr", str(root / "app.log"),
+                *[arg for key in ("CINDERDECK_STACKS_PREVIEW_ROOT", "CINDERDECK_STACKS_SOCKET") for arg in ("--env", f"{key}={env[key]}")]])
+            pid = None
             mcp = None
             try:
                 for _ in range(200):
                     if Path(env["CINDERDECK_STACKS_SOCKET"]).exists(): break
-                    assert app.poll() is None, (root / "app.log").read_text()
+                    assert launcher.poll() is None, (root / "app.log").read_text()
                     time.sleep(0.1)
-                else: raise AssertionError("Preview control socket did not start")
+                else: raise AssertionError("Preview control socket did not start: " + (root / "app.log").read_text())
+                # Ask this fixture's socket for its owner; another Debug app may be running.
+                pid = int(cli("services", "ping")["pid"])
                 for name in WORKSPACES:
                     cli("services", "start", name)
                 time.sleep(1)
@@ -144,7 +152,7 @@ cmd = "/bin/sh -c 'for i in 1 2 3 4 5; do echo {name}-task step $i; sleep 0.3; d
 
                 if args.inspect:
                     proceed = root / "continue"
-                    print(f"Preview PID {app.pid}. Inspect Workspaces → Recordings, then: touch {proceed}", flush=True)
+                    print(f"Preview PID {pid}. Inspect Workspaces → Recordings, then: touch {proceed}", flush=True)
                     deadline = time.monotonic() + 900
                     while not proceed.exists():
                         if time.monotonic() > deadline: raise TimeoutError("Inspection exceeded fifteen minutes")
@@ -152,15 +160,18 @@ cmd = "/bin/sh -c 'for i in 1 2 3 4 5; do echo {name}-task step $i; sleep 0.3; d
             finally:
                 if mcp:
                     mcp.terminate(); mcp.wait(timeout=10)
-                if app.poll() is None:
+                if Path(env["CINDERDECK_STACKS_SOCKET"]).exists():
                     try:
                         for name in WORKSPACES:
                             cli("services", "stop", name, "--force")
-                    finally:
-                        app.terminate()
-                        try: app.wait(timeout=10)
-                        except subprocess.TimeoutExpired:
-                            app.kill(); app.wait(timeout=10)
+                    except AssertionError:
+                        pass
+                if pid is not None:
+                    try: os.kill(pid, signal.SIGTERM)
+                    except ProcessLookupError: pass
+                try: launcher.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    launcher.terminate(); launcher.wait(timeout=10)
                 Path(env["CINDERDECK_STACKS_SOCKET"]).unlink(missing_ok=True)
 
 
