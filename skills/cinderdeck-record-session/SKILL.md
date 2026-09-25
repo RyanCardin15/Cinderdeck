@@ -68,7 +68,7 @@ cinderdeck repro start --window-id 4312 --title "Checkout with saved card" --max
 | User wants | Flag (CLI) | MCP |
 | --- | --- | --- |
 | One workspace | `--workspace shop` | `workspace: "shop"` |
-| Several workspaces | `--workspace shop,billing` | `workspaces: ["shop", "billing"]` |
+| Several workspaces | `--workspace shop,billing` (or repeat `--workspace`) | `workspaces: ["shop", "billing"]` |
 | Everything running (default) | nothing | nothing |
 | **No workspace logs** (plain video) | `--no-logs` | `logs: false` |
 
@@ -143,6 +143,7 @@ cinderdeck repro run shop browser-session --wait            # a task
 cinderdeck repro run shop e2e --workflow --wait             # a workflow (start:web → task:browser-session)
 ```
 
+- To also capture another workspace's output, such as the API the browser calls, add `--workspace api` (MCP: `workspaces: ["api"]`). The run's own workspace is always captured.
 - `repro run` records a **display**. The task opens the browser after recording has started, so leave out `--window` and `--window-id`. Use `--display N` for a display other than the main one.
 - The script must run the browser **headed** and print browser events to stdout. See the [Playwright script and task](references/browser-recipes.md#scripted-run-with-console-and-network-logs).
 - If the task does not exist yet, ask the user before adding it to their workspace. With the MCP server, use `save_workspace_task` and `save_workspace_workflow`: they validate the definition and start nothing.

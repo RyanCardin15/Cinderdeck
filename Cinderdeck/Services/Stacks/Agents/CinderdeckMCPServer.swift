@@ -270,10 +270,10 @@ nonisolated enum CinderdeckMCPServer {
 
   private static let reproTools: [Tool] = [
     tool("start_repro_recording", "Start a repro recording", .additive,
-      "Record the screen while capturing workspace service and task output on the same timeline, for reproducing bugs and automated UI testing. Records the main display by default, or one window (window_id from list_repro_windows is exact; window matches app name or title). A recorded window is followed if it moves, and its app's menus and dropdowns are included. The user sees floating controls and can stop it. To record a test run, pass workspace plus task or workflow: recording starts, the run starts, step results become markers, and recording stops shortly after the run ends. Returns the repro id immediately.",
+      "Record the screen while capturing workspace service and task output on the same timeline, for reproducing bugs and automated UI testing. Records the main display by default, or one window (window_id from list_repro_windows is exact; window matches app name or title). A recorded window is followed if it moves, and its app's menus and dropdowns are included. The user sees floating controls and can stop it. To record a test run, pass workspace plus task or workflow: recording starts, the run starts, step results become markers, and recording stops shortly after the run ends. Add workspaces to also capture other workspaces' output, such as a backend the run talks to. Returns the repro id immediately.",
       ["title": property("string", "What is being reproduced or tested"),
-        "workspace": property("string", "Workspace id or name. Limits captured output to it; required with task or workflow"),
-        "workspaces": property("array", "Capture output only from these workspaces (default: every workspace with output)", items: "string"),
+        "workspace": property("string", "Workspace id or name to capture output from; required with task or workflow, where it is the workspace that runs it"),
+        "workspaces": property("array", "Capture output from these workspaces, together with workspace if given, e.g. the frontend and its backend. Default: every workspace with output", items: "string"),
         "logs": property("boolean", "false records a plain video with no workspace output; your markers and add_repro_logs lines are still kept (default true)"),
         "task": property("string", "Run this configured task while recording"), "workflow": property("string", "Run this configured workflow while recording"),
         "window": property("string", "Record one window: application name or window title, e.g. Safari or \"localhost:3000\". The frontmost match wins"),

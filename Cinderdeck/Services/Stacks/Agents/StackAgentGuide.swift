@@ -27,7 +27,7 @@ nonisolated enum StackAgentGuide {
   uncommitted work unless dirty=stash or dirty=carry.
   Repros record the screen with every service and task log on the video timeline, to reproduce bugs or test UI end to end: \
   start_repro_recording (window_id from list_repro_windows records exactly one window, followed if it moves; workspace plus \
-  task or workflow records a run; logs=false records no workspace output) → drive the app → mark_repro at each step, with \
+  task or workflow records a run; workspaces adds other workspaces' output, such as its backend; logs=false records no workspace output) → drive the app → mark_repro at each step, with \
   outcome pass/fail for checks, and add_repro_logs for browser console output → stop_repro_recording, or wait_for_repro for a \
   run. Results have a verdict (clean, errors, failed), error highlights with video times, and logFile, a plain-text log stamped \
   with video times. Investigate with repro_frame (images at first_error or a marker, with the output just before), repro_logs, \

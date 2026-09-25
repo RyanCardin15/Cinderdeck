@@ -29,9 +29,14 @@ nonisolated enum ReproCLI {
       if let equals = name.firstIndex(of: "=") { inline = String(name[name.index(after: equals)...]); name = String(name[..<equals]) }
       if name == "h" { name = "help" }
       if valued.contains(name) {
-        if let inline { options.values[name] = inline; continue }
-        guard index < arguments.count else { throw StackControlError.invalid("--\(name) requires a value") }
-        options.values[name] = arguments[index]; index += 1
+        let value: String
+        if let inline { value = inline } else {
+          guard index < arguments.count else { throw StackControlError.invalid("--\(name) requires a value") }
+          value = arguments[index]; index += 1
+        }
+        // --workspace a --workspace b means both.
+        if name == "workspace", let earlier = options.values[name] { options.values[name] = earlier + "," + value }
+        else { options.values[name] = value }
       } else if booleans.contains(name) {
         guard inline == nil else { throw StackControlError.invalid("--\(name) does not take a value") }
         options.flags.insert(name)
@@ -62,9 +67,8 @@ nonisolated enum ReproCLI {
     case "start", "record":
       try noExtra(0, "start [--title T] [--workspace W[,W…] | --no-logs] [--window APP | --window-id ID | --display N] [--max SECONDS]")
       take("title"); take("window"); take("display"); take("note")
-      if let workspace = options["workspace"] {
-        let names = workspace.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        if names.count > 1 { params["workspaces"] = .array(names.map { .string($0) }) } else { params["workspace"] = .string(workspace) }
+      if let names = workspaceList(options), !names.isEmpty {
+        if names.count > 1 { params["workspaces"] = .array(names.map { .string($0) }) } else { params["workspace"] = .string(names[0]) }
       }
       if options.has("no-logs") {
         guard options["workspace"] == nil else { throw StackControlError.invalid("Pass --workspace or --no-logs, not both") }
@@ -81,6 +85,8 @@ nonisolated enum ReproCLI {
       guard args.count == 2 else { throw StackControlError.invalid("Use: cinderdeck repro run <workspace> <task-id> (or <workflow-id> --workflow)") }
       params["workspace"] = .string(args[0])
       params[options.has("workflow") ? "workflow" : "task"] = .string(args[1])
+      // --workspace here adds more workspaces whose logs are saved alongside the run's own.
+      if let names = workspaceList(options), !names.isEmpty { params["workspaces"] = .array(names.map { .string($0) }) }
       take("title"); take("window"); take("display"); take("note")
       if let max = try number(options, "max") { params["max_seconds"] = max }
       return ("repro.start", params, 90)
@@ -294,6 +300,11 @@ nonisolated enum ReproCLI {
     return StackCLI.clientInfo(stackOptions)
   }
 
+  /// `--workspace a,b` or `--workspace a --workspace b` as names.
+  private static func workspaceList(_ options: Options) -> [String]? {
+    options["workspace"].map { $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } }
+  }
+
   static let usage = """
   cinderdeck repro — screen recordings with workspace output on the same timeline
 
@@ -301,7 +312,8 @@ nonisolated enum ReproCLI {
           [--max SECONDS] [--note TEXT]      --window-id ID, --display N); stops after --max (default 300)
           [--no-logs]                      Plain video: no workspace output (agent lines and marks still kept)
     windows [text]                         Windows you can record, frontmost first, with ids and titles
-    run <workspace> <task> [--workflow]    Record while a task (or workflow) runs; stops after it ends
+    run <workspace> <task> [--workflow]    Record while a task (or workflow) runs; stops after it ends.
+        [--workspace W[,W…]]                 Also save logs from these workspaces, e.g. the backend
     mark "<label>" [--pass|--fail]         Add a step marker or a check result at this moment
     append "<text>" [--source NAME]        Add your own output (e.g. a browser console) to the log; pipe
            [--level error] [--repro ID]      lines on stdin to stream them until input ends or the

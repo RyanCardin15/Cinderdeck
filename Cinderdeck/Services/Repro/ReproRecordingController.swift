@@ -92,7 +92,8 @@ final class ReproRecordingController: ObservableObject {
   func startRun(_ options: Options, workspace: String, kind: WorkspaceRunKind, definitionID: String, actor: StackActor,
     runner: WorkspaceRunner, origin: ReproOrigin = .agent) async throws -> (ReproSession, WorkspaceRun) {
     var options = options
-    options.workspaces = options.workspaces ?? [workspace]
+    // The run's own workspace is always captured, alongside any others asked for.
+    options.workspaces = (options.workspaces ?? []).union([workspace])
     if options.title == nil {
       let definition = runner.supervisor.definition(workspace)
       let name = kind == .task ? definition?.task(definitionID)?.name : definition?.workflow(definitionID)?.name
@@ -312,5 +313,49 @@ enum ReproExport {
     guard status == 0 else { throw StackError.message("Could not create the zip archive (ditto exited with \(status))") }
     try? FileManager.default.removeItem(at: result.folder)
     return archive
+  }
+
+  /// What to hand an agent: the README first, then the stamped log, frames, and diffs.
+  /// The video stays where it was saved; the README gives its path.
+  struct Handoff: Equatable {
+    let folder: URL
+    let files: [URL]
+    let video: URL?
+  }
+
+  /// A video-less bundle kept in the repro's own folder, rebuilt when the recording
+  /// changes, so dragging it to an agent never waits on frame extraction.
+  static func handoff(_ session: ReproSession) async throws -> Handoff {
+    let manager = FileManager.default
+    let root = ReproRecorder.shared.store.folder(session.id).appendingPathComponent("handoff", isDirectory: true)
+    let stamp = root.appendingPathComponent(".stamp")
+    let key = [session.status.rawValue, session.title, "\(session.lineCount)", "\(session.markers.count)", "\(session.duration)", session.videoPath ?? ""]
+      .joined(separator: "|")
+    if (try? String(contentsOf: stamp, encoding: .utf8)) == key,
+      let folder = try? manager.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: .skipsHiddenFiles).first(where: \.hasDirectoryPath) {
+      return handoffFiles(in: folder, session: session)
+    }
+    try? manager.removeItem(at: root)
+    let folder = try await export(session, to: root, includeVideo: false)
+    let readme = folder.appendingPathComponent("README.md")
+    if let handle = try? FileHandle(forWritingTo: readme) {
+      handle.seekToEndOfFile()
+      handle.write(Data("\n---\nCinderdeck repro id: `\(session.id.uuidString)`. With the Cinderdeck MCP server, `repro_frame` pulls a still at any time and `repro_logs` reads lines around it.\n".utf8))
+      try? handle.close()
+    }
+    try key.write(to: stamp, atomically: true, encoding: .utf8)
+    return handoffFiles(in: folder, session: session)
+  }
+
+  private static func handoffFiles(in folder: URL, session: ReproSession) -> Handoff {
+    let manager = FileManager.default
+    func sorted(_ name: String) -> [URL] {
+      ((try? manager.contentsOfDirectory(at: folder.appendingPathComponent(name, isDirectory: true), includingPropertiesForKeys: nil, options: .skipsHiddenFiles)) ?? [])
+        .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+    let files = [folder.appendingPathComponent("README.md"), folder.appendingPathComponent("recording.log")]
+      .filter { manager.fileExists(atPath: $0.path) } + sorted("frames") + sorted("git")
+    let video = session.videoURL.flatMap { manager.fileExists(atPath: $0.path) ? $0 : nil }
+    return Handoff(folder: folder, files: files, video: video)
   }
 }

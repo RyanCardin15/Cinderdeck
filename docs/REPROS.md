@@ -13,10 +13,10 @@ In the CLI and MCP tools, a recording with logs is called a **repro**.
 | Choice | What gets saved |
 | --- | --- |
 | **None** (default) | Just the video |
-| **A workspace** | Logs from that workspace, and nothing else, including output that starts while you record |
+| **One or more workspaces** | Logs from the workspaces you tick, and nothing else, including output that starts while you record |
 | **All running workspaces** | Logs from every workspace that has a service or task running, including ones that start while you record |
 
-Your choice is remembered for the next recording, like the microphone choice. To capture several specific workspaces, pick them in **Preferences → Capture → Recording → Workspace logs**, where the picker then shows "2 workspaces". The same choice is at the top of **Workspaces → Recordings**.
+Tick as many workspaces as you need, for example a frontend and the backend it calls; the list stays open while you choose, and **All** ticks every one. Each row shows whether that workspace is running. The picker then reads "2 workspaces". Your choice is remembered for the next recording, like the microphone choice. The same choice is in **Preferences → Capture → Recording → Workspace logs** and at the top of **Workspaces → Recordings**.
 
 While recording, the recording bar shows a **logs** indicator with a live line count and a red error count. Hover over it to see which workspaces are being saved. **Click it to mark the moment**, for example "the bug happened here". A `▶ Marked` line appears in the log at that exact video time.
 
@@ -152,7 +152,7 @@ done
 | Tool | Purpose |
 | --- | --- |
 | `list_repro_windows` | Windows that can be recorded, frontmost first, with `id`, app, title, frame, display, and pid. Optional `query` filters by app or title. |
-| `start_repro_recording` | Start recording. Optional: `title`, `workspace`/`workspaces` to scope output or `logs: false` for none, `window_id` (from `list_repro_windows`), `window` (app name or title), or `display`, `max_seconds`, `system_audio`, `note`. Pass `workspace` with `task` or `workflow` to record a run. |
+| `start_repro_recording` | Start recording. Optional: `title`, `workspace`/`workspaces` to scope output or `logs: false` for none, `window_id` (from `list_repro_windows`), `window` (app name or title), or `display`, `max_seconds`, `system_audio`, `note`. `workspace` and `workspaces` combine. Pass `workspace` with `task` or `workflow` to record a run, and `workspaces` to also capture others, such as its backend. |
 | `mark_repro` | Add a marker now. `outcome: pass`/`fail` records a check; failed checks make the verdict **Failed**. |
 | `add_repro_logs` | Add your own lines to the log now, such as browser console messages or failed requests, under a `source` name. Lines that look like errors count toward the verdict. |
 
@@ -219,6 +219,10 @@ tail -n 0 -F /tmp/app.log | cinderdeck repro append --source app &
 
 # Record a workflow and exit 1 if anything failed, for scripts and CI-style loops
 cinderdeck repro run shop e2e --workflow --wait
+
+# Record the frontend's test task with the backend's logs on the same timeline
+cinderdeck repro start --workspace web --workspace api --window Safari
+cinderdeck repro run web e2e --workspace api --wait
 ```
 
 Two more commands help with toolbar recordings:
@@ -226,7 +230,7 @@ Two more commands help with toolbar recordings:
 ```sh
 cinderdeck repro dump              # print the latest recording's log file (--path for its location)
 cinderdeck repro scope             # which workspaces toolbar recordings save logs from
-cinderdeck repro scope shop        # only Shop; also: scope running, scope off
+cinderdeck repro scope shop billing  # only Shop and Billing; also: scope running, scope off
 ```
 
 `repro stop`, `repro wait`, and `repro run … --wait` exit with status 1 when the verdict is **Failed**. `logs` prints readable lines; add `--json` for structured output. The other commands print JSON. Run `cinderdeck repro --help` for every option.

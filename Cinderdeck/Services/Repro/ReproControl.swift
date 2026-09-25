@@ -49,8 +49,8 @@ extension StackControlService {
         result["next"] = .string("Recording while \(run.name) runs; it stops about 1.5s after the run finishes. Call wait_for_repro with this repro id, then repro_summary.")
         return .object(result)
       }
-      if let workspace = params["workspace"]?.stringValue, options.workspaces == nil {
-        options.workspaces = [try workspaceFile(.object(["workspace": .string(workspace)])).id]
+      if let workspace = params["workspace"]?.stringValue {
+        options.workspaces = (options.workspaces ?? []).union([try workspaceFile(.object(["workspace": .string(workspace)])).id])
       }
       let session = try await controller.start(options, origin: .agent, actor: actor)
       var result = reproPayload(session, lines: [], compact: true)

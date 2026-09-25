@@ -2,7 +2,7 @@
 
 ## Open a new, dedicated browser window
 
-Open the window, let the page load, then find it with `cinderdeck repro windows` and record it by id. The recording follows the window if it moves, but set its size up front, because the video keeps the size from the start.
+Open the window, let the page load, then find it with `cinderdeck repro windows` and record it by id. The examples use `http://localhost:3000`; for a worktree lane use its own URL from `cinderdeck lane env <workspace>/<branch> --export` (`CINDERDECK_URL_<SERVICE>`), since lanes run on assigned ports. The recording follows the window if it moves, but set its size up front, because the video keeps the size from the start.
 
 **Google Chrome in a separate instance.** A fresh profile keeps it away from the user's tabs:
 
@@ -67,7 +67,8 @@ This is the most complete recording: a headed browser script run as a workspace 
 ```js
 import { chromium } from 'playwright';
 
-const base = process.env.BASE_URL ?? 'http://localhost:3000';
+// Inside a workspace task, CINDERDECK_URL_<SERVICE> is the right URL in the original checkout and in every lane.
+const base = process.env.BASE_URL ?? process.env.CINDERDECK_URL_WEB ?? 'http://localhost:3000';
 const browser = await chromium.launch({ headless: false });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 
@@ -107,5 +108,7 @@ steps = ["start:web", "task:browser-session"]
 cinderdeck repro run shop browser-session --title "Checkout flow" --wait
 cinderdeck repro frame --at first_error,end
 ```
+
+To record the same flow on a worktree lane, pass the lane as the workspace: `cinderdeck repro run shop/agent/codex-1 browser-session --wait`. The task runs in the lane's folder, and `CINDERDECK_URL_WEB` points at the lane's `web`.
 
 To run it headless in CI, set `headless: true` and use `cinderdeck workspace task shop browser-session --wait` instead of `repro run`. You get the logs but no Cinderdeck video.

@@ -205,6 +205,8 @@ nonisolated enum ReproBundleExporter {
       videoName = destination.lastPathComponent
       videoURL = destination
     }
+    // Without a copy, point at the video where it was saved so a local reader can still open it.
+    let videoReference = videoName ?? (includeVideo ? nil : session.videoURL.flatMap { manager.fileExists(atPath: $0.path) ? $0.path : nil })
 
     var frameFiles: [(file: String, t: Double, label: String)] = []
     if !frames.isEmpty {
@@ -217,7 +219,7 @@ nonisolated enum ReproBundleExporter {
     }
 
     let readme = folder.appendingPathComponent("README.md")
-    var markdown = ReproReport.markdown(session, lines: lines, videoFile: videoName, logFile: "recording.log")
+    var markdown = ReproReport.markdown(session, lines: lines, videoFile: videoReference, logFile: "recording.log")
     if !frameFiles.isEmpty {
       markdown += "\n## Frames\n\n| Time | Moment | File |\n| --- | --- | --- |\n"
       for frame in frameFiles {
@@ -243,7 +245,7 @@ nonisolated enum ReproBundleExporter {
     var manifest = session
     // Paths inside the bundle, not on the machine that recorded it.
     manifest.videoBookmark = nil
-    manifest.videoPath = videoName
+    manifest.videoPath = videoReference
     manifest.logFile = "recording.log"
     try encoder.encode(manifest).write(to: folder.appendingPathComponent("repro.json"))
     try encoder.encode(ReproSummary(session: session, lines: lines)).write(to: folder.appendingPathComponent("summary.json"))
