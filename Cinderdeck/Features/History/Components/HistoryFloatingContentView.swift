@@ -206,15 +206,12 @@ struct HistoryFloatingContentView: View {
   }
 
   private var compactHeader: some View {
-    // Laid out side by side, not overlaid, so a wide pill row cannot cover the controls.
-    HStack(spacing: 8) {
-      preferencesButton()
-
-      Spacer(minLength: 4)
+    adaptiveHeader(controlSize: 30) {
       compactFilterBar
-      Spacer(minLength: 4)
-
+    } controls: {
       HStack(spacing: 8) {
+        pullRequestsButton(size: 30)
+
         controlButton(
           systemName: "arrow.up.forward.app",
           help: L10n.Actions.openHistory,
@@ -237,6 +234,34 @@ struct HistoryFloatingContentView: View {
     }
   }
 
+  private func adaptiveHeader<Filters: View, Controls: View>(
+    controlSize: CGFloat,
+    @ViewBuilder filters: () -> Filters,
+    @ViewBuilder controls: () -> Controls
+  ) -> some View {
+    // Measure the full navigation row before laying it out. If it cannot fit,
+    // give it its own row instead of compressing labels or covering controls.
+    ViewThatFits(in: .horizontal) {
+      HStack(spacing: 12) {
+        preferencesButton(size: controlSize)
+        filters().fixedSize(horizontal: true, vertical: false)
+        Spacer(minLength: 0)
+        controls().fixedSize()
+      }
+
+      VStack(spacing: 12) {
+        HStack {
+          preferencesButton(size: controlSize)
+          Spacer(minLength: 12)
+          controls().fixedSize()
+        }
+        filters()
+          .fixedSize(horizontal: true, vertical: false)
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
+    }
+  }
+
   private var compactFilterBar: some View {
     HStack(spacing: 8) {
       ForEach(Array(captureTypeFilters.enumerated()), id: \.offset) { _, filter in
@@ -253,7 +278,6 @@ struct HistoryFloatingContentView: View {
       clipboardFilterPill
       savedFilterPill
       if stacksEnabled { stacksFilterPill }
-      pullRequestsButton
     }
   }
 
@@ -315,10 +339,9 @@ struct HistoryFloatingContentView: View {
 
   private var expandedHeader: some View {
     VStack(spacing: 12) {
-      HStack {
-        preferencesButton(size: 34)
+      adaptiveHeader(controlSize: 34) {
         expandedTypeFilters
-        Spacer()
+      } controls: {
         expandedControls
       }
       HStack {
@@ -351,20 +374,15 @@ struct HistoryFloatingContentView: View {
     .accessibilityIdentifier("history.savedTab")
   }
 
-  private var pullRequestsButton: some View {
-    Button {
+  private func pullRequestsButton(size: CGFloat) -> some View {
+    controlButton(
+      systemName: "arrow.triangle.pull",
+      help: pullRequestsHelp,
+      size: size
+    ) {
       manager.hide()
       PullRequestsWindowController.shared.show()
-    } label: {
-      Label("PRs", systemImage: "arrow.triangle.pull")
-        .font(.system(size: 12, weight: .semibold))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(unselectedPillBackground, in: Capsule())
-        .overlay(Capsule().stroke(chromeSurfaceBorder, lineWidth: 1))
     }
-    .buttonStyle(.plain)
-    .help(pullRequestsHelp)
     .accessibilityLabel("Open pull requests")
     .accessibilityIdentifier("history.pullRequests")
   }
@@ -408,7 +426,6 @@ struct HistoryFloatingContentView: View {
       clipboardFilterPill
       savedFilterPill
       if stacksEnabled { stacksFilterPill }
-      pullRequestsButton
     }
   }
 
@@ -472,6 +489,8 @@ struct HistoryFloatingContentView: View {
 
   private var expandedControls: some View {
     HStack(spacing: 6) {
+      pullRequestsButton(size: 34)
+
       if manager.isEnabled {
         controlButton(
           systemName: "arrow.down.right.and.arrow.up.left",
@@ -776,6 +795,8 @@ struct HistoryFloatingContentView: View {
         if let count {
           Text("\(count)")
             .font(.system(size: max(fontSize - 2, 9), weight: .bold))
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
             .background(pillCountBackground.opacity(isSelected ? 0.18 : 1), in: Capsule())

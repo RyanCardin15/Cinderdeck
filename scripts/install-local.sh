@@ -115,7 +115,7 @@ printf '%s\n' "$REQUIREMENT" > "$DERIVED_DATA_PATH/designated-requirement.txt"
 echo "Verified designated requirement: $REQUIREMENT"
 # This CLI command exits before migration, app initialization, or permission UI.
 # A valid signature alone cannot detect a dyld / hardened-runtime launch failure.
-if ! "$APP_PATH/Contents/MacOS/Cinderdeck" stacks help > "$DERIVED_DATA_PATH/launch-check.log" 2>&1; then
+if ! "$APP_PATH/Contents/MacOS/Cinderdeck" services help > "$DERIVED_DATA_PATH/launch-check.log" 2>&1; then
   cat "$DERIVED_DATA_PATH/launch-check.log" >&2
   fail "Signed app could not launch; the installed app and its permissions have not been changed."
 fi
