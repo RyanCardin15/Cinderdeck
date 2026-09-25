@@ -327,6 +327,33 @@ final class CaptureHistoryStoreTests: XCTestCase {
 
   // MARK: - Helpers
 
+  // MARK: - saved records
+
+  func testRetention_keepsSavedRecords() throws {
+    let collections = HistoryCollectionStore(dbPool: try DatabaseManager.shared().dbPool)
+    let old = Date().addingTimeInterval(-10 * 86400)
+    let saved = makeRecord(capturedAt: old)
+    let unsaved = makeRecord(capturedAt: old.addingTimeInterval(1))
+    CaptureHistoryStore.shared.add(saved)
+    CaptureHistoryStore.shared.add(unsaved)
+    collections.add([.capture(saved.id)], to: HistoryCollection.favoritesID)
+
+    CaptureHistoryStore.shared.removeOlderThan(days: 5)
+    CaptureHistoryStore.shared.refreshRecords()
+    XCTAssertEqual(CaptureHistoryStore.shared.records.map(\.id), [saved.id])
+    XCTAssertEqual(CaptureHistoryStore.shared.savedRecordIDs(), [saved.id])
+
+    let newer = makeRecord()
+    CaptureHistoryStore.shared.add(newer)
+    CaptureHistoryStore.shared.trimToMaxCount(1)
+    CaptureHistoryStore.shared.refreshRecords()
+    XCTAssertEqual(Set(CaptureHistoryStore.shared.records.map(\.id)), [saved.id, newer.id])
+
+    CaptureHistoryStore.shared.remove(id: saved.id)
+    collections.refresh()
+    XCTAssertFalse(collections.isFavorite(.capture(saved.id)))
+  }
+
   private func makeRecord(
     filePath: String? = nil,
     thumbnailPath: String? = nil,
