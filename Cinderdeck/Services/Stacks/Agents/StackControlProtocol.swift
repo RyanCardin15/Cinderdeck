@@ -91,6 +91,25 @@ nonisolated struct StackServiceSnapshot: Codable, Sendable {
   let dependsOn: [String]
   let autostart: Bool
   let logFile: String
+  var ports: [String: Int]? = nil
+  var bindWarning: String? = nil
+  /// "isolate" (runs here), or where a shared/linked service actually runs.
+  var sharedFrom: String? = nil
+}
+
+/// Lane details beyond StackLaneInfo: setup, Git state and worktrees.
+nonisolated struct StackLaneStatusSnapshot: Codable, Sendable {
+  var slug: String
+  var directory: String
+  var pinned: Bool
+  var adopted: Bool
+  var setup: StackLaneSetupState?
+  var merged: Bool?
+  var upstreamGone: Bool?
+  var unpushed: Int?
+  var worktrees: [StackLaneWorktree]
+  var shared: [String]
+  var urls: [String: String]
 }
 
 nonisolated struct StackRepoSnapshot: Codable, Sendable {
@@ -118,6 +137,9 @@ nonisolated struct StackSnapshot: Codable, Sendable {
   let services: [StackServiceSnapshot]
   let repos: [StackRepoSnapshot]
   var lane: StackLaneInfo?
+  var laneStatus: StackLaneStatusSnapshot? = nil
+  /// Services this workspace uses but does not run.
+  var links: [StackServiceLink]? = nil
 }
 
 nonisolated struct StacksSnapshot: Codable, Sendable {

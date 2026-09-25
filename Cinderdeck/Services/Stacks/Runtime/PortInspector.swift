@@ -42,6 +42,17 @@ nonisolated enum PortInspector {
     }.value
   }
 
+  /// TCP ports a process group listens on.
+  static func listeningPorts(processGroup: Int32) async -> Set<Int> {
+    guard processGroup > 1, let result = try? await StackCommandRunner.run("/usr/sbin/lsof",
+      ["-nP", "-a", "-g", String(processGroup), "-iTCP", "-sTCP:LISTEN", "-Fn"], timeout: 5) else { return [] }
+    var ports = Set<Int>()
+    for line in result.text.split(separator: "\n") where line.first == "n" {
+      if let colon = line.lastIndex(of: ":"), let port = Int(line[line.index(after: colon)...]) { ports.insert(port) }
+    }
+    return ports
+  }
+
   static func conflict(on port: Int) async throws -> StackPortConflict? {
     let result = try await StackCommandRunner.run("/usr/sbin/lsof", ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN", "-Fpc"], timeout: 5)
     var owners: [StackPortOwner] = []

@@ -33,12 +33,15 @@ nonisolated enum StackCLI {
     var positionals: [String] = []
     var flags = Set<String>()
     var values: [String: String] = [:]
+    /// Repeatable flags such as --env KEY=VALUE, in order.
+    var lists: [String: [String]] = [:]
     var json: Bool { flags.contains("json") }
     func has(_ name: String) -> Bool { flags.contains(name) }
     subscript(name: String) -> String? { values[name] }
   }
 
-  private static let valueFlags: Set<String> = ["timeout", "lines", "n", "grep", "note", "ttl", "repo", "as", "session", "port", "pid", "dir", "dirty", "limit"]
+  private static let valueFlags: Set<String> = ["timeout", "lines", "n", "grep", "note", "ttl", "repo", "as", "session", "port", "pid", "dir", "dirty", "limit", "from", "path", "name", "env", "copy"]
+  private static let listFlags: Set<String> = ["env", "copy"]
 
   static func parse(_ arguments: [String]) -> Options {
     var options = Options()
@@ -53,8 +56,13 @@ nonisolated enum StackCLI {
         if let equals = name.firstIndex(of: "=") { inline = String(name[name.index(after: equals)...]); name = String(name[..<equals]) }
         if name == "f" { name = "follow" }
         if valueFlags.contains(name) {
-          if let inline { options.values[name] = inline }
-          else if index < arguments.count { options.values[name] = arguments[index]; index += 1 }
+          var value: String?
+          if let inline { value = inline }
+          else if index < arguments.count { value = arguments[index]; index += 1 }
+          if let value {
+            options.values[name] = value
+            if listFlags.contains(name) { options.lists[name, default: []].append(value) }
+          }
         } else { options.flags.insert(name) }
       } else { options.positionals.append(argument) }
     }
@@ -342,34 +350,108 @@ nonisolated enum StackCLI {
     switch command {
     case "list", "ls", "status":
       if let source = args.first { params["workspace"] = .string(source) }
-      let result = try connection.call("lane.list", params)
+      let result = try connection.call("lane.list", params, timeout: 120)
       if options.json { printJSON(result) }
       else { printStacks(try result.decode([StackSnapshot].self), detailed: true) }
-    case "create":
-      guard args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane create <workspace> <branch> [--no-start] [--no-wait]") }
-      params["workspace"] = .string(args[0]); params["branch"] = .string(args[1])
+    case "create", "adopt":
+      let adopting = command == "adopt"
+      if adopting {
+        guard (1...2).contains(args.count) else { throw StackControlError.invalid("Usage: cinderdeck lane adopt <workspace> [name] [--path <worktree>] [--setup] [--no-start]") }
+        params["path"] = .string(options["path"] ?? FileManager.default.currentDirectoryPath)
+        if args.count == 2 { params["name"] = .string(args[1]) }
+        params["setup"] = .bool(options.has("setup"))
+      } else {
+        guard args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane create <workspace> <branch> [--from <ref>] [--env KEY=VALUE] [--copy <pattern>] [--no-setup] [--no-start] [--no-wait]") }
+        params["branch"] = .string(args[1])
+        params["setup"] = .bool(!options.has("no-setup"))
+      }
+      params["workspace"] = .string(args[0])
+      if let from = options["from"] { params["from"] = .string(from) }
+      var environment: [String: JSONValue] = [:]
+      for pair in options.lists["env"] ?? [] {
+        guard let equals = pair.firstIndex(of: "="), equals != pair.startIndex else { throw StackControlError.invalid("--env takes KEY=VALUE (\(pair))") }
+        environment[String(pair[..<equals])] = .string(String(pair[pair.index(after: equals)...]))
+      }
+      if !environment.isEmpty { params["env"] = .object(environment) }
+      if let copy = options.lists["copy"] { params["copy"] = .array(copy.map(JSONValue.string)) }
       params["start"] = .bool(!options.has("no-start")); params["wait"] = .bool(!options.has("no-wait"))
       let timeout = min(max(Double(options["timeout"] ?? "") ?? 180, 1), 900)
       params["timeout"] = .number(timeout)
-      let result = try connection.call("lane.create", params, timeout: timeout + 300)
+      let result = try connection.call(adopting ? "lane.adopt" : "lane.create", params, timeout: timeout + 3900)
       if options.json { printJSON(result) }
       else if let snapshot = try result["workspace"]?.decode(StackSnapshot.self) {
         printStacks([snapshot], detailed: true)
         if let lane = snapshot.lane {
-          print("Lane: \(lane.reference)\nWorktrees: \(lane.directory.path)")
-          print("Use `cinderdeck services logs|stop|restart \(lane.reference)` to manage this lane.")
+          print("Lane: \(lane.reference)\nFolder: \(lane.directory.path)")
+          print("Use `cinderdeck services logs|stop|restart \(lane.reference)` to manage this lane, and `cinderdeck lane env \(lane.reference) --export` for its ports and URLs.")
         }
+        for warning in result["warnings"]?.arrayValue ?? [] { print(paint("warning: ", .yellow) + (warning.stringValue ?? "")) }
+        if let note = result["note"]?.stringValue { print(paint(note, .yellow)) }
+      }
+      if result["setup"]?["status"]?.stringValue == "failed" {
+        throw StackControlError(code: "setup_failed", message: "Lane created, but setup failed: \(result["setup"]?["detail"]?.stringValue ?? ""). Fix it, then run `cinderdeck lane setup <lane>`.")
       }
       if result["problems"] != nil { throw StackControlError(code: "service_failed", message: "Lane created, but one or more services failed. Inspect its logs, then restart the lane.") }
       if result["timedOut"]?.boolValue == true { throw StackControlError(code: "timeout", message: "Lane created; still waiting for readiness. Inspect lane status.") }
-    case "remove", "rm":
-      guard args.count == 1 || args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane remove <workspace>/<branch> (or <workspace> <branch>)") }
+    case "remove", "rm", "release":
+      guard args.count == 1 || args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane \(command) <workspace>/<branch> [--discard-ignored] [--force-teardown] [--delete-logs]") }
       params["workspace"] = .string(args.joined(separator: "/"))
-      let result = try connection.call("lane.remove", params, timeout: 300)
-      if options.json { printJSON(result) } else { print("Removed lane worktrees. Git branches were kept.") }
-    default: throw StackControlError.invalid("Unknown lane command. Use create, list or remove.")
+      if options.has("discard-ignored") { params["discard_ignored"] = .bool(true) }
+      if options.has("force-teardown") { params["force_teardown"] = .bool(true) }
+      if options.has("delete-logs") { params["delete_logs"] = .bool(true) }
+      let result = try connection.call(command == "release" ? "lane.release" : "lane.remove", params, timeout: 4200)
+      if options.json { printJSON(result); return }
+      let report = try? result["report"]?.decode(StackLaneRemovalReport.self)
+      print(command == "release" ? "Released the lane. Its worktrees were kept." : "Removed the lane. Git branches were kept.")
+      if let report {
+        if !report.ignored.isEmpty { print(paint("Deleted ignored files: " + ByteCountFormatter.string(fromByteCount: report.ignoredBytes, countStyle: .file), .dim)) }
+        for path in report.keptWorktrees { print(paint("Kept " + path, .dim)) }
+        for (branch, count) in report.unpushed.sorted(by: { $0.key < $1.key }) {
+          print(paint("\(branch) has \(count) commit\(count == 1 ? "" : "s") on no remote.", .yellow))
+        }
+      }
+    case "setup":
+      guard args.count == 1 || args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane setup <workspace>/<branch>") }
+      params["workspace"] = .string(args.joined(separator: "/"))
+      let result = try connection.call("lane.setup", params, timeout: 3900)
+      if options.json { printJSON(result); return }
+      let status = result["setup"]?["status"]?.stringValue ?? "?"
+      print("Setup " + status + (result["setup"]?["detail"]?.stringValue.map { ": " + $0 } ?? ""))
+      if status == "failed" { throw StackControlError(code: "setup_failed", message: "Lane setup failed") }
+    case "unpin":
+      guard args.count == 1 || args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane unpin <workspace>/<branch>") }
+      params["workspace"] = .string(args.joined(separator: "/"))
+      let result = try connection.call("lane.unpin", params)
+      if options.json { printJSON(result) } else { print("The lane now follows its source workspace.") }
+    case "env":
+      guard (1...2).contains(args.count) else { throw StackControlError.invalid("Usage: cinderdeck lane env <workspace or lane> [service] [--export|--json]") }
+      params["workspace"] = .string(args[0])
+      if args.count == 2 { params["service"] = .string(args[1]) }
+      let result = try connection.call("lane.env", params)
+      if options.json { printJSON(result); return }
+      let values = (result["environment"]?.objectValue ?? [:]).compactMapValues(\.stringValue)
+      for key in values.keys.sorted() {
+        let value = values[key]!
+        print(options.has("export") ? "export \(key)=" + shellQuote(value) : "\(key)=\(value)")
+      }
+    case "prune":
+      if let source = args.first { params["workspace"] = .string(source) }
+      if options.has("dry-run") { params["dry_run"] = .bool(true) }
+      if options.has("missing") { params["missing"] = .bool(true) }
+      if options.has("discard-ignored") { params["discard_ignored"] = .bool(true) }
+      let result = try connection.call("lane.prune", params, timeout: 4200)
+      if options.json { printJSON(result); return }
+      let entries = result.arrayValue ?? []
+      if entries.isEmpty { print("No merged lanes to prune.") }
+      for entry in entries {
+        let detail = entry["detail"]?.stringValue.map { " — " + $0 } ?? ""
+        print("\(entry["action"]?.stringValue ?? "") \(entry["reference"]?.stringValue ?? "") (\(entry["reason"]?.stringValue ?? ""))" + detail)
+      }
+    default: throw StackControlError.invalid("Unknown lane command. Use create, adopt, list, env, setup, remove, release, prune or unpin.")
     }
   }
+
+  static func shellQuote(_ value: String) -> String { "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'" }
 
   private static func printPaths(_ options: Options) {
     let values: [(String, String)] = [
@@ -453,6 +535,18 @@ nonisolated enum StackCLI {
         print("  " + paint("⚑ claimed by " + claim.holder.label, .cyan) + note + until)
       }
       for issue in stack.issues { print("  " + paint(issue, .yellow)) }
+      if let status = stack.laneStatus {
+        var line = "  " + paint("lane", .dim) + " " + status.directory
+        if status.pinned { line += paint("  pinned", .yellow) }
+        if status.adopted { line += paint("  adopted", .dim) }
+        if status.merged == true { line += paint("  merged", .green) }
+        if status.upstreamGone == true { line += paint("  upstream deleted", .yellow) }
+        if let setup = status.setup {
+          let color: Color = setup.status == .failed ? .red : setup.status == .succeeded ? .dim : .yellow
+          line += paint("  setup " + setup.status.rawValue, color)
+        }
+        print(line)
+      }
       if stack.definitionChanged { print("  " + paint("definition changed — restart to apply", .yellow)) }
       let width = max(8, (stack.services.map(\.name.count).max() ?? 0) + 2)
       for service in stack.services {
@@ -464,6 +558,7 @@ nonisolated enum StackCLI {
         if let owner = service.owner, service.pid != nil { line += paint("by " + owner.label, .dim) }
         print(line)
         if detailed, let detail = service.detail, !detail.isEmpty { print("      " + paint(detail, service.phase == "crashed" ? .red : .dim)) }
+        if let warning = service.bindWarning { print("      " + paint(warning, .yellow)) }
       }
       if detailed {
         for repo in stack.repos {
@@ -539,10 +634,18 @@ nonisolated enum StackCLI {
     cinderdeck services agent-help                    Instructions to paste into AGENTS.md
 
   WORKTREE LANES
-    cinderdeck lane create <workspace> <branch>       Create and start an isolated worktree lane
-    cinderdeck lane list [workspace]                  Original checkout and parallel lanes
-    cinderdeck lane remove <workspace>/<branch>       Stop and remove clean worktrees; keep branches
-    --no-start                                        Create only, for dependency setup before starting
+    cinderdeck lane create <workspace> <branch>       Create, set up and start an isolated worktree lane
+      --from <ref>  --env KEY=VALUE  --copy <glob>    Start point, lane-only variables, extra files to copy
+      --no-setup  --no-start                          Skip [lanes] setup, or create without starting
+    cinderdeck lane adopt <workspace> [name]          Use an existing worktree (--path, default: here)
+    cinderdeck lane list [workspace]                  Original checkout and lanes, with setup and merge state
+    cinderdeck lane env <lane> [service] --export     Resolved ports, URLs and variables for your shell
+    cinderdeck lane setup <lane>                      Run [lanes] setup again
+    cinderdeck lane remove <lane>                     Stop, tear down, remove worktrees; keep branches
+      --discard-ignored  --force-teardown             Also delete ignored files; remove if teardown fails
+    cinderdeck lane release <lane>                    Forget the lane but keep its worktrees
+    cinderdeck lane prune [workspace] --dry-run       Remove lanes whose branches were merged
+    cinderdeck lane unpin <lane>                      Make an older lane follow its source definition
     Use services status|logs|start|stop|restart <workspace>/<branch> to manage a lane.
 
   MORE

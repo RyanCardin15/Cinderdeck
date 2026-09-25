@@ -55,7 +55,9 @@ extension StackControlService {
   private func editableWorkspace(_ params: JSONValue, actor: StackActor) throws -> (StackDefinitionFile, StackDefinition, String) {
     let file = try workspaceFile(params)
     if let lane = file.lane {
-      throw StackControlError(code: "lane", message: "\(file.name) is a worktree lane, and its definition is a snapshot. Edit \(lane.sourceStackID), then recreate the lane.")
+      throw StackControlError(code: "lane", message: lane.pinned
+        ? "\(file.name) is a pinned lane that keeps the definition saved when it was created. Unpin it (unpin_lane) so it follows \(lane.sourceStackID), then edit \(lane.sourceStackID)."
+        : "\(file.name) is a worktree lane and follows \(lane.sourceStackID). Edit \(lane.sourceStackID) instead; lane-only values go in its [lanes] table.")
     }
     try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
     let source: String
@@ -107,7 +109,7 @@ extension StackControlService {
     let existing = definition.service(id)
     var service = existing ?? ServiceDefinition(id: id, command: "", repo: nil, directory: definition.root)
     var changes: [(section: String, replacement: String)] = []
-    if let command = params["cmd"]?.stringValue { service.command = command }
+    if let command = params["cmd"]?.stringValue { service.command = command; service.raw?.command = nil }
     guard !service.command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw StackControlError.invalid("Pass cmd for a new service") }
     let previousRepo = service.repo
     service.repo = try repoParameter(params, in: definition, current: service.repo)
@@ -136,8 +138,25 @@ extension StackControlService {
         service.port = port
       }
     }
+    if let ports = params["ports"]?.objectValue {
+      var named: [String: Int] = [:]
+      for (name, value) in ports {
+        guard StackDefinitionLoader.validID(name), let port = value.intValue, (1...65535).contains(port) else {
+          throw StackControlError.invalid("ports must map names to integers from 1 to 65535")
+        }
+        named[name] = port
+      }
+      service.ports = named
+    }
     if let ready = params["ready"]?.stringValue?.trimmingCharacters(in: .whitespaces) {
-      service.readiness = try readiness(ready)
+      service.raw?.readyHTTP = nil; service.raw?.readyPort = nil
+      let named = ready.lowercased().hasPrefix("port:") ? String(ready.dropFirst(5)).trimmingCharacters(in: .whitespaces) : ""
+      if StackTemplates.containsTemplate(ready) { service.raw = (service.raw ?? StackRawValues()); service.raw?.readyHTTP = ready }
+      else if !named.isEmpty, Int(named) == nil {
+        guard let port = service.allPorts[named] else { throw StackControlError.invalid("ready port:\(named) names no port of \(id)") }
+        service.readiness = .port(port)
+        service.raw = (service.raw ?? StackRawValues()); service.raw?.readyPort = named
+      } else { service.readiness = try readiness(ready) }
     } else if existing == nil, let port = service.port {
       service.readiness = .port(port)
     }
@@ -145,8 +164,13 @@ extension StackControlService {
       guard seconds.isFinite, seconds > 0, seconds <= 3600 else { throw StackControlError.invalid("ready_timeout must be greater than 0 and at most 3600 seconds") }
       service.readyTimeout = seconds
     }
-    if let environment = try environment(params["env"]) { service.environment = environment }
+    if let environment = try environment(params["env"]) { service.environment = environment; service.raw?.environment = [:] }
     if let autostart = params["autostart"]?.boolValue { service.autostart = autostart }
+    if let raw = params["lane"] {
+      if raw == .null || raw.stringValue == "" { service.laneMode = nil }
+      else if let mode = raw.stringValue.flatMap(StackServiceLaneMode.init(rawValue:)) { service.laneMode = mode }
+      else { throw StackControlError.invalid("lane must be isolate, shared or off") }
+    }
     changes.append(("services." + id, WorkspaceDefinitionWriter.service(service, base: base)))
     try WorkspaceDefinitionWriter.save(file: file, original: source, changes: changes)
     return "services." + id
@@ -189,7 +213,7 @@ extension StackControlService {
       repo: converted?.repo, directory: converted?.directory ?? definition.root, environment: converted?.environment ?? [:],
       requiresServices: converted?.dependencies ?? [])
     if let name = params["name"]?.stringValue, !name.trimmingCharacters(in: .whitespaces).isEmpty { task.name = name }
-    if let command = params["cmd"]?.stringValue { task.command = command }
+    if let command = params["cmd"]?.stringValue { task.command = command; task.raw?.command = nil }
     guard !task.command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw StackControlError.invalid("Pass cmd for a new task") }
     let previousRepo = task.repo
     task.repo = try repoParameter(params, in: definition, current: task.repo)
@@ -201,7 +225,7 @@ extension StackControlService {
       guard seconds.isFinite, seconds > 0, seconds <= 3600 else { throw StackControlError.invalid("timeout must be greater than 0 and at most 3600 seconds") }
       task.timeout = seconds
     }
-    if let environment = try environment(params["env"]) { task.environment = environment }
+    if let environment = try environment(params["env"]) { task.environment = environment; task.raw?.environment = [:] }
     var changes: [(section: String, replacement: String)] = [("tasks." + id, WorkspaceDefinitionWriter.task(task))]
     if let converted {
       changes.insert(("services." + converted.id, ""), at: 0)

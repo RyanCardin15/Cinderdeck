@@ -9,8 +9,7 @@ private actor LaneReloadGate {
   private var observers: [(Int, CheckedContinuation<Void, Never>)] = []
 
   func read(_ directory: URL) async throws -> [StackDefinitionFile] {
-    let snapshot = try StackDefinitionLoader.loadDirectory(directory)
-      + StackLaneStore.files(in: StackLaneStore.directory(for: directory))
+    let snapshot = try StackWorkspaceResolver.load(directory)
     reads += 1
     let number = reads
     let ready = observers.filter { $0.0 <= reads }
@@ -60,6 +59,7 @@ final class StackLaneTests: XCTestCase {
     _ = try await StackLaneStore.git(["-c", "commit.gpgsign=false", "commit", "-m", "fixture"], at: repo)
     defaults = UserDefaults(suiteName: "CinderdeckLaneTests-\(UUID().uuidString)")!
     defaults.set(definitions.path, forKey: PreferencesKeys.stacksDirectory)
+    defaults.set(root.appendingPathComponent("worktrees").path, forKey: PreferencesKeys.stacksLanesDirectory)
     defaults.set(false, forKey: PreferencesKeys.stacksNotifyOnCrash)
     let pool = try DatabaseManager.openDatabase(at: root.appendingPathComponent("runs.db")).dbPool
     supervisor = StackSupervisor(store: StackRunStore(pool: pool), defaults: defaults,
@@ -211,8 +211,8 @@ final class StackLaneTests: XCTestCase {
     var source = try XCTUnwrap(supervisor.definition("shop"))
     source.services[0].readiness = .http(URL(string: "https://example.com/health")!)
     do {
-      _ = try await StackLaneStore.create(source: source, branch: "invalid", owner: codex,
-        directory: supervisor.lanesDirectory, occupiedPorts: [])
+      _ = try await StackLaneStore.create(source: source, request: .init(branch: "invalid"), owner: codex,
+        directory: supervisor.lanesDirectory, worktreeRoot: supervisor.worktreeRoot, occupiedPorts: [])
       XCTFail("Accepted external readiness")
     } catch { XCTAssertTrue(error.localizedDescription.contains("localhost")) }
     XCTAssertTrue(try StackLaneStore.records(in: supervisor.lanesDirectory).isEmpty)
@@ -263,17 +263,19 @@ final class StackLaneTests: XCTestCase {
     source.root = root
     source.repos.append(.init(id: "other", path: other))
     source.services[1].repo = "other"; source.services[1].directory = other
-    let record = try await StackLaneStore.create(source: source, branch: "multi", owner: codex,
-      directory: supervisor.lanesDirectory, occupiedPorts: Set(source.services.compactMap(\.port)))
+    let record = try await StackLaneStore.create(source: source, request: .init(branch: "multi"), owner: codex,
+      directory: supervisor.lanesDirectory, worktreeRoot: supervisor.worktreeRoot, occupiedPorts: Set(source.services.compactMap(\.port))).record
+    let definition = StackLaneStore.derive(record, source: source).definition
     XCTAssertEqual(record.worktrees.count, 2)
-    XCTAssertEqual(Set(record.definition.services.map(\.directory)).count, 2)
-    XCTAssertEqual(record.definition.services[1].dependencies, ["api"])
-    for service in record.definition.services {
-      XCTAssertEqual(record.definition.repo(try XCTUnwrap(service.repo))?.path, service.directory)
+    XCTAssertEqual(Set(record.worktrees.map { $0.path.lastPathComponent }), ["shop", "other"])
+    XCTAssertEqual(Set(definition.services.map(\.directory)).count, 2)
+    XCTAssertEqual(definition.services[1].dependencies, ["api"])
+    for service in definition.services {
+      XCTAssertEqual(definition.repo(try XCTUnwrap(service.repo))?.path, service.directory)
       let branch = try await StackLaneStore.git(["branch", "--show-current"], at: service.directory)
       XCTAssertEqual(branch, "multi")
     }
-    try await StackLaneStore.remove(record)
+    _ = try await StackLaneStore.remove(record, in: supervisor.lanesDirectory, others: [], options: .init())
   }
 
   func testFailedCreateRollsBackWorktreesAndMalformedRecordDoesNotHideBase() async throws {
@@ -284,8 +286,8 @@ final class StackLaneTests: XCTestCase {
     var source = try XCTUnwrap(supervisor.definition("shop"))
     source.services[0].directory = subfolder
     do {
-      _ = try await StackLaneStore.create(source: source, branch: "rollback", owner: codex,
-        directory: supervisor.lanesDirectory, occupiedPorts: [])
+      _ = try await StackLaneStore.create(source: source, request: .init(branch: "rollback"), owner: codex,
+        directory: supervisor.lanesDirectory, worktreeRoot: supervisor.worktreeRoot, occupiedPorts: [])
       XCTFail("Accepted a folder absent on the lane branch")
     } catch { XCTAssertTrue(error.localizedDescription.contains("folder is missing")) }
     XCTAssertTrue(try StackLaneStore.records(in: supervisor.lanesDirectory).isEmpty)
@@ -410,7 +412,7 @@ final class StackLaneTests: XCTestCase {
     let file = try await supervisor.createLane(stack: "shop", branch: "journal", actor: codex)
     var record = try XCTUnwrap(StackLaneStore.records(in: supervisor.lanesDirectory).first)
     record.ready = false
-    let manifest = try XCTUnwrap(record.definition.lane?.directory).appendingPathComponent("lane.json")
+    let manifest = StackLaneStore.manifest(id: record.id, in: supervisor.lanesDirectory)
     try StackControlCoding.encoder().encode(record).write(to: manifest, options: .atomic)
     await supervisor.reloadDefinitions()
     XCTAssertNil(supervisor.definition(file.id))
@@ -466,9 +468,520 @@ final class StackLaneTests: XCTestCase {
     XCTAssertEqual(runner.run(run.id)?.status, .succeeded)
     XCTAssertEqual(supervisor.runtime(lane.id, "api").phase, .ready)
     let lines = await runner.output(run.id).map(\.text)
-    XCTAssertTrue(lines.contains { $0.contains("/repo-1") })
+    XCTAssertTrue(lines.contains { $0.contains("/shop/workflow/shop") }, "Worktrees live in <lanes>/<workspace>/<slug>/<repo folder>")
     XCTAssertTrue(lines.contains(String(try XCTUnwrap(definition.service("api")?.port))))
     XCTAssertTrue(lines.contains("task-config"), "Tasks must keep their own PORT even when they share a service id")
     try await supervisor.removeLane(lane.id, actor: codex)
+  }
+
+  // MARK: Redesigned lanes
+
+  private func write(_ source: String, id: String = "shop") async throws {
+    try source.write(to: definitions.appendingPathComponent(id + ".toml"), atomically: true, encoding: .utf8)
+    await supervisor.reloadDefinitions()
+    XCTAssertNotNil(supervisor.definition(id), supervisor.files.first { $0.id == id }?.issues.map(\.message).joined(separator: "; ") ?? "missing")
+  }
+
+  private func laneDefinition(_ stack: String, _ branch: String, _ actor: StackActor) async throws -> StackDefinition {
+    let file = try await supervisor.createLane(stack: stack, branch: branch, actor: actor)
+    return try XCTUnwrap(file.definition)
+  }
+
+  private func commitAll(_ message: String, at path: URL) async throws {
+    _ = try await StackLaneStore.git(["add", "-A"], at: path)
+    _ = try await StackLaneStore.git(["-c", "commit.gpgsign=false", "-c", "user.name=Lane Tests", "-c", "user.email=lanes@example.test",
+      "commit", "-m", message], at: path)
+  }
+
+  private func environment(_ stack: StackDefinition, _ service: String) throws -> [String: String] {
+    StackLaunchDefinition(stack: stack, service: try XCTUnwrap(stack.service(service))).environment(shell: [:], secrets: [:])
+  }
+
+  /// A bare `origin` with main pushed and origin/HEAD set.
+  private func addOrigin() async throws -> URL {
+    let remote = root.appendingPathComponent("origin.git")
+    _ = try await StackLaneStore.git(["init", "--bare", "-b", "main", remote.path], at: root)
+    _ = try await StackLaneStore.git(["remote", "add", "origin", remote.path], at: repo)
+    _ = try await StackLaneStore.git(["push", "-u", "origin", "main"], at: repo)
+    _ = try await StackLaneStore.git(["remote", "set-head", "origin", "main"], at: repo)
+    return remote
+  }
+
+  func testRemoteOnlyBranchIsTrackedAndNewBranchesStartAtFrom() async throws {
+    try await load()
+    let remote = try await addOrigin()
+    let other = root.appendingPathComponent("elsewhere")
+    _ = try await StackLaneStore.git(["clone", remote.path, other.path], at: root)
+    _ = try await StackLaneStore.git(["switch", "-c", "feature/pr"], at: other)
+    try "from the pull request\n".write(to: other.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)
+    try await commitAll("PR work", at: other)
+    _ = try await StackLaneStore.git(["push", "-u", "origin", "feature/pr"], at: other)
+    let remoteTip = try await StackLaneStore.git(["rev-parse", "HEAD"], at: other)
+    _ = try await StackLaneStore.git(["fetch", "origin"], at: repo)
+    _ = try await StackLaneStore.git(["tag", "v1"], at: repo)
+    try "later\n".write(to: repo.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)
+    try await commitAll("later on main", at: repo)
+
+    let review = try await laneDefinition("shop", "feature/pr", codex)
+    let tip = try await StackLaneStore.git(["rev-parse", "HEAD"], at: review.root)
+    XCTAssertEqual(tip, remoteTip, "A branch only on the remote is checked out as it is there")
+    let upstream = try await StackLaneStore.git(["rev-parse", "--abbrev-ref", "feature/pr@{upstream}"], at: review.root)
+    XCTAssertEqual(upstream, "origin/feature/pr")
+
+    let file = try await supervisor.createLane(stack: "shop", request: .init(branch: "from-tag", from: "v1"), actor: codex).file
+    let lane = try XCTUnwrap(file.definition)
+    let start = try await StackLaneStore.git(["rev-parse", "HEAD"], at: lane.root)
+    let tag = try await StackLaneStore.git(["rev-parse", "v1^{commit}"], at: repo)
+    XCTAssertEqual(start, tag)
+    XCTAssertEqual(lane.lane?.from, "v1")
+    do { _ = try await supervisor.createLane(stack: "shop", request: .init(branch: "bad-start", from: "no-such-ref"), actor: codex); XCTFail("Accepted a missing start point") }
+    catch { XCTAssertTrue(error.localizedDescription.contains("no-such-ref"), error.localizedDescription) }
+  }
+
+  func testEnvironmentContractTemplatesAndPortsOnlyForServicesWithPorts() async throws {
+    let port = try StackLaneStore.availablePort(excluding: [])
+    try await write("""
+    name = "Shop"
+    root = "\(repo.path)"
+    shell = "/bin/sh"
+    [env]
+    DATABASE = "shop{{lane.ident:+_}}{{lane.ident}}"
+    [services.api]
+    cmd = "/usr/bin/python3 server.py"
+    port = \(port)
+    ready.http = "{{url.api}}/health"
+    [services.worker]
+    cmd = "sleep 60"
+    env.API_URL = "{{url.api}}"
+    env.SLUG = "{{lane.slug:-main}}"
+    """)
+    let base = try XCTUnwrap(supervisor.definition("shop"))
+    XCTAssertEqual(base.service("api")?.readiness, .http(URL(string: "http://localhost:\(port)/health")!))
+    let api = try environment(base, "api")
+    XCTAssertEqual(api["PORT"], String(port), "The original checkout gets PORT too")
+    XCTAssertEqual(api["CINDERDECK_PORT_API"], String(port))
+    XCTAssertEqual(api["CINDERDECK_URL_API"], "http://localhost:\(port)")
+    XCTAssertEqual(api["DATABASE"], "shop")
+    XCTAssertNil(api["CINDERDECK_LANE"])
+    XCTAssertNil(api["COMPOSE_PROJECT_NAME"])
+    let worker = try environment(base, "worker")
+    XCTAssertEqual(worker["API_URL"], "http://localhost:\(port)")
+    XCTAssertEqual(worker["SLUG"], "main")
+    XCTAssertNil(worker["PORT"])
+
+    let file = try await supervisor.createLane(stack: "shop", branch: "agent/Env-Lane", actor: codex)
+    let lane = try XCTUnwrap(file.definition)
+    let assigned = try XCTUnwrap(lane.service("api")?.port)
+    XCTAssertNil(lane.service("worker")?.port, "Services without a port get none in lanes")
+    XCTAssertEqual(lane.lane?.ports.keys.sorted(), ["api"])
+    XCTAssertEqual(assigned % StackLaneStore.blockSize, 0, "A lane's ports start a block")
+    XCTAssertEqual(lane.service("api")?.readiness, .http(URL(string: "http://localhost:\(assigned)/health")!))
+    XCTAssertEqual(lane.lane?.effectiveSlug, "agent-env-lane")
+    XCTAssertEqual(lane.lane?.directory, supervisor.worktreeRoot.appendingPathComponent("shop/agent-env-lane"))
+    XCTAssertEqual(lane.root, lane.lane?.directory.appendingPathComponent("shop", isDirectory: true))
+    let laneWorker = try environment(lane, "worker")
+    XCTAssertNil(laneWorker["PORT"])
+    XCTAssertEqual(laneWorker["API_URL"], "http://localhost:\(assigned)", "Templates resolve to the lane's own ports")
+    XCTAssertEqual(laneWorker["SLUG"], "agent-env-lane")
+    XCTAssertEqual(laneWorker["DATABASE"], "shop_agent_env_lane")
+    XCTAssertEqual(laneWorker["COMPOSE_PROJECT_NAME"], "shop-agent-env-lane")
+    XCTAssertEqual(laneWorker["CINDERDECK_LANE_DIR"], lane.lane?.directory.path)
+    XCTAssertEqual(laneWorker["CINDERDECK_PORT_API"], String(assigned))
+    let exported = try control.lanes.environment(stack: file.id, service: nil)
+    XCTAssertEqual(exported["CINDERDECK_URL_API"], "http://localhost:\(assigned)")
+    XCTAssertNil(exported["FORCE_COLOR"])
+    let listed = try await control.handle("lane.env", params: .object(["workspace": .string("shop/agent/Env-Lane"), "service": .string("api")]), actor: codex)
+    XCTAssertEqual(listed["environment"]?["PORT"]?.stringValue, String(assigned))
+  }
+
+  func testConcurrentCreatesQueueInsteadOfFailing() async throws {
+    try await load()
+    async let first = supervisor.createLane(stack: "shop", branch: "agent/one", actor: codex)
+    async let second = supervisor.createLane(stack: "shop", branch: "agent/two", actor: claude)
+    async let third = supervisor.createLane(stack: "shop", branch: "agent/three", actor: codex)
+    let lanes = try await [first, second, third].compactMap(\.definition)
+    XCTAssertEqual(lanes.count, 3)
+    let blocks = Set(lanes.compactMap { $0.service("api")?.port }.map { $0 / StackLaneStore.blockSize })
+    XCTAssertEqual(blocks.count, 3, "Each lane gets its own block of ports")
+  }
+
+  func testLanesFolderInsideARepositoryIsRefused() async throws {
+    try await load()
+    defaults.set(repo.appendingPathComponent(".lanes").path, forKey: PreferencesKeys.stacksLanesDirectory)
+    do { _ = try await supervisor.createLane(stack: "shop", branch: "nested", actor: codex); XCTFail("Created worktrees inside the source repository") }
+    catch { XCTAssertTrue(error.localizedDescription.contains("inside the repository"), error.localizedDescription) }
+    XCTAssertTrue(try StackLaneStore.records(in: supervisor.lanesDirectory).isEmpty)
+  }
+
+  func testLanesFollowSourceEditsAndNewServicesGetPortsInTheirBlock() async throws {
+    try await load()
+    let file = try await supervisor.createLane(stack: "shop", branch: "follow", actor: codex)
+    let apiPort = try XCTUnwrap(file.definition?.service("api")?.port)
+    let second = try StackLaneStore.availablePort(excluding: [apiPort])
+    let source = definitions.appendingPathComponent("shop.toml")
+    try (String(contentsOf: source) + """
+
+    [services.web]
+    cmd = "/usr/bin/python3 server.py"
+    port = \(second)
+    env.GREETING = "hello"
+    """).write(to: source, atomically: true, encoding: .utf8)
+    await supervisor.reloadDefinitions()
+    let lane = try XCTUnwrap(supervisor.definition(file.id))
+    let web = try XCTUnwrap(lane.service("web"), "Source edits reach existing lanes")
+    XCTAssertEqual(web.environment["GREETING"], "hello")
+    XCTAssertEqual(web.port.map { $0 / StackLaneStore.blockSize }, apiPort / StackLaneStore.blockSize)
+    XCTAssertEqual(lane.service("api")?.port, apiPort, "Existing assignments are kept")
+    XCTAssertEqual(try StackLaneStore.record(id: file.id, in: supervisor.lanesDirectory)?.info.ports["web"], web.port)
+  }
+
+  func testVersionOneRecordsLoadPinnedAndCanBeUnpinned() async throws {
+    try await load()
+    let file = try await supervisor.createLane(stack: "shop", branch: "legacy", actor: codex)
+    var saved = try XCTUnwrap(file.definition)
+    saved.name = "Saved snapshot"
+    let record = try XCTUnwrap(try StackLaneStore.record(id: file.id, in: supervisor.lanesDirectory))
+    struct Legacy: Encodable { let definition: StackDefinition; let worktrees: [StackLaneWorktree]; let ready: Bool }
+    try StackControlCoding.encoder().encode(Legacy(definition: saved, worktrees: record.worktrees, ready: true))
+      .write(to: StackLaneStore.manifest(id: file.id, in: supervisor.lanesDirectory), options: .atomic)
+    await supervisor.reloadDefinitions()
+    let pinned = try XCTUnwrap(supervisor.files.first { $0.id == file.id })
+    XCTAssertEqual(pinned.definition?.name, "Saved snapshot")
+    XCTAssertEqual(pinned.lane?.pinned, true)
+    XCTAssertTrue(pinned.issues.contains { $0.message.contains("Unpin") })
+    _ = try await control.handle("lane.unpin", params: .object(["workspace": .string(file.id)]), actor: codex)
+    let followed = try XCTUnwrap(supervisor.definition(file.id))
+    XCTAssertEqual(followed.name, "Shop · legacy")
+    XCTAssertEqual(followed.lane?.pinned, false)
+    XCTAssertEqual(followed.service("api")?.port, saved.service("api")?.port)
+  }
+
+  func testCopiedFilesAndIgnoredFilesOnRemoval() async throws {
+    try "node_modules/\n.env\n".write(to: repo.appendingPathComponent(".gitignore"), atomically: true, encoding: .utf8)
+    try await commitAll("ignore dependencies", at: repo)
+    try "SECRET=base\n".write(to: repo.appendingPathComponent(".env"), atomically: true, encoding: .utf8)
+    let port = try StackLaneStore.availablePort(excluding: [])
+    try await write("""
+    root = "\(repo.path)"
+    shell = "/bin/sh"
+    [services.api]
+    cmd = "/usr/bin/python3 server.py"
+    port = \(port)
+    [lanes]
+    copy = [".env", "missing/*.env"]
+    """)
+    let file = try await supervisor.createLane(stack: "shop", branch: "deps", actor: codex)
+    let lane = try XCTUnwrap(file.definition)
+    XCTAssertEqual(try String(contentsOf: lane.root.appendingPathComponent(".env")), "SECRET=base\n")
+    // An unchanged copy is removed without asking.
+    let clean = try await supervisor.removeLane(file.id, actor: codex, options: .init())
+    XCTAssertTrue(clean.ignored.isEmpty)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: lane.root.path))
+
+    let second = try await laneDefinition("shop", "deps-2", codex)
+    let modules = second.root.appendingPathComponent("node_modules/pkg")
+    try FileManager.default.createDirectory(at: modules, withIntermediateDirectories: true)
+    try "module.exports = 1".write(to: modules.appendingPathComponent("index.js"), atomically: true, encoding: .utf8)
+    try "SECRET=changed\n".write(to: second.root.appendingPathComponent(".env"), atomically: true, encoding: .utf8)
+    let id = try XCTUnwrap(second.lane.map { _ in second.id })
+    do { try await supervisor.removeLane(id, actor: codex); XCTFail("Deleted ignored files without asking") }
+    catch {
+      XCTAssertEqual((error as? StackControlError)?.code, "ignored_files")
+      XCTAssertTrue(error.localizedDescription.contains("node_modules"))
+      XCTAssertTrue(error.localizedDescription.contains("changed after Cinderdeck copied it"))
+    }
+    XCTAssertTrue(FileManager.default.fileExists(atPath: modules.path))
+    XCTAssertEqual(supervisor.runtime(id, "api").phase, .stopped)
+    let report = try await supervisor.removeLane(id, actor: codex, options: .init(discardIgnored: true, deleteLogs: true))
+    XCTAssertTrue(report.ignored.contains { $0.path.hasSuffix("node_modules") })
+    XCTAssertFalse(FileManager.default.fileExists(atPath: second.root.path))
+    let kept = try await StackLaneStore.git(["rev-parse", "--verify", "refs/heads/deps-2"], at: repo)
+    XCTAssertFalse(kept.isEmpty)
+  }
+
+  func testSetupRunsBeforeStartAndTeardownGuardsRemoval() async throws {
+    let port = try StackLaneStore.availablePort(excluding: [])
+    try await write("""
+    root = "\(repo.path)"
+    shell = "/bin/sh"
+    [services.api]
+    cmd = "/usr/bin/python3 server.py"
+    port = \(port)
+    ready.http = "{{url.api}}/health"
+    ready.timeout = 8
+    [tasks.install]
+    cmd = "test -n \\"$FAIL_SETUP\\" && exit 4; touch \\"$CINDERDECK_LANE_DIR/installed\\""
+    [tasks.drop]
+    cmd = "test -f \\"$CINDERDECK_LANE_DIR/allow-teardown\\""
+    [lanes]
+    setup = "task:install"
+    teardown = "task:drop"
+    """)
+    await control.workspaceRunner.recover()
+    let created = try await control.handle("lane.create", params: .object(["workspace": .string("shop"), "branch": .string("setup")]), actor: codex)
+    XCTAssertEqual(created["setup"]?["status"]?.stringValue, "succeeded")
+    let file = try XCTUnwrap(supervisor.files.first { $0.lane?.name == "setup" })
+    let directory = try XCTUnwrap(file.lane?.directory)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: directory.appendingPathComponent("installed").path))
+    XCTAssertEqual(supervisor.runtime(file.id, "api").phase, .ready)
+    XCTAssertEqual(supervisor.files.first { $0.id == file.id }?.laneSetup?.status, .succeeded)
+
+    let failed = try await control.handle("lane.create", params: .object(["workspace": .string("shop"), "branch": .string("setup-fails"),
+      "env": .object(["FAIL_SETUP": .string("1")])]), actor: codex)
+    XCTAssertEqual(failed["setup"]?["status"]?.stringValue, "failed")
+    XCTAssertNotNil(failed["note"])
+    let broken = try XCTUnwrap(supervisor.files.first { $0.lane?.name == "setup-fails" })
+    XCTAssertEqual(supervisor.runtime(broken.id, "api").phase, .stopped, "Services do not start after a failed setup")
+
+    do {
+      _ = try await control.handle("lane.remove", params: .object(["workspace": .string("shop/setup")]), actor: codex)
+      XCTFail("Removed despite a failing teardown")
+    } catch { XCTAssertEqual((error as? StackControlError)?.code, "teardown_failed") }
+    XCTAssertNotNil(supervisor.definition(file.id))
+    try "".write(to: directory.appendingPathComponent("allow-teardown"), atomically: true, encoding: .utf8)
+    _ = try await control.handle("lane.remove", params: .object(["workspace": .string("shop/setup")]), actor: codex)
+    XCTAssertNil(supervisor.files.first { $0.id == file.id })
+    _ = try await control.handle("lane.remove", params: .object(["workspace": .string("shop/setup-fails"), "force_teardown": .bool(true)]), actor: codex)
+  }
+
+  func testBindWarningWhenACommandIgnoresItsPort() async throws {
+    let fixed = try StackLaneStore.availablePort(excluding: [])
+    try await write("""
+    root = "\(repo.path)"
+    shell = "/bin/sh"
+    [services.api]
+    cmd = "PORT=\(fixed) exec /usr/bin/python3 server.py"
+    port = \(fixed)
+    restart = "no"
+    """)
+    let file = try await supervisor.createLane(stack: "shop", branch: "ignores-port", actor: codex)
+    await supervisor.start(stack: file.id, actor: codex)
+    let deadline = Date().addingTimeInterval(10)
+    while supervisor.runtime(file.id, "api").bindWarning == nil, Date() < deadline { try await Task.sleep(nanoseconds: 200_000_000) }
+    let warning = try XCTUnwrap(supervisor.runtime(file.id, "api").bindWarning)
+    XCTAssertTrue(warning.contains(String(fixed)) && warning.contains("ignores $PORT"), warning)
+    let snapshot = control.stackSnapshot(try XCTUnwrap(supervisor.files.first { $0.id == file.id }))
+    XCTAssertEqual(snapshot.services.first?.bindWarning, warning)
+  }
+
+  func testSharedServiceRunsOnceInTheOriginalCheckout() async throws {
+    let db = try StackLaneStore.availablePort(excluding: [])
+    let api = try StackLaneStore.availablePort(excluding: [db])
+    try await write("""
+    root = "\(repo.path)"
+    shell = "/bin/sh"
+    [services.db]
+    cmd = "/usr/bin/python3 server.py"
+    port = \(db)
+    ready.port = \(db)
+    lane = "shared"
+    restart = "no"
+    [services.api]
+    cmd = "/usr/bin/python3 server.py"
+    port = \(api)
+    ready.port = \(api)
+    depends_on = ["db"]
+    env.DB_URL = "{{url.db}}"
+    restart = "no"
+    """)
+    let file = try await supervisor.createLane(stack: "shop", branch: "uses-db", actor: codex)
+    let lane = try XCTUnwrap(file.definition)
+    XCTAssertNil(lane.service("db"))
+    XCTAssertEqual(lane.link("db")?.port, db)
+    XCTAssertEqual(lane.lane?.ports.keys.sorted(), ["api"])
+    let env = try environment(lane, "api")
+    XCTAssertEqual(env["DB_URL"], "http://localhost:\(db)")
+    XCTAssertEqual(env["CINDERDECK_PORT_DB"], String(db))
+    await supervisor.start(stack: file.id, actor: codex)
+    XCTAssertEqual(supervisor.runtime("shop", "db").phase, .ready, "Starting the lane starts the shared service where it lives")
+    XCTAssertEqual(supervisor.runtime(file.id, "api").phase, .ready)
+    XCTAssertNil(supervisor.states[file.id]?.services["db"])
+    XCTAssertEqual(supervisor.dependents(of: "shop"), [file.id])
+    do { _ = try await control.handle("services.stop", params: .object(["workspace": .string("shop")]), actor: claude); XCTFail("Stopped a service lanes use") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "in_use") }
+    await supervisor.stop(stack: file.id, actor: codex)
+    XCTAssertEqual(supervisor.runtime("shop", "db").phase, .ready, "Stopping a lane leaves shared services running")
+    let snapshot = control.stackSnapshot(try XCTUnwrap(supervisor.files.first { $0.id == file.id }))
+    XCTAssertEqual(snapshot.services.first { $0.name == "db" }?.sharedFrom, "shop")
+    XCTAssertEqual(snapshot.laneStatus?.shared, ["db"])
+  }
+
+  func testAdoptedWorktreesAreNeverDeleted() async throws {
+    try await load()
+    let external = root.appendingPathComponent("agent-worktree")
+    _ = try await StackLaneStore.git(["worktree", "add", "-b", "agent/own", external.path], at: repo)
+    let adopted = try await control.handle("lane.adopt", params: .object(["workspace": .string("shop"), "path": .string(external.path), "start": .bool(false)]), actor: codex)
+    let id = try XCTUnwrap(adopted["workspace"]?["id"]?.stringValue)
+    let lane = try XCTUnwrap(supervisor.definition(id))
+    XCTAssertEqual(lane.lane?.name, "agent/own")
+    XCTAssertEqual(lane.lane?.adopted, true)
+    XCTAssertEqual(StackLaneStore.relative(lane.root, to: external), "")
+    XCTAssertNotEqual(lane.service("api")?.port, supervisor.definition("shop")?.service("api")?.port)
+    try "work in progress".write(to: external.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)
+    _ = try await control.handle("lane.remove", params: .object(["workspace": .string(id)]), actor: codex)
+    XCTAssertEqual(try String(contentsOf: external.appendingPathComponent("tracked.txt")), "work in progress")
+    XCTAssertNil(supervisor.files.first { $0.id == id })
+
+    // Adopting from inside the worktree, then releasing, keeps it too.
+    let again = try await supervisor.adoptLane(stack: "shop", path: external.appendingPathComponent("."), name: "mine", actor: codex)
+    XCTAssertEqual(again.file.lane?.name, "mine")
+    _ = try await control.handle("lane.release", params: .object(["workspace": .string("shop/mine")]), actor: codex)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: external.appendingPathComponent("tracked.txt").path))
+    do { _ = try await supervisor.adoptLane(stack: "shop", path: repo, name: nil, actor: codex); XCTFail("Adopted the original checkout") }
+    catch { XCTAssertTrue(error.localizedDescription.contains("original checkout")) }
+  }
+
+  func testWorkspacesSharingARepositoryShareOneWorktree() async throws {
+    try await load()
+    let port = try StackLaneStore.availablePort(excluding: Set(supervisor.definition("shop")?.services.compactMap(\.port) ?? []))
+    try await write("""
+    root = "\(repo.path)"
+    shell = "/bin/sh"
+    [services.web]
+    cmd = "/usr/bin/python3 server.py"
+    port = \(port)
+    """, id: "shopweb")
+    let first = try await laneDefinition("shop", "together", codex)
+    let second = try await laneDefinition("shopweb", "together", claude)
+    XCTAssertEqual(StackLaneStore.relative(first.root, to: second.root), "")
+    try await supervisor.removeLane(first.id, actor: codex)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: second.root.path), "Another lane still uses the worktree")
+    try await supervisor.removeLane(second.id, actor: claude)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: second.root.path))
+  }
+
+  func testCrossWorkspaceDependenciesPreferTheSameBranchLane() async throws {
+    let backendPort = try StackLaneStore.availablePort(excluding: [])
+    let webPort = try StackLaneStore.availablePort(excluding: [backendPort])
+    try await write("""
+    root = "\(repo.path)"
+    shell = "/bin/sh"
+    [services.api]
+    cmd = "/usr/bin/python3 server.py"
+    port = \(backendPort)
+    ready.port = \(backendPort)
+    restart = "no"
+    """, id: "backend")
+    try await write("""
+    root = "\(repo.path)"
+    shell = "/bin/sh"
+    [services.web]
+    cmd = "/usr/bin/python3 server.py"
+    port = \(webPort)
+    ready.port = \(webPort)
+    depends_on = ["backend:api"]
+    env.API = "{{url.backend:api}}"
+    restart = "no"
+    """, id: "front")
+    let base = try XCTUnwrap(supervisor.definition("front"))
+    XCTAssertEqual(try environment(base, "web")["API"], "http://localhost:\(backendPort)")
+    XCTAssertEqual(base.link("backend:api")?.stack, "backend")
+    await supervisor.start(stack: "front", actor: .user)
+    XCTAssertEqual(supervisor.runtime("backend", "api").phase, .ready, "Starting a workspace starts services it depends on elsewhere")
+    XCTAssertEqual(supervisor.runtime("front", "web").phase, .ready)
+    await supervisor.stop(stack: "front", actor: .user)
+    await supervisor.stop(stack: "backend", actor: .user)
+
+    let backendLane = try await laneDefinition("backend", "feature", codex)
+    let frontLane = try await laneDefinition("front", "feature", codex)
+    let lanePort = try XCTUnwrap(backendLane.service("api")?.port)
+    XCTAssertEqual(try environment(frontLane, "web")["API"], "http://localhost:\(lanePort)")
+    XCTAssertEqual(frontLane.link("backend:api")?.stack, backendLane.id)
+    let other = try await laneDefinition("front", "solo", codex)
+    XCTAssertEqual(try environment(other, "web")["API"], "http://localhost:\(backendPort)", "Without a matching lane, the original checkout is used")
+  }
+
+  func testNamedPortsAndTaskPortsAreAssignedInLanes() async throws {
+    let web = try StackLaneStore.availablePort(excluding: [])
+    let hmr = try StackLaneStore.availablePort(excluding: [web])
+    let storybook = try StackLaneStore.availablePort(excluding: [web, hmr])
+    try await write("""
+    root = "\(repo.path)"
+    shell = "/bin/sh"
+    [services.web]
+    cmd = "/usr/bin/python3 server.py --hmr {{port.web.hmr}}"
+    port = \(web)
+    ports.hmr = \(hmr)
+    ready.port = "hmr"
+    [tasks.stories]
+    cmd = "echo $PORT $CINDERDECK_TASK_PORT_STORYBOOK"
+    ports.storybook = \(storybook)
+    """)
+    let base = try XCTUnwrap(supervisor.definition("shop"))
+    XCTAssertEqual(base.service("web")?.readiness, .port(hmr))
+    XCTAssertEqual(base.service("web")?.command, "/usr/bin/python3 server.py --hmr \(hmr)")
+    XCTAssertEqual(try environment(base, "web")["CINDERDECK_PORT_WEB_HMR"], String(hmr))
+    let lane = try await laneDefinition("shop", "ports", codex)
+    let service = try XCTUnwrap(lane.service("web"))
+    let laneHMR = try XCTUnwrap(service.ports["hmr"])
+    XCTAssertNotEqual(laneHMR, hmr)
+    XCTAssertEqual(service.readiness, .port(laneHMR))
+    XCTAssertEqual(service.command, "/usr/bin/python3 server.py --hmr \(laneHMR)")
+    XCTAssertEqual(try environment(lane, "web")["CINDERDECK_PORT_WEB_HMR"], String(laneHMR))
+    XCTAssertNotNil(lane.task("stories")?.ports["storybook"])
+    XCTAssertNotEqual(lane.task("stories")?.ports["storybook"], storybook)
+    XCTAssertEqual(Set(lane.lane?.ports.keys.map { $0 } ?? []), ["web", "web.hmr", "task:stories.storybook"])
+    // A saved service keeps its templates when written back.
+    let written = WorkspaceDefinitionWriter.service(try XCTUnwrap(base.service("web")), base: repo)
+    XCTAssertTrue(written.contains("{{port.web.hmr}}") && written.contains("ports.hmr = \(hmr)") && written.contains("ready.port = \"hmr\""), written)
+  }
+
+  func testMergedLanesAreDetectedAndPruned() async throws {
+    try await load()
+    _ = try await addOrigin()
+    let open = try await laneDefinition("shop", "open", codex)
+    let done = try await laneDefinition("shop", "done", codex)
+    try "merged work\n".write(to: done.root.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)
+    try await commitAll("finish", at: done.root)
+    try "still open\n".write(to: open.root.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)
+    try await commitAll("wip", at: open.root)
+    _ = try await StackLaneStore.git(["merge", "--ff-only", "done"], at: repo)
+    _ = try await StackLaneStore.git(["push", "origin", "main"], at: repo)
+    await supervisor.refreshLaneGitStates()
+    XCTAssertEqual(supervisor.laneGitStates[done.id]?.merged, true)
+    XCTAssertEqual(supervisor.laneGitStates[open.id]?.merged, false)
+    XCTAssertEqual(supervisor.laneGitStates[open.id]?.unpushed, 1)
+    let preview = try await control.handle("lane.prune", params: .object(["dry_run": .bool(true)]), actor: codex)
+    XCTAssertEqual(preview.arrayValue?.compactMap { $0["lane"]?.stringValue }, [done.id])
+    XCTAssertNotNil(supervisor.definition(done.id))
+    let pruned = try await control.handle("lane.prune", params: .object(["workspace": .string("shop")]), actor: codex)
+    XCTAssertEqual(pruned.arrayValue?.first?["action"]?.stringValue, "removed")
+    XCTAssertNil(supervisor.files.first { $0.id == done.id })
+    XCTAssertNotNil(supervisor.definition(open.id))
+  }
+
+  func testLaneHostnamesAndLogAgeOut() async throws {
+    let port = try StackLaneStore.availablePort(excluding: [])
+    try await write("""
+    root = "\(repo.path)"
+    shell = "/bin/sh"
+    [services.api]
+    cmd = "/usr/bin/python3 server.py"
+    port = \(port)
+    ready.http = "{{url.api}}/health"
+    [lanes]
+    hosts = true
+    """, id: "Shop_App")
+    XCTAssertEqual(supervisor.definition("Shop_App")?.host, "localhost")
+    let lane = try await laneDefinition("Shop_App", "agent/hosts", codex)
+    XCTAssertEqual(lane.host, "agent-hosts.shop-app.localhost")
+    let assigned = try XCTUnwrap(lane.service("api")?.port)
+    XCTAssertEqual(lane.service("api")?.readiness, .http(URL(string: "http://agent-hosts.shop-app.localhost:\(assigned)/health")!))
+    let env = try environment(lane, "api")
+    XCTAssertEqual(env["CINDERDECK_HOST"], "agent-hosts.shop-app.localhost")
+    XCTAssertEqual(env["CINDERDECK_URL_API"], "http://agent-hosts.shop-app.localhost:\(assigned)")
+    await supervisor.start(stack: lane.id, actor: codex)
+    XCTAssertEqual(supervisor.runtime(lane.id, "api").phase, .ready, "Readiness reaches *.localhost through loopback")
+
+    let logs = root.appendingPathComponent("logs")
+    let stale = logs.appendingPathComponent("shop--lane-old"), current = logs.appendingPathComponent(lane.id)
+    try FileManager.default.createDirectory(at: stale, withIntermediateDirectories: true)
+    try "old".write(to: stale.appendingPathComponent("api.log"), atomically: true, encoding: .utf8)
+    let old = Date().addingTimeInterval(-20 * 86400)
+    try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: stale.appendingPathComponent("api.log").path)
+    try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: stale.path)
+    await supervisor.sweepLaneLogs()
+    XCTAssertFalse(FileManager.default.fileExists(atPath: stale.path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: current.path))
   }
 }

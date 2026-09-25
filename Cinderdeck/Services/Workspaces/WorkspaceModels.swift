@@ -10,6 +10,36 @@ nonisolated struct WorkspaceTaskDefinition: Codable, Equatable, Identifiable, Se
   var environment: [String: String] = [:]
   var requiresServices: [String] = []
   var timeout: TimeInterval = 600
+  /// Ports a task's own server listens on. Lanes assign their own values.
+  var port: Int?
+  var ports: [String: Int] = [:]
+  var raw: StackRawValues?
+
+  var allPorts: [String: Int] {
+    var result = ports
+    if let port { result[""] = port }
+    return result
+  }
+}
+
+extension WorkspaceTaskDefinition {
+  nonisolated enum CodingKeys: String, CodingKey {
+    case id, name, command, repo, directory, environment, requiresServices, timeout, port, ports, raw
+  }
+  nonisolated init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    id = try c.decode(String.self, forKey: .id)
+    name = try c.decode(String.self, forKey: .name)
+    command = try c.decode(String.self, forKey: .command)
+    repo = try c.decodeIfPresent(String.self, forKey: .repo)
+    directory = try c.decode(URL.self, forKey: .directory)
+    environment = try c.decodeIfPresent([String: String].self, forKey: .environment) ?? [:]
+    requiresServices = try c.decodeIfPresent([String].self, forKey: .requiresServices) ?? []
+    timeout = try c.decodeIfPresent(TimeInterval.self, forKey: .timeout) ?? 600
+    port = try c.decodeIfPresent(Int.self, forKey: .port)
+    ports = try c.decodeIfPresent([String: Int].self, forKey: .ports) ?? [:]
+    raw = try c.decodeIfPresent(StackRawValues.self, forKey: .raw)
+  }
 }
 
 nonisolated struct WorkspaceWorkflowDefinition: Codable, Equatable, Identifiable, Sendable {

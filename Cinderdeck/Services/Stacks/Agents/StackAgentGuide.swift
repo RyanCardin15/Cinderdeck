@@ -17,10 +17,13 @@ nonisolated enum StackAgentGuide {
   Definitions: create_workspace, save_workspace_service, save_workspace_task, save_workspace_workflow, and delete_workspace_item \
   edit a workspace's TOML file with validation; nothing starts on save. For other settings, edit the file (workspace_guide has \
   paths and a template), then validate_workspace and reload_workspaces.
-  Parallel branches: create_lane makes an isolated Git worktree copy of a workspace on a branch, with unique ports and a claim \
-  in your name, leaving the original running. Use the returned <workspace>/<branch> id with every tool. Commands must read PORT \
-  and CINDERDECK_PORT_<SERVICE> (uppercase, hyphens become underscores). start=false lets you install dependencies first. \
-  remove_lane keeps branches and refuses uncommitted or ignored files. switch_branch changes the original checkout and refuses \
+  Parallel branches: create_lane makes an isolated Git worktree copy of a workspace on a branch (tracking a remote-only branch), \
+  runs its [lanes] setup, and starts it on unique ports with a claim in your name, leaving the original running. Already in \
+  your own worktree? adopt_lane runs it as a lane without moving it. Use the returned <workspace>/<branch> id with every tool. \
+  Services read PORT, CINDERDECK_PORT_<SERVICE> and CINDERDECK_URL_<SERVICE>; definition values written as {{port.api}} or \
+  {{url.api}} resolve per lane. lane_env gives those values for your own shell or tests. Services marked shared (databases) \
+  run once in the original checkout. remove_lane keeps branches, refuses uncommitted work, and needs discard_ignored=true to \
+  delete ignored files such as node_modules (ask the user first). switch_branch changes the original checkout and refuses \
   uncommitted work unless dirty=stash or dirty=carry.
   Repros record the screen with every service and task log on the video timeline, to reproduce bugs or test UI end to end: \
   start_repro_recording (window_id from list_repro_windows records exactly one window, followed if it moves; workspace plus \
@@ -52,8 +55,8 @@ nonisolated enum StackAgentGuide {
   cmd = "npm run dev"
   depends_on = ["db"]
   port = 4000
-  ready.http = "http://localhost:4000/health"   # or ready.log = "listening"
-  env.DATABASE_URL = "postgres://localhost:5432/app"
+  ready.http = "{{url.api}}/health"   # or ready.log = "listening"
+  env.DATABASE_URL = "postgres://localhost:{{port.db}}/app{{lane.ident:+_}}{{lane.ident}}"
 
   [tasks.test]                    # finite command: exit 0 succeeds
   repo = "api"
@@ -64,6 +67,13 @@ nonisolated enum StackAgentGuide {
   [workflows.verify]              # ordered steps: task:<id>, start:<service>, stop:<service>
   steps = ["start:api", "task:test"]
   cleanup_services = true
+
+  # Optional: how parallel worktree lanes are prepared. {{…}} values resolve per lane.
+  # [services.db] lane = "shared" runs one database for every lane.
+  # [lanes]
+  # copy = [".env"]               # untracked files copied from the original checkout
+  # setup = "task:install"        # runs after the worktrees are created, before start
+  # teardown = "task:drop-db"     # runs before removal
   """
 
   static func instructions(command: String) -> String {
@@ -83,9 +93,11 @@ nonisolated enum StackAgentGuide {
       - `ports` — who owns each listening port (Cinderdeck service, or which app/terminal started it)
       - `claim <workspace> --note "running e2e" --ttl 30` / `release <workspace>` while you depend on a workspace
       - `switch <workspace> <branch> [--repo id] [--stash|--carry]`, `git <workspace>`, `branches <workspace>`
-    - Parallel work: `\(command) lane create <workspace> <branch>` creates and starts a worktree lane; use `--no-start` to set up first
-      - `\(command) lane list [workspace]` / `\(command) lane remove <workspace>/<branch>` (clean worktrees only; branches are kept)
-      - Use `<workspace>/<branch>` with every command; each service receives its assigned `PORT` and every `CINDERDECK_PORT_<UPPERCASE_SERVICE>`
+    - Parallel work: `\(command) lane create <workspace> <branch> [--from origin/main]` creates, sets up and starts a worktree lane
+      - Already in your own worktree: `\(command) lane adopt <workspace>` (from that folder) runs it as a lane; Cinderdeck never deletes it
+      - `\(command) lane list [workspace]` / `\(command) lane remove <workspace>/<branch>` (branches are kept; `--discard-ignored` also deletes node_modules and build output — ask first)
+      - Use `<workspace>/<branch>` with every command; each service receives its assigned `PORT`, every `CINDERDECK_PORT_<UPPERCASE_SERVICE>` and `CINDERDECK_URL_<SERVICE>`
+      - `eval "$(\(command) lane env <workspace>/<branch> --export)"` gives your shell the lane's ports and URLs for tests and curl
     - Live state without any call: `\(StackControlPaths.state.path)`; log files: `~/Library/Logs/Cinderdeck/Stacks/<workspace>/<service>.log`
     - Definitions are TOML files in `~/.config/cinderdeck/stacks/`. Edit them with the MCP `save_workspace_*` tools, or by hand and \
       validate with `\(command) services validate <file>`.

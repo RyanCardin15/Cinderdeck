@@ -83,18 +83,20 @@ path = "my-api"
 
 [services.api]
 repo = "api"
-cmd = "npm run dev"
+cmd = "npm run dev -- --port {{port.api}}"
 port = 4000
 ready.port = 4000
 
 [services.web]
 repo = "web"
-cmd = "npm run dev"
+cmd = "npm run dev -- --port {{port.web}}"
 depends_on = ["api"]
 port = 3000
-url = "http://localhost:3000"
 ready.port = 3000
+env.API_URL = "{{url.api}}"
 ```
+
+`{{port.…}}` and `{{url.…}}` fill in each service's port, so the same file also runs branches side by side in [worktree lanes](docs/STACKS.md#parallel-worktree-lanes).
 
 Saving a definition reloads it. Starting services is explicit. Git is optional; a service can use `cwd` instead of a repository. Dependencies and runtimes are installed by you, not by importing a stack. [Read the full stack guide](docs/STACKS.md).
 

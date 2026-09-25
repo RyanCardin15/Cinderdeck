@@ -40,17 +40,17 @@ path = "my-frontend"
 
 [services.api]
 repo = "api"
-cmd = "npm run dev"
+cmd = "npm run dev -- --port {{port.api}}"
 port = 4000
-ready.http = "http://localhost:4000/health"
+ready.http = "{{url.api}}/health"
 
 [services.site]
 repo = "site"
-cmd = "pnpm dev"
+cmd = "pnpm dev --port {{port.site}}"
 depends_on = ["api"]
 port = 3000
 ready.port = 3000
-env.API_URL = "http://localhost:4000"
+env.API_URL = "{{url.api}}"
 
 # A service does not need a Git repo.
 [services.worker]
@@ -66,6 +66,7 @@ Use double-quoted strings, arrays of strings, named tables, and dotted keys. Thi
 | --- | --- | --- |
 | `name` | File name | Display name |
 | `root` | Definition file's folder | Base for relative paths; expands `~` |
+| `[repos.<id>] lane` | `"worktree"` | `"shared"`: lanes use the original checkout of this repo |
 | `shell` | `$SHELL`, then `/bin/zsh` | Executable shell path |
 | `restart_on_branch_change` | `true` | Restart affected running services around Git checkout/pull |
 | `[env]` | Empty | Shared environment variables; string values |
@@ -74,9 +75,11 @@ Use double-quoted strings, arrays of strings, named tables, and dotted keys. Thi
 | `[services.<id>] cmd` | Required | Shell command; any local tool or language |
 | `repo` | None | Repository ID; sets the default working directory and branch restart association |
 | `cwd` | Repo path, then `root` | Relative to the repo if associated, otherwise `root`; absolute paths also work |
-| `depends_on` | `[]` | Service IDs that must become ready first |
-| `port` | None | Displayed localhost link and port-conflict check |
-| `ready.port` | None | TCP connection to `127.0.0.1` |
+| `depends_on` | `[]` | Service IDs that must become ready first; `"<workspace>:<service>"` for another workspace's service, which starts first |
+| `port` | None | Displayed localhost link and port-conflict check; also sets `PORT` |
+| `ports.<name>` | None | Extra named ports, such as `ports.hmr = 24678`; `CINDERDECK_PORT_<SERVICE>_<NAME>` |
+| `lane` | `"isolate"` | In lanes: `"shared"` uses the original checkout's instance, `"off"` leaves it out |
+| `ready.port` | None | TCP connection to `127.0.0.1`; a number or a port name |
 | `ready.http` | None | HTTP response below 500 (including 404) |
 | `ready.log` | None | Regular expression in this run's service output |
 | `ready.timeout` | `90` seconds | Mark unhealthy and allow dependents to start; continue checking |
@@ -92,7 +95,23 @@ If multiple readiness checks are configured, precedence is port, HTTP, then log.
 
 Cinderdeck captures your login/interactive shell environment, including tool paths configured by Homebrew, nvm, dotnet, uv, and pnpm. A five-second timeout falls back to a noninteractive login shell. The actions menu can refresh the cached environment after tool changes.
 
-Precedence is shell → shared environment → service environment → Keychain secrets. Cinderdeck then sets color/buffering flags and `CINDERDECK_STACK` / `CINDERDECK_SERVICE`. `DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1` is supplied unless you explicitly set it. Commands run with `shell -c` using that resolved environment; startup files are not run a second time over your overrides.
+Precedence is shell → shared environment → service environment → lane environment → Keychain secrets. Cinderdeck then sets color/buffering flags, `CINDERDECK_STACK` / `CINDERDECK_WORKSPACE` / `CINDERDECK_SERVICE`, `CINDERDECK_HOST`, and for every service with a port `CINDERDECK_PORT_<SERVICE>` and `CINDERDECK_URL_<SERVICE>`. A service with a `port` gets `PORT` unless the definition sets `env.PORT` itself.
+
+### Templates
+
+Commands, environment values and `ready.http` can contain `{{…}}` values. They are filled in for the original checkout and again for each lane, so one definition describes both:
+
+| Template | Original checkout | Lane |
+| --- | --- | --- |
+| `{{port.api}}`, `{{port.web.hmr}}` | Configured port | Assigned port |
+| `{{url.api}}` | `http://localhost:4000` | `http://<host>:<assigned port>` |
+| `{{port.backend:api}}`, `{{url.backend:api}}` | Another workspace's service | That workspace's lane on the same branch, if there is one |
+| `{{host}}` | `localhost` | `localhost`, or the lane hostname with `[lanes] hosts = true` |
+| `{{lane.slug}}`, `{{lane.ident}}`, `{{lane.name}}`, `{{lane.dir}}` | Empty | `agent-codex-1`, `agent_codex_1`, `agent/codex-1`, lane folder |
+| `{{repo.<id>}}` | Repo path | Worktree path |
+| `{{workspace}}` | Workspace ID | Source workspace ID |
+
+`{{x:-default}}` uses `default` when `x` is empty and `{{x:+text}}` writes `text` only when it is not, e.g. `"shop{{lane.ident:+_}}{{lane.ident}}"` is `shop` in the original checkout and `shop_agent_codex_1` in a lane. Only these names are templates; other `{{…}}` text such as `{{.State}}` is left as written. Unknown services, ports and names are errors with the field that uses them. A literal `localhost:<port>` pointing at another service's port is reported as a warning, because lanes would keep calling the original checkout. `DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1` is supplied unless you explicitly set it. Commands run with `shell -c` using that resolved environment; startup files are not run a second time over your overrides.
 
 **Settings → History → Workspaces → Manage secrets** adds, replaces, or removes generic-password items in the Keychain service `Cinderdeck Stacks`. Missing secrets prevent startup and name the missing reference. Values are never included in Cinderdeck configuration exports or run records. As with a terminal, a service can print its own environment, so treat its output files as local development logs.
 
@@ -114,50 +133,93 @@ Use a lane when agents need different branches running at the same time:
 
 ```sh
 cinderdeck lane create shop agent/codex-1 --as Codex --session codex-1
-cinderdeck lane create shop agent/claude-2 --as "Claude Code" --session claude-2
+cinderdeck lane create shop agent/claude-2 --from origin/main --as "Claude Code" --session claude-2
 cinderdeck lane list shop
 cinderdeck services logs shop/agent/codex-1
-cinderdeck services stop shop/agent/codex-1
-cinderdeck services start shop/agent/codex-1
+eval "$(cinderdeck lane env shop/agent/codex-1 --export)"
 cinderdeck lane remove shop/agent/codex-1
 ```
 
-`lane create <stack> <branch>` snapshots the stack definition, creates a worktree for each independent repository, claims the lane for the caller, and starts its services in dependency order. It uses an existing local branch or creates one from each repository's current `HEAD`. A branch already checked out in another worktree is rejected. The original checkout, local edits, and running services stay in place. A lane can be addressed by its returned ID or `<source-stack>/<branch>` with all stack commands, including claims, logs, Git status, and restart.
+`lane create <workspace> <branch>` creates a worktree for each independent repository, claims the lane for the caller, runs the workspace's `[lanes] setup`, and starts its services in dependency order. A local branch is checked out as it is; a branch that only exists on a remote is checked out tracking it; otherwise a new branch starts at `--from` (default: `[lanes] from`, then each repository's `HEAD`). The original checkout, its local edits, and its running services stay in place. A lane can be addressed by its returned ID or `<workspace>/<branch>` with all commands, including claims, logs, Git status, and restart.
 
-Open **Lanes** from any section of the Workspaces window, the expanded stack view, or the branch icon in compact view to see the original checkout and its lanes side by side, with owners, claims, service states, and ports. Each card controls only that lane. You can also create a lane there and inspect its services in the main view. MCP exposes `create_lane`, `list_lanes`, and `remove_lane`.
+Worktrees go in `~/.cinderdeck/lanes/<workspace>/<lane>/<repository folder>` (change it in **Settings → History → Workspaces → Lane worktrees**, or per workspace with `[lanes] dir`). Lane folders are never created inside a source repository.
 
-The Workspaces window lists source workspaces in its sidebar, with a lane count under each one. Lane snapshots and definitions rooted in their working folders are available through **Lanes**. Inspecting one keeps its source workspace highlighted and provides a **Back to** button. Lanes whose source is missing or whose record cannot be read remain accessible under **Lanes without a workspace**.
+Open **Lanes** from any section of the Workspaces window, the expanded stack view, or the branch icon in compact view to see the original checkout and its lanes side by side, with owners, claims, setup state, merged branches, service states, and links. Each card controls only that lane and can open its folder in Finder, Terminal, VS Code or Cursor, or copy shell exports of its ports.
 
-Every lane service receives its own `PORT`, plus `CINDERDECK_PORT_<SERVICE>` for **every service in that lane**, including services that are not started. Service names are uppercased and hyphens become underscores: `web-app` becomes `CINDERDECK_PORT_WEB_APP`. These assignments override shell, TOML, and secret values. `CINDERDECK_LANE` contains the lane's original branch name; `CINDERDECK_SOURCE_STACK` identifies the source stack. Assignments persist while a lane exists, including across stops and app restarts. The allocator excludes configured base ports, other lanes, live launches, and occupied IPv4/IPv6 ports. If an outside process later takes a saved port, normal conflict handling reports it without killing that process.
+### Lanes follow their workspace
 
-Service commands must consume these variables. Cinderdeck remaps working directories and port/localhost HTTP readiness checks; it does not rewrite shell commands or arbitrary environment values. For example:
+A lane stores only what differs from its workspace: worktrees, assigned ports, and per-lane choices. Its definition is derived from the current workspace file whenever it loads, so services, tasks, and environment changes reach existing lanes; restart a lane's services to apply them, as in the original checkout. Services added later get ports next to the lane's others. Lanes created by Cinderdeck 1.1 keep their saved definition and show **Pinned**; choose **Unpin** (`cinderdeck lane unpin`) to make them follow their workspace.
+
+### Ports and environment
+
+Only services with a `port`, `ports.<name>` or `ready.port` get lane ports. A lane reserves a block of ten ports from 20000 (larger when it needs more), excluding configured ports, other lanes, live launches, and occupied IPv4/IPv6 ports; assignments persist while the lane exists. Services receive `PORT`, `CINDERDECK_PORT_<SERVICE>[_<NAME>]` and `CINDERDECK_URL_<SERVICE>` for every service, plus `CINDERDECK_LANE` (the branch), `CINDERDECK_LANE_SLUG`, `CINDERDECK_LANE_DIR`, `CINDERDECK_SOURCE_STACK`, and `COMPOSE_PROJECT_NAME=<workspace>-<slug>` unless you set it. Lane values override shell, TOML, and secret values. Readiness checks on a service's own localhost ports follow the lane automatically; use `{{url.<service>}}` everywhere else.
+
+Commands must use these values. Cinderdeck fills in `{{…}}` templates but does not rewrite literal ports. If a service listens, but not on any of its assigned ports, its port chip turns orange and the lane shows which port it used and that its command ignores `$PORT`.
 
 ```toml
 [services.api]
 repo = "app"
-cmd = "npm run dev -- --port \"$PORT\""
+cmd = "npm run dev -- --port {{port.api}}"
 port = 4000
-env.PORT = "4000" # Original checkout; overridden in lanes
-ready.http = "http://localhost:4000/health"
+ready.http = "{{url.api}}/health"
 
 [services.web]
 repo = "app"
-cmd = "API_URL=http://localhost:${CINDERDECK_PORT_API:-4000} npm run dev -- --port \"$PORT\""
+cmd = "npm run dev -- --port {{port.web}}"
 port = 3000
-env.PORT = "3000"
-ready.port = 3000
+ports.hmr = 24678
+env.API_URL = "{{url.api}}"
+env.VITE_HMR_PORT = "{{port.web.hmr}}"
 depends_on = ["api"]
 ```
 
-Use `--no-start` (MCP `start=false`) to create the worktrees first, then install dependencies or prepare local configuration in the returned service directories before calling `services start`. Uncommitted files, ignored files such as `.env` and `node_modules`, and external databases or Docker resources are not copied or isolated automatically. Avoid hardcoded checkout paths and fixed container ports/names. Lanes currently support independent Git repositories and one port per service; nested repositories and HTTP readiness against a different host/port are rejected.
+With `[lanes] hosts = true`, lanes use `http://<lane>.<workspace>.localhost:<port>`, so browser cookies and logins stay separate per lane. Chrome, Firefox and curl resolve `*.localhost` to your Mac; some dev servers need the host added to their allowed hosts.
 
-Tasks and workflows are copied into the lane snapshot too. Task working directories and named port variables point into the lane, and lane removal waits for finite runs to finish or be cancelled.
+### Shared services and repositories
 
-Lane definitions are snapshots, stored with worktree metadata under `<stacks-directory>/.lanes/<lane-id>/lane.json`; editing the original TOML affects future lanes. Services, logs, saved process identities, and claims use the lane's unique ID. Claims are advisory leases (30 minutes by default); renew them while using a lane. The creation owner remains visible after a lease expires.
+`lane = "shared"` on a service (or on its repository) makes lanes use the original checkout's instance: lanes do not run their own copy, `{{port.db}}` and `CINDERDECK_PORT_DB` point at it, starting a lane starts it there if needed, and stopping a lane leaves it running. Stopping it in the original checkout while lanes use it asks first (agents get an `in_use` error unless they pass `force`). `lane = "off"` leaves a service out of lanes. Service and task folders outside Git are shared automatically.
 
-If you switch branches inside a lane later, its alias stays the same and the Lanes view shows the differing repository branch. Switching to a branch already checked out in another worktree is rejected before services are stopped or local changes are stashed.
+```toml
+[services.db]
+cmd = "docker compose up postgres"
+port = 5432
+ready.port = 5432
+lane = "shared"
 
-`lane remove` stops only that lane, removes its clean worktrees, and releases its claim. It preserves Git branches and logs. Removal refuses tracked changes, untracked files, and ignored files; move or clean those files yourself first. `--force` only overrides another agent's claim, never Git's data protection. Failed starts keep the lane for inspection; interrupted creation leaves a recovery record. The original stack cannot be removed with this command.
+[services.api]
+repo = "app"
+cmd = "npm run dev -- --port {{port.api}}"
+port = 4000
+depends_on = ["db"]
+env.DATABASE_URL = "postgres://localhost:{{port.db}}/shop{{lane.ident:+_}}{{lane.ident}}"
+```
+
+A workspace can depend on another workspace's service with `depends_on = ["backend:api"]` and `{{url.backend:api}}`. In a lane, it uses the backend's lane on the same branch when there is one, otherwise the backend's original checkout. Workspaces that share a repository share its worktree for the same branch; it is removed with the last lane that uses it.
+
+### Setup, copied files, and adoption
+
+```toml
+[lanes]
+from = "origin/main"          # start point for new branches
+copy = [".env", "apps/*/.env"] # untracked files copied from each original checkout (never over files the branch has)
+link = []                      # symlinks instead of copies, for large caches you accept sharing
+setup = "task:install"         # task or workflow run after the worktrees are created, before services start
+teardown = "task:drop-db"      # run before removal; removal stops if it fails
+hosts = false
+env.FEATURE_FLAGS = "lanes"    # lane-only values, after [env]
+```
+
+Setup runs as a normal run in the lane (see its output under Runs). If it fails, services are not started; fix it and choose **Run setup** (`cinderdeck lane setup`, MCP `run_lane_setup`). `lane create --no-setup` skips it, `--env KEY=VALUE` adds lane-only variables, and `--copy <glob>` copies more files. Submodules are initialized in new worktrees. Databases, Docker volumes and other outside resources are not created per lane automatically; do that in setup and teardown with `{{lane.ident}}`.
+
+Agents that already work in their own worktree (Claude Code, Codex, Cursor, Conductor) can run it as a lane: `cinderdeck lane adopt shop` from that folder, or MCP `adopt_lane`. Cinderdeck never deletes an adopted worktree; other repositories of the workspace get worktrees on the same branch or stay shared. When a branch is already checked out in another worktree, `lane create` suggests adopting it.
+
+### Removing and cleaning up
+
+`lane remove` runs teardown, stops only that lane, removes its worktrees, and releases its claim. It keeps Git branches, adopted worktrees, and worktrees another lane still uses, and reports branches with commits on no remote. Tracked or untracked changes block removal. Ignored files (`node_modules`, build output, a changed `.env`) block it too, with their sizes listed, until you pass `--discard-ignored` (MCP `discard_ignored`); the Lanes view asks with a checkbox. Unchanged files Cinderdeck copied are removed without asking. `--force` only overrides another agent's claim, never Git's data protection. `lane release` forgets a lane but keeps its worktrees. Failed starts keep the lane for inspection; interrupted creation leaves a recovery record.
+
+The Lanes view marks lanes whose branch was merged into the default remote branch, or whose upstream branch was deleted. `cinderdeck lane prune [workspace] --dry-run` lists them and `lane prune` removes the clean ones (MCP `prune_lanes`); `--missing` also removes lanes whose worktrees are gone. Logs of removed lanes are deleted after 14 days, or right away with `--delete-logs`.
+
+If you switch branches inside a lane later, its name stays the same and the Lanes view shows the differing repository branch. Switching to a branch already checked out in another worktree is rejected before services are stopped or local changes are stashed. Lane records are stored in `<stacks-directory>/.lanes/<lane-id>/lane.json`. Services, logs, saved process identities, and claims use the lane's unique ID. Claims are advisory leases (30 minutes by default); renew them while using a lane. Nested repositories are not supported; mark the inner one `lane = "shared"`.
 
 ## Branches
 
@@ -192,7 +254,7 @@ Each service retains the latest 5,000 lines in memory. The All view interleaves 
 
 Coding agents can run and inspect stacks, so they stop spawning their own dev servers in scattered terminals. Everything goes through one local control socket owned by Cinderdeck; services an agent starts appear in the panel with a purple ✦ badge naming it.
 
-**Set up:** Stacks → ✦ (or Settings → History → Workspaces → **Agent access…**). Install the CLI, then **Add** Cursor, Codex, Claude Code, and/or VS Code Copilot. The **Agent skills** section installs the skills that ship with Cinderdeck, such as recording a browser session with its logs, for each agent. From a terminal the same thing is:
+**Set up:** Stacks → ✦ (or Settings → History → Workspaces → **Agent access…**). Install the CLI, then **Add** Cursor, Codex, Claude Code, and/or VS Code Copilot. The **Agent skills** section installs the skills that ship with Cinderdeck, such as recording a browser session with its logs, or running a branch in a worktree lane, for each agent. From a terminal the same thing is:
 
 ```sh
 /Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck services install-cli   # links ~/.local/bin/cinderdeck
@@ -220,7 +282,7 @@ Skills are copied to `~/.claude/skills` (Claude Code), `~/.agents/skills` (Codex
 | `recent_activity` | `events <workspace>` | Starts, crashes, stops, branch switches — each with who caused it |
 | `create_workspace`, `save_workspace_service`, `save_workspace_task`, `save_workspace_workflow`, `delete_workspace_item` | Workspaces window | Validated definition edits; nothing starts on save |
 | `workspace_guide`, `validate_workspace`, `reload_workspaces` | `agent-help`, `validate <file>`, `reload`, `where` | Authoring by hand: paths, a template, validation and start order |
-| `create_lane`, `list_lanes`, `remove_lane` | `cinderdeck lane …` | Parallel Git worktree lanes |
+| `create_lane`, `adopt_lane`, `list_lanes`, `lane_env`, `run_lane_setup`, `remove_lane`, `release_lane`, `prune_lanes`, `unpin_lane` | `cinderdeck lane …` | Parallel Git worktree lanes |
 
 `cinderdeck mcp` is a stdio MCP server; if Cinderdeck isn't running, the first call launches it in the background. The CLI does the same. Tool calls run concurrently on pooled connections, so a long wait never blocks other calls or pings, and unknown or misspelled arguments are rejected with the valid names. Reload the tool list in connected clients after updating Cinderdeck.
 
@@ -244,8 +306,9 @@ The control socket is `~/Library/Application Support/Cinderdeck/Stacks/control.s
 | `~/Library/Application Support/Cinderdeck/cinderdeck.db` | Live process records and up to 1,000 recent events |
 | Keychain service `Cinderdeck Stacks` | Secret values |
 | `~/Library/Application Support/Cinderdeck/Stacks/` | `control.sock`, `state.json`, `claims.json` for agents |
+| `~/.cinderdeck/lanes/<workspace>/<lane>/` | Lane worktrees; records in `<stacks-directory>/.lanes/` |
 
-The global configuration's `[stacks]` table exports `enabled`, `directory`, `quit_behavior`, `notify_on_crash`, and `auto_fetch_minutes`. Stack files, Keychain values, run records, and activity are not embedded in that export. Existing clipboard history and preferences are preserved; the old clipboard-selected flag migrates once to `history.selectedSection`.
+The global configuration's `[stacks]` table exports `enabled`, `directory`, `lanes_directory`, `quit_behavior`, `notify_on_crash`, and `auto_fetch_minutes`. Stack files, Keychain values, run records, and activity are not embedded in that export. Existing clipboard history and preferences are preserved; the old clipboard-selected flag migrates once to `history.selectedSection`.
 
 ## Development verification
 

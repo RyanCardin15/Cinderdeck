@@ -3,6 +3,7 @@ import SwiftUI
 struct StackSettingsView: View {
   @AppStorage(PreferencesKeys.stacksEnabled) private var enabled = true
   @AppStorage(PreferencesKeys.stacksDirectory) private var directory = "~/.config/cinderdeck/stacks"
+  @AppStorage(PreferencesKeys.stacksLanesDirectory) private var lanesDirectory = "~/.cinderdeck/lanes"
   @AppStorage(PreferencesKeys.stacksQuitBehavior) private var quitBehavior = "ask"
   @AppStorage(PreferencesKeys.stacksNotifyOnCrash) private var notify = true
   @AppStorage(PreferencesKeys.stacksAutoFetchMinutes) private var autoFetch = 0
@@ -18,6 +19,16 @@ struct StackSettingsView: View {
           let panel = NSOpenPanel(); panel.canChooseFiles = false; panel.canChooseDirectories = true
           panel.canCreateDirectories = true
           if panel.runModal() == .OK, let url = panel.url { directory = url.path }
+        }
+      }
+      HStack {
+        Text("Lane worktrees")
+        TextField("~/.cinderdeck/lanes", text: $lanesDirectory).textFieldStyle(.roundedBorder)
+          .help("New lanes create their worktrees here, in <workspace>/<lane>/. Keep it outside your projects. A workspace's [lanes] dir overrides it.")
+        Button("Choose…") {
+          let panel = NSOpenPanel(); panel.canChooseFiles = false; panel.canChooseDirectories = true
+          panel.canCreateDirectories = true
+          if panel.runModal() == .OK, let url = panel.url { lanesDirectory = url.path }
         }
       }
       Picker("When quitting with services running", selection: $quitBehavior) {

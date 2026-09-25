@@ -168,6 +168,8 @@ enum PreferencesKeys {
   static let historySavedCollectionID = "history.savedCollectionID"
   nonisolated static let stacksEnabled = "stacks.enabled"
   nonisolated static let stacksDirectory = "stacks.directory"
+  /// Folder for lane worktrees. Default: ~/.cinderdeck/lanes.
+  nonisolated static let stacksLanesDirectory = "stacks.lanesDirectory"
   nonisolated static let stacksQuitBehavior = "stacks.quitBehavior"
   nonisolated static let stacksNotifyOnCrash = "stacks.notifyOnCrash"
   nonisolated static let stacksAutoFetchMinutes = "stacks.autoFetchMinutes"

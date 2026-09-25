@@ -86,8 +86,9 @@ struct StackCompactCardView: View {
         }
         Spacer(minLength: 2)
         if let port = service.port ?? { if case .port(let port) = service.readiness { return port }; return nil }() {
-          Button { viewModel.openPort(port) } label: { StackChip(text: ":\(String(port))", tint: runtime.phase == .ready ? .accentColor : .secondary, monospaced: true) }
-            .buttonStyle(.plain).help("Open http://localhost:\(String(port))").fixedSize()
+          let host = file.definition?.host ?? "localhost"
+          Button { viewModel.openPort(port, host: host) } label: { StackChip(text: ":\(String(port))", tint: runtime.bindWarning != nil ? .orange : runtime.phase == .ready ? .accentColor : .secondary, monospaced: true) }
+            .buttonStyle(.plain).help(runtime.bindWarning ?? "Open http://\(host):\(String(port))").fixedSize()
         }
       }
       if let repo = service.repo.flatMap({ file.definition?.repo($0) }) {

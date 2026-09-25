@@ -24,6 +24,8 @@ nonisolated struct StackServiceRuntime: Equatable, Sendable {
   var launchDefinition: StackLaunchDefinition?
   /// Who last started this service: you in the panel, or an agent.
   var owner: StackActor?
+  /// Set when the process listens, but not on any port assigned to it.
+  var bindWarning: String?
 }
 
 nonisolated struct StackRuntimeState: Equatable, Sendable {

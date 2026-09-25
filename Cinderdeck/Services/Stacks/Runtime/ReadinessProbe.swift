@@ -5,7 +5,12 @@ nonisolated enum ReadinessProbe {
     switch readiness {
     case .alive: return Date().timeIntervalSince(startedAt) >= 2
     case .port(let port): return await PortInspector.isListening(port)
-    case .http(let url):
+    case .http(var url):
+      // Lane hostnames (<lane>.<workspace>.localhost) are loopback; not every resolver knows that.
+      if url.host?.hasSuffix(".localhost") == true, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+        components.host = "127.0.0.1"
+        url = components.url ?? url
+      }
       var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 2)
       request.httpMethod = "GET"
       do {

@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+- Rework worktree lanes so they work beyond single-port services:
+  - Write `{{port.api}}`, `{{url.api}}`, `{{lane.slug}}`, `{{repo.app}}` and `{{url.backend:api}}` in commands, environment values and readiness URLs. They resolve for the original checkout and for each lane, so a lane's frontend no longer calls the original checkout's API. A literal `localhost:<port>` pointing at another service is now a warning.
+  - Every service with a port gets `PORT`, `CINDERDECK_PORT_<SERVICE>` and `CINDERDECK_URL_<SERVICE>` in the original checkout too. Lanes also get `CINDERDECK_LANE_SLUG`, `CINDERDECK_LANE_DIR` and a per-lane `COMPOSE_PROJECT_NAME`. Services without a port no longer get one in lanes.
+  - Add a `[lanes]` table: `from`, `copy` and `link` for `.env` files, `setup` and `teardown` tasks or workflows, lane-only `env`, `dir`, and `hosts` for per-lane `*.localhost` hostnames.
+  - Mark services or repositories `lane = "shared"` so lanes use the original checkout's database or backend, or `lane = "off"` to leave them out. Depend on another workspace's service with `depends_on = ["backend:api"]`; lanes use its lane on the same branch.
+  - Add named ports (`ports.hmr = 24678`, `ready.port = "hmr"`) and task ports, assigned in blocks of ten per lane.
+  - Lanes now follow their workspace definition instead of a saved copy. Lanes from 1.1 load pinned; Unpin makes them follow.
+  - Track branches that only exist on a remote instead of creating an unrelated branch from `HEAD`, and start new branches at `--from`.
+  - Adopt worktrees agents created with `cinderdeck lane adopt` or `adopt_lane`; Cinderdeck never deletes them. Workspaces that share a repository share its worktree.
+  - Remove lanes that contain `node_modules` or build output after confirming, with sizes listed, and keep branches, adopted worktrees and shared worktrees. Add `lane release`, merged-lane detection and `lane prune`, and delete removed lanes' logs after 14 days.
+  - Queue simultaneous lane creation instead of failing, and warn when a service listens on a different port than it was assigned.
+  - Put lane worktrees in `~/.cinderdeck/lanes/<workspace>/<lane>/<repository>` (Settings → Workspaces → Lane worktrees) and refuse a lanes folder inside a repository.
+  - Add the `cinderdeck-parallel-lanes` agent skill, and teach the recording skill to record lanes on their own URLs. `workspace_guide` now explains templates and `[lanes]`.
+  - Add `cinderdeck lane env --export` and MCP `lane_env` for a lane's ports and URLs, plus `run_lane_setup`, `release_lane`, `prune_lanes` and `unpin_lane`. Stopping a service that lanes use asks first.
 - Add a Saved tab to the history panel with Favorites and groups you name, holding captures and copied text together. Right-click any capture or copied text and choose Add to Favorites or Add to Group, or use the star on text cards. Return copies saved text and closes the panel, ready to paste.
 - Keep saved captures and text through history cleanup. They are skipped by the capture age and count limits and the clipboard's 30-day and 500-item limits, and Clear Text History keeps them.
 - Lay out the compact history header side by side so the filter pills no longer cover the open, pin, and close buttons.

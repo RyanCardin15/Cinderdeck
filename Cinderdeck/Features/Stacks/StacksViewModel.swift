@@ -130,12 +130,20 @@ final class StacksViewModel: ObservableObject {
     if visible { refreshStashes() }
   }
   func toggle(_ id: String) {
-    Task {
-      if states[id]?.isActive == true { await supervisor.stop(stack: id, actor: .user) }
-      else { await supervisor.start(stack: id, actor: .user) }
-    }
+    if states[id]?.isActive == true { stop(id); return }
+    Task { await supervisor.start(stack: id, actor: .user) }
   }
-  func stop(_ id: String, service: String? = nil) { Task { await supervisor.stop(stack: id, services: service.map { [$0] }, actor: .user) } }
+  func stop(_ id: String, service: String? = nil) {
+    // Lanes and other workspaces may use this workspace's services.
+    let dependents = supervisor.dependents(of: id, services: service.map { [$0] })
+    if !dependents.isEmpty {
+      let names = dependents.map { dependent in files.first { $0.id == dependent }?.name ?? dependent }
+      guard confirm(title: "Stop services other workspaces use?",
+        message: "\(names.joined(separator: ", ")) \(names.count == 1 ? "uses" : "use") \(service ?? "these services"). They will lose \(service == nil ? "them" : "it") until you start \(service == nil ? "them" : "it") again.",
+        buttons: ["Stop", "Cancel"]) == 0 else { return }
+    }
+    Task { await supervisor.stop(stack: id, services: service.map { [$0] }, actor: .user) }
+  }
   func start(_ id: String, service: String) { Task { await supervisor.start(stack: id, services: [service], actor: .user) } }
   func restart(_ id: String, service: String? = nil, dependents: Bool = false) {
     Task { await supervisor.restart(stack: id, service: service, includeDependents: dependents, actor: .user) }
@@ -165,7 +173,7 @@ final class StacksViewModel: ObservableObject {
     }
     controller.show(service: service)
   }
-  func openPort(_ port: Int) { if let url = URL(string: "http://localhost:\(port)") { NSWorkspace.shared.open(url) } }
+  func openPort(_ port: Int, host: String = "localhost") { if let url = URL(string: "http://\(host):\(port)") { NSWorkspace.shared.open(url) } }
   func openRepo(_ repo: RepoDefinition, inCode: Bool = false) {
     if inCode {
       var components = URLComponents()

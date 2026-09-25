@@ -128,9 +128,11 @@ struct StackServiceTile: View {
       }
       HStack(spacing: 5) {
         if let port {
-          Button { viewModel.openPort(port) } label: {
-            StackChip(systemImage: "globe", text: ":\(String(port))", tint: runtime.phase == .ready ? .accentColor : .secondary, monospaced: true)
-          }.buttonStyle(.plain).help("Open http://localhost:\(String(port))").fixedSize()
+          let host = stack.definition?.host ?? "localhost"
+          Button { viewModel.openPort(port, host: host) } label: {
+            StackChip(systemImage: runtime.bindWarning == nil ? "globe" : "exclamationmark.triangle", text: ":\(String(port))",
+              tint: runtime.bindWarning != nil ? .orange : runtime.phase == .ready ? .accentColor : .secondary, monospaced: true)
+          }.buttonStyle(.plain).help(runtime.bindWarning ?? "Open http://\(host):\(String(port))").fixedSize()
         }
         if let repo = service.repo.flatMap({ stack.definition?.repo($0) }) {
           StackBranchChip(stack: stack.id, repo: repo, viewModel: viewModel)

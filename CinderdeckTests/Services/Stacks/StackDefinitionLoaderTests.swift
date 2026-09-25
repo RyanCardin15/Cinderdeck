@@ -50,6 +50,98 @@ final class StackDefinitionLoaderTests: XCTestCase {
     XCTAssertEqual(stack.service("frontend")?.readiness, .port(4200))
     XCTAssertEqual(try stack.dependencyLayers(), [["api"], ["frontend"]])
   }
+  func testTemplatesRenderForTheOriginalCheckoutAndKeepRawText() throws {
+    let file = URL(fileURLWithPath: "/tmp/example.toml")
+    let result = StackDefinitionLoader.load("""
+      root = "/tmp"
+      [env]
+      SITE = "{{url.web}}"
+      [repos.app]
+      path = "app"
+      [services.api]
+      cmd = "serve --port {{port.api}} --from {{repo.app}} --go '{{.State}}'"
+      port = 4000
+      ready.http = "{{url.api}}/health"
+      [services.web]
+      cmd = "web"
+      port = 3000
+      ports.hmr = 24678
+      env.API_URL = "{{url.api}}"
+      env.DB = "app{{lane.ident:+_}}{{lane.ident}}"
+      env.NAME = "{{lane.slug:-main}}"
+      env.OTHER = "{{port.backend:api}}"
+      depends_on = ["api", "backend:api"]
+      [tasks.test]
+      cmd = "curl {{url.web.hmr}}"
+      [lanes]
+      copy = [".env"]
+      setup = "task:test"
+      hosts = true
+      env.MODE = "lane"
+      """, file: file, validatePaths: false)
+    let stack = try XCTUnwrap(result.definition, result.issues.map(\.message).joined(separator: "; "))
+    let api = try XCTUnwrap(stack.service("api"))
+    XCTAssertEqual(api.command, "serve --port 4000 --from /tmp/app --go '{{.State}}'", "Other {{…}} text is left alone")
+    XCTAssertEqual(api.raw?.command, "serve --port {{port.api}} --from {{repo.app}} --go '{{.State}}'")
+    XCTAssertEqual(api.readiness, .http(URL(string: "http://localhost:4000/health")!))
+    let web = try XCTUnwrap(stack.service("web"))
+    XCTAssertEqual(web.environment["API_URL"], "http://localhost:4000")
+    XCTAssertEqual(web.environment["DB"], "app")
+    XCTAssertEqual(web.environment["NAME"], "main")
+    XCTAssertEqual(web.environment["OTHER"], "{{port.backend:api}}", "Other workspaces resolve when every workspace is loaded")
+    XCTAssertEqual(web.ports, ["hmr": 24678])
+    XCTAssertEqual(stack.environment["SITE"], "http://localhost:3000")
+    XCTAssertEqual(stack.task("test")?.command, "curl http://localhost:24678")
+    XCTAssertEqual(stack.laneSettings?.setup, "task:test")
+    XCTAssertEqual(stack.laneSettings?.hosts, true)
+    XCTAssertEqual(stack.laneSettings?.environment["MODE"], "lane")
+    XCTAssertEqual(try stack.dependencyLayers(), [["api"], ["web"]], "Links are not ordered locally")
+    XCTAssertEqual(StackTemplates.references(in: "{{url.backend:api.hmr}}"), [.init(workspace: "backend", service: "api", port: "hmr")])
+
+    for (bad, expected) in [("cmd = \"x {{port.nope}}\"", "unknown service"), ("cmd = \"x {{port.worker}}\"", "has no port"),
+      ("cmd = \"x {{lane.color}}\"", "lane.slug"), ("cmd = \"x {{repo.none}}\"", "unknown repo")] {
+      let invalid = StackDefinitionLoader.load("[services.worker]\n" + bad, file: file, validatePaths: false)
+      XCTAssertNil(invalid.definition, bad)
+      XCTAssertTrue(invalid.issues.contains { $0.message.contains(expected) }, "\(bad): \(invalid.issues.map(\.message))")
+    }
+  }
+
+  func testLaneSettingsAndModesAreValidated() {
+    let file = URL(fileURLWithPath: "/tmp/example.toml")
+    let cases = [
+      ("[repos.app]\npath = \"a\"\nlane = \"copy\"", "worktree or shared"),
+      ("[services.a]\ncmd = \"a\"\nlane = \"maybe\"", "isolate, shared or off"),
+      ("[services.a]\ncmd = \"a\"\nlane = \"off\"\n[services.b]\ncmd = \"b\"\ndepends_on = [\"a\"]", "lane = \"off\""),
+      ("[lanes]\nsetup = \"task:missing\"", "existing task"),
+      ("[lanes]\ncopy = [\"../secrets\"]", "without .."),
+      ("[services.a]\ncmd = \"a\"\nports.default = 3", "not \"default\""),
+      ("[services.a]\ncmd = \"a\"\nport = 3\nready.port = \"hmr\"", "names no port"),
+      ("[services.a]\ncmd = \"a\"\ndepends_on = [\"x:y:z\"]", "<workspace>:<service>"),
+    ]
+    for (source, expected) in cases {
+      let result = StackDefinitionLoader.load(source, file: file, validatePaths: false)
+      XCTAssertNil(result.definition, source)
+      XCTAssertTrue(result.issues.contains { $0.message.contains(expected) }, "\(source): \(result.issues.map(\.message))")
+    }
+  }
+
+  func testHardcodedSiblingPortsWarn() throws {
+    let result = StackDefinitionLoader.load("""
+      [services.api]
+      cmd = "api --listen localhost:4000"
+      port = 4000
+      [services.web]
+      cmd = "web"
+      port = 3000
+      env.API_URL = "http://localhost:4000"
+      env.OWN = "http://localhost:3000"
+      """, file: URL(fileURLWithPath: "/tmp/example.toml"), validatePaths: false)
+    XCTAssertNotNil(result.definition)
+    let warnings = result.issues.filter { $0.severity == .warning }.map(\.message)
+    XCTAssertEqual(warnings.count, 1, "\(warnings)")
+    XCTAssertTrue(warnings.first?.contains("{{url.api}}") == true)
+  }
+
   func testMissingCommandUnknownRepoAndCycleAreErrors() {
     let cases = [
       "[services.a]\nport = 12": "cmd is required",

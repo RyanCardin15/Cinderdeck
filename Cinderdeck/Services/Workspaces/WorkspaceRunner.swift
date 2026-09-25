@@ -94,6 +94,24 @@ final class WorkspaceRunner: ObservableObject {
     return run
   }
 
+  /// Runs a lane's `[lanes] setup` or `teardown` reference (task:<id> or workflow:<id>) and waits for it.
+  func runAndWait(workspace id: String, reference: String, actor: StackActor, timeout: TimeInterval = 3600) async throws -> WorkspaceRun {
+    let parts = reference.split(separator: ":", maxSplits: 1).map(String.init)
+    guard parts.count == 2, let kind = WorkspaceRunKind(rawValue: parts[0]) else {
+      throw StackError.message("Use task:<id> or workflow:<id> (\(reference))")
+    }
+    let started = try submit(workspace: id, kind: kind, definitionID: parts[1], actor: actor)
+    let deadline = Date().addingTimeInterval(timeout)
+    while let current = run(started.id), current.status.isActive {
+      guard Date() < deadline else {
+        try? await cancel(started.id)
+        throw StackError.message("\(reference) did not finish within \(Int(timeout)) seconds and was cancelled")
+      }
+      try? await Task.sleep(nanoseconds: 200_000_000)
+    }
+    return run(started.id) ?? started
+  }
+
   func cancel(_ id: UUID) async throws {
     guard let run = run(id), run.status.isActive || processes[id] != nil else { return }
     change(id) { $0.status = .cancelling }
@@ -128,6 +146,8 @@ final class WorkspaceRunner: ObservableObject {
             try await executeTask(task, workspace: workspace, runID: id, stepIndex: index)
           case "start": try await ensureServices([reference[1]], workspace: workspace, runID: id)
           case "stop":
+            // A lane never stops the original checkout's shared services or another workspace's.
+            if workspace.link(reference[1]) != nil { break }
             await supervisor.stop(stack: workspace.id, services: [reference[1]], actor: initial.actor)
             if supervisor.runtime(workspace.id, reference[1]).process != nil { throw StackError.message("Could not stop \(reference[1])") }
           default: throw StackError.message("Unsupported workflow step")
@@ -187,8 +207,8 @@ final class WorkspaceRunner: ObservableObject {
       if let identity = supervisor.runtime(workspace.id, service).process { change(runID) { $0.startedServices[service] = identity } }
     }
     try Task.checkCancellation()
-    for service in required.sorted() where supervisor.runtime(workspace.id, service).phase != .ready {
-      let state = supervisor.runtime(workspace.id, service)
+    for service in required.sorted() where supervisor.dependencyRuntime(workspace.id, service).phase != .ready {
+      let state = supervisor.dependencyRuntime(workspace.id, service)
       throw StackError.message("\(service) is not ready: \(state.detail ?? state.phase.label). Remaining steps were skipped.")
     }
   }
@@ -198,11 +218,15 @@ final class WorkspaceRunner: ObservableObject {
     try Task.checkCancellation()
     var values: [String: String] = [:]
     for (variable, name) in workspace.secrets { values[variable] = try secrets.read(name) }
-    let service = ServiceDefinition(id: task.id, command: task.command, repo: task.repo,
+    var service = ServiceDefinition(id: task.id, command: task.command, repo: task.repo,
       directory: task.directory, environment: task.environment, restartOnFailure: false)
+    service.port = task.port
     let launch = StackLaunchDefinition(stack: workspace, service: service)
     var env = launch.environment(shell: shell, secrets: values)
     env["CINDERDECK_WORKSPACE"] = workspace.id; env["CINDERDECK_TASK"] = task.id; env["CINDERDECK_RUN"] = runID.uuidString
+    // A task's own server ports; in lanes these are assigned like service ports.
+    if let port = task.port { env["CINDERDECK_TASK_PORT"] = String(port) }
+    for (name, port) in task.ports { env["CINDERDECK_TASK_PORT_" + StackLaneInfo.variableName(name)] = String(port) }
     guard let step = run(runID)?.steps[stepIndex] else { throw CancellationError() }
     let process = ServiceProcess()
     processes[runID] = process

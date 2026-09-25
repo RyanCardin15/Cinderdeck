@@ -84,7 +84,7 @@ nonisolated enum CinderdeckMCPServer {
       ["workspace": workspace, "services": property("array", "Only these services (and nothing else)", items: "string"),
         "wait": wait, "timeout": waitTimeout, "force": force], required: ["workspace"], idempotent: true),
     tool("stop_services", "Stop services", .destructive,
-      "Stop a workspace's services, or only some, in reverse dependency order. Stops whole process groups.",
+      "Stop a workspace's services, or only some, in reverse dependency order. Stops whole process groups. Refuses (in_use) when running lanes or other workspaces use them, unless force=true.",
       ["workspace": workspace, "services": property("array", "Only these services", items: "string"),
         "wait": property("boolean", "Wait until they have stopped (default true)"), "timeout": waitTimeout, "force": force],
       required: ["workspace"], idempotent: true),
@@ -151,11 +151,15 @@ nonisolated enum CinderdeckMCPServer {
       ["workspace": workspace, "service": property("string", "Service id (letters, numbers, hyphens, underscores)"),
         "cmd": property("string", "Shell command, e.g. \"npm run dev\". Required for a new service"), "cwd": cwd, "repo": repo,
         "port": property("number", "Port shown as a localhost link and checked for conflicts; 0 removes it"),
-        "ready": property("string", "Readiness check: port:<port>, an http(s) URL answering below 500, log:<regex>, or none. New services with a port default to port:<port>"),
+        "ready": property("string", "Readiness check: port:<port or port name>, an http(s) URL answering below 500 (may use {{url.<service>}}), log:<regex>, or none. New services with a port default to port:<port>"),
         "ready_timeout": property("number", "Seconds to wait for readiness (default 90)"),
         "depends_on": property("array", "Service ids that must be ready first", items: "string"),
         "env": environment, "autostart": property("boolean", "Start with the whole workspace (default true)"),
-        "add_repo": property("boolean", "For a new service in a Git working tree without repo, track its branch (default true)"), "force": force],
+        "add_repo": property("boolean", "For a new service in a Git working tree without repo, track its branch (default true)"),
+        "ports": .object(["type": .string("object"), "additionalProperties": .object(["type": .string("number")]),
+          "description": .string("Extra named ports, e.g. {\"hmr\": 24678}; replaces the existing set. Lanes assign their own values.")]),
+        "lane": property("string", "In worktree lanes: isolate (own copy, default), shared (use the original checkout's), or off; \"\" resets", values: ["isolate", "shared", "off", ""]),
+        "force": force],
       required: ["workspace", "service"], idempotent: true),
     tool("save_workspace_task", "Save a task", .destructive,
       "Add a task (a command that finishes, such as tests, a build, or a migration) to a workspace, or change one. Omitted settings keep their values. from_service moves a stopped service to Tasks, keeping its command, folder, repo, and environment.",
@@ -200,16 +204,47 @@ nonisolated enum CinderdeckMCPServer {
       ["workspace": workspace, "repo": property("string", "One repo id"), "fetch": property("boolean", "Fetch only; do not pull"), "force": force],
       required: ["workspace"]),
     tool("list_lanes", "List lanes", .read,
-      "Original checkouts and their parallel worktree lanes, with each lane's ports, owner, paths, and service state.",
+      "Original checkouts and their parallel worktree lanes: ports and URLs, owner, folders, service state, setup status, shared services, and whether each lane's branch was merged or its upstream deleted.",
       ["workspace": workspace]),
     tool("create_lane", "Create a lane", .additive,
-      "Create an isolated Git worktree copy of a workspace on an existing or new local branch, claim it for you, and start its services on unique ports. The source keeps running. Commands must use PORT and CINDERDECK_PORT_<UPPERCASE_SERVICE>. start=false lets you install dependencies in the returned paths first. The branch must not already be checked out.",
-      ["workspace": workspace, "branch": property("string", "Existing or new local branch, also the lane name, e.g. agent/codex-1"),
+      "Create an isolated Git worktree copy of a workspace on a branch, claim it for you, run its [lanes] setup, and start its services on unique ports. The source keeps running. A branch that only exists on the remote is tracked; a new branch starts at from (default each repo's HEAD). Values written as {{port.<service>}} / {{url.<service>}} resolve to this lane's ports; services marked shared use the original checkout's instance. start=false creates without starting. If the branch is already checked out in your own worktree, use adopt_lane.",
+      ["workspace": workspace, "branch": property("string", "Existing (local or remote) or new branch, also the lane name, e.g. agent/codex-1"),
+        "from": property("string", "Start point for a new branch, e.g. origin/main (default: [lanes] from, else HEAD)"),
+        "env": .object(["type": .string("object"), "additionalProperties": .object(["type": .string("string")]),
+          "description": .string("Lane-only environment variables as NAME: \"value\"; they win over the definition")]),
+        "copy": property("array", "Extra untracked files to copy from each original checkout, e.g. [\".env.local\"]", items: "string"),
+        "setup": property("boolean", "Run the workspace's [lanes] setup before starting (default true)"),
         "start": property("boolean", "Start services after creation (default true)"), "wait": wait,
         "timeout": waitTimeout], required: ["workspace", "branch"]),
+    tool("adopt_lane", "Adopt a worktree as a lane", .additive,
+      "Run an existing Git worktree (for example the one you are working in) as a lane of a workspace, with its own ports. Cinderdeck never deletes an adopted worktree; other repos of the workspace get worktrees on the same branch or stay shared.",
+      ["workspace": workspace, "path": property("string", "Worktree folder (default: your current folder)"),
+        "name": property("string", "Lane name (default: the worktree's branch)"),
+        "setup": property("boolean", "Run [lanes] setup (default false)"),
+        "start": property("boolean", "Start services (default true)"), "wait": wait, "timeout": waitTimeout], required: ["workspace"]),
+    tool("lane_env", "Lane environment", .read,
+      "The ports, URLs and variables a lane (or original checkout) gives its services: PORT, CINDERDECK_PORT_*, CINDERDECK_URL_*, lane values and definition env. Use them when you run tests or curl from your own shell. Secrets are omitted.",
+      ["workspace": workspace, "service": property("string", "A service or task, for its PORT and own env")], required: ["workspace"]),
+    tool("run_lane_setup", "Run lane setup", .additive,
+      "Run the workspace's [lanes] setup task or workflow in a lane again, e.g. after it failed, and wait for it.",
+      ["workspace": property("string", "Lane id or <workspace>/<branch>"), "force": force], required: ["workspace"]),
     tool("remove_lane", "Remove a lane", .destructive,
-      "Stop a lane and remove its worktrees. Refuses tracked, untracked, or ignored changes and respects claims. Keeps Git branches. Never removes the original checkout.",
-      ["workspace": property("string", "Lane id or <workspace>/<branch> from create_lane"), "force": force], required: ["workspace"]),
+      "Stop a lane, run its [lanes] teardown, and remove its worktrees. Refuses tracked or untracked changes and respects claims. Ignored files (node_modules, build output, .env) block removal unless discard_ignored=true; ask the user before discarding. Keeps Git branches and adopted worktrees. Never removes the original checkout.",
+      ["workspace": property("string", "Lane id or <workspace>/<branch> from create_lane"), "force": force,
+        "discard_ignored": property("boolean", "Also delete ignored files in the lane's worktrees"),
+        "force_teardown": property("boolean", "Remove even if teardown fails"),
+        "delete_logs": property("boolean", "Also delete the lane's service logs")], required: ["workspace"]),
+    tool("release_lane", "Release a lane", .destructive,
+      "Stop a lane and forget it, keeping every worktree on disk. Use for adopted worktrees you keep working in.",
+      ["workspace": property("string", "Lane id or <workspace>/<branch>"), "force": force], required: ["workspace"]),
+    tool("prune_lanes", "Prune merged lanes", .destructive,
+      "Remove lanes whose branches were merged into the default remote branch or whose upstream branch was deleted. Lanes with changes, or claimed by others, are kept and reported. dry_run lists them first.",
+      ["workspace": workspace, "dry_run": property("boolean", "Only list what would be removed"),
+        "missing": property("boolean", "Also remove lanes whose worktrees are missing"),
+        "discard_ignored": property("boolean", "Also delete ignored files"), "force": force]),
+    tool("unpin_lane", "Unpin a lane", .additive,
+      "Make a lane created by an older Cinderdeck follow its source workspace definition instead of its saved copy.",
+      ["workspace": property("string", "Lane id or <workspace>/<branch>"), "force": force], required: ["workspace"]),
   ]
 
   private static let prTools: [Tool] = [
@@ -445,9 +480,15 @@ nonisolated enum CinderdeckMCPServer {
     case "list_branches": return ("git.branches", params, 90)
     case "switch_branch": return ("git.switch", params, 300)
     case "pull_repos": return (arguments["fetch"]?.boolValue == true ? "git.fetch" : "git.pull", params, 300)
-    case "list_lanes": return ("lane.list", params, 30)
-    case "create_lane": return ("lane.create", params, wait + 300)
-    case "remove_lane": return ("lane.remove", params, 300)
+    case "list_lanes": return ("lane.list", params, 120)
+    case "create_lane": return ("lane.create", params, wait + 3900)
+    case "adopt_lane": return ("lane.adopt", params, wait + 3900)
+    case "lane_env": return ("lane.env", params, 30)
+    case "run_lane_setup": return ("lane.setup", params, 3900)
+    case "remove_lane": return ("lane.remove", params, 4200)
+    case "release_lane": return ("lane.release", params, 600)
+    case "prune_lanes": return ("lane.prune", params, 4200)
+    case "unpin_lane": return ("lane.unpin", params, 60)
     case "list_pr_views": return ("prs.views.list", params, 90)
     case "upsert_pr_view": return ("prs.views.upsert", params, 90)
     case "select_pr_view": return ("prs.views.select", params, 90)
@@ -525,7 +566,7 @@ nonisolated enum CinderdeckMCPServer {
     case "list_lanes":
       guard let snapshots = try? result.decode([StackSnapshot].self) else { return result.compactString() }
       return JSONValue.array(snapshots.map { .object(compact($0)) }).compactString()
-    case "start_services", "stop_services", "restart_services", "create_lane", "switch_branch", "create_workspace",
+    case "start_services", "stop_services", "restart_services", "create_lane", "adopt_lane", "run_lane_setup", "unpin_lane", "switch_branch", "create_workspace",
       "save_workspace_service", "save_workspace_task", "save_workspace_workflow", "delete_workspace_item":
       guard var object = result.objectValue, let snapshot = try? object["workspace"]?.decode(StackSnapshot.self) else { return result.compactString() }
       object["workspace"] = .object(compact(snapshot))
@@ -533,7 +574,7 @@ nonisolated enum CinderdeckMCPServer {
     case "workspace_guide":
       var object = result.objectValue ?? [:]
       object["cli"] = .string(StackCLI.preferredCommandPath())
-      object["rules"] = .string("One TOML file per workspace; the file name is its id. Services must run in the foreground. Use double-quoted strings, [services.<id>], [tasks.<id>] and [workflows.<id>] tables, and dotted keys (ready.port, env.NAME). No inline tables, arrays of tables, or multiline strings.")
+      object["rules"] = .string("One TOML file per workspace; the file name is its id. Services must run in the foreground. Use double-quoted strings, [services.<id>], [tasks.<id>] and [workflows.<id>] tables, and dotted keys (ready.port, env.NAME). No inline tables, arrays of tables, or multiline strings. Write ports and URLs as {{port.<service>}} / {{url.<service>}} (also {{port.<service>.<name>}} for ports.<name>, {{url.<workspace>:<service>}}, {{lane.slug}}, {{lane.ident}}, {{repo.<id>}}) so values follow each worktree lane; literal localhost ports keep pointing at the original checkout. A [lanes] table sets copy (.env files), setup and teardown (task:<id> or workflow:<id>), from, env and hosts; lane = \"shared\" or \"off\" on a service or repo controls whether lanes run their own copy.")
       object["socket"] = nil
       return JSONValue.object(object).compactString()
     default:
@@ -562,12 +603,26 @@ nonisolated enum CinderdeckMCPServer {
         if let owner = service.owner, service.pid != nil { entry["startedBy"] = .string(owner.label) }
         if let branch = service.branch { entry["branch"] = .string(branch) }
         if let detail = service.detail { entry["detail"] = .string(detail) }
+        if let warning = service.bindWarning { entry["portWarning"] = .string(warning) }
+        if let source = service.sharedFrom { entry["sharedFrom"] = .string(source) }
+        if let ports = service.ports { entry["ports"] = (try? JSONValue(encoding: ports)) ?? .null }
         return .object(entry)
       }),
     ]
     if let operation = workspace.operation { object["busy"] = .string(operation) }
     if workspace.definitionChanged { object["definitionChanged"] = .string("Restart to apply definition changes") }
     if let lane = workspace.lane { object["lane"] = try? JSONValue(encoding: lane) }
+    if let status = workspace.laneStatus {
+      var summary: [String: JSONValue] = ["folder": .string(status.directory)]
+      if let setup = status.setup { summary["setup"] = .string(setup.status.rawValue + (setup.detail.map { ": " + $0 } ?? "")) }
+      if status.merged == true { summary["merged"] = .bool(true) }
+      if status.upstreamGone == true { summary["upstreamDeleted"] = .bool(true) }
+      if status.pinned { summary["pinned"] = .bool(true) }
+      if status.adopted { summary["adopted"] = .bool(true) }
+      if !status.shared.isEmpty { summary["sharedServices"] = .array(status.shared.map(JSONValue.string)) }
+      summary["worktrees"] = .array(status.worktrees.map { .string($0.path.path + ($0.managed ? "" : " (adopted)")) })
+      object["laneStatus"] = .object(summary)
+    }
     if let claim = workspace.claim {
       object["claim"] = .object(["by": .string(claim.holder.label), "note": .string(claim.note ?? ""),
         "until": .string(ISO8601DateFormatter().string(from: claim.expiresAt))])

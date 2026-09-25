@@ -18,11 +18,13 @@ final class StackControlService: ObservableObject {
   private let claimsFile: URL
   private let prViews: PRViewControlService
   let workspaceRunner: WorkspaceRunner
+  let lanes: StackLaneCoordinator
 
   init(supervisor: StackSupervisor, prViews: PRViewControlService? = nil, runner: WorkspaceRunner? = nil, claimsFile: URL = StackControlPaths.claims) {
     self.supervisor = supervisor
     self.claimsFile = claimsFile
     self.workspaceRunner = runner ?? WorkspaceRunner(supervisor: supervisor, store: .init(directory: supervisor.logDirectory.appendingPathComponent("Runs")))
+    self.lanes = StackLaneCoordinator(supervisor: supervisor, runner: self.workspaceRunner)
     self.prViews = prViews ?? PRViewControlService()
   }
 
@@ -125,7 +127,8 @@ final class StackControlService: ObservableObject {
       if let service = runtime.launchDefinition?.service, !services.contains(where: { $0.id == service.id }) { services.append(service) }
     }
     let repos = file.definition?.repos ?? []
-    return StackSnapshot(
+    let host = file.definition?.host ?? "localhost"
+    var snapshot = StackSnapshot(
       id: file.id, name: file.name, file: file.file.path, state: state.label, operation: state.operation,
       definitionChanged: supervisor.definitionChanged(file.id),
       issues: file.issues.map { "\($0.severity.rawValue): \($0.message)" },
@@ -137,11 +140,21 @@ final class StackControlService: ObservableObject {
         return StackServiceSnapshot(
           name: service.id, phase: runtime.phase.rawValue, status: runtime.phase.label,
           ready: runtime.phase == .ready, pid: runtime.process?.pid, pgid: runtime.process?.pgid,
-          port: port, url: port.map { "http://localhost:\($0)" }, startedAt: runtime.startedAt,
+          port: port, url: port.map { "http://\(host):\($0)" }, startedAt: runtime.startedAt,
           restarts: runtime.restartCount, detail: runtime.detail, owner: runtime.owner,
           repo: service.repo, branch: repo.flatMap { supervisor.gitMonitor.statuses[$0.path]?.branchLabel },
           cwd: service.directory.path, command: service.command, dependsOn: service.dependencies,
-          autostart: service.autostart, logFile: supervisor.logURL(stack: file.id, service: service.id).path)
+          autostart: service.autostart, logFile: supervisor.logURL(stack: file.id, service: service.id).path,
+          ports: service.ports.isEmpty ? nil : service.ports, bindWarning: runtime.bindWarning)
+      } + (file.definition?.links.filter { !$0.isExternal } ?? []).map { link in
+        // Shared services appear with the state of the instance the lane uses.
+        let runtime = supervisor.runtime(link.stack, link.service)
+        return StackServiceSnapshot(name: link.id, phase: runtime.phase.rawValue, status: runtime.phase.label + " (shared)",
+          ready: runtime.phase == .ready, pid: runtime.process?.pid, pgid: runtime.process?.pgid, port: link.port,
+          url: link.port.map { "http://\(link.host):\($0)" }, startedAt: runtime.startedAt, restarts: runtime.restartCount,
+          detail: runtime.detail, owner: runtime.owner, repo: nil, branch: nil, cwd: nil, command: nil, dependsOn: [],
+          autostart: false, logFile: supervisor.logURL(stack: link.stack, service: link.service).path,
+          ports: link.ports.isEmpty ? nil : link.ports, sharedFrom: link.stack)
       },
       repos: repos.map { repo in
         let status = supervisor.gitMonitor.statuses[repo.path] ?? GitRepoStatus(branch: "Loading…")
@@ -149,6 +162,16 @@ final class StackControlService: ObservableObject {
           changedFiles: status.changedFiles, ahead: status.ahead, behind: status.behind, upstream: status.upstream,
           operation: status.operation, error: status.error)
       }, lane: file.lane)
+    if let lane = file.lane {
+      let git = supervisor.laneGitStates[file.id]
+      var urls: [String: String] = [:]
+      for service in file.definition?.services ?? [] { if let port = service.port { urls[service.id] = "http://\(host):\(port)" } }
+      snapshot.laneStatus = StackLaneStatusSnapshot(slug: lane.effectiveSlug, directory: lane.directory.path, pinned: lane.pinned,
+        adopted: lane.adopted, setup: file.laneSetup, merged: git?.merged, upstreamGone: git?.upstreamGone, unpushed: git?.unpushed,
+        worktrees: file.laneWorktrees, shared: (file.definition?.links ?? []).filter(\.shared).map(\.id), urls: urls)
+    }
+    if let links = file.definition?.links, !links.isEmpty { snapshot.links = links }
+    return snapshot
   }
 
   private func writeState(appRunning: Bool = true) {
@@ -213,24 +236,49 @@ final class StackControlService: ObservableObject {
       let source = try params["workspace"].map { _ in try workspaceFile(params) }
       let sourceID = source?.lane?.sourceStackID ?? source?.id
       let files = supervisor.files.filter { sourceID == nil || $0.id == sourceID || $0.lane?.sourceStackID == sourceID }
+      await supervisor.refreshLaneGitStates(files.filter { $0.lane != nil }.map(\.id))
       return try JSONValue(encoding: files.map { stackSnapshot($0) })
-    case "lane.create":
-      let source = try workspaceFile(params)
-      guard let branch = params["branch"]?.stringValue else { throw StackControlError.invalid("Pass a branch name for the new lane.") }
-      try requireIdle(source)
-      // Cloning a claimed source does not change it or use its service ports.
-      let file = try await supervisor.createLane(stack: source.id, branch: branch, actor: actor)
-      _ = try claim(.object(["workspace": .string(file.id), "note": .string("Worktree lane " + branch)]), actor: actor)
-      if params["start"]?.boolValue == false { return try JSONValue(encoding: ["workspace": stackSnapshot(file)]) }
-      let supervisor = supervisor
-      let timedOut = await settle(file, params: params) { await supervisor.start(stack: file.id, actor: actor) }
-      return await actionResult(file, timedOut: timedOut, waited: params["wait"]?.boolValue ?? true)
-    case "lane.remove":
-      let file = try workspaceFile(params)
+    case "lane.create", "lane.adopt": return try await createLane(params, adopt: method == "lane.adopt", actor: actor)
+    case "lane.remove", "lane.release":
+      let file = try laneFile(params)
       try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
-      try await supervisor.removeLane(file.id, actor: actor)
+      let options = StackLaneRemovalOptions(discardIgnored: params["discard_ignored"]?.boolValue == true,
+        keepWorktrees: method == "lane.release", deleteLogs: params["delete_logs"]?.boolValue == true,
+        forceTeardown: params["force_teardown"]?.boolValue == true)
+      let report = try await lanes.remove(file.id, actor: actor, options: options)
       release(stack: file.id)
-      return .object(["removed": .string(file.id)])
+      var result: [String: JSONValue] = [method == "lane.release" ? "released" : "removed": .string(file.id)]
+      if let encoded = try? JSONValue(encoding: report) { result["report"] = encoded }
+      return .object(result)
+    case "lane.setup":
+      let file = try laneFile(params)
+      try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
+      try requireIdle(file)
+      guard file.definition?.laneSettings?.setup != nil else {
+        throw StackControlError.invalid("\(file.lane?.sourceStackID ?? file.id) has no [lanes] setup. Add setup = \"task:<id>\" or \"workflow:<id>\".")
+      }
+      let state = await lanes.runSetup(file.id, actor: actor)
+      let refreshed = supervisor.files.first { $0.id == file.id } ?? file
+      return .object(["setup": (try? JSONValue(encoding: state)) ?? .null, "workspace": (try? JSONValue(encoding: stackSnapshot(refreshed))) ?? .null])
+    case "lane.unpin":
+      let file = try laneFile(params)
+      try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
+      try await supervisor.unpinLane(file.id, actor: actor)
+      let refreshed = supervisor.files.first { $0.id == file.id } ?? file
+      return .object(["workspace": (try? JSONValue(encoding: stackSnapshot(refreshed))) ?? .null])
+    case "lane.env":
+      let file = try workspaceFile(params)
+      let environment = try lanes.environment(stack: file.id, service: params["service"]?.stringValue)
+      return .object(["workspace": .string(file.id), "environment": .object(environment.mapValues(JSONValue.string))])
+    case "lane.prune":
+      let source = try params["workspace"].map { _ in try workspaceFile(params) }
+      let entries = await lanes.prune(source: source.map { $0.lane?.sourceStackID ?? $0.id }, missing: params["missing"]?.boolValue == true,
+        dryRun: params["dry_run"]?.boolValue == true, discardIgnored: params["discard_ignored"]?.boolValue == true, actor: actor) { [weak self] id in
+        guard let self, params["force"]?.boolValue != true else { return nil }
+        do { try self.checkClaim(id, actor: actor, force: false); return nil } catch { return error.localizedDescription }
+      }
+      for entry in entries where entry.action == "removed" { release(stack: entry.lane) }
+      return try JSONValue(encoding: entries)
     case "logs": return try await logs(params)
     case "events":
       let file = try workspaceFile(params)
@@ -289,6 +337,59 @@ final class StackControlService: ObservableObject {
     let prefixed = files.filter { $0.id.lowercased().hasPrefix(query.lowercased()) || $0.name.lowercased().hasPrefix(query.lowercased()) }
     if prefixed.count == 1 { return prefixed[0] }
     throw StackControlError.notFound("No workspace matches \"\(query)\". Workspaces: " + files.map(\.id).joined(separator: ", "))
+  }
+
+  /// A lane by id or <workspace>/<branch>; the original checkout is refused.
+  private func laneFile(_ params: JSONValue) throws -> StackDefinitionFile {
+    let file = try workspaceFile(params)
+    guard file.lane != nil else {
+      throw StackControlError.invalid("\(file.name) is an original checkout, not a lane. Pass a lane id or <workspace>/<branch> (see list_lanes).")
+    }
+    return file
+  }
+
+  private func createLane(_ params: JSONValue, adopt: Bool, actor: StackActor) async throws -> JSONValue {
+    let source = try workspaceFile(params)
+    guard source.lane == nil else { throw StackControlError.invalid("Create lanes from the original workspace, not from lane \(source.name).") }
+    var request = StackLaneRequest(branch: params["branch"]?.stringValue ?? params["name"]?.stringValue ?? "")
+    if adopt {
+      let path = params["path"]?.stringValue ?? actor.cwd
+      guard let path, !path.isEmpty else { throw StackControlError.invalid("Pass path: the worktree to adopt") }
+      request.adoptPath = URL(fileURLWithPath: (path as NSString).expandingTildeInPath).standardizedFileURL
+    } else if request.branch.isEmpty {
+      throw StackControlError.invalid("Pass a branch name for the new lane.")
+    }
+    request.from = params["from"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
+    if let values = params["env"]?.objectValue {
+      for (key, value) in values {
+        guard let text = value.stringValue else { throw StackControlError.invalid("env.\(key) must be a string") }
+        request.environment[key] = text
+      }
+    }
+    request.copy = params["copy"]?.stringsValue ?? []
+    try requireIdle(source)
+    // Cloning a claimed source does not change it or use its service ports.
+    let created = try await lanes.create(stack: source.id, request: request, actor: actor,
+      setup: params["setup"]?.boolValue ?? !adopt)
+    let file = created.file
+    _ = try claim(.object(["workspace": .string(file.id), "note": .string("Worktree lane " + (file.lane?.name ?? ""))]), actor: actor)
+    var extra: [String: JSONValue] = [:]
+    if !created.warnings.isEmpty { extra["warnings"] = .array(created.warnings.map(JSONValue.string)) }
+    if let setup = created.setup { extra["setup"] = (try? JSONValue(encoding: setup)) ?? .null }
+    func respond(_ value: JSONValue) -> JSONValue {
+      guard var object = value.objectValue else { return value }
+      object.merge(extra) { _, new in new }
+      return .object(object)
+    }
+    if params["start"]?.boolValue == false || !created.setupSucceeded {
+      if !created.setupSucceeded {
+        extra["note"] = .string("Setup failed, so services were not started. Read the run with workspace_run_logs, fix it, then run_lane_setup or start_services.")
+      }
+      return respond(.object(["workspace": try JSONValue(encoding: stackSnapshot(supervisor.files.first { $0.id == file.id } ?? file))]))
+    }
+    let supervisor = supervisor
+    let timedOut = await settle(file, params: params) { await supervisor.start(stack: file.id, actor: actor) }
+    return respond(await actionResult(file, timedOut: timedOut, waited: params["wait"]?.boolValue ?? true))
   }
 
   private func services(_ params: JSONValue, in file: StackDefinitionFile, key: String = "services") throws -> Set<String>? {
@@ -354,6 +455,12 @@ final class StackControlService: ObservableObject {
     let file = try workspaceFile(params)
     try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
     let selected = try services(params, in: file)
+    let dependents = self.supervisor.dependents(of: file.id, services: selected)
+    if !dependents.isEmpty, params["force"]?.boolValue != true {
+      let files = self.supervisor.files
+      let names = dependents.map { id in files.first { $0.id == id }?.lane?.reference ?? id }
+      throw StackControlError(code: "in_use", message: "\(names.joined(separator: ", ")) \(names.count == 1 ? "uses" : "use") these services. Stop \(names.count == 1 ? "it" : "them") first, or pass force=true to stop anyway.")
+    }
     let supervisor = supervisor
     let timedOut = await settle(file, params: params) { await supervisor.stop(stack: file.id, services: selected, actor: actor) }
     return await actionResult(file, timedOut: timedOut, waited: params["wait"]?.boolValue ?? true)

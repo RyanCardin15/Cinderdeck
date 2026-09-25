@@ -66,7 +66,7 @@ steps = ["task:lint", "start:api", "task:test", "task:build"]
 cleanup_services = true
 ```
 
-Tasks support `name`, `cmd`, `repo`, `cwd`, `env`, `requires_services`, and `timeout`. Name defaults to the ID. Folder resolution and environment/Keychain precedence match services. Timeout defaults to 600 seconds, must be positive, and is capped at 3,600 seconds. Task launches additionally set `CINDERDECK_WORKSPACE`, `CINDERDECK_TASK`, and `CINDERDECK_RUN`. Resolved environment values and Keychain secret values are not written into run history. Commands may print their own secrets, so treat output as local development logs.
+Tasks support `name`, `cmd`, `repo`, `cwd`, `env`, `requires_services`, `timeout`, and `port` / `ports.<name>` for a server the task starts itself (set as `PORT`, `CINDERDECK_TASK_PORT` and `CINDERDECK_TASK_PORT_<NAME>`; lanes assign their own). Commands and env values can use `{{…}}` templates such as `{{url.api}}` (see [STACKS.md](STACKS.md#templates)). Name defaults to the ID. Folder resolution and environment/Keychain precedence match services. Timeout defaults to 600 seconds, must be positive, and is capped at 3,600 seconds. Task launches additionally set `CINDERDECK_WORKSPACE`, `CINDERDECK_TASK`, and `CINDERDECK_RUN`. Resolved environment values and Keychain secret values are not written into run history. Commands may print their own secrets, so treat output as local development logs.
 
 Workflow steps are `task:<id>`, `start:<service-id>`, or `stop:<service-id>`. Up to 100 steps run sequentially, and repeated steps are allowed. References must exist. Workflows do not call other workflows. An explicit stop step stops its named service, including one that was running before this workflow.
 

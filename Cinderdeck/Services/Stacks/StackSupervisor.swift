@@ -37,8 +37,10 @@ final class StackSupervisor: ObservableObject {
   /// Called before a service's log buffer is replaced by a relaunch, so a repro
   /// capture can read the final lines of the previous process.
   var logBufferRetiring: ((_ stack: String, _ service: String, _ buffer: LogBuffer) -> Void)?
-  private var laneMutationInProgress = false
+  /// Lane creation and removal queue here instead of failing while another runs.
+  private let laneLock = StackAsyncLock()
   private var removingLanes = Set<String>()
+  @Published private(set) var laneGitStates: [String: StackLaneGitState] = [:]
 
   init(store: StackRunStore?, defaults: UserDefaults = .standard, secrets: any StackSecretsStoring = StackSecretsStore(),
     git: GitService = .shared, logRoot: URL? = nil,
@@ -47,9 +49,7 @@ final class StackSupervisor: ObservableObject {
     inspectPort: @escaping @Sendable (Int) async throws -> StackPortConflict? = { try await PortInspector.conflict(on: $0) },
     probe: @escaping @Sendable (StackReadiness, Date, LogBuffer?) async -> Bool = { await ReadinessProbe.check($0, startedAt: $1, log: $2) },
     loadFiles: @escaping @Sendable (URL) async throws -> [StackDefinitionFile] = { directory in
-      try await Task.detached {
-        try StackDefinitionLoader.loadDirectory(directory) + StackLaneStore.files(in: StackLaneStore.directory(for: directory))
-      }.value
+      try await Task.detached { try StackWorkspaceResolver.load(directory) }.value
     }
   ) {
     self.store = store; self.defaults = defaults; self.secrets = secrets
@@ -156,6 +156,7 @@ final class StackSupervisor: ObservableObject {
           message: "Definition file was removed. Stop the running services before removing this stack.")]))
       }
       files = updated
+      assignPendingLanePorts()
       for file in files {
         if states[file.id] == nil { states[file.id] = .init() }
         for service in file.definition?.services ?? [] where states[file.id]?.services[service.id] == nil {
@@ -186,6 +187,12 @@ final class StackSupervisor: ObservableObject {
     }
     let selected = services ?? Set(definition.services.filter(\.autostart).map(\.id))
     for service in selected { restartPolicies[key(id, service)] = nil }
+    // Shared and other-workspace services start where they live, before dependents here wait on them.
+    var linked: [String: Set<String>] = [:]
+    for link in definition.serviceDependencies(selected).compactMap(definition.link) { linked[link.stack, default: []].insert(link.service) }
+    for (stack, names) in linked.sorted(by: { $0.key < $1.key }) where stack != id {
+      await start(stack: stack, services: names, actor: actor)
+    }
     if let actor {
       for service in selected where definition.service(service) != nil && runtime(id, service).process == nil {
         change(id, service) { $0.owner = actor }
@@ -203,11 +210,11 @@ final class StackSupervisor: ObservableObject {
       for service in pending.sorted() {
         guard runtime(id, service).phase == .waiting else { pending.remove(service); continue }
         guard let spec = definition.service(service) else { pending.remove(service); continue }
-        if let failed = spec.dependencies.first(where: { runtime(id, $0).phase == .crashed }) {
+        if let failed = spec.dependencies.first(where: { dependencyRuntime(id, $0).phase == .crashed }) {
           change(id, service) { $0.phase = .crashed; $0.detail = "Dependency \(failed) failed to start" }
           pending.remove(service); progressed = true; continue
         }
-        if spec.dependencies.allSatisfy({ runtime(id, $0).phase.permitsDependents }) {
+        if spec.dependencies.allSatisfy({ dependencyRuntime(id, $0).phase.permitsDependents }) {
           pending.remove(service); progressed = true
           change(id, service) { $0.phase = .starting; $0.detail = nil }
           let launch = StackLaunchDefinition(stack: definition, service: spec)
@@ -266,7 +273,7 @@ final class StackSupervisor: ObservableObject {
       }
       if let previous = logs[k] { logBufferRetiring?(id, service, previous) }
       await logs[k]?.close(); logs[k] = buffer
-      change(id, service) { $0.process = identity; $0.startedAt = started; $0.launchDefinition = launch; $0.conflict = nil }
+      change(id, service) { $0.process = identity; $0.startedAt = started; $0.launchDefinition = launch; $0.conflict = nil; $0.bindWarning = nil }
       if !current() { return } // Stop is waiting on this launch and will own cleanup.
       await event(id, service, "started", actor: runtime(id, service).owner)
       observeExit(id, service, process: process, identity: identity)
@@ -293,12 +300,16 @@ final class StackSupervisor: ObservableObject {
             change(id, service) { $0.phase = .ready; $0.detail = nil }
             await event(id, service, "ready")
             wakeWaiting(id)
+            wakeLinked(id, service)
+            verifyBinding(id, service, launch: launch, identity: identity)
           }
           reachedReadiness = true
         } else if Date() >= deadline || reachedReadiness {
           if runtime(id, service).phase != .unhealthy {
             change(id, service) { $0.phase = .unhealthy; $0.detail = "Readiness check is failing; dependents may start" }
             wakeWaiting(id)
+            wakeLinked(id, service)
+            verifyBinding(id, service, launch: launch, identity: identity)
           }
         }
         // Probe quickly while starting. Afterwards this is a health check for the
@@ -312,7 +323,7 @@ final class StackSupervisor: ObservableObject {
     guard states[id]?.operation == nil else { return }
     let waiting = Set(states[id]?.services.filter {
       $0.value.phase == .waiting && definition(id)?.service($0.key)?.dependencies.allSatisfy {
-        runtime(id, $0).phase.permitsDependents
+        dependencyRuntime(id, $0).phase.permitsDependents
       } == true
     }.keys.map { $0 } ?? [])
     guard !waiting.isEmpty else { return }
@@ -401,7 +412,7 @@ final class StackSupervisor: ObservableObject {
         try await store?.delete(stack: id, service: service)
         await logs[k]?.readAvailable()
         let wasRunning = runtime(id, service).process != nil || runtime(id, service).startedAt != nil
-        change(id, service) { $0.phase = .stopped; $0.process = nil; $0.startedAt = nil; $0.launchDefinition = nil; $0.detail = nil; $0.owner = nil }
+        change(id, service) { $0.phase = .stopped; $0.process = nil; $0.startedAt = nil; $0.launchDefinition = nil; $0.detail = nil; $0.owner = nil; $0.bindWarning = nil }
         if let port = spec?.port, let conflict = try await inspectPort(port) {
           change(id, service) { $0.conflict = conflict; $0.detail = "Still listening after stop. " + conflict.description }
         }
@@ -430,63 +441,209 @@ final class StackSupervisor: ObservableObject {
   // MARK: Worktree lanes
 
   var definitionsDirectory: URL { StackDefinitionLoader.directory(defaults: defaults) }
+  /// Lane records: `<definitions>/.lanes/<id>/lane.json`.
   var lanesDirectory: URL { StackLaneStore.directory(for: definitionsDirectory) }
+  /// Default folder for lane worktrees; `[lanes] dir` overrides it per workspace.
+  var worktreeRoot: URL {
+    if let path = defaults.string(forKey: PreferencesKeys.stacksLanesDirectory), !path.isEmpty {
+      return URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true).standardizedFileURL
+    }
+    #if DEBUG
+    if let root = StackPreviewHarness.root { return root.appendingPathComponent("lanes", isDirectory: true) }
+    #endif
+    return StackLaneStore.defaultWorktreeRoot
+  }
   func isRemovingLane(_ id: String) -> Bool { removingLanes.contains(id) }
+  var isLaneOperationRunning: Bool { laneLock.isLocked }
 
-  func createLane(stack id: String, branch: String, actor: StackActor) async throws -> StackDefinitionFile {
-    guard !isBootstrapping, !laneMutationInProgress else { throw StackError.message("A lane operation is in progress. Try again when it finishes.") }
-    guard let source = definition(id) else { throw StackError.message("This stack needs a valid definition") }
-    laneMutationInProgress = true
-    defer { laneMutationInProgress = false }
+  /// The runtime a dependency refers to: a local service, or the linked service in its own workspace.
+  func dependencyRuntime(_ id: String, _ name: String) -> StackServiceRuntime {
+    if let link = definition(id)?.link(name) { return runtime(link.stack, link.service) }
+    return runtime(id, name)
+  }
+
+  /// Workspaces (lanes, or others that depend on it) with running services that use `service` of `id`.
+  func dependents(of id: String, services names: Set<String>? = nil) -> [String] {
+    files.compactMap { file -> String? in
+      guard file.id != id, let definition = file.definition, states[file.id]?.isActive == true else { return nil }
+      let uses = definition.links.contains { $0.stack == id && (names?.contains($0.service) ?? true) }
+      return uses ? file.id : nil
+    }.sorted()
+  }
+
+  /// Everything a new lane must not take: configured ports, other lanes, and live launches.
+  private func occupiedPorts() -> Set<Int> {
     let definitions = files.compactMap(\.definition) + states.values.flatMap { $0.services.values.compactMap { $0.launchDefinition?.stack } }
-    var ports = Set(definitions.flatMap { $0.services.compactMap(\.port) })
-    for service in definitions.flatMap(\.services) {
-      if case .port(let port) = service.readiness { ports.insert(port) }
-      if case .http(let url) = service.readiness, let port = url.port { ports.insert(port) }
+    var ports = Set<Int>()
+    for definition in definitions {
+      for service in definition.services {
+        ports.formUnion(service.allPorts.values)
+        if case .port(let port) = service.readiness { ports.insert(port) }
+        if case .http(let url) = service.readiness, let port = url.port { ports.insert(port) }
+      }
+      for task in definition.tasks { ports.formUnion(task.allPorts.values) }
     }
     // Include interrupted lanes, whose worktrees may not currently be loadable.
-    for record in try StackLaneStore.records(in: lanesDirectory) { ports.formUnion(record.definition.lane?.ports.values.map { $0 } ?? []) }
-    do {
-      let record = try await StackLaneStore.create(source: source, branch: branch, owner: actor,
-        directory: lanesDirectory, occupiedPorts: ports)
-      await reloadDefinitions()
-      guard let file = files.first(where: { $0.id == record.definition.id }), file.definition != nil else {
-        throw StackError.message("Lane was saved but could not be loaded. Reload stacks to inspect it.")
+    for record in (try? StackLaneStore.records(in: lanesDirectory)) ?? [] { ports.formUnion(record.info.ports.values) }
+    return ports
+  }
+
+  /// Services added to a source after its lanes were created get ports on the next load.
+  private func assignPendingLanePorts() {
+    guard !laneLock.isLocked else { return }
+    var changed = false
+    for index in files.indices where !files[index].pendingLanePorts.isEmpty && !removingLanes.contains(files[index].id) {
+      let file = files[index]
+      do {
+        let used = occupiedPorts()
+        try StackLaneStore.update(id: file.id, in: lanesDirectory) { record in
+          record.info.ports = try StackLaneStore.extend(record.info.ports, adding: file.pendingLanePorts, excluding: used)
+        }
+        changed = true
+      } catch {
+        files[index].issues.append(.init(severity: .error, message: "Could not assign ports to new services: \(error.localizedDescription)"))
       }
-      await event(file.id, nil, "laneCreated", detail: branch, actor: actor)
-      return file
+    }
+    if changed { reloadGeneration += 1 }
+  }
+
+  struct LaneCreation {
+    let file: StackDefinitionFile
+    let warnings: [String]
+  }
+
+  func createLane(stack id: String, branch: String, actor: StackActor) async throws -> StackDefinitionFile {
+    try await createLane(stack: id, request: .init(branch: branch), actor: actor).file
+  }
+
+  func createLane(stack id: String, request: StackLaneRequest, actor: StackActor) async throws -> LaneCreation {
+    guard !isBootstrapping else { throw StackError.message("Cinderdeck is still reconnecting to running services. Try again in a moment.") }
+    await laneLock.acquire()
+    let creation: StackLaneStore.Creation
+    do {
+      guard let source = definition(id) else { throw StackError.message("This stack needs a valid definition") }
+      creation = try await StackLaneStore.create(source: source, request: request, owner: actor,
+        directory: lanesDirectory, worktreeRoot: worktreeRoot, occupiedPorts: occupiedPorts())
     } catch {
+      laneLock.release()
       await reloadDefinitions()
       throw error
     }
+    laneLock.release()
+    await reloadDefinitions()
+    guard let file = files.first(where: { $0.id == creation.record.id }), file.definition != nil else {
+      let issues = files.first { $0.id == creation.record.id }?.issues.map(\.message).joined(separator: "; ") ?? ""
+      throw StackError.message("Lane was saved but could not be loaded. \(issues)")
+    }
+    await event(file.id, nil, request.adoptPath == nil ? "laneCreated" : "laneAdopted", detail: file.lane?.name, actor: actor)
+    return LaneCreation(file: file, warnings: creation.warnings)
+  }
+
+  /// Registers an existing worktree (for example one an agent created) as a lane. Cinderdeck never deletes it.
+  func adoptLane(stack id: String, path: URL, name: String?, actor: StackActor) async throws -> LaneCreation {
+    try await createLane(stack: id, request: .init(branch: name ?? "", adoptPath: path), actor: actor)
   }
 
   func removeLane(_ id: String, actor: StackActor) async throws {
-    guard !isBootstrapping, !laneMutationInProgress else { throw StackError.message("A lane operation is in progress. Try again when it finishes.") }
+    _ = try await removeLane(id, actor: actor, options: .init())
+  }
+
+  @discardableResult
+  func removeLane(_ id: String, actor: StackActor, options: StackLaneRemovalOptions) async throws -> StackLaneRemovalReport {
+    guard !isBootstrapping else { throw StackError.message("Cinderdeck is still reconnecting to running services. Try again in a moment.") }
     guard activeWorkspaceRun?(id) != true else { throw StackError.message("Wait for this lane's task or workflow to finish, or cancel its run before removing it.") }
     guard let record = try StackLaneStore.record(id: id, in: lanesDirectory) else {
       throw StackError.message("Select a worktree lane. The original checkout cannot be removed.")
     }
-    guard states[id]?.operation == nil else { throw StackError.message("Wait for this lane to finish its current operation.") }
-    laneMutationInProgress = true; removingLanes.insert(id)
-    defer { laneMutationInProgress = false; removingLanes.remove(id) }
-    try await StackLaneStore.requireClean(record)
+    guard states[id]?.operation == nil, !removingLanes.contains(id) else { throw StackError.message("Wait for this lane to finish its current operation.") }
+    removingLanes.insert(id)
+    defer { removingLanes.remove(id) }
+    // Refuse before stopping anything when removal would lose work.
+    _ = try await StackLaneStore.check(record, others: try StackLaneStore.records(in: lanesDirectory), options: options)
     await stop(stack: id, actor: actor)
     guard states[id]?.isActive != true else { throw StackError.message("Could not stop all lane services. Worktrees were kept.") }
-    do { try await StackLaneStore.remove(record) }
-    catch { await reloadDefinitions(); throw error }
-    await event(id, nil, "laneRemoved", detail: record.definition.lane?.name, actor: actor)
-    for service in record.definition.services {
-      let k = key(id, service.id)
+    await laneLock.acquire()
+    let report: StackLaneRemovalReport
+    do {
+      // Re-read under the lock: another workspace's lane may now share a worktree.
+      report = try await StackLaneStore.remove(record, in: lanesDirectory, others: try StackLaneStore.records(in: lanesDirectory), options: options)
+    } catch {
+      laneLock.release()
+      await reloadDefinitions()
+      throw error
+    }
+    laneLock.release()
+    await event(id, nil, options.keepWorktrees ? "laneReleased" : "laneRemoved", detail: record.info.name, actor: actor)
+    for service in states[id]?.services.keys.map({ $0 }) ?? [] {
+      let k = key(id, service)
       if let buffer = logs.removeValue(forKey: k) {
-        logBufferRetiring?(id, service.id, buffer)
+        logBufferRetiring?(id, service, buffer)
         await buffer.close()
       }
       launchTasks.removeValue(forKey: k)?.cancel()
       restartPolicies[k] = nil
     }
+    if options.deleteLogs { try? FileManager.default.removeItem(at: logRoot.appendingPathComponent(id, isDirectory: true)) }
     states[id] = nil
+    laneGitStates[id] = nil
     await reloadDefinitions()
+    return report
+  }
+
+  /// Converts a lane saved before lanes followed their source into one that does.
+  func unpinLane(_ id: String, actor: StackActor) async throws {
+    guard let record = try StackLaneStore.record(id: id, in: lanesDirectory), record.info.pinned else {
+      throw StackError.message("This lane already follows its source workspace.")
+    }
+    await laneLock.acquire()
+    do {
+      try StackLaneStore.update(id: id, in: lanesDirectory) { record in
+        record.info.pinned = false
+        record.definition = nil
+        record.version = 2
+      }
+    } catch { laneLock.release(); throw error }
+    laneLock.release()
+    await event(id, nil, "laneUnpinned", detail: record.info.name, actor: actor)
+    await reloadDefinitions()
+  }
+
+  /// Records a lane's setup progress durably and shows it immediately.
+  func setLaneSetup(_ id: String, _ state: StackLaneSetupState?) {
+    _ = try? StackLaneStore.update(id: id, in: lanesDirectory) { $0.setup = state }
+    if let index = files.firstIndex(where: { $0.id == id }) { files[index].laneSetup = state }
+  }
+
+  /// Merged, upstream-deleted and unpushed state for every lane (or `ids`).
+  func refreshLaneGitStates(_ ids: [String]? = nil) async {
+    let records = ((try? StackLaneStore.records(in: lanesDirectory)) ?? []).filter { ids?.contains($0.id) ?? true }
+    for record in records { laneGitStates[record.id] = await StackLaneStore.gitState(record) }
+  }
+
+  private func wakeLinked(_ stack: String, _ service: String) {
+    for file in files where file.id != stack {
+      if file.definition?.links.contains(where: { $0.stack == stack && $0.service == service }) == true { wakeWaiting(file.id) }
+    }
+  }
+
+  /// A service that ignores its assigned port still binds something; say which.
+  private func verifyBinding(_ id: String, _ service: String, launch: StackLaunchDefinition, identity: StackProcessIdentity) {
+    let expected = Set(launch.service.allPorts.values)
+    guard !expected.isEmpty else { return }
+    Task { [weak self] in
+      try? await Task.sleep(nanoseconds: 1_500_000_000)
+      let listening = await PortInspector.listeningPorts(processGroup: identity.pgid)
+      guard let self, runtime(id, service).process == identity else { return }
+      var warning: String?
+      if !listening.isEmpty, listening.isDisjoint(with: expected) {
+        let found = listening.sorted().map(String.init).joined(separator: ", ")
+        let assigned = expected.sorted().map(String.init).joined(separator: ", ")
+        warning = launch.stack.lane == nil
+          ? "\(service) is listening on \(found), not its configured port \(assigned). Update port in the definition."
+          : "\(service) is listening on \(found), not its assigned \(assigned). Its command ignores $PORT; use $PORT or {{port.\(service)}}."
+      }
+      if runtime(id, service).bindWarning != warning { change(id, service) { $0.bindWarning = warning } }
+    }
   }
 
   /// Settle pending launches before quitting so every surviving child has a
@@ -615,6 +772,23 @@ final class StackSupervisor: ObservableObject {
   }
   private func sweepEvents() async {
     do { try await store?.pruneEvents() } catch { errorMessage = error.localizedDescription }
+    await sweepLaneLogs()
+  }
+
+  /// Logs of removed lanes are kept for a while for inspection, then deleted.
+  func sweepLaneLogs(olderThan age: TimeInterval = 14 * 86400) async {
+    let live = Set(files.map(\.id)).union(states.keys)
+    let root = logRoot
+    await Task.detached(priority: .utility) {
+      let keys: [URLResourceKey] = [.contentModificationDateKey]
+      let cutoff = Date().addingTimeInterval(-age)
+      for folder in (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: keys)) ?? []
+      where folder.lastPathComponent.contains("--lane-") && !live.contains(folder.lastPathComponent) {
+        let entries = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys)) ?? []
+        let newest = (entries + [folder]).compactMap { try? $0.resourceValues(forKeys: Set(keys)).contentModificationDate }.max() ?? .distantFuture
+        if newest < cutoff { try? FileManager.default.removeItem(at: folder) }
+      }
+    }.value
   }
 
   /// Releases observers without signaling services. Used when leaving them running.
@@ -627,5 +801,20 @@ final class StackSupervisor: ObservableObject {
     restartTasks.values.forEach { $0.cancel() }; restartTasks.removeAll()
     exitTasks.values.forEach { $0.cancel() }; exitTasks.removeAll()
     for buffer in logs.values { await buffer.close() }
+  }
+}
+
+/// A first-in, first-out lock for async work on the main actor.
+@MainActor
+final class StackAsyncLock {
+  private var locked = false
+  private var waiters: [CheckedContinuation<Void, Never>] = []
+  var isLocked: Bool { locked }
+  func acquire() async {
+    guard locked else { locked = true; return }
+    await withCheckedContinuation { waiters.append($0) }
+  }
+  func release() {
+    if waiters.isEmpty { locked = false } else { waiters.removeFirst().resume() }
   }
 }

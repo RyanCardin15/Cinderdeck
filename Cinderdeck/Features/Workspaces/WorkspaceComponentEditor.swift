@@ -104,12 +104,12 @@ struct WorkspaceComponentEditor: View {
     identifier = context.componentID ?? ""
     directory = context.workspace.root.path
     if let id = context.sourceServiceID, let service = context.workspace.service(id) {
-      identifier = id; name = id; command = service.command; directory = service.directory.path
+      identifier = id; name = id; command = service.raw?.command ?? service.command; directory = service.directory.path
       services = Set(service.dependencies)
     }
     if let id = context.componentID {
       if let task = context.workspace.task(id), context.kind == .task {
-        name = task.name; command = task.command; directory = task.directory.path
+        name = task.name; command = task.raw?.command ?? task.command; directory = task.directory.path
         timeout = String(Int(task.timeout)); services = Set(task.requiresServices)
       } else if let workflow = context.workspace.workflow(id) {
         name = workflow.name; steps = workflow.steps; cleanup = workflow.cleanupServices
@@ -128,9 +128,13 @@ struct WorkspaceComponentEditor: View {
         guard let seconds = Double(timeout), seconds.isFinite, seconds > 0, seconds <= 3600 else { throw StackError.message("Timeout must be greater than 0 and at most 3600 seconds") }
         let old = context.workspace.task(identifier)
         let converted = context.sourceServiceID.flatMap { context.workspace.service($0) }
-        let task = WorkspaceTaskDefinition(id: identifier, name: name, command: command, repo: old?.repo ?? converted?.repo,
+        var task = WorkspaceTaskDefinition(id: identifier, name: name, command: command, repo: old?.repo ?? converted?.repo,
           directory: StackDefinitionLoader.resolve(directory, relativeTo: context.workspace.root),
           environment: old?.environment ?? converted?.environment ?? [:], requiresServices: services.sorted(), timeout: seconds)
+        // Keep templated values and ports; the command field already shows the text as written.
+        task.port = old?.port; task.ports = old?.ports ?? [:]
+        task.raw = old?.raw ?? converted?.raw
+        task.raw?.command = nil
         replacement = WorkspaceDefinitionWriter.task(task)
       } else {
         replacement = WorkspaceDefinitionWriter.workflow(.init(id: identifier, name: name, steps: steps, cleanupServices: cleanup))

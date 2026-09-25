@@ -29,6 +29,7 @@ final class StackAgentSkillsTests: XCTestCase {
   func testAppShipsTheRepositorySkills() {
     let names = StackAgentSkills.skills().map(\.name)
     XCTAssertTrue(names.contains("cinderdeck-record-session"), "\(names)")
+    XCTAssertTrue(names.contains("cinderdeck-parallel-lanes"), "\(names)")
     XCTAssertTrue(names.contains("cinderdeck-review-recording"), "\(names)")
   }
 

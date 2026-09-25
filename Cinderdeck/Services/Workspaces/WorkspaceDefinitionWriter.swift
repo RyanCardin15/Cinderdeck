@@ -39,30 +39,41 @@ nonisolated enum WorkspaceDefinitionWriter {
 
   /// Every setting that differs from the loader's defaults. `base` is the folder `cwd` is relative to.
   static func service(_ service: ServiceDefinition, base: URL) -> String {
-    var lines = ["[services.\(service.id)]", "cmd = \(quote(service.command))"]
+    // Templates are written as authored, not as rendered for the original checkout.
+    let raw = service.raw ?? StackRawValues()
+    var lines = ["[services.\(service.id)]", "cmd = \(quote(raw.command ?? service.command))"]
     if let repo = service.repo { lines.append("repo = \(quote(repo))") }
     if service.directory.standardizedFileURL.path != base.standardizedFileURL.path { lines.append("cwd = \(quote(service.directory.path))") }
     if !service.dependencies.isEmpty { lines.append("depends_on = \(array(service.dependencies))") }
     if let port = service.port { lines.append("port = \(port)") }
+    for name in service.ports.keys.sorted() { lines.append("ports.\(name) = \(service.ports[name]!)") }
+    if let mode = service.laneMode { lines.append("lane = \(quote(mode.rawValue))") }
     if !service.autostart { lines.append("autostart = false") }
     if !service.restartOnFailure { lines.append("restart = \"no\"") }
     if service.stopSignal == SIGINT { lines.append("stop_signal = \"INT\"") }
     if service.stopTimeout != 10 { lines.append("stop_timeout = \(number(service.stopTimeout))") }
-    switch service.readiness {
-    case .alive: break
-    case .port(let port): lines.append("ready.port = \(port)")
-    case .http(let url): lines.append("ready.http = \(quote(url.absoluteString))")
-    case .log(let pattern): lines.append("ready.log = \(quote(pattern))")
+    if let name = raw.readyPort { lines.append("ready.port = \(quote(name))") }
+    else if let text = raw.readyHTTP { lines.append("ready.http = \(quote(text))") }
+    else {
+      switch service.readiness {
+      case .alive: break
+      case .port(let port): lines.append("ready.port = \(port)")
+      case .http(let url): lines.append("ready.http = \(quote(url.absoluteString))")
+      case .log(let pattern): lines.append("ready.log = \(quote(pattern))")
+      }
     }
     if service.readyTimeout != 90 { lines.append("ready.timeout = \(number(service.readyTimeout))") }
-    for key in service.environment.keys.sorted() { lines.append("env.\(key) = \(quote(service.environment[key]!))") }
+    for key in service.environment.keys.sorted() { lines.append("env.\(key) = \(quote(raw.environment[key] ?? service.environment[key]!))") }
     return lines.joined(separator: "\n")
   }
   static func task(_ task: WorkspaceTaskDefinition) -> String {
-    var lines = ["[tasks.\(task.id)]", "name = \(quote(task.name))", "cmd = \(quote(task.command))", "cwd = \(quote(task.directory.path))",
+    let raw = task.raw ?? StackRawValues()
+    var lines = ["[tasks.\(task.id)]", "name = \(quote(task.name))", "cmd = \(quote(raw.command ?? task.command))", "cwd = \(quote(task.directory.path))",
       "timeout = \(number(task.timeout))", "requires_services = \(array(task.requiresServices))"]
     if let repo = task.repo { lines.append("repo = \(quote(repo))") }
-    for key in task.environment.keys.sorted() { lines.append("env.\(key) = \(quote(task.environment[key]!))") }
+    if let port = task.port { lines.append("port = \(port)") }
+    for name in task.ports.keys.sorted() { lines.append("ports.\(name) = \(task.ports[name]!)") }
+    for key in task.environment.keys.sorted() { lines.append("env.\(key) = \(quote(raw.environment[key] ?? task.environment[key]!))") }
     return lines.joined(separator: "\n")
   }
   static func workflow(_ workflow: WorkspaceWorkflowDefinition) -> String {

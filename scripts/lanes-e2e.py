@@ -102,7 +102,7 @@ steps = ["task:check"]
 
                 rpc("initialize", dict(protocolVersion="2025-06-18", clientInfo=dict(name="claude-code", version="test")))
                 names = {tool["name"] for tool in rpc("tools/list", {})["tools"]}
-                assert {"create_lane", "list_lanes", "remove_lane"} <= names
+                assert {"create_lane", "adopt_lane", "list_lanes", "lane_env", "run_lane_setup", "remove_lane", "release_lane", "prune_lanes", "unpin_lane"} <= names
                 result = rpc("tools/call", dict(name="create_lane", arguments=dict(workspace="shop", branch="agent/claude-2")))
                 assert not result["isError"], result
                 assert json.loads(result["content"][0]["text"])["workspace"]["lane"], result
@@ -131,6 +131,18 @@ steps = ["task:check"]
                 blocked = cli("services", "switch", "shop", "agent/codex-1", expected=1)
                 assert "already checked out" in blocked["error"]["message"], blocked
                 assert cli("services", "status", "shop")["services"][0]["pid"] == base["services"][0]["pid"]
+                exported = cli("lane", "env", "shop/agent/codex-1", "api")["environment"]
+                assert exported["PORT"] == str(first["services"][0]["port"]), exported
+                assert exported["CINDERDECK_URL_API"] == first["services"][0]["url"], exported
+                assert exported["CINDERDECK_LANE"] == "agent/codex-1" and exported["COMPOSE_PROJECT_NAME"] == "shop-agent-codex-1", exported
+                assert "/lanes/shop/agent-codex-1/" in first["services"][0]["cwd"], first
+                external = root / "agent-own"
+                git("worktree", "add", "-b", "agent/own", str(external))
+                adopted = cli("lane", "adopt", "shop", "--path", str(external), "--no-start")["workspace"]
+                assert adopted["laneStatus"]["adopted"] and adopted["lane"]["name"] == "agent/own", adopted
+                cli("lane", "release", "shop/agent/own")
+                assert (external / "server.py").exists()
+                print("PASS: lane env exported the lane's ports; an agent's own worktree was adopted and released without deleting it.", flush=True)
                 print("PASS: CLI and MCP created three running environments with separate ports, worktrees and claims.", flush=True)
                 print("PASS: a workflow reached its own lane server; an occupied-branch switch preserved the source process.", flush=True)
                 if args.inspect:

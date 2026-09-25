@@ -7,7 +7,7 @@ extension StackDefinitionLoader {
       let prefix = "tasks.\(id)"
       guard case .table(let table) = value else { reader.error("\(prefix) must be a table"); continue }
       if !validID(id) { reader.error("Invalid task ID: \(id)") }
-      reader.warnUnknown(table, allowed: ["name", "cmd", "repo", "cwd", "env", "requires_services", "timeout"], at: prefix)
+      reader.warnUnknown(table, allowed: ["name", "cmd", "repo", "cwd", "env", "requires_services", "timeout", "port", "ports"], at: prefix)
       guard let command = reader.string(table, "cmd", at: prefix), !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
         reader.error("\(prefix).cmd is required"); continue
       }
@@ -18,10 +18,17 @@ extension StackDefinitionLoader {
       if validatePaths { reader.directory(directory, label: "\(prefix).cwd") }
       let required = reader.array(table, "requires_services", at: prefix) ?? []
       for service in required where workspace.service(service) == nil { reader.error("\(prefix) requires unknown service \(service)") }
-      workspace.tasks.append(.init(id: id, name: reader.string(table, "name", at: prefix) ?? id,
+      var task = WorkspaceTaskDefinition(id: id, name: reader.string(table, "name", at: prefix) ?? id,
         command: command, repo: repo, directory: directory,
         environment: reader.strings(table, "env", at: prefix), requiresServices: required,
-        timeout: reader.timeout(table, "timeout", at: prefix) ?? 600))
+        timeout: reader.timeout(table, "timeout", at: prefix) ?? 600)
+      task.port = reader.port(table, "port", at: prefix)
+      task.ports = reader.namedPorts(table, at: prefix)
+      var raw = StackRawValues()
+      if StackTemplates.containsTemplate(command) { raw.command = command }
+      raw.environment = task.environment.filter { StackTemplates.containsTemplate($0.value) }
+      if !raw.isEmpty { task.raw = raw }
+      workspace.tasks.append(task)
     }
     for (id, value) in reader.table(root, "workflows").sorted(by: { $0.key < $1.key }) {
       let prefix = "workflows.\(id)"
