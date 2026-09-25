@@ -24,24 +24,70 @@ struct HistorySaveMenuItems: View {
     }
 
     Menu("Add to Group") {
-      ForEach(store.groups) { group in
-        Toggle(group.name, isOn: Binding(
-          get: { !items.isEmpty && items.allSatisfy { store.contains($0, in: group.id) } },
-          set: { isOn in
-            if isOn {
-              store.add(items, to: group.id)
-            } else {
-              store.remove(items, from: group.id)
-            }
+      HistoryGroupMenuItems(items: items)
+    }
+  }
+}
+
+/// Direct group access for item quick actions, without a nested Save menu.
+struct HistoryGroupMenu: View {
+  let item: SavedHistoryItem
+  var iconOnly = false
+  @ObservedObject private var store = HistoryCollectionStore.shared
+
+  private var groups: [HistoryCollection] {
+    store.groups.filter { store.contains(item, in: $0.id) }
+  }
+
+  var body: some View {
+    Menu {
+      HistoryGroupMenuItems(items: [item])
+    } label: {
+      Label("Groups", systemImage: groups.isEmpty ? "folder.badge.plus" : "folder.fill")
+        .labelStyle(HistoryGroupLabelStyle(iconOnly: iconOnly))
+        .frame(minWidth: 24, minHeight: 24)
+        .contentShape(Rectangle())
+    }
+    .menuStyle(.borderlessButton)
+    .menuIndicator(.hidden)
+    .fixedSize()
+    .help(groups.isEmpty ? "Add to group" : "Groups: " + groups.map(\.name).joined(separator: ", "))
+    .accessibilityLabel("Add to or remove from groups")
+    .accessibilityValue(groups.isEmpty ? "No groups" : groups.map(\.name).joined(separator: ", "))
+  }
+}
+
+private struct HistoryGroupLabelStyle: LabelStyle {
+  let iconOnly: Bool
+
+  func makeBody(configuration: Configuration) -> some View {
+    HStack(spacing: 5) {
+      configuration.icon
+      if !iconOnly { configuration.title }
+    }
+  }
+}
+
+private struct HistoryGroupMenuItems: View {
+  let items: [SavedHistoryItem]
+  @ObservedObject private var store = HistoryCollectionStore.shared
+
+  var body: some View {
+    ForEach(store.groups) { group in
+      Toggle(group.name, isOn: Binding(
+        get: { !items.isEmpty && items.allSatisfy { store.contains($0, in: group.id) } },
+        set: { isOn in
+          if isOn {
+            store.add(items, to: group.id)
+          } else {
+            store.remove(items, from: group.id)
           }
-        ))
-      }
-      if !store.groups.isEmpty {
-        Divider()
-      }
-      Button("New Group…") {
-        HistoryCollectionPrompt.createGroup(adding: items)
-      }
+        }
+      ))
+    }
+    if !store.groups.isEmpty { Divider() }
+    Button("New Group…") {
+      HistoryCollectionPrompt.createGroup(adding: items)
     }
   }
 }
@@ -60,11 +106,13 @@ struct HistoryFavoriteButton: View {
       Image(systemName: isFavorite ? "star.fill" : "star")
         .font(.system(size: size, weight: .semibold))
         .foregroundColor(isFavorite ? .yellow : .secondary)
+        .frame(minWidth: 24, minHeight: 24)
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
     .help(isFavorite ? "Remove from Favorites" : "Add to Favorites")
     .accessibilityLabel(isFavorite ? "Remove from Favorites" : "Add to Favorites")
+    .accessibilityValue(isFavorite ? "Favorite" : "Not a favorite")
   }
 }
 

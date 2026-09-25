@@ -64,9 +64,9 @@ final class HistoryFloatingLayoutTests: XCTestCase {
     XCTAssertEqual(size, CGSize(width: 1040, height: 680))
   }
 
-  func testStackPanelGetsRoomForFullCardsWithoutChangingOtherSections() {
+  func testCompactPanelsReserveRoomForSectionControlsAndCards() {
     XCTAssertEqual(HistoryFloatingLayout.basePanelSize(for: .compact, section: .stacks), CGSize(width: 920, height: 400))
-    XCTAssertEqual(HistoryFloatingLayout.basePanelSize(for: .compact, section: .clipboard), CGSize(width: 920, height: 316))
+    XCTAssertEqual(HistoryFloatingLayout.basePanelSize(for: .compact, section: .clipboard), CGSize(width: 920, height: 400))
     XCTAssertEqual(HistoryFloatingLayout.basePanelSize(for: .expanded, section: .stacks), CGSize(width: 1040, height: 680))
     let scale = HistoryFloatingLayout.effectiveScale(for: 1.4, mode: .compact, section: .stacks)
     let size = HistoryFloatingLayout.panelSize(for: 1.4, mode: .compact, section: .stacks)

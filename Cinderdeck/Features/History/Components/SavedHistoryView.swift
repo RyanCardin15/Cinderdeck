@@ -286,6 +286,7 @@ struct SavedHistoryView: View {
         Text("Text")
         Spacer()
         HistoryFavoriteButton(item: item, size: 11)
+        HistoryGroupMenu(item: item, iconOnly: true)
       }
       .font(.caption)
       .foregroundColor(.secondary)
@@ -356,8 +357,7 @@ struct SavedHistoryView: View {
     if isExpanded, !manager.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
       return "Try another search."
     }
-    let destination = selectedCollection?.isFavorites == false ? "Add to Group" : "Add to Favorites"
-    return "Right-click a capture or copied text and choose \(destination). Saved items stay until you remove them, even after history cleanup."
+    return "Use the star or folder on copied text to save it here, or right-click a capture to save it. Saved items stay until you remove them, even after history cleanup."
   }
 
   // MARK: - Actions
