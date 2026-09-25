@@ -141,6 +141,20 @@ nonisolated enum CinderdeckMCPServer {
   ]
 
   private static let definitionTools: [Tool] = [
+    tool("workspace_definition", "Read workspace definition", .read,
+      "Read the complete authored TOML and its revision, including repos, lane defaults, environment and every component setting. Also works for invalid definitions so they can be repaired. Does not read Keychain secret values. Read before save_workspace.",
+      ["workspace": workspace], required: ["workspace"]),
+    tool("save_workspace", "Edit a workspace", .destructive,
+      "Rename a workspace or change its project folder, preserving all other settings. Or replace the complete TOML source with revision from workspace_definition to edit any setting, repo, lane defaults or components. Refuses stale revisions and new broken references. Stop services and runs in this workspace and its lanes first; honors their claims. Keeps the workspace id and nothing starts.",
+      ["workspace": workspace, "name": property("string", "New display name; workspace id stays the same"),
+        "folder": property("string", "New project folder, absolute or ~/…; relative repo and command folders follow it"),
+        "source": property("string", "Complete TOML; mutually exclusive with name/folder. Requires revision"),
+        "revision": property("string", "Revision returned by workspace_definition; refuses if the file changed"), "force": force],
+      required: ["workspace"], idempotent: true),
+    tool("delete_workspace", "Remove a workspace", .destructive,
+      "Remove only the workspace definition. Keeps project folders, Git branches, service logs and run history. Refuses active services/runs, remaining lanes, dependent workspace references and another agent's claim. Remove or release lanes first. Never removes a lane or project directory.",
+      ["workspace": workspace, "revision": property("string", "Optional revision from workspace_definition to refuse a changed definition"), "force": force],
+      required: ["workspace"]),
     tool("create_workspace", "Create a workspace", .additive,
       "Create an empty workspace for a project folder. Then add services, tasks, and workflows with the save_workspace_* tools. Nothing starts.",
       ["name": property("string", "Display name, e.g. \"Shop\""), "folder": property("string", "Project folder commands run in by default (absolute or ~/…)"),
@@ -225,6 +239,10 @@ nonisolated enum CinderdeckMCPServer {
     tool("lane_env", "Lane environment", .read,
       "The ports, URLs and variables a lane (or original checkout) gives its services: PORT, CINDERDECK_PORT_*, CINDERDECK_URL_*, lane values and definition env. Use them when you run tests or curl from your own shell. Secrets are omitted.",
       ["workspace": workspace, "service": property("string", "A service or task, for its PORT and own env")], required: ["workspace"]),
+    tool("update_lane", "Edit a lane", .destructive,
+      "Rename a stopped lane or replace its environment overrides ({} clears them). Omitted fields are kept. Stable lane id, Git branches, folders, slug and assigned ports stay the same. Refuses active services/runs, pinned lanes and another agent's claim. Edit the source workspace for shared component definitions and [lanes] defaults. Nothing starts.",
+      ["workspace": workspace, "name": property("string", "New lane name; changes its workspace/name reference, not its Git branch"), "env": environment, "force": force],
+      required: ["workspace"], idempotent: true),
     tool("run_lane_setup", "Run lane setup", .additive,
       "Run the workspace's [lanes] setup task or workflow in a lane again, e.g. after it failed, and wait for it.",
       ["workspace": property("string", "Lane id or <workspace>/<branch>"), "force": force], required: ["workspace"]),
@@ -414,12 +432,42 @@ nonisolated enum CinderdeckMCPServer {
     }
     let missing = tool.required.filter { arguments[$0] == nil || arguments[$0] == .null }
     guard missing.isEmpty else { throw StackControlError.invalid("Missing \(missing.joined(separator: ", ")) for \(name)") }
+    for (key, value) in arguments { try validateValue(value, schema: tool.properties[key]!, path: key) }
+  }
+
+  private static func validateValue(_ value: JSONValue, schema: JSONValue, path: String) throws {
+    let type: String
+    switch value {
+    case .null: type = "null"
+    case .string: type = "string"
+    case .number: type = "number"
+    case .bool: type = "boolean"
+    case .array: type = "array"
+    case .object: type = "object"
+    }
+    let types = schema["type"]?.stringsValue ?? []
+    if !types.isEmpty, !types.contains(type) { throw StackControlError.invalid("\(path) must be \(types.joined(separator: " or "))") }
+    if let allowed = schema["enum"]?.arrayValue, !allowed.contains(value) {
+      throw StackControlError.invalid("Invalid \(path); allowed values: " + allowed.map { $0.compactString() }.joined(separator: ", "))
+    }
+    if case .array(let values) = value, let item = schema["items"] {
+      for (index, value) in values.enumerated() { try validateValue(value, schema: item, path: "\(path)[\(index)]") }
+    }
+    if case .object(let values) = value {
+      let properties = schema["properties"]?.objectValue ?? [:]
+      for (key, value) in values {
+        if let child = properties[key] ?? schema["additionalProperties"].flatMap({ $0.objectValue == nil ? nil : $0 }) {
+          try validateValue(value, schema: child, path: path + "." + key)
+        } else if schema["additionalProperties"] == .bool(false) { throw StackControlError.invalid("Unknown argument \(path).\(key)") }
+      }
+    }
   }
 
   fileprivate static func call(_ params: JSONValue, session: MCPSession) -> JSONValue {
     let name = params["name"]?.stringValue ?? ""
     let arguments = params["arguments"]?.objectValue ?? [:]
     do {
+      if let raw = params["arguments"], raw.objectValue == nil { throw StackControlError.invalid("arguments must be a JSON object") }
       try validate(name, arguments)
       let (method, request, timeout) = try self.request(for: name, arguments)
       let result = try session.perform(method, request, timeout: timeout, retryable: toolsByName[name]?.effect == .read)
@@ -456,6 +504,9 @@ nonisolated enum CinderdeckMCPServer {
       return ("workspace.runs", params, 30)
     case "cancel_workspace_run": return ("workspace.run.cancel", params, 120)
     case "create_workspace": return ("workspace.create", params, 60)
+    case "workspace_definition": return ("workspace.definition", params, 30)
+    case "save_workspace": return ("workspace.save", params, 60)
+    case "delete_workspace": return ("workspace.delete", params, 60)
     case "save_workspace_service": return ("workspace.service.save", params, 60)
     case "save_workspace_task": return ("workspace.task.save", params, 60)
     case "save_workspace_workflow": return ("workspace.workflow.save", params, 60)
@@ -483,6 +534,7 @@ nonisolated enum CinderdeckMCPServer {
     case "list_lanes": return ("lane.list", params, 120)
     case "create_lane": return ("lane.create", params, wait + 3900)
     case "adopt_lane": return ("lane.adopt", params, wait + 3900)
+    case "update_lane": return ("lane.update", params, 60)
     case "lane_env": return ("lane.env", params, 30)
     case "run_lane_setup": return ("lane.setup", params, 3900)
     case "remove_lane": return ("lane.remove", params, 4200)

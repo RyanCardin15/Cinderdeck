@@ -114,7 +114,7 @@ cinderdeck services stop my-workspace
 cinderdeck services setup-agents --print
 ```
 
-Use the filename without `.toml` as the workspace ID. `cinderdeck mcp` exposes the same controls over MCP stdio, and agents can also create workspaces and add services, tasks, and workflows through it. Agent setup changes client configuration only when you run the setup command. Use `cinderdeck services agent-help` for the full command reference and agent instructions.
+Use the filename without `.toml` as the workspace ID. `cinderdeck mcp` exposes the same controls over MCP stdio, including workspace creation, edits and removal, component management, and lane creation, edits and removal. `cinderdeck tools` lists every operation and its JSON schema; `cinderdeck call <tool-name> --arguments '<json>'` runs any MCP tool from the CLI. [Workspace commands and examples](docs/WORKSPACES.md#cli-and-agents). Agent setup changes client configuration only when you run the setup command. Use `cinderdeck services agent-help` for the full command reference and agent instructions.
 
 ## Install
 

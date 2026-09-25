@@ -2,7 +2,7 @@ import Foundation
 
 nonisolated struct StackLaneInfo: Codable, Equatable, Sendable {
   let sourceStackID: String
-  let name: String
+  var name: String
   let owner: StackActor
   let createdAt: Date
   /// The lane's working folder: its worktrees live below it. Records from before

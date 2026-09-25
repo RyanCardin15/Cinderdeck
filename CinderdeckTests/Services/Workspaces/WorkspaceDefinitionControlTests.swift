@@ -36,6 +36,93 @@ final class WorkspaceDefinitionControlTests: XCTestCase {
     try String(contentsOf: supervisor.definitionsDirectory.appendingPathComponent(id + ".toml"), encoding: .utf8)
   }
 
+  func testWorkspaceLifecyclePreservesFilesAndRejectsStaleOrInvalidEdits() async throws {
+    _ = try await call("workspace.create", ["name": .string("Shop"), "folder": .string(root.path)])
+    _ = try await call("workspace.task.save", ["workspace": .string("shop"), "task": .string("check"), "cmd": .string("echo saved")])
+    let before = try await call("workspace.definition", ["workspace": .string("shop")])
+    let revision = try XCTUnwrap(before["revision"])
+    let original = try source("shop")
+    _ = try await call("workspace.save", ["workspace": .string("shop"), "name": .string("Renamed Shop")])
+    XCTAssertEqual(supervisor.definition("shop")?.name, "Renamed Shop")
+    XCTAssertEqual(supervisor.definition("shop")?.task("check")?.command, "echo saved")
+    do {
+      _ = try await call("workspace.save", ["workspace": .string("shop"), "source": .string(original), "revision": revision]); XCTFail("Stale save")
+    } catch { XCTAssertEqual((error as? StackControlError)?.code, "stale_definition") }
+    let current = try await call("workspace.definition", ["workspace": .string("shop")])
+    let currentRevision = try XCTUnwrap(current["revision"])
+    for update in ["[tasks.broken]\ncmd = \"echo no\"\nrequires_services = [\"missing\"]", "[broken"] {
+      do {
+        _ = try await call("workspace.save", ["workspace": .string("shop"), "source": .string(update), "revision": currentRevision]); XCTFail("Invalid source")
+      } catch { XCTAssertEqual((error as? StackControlError)?.code, "invalid_definition") }
+    }
+    XCTAssertEqual(try source("shop"), current["source"]?.stringValue)
+    let run = try await call("workspace.task.run", ["workspace": .string("shop"), "task": .string("check")]).decode(WorkspaceRun.self)
+    _ = try await call("workspace.run.wait", ["run": .string(run.id.uuidString)])
+    let marker = root.appendingPathComponent("keep.txt")
+    try "keep".write(to: marker, atomically: true, encoding: .utf8)
+    _ = try await call("workspace.delete", ["workspace": .string("shop"), "revision": currentRevision])
+    XCTAssertNil(supervisor.definition("shop"))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: marker.path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: supervisor.definitionsDirectory.appendingPathComponent("shop.toml").path))
+    let retained = try await call("workspace.runs", ["workspace": .string("shop")])
+    XCTAssertEqual(retained.arrayValue?.first?["id"]?.stringValue, run.id.uuidString)
+  }
+
+  func testWholeDefinitionEditsCoverReposLaneDefaultsAndRepair() async throws {
+    _ = try await call("workspace.create", ["name": .string("Shop"), "folder": .string(root.path)])
+    let definition = try await call("workspace.definition", ["workspace": .string("shop")])
+    let source = try XCTUnwrap(definition["source"]?.stringValue) + """
+
+    # authored settings are preserved exactly
+    [repos.app]
+    path = "."
+    lane = "shared"
+    [tasks.setup]
+    cmd = "echo setup"
+    [lanes]
+    setup = "task:setup"
+    copy = [".env"]
+    hosts = true
+    env.MODE = "preview"
+    """
+    _ = try await call("workspace.save", ["workspace": .string("shop"), "source": .string(source), "revision": definition["revision"]!])
+    XCTAssertEqual(supervisor.definition("shop")?.repo("app")?.laneMode, .shared)
+    XCTAssertEqual(supervisor.definition("shop")?.laneSettings?.setup, "task:setup")
+    XCTAssertEqual(supervisor.definition("shop")?.laneSettings?.environment, ["MODE": "preview"])
+    XCTAssertEqual(try self.source("shop"), source)
+    let file = supervisor.definitionsDirectory.appendingPathComponent("shop.toml")
+    try "[broken".write(to: file, atomically: true, encoding: .utf8)
+    await supervisor.reloadDefinitions()
+    let broken = try await call("workspace.definition", ["workspace": .string("shop")])
+    _ = try await call("workspace.save", ["workspace": .string("shop"), "source": .string(source), "revision": broken["revision"]!])
+    XCTAssertNotNil(supervisor.definition("shop"))
+  }
+
+  func testWorkspaceRemovalAndEditsHonorClaimsBusyRunsAndExternalReferences() async throws {
+    _ = try await call("workspace.create", ["name": .string("Shop"), "folder": .string(root.path)])
+    _ = try await call("workspace.service.save", ["workspace": .string("shop"), "service": .string("api"), "cmd": .string("sleep 300")])
+    let other = StackActor(kind: .agent, name: "Other")
+    _ = try await call("claim", ["workspace": .string("shop")], as: other)
+    for method in ["workspace.save", "workspace.delete"] {
+      do { _ = try await call(method, ["workspace": .string("shop"), "name": .string("Renamed")]); XCTFail("Claimed") }
+      catch { XCTAssertEqual((error as? StackControlError)?.code, "claimed") }
+    }
+    control.release(stack: "shop")
+    _ = try await call("workspace.task.save", ["workspace": .string("shop"), "task": .string("wait"), "cmd": .string("sleep 300")])
+    let run = try await call("workspace.task.run", ["workspace": .string("shop"), "task": .string("wait")]).decode(WorkspaceRun.self)
+    for method in ["workspace.save", "workspace.delete"] {
+      do { _ = try await call(method, ["workspace": .string("shop"), "name": .string("Renamed"), "force": .bool(true)]); XCTFail("Busy") }
+      catch { XCTAssertEqual((error as? StackControlError)?.code, "busy") }
+    }
+    _ = try await call("workspace.run.cancel", ["run": .string(run.id.uuidString)])
+    _ = try await call("workspace.create", ["name": .string("Client"), "folder": .string(root.path)])
+    _ = try await call("workspace.service.save", ["workspace": .string("client"), "service": .string("web"), "cmd": .string("echo web"),
+      "depends_on": .array([.string("shop:api")])])
+    do { _ = try await call("workspace.delete", ["workspace": .string("shop")]); XCTFail("Referenced") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "in_use") }
+    XCTAssertNotNil(supervisor.definition("shop"))
+  }
+
   func testAgentBuildsAWorkspaceFromScratch() async throws {
     let project = root.appendingPathComponent("project")
     try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)

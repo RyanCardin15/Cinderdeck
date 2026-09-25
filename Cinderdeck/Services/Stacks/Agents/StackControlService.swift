@@ -239,6 +239,7 @@ final class StackControlService: ObservableObject {
       await supervisor.refreshLaneGitStates(files.filter { $0.lane != nil }.map(\.id))
       return try JSONValue(encoding: files.map { stackSnapshot($0) })
     case "lane.create", "lane.adopt": return try await createLane(params, adopt: method == "lane.adopt", actor: actor)
+    case "lane.update": return try await updateLane(params, actor: actor)
     case "lane.remove", "lane.release":
       let file = try laneFile(params)
       try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)

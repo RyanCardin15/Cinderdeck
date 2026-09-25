@@ -15,11 +15,17 @@ nonisolated enum StackAgentGuide {
   returns the result with the failing step's output; workspace_run_status and workspace_run_logs read progress. A wait that \
   ends first is not a failure: wait again, never start the run again. cancel_workspace_run stops a run.
   Definitions: create_workspace, save_workspace_service, save_workspace_task, save_workspace_workflow, and delete_workspace_item \
-  edit a workspace's TOML file with validation; nothing starts on save. For other settings, edit the file (workspace_guide has \
-  paths and a template), then validate_workspace and reload_workspaces.
+  edit a workspace's TOML file with validation; nothing starts on save. workspace_definition returns complete source and its \
+  revision; save_workspace patches name/folder or replaces source with that revision to change any setting (repos, lane defaults, \
+  shell, environment and components). Stop the workspace and its lanes first. delete_workspace removes only its definition, \
+  keeping project files and saved runs; remove/release lanes first. Claims, active work and dependent references are protected. \
+  CLI agents: cinderdeck tools lists this same catalog; cinderdeck call <tool-name> --arguments '<json>' or --file <args.json> \
+  invokes any operation with the same schema. cinderdeck workspace --help lists common shortcuts.
   Parallel branches: create_lane makes an isolated Git worktree copy of a workspace on a branch (tracking a remote-only branch), \
   runs its [lanes] setup, and starts it on unique ports with a claim in your name, leaving the original running. Already in \
-  your own worktree? adopt_lane runs it as a lane without moving it. Use the returned <workspace>/<branch> id with every tool. \
+  your own worktree? adopt_lane runs it as a lane without moving it. Use its stable id or <workspace>/<name> with every tool. \
+  update_lane changes a stopped lane's name or environment overrides ({} clears); ids, branches, folders, slug and ports stay. \
+  Edit the source workspace for component definitions and lane defaults. release_lane forgets a lane while keeping its worktrees. \
   Services read PORT, CINDERDECK_PORT_<SERVICE> and CINDERDECK_URL_<SERVICE>; definition values written as {{port.api}} or \
   {{url.api}} resolve per lane. lane_env gives those values for your own shell or tests. Services marked shared (databases) \
   run once in the original checkout. remove_lane keeps branches, refuses uncommitted work, and needs discard_ignored=true to \
