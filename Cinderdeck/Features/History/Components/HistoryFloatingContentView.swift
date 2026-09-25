@@ -192,6 +192,8 @@ struct HistoryFloatingContentView: View {
         StacksTabView(viewModel: stacksViewModel, manager: manager)
       } else if manager.selectedSection == .clipboard {
         clipboardContent
+      } else if manager.selectedSection == .saved {
+        SavedHistoryView(manager: manager)
       } else if compactRecords.isEmpty {
         compactEmptyState
       } else {
@@ -204,15 +206,15 @@ struct HistoryFloatingContentView: View {
   }
 
   private var compactHeader: some View {
-    ZStack {
+    // Laid out side by side, not overlaid, so a wide pill row cannot cover the controls.
+    HStack(spacing: 8) {
+      preferencesButton()
+
+      Spacer(minLength: 4)
       compactFilterBar
-        .frame(maxWidth: .infinity)
+      Spacer(minLength: 4)
 
       HStack(spacing: 8) {
-        preferencesButton()
-
-        Spacer()
-
         controlButton(
           systemName: "arrow.up.forward.app",
           help: L10n.Actions.openHistory,
@@ -236,7 +238,7 @@ struct HistoryFloatingContentView: View {
   }
 
   private var compactFilterBar: some View {
-    HStack(spacing: 10) {
+    HStack(spacing: 8) {
       ForEach(Array(captureTypeFilters.enumerated()), id: \.offset) { _, filter in
         selectionPill(
           title: filter.title,
@@ -249,6 +251,7 @@ struct HistoryFloatingContentView: View {
         )
       }
       clipboardFilterPill
+      savedFilterPill
       if stacksEnabled { stacksFilterPill }
       pullRequestsButton
     }
@@ -290,6 +293,8 @@ struct HistoryFloatingContentView: View {
           StacksTabView(viewModel: stacksViewModel, manager: manager)
         } else if manager.selectedSection == .clipboard {
           clipboardContent
+        } else if manager.selectedSection == .saved {
+          SavedHistoryView(manager: manager)
         } else if expandedRecords.isEmpty {
           expandedEmptyState
         } else if isExpandedGridReady {
@@ -319,7 +324,7 @@ struct HistoryFloatingContentView: View {
       HStack {
         expandedSearchBar
         Spacer()
-        if manager.selectedSection != .stacks { expandedTimeFilters }
+        if manager.selectedSection == .captures || manager.selectedSection == .clipboard { expandedTimeFilters }
       }
     }
   }
@@ -335,6 +340,15 @@ struct HistoryFloatingContentView: View {
       manager.focusPanel()
     }
     .accessibilityIdentifier("history.clipboardTextTab")
+  }
+
+  private var savedFilterPill: some View {
+    selectionPill(title: "Saved", isSelected: manager.selectedSection == .saved, count: nil) {
+      manager.selectedSection = .saved
+      manager.focusPanel()
+    }
+    .help("Favorites and groups of captures and copied text")
+    .accessibilityIdentifier("history.savedTab")
   }
 
   private var pullRequestsButton: some View {
@@ -392,6 +406,7 @@ struct HistoryFloatingContentView: View {
         )
       }
       clipboardFilterPill
+      savedFilterPill
       if stacksEnabled { stacksFilterPill }
       pullRequestsButton
     }
@@ -499,6 +514,16 @@ struct HistoryFloatingContentView: View {
           action: selectAllExpandedRecords
         )
       }
+
+      Menu {
+        HistorySaveMenuItems(items: expandedSelectedRecords.map { .capture($0.id) })
+      } label: {
+        Label("Save", systemImage: "star")
+          .font(.system(size: 11, weight: .semibold))
+      }
+      .menuStyle(.borderlessButton)
+      .fixedSize()
+      .help("Add the selected captures to Favorites or a group")
 
       selectionControlButton(
         title: L10n.PreferencesHistory.clearSelection,

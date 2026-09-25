@@ -251,6 +251,7 @@ final class DatabaseManager: @unchecked Sendable {
     }
 
     StackRunStore.registerMigrations(&migrator)
+    HistoryCollectionItem.registerMigrations(&migrator)
     return migrator
   }
 

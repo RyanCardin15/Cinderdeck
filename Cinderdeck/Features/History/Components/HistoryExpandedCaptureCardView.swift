@@ -135,6 +135,10 @@ struct HistoryExpandedCaptureCardView: View, Equatable {
         }
         .padding(8)
 
+        HistoryFavoriteBadge(item: .capture(record.id))
+          .padding(8)
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+
         if let uploadState = manager.cloudUploadState(for: record) {
           HistoryCloudUploadOverlayView(state: uploadState)
         }

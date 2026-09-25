@@ -142,8 +142,9 @@ final class ClipboardTextHistoryStore: ObservableObject {
     mutate { db in _ = try ClipboardTextRecord.deleteOne(db, id: id) }
   }
 
+  /// Clears copied text history. Text in Favorites or a group is kept.
   func clear() {
-    mutate { db in _ = try ClipboardTextRecord.deleteAll(db) }
+    mutate { db in _ = try Self.unsaved.deleteAll(db) }
   }
 
   func prune(now: Date = Date()) {
@@ -151,12 +152,19 @@ final class ClipboardTextHistoryStore: ObservableObject {
     lastPrunedAt = now
   }
 
+  /// Saved text is exempt from the age and count limits.
+  private static var unsaved: QueryInterfaceRequest<ClipboardTextRecord> {
+    ClipboardTextRecord.filter(sql: "id NOT IN (\(HistoryCollectionItem.savedClipboardTextIDsSQL))")
+  }
+
   private static func prune(in db: Database, now: Date) throws {
     let cutoff = now.addingTimeInterval(-Double(retentionDays) * 86400)
-    try ClipboardTextRecord.filter(Column("copiedAt") < cutoff).deleteAll(db)
+    try unsaved.filter(Column("copiedAt") < cutoff).deleteAll(db)
+    let saved = HistoryCollectionItem.savedClipboardTextIDsSQL
     try db.execute(sql: """
-      DELETE FROM clipboardTextRecord WHERE id NOT IN (
-        SELECT id FROM clipboardTextRecord ORDER BY copiedAt DESC, id DESC LIMIT ?
+      DELETE FROM clipboardTextRecord WHERE id NOT IN (\(saved)) AND id NOT IN (
+        SELECT id FROM clipboardTextRecord WHERE id NOT IN (\(saved))
+        ORDER BY copiedAt DESC, id DESC LIMIT ?
       )
       """, arguments: [maximumRecordCount])
   }

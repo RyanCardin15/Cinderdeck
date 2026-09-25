@@ -25,6 +25,12 @@ struct HistoryContextMenu: View {
       HistoryWindowController.shared.openItem(record)
     }
 
+    Divider()
+
+    HistorySaveMenuItems(items: [.capture(record.id)])
+
+    Divider()
+
     if cloudManager.isAvailable {
       Button {
         manager.uploadToCloud(record)

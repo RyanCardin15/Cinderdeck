@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Add a Saved tab to the history panel with Favorites and groups you name, holding captures and copied text together. Right-click any capture or copied text and choose Add to Favorites or Add to Group, or use the star on text cards. Return copies saved text and closes the panel, ready to paste.
+- Keep saved captures and text through history cleanup. They are skipped by the capture age and count limits and the clipboard's 30-day and 500-item limits, and Clear Text History keeps them.
+- Lay out the compact history header side by side so the filter pills no longer cover the open, pin, and close buttons.
 - Rename the MCP tools from Stacks to Workspaces terminology: `list_workspaces`, `start_services`, `stop_services`, `restart_services`, `read_service_logs`, `claim_workspace`, `release_workspace`, `workspace_guide`, `validate_workspace`, and `reload_workspaces`. Tools take a `workspace` argument, and the old `*_stack` tool names are removed.
 - Let agents create workspaces and add, change, or delete services, tasks, and workflows through MCP, with the same validation as the Workspaces forms. `save_workspace_task` can move a stopped service to Tasks.
 - Add `wait_for_workspace_run`, which waits for a task or workflow and returns the failing step's output; `repro_recording_scope`; and `open_workspace`.

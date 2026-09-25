@@ -206,7 +206,7 @@ struct HistorySettingsView: View {
       Button("Cancel", role: .cancel) {}
       Button("Clear Text History", role: .destructive) { clipboardTextStore.clear() }
     } message: {
-      Text("Saved text will be removed from Cinderdeck. Your captures and current clipboard will stay unchanged.")
+      Text("Copied text will be removed from Cinderdeck. Text in Favorites or a group, your captures, and your current clipboard stay unchanged.")
     }
     .onAppear {
       updateCaptureStorageSize()

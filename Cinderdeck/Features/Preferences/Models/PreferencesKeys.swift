@@ -165,6 +165,7 @@ enum PreferencesKeys {
   static let clipboardTextHistoryEnabled = "history.clipboardTextEnabled"
   static let historyClipboardTextSelected = "history.clipboardTextSelected"
   nonisolated static let historySelectedSection = "history.selectedSection"
+  static let historySavedCollectionID = "history.savedCollectionID"
   nonisolated static let stacksEnabled = "stacks.enabled"
   nonisolated static let stacksDirectory = "stacks.directory"
   nonisolated static let stacksQuitBehavior = "stacks.quitBehavior"

@@ -1,11 +1,12 @@
 import Foundation
 
 enum HistorySection: String, CaseIterable {
-  case captures, clipboard, stacks
+  case captures, clipboard, saved, stacks
   var searchPrompt: String {
     switch self {
     case .captures: return "Search captures"
     case .clipboard: return "Search clipboard text"
+    case .saved: return "Search saved items"
     case .stacks: return "Search workspaces"
     }
   }

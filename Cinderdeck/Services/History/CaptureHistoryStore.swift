@@ -449,6 +449,20 @@ final class CaptureHistoryStore: ObservableObject {
     }
   }
 
+  /// IDs of records in Favorites or a group; retention keeps these.
+  func savedRecordIDs() -> Set<UUID> {
+    guard let dbPool = requireDatabase(for: "read saved capture history ids") else { return [] }
+    do {
+      return try dbPool.read { db in
+        Set(try UUID.fetchAll(db, sql: HistoryCollectionItem.savedCaptureIDsSQL))
+      }
+    } catch {
+      logger.error("Failed to read saved capture ids: \(error.localizedDescription)")
+      DiagnosticLogger.shared.logError(.history, error, "Capture history saved ids read failed")
+      return []
+    }
+  }
+
   /// Check whether an active history record exists for a given file path
   func hasRecord(forFilePath filePath: String) -> Bool {
     guard let dbPool = requireDatabase(for: "check capture history record existence") else { return false }
@@ -472,7 +486,7 @@ final class CaptureHistoryStore: ObservableObject {
     }
   }
 
-  /// Remove records older than the given number of days.
+  /// Remove records older than the given number of days, keeping saved records.
   /// Pass 0 to skip age-based cleanup.
   func removeOlderThan(days: Int) {
     guard days > 0 else { return }
@@ -484,6 +498,7 @@ final class CaptureHistoryStore: ObservableObject {
       let count = try dbPool.write { db in
         try CaptureHistoryRecord
           .filter(Column("capturedAt") < cutoff)
+          .filter(sql: "id NOT IN (\(HistoryCollectionItem.savedCaptureIDsSQL))")
           .deleteAll(db)
       }
       if count > 0 {
@@ -506,22 +521,23 @@ final class CaptureHistoryStore: ObservableObject {
     }
   }
 
-  /// If total record count exceeds `maxCount`, remove oldest records.
-  /// Pass 0 to skip count-based cleanup.
+  /// If the count of unsaved records exceeds `maxCount`, remove the oldest unsaved records.
+  /// Saved records do not count toward the limit. Pass 0 to skip count-based cleanup.
   func trimToMaxCount(_ maxCount: Int) {
     guard maxCount > 0 else { return }
     guard let dbPool = requireDatabase(for: "trim capture history records") else { return }
+    let unsaved = CaptureHistoryRecord.filter(sql: "id NOT IN (\(HistoryCollectionItem.savedCaptureIDsSQL))")
 
     do {
       let total = try dbPool.read { db in
-        try CaptureHistoryRecord.fetchCount(db)
+        try unsaved.fetchCount(db)
       }
 
       guard total > maxCount else { return }
       let excess = total - maxCount
 
       let idsToDelete: [UUID] = try dbPool.read { db in
-        try CaptureHistoryRecord
+        try unsaved
           .order(Column("capturedAt").asc)
           .limit(excess)
           .fetchAll(db)

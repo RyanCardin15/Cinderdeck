@@ -123,7 +123,8 @@ final class CaptureHistoryRetentionService {
     var pathsToDelete: [String] = []
 
     do {
-      let allRecords = store.records
+      let savedIDs = store.savedRecordIDs()
+      let allRecords = store.records.filter { !savedIDs.contains($0.id) }
 
       // Find records older than retentionDays
       if retentionDays > 0 {

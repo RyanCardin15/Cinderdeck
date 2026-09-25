@@ -29,7 +29,7 @@ struct ClipboardTextHistoryView: View {
       HStack(spacing: 8) {
         Label(isEnabled ? "Saving copied text" : "Clipboard history paused",
               systemImage: isEnabled ? "clipboard" : "pause.circle")
-        Text("· \(store.records.count) items · Kept on this Mac for 30 days")
+        Text("· \(store.records.count) items · Kept on this Mac for 30 days unless saved")
           .foregroundColor(.secondary)
         Spacer()
         Button(isEnabled ? "Pause" : "Resume") { isEnabled.toggle() }
@@ -113,6 +113,7 @@ struct ClipboardTextHistoryView: View {
                 Label("Text", systemImage: "text.alignleft")
                 Spacer()
                 Text(record.copiedAt, style: .time)
+                HistoryFavoriteButton(item: .clipboardText(record.id), size: 11)
               }
               .font(.caption)
               .foregroundColor(.secondary)
@@ -189,6 +190,8 @@ struct ClipboardTextHistoryView: View {
             Label("Clipboard text", systemImage: "text.alignleft")
               .font(.headline)
             Spacer()
+            HistoryFavoriteButton(item: .clipboardText(record.id), size: 14)
+            saveMenu(record)
             copyButton(record)
               .buttonStyle(.borderedProminent)
           }
@@ -244,7 +247,19 @@ struct ClipboardTextHistoryView: View {
       manager.showExpanded()
     }
     Divider()
+    HistorySaveMenuItems(items: [.clipboardText(record.id)])
+    Divider()
     Button("Delete", role: .destructive) { store.remove(record.id) }
+  }
+
+  private func saveMenu(_ record: ClipboardTextRecord) -> some View {
+    Menu {
+      HistorySaveMenuItems(items: [.clipboardText(record.id)])
+    } label: {
+      Label("Save", systemImage: "folder.badge.plus")
+    }
+    .fixedSize()
+    .help("Add this text to Favorites or a group")
   }
 
   private func select(_ record: ClipboardTextRecord) {
