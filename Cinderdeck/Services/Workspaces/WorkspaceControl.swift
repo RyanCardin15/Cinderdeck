@@ -5,6 +5,9 @@ extension StackControlService {
     "workspace.workflow.save", "workspace.item.delete"]
 
   func handleWorkspace(_ method: String, params: JSONValue, actor: StackActor) async throws -> JSONValue {
+    if ["workspace.definition", "workspace.save", "workspace.delete"].contains(method) {
+      return try await handleWorkspaceLifecycle(method, params: params, actor: actor)
+    }
     if Self.workspaceDefinitionMethods.contains(method) { return try await handleWorkspaceDefinition(method, params: params, actor: actor) }
     let runner = workspaceRunner
     if method == "workspace.list" {

@@ -52,6 +52,38 @@ final class CinderdeckMCPServerTests: XCTestCase {
       XCTAssertEqual((error as? StackControlError)?.code, "unknown_tool")
     }
     XCTAssertNoThrow(try CinderdeckMCPServer.validate("list_workspaces", [:]))
+    for (tool, arguments) in [
+      ("update_lane", ["workspace": JSONValue.string("shop/test"), "env": .object(["MODE": .number(3)])]),
+      ("save_workspace_service", ["workspace": .string("shop"), "service": .string("api"), "autostart": .string("false")]),
+      ("save_workspace_workflow", ["workspace": .string("shop"), "workflow": .string("check"), "steps": .array([.number(1)])]),
+      ("delete_workspace_item", ["workspace": .string("shop"), "kind": .string("repository"), "id": .string("app")]),
+      ("save_workspace", ["workspace": .string("shop"), "name": .number(3)]),
+    ] { XCTAssertThrowsError(try CinderdeckMCPServer.validate(tool, arguments), tool) }
+  }
+
+  func testEveryMCPToolIsAvailableThroughTheCLIWithoutASeparateCatalog() throws {
+    func example(_ schema: JSONValue) -> JSONValue {
+      if let first = schema["enum"]?.arrayValue?.first { return first }
+      switch schema["type"]?.stringsValue?.first {
+      case "number": return .number(10)
+      case "boolean": return .bool(false)
+      case "array": return .array([])
+      case "object": return .object([:])
+      default: return .string("example")
+      }
+    }
+    for tool in CinderdeckMCPServer.toolDescriptions {
+      let name = try XCTUnwrap(tool["name"]?.stringValue)
+      let schema = try XCTUnwrap(tool["inputSchema"])
+      let arguments = Dictionary(uniqueKeysWithValues: (schema["required"]?.stringsValue ?? []).map {
+        ($0, example(schema["properties"]?[$0] ?? .null))
+      })
+      let cli = try AgentToolCLI.request(name: name, arguments: arguments)
+      let mcp = try CinderdeckMCPServer.request(for: name, arguments)
+      XCTAssertEqual(cli.0, mcp.0, name)
+      XCTAssertEqual(cli.1, mcp.1, name)
+      XCTAssertEqual(cli.2, mcp.2, name)
+    }
   }
 
   func testProtocolVersionNegotiation() {

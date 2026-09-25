@@ -76,6 +76,52 @@ final class StackLaneTests: XCTestCase {
     if let root { try? FileManager.default.removeItem(at: root) }
   }
 
+  func testLaneEditingKeepsIdentityAndWorktreesAndHonorsClaims() async throws {
+    try await load()
+    let created = try await control.handle("lane.create", params: .object(["workspace": .string("shop"), "branch": .string("agent/original"),
+      "start": .bool(false)]), actor: codex)
+    let id = try XCTUnwrap(created["workspace"]?["id"]?.stringValue)
+    let before = try XCTUnwrap(StackLaneStore.record(id: id, in: supervisor.lanesDirectory))
+    let update: JSONValue = .object(["workspace": .string(id), "name": .string("agent/renamed"), "env": .object(["MODE": .string("review")])])
+    do { _ = try await control.handle("lane.update", params: update, actor: claude); XCTFail("Claimed") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "claimed") }
+    _ = try await control.handle("lane.update", params: update, actor: codex)
+    let after = try XCTUnwrap(StackLaneStore.record(id: id, in: supervisor.lanesDirectory))
+    XCTAssertEqual(after.id, before.id)
+    XCTAssertEqual(after.info.directory, before.info.directory)
+    XCTAssertEqual(after.info.ports, before.info.ports)
+    XCTAssertEqual(after.info.effectiveSlug, before.info.effectiveSlug)
+    XCTAssertEqual(after.worktrees, before.worktrees)
+    XCTAssertEqual(after.info.environment, ["MODE": "review"])
+    XCTAssertEqual(after.info.reference, "shop/agent/renamed")
+    let resolved = try control.workspaceFile(.object(["workspace": .string("shop/agent/renamed")]))
+    XCTAssertEqual(resolved.id, id)
+    _ = try await control.handle("lane.update", params: .object(["workspace": .string(id), "env": .object([:])]), actor: codex)
+    XCTAssertEqual(try StackLaneStore.record(id: id, in: supervisor.lanesDirectory)?.info.environment, [:])
+    do { _ = try await control.handle("workspace.delete", params: .object(["workspace": .string("shop")]), actor: codex); XCTFail("Has lanes") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "in_use") }
+    await supervisor.start(stack: id)
+    do { _ = try await control.handle("lane.update", params: update, actor: codex); XCTFail("Running") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "busy") }
+    await supervisor.stop(stack: id)
+    _ = try await control.handle("lane.remove", params: .object(["workspace": .string(id)]), actor: codex)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: repo.appendingPathComponent("tracked.txt").path))
+  }
+
+  func testLaneEditRejectsDuplicateNamesAndInvalidEnvironmentWithoutWriting() async throws {
+    try await load()
+    let first = try await supervisor.createLane(stack: "shop", branch: "one", actor: codex)
+    _ = try await supervisor.createLane(stack: "shop", branch: "two", actor: codex)
+    let manifest = StackLaneStore.manifest(id: first.id, in: supervisor.lanesDirectory)
+    let before = try Data(contentsOf: manifest)
+    for fields: [String: JSONValue] in [["name": .string("two")], ["name": .string("")], ["env": .object(["INVALID-NAME": .string("value")])], [:]] {
+      var params = fields; params["workspace"] = .string(first.id)
+      do { _ = try await control.handle("lane.update", params: .object(params), actor: codex); XCTFail("Invalid") }
+      catch { XCTAssertEqual((error as? StackControlError)?.code, "invalid_params") }
+      XCTAssertEqual(try Data(contentsOf: manifest), before)
+    }
+  }
+
   private func load(twoServices: Bool = false) async throws {
     let first = try StackLaneStore.availablePort(excluding: [])
     let second = try StackLaneStore.availablePort(excluding: [first])
@@ -405,6 +451,32 @@ final class StackLaneTests: XCTestCase {
     await second.value
     XCTAssertEqual(firstName, "Latest Shop")
     XCTAssertEqual(supervisor.definition("shop")?.name, "Latest Shop")
+  }
+
+  func testDefinitionEditBlocksStartsUntilTheNewSnapshotLoads() async throws {
+    try await load()
+    await supervisor.shutdownMonitoring()
+    let gate = LaneReloadGate()
+    supervisor = StackSupervisor(store: nil, defaults: defaults, logRoot: root.appendingPathComponent("edit-logs"),
+      loadFiles: { try await gate.read($0) })
+    control = StackControlService(supervisor: supervisor, claimsFile: root.appendingPathComponent("edit-claims.json"))
+    let initial = Task { await supervisor.reloadDefinitions() }
+    await gate.waitForRead(1)
+    await gate.release(1)
+    await initial.value
+    let edit = Task {
+      try await control.handle("workspace.save", params: .object(["workspace": .string("shop"), "name": .string("Updated Shop")]), actor: codex)
+    }
+    await gate.waitForRead(2)
+    XCTAssertEqual(supervisor.states["shop"]?.operation, "Updating definition")
+    do {
+      _ = try await control.handle("services.start", params: .object(["workspace": .string("shop")]), actor: codex)
+      XCTFail("Started from stale definition")
+    } catch { XCTAssertEqual((error as? StackControlError)?.code, "busy") }
+    await gate.release(2)
+    _ = try await edit.value
+    XCTAssertNil(supervisor.states["shop"]?.operation)
+    XCTAssertEqual(supervisor.definition("shop")?.name, "Updated Shop")
   }
 
   func testIncompleteJournalCannotLaunchAndOccupiedPortsAreSkipped() async throws {

@@ -91,10 +91,16 @@ The existing CLI install and MCP setup provide the new controls too. Reload the 
 ```sh
 cinderdeck workspace list
 cinderdeck workspace show shop
+cinderdeck workspace create --name Shop --folder ~/Src/shop --id shop
+cinderdeck workspace edit shop --name "Shop development"
+cinderdeck workspace save-service shop api --data '{"cmd":"npm run dev","port":3000}'
+cinderdeck workspace save-task shop test --data '{"cmd":"npm test"}'
+cinderdeck workspace save-workflow shop verify --data '{"steps":["task:test"]}'
 cinderdeck workspace task shop lint --wait
 cinderdeck workspace workflow shop verify --as Codex
 cinderdeck workspace runs shop
 cinderdeck workspace status <run-uuid>
+cinderdeck workspace wait <run-uuid> --timeout 600
 cinderdeck workspace logs <run-uuid> -n 200
 cinderdeck workspace cancel <run-uuid>
 ```
@@ -103,8 +109,37 @@ Starts return a durable run UUID immediately. `--wait` waits for completion and 
 
 MCP tools: `list_workspaces`, `workspace_details`, `run_workspace_task`, `run_workspace_workflow`, `wait_for_workspace_run`, `list_workspace_runs`, `workspace_run_status`, `workspace_run_logs`, `cancel_workspace_run`. `wait_for_workspace_run` waits in the app (default 600 seconds, at most 3,600) and returns the run with `finished`; a failed run also includes the failing step's last 30 lines. A wait that ends first returns `finished: false` and never cancels the run. Run logs accept an optional step UUID. Runs record the same agent identity used by services; starts and cancellation honor workspace claims. The human UI remains in control.
 
-Agents can also edit definitions through MCP, with the same validation and stale-file protection as the forms: `create_workspace` (name and project folder), `save_workspace_service`, `save_workspace_task` (`from_service` moves a stopped service to Tasks), `save_workspace_workflow`, and `delete_workspace_item`. Saving creates or updates one component and keeps every setting the call omits. Nothing starts on save, invalid results are refused without touching the file, lanes are read-only, and edits honor workspace claims. `open_workspace` shows a workspace and section to the user.
+Both interfaces can create and edit components, with the same validation and stale-file protection as the forms: `create_workspace` (name and project folder), `save_workspace_service`, `save_workspace_task` (`from_service` moves a stopped service to Tasks), `save_workspace_workflow`, and `delete_workspace_item`. Saving creates or updates one component and keeps every setting the call omits. Nothing starts on save, invalid results are refused without touching the file, component edits belong to the source workspace, and edits honor workspace claims. `open_workspace` shows a workspace and section to the user.
+
+### Complete definition and lifecycle controls
+
+`workspace_definition` (`workspace definition <id>`) returns the authored TOML, file path and a content `revision`. `save_workspace` can patch `name` and/or `folder`, or replace the whole `source` with that revision. Complete source replacement supports **every definition setting**: repositories and their lane modes, workspace environment, secret references, shell, service restart/stop settings, task ports, lane setup/teardown/copy/link/host defaults, and component additions, edits and removals. It also repairs invalid definitions. It does not read secret values from Keychain.
+
+```sh
+cinderdeck workspace definition shop
+# Save the returned source to a local file, edit it, and use the returned revision:
+cinderdeck workspace save shop --file ./shop.toml --revision <revision>
+cinderdeck workspace delete-item shop workflow verify
+cinderdeck workspace remove shop --revision <revision>
+```
+
+A full save or metadata edit requires stopped services and finished/cancelled runs in the workspace and its lanes. It respects claims on all affected lanes, validates references across workspaces before writing, and refuses a stale revision. Changing the display name keeps the workspace id. Changing the folder re-resolves relative paths. Nothing starts automatically. `delete_workspace` removes just the definition, requires stopped work, refuses remaining lanes or dependent workspace references, and keeps project folders, branches, logs and saved run results. `force` overrides claims only; it never bypasses these checks.
+
+`update_lane` (`lane edit <lane> --name <name>`, `--env KEY=VALUE` repeated, or `--clear-env`) edits a stopped lane. Environment values replace the lane override set; omitted fields stay unchanged. Renaming keeps its stable id, worktrees, branches, slug and ports, while its `<workspace>/<name>` reference changes. Pinned lanes must be unpinned first. `remove_lane` and `release_lane` retain their existing worktree protections; release keeps all worktrees.
+
+### One operation catalog for CLI and MCP
+
+```sh
+cinderdeck tools                         # Full JSON catalog and schemas; no app connection needed
+cinderdeck tools save_workspace_service  # All accepted settings for one operation
+cinderdeck call update_lane --arguments '{"workspace":"shop/review","env":{"MODE":"review"}}'
+cinderdeck call save_workspace --file ./arguments.json
+```
+
+`cinderdeck call` exposes **every MCP tool**, using the same catalog, argument validation, control route and timeout. New tools automatically become available to CLI agents. JSON file input avoids shell quoting and supports nested settings. The dedicated `workspace save-service`, `save-task` and `save-workflow` commands accept the same settings in `--data` or a JSON `--file`, with workspace/id supplied as positionals. Unknown arguments, wrong JSON types and invalid enum values are rejected before connecting. JSON results go to stdout; JSON errors go to stderr (exit 3 for a claim conflict, 1 for other errors). Generic calls return the control result; inspect run status and service problems, since a successfully delivered call can report failed work.
 
 ## Validation
 
 Focused XCTest suites cover task-only/empty definitions, invalid references, older launch record decoding, component edits, conversion, stale-save protection, real process exit results and output, sequential failure handling, timeout, process-group cancellation, readiness, cleanup ownership, history reload, recovery, CLI parsing, and MCP/control access.
+
+Run `bash scripts/stacks-verify.sh test` for the workspace, lane and agent contract suites. After a Debug build, `python3 scripts/agent-controls-e2e.py` verifies workspace/component/lane lifecycles across the real CLI and MCP transports in a temporary preview environment. `python3 scripts/lanes-e2e.py` also checks running HTTP services in three parallel environments. Neither smoke test installs an app or edits your saved workspaces.

@@ -280,11 +280,14 @@ Skills are copied to `~/.claude/skills` (Claude Code), `~/.agents/skills` (Codex
 | `git_status`, `list_branches`, `switch_branch`, `pull_repos` | `git`, `branches`, `switch <stack> <branch> [--stash|--carry]`, `fetch`, `pull` | Same stop → checkout → restart flow as the panel; uncommitted work fails unless `dirty=stash|carry` |
 | `claim_workspace`, `release_workspace` | `claim <workspace> [note] --ttl 30`, `release` | Advisory lease: other agents get a `claimed` error (CLI exit 3) unless they pass `force` |
 | `recent_activity` | `events <workspace>` | Starts, crashes, stops, branch switches — each with who caused it |
-| `create_workspace`, `save_workspace_service`, `save_workspace_task`, `save_workspace_workflow`, `delete_workspace_item` | Workspaces window | Validated definition edits; nothing starts on save |
+| `create_workspace`, `save_workspace_service`, `save_workspace_task`, `save_workspace_workflow`, `delete_workspace_item` | `cinderdeck workspace create`, `save-service`, `save-task`, `save-workflow`, `delete-item` | Validated definition edits; nothing starts on save |
+| `workspace_definition`, `save_workspace`, `delete_workspace` | `cinderdeck workspace definition`, `edit`, `save`, `remove` | Complete TOML editing with revision checks; removal keeps project files and history |
 | `workspace_guide`, `validate_workspace`, `reload_workspaces` | `agent-help`, `validate <file>`, `reload`, `where` | Authoring by hand: paths, a template, validation and start order |
-| `create_lane`, `adopt_lane`, `list_lanes`, `lane_env`, `run_lane_setup`, `remove_lane`, `release_lane`, `prune_lanes`, `unpin_lane` | `cinderdeck lane …` | Parallel Git worktree lanes |
+| `create_lane`, `adopt_lane`, `update_lane`, `list_lanes`, `lane_env`, `run_lane_setup`, `remove_lane`, `release_lane`, `prune_lanes`, `unpin_lane` | `cinderdeck lane …` | Parallel Git worktree lanes |
 
 `cinderdeck mcp` is a stdio MCP server; if Cinderdeck isn't running, the first call launches it in the background. The CLI does the same. Tool calls run concurrently on pooled connections, so a long wait never blocks other calls or pings, and unknown or misspelled arguments are rejected with the valid names. Reload the tool list in connected clients after updating Cinderdeck.
+
+Every tool above, plus task/workflow runs, repros and PR views, is also available through `cinderdeck call <tool-name> --arguments '<json>'` or `--file <args.json>`. `cinderdeck tools [tool-name]` prints the current schemas directly from the MCP catalog. See [workspace lifecycle controls](WORKSPACES.md#complete-definition-and-lifecycle-controls) for full definition edits and lane renaming/environment overrides.
 
 ### Who owns what
 

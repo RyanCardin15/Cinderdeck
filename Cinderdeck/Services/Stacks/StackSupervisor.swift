@@ -512,6 +512,23 @@ final class StackSupervisor: ObservableObject {
     let warnings: [String]
   }
 
+  /// Definition and lane metadata changes must not race worktree creation/removal.
+  func withDefinitionLock<T>(workspace id: String, _ body: () throws -> T) async throws -> T {
+    await laneLock.acquire()
+    let affected: [String]
+    let result: T
+    do {
+      affected = [id] + (try StackLaneStore.records(in: lanesDirectory)).filter { $0.info.sourceStackID == id }.map(\.id)
+      result = try body()
+    } catch { laneLock.release(); throw error }
+    // Don't let a service or run start from the old in-memory definition while the file reloads.
+    for id in affected { states[id, default: .init()].operation = "Updating definition" }
+    laneLock.release()
+    defer { for id in affected { states[id]?.operation = nil } }
+    await reloadDefinitions()
+    return result
+  }
+
   func createLane(stack id: String, branch: String, actor: StackActor) async throws -> StackDefinitionFile {
     try await createLane(stack: id, request: .init(branch: branch), actor: actor).file
   }
@@ -521,7 +538,7 @@ final class StackSupervisor: ObservableObject {
     await laneLock.acquire()
     let creation: StackLaneStore.Creation
     do {
-      guard let source = definition(id) else { throw StackError.message("This stack needs a valid definition") }
+      guard states[id]?.operation == nil, let source = definition(id) else { throw StackError.message("This stack needs a valid definition and must finish its current operation") }
       creation = try await StackLaneStore.create(source: source, request: request, owner: actor,
         directory: lanesDirectory, worktreeRoot: worktreeRoot, occupiedPorts: occupiedPorts())
     } catch {

@@ -14,8 +14,12 @@ nonisolated enum StackCLI {
     case "prs", "pull-requests": return PRViewsCLI.run(Array(arguments.dropFirst(2)))
     case "repro", "repros": return ReproCLI.run(Array(arguments.dropFirst(2)))
     case "skills", "skill": return StackAgentSkills.run(Array(arguments.dropFirst(2)))
-    case "lane", "lanes": return run(["lane"] + arguments.dropFirst(2))
+    case "lane", "lanes":
+      if arguments.count > 2, ["edit", "update"].contains(arguments[2]) { return AgentToolCLI.runLaneEdit(Array(arguments.dropFirst(3))) }
+      return run(["lane"] + arguments.dropFirst(2))
     case "mcp": return CinderdeckMCPServer.run()
+    case "tools": return AgentToolCLI.run(Array(arguments.dropFirst(2)), list: true)
+    case "call": return AgentToolCLI.run(Array(arguments.dropFirst(2)))
     case "help", "--help", "-h":
       guard isCommandName(arguments[0]) else { return nil }
       print(usage); return 0
@@ -76,7 +80,7 @@ nonisolated enum StackCLI {
     let options = parse(arguments)
     var positionals = options.positionals
     let command = positionals.isEmpty ? "status" : positionals.removeFirst()
-    if ["lane", "lanes"].contains(command), options.has("help") || positionals.first == "help" {
+    if options.has("help") || options.has("h") || (["lane", "lanes"].contains(command) && positionals.first == "help") {
       print(usage); return 0
     }
     do {
@@ -635,6 +639,8 @@ nonisolated enum StackCLI {
 
   WORKTREE LANES
     cinderdeck lane create <workspace> <branch>       Create, set up and start an isolated worktree lane
+    cinderdeck lane edit <lane> --name <name>         Rename a stopped lane; id, branches and folders stay
+    cinderdeck lane edit <lane> --env KEY=VALUE       Replace lane overrides; --clear-env clears them
       --from <ref>  --env KEY=VALUE  --copy <glob>    Start point, lane-only variables, extra files to copy
       --no-setup  --no-start                          Skip [lanes] setup, or create without starting
     cinderdeck lane adopt <workspace> [name]          Use an existing worktree (--path, default: here)
@@ -654,6 +660,8 @@ nonisolated enum StackCLI {
     cinderdeck prs views                              Configure Pull Request tabs (prs --help)
     cinderdeck skills [list|install]                  Agent skills that ship with Cinderdeck
     cinderdeck mcp                                    Run as an MCP server over stdio
+    cinderdeck tools [tool-name]                      List every agent operation and its argument schema
+    cinderdeck call <tool-name> --arguments '<json>'   Run any MCP operation from the CLI
 
   OPTIONS
     --json          Machine-readable output        --no-wait     Don't wait for readiness

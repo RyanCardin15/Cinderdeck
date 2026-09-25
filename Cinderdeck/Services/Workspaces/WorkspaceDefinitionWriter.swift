@@ -1,8 +1,38 @@
+import CryptoKit
 import Darwin
 import Foundation
 
 /// Changes one named component while preserving unrelated tables and comments.
 nonisolated enum WorkspaceDefinitionWriter {
+  static func revision(_ source: String) -> String {
+    SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
+  }
+
+  /// Patch root-level strings without reserializing unrelated tables, templates, or comments.
+  static func metadata(_ source: String, values: [String: String]) throws -> String {
+    _ = try SimpleTOMLParser.parse(source, strict: true)
+    var inRoot = true
+    var lines: [String] = []
+    for line in source.components(separatedBy: "\n") {
+      let trimmed = line.trimmingCharacters(in: .whitespaces)
+      if trimmed.hasPrefix("[") { inRoot = false }
+      if inRoot, let equals = trimmed.firstIndex(of: "=") {
+        let key = trimmed[..<equals].trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+        if values[key] != nil { continue }
+      }
+      lines.append(line)
+    }
+    return values.keys.sorted().map { "\($0) = \(quote(values[$0]!))" }.joined(separator: "\n") + "\n" + lines.joined(separator: "\n")
+  }
+
+  static func saveSource(file: URL, original: String, source: String) throws {
+    guard try String(contentsOf: file, encoding: .utf8) == original else {
+      throw StackControlError(code: "stale_definition", message: "Workspace changed. Read workspace_definition again before saving.")
+    }
+    let loaded = StackDefinitionLoader.load(source, file: file)
+    guard loaded.definition != nil else { throw StackError.message(loaded.issues.map(\.message).joined(separator: "\n")) }
+    try source.write(to: file, atomically: true, encoding: .utf8)
+  }
   static func quote(_ value: String) -> String {
     "\"" + value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
       .replacingOccurrences(of: "\n", with: "\\n").replacingOccurrences(of: "\r", with: "\\r")

@@ -57,7 +57,7 @@ extension StackControlService {
     if let lane = file.lane {
       throw StackControlError(code: "lane", message: lane.pinned
         ? "\(file.name) is a pinned lane that keeps the definition saved when it was created. Unpin it (unpin_lane) so it follows \(lane.sourceStackID), then edit \(lane.sourceStackID)."
-        : "\(file.name) is a worktree lane and follows \(lane.sourceStackID). Edit \(lane.sourceStackID) instead; lane-only values go in its [lanes] table.")
+        : "\(file.name) is a worktree lane and follows \(lane.sourceStackID). Edit \(lane.sourceStackID) for components and [lanes] defaults; use update_lane for this lane's name or environment overrides.")
     }
     try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
     let source: String
