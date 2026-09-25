@@ -178,7 +178,8 @@ final class DatabaseManager: @unchecked Sendable {
 
   // MARK: - Migrations
 
-  private static var migrator: DatabaseMigrator {
+  // Internal so upgrade tests can create a real historical schema with migrate(_:upTo:).
+  static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
 
     #if DEBUG

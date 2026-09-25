@@ -316,11 +316,13 @@ enum ReproExport {
   }
 
   /// What to hand an agent: the README first, then the stamped log, frames, and diffs.
-  /// The video stays where it was saved; the README gives its path.
+  /// The video is not copied; it is handed over from where it was saved.
   struct Handoff: Equatable {
     let folder: URL
     let files: [URL]
     let video: URL?
+    /// The video first, then everything else.
+    var allFiles: [URL] { (video.map { [$0] } ?? []) + files }
   }
 
   /// A video-less bundle kept in the repro's own folder, rebuilt when the recording

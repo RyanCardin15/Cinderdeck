@@ -162,6 +162,54 @@ final class ReproRecorderTests: XCTestCase {
     recorder.setScope(.running)
   }
 
+  /// The toolbar popover's ticks, with three workspaces printing: only the ticked ones
+  /// reach the recording, including ones that start after it began, and nothing from the
+  /// others shows in its sources, workspaces, log file, or the Recordings lists.
+  func testSeveralSelectedWorkspacesCaptureOnlyThemselves() async throws {
+    for name in ["alpha", "beta", "gamma"] {
+      try ("root = \(WorkspaceDefinitionWriter.quote(root.path))\nshell = \"/bin/sh\"\n"
+        + "[services.talk]\ncmd = \"while true; do echo \(name)-service; sleep 0.05; done\"\n"
+        + "[tasks.check]\ncmd = \"echo \(name)-task\"\n")
+        .write(to: root.appendingPathComponent("\(name).toml"), atomically: true, encoding: .utf8)
+    }
+    await supervisor.reloadDefinitions()
+    for name in ["alpha", "beta"] {
+      await supervisor.start(stack: name, services: ["talk"])
+      try await until { self.supervisor.runtime(name, "talk").phase == .ready }
+    }
+
+    // Ticks in the popover: alpha, beta, gamma, then beta off again.
+    var scope = ReproLogScope.off
+    for id in ["alpha", "beta", "gamma", "beta"] { scope = scope.toggling(id) }
+    XCTAssertEqual(scope, .only(["alpha", "gamma"]))
+    recorder.setScope(scope)
+    XCTAssertEqual(ToolbarWorkspacePicker.title(scope: recorder.scope, choices: WorkspaceLogChoice.all(supervisor: supervisor, runner: runner)), "2 workspaces")
+
+    events.send(.started(Date()))
+    events.send(.firstFrame(Date()))
+    let id = try XCTUnwrap(recorder.activeSessionID)
+    // A selected workspace that starts while recording, and an unselected task run.
+    await supervisor.start(stack: "gamma", services: ["talk"])
+    let run = try runner.submit(workspace: "beta", kind: .task, definitionID: "check", actor: .user)
+    try await until { self.runner.run(run.id)?.status.isActive == false }
+    try await until { (self.recorder.live?.sources ?? 0) >= 2 }
+    let stopped = try await stopRecording()
+    let saved = try XCTUnwrap(stopped)
+
+    XCTAssertEqual(saved.id, id)
+    XCTAssertEqual(Set(saved.sources.map(\.workspace)), ["alpha", "gamma"], saved.sources.map(\.id).joined(separator: ", "))
+    XCTAssertFalse(saved.workspaceIDs.contains("beta"), "beta is not listed as captured: \(saved.workspaceIDs)")
+    XCTAssertTrue(saved.runs.isEmpty, "beta's task run is not linked")
+    let lines = await recorder.lines(for: id)
+    let log = ReproReport.logFile(saved, lines: lines, videoName: nil)
+    XCTAssertTrue(log.contains("alpha-service") && log.contains("gamma-service"), log)
+    XCTAssertFalse(log.contains("beta-"), "beta output leaked into the log")
+    // What Workspaces → Recordings and `repro list <workspace>` match on.
+    func listed(under workspace: String) -> Bool { saved.workspaceIDs.contains(workspace) || saved.sources.contains { $0.workspace == workspace } }
+    XCTAssertTrue(listed(under: "alpha") && listed(under: "gamma"))
+    XCTAssertFalse(listed(under: "beta"))
+  }
+
   func testRecordingWithoutWorkspaceOutputIsDiscarded() async throws {
     try await load("[tasks.noop]\ncmd = \"true\"\n")
     events.send(.started(Date()))

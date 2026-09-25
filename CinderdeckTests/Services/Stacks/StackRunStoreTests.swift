@@ -5,21 +5,57 @@ import XCTest
 
 @MainActor
 final class StackRunStoreTests: XCTestCase {
-  func testFreshAndUpgradeMigrationsPreserveClipboardData() throws {
+  func testFreshMigrationsCreateWorkspaceTables() throws {
     let root = try StackTestSupport.temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }
     let url = root.appendingPathComponent("cinderdeck.db")
     let pool = try DatabaseManager.openDatabase(at: url).dbPool
-    try pool.write { db in
-      XCTAssertTrue(try db.tableExists("stackRunRecord")); XCTAssertTrue(try db.tableExists("stackEventRecord"))
-      try db.execute(sql: "INSERT INTO clipboardTextRecord (id, text, contentHash, copiedAt) VALUES (?, ?, ?, ?)", arguments: [UUID().uuidString, "keep me", "hash", Date()])
-      try db.execute(sql: "DROP TABLE stackRunRecord; DROP TABLE stackEventRecord; DELETE FROM grdb_migrations WHERE identifier LIKE 'custom_%'")
-    }
-    let upgraded = try DatabaseManager.openDatabase(at: url).dbPool
-    try upgraded.read { db in
-      XCTAssertTrue(try db.tableExists("stackRunRecord")); XCTAssertTrue(try db.tableExists("stackEventRecord"))
-      XCTAssertEqual(try String.fetchOne(db, sql: "SELECT text FROM clipboardTextRecord"), "keep me")
+    try pool.read { db in
+      XCTAssertTrue(try db.tableExists("stackRunRecord"))
+      XCTAssertTrue(try db.tableExists("stackEventRecord"))
       XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM grdb_migrations WHERE identifier LIKE 'custom_%'"), 3)
+    }
+  }
+
+  func testUpgradeMigrationsPreserveClipboardData() throws {
+    let root = try StackTestSupport.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let historicalMigrations = [
+      "v3_createClipboardTextRecords",
+      "custom_v1_createStackRunRecords",
+      "custom_v2_createStackEventRecords",
+      "custom_v3_addStackActors",
+    ]
+
+    for migration in historicalMigrations {
+      let url = root.appendingPathComponent("\(migration).db")
+      let pool = try DatabasePool(path: url.path)
+      // Build a valid migration prefix. Deleting older migration records from a current
+      // database leaves newer schemas applied and triggers GRDB's Debug schema reset.
+      try DatabaseManager.migrator.migrate(pool, upTo: migration)
+      let clipboardID = UUID().uuidString
+      try pool.write { db in
+        XCTAssertFalse(try db.tableExists("historyCollection"), migration)
+        try db.execute(
+          sql: "INSERT INTO clipboardTextRecord (id, text, contentHash, copiedAt) VALUES (?, ?, ?, ?)",
+          arguments: [clipboardID, "keep me", "hash", Date()]
+        )
+      }
+      try pool.close()
+
+      let upgraded = try DatabaseManager.openDatabase(at: url).dbPool
+      try upgraded.read { db in
+        XCTAssertTrue(try db.columns(in: "stackRunRecord").contains { $0.name == "ownerJSON" }, migration)
+        XCTAssertTrue(try db.columns(in: "stackEventRecord").contains { $0.name == "actor" }, migration)
+        XCTAssertTrue(try db.tableExists("historyCollection"), migration)
+        XCTAssertEqual(
+          try String.fetchOne(db, sql: "SELECT text FROM clipboardTextRecord WHERE id = ?", arguments: [clipboardID]),
+          "keep me", migration
+        )
+        XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM clipboardTextRecord"), 1, migration)
+        XCTAssertTrue(try DatabaseManager.migrator.hasCompletedMigrations(db), migration)
+      }
+      try upgraded.close()
     }
   }
   func testReattachLiveRecordDropReusedAndDeadRecords() async throws {

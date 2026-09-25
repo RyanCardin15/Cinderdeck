@@ -3,8 +3,8 @@ import SwiftUI
 
 /// Drag a recording straight into an agent: Claude Code or Codex in a terminal gets the
 /// file paths (and sees the frames as images), a chat app gets the files attached. The
-/// video is left out unless you hold Option, since most agents cannot watch it and the
-/// README already gives its path.
+/// video goes too; hold Option to leave it out for chats that reject large or video files.
+/// The README gives its path either way.
 struct ReproAgentDragCard: View {
   let session: ReproSession
   @State private var handoff: ReproExport.Handoff?
@@ -33,7 +33,7 @@ struct ReproAgentDragCard: View {
       .overlay {
         if let handoff { ReproFileDragSource(files: handoff.files, video: handoff.video) }
       }
-      .help(handoff == nil ? "" : "Drop into a terminal agent or a chat. Hold ⌥ while dragging to include the video.")
+      .help(handoff == nil ? "" : "Drop into a terminal agent or a chat. Hold ⌥ while dragging to leave out the video.")
       .accessibilityElement(children: .combine)
       .accessibilityLabel("Drag to an agent")
       .accessibilityHint(caption)
@@ -41,12 +41,12 @@ struct ReproAgentDragCard: View {
       Button {
         guard let handoff else { return }
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.writeObjects(handoff.files as [NSURL])
+        NSPasteboard.general.writeObjects(handoff.allFiles as [NSURL])
         copied = true
         Task { try? await Task.sleep(nanoseconds: 2_000_000_000); copied = false }
       } label: { Label(copied ? "Copied" : "Copy Files", systemImage: copied ? "checkmark" : "doc.on.doc") }
         .disabled(handoff == nil)
-        .help("Copy the same files to paste into an agent with ⌘V")
+        .help("Copy the same files, video included, to paste into an agent with ⌘V")
       Button { if let handoff { NSWorkspace.shared.activateFileViewerSelecting([handoff.folder]) } } label: { Image(systemName: "folder") }
         .disabled(handoff == nil)
         .help("Show the handoff folder in Finder")
@@ -71,10 +71,11 @@ struct ReproAgentDragCard: View {
     guard let handoff else { return "Preparing the README, log, and frames…" }
     let frames = handoff.files.filter { $0.pathExtension == "jpg" }.count
     let diffs = handoff.files.filter { $0.pathExtension == "diff" }.count
-    var parts = ["README", "log"]
+    var parts = handoff.video == nil ? [] : ["Video"]
+    parts += ["README", "log"]
     if frames > 0 { parts.append("\(frames) frame\(frames == 1 ? "" : "s")") }
     if diffs > 0 { parts.append("\(diffs) diff\(diffs == 1 ? "" : "s")") }
-    return ReproFormat.list(parts) + (handoff.video == nil ? "" : ". Hold ⌥ to add the video.")
+    return ReproFormat.list(parts) + (handoff.video == nil ? "" : ". Hold ⌥ to leave out the video.")
   }
 
   private func prepare() async {
@@ -111,7 +112,7 @@ private struct ReproFileDragSource: NSViewRepresentable {
       guard let start = mouseDownEvent else { return }
       mouseDownEvent = nil
       var urls = files
-      if let video, start.modifierFlags.contains(.option) || event.modifierFlags.contains(.option) { urls.append(video) }
+      if let video, !start.modifierFlags.contains(.option), !event.modifierFlags.contains(.option) { urls.insert(video, at: 0) }
       guard !urls.isEmpty else { return }
       let origin = convert(start.locationInWindow, from: nil)
       let items = urls.enumerated().map { index, url -> NSDraggingItem in
