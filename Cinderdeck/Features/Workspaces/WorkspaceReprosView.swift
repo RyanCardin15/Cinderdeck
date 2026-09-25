@@ -8,7 +8,7 @@ struct WorkspaceReprosView: View {
   @ObservedObject var recorder: ReproRecorder
   @ObservedObject var controller: ReproRecordingController
   @ObservedObject var runner: WorkspaceRunner
-  @State private var selected: UUID?
+  @State private var selection = WorkspaceReproSelection()
   @State private var allWorkspaces = false
   @State private var error: String?
   @State private var starting = false
@@ -17,9 +17,14 @@ struct WorkspaceReprosView: View {
     recorder.sessions.filter { allWorkspaces || $0.workspaceIDs.contains(file.id) || $0.sources.contains { $0.workspace == file.id } }
   }
 
+  private var selectedRepros: [ReproSession] {
+    repros.filter { selection.ids.contains($0.id) }
+  }
+
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       toolbar
+      if !selectedRepros.isEmpty { selectionBar }
       HStack(spacing: 6) {
         WorkspaceLogScopeMenu()
         Text("Change this anytime from the logs button on the recording toolbar.").font(.caption).foregroundColor(.secondary)
@@ -34,11 +39,20 @@ struct WorkspaceReprosView: View {
       } else {
         HSplitView {
           list.frame(minWidth: 210, idealWidth: 250, maxWidth: 320)
-          if let session = repros.first(where: { $0.id == selected }) ?? repros.first {
+          if let session = repros.first(where: { $0.id == selection.focusedID }) {
             WorkspaceReproDetail(session: session, recorder: recorder).id(session.id)
-          } else { Spacer() }
+          } else {
+            Text("Select a recording to see its details.")
+              .foregroundColor(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+          }
         }
       }
+    }
+    .onAppear { selection.reconcile(visibleIDs: repros.map(\.id)) }
+    .onChange(of: repros.map(\.id)) { ids in selection.reconcile(visibleIDs: ids) }
+    .onChange(of: file.id) { _ in
+      selection = WorkspaceReproSelection()
+      selection.reconcile(visibleIDs: repros.map(\.id))
     }
   }
 
@@ -46,7 +60,8 @@ struct WorkspaceReprosView: View {
 
   private var toolbar: some View {
     HStack {
-      Text("\(repros.count) \(repros.count == 1 ? "recording" : "recordings")").foregroundColor(.secondary)
+      Text("\(repros.count) \(repros.count == 1 ? "recording" : "recordings")")
+        .foregroundColor(.secondary)
       Picker("Show", selection: $allWorkspaces) {
         Text("With \(file.name)").tag(false)
         Text("All workspaces").tag(true)
@@ -73,6 +88,22 @@ struct WorkspaceReprosView: View {
       .disabled(recorder.isCapturing || starting)
       .help("Record the screen and save \(file.name)'s logs with it, stamped with video times")
       .accessibilityIdentifier("workspace.recordRepro")
+    }
+  }
+
+  private var selectionBar: some View {
+    HStack {
+      Text("\(selectedRepros.count) selected")
+        .font(.callout.weight(.medium))
+      Text("Shift-click for a range · ⌘-click to add or remove")
+        .font(.caption).foregroundColor(.secondary)
+      Spacer()
+      Button {
+        delete(selectedRepros)
+      } label: {
+        Label(selectedRepros.count == 1 ? "Delete" : "Delete \(selectedRepros.count)", systemImage: "trash")
+      }
+      .accessibilityIdentifier("workspace.deleteRecordings")
     }
   }
 
@@ -120,18 +151,34 @@ struct WorkspaceReprosView: View {
     ScrollView {
       LazyVStack(spacing: 6) {
         ForEach(repros) { session in
-          Button { selected = session.id } label: { WorkspaceReproRow(session: session, selected: (selected ?? repros.first?.id) == session.id) }
+          Button {
+            selection.select(session.id, orderedIDs: repros.map(\.id), modifiers: NSEvent.modifierFlags)
+          } label: {
+            WorkspaceReproRow(session: session, selected: selection.ids.contains(session.id))
+          }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("workspace.recording.\(session.id)")
+            .accessibilityValue(selection.ids.contains(session.id) ? "Selected" : "Not selected")
+            .accessibilityHint("Shift-click to select a range; Command-click to add or remove a recording")
+            .help("Shift-click to select a range; Command-click to add or remove a recording")
             .contextMenu {
+              Button(selection.ids.contains(session.id) ? "Remove from Selection" : "Add to Selection") {
+                selection.select(session.id, orderedIDs: repros.map(\.id), modifiers: [.command])
+              }
+              Divider()
               Button("Open in video editor") { ReproLibraryActions.open(session) }
               Button("Export…") { ReproLibraryActions.export(session) }
               Button("Copy summary") { Task { await ReproLibraryActions.copySummary(session) } }
               Divider()
-              Button("Delete…", role: .destructive) { delete(session) }
+              let targets = selection.ids.contains(session.id) ? selectedRepros : [session]
+              Button(targets.count == 1 ? "Delete…" : "Delete \(targets.count) recordings…", role: .destructive) {
+                delete(targets)
+              }
             }
         }
       }
     }
+    .onDeleteCommand { delete(selectedRepros) }
   }
 
   // MARK: Actions
@@ -148,26 +195,90 @@ struct WorkspaceReprosView: View {
       do {
         if let kind, let id {
           let (session, _) = try await controller.startRun(options, workspace: file.id, kind: kind, definitionID: id, actor: .user, runner: runner, origin: .workspace)
-          selected = session.id
+          selection.selectOnly(session.id)
         } else {
           options.title = "\(file.name) recording"
-          selected = try await controller.start(options, origin: .workspace, actor: .user).id
+          selection.selectOnly(try await controller.start(options, origin: .workspace, actor: .user).id)
         }
       } catch let failure as StackControlError { error = failure.message }
       catch { self.error = error.localizedDescription }
     }
   }
 
-  private func delete(_ session: ReproSession) {
+  private func delete(_ sessions: [ReproSession]) {
+    guard !sessions.isEmpty else { return }
+    guard !sessions.contains(where: { $0.status.isActive }) else {
+      error = "Stop active recordings and wait for them to finish saving before deleting the selection."
+      return
+    }
     let alert = NSAlert()
-    alert.messageText = "Delete “\(session.title)”?"
-    let keepsVideo = session.videoPath.map { !$0.hasPrefix(recorder.store.folder(session.id).path) } ?? false
-    alert.informativeText = keepsVideo
-      ? "The video and the .log file next to it stay where they were saved. Cinderdeck's copy of the logs and markers is removed."
-      : "The video, its log file, and markers are removed."
+    alert.messageText = sessions.count == 1 ? "Delete “\(sessions[0].title)”?" : "Delete \(sessions.count) recordings?"
+    let externallySaved = sessions.filter { session in
+      session.videoPath.map { !$0.hasPrefix(recorder.store.folder(session.id).path + "/") } ?? false
+    }.count
+    if externallySaved == sessions.count {
+      alert.informativeText = sessions.count == 1
+        ? "The video and the .log file next to it stay where they were saved. Cinderdeck's copy of the logs and markers is removed."
+        : "The videos and .log files saved outside Cinderdeck stay where they are. Cinderdeck's copies of the logs and markers are removed."
+    } else if externallySaved == 0 {
+      alert.informativeText = sessions.count == 1
+        ? "The video, its log file, and markers are removed."
+        : "The videos, log files, and markers are removed."
+    } else {
+      alert.informativeText = "Videos and .log files saved outside Cinderdeck stay where they are. Videos and log files inside Cinderdeck, plus the stored logs and markers for every selected recording, are removed."
+    }
     alert.addButton(withTitle: "Delete"); alert.addButton(withTitle: "Cancel")
     guard alert.runModal() == .alertFirstButtonReturn else { return }
-    do { try recorder.delete(session.id) } catch { self.error = error.localizedDescription }
+    var failures: [String] = []
+    for session in sessions {
+      do { try recorder.delete(session.id) }
+      catch { failures.append("\(session.title): \(error.localizedDescription)") }
+    }
+    selection.reconcile(visibleIDs: repros.map(\.id))
+    error = failures.isEmpty ? nil : failures.joined(separator: "\n")
+  }
+}
+
+struct WorkspaceReproSelection {
+  private(set) var ids: Set<UUID> = []
+  private(set) var focusedID: UUID?
+  private var anchorID: UUID?
+
+  mutating func selectOnly(_ id: UUID) {
+    ids = [id]
+    focusedID = id
+    anchorID = id
+  }
+
+  mutating func select(_ id: UUID, orderedIDs: [UUID], modifiers: NSEvent.ModifierFlags) {
+    guard orderedIDs.contains(id) else { return }
+    let flags = modifiers.intersection(.deviceIndependentFlagsMask)
+    let toggles = flags.contains(.command) || flags.contains(.control)
+
+    if flags.contains(.shift), let anchorID,
+      let start = orderedIDs.firstIndex(of: anchorID), let end = orderedIDs.firstIndex(of: id)
+    {
+      let range = Set(orderedIDs[min(start, end)...max(start, end)])
+      if toggles { ids.formUnion(range) } else { ids = range }
+      focusedID = id
+    } else if toggles {
+      if ids.contains(id) { ids.remove(id) } else { ids.insert(id) }
+      focusedID = ids.contains(id) ? id : orderedIDs.first(where: { ids.contains($0) })
+      self.anchorID = id
+    } else {
+      selectOnly(id)
+    }
+  }
+
+  mutating func reconcile(visibleIDs: [UUID]) {
+    let visible = Set(visibleIDs)
+    ids.formIntersection(visible)
+    if ids.isEmpty, let first = visibleIDs.first { selectOnly(first); return }
+    if focusedID.map({ ids.contains($0) }) != true {
+      self.focusedID = visibleIDs.first(where: { ids.contains($0) })
+    }
+    if let anchorID, !visible.contains(anchorID) { self.anchorID = focusedID }
+    if visibleIDs.isEmpty { focusedID = nil; anchorID = nil }
   }
 }
 
