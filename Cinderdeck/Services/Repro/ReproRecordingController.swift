@@ -47,6 +47,8 @@ final class ReproRecordingController: ObservableObject {
       throw StackControlError(code: "busy", message: "Another screen recording is in progress. Stop it first.")
     }
     let target = try await resolveTarget(options)
+    // A toolbar recording that just stopped may still be saving its log; this one would get no log.
+    if let previous = repros.stoppingSessionID { _ = await repros.waitUntilSaved(previous) }
     let id = UUID()
     let store = repros.store
     do { try store.prepare(id) } catch { throw StackControlError(code: "failed", message: "Could not create the repro folder: \(error.localizedDescription)") }
@@ -135,10 +137,11 @@ final class ReproRecordingController: ObservableObject {
     autoStop?.cancel(); autoStop = nil
     runWatch = nil
     ReproControlsPanel.shared.showFinalizing()
-    let url = await recorder.stopRecording()
+    _ = await recorder.stopRecording()
+    // Saved even without a video: the log is kept, and its detail says what happened.
     let saved = await repros.waitUntilSaved(id)
     activeID = nil; activeActor = nil; linkedRun = nil
-    guard url != nil, let saved else {
+    guard let saved else {
       ReproControlsPanel.shared.hide()
       throw StackControlError(code: "recording_failed", message: "The recording produced no video. Check Screen Recording permission for Cinderdeck.")
     }
@@ -232,7 +235,9 @@ nonisolated enum ReproFrames {
     let height: Int
   }
 
-  static func extract(video: URL, at seconds: [Double], maxDimension: Int, into folder: URL) async throws -> [Frame] {
+  /// Frames at `seconds`, saved as JPEGs in `folder`. `names` (without extension) replaces
+  /// the default `frame-<ms>ms` file names, one per moment.
+  static func extract(video: URL, at seconds: [Double], maxDimension: Int, into folder: URL, names: [String]? = nil) async throws -> [Frame] {
     let asset = AVURLAsset(url: video)
     let duration = try await asset.load(.duration).seconds
     let generator = AVAssetImageGenerator(asset: asset)
@@ -243,7 +248,7 @@ nonisolated enum ReproFrames {
     generator.requestedTimeToleranceAfter = tolerance
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     var frames: [Frame] = []
-    for value in seconds {
+    for (index, value) in seconds.enumerated() {
       // The very last instant has no frame; step just inside the video.
       let t = min(max(0, value), max(0, (duration.isFinite ? duration : value) - 0.05))
       let (image, _) = try await generator.image(at: CMTime(seconds: t, preferredTimescale: 600))
@@ -253,7 +258,8 @@ nonisolated enum ReproFrames {
       }
       CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: 0.72] as CFDictionary)
       guard CGImageDestinationFinalize(destination) else { throw StackError.message("Could not encode the frame") }
-      let url = folder.appendingPathComponent("frame-\(Int((t * 1000).rounded()))ms.jpg")
+      let name = names.flatMap { index < $0.count ? $0[index] : nil } ?? "frame-\(Int((t * 1000).rounded()))ms"
+      let url = folder.appendingPathComponent(name + ".jpg")
       try (data as Data).write(to: url, options: .atomic)
       frames.append(Frame(url: url, data: data as Data, t: t, width: image.width, height: image.height))
     }
@@ -271,23 +277,27 @@ enum ReproExport {
       .appendingPathComponent("Cinderdeck Repros", isDirectory: true)
   }
 
-  /// Writes the bundle, with frames at the first error and each failure when
+  /// Writes the bundle, with frames at the first error, each failure, and the end when
   /// the video is available. Returns the folder, or the .zip when `zip` is true.
   static func export(_ session: ReproSession, to destination: URL? = nil, zip: Bool = false, includeVideo: Bool = true) async throws -> URL {
     let recorder = ReproRecorder.shared
     let lines = await recorder.lines(for: session.id)
     let store = recorder.store
+    let staging = FileManager.default.temporaryDirectory.appendingPathComponent("cinderdeck-export-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: staging) }
+    var frames: [ReproBundleExporter.FrameFile] = []
     if let video = session.videoURL, FileManager.default.fileExists(atPath: video.path) {
-      var moments = session.markers.filter(\.isFailure).map(\.t)
-      if let first = session.firstErrorLine, let line = lines.first(where: { $0.id == first }) { moments.insert(line.t, at: 0) }
-      let unique = moments.reduce(into: [Double]()) { result, t in if !result.contains(where: { abs($0 - t) < 0.5 }) { result.append(t) } }
-      if !unique.isEmpty {
-        _ = try? await ReproFrames.extract(video: video, at: Array(unique.prefix(8)), maxDimension: 1600, into: store.framesFolder(session.id))
+      let moments = ReproBundleExporter.frameMoments(session, lines: lines)
+      let names = moments.enumerated().map { index, moment in
+        String(format: "%02d-", index + 1) + ReproReport.slug(moment.label, fallback: "frame") + "-" + ReproFormat.timestamp(moment.t).replacingOccurrences(of: ":", with: "m") + "s"
+      }
+      if let extracted = try? await ReproFrames.extract(video: video, at: moments.map(\.t), maxDimension: 1600, into: staging, names: names) {
+        frames = Swift.zip(extracted, moments).map { ReproBundleExporter.FrameFile(url: $0.url, t: $0.t, label: $1.label) }
       }
     }
     let parent = destination ?? defaultDestination
     let result = try await Task.detached {
-      try ReproBundleExporter.export(session, lines: lines, store: store, to: parent, includeVideo: includeVideo)
+      try ReproBundleExporter.export(session, lines: lines, store: store, to: parent, includeVideo: includeVideo, frames: frames)
     }.value
     guard zip else { return result.folder }
     let archive = result.folder.appendingPathExtension("zip")

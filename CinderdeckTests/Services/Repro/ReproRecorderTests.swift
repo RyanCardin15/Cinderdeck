@@ -248,6 +248,221 @@ final class ReproRecorderTests: XCTestCase {
     XCTAssertEqual(saved?.id, id)
   }
 
+  // MARK: Agent speed
+
+  private func agentRequest(_ title: String = "Agent check") -> ReproRequest {
+    ReproRequest(title: title, origin: .agent, actor: StackActor(kind: .agent, name: "Codex"))
+  }
+
+  /// Stops the way an agent does: right after the output it cares about, with no pause.
+  private func stopImmediately(video: Bool = true) async throws -> ReproSession? {
+    let id = try XCTUnwrap(recorder.activeSessionID)
+    events.send(.stopping(Date()))
+    guard video else {
+      events.send(.noVideo)
+      return await recorder.waitUntilSaved(id)
+    }
+    let url = root.appendingPathComponent("recording.mov")
+    try Data("not a real movie".utf8).write(to: url)
+    events.send(.finished(url))
+    return await recorder.waitUntilSaved(id)
+  }
+
+  func testStopRightAfterOutputKeepsTheLastLines() async throws {
+    let trigger = root.appendingPathComponent("go")
+    try await load("""
+    [services.api]
+    cmd = "echo listening; while [ ! -f '\(trigger.path)' ]; do sleep 0.01; done; echo 'Error: payment declined'; sleep 30"
+    ready.log = "listening"
+    """)
+    await supervisor.start(stack: "shop", services: ["api"])
+    try await until { self.supervisor.runtime("shop", "api").phase == .ready }
+    recorder.expect(agentRequest())
+    let start = Date()
+    events.send(.started(start))
+    events.send(.firstFrame(start))
+    try await Task.sleep(nanoseconds: 300_000_000)
+    // The agent triggers the failure and stops as soon as it has happened.
+    FileManager.default.createFile(atPath: trigger.path, contents: nil)
+    try await Task.sleep(nanoseconds: 40_000_000)
+    let stopped = try await stopImmediately()
+    let saved = try XCTUnwrap(stopped)
+    let lines = store.loadLines(saved.id)
+    let error = try XCTUnwrap(lines.first { $0.text == "Error: payment declined" }, "The last output before stop is kept: \(lines.map(\.text))")
+    XCTAssertEqual(saved.errorCount, 1)
+    XCTAssertLessThanOrEqual(error.t, saved.duration + 0.001, "Pinned inside the video")
+    XCTAssertEqual(ReproSummary(session: saved, lines: lines).verdict, .errors)
+  }
+
+  func testLinesAndMarksSentWhileStoppingAreKept() async throws {
+    recorder.expect(agentRequest())
+    let start = Date()
+    events.send(.started(start))
+    events.send(.firstFrame(start))
+    let id = try XCTUnwrap(recorder.activeSessionID)
+    try await Task.sleep(nanoseconds: 200_000_000)
+    // Agents send tool calls in parallel: these arrive after stop began.
+    events.send(.stopping(Date()))
+    XCTAssertNoThrow(try recorder.appendExternal([.init(text: "Uncaught TypeError: price is undefined")], source: "browser"))
+    XCTAssertNoThrow(try recorder.addMarker(label: "Pay succeeds", outcome: .fail, kind: .check, by: "Codex"))
+    let url = root.appendingPathComponent("recording.mov")
+    try Data("not a real movie".utf8).write(to: url)
+    events.send(.finished(url))
+    // …and while it is being saved.
+    XCTAssertNoThrow(try recorder.addMarker(label: "Receipt shown", outcome: .fail, kind: .check, by: "Codex"))
+    let result = await recorder.waitUntilSaved(id)
+    let saved = try XCTUnwrap(result)
+    let lines = store.loadLines(saved.id)
+    XCTAssertTrue(lines.contains { $0.text.contains("price is undefined") }, "\(lines)")
+    XCTAssertEqual(Set(saved.markers.map(\.label)), ["Pay succeeds", "Receipt shown"])
+    XCTAssertEqual(ReproSummary(session: saved, lines: lines).verdict, .failed)
+    let log = try String(contentsOf: store.logURL(saved.id), encoding: .utf8)
+    XCTAssertTrue(log.contains("price is undefined") && log.contains("Receipt shown"), log)
+  }
+
+  func testLinesAndMarksAfterTheStopAmendTheSavedRepro() async throws {
+    do {
+      _ = try await recorder.append([.init(text: "nothing to add to")], source: "browser")
+      XCTFail("Nothing is recording or just stopped")
+    } catch {}
+    recorder.expect(agentRequest())
+    let start = Date().addingTimeInterval(-3)
+    events.send(.started(start))
+    events.send(.firstFrame(start))
+    try recorder.appendExternal([.init(text: "cart loaded")], source: "browser")
+    events.send(.stopping(start.addingTimeInterval(2)))
+    let url = root.appendingPathComponent("recording.mov")
+    try Data("not a real movie".utf8).write(to: url)
+    let id = try XCTUnwrap(recorder.activeSessionID)
+    events.send(.finished(url))
+    _ = await recorder.waitUntilSaved(id)
+
+    // The console was read after the stop: one line with its real time, one without.
+    let added = try await recorder.append([
+      .init(text: "Uncaught TypeError: price is undefined", at: start.addingTimeInterval(1)),
+      .init(text: "[browser:log] unload"),
+    ], source: "browser")
+    XCTAssertEqual(added.repro, id)
+    XCTAssertTrue(added.late)
+    XCTAssertEqual(added.count, 2)
+    let marked = try await recorder.mark(label: "Receipt shown", outcome: .fail, kind: .check, by: "Codex")
+    XCTAssertTrue(marked.late)
+    XCTAssertEqual(marked.marker.t, 2, accuracy: 0.01, "Pinned to the end of the video")
+
+    let saved = try XCTUnwrap(recorder.sessions.first { $0.id == id })
+    XCTAssertEqual(saved.lineCount, 3)
+    XCTAssertEqual(saved.errorCount, 1)
+    let lines = store.loadLines(id)
+    let error = try XCTUnwrap(lines.first { $0.text.contains("price is undefined") })
+    XCTAssertEqual(error.t, 1, accuracy: 0.01, "Placed by its clock time")
+    XCTAssertNil(error.offscreen)
+    XCTAssertEqual(saved.firstErrorLine, error.id)
+    let unload = try XCTUnwrap(lines.first { $0.text.contains("unload") })
+    XCTAssertEqual(unload.t, 2, accuracy: 0.01)
+    XCTAssertEqual(unload.offscreen, true, "Reported after the video ended")
+    XCTAssertEqual(Set(lines.map(\.id)).count, 3, "Ids stay unique")
+    XCTAssertEqual(ReproSummary(session: saved, lines: lines).verdict, .failed)
+    let log = try String(contentsOf: store.logURL(id), encoding: .utf8)
+    XCTAssertTrue(log.contains("[00:01.000") && log.contains("ERROR  Uncaught TypeError: price is undefined"), log)
+    XCTAssertTrue(log.contains("Receipt shown  [FAIL]"), log)
+    let reloaded = await recorder.lines(for: id)
+    XCTAssertEqual(reloaded.count, 3, "The line cache sees the amendment")
+
+    // An explicit id reaches any saved repro.
+    let explicit = try await recorder.append([.init(text: "follow-up")], source: "agent", to: String(id.uuidString.prefix(8)))
+    XCTAssertEqual(explicit.repro, id)
+  }
+
+  func testCaptureThatStopsOnItsOwnIsMarked() async throws {
+    recorder.expect(agentRequest())
+    let start = Date().addingTimeInterval(-2)
+    events.send(.started(start))
+    events.send(.firstFrame(start))
+    // The recorded browser window was closed before the recording stopped.
+    events.send(.interrupted(start.addingTimeInterval(0.2), "The window was closed"))
+    let stopped = try await stopImmediately()
+    let saved = try XCTUnwrap(stopped)
+    let marker = try XCTUnwrap(saved.markers.first { $0.label == "Screen capture stopped" })
+    XCTAssertEqual(marker.detail, "The window was closed. The video holds its last frame until the recording stops.")
+    XCTAssertEqual(marker.t, 0.2, accuracy: 0.01)
+    XCTAssertEqual(ReproSummary(session: saved, lines: []).verdict, .clean, "Information, not a failure")
+  }
+
+  func testStopWithoutVideoKeepsTheLog() async throws {
+    try await load("[tasks.noop]\ncmd = \"true\"\n")
+    recorder.expect(agentRequest())
+    events.send(.started(Date()))
+    try recorder.appendExternal([.init(text: "Error: window was closed")], source: "agent")
+    let stopped = try await stopImmediately(video: false)
+    let saved = try XCTUnwrap(stopped, "The log is kept when there is no video")
+    XCTAssertEqual(saved.status, .failed)
+    XCTAssertNil(saved.videoPath)
+    XCTAssertTrue(saved.detail?.contains("no video") == true)
+    XCTAssertEqual(store.loadLines(saved.id).count, 1)
+    let log = try String(contentsOf: store.logURL(saved.id), encoding: .utf8)
+    XCTAssertTrue(log.contains("Video:      (not saved)") && log.contains("Note:       The recording produced no video"), log)
+
+    // A toolbar recording with nothing captured is still just discarded.
+    events.send(.started(Date()))
+    let quiet = try XCTUnwrap(recorder.activeSessionID)
+    let discarded = try await stopImmediately(video: false)
+    XCTAssertNil(discarded)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: store.folder(quiet).path))
+  }
+
+  func testTimelineIsPlacedFromTheFirstFrameAndTheVideoLength() async throws {
+    recorder.expect(agentRequest())
+    let start = Date().addingTimeInterval(-10)
+    events.send(.started(start))
+    // Output and a mark arrive before the first frame does.
+    try recorder.appendExternal([.init(text: "Error: before the video", at: start.addingTimeInterval(0.3))], source: "app")
+    try recorder.addMarker(label: "Open cart", at: start.addingTimeInterval(1))
+    events.send(.firstFrame(start.addingTimeInterval(0.5)))
+    try recorder.appendExternal([.init(text: "TypeError: in the video", at: start.addingTimeInterval(1.9))], source: "app")
+    let stopped = try await stopRecordingAt(start.addingTimeInterval(2))
+    let saved = try XCTUnwrap(stopped)
+    XCTAssertEqual(saved.duration, 1.5, accuracy: 0.01)
+    let lines = store.loadLines(saved.id)
+    let early = try XCTUnwrap(lines.first { $0.text.contains("before the video") })
+    XCTAssertEqual(early.t, 0)
+    XCTAssertEqual(early.offscreen, true)
+    let late = try XCTUnwrap(lines.first { $0.text.contains("in the video") })
+    XCTAssertEqual(late.t, 1.4, accuracy: 0.01)
+    XCTAssertEqual(saved.markers.first?.t ?? -1, 0.5, accuracy: 0.01)
+    XCTAssertEqual(saved.errorCount, 1, "Output from before the video is context, not an error of the recording")
+    XCTAssertEqual(saved.firstErrorLine, late.id)
+    XCTAssertEqual(saved.clock?.origin, start.addingTimeInterval(0.5))
+  }
+
+  private func stopRecordingAt(_ date: Date) async throws -> ReproSession? {
+    let id = try XCTUnwrap(recorder.activeSessionID)
+    events.send(.stopping(date))
+    let url = root.appendingPathComponent("recording.mov")
+    try Data("not a real movie".utf8).write(to: url)
+    events.send(.finished(url))
+    return await recorder.waitUntilSaved(id)
+  }
+
+  func testVideoSavedWhileItsReproSavesKeepsItsLog() async throws {
+    try await load("[services.api]\ncmd = \"while true; do echo tick; sleep 0.05; done\"\n")
+    await supervisor.start(stack: "shop", services: ["api"])
+    try await until { self.supervisor.runtime("shop", "api").phase == .ready }
+    events.send(.started(Date()))
+    let id = try XCTUnwrap(recorder.activeSessionID)
+    try await Task.sleep(nanoseconds: 400_000_000)
+    events.send(.stopping(Date()))
+    let temporary = root.appendingPathComponent("temp.mov"), saved = root.appendingPathComponent("Saved.mov")
+    try Data("not a real movie".utf8).write(to: temporary)
+    events.send(.finished(temporary))
+    // Quick Access saves the video before the repro has finished saving.
+    try FileManager.default.moveItem(at: temporary, to: saved)
+    NotificationCenter.default.post(name: .captureSavedFromTemp, object: nil, userInfo: ["from": temporary, "to": saved])
+    _ = await recorder.waitUntilSaved(id)
+    try await until { self.recorder.sessions.first?.logFile == self.root.appendingPathComponent("Saved.log").path }
+    XCTAssertEqual(recorder.sessions.first?.videoPath, saved.path)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: root.appendingPathComponent("Saved.log").path))
+  }
+
   func testPeopleWithoutWorkspacesGetPlainVideos() async throws {
     XCTAssertTrue(supervisor.files.isEmpty)
     events.send(.started(Date()))

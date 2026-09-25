@@ -81,6 +81,12 @@ final class ReproAgentAPITests: XCTestCase {
     XCTAssertNil(piped.params["text"], "No text streams standard input")
     XCTAssertEqual(piped.params["source"]?.stringValue, "agent")
     XCTAssertEqual(try request(["log"]).method, "repro.logs", "log still reads output")
+    // After a stop, lines and marks can name the saved repro.
+    let late = try request(["append", "Uncaught Error", "--source", "browser", "--repro", "3f2a"])
+    XCTAssertEqual(late.params["repro"]?.stringValue, "3f2a")
+    let mark = try request(["mark", "Receipt shown", "--fail", "--repro", "3f2a"])
+    XCTAssertEqual(mark.params["repro"]?.stringValue, "3f2a")
+    XCTAssertEqual(mark.params["outcome"]?.stringValue, "fail")
   }
 
   func testRejectsMistakes() {

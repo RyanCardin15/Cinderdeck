@@ -29,6 +29,8 @@ actor LogBuffer {
   private var version = 0
   /// Total lines ever appended; unlike `version`, clear() does not move it.
   private var appended = 0
+  /// `appended` at the last clear(), so followers can tell cleared lines from evicted ones.
+  private var clearedAt = 0
   private var truncatedPartial = false
   private let readinessPattern: String?
   private let readinessRegex: NSRegularExpression?
@@ -129,12 +131,14 @@ actor LogBuffer {
   func snapshot() -> [StackLogLine] { lines }
   func revision() -> Int { version }
   /// Lines appended after `position`, a value this method returned earlier (0 at first).
-  /// Followers use it to copy only new output instead of the whole ring.
-  func lines(after position: Int) -> (lines: [StackLogLine], next: Int) {
+  /// Followers use it to copy only new output instead of the whole ring. `dropped` counts
+  /// lines appended since `position` that the ring evicted before this call.
+  func lines(after position: Int) -> (lines: [StackLogLine], next: Int, dropped: Int) {
     let fresh = min(lines.count, max(0, appended - position))
-    return (fresh == 0 ? [] : Array(lines.suffix(fresh)), appended)
+    let dropped = position > 0 && clearedAt <= position ? max(0, appended - position - fresh) : 0
+    return (fresh == 0 ? [] : Array(lines.suffix(fresh)), appended, dropped)
   }
-  func clear() { lines.removeAll(); partial.removeAll(); version += 1 }
+  func clear() { lines.removeAll(); partial.removeAll(); version += 1; clearedAt = appended }
   func matches(_ pattern: String) -> Bool {
     if pattern == readinessPattern { return reachedReadiness }
     guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }

@@ -105,12 +105,18 @@ extension StackControlService {
       }
       guard !entries.isEmpty else { throw StackControlError.invalid("Pass text or lines") }
       let source = params["source"]?.stringValue ?? "agent"
-      guard recorder.isCapturing else { throw StackControlError.notFound("No repro is recording. Start one with start_repro_recording.") }
-      let added: Int
-      do { added = try recorder.appendExternal(entries, source: source) }
-      catch { throw StackControlError.invalid(error.localizedDescription) }
-      return .object(["added": .number(Double(added)), "source": .string(source), "repro": .string(recorder.activeSessionID?.uuidString ?? ""),
-        "t": .number((recorder.now * 1000).rounded() / 1000)])
+      let added: ReproRecorder.Added
+      do { added = try await recorder.append(entries, source: source, to: params["repro"]?.stringValue) }
+      catch let error as StackControlError { throw error }
+      catch { throw Self.reproWriteError(error) }
+      var result: [String: JSONValue] = ["added": .number(Double(added.count)), "source": .string(source), "repro": .string(added.repro.uuidString)]
+      if added.late {
+        result["late"] = .bool(true)
+        result["note"] = .string("The recording had already stopped, so these lines were added to its saved log. Lines without at are placed at the end of the video.")
+      } else {
+        result["t"] = .number((recorder.now * 1000).rounded() / 1000)
+      }
+      return .object(result)
 
     case "repro.stop":
       if controller.ownsRecording {
@@ -121,7 +127,7 @@ extension StackControlService {
         throw StackControlError(code: "busy", message: "A person is recording with the toolbar. They stop it; the repro is saved automatically.")
       }
       // Idempotent: a repro that already stopped (for example after its run finished) is returned as is.
-      let session = try recorder.resolve(params["repro"]?.stringValue)
+      let session = await settled(try recorder.resolve(params["repro"]?.stringValue))
       return .object(reproPayload(session, lines: await recorder.lines(for: session.id)))
 
     case "repro.cancel":
@@ -147,20 +153,23 @@ extension StackControlService {
 
     case "repro.mark":
       guard let label = params["label"]?.stringValue else { throw StackControlError.invalid("Pass label") }
-      if let query = params["repro"]?.stringValue, (try? recorder.resolve(query))?.id != recorder.activeSessionID {
-        throw StackControlError.invalid("Markers can only be added while a repro is recording")
-      }
       var outcome: ReproMarker.Outcome?
       if let raw = params["outcome"]?.stringValue?.lowercased(), !raw.isEmpty {
         guard let value = ReproMarker.Outcome(rawValue: raw) else { throw StackControlError.invalid("outcome must be pass, fail, or info") }
         outcome = value
       }
-      let marker: ReproMarker
+      let marked: (marker: ReproMarker, repro: UUID, late: Bool)
       do {
-        marker = try recorder.addMarker(label: label, detail: params["detail"]?.stringValue, outcome: outcome,
-          kind: outcome == nil || outcome == .info ? .note : .check, by: actor.label)
-      } catch { throw StackControlError.notFound("No repro is recording. Start one with start_repro_recording.") }
-      return .object(["marker": markerValue(marker), "repro": .string(recorder.activeSessionID?.uuidString ?? "")])
+        marked = try await recorder.mark(label: label, detail: params["detail"]?.stringValue, outcome: outcome,
+          kind: outcome == nil || outcome == .info ? .note : .check, by: actor.label, to: params["repro"]?.stringValue)
+      } catch let error as StackControlError { throw error }
+      catch { throw Self.reproWriteError(error) }
+      var result: [String: JSONValue] = ["marker": markerValue(marked.marker), "repro": .string(marked.repro.uuidString)]
+      if marked.late {
+        result["late"] = .bool(true)
+        result["note"] = .string("The recording had already stopped, so this marker was added at the end of the video. Mark before stopping.")
+      }
+      return .object(result)
 
     case "repro.list":
       let workspace = try params["workspace"]?.stringValue.map { try workspaceFile(.object(["workspace": .string($0)])).id }
@@ -171,7 +180,7 @@ extension StackControlService {
       return .array(filtered.prefix(limit).map { .object(reproPayload($0, lines: [], compact: true)) })
 
     case "repro.get":
-      let session = try recorder.resolve(params["repro"]?.stringValue)
+      let session = await settled(try recorder.resolve(params["repro"]?.stringValue))
       var result = reproPayload(session, lines: await recorder.lines(for: session.id))
       result["workspaces"] = try JSONValue(encoding: session.workspaces)
       result["sources"] = .array(session.sources.map { source in
@@ -181,7 +190,7 @@ extension StackControlService {
       return .object(result)
 
     case "repro.logs":
-      let session = try recorder.resolve(params["repro"]?.stringValue)
+      let session = await settled(try recorder.resolve(params["repro"]?.stringValue))
       let lines = await recorder.lines(for: session.id)
       var query = ReproLogQuery()
       if let around = try time(params["around"], session: session, lines: lines) {
@@ -207,9 +216,10 @@ extension StackControlService {
       ])
 
     case "repro.frame":
-      let session = try recorder.resolve(params["repro"]?.stringValue)
+      let session = await settled(try recorder.resolve(params["repro"]?.stringValue))
       guard let video = session.videoURL, FileManager.default.fileExists(atPath: video.path) else {
-        throw StackControlError.notFound(session.status.isActive ? "The video is available after the repro stops." : "This repro's video was moved or deleted.")
+        throw StackControlError.notFound(session.status.isActive ? "The video is available after the repro stops."
+          : session.videoPath == nil ? (session.detail ?? "This repro has no video.") : "This repro's video was moved or deleted.")
       }
       let lines = await recorder.lines(for: session.id)
       var moments: [Double] = []
@@ -236,7 +246,8 @@ extension StackControlService {
       return .object([
         "repro": .string(session.id.uuidString),
         "frames": .array(frames.map { frame in
-          let nearby = ReproLogQuery(from: max(0, frame.t - span), to: frame.t + min(span, 1), limit: 40).filter(lines)
+          // When output is dense, keep the lines nearest the frame rather than the earliest.
+          let nearby = ReproLogQuery(from: max(0, frame.t - span), to: frame.t + min(span, 1), limit: 40, anchor: frame.t).filter(lines)
           var object: [String: JSONValue] = [
             "t": .number(frame.t), "time": .string(ReproFormat.timestamp(frame.t)), "path": .string(frame.url.path),
             "width": .number(Double(frame.width)), "height": .number(Double(frame.height)), "mimeType": .string("image/jpeg"),
@@ -255,7 +266,7 @@ extension StackControlService {
       ])
 
     case "repro.export":
-      let session = try recorder.resolve(params["repro"]?.stringValue)
+      let session = await settled(try recorder.resolve(params["repro"]?.stringValue))
       guard !session.status.isActive else { throw StackControlError(code: "busy", message: "Stop the repro before exporting it") }
       let destination = params["destination"]?.stringValue.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) }
       let url = try await ReproExport.export(session, to: destination, zip: params["zip"]?.boolValue ?? false,
@@ -289,7 +300,7 @@ extension StackControlService {
       return .object(reproPayload(saved, lines: await recorder.lines(for: saved.id)))
 
     case "repro.dump":
-      let session = try recorder.resolve(params["repro"]?.stringValue)
+      let session = await settled(try recorder.resolve(params["repro"]?.stringValue))
       guard !session.status.isActive else { throw StackControlError(code: "busy", message: "The log file is written when the recording stops") }
       guard let url = await recorder.logFileURL(for: session) else { throw StackControlError.notFound("This recording has no saved output") }
       let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
@@ -328,6 +339,22 @@ extension StackControlService {
   }
 
   // MARK: Values
+
+  /// A repro that stopped moments ago is still placing its lines on the video; read it once saved.
+  private func settled(_ session: ReproSession) async -> ReproSession {
+    let recorder = ReproRecorder.shared
+    guard recorder.activeSessionID != session.id, recorder.isRecordingOrSaving(session.id) else { return session }
+    return await recorder.waitUntilSaved(session.id) ?? session
+  }
+
+  /// Errors from adding lines or marks, with the next step for the common one.
+  private static func reproWriteError(_ error: Error) -> StackControlError {
+    let message = error.localizedDescription
+    if message == "No repro is recording" {
+      return .notFound("No repro is recording, and none stopped in the last \(Int(ReproRecorder.lateWindow / 60)) minutes. Start one with start_repro_recording, or pass repro=<id> to add to a saved one.")
+    }
+    return .invalid(message)
+  }
 
   /// Seconds, "mm:ss.sss", "first_error", "last_error", "end", or "marker:<label or id>".
   private func time(_ value: JSONValue?, session: ReproSession, lines: [ReproLogLine]) throws -> Double? {

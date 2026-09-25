@@ -13,7 +13,7 @@ nonisolated enum ReproCLI {
 
   static let valued: Set<String> = ["title", "workspace", "window", "display", "max", "note", "detail", "outcome", "from", "to",
     "around", "span", "source", "level", "grep", "lines", "n", "at", "marker", "size", "dest", "out", "timeout", "limit",
-    "as", "session", "window-id"]
+    "as", "session", "window-id", "repro"]
   static let booleans: Set<String> = ["audio", "wait", "json", "zip", "no-video", "pass", "fail", "force", "first-error", "help",
     "task", "workflow", "path", "no-logs"]
 
@@ -92,7 +92,7 @@ nonisolated enum ReproCLI {
       try noExtra(1, "append \"<text>\" [--source NAME] [--level error]   (or pipe lines: … | cinderdeck repro append --source NAME)")
       if let first = args.first, first != "-" { params["text"] = .string(first) }
       params["source"] = .string(options["source"] ?? "agent")
-      take("level")
+      take("level"); take("repro")
       return ("repro.log", params, 30)
     case "stop":
       try noExtra(1, "stop [repro]"); repro(); return ("repro.stop", params, 240)
@@ -102,7 +102,7 @@ nonisolated enum ReproCLI {
       try noExtra(0, "status"); return ("repro.status", params, 30)
     case "mark", "check", "step":
       guard args.count == 1 else { throw StackControlError.invalid("Use: cinderdeck repro mark \"<label>\" [--pass|--fail] [--detail TEXT]") }
-      params["label"] = .string(args[0]); take("detail")
+      params["label"] = .string(args[0]); take("detail"); take("repro")
       if options.has("pass") { params["outcome"] = .string("pass") }
       if options.has("fail") { params["outcome"] = .string("fail") }
       take("outcome")
@@ -237,7 +237,9 @@ nonisolated enum ReproCLI {
       inbox.lock.lock(); inbox.finished = true; inbox.lock.unlock()
     }
     var total = 0
-    while true {
+    var params = params
+    var stopped = false
+    while !stopped {
       inbox.lock.lock()
       let pending = inbox.lines, finished = inbox.finished
       inbox.lines.removeAll(keepingCapacity: true)
@@ -245,13 +247,21 @@ nonisolated enum ReproCLI {
       for start in stride(from: 0, to: pending.count, by: ReproRecorder.externalBatchLimit) {
         var request = params
         request["lines"] = .array(Array(pending[start..<min(start + ReproRecorder.externalBatchLimit, pending.count)]))
-        total += try connection.call("repro.log", request, timeout: 30)["added"]?.intValue ?? 0
+        let result = try connection.call("repro.log", request, timeout: 30)
+        total += result["added"]?.intValue ?? 0
+        // Stay with this recording, and stop once it has: lines read up to then are still
+        // added to its saved log with the time they were read.
+        if params["repro"] == nil, let id = result["repro"]?.stringValue, !id.isEmpty { params["repro"] = .string(id) }
+        if result["late"]?.boolValue == true { stopped = true }
       }
       if finished { break }
-      Thread.sleep(forTimeInterval: 0.2)
+      if !stopped { Thread.sleep(forTimeInterval: 0.2) }
     }
-    if options.json { print(JSONValue.object(["added": .number(Double(total))]).prettyString()) }
-    else { FileHandle.standardError.write(Data("Added \(total) line\(total == 1 ? "" : "s")\n".utf8)) }
+    if options.json { print(JSONValue.object(["added": .number(Double(total)), "stopped": .bool(stopped)]).prettyString()) }
+    else {
+      let note = stopped ? "; the recording stopped, so later input was not read" : ""
+      FileHandle.standardError.write(Data("Added \(total) line\(total == 1 ? "" : "s")\(note)\n".utf8))
+    }
     return 0
   }
 
@@ -294,7 +304,8 @@ nonisolated enum ReproCLI {
     run <workspace> <task> [--workflow]    Record while a task (or workflow) runs; stops after it ends
     mark "<label>" [--pass|--fail]         Add a step marker or a check result at this moment
     append "<text>" [--source NAME]        Add your own output (e.g. a browser console) to the log; pipe
-           [--level error]                   lines on stdin to stream them until input ends
+           [--level error] [--repro ID]      lines on stdin to stream them until input ends or the
+                                             recording stops. Right after a stop, lines go to the saved log
     stop [repro]                           Stop and save; prints verdict, errors, and markers
     cancel                                 Stop and discard the recording
     status                                 What is recording now

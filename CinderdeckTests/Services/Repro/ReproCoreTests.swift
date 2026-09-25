@@ -340,4 +340,110 @@ final class ReproCoreTests: XCTestCase {
     XCTAssertFalse(store.hasLines(repro.id))
     XCTAssertTrue(store.loadSessions().isEmpty)
   }
+
+  func testExportBundleHoldsOnlyItsFramesAndBundleRelativePaths() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("repro-tests-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = ReproStore(directory: root.appendingPathComponent("library"))
+    let lines = [line(1, 1, "shop/api", "listening"), line(2, 4.25, "shop/api", "TypeError: total is undefined"),
+      line(3, 0, "shop/web", "compiling", offscreen: true)]
+    var repro = session(lines: lines, markers: [ReproMarker(t: 6, at: Date(), kind: .check, label: "Pay | succeeds", outcome: .fail)])
+    repro.logFile = "/Users/someone/Movies/Screen Recording.log"
+    try store.save(repro)
+    // A frame an agent looked at earlier stays in the library, not in the bundle.
+    try FileManager.default.createDirectory(at: store.framesFolder(repro.id), withIntermediateDirectories: true)
+    try Data([0xFF]).write(to: store.framesFolder(repro.id).appendingPathComponent("frame-1000ms.jpg"))
+
+    let moments = ReproBundleExporter.frameMoments(repro, lines: lines)
+    XCTAssertEqual(moments.map(\.label), ["first error", "fail Pay | succeeds", "end"])
+    XCTAssertEqual(moments.map(\.t), [4.25, 6, 30])
+
+    let staged = root.appendingPathComponent("staged")
+    try FileManager.default.createDirectory(at: staged, withIntermediateDirectories: true)
+    let frames = try moments.enumerated().map { index, moment -> ReproBundleExporter.FrameFile in
+      let url = staged.appendingPathComponent("0\(index + 1)-frame.jpg")
+      try Data([0xFF, 0xD8]).write(to: url)
+      return ReproBundleExporter.FrameFile(url: url, t: moment.t, label: moment.label)
+    }
+    let exported = try ReproBundleExporter.export(repro, lines: lines, store: store, to: root.appendingPathComponent("out"), frames: frames)
+    let files = try FileManager.default.subpathsOfDirectory(atPath: exported.folder.path).sorted()
+    XCTAssertEqual(files.filter { $0.hasPrefix("frames/") }, ["frames/01-frame.jpg", "frames/02-frame.jpg", "frames/03-frame.jpg"])
+
+    let readme = try String(contentsOf: exported.readme, encoding: .utf8)
+    XCTAssertTrue(readme.contains("## Frames"), readme)
+    XCTAssertTrue(readme.contains("| 00:04.250 | first error | [`frames/01-frame.jpg`](frames/01-frame.jpg) |"), readme)
+    XCTAssertTrue(readme.contains("fail Pay \\| succeeds"), readme)
+
+    let manifest = try String(contentsOf: exported.folder.appendingPathComponent("repro.json"), encoding: .utf8)
+    XCTAssertFalse(manifest.contains("/Users/someone"), "No paths from the recording machine")
+    XCTAssertTrue(manifest.contains("\"logFile\" : \"recording.log\""), manifest)
+
+    let api = try String(contentsOf: exported.folder.appendingPathComponent("logs/api.log"), encoding: .utf8)
+    XCTAssertTrue(api.hasPrefix("api · 2 lines · Checkout fails\n"), api)
+    XCTAssertTrue(api.contains("[00:04.250  ") && api.contains("ERROR  TypeError: total is undefined"), api)
+    let web = try String(contentsOf: exported.folder.appendingPathComponent("logs/web.log"), encoding: .utf8)
+    XCTAssertTrue(web.contains("] ~ compiling"), "Offscreen lines keep their mark: \(web)")
+  }
+
+  func testLogBufferReportsLinesEvictedBetweenReads() async {
+    let buffer = LogBuffer(service: "api", capacity: 5)
+    for index in 0..<3 { await buffer.append("line \(index)") }
+    let first = await buffer.lines(after: 0)
+    XCTAssertEqual(first.lines.count, 3)
+    XCTAssertEqual(first.dropped, 0)
+    for index in 3..<13 { await buffer.append("line \(index)") }
+    let second = await buffer.lines(after: first.next)
+    XCTAssertEqual(second.lines.map(\.text), (8..<13).map { "line \($0)" })
+    XCTAssertEqual(second.dropped, 5, "Five lines were evicted before this read")
+    await buffer.clear()
+    await buffer.append("after clear")
+    let third = await buffer.lines(after: second.next)
+    XCTAssertEqual(third.lines.map(\.text), ["after clear"])
+    XCTAssertEqual(third.dropped, 0, "Clearing is not dropping")
+  }
+
+  func testLogFileNotesDroppedLinesDetailsAndLateOutput() {
+    var repro = session(lines: [line(1, 30, "shop/api", "late", offscreen: true)])
+    repro.droppedLines = 1200
+    repro.detail = "The recording produced no video, so only its log was saved."
+    let log = ReproReport.logFile(repro, lines: [line(1, 30, "shop/api", "late", offscreen: true)], videoName: nil)
+    XCTAssertTrue(log.contains("Note:       1200 lines were printed faster than Cinderdeck could read them and are missing."), log)
+    XCTAssertTrue(log.contains("Note:       The recording produced no video"), log)
+    XCTAssertTrue(log.contains("or reported after\n    it stopped") || log.contains("reported after"), log)
+  }
+
+  func testClockPinsMomentsAfterTheVideoToItsLastFrame() throws {
+    let start = Date(timeIntervalSince1970: 1_000)
+    var clock = ReproClock(start: start)
+    clock.firstFrame(at: start)
+    clock.stop(at: start.addingTimeInterval(10))
+    XCTAssertEqual(clock.position(at: start.addingTimeInterval(5), duration: 9.97).t, 5)
+    let edge = clock.position(at: start.addingTimeInterval(10), duration: 9.97)
+    XCTAssertEqual(edge.t, 9.97)
+    XCTAssertTrue(edge.visible, "A frame of difference is still on screen")
+    let after = clock.position(at: start.addingTimeInterval(11), duration: 9.97)
+    XCTAssertEqual(after.t, 9.97)
+    XCTAssertFalse(after.visible)
+    let decoded = try StackControlCoding.decoder().decode(ReproClock.self, from: StackControlCoding.encoder().encode(clock))
+    XCTAssertEqual(decoded, clock)
+  }
+
+  func testLimitedQueriesAroundAMomentKeepThatMoment() {
+    // 1,000 lines in ten seconds, with the error in the middle.
+    let lines = (0..<1000).map { index in
+      line(index + 1, Double(index) / 100, "shop/api", index == 500 ? "TypeError: total is undefined" : "tick \(index)")
+    }
+    var query = ReproLogQuery.around(5, window: 5)
+    query.limit = 300
+    let around = query.filter(lines)
+    XCTAssertEqual(around.count, 300)
+    XCTAssertTrue(around.contains { $0.text.hasPrefix("TypeError") }, "The moment asked about is kept")
+    XCTAssertEqual(around.first?.t ?? 0, 3.51, accuracy: 0.001)
+    XCTAssertEqual(around.last?.t ?? 0, 6.5, accuracy: 0.001)
+    let range = ReproLogQuery(from: 0, to: 10, limit: 300).filter(lines)
+    XCTAssertEqual(range.last?.t ?? 0, 2.99, accuracy: 0.001, "A plain range keeps its earliest lines")
+    let edge = ReproLogQuery(from: 9, to: 10, limit: 50, anchor: 10).filter(lines)
+    XCTAssertEqual(edge.count, 50)
+    XCTAssertEqual(edge.last?.t ?? 0, 9.99, accuracy: 0.001)
+  }
 }

@@ -34,6 +34,8 @@ final class RecordingSession: @unchecked Sendable {
   private var _sessionStarted = false
   private var _isCapturing = false
   private var _firstTimestamp: CMTime?  // Track first video timestamp for timeline alignment
+  /// Presentation time of the last video frame written, after the pause offset.
+  private var _lastVideoTimestamp: CMTime?
   private var _pauseOffsetAccumulator: CMTime = .zero
   private var _onFirstVideoFrame: (() -> Void)?
   private var _videoFramesReceived = 0
@@ -88,6 +90,9 @@ final class RecordingSession: @unchecked Sendable {
     get { lock.withLock { _isCapturing } }
     set { lock.withLock { _isCapturing = newValue } }
   }
+
+  /// Presentation time of the first video frame (host clock), once it has arrived.
+  var firstVideoTimestamp: CMTime? { lock.withLock { _firstTimestamp } }
 
   func setOnFirstVideoFrame(_ callback: (() -> Void)?) {
     lock.withLock {
@@ -264,7 +269,10 @@ final class RecordingSession: @unchecked Sendable {
           )
         }
       } else {
-        lock.withLock { _videoFramesAppended += 1 }
+        lock.withLock {
+          _videoFramesAppended += 1
+          _lastVideoTimestamp = adjustedTimestamp
+        }
       }
     } else {
       lock.withLock { _videoFramesDroppedBackpressure += 1 }
@@ -379,9 +387,15 @@ final class RecordingSession: @unchecked Sendable {
     }
   }
   
-  /// Finish writing asynchronously
-  func finishWriting() async {
-    let writer = lock.withLock { _assetWriter }
+  /// Finish writing asynchronously.
+  ///
+  /// Screen capture delivers frames only when something on screen changes, so a video
+  /// whose screen stayed still at the end would stop at its last change. `end` (host
+  /// time, before the pause offset) holds that last frame until the moment recording
+  /// stopped, so the video is as long as the recording. `maximumDuration` bounds the
+  /// extension against clock mix-ups.
+  func finishWriting(endingAt end: CMTime? = nil, maximumDuration: TimeInterval? = nil) async {
+    let (writer, first, last, offset) = lock.withLock { (_assetWriter, _firstTimestamp, _lastVideoTimestamp, _pauseOffsetAccumulator) }
     guard let writer = writer else {
       DiagnosticLogger.shared.log(.warning, .recording, "Recording finish requested without asset writer")
       return
@@ -392,6 +406,17 @@ final class RecordingSession: @unchecked Sendable {
     ])
 
     if writer.status == .writing {
+      if let end, end.isNumeric, let first, let last {
+        let adjustedEnd = offset.isNumeric && offset > .zero ? CMTimeSubtract(end, offset) : end
+        let length = CMTimeSubtract(adjustedEnd, first).seconds
+        if CMTimeCompare(adjustedEnd, last) > 0, maximumDuration.map({ length <= $0 + 1 }) ?? true {
+          writer.endSession(atSourceTime: adjustedEnd)
+          DiagnosticLogger.shared.log(.debug, .recording, "Recording writer session end extended", context: [
+            "heldLastFrameSeconds": String(format: "%.3f", CMTimeSubtract(adjustedEnd, last).seconds),
+            "durationSeconds": String(format: "%.3f", length),
+          ])
+        }
+      }
       await writer.finishWriting()
       if let error = writer.error {
         logWriterIssue("Recording writer finished with error", writer: writer)
@@ -416,6 +441,7 @@ final class RecordingSession: @unchecked Sendable {
       _sessionStarted = false
       _isCapturing = false
       _firstTimestamp = nil
+      _lastVideoTimestamp = nil
       _pauseOffsetAccumulator = .zero
       _onFirstVideoFrame = nil
       _videoFramesReceived = 0

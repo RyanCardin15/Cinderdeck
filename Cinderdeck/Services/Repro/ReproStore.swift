@@ -62,6 +62,19 @@ nonisolated struct ReproStore: Sendable {
     return lines.sorted { $0.t == $1.t ? $0.id < $1.id : $0.t < $1.t }
   }
 
+  /// Replaces every stored line, for example after they were placed with the final clock.
+  func rewriteLines(_ lines: [ReproLogLine], id: UUID) throws {
+    let encoder = StackControlCoding.encoder()
+    var data = Data()
+    for line in lines {
+      data.append(try encoder.encode(line))
+      data.append(10)
+    }
+    let url = linesURL(id)
+    try data.write(to: url, options: .atomic)
+    try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+  }
+
   /// Whether any output was written for this repro.
   func hasLines(_ id: UUID) -> Bool {
     ((try? FileManager.default.attributesOfItem(atPath: linesURL(id).path)[.size] as? Int) ?? 0) > 0
@@ -145,6 +158,26 @@ nonisolated enum ReproBundleExporter {
     let video: URL?
   }
 
+  /// A still from the video, already written, to include under `frames/`.
+  struct FrameFile: Sendable {
+    let url: URL
+    let t: Double
+    let label: String
+  }
+
+  /// The moments worth a frame in a bundle: the first error, each failure, and the end.
+  static func frameMoments(_ session: ReproSession, lines: [ReproLogLine]) -> [(t: Double, label: String)] {
+    var moments: [(t: Double, label: String)] = []
+    if let first = session.firstErrorLine, let line = lines.first(where: { $0.id == first }) { moments.append((line.t, "first error")) }
+    for marker in session.markers where marker.isFailure { moments.append((marker.t, "fail " + marker.label)) }
+    moments.sort { $0.t < $1.t }
+    var unique: [(t: Double, label: String)] = []
+    for moment in moments where !unique.contains(where: { abs($0.t - moment.t) < 0.5 }) { unique.append(moment) }
+    unique = Array(unique.prefix(8))
+    if session.duration > 0, !unique.contains(where: { abs($0.t - session.duration) < 0.5 }) { unique.append((session.duration, "end")) }
+    return unique
+  }
+
   static func folderName(for session: ReproSession) -> String {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -153,7 +186,7 @@ nonisolated enum ReproBundleExporter {
   }
 
   static func export(_ session: ReproSession, lines: [ReproLogLine], store: ReproStore, to parent: URL,
-    includeVideo: Bool = true) throws -> Result {
+    includeVideo: Bool = true, frames: [FrameFile] = []) throws -> Result {
     let manager = FileManager.default
     try manager.createDirectory(at: parent, withIntermediateDirectories: true)
     var folder = parent.appendingPathComponent(folderName(for: session), isDirectory: true)
@@ -173,32 +206,51 @@ nonisolated enum ReproBundleExporter {
       videoURL = destination
     }
 
+    var frameFiles: [(file: String, t: Double, label: String)] = []
+    if !frames.isEmpty {
+      let framesFolder = folder.appendingPathComponent("frames", isDirectory: true)
+      try manager.createDirectory(at: framesFolder, withIntermediateDirectories: true)
+      for frame in frames where manager.fileExists(atPath: frame.url.path) {
+        try manager.copyItem(at: frame.url, to: framesFolder.appendingPathComponent(frame.url.lastPathComponent))
+        frameFiles.append(("frames/" + frame.url.lastPathComponent, frame.t, frame.label))
+      }
+    }
+
     let readme = folder.appendingPathComponent("README.md")
-    try ReproReport.markdown(session, lines: lines, videoFile: videoName, logFile: "recording.log").write(to: readme, atomically: true, encoding: .utf8)
+    var markdown = ReproReport.markdown(session, lines: lines, videoFile: videoName, logFile: "recording.log")
+    if !frameFiles.isEmpty {
+      markdown += "\n## Frames\n\n| Time | Moment | File |\n| --- | --- | --- |\n"
+      for frame in frameFiles {
+        markdown += "| \(ReproFormat.timestamp(frame.t)) | \(frame.label.replacingOccurrences(of: "|", with: "\\|")) | [`\(frame.file)`](\(frame.file)) |\n"
+      }
+    }
+    try markdown.write(to: readme, atomically: true, encoding: .utf8)
     try ReproReport.logFile(session, lines: lines, videoName: videoName ?? session.videoURL?.lastPathComponent)
       .write(to: folder.appendingPathComponent("recording.log"), atomically: true, encoding: .utf8)
 
     let logs = folder.appendingPathComponent("logs", isDirectory: true)
     try manager.createDirectory(at: logs, withIntermediateDirectories: true)
+    let labels = ReproReport.sourceLabels(session)
     var usedNames = Set<String>()
     for source in session.sources {
-      var name = ReproReport.slug(session.workspaces.count > 1 ? "\(source.workspace)-\(source.name)" : source.name, fallback: "output")
+      var name = ReproReport.slug(labels[source.id] ?? source.name, fallback: "output")
       while !usedNames.insert(name).inserted { name += "-2" }
-      let text = lines.filter { $0.source == source.id }.map { ReproReport.logLine($0, session: session) }.joined(separator: "\n")
-      try (text + "\n").write(to: logs.appendingPathComponent(name + ".log"), atomically: true, encoding: .utf8)
+      try ReproReport.sourceLog(session, lines: lines, source: source.id)
+        .write(to: logs.appendingPathComponent(name + ".log"), atomically: true, encoding: .utf8)
     }
 
     let encoder = StackControlCoding.encoder(pretty: true)
     var manifest = session
+    // Paths inside the bundle, not on the machine that recorded it.
     manifest.videoBookmark = nil
     manifest.videoPath = videoName
+    manifest.logFile = "recording.log"
     try encoder.encode(manifest).write(to: folder.appendingPathComponent("repro.json"))
     try encoder.encode(ReproSummary(session: session, lines: lines)).write(to: folder.appendingPathComponent("summary.json"))
 
-    for (name, subfolder) in [("git", store.gitFolder(session.id)), ("frames", store.framesFolder(session.id))] {
-      if manager.fileExists(atPath: subfolder.path), let items = try? manager.contentsOfDirectory(atPath: subfolder.path), !items.isEmpty {
-        try manager.copyItem(at: subfolder, to: folder.appendingPathComponent(name, isDirectory: true))
-      }
+    let git = store.gitFolder(session.id)
+    if let items = try? manager.contentsOfDirectory(atPath: git.path), !items.isEmpty {
+      try manager.copyItem(at: git, to: folder.appendingPathComponent("git", isDirectory: true))
     }
     return Result(folder: folder, readme: readme, video: videoURL)
   }

@@ -567,8 +567,13 @@ enum RecordingLifecycleEvent {
   case firstFrame(Date)
   case paused(Date)
   case resumed(Date)
+  /// Capture stopped on its own, for example because the recorded window closed. The
+  /// recording continues until it is stopped; the video holds its last frame.
+  case interrupted(Date, String)
   case stopping(Date)
   case finished(URL)
+  /// Stopping produced no video file, for example when no frame arrived.
+  case noVideo
   case cancelled
 }
 
@@ -647,6 +652,8 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
   private var startTime: Date?
   private var pausedDuration: TimeInterval = 0
   private var pauseStartTime: Date?
+  /// Host time the current pause began, for ending the video there if recording stops while paused.
+  private var pauseStartHostTime: CMTime?
 
   // MARK: - Configuration
 
@@ -1040,8 +1047,11 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
     // This ensures timestamp synchronization with SCStream
 
     session.isCapturing = true
-    session.setOnFirstVideoFrame { [weak self] in
-      let firstFrameAt = Date()
+    session.setOnFirstVideoFrame { [weak self, session] in
+      // The video starts at the frame's capture time, slightly before this callback runs.
+      let now = CMClockGetTime(CMClockGetHostTimeClock())
+      let lag = session.firstVideoTimestamp.map { CMTimeSubtract(now, $0).seconds } ?? 0
+      let firstFrameAt = Date().addingTimeInterval(-(lag.isFinite ? min(max(lag, 0), 1) : 0))
       Task { @MainActor [weak self] in
         self?.mouseTracker?.start()
         self?.lifecycle.send(.firstFrame(firstFrameAt))
@@ -1093,6 +1103,7 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
     mouseTracker?.pause()
     audioLevelMeter.freeze()
     pauseStartTime = Date()
+    pauseStartHostTime = CMClockGetTime(CMClockGetHostTimeClock())
     state = .paused
     lifecycle.send(.paused(pauseStartTime ?? Date()))
     DiagnosticLogger.shared.log(.info, .recording, "Recording paused")
@@ -1106,6 +1117,7 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
     }
     pausedDuration += Date().timeIntervalSince(pauseStart)
     pauseStartTime = nil
+    pauseStartHostTime = nil
 
     // Set accumulated pause offset in CoreMedia time before resuming capture
     let offset = CMTime(seconds: pausedDuration, preferredTimescale: 1_000_000)
@@ -1198,6 +1210,9 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
 
     session.isCapturing = false
     session.setOnFirstVideoFrame(nil)
+    // The video ends now, or where it was paused, even if the screen stopped changing earlier.
+    let videoEnd = state == .paused ? pauseStartHostTime : CMClockGetTime(CMClockGetHostTimeClock())
+    let recordedSeconds = startTime.map { max(0, (pauseStartTime ?? Date()).timeIntervalSince($0) - pausedDuration) }
 
     state = .stopping
     lifecycle.send(.stopping(Date()))
@@ -1213,7 +1228,7 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
 
     session.finishInputs()
 
-    await session.finishWriting()
+    await session.finishWriting(endingAt: videoEnd, maximumDuration: recordedSeconds)
 
     let videoWriteStats = session.videoWriteStats()
 
@@ -1279,7 +1294,7 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
     // Reset state
     cleanup()
 
-    lifecycle.send(url.map { .finished($0) } ?? .cancelled)
+    lifecycle.send(url.map { .finished($0) } ?? .noVideo)
     return url
   }
 
@@ -2155,6 +2170,7 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
     timer = nil
     startTime = nil
     pauseStartTime = nil
+    pauseStartHostTime = nil
     pausedDuration = 0
     exportDirectoryAccess?.stop()
     exportDirectoryAccess = nil
@@ -2293,5 +2309,10 @@ extension ScreenRecordingManager: SCStreamOutput {
 extension ScreenRecordingManager: SCStreamDelegate {
   nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
     DiagnosticLogger.shared.logError(.recording, error, "Screen recording stream stopped unexpectedly")
+    let at = Date(), reason = error.localizedDescription
+    Task { @MainActor [weak self] in
+      guard let self, self.state == .recording || self.state == .paused else { return }
+      self.lifecycle.send(.interrupted(at, reason))
+    }
   }
 }

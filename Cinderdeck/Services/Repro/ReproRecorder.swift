@@ -58,6 +58,13 @@ final class ReproRecorder: ObservableObject {
   static let lineLimit = 250_000
   /// Output from just before recording is kept as context.
   static let preRoll: TimeInterval = 3
+  /// Output is stamped when Cinderdeck reads it, a little after it was written. Lines read
+  /// this soon after the stop are kept, pinned to the last frame, so an agent that stops
+  /// right after the failure it caused still gets the failure's output.
+  static let postRoll: TimeInterval = 1.5
+  /// Lines and marks sent without a repro id this soon after a recording stopped are added
+  /// to it, so a call that raced the stop is not lost.
+  static let lateWindow: TimeInterval = 120
 
   @Published private(set) var live: Live?
   @Published private(set) var sessions: [ReproSession] = []
@@ -101,6 +108,12 @@ final class ReproRecorder: ObservableObject {
   private var lastSave = Date.distantPast
   private var lastFirstFrame: Date?
   private var waiters: [UUID: [CheckedContinuation<ReproSession?, Never>]] = [:]
+  /// Reads output that was written but not read yet when the recording stopped.
+  private var stopReads: Task<Void, Never>?
+  /// Videos saved from the temporary folder before their repro finished saving.
+  private var pendingMoves: [String: URL] = [:]
+  /// Serializes changes to repros that already stopped.
+  private var amendments: Task<Void, Never>?
   /// Repros that stopped and are being saved or discarded. They are neither
   /// recording nor in `sessions` yet, so waiters must not give up on them.
   private var finishing = Set<UUID>()
@@ -166,6 +179,8 @@ final class ReproRecorder: ObservableObject {
 
   var isCapturing: Bool { session != nil }
   var activeSessionID: UUID? { session?.id }
+  /// A recording that stopped and is still being saved. A new one can't start until it is.
+  var stoppingSessionID: UUID? { stopRequested ? session?.id : nil }
   var logsNextToVideo: Bool { defaults.object(forKey: PreferencesKeys.reproLogNextToVideo) as? Bool ?? true }
 
   func setScope(_ scope: ReproLogScope) {
@@ -190,21 +205,39 @@ final class ReproRecorder: ObservableObject {
       clock?.pause(at: date); live?.isPaused = true
     case .resumed(let date):
       clock?.resume(at: date); live?.isPaused = false
+    case .interrupted(let date, let reason):
+      guard session != nil, !stopRequested else { return }
+      let sentence = reason.hasSuffix(".") ? reason : reason + "."
+      _ = try? addMarker(label: "Screen capture stopped", detail: "\(sentence) The video holds its last frame until the recording stops.",
+        outcome: .info, kind: .note, by: "Cinderdeck", at: date)
     case .stopping(let date):
       lastFirstFrame = nil
       guard session != nil else { return }
       stopRequested = true
       clock?.stop(at: date)
       live?.isFinalizing = true
+      // Pull in output that was written but not read yet, so it is stamped close to the stop.
+      let buffers = followedBuffers()
+      stopReads = Task { for buffer in buffers { await buffer.readAvailable() } }
     case .finished(let url):
       guard session != nil else { return }
       Task { await finalize(video: url) }
+    case .noVideo:
+      // Keep what was captured; the log is often what explains why there is no video.
+      guard session != nil else { return }
+      Task { await finalize(video: nil) }
     case .cancelled:
       lastFirstFrame = nil
-      // Either the recording was deleted, or stopping produced no video.
       guard session != nil else { return }
       Task { await discard() }
     }
+  }
+
+  /// Every buffer the recording reads from right now.
+  private func followedBuffers() -> [LogBuffer] {
+    supervisor.logBuffers().filter { inScope($0.stack) }.map(\.buffer)
+      + runner.liveStepBuffers().filter { inScope($0.run.workspaceID) }.map(\.buffer)
+      + retired.map(\.buffer)
   }
 
   private func begin(at date: Date) {
@@ -325,8 +358,14 @@ final class ReproRecorder: ObservableObject {
     var fresh = delta.lines
     let cutoff = start.addingTimeInterval(-Self.preRoll)
     if let old = fresh.lastIndex(where: { $0.timestamp < cutoff }) { fresh.removeFirst(old + 1) }
-    if let stoppedAt = clock.stoppedAt { fresh.removeAll { $0.timestamp > stoppedAt } }
-    guard session != nil, !fresh.isEmpty else { return }
+    if let stoppedAt = clock.stoppedAt { fresh.removeAll { $0.timestamp > stoppedAt.addingTimeInterval(Self.postRoll) } }
+    guard session != nil else { return }
+    if delta.dropped > 0 {
+      session!.droppedLines = (session!.droppedLines ?? 0) + delta.dropped
+      let at = fresh.first?.timestamp ?? Date()
+      fresh.insert(StackLogLine(service: source.name, text: "[Cinderdeck] \(delta.dropped) line\(delta.dropped == 1 ? " was" : "s were") printed too fast to capture here", timestamp: at), at: 0)
+    }
+    guard !fresh.isEmpty else { return }
     if source.kind != .external { loadSecrets(source.workspace) }
     // Stripping, redacting, and classifying runs several regular expressions per
     // line; do it off the main actor so noisy services cannot stall the UI while recording.
@@ -401,6 +440,8 @@ final class ReproRecorder: ObservableObject {
   }
 
   private func save() {
+    // The clock goes with every save, so a repro recovered after a crash can still be amended.
+    self.session?.clock = clock
     guard let session else { return }
     lastSave = Date()
     do { try store.save(session) } catch { lastError = "Could not save repro: \(error.localizedDescription)" }
@@ -423,13 +464,15 @@ final class ReproRecorder: ObservableObject {
   /// on the same timeline as workspace output. Returns how many lines were added.
   @discardableResult
   func appendExternal(_ lines: [ExternalLine], source name: String) throws -> Int {
-    guard session != nil, let clock, !stopRequested else { throw StackError.message("No repro is recording") }
+    // Accepted while stopping too: agents send tool calls in parallel, and a console
+    // dump racing the stop belongs to this recording.
+    guard session != nil, let clock else { throw StackError.message("No repro is recording") }
     let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
     let label = trimmed.isEmpty ? "agent" : String(trimmed.prefix(40))
     guard lines.count <= Self.externalBatchLimit else {
       throw StackError.message("Add at most \(Self.externalBatchLimit) lines per call")
     }
-    let source = ReproSource(id: "external/\(label)", kind: .external, workspace: "", workspaceName: label, name: label)
+    let source = Self.externalSource(label)
     let now = Date()
     let earliest = (session?.createdAt ?? now).addingTimeInterval(-Self.preRoll)
     var added = 0
@@ -443,6 +486,86 @@ final class ReproRecorder: ObservableObject {
     }
     flush()
     return added
+  }
+
+  private nonisolated static func externalLabel(_ name: String) -> String {
+    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? "agent" : String(trimmed.prefix(40))
+  }
+  private nonisolated static func externalSource(_ label: String) -> ReproSource {
+    ReproSource(id: "external/\(label)", kind: .external, workspace: "", workspaceName: label, name: label)
+  }
+
+  /// Where a line or mark goes: the recording (also while it stops), or a repro that
+  /// already stopped. Without a repro id, a repro that stopped moments ago still takes
+  /// it, since agents often send the last console lines in parallel with the stop.
+  private func target(_ query: String?) throws -> UUID? {
+    let value = query?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
+    if !value.isEmpty, !["latest", "last", "active", "current"].contains(value) {
+      let found = try resolve(query)
+      return found.id == session?.id ? nil : found.id
+    }
+    if session != nil { return nil }
+    if let saving { return saving.id }
+    if let latest = sessions.first, let ended = latest.endedAt, Date().timeIntervalSince(ended) <= Self.lateWindow {
+      return latest.id
+    }
+    throw StackError.message("No repro is recording")
+  }
+
+  struct Added: Sendable {
+    var count: Int
+    var repro: UUID
+    /// Added to a repro that had already stopped.
+    var late: Bool
+  }
+
+  /// Adds lines to the recording, or to the repro `query` names when it already stopped.
+  func append(_ lines: [ExternalLine], source name: String, to query: String? = nil) async throws -> Added {
+    guard let id = try target(query) else {
+      let count = try appendExternal(lines, source: name)
+      return Added(count: count, repro: session?.id ?? UUID(), late: false)
+    }
+    let label = Self.externalLabel(name)
+    guard lines.count <= Self.externalBatchLimit else { throw StackError.message("Add at most \(Self.externalBatchLimit) lines per call") }
+    let count = try await amend(id) { session, context in
+      let source = Self.externalSource(label)
+      let now = Date()
+      let earliest = session.createdAt.addingTimeInterval(-Self.preRoll)
+      var added = 0
+      for line in lines {
+        let raw = String(line.text.prefix(Self.externalLineLimit))
+        guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+        let at = min(max(line.at ?? now, earliest), now)
+        let text = context.redactor.redact(AnsiParser.plainText(raw))
+        context.add(ReproLogLine(id: 0, t: 0, at: at, source: source.id, text: text, level: line.level ?? ReproLogLevel.classify(text)),
+          source: source, to: &session)
+        added += 1
+      }
+      return added
+    }
+    return Added(count: count, repro: id, late: true)
+  }
+
+  /// Adds a marker now, to the recording or to the repro `query` names when it already
+  /// stopped, where it is pinned to the last frame.
+  func mark(label: String, detail: String? = nil, outcome: ReproMarker.Outcome? = nil, kind: ReproMarker.Kind = .note,
+    by: String? = nil, to query: String? = nil) async throws -> (marker: ReproMarker, repro: UUID, late: Bool) {
+    guard let id = try target(query) else {
+      let marker = try addMarker(label: label, detail: detail, outcome: outcome, kind: kind, by: by)
+      return (marker, session?.id ?? UUID(), false)
+    }
+    let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { throw StackError.message("A marker needs a label") }
+    let marker = try await amend(id) { session, context -> ReproMarker in
+      let at = Date()
+      let marker = ReproMarker(t: context.clock.position(at: at, duration: session.duration).t, at: at, kind: kind,
+        label: String(trimmed.prefix(200)), detail: detail.map { context.redactor.redact(String($0.prefix(2000))) }, outcome: outcome, by: by)
+      session.markers.append(marker)
+      session.markers.sort { $0.t == $1.t ? $0.at < $1.at : $0.t < $1.t }
+      return marker
+    }
+    return (marker, id, true)
   }
 
   // MARK: Markers
@@ -616,35 +739,56 @@ final class ReproRecorder: ObservableObject {
   // MARK: Finishing
 
   private func settleCapture() async {
+    await stopReads?.value
+    stopReads = nil
     pollTask?.cancel()
     await pollTask?.value
     pollTask = nil
     // Catch output written just before the stop, including relaunches.
     await poll()
-    for task in contextTasks { await task.value }
-    contextTasks = []
+    // A source that first printed during the last poll starts its own context capture.
+    while !contextTasks.isEmpty {
+      let tasks = contextTasks
+      contextTasks = []
+      for task in tasks { await task.value }
+    }
+    // Lines an agent added while this waited.
+    if !pending.isEmpty { writer?.enqueue(pending); pending.removeAll() }
     writer?.close()
     writer = nil
   }
 
-  private func finalize(video url: URL) async {
+  private func finalize(video url: URL?) async {
     guard let id = session?.id else { return }
     finishing.insert(id)
     live?.isFinalizing = true
+    // Everything that suspends happens before the snapshot below, so lines and marks
+    // that arrive meanwhile are part of it. Anything later amends the saved repro.
+    var videoDuration: Double?
+    if let url, let seconds = try? await AVURLAsset(url: url).load(.duration).seconds, seconds.isFinite, seconds > 0 {
+      videoDuration = seconds
+    }
     await settleCapture()
-    guard var session else { finishing.remove(id); resume(id, with: nil); return }
-    let keepEmpty = session.origin != .recording
-    session.duration = clock?.duration ?? 0
-    if let seconds = try? await AVURLAsset(url: url).load(.duration).seconds, seconds.isFinite, seconds > 0 { session.duration = seconds }
-    session.endedAt = clock?.stoppedAt ?? Date()
-    session.videoPath = url.path
-    session.videoBookmark = try? url.bookmarkData()
-    session.markers.sort { $0.t == $1.t ? $0.at < $1.at : $0.t < $1.t }
-    // Markers placed after the last frame still belong to the recording.
-    for index in session.markers.indices where session.markers[index].t > session.duration { session.markers[index].t = session.duration }
-    if session.title.isEmpty { session.title = displayTitle(session) }
-    session.status = .ready
+    guard var session = self.session, let clock = self.clock else { reset(); finishing.remove(id); resume(id, with: nil); return }
     reset()
+    let keepEmpty = session.origin != .recording
+    session.clock = clock
+    session.duration = videoDuration ?? clock.duration
+    session.endedAt = clock.stoppedAt ?? Date()
+    if let url {
+      session.videoPath = url.path
+      session.videoBookmark = try? url.bookmarkData()
+      session.status = .ready
+    } else {
+      session.status = .failed
+      session.detail = "The recording produced no video, so only its log was saved. Check Screen Recording permission for Cinderdeck, and that the recorded window stayed visible."
+    }
+    // The first frame can arrive after early markers were placed; place them all with the final clock.
+    for index in session.markers.indices {
+      session.markers[index].t = clock.position(at: session.markers[index].at, duration: session.duration).t
+    }
+    session.markers.sort { $0.t == $1.t ? $0.at < $1.at : $0.t < $1.t }
+    if session.title.isEmpty { session.title = displayTitle(session) }
     guard keepEmpty || session.lineCount > 0 || !session.runs.isEmpty else {
       try? store.delete(session.id)
       finishing.remove(session.id)
@@ -652,14 +796,164 @@ final class ReproRecorder: ObservableObject {
       return
     }
     saving = session
-    session.logFile = await writeLogFiles(for: session)?.path
+    session = await writeTimeline(session)
     do { try store.save(session) } catch { lastError = "Could not save repro: \(error.localizedDescription)" }
     sessions.removeAll { $0.id == session.id }
     sessions.insert(session, at: 0)
     saving = nil
     finishing.remove(session.id)
+    lineCache[session.id] = nil
+    let moves = pendingMoves
+    pendingMoves = [:]
+    if let path = session.videoPath, let destination = moves[Self.pathKey(URL(fileURLWithPath: path))] {
+      videoMoved(from: URL(fileURLWithPath: path), to: destination)
+    }
     resume(session.id, with: session)
     onSaved?(session)
+  }
+
+  /// Places every stored line with the final clock and video length, recounts from what
+  /// was stored, and writes the log files.
+  private func writeTimeline(_ session: ReproSession) async -> ReproSession {
+    let store = store
+    var session = session
+    let placed = await Task.detached { () -> [ReproLogLine] in
+      var lines = store.loadLines(session.id)
+      guard let clock = session.clock else { return lines }
+      var changed = false
+      for index in lines.indices {
+        let position = clock.position(at: lines[index].at, duration: session.duration)
+        let offscreen: Bool? = position.visible ? nil : true
+        guard abs(position.t - lines[index].t) >= 0.0005 || offscreen != lines[index].offscreen else { continue }
+        lines[index].t = position.t
+        lines[index].offscreen = offscreen
+        changed = true
+      }
+      guard changed else { return lines }
+      lines.sort { $0.t == $1.t ? $0.id < $1.id : $0.t < $1.t }
+      try? store.rewriteLines(lines, id: session.id)
+      return lines
+    }.value
+    if !session.truncated { Self.recount(&session, lines: placed) }
+    session.firstErrorLine = placed.first { $0.level == .error && !$0.isPreRoll }?.id ?? (session.truncated ? session.firstErrorLine : nil)
+    session.logFile = await writeLogFiles(for: session, lines: placed)?.path
+    return session
+  }
+
+  /// Counts from the stored lines, which are what the log, summary, and agents see.
+  private static func recount(_ session: inout ReproSession, lines: [ReproLogLine]) {
+    var counts: [String: (lines: Int, errors: Int, warnings: Int)] = [:]
+    for line in lines {
+      var count = counts[line.source] ?? (0, 0, 0)
+      count.lines += 1
+      if !line.isPreRoll && line.level == .error { count.errors += 1 }
+      if !line.isPreRoll && line.level == .warning { count.warnings += 1 }
+      counts[line.source] = count
+    }
+    for index in session.sources.indices {
+      let count = counts[session.sources[index].id] ?? (0, 0, 0)
+      session.sources[index].lineCount = count.lines
+      session.sources[index].errorCount = count.errors
+      session.sources[index].warningCount = count.warnings
+    }
+    session.lineCount = lines.count
+    session.errorCount = counts.values.reduce(0) { $0 + $1.errors }
+    session.warningCount = counts.values.reduce(0) { $0 + $1.warnings }
+  }
+
+  // MARK: Changing stopped repros
+
+  /// What an amendment needs to place lines: the saved clock, secret redaction, and the lines so far.
+  struct AmendContext {
+    let clock: ReproClock
+    let redactor: ReproRedactor
+    fileprivate(set) var lines: [ReproLogLine]
+    fileprivate(set) var added: [ReproLogLine] = []
+    fileprivate var nextID: Int
+
+    /// Places `line` by its clock time and counts it, like output captured while recording.
+    mutating func add(_ line: ReproLogLine, source: ReproSource, to session: inout ReproSession) {
+      var line = line
+      let position = clock.position(at: line.at, duration: session.duration)
+      line.t = position.t
+      line.offscreen = position.visible ? nil : true
+      let index: Int
+      if let existing = session.sources.firstIndex(where: { $0.id == source.id }) {
+        index = existing
+      } else {
+        session.sources.append(source)
+        index = session.sources.count - 1
+      }
+      session.sources[index].lineCount += 1
+      session.lineCount += 1
+      if !line.isPreRoll && line.level == .error { session.sources[index].errorCount += 1; session.errorCount += 1 }
+      if !line.isPreRoll && line.level == .warning { session.sources[index].warningCount += 1; session.warningCount += 1 }
+      guard session.lineCount <= ReproRecorder.lineLimit else { session.truncated = true; return }
+      line.id = nextID
+      nextID += 1
+      added.append(line)
+      lines.append(line)
+    }
+  }
+
+  /// Applies `change` to a repro that stopped, once it is saved, then rewrites its files.
+  /// Changes run one at a time.
+  private func amend<T: Sendable>(_ id: UUID, _ change: @escaping @MainActor (inout ReproSession, inout AmendContext) throws -> T) async throws -> T {
+    let previous = amendments
+    let work = Task { @MainActor [weak self] () async throws -> T in
+      await previous?.value
+      guard let self else { throw CancellationError() }
+      return try await self.performAmend(id, change)
+    }
+    amendments = Task { _ = try? await work.value }
+    return try await work.value
+  }
+
+  private func performAmend<T>(_ id: UUID, _ change: (inout ReproSession, inout AmendContext) throws -> T) async throws -> T {
+    if isRecordingOrSaving(id) { _ = await waitUntilSaved(id) }
+    let store = store
+    let lines = await Task.detached { store.loadLines(id) }.value
+    guard var session = sessions.first(where: { $0.id == id }) else { throw StackError.message("That repro was discarded") }
+    guard !session.status.isActive else { throw StackError.message("That repro is still recording") }
+    var context = AmendContext(clock: session.clock ?? Self.estimatedClock(session), redactor: savedRedactor(session),
+      lines: lines, nextID: (lines.map(\.id).max() ?? 0) + 1)
+    let result = try change(&session, &context)
+    if !context.added.isEmpty {
+      context.lines.sort { $0.t == $1.t ? $0.id < $1.id : $0.t < $1.t }
+      session.firstErrorLine = context.lines.first { $0.level == .error && !$0.isPreRoll }?.id ?? session.firstErrorLine
+      let added = context.added
+      try await Task.detached {
+        let writer = try ReproLineWriter(url: store.linesURL(id))
+        defer { writer.close() }
+        try writer.append(added)
+      }.value
+    }
+    session.logFile = await writeLogFiles(for: session, lines: context.lines)?.path ?? session.logFile
+    try store.save(session)
+    if let index = sessions.firstIndex(where: { $0.id == id }) { sessions[index] = session }
+    lineCache[id] = nil
+    return result
+  }
+
+  /// Repros saved before the clock was stored: assume no pauses.
+  private static func estimatedClock(_ session: ReproSession) -> ReproClock {
+    var clock = ReproClock(start: session.createdAt)
+    clock.stop(at: session.endedAt ?? session.createdAt.addingTimeInterval(session.duration))
+    return clock
+  }
+
+  /// Redacts the Keychain secrets of the workspaces a stopped repro captured.
+  private func savedRedactor(_ session: ReproSession) -> ReproRedactor {
+    var values: [String: String] = [:]
+    let workspaces = (session.workspaces.map(\.id) + session.sources.map(\.workspace)).filter { !$0.isEmpty }
+    for workspace in Set(workspaces).sorted() {
+      guard let definition = supervisor.definition(workspace) else { continue }
+      for (variable, name) in definition.secrets.sorted(by: { $0.key < $1.key }) {
+        guard let value = try? secrets.read(name) else { continue }
+        values[(values[variable] ?? value) == value ? variable : "\(workspace)/\(variable)"] = value
+      }
+    }
+    return ReproRedactor(secrets: values)
   }
 
   // MARK: Log files
@@ -667,7 +961,7 @@ final class ReproRecorder: ObservableObject {
   /// Writes the readable log to the library, and next to the video when it was
   /// saved somewhere permanent. Returns the file people should see.
   @discardableResult
-  private func writeLogFiles(for session: ReproSession) async -> URL? {
+  private func writeLogFiles(for session: ReproSession, lines known: [ReproLogLine]? = nil) async -> URL? {
     let store = store
     let canonical = store.logURL(session.id)
     var sidecar: URL?
@@ -677,7 +971,7 @@ final class ReproRecorder: ObservableObject {
     }
     let videoName = session.videoURL?.lastPathComponent
     let written = await Task.detached { () -> (Bool, Bool) in
-      let text = ReproReport.logFile(session, lines: store.loadLines(session.id), videoName: videoName)
+      let text = ReproReport.logFile(session, lines: known ?? store.loadLines(session.id), videoName: videoName)
       let data = Data(text.utf8)
       let savedCanonical = (try? data.write(to: canonical, options: .atomic)) != nil
       let savedSidecar = sidecar.map { (try? data.write(to: $0, options: .atomic)) != nil } ?? false
@@ -713,8 +1007,12 @@ final class ReproRecorder: ObservableObject {
   /// Keeps a repro attached when its video is saved from the temporary capture
   /// folder, and puts the log file beside the video's new location.
   func videoMoved(from source: URL, to destination: URL) {
-    let path = source.standardizedFileURL.path
-    guard let index = sessions.firstIndex(where: { $0.videoPath.map { URL(fileURLWithPath: $0).standardizedFileURL.path } == path }) else { return }
+    let path = Self.pathKey(source)
+    guard let index = sessions.firstIndex(where: { $0.videoPath.map { Self.pathKey(URL(fileURLWithPath: $0)) } == path }) else {
+      // Saved from Quick Access before its repro finished saving: move it once it has.
+      if session != nil || !finishing.isEmpty { pendingMoves[path] = destination }
+      return
+    }
     sessions[index].videoPath = destination.path
     sessions[index].videoBookmark = try? destination.bookmarkData()
     let session = sessions[index]
@@ -726,6 +1024,8 @@ final class ReproRecorder: ObservableObject {
       try? self.store.save(self.sessions[current])
     }
   }
+
+  private nonisolated static func pathKey(_ url: URL) -> String { url.standardizedFileURL.path }
 
   private func discard() async {
     guard let id = session?.id else { return }
@@ -741,6 +1041,7 @@ final class ReproRecorder: ObservableObject {
     session = nil; clock = nil; live = nil; expectedRequest = nil
     cursors = [:]; retired = []; pending = []; phases = [:]; runSteps = [:]; runStatus = [:]
     stopRequested = false; lastFirstFrame = nil; pendingLastError = nil
+    stopReads?.cancel(); stopReads = nil
     redactor = ReproRedactor(secrets: [:]); secretValues = [:]; secretWorkspaces = []
   }
 
@@ -819,8 +1120,10 @@ final class ReproRecorder: ObservableObject {
       let store = store, writer = writer
       return await Task.detached { writer?.waitForPendingWrites(); return store.loadLines(id) }.value
     }
-    if let cached = lineCache[id] { return cached }
     let store = store
+    // Being saved: line times are still being placed, so nothing is cached yet.
+    if finishing.contains(id) { return await Task.detached { store.loadLines(id) }.value }
+    if let cached = lineCache[id] { return cached }
     let lines = await Task.detached { store.loadLines(id) }.value
     lineCache[id] = lines
     lineCacheOrder.removeAll { $0 == id }
