@@ -112,7 +112,8 @@ nonisolated enum StackAgentGuide {
       if it moves and includes its app's menus and dropdowns. A headless browser has no window and cannot be recorded; run it headed.
     - Choose logs: `workspace`/`workspaces` (CLI `--workspace a,b`), all running workspaces by default, or `logs: false` / `--no-logs` for none.
     - Add your own output, such as browser console messages: `add_repro_logs` or `\(command) repro append "text" --source browser` \
-      (pipe lines on stdin to stream them).
+      (pipe lines on stdin to stream them). Lines and marks sent in parallel with the stop, or up to 2 minutes after it, still reach \
+      that repro's log; after that pass `repro`. Lines added after the stop without a time are placed at the end of the video.
     - Record a test run: pass `workspace` and `task` or `workflow`, or `\(command) repro run <workspace> <workflow> --workflow --wait` \
       (exit status 1 when a service crashed, a check failed, or the run failed).
     - While recording, mark each step: `mark_repro` with `label`, and `outcome` pass/fail for checks; CLI `repro mark "Total shows $42" --pass`.

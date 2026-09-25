@@ -48,7 +48,8 @@ cinderdeck repro logs <id> --source browser --grep "TypeError|500"
 - `repro_frame` over MCP returns the images directly, with the log lines and marks just before each frame. The CLI writes JPEG files and prints their paths; open them to look.
 - **Always look at a frame** before describing what was on screen. Never infer the UI state from the logs alone.
 - Work backwards from the first error or failed mark. The cause is usually in the few seconds *before* it: a request, a warning, or a service restarting. Widen `--span` if nothing stands out.
-- `~` lines were written just before the video started, or while it was paused. They are context, not what was on screen.
+- `~` lines were written just before the video started, while it was paused, or reported after it stopped (pinned to the last frame). They are context, not what was on screen.
+- A `Note:` in the log header, or `detail` in the summary, says when output is missing or when there is no video.
 
 ## 4. Read the whole log when it's short
 

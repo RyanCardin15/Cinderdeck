@@ -306,6 +306,11 @@ nonisolated struct ReproSession: Codable, Equatable, Identifiable, Sendable {
   var scope: String?
   /// The log file people see: next to the video when it was saved there.
   var logFile: String?
+  /// How wall-clock times map onto the video, kept so lines added after the
+  /// recording stopped land on the same timeline.
+  var clock: ReproClock?
+  /// Lines a service printed faster than they could be read, so they were never captured.
+  var droppedLines: Int?
   var videoURL: URL? { videoPath.map { URL(fileURLWithPath: $0) } }
   var workspaceIDs: [String] { workspaces.map(\.id) }
 
@@ -327,7 +332,7 @@ nonisolated struct ReproPause: Codable, Equatable, Sendable {
 
 /// Maps wall-clock times to positions on the recorded video. The video starts at
 /// its first frame, and paused spans are removed from it.
-nonisolated struct ReproClock: Equatable, Sendable {
+nonisolated struct ReproClock: Codable, Equatable, Sendable {
   private(set) var origin: Date
   private(set) var hasFirstFrame = false
   private(set) var pauses: [ReproPause] = []
@@ -369,6 +374,15 @@ nonisolated struct ReproClock: Equatable, Sendable {
   }
 
   var duration: Double { stoppedAt.map { position(at: $0).t } ?? position(at: Date()).t }
+
+  /// Position for a moment on a finished video of `duration` seconds. Moments after
+  /// the last frame are pinned to it and marked as not recorded.
+  func position(at date: Date, duration: Double) -> (t: Double, visible: Bool) {
+    let position = position(at: date)
+    guard position.t > duration else { return position }
+    // The clock and the encoded video can disagree by a frame; that is still on screen.
+    return (duration, position.visible && position.t - duration < 0.1)
+  }
 }
 
 // MARK: - Formatting
@@ -432,10 +446,12 @@ nonisolated struct ReproLogQuery: Equatable, Sendable {
   var text: String?
   var includeOffscreen = true
   var limit = 500
+  /// When more lines match than `limit`, keep the ones nearest this moment instead of the earliest.
+  var anchor: Double?
 
   /// Lines within `window` seconds either side of `t`.
   static func around(_ t: Double, window: Double = 5) -> ReproLogQuery {
-    ReproLogQuery(from: max(0, t - window), to: t + window)
+    ReproLogQuery(from: max(0, t - window), to: t + window, anchor: t)
   }
 
   /// Matches plain text case-insensitively, or as a regex when the text is a valid pattern with regex syntax.
@@ -459,8 +475,15 @@ nonisolated struct ReproLogQuery: Equatable, Sendable {
       }
       return true
     }
-    // Keep the earliest lines of a range: they are closest to the cause.
-    return limit > 0 && matched.count > limit ? Array(matched.prefix(limit)) : matched
+    guard limit > 0, matched.count > limit else { return matched }
+    // Around a moment, keep the lines nearest it, so the moment itself is never cut off.
+    if let anchor {
+      let pivot = reproLineIndex(atOrBefore: anchor, in: matched).map { $0 + 1 } ?? 0
+      let start = min(max(0, pivot - (limit + 1) / 2), matched.count - limit)
+      return Array(matched[start..<(start + limit)])
+    }
+    // Otherwise keep the earliest lines of a range: they are closest to the cause.
+    return Array(matched.prefix(limit))
   }
 }
 
@@ -590,6 +613,8 @@ nonisolated enum ReproReport {
     if let videoFile { out += "- Video: `\(videoFile)`\n" }
     if let logFile { out += "- Log file: `\(logFile)` (every line is stamped with its position in the video)\n" }
     if session.truncated { out += "- Note: output exceeded the capture limit; later lines were counted but not stored.\n" }
+    if let dropped = session.droppedLines, dropped > 0 { out += "- Note: \(dropped) line\(dropped == 1 ? "" : "s") printed faster than Cinderdeck could read were not captured.\n" }
+    if let detail = session.detail { out += "- Note: \(detail)\n" }
     if !session.markers.isEmpty {
       out += "\n## Timeline\n\n| Time | Event | Result |\n| --- | --- | --- |\n"
       for marker in session.markers.sorted(by: { $0.t < $1.t }) {
@@ -679,6 +704,10 @@ nonisolated enum ReproReport {
     if session.truncated {
       out += "Note:       Only the first \(lines.count) lines were saved; \(max(0, session.lineCount - lines.count)) later lines were counted but not saved.\n"
     }
+    if let dropped = session.droppedLines, dropped > 0 {
+      out += "Note:       \(dropped) line\(dropped == 1 ? " was" : "s were") printed faster than Cinderdeck could read \(dropped == 1 ? "it" : "them") and \(dropped == 1 ? "is" : "are") missing.\n"
+    }
+    if let detail = session.detail { out += "Note:       \(detail)\n" }
 
     out += "\nSources\n"
     let sourceWidth = max(width, 12)
@@ -702,7 +731,8 @@ nonisolated enum ReproReport {
       Clock times are local (\(zone)).
       ERROR and WARN mark lines that look like errors or warnings.
       ▶ marks events: services starting, becoming ready, or crashing, workflow steps, and marks you added.
-      ~ marks output written just before recording started or while it was paused.
+      ~ marks output written just before recording started, while it was paused, or reported after
+        it stopped. It is pinned to the nearest recorded moment.
 
     """
     out += String(repeating: "-", count: 78) + "\n"
@@ -725,6 +755,20 @@ nonisolated enum ReproReport {
     out += rows.map(\.text).joined(separator: "\n")
     if rows.isEmpty { out += "(nothing was captured)" }
     return out + "\n"
+  }
+
+  /// One source's lines, stamped like the log file, for the export bundle's `logs/` folder.
+  static func sourceLog(_ session: ReproSession, lines: [ReproLogLine], source id: String, timeZone: TimeZone = .current) -> String {
+    let clock = DateFormatter()
+    clock.locale = Locale(identifier: "en_US_POSIX"); clock.timeZone = timeZone; clock.dateFormat = "HH:mm:ss.SSS"
+    let mine = lines.filter { $0.source == id }
+    var out = "\(sourceLabels(session)[id] ?? session.label(for: id)) · \(mine.count) line\(mine.count == 1 ? "" : "s") · \(session.title)\n"
+    out += "[video time  clock time]  message\n"
+    for line in mine {
+      let level = line.level == .error ? "ERROR  " : line.level == .warning ? "WARN   " : ""
+      out += "[\(ReproFormat.timestamp(line.t))  \(clock.string(from: line.at))] \(line.isOffscreen ? "~" : " ") \(level)\(line.text)\n"
+    }
+    return out
   }
 
   /// A filesystem-safe name fragment.

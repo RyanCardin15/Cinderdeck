@@ -7,6 +7,17 @@
 - Add `wait_for_workspace_run`, which waits for a task or workflow and returns the failing step's output; `repro_recording_scope`; and `open_workspace`.
 - Run MCP tool calls concurrently, answer pings during long waits, honor cancellation, negotiate the protocol version, and reject unknown arguments. Results are compact JSON, and stopping services no longer reports a timeout while a slow stop finishes.
 - Rename the `cinderdeck stacks` CLI command to `cinderdeck services`, and name workspaces `workspaces` in `state.json` and CLI JSON output.
+- Keep the last output of recordings that stop right after it happens. Output is read slightly after it is written, and lines read in the 1.5 seconds after the stop were dropped, which lost the error an agent had just triggered. They are now kept and pinned to the last frame.
+- Keep log lines and marks that agents send in parallel with `stop_repro_recording`. They were rejected or lost while the recording was being saved. Lines and marks sent up to 2 minutes after the stop now go to that repro's saved log, and `add_repro_logs`, `mark_repro`, and `repro append`/`mark` take `repro` to add to any saved one.
+- Hold the last frame of a recording until it stops. A screen that stopped changing ended the video early, so the log ran past the end of the video.
+- Place every line and mark with the first frame's capture time and the video's final length, including ones added before the first frame arrived.
+- Save the log when a recording produces no video, instead of discarding it, and say why in the result and the log file.
+- Note output that a service printed faster than it could be captured, in the log file and at the gap.
+- Export bundles contain only the frames at the first error, each failure, and the end, listed in README.md. Per-source logs are stamped like `recording.log`, and `repro.json` no longer contains paths from the recording Mac.
+- `repro append` streaming from a pipe ends cleanly when the recording stops.
+- Mark the moment screen capture stops on its own, for example when the recorded window closes, with a `Screen capture stopped` event.
+- `repro_logs` with `around`, and the output returned with `repro_frame`, keep the lines nearest that moment when there are more than the limit. They kept the earliest lines, which could leave out the error being asked about.
+- Agents starting a recording wait for a toolbar recording that just stopped to finish saving, instead of failing with "Repro capture could not start".
 
 ## [1.1.0] - 2026-09-24
 

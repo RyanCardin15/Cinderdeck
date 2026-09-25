@@ -58,8 +58,9 @@ How to read this file
 - **Video time** (`00:12.001`) is the position in the video. Seek there to see what was on screen.
 - **Clock time** is local time, for matching against other logs, such as a browser console or a server you did not start with Cinderdeck.
 - **Sources** are `service` names when one workspace was captured, and `workspace/service` when several were. The header lists every workspace that was included, including running ones that printed nothing, so you know nothing was missed.
-- `ERROR` and `WARN` flag lines that look like errors or warnings. `▶` lines are events: services starting, becoming ready, or crashing, workflow steps, and your marks.
-- `~` marks output from up to three seconds before the video started, or written while it was paused. It is kept for context and pinned to the nearest recorded moment.
+- `ERROR` and `WARN` flag lines that look like errors or warnings. `▶` lines are events: services starting, becoming ready, or crashing, workflow steps, and your marks. `▶ Screen capture stopped` means capture ended on its own, for example because the recorded window closed; the video holds its last frame from there until the recording stops.
+- `~` marks output from up to three seconds before the video started, written while it was paused, or reported after it stopped. It is kept for context and pinned to the nearest recorded moment.
+- A `Note:` in the header says when lines are missing: past the 250,000-line limit, printed faster than Cinderdeck could read them, or when the recording produced no video.
 
 **Where it goes:**
 
@@ -95,13 +96,13 @@ Error lines are recognized from common patterns: `Error`, `TypeError`, `Exceptio
 - **Environment variable names** set by the workspace. Values are never stored.
 - **Secrets are redacted.** Keychain secret values that appear in output are replaced with `[secret NAME]` before anything is written.
 
-A line's video time comes from when Cinderdeck reads it, which is usually within a tenth of a second of when it was written.
+A line's video time comes from when Cinderdeck reads it, which is usually within a tenth of a second of when it was written. Output read in the 1.5 seconds after recording stops is kept and pinned to the last frame, so the output of something that happened just before the stop is not lost. The video starts at its first frame and ends when you stop: if the screen stopped changing earlier, the last frame is held until then, so the video and the log have the same length.
 
 ### Storage
 
 The library is `~/Library/Application Support/Cinderdeck/Stacks/Repros/<id>/` (Debug builds use `Stacks-Debug`). Each folder contains `recording.log`, `session.json`, `lines.jsonl` (one JSON object per line, with `t` in video seconds and `at` in epoch seconds), `git/*.diff`, and extracted `frames/`. Recordings started from Workspaces or by agents also keep their video there. Videos from regular recordings stay where your recording settings save them.
 
-Deleting a recording from Workspaces removes its library folder. A video saved elsewhere, and the log file next to it, are kept. If Cinderdeck quits while recording, the recording is marked **Failed** and the output captured so far is kept.
+Deleting a recording from Workspaces removes its library folder. A video saved elsewhere, and the log file next to it, are kept. If Cinderdeck quits while recording, the recording is marked **Failed** and the output captured so far is kept. If a recording produces no video, for example because Screen Recording permission is missing or the recorded window disappeared, its log is still saved and it is marked **Failed** with the reason.
 
 ### Export bundle
 
@@ -112,9 +113,9 @@ Deleting a recording from Workspaces removes its library folder. A video saved e
 | `recording.mp4` / `.mov` | The video |
 | `recording.log` | The log file described above |
 | `README.md` | Verdict, headline, events, distinct errors, output around the first error, runs, services, Git state, and sources |
-| `logs/<source>.log` | One file per service or task |
-| `repro.json`, `summary.json` | Full metadata and the machine-readable summary |
-| `frames/` | Frames at the first error and at each failure |
+| `logs/<source>.log` | One file per service or task, stamped like `recording.log` |
+| `repro.json`, `summary.json` | Full metadata and the machine-readable summary, with paths inside the bundle |
+| `frames/` | Frames at the first error, at each failure, and at the end, listed in `README.md` |
 | `git/` | Uncommitted diffs from when recording started |
 
 Pass `--zip` (CLI) or `zip: true` (MCP) to create an archive instead of a folder.
@@ -154,6 +155,8 @@ done
 | `start_repro_recording` | Start recording. Optional: `title`, `workspace`/`workspaces` to scope output or `logs: false` for none, `window_id` (from `list_repro_windows`), `window` (app name or title), or `display`, `max_seconds`, `system_audio`, `note`. Pass `workspace` with `task` or `workflow` to record a run. |
 | `mark_repro` | Add a marker now. `outcome: pass`/`fail` records a check; failed checks make the verdict **Failed**. |
 | `add_repro_logs` | Add your own lines to the log now, such as browser console messages or failed requests, under a `source` name. Lines that look like errors count toward the verdict. |
+
+`mark_repro` and `add_repro_logs` are safe to send in parallel with `stop_repro_recording`. A call that arrives while the recording stops, or up to 2 minutes after it stopped, goes to that repro; the result has `late: true`. Pass `repro` to add to any saved repro. Lines keep their `at` time; lines and marks without one are placed at the end of the video, so mark and read the console before stopping when you can.
 | `stop_repro_recording` | Stop and save. Returns the verdict, headline, errors with timestamps, markers, runs, and `logFile`, the path of the log file. Calling it again returns the saved repro. |
 | `wait_for_repro` | Wait for a recording that stops itself, such as a recorded run. |
 | `cancel_repro_recording` | Stop and discard. |
@@ -240,9 +243,11 @@ Recording requires Screen Recording permission for Cinderdeck. When permission i
 
 - `ReproCoreTests` covers log level classification, the video clock (first frame, pauses, stop), the log file format, workspace choices, millisecond timestamps, queries, verdicts, reports, secret redaction, storage, and the export bundle.
 - `ReproAgentAPITests` covers CLI parsing and MCP tool mapping.
-- `ReproRecorderTests` runs real services and tasks through the capture engine. It covers placing lines on the video timeline, events, redaction, the log file next to the video, the workspace choice, plain videos (including for people without workspaces), discarding empty recordings, and waiting on a repro while it is being saved.
+- `ReproRecorderTests` runs real services and tasks through the capture engine. It covers placing lines on the video timeline, events, redaction, the log file next to the video, the workspace choice, plain videos (including for people without workspaces), discarding empty recordings, and waiting on a repro while it is being saved. It also stops at agent speed: output written just before the stop, lines and marks sent while stopping or after the save, a stop that produced no video, lines that arrive before the first frame, and a video saved from Quick Access while its repro saves.
+- `RecordingSessionVideoEndTests` writes real videos and checks that a still screen at the end is held until the stop, within the recorded length and without paused time.
 
 ```sh
 scripts/run-tests.sh -only-testing:CinderdeckTests/ReproCoreTests \
-  -only-testing:CinderdeckTests/ReproAgentAPITests -only-testing:CinderdeckTests/ReproRecorderTests
+  -only-testing:CinderdeckTests/ReproAgentAPITests -only-testing:CinderdeckTests/ReproRecorderTests \
+  -only-testing:CinderdeckTests/RecordingSessionVideoEndTests
 ```

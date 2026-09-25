@@ -112,11 +112,12 @@ some-command | cinderdeck repro append --source app      # streams each line unt
 - The level is detected from the text: `Error`, `TypeError`, and HTTP 5xx lines become errors, and HTTP 4xx lines become warnings. Errors count toward the verdict. Pass `--level` to override the detected level.
 - Lines are stamped when they arrive. Append right after reading them, so they stay close to the action that caused them.
 - MCP: `add_repro_logs` with `lines: [...]` or `text`, plus `source` and `level`.
+- Read the console one last time and append it **before** you stop. A call that races the stop, or comes up to 2 minutes after it, still lands in that recording's log (the result says `"late": true`), but lines without a time are then placed at the end of the video. After that, pass `--repro <id>` (MCP `repro`).
 
 ## 5. Stop, inspect, and deliver
 
 ```bash
-cinderdeck repro stop                 # verdict: clean | errors | failed; exits 1 when failed
+cinderdeck repro stop                 # verdict: clean | errors | failed; exits 1 when failed; status "failed" + detail if no video was saved
 cinderdeck repro frame --first-error --out /tmp/first-error.jpg
 cinderdeck repro frame --at "marker:Total shows,end"       # up to 6 moments, comma-separated
 cinderdeck repro logs --around first_error --span 5 --level warning
@@ -124,6 +125,7 @@ cinderdeck repro dump --path          # the plain-text .log: every line stamped 
 cinderdeck repro export --zip         # ~/Downloads/Cinderdeck Repros/<title>-<date>.zip
 ```
 
+- Stop **before** you close the browser or window you recorded. If it closes first, the video holds its last frame and a `Screen capture stopped` mark says so.
 - **Look at the frames before claiming success.** `repro frame` returns images (MCP) or writes files (CLI `--out`). Check that the video shows what your marks claim.
 - Time formats: seconds, `mm:ss.sss`, `first_error`, `last_error`, `start`, `end`, and `marker:<label prefix>`.
 - Report to the user: verdict, headline, the export path, the `logFile` path, and the video timestamps of any failure.
