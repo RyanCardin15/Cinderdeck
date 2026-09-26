@@ -292,6 +292,9 @@ nonisolated struct ReproSession: Codable, Equatable, Identifiable, Sendable {
   var videoBookmark: Data?
   var capture: String?
   var actor: StackActor
+  /// Explicit choices, saved before asynchronous context capture. Older recordings
+  /// and the automatic running-workspace scope derive membership from context/output.
+  var selectedWorkspaceIDs: [String]?
   var workspaces: [ReproWorkspaceContext] = []
   var sources: [ReproSource] = []
   var markers: [ReproMarker] = []
@@ -312,7 +315,13 @@ nonisolated struct ReproSession: Codable, Equatable, Identifiable, Sendable {
   /// Lines a service printed faster than they could be read, so they were never captured.
   var droppedLines: Int?
   var videoURL: URL? { videoPath.map { URL(fileURLWithPath: $0) } }
-  var workspaceIDs: [String] { workspaces.map(\.id) }
+  var workspaceIDs: [String] {
+    var seen = Set<String>()
+    return ((selectedWorkspaceIDs ?? []) + workspaces.map(\.id)).filter { seen.insert($0).inserted }
+  }
+
+  /// Choosing workspaces is enough to keep a recording, even if they stay quiet.
+  var keepsWithoutOutput: Bool { origin != .recording || selectedWorkspaceIDs?.isEmpty == false || !workspaces.isEmpty }
 
   /// Workspaces with captured state or output, in first-seen order.
   var workspaceNames: [String] {

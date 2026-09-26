@@ -251,6 +251,22 @@ final class ReproCoreTests: XCTestCase {
     XCTAssertEqual(ReproFormat.list(["A", "B", "C"]), "A, B, and C")
   }
 
+  func testSelectedWorkspaceMembershipAndLegacySessionDecoding() throws {
+    var repro = session()
+    repro.origin = .recording
+    repro.workspaces = [ReproWorkspaceContext(id: "shop", name: "Shop", root: "/tmp/shop",
+      definitionFingerprint: "test", environmentKeys: [], secretKeys: [], services: [], repos: [])]
+    let legacy = try StackControlCoding.encoder().encode(repro)
+    let decoded = try StackControlCoding.decoder().decode(ReproSession.self, from: legacy)
+    XCTAssertNil(decoded.selectedWorkspaceIDs)
+    XCTAssertEqual(decoded.workspaceIDs, repro.workspaces.map(\.id))
+
+    repro.selectedWorkspaceIDs = ["billing", "shop"]
+    let restored = try StackControlCoding.decoder().decode(ReproSession.self, from: StackControlCoding.encoder().encode(repro))
+    XCTAssertEqual(restored.workspaceIDs, ["billing", "shop"], "Selected and captured workspace IDs are deduplicated")
+    XCTAssertTrue(restored.keepsWithoutOutput)
+  }
+
   func testToolbarWorkspacePickerTitles() {
     let choices = [
       WorkspaceLogChoice(id: "shop", name: "Shop", runningServices: 1, hasActiveRun: false),

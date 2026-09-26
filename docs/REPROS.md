@@ -2,7 +2,7 @@
 
 When you record your screen with a workspace selected and running, Cinderdeck saves a **log file next to the video** with everything those workspaces printed. Every line is stamped with its **position in the video** and the clock time it was written. When something goes wrong at 0:42 in the video, look at `[00:42.000 …]` in the log.
 
-Nothing changes for plain videos. Recordings capture no logs until you pick a workspace in the recording toolbar. If nothing is running, you also get a normal video.
+Nothing changes for plain videos. Recordings capture no logs until you pick a workspace in the recording toolbar. Explicitly chosen workspaces keep the recording in the library even if they are stopped or print nothing. With **All running workspaces**, a recording with no active workspace or output remains a plain video.
 
 In the CLI and MCP tools, a recording with logs is called a **repro**.
 
@@ -13,7 +13,7 @@ In the CLI and MCP tools, a recording with logs is called a **repro**.
 | Choice | What gets saved |
 | --- | --- |
 | **None** (default) | Just the video |
-| **One or more workspaces** | Logs from the workspaces you tick, and nothing else, including output that starts while you record |
+| **One or more workspaces** | The recording and workspace context, plus any logs from the workspaces you tick, including output that starts while you record; quiet workspaces still keep the recording in the library |
 | **All running workspaces** | Logs from every workspace that has a service or task running, including ones that start while you record |
 
 Tick as many workspaces as you need, for example a frontend and the backend it calls; the list stays open while you choose, and **All** ticks every one. Each row shows whether that workspace is running. The picker then reads "2 workspaces". Your choice is remembered for the next recording, like the microphone choice. The same choice is in **Preferences → Capture → Recording → Workspace logs** and at the top of **Workspaces → Recordings**.
@@ -22,7 +22,7 @@ While recording, the recording bar shows a **logs** indicator with a live line c
 
 When you stop, a short confirmation shows how many lines were saved and from which workspaces, with **Show Log** and **Copy Log**.
 
-**One click from Workspaces.** **Workspaces → Recordings → Record with Logs** records the main display right away and saves only that workspace's logs. Its menu can also record a workflow or task run: recording starts, the run starts, each step is marked, and recording stops about 1.5 seconds after the run ends. Agents can record too; see [Agents](#agents).
+**One click from Workspaces.** **Workspaces → Recordings → Record with Logs** records the main display right away using the workspace-log dropdown's choice (or the current workspace if logs are off). Its menu can also record a workflow or task run: recording starts, the run starts, each step is marked, and recording stops about 1.5 seconds after the run ends. The run's own workspace is always included. Agents can record too; see [Agents](#agents).
 
 Recordings started from Workspaces or by an agent show floating controls at the top of the screen with who is recording, elapsed time, line and error counts, and **Pause**, **Mark**, and **Stop**. Cinderdeck's own windows are left out of every recording. The menu bar stop item and the recording shortcut also stop these recordings. Agent recordings stop automatically after five minutes unless the agent asks for a different limit, up to one hour.
 
@@ -71,6 +71,7 @@ How to read this file
 ## Finding logs later
 
 - **Workspaces → Recordings** lists every recording that saved this workspace's logs (switch to **All workspaces** to see all of them). Each one shows where its log file is, with **Show Log File**, **Copy Log**, and **Open Video**. It also shows a timeline of marks and events, the distinct errors, and the services and repositories at the start of recording. Clicking a mark or error opens the video at that moment.
+- **With [workspace] / All workspaces** also updates the workspace-log dropdown for subsequent recordings. Opening the library preserves a custom selection of several workspaces. A recording already in progress keeps the choices it started with.
 - **In the video editor**, a **Logs** button appears for videos that have logs, with Show Log File, Copy Log, the log panel (⇧⌘L), and Export. The editor finds the logs even if you renamed or moved the video.
 - **In a terminal**: `cinderdeck repro dump` prints the latest recording's log file, and `cinderdeck repro dump --path` prints its path.
 
@@ -247,7 +248,7 @@ Recording requires Screen Recording permission for Cinderdeck. When permission i
 
 - `ReproCoreTests` covers log level classification, the video clock (first frame, pauses, stop), the log file format, workspace choices, millisecond timestamps, queries, verdicts, reports, secret redaction, storage, and the export bundle.
 - `ReproAgentAPITests` covers CLI parsing and MCP tool mapping.
-- `ReproRecorderTests` runs real services and tasks through the capture engine. It covers placing lines on the video timeline, events, redaction, the log file next to the video, the workspace choice, plain videos (including for people without workspaces), discarding empty recordings, and waiting on a repro while it is being saved. It also stops at agent speed: output written just before the stop, lines and marks sent while stopping or after the save, a stop that produced no video, lines that arrive before the first frame, and a video saved from Quick Access while its repro saves.
+- `ReproRecorderTests` runs real services and tasks through the capture engine. It covers placing lines on the video timeline, events, redaction, the log file next to the video, the workspace choice, plain videos (including for people without workspaces), retaining quiet selected workspaces, recovering interrupted selections, synchronizing library filters and log choices, discarding automatic captures without workspace context or output, and waiting on a repro while it is being saved. It also stops at agent speed: output written just before the stop, lines and marks sent while stopping or after the save, a stop that produced no video, lines that arrive before the first frame, and a video saved from Quick Access while its repro saves.
 - `RecordingSessionVideoEndTests` writes real videos and checks that a still screen at the end is held until the stop, within the recorded length and without paused time.
 
 ```sh

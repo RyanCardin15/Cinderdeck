@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import SwiftUI
 import XCTest
 @testable import Cinderdeck
 
@@ -147,7 +148,9 @@ final class ReproRecorderTests: XCTestCase {
     recorder.setScope(.only(["billing"]))
     events.send(.started(Date()))
     let unselected = try await stopRecording()
-    XCTAssertNil(unselected, "Output from unselected workspaces is not captured")
+    let quiet = try XCTUnwrap(unselected, "Keep the explicit choice even if the definition is unavailable")
+    XCTAssertEqual(quiet.workspaceIDs, ["billing"])
+    XCTAssertTrue(quiet.sources.isEmpty, "Output from unselected workspaces is not captured")
 
     recorder.setScope(.only(["shop"]))
     events.send(.started(Date()))
@@ -218,6 +221,111 @@ final class ReproRecorderTests: XCTestCase {
     XCTAssertNil(saved)
     XCTAssertFalse(FileManager.default.fileExists(atPath: store.folder(id).path))
     XCTAssertTrue(recorder.sessions.isEmpty)
+  }
+
+  func testSelectedQuietWorkspacesStayInLibraryAndExcludeOtherOutput() async throws {
+    try await load("[tasks.noop]\ncmd = \"true\"\n")
+    for id in ["billing", "other"] {
+      let source = "root = \(WorkspaceDefinitionWriter.quote(root.path))\nshell = \"/bin/sh\"\n[services.api]\ncmd = \"while true; do echo tick; sleep 0.1; done\"\n"
+      try source.write(to: root.appendingPathComponent("\(id).toml"), atomically: true, encoding: .utf8)
+    }
+    await supervisor.reloadDefinitions()
+    await supervisor.start(stack: "other", services: ["api"])
+    try await until { self.supervisor.runtime("other", "api").phase == .ready }
+
+    for ids: Set<String> in [["shop"], ["shop", "billing"]] {
+      recorder.setScope(.only(ids))
+      events.send(.started(Date()))
+      // Changing the next recording's choice cannot discard this one at stop.
+      recorder.setScope(.off)
+      let stopped = try await stopRecording()
+      let saved = try XCTUnwrap(stopped, "Explicit workspace choices must survive even without output")
+      XCTAssertEqual(saved.status, .ready)
+      XCTAssertEqual(Set(saved.workspaceIDs), ids)
+      XCTAssertEqual(Set(saved.workspaces.map(\.id)), ids)
+      XCTAssertTrue(saved.sources.isEmpty, "The unselected running workspace must not leak into the recording")
+      XCTAssertEqual(saved.lineCount, 0)
+      XCTAssertTrue(saved.runs.isEmpty)
+      XCTAssertTrue(FileManager.default.fileExists(atPath: try XCTUnwrap(saved.videoPath)))
+      XCTAssertTrue(FileManager.default.fileExists(atPath: store.logURL(saved.id).path))
+      XCTAssertNotNil(recorder.sessions.first { $0.id == saved.id })
+      let reloaded = try XCTUnwrap(store.loadSessions().first { $0.id == saved.id })
+      XCTAssertEqual(reloaded.workspaceIDs, saved.workspaceIDs, "Workspace membership must survive reloading the library")
+      XCTAssertEqual(reloaded.videoPath, saved.videoPath)
+      XCTAssertEqual(reloaded.status, .ready)
+    }
+  }
+
+  func testAllRunningKeepsAQuietActiveWorkspace() async throws {
+    try await load("[services.api]\ncmd = \"sleep 30\"\n")
+    await supervisor.start(stack: "shop", services: ["api"])
+    try await until { self.supervisor.runtime("shop", "api").phase == .ready }
+    events.send(.started(Date()))
+    let stopped = try await stopRecording()
+    let saved = try XCTUnwrap(stopped)
+    XCTAssertEqual(saved.workspaceIDs, ["shop"])
+    XCTAssertEqual(saved.lineCount, 0)
+    XCTAssertEqual(saved.status, .ready)
+  }
+
+  func testInterruptedSelectionSurvivesBeforeContextIsCaptured() async throws {
+    var chosen = ReproSession(title: "Selected workspace", origin: .recording, actor: .user)
+    chosen.selectedWorkspaceIDs = ["shop", "billing"]
+    try store.save(chosen)
+    let automatic = ReproSession(title: "No workspace", origin: .recording, actor: .user)
+    try store.save(automatic)
+    let recovered = ReproRecorder(supervisor: supervisor, runner: runner, store: store,
+      events: Empty<RecordingLifecycleEvent, Never>().eraseToAnyPublisher(),
+      defaults: UserDefaults(suiteName: "ReproRecovery-\(UUID())")!, secrets: FixedSecrets())
+    recovered.start()
+
+    XCTAssertEqual(recovered.sessions.map(\.id), [chosen.id])
+    XCTAssertEqual(recovered.sessions.first?.status, .failed)
+    XCTAssertEqual(recovered.sessions.first?.workspaceIDs, ["shop", "billing"])
+    XCTAssertNotNil(store.loadSession(chosen.id))
+    XCTAssertNil(store.loadSession(automatic.id))
+  }
+
+  func testRecordingFilterAndDropdownShareScopeWithoutLosingMultipleChoices() async throws {
+    try await load("[tasks.noop]\ncmd = \"true\"\n")
+    let file = try XCTUnwrap(supervisor.files.first { $0.id == "shop" })
+    let view = WorkspaceReprosView(file: file, recorder: recorder, controller: .shared, runner: runner)
+
+    recorder.setScope(.only(["shop", "billing"]))
+    XCTAssertFalse(view.workspaceFilter.wrappedValue)
+    XCTAssertEqual(recorder.scope, .only(["shop", "billing"]), "Opening the library must preserve toolbar choices")
+    XCTAssertEqual(view.recordingScope, .only(["shop", "billing"]))
+
+    view.workspaceFilter.wrappedValue = true
+    XCTAssertEqual(recorder.scope, .running, "All workspaces updates the shared dropdown setting")
+    XCTAssertEqual(view.recordingScope, .running, "The record action must follow the same choice")
+    XCTAssertTrue(view.workspaceFilter.wrappedValue)
+    view.workspaceFilter.wrappedValue = false
+    XCTAssertEqual(recorder.scope, .only(["shop"]), "With Shop narrows the dropdown to Shop")
+
+    recorder.setScope(.running)
+    XCTAssertTrue(view.workspaceFilter.wrappedValue, "Changing the dropdown updates the filter too")
+    recorder.setScope(.off)
+    XCTAssertFalse(view.workspaceFilter.wrappedValue)
+    XCTAssertEqual(view.recordingScope, .only(["shop"]), "Record with Logs explicitly enables this workspace")
+  }
+
+  func testSelectedQuietWorkspaceWithoutVideoKeepsFailureAndCancelDiscards() async throws {
+    try await load("[tasks.noop]\ncmd = \"true\"\n")
+    recorder.setScope(.only(["shop"]))
+    events.send(.started(Date()))
+    let stopped = try await stopImmediately(video: false)
+    let saved = try XCTUnwrap(stopped)
+    XCTAssertEqual(saved.status, .failed)
+    XCTAssertEqual(saved.workspaceIDs, ["shop"])
+    XCTAssertTrue(saved.detail?.contains("no video") == true)
+
+    events.send(.started(Date()))
+    let id = try XCTUnwrap(recorder.activeSessionID)
+    events.send(.cancelled)
+    let cancelled = await recorder.waitUntilSaved(id)
+    XCTAssertNil(cancelled)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: store.folder(id).path))
   }
 
   func testExplicitRequestIsKeptEvenWhenQuietAndCancelDiscards() async throws {
