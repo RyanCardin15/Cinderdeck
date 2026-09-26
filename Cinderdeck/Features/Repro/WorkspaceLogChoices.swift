@@ -61,7 +61,7 @@ struct WorkspaceLogOutlook: Equatable {
         message = "No workspaces are selected. The video is saved on its own."
       } else if active.isEmpty {
         state = .waiting
-        message = "\(ReproFormat.list(selected.map(\.name))) \(selected.count == 1 ? "isn't" : "aren't") running. Logs are captured if \(selected.count == 1 ? "it starts" : "they start") while you record."
+        message = "\(ReproFormat.list(selected.map(\.name))) \(selected.count == 1 ? "isn't" : "aren't") running. The recording is kept in the library, with any logs produced while you record."
       } else {
         state = .capturing
         message = "Logs from \(ReproFormat.list(active.map(\.name))) are saved with the video."

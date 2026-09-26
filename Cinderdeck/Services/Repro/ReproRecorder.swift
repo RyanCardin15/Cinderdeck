@@ -152,9 +152,9 @@ final class ReproRecorder: ObservableObject {
     guard !started else { return }
     started = true
     var loaded = store.loadSessions()
-    // An ordinary recording that was interrupted before any output arrived is just a video.
+    // Discard automatic captures with no workspace or output; preserve explicit choices.
     loaded.removeAll { session in
-      guard session.status.isActive, session.origin == .recording, session.markers.isEmpty, !store.hasLines(session.id) else { return false }
+      guard session.status.isActive, !session.keepsWithoutOutput, session.markers.isEmpty, !store.hasLines(session.id) else { return false }
       try? store.delete(session.id)
       return true
     }
@@ -257,6 +257,7 @@ final class ReproRecorder: ObservableObject {
     lastFirstFrame = nil
     var session = ReproSession(id: incoming.id, title: incoming.title ?? "", origin: incoming.origin, createdAt: date, actor: incoming.actor)
     session.capture = incoming.capture
+    session.selectedWorkspaceIDs = incoming.workspaces?.sorted()
     session.scope = incoming.workspaces == nil ? "all running workspaces"
       : incoming.workspaces?.isEmpty == true ? "workspace logs off"
       : incoming.origin == .recording ? "chosen in the recording toolbar" : "chosen for this recording"
@@ -771,7 +772,6 @@ final class ReproRecorder: ObservableObject {
     await settleCapture()
     guard var session = self.session, let clock = self.clock else { reset(); finishing.remove(id); resume(id, with: nil); return }
     reset()
-    let keepEmpty = session.origin != .recording
     session.clock = clock
     session.duration = videoDuration ?? clock.duration
     session.endedAt = clock.stoppedAt ?? Date()
@@ -789,7 +789,7 @@ final class ReproRecorder: ObservableObject {
     }
     session.markers.sort { $0.t == $1.t ? $0.at < $1.at : $0.t < $1.t }
     if session.title.isEmpty { session.title = displayTitle(session) }
-    guard keepEmpty || session.lineCount > 0 || !session.runs.isEmpty else {
+    guard session.keepsWithoutOutput || session.lineCount > 0 || !session.runs.isEmpty else {
       try? store.delete(session.id)
       finishing.remove(session.id)
       resume(session.id, with: nil)

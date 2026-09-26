@@ -9,24 +9,39 @@ struct WorkspaceReprosView: View {
   @ObservedObject var controller: ReproRecordingController
   @ObservedObject var runner: WorkspaceRunner
   @State private var selection = WorkspaceReproSelection()
-  @State private var allWorkspaces = false
   @State private var error: String?
   @State private var starting = false
 
-  private var repros: [ReproSession] {
-    recorder.sessions.filter { allWorkspaces || $0.workspaceIDs.contains(file.id) || $0.sources.contains { $0.workspace == file.id } }
+  // Both controls use the recorder's scope, so changing either updates the other.
+  // Keep multi-workspace toolbar choices intact when this view is opened.
+  var workspaceFilter: Binding<Bool> {
+    Binding(get: { recorder.scope == .running }, set: {
+      recorder.setScope($0 ? .running : .only([file.id]))
+    })
   }
 
-  private var selectedRepros: [ReproSession] {
-    repros.filter { selection.ids.contains($0.id) }
+  // The explicit "with logs" action falls back to this workspace when logs are off.
+  var recordingScope: ReproLogScope { recorder.scope.isOff ? .only([file.id]) : recorder.scope }
+
+  private var recordingScopeTitle: String {
+    recordingScope.summary(names: Dictionary(uniqueKeysWithValues: recorder.supervisor.files.map { ($0.id, $0.name) }))
+  }
+
+  private var repros: [ReproSession] {
+    let allWorkspaces = workspaceFilter.wrappedValue
+    return recorder.sessions.filter {
+      allWorkspaces || $0.workspaceIDs.contains(file.id) || $0.sources.contains { $0.workspace == file.id }
+    }
   }
 
   var body: some View {
+    let repros = self.repros
+    let selectedRepros = repros.filter { selection.ids.contains($0.id) }
     VStack(alignment: .leading, spacing: 12) {
-      toolbar
-      if !selectedRepros.isEmpty { selectionBar }
+      toolbar(count: repros.count)
+      if !selectedRepros.isEmpty { selectionBar(selectedRepros) }
       HStack(spacing: 6) {
-        WorkspaceLogScopeMenu()
+        WorkspaceLogScopeMenu(recorder: recorder, supervisor: recorder.supervisor, runner: runner)
         Text("Change this anytime from the logs button on the recording toolbar.").font(.caption).foregroundColor(.secondary)
       }
       if let error {
@@ -38,7 +53,7 @@ struct WorkspaceReprosView: View {
         emptyState
       } else {
         HSplitView {
-          list.frame(minWidth: 210, idealWidth: 250, maxWidth: 320)
+          list(repros, selectedRepros: selectedRepros).frame(minWidth: 210, idealWidth: 250, maxWidth: 320)
           if let session = repros.first(where: { $0.id == selection.focusedID }) {
             WorkspaceReproDetail(session: session, recorder: recorder).id(session.id)
           } else {
@@ -50,7 +65,8 @@ struct WorkspaceReprosView: View {
     }
     .onAppear { selection.reconcile(visibleIDs: repros.map(\.id)) }
     .onChange(of: repros.map(\.id)) { ids in selection.reconcile(visibleIDs: ids) }
-    .onChange(of: file.id) { _ in
+    .onChange(of: file.id) { [previousID = file.id] workspaceID in
+      if recorder.scope == .only([previousID]) { recorder.setScope(.only([workspaceID])) }
       selection = WorkspaceReproSelection()
       selection.reconcile(visibleIDs: repros.map(\.id))
     }
@@ -58,17 +74,17 @@ struct WorkspaceReprosView: View {
 
   // MARK: Toolbar
 
-  private var toolbar: some View {
+  private func toolbar(count: Int) -> some View {
     HStack {
-      Text("\(repros.count) \(repros.count == 1 ? "recording" : "recordings")")
-        .foregroundColor(.secondary)
-      Picker("Show", selection: $allWorkspaces) {
+      Text("\(count) \(count == 1 ? "recording" : "recordings")").foregroundColor(.secondary)
+      Picker("Show", selection: workspaceFilter) {
         Text("With \(file.name)").tag(false)
         Text("All workspaces").tag(true)
       }.pickerStyle(.segmented).labelsHidden().fixedSize()
+        .accessibilityIdentifier("workspace.recordings.scope")
       Spacer()
       Menu {
-        Button { record() } label: { Label("Record the screen with \(file.name) logs", systemImage: "record.circle") }
+        Button { record() } label: { Label("Record the screen with logs from \(recordingScopeTitle)", systemImage: "record.circle") }
         Button { NSWorkspace.shared.open(URL(string: "cinderdeck://record")!) } label: { Label("Record an area or window…", systemImage: "rectangle.dashed") }
         if let workspace = file.definition, !(workspace.tasks.isEmpty && workspace.workflows.isEmpty) {
           Divider()
@@ -86,12 +102,12 @@ struct WorkspaceReprosView: View {
       }
       .fixedSize()
       .disabled(recorder.isCapturing || starting)
-      .help("Record the screen and save \(file.name)'s logs with it, stamped with video times")
+      .help("Record the screen and save logs from \(recordingScopeTitle), stamped with video times")
       .accessibilityIdentifier("workspace.recordRepro")
     }
   }
 
-  private var selectionBar: some View {
+  private func selectionBar(_ selectedRepros: [ReproSession]) -> some View {
     HStack {
       Text("\(selectedRepros.count) selected")
         .font(.callout.weight(.medium))
@@ -141,13 +157,13 @@ struct WorkspaceReprosView: View {
           Button("Record \(workflow.name)") { record(kind: .workflow, id: workflow.id) }
         }
       }.disabled(recorder.isCapturing || starting)
-      Text("Recordings you make with the usual toolbar or shortcut show up here too, whenever this workspace is running.").font(.caption).foregroundColor(.secondary)
+      Text("Choose this workspace in the recording toolbar to keep recordings here, even when it prints no logs.").font(.caption).foregroundColor(.secondary)
     }.frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
   // MARK: List
 
-  private var list: some View {
+  private func list(_ repros: [ReproSession], selectedRepros: [ReproSession]) -> some View {
     ScrollView {
       LazyVStack(spacing: 6) {
         ForEach(repros) { session in
@@ -188,7 +204,7 @@ struct WorkspaceReprosView: View {
     starting = true
     error = nil
     var options = ReproRecordingController.Options()
-    options.workspaces = [file.id]
+    options.workspaces = recordingScope == .running ? nil : Set(recordingScope.workspaces)
     options.maxSeconds = 1800
     Task {
       defer { starting = false }
@@ -197,7 +213,7 @@ struct WorkspaceReprosView: View {
           let (session, _) = try await controller.startRun(options, workspace: file.id, kind: kind, definitionID: id, actor: .user, runner: runner, origin: .workspace)
           selection.selectOnly(session.id)
         } else {
-          options.title = "\(file.name) recording"
+          options.title = options.workspaces == Set([file.id]) ? "\(file.name) recording" : nil
           selection.selectOnly(try await controller.start(options, origin: .workspace, actor: .user).id)
         }
       } catch let failure as StackControlError { error = failure.message }
