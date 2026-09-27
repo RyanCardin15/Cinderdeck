@@ -53,6 +53,11 @@ enum StackPreviewHarness {
           let rect = CGRect(x: frame.midX - 400, y: frame.midY - 250,
             width: min(800, frame.width), height: min(500, frame.height))
           RecordingCoordinator.shared.showToolbar(for: rect)
+          // The toolbar hides itself from screen capture so it never appears in videos;
+          // in the harness, let screenshots see it and its popovers.
+          Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+            MainActor.assumeIsolated { for window in NSApp.windows where window.sharingType == .none { window.sharingType = .readOnly } }
+          }
         } else {
           capture.startRecordingFlow()
         }
