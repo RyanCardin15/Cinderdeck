@@ -21,13 +21,16 @@ struct StackLaneRemovalView: View {
   @State private var removed = false
 
   private var name: String { request.file.lane?.name ?? request.file.name }
+  private var entryOnly: Bool { request.file.lane == nil }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       Text(removed ? "\(name) \(request.keepWorktrees ? "released" : "deleted")"
         : "\(request.keepWorktrees ? "Release" : "Delete") \(name)?").font(.headline)
       if !removed {
-        Text(request.keepWorktrees
+        Text(entryOnly
+          ? "Removes this lane's saved entry from Cinderdeck. Project files, worktrees, Git branches, and logs stay on disk. Stop its services and runs first."
+          : request.keepWorktrees
           ? "Stops only this lane and forgets it. Its worktrees and files stay on disk; Git branches are kept."
           : "Stops only this lane\(request.file.definition?.laneSettings?.teardown.map { ", runs teardown (\($0))," } ?? ""), and removes its worktrees. Git branches and adopted worktrees are kept. Tracked or untracked changes block deletion.")
           .fixedSize(horizontal: false, vertical: true)
@@ -50,7 +53,7 @@ struct StackLaneRemovalView: View {
             }
           }.frame(maxHeight: 160)
         }
-        Toggle("Delete this lane's service logs", isOn: $deleteLogs).disabled(checking || working)
+        if !entryOnly { Toggle("Delete this lane's service logs", isOn: $deleteLogs).disabled(checking || working) }
       }
       if let error { Text(error).foregroundColor(.red).textSelection(.enabled).fixedSize(horizontal: false, vertical: true) }
       ForEach(warnings, id: \.self) { Text($0).foregroundColor(.orange).fixedSize(horizontal: false, vertical: true) }
@@ -60,7 +63,7 @@ struct StackLaneRemovalView: View {
         Button(removed ? "Done" : "Cancel", role: .cancel) { dismiss() }
           .keyboardShortcut(.cancelAction).disabled(working)
         if !removed {
-          Button(request.keepWorktrees ? "Stop and release" : "Stop and delete", role: .destructive) { remove() }
+          Button(entryOnly ? "Delete lane" : request.keepWorktrees ? "Stop and release" : "Stop and delete", role: .destructive) { remove() }
             .disabled(checking || working || error != nil || (!request.keepWorktrees && !ignored.isEmpty && !discardIgnored))
             .keyboardShortcut(.defaultAction).accessibilityIdentifier("stacks.laneRemoval.confirm")
         }
@@ -72,6 +75,7 @@ struct StackLaneRemovalView: View {
 
   private func prepare() async {
     defer { checking = false }
+    guard !entryOnly else { return }
     do {
       guard let record = try StackLaneStore.record(id: request.id, in: viewModel.supervisor.lanesDirectory) else {
         throw StackError.message("This lane is no longer available.")
@@ -89,6 +93,11 @@ struct StackLaneRemovalView: View {
     Task {
       defer { working = false }
       do {
+        if entryOnly {
+          try await StackControlService.shared.removeLaneEntry(request.id, actor: .user)
+          dismiss()
+          return
+        }
         let report = try await StackControlService.shared.lanes.remove(request.id, actor: .user, options: options)
         StackControlService.shared.release(stack: request.id)
         removed = true
@@ -105,7 +114,7 @@ struct StackLaneDeletionMenu: View {
   let file: StackDefinitionFile
   @ObservedObject var model: StacksViewModel
   var body: some View {
-    if file.lane != nil {
+    if model.workspaceNavigation.isLane(file.id) {
       Button("Delete lane…", role: .destructive) { model.deleteLane(file) }
         .disabled(model.isBusy(file.id)).accessibilityIdentifier("workspace.lane.delete.\(file.id)")
     }

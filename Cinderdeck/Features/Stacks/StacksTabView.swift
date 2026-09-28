@@ -70,6 +70,7 @@ struct StacksTabView: View {
       StackLanesView(viewModel: viewModel)
     }
     .sheet(item: $viewModel.laneRemoval) { StackLaneRemovalView(request: $0, viewModel: viewModel) }
+    .sheet(item: $viewModel.laneAttachment) { StackLaneAttachmentView(file: $0, model: viewModel) }
   }
 
   // MARK: Empty

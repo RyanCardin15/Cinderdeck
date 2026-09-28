@@ -175,6 +175,7 @@ struct WorkspaceNavigationMenu: View {
   @ObservedObject var model: StacksViewModel
   var body: some View {
     Button("Show lane map") { WorkspaceWindowController.shared.show(workspace: file.id, section: .laneMap) }
+    StackLaneAttachmentMenu(file: file, model: model)
     StackLaneDeletionMenu(file: file, model: model)
     if model.workspaceNavigation.workspaces.contains(where: { $0.id == file.id }) {
       Button("Delete workspace…", role: .destructive) { model.deleteWorkspace(file) }

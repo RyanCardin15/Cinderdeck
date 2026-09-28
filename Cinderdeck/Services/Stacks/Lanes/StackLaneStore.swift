@@ -94,7 +94,7 @@ nonisolated enum StackLaneStore {
       }
       guard let base = source?.definition else {
         file.issues.append(.init(severity: .error, message: source == nil
-          ? "Source workspace \(record.info.sourceStackID) is missing. Stop or remove this lane."
+          ? "Source workspace \(record.info.sourceStackID) is missing. Add this lane to a workspace or delete it using its context menu."
           : "Source workspace \(record.info.sourceStackID) has errors: " + (source?.issues.filter { $0.severity == .error }.map(\.message).joined(separator: "; ") ?? "")))
         return file
       }

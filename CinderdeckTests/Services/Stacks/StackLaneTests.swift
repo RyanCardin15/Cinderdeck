@@ -122,6 +122,108 @@ final class StackLaneTests: XCTestCase {
     }
   }
 
+  func testAttachOrphanPreservesIdentityWorktreesPortsAndSelection() async throws {
+    try await load()
+    let file = try await supervisor.createLane(stack: "shop", branch: "orphan", actor: codex)
+    try StackLaneStore.update(id: file.id, in: supervisor.lanesDirectory) { $0.info.sourceStackID = "missing" }
+    await supervisor.reloadDefinitions()
+    let before = try XCTUnwrap(StackLaneStore.record(id: file.id, in: supervisor.lanesDirectory))
+    let model = StacksViewModel(supervisor: supervisor)
+    model.select("shop")
+    model.attachLane(file)
+    XCTAssertEqual(model.laneAttachment?.id, file.id)
+    XCTAssertEqual(model.selectedStackID, "shop")
+    XCTAssertTrue(model.hasAuxiliaryUI)
+    model.laneAttachment = nil
+    model.select(file.id)
+
+    try await control.attachLane(file.id, to: "shop", actor: codex)
+    await supervisor.reloadDefinitions()
+    let after = try XCTUnwrap(StackLaneStore.record(id: file.id, in: supervisor.lanesDirectory))
+    XCTAssertEqual(after.id, before.id)
+    XCTAssertEqual(after.worktrees, before.worktrees)
+    XCTAssertEqual(after.info.directory, before.info.directory)
+    XCTAssertEqual(after.info.ports, before.info.ports)
+    XCTAssertEqual(after.info.owner, before.info.owner)
+    XCTAssertEqual(after.info.sourceStackID, "shop")
+    XCTAssertEqual(model.selectedStackID, file.id)
+    XCTAssertEqual(model.selectedWorkspaceID, "shop")
+    XCTAssertFalse(model.workspaceNavigation.isUnattached(file.id))
+    XCTAssertNotNil(supervisor.definition(file.id))
+    model.attachLane(file)
+    XCTAssertNil(model.laneAttachment, "A stale context menu must not attach an already attached lane")
+    try await supervisor.removeLane(file.id, actor: codex)
+  }
+
+  func testAttachmentRejectsUnrelatedWorkspaceClaimsAndActiveRunsWithoutWriting() async throws {
+    try await load()
+    let file = try await supervisor.createLane(stack: "shop", branch: "orphan", actor: codex)
+    try StackLaneStore.update(id: file.id, in: supervisor.lanesDirectory) { $0.info.sourceStackID = "missing" }
+    try WorkspaceDefinitionWriter.createWorkspace(name: "Other", root: root.path, id: "other", directory: definitions)
+    await supervisor.reloadDefinitions()
+    let manifest = StackLaneStore.manifest(id: file.id, in: supervisor.lanesDirectory)
+    let before = try Data(contentsOf: manifest)
+    for target in ["other", "absent", file.id] {
+      do { try await control.attachLane(file.id, to: target, actor: codex); XCTFail("Attached to \(target)") } catch {}
+      XCTAssertEqual(try Data(contentsOf: manifest), before)
+    }
+    _ = try await control.handle("claim", params: .object(["workspace": .string(file.id)]), actor: claude)
+    do { try await control.attachLane(file.id, to: "shop", actor: codex); XCTFail("Ignored claim") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "claimed") }
+    control.release(stack: file.id)
+    supervisor.activeWorkspaceRun = { $0 == file.id }
+    do { try await control.attachLane(file.id, to: "shop", actor: codex); XCTFail("Changed busy lane") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "busy") }
+    XCTAssertEqual(try Data(contentsOf: manifest), before)
+    supervisor.activeWorkspaceRun = nil
+    try await supervisor.removeLane(file.id, actor: codex)
+  }
+
+  func testStandaloneOrphanMembershipSurvivesReloadAndDeletionKeepsProject() async throws {
+    try await load()
+    let project = supervisor.lanesDirectory.appendingPathComponent("legacy/repo")
+    try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+    let marker = project.appendingPathComponent("keep.txt")
+    try "work".write(to: marker, atomically: true, encoding: .utf8)
+    try WorkspaceDefinitionWriter.createWorkspace(name: "Legacy", root: project.path, id: "legacy", directory: definitions)
+    await supervisor.reloadDefinitions()
+    XCTAssertTrue(WorkspaceNavigation(files: supervisor.files, lanesDirectory: supervisor.lanesDirectory).isUnattached("legacy"))
+    try await control.attachLane("legacy", to: "shop", actor: codex)
+    let reloaded = try StackWorkspaceResolver.load(definitions)
+    let navigation = WorkspaceNavigation(files: reloaded, lanesDirectory: supervisor.lanesDirectory)
+    XCTAssertEqual(navigation.workspaceID(for: "legacy"), "shop")
+    XCTAssertFalse(navigation.isUnattached("legacy"))
+    XCTAssertEqual(reloaded.first { $0.id == "legacy" }?.definition?.root.path, project.path)
+    do {
+      _ = try await control.handleWorkspaceLifecycle("workspace.delete", params: .object(["workspace": .string("shop")]), actor: codex)
+      XCTFail("Deleted a workspace with an attached lane definition")
+    } catch { XCTAssertEqual((error as? StackControlError)?.code, "in_use") }
+    try await control.removeLaneEntry("legacy", actor: codex)
+    XCTAssertFalse(supervisor.files.contains { $0.id == "legacy" })
+    XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), "work")
+  }
+
+  func testUnreadableLaneDeletionKeepsWorktreeAndRejectsOriginalWorkspace() async throws {
+    try await load()
+    let manifest = StackLaneStore.manifest(id: "broken", in: supervisor.lanesDirectory)
+    try FileManager.default.createDirectory(at: manifest.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try "broken json".write(to: manifest, atomically: true, encoding: .utf8)
+    let marker = manifest.deletingLastPathComponent().appendingPathComponent("keep.txt")
+    try "work".write(to: marker, atomically: true, encoding: .utf8)
+    await supervisor.reloadDefinitions()
+    let model = StacksViewModel(supervisor: supervisor)
+    let file = try XCTUnwrap(supervisor.files.first { $0.id == "broken" })
+    model.deleteLane(file)
+    XCTAssertEqual(model.laneRemoval?.id, "broken")
+    do { try await control.attachLane("broken", to: "shop", actor: codex); XCTFail("Attached unreadable lane") } catch {}
+    XCTAssertEqual(try String(contentsOf: manifest, encoding: .utf8), "broken json")
+    try await control.removeLaneEntry("broken", actor: codex)
+    XCTAssertFalse(supervisor.files.contains { $0.id == "broken" })
+    XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), "work")
+    do { try await control.removeLaneEntry("shop", actor: codex); XCTFail("Removed original workspace") } catch {}
+    XCTAssertNotNil(supervisor.definition("shop"))
+  }
+
   private func load(twoServices: Bool = false) async throws {
     let first = try StackLaneStore.availablePort(excluding: [])
     let second = try StackLaneStore.availablePort(excluding: [first])
