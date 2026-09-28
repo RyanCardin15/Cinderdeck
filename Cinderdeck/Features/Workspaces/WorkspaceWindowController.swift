@@ -7,12 +7,12 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
   let model: StacksViewModel
   init(supervisor: StackSupervisor = .shared, runner: WorkspaceRunner = .shared) {
     model = StacksViewModel(supervisor: supervisor)
-    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1160, height: 760),
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1380, height: 860),
       styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
     super.init(window: window)
     window.delegate = self
     window.title = "Workspaces — Cinderdeck"
-    window.minSize = NSSize(width: 920, height: 600)
+    window.minSize = NSSize(width: 1020, height: 700)
     window.isReleasedWhenClosed = false
     window.setFrameAutosaveName("CinderdeckWorkspaces")
     window.contentView = NSHostingView(rootView: WorkspaceView(model: model, runner: runner))

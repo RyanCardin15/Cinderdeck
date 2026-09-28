@@ -43,6 +43,7 @@ final class StacksViewModel: ObservableObject {
   /// Set to open the Workspaces window on a section, e.g. Recordings.
   @Published var requestedSection: WorkspaceSection?
   @Published var lanesSheet = false
+  @Published var laneRemoval: StackLaneRemovalRequest?
   let supervisor: StackSupervisor
   private let git: GitService
   private var subscriptions = Set<AnyCancellable>()
@@ -90,7 +91,7 @@ final class StacksViewModel: ObservableObject {
     }
     return services.sorted { $0.id < $1.id }
   }
-  var hasAuxiliaryUI: Bool { branchPicker != nil || stackBranchPicker || editor != nil || isConfirming || agentsSheet || lanesSheet }
+  var hasAuxiliaryUI: Bool { branchPicker != nil || stackBranchPicker || editor != nil || isConfirming || agentsSheet || lanesSheet || laneRemoval != nil }
   func claim(_ stack: String) -> StackClaim? { claims[stack].flatMap { $0.isExpired ? nil : $0 } }
   func releaseClaim(_ stack: String) {
     guard let claim = claim(stack), confirm(title: "Release \(claim.holder.name)'s claim?",
@@ -183,6 +184,10 @@ final class StacksViewModel: ObservableObject {
   }
   func edit(_ file: StackDefinitionFile) { editor = .init(file: file.file) }
   func create() { editor = .init(file: nil) }
+  func deleteLane(_ file: StackDefinitionFile) {
+    guard let current = files.first(where: { $0.id == file.id }), current.lane != nil else { return }
+    laneRemoval = .init(file: current)
+  }
   func deleteWorkspace(_ file: StackDefinitionFile) {
     guard workspaceNavigation.workspaces.contains(where: { $0.id == file.id }) else { return }
     do {

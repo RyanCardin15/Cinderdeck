@@ -14,17 +14,7 @@ struct StackLanesView: View {
   @State private var working = false
   @State private var error: String?
   @State private var warnings: [String] = []
-  @State private var removal: Removal?
-
-  /// What removing a lane would delete, shown before anything happens.
-  struct Removal: Identifiable {
-    let file: StackDefinitionFile
-    var ignored: [StackLaneIgnoredEntry] = []
-    var discardIgnored = true
-    var deleteLogs = false
-    var keepWorktrees = false
-    var id: String { file.id }
-  }
+  @State private var removal: StackLaneRemovalRequest?
 
   init(viewModel: StacksViewModel) {
     self.viewModel = viewModel
@@ -82,7 +72,7 @@ struct StackLanesView: View {
     }
     .padding(24).frame(width: 900)
     .task { await supervisor.refreshLaneGitStates(lanes.filter { $0.lane != nil }.map(\.id)) }
-    .sheet(item: $removal) { item in removalSheet(item) }
+    .sheet(item: $removal) { StackLaneRemovalView(request: $0, viewModel: viewModel) }
   }
 
   private var hint: String {
@@ -190,13 +180,19 @@ struct StackLanesView: View {
           if lane.pinned { Button("Unpin") { unpin(file) }.help("Follow \(lane.sourceStackID)'s current definition") }
           Spacer()
           Menu("Remove") {
-            Button("Remove lane…") { prepareRemoval(file, keep: false) }
-            Button("Release, keep worktrees…") { prepareRemoval(file, keep: true) }
+            Button("Delete lane…", role: .destructive) { removal = .init(file: file) }
+            Button("Release, keep worktrees…") { removal = .init(file: file, keepWorktrees: true) }
           }.fixedSize()
         }.disabled(working || viewModel.isBusy(file.id))
       }
     }
     .padding(14).frame(width: 260, alignment: .topLeading).stackSurface(cornerRadius: 12)
+    .contextMenu {
+      if file.lane != nil {
+        Button("Delete lane…", role: .destructive) { removal = .init(file: file) }
+          .disabled(working || viewModel.isBusy(file.id))
+      }
+    }
   }
 
   private func badge(_ text: String, _ color: Color, help: String) -> some View {
@@ -230,76 +226,6 @@ struct StackLanesView: View {
   private func open(_ folder: URL, with app: URL) {
     NSWorkspace.shared.open([folder], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration()) { _, error in
       if let error { Task { @MainActor in self.error = error.localizedDescription } }
-    }
-  }
-
-  // MARK: Removal
-
-  private func removalSheet(_ item: Removal) -> some View {
-    let binding = Binding(get: { removal ?? item }, set: { removal = $0 })
-    let total = item.ignored.compactMap(\.bytes).reduce(0, +)
-    return VStack(alignment: .leading, spacing: 12) {
-      Text(item.keepWorktrees ? "Release \(item.file.lane?.name ?? "lane")?" : "Remove \(item.file.lane?.name ?? "lane")?").font(.headline)
-      Text(item.keepWorktrees
-        ? "Stops only this lane and forgets it. Its worktrees and files stay on disk; Git branches are kept."
-        : "Stops only this lane\(item.file.definition?.laneSettings?.teardown.map { ", runs teardown (\($0))," } ?? ""), and removes its worktrees. Git branches and adopted worktrees are kept. Tracked or untracked changes block removal.")
-        .fixedSize(horizontal: false, vertical: true)
-      if !item.keepWorktrees, !item.ignored.isEmpty {
-        Toggle("Delete ignored files (\(ByteCountFormatter.string(fromByteCount: total, countStyle: .file)))", isOn: binding.discardIgnored)
-        ScrollView {
-          VStack(alignment: .leading, spacing: 2) {
-            ForEach(item.ignored, id: \.path) { entry in
-              HStack {
-                Text(entry.path).lineLimit(1).truncationMode(.head)
-                Spacer()
-                if let note = entry.note { Text(note).foregroundColor(.orange) }
-                if let bytes = entry.bytes { Text(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)).foregroundColor(.secondary) }
-              }.font(.caption.monospaced())
-            }
-          }
-        }.frame(maxHeight: 160)
-      }
-      Toggle("Delete this lane's service logs", isOn: binding.deleteLogs)
-      HStack {
-        Spacer()
-        Button("Cancel", role: .cancel) { removal = nil }.keyboardShortcut(.cancelAction)
-        Button(item.keepWorktrees ? "Stop and release" : "Stop and remove", role: .destructive) {
-          let request = removal ?? item
-          removal = nil
-          remove(request)
-        }
-        .disabled(!item.keepWorktrees && !item.ignored.isEmpty && !(removal ?? item).discardIgnored)
-        .keyboardShortcut(.defaultAction)
-      }
-    }
-    .padding(20).frame(width: 560)
-  }
-
-  private func prepareRemoval(_ file: StackDefinitionFile, keep: Bool) {
-    working = true; error = nil
-    Task {
-      defer { working = false }
-      do {
-        var item = Removal(file: file, keepWorktrees: keep)
-        if !keep, let record = try StackLaneStore.record(id: file.id, in: supervisor.lanesDirectory) {
-          item.ignored = try await StackLaneStore.check(record, others: try StackLaneStore.records(in: supervisor.lanesDirectory),
-            options: .init(discardIgnored: true))
-        }
-        removal = item
-      } catch { self.error = error.localizedDescription }
-    }
-  }
-
-  private func remove(_ item: Removal) {
-    working = true; error = nil
-    Task {
-      defer { working = false }
-      do {
-        let report = try await coordinator.remove(item.file.id, actor: .user, options: .init(discardIgnored: item.discardIgnored,
-          keepWorktrees: item.keepWorktrees, deleteLogs: item.deleteLogs))
-        StackControlService.shared.release(stack: item.file.id)
-        warnings = report.unpushed.sorted { $0.key < $1.key }.map { "\($0.key) has \($0.value) commit\($0.value == 1 ? "" : "s") on no remote. The branch was kept." }
-      } catch { self.error = error.localizedDescription }
     }
   }
 

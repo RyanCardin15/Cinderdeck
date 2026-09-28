@@ -28,7 +28,7 @@ struct WorkspaceView: View {
 
   var body: some View {
     HSplitView {
-      sidebar.frame(minWidth: 200, idealWidth: 235, maxWidth: 320)
+      sidebar.frame(minWidth: 200, idealWidth: 225, maxWidth: 270)
       VStack(alignment: .leading, spacing: 16) {
         if let file = model.selectedFile {
           HStack(alignment: .top) {
@@ -45,8 +45,8 @@ struct WorkspaceView: View {
           Picker("Workspace component", selection: $section) {
             ForEach(WorkspaceSection.allCases, id: \.self) { Text($0.rawValue).tag($0) }
           }.pickerStyle(.segmented).labelsHidden().accessibilityIdentifier("workspace.sections")
-          Text(section.explanation).foregroundColor(.secondary).font(.callout)
-          if model.selectedWorkspaceID != file.id {
+          if section != .laneMap { Text(section.explanation).foregroundColor(.secondary).font(.callout) }
+          if model.selectedWorkspaceID != file.id, section != .laneMap {
             HStack {
               Label(file.lane.map { "Lane: \($0.name)" } ?? "Lane workspace", systemImage: "arrow.triangle.branch")
               Spacer()
@@ -63,7 +63,7 @@ struct WorkspaceView: View {
             HStack { Label(error, systemImage: "exclamationmark.triangle").textSelection(.enabled); Spacer(); Button("Dismiss") { model.error = nil } }
               .font(.callout).foregroundColor(.orange)
           }
-          if let active = runner.activeRun(file.id), section != .runs {
+          if let active = runner.activeRun(file.id), section != .runs, section != .laneMap {
             HStack {
               ProgressView().controlSize(.small)
               Text("\(active.name) · \(active.status.label)")
@@ -111,6 +111,7 @@ struct WorkspaceView: View {
     }
     .sheet(isPresented: $model.agentsSheet) { StackAgentsSheet() }
     .sheet(isPresented: $model.lanesSheet) { StackLanesView(viewModel: model) }
+    .sheet(item: $model.laneRemoval) { StackLaneRemovalView(request: $0, viewModel: model) }
     .sheet(isPresented: $model.stackBranchPicker) { StackBranchPickerSheet(viewModel: model) }
     .onChange(of: model.selectedStackID) { _ in selectedRun = nil; revealSelectedLane() }
     .onAppear { consumeSectionRequest(); revealSelectedLane() }
@@ -151,6 +152,10 @@ struct WorkspaceView: View {
   private func sidebarRow(_ file: StackDefinitionFile, isWorkspace: Bool) -> some View {
     let laneCount = isWorkspace ? navigation.lanes(for: file.id).count : 0
     let selected = model.selectedStackID == file.id
+    let source = navigation.workspaceID(for: file.id) ?? file.id
+    let tint = WorkspaceLaneMapStyle.tint(file.id, source: source, lanes: navigation.lanes(for: source).map(\.id))
+    let state = model.states[file.id] ?? .init()
+    let active = runner.activeRun(file.id) != nil || state.isActive
     return HStack(spacing: 0) {
       if laneCount > 0 {
         Button {
@@ -164,7 +169,10 @@ struct WorkspaceView: View {
       }
       Button { model.select(file.id) } label: {
         HStack {
-          Image(systemName: isWorkspace ? "square.stack.3d.up.fill" : "arrow.triangle.branch").foregroundColor(.accentColor)
+          VStack(spacing: 7) {
+            Image(systemName: isWorkspace ? "square.stack.3d.up.fill" : "arrow.triangle.branch").foregroundColor(tint)
+            if active { Circle().fill(.green).frame(width: 5, height: 5).help("Running") }
+          }
           VStack(alignment: .leading, spacing: 4) {
             Text(isWorkspace ? file.name : file.lane?.name ?? file.name).fontWeight(.semibold).lineLimit(2)
             if !isWorkspace {
@@ -175,18 +183,25 @@ struct WorkspaceView: View {
               ?? (file.definition == nil ? "Needs attention" : "\(file.definition?.services.count ?? 0) \(file.definition?.services.count == 1 ? "service" : "services") · \(file.definition?.tasks.count ?? 0) \(file.definition?.tasks.count == 1 ? "task" : "tasks")"))
               .font(.caption).foregroundColor(.secondary).lineLimit(1)
             if laneCount > 0 {
-              Label("\(laneCount) \(laneCount == 1 ? "lane" : "lanes")", systemImage: "arrow.triangle.branch")
-                .font(.caption).foregroundColor(.secondary)
+              HStack(spacing: 5) {
+                ForEach(navigation.lanes(for: file.id).prefix(5)) { lane in
+                  Circle().fill(WorkspaceLaneMapStyle.tint(lane.id, source: file.id, lanes: navigation.lanes(for: file.id).map(\.id)))
+                    .frame(width: 5, height: 5)
+                }
+                Text("\(laneCount) \(laneCount == 1 ? "lane" : "lanes")").font(.system(size: 10, weight: .medium))
+              }.foregroundColor(.secondary)
             }
           }
           Spacer(minLength: 0)
         }.padding(10).contentShape(Rectangle())
       }.buttonStyle(.plain).accessibilityIdentifier("workspace.sidebar.\(file.id)")
     }
-    .background(selected ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
+    .background(selected ? tint.opacity(0.1) : .clear, in: RoundedRectangle(cornerRadius: 10))
+    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(selected ? tint.opacity(0.35) : .clear))
     .help(WorkspaceLaneGraph.branchSummary(file, statuses: model.repoStatuses))
     .contextMenu {
       Button("Show lane map") { model.select(file.id); section = .laneMap }
+      StackLaneDeletionMenu(file: file, model: model)
       if isWorkspace {
         Button("Edit workspace…") { model.edit(file) }
         Divider()
