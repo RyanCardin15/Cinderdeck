@@ -181,6 +181,8 @@ nonisolated struct StackDefinitionFile: Identifiable, Equatable, Sendable {
   var laneWorktrees: [StackLaneWorktree] = []
   /// Services added to the source after the lane was created, waiting for ports.
   var pendingLanePorts: [String] = []
+  /// Explicit sidebar membership for a standalone definition inside a lane folder.
+  var parentWorkspaceID: String?
   var lane: StackLaneInfo? { definition?.lane ?? savedLane }
   var name: String { definition?.name ?? savedLane?.reference ?? file.deletingPathExtension().lastPathComponent }
 }

@@ -19,6 +19,8 @@ Right-click a workspace and choose **Delete workspace…** to remove its definit
 
 ## Create and edit
 
+Under **Lanes without a workspace**, right-click a lane and choose **Add to workspace…** to pick its workspace, or **Delete lane…** to remove it. Adding a managed lane requires a workspace using its original repositories and keeps its ID, worktrees, branches, and assigned ports. Standalone lane definitions keep their commands and save their sidebar membership as `workspace = "workspace-id"` in TOML. Stop lane services and runs before changing membership. Unreadable lane records must be repaired before attachment; deleting an unreadable record or standalone entry removes only its saved entry and keeps project files and worktrees.
+
 Choose **+** in Workspaces, give the workspace a name and project folder, and create it. An empty workspace is valid. **Edit workspace → Add project…** adds a long-running service. The **Tasks** tab has **New task**, with name, command, working folder, timeout, and required services. **New workflow** lets you add task/start/stop steps and move them up or down. The TOML editor remains available through **Edit workspace** for environment overrides and other advanced settings.
 
 If you have been using a service for a build or test command, stop it, open **Tasks → Move service to Tasks**, choose the service, and save. This preserves its command, folder, repository association, environment, and required services. It removes the service entry; references from other services/tasks/workflows must be updated first. The file is validated before saving. Task/workflow menus also offer deletion; referenced tasks cannot be deleted until their workflows are updated. Prior run results are retained.

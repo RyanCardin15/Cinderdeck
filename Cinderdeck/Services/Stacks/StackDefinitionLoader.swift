@@ -24,7 +24,11 @@ nonisolated enum StackDefinitionLoader {
       let document = try SimpleTOMLParser.parse(source, strict: true)
       var reader = StackDefinitionReader(root: document.root)
       if !validID(id) { reader.error("File name must use letters, numbers, hyphens or underscores.") }
-      reader.warnUnknown(document.root, allowed: ["name", "root", "shell", "restart_on_branch_change", "env", "secrets", "repos", "services", "tasks", "workflows", "lanes"], at: "")
+      reader.warnUnknown(document.root, allowed: ["name", "root", "workspace", "shell", "restart_on_branch_change", "env", "secrets", "repos", "services", "tasks", "workflows", "lanes"], at: "")
+      result.parentWorkspaceID = reader.string(document.root, "workspace")
+      if let parent = result.parentWorkspaceID, !validID(parent) || parent == id {
+        reader.error("workspace must identify a different source workspace")
+      }
       let root = resolve(reader.string(document.root, "root") ?? file.deletingLastPathComponent().path, relativeTo: file.deletingLastPathComponent())
       let shell = reader.string(document.root, "shell") ?? ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
       var stack = StackDefinition(id: id, name: reader.string(document.root, "name") ?? id, file: file,

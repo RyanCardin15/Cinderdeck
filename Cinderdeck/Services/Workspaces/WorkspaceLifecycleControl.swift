@@ -9,6 +9,13 @@ extension StackControlService {
     if method == "workspace.definition" { return try workspaceSourceResult(file) }
     let deleted = method == "workspace.delete"
     try await supervisor.withDefinitionLock(workspace: file.id) {
+      if deleted, params["lane_entry"]?.boolValue == true {
+        let files = try StackWorkspaceResolver.load(supervisor.definitionsDirectory)
+        let navigation = WorkspaceNavigation(files: files, lanesDirectory: supervisor.lanesDirectory)
+        guard navigation.isLane(file.id), files.first(where: { $0.id == file.id })?.lane == nil else {
+          throw StackError.message("This lane changed. Close the confirmation and try again.")
+        }
+      }
       try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
       try requireStoppedForDefinition(file.id)
       let original = try String(contentsOf: file.file, encoding: .utf8)
@@ -16,8 +23,10 @@ extension StackControlService {
         throw StackControlError(code: "stale_definition", message: "Workspace changed. Read workspace_definition again before saving or removing it.")
       }
       let records = try StackLaneStore.records(in: supervisor.lanesDirectory).filter { $0.info.sourceStackID == file.id }
-      if deleted, !records.isEmpty {
-        throw StackControlError(code: "in_use", message: "Remove or release this workspace's lanes first: " + records.map { $0.info.reference }.joined(separator: ", "))
+      let children = try StackDefinitionLoader.loadDirectory(supervisor.definitionsDirectory).filter { $0.parentWorkspaceID == file.id }
+      if deleted, !records.isEmpty || !children.isEmpty {
+        throw StackControlError(code: "in_use", message: "Remove or release this workspace's lanes first: "
+          + (records.map { $0.info.reference } + children.map(\.name)).joined(separator: ", "))
       }
       for lane in records {
         try checkClaim(lane.id, actor: actor, force: params["force"]?.boolValue == true)
@@ -71,7 +80,7 @@ extension StackControlService {
 
   func requireStoppedForDefinition(_ id: String) throws {
     guard !supervisor.isBootstrapping, !supervisor.isRemovingLane(id), supervisor.states[id]?.operation == nil,
-      workspaceRunner.activeRun(id) == nil, supervisor.states[id]?.isActive != true else {
+      workspaceRunner.activeRun(id) == nil, supervisor.activeWorkspaceRun?(id) != true, supervisor.states[id]?.isActive != true else {
       throw StackControlError(code: "busy", message: "Stop services and finish or cancel active runs in \(id) before changing its definition or lane settings.")
     }
   }

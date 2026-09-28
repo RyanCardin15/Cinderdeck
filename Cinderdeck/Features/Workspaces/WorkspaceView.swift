@@ -112,8 +112,10 @@ struct WorkspaceView: View {
     .sheet(isPresented: $model.agentsSheet) { StackAgentsSheet() }
     .sheet(isPresented: $model.lanesSheet) { StackLanesView(viewModel: model) }
     .sheet(item: $model.laneRemoval) { StackLaneRemovalView(request: $0, viewModel: model) }
+    .sheet(item: $model.laneAttachment) { StackLaneAttachmentView(file: $0, model: model) }
     .sheet(isPresented: $model.stackBranchPicker) { StackBranchPickerSheet(viewModel: model) }
     .onChange(of: model.selectedStackID) { _ in selectedRun = nil; revealSelectedLane() }
+    .onChange(of: model.selectedWorkspaceID) { _ in revealSelectedLane() }
     .onAppear { consumeSectionRequest(); revealSelectedLane() }
     .onChange(of: model.requestedSection) { _ in consumeSectionRequest() }
   }
@@ -201,6 +203,7 @@ struct WorkspaceView: View {
     .help(WorkspaceLaneGraph.branchSummary(file, statuses: model.repoStatuses))
     .contextMenu {
       Button("Show lane map") { model.select(file.id); section = .laneMap }
+      StackLaneAttachmentMenu(file: file, model: model)
       StackLaneDeletionMenu(file: file, model: model)
       if isWorkspace {
         Button("Edit workspace…") { model.edit(file) }

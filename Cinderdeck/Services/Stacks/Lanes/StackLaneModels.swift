@@ -1,7 +1,7 @@
 import Foundation
 
 nonisolated struct StackLaneInfo: Codable, Equatable, Sendable {
-  let sourceStackID: String
+  var sourceStackID: String
   var name: String
   let owner: StackActor
   let createdAt: Date

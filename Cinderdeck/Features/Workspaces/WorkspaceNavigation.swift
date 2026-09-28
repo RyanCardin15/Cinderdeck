@@ -17,6 +17,9 @@ struct WorkspaceNavigation {
       if let lane = file.lane {
         sourceIDs[file.id] = lane.sourceStackID
         laneIDs.insert(file.id)
+      } else if let parent = file.parentWorkspaceID {
+        sourceIDs[file.id] = parent
+        laneIDs.insert(file.id)
       } else if let root = file.definition?.root,
         let owner = lanes.filter({ Self.contains(root, in: $0.directory) })
           .max(by: { $0.directory.pathComponents.count < $1.directory.pathComponents.count }) {
@@ -45,6 +48,10 @@ struct WorkspaceNavigation {
   func lanes(for workspaceID: String) -> [StackDefinitionFile] {
     files.filter { sourceIDs[$0.id] == workspaceID }
   }
+
+  func isLane(_ id: String) -> Bool { files.contains { $0.id == id } && !workspaces.contains { $0.id == id } }
+
+  func isUnattached(_ id: String) -> Bool { unattachedLanes.contains { $0.id == id } }
 
   private static func contains(_ path: URL, in directory: URL) -> Bool {
     path.standardizedFileURL.pathComponents.starts(with: directory.standardizedFileURL.pathComponents)
