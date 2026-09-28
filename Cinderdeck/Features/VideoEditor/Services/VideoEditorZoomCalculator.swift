@@ -9,7 +9,7 @@ import Foundation
 import CoreGraphics
 
 /// Utility enum for zoom-related calculations
-enum ZoomCalculator {
+nonisolated enum ZoomCalculator {
 
   // MARK: - Transition Configuration
 

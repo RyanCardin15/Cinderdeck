@@ -8,7 +8,7 @@
 import Foundation
 
 /// Represents a zoom effect segment on the video timeline
-struct ZoomSegment: Identifiable, Codable, Equatable, Hashable {
+nonisolated struct ZoomSegment: Identifiable, Codable, Equatable, Hashable, Sendable {
   let id: UUID
   var startTime: TimeInterval      // seconds from video start
   var duration: TimeInterval       // zoom duration in seconds
@@ -84,11 +84,11 @@ struct ZoomSegment: Identifiable, Codable, Equatable, Hashable {
 
 // MARK: - Zoom Type
 
-enum ZoomType: String, Codable, CaseIterable, Equatable {
+nonisolated enum ZoomType: String, Codable, CaseIterable, Equatable, Sendable {
   case auto    // follow recorded mouse path within the zoom item's range
   case manual  // user-defined camera framing
 
-  var displayName: String {
+  @MainActor var displayName: String {
     switch self {
     case .auto: return L10n.VideoEditor.auto
     case .manual: return L10n.VideoEditor.manual
@@ -105,7 +105,7 @@ enum ZoomType: String, Codable, CaseIterable, Equatable {
 
 // MARK: - Zoom Segment Extensions
 
-extension ZoomSegment {
+nonisolated extension ZoomSegment {
   var autoFocusSettings: AutoFocusSettings {
     AutoFocusSettings(
       isEnabled: zoomType == .auto,

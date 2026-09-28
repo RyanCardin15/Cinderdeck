@@ -74,6 +74,9 @@ enum StackPreviewHarness {
         default: break
         }
       }
+      if let path = ProcessInfo.processInfo.environment["CINDERDECK_PREVIEW_VIDEO"], path.hasPrefix("/") {
+        VideoEditorManager.shared.openEditor(for: URL(fileURLWithPath: path))
+      }
     }
     return true
   }

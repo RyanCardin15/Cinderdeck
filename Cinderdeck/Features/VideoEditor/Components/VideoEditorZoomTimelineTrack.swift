@@ -16,7 +16,6 @@ struct ZoomTimelineTrack: View {
   private let trackHeight: CGFloat = 32
   private let handleWidth: CGFloat = 8
   private let minVisualBlockWidth: CGFloat = 64
-  private let dragModelUpdateInterval: TimeInterval = 1.0 / 30.0
 
   // MARK: - Drag State (Track-Level)
 
@@ -25,7 +24,6 @@ struct ZoomTimelineTrack: View {
   @State private var dragInitialStartTime: TimeInterval = 0
   @State private var dragInitialEndTime: TimeInterval = 0
   @State private var dragPreviewSegment: ZoomSegment?
-  @State private var lastDragModelUpdateTime: TimeInterval = 0
 
   // MARK: - Hover State (Placeholder Preview)
 
@@ -165,7 +163,8 @@ struct ZoomTimelineTrack: View {
         }
         continueDrag(translation: value.translation)
       }
-      .onEnded { _ in
+      .onEnded { value in
+        continueDrag(translation: value.translation)
         endDrag()
       }
   }
@@ -184,7 +183,6 @@ struct ZoomTimelineTrack: View {
     dragInitialStartTime = segment.startTime
     dragInitialEndTime = segment.endTime
     dragPreviewSegment = segment
-    lastDragModelUpdateTime = 0
 
     if location.x <= leftHandleEnd {
       dragMode = .startEdge
@@ -207,7 +205,6 @@ struct ZoomTimelineTrack: View {
     let deltaSeconds = translation.width / pixelsPerSecond
     let previewSegment = previewSegment(from: segment, deltaSeconds: deltaSeconds)
     dragPreviewSegment = previewSegment
-    commitDragPreviewIfNeeded(previewSegment)
   }
 
   private func previewSegment(from segment: ZoomSegment, deltaSeconds: TimeInterval) -> ZoomSegment {
@@ -243,27 +240,19 @@ struct ZoomTimelineTrack: View {
     return preview
   }
 
-  private func commitDragPreviewIfNeeded(_ segment: ZoomSegment, force: Bool = false) {
-    let now = ProcessInfo.processInfo.systemUptime
-    guard force || now - lastDragModelUpdateTime >= dragModelUpdateInterval else { return }
-
-    state.updateZoom(
-      id: segment.id,
-      startTime: segment.startTime,
-      duration: segment.duration
-    )
-    lastDragModelUpdateTime = now
-  }
-
   private func endDrag() {
     if let dragPreviewSegment {
-      commitDragPreviewIfNeeded(dragPreviewSegment, force: true)
+      // Only this track redraws while dragging; publish one undoable edit on release.
+      state.updateZoom(
+        id: dragPreviewSegment.id,
+        startTime: dragPreviewSegment.startTime,
+        duration: dragPreviewSegment.duration
+      )
     }
 
     dragMode = .none
     dragSegmentId = nil
     dragPreviewSegment = nil
-    lastDragModelUpdateTime = 0
   }
 
   // MARK: - Tap Handling

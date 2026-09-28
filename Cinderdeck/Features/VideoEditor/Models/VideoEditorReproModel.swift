@@ -18,6 +18,8 @@ struct VideoEditorReproEntry: Identifiable, Equatable {
 /// VideoEditorState so filtering and playback updates only redraw the panel.
 @MainActor
 final class VideoEditorReproModel: ObservableObject {
+  nonisolated deinit { searchTask?.cancel() }
+
   enum LevelFilter: String, CaseIterable, Identifiable {
     case all = "All", warnings = "Warnings", errors = "Errors"
     var id: String { rawValue }

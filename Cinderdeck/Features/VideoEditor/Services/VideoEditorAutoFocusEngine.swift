@@ -8,7 +8,7 @@
 import CoreGraphics
 import Foundation
 
-enum VideoEditorAutoFocusEngine {
+nonisolated enum VideoEditorAutoFocusEngine {
   struct AutoFocusAccuracyMetrics {
     let sampleCount: Int
     let lockAccuracy: Double
@@ -50,6 +50,7 @@ enum VideoEditorAutoFocusEngine {
     var previousCursorPoint = samples[0].point.clampedToUnitRect
 
     for sample in samples.dropFirst() {
+      guard !Task.isCancelled else { return [] }
       let cursorPoint = sample.point.clampedToUnitRect
       if sample.isInsideCapture {
         lastVisiblePoint = cursorPoint
@@ -256,7 +257,7 @@ enum VideoEditorAutoFocusEngine {
 
   /// Remap a trim-relative path onto the scaled (speed-adjusted) timeline. `toScaled` is
   /// monotonic increasing so sample order is preserved.
-  static func scaledPath(
+  @MainActor static func scaledPath(
     _ path: [AutoFocusCameraSample],
     map: SpeedTimeMap
   ) -> [AutoFocusCameraSample] {
@@ -452,7 +453,7 @@ enum VideoEditorAutoFocusEngine {
   }
 }
 
-private extension CGPoint {
+nonisolated private extension CGPoint {
   var clampedToUnitRect: CGPoint {
     CGPoint(
       x: x.clamped(to: 0...1),
@@ -461,13 +462,13 @@ private extension CGPoint {
   }
 }
 
-private extension CGFloat {
+nonisolated private extension CGFloat {
   func clamped(to range: ClosedRange<CGFloat>) -> CGFloat {
     Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
   }
 }
 
-private extension Double {
+nonisolated private extension Double {
   func clamped(to range: ClosedRange<Double>) -> Double {
     Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
   }

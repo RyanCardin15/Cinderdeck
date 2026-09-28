@@ -20,6 +20,8 @@ enum VideoEditorExporter {
     to outputURL: URL,
     progress: @escaping (Float) -> Void
   ) async throws {
+    await state.waitForAutoFocusPaths()
+    try Task.checkCancellation()
     DiagnosticLogger.shared.log(.info, .export, "Video export started", context: [
       "file": state.sourceURL.lastPathComponent,
       "hasZooms": "\(state.zoomSegments.contains { $0.isEnabled })",

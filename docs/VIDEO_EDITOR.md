@@ -64,6 +64,17 @@ flowchart TD
 - Live preview is approximate: it drives `AVPlayer.rate` per active segment instead of rebuilding a scaled composition.
 - Video only — the GIF save path does not bake timeline edits, so the speed track is hidden for GIF sources.
 
+## Interactive Editing Performance
+
+- Zoom and speed timeline drags update a local block preview, then commit the final pointer position as one undoable edit on release. Speed previews use the same trim/neighbour constraints as committed edits. The rest of the editor is not invalidated on every drag event.
+- Follow Mouse paths build in a cancellable background task. Superseded results cannot overwrite newer settings, matching camera settings reuse a path, and timing-only edits reuse the full-recording path. Export waits for the latest path before constructing its composition.
+- The preview observes a path revision instead of comparing every camera sample during playback. Source file attributes are cached when opening/loading/renaming, and size estimates use cached data without queued tasks or permission resolution during edits. Derived duration, preview rate and dirty state update after the edited values are committed.
+- The editor playback/repro models use nonisolated teardown to avoid the Swift 6.2 isolated-deinit back-deployment crash found while exercising editor lifecycle tests.
+
+Verified September 28, 2026, on an M4 Max in a Debug build: 59 editor/metadata tests plus a real-video export smoke test passed. A synthetic 30-minute recording with 108,000 cursor samples took a median **115.8 ms** for the equivalent synchronous path calculation plus quality diagnostics; dispatching an edit to the background worker took **0.089 ms** on the main actor (10 samples). Every resulting path matched the synchronous calculation. This measures time freed on the UI thread, not total calculation time or rendered frame rate. A 30-second video with zoom and 2× speed exported successfully at 15 seconds; native zoom presets, speed selection and undo were also checked.
+
+Run the focused suites with `scripts/run-tests.sh -only-testing:CinderdeckTests/VideoEditorInteractionTests` (and the existing `VideoEditorZoomAndAutoFocusTests`, `VideoEditorSpeedTimeMapTests`, `VideoEditorExportSettingsTests`, `RecordingMetadataStoreTests`). Set `TEST_RUNNER_CINDERDECK_EDITOR_PERFORMANCE=1` for the optional long-recording measurement; set `TEST_RUNNER_CINDERDECK_EDITOR_FIXTURE` to an absolute disposable video path for the export smoke test. An isolated Debug preview accepts `CINDERDECK_PREVIEW_VIDEO=/absolute/path/video.mp4` alongside `CINDERDECK_STACKS_PREVIEW_ROOT`.
+
 ## Background and Padding
 
 - `BackgroundStyle` (shared `Cinderdeck/Features/Annotate/Models/AnnotateBackgroundStyle.swift`): `none`, `gradient`, `wallpaper(URL)`, `blurred(URL)`, `solidColor`. Combined with padding, shadow, corner radius, alignment, and aspect controls in the left sidebar (`VideoEditorVideoBackgroundSidebarView`); background changes are undoable.

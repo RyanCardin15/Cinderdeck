@@ -11,7 +11,7 @@ import os.log
 
 private let recordingMetadataLogger = Logger(subsystem: "Cinderdeck", category: "RecordingMetadata")
 
-struct RecordedMouseSample: Codable, Equatable {
+nonisolated struct RecordedMouseSample: Codable, Equatable, Sendable {
   var time: TimeInterval
   var normalizedX: CGFloat
   var normalizedY: CGFloat
@@ -22,12 +22,12 @@ struct RecordedMouseSample: Codable, Equatable {
   }
 }
 
-enum RecordingCoordinateSpace: String, Codable {
+nonisolated enum RecordingCoordinateSpace: String, Codable, Sendable {
   case bottomLeftNormalized
   case topLeftNormalized
 }
 
-enum RecordingAudioSourceTrackRole: String, Codable, Equatable {
+nonisolated enum RecordingAudioSourceTrackRole: String, Codable, Equatable, Sendable {
   case systemAudio
   case microphone
 
@@ -43,12 +43,12 @@ enum RecordingAudioSourceTrackRole: String, Codable, Equatable {
   }
 }
 
-struct RecordingAudioSourceTrack: Codable, Equatable {
+nonisolated struct RecordingAudioSourceTrack: Codable, Equatable, Sendable {
   var trackID: Int
   var role: RecordingAudioSourceTrackRole
 }
 
-struct RecordingMetadata: Codable, Equatable {
+nonisolated struct RecordingMetadata: Codable, Equatable, Sendable {
   static let currentVersion = 5
 
   var version: Int

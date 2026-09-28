@@ -33,6 +33,9 @@ enum EditorAction: Equatable {
 /// Playback state changes frequently, so it stays isolated from the broader editor model.
 @MainActor
 final class VideoEditorPlaybackState: ObservableObject {
+  // No actor-bound teardown; avoids Swift 6.2's isolated-deinit back-deployment crash.
+  nonisolated deinit {}
+
   @Published private(set) var currentTime: CMTime = .zero
   @Published private(set) var isPlaying: Bool = false
   @Published private(set) var isScrubbing: Bool = false
@@ -74,7 +77,7 @@ final class VideoEditorPlaybackState: ObservableObject {
 @MainActor
 final class VideoEditorState: ObservableObject {
 
-  private struct AutoFocusPathInput: Equatable {
+  nonisolated private struct AutoFocusPathInput: Hashable, Sendable {
     let zoomType: ZoomType
     let zoomLevel: CGFloat
     let followSpeed: Double
@@ -117,16 +120,16 @@ final class VideoEditorState: ObservableObject {
   // MARK: - Trim Range
 
   @Published var trimStart: CMTime = .zero {
-    didSet { invalidateSpeedMap() }
+    didSet { speedMappingDidChange() }
   }
   @Published var trimEnd: CMTime = .zero {
-    didSet { invalidateSpeedMap() }
+    didSet { speedMappingDidChange() }
   }
 
   // MARK: - Speed Segments (Timelapse)
 
   @Published var speedSegments: [SpeedSegment] = [] {
-    didSet { invalidateSpeedMap() }
+    didSet { speedMappingDidChange() }
   }
   @Published var selectedSpeedId: UUID? = nil
 
@@ -145,7 +148,14 @@ final class VideoEditorState: ObservableObject {
     return map
   }
 
-  private func invalidateSpeedMap() { cachedSpeedTimeMap = nil }
+  private func speedMappingDidChange() {
+    cachedSpeedTimeMap = nil
+    updateHasUnsavedChanges()
+    recalculateEstimatedFileSize()
+    if isPlaying {
+      player.rate = currentPreviewRate(at: currentTime)
+    }
+  }
 
   /// True when at least one enabled speed segment changes playback rate.
   var hasSpeedSegments: Bool {
@@ -163,6 +173,7 @@ final class VideoEditorState: ObservableObject {
   @Published var isMuted: Bool = false {
     didSet {
       player.isMuted = isMuted
+      editorSettingsDidChange()
     }
   }
   private var initialIsMuted: Bool = false
@@ -212,7 +223,13 @@ final class VideoEditorState: ObservableObject {
 
   // MARK: - Zoom Segments
 
-  @Published var zoomSegments: [ZoomSegment] = []
+  @Published var zoomSegments: [ZoomSegment] = [] {
+    didSet {
+      guard zoomSegments != oldValue else { return }
+      rebuildAutoFocusPaths(for: zoomSegments)
+      updateHasUnsavedChanges()
+    }
+  }
   @Published var selectedZoomId: UUID? = nil
   @Published var isZoomTrackVisible: Bool = true
   @Published var isSpeedTrackVisible: Bool = true
@@ -235,6 +252,7 @@ final class VideoEditorState: ObservableObject {
 
   @Published private(set) var recordingMetadata: RecordingMetadata?
   @Published private(set) var autoFocusPaths: [UUID: [AutoFocusCameraSample]] = [:]
+  @Published private(set) var autoFocusPathsRevision = 0
 
   // MARK: - GIF Metadata
 
@@ -246,9 +264,12 @@ final class VideoEditorState: ObservableObject {
   @Published var backgroundStyle: BackgroundStyle = .none {
     didSet {
       handleBackgroundStyleChange()
+      editorSettingsDidChange()
     }
   }
-  @Published var backgroundPadding: CGFloat = 0
+  @Published var backgroundPadding: CGFloat = 0 {
+    didSet { editorSettingsDidChange() }
+  }
 
   // MARK: - Cached Background Images (Performance Optimization)
 
@@ -260,8 +281,12 @@ final class VideoEditorState: ObservableObject {
 
   /// Track URL being loaded to prevent race conditions
   private var loadingBackgroundURL: URL?
-  @Published var backgroundShadowIntensity: CGFloat = 0
-  @Published var backgroundCornerRadius: CGFloat = 0
+  @Published var backgroundShadowIntensity: CGFloat = 0 {
+    didSet { editorSettingsDidChange() }
+  }
+  @Published var backgroundCornerRadius: CGFloat = 0 {
+    didSet { editorSettingsDidChange() }
+  }
   @Published var backgroundAlignment: ImageAlignment = .center
   @Published var backgroundAspectRatio: AspectRatioOption = .auto
 
@@ -273,7 +298,9 @@ final class VideoEditorState: ObservableObject {
 
   // MARK: - Export Settings
 
-  @Published var exportSettings: ExportSettings = ExportSettings()
+  @Published var exportSettings: ExportSettings = ExportSettings() {
+    didSet { editorSettingsDidChange() }
+  }
   @Published private(set) var estimatedFileSize: Int64 = 0
 
   // MARK: - Unsaved Changes
@@ -311,8 +338,12 @@ final class VideoEditorState: ObservableObject {
 
   private var timeObserver: Any?
   private var endObserver: NSObjectProtocol?
-  private var cancellables = Set<AnyCancellable>()
   private var autoFocusPathInputs: [UUID: AutoFocusPathInput] = [:]
+  private var requestedAutoFocusPathInputs: [UUID: AutoFocusPathInput] = [:]
+  private var autoFocusRequestRevision = 0
+  private var autoFocusWorker: Task<[UUID: [AutoFocusCameraSample]]?, Never>?
+  private var autoFocusUpdate: Task<Void, Never>?
+  private var sourceFileAttributes: [FileAttributeKey: Any] = [:]
 
   // MARK: - Computed Properties
 
@@ -393,31 +424,21 @@ final class VideoEditorState: ObservableObject {
   }
 
   var fileSizeString: String {
-    let size: Int64? = SandboxFileAccessManager.shared.withScopedAccess(to: sourceURL) {
-      guard let attrs = try? FileManager.default.attributesOfItem(atPath: sourceURL.path),
-            let size = attrs[.size] as? Int64
-      else { return nil }
-      return size
-    }
-    guard let size else { return "—" }
+    guard let size = sourceFileAttributes[.size] as? Int64 else { return "—" }
     return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
   }
 
   var fileCreationDate: Date? {
-    SandboxFileAccessManager.shared.withScopedAccess(to: sourceURL) {
-      guard let attrs = try? FileManager.default.attributesOfItem(atPath: sourceURL.path) else {
-        return nil
-      }
-      return attrs[.creationDate] as? Date
-    }
+    sourceFileAttributes[.creationDate] as? Date
   }
 
   var fileModificationDate: Date? {
-    SandboxFileAccessManager.shared.withScopedAccess(to: sourceURL) {
-      guard let attrs = try? FileManager.default.attributesOfItem(atPath: sourceURL.path) else {
-        return nil
-      }
-      return attrs[.modificationDate] as? Date
+    sourceFileAttributes[.modificationDate] as? Date
+  }
+
+  private func refreshSourceFileAttributes() {
+    sourceFileAttributes = SandboxFileAccessManager.shared.withScopedAccess(to: sourceURL) {
+      (try? FileManager.default.attributesOfItem(atPath: sourceURL.path)) ?? [:]
     }
   }
 
@@ -439,9 +460,9 @@ final class VideoEditorState: ObservableObject {
     self.zoomTransitionDuration = Self.loadZoomTransitionDuration()
     self.recordingMetadata = initialMetadata
 
+    refreshSourceFileAttributes()
     setupTimeObserver()
     setupEndObserver()
-    setupChangeTracking()
   }
 
   private static func loadRecordingMetadata(for url: URL, originalURL: URL?) -> RecordingMetadata? {
@@ -514,18 +535,20 @@ final class VideoEditorState: ObservableObject {
   }
 
   deinit {
+    autoFocusWorker?.cancel()
+    autoFocusUpdate?.cancel()
     if let observer = timeObserver {
       player.removeTimeObserver(observer)
     }
     if let observer = endObserver {
       NotificationCenter.default.removeObserver(observer)
     }
-    cancellables.removeAll()
   }
 
   // MARK: - Metadata Loading
 
   func loadMetadata() async {
+    refreshSourceFileAttributes()
     loadRecordingMetadata()
 
     // GIF files can't be loaded by AVAsset — use GIFResizer metadata
@@ -574,6 +597,7 @@ final class VideoEditorState: ObservableObject {
         "audioTrackRoles": audioTrackRoles.map(\.id).joined(separator: ",")
       ])
       // Calculate initial file size estimate after metadata loads
+      updateHasUnsavedChanges()
       recalculateEstimatedFileSize()
     } catch {
       DiagnosticLogger.shared.logError(.editor, error, "Failed to load video metadata")
@@ -941,8 +965,8 @@ final class VideoEditorState: ObservableObject {
   }
 
   private func updateUndoRedoState() {
-    canUndo = !undoStack.isEmpty
-    canRedo = !redoStack.isEmpty
+    if canUndo != !undoStack.isEmpty { canUndo = !undoStack.isEmpty }
+    if canRedo != !redoStack.isEmpty { canRedo = !redoStack.isEmpty }
   }
 
   private func clearUndoHistory() {
@@ -997,6 +1021,7 @@ final class VideoEditorState: ObservableObject {
     }
 
     sourceURL = newURL
+    refreshSourceFileAttributes()
     if originalURL == oldSourceURL {
       originalURL = newURL
     }
@@ -1080,7 +1105,10 @@ final class VideoEditorState: ObservableObject {
       segment.isEnabled = isEnabled
     }
 
+    let old = zoomSegments[index]
+    guard segment != old else { return }
     zoomSegments[index] = segment
+    recordAction(.updateZoom(old: old, new: segment))
   }
 
   func setZoomMode(id: UUID, zoomType: ZoomType) {
@@ -1195,8 +1223,17 @@ final class VideoEditorState: ObservableObject {
     recordAction(.removeSpeed(segment: segment))
   }
 
-  /// Update a speed segment's rate and/or range. Range changes are clamped against the trim
-  /// window + neighbours; an update that loses all room is ignored.
+  /// Validate a local drag without publishing changes to the editor or undo history.
+  func previewSpeedRange(id: UUID, startTime: TimeInterval, duration: TimeInterval) -> SpeedSegment? {
+    guard var segment = speedSegments.first(where: { $0.id == id }),
+          let range = clampedSpeedRange(startTime...(startTime + max(0, duration)), excluding: id)
+    else { return nil }
+    segment.startTime = range.start
+    segment.duration = range.duration
+    return segment
+  }
+
+  /// Update a speed segment's rate and/or validated range as one undoable edit.
   func updateSpeed(
     id: UUID,
     rate: Double? = nil,
@@ -1317,21 +1354,14 @@ final class VideoEditorState: ObservableObject {
 
   /// Recalculate estimated file size based on current settings
   func recalculateEstimatedFileSize() {
-    Task { @MainActor in
-      estimatedFileSize = await calculateEstimatedFileSize()
-    }
+    let estimate = calculateEstimatedFileSize()
+    if estimatedFileSize != estimate { estimatedFileSize = estimate }
   }
 
   /// Calculate estimated file size based on export settings
-  private func calculateEstimatedFileSize() async -> Int64 {
-    // Get source file size
-    let sourceSize: Int64? = SandboxFileAccessManager.shared.withScopedAccess(to: sourceURL) {
-      guard let attrs = try? FileManager.default.attributesOfItem(atPath: sourceURL.path),
-            let sourceSize = attrs[.size] as? Int64
-      else { return nil }
-      return sourceSize
-    }
-    guard let sourceSize else { return 0 }
+  private func calculateEstimatedFileSize() -> Int64 {
+    // Source attributes are loaded once, never resolved from disk during a gesture/render.
+    guard let sourceSize = sourceFileAttributes[.size] as? Int64 else { return 0 }
 
     // GIF mode: estimate based on pixel ratio
     if isGIF {
@@ -1347,7 +1377,7 @@ final class VideoEditorState: ObservableObject {
     guard sourceDuration > 0 else { return 0 }
 
     // Calculate trim ratio
-    let trimmedDurationSec = CMTimeGetSeconds(trimmedDuration)
+    let trimmedDurationSec = CMTimeGetSeconds(effectiveOutputDuration)
     let trimRatio = trimmedDurationSec / sourceDuration
 
     // Calculate dimension ratio (including background padding)
@@ -1437,72 +1467,25 @@ final class VideoEditorState: ObservableObject {
     }
   }
 
-  private func setupChangeTracking() {
-    // Track trim and mute changes
-    Publishers.CombineLatest3($trimStart, $trimEnd, $isMuted)
-      .dropFirst(3)
-      .sink { [weak self] _, _, _ in
-        self?.updateHasUnsavedChanges()
-        self?.recalculateEstimatedFileSize()
-      }
-      .store(in: &cancellables)
-
-    // Track zoom changes - pass segments directly to avoid stale state reads
-    $zoomSegments
-      .removeDuplicates()
-      .sink { [weak self] segments in
-        guard let self = self else { return }
-        self.rebuildAutoFocusPaths(for: segments)
-        // Pass segments directly from publisher to avoid timing issues
-        self.updateHasUnsavedChanges(currentZoomSegments: segments)
-      }
-      .store(in: &cancellables)
-
-    // Track speed (timelapse) segment changes
-    $speedSegments
-      .removeDuplicates()
-      .dropFirst()
-      .sink { [weak self] _ in
-        self?.updateHasUnsavedChanges()
-        self?.recalculateEstimatedFileSize()
-      }
-      .store(in: &cancellables)
-
-    // Track background changes
-    Publishers.CombineLatest4($backgroundStyle, $backgroundPadding, $backgroundShadowIntensity, $backgroundCornerRadius)
-      .dropFirst(4)
-      .sink { [weak self] _, _, _, _ in
-        self?.updateHasUnsavedChanges()
-        self?.recalculateEstimatedFileSize()
-      }
-      .store(in: &cancellables)
-
-    // Track export settings changes for file size estimation
-    $exportSettings
-      .dropFirst()
-      .sink { [weak self] _ in
-        self?.updateHasUnsavedChanges()
-        self?.recalculateEstimatedFileSize()
-      }
-      .store(in: &cancellables)
+  private func editorSettingsDidChange() {
+    updateHasUnsavedChanges()
+    recalculateEstimatedFileSize()
   }
 
-  private func updateHasUnsavedChanges(currentZoomSegments: [ZoomSegment]? = nil) {
+  private func updateHasUnsavedChanges() {
     // GIF mode: only track dimension changes
     if isGIF {
       let dimensionChanged = exportSettings.dimensionPreset != initialExportSettings.dimensionPreset
         || exportSettings.customWidth != initialExportSettings.customWidth
         || exportSettings.customHeight != initialExportSettings.customHeight
-      hasUnsavedChanges = dimensionChanged
+      if hasUnsavedChanges != dimensionChanged { hasUnsavedChanges = dimensionChanged }
       return
     }
 
     let startChanged = CMTimeCompare(trimStart, initialTrimStart) != 0
     let endChanged = CMTimeCompare(trimEnd, initialTrimEnd) != 0
     let muteChanged = isMuted != initialIsMuted
-    // Use passed segments if available, otherwise read from self
-    let segments = currentZoomSegments ?? zoomSegments
-    let zoomsChanged = segments != initialZoomSegments
+    let zoomsChanged = zoomSegments != initialZoomSegments
     let speedsChanged = speedSegments != initialSpeedSegments
     // Background changes
     let bgStyleChanged = backgroundStyle != initialBackgroundStyle
@@ -1512,7 +1495,8 @@ final class VideoEditorState: ObservableObject {
     let backgroundChanged = bgStyleChanged || bgPaddingChanged || bgShadowChanged || bgCornerChanged
     let exportSettingsChanged = exportSettings != initialExportSettings
 
-    hasUnsavedChanges = startChanged || endChanged || muteChanged || zoomsChanged || speedsChanged || backgroundChanged || exportSettingsChanged
+    let changed = startChanged || endChanged || muteChanged || zoomsChanged || speedsChanged || backgroundChanged || exportSettingsChanged
+    if hasUnsavedChanges != changed { hasUnsavedChanges = changed }
   }
 
   private func clampTime(_ time: CMTime) -> CMTime {
@@ -1574,6 +1558,17 @@ final class VideoEditorState: ObservableObject {
   }
 
   private func loadRecordingMetadata() {
+    autoFocusWorker?.cancel()
+    autoFocusUpdate?.cancel()
+    autoFocusWorker = nil
+    autoFocusUpdate = nil
+    autoFocusRequestRevision += 1
+    requestedAutoFocusPathInputs = [:]
+    autoFocusPathInputs = [:]
+    if !autoFocusPaths.isEmpty {
+      autoFocusPaths = [:]
+      autoFocusPathsRevision += 1
+    }
     guard !isGIF else {
       recordingMetadata = nil
       autoFocusPaths = [:]
@@ -1587,47 +1582,63 @@ final class VideoEditorState: ObservableObject {
   }
 
   private func rebuildAutoFocusPaths(for segments: [ZoomSegment]) {
-    guard let recordingMetadata, hasMouseTrackingData else {
-      autoFocusPaths = [:]
+    let autoSegments = hasMouseTrackingData ? segments.filter(\.isAutoMode) : []
+    let inputs = Dictionary(uniqueKeysWithValues: autoSegments.map {
+      ($0.id, AutoFocusPathInput(segment: $0))
+    })
+    // Moving/resizing a segment does not change its full-recording camera path.
+    guard inputs != requestedAutoFocusPathInputs else { return }
+    requestedAutoFocusPathInputs = inputs
+    autoFocusRequestRevision += 1
+    autoFocusWorker?.cancel()
+    autoFocusUpdate?.cancel()
+
+    let cachedPaths = autoFocusPaths
+    let cachedInputs = autoFocusPathInputs
+    guard let recordingMetadata, !autoSegments.isEmpty else {
       autoFocusPathInputs = [:]
+      autoFocusPaths = [:]
+      autoFocusPathsRevision += 1
+      autoFocusWorker = nil
+      autoFocusUpdate = nil
       return
     }
 
-    var rebuiltPaths: [UUID: [AutoFocusCameraSample]] = [:]
-    var rebuiltInputs: [UUID: AutoFocusPathInput] = [:]
-
-    for segment in segments where segment.isAutoMode {
-      let input = AutoFocusPathInput(segment: segment)
-      rebuiltInputs[segment.id] = input
-
-      if autoFocusPathInputs[segment.id] == input,
-         let cachedPath = autoFocusPaths[segment.id] {
-        rebuiltPaths[segment.id] = cachedPath
-        continue
+    // Identical camera settings share one path, including newly added segments.
+    let worker = Task.detached(priority: .userInitiated) { () -> [UUID: [AutoFocusCameraSample]]? in
+      var pathsByInput: [AutoFocusPathInput: [AutoFocusCameraSample]] = [:]
+      for (id, input) in cachedInputs {
+        if let path = cachedPaths[id] { pathsByInput[input] = path }
       }
-
-      let builtPath = VideoEditorAutoFocusEngine.buildPath(
-        from: recordingMetadata,
-        segment: segment
-      )
-      rebuiltPaths[segment.id] = builtPath
-
-      let metrics = VideoEditorAutoFocusEngine.evaluatePathQuality(
-        metadata: recordingMetadata,
-        segment: segment,
-        path: builtPath
-      )
-      DiagnosticLogger.shared.log(.debug, .editor, "Auto-focus path rebuilt", context: [
-        "segmentId": segment.id.uuidString,
-        "sampleCount": "\(metrics.sampleCount)",
-        "lockAccuracy": String(format: "%.3f", metrics.lockAccuracy),
-        "visibilityRate": String(format: "%.3f", metrics.visibilityRate),
-        "meanError": String(format: "%.4f", metrics.meanError),
-      ])
+      var paths: [UUID: [AutoFocusCameraSample]] = [:]
+      for segment in autoSegments {
+        guard !Task.isCancelled else { return nil }
+        let input = AutoFocusPathInput(segment: segment)
+        let path = pathsByInput[input] ?? VideoEditorAutoFocusEngine.buildPath(
+          from: recordingMetadata, segment: segment
+        )
+        pathsByInput[input] = path
+        paths[segment.id] = path
+      }
+      return Task.isCancelled ? nil : paths
     }
+    autoFocusWorker = worker
+    autoFocusUpdate = Task { @MainActor [weak self] in
+      guard let paths = await worker.value, !Task.isCancelled,
+            let self, self.requestedAutoFocusPathInputs == inputs else { return }
+      self.autoFocusPathInputs = inputs
+      self.autoFocusPaths = paths
+      self.autoFocusPathsRevision += 1
+    }
+  }
 
-    autoFocusPathInputs = rebuiltInputs
-    autoFocusPaths = rebuiltPaths
+  /// Export waits for the latest settings, even if another edit supersedes an in-flight build.
+  func waitForAutoFocusPaths() async {
+    while let update = autoFocusUpdate {
+      let revision = autoFocusRequestRevision
+      await update.value
+      if revision == autoFocusRequestRevision { return }
+    }
   }
 
   /// Apply Gaussian blur to image (computed once, reused during render)
