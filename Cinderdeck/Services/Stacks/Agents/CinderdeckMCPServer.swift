@@ -68,7 +68,8 @@ nonisolated enum CinderdeckMCPServer {
 
   private static let workspaceTools: [Tool] = [
     tool("list_workspaces", "List workspaces", .read,
-      "Every workspace with its services (status, URL, PID, who started each, branch), tasks, workflows, active run, claim, lane, and Git state. Start here."),
+      "Every workspace with its services, tasks, workflows and active run. Start here. Use detail=false for a compact inventory, then workspace_details for the workspace you need.",
+      ["detail": property("boolean", "Include service status, URLs, PIDs, claims, lanes and Git state (default true; false returns a compact inventory)")]),
     tool("workspace_details", "Workspace details", .read,
       "One workspace in full: services (phase, pid, port, url, owner, log file, command, cwd), repos, claim, task and workflow definitions, and its 20 most recent runs.",
       ["workspace": workspace], required: ["workspace"]),
@@ -489,7 +490,7 @@ nonisolated enum CinderdeckMCPServer {
     var params = arguments
     let wait = min(max(arguments["timeout"]?.doubleValue ?? 180, 1), 900)
     switch tool {
-    case "list_workspaces": return ("workspace.list", ["detail": .bool(true)], 30)
+    case "list_workspaces": return ("workspace.list", ["detail": params["detail"] ?? .bool(true)], 30)
     case "workspace_details": return ("workspace.get", params, 30)
     case "open_workspace": return ("workspace.open", params, 30)
     case "run_workspace_task": return ("workspace.task.run", params, 30)
@@ -637,6 +638,9 @@ nonisolated enum CinderdeckMCPServer {
   private static func compactWorkspace(_ entry: JSONValue) -> JSONValue {
     var object = (entry["status"].flatMap { try? $0.decode(StackSnapshot.self) }.map(compact))
       ?? ["id": entry["id"] ?? .null, "name": entry["name"] ?? .null]
+    if entry["status"] == nil, let services = entry["services"], !(services.arrayValue ?? []).isEmpty {
+      object["services"] = services
+    }
     for key in ["tasks", "workflows"] where !(entry[key]?.arrayValue ?? []).isEmpty { object[key] = entry[key] }
     if let run = entry["activeRun"], run != .null {
       object["activeRun"] = .object(["id": run["id"] ?? .null, "kind": run["kind"] ?? .null, "name": run["name"] ?? .null, "status": run["status"] ?? .null])

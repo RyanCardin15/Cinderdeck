@@ -89,6 +89,7 @@ private actor GitRepositoryCommands {
   }
   func directories() async throws -> [URL] {
     await acquire(); defer { release() }
+    if let knownDirectories { return knownDirectories }
     return try await readDirectories()
   }
   func branches() async throws -> [GitBranch] {

@@ -4,6 +4,9 @@ import Foundation
 @MainActor
 final class StackSupervisor: ObservableObject {
   static let shared = StackSupervisor(store: (try? DatabaseManager.shared().dbPool).map { StackRunStore(pool: $0) })
+  // shutdownMonitoring() performs explicit cleanup; releasing the stored values
+  // must not nest Swift 6.2 main-actor deinit back-deployment shims.
+  nonisolated deinit {}
   @Published private(set) var files: [StackDefinitionFile] = []
   @Published private(set) var states: [StackID: StackRuntimeState] = [:]
   @Published private(set) var errorMessage: String?
@@ -68,7 +71,8 @@ final class StackSupervisor: ObservableObject {
   func definition(_ id: String) -> StackDefinition? { files.first { $0.id == id }?.definition }
   func runtime(_ id: String, _ service: String) -> StackServiceRuntime { states[id]?.services[service] ?? .init() }
   func definitionChanged(_ id: String) -> Bool {
-    states[id]?.services.values.contains { $0.launchDefinition.map { $0.stack != definition(id) } ?? false } ?? false
+    let current = definition(id)
+    return states[id]?.services.values.contains { $0.launchDefinition.map { $0.stack != current } ?? false } ?? false
   }
   private func key(_ id: String, _ service: String) -> String { "\(id)/\(service)" }
   var logDirectory: URL { logRoot }
@@ -762,12 +766,16 @@ final class StackSupervisor: ObservableObject {
     }
     return result
   }
-  func logLines(stack id: String, service: String? = nil) async -> [StackLogLine] {
+  func logLines(stack id: String, service: String? = nil, limit: Int? = nil, after: Double? = nil) async -> [StackLogLine] {
     var buffers: [[StackLogLine]] = []
     for name in states[id]?.services.keys.sorted() ?? [] where service == nil || service == name {
-      if let buffer = logs[key(id, name)] { buffers.append(await buffer.snapshot()) }
+      if let buffer = logs[key(id, name)] { buffers.append(await buffer.snapshot(limit: limit, after: after)) }
     }
-    return LogBuffer.merged(buffers)
+    let snapshots = buffers
+    if snapshots.count > 1, (limit ?? snapshots.reduce(0, { $0 + $1.count })) > 2048 {
+      return await Task.detached(priority: .userInitiated) { LogBuffer.merged(snapshots, limit: limit) }.value
+    }
+    return LogBuffer.merged(snapshots, limit: limit)
   }
   /// Every service buffer that has output this session, for live followers.
   func logBuffers() -> [(stack: String, service: String, buffer: LogBuffer)] {
@@ -824,6 +832,7 @@ final class StackSupervisor: ObservableObject {
 /// A first-in, first-out lock for async work on the main actor.
 @MainActor
 final class StackAsyncLock {
+  nonisolated deinit {}
   private var locked = false
   private var waiters: [CheckedContinuation<Void, Never>] = []
   var isLocked: Bool { locked }

@@ -4,6 +4,22 @@ import XCTest
 @testable import Cinderdeck
 
 final class StackProcessIntegrationTests: XCTestCase {
+  func testRapidConcurrentCommandsKeepExitCodesAndStreamsSeparate() async throws {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for index in 0..<48 {
+        group.addTask {
+          let result = try await StackCommandRunner.run("/bin/sh", ["-c", "printf out-\(index); printf err-\(index) >&2; exit \(index % 8)"])
+          XCTAssertEqual(result.status, Int32(index % 8))
+          XCTAssertEqual(result.text, "out-\(index)")
+          XCTAssertEqual(result.errorText, "err-\(index)")
+        }
+      }
+      try await group.waitForAll()
+    }
+    let signalled = try await StackCommandRunner.run("/bin/sh", ["-c", "kill -TERM $$"])
+    XCTAssertEqual(signalled.status, 128 + SIGTERM)
+  }
+
   func testStopKillsEntireProcessGroup() async throws {
     let root = try StackTestSupport.temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }

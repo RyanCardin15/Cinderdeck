@@ -35,6 +35,7 @@ do_test() {
   xcodebuild test "${COMMON[@]}" -parallel-testing-enabled NO \
     -only-testing:CinderdeckTests/StackDefinitionLoaderTests -only-testing:CinderdeckTests/GitStatusParserTests \
     -only-testing:CinderdeckTests/GitRecentBranchesTests -only-testing:CinderdeckTests/AnsiParserTests -only-testing:CinderdeckTests/LogBufferTests \
+    -only-testing:CinderdeckTests/StackLogPerformanceRegressionTests \
     -only-testing:CinderdeckTests/StackProcessIntegrationTests -only-testing:CinderdeckTests/StackSupervisorOrderingTests \
     -only-testing:CinderdeckTests/GitServiceIntegrationTests -only-testing:CinderdeckTests/StackRunStoreTests \
     -only-testing:CinderdeckTests/StackConfigurationTests -only-testing:CinderdeckTests/StackDefinitionWatcherTests \

@@ -5,11 +5,13 @@ import Foundation
 struct WorkspaceNavigation {
   let workspaces: [StackDefinitionFile]
   let unattachedLanes: [StackDefinitionFile]
-  private let files: [StackDefinitionFile]
   private let sourceIDs: [String: String]
+  private let workspaceIDs: Set<String>
+  private let laneIDs: Set<String>
+  private let unattachedIDs: Set<String>
+  private let lanesByWorkspace: [String: [StackDefinitionFile]]
 
   init(files: [StackDefinitionFile], lanesDirectory: URL) {
-    self.files = files
     let lanes = files.compactMap(\.lane)
     var sourceIDs: [String: String] = [:]
     var laneIDs = Set<String>()
@@ -35,23 +37,27 @@ struct WorkspaceNavigation {
     self.sourceIDs = sourceIDs
     workspaces = files.filter { !laneIDs.contains($0.id) }
     let workspaceIDs = Set(workspaces.map(\.id))
+    self.workspaceIDs = workspaceIDs
+    self.laneIDs = laneIDs
     unattachedLanes = files.filter {
       laneIDs.contains($0.id) && !workspaceIDs.contains(sourceIDs[$0.id] ?? "")
     }
+    unattachedIDs = Set(unattachedLanes.map(\.id))
+    lanesByWorkspace = Dictionary(grouping: files.filter { sourceIDs[$0.id] != nil }, by: { sourceIDs[$0.id]! })
   }
 
   func workspaceID(for id: String?) -> String? {
     guard let id else { return nil }
-    return sourceIDs[id] ?? workspaces.first { $0.id == id }?.id
+    return sourceIDs[id] ?? (workspaceIDs.contains(id) ? id : nil)
   }
 
   func lanes(for workspaceID: String) -> [StackDefinitionFile] {
-    files.filter { sourceIDs[$0.id] == workspaceID }
+    lanesByWorkspace[workspaceID] ?? []
   }
 
-  func isLane(_ id: String) -> Bool { files.contains { $0.id == id } && !workspaces.contains { $0.id == id } }
+  func isLane(_ id: String) -> Bool { laneIDs.contains(id) }
 
-  func isUnattached(_ id: String) -> Bool { unattachedLanes.contains { $0.id == id } }
+  func isUnattached(_ id: String) -> Bool { unattachedIDs.contains(id) }
 
   private static func contains(_ path: URL, in directory: URL) -> Bool {
     path.standardizedFileURL.pathComponents.starts(with: directory.standardizedFileURL.pathComponents)

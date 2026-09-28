@@ -4,6 +4,8 @@ Workspaces now groups **Services, Tasks, Workflows, and Runs** in a dedicated wi
 
 This doc mirrors the current Cinderdeck codebase and runtime ownership. Keep it in sync with source, not with intended architecture.
 
+Workspace performance: `StackCommandRunner` waits on kernel process-exit notifications with cancellation and deadline cleanup. `LogBuffer` uses a heap merge with a bounded reverse traversal for recent output; `StackSupervisor` moves large merges off the main actor. `StackLogFilter` retains search matches only for current line IDs. `StacksViewModel` rebuilds its indexed `WorkspaceNavigation` snapshot when definitions change, and the execution map draws static connections separately from animated activity. Agent inventory supports `list_workspaces(detail: false)`. Measurements and verification are in [PERFORMANCE.md](PERFORMANCE.md).
+
 ## Feature Docs
 
 Separated feature docs cover each runtime area in depth:

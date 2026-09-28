@@ -17,7 +17,18 @@ struct WorkspaceLaneMapCanvas: View {
   var body: some View {
     let byID = Dictionary(uniqueKeysWithValues: graph.nodes.map { ($0.id, $0) })
     let edges = graph.diagramEdges
-    let hasActivity = edges.contains { byID[$0.from]?.hasLiveActivity == true && byID[$0.to]?.hasLiveActivity == true }
+    let routes = edges.enumerated().compactMap { index, edge -> WorkspaceMapRenderedRoute? in
+      guard let start = layout.frames[edge.from], let end = layout.frames[edge.to] else { return nil }
+      let highlighted = connected.map { $0.contains(edge.from) && $0.contains(edge.to) } ?? false
+      let dimmed = connected != nil && !highlighted
+      return WorkspaceMapRenderedRoute(route: WorkspaceMapRoute(start: start, end: end),
+        tint: byID[edge.from].map { color($0.workspaceID) } ?? .secondary,
+        highlighted: highlighted, dimmed: dimmed, dashed: edge.kind == .depends,
+        active: !dimmed && byID[edge.from]?.hasLiveActivity == true && byID[edge.to]?.hasLiveActivity == true,
+        phase: Double(index) * 0.19)
+    }
+    let activeRoutes = routes.filter(\.active)
+    let connectionCounts = Dictionary(grouping: graph.edges, by: \.from).mapValues(\.count)
     ZStack(alignment: .topLeading) {
       Canvas { context, size in
         for x in stride(from: CGFloat(8), to: size.width, by: 24) {
@@ -46,27 +57,26 @@ struct WorkspaceLaneMapCanvas: View {
           .frame(width: band.frame.width * zoom, height: band.frame.height * zoom)
           .position(x: band.frame.midX * zoom, y: band.frame.midY * zoom).accessibilityHidden(true)
       }
-      TimelineView(.animation(minimumInterval: 1.0 / 24, paused: reduceMotion || !hasActivity)) { timeline in
+      // Static connections do not need to be stroked again for every animation
+      // frame. Only the moving activity dots live inside the timeline.
+      Canvas { context, _ in
+        context.scaleBy(x: zoom, y: zoom)
+        for item in routes {
+          if item.highlighted { context.stroke(item.route.path, with: .color(item.tint.opacity(0.08)), lineWidth: 7) }
+          context.stroke(item.route.path, with: .color(item.tint.opacity(item.dimmed ? 0.07 : item.highlighted ? 0.9 : 0.35)),
+            style: StrokeStyle(lineWidth: item.highlighted ? 2 : 1.3, dash: item.dashed ? [5, 5] : []))
+          context.fill(item.route.arrow, with: .color(item.tint.opacity(item.dimmed ? 0.08 : 0.7)))
+        }
+      }.accessibilityHidden(true).allowsHitTesting(false)
+      TimelineView(.animation(minimumInterval: 1.0 / 24, paused: reduceMotion || activeRoutes.isEmpty)) { timeline in
         Canvas { context, _ in
           context.scaleBy(x: zoom, y: zoom)
-          for (index, edge) in edges.enumerated() {
-            guard let start = layout.frames[edge.from], let end = layout.frames[edge.to] else { continue }
-            let route = WorkspaceMapRoute(start: start, end: end)
-            let highlighted = connected.map { $0.contains(edge.from) && $0.contains(edge.to) } ?? false
-            let dimmed = connected != nil && !highlighted
-            let tint = byID[edge.from].map { color($0.workspaceID) } ?? .secondary
-            let active = byID[edge.from]?.hasLiveActivity == true && byID[edge.to]?.hasLiveActivity == true
-            if highlighted {
-              context.stroke(route.path, with: .color(tint.opacity(0.08)), lineWidth: 7)
-            }
-            context.stroke(route.path, with: .color(tint.opacity(dimmed ? 0.07 : highlighted ? 0.9 : 0.35)),
-              style: StrokeStyle(lineWidth: highlighted ? 2 : 1.3, dash: edge.kind == .depends ? [5, 5] : []))
-            context.fill(route.arrow, with: .color(tint.opacity(dimmed ? 0.08 : 0.7)))
-            if active && !dimmed && !reduceMotion {
-              let t = (timeline.date.timeIntervalSinceReferenceDate / 3.8 + Double(index) * 0.19).truncatingRemainder(dividingBy: 1)
-              let point = route.point(at: t)
+          if !reduceMotion {
+            for item in activeRoutes {
+              let t = (timeline.date.timeIntervalSinceReferenceDate / 3.8 + item.phase).truncatingRemainder(dividingBy: 1)
+              let point = item.route.point(at: t)
               context.fill(Path(ellipseIn: CGRect(x: point.x - 2.5, y: point.y - 2.5, width: 5, height: 5)),
-                with: .color(tint.opacity(highlighted ? 1 : 0.65)))
+                with: .color(item.tint.opacity(item.highlighted ? 1 : 0.65)))
             }
           }
         }
@@ -76,7 +86,7 @@ struct WorkspaceLaneMapCanvas: View {
           WorkspaceLaneMapBlock(node: node, tint: node.isSharedResource ? WorkspaceLaneMapStyle.resource : color(node.workspaceID),
             selected: selection == node.id, connected: connected?.contains(node.id) == true,
             dimmed: connected.map { !$0.contains(node.id) } ?? false,
-            connectionCount: graph.edges.filter { $0.from == node.id }.count, select: { select(node.id) })
+            connectionCount: connectionCounts[node.id] ?? 0, select: { select(node.id) })
             .contextMenu {
               if node.isLane, removableLanes.contains(node.workspaceID) {
                 Button("Delete lane…", role: .destructive) { deleteLane(node.workspaceID) }
@@ -96,6 +106,16 @@ struct WorkspaceLaneMapCanvas: View {
   private func columnLabel(_ title: String, width: CGFloat) -> some View {
     WorkspaceMapEyebrow(text: title).frame(width: width, alignment: .leading)
   }
+}
+
+private struct WorkspaceMapRenderedRoute {
+  let route: WorkspaceMapRoute
+  let tint: Color
+  let highlighted: Bool
+  let dimmed: Bool
+  let dashed: Bool
+  let active: Bool
+  let phase: Double
 }
 
 /// Curves use the closest appropriate side. Vertical step sequences and return

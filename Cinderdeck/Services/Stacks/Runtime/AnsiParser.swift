@@ -66,5 +66,11 @@ nonisolated enum AnsiParser {
       }
     }
   }
-  static func plainText(_ text: String) -> String { var state = State(); return state.parse(text).map(\.text).joined() }
+  static func plainText(_ text: String) -> String {
+    // Most service output is already plain text. Avoid scalar arrays, styled
+    // runs and a second joined string for every filter, copy and agent response.
+    if !text.utf8.contains(where: { ($0 < 32 && $0 != 9 && $0 != 10) || $0 == 127 }) { return text }
+    var state = State()
+    return state.parse(text).map(\.text).joined()
+  }
 }

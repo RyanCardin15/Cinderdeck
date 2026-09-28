@@ -276,12 +276,16 @@ final class WorkspaceRunner: ObservableObject {
     }
   }
 
-  func output(_ runID: UUID, stepID: UUID? = nil) async -> [StackLogLine] {
+  func output(_ runID: UUID, stepID: UUID? = nil, limit: Int = LogBuffer.capacity) async -> [StackLogLine] {
     guard let run = run(runID) else { return [] }
-    var result: [StackLogLine] = []
-    for step in run.steps where stepID == nil || step.id == stepID {
-      if let buffer = buffers[step.id] { result += await buffer.snapshot() }
-      else if let cached = finishedOutput[step.id] { result += cached }
+    var chunks: [[StackLogLine]] = []
+    var remaining = min(max(0, limit), LogBuffer.capacity)
+    // Steps are ordered. Fill the tail from the last step first, avoiding file
+    // reads and cache churn for output that cannot appear in this response.
+    for step in run.steps.reversed() where (stepID == nil || step.id == stepID) && remaining > 0 {
+      let selected: [StackLogLine]
+      if let buffer = buffers[step.id] { selected = await buffer.snapshot(limit: remaining) }
+      else if let cached = finishedOutput[step.id] { selected = Array(cached.suffix(remaining)) }
       else {
         let url = store.logURL(runID, step.id)
         let text = await Task.detached {
@@ -293,7 +297,7 @@ final class WorkspaceRunner: ObservableObject {
         }.value
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false).filter { !$0.isEmpty }
           .suffix(LogBuffer.capacity).map { StackLogLine(service: step.title, text: String($0), timestamp: step.startedAt ?? run.createdAt) }
-        result += lines
+        selected = Array(lines.suffix(remaining))
         // Only settled steps: a queued or running step's file is still growing.
         if !step.status.isActive, buffers[step.id] == nil, self.run(runID)?.steps.first(where: { $0.id == step.id })?.status.isActive == false {
           finishedOutput[step.id] = lines
@@ -301,8 +305,10 @@ final class WorkspaceRunner: ObservableObject {
           while finishedOutputOrder.count > 32 { finishedOutput[finishedOutputOrder.removeFirst()] = nil }
         }
       }
+      chunks.append(selected)
+      remaining -= selected.count
     }
-    return Array(result.suffix(LogBuffer.capacity))
+    return chunks.reversed().flatMap { $0 }
   }
 
   private func change(_ id: UUID, _ mutation: (inout WorkspaceRun) -> Void) {

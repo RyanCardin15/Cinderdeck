@@ -116,6 +116,8 @@ cinderdeck services setup-agents --print
 
 Use the filename without `.toml` as the workspace ID. `cinderdeck mcp` exposes the same controls over MCP stdio, including workspace creation, edits and removal, component management, and lane creation, edits and removal. `cinderdeck tools` lists every operation and its JSON schema; `cinderdeck call <tool-name> --arguments '<json>'` runs any MCP tool from the CLI. [Workspace commands and examples](docs/WORKSPACES.md#cli-and-agents). Agent setup changes client configuration only when you run the setup command. Use `cinderdeck services agent-help` for the full command reference and agent instructions.
 
+For a compact agent inventory, use `cinderdeck call list_workspaces --arguments '{"detail":false}'`, then fetch the workspace you need. [Performance benchmarks](docs/PERFORMANCE.md) cover command execution, large log buffers, and the live agent API.
+
 ## Install
 
 Requires macOS 13 or later. Download `Cinderdeck-v….dmg` from [Releases](https://github.com/RyanCardin15/Cinderdeck/releases) and drag Cinderdeck to Applications, or run:

@@ -71,6 +71,10 @@ def main():
                 cli("workspace", "save-service", "fixture", "worker", "--data", '{"cmd":"sleep 300","autostart":false}')
                 tool("save_workspace_task", workspace="fixture", task="check", cmd="echo checked")
                 cli("workspace", "save-workflow", "fixture", "verify", "--data", '{"steps":["task:check"]}')
+                compact = tool("list_workspaces", detail=False)
+                assert compact[0]["services"] == ["worker"] and compact[0]["tasks"] == ["check"], compact
+                assert "repos" not in compact[0] and "status" not in compact[0], compact
+                assert cli("call", "list_workspaces", "--arguments", '{"detail":false}')[0]["services"] == ["worker"]
                 definition = tool("workspace_definition", workspace="fixture")
                 cli("workspace", "edit", "fixture", "--name", "Updated fixture")
                 stale = cli("call", "save_workspace", "--arguments", json.dumps(dict(workspace="fixture", source=definition["source"],

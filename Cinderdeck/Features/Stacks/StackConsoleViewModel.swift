@@ -21,6 +21,7 @@ final class StackConsoleViewModel: ObservableObject {
   private var logTask: Task<Void, Never>?
   private var selectionRevision = 0
   private var loadedRevision: [LogBufferRevision]?
+  private var logMatcher = StackLogFilter()
 
   init(file: StackDefinitionFile, supervisor: StackSupervisor) {
     self.stackID = file.id
@@ -50,8 +51,7 @@ final class StackConsoleViewModel: ObservableObject {
     return services.sorted { $0.id < $1.id }
   }
   private func updateFilteredLogs() {
-    filteredLogs = logFilter.isEmpty ? logLines
-      : logLines.filter { AnsiParser.plainText($0.text).localizedCaseInsensitiveContains(logFilter) }
+    filteredLogs = logMatcher.filter(logLines, query: logFilter)
   }
   func runtime(_ service: String) -> StackServiceRuntime { state.services[service] ?? .init() }
 

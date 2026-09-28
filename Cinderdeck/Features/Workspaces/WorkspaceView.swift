@@ -472,7 +472,8 @@ private struct WorkspaceRunDetail: View {
   @State private var lines: [StackLogLine] = []
   @State private var filter = ""
   @State private var autoScroll = true
-  private var filtered: [StackLogLine] { lines.filter { filter.isEmpty || AnsiParser.plainText($0.text).localizedCaseInsensitiveContains(filter) } }
+  @State private var logMatcher = StackLogFilter()
+  @State private var filtered: [StackLogLine] = []
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
       HStack {
@@ -482,7 +483,7 @@ private struct WorkspaceRunDetail: View {
         if run.status.isActive { Button("Cancel run", action: cancel) }
         else { Button("Run again", action: rerun).buttonStyle(DeckButtonStyle(prominent: true, compact: true)).disabled(runner.activeRun(run.workspaceID) != nil).help("Run again using the current definition") }
       }
-      TimelineView(.periodic(from: .now, by: 1)) { _ in
+      TimelineView(.animation(minimumInterval: 1, paused: !run.status.isActive)) { _ in
         Text("\(run.kind.rawValue.capitalized) · \(run.actor.label) · \(String(format: "%.1f", run.duration))s").font(.caption).foregroundColor(.secondary)
       }
       if let detail = run.detail { Text(detail).font(.callout).foregroundColor(run.status == .failed ? .red : .secondary).textSelection(.enabled) }
@@ -511,13 +512,18 @@ private struct WorkspaceRunDetail: View {
         .clipShape(RoundedRectangle(cornerRadius: 8)).frame(minHeight: 150)
     }.padding(16).deckSurface()
       .padding(.leading, 12)
+      .onChange(of: filter) { query in filtered = logMatcher.filter(lines, query: query) }
       .task(id: "\(run.id)-\(selectedStep?.uuidString ?? "all")") {
         lines = []
+        filtered = logMatcher.filter([], query: filter)
         while !Task.isCancelled {
           let output = await runner.output(run.id, stepID: selectedStep)
           guard !Task.isCancelled else { return }
           // Line ids are stable for live and finished steps, so they identify new output.
-          if lines.count != output.count || lines.last?.id != output.last?.id || lines.map(\.id) != output.map(\.id) { lines = output }
+          if lines.count != output.count || lines.last?.id != output.last?.id || lines.map(\.id) != output.map(\.id) {
+            lines = output
+            filtered = logMatcher.filter(output, query: filter)
+          }
           if runner.run(run.id)?.status.isActive != true { return }
           do { try await Task.sleep(nanoseconds: 250_000_000) } catch { return }
         }

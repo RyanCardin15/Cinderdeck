@@ -37,7 +37,14 @@ nonisolated enum StackCommandRunner {
       posix_spawn_file_actions_adddup2(&actions, errFD, STDERR_FILENO)
       if let directory { posix_spawn_file_actions_addchdir_np(&actions, directory.path) }
       posix_spawnattr_setpgroup(&attr, 0)
-      posix_spawnattr_setflags(&attr, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT))
+      // GUI/test hosts may ignore or block signals. Commands need normal shell
+      // semantics, including a truthful signal exit status and working SIGPIPE.
+      var mask = sigset_t(), defaults = sigset_t()
+      sigemptyset(&mask); sigemptyset(&defaults)
+      for signal in [SIGINT, SIGTERM, SIGHUP, SIGPIPE, SIGQUIT] { sigaddset(&defaults, signal) }
+      posix_spawnattr_setsigmask(&attr, &mask)
+      posix_spawnattr_setsigdefault(&attr, &defaults)
+      posix_spawnattr_setflags(&attr, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF))
       let args = ([executable] + arguments).map { value in value.withCString { strdup($0) } }
       let vars = environment.map { strdup("\($0.key)=\($0.value)") }
       defer { args.forEach { free($0) }; vars.forEach { free($0) } }
@@ -45,17 +52,7 @@ nonisolated enum StackCommandRunner {
       var pid: pid_t = 0
       let spawned = posix_spawn(&pid, executable, &actions, &attr, &argv, &envp)
       guard spawned == 0 else { throw StackError.message(String(cString: strerror(spawned))) }
-      var status: Int32 = 0
-      let deadline = Date().addingTimeInterval(timeout)
-      while waitpid(pid, &status, WNOHANG) == 0 {
-        if Date() >= deadline || Task.isCancelled {
-          kill(-pid, SIGKILL)
-          waitpid(pid, &status, 0)
-          try Task.checkCancellation()
-          throw StackError.message("Command timed out after \(Int(timeout)) seconds")
-        }
-        try? await Task.sleep(nanoseconds: 25_000_000)
-      }
+      let status = try await StackCommandExit(pid: pid).wait(timeout: timeout)
       let code = (status & 0x7f) == 0 ? (status >> 8) & 0xff : 128 + (status & 0x7f)
       func read(_ fd: Int32) throws -> Data {
         // Reuse the descriptor we already own instead of opening the file again
@@ -84,5 +81,80 @@ nonisolated enum StackCommandRunner {
     } onCancel: {
       task.cancel()
     }
+  }
+}
+
+/// Kernel exit notification avoids a 25 ms latency floor and 40 wakeups/second
+/// for every command. All completion paths share one queue and reap exactly once.
+private nonisolated final class StackCommandExit: @unchecked Sendable {
+  private let pid: pid_t
+  private let queue = DispatchQueue(label: "cinderdeck.command.exit", qos: .utility)
+  private var source: DispatchSourceProcess?
+  private var timer: DispatchSourceTimer?
+  private var continuation: CheckedContinuation<Int32, Error>?
+  private var cancelled = false
+
+  init(pid: pid_t) { self.pid = pid }
+
+  func wait(timeout: TimeInterval) async throws -> Int32 {
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { continuation in
+        queue.async { self.begin(continuation, timeout: timeout) }
+      }
+    } onCancel: {
+      self.queue.async {
+        self.cancelled = true
+        if self.continuation != nil { self.terminate(CancellationError()) }
+      }
+    }
+  }
+
+  private func begin(_ continuation: CheckedContinuation<Int32, Error>, timeout: TimeInterval) {
+    self.continuation = continuation
+    if cancelled { terminate(CancellationError()); return }
+    if reap(blocking: false) { return }
+    let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: queue)
+    source.setEventHandler { [weak self] in _ = self?.reap(blocking: true) }
+    self.source = source
+    source.resume()
+    let timer = DispatchSource.makeTimerSource(queue: queue)
+    timer.schedule(deadline: .now() + max(0, timeout))
+    timer.setEventHandler { [weak self] in
+      guard let self, self.continuation != nil else { return }
+      if !self.reap(blocking: false) {
+        self.terminate(StackError.message("Command timed out after \(Int(timeout)) seconds"))
+      }
+    }
+    self.timer = timer
+    timer.resume()
+  }
+
+  @discardableResult
+  private func reap(blocking: Bool) -> Bool {
+    guard continuation != nil else { return true }
+    var status: Int32 = 0
+    var result: pid_t
+    repeat { result = waitpid(pid, &status, blocking ? 0 : WNOHANG) } while result < 0 && errno == EINTR
+    if result == 0 { return false }
+    if result < 0 { finish(.failure(StackError.message("Wait for command: \(String(cString: strerror(errno)))"))) }
+    else { finish(.success(status)) }
+    return true
+  }
+
+  private func terminate(_ error: Error) {
+    guard continuation != nil else { return }
+    // The leader has not been reaped, so its PID/group cannot have been reused.
+    kill(-pid, SIGKILL)
+    var status: Int32 = 0
+    while waitpid(pid, &status, 0) < 0 && errno == EINTR {}
+    finish(.failure(error))
+  }
+
+  private func finish(_ result: Result<Int32, Error>) {
+    let waiter = continuation
+    continuation = nil
+    source?.cancel(); source = nil
+    timer?.cancel(); timer = nil
+    waiter?.resume(with: result)
   }
 }
