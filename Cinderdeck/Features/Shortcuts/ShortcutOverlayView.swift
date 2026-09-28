@@ -40,14 +40,7 @@ struct ShortcutOverlayView: View {
         footer
       }
       .frame(width: 760)
-      .background(
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-          .fill(Color(nsColor: .windowBackgroundColor).opacity(0.96))
-      )
-      .overlay(
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-          .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-      )
+      .deckSurface(radius: 16)
       .shadow(color: .black.opacity(0.2), radius: 16, x: 0, y: 8)
       .padding(24)
       .onTapGesture {}  // Consume taps to prevent dismiss when interacting with card
@@ -75,6 +68,7 @@ struct ShortcutOverlayView: View {
       }
       .buttonStyle(.plain)
       .help(L10n.ShortcutOverlay.closeHelp)
+      .accessibilityLabel(L10n.ShortcutOverlay.closeHelp)
     }
     .padding(.horizontal, 20)
     .padding(.vertical, 16)
@@ -85,7 +79,7 @@ struct ShortcutOverlayView: View {
       Button(L10n.ShortcutOverlay.customizeInSettings) {
         onOpenSettings()
       }
-      .buttonStyle(.borderedProminent)
+      .buttonStyle(DeckButtonStyle(prominent: true))
       .controlSize(.small)
 
       Spacer()

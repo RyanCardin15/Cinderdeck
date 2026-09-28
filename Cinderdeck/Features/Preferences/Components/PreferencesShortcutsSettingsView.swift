@@ -267,7 +267,7 @@ struct ShortcutsSettingsView: View {
           title: L10n.PreferencesShortcuts.enableShortcutsTitle,
           description: L10n.PreferencesShortcuts.enableShortcutsDescription
         ) {
-          Toggle("", isOn: $shortcutsEnabled)
+          Toggle(L10n.PreferencesShortcuts.enableShortcutsTitle, isOn: $shortcutsEnabled)
             .labelsHidden()
             .onChange(of: shortcutsEnabled) { newValue in
               if newValue {

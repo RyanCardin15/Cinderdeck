@@ -13,9 +13,7 @@ struct VideoSidebarSectionHeader: View {
   let title: String
 
   var body: some View {
-    Text(title)
-      .font(Typography.sectionHeader)
-      .foregroundColor(SidebarColors.labelSecondary)
+    DeckSectionLabel(title: title).padding(.bottom, 2)
   }
 }
 
@@ -33,6 +31,8 @@ struct VideoGradientPresetButton: View {
         .sidebarItemStyle(isSelected: isSelected)
     }
     .buttonStyle(.plain)
+    .accessibilityLabel(preset.displayName)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 }
 
@@ -62,6 +62,8 @@ struct VideoColorSwatchGrid: View {
               .colorSwatchStyle(isSelected: AnnotateColorPaletteStore.colorsMatch(selectedColor, color))
           }
           .buttonStyle(.plain)
+          .accessibilityLabel(AnnotateColorPaletteStore.accessibilityName(for: color))
+          .accessibilityAddTraits(AnnotateColorPaletteStore.colorsMatch(selectedColor, color) ? .isSelected : [])
         }
 
         ForEach(paletteStore.customColors, id: \.self) { color in
@@ -117,7 +119,7 @@ struct VideoSliderRow: View {
           .font(Typography.labelSmall)
           .foregroundColor(SidebarColors.labelSecondary)
         Spacer()
-        TextField("", text: $textValue)
+        TextField(label, text: $textValue)
           .font(Typography.labelSmall)
           .foregroundColor(SidebarColors.labelSecondary.opacity(0.9))
           .multilineTextAlignment(.trailing)
@@ -164,6 +166,7 @@ struct VideoSliderRow: View {
         }
       )
       .controlSize(.small)
+      .accessibilityLabel(label)
     }
     .onAppear { localValue = value }
     .onChange(of: localValue) { newValue in
@@ -220,6 +223,8 @@ struct VideoDefaultWallpaperButton: View {
       .sidebarItemStyle(isSelected: isSelected)
     }
     .buttonStyle(.plain)
+    .accessibilityLabel(item.name)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
     .onAppear {
       loadThumbnail()
     }
@@ -271,6 +276,8 @@ struct VideoCustomWallpaperButton: View {
         .sidebarItemStyle(isSelected: isSelected)
       }
       .buttonStyle(.plain)
+      .accessibilityLabel(url.lastPathComponent)
+      .accessibilityAddTraits(isSelected ? .isSelected : [])
 
       if isHovering {
         Button(action: onRemove) {
@@ -325,5 +332,6 @@ struct VideoAddWallpaperButton: View {
         .actionButtonStyle()
     }
     .buttonStyle(.plain)
+    .accessibilityLabel("Add wallpaper")
   }
 }

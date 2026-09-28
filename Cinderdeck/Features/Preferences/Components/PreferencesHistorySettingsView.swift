@@ -43,7 +43,7 @@ struct HistorySettingsView: View {
           title: L10n.PreferencesHistory.floatingPanelTitle,
           description: L10n.PreferencesHistory.floatingPanelDescription
         ) {
-          Toggle("", isOn: $manager.isEnabled)
+          Toggle(L10n.PreferencesHistory.floatingPanelTitle, isOn: $manager.isEnabled)
             .labelsHidden()
         }
 

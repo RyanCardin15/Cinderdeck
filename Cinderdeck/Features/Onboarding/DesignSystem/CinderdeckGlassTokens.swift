@@ -26,7 +26,7 @@ enum CinderdeckGlassInk {
   /// Body prose and descriptions
   static let body = Color.white.opacity(0.72)
   /// Secondary text, inactive markers, overlines
-  static let muted = Color.white.opacity(0.46)
+  static let muted = Color.white.opacity(0.64)
   /// Background structure, faint connectors, borders
   static let faint = Color.white.opacity(0.30)
 }
@@ -72,10 +72,10 @@ enum CinderdeckOnboardingMetrics {
 }
 
 enum CinderdeckOnboardingType {
-  static let overline: CGFloat = 9.5
+  static let overline: CGFloat = 10
   static let display: CGFloat = 32.5
   static let lede: CGFloat = 14.0
-  static let sectionLabel: CGFloat = 9.0
+  static let sectionLabel: CGFloat = 10.0
   static let challenge: CGFloat = 13.0
   static let body: CGFloat = 11.5
   static let caption: CGFloat = 11.0

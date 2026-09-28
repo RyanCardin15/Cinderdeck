@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct PreferencesView: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @ObservedObject private var themeManager = ThemeManager.shared
   @ObservedObject private var navigationState = PreferencesNavigationState.shared
 
@@ -21,6 +22,7 @@ struct PreferencesView: View {
       detail
     }
     .navigationSplitViewStyle(.balanced)
+    .tint(DeckStyle.accent)
     .preferredColorScheme(themeManager.systemAppearance)
     .frame(minWidth: PreferencesWindowController.minimumContentSize.width,
            minHeight: PreferencesWindowController.minimumContentSize.height)
@@ -104,7 +106,7 @@ struct PreferencesView: View {
     }
     .id(navigationState.selectedTab)
     .transition(.opacity)
-    .animation(.easeOut(duration: 0.12), value: navigationState.selectedTab)
+    .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: navigationState.selectedTab)
     .navigationTitle(navigationState.selectedTab.title)
     .navigationSplitViewColumnWidth(min: 480, ideal: 580)
     .toolbar {
@@ -142,8 +144,8 @@ private struct PreferencesSidebarRow: View {
       Text(tab.title)
     } icon: {
       Image(systemName: tab.symbol)
-        .font(.system(size: 13, weight: .regular))
-        .frame(width: 18, alignment: .center)
+        .font(.system(size: 13, weight: .medium))
+        .frame(width: 22, height: 24, alignment: .center)
     }
   }
 }

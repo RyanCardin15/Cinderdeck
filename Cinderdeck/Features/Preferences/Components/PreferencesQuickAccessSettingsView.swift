@@ -49,17 +49,17 @@ struct QuickAccessSettingsView: View {
 
       Section(L10n.PreferencesQuickAccess.behaviorsSection) {
         SettingRow(icon: "square.on.square", title: L10n.PreferencesQuickAccess.floatingOverlayTitle, description: L10n.PreferencesQuickAccess.floatingOverlayDescription) {
-          Toggle("", isOn: $manager.isEnabled)
+          Toggle(L10n.PreferencesQuickAccess.floatingOverlayTitle, isOn: $manager.isEnabled)
             .labelsHidden()
         }
 
         SettingRow(icon: "timer", title: L10n.PreferencesQuickAccess.autoCloseTitle, description: autoCloseDescription) {
-          Toggle("", isOn: $manager.autoDismissEnabled)
+          Toggle(L10n.PreferencesQuickAccess.autoCloseTitle, isOn: $manager.autoDismissEnabled)
             .labelsHidden()
         }
 
         SettingRow(icon: "eye.slash", title: L10n.PreferencesQuickAccess.hideCardWhenWindowOpenTitle, description: L10n.PreferencesQuickAccess.hideCardWhenWindowOpenDescription) {
-          Toggle("", isOn: $manager.hideCardWhenWindowOpen)
+          Toggle(L10n.PreferencesQuickAccess.hideCardWhenWindowOpenTitle, isOn: $manager.hideCardWhenWindowOpen)
             .labelsHidden()
         }
 
@@ -76,7 +76,7 @@ struct QuickAccessSettingsView: View {
         }
 
         SettingRow(icon: "speaker.wave.2", title: L10n.PreferencesQuickAccess.soundEffectsTitle, description: L10n.PreferencesQuickAccess.soundEffectsDescription) {
-          Toggle("", isOn: $playSounds)
+          Toggle(L10n.PreferencesQuickAccess.soundEffectsTitle, isOn: $playSounds)
             .labelsHidden()
         }
 
@@ -105,18 +105,18 @@ struct QuickAccessSettingsView: View {
 
         if manager.autoDismissEnabled {
           SettingRow(icon: "cursorarrow.motionlines", title: L10n.PreferencesQuickAccess.pauseOnHoverTitle, description: L10n.PreferencesQuickAccess.pauseOnHoverDescription) {
-            Toggle("", isOn: $manager.pauseCountdownOnHover)
+            Toggle(L10n.PreferencesQuickAccess.pauseOnHoverTitle, isOn: $manager.pauseCountdownOnHover)
               .labelsHidden()
           }
         }
 
         SettingRow(icon: "hand.draw", title: L10n.PreferencesQuickAccess.dragAndDropTitle, description: L10n.PreferencesQuickAccess.dragAndDropDescription) {
-          Toggle("", isOn: $manager.dragDropEnabled)
+          Toggle(L10n.PreferencesQuickAccess.dragAndDropTitle, isOn: $manager.dragDropEnabled)
             .labelsHidden()
         }
 
         SettingRow(icon: "hand.point.right", title: L10n.PreferencesQuickAccess.twoFingerSwipeTitle, description: L10n.PreferencesQuickAccess.twoFingerSwipeDescription) {
-          Toggle("", isOn: $manager.twoFingerSwipeToDismissEnabled)
+          Toggle(L10n.PreferencesQuickAccess.twoFingerSwipeTitle, isOn: $manager.twoFingerSwipeToDismissEnabled)
             .labelsHidden()
         }
 

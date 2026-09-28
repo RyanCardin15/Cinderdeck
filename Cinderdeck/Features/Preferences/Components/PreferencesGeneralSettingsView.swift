@@ -22,7 +22,7 @@ struct GeneralSettingsView: View {
     Form {
       Section(L10n.PreferencesGeneral.startupSection) {
         SettingRow(icon: "power.circle", title: L10n.PreferencesGeneral.startAtLoginTitle, description: L10n.PreferencesGeneral.startAtLoginDescription) {
-          Toggle("", isOn: $startAtLogin)
+          Toggle(L10n.PreferencesGeneral.startAtLoginTitle, isOn: $startAtLogin)
             .labelsHidden()
             .onChange(of: startAtLogin) { newValue in
               LoginItemManager.setEnabled(newValue)
@@ -30,12 +30,12 @@ struct GeneralSettingsView: View {
         }
 
         SettingRow(icon: "speaker.wave.2", title: L10n.PreferencesGeneral.playSoundsTitle, description: L10n.PreferencesGeneral.playSoundsDescription) {
-          Toggle("", isOn: $playSounds)
+          Toggle(L10n.PreferencesGeneral.playSoundsTitle, isOn: $playSounds)
             .labelsHidden()
         }
 
         SettingRow(icon: "menubar.rectangle", title: L10n.PreferencesGeneral.menuBarIconTitle, description: L10n.PreferencesGeneral.menuBarIconDescription) {
-          Toggle("", isOn: $showMenuBarIcon)
+          Toggle(L10n.PreferencesGeneral.menuBarIconTitle, isOn: $showMenuBarIcon)
             .labelsHidden()
             .onChange(of: showMenuBarIcon) { newValue in
               AppStatusBarController.shared.setMenuBarIconVisible(newValue)
@@ -65,7 +65,7 @@ struct GeneralSettingsView: View {
         PreferencesSoftwareUpdateView()
 
         SettingRow(icon: "arrow.triangle.2.circlepath", title: L10n.PreferencesGeneral.checkAutomaticallyTitle, description: L10n.PreferencesGeneral.checkAutomaticallyDescription) {
-          Toggle("", isOn: Binding(
+          Toggle(L10n.PreferencesGeneral.checkAutomaticallyTitle, isOn: Binding(
             get: { updates.automaticallyChecksForUpdates },
             set: {
               updates.automaticallyChecksForUpdates = $0
@@ -77,7 +77,7 @@ struct GeneralSettingsView: View {
         }
 
         SettingRow(icon: "arrow.down.circle", title: L10n.PreferencesGeneral.downloadAutomaticallyTitle, description: L10n.PreferencesGeneral.downloadAutomaticallyDescription) {
-          Toggle("", isOn: Binding(
+          Toggle(L10n.PreferencesGeneral.downloadAutomaticallyTitle, isOn: Binding(
             get: { updates.automaticallyDownloadsUpdates },
             set: {
               updates.automaticallyDownloadsUpdates = $0

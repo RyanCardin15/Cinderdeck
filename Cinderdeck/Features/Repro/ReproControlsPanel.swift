@@ -107,6 +107,7 @@ private struct ReproControlsView: View {
   @ObservedObject private var screen = ScreenRecordingManager.shared
   let close: () -> Void
   let hover: (Bool) -> Void
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var pulse = false
   @State private var copied = false
 
@@ -123,8 +124,7 @@ private struct ReproControlsView: View {
     .onChange(of: model.phase) { _ in copied = false }
     .padding(.horizontal, 14)
     .frame(width: 520, height: 56)
-    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
+    .deckSurface()
     .padding(4)
   }
 
@@ -132,14 +132,14 @@ private struct ReproControlsView: View {
 
   private var recording: some View {
     Group {
-      Circle().fill(Color.red).frame(width: 10, height: 10)
-        .opacity(screen.isPaused ? 0.35 : (pulse ? 0.45 : 1))
-        .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
+      Circle().fill(DeckStyle.danger).frame(width: 10, height: 10)
+        .opacity(screen.isPaused ? 0.35 : (pulse && !reduceMotion ? 0.45 : 1))
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
         .onAppear { pulse = true }
       VStack(alignment: .leading, spacing: 2) {
         Text(recorder.live?.title ?? "Recording with logs").font(.system(size: 12, weight: .semibold)).lineLimit(1)
         TimelineView(.periodic(from: .now, by: 1)) { _ in
-          Text(subtitle).font(.system(size: 10.5)).foregroundColor(.secondary).monospacedDigit().lineLimit(1)
+          Text(subtitle).font(.system(size: 11)).foregroundColor(.secondary).monospacedDigit().lineLimit(1)
         }
       }
       Spacer(minLength: 4)
@@ -159,7 +159,7 @@ private struct ReproControlsView: View {
       } label: {
         Label("Stop", systemImage: "stop.fill").font(.system(size: 11, weight: .semibold))
       }
-      .buttonStyle(.borderedProminent).tint(.red).controlSize(.small)
+      .buttonStyle(DeckButtonStyle(prominent: true, compact: true, tint: DeckStyle.danger))
       .help("Stop recording and save the repro")
     }
   }
@@ -190,10 +190,10 @@ private struct ReproControlsView: View {
   private func finished(_ session: ReproSession, agent: Bool) -> some View {
     Group {
       Image(systemName: session.errorCount > 0 ? "text.badge.xmark" : "text.badge.checkmark")
-        .foregroundColor(session.errorCount > 0 ? .orange : .green).font(.system(size: 17, weight: .semibold))
+        .foregroundColor(session.errorCount > 0 ? DeckStyle.warning : DeckStyle.success).font(.system(size: 17, weight: .semibold))
       VStack(alignment: .leading, spacing: 2) {
         Text(agent ? "Recording saved with logs" : "Logs saved with your video").font(.system(size: 12, weight: .semibold)).lineLimit(1)
-        Text(detail(session)).font(.system(size: 10.5)).foregroundColor(.secondary).lineLimit(1).truncationMode(.middle)
+        Text(detail(session)).font(.system(size: 11)).foregroundColor(.secondary).lineLimit(1).truncationMode(.middle)
       }
       Spacer(minLength: 4)
       Button("Show Log") {
@@ -223,9 +223,9 @@ private struct ReproControlsView: View {
   private func iconButton(_ icon: String, help: String, action: @escaping () -> Void) -> some View {
     Button(action: action) {
       Image(systemName: icon).font(.system(size: 11, weight: .semibold)).frame(width: 26, height: 26)
-        .background(Color.primary.opacity(0.07), in: Circle())
+        .background(DeckStyle.hover, in: RoundedRectangle(cornerRadius: 6))
     }
-    .buttonStyle(.plain).help(help)
+    .buttonStyle(.plain).help(help).accessibilityLabel(help)
   }
 }
 

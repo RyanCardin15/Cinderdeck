@@ -8,9 +8,13 @@ struct WorkspaceCreateView: View {
   @State private var error: String?
   var body: some View {
     VStack(alignment: .leading, spacing: 18) {
-      Text("Create a workspace").font(.title2.bold())
-      Text("Keep a project's services, tasks, and workflows together. You can add any of them after creating the workspace.").foregroundColor(.secondary)
-      TextField("Workspace name", text: $name).textFieldStyle(.roundedBorder)
+      DeckSheetHeader(icon: "square.stack.3d.up", title: "Create a workspace",
+        detail: "One home for your project's services, tasks, and workflows.")
+      VStack(alignment: .leading, spacing: 7) {
+        DeckSectionLabel(title: "Workspace name")
+        TextField("e.g. Cinderdeck", text: $name).textFieldStyle(.roundedBorder).accessibilityLabel("Workspace name")
+      }
+      DeckSectionLabel(title: "Project folder")
       HStack {
         TextField("Project folder", text: $folder).textFieldStyle(.roundedBorder)
         Button("Choose folder…") {
@@ -23,9 +27,10 @@ struct WorkspaceCreateView: View {
       HStack {
         Spacer()
         Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-        Button("Create workspace", action: save).buttonStyle(.borderedProminent).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        Button("Create workspace", action: save).buttonStyle(DeckButtonStyle(prominent: true))
+          .keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
       }
-    }.padding(24).frame(width: 520)
+    }.padding(24).frame(width: 520).background(DeckStyle.canvas)
   }
   private func save() {
     do {

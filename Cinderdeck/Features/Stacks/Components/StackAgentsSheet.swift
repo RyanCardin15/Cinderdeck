@@ -19,17 +19,8 @@ struct StackAgentsSheet: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
-      HStack(alignment: .top, spacing: 12) {
-        ZStack {
-          RoundedRectangle(cornerRadius: 11, style: .continuous).fill(StackPalette.agent.opacity(0.15)).frame(width: 40, height: 40)
-          Image(systemName: "sparkles").font(.system(size: 18, weight: .semibold)).foregroundColor(StackPalette.agent)
-        }
-        VStack(alignment: .leading, spacing: 3) {
-          Text("Agent access").font(.title2.weight(.semibold))
-          Text("Let Cursor, Codex, Claude Code, VS Code Copilot, or any shell run services, tasks, workflows, and screen-recorded repros, and configure Pull Request tabs. Saved views update in the PR window immediately; services started by agents are labeled with their name.")
-            .font(.callout).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-        }
-      }
+      DeckSheetHeader(icon: "sparkles", title: "Agent access",
+        detail: "Give your coding agents the same workspace controls. Connect an MCP client, install the CLI, or add recording and review skills.")
 
       ScrollView { sections }.frame(maxHeight: 560)
 
@@ -48,6 +39,7 @@ struct StackAgentsSheet: View {
     }
     .padding(22)
     .frame(width: 640)
+    .background(DeckStyle.canvas)
     .onAppear(perform: refreshSkills)
   }
 
@@ -61,7 +53,7 @@ struct StackAgentsSheet: View {
           Text(StackControlPaths.socket.path).font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary).textSelection(.enabled).lineLimit(1).truncationMode(.head)
         }
         Text("Live stack state for agents that just read files: \(StackControlPaths.state.path)")
-          .font(.system(size: 10.5)).foregroundColor(.secondary).textSelection(.enabled)
+          .font(.system(size: 11)).foregroundColor(.secondary).textSelection(.enabled)
       }
 
       section("Command-line tool") {
@@ -75,7 +67,7 @@ struct StackAgentsSheet: View {
           }.buttonStyle(StackPillButtonStyle(compact: true))
         }
         Text("Try: cinderdeck prs views list · cinderdeck prs --help · cinderdeck services status")
-          .font(.system(size: 10.5, design: .monospaced)).foregroundColor(.secondary).textSelection(.enabled)
+          .font(.system(size: 11, design: .monospaced)).foregroundColor(.secondary).textSelection(.enabled)
       }
 
       section("MCP server") {
@@ -86,9 +78,9 @@ struct StackAgentsSheet: View {
             if let result = results[item.0] {
               Image(systemName: result.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .foregroundColor(result.ok ? StackPalette.color(phase: .ready) : .orange)
-              Text(result.detail).font(.system(size: 10.5)).foregroundColor(.secondary).lineLimit(2).textSelection(.enabled)
+              Text(result.detail).font(.system(size: 11)).foregroundColor(.secondary).lineLimit(2).textSelection(.enabled)
             } else {
-              Text(item.2).font(.system(size: 10.5, design: .monospaced)).foregroundColor(.secondary)
+              Text(item.2).font(.system(size: 11, design: .monospaced)).foregroundColor(.secondary)
             }
             Spacer()
             Button("Add") { add(item.0) }.buttonStyle(StackPillButtonStyle(compact: true))
@@ -105,7 +97,7 @@ struct StackAgentsSheet: View {
           ForEach(skills) { skill in
             VStack(alignment: .leading, spacing: 1) {
               Text(skill.name).font(.system(size: 11.5, weight: .semibold, design: .monospaced))
-              Text(skill.summary).font(.system(size: 10.5)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+              Text(skill.summary).font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
             }
           }
           Divider()
@@ -114,7 +106,7 @@ struct StackAgentsSheet: View {
               Text(agent.name).font(.system(size: 12, weight: .semibold)).frame(width: 110, alignment: .leading)
               let status = skillStatus(agent)
               Image(systemName: status.icon).foregroundColor(status.color)
-              Text(skillNotes[agent.id] ?? status.text).font(.system(size: 10.5)).foregroundColor(.secondary).lineLimit(2).textSelection(.enabled)
+              Text(skillNotes[agent.id] ?? status.text).font(.system(size: 11)).foregroundColor(.secondary).lineLimit(2).textSelection(.enabled)
               Spacer()
               Button(status.action) { installSkills(agent) }
                 .buttonStyle(StackPillButtonStyle(compact: true))
@@ -123,7 +115,7 @@ struct StackAgentsSheet: View {
             }
           }
           Text("Skills teach agents to record sessions with their actions and logs, and to review recordings. New skills in Cinderdeck updates appear here.")
-            .font(.system(size: 10.5)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+            .font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
         }
       }
 
@@ -135,7 +127,7 @@ struct StackAgentsSheet: View {
               Text(claim.stackID).font(.system(size: 11, weight: .medium))
               Spacer()
               Text("until " + DateFormatter.localizedString(from: claim.expiresAt, dateStyle: .none, timeStyle: .short))
-                .font(.system(size: 10.5)).foregroundColor(.secondary)
+                .font(.system(size: 11)).foregroundColor(.secondary)
               Button("Release") { control.release(stack: claim.stackID) }.buttonStyle(StackPillButtonStyle(compact: true))
             }
           }

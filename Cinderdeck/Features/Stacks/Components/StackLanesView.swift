@@ -36,12 +36,10 @@ struct StackLanesView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
       HStack {
-        VStack(alignment: .leading, spacing: 4) {
-          Text("\(source?.name ?? "Stack") lanes").font(.title2.bold())
-          Text("Run branches side by side in isolated working folders.").foregroundColor(.secondary)
-        }
+        DeckSheetHeader(icon: "arrow.triangle.branch", title: "\(source?.name ?? "Workspace") lanes",
+          detail: "Run branches side by side in isolated working folders.")
         Spacer()
-        Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
+        Button("Done") { dismiss() }.keyboardShortcut(.cancelAction).buttonStyle(DeckButtonStyle())
       }
       ScrollView([.horizontal, .vertical]) {
         HStack(alignment: .top, spacing: 12) { ForEach(lanes) { card($0) } }.padding(3)
@@ -54,6 +52,7 @@ struct StackLanesView: View {
         TextField(source?.definition?.laneSettings?.from ?? "From (default: HEAD)", text: $from)
           .textFieldStyle(.roundedBorder).frame(width: 200).help("Start point for a new branch, such as origin/main. Existing local or remote branches are used as they are.")
         Button(working ? "Working…" : "Create lane") { create() }
+          .buttonStyle(DeckButtonStyle(prominent: true))
           .disabled(working || branch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || source?.definition == nil)
           .accessibilityIdentifier("stacks.createLane")
       }

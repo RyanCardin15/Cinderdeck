@@ -13,6 +13,7 @@ struct VideoEditorEmptyStateView: View {
   /// Callback with (workingURL, originalURL) - originalURL is the user's actual file for "Replace Original"
   var onVideoDropped: (URL, URL?) -> Void
 
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var isTargeted = false
   @State private var showError = false
   @State private var errorMessage = ""
@@ -47,15 +48,12 @@ struct VideoEditorEmptyStateView: View {
 
   private var dropZone: some View {
     VStack(spacing: 16) {
-      // Video icon
-      Image(systemName: "film")
-        .font(.system(size: 48, weight: .light))
-        .foregroundColor(isTargeted ? .accentColor : .secondary)
+      DeckFeatureIcon(systemName: "film", size: 52)
 
       // Instructions
       VStack(spacing: 4) {
         Text(L10n.VideoEditor.dropVideoHereToEdit)
-          .font(.headline)
+          .font(.system(size: 20, weight: .semibold))
           .foregroundColor(.primary)
 
         Text(L10n.VideoEditor.supportsVideoFormats)
@@ -67,16 +65,17 @@ struct VideoEditorEmptyStateView: View {
       Button(L10n.VideoEditor.browseFiles) {
         browseForVideo()
       }
-      .buttonStyle(.bordered)
+      .buttonStyle(DeckButtonStyle(prominent: true))
       .padding(.top, 8)
     }
-    .frame(width: 400, height: 250)
+    .frame(width: 430, height: 280)
+    .background(DeckStyle.surface, in: RoundedRectangle(cornerRadius: DeckStyle.cardRadius))
     .background(
       RoundedRectangle(cornerRadius: 12)
         .strokeBorder(
-          style: StrokeStyle(lineWidth: 2, dash: [8, 4])
+          style: StrokeStyle(lineWidth: 1, dash: [5, 4])
         )
-        .foregroundColor(isTargeted ? .accentColor : .secondary.opacity(0.5))
+        .foregroundColor(isTargeted ? .accentColor : .secondary.opacity(0.3))
     )
     .background(
       RoundedRectangle(cornerRadius: 12)
@@ -85,7 +84,7 @@ struct VideoEditorEmptyStateView: View {
     .onDrop(of: supportedTypes, isTargeted: $isTargeted) { providers in
       handleDrop(providers: providers)
     }
-    .animation(.easeInOut(duration: 0.2), value: isTargeted)
+    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isTargeted)
   }
 
   private func handleDrop(providers: [NSItemProvider]) -> Bool {

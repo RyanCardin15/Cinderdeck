@@ -52,7 +52,7 @@ struct AnnotateSettingsView: View {
           title: L10n.PreferencesAnnotate.rememberLastToolTitle,
           description: L10n.PreferencesAnnotate.rememberLastToolDescription
         ) {
-          Toggle("", isOn: $annotateRememberLastTool)
+          Toggle(L10n.PreferencesAnnotate.rememberLastToolTitle, isOn: $annotateRememberLastTool)
             .labelsHidden()
         }
 
@@ -61,7 +61,7 @@ struct AnnotateSettingsView: View {
           title: L10n.PreferencesAnnotate.quickPropertiesSyncTitle,
           description: L10n.PreferencesAnnotate.quickPropertiesSyncDescription
         ) {
-          Toggle("", isOn: $annotateQuickPropertiesSyncEnabled)
+          Toggle(L10n.PreferencesAnnotate.quickPropertiesSyncTitle, isOn: $annotateQuickPropertiesSyncEnabled)
             .labelsHidden()
         }
 
@@ -70,7 +70,7 @@ struct AnnotateSettingsView: View {
           title: L10n.PreferencesAnnotate.combineSaveAsEditTitle,
           description: L10n.PreferencesAnnotate.combineSaveAsEditDescription
         ) {
-          Toggle("", isOn: $annotateCombineSaveAsEdit)
+          Toggle(L10n.PreferencesAnnotate.combineSaveAsEditTitle, isOn: $annotateCombineSaveAsEdit)
             .labelsHidden()
         }
 
@@ -79,7 +79,7 @@ struct AnnotateSettingsView: View {
           title: L10n.AnnotateUI.cropSnapToEdges,
           description: L10n.AnnotateUI.cropSnapToEdgesDescription
         ) {
-          Toggle("", isOn: $annotateCropSnapToEdgesEnabled)
+          Toggle(L10n.AnnotateUI.cropSnapToEdges, isOn: $annotateCropSnapToEdgesEnabled)
             .labelsHidden()
         }
 
@@ -88,7 +88,7 @@ struct AnnotateSettingsView: View {
           title: L10n.AnnotateUI.highlighterTextSnapping,
           description: L10n.AnnotateUI.highlighterTextSnappingDescription
         ) {
-          Toggle("", isOn: $annotateHighlighterTextSnappingEnabled)
+          Toggle(L10n.AnnotateUI.highlighterTextSnapping, isOn: $annotateHighlighterTextSnappingEnabled)
             .labelsHidden()
         }
 
@@ -113,7 +113,7 @@ struct AnnotateSettingsView: View {
           title: L10n.PreferencesAnnotate.closeAfterDragTitle,
           description: L10n.PreferencesAnnotate.closeAfterDragDescription
         ) {
-          Toggle("", isOn: $annotateCloseAfterDrag)
+          Toggle(L10n.PreferencesAnnotate.closeAfterDragTitle, isOn: $annotateCloseAfterDrag)
             .labelsHidden()
         }
 
@@ -122,7 +122,7 @@ struct AnnotateSettingsView: View {
           title: L10n.PreferencesAnnotate.bringForwardAfterDragTitle,
           description: L10n.PreferencesAnnotate.bringForwardAfterDragDescription
         ) {
-          Toggle("", isOn: $annotateBringForwardAfterDrag)
+          Toggle(L10n.PreferencesAnnotate.bringForwardAfterDragTitle, isOn: $annotateBringForwardAfterDrag)
             .labelsHidden()
         }
         .disabled(annotateCloseAfterDrag)

@@ -43,6 +43,7 @@ struct AnnotateToolbarView: View {
           NotificationCenter.default.post(name: .annotateAddImage, object: window)
         }
         .help(L10n.Combine.pickerTitle)
+        .accessibilityLabel(L10n.Combine.pickerTitle)
 
         ToolbarDivider()
       }
@@ -78,15 +79,17 @@ struct AnnotateToolbarView: View {
         state.beginCropInteraction()
       }
       .help(L10n.AnnotateUI.crop)
+      .accessibilityLabel(L10n.AnnotateUI.crop)
 
       ToolbarButton(
         icon: "rectangle.on.rectangle",
         isSelected: state.showSidebar,
-        highlightColor: .blue
+        highlightColor: DeckStyle.accent
       ) {
         state.toggleSidebarVisibility()
       }
       .help(L10n.AnnotateUI.toggleSidebar)
+      .accessibilityLabel(L10n.AnnotateUI.toggleSidebar)
 
       ToolbarDivider()
 
@@ -100,6 +103,7 @@ struct AnnotateToolbarView: View {
         state.rotateImage(clockwise: false)
       }
       .help(L10n.AnnotateUI.rotateLeft)
+      .accessibilityLabel(L10n.AnnotateUI.rotateLeft)
       .disabled(!state.canRotateImage)
       .opacity(state.canRotateImage ? 1 : 0.4)
 
@@ -107,6 +111,7 @@ struct AnnotateToolbarView: View {
         state.rotateImage(clockwise: true)
       }
       .help(L10n.AnnotateUI.rotateRight)
+      .accessibilityLabel(L10n.AnnotateUI.rotateRight)
       .disabled(!state.canRotateImage)
       .opacity(state.canRotateImage ? 1 : 0.4)
     }
@@ -133,7 +138,7 @@ struct AnnotateToolbarView: View {
     ToolbarButton(
       icon: state.isCutoutProcessing ? "hourglass" : "wand.and.stars",
       isSelected: state.isCutoutApplied,
-      highlightColor: .blue
+      highlightColor: DeckStyle.accent
     ) {
       state.toggleBackgroundCutout()
     }
@@ -159,6 +164,7 @@ struct AnnotateToolbarView: View {
       state.activateTool(tool)
     }
     .help(tool.displayName)
+    .accessibilityLabel(tool.displayName)
     .disabled(state.editorMode == .mockup && tool != .selection)
     .opacity(state.editorMode == .mockup && tool != .selection ? 0.4 : 1)
   }
@@ -169,6 +175,7 @@ struct AnnotateToolbarView: View {
         state.undo()
       }
       .help(L10n.Common.undo)
+      .accessibilityLabel(L10n.Common.undo)
       .disabled(!state.canUndo)
       .opacity(state.canUndo ? 1 : 0.4)
 
@@ -176,6 +183,7 @@ struct AnnotateToolbarView: View {
         state.redo()
       }
       .help(L10n.Common.redo)
+      .accessibilityLabel(L10n.Common.redo)
       .disabled(!state.canRedo)
       .opacity(state.canRedo ? 1 : 0.4)
     }
@@ -211,8 +219,7 @@ struct AnnotateToolbarView: View {
       Button(L10n.Common.done) {
         done()
       }
-      .buttonStyle(.borderedProminent)
-      .tint(.blue)
+      .buttonStyle(DeckButtonStyle(prominent: true))
     }
   }
 
@@ -232,8 +239,7 @@ struct AnnotateToolbarView: View {
       Button(L10n.Common.apply) {
         state.confirmCropInteraction()
       }
-      .buttonStyle(.borderedProminent)
-      .tint(.blue)
+      .buttonStyle(DeckButtonStyle(prominent: true))
     }
   }
 

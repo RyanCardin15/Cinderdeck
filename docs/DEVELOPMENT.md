@@ -93,6 +93,28 @@ tool, not a regression test. Colors are not faithful: `ImageRenderer` does not r
 dynamic `NSColor`s in `VSDesignSystem.Colors` to their dark-appearance values, so treat the
 output as a geometry and layout check only.
 
+## Preview UI with isolated workspace data
+
+The Debug-only `StackPreviewHarness` accepts an absolute fixture directory through
+`CINDERDECK_STACKS_PREVIEW_ROOT`. Place workspace TOML files in its `stacks/` folder.
+It redirects workspace/history data and capture output to the fixture; other Debug
+preferences and the active GitHub CLI connection can still be used by their screens.
+
+```bash
+CINDERDECK_STACKS_PREVIEW_ROOT="$PWD/.build/ui-audit" \
+CINDERDECK_PREVIEW_SURFACES="annotate,video" \
+".build/xcode-derived-data/Build/Products/Debug/Cinderdeck Debug.app/Contents/MacOS/Cinderdeck" \
+-appearanceMode Dark
+```
+
+`CINDERDECK_PREVIEW_SURFACES` optionally opens `annotate`, `video`, `onboarding`,
+`shortcuts`, or `uploads` (comma separated). The editors start empty; these entries
+do not start capture or grant permissions. Use one floating panel at a time when
+inspecting its contents. Pass `-appearanceMode Light` for a light-theme walkthrough.
+Quit the previous Debug preview before launching another instance.
+
+See [UI_AUDIT.md](UI_AUDIT.md) for the design rules, coverage and validation record.
+
 ## Related docs
 
 - For archive, export, and DMG packaging commands, see [BUILD.md](BUILD.md).

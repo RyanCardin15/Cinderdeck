@@ -26,7 +26,7 @@ struct StackExpandedView: View {
   private var header: some View {
     HStack(alignment: .center, spacing: 10) {
       VStack(alignment: .leading, spacing: 5) {
-        Text(showsWorkspaceName ? file.name : "Services").font(.system(size: 19, weight: .bold)).lineLimit(1).help(file.name)
+        Text(showsWorkspaceName ? file.name : "Services").font(DeckStyle.section).lineLimit(1).help(file.name)
         HStack(spacing: 6) {
           StackStateBadge(label: file.definition == nil ? "Degraded" : state.label, since: state.isActive ? state.startedAt : nil)
           if let operation = state.operation { StackChip(systemImage: "hourglass", text: operation + "…", tint: .orange) }
@@ -101,7 +101,7 @@ struct StackExpandedView: View {
 
   private func repoList(_ repos: [RepoDefinition]) -> some View {
     VStack(alignment: .leading, spacing: 6) {
-      Text("REPOSITORIES").font(.system(size: 9, weight: .bold)).foregroundColor(.secondary).tracking(0.6)
+      DeckSectionLabel(title: "Repositories")
       ForEach(repos) { repo in StackRepoRow(stack: file.id, repo: repo, viewModel: viewModel) }
     }
   }

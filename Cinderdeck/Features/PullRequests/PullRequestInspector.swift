@@ -60,13 +60,13 @@ struct PullRequestInspector: View {
             }
             Spacer()
             Button("Review…") { reviewContext = .init(request: request, detail: detail) }
-              .buttonStyle(.borderedProminent).disabled(detail.state != "OPEN" || model.submitting)
+              .buttonStyle(DeckButtonStyle(prominent: true)).disabled(detail.state != "OPEN" || model.submitting)
               .help(detail.state == "OPEN" ? "Approve, request changes, or leave a comment" : "Reviews are available for open pull requests")
           }.padding(18)
         } else { Spacer() }
       }
     }
-    .background(Color(nsColor: .controlBackgroundColor))
+    .background(DeckStyle.surface)
     .onChange(of: request.id) { _ in tab = "Overview" }
     .task(id: "\(request.id)-\(tab)-\(model.detail?.headRefOid ?? "")") {
       if tab == "Files", model.files.isEmpty { await model.loadFiles() }
@@ -80,11 +80,11 @@ struct PullRequestInspector: View {
         statusRow("Checks", value: request.checks, symbol: PRStyle.checkSymbol(request.checks), color: PRStyle.checkColor(request.checks))
         statusRow("Review", value: detail.reviewDecision.map { $0.replacingOccurrences(of: "_", with: " ").capitalized } ?? "No review decision", symbol: "person.crop.circle.badge.checkmark", color: detail.reviewDecision == "APPROVED" ? .green : .secondary)
         statusRow("Merge status", value: detail.state != "OPEN" ? detail.state.capitalized : detail.mergeable == "CONFLICTING" ? "Has conflicts" : detail.mergeable == "MERGEABLE" ? "No conflicts" : "Checking…", symbol: "arrow.triangle.merge", color: detail.mergeable == "CONFLICTING" ? .orange : .secondary)
-      }.padding(12).background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 9))
+      }.padding(12).background(DeckStyle.inset, in: RoundedRectangle(cornerRadius: DeckStyle.cardRadius))
       if !request.labels.nodes.isEmpty {
         Text(request.labels.nodes.map(\.name).joined(separator: "  ·  ")).font(.system(size: 11, weight: .medium)).foregroundStyle(Color.accentColor)
       }
-      Text("DESCRIPTION").font(.system(size: 10, weight: .semibold)).tracking(0.7).foregroundStyle(.secondary)
+      DeckSectionLabel(title: "Description")
       PRMarkdown(text: detail.body.isEmpty ? "No description provided." : detail.body)
       Button("View checks and full conversation on GitHub") { PROpenURL.open(request.url) }.buttonStyle(.link).font(.callout)
     }
@@ -154,7 +154,7 @@ private struct PRFileDisclosure: View {
     DisclosureGroup(isExpanded: $expanded) {
       if let patch = file.patch {
         ScrollView(.horizontal) {
-          Text(highlight(patch)).font(.system(size: 10, design: .monospaced)).textSelection(.enabled).fixedSize(horizontal: true, vertical: true)
+          Text(highlight(patch)).font(.system(size: 12, design: .monospaced)).textSelection(.enabled).fixedSize(horizontal: true, vertical: true)
             .padding(10).frame(maxWidth: .infinity, alignment: .leading)
         }.background(Color.primary.opacity(0.025))
       } else {
@@ -222,7 +222,7 @@ private struct PRReviewComposer: View {
             error = await model.submit(request: context.request, reviewed: context.detail, event: event, body: bodyText)
             if error == nil { dismiss() }
           }
-        }.buttonStyle(.borderedProminent).disabled(model.submitting || validation != nil)
+        }.buttonStyle(DeckButtonStyle(prominent: true)).disabled(model.submitting || validation != nil)
       }
     }.padding(26).frame(width: 560).interactiveDismissDisabled(model.submitting)
       .disabled(model.submitting)

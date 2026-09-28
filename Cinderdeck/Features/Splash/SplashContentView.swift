@@ -18,6 +18,7 @@ private enum SplashPhase {
 struct SplashContentView: View {
   let onContinue: (Bool) -> Void
 
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var phase: SplashPhase = .idle
   @State private var doNotShowAgain = false
 
@@ -68,7 +69,10 @@ struct SplashContentView: View {
           .padding(.bottom, 28)
       }
     }
-    .task { await startAnimationSequence() }
+    .task {
+      if reduceMotion { phase = .buttonVisible }
+      else { await startAnimationSequence() }
+    }
   }
 }
 

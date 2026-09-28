@@ -138,6 +138,19 @@ nonisolated enum GradientPreset: String, CaseIterable, Identifiable, Sendable {
     rawValue
   }
 
+  var displayName: String {
+    switch self {
+    case .pinkOrange: "Pink to orange"
+    case .bluePurple: "Blue to purple"
+    case .greenBlue: "Green to blue"
+    case .orangeRed: "Orange to red"
+    case .purplePink: "Purple to pink"
+    case .blueGreen: "Blue to green"
+    case .yellowOrange: "Yellow to orange"
+    case .cyanBlue: "Cyan to blue"
+    }
+  }
+
   var colors: [Color] {
     switch self {
     case .pinkOrange: [.pink, .orange]
@@ -157,6 +170,20 @@ nonisolated enum ImageAlignment: String, CaseIterable, Sendable {
   case topLeft, top, topRight
   case left, center, right
   case bottomLeft, bottom, bottomRight
+
+  var displayName: String {
+    switch self {
+    case .topLeft: "Top left"
+    case .top: "Top center"
+    case .topRight: "Top right"
+    case .left: "Center left"
+    case .center: "Center"
+    case .right: "Center right"
+    case .bottomLeft: "Bottom left"
+    case .bottom: "Bottom center"
+    case .bottomRight: "Bottom right"
+    }
+  }
 }
 
 /// Predefined wallpaper presets (abstract gradient patterns)

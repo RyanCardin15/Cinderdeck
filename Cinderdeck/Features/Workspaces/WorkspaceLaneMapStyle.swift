@@ -3,15 +3,15 @@ import SwiftUI
 enum WorkspaceLaneMapStyle {
   static let resource = Color.teal
   static func tint(_ workspace: String, source: String, lanes: [String]) -> Color {
-    if workspace == source { return .orange }
+    if workspace == source { return DeckStyle.warning }
     let colors: [Color] = [.cyan, .mint, .blue, .pink, .yellow]
     let index = lanes.filter { $0 != source }.firstIndex(of: workspace) ?? 0
     return colors[index % colors.count]
   }
   static func status(_ node: WorkspaceLaneGraph.Node) -> Color {
-    if node.needsAttention { return node.phase == .crashed || node.runStatus == .failed ? .red : .orange }
-    if node.phase == .starting || node.phase == .waiting || node.phase == .stopping || node.runStatus == .queued { return .orange }
-    if node.isActive || node.runStatus == .succeeded { return .green }
+    if node.needsAttention { return node.phase == .crashed || node.runStatus == .failed ? DeckStyle.danger : DeckStyle.warning }
+    if node.phase == .starting || node.phase == .waiting || node.phase == .stopping || node.runStatus == .queued { return DeckStyle.warning }
+    if node.isActive || node.runStatus == .succeeded { return DeckStyle.success }
     return .secondary
   }
   static func icon(_ node: WorkspaceLaneGraph.Node) -> String {
@@ -27,7 +27,7 @@ enum WorkspaceLaneMapStyle {
 struct WorkspaceMapEyebrow: View {
   let text: String
   var body: some View {
-    Text(text.uppercased()).font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1.4).foregroundColor(.secondary)
+    DeckSectionLabel(title: text)
   }
 }
 
@@ -82,7 +82,7 @@ struct WorkspaceLaneMapBlock: View {
         }
       }
       .padding(13)
-      .background(scheme == .dark ? Color(red: 0.105, green: 0.12, blue: 0.145) : Color(nsColor: .controlBackgroundColor),
+      .background(DeckStyle.surface,
         in: RoundedRectangle(cornerRadius: 12))
       .background(tint.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
       .overlay(alignment: .leading) {

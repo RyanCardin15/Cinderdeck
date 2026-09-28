@@ -62,6 +62,18 @@ enum StackPreviewHarness {
           capture.startRecordingFlow()
         }
       }
+      // Opt-in visual audit surfaces. These open editors and reference panels;
+      // they do not start capture, change permissions, or write user documents.
+      for surface in (ProcessInfo.processInfo.environment["CINDERDECK_PREVIEW_SURFACES"] ?? "").split(separator: ",") {
+        switch surface {
+        case "annotate": AnnotateManager.shared.openEmptyAnnotation()
+        case "video": VideoEditorManager.shared.openEmptyEditor()
+        case "onboarding": CinderdeckOnboardingWindowController.shared.show()
+        case "shortcuts": ShortcutOverlayManager.shared.show()
+        case "uploads": _ = CloudUploadHistoryWindowController.shared.toggleWindow()
+        default: break
+        }
+      }
     }
     return true
   }

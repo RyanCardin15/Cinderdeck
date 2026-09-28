@@ -39,7 +39,7 @@ struct ClipboardTextHistoryView: View {
           .foregroundColor(.secondary)
         Spacer()
         Button(isEnabled ? "Pause" : "Resume") { isEnabled.toggle() }
-          .buttonStyle(.bordered)
+          .buttonStyle(DeckButtonStyle())
           .controlSize(.small)
       }
       .font(.system(size: 11, weight: .medium))
@@ -130,7 +130,7 @@ struct ClipboardTextHistoryView: View {
       } label: {
         Label("New Group", systemImage: "folder.badge.plus")
       }
-      .buttonStyle(.bordered)
+      .buttonStyle(DeckButtonStyle())
       .controlSize(.small)
       .fixedSize()
       .accessibilityIdentifier("history.clipboard.newGroup")
@@ -163,22 +163,14 @@ struct ClipboardTextHistoryView: View {
   }
 
   private var emptyState: some View {
-    VStack(spacing: 10) {
-      Image(systemName: selectedCollection?.systemIconName ?? "doc.on.clipboard")
-        .font(.system(size: 28))
-        .foregroundColor(.secondary)
-      Text(emptyTitle)
-        .font(.headline)
-      Text(emptyMessage)
-        .font(.caption)
-        .foregroundColor(.secondary)
-        .multilineTextAlignment(.center)
+    DeckEmptyState(icon: selectedCollection?.systemIconName ?? "doc.on.clipboard",
+      title: emptyTitle, detail: emptyMessage, compact: !isExpanded) {
       if selectedCollectionID != nil {
         Button("Show all text") { selectedCollectionID = nil }
-          .buttonStyle(.bordered)
+          .buttonStyle(DeckButtonStyle())
       } else if !isEnabled {
         Button("Enable clipboard text history") { isEnabled = true }
-          .buttonStyle(.borderedProminent)
+          .buttonStyle(DeckButtonStyle(prominent: true))
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -228,7 +220,7 @@ struct ClipboardTextHistoryView: View {
                 Spacer()
                 copyButton(record)
               }
-              .buttonStyle(.bordered)
+              .buttonStyle(DeckButtonStyle())
               .controlSize(.small)
             }
             .padding(14)
@@ -310,7 +302,7 @@ struct ClipboardTextHistoryView: View {
             HistoryFavoriteButton(item: .clipboardText(record.id), size: 14)
             HistoryGroupMenu(item: .clipboardText(record.id))
             copyButton(record)
-              .buttonStyle(.borderedProminent)
+              .buttonStyle(DeckButtonStyle(prominent: true))
           }
           Divider()
           ScrollView {

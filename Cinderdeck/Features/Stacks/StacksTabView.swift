@@ -76,14 +76,8 @@ struct StacksTabView: View {
   // MARK: Empty
 
   private var emptyState: some View {
-    VStack(spacing: 12) {
-      ZStack {
-        Circle().fill(Color.accentColor.opacity(0.12)).frame(width: 58, height: 58)
-        Image(systemName: "square.stack.3d.up.fill").font(.system(size: 24, weight: .semibold)).foregroundColor(.accentColor)
-      }
-      Text("Your projects, running together").font(.system(size: 15, weight: .semibold))
-      Text("Create a workspace for your services, one-time tasks, and ordered workflows.\nYour coding agents can run them too.")
-        .font(.system(size: 12)).foregroundColor(.secondary).multilineTextAlignment(.center).frame(maxWidth: 440)
+    DeckEmptyState(icon: "square.stack.3d.up", title: "Your projects, running together",
+      detail: "Create a workspace for your services, tasks, and workflows. Your coding agents can run them too.", compact: !expanded) {
       HStack(spacing: 8) {
         Button { viewModel.create() } label: { Label("Create workspace", systemImage: "plus") }
           .buttonStyle(StackPillButtonStyle(kind: .primary(.accentColor)))

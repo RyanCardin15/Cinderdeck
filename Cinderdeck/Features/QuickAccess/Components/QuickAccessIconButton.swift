@@ -14,6 +14,7 @@ struct QuickAccessIconButton: View {
   let action: () -> Void
   var helpText: String? = nil
 
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.isEnabled) private var isEnabled
   @State private var isHovering = false
   @State private var isPressed = false
@@ -40,7 +41,7 @@ struct QuickAccessIconButton: View {
           Circle()
             .fill(buttonBackgroundColor)
         )
-        .scaleEffect(isPressed ? 0.85 : 1.0)
+        .scaleEffect(isPressed && !reduceMotion ? 0.95 : 1.0)
     }
     .buttonStyle(.plain)
     .onHover { hovering in
@@ -59,7 +60,7 @@ struct QuickAccessIconButton: View {
       }
     }
     .if(helpText != nil) { view in
-      view.help(helpText!)
+      view.help(helpText!).accessibilityLabel(helpText!)
     }
   }
 

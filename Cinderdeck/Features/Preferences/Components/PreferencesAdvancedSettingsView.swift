@@ -117,7 +117,7 @@ struct AdvancedSettingsView: View {
           title: L10n.PreferencesAdvanced.urlSchemeTitle,
           description: L10n.PreferencesAdvanced.urlSchemeDescription
         ) {
-          Toggle("", isOn: $urlSchemeEnabled)
+          Toggle(L10n.PreferencesAdvanced.urlSchemeTitle, isOn: $urlSchemeEnabled)
             .labelsHidden()
         }
       }
@@ -128,7 +128,7 @@ struct AdvancedSettingsView: View {
           title: L10n.PreferencesAdvanced.diagnosticLoggingTitle,
           description: L10n.PreferencesAdvanced.diagnosticLoggingDescription
         ) {
-          Toggle("", isOn: $diagnosticsEnabled)
+          Toggle(L10n.PreferencesAdvanced.diagnosticLoggingTitle, isOn: $diagnosticsEnabled)
             .labelsHidden()
         }
 
