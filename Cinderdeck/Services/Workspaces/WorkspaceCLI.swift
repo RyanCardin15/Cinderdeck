@@ -141,7 +141,7 @@ nonisolated enum WorkspaceCLI {
     save-task <workspace> <id> --data '<json>'
     save-workflow <workspace> <id> --data '<json>'
     delete-item <workspace> <service|task|workflow> <id>
-    open [workspace] [--section services|tasks|workflows|runs|recordings]
+    open [workspace] [--section services|tasks|workflows|"lane map"|runs|recordings]
     task <workspace> <task>            Start a task; returns a run UUID immediately
     workflow <workspace> <workflow>    Start an ordered workflow; returns a run UUID
     wait <run-uuid> [--timeout 600]    Wait for an existing run without starting another
