@@ -41,6 +41,9 @@ struct WorkspaceLaneMapView: View {
                 if lane.needsAttention { Image(systemName: "exclamationmark.circle").foregroundColor(.orange) }
               }
             }.buttonStyle(.bordered).tint(selection == lane.id ? tint(lane.workspaceID, lanes: lanes) : .secondary)
+              .contextMenu {
+                if let file = model.files.first(where: { $0.id == lane.workspaceID }) { StackLaneDeletionMenu(file: file, model: model) }
+              }
           }
         }.font(.system(size: 11, weight: .medium)).controlSize(.small)
       }
@@ -48,7 +51,9 @@ struct WorkspaceLaneMapView: View {
         ZStack(alignment: selectedOnRight ? .bottomLeading : .bottomTrailing) {
           ScrollView([.horizontal, .vertical]) {
             WorkspaceLaneMapCanvas(graph: visible, layout: layout, sourceID: sourceID, laneIDs: lanes.map(\.workspaceID),
-              selection: selection, connected: connected, zoom: zoom, select: choose)
+              selection: selection, connected: connected, zoom: zoom, select: choose,
+              removableLanes: Set(model.files.filter { $0.lane != nil && !model.isBusy($0.id) }.map(\.id)),
+              deleteLane: { id in if let file = model.files.first(where: { $0.id == id }) { model.deleteLane(file) } })
               .background(WorkspaceMapScrollTarget(request: jump, frame: jump.flatMap { layout.frames[$0.node] }, zoom: zoom))
               .padding(8)
           }.accessibilityIdentifier("workspace.map.canvas")

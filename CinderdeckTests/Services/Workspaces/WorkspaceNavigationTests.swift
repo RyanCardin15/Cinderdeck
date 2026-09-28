@@ -106,6 +106,14 @@ final class WorkspaceNavigationTests: XCTestCase {
     await supervisor.reloadDefinitions()
     XCTAssertEqual(model.selectedStackID, "other", "Initial selection should be a source workspace")
 
+    model.deleteLane(workspace("bridge"))
+    XCTAssertNil(model.laneRemoval, "The original checkout must not be offered lane deletion")
+    model.deleteLane(lane("branch"))
+    XCTAssertEqual(model.laneRemoval?.id, "branch", "A context action targets the clicked lane")
+    XCTAssertEqual(model.selectedStackID, "other", "Opening or cancelling confirmation must not change selection")
+    XCTAssertTrue(model.hasAuxiliaryUI, "Keep the floating panel open while confirming lane deletion")
+    model.laneRemoval = nil
+
     model.select("branch")
     model.selectService("api")
     XCTAssertEqual(model.selectedFile?.lane?.name, "test/bridge-import-stream")
@@ -116,6 +124,8 @@ final class WorkspaceNavigationTests: XCTestCase {
     await fixture.remove("branch")
     await supervisor.reloadDefinitions()
     XCTAssertEqual(model.selectedStackID, "bridge", "Removing a lane should return to its source, not the first workspace")
+    model.deleteLane(lane("branch"))
+    XCTAssertNil(model.laneRemoval, "A stale context menu must not reopen a removed lane")
     XCTAssertNil(model.selectedServiceID)
     XCTAssertNotNil(supervisor.definition("bridge"))
     await supervisor.shutdownMonitoring()

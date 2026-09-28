@@ -69,6 +69,7 @@ struct StacksTabView: View {
     .sheet(isPresented: $viewModel.lanesSheet) {
       StackLanesView(viewModel: viewModel)
     }
+    .sheet(item: $viewModel.laneRemoval) { StackLaneRemovalView(request: $0, viewModel: viewModel) }
   }
 
   // MARK: Empty

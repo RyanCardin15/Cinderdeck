@@ -9,6 +9,8 @@ struct WorkspaceLaneMapCanvas: View {
   let connected: Set<WorkspaceLaneGraph.ID>?
   let zoom: CGFloat
   let select: (WorkspaceLaneGraph.ID) -> Void
+  let removableLanes: Set<String>
+  let deleteLane: (String) -> Void
   @Environment(\.colorScheme) private var scheme
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -75,6 +77,12 @@ struct WorkspaceLaneMapCanvas: View {
             selected: selection == node.id, connected: connected?.contains(node.id) == true,
             dimmed: connected.map { !$0.contains(node.id) } ?? false,
             connectionCount: graph.edges.filter { $0.from == node.id }.count, select: { select(node.id) })
+            .contextMenu {
+              if node.isLane, removableLanes.contains(node.workspaceID) {
+                Button("Delete lane…", role: .destructive) { deleteLane(node.workspaceID) }
+                  .accessibilityIdentifier("workspace.lane.delete.\(node.workspaceID)")
+              }
+            }
             .frame(width: frame.width, height: frame.height)
             .scaleEffect(zoom)
             .frame(width: frame.width * zoom, height: frame.height * zoom)

@@ -15,7 +15,7 @@ A **workspace** groups a project's folders, environment, and reusable commands:
 
 Workspaces with lanes have a disclosure button in the sidebar. Expand it to see each lane and the current branch for every repository; search also matches branch names. Unavailable Git status is labeled, and saved branch fallbacks are marked “last known.”
 
-Right-click a workspace and choose **Delete workspace…** to remove its definition. Confirmation preserves project files, Git branches, logs, and saved run results. Active services/runs, claims from other agents, existing lanes, and references from other workspaces block deletion with an explanation. Remove or release lanes through **Lanes** first. The same menu offers **Show lane map**.
+Right-click a workspace and choose **Delete workspace…** to remove its definition. Confirmation preserves project files, Git branches, logs, and saved run results. Active services/runs, claims from other agents, existing lanes, and references from other workspaces block deletion with an explanation. Right-click a lane in the sidebar or execution map and choose **Delete lane…** to stop its services and remove its managed worktrees. The confirmation lists ignored files and offers optional log deletion; Git branches and adopted worktrees are kept, and worktree changes or active runs block deletion. The **Lanes** view also offers release while keeping worktrees. The same menu offers **Show lane map**.
 
 ## Create and edit
 
