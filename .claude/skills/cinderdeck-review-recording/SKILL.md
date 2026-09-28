@@ -5,7 +5,7 @@ description: Investigate a Cinderdeck screen recording and its synced logs, whet
 
 # Review a Cinderdeck recording
 
-A Cinderdeck recording (a "repro") is a video plus a log. The log holds everything the chosen workspaces printed, events (services starting, crashing, workflow steps), marks, and any lines an agent added (for example `browser` or `network`). Every line is stamped `[video time  clock time]`. The goal is to explain what happened, with evidence from the video and the log.
+A Cinderdeck recording (a "repro") is a video plus a log, including headless/CDP browser recordings. The log holds everything the chosen workspaces printed, events (services starting, crashing, workflow steps), marks, and any lines an agent added (for example `browser` or `network`). Every line is stamped `[video time  clock time]`. The goal is to explain what happened, with evidence from the video and the log.
 
 Use the `cinderdeck` CLI (MCP equivalents in parentheses). Every command except `logs` and `dump` prints JSON.
 
@@ -32,7 +32,7 @@ Check these fields, in order:
 - `markers`: the actions and checks, with `t` in video seconds. `outcome: fail` marks are the claimed failures.
 - `runs`: task and workflow runs with their status.
 - The Git branch, commit, and uncommitted files of each workspace when recording started. Use them to know which code was running.
-- `capture` (which window or display was recorded) and `workspaceNames` (whose logs are included). A scope of "workspace logs off" means only marks and agent-added lines are in the log.
+- `capture` (which window, display, or browser page was recorded) and `workspaceNames` (whose logs are included). A scope of "workspace logs off" still allows marks, agent-added lines, and automatic browser/network logs for headless/CDP captures.
 
 ## 3. Look at the moments that matter
 
@@ -47,6 +47,7 @@ cinderdeck repro logs <id> --source browser --grep "TypeError|500"
 - Moments: seconds, `mm:ss.sss`, `first_error`, `last_error`, `start`, `end`, and `marker:<label prefix>`.
 - `repro_frame` over MCP returns the images directly, with the log lines and marks just before each frame. The CLI writes JPEG files and prints their paths; open them to look.
 - **Always look at a frame** before describing what was on screen. Never infer the UI state from the logs alone.
+- Request the relevant moments together (up to six), rather than many separate calls or every second of video. Live `repro_browser` screenshots show the current page; use saved `repro_frame` images to verify what the recording contains.
 - Work backwards from the first error or failed mark. The cause is usually in the few seconds *before* it: a request, a warning, or a service restarting. Widen `--span` if nothing stands out.
 - `~` lines were written just before the video started, while it was paused, or reported after it stopped (pinned to the last frame). They are context, not what was on screen.
 - A `Note:` in the log header, or `detail` in the summary, says when output is missing or when there is no video.
@@ -82,3 +83,5 @@ Only delete a recording when the user asks, using the exact full id: `cinderdeck
 - "errors" is not "failed". Error lines can be expected noise, such as a 404 for a favicon. Say which errors matter and why.
 - Clock times are local. To match another log, such as a server not run by Cinderdeck or CI output, use the clock time, not the video time.
 - A marker's time is when it was added. Agents mark just *before* an action, so the change appears shortly after the marker.
+
+For headless/CDP recordings, `browser` and `network` sources are collected automatically. A browser disconnect preserves available evidence and adds a failed recording check. Only the selected page is recorded; do not assume a popup or another tab appears in the video. Use the same frame, log, editor, and export tools as for screen recordings.

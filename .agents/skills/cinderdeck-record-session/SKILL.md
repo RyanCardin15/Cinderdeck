@@ -1,11 +1,13 @@
 ---
 name: cinderdeck-record-session
-description: Record a browser or app session on macOS with Cinderdeck. You get a video with every action marked, plus workspace logs and browser console output on the same timeline. Use when asked to record, screen-capture, or make a repro or video of a bug, UI flow, or end-to-end test, or to prove that a change works in the browser. Covers an existing window, a new browser window, an automation browser (Playwright, Puppeteer, Claude in Chrome), the whole display, and headless browsers. Covers recording with selected workspaces or with no workspace logs.
+description: Record a screen, app window, or headless Chromium session on macOS with Cinderdeck, with video and synchronized logs. Use for recorded bug repros, browser flows, or end-to-end test evidence. Supports launching a headless browser, attaching over CDP, and recording Playwright tasks.
 ---
 
 # Record a session with Cinderdeck
 
-Cinderdeck records the screen and saves a log next to the video. The log holds everything the chosen workspaces' services and tasks printed, plus any lines you add, such as the browser console. Every line is stamped with its **video time**. You drive the app and mark each action. Then you read the verdict, look at frames, and hand the user a bundle.
+Cinderdeck records a screen, window, or headless Chromium page and saves a log next to the video. The log holds everything the chosen workspaces' services and tasks printed, plus any lines you add, such as the browser console. Every line is stamped with its **video time**. You drive the app and mark each action. Then you read the verdict, look at frames, and hand the user a bundle.
+
+**Headless recording:** after preflight and choosing workspace logs, follow the [headless agent workflow](references/headless.md). It covers the short CLI/MCP path, bounded readiness waits, efficient screenshots, and failure recovery. Skip window discovery and screen-permission steps. For a repeatable Playwright task, use the [existing-page recipe](references/browser-recipes.md#headless-playwright-task-with-video-and-synchronized-logs).
 
 Use the `cinderdeck` CLI. It works the same in Claude Code, Codex, Cursor, and any shell. If the `cinderdeck` MCP server is connected, the tools map one to one:
 
@@ -14,7 +16,9 @@ Use the `cinderdeck` CLI. It works the same in Claude Code, Codex, Cursor, and a
 | `repro status` | `repro_status` |
 | `workspace list` | `list_workspaces` |
 | `repro windows` | `list_repro_windows` |
-| `repro start` | `start_repro_recording` |
+| `repro start` (including `--headless` / `--cdp`) | `start_repro_recording` |
+| `repro browser` | `repro_browser` |
+| `repro pause` / `resume` | `pause_repro_recording` / `resume_repro_recording` |
 | `repro mark` | `mark_repro` |
 | `repro append` | `add_repro_logs` |
 | `repro stop` / `cancel` | `stop_repro_recording` / `cancel_repro_recording` |
@@ -28,7 +32,7 @@ Every command prints JSON unless noted. To investigate a recording afterwards, i
 
 ```bash
 cinderdeck repro status        # must show "recording": false. Only one recording at a time
-cinderdeck workspace list      # workspace ids, if you need logs (MCP list_workspaces)
+cinderdeck workspace list      # only if you need to discover workspace ids (MCP list_workspaces)
 ```
 
 - `cinderdeck: command not found`: the app or its CLI link is missing. Ask the user to install Cinderdeck.
@@ -47,7 +51,8 @@ cinderdeck workspace list      # workspace ids, if you need logs (MCP list_works
 | Claude in Chrome, or the user's own Chrome | the window of the tab you drive, by id |
 | Several apps or windows, or a window that will appear after recording starts | a display: `--display main` (default) or `--display 2` |
 | A workspace task or workflow that launches the browser itself | `cinderdeck repro run …` (step 6) |
-| A **headless** browser | nothing to record; see [Headless browsers](#headless-browsers) |
+| A new **headless Chromium** browser | `--headless <url>`; use the [headless agent workflow](references/headless.md) |
+| An existing headless Chromium browser controlled by Playwright/Puppeteer | `--cdp <http-endpoint>` and `--page-id` when several tabs exist |
 
 **Record windows by id:**
 
@@ -70,9 +75,9 @@ cinderdeck repro start --window-id 4312 --title "Checkout with saved card" --max
 | One workspace | `--workspace shop` | `workspace: "shop"` |
 | Several workspaces | `--workspace shop,billing` (or repeat `--workspace`) | `workspaces: ["shop", "billing"]` |
 | Everything running (default) | nothing | nothing |
-| **No workspace logs** (plain video) | `--no-logs` | `logs: false` |
+| **No workspace logs** | `--no-logs` | `logs: false` |
 
-With `--no-logs`, workspace output is not recorded, but your marks and `repro append` lines still are. If the user said "no workspace" or "just the video", use it.
+With `--no-logs`, workspace output is not recorded, but your marks and `repro append` lines still are. Headless/CDP capture also retains automatic browser logs. If the user said "no workspace" or "just the video", use it and describe the retained evidence accurately.
 
 **Recording a worktree lane** (a branch running beside the original checkout; see the `cinderdeck-parallel-lanes` skill): pass the lane as the workspace, `--workspace shop/agent/codex-1`, and add the original workspace too (`--workspace shop/agent/codex-1,shop`) when the lane uses its shared services such as a database. Open the **lane's** URL, not the port in the definition: take it from `cinderdeck lane list shop --json` (each service's `url`) or `cinderdeck lane env shop/agent/codex-1 --export` (`CINDERDECK_URL_<SERVICE>`). With `[lanes] hosts = true` the URL is `http://<lane>.<workspace>.localhost:<port>`, so filter `repro windows` by the lane name or port instead of `localhost`.
 
@@ -85,7 +90,8 @@ cinderdeck repro start --window-id 4312 --workspace shop --title "Checkout with 
 
 - Always pass `--title` and a `--max` sized to the task. The default is 300 s and the limit is 3600 s. Recording stops by itself at the limit.
 - The user sees floating controls with Pause, Mark, and Stop, and can stop you at any time.
-- Wait about 1 second after `start` before the first action, so the first frames are recorded.
+- For screen/window recordings, leave about one second for the initial view before acting.
+- Headless `start` returns after its first video frame is written. Wait for the page state needed by the next action; no fixed startup sleep is required.
 
 **Mark *before* each action**, so the marker lands on the frame just before the change. Mark again after each check:
 
@@ -102,7 +108,7 @@ cinderdeck repro mark "Total shows \$42.00" --fail --detail "Shows \$0.00"
 
 ## 4. Put browser output on the timeline
 
-Cinderdeck captures workspace output by itself. Browser output reaches the log only if you add it:
+Cinderdeck captures workspace output by itself. **Headless/CDP recordings also capture console messages, uncaught exceptions, failed requests, and HTTP 4xx/5xx automatically. Do not append those again.** Screen/window recordings need browser output added explicitly:
 
 ```bash
 cinderdeck repro append "Uncaught TypeError: price is undefined (cart.js:42)" --source browser
@@ -127,7 +133,7 @@ cinderdeck repro dump --path          # the plain-text .log: every line stamped 
 cinderdeck repro export --zip         # ~/Downloads/Cinderdeck Repros/<title>-<date>.zip
 ```
 
-- Stop **before** you close the browser or window you recorded. If it closes first, the video holds its last frame and a `Screen capture stopped` mark says so.
+- Stop **before** you close the browser or window you recorded. A browser disconnect saves available evidence with a failed recording check. A closed screen-captured window produces a `Screen capture stopped` mark and holds its last frame.
 - **Look at the frames before claiming success.** `repro frame` returns images (MCP) or writes files (CLI `--out`). Check that the video shows what your marks claim.
 - Time formats: seconds, `mm:ss.sss`, `first_error`, `last_error`, `start`, `end`, and `marker:<label prefix>`.
 - Report to the user: verdict, headline, the export path, the `logFile` path, and the video timestamps of any failure.
@@ -144,25 +150,18 @@ cinderdeck repro run shop e2e --workflow --wait             # a workflow (start:
 ```
 
 - To also capture another workspace's output, such as the API the browser calls, add `--workspace api` (MCP: `workspaces: ["api"]`). The run's own workspace is always captured.
-- `repro run` records a **display**. The task opens the browser after recording has started, so leave out `--window` and `--window-id`. Use `--display N` for a display other than the main one.
-- The script must run the browser **headed** and print browser events to stdout. See the [Playwright script and task](references/browser-recipes.md#scripted-run-with-console-and-network-logs).
+- With `--headless about:blank`, `repro run` launches a browser before the task, supplies `CINDERDECK_BROWSER_ENDPOINT`, `CINDERDECK_BROWSER_PAGE_ID`, and `CINDERDECK_REPRO` to its task steps, and records that page. The task must connect to that endpoint and use the existing page (see the browser recipes). Services are not given these transient variables.
+- Without browser options, `repro run` records a **display**. The task opens the browser after recording has started, so leave out `--window` and `--window-id`. Use `--display N` for a display other than the main one.
+- For display capture, the script must run the browser **headed** and print browser events to stdout. See the [Playwright script and task](references/browser-recipes.md#scripted-run-with-console-and-network-logs).
 - If the task does not exist yet, ask the user before adding it to their workspace. With the MCP server, use `save_workspace_task` and `save_workspace_workflow`: they validate the definition and start nothing.
 - Exit status 1 means a service crashed, a check failed, or the run failed.
 
-## Headless browsers
-
-A headless browser has no window on screen, so **Cinderdeck cannot record it**. Choose one of these, in order:
-1. **Run it headed.** Playwright `headless: false`. Playwright MCP runs headed unless it was started with `--headless`. Puppeteer `headless: false`. Then record its window by id, or the display.
-2. **Headless is required** (no GUI session, CI): skip the Cinderdeck video. Use the browser's own recording (Playwright `recordVideo` and `tracing`). Run the script as a workspace task (`cinderdeck workspace task <ws> <task> --wait`, or MCP `run_workspace_task` then `wait_for_workspace_run`), so its output is still captured and attributed. Tell the user that this output is not synced with a Cinderdeck video.
-
-Never report a headless session as "recorded" by Cinderdeck.
-
 ## Checklist
 
-- [ ] `repro status` is idle, and permission errors have been handled
-- [ ] The target window is open, loaded, and visible, and was chosen by id from `repro windows`
+- [ ] `repro status` is idle, and the chosen capture backend's prerequisites are available
+- [ ] The target window is visible and selected by id, or the browser endpoint and recorded page id are confirmed
 - [ ] Workspace logs match the request: `--workspace`, the default, or `--no-logs` (for a lane: the lane, plus its source when it uses shared services)
 - [ ] `--title` and `--max` are set
 - [ ] A mark before every action, and `--pass` or `--fail` after every check
-- [ ] Browser console and network errors appended with `--source browser` and `--source network`
+- [ ] Browser console and network errors captured automatically (headless/CDP), or appended for screen/window recordings
 - [ ] Stopped, frames reviewed, and the verdict, export path, and log path reported

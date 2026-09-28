@@ -1,6 +1,6 @@
 import Foundation
 
-/// `cinderdeck repro …` — record the screen with synchronized workspace output.
+/// `cinderdeck repro …` — record screens and browsers with synchronized workspace output.
 nonisolated enum ReproCLI {
   struct Options: Equatable {
     var positionals: [String] = []
@@ -13,9 +13,9 @@ nonisolated enum ReproCLI {
 
   static let valued: Set<String> = ["title", "workspace", "window", "display", "max", "note", "detail", "outcome", "from", "to",
     "around", "span", "source", "level", "grep", "lines", "n", "at", "marker", "size", "dest", "out", "timeout", "limit",
-    "as", "session", "window-id", "repro"]
+    "as", "session", "window-id", "repro", "headless", "cdp", "page-id", "browser-executable", "width", "height", "url", "evaluate"]
   static let booleans: Set<String> = ["audio", "wait", "json", "zip", "no-video", "pass", "fail", "force", "first-error", "help",
-    "task", "workflow", "path", "no-logs"]
+    "task", "workflow", "path", "no-logs", "no-screenshot"]
 
   static func parse(_ arguments: [String]) throws -> Options {
     var options = Options()
@@ -62,6 +62,13 @@ nonisolated enum ReproCLI {
     func take(_ key: String, _ name: String? = nil) { if let value = options[name ?? key] { params[key] = .string(value) } }
     func repro() { if let first = args.first { params["repro"] = .string(first) } }
     func noExtra(_ allowed: Int, _ usage: String) throws { guard args.count <= allowed else { throw StackControlError.invalid("Use: cinderdeck repro \(usage)") } }
+    func browserOptions() throws {
+      for (key, flag) in [("headless", "headless"), ("cdp", "cdp"), ("page_id", "page-id"),
+        ("browser_executable", "browser-executable")] { take(key, flag) }
+      if let width = try number(options, "width") { params["browser_width"] = width }
+      if let height = try number(options, "height") { params["browser_height"] = height }
+      _ = try BrowserReproOptions.parse(.object(params))
+    }
     if options.has("force") { params["force"] = .bool(true) }
     switch command {
     case "start", "record":
@@ -80,6 +87,7 @@ nonisolated enum ReproCLI {
       }
       if let max = try number(options, "max") { params["max_seconds"] = max }
       if options.has("audio") { params["system_audio"] = .bool(true) }
+      try browserOptions()
       return ("repro.start", params, 90)
     case "run", "test":
       guard args.count == 2 else { throw StackControlError.invalid("Use: cinderdeck repro run <workspace> <task-id> (or <workflow-id> --workflow)") }
@@ -88,8 +96,22 @@ nonisolated enum ReproCLI {
       // --workspace here adds more workspaces whose logs are saved alongside the run's own.
       if let names = workspaceList(options), !names.isEmpty { params["workspaces"] = .array(names.map { .string($0) }) }
       take("title"); take("window"); take("display"); take("note")
+      if let id = options["window-id"] { params["window_id"] = .string(id) }
+      if options.has("audio") { params["system_audio"] = .bool(true) }
+      if options.has("no-logs") { throw StackControlError.invalid("--no-logs cannot record a task or workflow run") }
       if let max = try number(options, "max") { params["max_seconds"] = max }
+      try browserOptions()
       return ("repro.start", params, 90)
+    case "browser":
+      try noExtra(0, "browser [--url URL | --evaluate JAVASCRIPT] [--no-screenshot] [--out FILE]")
+      guard options["url"] == nil || options["evaluate"] == nil else { throw StackControlError.invalid("Pass --url or --evaluate, not both") }
+      if let url = options["url"] { params["url"] = .string(try BrowserReproOptions.navigationURL(url)) }
+      take("expression", "evaluate")
+      params["screenshot"] = .bool(!options.has("no-screenshot"))
+      return ("repro.browser", params, 45)
+    case "pause", "resume":
+      try noExtra(0, command)
+      return ("repro." + command, params, 30)
     case "windows":
       try noExtra(1, "windows [text]")
       if let first = args.first { params["query"] = .string(first) }
@@ -191,7 +213,7 @@ nonisolated enum ReproCLI {
         let lines = result["lines"]?.arrayValue ?? []
         for line in lines { print(text(line)) }
         if lines.isEmpty { FileHandle.standardError.write(Data("(no matching output)\n".utf8)) }
-      case "repro.frame":
+      case "repro.frame", "repro.browser":
         var frames = result["frames"]?.arrayValue ?? []
         if let out = options["out"], frames.count == 1, let path = frames[0]["path"]?.stringValue {
           let destination = URL(fileURLWithPath: (out as NSString).expandingTildeInPath)
@@ -201,7 +223,9 @@ nonisolated enum ReproCLI {
         }
         // Image data is for MCP clients; the CLI prints file paths.
         let trimmed = frames.map { JSONValue.object(($0.objectValue ?? [:]).filter { $0.key != "imageBase64" }) }
-        print(JSONValue.object(["repro": result["repro"] ?? .null, "frames": .array(trimmed)]).prettyString())
+        var object = result.objectValue ?? [:]
+        object["frames"] = .array(trimmed)
+        print(JSONValue.object(object).prettyString())
       case "repro.stop", "repro.wait":
         return finish(result, options: options)
       case "repro.dump" where !options.json:
@@ -306,12 +330,18 @@ nonisolated enum ReproCLI {
   }
 
   static let usage = """
-  cinderdeck repro — screen recordings with workspace output on the same timeline
+  cinderdeck repro — screen and browser recordings with synchronized workspace output
 
     start [--title T] [--workspace W[,W…]] Record the main display (or --window APP|TITLE,
           [--max SECONDS] [--note TEXT]      --window-id ID, --display N); stops after --max (default 300)
           [--no-logs]                      Plain video: no workspace output (agent lines and marks still kept)
     windows [text]                         Windows you can record, frontmost first, with ids and titles
+    start --headless URL                   Record an isolated headless Chromium page, with browser logs
+          [--width 1280 --height 720]        Viewport size; --browser-executable PATH overrides auto-detection
+    start --cdp http://127.0.0.1:9222      Record an existing Chromium page; --page-id ID chooses among tabs
+    browser [--url URL | --evaluate JS]   Inspect/control the recorded page; returns a live screenshot
+            [--no-screenshot] [--out FILE]   Or drive its returned CDP endpoint with Playwright/Puppeteer
+    pause | resume                        Pause/resume an agent recording and its video timeline
     run <workspace> <task> [--workflow]    Record while a task (or workflow) runs; stops after it ends.
         [--workspace W[,W…]]                 Also save logs from these workspaces, e.g. the backend
     mark "<label>" [--pass|--fail]         Add a step marker or a check result at this moment

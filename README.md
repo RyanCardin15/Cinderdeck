@@ -48,6 +48,8 @@ cinderdeck repro run shop e2e --workflow --wait   # record a workflow; exits 1 i
 cinderdeck repro frame --at first_error           # the video frame at the first error, with nearby logs
 ```
 
+Agents can also record headless Chromium: `cinderdeck repro start --headless http://localhost:3000` launches an isolated browser and automatically saves console errors and failed requests alongside workspace logs. `repro browser` inspects and controls its page; normal stop, frame, and export commands apply. Use `--cdp <http-endpoint>` to attach to an existing browser.
+
 Agents can record exactly one window (`cinderdeck repro windows`, then `--window-id`), record with or without workspace logs (`--no-logs`), and add browser console output to the log (`cinderdeck repro append`). The [`cinderdeck-record-session`](skills/cinderdeck-record-session/SKILL.md) and [`cinderdeck-review-recording`](skills/cinderdeck-review-recording/SKILL.md) skills teach Claude Code, Codex, Cursor, and VS Code Copilot how to do this. Install them for each agent from **Agent access**, or with `cinderdeck skills install --all`. Agents also pick them up automatically in a clone of this repository.
 
 [Read the recordings guide](docs/REPROS.md).

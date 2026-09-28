@@ -72,6 +72,70 @@ final class ReproRecorderTests: XCTestCase {
     return await recorder.waitUntilSaved(id)
   }
 
+  func testBrowserLifecycleUsesSamePausedTimelineAndPreservesFailureLogs() async throws {
+    let id = UUID(), start = Date().addingTimeInterval(-8)
+    recorder.beginBrowser(ReproRequest(id: id, title: "Headless", origin: .agent, actor: .user,
+      workspaces: [], capture: "Browser: about:blank"), at: start)
+    recorder.browserEvent(.firstFrame(start), id: id)
+    // Unrelated native recorder events cannot end or pause the browser session.
+    events.send(.cancelled)
+    events.send(.paused(start.addingTimeInterval(1)))
+    XCTAssertEqual(recorder.activeSessionID, id)
+    XCTAssertFalse(recorder.live?.isPaused ?? true)
+    recorder.browserEvent(.paused(start.addingTimeInterval(2)), id: id)
+    try recorder.appendExternal([.init(text: "during pause", at: start.addingTimeInterval(3))], source: "browser")
+    recorder.browserEvent(.resumed(start.addingTimeInterval(4)), id: id)
+    try recorder.appendExternal([.init(text: "HTTP 500 /api", at: start.addingTimeInterval(5), level: .error)], source: "network")
+    recorder.captureFailed("The recorded page disconnected")
+    recorder.browserEvent(.stopping(start.addingTimeInterval(7)), id: id)
+    recorder.browserEvent(.noVideo, id: id)
+    let result = await recorder.waitUntilSaved(id)
+    let saved = try XCTUnwrap(result)
+    XCTAssertEqual(saved.status, .failed)
+    XCTAssertEqual(saved.detail, "The recorded page disconnected")
+    XCTAssertEqual(saved.duration, 5, accuracy: 0.01)
+    let lines = store.loadLines(id)
+    XCTAssertTrue(try XCTUnwrap(lines.first { $0.text == "during pause" }).isOffscreen)
+    XCTAssertEqual(try XCTUnwrap(lines.first { $0.text == "HTTP 500 /api" }).t, 3, accuracy: 0.01)
+    XCTAssertTrue(saved.markers.contains { $0.isFailure })
+    XCTAssertTrue(FileManager.default.fileExists(atPath: try XCTUnwrap(saved.logFile)))
+    XCTAssertEqual(ReproSummary(session: saved, lines: lines).verdict, .failed)
+
+    let next = UUID()
+    recorder.expect(ReproRequest(id: next, origin: .agent, actor: .user, workspaces: []))
+    events.send(.started(Date()))
+    XCTAssertEqual(recorder.activeSessionID, next, "Native recordings still work after browser finalization")
+    events.send(.cancelled)
+    _ = await recorder.waitUntilSaved(next)
+  }
+
+  func testBrowserCancelDeletesItsLibraryFolder() async throws {
+    let id = UUID()
+    recorder.beginBrowser(ReproRequest(id: id, origin: .agent, actor: .user, workspaces: []), at: Date())
+    try recorder.appendExternal([.init(text: "temporary output")], source: "browser")
+    recorder.browserEvent(.cancelled, id: id)
+    let result = await recorder.waitUntilSaved(id)
+    XCTAssertNil(result)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: store.folder(id).path))
+    XCTAssertFalse(recorder.isCapturing)
+  }
+
+  func testTaskBrowserEnvironmentIsTransientAndDoesNotLeakToTheNextRun() async throws {
+    try await load("""
+    [tasks.browser]
+    cmd = "printf '%s' \\"${CINDERDECK_BROWSER_ENDPOINT:-unset}\\""
+    """)
+    let first = try runner.submit(workspace: "shop", kind: .task, definitionID: "browser",
+      environment: ["CINDERDECK_BROWSER_ENDPOINT": "http://127.0.0.1:9222"])
+    try await until { self.runner.run(first.id)?.status.isActive == false }
+    let firstOutput = await runner.output(first.id)
+    XCTAssertTrue(firstOutput.contains { $0.text.contains("http://127.0.0.1:9222") })
+    let second = try runner.submit(workspace: "shop", kind: .task, definitionID: "browser")
+    try await until { self.runner.run(second.id)?.status.isActive == false }
+    let secondOutput = await runner.output(second.id)
+    XCTAssertTrue(secondOutput.contains { $0.text == "unset" })
+  }
+
   func testCapturesServiceAndTaskOutputWithMarkersAndRedaction() async throws {
     try await load("""
     [secrets]

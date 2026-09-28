@@ -743,7 +743,7 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
     followsWindowTarget: Bool = false,
     includesWindowTargetApplication: Bool = false
   ) async throws {
-    guard state == .idle else {
+    guard state == .idle, ReproRecordingController.shared.browserInfo == nil else {
       DiagnosticLogger.shared.log(.debug, .recording, "prepareRecording blocked: recorder busy", context: [
         "state": "\(state)"
       ])

@@ -84,6 +84,7 @@ final class ReproRecorder: ObservableObject {
   private let isTemporary: (URL) -> Bool
   private var subscriptions = Set<AnyCancellable>()
   private var started = false
+  private var browserCapture = false
 
   // Current recording
   private var session: ReproSession?
@@ -144,7 +145,10 @@ final class ReproRecorder: ObservableObject {
         guard let from = note.userInfo?["from"] as? URL, let to = note.userInfo?["to"] as? URL else { return }
         self?.videoMoved(from: from, to: to)
       }.store(in: &subscriptions)
-    events.sink { [weak self] event in self?.handle(event) }.store(in: &subscriptions)
+    events.sink { [weak self] event in
+      guard let self, !self.browserCapture else { return }
+      self.handle(event)
+    }.store(in: &subscriptions)
   }
 
   /// Loads the library and marks repros interrupted by a quit or crash.
@@ -194,6 +198,24 @@ final class ReproRecorder: ObservableObject {
   func clearExpectation(_ id: UUID) { if request?.id == id { request = nil } }
 
   // MARK: Recording lifecycle
+
+  func beginBrowser(_ request: ReproRequest, at date: Date) {
+    guard session == nil else { return }
+    browserCapture = true
+    expect(request)
+    handle(.started(date))
+    if session == nil { browserCapture = false }
+  }
+
+  func browserEvent(_ event: RecordingLifecycleEvent, id: UUID) {
+    guard browserCapture, session?.id == id else { return }
+    handle(event)
+  }
+
+  func captureFailed(_ reason: String) {
+    session?.detail = reason
+    _ = try? addMarker(label: "Recording interrupted", detail: reason, outcome: .fail, kind: .check, by: "Cinderdeck")
+  }
 
   private func handle(_ event: RecordingLifecycleEvent) {
     switch event {
@@ -781,7 +803,7 @@ final class ReproRecorder: ObservableObject {
       session.status = .ready
     } else {
       session.status = .failed
-      session.detail = "The recording produced no video, so only its log was saved. Check Screen Recording permission for Cinderdeck, and that the recorded window stayed visible."
+      session.detail = session.detail ?? "The recording produced no video, so only its log was saved. Check Screen Recording permission for Cinderdeck, and that the recorded window stayed visible."
     }
     // The first frame can arrive after early markers were placed; place them all with the final clock.
     for index in session.markers.indices {
@@ -1038,6 +1060,7 @@ final class ReproRecorder: ObservableObject {
   }
 
   private func reset() {
+    browserCapture = false
     session = nil; clock = nil; live = nil; expectedRequest = nil
     cursors = [:]; retired = []; pending = []; phases = [:]; runSteps = [:]; runStatus = [:]
     stopRequested = false; lastFirstFrame = nil; pendingLastError = nil

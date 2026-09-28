@@ -133,7 +133,7 @@ private struct ReproControlsView: View {
   private var recording: some View {
     Group {
       Circle().fill(DeckStyle.danger).frame(width: 10, height: 10)
-        .opacity(screen.isPaused ? 0.35 : (pulse && !reduceMotion ? 0.45 : 1))
+        .opacity(controller.isPaused ? 0.35 : (pulse && !reduceMotion ? 0.45 : 1))
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
         .onAppear { pulse = true }
       VStack(alignment: .leading, spacing: 2) {
@@ -148,8 +148,8 @@ private struct ReproControlsView: View {
           .font(.system(size: 11, weight: .semibold)).foregroundColor(.red)
           .help(live.lastError ?? "Errors in captured output")
       }
-      iconButton(screen.isPaused ? "play.fill" : "pause.fill", help: screen.isPaused ? "Resume" : "Pause") {
-        ScreenRecordingManager.shared.togglePause()
+      iconButton(controller.isPaused ? "play.fill" : "pause.fill", help: controller.isPaused ? "Resume" : "Pause") {
+        Task { await controller.togglePause() }
       }
       iconButton("flag.fill", help: "Add a marker at this moment") {
         _ = try? recorder.addMarker(label: "Marked by you", kind: .note, by: StackActor.user.label)
@@ -173,7 +173,7 @@ private struct ReproControlsView: View {
       if live.sources > 0 { parts.append("\(live.sources) source\(live.sources == 1 ? "" : "s")") }
       if live.markers > 0 { parts.append("\(live.markers) marker\(live.markers == 1 ? "" : "s")") }
     }
-    if screen.isPaused { parts.append("paused") }
+    if controller.isPaused { parts.append("paused") }
     return parts.joined(separator: " · ")
   }
 

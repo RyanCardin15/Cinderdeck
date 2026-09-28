@@ -5,8 +5,8 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-/// Records the screen without the selection toolbar, for agents and one-click
-/// repros from Workspaces. The floating controls stay visible (and out of the
+/// Records a screen or Chromium page without the selection toolbar, for agents
+/// and one-click repros from Workspaces. The floating controls stay visible (and out of the
 /// video) so the person at the Mac always sees that recording is on and can stop it.
 @MainActor
 final class ReproRecordingController: ObservableObject {
@@ -24,6 +24,7 @@ final class ReproRecordingController: ObservableObject {
     var maxSeconds: Double = 300
     var systemAudio = false
     var note: String?
+    var browser: BrowserReproOptions?
   }
 
   static let maximumSeconds: Double = 3600
@@ -37,15 +38,23 @@ final class ReproRecordingController: ObservableObject {
   private var autoStop: Task<Void, Never>?
   private var runWatch: AnyCancellable?
   private var stopping = false
+  private var starting = false
+  private var browser: BrowserReproCapture?
+  @Published private(set) var browserInfo: BrowserReproCapture.Info?
 
   var ownsRecording: Bool { activeID != nil }
+  var isBusy: Bool { starting || ownsRecording }
+  var isPaused: Bool { repros.live?.isPaused ?? recorder.isPaused }
 
   // MARK: Start
 
   func start(_ options: Options, origin: ReproOrigin, actor: StackActor) async throws -> ReproSession {
-    guard recorder.state == .idle, !RecordingCoordinator.shared.isActive, activeID == nil else {
-      throw StackControlError(code: "busy", message: "Another screen recording is in progress. Stop it first.")
+    guard recorder.state == .idle, !RecordingCoordinator.shared.isActive, !isBusy else {
+      throw StackControlError(code: "busy", message: "Another recording is in progress. Stop it first.")
     }
+    starting = true
+    defer { starting = false }
+    if let browserOptions = options.browser { return try await startBrowser(options, browserOptions: browserOptions, origin: origin, actor: actor) }
     let target = try await resolveTarget(options)
     // A toolbar recording that just stopped may still be saving its log; this one would get no log.
     if let previous = repros.stoppingSessionID { _ = await repros.waitUntilSaved(previous) }
@@ -77,15 +86,135 @@ final class ReproRecordingController: ObservableObject {
     }
     activeID = id
     activeActor = actor
-    let limit = min(max(options.maxSeconds, 3), Self.maximumSeconds)
+    scheduleStop(id: id, maxSeconds: options.maxSeconds)
+    ReproControlsPanel.shared.showRecording()
+    return session
+  }
+
+  private func scheduleStop(id: UUID, maxSeconds: Double) {
+    let limit = min(max(maxSeconds, 3), Self.maximumSeconds)
     autoStop = Task { [weak self] in
       try? await Task.sleep(nanoseconds: UInt64(limit * 1_000_000_000))
       guard !Task.isCancelled, let self, self.activeID == id else { return }
       _ = try? self.repros.addMarker(label: "Time limit reached", detail: "Stopped after \(Int(limit))s", kind: .note, by: "Cinderdeck")
       _ = try? await self.stop()
     }
-    ReproControlsPanel.shared.showRecording()
-    return session
+  }
+
+  private func startBrowser(_ options: Options, browserOptions: BrowserReproOptions, origin: ReproOrigin, actor: StackActor) async throws -> ReproSession {
+    if let previous = repros.stoppingSessionID { _ = await repros.waitUntilSaved(previous) }
+    let id = UUID()
+    try repros.store.prepare(id)
+    let capture = BrowserReproCapture(options: browserOptions,
+      videoURL: repros.store.folder(id).appendingPathComponent("recording.mp4"),
+      onLog: { [weak self] logs in
+        await self?.receiveBrowserLogs(logs, id: id)
+      }, onDisconnect: { [weak self] reason in
+        await self?.browserDisconnected(reason, id: id)
+      })
+    let info: BrowserReproCapture.Info
+    do { info = try await capture.prepare() }
+    catch { await capture.cancel(); try? repros.store.delete(id); throw error }
+    browser = capture; browserInfo = info
+    activeID = id; activeActor = actor
+    let request = ReproRequest(id: id, title: options.title, origin: origin, actor: actor,
+      workspaces: options.workspaces, capture: "Browser: \(info.url)", note: options.note)
+    repros.beginBrowser(request, at: Date())
+    do {
+      guard repros.current(id) != nil else { throw StackControlError(code: "recording_failed", message: repros.lastError ?? "Could not start the browser log") }
+      scheduleStop(id: id, maxSeconds: options.maxSeconds)
+      let firstFrame = try await capture.start()
+      repros.browserEvent(.firstFrame(firstFrame), id: id)
+      ReproControlsPanel.shared.showRecording()
+      if let url = browserOptions.url { try await capture.navigate(url) }
+      guard activeID == id, let session = repros.current(id) else { throw StackControlError(code: "browser_disconnected", message: "The browser closed while recording started") }
+      return session
+    } catch {
+      if activeID == id, repros.activeSessionID == id {
+        repros.captureFailed(error.localizedDescription)
+        _ = try? await stop()
+      }
+      else {
+        // A user may stop/cancel while the first frame or navigation is starting.
+        // Preserve a saved repro, and clean up only this browser instance.
+        await capture.cancel()
+        if activeID == id { browser = nil; browserInfo = nil; activeID = nil; activeActor = nil }
+        if repros.current(id) == nil { try? repros.store.delete(id) }
+      }
+      throw StackControlError(code: "browser_failed", message: "\(error.localizedDescription). Repro: \(id.uuidString)")
+    }
+  }
+
+  private func receiveBrowserLogs(_ logs: [BrowserReproCapture.Log], id: UUID) {
+    guard repros.activeSessionID == id else { return }
+    for source in ["browser", "network"] {
+      let entries = logs.filter { $0.source == source }.map { ReproRecorder.ExternalLine(text: $0.text, at: $0.at, level: $0.level) }
+      for offset in stride(from: 0, to: entries.count, by: ReproRecorder.externalBatchLimit) {
+        _ = try? repros.appendExternal(Array(entries[offset..<min(offset + ReproRecorder.externalBatchLimit, entries.count)]), source: source)
+      }
+    }
+  }
+
+  private func browserDisconnected(_ reason: String, id: UUID) {
+    guard activeID == id, !stopping else { return }
+    repros.captureFailed(reason)
+    // Do not await stop in the CDP reader: stop needs that reader to finish commands.
+    Task { [weak self] in
+      guard let self, self.activeID == id else { return }
+      _ = try? await self.stop()
+    }
+  }
+
+  func togglePause() async {
+    guard !stopping else { return }
+    if let browser, let id = activeID {
+      let date = Date(), paused = !isPaused
+      await browser.setPaused(paused, at: date)
+      repros.browserEvent(paused ? .paused(date) : .resumed(date), id: id)
+    } else { recorder.togglePause() }
+  }
+
+  /// Agents can use these small controls, or drive the returned CDP endpoint with their own tools.
+  func browserAction(url: String?, expression: String?, screenshot: Bool) async throws -> JSONValue {
+    guard let browser, let id = activeID, !stopping else { throw StackControlError.notFound("No browser repro is recording. Start with headless or cdp.") }
+    guard url == nil || expression == nil else { throw StackControlError.invalid("Pass url or expression, not both") }
+    do {
+      var result: [String: JSONValue] = ["repro": .string(id.uuidString)]
+      if let url {
+        _ = try repros.addMarker(label: "Navigate to \(BrowserReproOptions.logURL(url))", kind: .note, by: activeActor?.label)
+        try await browser.navigate(url)
+      } else if let expression {
+        _ = try repros.addMarker(label: "Browser action", kind: .note, by: activeActor?.label)
+        result["result"] = try await browser.evaluate(expression)
+      } else {
+        result["page"] = try await browser.evaluate("""
+          ({url: location.href, title: document.title, ready: document.readyState,
+            text: (document.body?.innerText || '').slice(0, 16000),
+            controls: [...document.querySelectorAll('a,button,input,select,textarea,[role="button"]')].slice(0, 100)
+              .map(e => ({tag: e.tagName.toLowerCase(), id: e.id, name: e.getAttribute('name'),
+                text: (e.innerText || e.getAttribute('aria-label') || e.getAttribute('placeholder') || '').slice(0, 160)}))})
+          """)
+      }
+      if screenshot {
+        let data = try await browser.screenshot()
+        let path = repros.store.framesFolder(id).appendingPathComponent("browser-live.jpg")
+        try FileManager.default.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        try data.write(to: path, options: .atomic)
+        let source = CGImageSourceCreateWithData(data as CFData, nil)
+        let properties = source.flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) as? [CFString: Any] }
+        result["frames"] = .array([.object(["imageBase64": .string(data.base64EncodedString()), "mimeType": .string("image/jpeg"),
+          "path": .string(path.path), "t": .number(repros.now), "time": .string(ReproFormat.timestamp(repros.now)),
+          "width": .number(Double(properties?[kCGImagePropertyPixelWidth] as? Int ?? 0)),
+          "height": .number(Double(properties?[kCGImagePropertyPixelHeight] as? Int ?? 0))])])
+      }
+      return .object(result)
+    } catch {
+      if activeID == id {
+        _ = try? repros.addMarker(label: "Browser action failed", detail: error.localizedDescription,
+          outcome: .fail, kind: .check, by: activeActor?.label)
+      }
+      throw error
+    }
   }
 
   /// Records while a task or workflow runs, then stops a moment after it finishes.
@@ -104,8 +233,16 @@ final class ReproRecordingController: ObservableObject {
     // Let the first frames land so the run's first output is visible in the video.
     try? await Task.sleep(nanoseconds: 700_000_000)
     await runner.recover()
+    guard activeID == session.id, !stopping else {
+      throw StackControlError(code: "recording_stopped", message: "The recording stopped before the task could start. The task was not launched.")
+    }
     let run: WorkspaceRun
-    do { run = try runner.submit(workspace: workspace, kind: kind, definitionID: definitionID, actor: actor) }
+    var environment: [String: String] = [:]
+    if let browserInfo {
+      environment = ["CINDERDECK_BROWSER_ENDPOINT": browserInfo.endpoint.absoluteString,
+        "CINDERDECK_BROWSER_PAGE_ID": browserInfo.pageID, "CINDERDECK_REPRO": session.id.uuidString]
+    }
+    do { run = try runner.submit(workspace: workspace, kind: kind, definitionID: definitionID, actor: actor, environment: environment) }
     catch {
       await cancel()
       throw StackControlError(code: "run_failed", message: error.localizedDescription)
@@ -138,10 +275,18 @@ final class ReproRecordingController: ObservableObject {
     autoStop?.cancel(); autoStop = nil
     runWatch = nil
     ReproControlsPanel.shared.showFinalizing()
-    _ = await recorder.stopRecording()
+    if let browser {
+      let date = Date()
+      repros.browserEvent(.stopping(date), id: id)
+      do { repros.browserEvent(.finished(try await browser.stop(at: date)), id: id) }
+      catch {
+        repros.captureFailed(error.localizedDescription)
+        repros.browserEvent(.noVideo, id: id)
+      }
+    } else { _ = await recorder.stopRecording() }
     // Saved even without a video: the log is kept, and its detail says what happened.
     let saved = await repros.waitUntilSaved(id)
-    activeID = nil; activeActor = nil; linkedRun = nil
+    activeID = nil; activeActor = nil; linkedRun = nil; browser = nil; browserInfo = nil
     guard let saved else {
       ReproControlsPanel.shared.hide()
       throw StackControlError(code: "recording_failed", message: "The recording produced no video. Check Screen Recording permission for Cinderdeck.")
@@ -151,11 +296,17 @@ final class ReproRecordingController: ObservableObject {
   }
 
   func cancel() async {
-    guard activeID != nil else { return }
+    guard let id = activeID, !stopping else { return }
+    stopping = true
+    defer { stopping = false }
     autoStop?.cancel(); autoStop = nil
     runWatch = nil
-    await recorder.cancelRecording()
-    activeID = nil; activeActor = nil; linkedRun = nil
+    if let browser {
+      await browser.cancel()
+      repros.browserEvent(.cancelled, id: id)
+      _ = await repros.waitUntilSaved(id)
+    } else { await recorder.cancelRecording() }
+    activeID = nil; activeActor = nil; linkedRun = nil; browser = nil; browserInfo = nil
     ReproControlsPanel.shared.hide()
   }
 
