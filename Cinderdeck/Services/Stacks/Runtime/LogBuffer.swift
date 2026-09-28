@@ -27,6 +27,9 @@ actor LogBuffer {
   private var offset: UInt64 = 0
   private var scheduledRead: Task<Void, Never>?
   private var version = 0
+  // A conservative high-water mark also handles wall-clock adjustments. It may
+  // outlive an evicted line, but never hides newer output from a follower.
+  private var latestTimestamp = -Double.infinity
   /// Total lines ever appended; unlike `version`, clear() does not move it.
   private var appended = 0
   /// `appended` at the last clear(), so followers can tell cleared lines from evicted ones.
@@ -123,12 +126,18 @@ actor LogBuffer {
     lines.append(.init(service: service, text: text.utf8.count > 64 * 1024 ? String(text.prefix(64 * 1024)) : text, timestamp: date))
     appended += 1
     version += 1
+    latestTimestamp = max(latestTimestamp, date.timeIntervalSince1970)
   }
   /// Evicts once per batch; trimming per line would shift the whole ring for every line.
   private func trim() {
     if lines.count > capacity { lines.removeFirst(lines.count - capacity) }
   }
-  func snapshot() -> [StackLogLine] { lines }
+  func snapshot(limit: Int? = nil, after: Double? = nil) -> [StackLogLine] {
+    // Polling agents usually have nothing new to read. Test before copying.
+    if let after, latestTimestamp <= after { return [] }
+    let selected = after.map { after in lines.filter { $0.timestamp.timeIntervalSince1970 > after } } ?? lines
+    return limit.map { Array(selected.suffix(max(0, $0))) } ?? selected
+  }
   func revision() -> Int { version }
   /// Lines appended after `position`, a value this method returned earlier (0 at first).
   /// Followers use it to copy only new output instead of the whole ring. `dropped` counts
@@ -138,7 +147,7 @@ actor LogBuffer {
     let dropped = position > 0 && clearedAt <= position ? max(0, appended - position - fresh) : 0
     return (fresh == 0 ? [] : Array(lines.suffix(fresh)), appended, dropped)
   }
-  func clear() { lines.removeAll(); partial.removeAll(); version += 1; clearedAt = appended }
+  func clear() { lines.removeAll(); partial.removeAll(); version += 1; clearedAt = appended; latestTimestamp = -Double.infinity }
   func matches(_ pattern: String) -> Bool {
     if pattern == readinessPattern { return reachedReadiness }
     guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
@@ -165,23 +174,52 @@ actor LogBuffer {
     handle = nil
   }
   deinit { scheduledRead?.cancel(); source?.cancel() }
-  /// Each buffer is already in arrival order, so a k-way merge replaces a full sort.
-  /// Ties keep the earlier buffer first.
-  static func merged(_ buffers: [[StackLogLine]]) -> [StackLogLine] {
+  /// A heap makes a full merge O(N log K). A tail request walks backwards and
+  /// stops at `limit`, instead of merging N lines to throw almost all of them away.
+  /// Ties keep the earlier buffer first, including when reading backwards.
+  static func merged(_ buffers: [[StackLogLine]], limit: Int? = nil) -> [StackLogLine] {
     let buffers = buffers.filter { !$0.isEmpty }
-    if buffers.count <= 1 { return buffers.first ?? [] }
-    var result: [StackLogLine] = []
-    result.reserveCapacity(buffers.reduce(0) { $0 + $1.count })
-    var heads = [Int](repeating: 0, count: buffers.count)
-    while true {
-      var next: Int?
-      for index in buffers.indices where heads[index] < buffers[index].count {
-        if let current = next, buffers[current][heads[current]].timestamp <= buffers[index][heads[index]].timestamp { continue }
-        next = index
-      }
-      guard let next else { return result }
-      result.append(buffers[next][heads[next]])
-      heads[next] += 1
+    let count = min(max(0, limit ?? Int.max), buffers.reduce(0) { $0 + $1.count })
+    guard count > 0 else { return [] }
+    if buffers.count == 1 { return count == buffers[0].count ? buffers[0] : Array(buffers[0].suffix(count)) }
+    let backwards = limit != nil
+    struct Cursor { let buffer: Int; var line: Int }
+    var heap: [Cursor] = []
+    func precedes(_ lhs: Cursor, _ rhs: Cursor) -> Bool {
+      let a = buffers[lhs.buffer][lhs.line].timestamp
+      let b = buffers[rhs.buffer][rhs.line].timestamp
+      if a == b { return backwards ? lhs.buffer > rhs.buffer : lhs.buffer < rhs.buffer }
+      return backwards ? a > b : a < b
     }
+    for index in buffers.indices {
+      heap.append(Cursor(buffer: index, line: backwards ? buffers[index].count - 1 : 0))
+      var child = heap.count - 1
+      while child > 0 {
+        let parent = (child - 1) / 2
+        guard precedes(heap[child], heap[parent]) else { break }
+        heap.swapAt(child, parent); child = parent
+      }
+    }
+    var result: [StackLogLine] = []
+    result.reserveCapacity(count)
+    while !heap.isEmpty, result.count < count {
+      let next = heap[0]
+      result.append(buffers[next.buffer][next.line])
+      let line = next.line + (backwards ? -1 : 1)
+      if buffers[next.buffer].indices.contains(line) { heap[0] = Cursor(buffer: next.buffer, line: line) }
+      else {
+        let last = heap.removeLast()
+        if heap.isEmpty { break }
+        heap[0] = last
+      }
+      var parent = 0
+      while parent * 2 + 1 < heap.count {
+        var child = parent * 2 + 1
+        if child + 1 < heap.count, precedes(heap[child + 1], heap[child]) { child += 1 }
+        guard precedes(heap[child], heap[parent]) else { break }
+        heap.swapAt(parent, child); parent = child
+      }
+    }
+    return backwards ? result.reversed() : result
   }
 }

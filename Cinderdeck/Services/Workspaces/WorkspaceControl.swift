@@ -58,7 +58,7 @@ extension StackControlService {
           step = id
         }
         let limit = min(max(params["lines"]?.intValue ?? 200, 1), 5000)
-        let lines = await runner.output(id, stepID: step)
+        let lines = await runner.output(id, stepID: step, limit: limit)
         return .object(["run": .string(raw), "status": .string(runner.run(id)?.status.rawValue ?? run.status.rawValue),
           "lines": .array(lines.suffix(limit).map { .object(["step": .string($0.service), "text": .string(AnsiParser.plainText($0.text))]) })])
       case "workspace.run.wait":
@@ -72,7 +72,7 @@ extension StackControlService {
         } else if current.status != .succeeded {
           // The failing step's last output, so a failure can be diagnosed without another call.
           let failed = current.steps.last { $0.status == .failed || $0.status == .cancelled || $0.status == .interrupted }
-          let lines = await runner.output(id, stepID: failed?.id)
+          let lines = await runner.output(id, stepID: failed?.id, limit: 30)
           result["lastLines"] = .array(lines.suffix(30).map { .string(AnsiParser.plainText($0.text)) })
         }
         return .object(result)

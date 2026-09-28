@@ -133,6 +133,9 @@ struct StackLogView: NSViewRepresentable {
     return NSColor(srgbRed: component(value / 36), green: component(value / 6 % 6), blue: component(value % 6), alpha: 1)
   }
   final class Coordinator {
+    // No actor work is needed at destruction. Avoid the Swift 6.2 isolated
+    // deinit back-deployment crash when AppKit releases a closed console.
+    nonisolated deinit {}
     weak var text: NSTextView?
     var ids: [UUID] = []
     /// Character offset where each line starts, plus the end: offsets[i]..<offsets[i + 1] is line i.

@@ -70,6 +70,29 @@ final class WorkspaceRunnerTests: XCTestCase {
     XCTAssertEqual(result.steps[1].exitCode, 7)
     XCTAssertEqual(try String(contentsOf: root.appendingPathComponent("sequence")), "first\n")
   }
+  func testOutputTailPreservesStepOrderForLiveAndReloadedRuns() async throws {
+    try await load("""
+    [tasks.first]
+    cmd = "printf 'first-1\\nfirst-2\\n'"
+    [tasks.last]
+    cmd = "printf 'last-1\\nlast-2\\n'"
+    [workflows.verify]
+    steps = ["task:first", "task:last"]
+    """)
+    let run = try runner.submit(workspace: "test", kind: .workflow, definitionID: "verify")
+    let finished = try await wait(run.id)
+    XCTAssertEqual(finished.status, .succeeded)
+    let all = await runner.output(run.id)
+    XCTAssertEqual(all.map(\.text), ["first-1", "first-2", "last-1", "last-2"])
+    let tail = await runner.output(run.id, limit: 3)
+    XCTAssertEqual(tail.map(\.text), ["first-2", "last-1", "last-2"])
+    let single = await runner.output(run.id, stepID: finished.steps[0].id, limit: 1)
+    XCTAssertEqual(single.map(\.text), ["first-2"])
+    let restored = WorkspaceRunner(supervisor: supervisor, store: store)
+    await restored.recover()
+    let saved = await restored.output(run.id, limit: 3)
+    XCTAssertEqual(saved.map(\.text), tail.map(\.text))
+  }
   func testCancelKillsDescendantsAndSkipsNextStep() async throws {
     try await load("""
     [tasks.wait]

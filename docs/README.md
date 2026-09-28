@@ -11,6 +11,7 @@ Flow-first entrypoint for humans and agents working in Cinderdeck. Docs are sepa
 | [`../README.md`](../README.md) | Public product summary, install, feature list | Any new session |
 | [`DEVELOPMENT.md`](DEVELOPMENT.md) | First-time local setup and source-based development | Running from source |
 | [`STRUCTURE.md`](STRUCTURE.md) | Real source-tree map, runtime architecture, persistence, test architecture, edit guide | Any code change |
+| [`PERFORMANCE.md`](PERFORMANCE.md) | Workspace/UI/agent performance audit, measured workloads, and repeatable benchmarks | Measuring or changing runtime performance |
 
 ## Development workspace
 

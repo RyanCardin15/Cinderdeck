@@ -14,6 +14,8 @@ final class GitStatusMonitor: ObservableObject {
   private var generation = 0
   private var autoFetchMinutes = 0
   init(git: GitService = .shared) { self.git = git }
+  // stop() owns actor-bound shutdown. Stored values need no executor hop on release.
+  nonisolated deinit {}
 
   func configure(_ repos: [RepoDefinition]) {
     generation += 1

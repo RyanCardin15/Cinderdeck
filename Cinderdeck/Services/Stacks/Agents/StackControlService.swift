@@ -486,18 +486,26 @@ final class StackControlService: ObservableObject {
 
   // MARK: Logs
 
-  private func recentLines(stack: String, service: String?, limit: Int) async -> [StackLogLine] {
-    let buffered = await supervisor.logLines(stack: stack, service: service)
-    if !buffered.isEmpty { return Array(buffered.suffix(limit)) }
+  private func recentLines(stack: String, service: String?, limit: Int, after: Double? = nil) async -> [StackLogLine] {
+    let buffered = await supervisor.logLines(stack: stack, service: service, limit: limit, after: after)
+    if !buffered.isEmpty { return buffered }
+    // An unchanged live buffer must not fall back to rereading its whole log file.
+    if after != nil, !(await supervisor.logRevision(stack: stack, service: service)).isEmpty { return [] }
     // Nothing buffered this session: read the files services write to.
     let names = service.map { [$0] } ?? (supervisor.definition(stack)?.services.map(\.id) ?? [])
-    var lines: [StackLogLine] = []
-    for name in names {
-      let url = supervisor.logURL(stack: stack, service: name)
-      let date = (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
-      lines += Self.tail(url, maxLines: limit).map { StackLogLine(service: name, text: $0, timestamp: date) }
-    }
-    return Array(lines.suffix(limit))
+    let files = names.map { (name: $0, url: supervisor.logURL(stack: stack, service: $0)) }
+    return await Task.detached(priority: .utility) {
+      var chunks: [[StackLogLine]] = []
+      var remaining = limit
+      for file in files.reversed() where remaining > 0 {
+        let date = (try? file.url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
+        if let after, date.timeIntervalSince1970 <= after { continue }
+        let lines = Self.tail(file.url, maxLines: remaining).map { StackLogLine(service: file.name, text: $0, timestamp: date) }
+        chunks.append(lines)
+        remaining -= lines.count
+      }
+      return chunks.reversed().flatMap { $0 }
+    }.value
   }
 
   nonisolated static func tail(_ url: URL, maxLines: Int, maxBytes: UInt64 = 512 * 1024) -> [String] {
@@ -518,8 +526,7 @@ final class StackControlService: ObservableObject {
     let service = try services(params, in: file, key: "service")?.first
     let limit = min(max(params["lines"]?.intValue ?? 200, 1), 5000)
     let after = params["after"]?.doubleValue
-    var lines = await recentLines(stack: file.id, service: service, limit: after == nil && params["grep"] == nil ? limit : 5000)
-    if let after { lines = lines.filter { $0.timestamp.timeIntervalSince1970 > after } }
+    var lines = await recentLines(stack: file.id, service: service, limit: params["grep"] == nil ? limit : 5000, after: after)
     if let pattern = params["grep"]?.stringValue, !pattern.isEmpty {
       let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
       lines = lines.filter { line in

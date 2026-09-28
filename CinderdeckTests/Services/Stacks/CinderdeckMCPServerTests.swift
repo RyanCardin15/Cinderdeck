@@ -36,6 +36,7 @@ final class CinderdeckMCPServerTests: XCTestCase {
     let ports = try CinderdeckMCPServer.request(for: "list_ports", ["external_only": .bool(true)])
     XCTAssertEqual(JSONValue.object(ports.1), .object(["external": .bool(true)]))
     XCTAssertEqual(try CinderdeckMCPServer.request(for: "list_workspaces", [:]).1["detail"], .bool(true))
+    XCTAssertEqual(try CinderdeckMCPServer.request(for: "list_workspaces", ["detail": .bool(false)]).1["detail"], .bool(false))
     XCTAssertEqual(try CinderdeckMCPServer.request(for: "list_workspace_runs", [:]).1["limit"], .number(20))
     XCTAssertEqual(try CinderdeckMCPServer.request(for: "wait_for_workspace_run", ["run": .string("x"), "timeout": .number(30)]).2, 60)
     XCTAssertEqual(try CinderdeckMCPServer.request(for: "pull_repos", ["workspace": .string("shop"), "fetch": .bool(true)]).0, "git.fetch")
@@ -110,6 +111,19 @@ final class CinderdeckMCPServerTests: XCTestCase {
     XCTAssertNil(workspace["services"]?.arrayValue?.first?["command"], "Details stay in workspace_details")
     XCTAssertNotNil(workspace["definitionChanged"])
     XCTAssertTrue(CinderdeckMCPServer.render("list_workspaces", .array([])).contains("create_workspace"))
+  }
+
+  func testCompactInventoryRetainsServiceNamesAndIssues() throws {
+    try CinderdeckMCPServer.validate("list_workspaces", ["detail": .bool(false)])
+    let inventory: JSONValue = .array([.object(["id": .string("shop"), "name": .string("Shop"),
+      "services": .array([.string("api")]), "tasks": .array([.string("test")]),
+      "workflows": .array([]), "issues": .array([.string("Needs attention")]), "activeRun": .null])])
+    let text = CinderdeckMCPServer.render("list_workspaces", inventory)
+    let result = try StackControlCoding.decoder().decode(JSONValue.self, from: Data(text.utf8)).arrayValue?.first
+    XCTAssertEqual(result?["services"]?.stringsValue, ["api"])
+    XCTAssertEqual(result?["tasks"]?.stringsValue, ["test"])
+    XCTAssertEqual(result?["issues"]?.stringsValue, ["Needs attention"])
+    XCTAssertNil(result?["workflows"])
   }
 
   func testSessionAnswersPingsDuringCallsAndDropsCancelledResponses() throws {

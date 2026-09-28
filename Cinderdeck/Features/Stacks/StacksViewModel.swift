@@ -22,6 +22,8 @@ struct StackEditorContext: Identifiable {
 @MainActor
 final class StacksViewModel: ObservableObject {
   @Published private(set) var files: [StackDefinitionFile] = []
+  /// Membership changes with definitions, not every log tick, hover or selection.
+  private(set) var workspaceNavigation: WorkspaceNavigation
   @Published private(set) var states: [String: StackRuntimeState] = [:]
   @Published private(set) var repoStatuses: [URL: GitRepoStatus] = [:]
   @Published var selectedStackID: String?
@@ -54,9 +56,11 @@ final class StacksViewModel: ObservableObject {
   init(supervisor: StackSupervisor? = nil, git: GitService = .shared) {
     let supervisor = supervisor ?? .shared
     self.supervisor = supervisor; self.git = git
+    workspaceNavigation = WorkspaceNavigation(files: [], lanesDirectory: supervisor.lanesDirectory)
     supervisor.$files.sink { [weak self] files in
       guard let self else { return }
       let previousWorkspaceID = self.selectedWorkspaceID
+      self.workspaceNavigation = WorkspaceNavigation(files: files, lanesDirectory: supervisor.lanesDirectory)
       self.files = files
       if !files.contains(where: { $0.id == self.selectedStackID }) {
         self.selectedStackID = self.workspaceNavigation.workspaces.first { $0.id == previousWorkspaceID }?.id
@@ -77,7 +81,6 @@ final class StacksViewModel: ObservableObject {
   }
 
   var runningCount: Int { states.values.filter(\.isActive).count }
-  var workspaceNavigation: WorkspaceNavigation { WorkspaceNavigation(files: files, lanesDirectory: supervisor.lanesDirectory) }
   var selectedWorkspaceID: String? { workspaceNavigation.workspaceID(for: selectedStackID) }
   var filteredFiles: [StackDefinitionFile] {
     files.filter { stackFilter.isEmpty || $0.name.localizedCaseInsensitiveContains(stackFilter) || $0.id.localizedCaseInsensitiveContains(stackFilter) }

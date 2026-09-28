@@ -139,11 +139,14 @@ A full save or metadata edit requires stopped services and finished/cancelled ru
 ```sh
 cinderdeck tools                         # Full JSON catalog and schemas; no app connection needed
 cinderdeck tools save_workspace_service  # All accepted settings for one operation
+cinderdeck call list_workspaces --arguments '{"detail":false}'  # Compact inventory
 cinderdeck call update_lane --arguments '{"workspace":"shop/review","env":{"MODE":"review"}}'
 cinderdeck call save_workspace --file ./arguments.json
 ```
 
 `cinderdeck call` exposes **every MCP tool**, using the same catalog, argument validation, control route and timeout. New tools automatically become available to CLI agents. JSON file input avoids shell quoting and supports nested settings. The dedicated `workspace save-service`, `save-task` and `save-workflow` commands accept the same settings in `--data` or a JSON `--file`, with workspace/id supplied as positionals. Unknown arguments, wrong JSON types and invalid enum values are rejected before connecting. JSON results go to stdout; JSON errors go to stderr (exit 3 for a claim conflict, 1 for other errors). Generic calls return the control result; inspect run status and service problems, since a successfully delivered call can report failed work.
+
+For large installations, call `list_workspaces` with `detail: false` to discover workspace IDs, service names, tasks, workflows, issues, and active runs, then request `workspace_details` for the selected workspace. Omitting `detail` preserves the existing detailed inventory. Log requests bound merging and file reads to the requested tail; passing the numeric service-log cursor as `after` avoids returning unchanged output. Live console searches reuse matches for existing lines, and large combined log merges run off the UI thread. See [performance measurements and reproduction steps](PERFORMANCE.md).
 
 ## Validation
 
