@@ -62,7 +62,7 @@ Stop these pipes (`kill %1` or `kill $!`) after `repro stop`.
 
 ## Scripted run with console and network logs
 
-This is the most complete recording: a headed browser script run as a workspace task, so its stdout becomes part of the log. `browser-session.mjs`:
+For a headed browser script run as a workspace task, stdout becomes part of the log. `browser-session.mjs`:
 
 ```js
 import { chromium } from 'playwright';
@@ -111,4 +111,41 @@ cinderdeck repro frame --at first_error,end
 
 To record the same flow on a worktree lane, pass the lane as the workspace: `cinderdeck repro run shop/agent/codex-1 browser-session --wait`. The task runs in the lane's folder, and `CINDERDECK_URL_WEB` points at the lane's `web`.
 
-To run it headless in CI, set `headless: true` and use `cinderdeck workspace task shop browser-session --wait` instead of `repro run`. You get the logs but no Cinderdeck video.
+For a headless Cinderdeck recording on macOS, connect the task to the browser Cinderdeck launches, as below. Cinderdeck must be running; Linux CI remains outside this recorder.
+
+
+## Headless Playwright task with video and synchronized logs
+
+For the interactive CLI/MCP path and efficient screenshots/readiness checks, use the [headless agent workflow](headless.md).
+
+```js
+import { chromium } from 'playwright';
+
+const endpoint = process.env.CINDERDECK_BROWSER_ENDPOINT;
+const pageID = process.env.CINDERDECK_BROWSER_PAGE_ID;
+if (!endpoint || !pageID) throw new Error('Run this task with repro run --headless about:blank');
+const browser = await chromium.connectOverCDP(endpoint);
+try {
+  let page;
+  for (const candidate of browser.contexts().flatMap(context => context.pages())) {
+    const cdp = await candidate.context().newCDPSession(candidate);
+    const { targetInfo } = await cdp.send('Target.getTargetInfo');
+    await cdp.detach();
+    if (targetInfo.targetId === pageID) { page = candidate; break; }
+  }
+  if (!page) throw new Error('The Cinderdeck recording page was not found');
+  page.setDefaultTimeout(8000);
+  page.setDefaultNavigationTimeout(15000);
+  await page.goto(process.env.CINDERDECK_URL_WEB || 'http://localhost:3000', { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: 'Pay', exact: true }).click();
+  await page.getByText('Receipt', { exact: true }).waitFor();
+  console.log('Receipt is visible');
+} finally {
+  // Disconnect even on failure; do not close the recorded page/context.
+  await browser.close();
+}
+```
+
+Use the existing configured task: `cinderdeck repro run shop browser-session --headless about:blank --wait` (MCP `start_repro_recording` with `workspace`, `task`, `headless`, then `wait_for_repro`). The task's stdout, services, browser console, and network failures are synchronized with the saved MP4. Normal frame extraction and exports work. Do not launch a second browser or enable Playwright video: Cinderdeck already records the selected page. For Puppeteer, use `puppeteer.connect({ browserURL: process.env.CINDERDECK_BROWSER_ENDPOINT })` and `browser.disconnect()` when done.
+
+For an already running browser, use `--cdp http://127.0.0.1:9222 --page-id <id>` on start or run. Its process and profile remain the caller's responsibility. Do not change its viewport while recording unless resizing is part of the test; output dimensions are fixed at the first frame.

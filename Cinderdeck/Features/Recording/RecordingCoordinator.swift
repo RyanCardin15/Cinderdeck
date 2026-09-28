@@ -190,7 +190,7 @@ final class RecordingCoordinator: ObservableObject {
     windowTarget: WindowCaptureTarget? = nil,
     onSessionEnded: (@MainActor () -> Void)? = nil
   ) {
-    guard !isActive else {
+    guard !isActive, !ReproRecordingController.shared.isBusy else {
       DiagnosticLogger.shared.log(.debug, .recording, "Recording toolbar request ignored: coordinator active")
       onSessionEnded?()
       return

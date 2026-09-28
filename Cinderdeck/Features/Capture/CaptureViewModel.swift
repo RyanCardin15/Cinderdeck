@@ -2060,8 +2060,12 @@ final class ScreenCaptureViewModel: ObservableObject, KeyboardShortcutDelegate {
   }
 
   /// Pause/resume entry from global shortcut. No-op when no active recording.
-  /// Reuses existing `ScreenRecordingManager.togglePause()` (already used by the menu bar).
+  /// Routes to the active recording backend, including headless browser repros.
   func togglePauseFromShortcut() {
+    if ReproRecordingController.shared.ownsRecording {
+      Task { await ReproRecordingController.shared.togglePause() }
+      return
+    }
     let state = ScreenRecordingManager.shared.state
     guard state.isPauseResumeEligible else {
       DiagnosticLogger.shared.log(.debug, .recording, "Pause shortcut ignored: no active recording", context: [
@@ -2089,6 +2093,10 @@ final class ScreenCaptureViewModel: ObservableObject, KeyboardShortcutDelegate {
 
   /// Cancel/Delete current recording from global shortcut.
   func deleteRecordingFromShortcut() {
+    if ReproRecordingController.shared.ownsRecording {
+      Task { await ReproRecordingController.shared.cancel() }
+      return
+    }
     guard RecordingCoordinator.shared.isActive else { return }
     RecordingCoordinator.shared.deleteFromShortcut()
   }
@@ -2117,6 +2125,7 @@ final class ScreenCaptureViewModel: ObservableObject, KeyboardShortcutDelegate {
   }
 
   private func startRecordingFlow(initialInteractionMode: AreaSelectionInteractionMode) {
+    guard !ReproRecordingController.shared.isBusy else { return }
     guard hasPermission else {
       requestPermission()
       return

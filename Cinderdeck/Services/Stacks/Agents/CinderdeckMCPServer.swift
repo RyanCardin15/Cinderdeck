@@ -289,18 +289,33 @@ nonisolated enum CinderdeckMCPServer {
 
   private static let reproTools: [Tool] = [
     tool("start_repro_recording", "Start a repro recording", .additive,
-      "Record the screen while capturing workspace service and task output on the same timeline, for reproducing bugs and automated UI testing. Records the main display by default, or one window (window_id from list_repro_windows is exact; window matches app name or title). A recorded window is followed if it moves, and its app's menus and dropdowns are included. The user sees floating controls and can stop it. To record a test run, pass workspace plus task or workflow: recording starts, the run starts, step results become markers, and recording stops shortly after the run ends. Add workspaces to also capture other workspaces' output, such as a backend the run talks to. Returns the repro id immediately.",
+      "Record a screen, window, or headless Chromium page with workspace service and task output on the same timeline. Pass headless=<url> to launch an isolated browser or cdp=<http-endpoint> to attach; browser console and failed requests are captured automatically. Records the main display by default, or one window (window_id from list_repro_windows is exact; window matches app name or title). A recorded window is followed if it moves, and its app's menus and dropdowns are included. The user sees floating controls and can stop it. To record a test run, pass workspace plus task or workflow: recording starts, the run starts, step results become markers, and recording stops shortly after the run ends. Add workspaces to also capture other workspaces' output, such as a backend the run talks to. Returns the repro id immediately.",
       ["title": property("string", "What is being reproduced or tested"),
         "workspace": property("string", "Workspace id or name to capture output from; required with task or workflow, where it is the workspace that runs it"),
         "workspaces": property("array", "Capture output from these workspaces, together with workspace if given, e.g. the frontend and its backend. Default: every workspace with output", items: "string"),
         "logs": property("boolean", "false records a plain video with no workspace output; your markers and add_repro_logs lines are still kept (default true)"),
         "task": property("string", "Run this configured task while recording"), "workflow": property("string", "Run this configured workflow while recording"),
+        "headless": property("string", "Launch and record an isolated headless Chromium browser at this URL (http, https, or about:blank). No Screen Recording permission required. Browser console, exceptions, and failed requests are captured automatically. Returns browser.endpoint and pageId for automation; repro_browser also inspects and controls the page. Normal stop, frame, logs, and export work. Cannot combine with cdp, window, display, or system_audio."),
+        "cdp": property("string", "Attach to an existing Chromium HTTP debugging endpoint, e.g. http://127.0.0.1:9222. Records one page, without resizing or closing the caller's browser. Use page_id if it has several pages."),
+        "page_id": property("string", "CDP page id from the endpoint's /json/list; required when several pages exist"),
+        "browser_executable": property("string", "Optional absolute Chromium executable path for headless; defaults to installed Chrome, Chromium, or Edge"),
+        "browser_width": property("number", "Headless viewport width, 240–3840 (default 1280)"),
+        "browser_height": property("number", "Headless viewport height, 240–3840 (default 720)"),
         "window": property("string", "Record one window: application name or window title, e.g. Safari or \"localhost:3000\". The frontmost match wins"),
         "window_id": property("number", "Record exactly this window, by id from list_repro_windows"),
         "display": property("string", "\"main\" (default) or a 1-based display number"),
         "max_seconds": property("number", "Stop automatically after this many seconds (default 300, max 3600)"),
         "system_audio": property("boolean", "Also record system audio (default false)"),
         "note": property("string", "Optional first marker, e.g. the steps you are about to perform"), "force": force]),
+    tool("repro_browser", "Inspect or control the recorded browser", .additive,
+      "Inspect the active browser repro: returns page text, controls, and a live screenshot. Pass url to navigate, or expression to run JavaScript in the recorded page (promises are awaited, 10s limit). Navigation/actions create markers. Use mark_repro for descriptive steps and pass/fail checks. This controls only the selected recorded page. Console, exceptions, and failed requests are captured automatically.",
+      ["url": property("string", "Navigate to this http/https URL or about:blank"),
+        "expression": property("string", "JavaScript to evaluate, e.g. document.querySelector('button').click(). Return a serializable value; do not include credentials."),
+        "screenshot": property("boolean", "Include a live page screenshot (default true). Use false for intermediate actions, small data reads, and bounded readiness waits; video capture continues.")]),
+    tool("pause_repro_recording", "Pause a repro recording", .additive,
+      "Pause the active agent recording. Output during the pause is kept as offscreen context. Idempotent.", [:]),
+    tool("resume_repro_recording", "Resume a repro recording", .additive,
+      "Resume the active agent recording. Idempotent.", [:]),
     tool("mark_repro", "Mark a repro step", .additive,
       "Add a marker at the current moment of the recording. Use one per test step or action. Set outcome to pass or fail to record a check; failed checks make the repro's verdict failed.",
       ["label": property("string", "Step, action, or expectation, e.g. \"Click Pay\" or \"Order total shows $42\""),
@@ -473,6 +488,12 @@ nonisolated enum CinderdeckMCPServer {
       let (method, request, timeout) = try self.request(for: name, arguments)
       let result = try session.perform(method, request, timeout: timeout, retryable: toolsByName[name]?.effect == .read)
       if name == "repro_frame" { return .object(["content": .array(frameContent(result)), "isError": .bool(false)]) }
+      if name == "repro_browser" {
+        var content = (result["frames"]?.arrayValue ?? []).isEmpty ? [] : frameContent(result)
+        var text = result.objectValue ?? [:]; text["frames"] = nil
+        content.append(.object(["type": .string("text"), "text": .string(JSONValue.object(text).compactString())]))
+        return .object(["content": .array(content), "isError": .bool(false)])
+      }
       return .object(["content": .array([.object(["type": .string("text"), "text": .string(render(name, result))])]), "isError": .bool(false)])
     } catch let error as StackControlError {
       return errorResult("\(error.message) [\(error.code)]")
@@ -548,6 +569,9 @@ nonisolated enum CinderdeckMCPServer {
     case "delete_pr_view": return ("prs.views.delete", params, 90)
     case "reorder_pr_views": return ("prs.views.reorder", params, 90)
     case "start_repro_recording": return ("repro.start", params, 90)
+    case "repro_browser": return ("repro.browser", params, 45)
+    case "pause_repro_recording": return ("repro.pause", params, 30)
+    case "resume_repro_recording": return ("repro.resume", params, 30)
     case "mark_repro": return ("repro.mark", params, 30)
     case "list_repro_windows": return ("repro.windows", params, 30)
     case "add_repro_logs": return ("repro.log", params, 30)

@@ -131,7 +131,7 @@ Two skills teach Claude Code, Codex, Cursor, VS Code Copilot, and other agents t
 
 | Skill | Use |
 | --- | --- |
-| [`cinderdeck-record-session`](../skills/cinderdeck-record-session/SKILL.md) | Record a browser or app session: pick the window, a new window, an automation browser, or a display; choose workspace logs or none; mark each action; add browser console output; review the result. Explains why headless browsers can't be recorded and what to do instead. |
+| [`cinderdeck-record-session`](../skills/cinderdeck-record-session/SKILL.md) | Record a browser or app session: pick the window, a new window, an automation browser, or a display; choose workspace logs or none; mark each action; add browser console output; review the result. Includes headless Chromium launch, CDP attach, browser controls, and task integration. |
 | [`cinderdeck-review-recording`](../skills/cinderdeck-review-recording/SKILL.md) | Investigate a recording, yours or the user's: verdict, frames at errors and marks, logs around a moment, and an export. |
 
 To install them for your agents, open **Agent access** and click **Add** next to each agent under **Agent skills**, or run `cinderdeck skills install --all`. The skills ship inside the app, and **Update** appears when a new version changes them.
@@ -153,11 +153,11 @@ done
 | Tool | Purpose |
 | --- | --- |
 | `list_repro_windows` | Windows that can be recorded, frontmost first, with `id`, app, title, frame, display, and pid. Optional `query` filters by app or title. |
-| `start_repro_recording` | Start recording. Optional: `title`, `workspace`/`workspaces` to scope output or `logs: false` for none, `window_id` (from `list_repro_windows`), `window` (app name or title), or `display`, `max_seconds`, `system_audio`, `note`. `workspace` and `workspaces` combine. Pass `workspace` with `task` or `workflow` to record a run, and `workspaces` to also capture others, such as its backend. |
+| `start_repro_recording` | Start recording. Choose `headless` (page URL), `cdp` (existing Chromium endpoint, optional `page_id`), `window_id`, `window`, or `display`. Optional: `title`, `workspace`/`workspaces` to scope output, `logs: false` to omit workspace output, `max_seconds`, `note`, or `system_audio` for screen/window capture. `workspace` and `workspaces` combine. Pass `workspace` with `task` or `workflow` to record a run, and `workspaces` to also capture others, such as its backend. |
+| `repro_browser` | Inspect the recorded browser page and return a live screenshot. Pass `url` to navigate or `expression` to evaluate JavaScript. `screenshot: false` returns only data. |
+| `pause_repro_recording` / `resume_repro_recording` | Pause or resume an agent/workspace recording. Browser logs continue during the pause and are marked offscreen. |
 | `mark_repro` | Add a marker now. `outcome: pass`/`fail` records a check; failed checks make the verdict **Failed**. |
 | `add_repro_logs` | Add your own lines to the log now, such as browser console messages or failed requests, under a `source` name. Lines that look like errors count toward the verdict. |
-
-`mark_repro` and `add_repro_logs` are safe to send in parallel with `stop_repro_recording`. A call that arrives while the recording stops, or up to 2 minutes after it stopped, goes to that repro; the result has `late: true`. Pass `repro` to add to any saved repro. Lines keep their `at` time; lines and marks without one are placed at the end of the video, so mark and read the console before stopping when you can.
 | `stop_repro_recording` | Stop and save. Returns the verdict, headline, errors with timestamps, markers, runs, and `logFile`, the path of the log file. Calling it again returns the saved repro. |
 | `wait_for_repro` | Wait for a recording that stops itself, such as a recorded run. |
 | `cancel_repro_recording` | Stop and discard. |
@@ -171,7 +171,9 @@ done
 | `delete_repro` | Delete a repro. Requires the exact id. |
 | `repro_recording_scope` | Show which workspaces the user's toolbar recordings capture, or set `mode` to `running`, `selected` (with `workspaces`), or `off`. Agents change it only when asked. |
 
-**Recording a window.** Pick it by `window_id` from `list_repro_windows`; `window` matches an app name or title and takes the frontmost match. The recording follows the window if it moves or resizes, keeping the video size from the start. It includes the window's app, so menus, dropdowns, and sheets appear, while other apps' windows passing over it do not. A window must be visible to be recorded, so a headless browser can't be; run it headed.
+`mark_repro` and `add_repro_logs` are safe to send in parallel with `stop_repro_recording`. A call that arrives while the recording stops, or up to 2 minutes after it stopped, goes to that repro; the result has `late: true`. Pass `repro` to add to any saved repro. Lines keep their `at` time; lines and marks without one are placed at the end of the video, so mark and read the console before stopping when you can.
+
+**Recording a window.** Pick it by `window_id` from `list_repro_windows`; `window` matches an app name or title and takes the frontmost match. The recording follows the window if it moves or resizes, keeping the video size from the start. It includes the window's app, so menus, dropdowns, and sheets appear, while other apps' windows passing over it do not. Window capture requires a visible window. For headless Chromium, use `headless` (launch) or `cdp` (attach) instead.
 
 **Choosing logs.** By default an agent recording captures every running workspace. Pass `workspace` or `workspaces` to narrow it, or `logs: false` for a plain video. With `logs: false`, markers and lines from `add_repro_logs` are still saved.
 
@@ -256,3 +258,41 @@ scripts/run-tests.sh -only-testing:CinderdeckTests/ReproCoreTests \
   -only-testing:CinderdeckTests/ReproAgentAPITests -only-testing:CinderdeckTests/ReproRecorderTests \
   -only-testing:CinderdeckTests/RecordingSessionVideoEndTests
 ```
+
+
+## Headless browser recordings
+
+```sh
+cinderdeck repro start --headless http://localhost:3000 --title "Checkout" --workspace shop --max 120
+cinderdeck repro browser
+cinderdeck repro browser --evaluate "document.querySelector('button').click()"
+cinderdeck repro stop
+cinderdeck repro frame --at end
+cinderdeck repro export --zip
+```
+
+Browser recordings use the same library, MP4 playback/editor, synchronized `.log`, workspace scope, markers, verdict, frame extraction, and export bundle as screen recordings. Browser console output, JavaScript exceptions, request failures, and HTTP 4xx/5xx are captured automatically. `--no-logs` omits workspace output; browser logs and marks remain. No Screen Recording permission or Node installation is needed. Cinderdeck runs on macOS and detects Chrome, Chromium, or Edge; pass `--browser-executable` for another Chromium binary.
+
+`start_repro_recording` accepts `headless` (page URL), or `cdp` (HTTP debugging endpoint) plus optional `page_id`. A browser with several tabs requires an explicit page id from `/json/list`. The CLI equivalents are `--headless`, `--cdp`, and `--page-id`. `repro_browser` / `repro browser` inspects the page and returns a screenshot, or takes `url` / `--url` to navigate or `expression` / `--evaluate` to act. Actions can return JSON and await promises for up to ten seconds. `screenshot: false` / `--no-screenshot` avoids image overhead. Navigation initiates loading; wait for the expected element or inspect readiness before the next action.
+
+Start/status responses include `browser.endpoint` and `browser.pageId` for agents using Playwright or Puppeteer. `repro run shop e2e --headless about:blank --wait` supplies these as `CINDERDECK_BROWSER_ENDPOINT` and `CINDERDECK_BROWSER_PAGE_ID` to task steps, along with `CINDERDECK_REPRO`. The script must use the existing recorded page. See the [browser recipes](../skills/cinderdeck-record-session/references/browser-recipes.md).
+
+Pause/resume, the maximum duration, and user Stop controls apply. Stopping/cancelling closes only browsers Cinderdeck launched and removes their temporary profiles. Attached browsers remain open. Disconnects save available evidence with a failed recording check. Video frames are streamed over CDP into a native H.264 encoder, capped at 30 fps with bounded buffers and no screenshot polling during idle periods. The first-frame clock aligns video and logs; paused output is marked offscreen. Recording dimensions stay fixed; resized pages fit inside them.
+
+Capture covers one page, without audio, browser chrome, native menus, popups, or other tabs. Default viewport is 1280×720 (`--width`, `--height`; MCP `browser_width`, `browser_height`); video is capped at 1920×1080. Attaching preserves the existing viewport. Network logs omit bodies, headers, credentials, and query values. Console content still reflects what the application prints and uses the existing workspace secret redaction. Firefox/WebKit can be recorded as visible windows but do not support this CDP backend.
+
+
+### Verifying browser capture
+
+The focused `BrowserReproTests`, `ReproRecorderTests`, and `ReproAgentAPITests` cover option validation, target selection, MP4 encoding and idle frames, pause timing, storage, failure/cancel handling, and CLI/MCP contracts. `scripts/repro-browser-e2e.py` exercises an isolated Debug app against a local fixture using real Chrome, through both CLI and MCP. It keeps videos, logs, screenshots, and ZIP evidence under `.build/headless-e2e` and leaves the user's app and browser profiles alone.
+
+```sh
+python3 scripts/repro-browser-e2e.py
+# Optional: also verify a real Playwright task against the returned endpoint/page.
+npm install --prefix .build/headless-driver --no-audit --no-fund --ignore-scripts playwright
+python3 scripts/repro-browser-e2e.py --playwright .build/headless-driver/node_modules/playwright
+# Longer capture check; performance.json records app RSS after each animation burst.
+python3 scripts/repro-browser-e2e.py --stress-seconds 60
+```
+
+For agents, the [headless workflow](../skills/cinderdeck-record-session/references/headless.md) explains when to skip screenshots, how to wait for page readiness in one call, and how to retain failure evidence. The recording skill routes headless tasks there directly. Performance samples measure the Cinderdeck process on the test machine, not total browser memory or a guarantee for every page and Mac.

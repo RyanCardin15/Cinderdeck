@@ -20,6 +20,7 @@ final class AppStatusBarController: ObservableObject {
 
   private var statusItem: NSStatusItem?
   private var cancellables = Set<AnyCancellable>()
+  private var browserStatusTick: AnyCancellable?
   private let recorder = ScreenRecordingManager.shared
   private let menuBarCustomizationStore = MenuBarCustomizationStore.shared
   private let menuBarIconRenderer = MenuBarIconRenderer.shared
@@ -216,7 +217,20 @@ final class AppStatusBarController: ObservableObject {
   /// True while the menu bar item acts as the direct stop control
   /// (recording/paused AND the hover bar is hidden).
   private var isMenuBarActingAsStopControl: Bool {
-    (recorder.state == .recording || recorder.state == .paused) && !isHoverBarVisible
+    (recordingState == .recording || recordingState == .paused) && !isHoverBarVisible
+  }
+
+  /// Headless recordings share the menu controls, but never activate screen capture.
+  private var recordingState: RecordingState {
+    guard ReproRecordingController.shared.browserInfo != nil else { return recorder.state }
+    guard let live = ReproRecorder.shared.live else { return .preparing }
+    if live.isFinalizing { return .stopping }
+    return live.isPaused ? .paused : .recording
+  }
+
+  private var recordingDuration: String {
+    guard ReproRecordingController.shared.browserInfo != nil else { return recorder.formattedDuration }
+    return ReproFormat.timestamp(ReproRecorder.shared.now, precise: false)
   }
 
   // MARK: - State Observation
@@ -234,6 +248,26 @@ final class AppStatusBarController: ObservableObject {
       .receive(on: RunLoop.main)
       .sink { [weak self] _ in
         self?.renderStatusItem()
+      }
+      .store(in: &cancellables)
+
+    ReproRecordingController.shared.$browserInfo
+      .map { $0 != nil }
+      .removeDuplicates()
+      .receive(on: RunLoop.main)
+      .sink { [weak self] active in
+        guard let self else { return }
+        browserStatusTick = active ? Timer.publish(every: 1, on: .main, in: .common)
+          .autoconnect().sink { [weak self] _ in self?.renderStatusItem() } : nil
+        renderStatusItem()
+      }
+      .store(in: &cancellables)
+
+    ReproRecorder.shared.$live
+      .removeDuplicates { $0?.isPaused == $1?.isPaused && $0?.isFinalizing == $1?.isFinalizing }
+      .receive(on: RunLoop.main)
+      .sink { [weak self] _ in
+        if ReproRecordingController.shared.browserInfo != nil { self?.renderStatusItem() }
       }
       .store(in: &cancellables)
 
@@ -266,8 +300,8 @@ final class AppStatusBarController: ObservableObject {
     // control and shows a distinct stop glyph (macOS ⌘⇧5 parity). Otherwise use the app icon.
     button.image = isMenuBarActingAsStopControl ? (recordingStopImage ?? idleStatusImage) : idleStatusImage
     button.contentTintColor = nil
-    button.attributedTitle = statusItemAttributedTitle(for: recorder.state)
-    button.toolTip = statusItemTooltip(for: recorder.state)
+    button.attributedTitle = statusItemAttributedTitle(for: recordingState)
+    button.toolTip = statusItemTooltip(for: recordingState)
   }
 
   /// Pure decision for the menu bar title text. Empty when the time display is off or there is
@@ -291,7 +325,7 @@ final class AppStatusBarController: ObservableObject {
   private func statusItemAttributedTitle(for state: RecordingState) -> NSAttributedString {
     let title = Self.menuBarTitleString(
       for: state,
-      duration: recorder.formattedDuration,
+      duration: recordingDuration,
       showTime: showsRecordingTimeOnMenuBar
     )
 
@@ -317,13 +351,13 @@ final class AppStatusBarController: ObservableObject {
   private func statusItemTooltip(for state: RecordingState) -> String {
     // When the menu bar is the stop control, tell the user a click stops the recording.
     if isMenuBarActingAsStopControl {
-      return L10n.RecordingToolbar.clickToStop(recorder.formattedDuration)
+      return L10n.RecordingToolbar.clickToStop(recordingDuration)
     }
     switch state {
     case .recording:
-      return "\(L10n.RecordingToolbar.recordingInProgress) (\(recorder.formattedDuration))"
+      return "\(L10n.RecordingToolbar.recordingInProgress) (\(recordingDuration))"
     case .paused:
-      return "\(L10n.RecordingToolbar.recordingPaused) (\(recorder.formattedDuration))"
+      return "\(L10n.RecordingToolbar.recordingPaused) (\(recordingDuration))"
     case .preparing:
       return "Cinderdeck"
     case .stopping:
@@ -378,9 +412,9 @@ final class AppStatusBarController: ObservableObject {
     let shortcutManager = KeyboardShortcutManager.shared
 
     // Recording status indicator (when recording)
-    if recorder.state == .recording || recorder.state == .paused {
+    if recordingState == .recording || recordingState == .paused {
       let stopItem = NSMenuItem(
-        title: L10n.Menu.stopRecording(recorder.formattedDuration),
+        title: L10n.Menu.stopRecording(recordingDuration),
         action: #selector(stopRecordingAction),
         keyEquivalent: ""
       )
@@ -390,16 +424,16 @@ final class AppStatusBarController: ObservableObject {
       menu?.addItem(stopItem)
 
       let pauseResumeItem = NSMenuItem(
-        title: recorder.isPaused ? L10n.RecordingToolbar.resumeRecording : L10n.RecordingToolbar.pauseRecording,
+        title: recordingState == .paused ? L10n.RecordingToolbar.resumeRecording : L10n.RecordingToolbar.pauseRecording,
         action: #selector(togglePauseRecordingAction),
         keyEquivalent: ""
       )
       pauseResumeItem.target = self
       pauseResumeItem.image = NSImage(
-        systemSymbolName: recorder.isPaused ? "play.fill" : "pause.fill",
+        systemSymbolName: recordingState == .paused ? "play.fill" : "pause.fill",
         accessibilityDescription: nil
       )
-      pauseResumeItem.isEnabled = recorder.state == .recording || recorder.state == .paused
+      pauseResumeItem.isEnabled = true
       menu?.addItem(pauseResumeItem)
 
       menu?.addItem(NSMenuItem.separator())
@@ -616,7 +650,7 @@ final class AppStatusBarController: ObservableObject {
       applyConfiguredShortcut(item, for: .recording, using: shortcutManager)
       item.target = self
       item.image = NSImage(systemSymbolName: "record.circle", accessibilityDescription: nil)
-      item.isEnabled = viewModel.hasPermission && !recorder.isActive
+      item.isEnabled = viewModel.hasPermission && !recorder.isActive && !ReproRecordingController.shared.isBusy
       return item
 
     case .recordApplication:
@@ -634,7 +668,7 @@ final class AppStatusBarController: ObservableObject {
       )
       item.target = self
       item.image = NSImage(systemSymbolName: "square.on.square", accessibilityDescription: nil)
-      item.isEnabled = viewModel.hasPermission && !recorder.isActive
+      item.isEnabled = viewModel.hasPermission && !recorder.isActive && !ReproRecordingController.shared.isBusy
       return item
 
     case .openAnnotate:
@@ -763,8 +797,10 @@ final class AppStatusBarController: ObservableObject {
   }
 
   @objc private func togglePauseRecordingAction() {
-    logMenuAction("togglePauseRecording", context: ["state": "\(recorder.state)"])
-    recorder.togglePause()
+    logMenuAction("togglePauseRecording", context: ["state": "\(recordingState)"])
+    if ReproRecordingController.shared.ownsRecording {
+      Task { await ReproRecordingController.shared.togglePause() }
+    } else { recorder.togglePause() }
   }
 
   @objc private func captureAreaAction() {

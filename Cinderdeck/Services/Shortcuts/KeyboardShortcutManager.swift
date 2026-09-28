@@ -635,7 +635,9 @@ final class KeyboardShortcutManager {
 
   /// Recording-session activity source. Production reads the live recorder;
   /// tests can substitute a stub to exercise session gating deterministically.
-  var isRecordingSessionActive: () -> Bool = { ScreenRecordingManager.shared.isActive }
+  var isRecordingSessionActive: () -> Bool = {
+    ScreenRecordingManager.shared.isActive || ReproRecordingController.shared.browserInfo != nil
+  }
 
   /// Authoritative session-activity truth for the current observation-driven refresh.
   ///
@@ -831,7 +833,8 @@ final class KeyboardShortcutManager {
   /// `sessionActivityOverride`).
   private func observeRecordingSessionState() {
     ScreenRecordingManager.shared.$state
-      .map { $0 != .idle }
+      .combineLatest(ReproRecordingController.shared.$browserInfo)
+      .map { state, browser in state != .idle || browser != nil }
       .removeDuplicates()
       .dropFirst()
       .sink { [weak self] isActive in

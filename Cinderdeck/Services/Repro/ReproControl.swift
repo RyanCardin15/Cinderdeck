@@ -10,6 +10,7 @@ extension StackControlService {
     switch method {
     case "repro.start":
       var options = ReproRecordingController.Options()
+      options.browser = try BrowserReproOptions.parse(params)
       options.title = params["title"]?.stringValue
       options.display = params["display"]?.stringValue
       options.window = params["window"]?.stringValue
@@ -45,6 +46,7 @@ extension StackControlService {
         let (session, run) = try await controller.startRun(options, workspace: file.id, kind: kind, definitionID: task ?? workflow ?? "",
           actor: actor, runner: workspaceRunner)
         var result = reproPayload(session, lines: [], compact: true)
+        if let browser = controller.browserInfo { result["browser"] = browser.value }
         result["run"] = try JSONValue(encoding: run)
         result["next"] = .string("Recording while \(run.name) runs; it stops about 1.5s after the run finishes. Call wait_for_repro with this repro id, then repro_summary.")
         return .object(result)
@@ -54,8 +56,19 @@ extension StackControlService {
       }
       let session = try await controller.start(options, origin: .agent, actor: actor)
       var result = reproPayload(session, lines: [], compact: true)
+      if let browser = controller.browserInfo { result["browser"] = browser.value }
       result["next"] = .string("Recording. Reproduce the issue, call mark_repro at each step (outcome pass/fail for checks), then stop_repro_recording.")
       return .object(result)
+
+    case "repro.browser":
+      return try await controller.browserAction(url: params["url"]?.stringValue,
+        expression: params["expression"]?.stringValue, screenshot: params["screenshot"]?.boolValue ?? true)
+
+    case "repro.pause", "repro.resume":
+      guard controller.ownsRecording else { throw StackControlError.notFound("No agent or workspace repro is recording") }
+      let paused = method == "repro.pause"
+      if controller.isPaused != paused { await controller.togglePause() }
+      return .object(["paused": .bool(controller.isPaused)])
 
     case "repro.windows":
       let candidates = try await controller.windows()
@@ -137,6 +150,7 @@ extension StackControlService {
 
     case "repro.status":
       var result: [String: JSONValue] = ["recording": .bool(recorder.isCapturing)]
+      if let browser = controller.browserInfo { result["browser"] = browser.value }
       if let live = recorder.live {
         result["active"] = .object([
           "repro": .string(live.id.uuidString), "title": .string(live.title), "by": .string(live.actor),

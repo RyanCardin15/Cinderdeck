@@ -13,6 +13,8 @@ final class WorkspaceRunner: ObservableObject {
   private let secrets: any StackSecretsStoring
   private let environment: @Sendable (String) async throws -> [String: String]
   private var workers: [UUID: Task<Void, Never>] = [:]
+  /// Ephemeral connection details for a recording's browser; never persisted to workspace definitions.
+  private var runEnvironment: [UUID: [String: String]] = [:]
   private var processes: [UUID: ServiceProcess] = [:]
   private var buffers: [UUID: LogBuffer] = [:]
   /// Output of finished steps, read from their log once. The run view polls while
@@ -64,7 +66,8 @@ final class WorkspaceRunner: ObservableObject {
   }
 
   @discardableResult
-  func submit(workspace id: String, kind: WorkspaceRunKind, definitionID: String, actor: StackActor = .user) throws -> WorkspaceRun {
+  func submit(workspace id: String, kind: WorkspaceRunKind, definitionID: String, actor: StackActor = .user,
+    environment: [String: String] = [:]) throws -> WorkspaceRun {
     guard recovered && !recovering else { throw StackError.message("Run recovery is still in progress") }
     if let storageError { throw StackError.message(storageError) }
     guard activeRun(id) == nil else { throw StackError.message("A task or workflow is already running in this workspace") }
@@ -90,7 +93,11 @@ final class WorkspaceRunner: ObservableObject {
     // Persist before launching anything. Corrupt/unwritable history never silently loses ownership.
     try store.save([run] + runs)
     runs.insert(run, at: 0)
-    workers[run.id] = Task { [weak self] in await self?.execute(run.id, workspace: workspace) }
+    runEnvironment[run.id] = environment
+    workers[run.id] = Task { [weak self] in
+      await self?.execute(run.id, workspace: workspace)
+      self?.runEnvironment[run.id] = nil
+    }
     return run
   }
 
@@ -223,6 +230,7 @@ final class WorkspaceRunner: ObservableObject {
     service.port = task.port
     let launch = StackLaunchDefinition(stack: workspace, service: service)
     var env = launch.environment(shell: shell, secrets: values)
+    env.merge(runEnvironment[runID] ?? [:]) { _, recording in recording }
     env["CINDERDECK_WORKSPACE"] = workspace.id; env["CINDERDECK_TASK"] = task.id; env["CINDERDECK_RUN"] = runID.uuidString
     // A task's own server ports; in lanes these are assigned like service ports.
     if let port = task.port { env["CINDERDECK_TASK_PORT"] = String(port) }

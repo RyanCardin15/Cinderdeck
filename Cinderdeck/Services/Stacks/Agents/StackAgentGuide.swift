@@ -38,7 +38,7 @@ nonisolated enum StackAgentGuide {
   run. Results have a verdict (clean, errors, failed), error highlights with video times, and logFile, a plain-text log stamped \
   with video times. Investigate with repro_frame (images at first_error or a marker, with the output just before), repro_logs, \
   and repro_summary; export_repro hands the user a bundle. The user sees floating controls and can stop a recording, so keep \
-  recordings short. repro_recording_scope sets which workspaces the user's own toolbar recordings capture; change it only when asked.
+  recordings short. Headless Chromium: start_repro_recording headless=<url> launches an isolated browser, or cdp=<http-endpoint> attaches to one (page_id selects a tab). repro_browser inspects/controls the page with screenshots; browser console and failed requests are captured automatically. Normal stop/frame/logs/export work. Task runs receive CINDERDECK_BROWSER_ENDPOINT and CINDERDECK_BROWSER_PAGE_ID. repro_recording_scope sets which workspaces the user's own toolbar recordings capture; change it only when asked.
   Pull Request tabs: list_pr_views, then upsert_pr_view, select_pr_view, reorder_pr_views, or delete_pr_view with the returned \
   account and hostname. Use stable ids to avoid duplicate tabs. These change local tabs only and never post to GitHub.
   """
@@ -127,8 +127,9 @@ nonisolated enum StackAgentGuide {
     starts, crashes, workflow steps, and your own checks. Use it to reproduce bugs and to test UI changes end to end.
     - Record: `start_repro_recording` (MCP) or `\(command) repro start --title "Checkout" [--window Safari] [--max 120]`.
     - Pick a window exactly: `list_repro_windows` / `\(command) repro windows`, then `window_id` / `--window-id <id>`. The capture follows the window \
-      if it moves and includes its app's menus and dropdowns. A headless browser has no window and cannot be recorded; run it headed.
+      if it moves and includes its app's menus and dropdowns. For headless Chromium, use `headless` / `--headless <url>` to launch, or `cdp` / `--cdp <http-endpoint>` to attach. Browser output is captured automatically.
     - Choose logs: `workspace`/`workspaces` (CLI `--workspace a,b`), all running workspaces by default, or `logs: false` / `--no-logs` for none.
+    - Headless: `repro start --headless http://localhost:3000` or MCP `start_repro_recording` with `headless`. Use `repro_browser` / `repro browser` to inspect the page, navigate (`url` / `--url`) or evaluate JavaScript (`expression` / `--evaluate`). The returned browser endpoint/pageId also work with Playwright/Puppeteer. Normal stop, frame, logs, and export apply. Task runs receive CINDERDECK_BROWSER_ENDPOINT and CINDERDECK_BROWSER_PAGE_ID; use the existing page.
     - Add your own output, such as browser console messages: `add_repro_logs` or `\(command) repro append "text" --source browser` \
       (pipe lines on stdin to stream them). Lines and marks sent in parallel with the stop, or up to 2 minutes after it, still reach \
       that repro's log; after that pass `repro`. Lines added after the stop without a time are placed at the end of the video.
