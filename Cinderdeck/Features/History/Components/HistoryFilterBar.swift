@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct HistoryFilterBar: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Binding var selectedFilter: CaptureHistoryType?
   let counts: [CaptureHistoryType?: Int]
 
@@ -27,7 +28,7 @@ struct HistoryFilterBar: View {
           count: counts[filter.type] ?? 0,
           isSelected: selectedFilter == filter.type
         ) {
-          withAnimation(.easeInOut(duration: 0.15)) {
+          withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
             selectedFilter = filter.type
           }
         }
@@ -66,29 +67,19 @@ private struct FilterPill: View {
       .padding(.horizontal, 12)
       .padding(.vertical, 8)
       .background(backgroundFill)
-      .foregroundColor(isSelected ? .white : .primary.opacity(0.82))
-      .clipShape(Capsule())
+      .foregroundColor(isSelected ? DeckStyle.accent : .primary)
+      .clipShape(RoundedRectangle(cornerRadius: DeckStyle.controlRadius))
       .overlay(
-        Capsule()
-          .stroke(borderColor, lineWidth: 1)
+        RoundedRectangle(cornerRadius: DeckStyle.controlRadius)
+          .stroke(isSelected ? DeckStyle.accent.opacity(0.4) : DeckStyle.border, lineWidth: 1)
       )
     }
     .buttonStyle(.plain)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 
   private var backgroundFill: AnyShapeStyle {
-    if isSelected {
-      return AnyShapeStyle(
-        LinearGradient(
-          colors: [
-            Color.accentColor.opacity(0.98),
-            Color.accentColor.opacity(0.84),
-          ],
-          startPoint: .top,
-          endPoint: .bottom
-        )
-      )
-    }
+    if isSelected { return AnyShapeStyle(DeckStyle.accent.opacity(0.12)) }
 
     if backgroundStyle == .solid {
       return colorScheme == .dark

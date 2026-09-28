@@ -13,7 +13,7 @@ import SwiftUI
 enum ToolbarConstants {
   static let iconButtonSize: CGFloat = 32
   static let iconSize: CGFloat = 15
-  static let buttonCornerRadius: CGFloat = 6
+  static let buttonCornerRadius: CGFloat = DeckStyle.controlRadius
   static let toolbarCornerRadius: CGFloat = 14
   static let dividerHeight: CGFloat = 20
   static let itemSpacing: CGFloat = 4
@@ -36,23 +36,11 @@ struct NativeToolbarButtonStyle: ButtonStyle {
   }
 }
 
-// MARK: - Record Button Style (native text style, no colored background)
+// MARK: - Record Button Style
 
 struct RecordButtonStyle: ButtonStyle {
-  @State private var isHovered = false
-
   func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .font(.system(size: 13, weight: .regular))
-      .foregroundColor(.primary)
-      .padding(.horizontal, 12)
-      .padding(.vertical, 6)
-      .background(
-        RoundedRectangle(cornerRadius: ToolbarConstants.buttonCornerRadius)
-          .fill(Color.primary.opacity(configuration.isPressed ? 0.12 : 0))
-      )
-      .contentShape(RoundedRectangle(cornerRadius: ToolbarConstants.buttonCornerRadius))
-      .animation(ToolbarConstants.pressAnimation, value: configuration.isPressed)
+    DeckButtonStyle(prominent: true, tint: DeckStyle.danger).makeBody(configuration: configuration)
   }
 }
 
@@ -107,21 +95,11 @@ struct ToolbarIconButtonLabel: View {
   }
 }
 
-// MARK: - Stop Button Style (native monochrome, no red pill)
+// MARK: - Stop Button Style
 
 struct StopButtonStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .font(.system(size: 13, weight: .regular))
-      .foregroundColor(.primary)
-      .padding(.horizontal, 12)
-      .padding(.vertical, 6)
-      .background(
-        RoundedRectangle(cornerRadius: ToolbarConstants.buttonCornerRadius)
-          .fill(Color.primary.opacity(configuration.isPressed ? 0.12 : 0))
-      )
-      .contentShape(RoundedRectangle(cornerRadius: ToolbarConstants.buttonCornerRadius))
-      .animation(ToolbarConstants.pressAnimation, value: configuration.isPressed)
+    DeckButtonStyle(prominent: true, tint: DeckStyle.danger).makeBody(configuration: configuration)
   }
 }
 

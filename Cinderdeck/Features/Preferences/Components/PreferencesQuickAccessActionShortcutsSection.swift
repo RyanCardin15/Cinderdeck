@@ -25,7 +25,7 @@ struct QuickAccessActionShortcutsSection: View {
         title: L10n.PreferencesShortcuts.cardActionsEnableTitle,
         description: L10n.PreferencesShortcuts.cardActionsEnableDescription
       ) {
-        Toggle("", isOn: $store.isEnabled)
+        Toggle(L10n.PreferencesShortcuts.cardActionsEnableTitle, isOn: $store.isEnabled)
           .labelsHidden()
       }
 

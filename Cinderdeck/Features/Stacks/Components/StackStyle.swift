@@ -4,10 +4,10 @@ import SwiftUI
 enum StackPalette {
   static func color(phase: StackServicePhase?) -> Color {
     switch phase {
-    case .ready: return Color(red: 0.2, green: 0.78, blue: 0.45)
-    case .starting, .waiting, .stopping: return Color(red: 0.98, green: 0.72, blue: 0.2)
-    case .unhealthy: return .orange
-    case .crashed: return Color(red: 0.95, green: 0.3, blue: 0.3)
+    case .ready: return DeckStyle.success
+    case .starting, .waiting, .stopping: return DeckStyle.warning
+    case .unhealthy: return DeckStyle.warning
+    case .crashed: return DeckStyle.danger
     default: return .secondary
     }
   }
@@ -36,31 +36,16 @@ enum StackPalette {
 }
 
 struct StackSurface: ViewModifier {
-  var cornerRadius: CGFloat = 14
+  var cornerRadius: CGFloat = DeckStyle.cardRadius
   var selected = false
   var tint: Color? = nil
-  @Environment(\.colorScheme) private var colorScheme
   func body(content: Content) -> some View {
-    content
-      .background(
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-          .fill(colorScheme == .dark ? Color.white.opacity(0.06) : Color.white.opacity(0.62))
-      )
-      .background(
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-          .fill((tint ?? .clear).opacity(colorScheme == .dark ? 0.08 : 0.06))
-      )
-      .overlay(
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-          .strokeBorder(selected ? Color.accentColor.opacity(0.75) : (colorScheme == .dark ? Color.white.opacity(0.09) : Color.black.opacity(0.06)),
-            lineWidth: selected ? 1.5 : 1)
-      )
-      .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.16 : 0.05), radius: 6, x: 0, y: 2)
+    content.deckSurface(radius: cornerRadius, selected: selected, tint: tint ?? DeckStyle.accent)
   }
 }
 
 extension View {
-  func stackSurface(cornerRadius: CGFloat = 14, selected: Bool = false, tint: Color? = nil) -> some View {
+  func stackSurface(cornerRadius: CGFloat = DeckStyle.cardRadius, selected: Bool = false, tint: Color? = nil) -> some View {
     modifier(StackSurface(cornerRadius: cornerRadius, selected: selected, tint: tint))
   }
 
@@ -132,46 +117,23 @@ private struct StackHelpLayout: Layout {
   }
 }
 
-/// Capsule action button: `.primary(color)` is filled, `.secondary` is glass.
+/// Shared control shape and contrast across workspace windows and quick panels.
 struct StackPillButtonStyle: ButtonStyle {
   enum Kind { case primary(Color), secondary, destructive }
   var kind: Kind = .secondary
   var compact = false
-  @Environment(\.isEnabled) private var isEnabled
-  @Environment(\.colorScheme) private var colorScheme
   func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .font(.system(size: compact ? 10.5 : 11.5, weight: .semibold))
-      .labelStyle(StackTightLabelStyle())
-      .lineLimit(1)
-      .padding(.horizontal, compact ? 9 : 12)
-      .padding(.vertical, compact ? 4.5 : 6)
-      .foregroundColor(foreground)
-      .background(background, in: Capsule())
-      .overlay(Capsule().strokeBorder(border, lineWidth: 1))
-      .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1) : 0.45)
-      .scaleEffect(configuration.isPressed ? 0.97 : 1)
-      .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    DeckButtonStyle(prominent: prominent, compact: compact, tint: tint)
+      .makeBody(configuration: configuration)
   }
-  private var foreground: Color {
-    switch kind {
-    case .primary: return .white
-    case .secondary: return .primary.opacity(0.85)
-    case .destructive: return StackPalette.color(phase: .crashed)
-    }
+  private var prominent: Bool {
+    switch kind { case .secondary: return false; default: return true }
   }
-  private var background: AnyShapeStyle {
+  private var tint: Color {
     switch kind {
-    case .primary(let color): return AnyShapeStyle(LinearGradient(colors: [color.opacity(0.95), color.opacity(0.8)], startPoint: .top, endPoint: .bottom))
-    case .secondary: return AnyShapeStyle(colorScheme == .dark ? Color.white.opacity(0.09) : Color.white.opacity(0.8))
-    case .destructive: return AnyShapeStyle(StackPalette.color(phase: .crashed).opacity(0.12))
-    }
-  }
-  private var border: Color {
-    switch kind {
-    case .primary: return Color.white.opacity(0.14)
-    case .secondary: return colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.07)
-    case .destructive: return StackPalette.color(phase: .crashed).opacity(0.25)
+    case .primary(let color): return color
+    case .destructive: return DeckStyle.danger
+    case .secondary: return DeckStyle.accent
     }
   }
 }
@@ -182,7 +144,7 @@ struct StackTightLabelStyle: LabelStyle {
   }
 }
 
-/// Small circular icon button with a hover highlight.
+/// Compact icon button with a hover highlight.
 struct StackIconButton: View {
   let systemName: String
   let help: String
@@ -191,15 +153,14 @@ struct StackIconButton: View {
   let action: () -> Void
   @State private var hovering = false
   @Environment(\.isEnabled) private var isEnabled
-  @Environment(\.colorScheme) private var colorScheme
   var body: some View {
     Button(action: action) {
       Image(systemName: systemName)
         .font(.system(size: size * 0.42, weight: .semibold))
         .foregroundColor(tint ?? .primary.opacity(0.8))
         .frame(width: size, height: size)
-        .background(Circle().fill(hovering && isEnabled ? (colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.07)) : Color.clear))
-        .contentShape(Circle())
+        .background(hovering && isEnabled ? DeckStyle.hover : .clear, in: RoundedRectangle(cornerRadius: 6))
+        .contentShape(RoundedRectangle(cornerRadius: 6))
     }
     .buttonStyle(.plain)
     .opacity(isEnabled ? 1 : 0.35)
@@ -219,14 +180,14 @@ struct StackChip: View {
   private var neutral: Bool { tint == .secondary }
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 4) {
-      if let systemImage { Image(systemName: systemImage).font(.system(size: 8.5, weight: .bold)).foregroundColor(neutral ? .secondary : tint) }
+      if let systemImage { Image(systemName: systemImage).font(.system(size: 10, weight: .semibold)).foregroundColor(neutral ? .secondary : tint) }
       Text(text).font(monospaced ? .system(size: 10, weight: .semibold, design: .monospaced) : .system(size: 10, weight: .semibold))
         .foregroundColor(neutral ? .secondary : .primary.opacity(0.9))
         .lineLimit(wraps ? nil : 1).truncationMode(.middle)
         .fixedSize(horizontal: false, vertical: true)
     }
     .padding(.horizontal, 7).padding(.vertical, 3)
-    .background(tint.opacity(neutral ? 0.1 : 0.2), in: RoundedRectangle(cornerRadius: 9))
+    .background(tint.opacity(neutral ? 0.07 : 0.10), in: RoundedRectangle(cornerRadius: 9))
     .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(tint.opacity(neutral ? 0 : 0.3), lineWidth: 0.5))
   }
 }
@@ -293,7 +254,7 @@ struct StackClaimChip: View {
   var onRelease: (() -> Void)? = nil
   var body: some View {
     HStack(spacing: 5) {
-      Image(systemName: "lock.fill").font(.system(size: 8.5, weight: .bold))
+      Image(systemName: "lock.fill").font(.system(size: 10, weight: .semibold))
       Text(claim.holder.name).font(.system(size: 10, weight: .semibold))
       if let note = claim.note, !note.isEmpty { Text("· \(note)").font(.system(size: 10)).lineLimit(1).truncationMode(.tail) }
       if let onRelease {

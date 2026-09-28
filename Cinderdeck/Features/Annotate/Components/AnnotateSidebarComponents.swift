@@ -14,9 +14,7 @@ struct SidebarSectionHeader: View {
   let title: String
 
   var body: some View {
-    Text(title)
-      .font(Typography.sectionHeader)
-      .foregroundColor(SidebarColors.labelSecondary)
+    DeckSectionLabel(title: title).padding(.bottom, 2)
   }
 }
 
@@ -36,6 +34,8 @@ struct GradientPresetButton: View {
         .sidebarItemStyle(isSelected: isSelected)
     }
     .buttonStyle(.plain)
+    .accessibilityLabel(preset.displayName)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 }
 
@@ -63,6 +63,8 @@ struct WallpaperPresetButton: View {
         .sidebarItemStyle(isSelected: isSelected)
     }
     .buttonStyle(.plain)
+    .accessibilityLabel(preset.displayName)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 }
 
@@ -93,6 +95,8 @@ struct CustomWallpaperButton: View {
         .sidebarItemStyle(isSelected: isSelected)
       }
       .buttonStyle(.plain)
+      .accessibilityLabel(url.lastPathComponent)
+      .accessibilityAddTraits(isSelected ? .isSelected : [])
 
       if isHovering {
         Button(action: onRemove) {
@@ -141,6 +145,7 @@ struct AddWallpaperButton: View {
         .actionButtonStyle()
     }
     .buttonStyle(.plain)
+    .accessibilityLabel("Add wallpaper")
   }
 }
 
@@ -168,6 +173,8 @@ struct DefaultWallpaperButton: View {
       .sidebarItemStyle(isSelected: isSelected)
     }
     .buttonStyle(.plain)
+    .accessibilityLabel(item.name)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
     .onAppear {
       loadCachedThumbnail()
     }
@@ -237,6 +244,8 @@ struct BlurredBackgroundEffectButton: View {
     }
     .buttonStyle(.plain)
     .help(effect.displayName)
+    .accessibilityLabel(effect.displayName)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 
   @ViewBuilder
@@ -347,6 +356,8 @@ struct ColorSwatch: View {
         .colorSwatchStyle(isSelected: isSelected)
     }
     .buttonStyle(.plain)
+    .accessibilityLabel(AnnotateColorPaletteStore.accessibilityName(for: color))
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 }
 
@@ -362,6 +373,8 @@ struct AnnotateColorSwatchButton: View {
       swatch
     }
     .buttonStyle(.plain)
+    .accessibilityLabel(AnnotateColorPaletteStore.accessibilityName(for: color))
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
     .overlay(alignment: .topTrailing) {
       deleteButton
     }
@@ -878,6 +891,7 @@ struct SliderRow: View {
         }
       )
       .controlSize(.small)
+      .accessibilityLabel(label)
     }
     .onAppear { localValue = value }
     .onChange(of: value) { newValue in
@@ -937,6 +951,8 @@ struct AlignmentCell: View {
         .cornerRadius(Size.radiusXs)
     }
     .buttonStyle(.plain)
+    .accessibilityLabel(alignment.displayName)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
     .onHover { isHovering = $0 }
   }
 

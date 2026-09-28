@@ -29,7 +29,9 @@ struct WorkspaceComponentEditor: View {
   }
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
-      Text("\(context.componentID == nil ? "New" : "Edit") \(context.kind.rawValue)").font(.title2.bold())
+      DeckSheetHeader(icon: context.kind == .task ? "terminal" : "point.3.connected.trianglepath.dotted",
+        title: "\(context.componentID == nil ? "New" : "Edit") \(context.kind.rawValue)",
+        detail: context.kind == .task ? "A command with a result, duration, and saved output." : "A repeatable sequence of tasks and service actions.")
       if let service = context.sourceServiceID {
         Label("Move \(service) from Services to Tasks", systemImage: "arrow.right.circle").foregroundColor(.accentColor)
         Text("The command will run once and report its exit status. Its old service entry is removed when you save.").font(.callout).foregroundColor(.secondary)
@@ -37,8 +39,14 @@ struct WorkspaceComponentEditor: View {
       Text(context.kind == .task ? "A task finishes with a result. Use services for commands that keep running."
         : "Steps run in order. A failure skips the remaining steps.").foregroundColor(.secondary)
       HStack {
-        TextField("ID (e.g. integration-tests)", text: $identifier).disabled(context.componentID != nil)
-        TextField("Display name", text: $name)
+        VStack(alignment: .leading, spacing: 6) {
+          DeckSectionLabel(title: "Identifier")
+          TextField("e.g. integration-tests", text: $identifier).disabled(context.componentID != nil).accessibilityLabel("Identifier")
+        }
+        VStack(alignment: .leading, spacing: 6) {
+          DeckSectionLabel(title: "Display name")
+          TextField("Display name", text: $name).accessibilityLabel("Display name")
+        }
       }.textFieldStyle(.roundedBorder)
       if context.kind == .task {
         Text("Command").font(.headline)
@@ -79,9 +87,9 @@ struct WorkspaceComponentEditor: View {
                 Text("\(index + 1).").monospacedDigit().foregroundColor(.secondary)
                 Text(steps[index].replacingOccurrences(of: ":", with: " "))
                 Spacer()
-                Button { steps.swapAt(index, index - 1) } label: { Image(systemName: "arrow.up") }.disabled(index == 0).help("Move step up")
-                Button { steps.swapAt(index, index + 1) } label: { Image(systemName: "arrow.down") }.disabled(index == steps.count - 1).help("Move step down")
-                Button { steps.remove(at: index) } label: { Image(systemName: "minus.circle") }.help("Remove step")
+                Button { steps.swapAt(index, index - 1) } label: { Image(systemName: "arrow.up") }.disabled(index == 0).help("Move step up").accessibilityLabel("Move step up")
+                Button { steps.swapAt(index, index + 1) } label: { Image(systemName: "arrow.down") }.disabled(index == steps.count - 1).help("Move step down").accessibilityLabel("Move step down")
+                Button { steps.remove(at: index) } label: { Image(systemName: "minus.circle") }.help("Remove step").accessibilityLabel("Remove step")
               }.padding(8).background(Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 6))
             }
           }
@@ -93,7 +101,7 @@ struct WorkspaceComponentEditor: View {
       HStack {
         Spacer()
         Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-        Button("Save \(context.kind.rawValue)", action: save).buttonStyle(.borderedProminent)
+        Button("Save \(context.kind.rawValue)", action: save).buttonStyle(DeckButtonStyle(prominent: true))
           .disabled(source == nil || identifier.isEmpty || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
       }
     }.padding(24).frame(width: 630)

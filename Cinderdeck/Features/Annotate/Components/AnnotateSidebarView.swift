@@ -672,6 +672,8 @@ struct CompactColorSwatchGrid: View {
               .colorSwatchStyle(isSelected: AnnotateColorPaletteStore.colorsMatch(selectedColor, color))
           }
           .buttonStyle(.plain)
+          .accessibilityLabel(AnnotateColorPaletteStore.accessibilityName(for: color))
+          .accessibilityAddTraits(AnnotateColorPaletteStore.colorsMatch(selectedColor, color) ? .isSelected : [])
         }
 
         ForEach(paletteStore.customColors, id: \.self) { color in
@@ -725,7 +727,7 @@ struct CompactSliderRow: View {
           .font(Typography.labelSmall)
           .foregroundColor(SidebarColors.labelSecondary)
         Spacer()
-        TextField("", text: $textValue)
+        TextField(label, text: $textValue)
           .font(Typography.labelSmall)
           .foregroundColor(SidebarColors.labelSecondary.opacity(0.9))
           .multilineTextAlignment(.trailing)
@@ -772,6 +774,7 @@ struct CompactSliderRow: View {
         }
       )
       .controlSize(.small)
+      .accessibilityLabel(label)
     }
     .onAppear { localValue = value }
     .onChange(of: localValue) { newValue in

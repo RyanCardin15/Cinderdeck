@@ -16,30 +16,28 @@ struct SettingRow<Content: View>: View {
 
   var body: some View {
     HStack(spacing: 12) {
-      Image(systemName: icon)
-        .font(.title2)
-        .foregroundColor(.secondary)
-        .frame(width: 28)
+      DeckFeatureIcon(systemName: icon, size: 30, tint: .secondary)
 
-      VStack(alignment: .leading, spacing: 2) {
+      VStack(alignment: .leading, spacing: 4) {
         if let tooltip {
           Text(title)
-            .fontWeight(.medium)
+            .font(.system(size: 13, weight: .medium))
             .hint(tooltip, variant: .icon(.info))
         } else {
           Text(title)
-            .fontWeight(.medium)
+            .font(.system(size: 13, weight: .medium))
         }
         if let description {
           Text(description)
             .font(.caption)
             .foregroundColor(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
       }
 
       Spacer()
       content()
     }
-    .padding(.vertical, 4)
+    .padding(.vertical, 7)
   }
 }

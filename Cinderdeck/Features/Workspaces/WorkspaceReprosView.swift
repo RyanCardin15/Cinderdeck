@@ -137,7 +137,7 @@ struct WorkspaceReprosView: View {
       if controller.ownsRecording && !live.isFinalizing {
         Button { _ = try? recorder.addMarker(label: "Marked by you", kind: .note, by: StackActor.user.label) } label: { Label("Mark", systemImage: "flag") }
         Button { Task { do { _ = try await controller.stop() } catch { self.error = error.localizedDescription } } } label: { Label("Stop", systemImage: "stop.fill") }
-          .buttonStyle(.borderedProminent).tint(.red)
+          .buttonStyle(DeckButtonStyle(prominent: true)).tint(.red)
       } else if !live.isFinalizing {
         Text("Stop from the recording controls").font(.caption).foregroundColor(.secondary)
       }
@@ -146,13 +146,10 @@ struct WorkspaceReprosView: View {
   }
 
   private var emptyState: some View {
-    VStack(spacing: 14) {
-      Image(systemName: "film.stack").font(.system(size: 34)).foregroundColor(.accentColor)
-      Text("Recordings with logs").font(.title2.bold())
-      Text("When you record your screen, everything \(file.name) prints is saved to a .log file next to the video. Every line is stamped with its time in the video, so you can see what the app logged at the moment something went wrong.")
-        .foregroundColor(.secondary).multilineTextAlignment(.center).frame(maxWidth: 480)
+    DeckEmptyState(icon: "film.stack", title: "Recordings with logs",
+      detail: "Record your screen with \(file.name)'s output alongside it. Every log line is stamped with its position in the video.") {
       HStack {
-        Button("Record Screen with Logs") { record() }.buttonStyle(.borderedProminent)
+        Button("Record Screen with Logs") { record() }.buttonStyle(DeckButtonStyle(prominent: true))
         if let workflow = file.definition?.workflows.first {
           Button("Record \(workflow.name)") { record(kind: .workflow, id: workflow.id) }
         }
@@ -357,7 +354,7 @@ private struct WorkspaceReproDetail: View {
         }
         HStack {
           Button { Task { await ReproLibraryActions.revealLog(session) } } label: { Label("Show Log File", systemImage: "doc.text.magnifyingglass") }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(DeckButtonStyle(prominent: true))
             .help("The .log file with every line stamped with its video time")
           Button {
             Task { await ReproLibraryActions.copyLog(session); copied = true; try? await Task.sleep(nanoseconds: 2_000_000_000); copied = false }

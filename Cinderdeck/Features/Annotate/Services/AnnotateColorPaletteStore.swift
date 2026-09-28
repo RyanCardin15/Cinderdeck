@@ -242,6 +242,20 @@ final class AnnotateColorPaletteStore: ObservableObject {
     return value.alpha <= 0.001
   }
 
+  static func accessibilityName(for color: Color) -> String {
+    if isClear(color) { return "Transparent" }
+    let namedColors: [(Color, String)] = [
+      (.red, "Red"), (.orange, "Orange"), (.yellow, "Yellow"), (.green, "Green"),
+      (.blue, "Blue"), (.purple, "Purple"), (.pink, "Pink"), (.gray, "Gray"),
+      (.white, "White"), (.black, "Black"),
+    ]
+    if let name = namedColors.first(where: { $0.0 == color })?.1 { return name }
+    guard let value = rgbaColor(for: color) else { return "Custom color" }
+    return String(format: "Color #%02X%02X%02X, %.0f percent opacity",
+      Int((value.red * 255).rounded()), Int((value.green * 255).rounded()),
+      Int((value.blue * 255).rounded()), value.alpha * 100)
+  }
+
   private func commitCustomColors(_ values: [RGBAColor]) {
     storedColors = Self.sanitized(values, maximumCount: Self.maximumCustomColorCount, allowsClear: false)
     customColors = storedColors.map(\.color)

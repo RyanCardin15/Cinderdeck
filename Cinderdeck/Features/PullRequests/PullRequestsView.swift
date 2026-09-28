@@ -13,7 +13,7 @@ struct PullRequestsView: View {
   var body: some View {
     HSplitView {
       if showsSidebar {
-        sidebar.frame(minWidth: 180, idealWidth: 228, maxWidth: 480)
+        sidebar.frame(minWidth: 200, idealWidth: 240, maxWidth: 300)
       }
       VStack(spacing: 0) {
         header
@@ -34,7 +34,8 @@ struct PullRequestsView: View {
       }
       .frame(minWidth: 740)
     }
-    .background(Color(nsColor: .windowBackgroundColor))
+    .background(DeckStyle.canvas)
+    .tint(DeckStyle.accent)
     .preferredColorScheme(theme.systemAppearance)
     .task { if model.login == nil { await model.connect() } }
     .onReceive(NotificationCenter.default.publisher(for: .githubAccountChanged)) { notification in
@@ -56,10 +57,10 @@ struct PullRequestsView: View {
   private var sidebar: some View {
     VStack(alignment: .leading, spacing: 0) {
       HStack(spacing: 10) {
-        Image(systemName: "arrow.triangle.pull").font(.system(size: 22, weight: .semibold)).foregroundStyle(Color.accentColor)
-        VStack(alignment: .leading, spacing: 2) {
-          Text("Cinderdeck").font(.system(size: 15, weight: .semibold))
-          Text("GITHUB WORKSPACE").font(.system(size: 9, weight: .semibold)).tracking(1.1).foregroundStyle(.secondary)
+        DeckFeatureIcon(systemName: "arrow.triangle.pull", size: 30)
+        VStack(alignment: .leading, spacing: 3) {
+          Text("Cinderdeck").font(DeckStyle.section)
+          DeckSectionLabel(title: "GitHub workspace")
         }
       }.padding(20)
       Button { model.selectRepository(nil) } label: {
@@ -70,8 +71,7 @@ struct PullRequestsView: View {
           if (model.filters.repository == nil && model.filters.organization == nil) { Circle().fill(Color.accentColor).frame(width: 5, height: 5) }
         }.padding(10).background((model.filters.repository == nil && model.filters.organization == nil) ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 7))
       }.buttonStyle(.plain).padding(.horizontal, 10).help("Pull requests you are involved in, across GitHub")
-      Text("ORGANIZATIONS").font(.system(size: 10, weight: .semibold)).tracking(0.8)
-        .foregroundStyle(.secondary).padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 8)
+      DeckSectionLabel(title: "Organizations").padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 8)
       Picker("Organization", selection: Binding(get: { model.filters.organization ?? "" }, set: { model.selectOrganization($0.isEmpty ? nil : $0) })) {
         Text("All repositories").tag("")
         ForEach(model.availableOrganizations, id: \.self) { Text($0).tag($0) }
@@ -87,7 +87,7 @@ struct PullRequestsView: View {
         Text("Couldn’t load all organizations. \(message)").font(.caption).foregroundStyle(.orange).padding(.horizontal, 14)
       }
       HStack {
-        Text("REPOSITORIES").font(.system(size: 10, weight: .semibold)).tracking(0.8).foregroundStyle(.secondary)
+        DeckSectionLabel(title: "Repositories")
         Spacer()
         if model.connecting || (model.loadingRepositories || model.loadingSelectedOrganization) {
           ProgressView().progressViewStyle(.circular).controlSize(.small)
@@ -98,11 +98,8 @@ struct PullRequestsView: View {
         }.buttonStyle(.plain).help(model.starredOnly ? "Show all repositories" : "Show only starred repositories")
           .accessibilityLabel("Show only starred repositories").accessibilityValue(model.starredOnly ? "On" : "Off")
       }.padding(.horizontal, 20).padding(.top, 26).padding(.bottom, 12)
-      HStack(spacing: 6) {
-        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-        TextField("Find a repository", text: $model.repositorySearch).textFieldStyle(.plain)
-          .accessibilityIdentifier("prs.repositorySearch")
-      }.font(.system(size: 11)).padding(8).background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 6))
+      DeckSearchField(placeholder: "Find a repository", text: $model.repositorySearch)
+        .accessibilityIdentifier("prs.repositorySearch")
         .padding(.horizontal, 14).padding(.bottom, 10)
       if let message = model.repositoryError {
         VStack(alignment: .leading, spacing: 6) {
@@ -161,7 +158,7 @@ struct PullRequestsView: View {
           .buttonStyle(.plain).disabled(model.connecting || model.submitting || !model.starring.isEmpty)
           .help("Reload repositories and reconnect to the active GitHub CLI account").accessibilityLabel("Reconnect GitHub")
       }.padding(16)
-    }.background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+    }.background(DeckStyle.sidebar)
   }
 
   private func repositoryGroups(starred: Bool) -> [PullRequestsViewModel.RepositoryGroup] {
@@ -226,7 +223,7 @@ struct PullRequestsView: View {
       Button { showsSidebar.toggle() } label: { Image(systemName: "sidebar.left") }
         .buttonStyle(.plain).help("Toggle repositories").accessibilityLabel("Toggle repository sidebar")
       VStack(alignment: .leading, spacing: 4) {
-        Text("Pull requests").font(.system(size: 21, weight: .semibold))
+        Text("Pull requests").font(DeckStyle.title).accessibilityAddTraits(.isHeader)
         Text(model.filters.repository ?? model.filters.organization.map { "\($0) · all accessible repositories" } ?? "My work · pull requests you're involved in")
           .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
       }
@@ -238,9 +235,9 @@ struct PullRequestsView: View {
           .help(message).accessibilityLabel(message).accessibilityIdentifier("prs.loading")
       }
       Button { showsFilters.toggle() } label: { Label("Filters", systemImage: "line.3.horizontal.decrease") }
-        .buttonStyle(.bordered).controlSize(.small).disabled(model.login == nil)
+        .buttonStyle(DeckButtonStyle(compact: true)).disabled(model.login == nil)
       Button { model.scheduleSearch(immediate: true, force: true) } label: { Image(systemName: "arrow.clockwise") }
-        .buttonStyle(.bordered).controlSize(.small).help("Refresh pull requests (⌘R)").accessibilityLabel("Refresh pull requests")
+        .buttonStyle(DeckButtonStyle(compact: true)).help("Refresh pull requests (⌘R)").accessibilityLabel("Refresh pull requests")
         .keyboardShortcut("r", modifiers: .command).disabled(model.login == nil || model.loading)
     }.padding(.horizontal, 22).padding(.vertical, 18)
   }
@@ -326,27 +323,21 @@ struct PullRequestsView: View {
         else if let updated = model.lastUpdated { Text("Updated \(updated.formatted(date: .omitted, time: .shortened))") }
       }.font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary).padding(.horizontal, 22).padding(.vertical, 12)
       if model.requests.isEmpty {
-        VStack(spacing: 12) {
+        DeckEmptyState(icon: model.error == nil ? "tray" : "wifi.exclamationmark",
+          title: model.loading ? "Loading pull requests…" : model.error == nil ? "You're all caught up" : "Couldn't load pull requests",
+          detail: model.loading ? (model.filters.repository ?? model.filters.organization ?? "Fetching your latest work from GitHub.")
+            : model.error == nil ? "No pull requests match this view. Try another tab or adjust your filters."
+            : "Your filters are saved. Retry when you're ready.") {
           if model.loading {
-            ProgressView().progressViewStyle(.circular).controlSize(.large)
-              .padding(.bottom, 4)
-              .accessibilityLabel("Loading pull requests")
+            ProgressView().controlSize(.small).accessibilityLabel("Loading pull requests")
               .accessibilityIdentifier("prs.loadingRequests")
           } else {
-            Image(systemName: model.error == nil ? "tray" : "wifi.exclamationmark")
-              .font(.system(size: 32, weight: .light)).foregroundStyle(.secondary)
-          }
-          Text(model.loading ? "Loading pull requests…" : model.error == nil ? "You're all caught up" : "Couldn't load pull requests")
-            .font(.system(size: 17, weight: .semibold))
-          Text(model.loading ? (model.filters.repository ?? model.filters.organization ?? "Fetching your latest work from GitHub.") : model.error == nil ? "No pull requests match this view. Try another tab or adjust your filters." : "Your filters are saved. Retry when you're ready.")
-            .font(.system(size: 12)).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 320)
-          if !model.loading {
             Button(model.error == nil ? "Clear filters" : "Retry") {
               if model.error == nil { model.filters = PRFilters(repository: model.filters.repository, organization: model.filters.organization, state: .all) }
               else { model.scheduleSearch(immediate: true, force: true) }
-            }.buttonStyle(.bordered)
+            }.buttonStyle(DeckButtonStyle())
           }
-        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
       } else {
         List(selection: Binding(get: { model.selectedID }, set: { model.select($0) })) {
           ForEach(model.requests) { request in
@@ -357,7 +348,7 @@ struct PullRequestsView: View {
                 Button("Copy link") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(request.url, forType: .string) }
               }
           }
-        }.listStyle(.inset).accessibilityLabel("Pull requests")
+        }.listStyle(.inset).scrollContentBackground(.hidden).accessibilityLabel("Pull requests")
         if model.canLoadMore {
           Button { Task { await model.loadMore() } } label: {
             HStack(spacing: 8) {
@@ -376,11 +367,9 @@ struct PullRequestsView: View {
   }
 
   private var connectionState: some View {
-    VStack(spacing: 16) {
-      Image(systemName: "arrow.triangle.pull").font(.system(size: 40, weight: .light)).foregroundStyle(Color.accentColor)
-      Text(model.connecting ? "Connecting to GitHub" : "Your GitHub, in one place").font(.system(size: 23, weight: .semibold))
-      Text("Browse repositories, keep your favorites close, and give every review a clear place to land.")
-        .font(.system(size: 13)).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 390)
+    DeckEmptyState(icon: "arrow.triangle.pull",
+      title: model.connecting ? "Connecting to GitHub" : "Your GitHub, in one place",
+      detail: "Browse repositories, keep favorites close, and bring every review into focus.") {
       if model.connecting {
         ProgressView().progressViewStyle(.circular).controlSize(.large)
           .accessibilityLabel("Connecting to GitHub")
@@ -389,7 +378,7 @@ struct PullRequestsView: View {
         if let error = model.error { Text(error).font(.callout).foregroundStyle(.orange).textSelection(.enabled).frame(maxWidth: 460) }
         Text("Connect your account in Preferences → GitHub.").font(.callout)
         Button("Open GitHub preferences") { PreferencesWindowController.shared.show(tab: .github) }
-          .buttonStyle(.borderedProminent)
+          .buttonStyle(DeckButtonStyle(prominent: true))
 
       }
     }.padding(30).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -472,7 +461,7 @@ private struct PRSavedViewEditor: View {
         Spacer()
         Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
         Button("Save view") { if model.saveView(name: name, replacing: context.view?.id) { dismiss() } }
-          .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+          .buttonStyle(DeckButtonStyle(prominent: true)).keyboardShortcut(.defaultAction)
           .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || name.count > 40)
       }
     }.padding(26).frame(width: 440).onAppear { name = context.view?.name ?? "" }

@@ -139,7 +139,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.includeInScreenshotsTitle,
               description: L10n.PreferencesCapture.includeInScreenshotsDescription
             ) {
-              Toggle("", isOn: $includeOwnAppInScreenshots)
+              Toggle(L10n.PreferencesCapture.includeInScreenshotsTitle, isOn: $includeOwnAppInScreenshots)
                 .labelsHidden()
             }
 
@@ -148,7 +148,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.includeInRecordingsTitle,
               description: L10n.PreferencesCapture.includeInRecordingsDescription
             ) {
-              Toggle("", isOn: $includeOwnAppInRecordings)
+              Toggle(L10n.PreferencesCapture.includeInRecordingsTitle, isOn: $includeOwnAppInRecordings)
                 .labelsHidden()
             }
           }
@@ -163,7 +163,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.hideDesktopIconsTitle,
               description: L10n.PreferencesCapture.hideDesktopIconsDescription
             ) {
-              Toggle("", isOn: $hideDesktopIcons)
+              Toggle(L10n.PreferencesCapture.hideDesktopIconsTitle, isOn: $hideDesktopIcons)
                 .labelsHidden()
             }
 
@@ -172,7 +172,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.hideDesktopWidgetsTitle,
               description: L10n.PreferencesCapture.hideDesktopWidgetsDescription
             ) {
-              Toggle("", isOn: $hideDesktopWidgets)
+              Toggle(L10n.PreferencesCapture.hideDesktopWidgetsTitle, isOn: $hideDesktopWidgets)
                 .labelsHidden()
             }
           }
@@ -183,7 +183,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.showSelectionAreaOverlayTitle,
               description: L10n.PreferencesCapture.showSelectionAreaOverlayDescription
             ) {
-              Toggle("", isOn: $showSelectionAreaOverlay)
+              Toggle(L10n.PreferencesCapture.showSelectionAreaOverlayTitle, isOn: $showSelectionAreaOverlay)
                 .labelsHidden()
             }
 
@@ -192,7 +192,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.autoDetectWindowUnderCursorTitle,
               description: L10n.PreferencesCapture.autoDetectWindowUnderCursorDescription
             ) {
-              Toggle("", isOn: $autoDetectWindowUnderCursor)
+              Toggle(L10n.PreferencesCapture.autoDetectWindowUnderCursorTitle, isOn: $autoDetectWindowUnderCursor)
                 .labelsHidden()
                 .onChange(of: autoDetectWindowUnderCursor) { isOn in
                   if !isOn {
@@ -206,7 +206,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.autoDetectElementUnderCursorTitle,
               description: L10n.PreferencesCapture.autoDetectElementUnderCursorDescription
             ) {
-              Toggle("", isOn: $autoDetectElementUnderCursor)
+              Toggle(L10n.PreferencesCapture.autoDetectElementUnderCursorTitle, isOn: $autoDetectElementUnderCursor)
                 .labelsHidden()
                 .disabled(!autoDetectWindowUnderCursor)
             }
@@ -218,7 +218,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.showMagnifierByDefaultTitle,
               description: L10n.PreferencesCapture.showMagnifierByDefaultDescription
             ) {
-              Toggle("", isOn: $showMagnifierByDefault)
+              Toggle(L10n.PreferencesCapture.showMagnifierByDefaultTitle, isOn: $showMagnifierByDefault)
                 .labelsHidden()
                 .onChange(of: showMagnifierByDefault) { isOn in
                   if !isOn {
@@ -232,7 +232,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.reverseMagnifierZoomDirectionTitle,
               description: L10n.PreferencesCapture.reverseMagnifierZoomDirectionDescription
             ) {
-              Toggle("", isOn: $reverseMagnifierZoomDirection)
+              Toggle(L10n.PreferencesCapture.reverseMagnifierZoomDirectionTitle, isOn: $reverseMagnifierZoomDirection)
                 .labelsHidden()
             }
 
@@ -241,7 +241,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.showMagnifierColorPanelTitle,
               description: L10n.PreferencesCapture.showMagnifierColorPanelDescription
             ) {
-              Toggle("", isOn: $showMagnifierColorPanel)
+              Toggle(L10n.PreferencesCapture.showMagnifierColorPanelTitle, isOn: $showMagnifierColorPanel)
                 .labelsHidden()
                 .disabled(!showMagnifierByDefault)
             }
@@ -257,7 +257,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.showCursorTitle,
               description: L10n.PreferencesCapture.showCursorDescription
             ) {
-              Toggle("", isOn: $screenshotShowCursor)
+              Toggle(L10n.PreferencesCapture.showCursorTitle, isOn: $screenshotShowCursor)
                 .labelsHidden()
             }
 
@@ -266,7 +266,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.includeWindowShadowTitle,
               description: L10n.PreferencesCapture.includeWindowShadowDescription
             ) {
-              Toggle("", isOn: $captureIncludeWindowShadow)
+              Toggle(L10n.PreferencesCapture.includeWindowShadowTitle, isOn: $captureIncludeWindowShadow)
                 .labelsHidden()
             }
 
@@ -275,7 +275,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.freezeAreaTitle,
               description: L10n.PreferencesCapture.freezeAreaDescription
             ) {
-              Toggle("", isOn: $freezeAreaCapture)
+              Toggle(L10n.PreferencesCapture.freezeAreaTitle, isOn: $freezeAreaCapture)
                 .labelsHidden()
             }
 
@@ -284,7 +284,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.livePassthroughTitle,
               description: L10n.PreferencesCapture.livePassthroughDescription
             ) {
-              Toggle("", isOn: $livePassthrough)
+              Toggle(L10n.PreferencesCapture.livePassthroughTitle, isOn: $livePassthrough)
                 .labelsHidden()
             }
 
@@ -370,7 +370,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.showSessionHintsTitle,
               description: L10n.PreferencesCapture.showSessionHintsDescription
             ) {
-              Toggle("", isOn: $scrollingCaptureShowHints)
+              Toggle(L10n.PreferencesCapture.showSessionHintsTitle, isOn: $scrollingCaptureShowHints)
                 .labelsHidden()
             }
 
@@ -399,7 +399,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.ocrSuccessNotificationTitle,
               description: L10n.PreferencesCapture.ocrSuccessNotificationDescription
             ) {
-              Toggle("", isOn: $ocrSuccessNotification)
+              Toggle(L10n.PreferencesCapture.ocrSuccessNotificationTitle, isOn: $ocrSuccessNotification)
                 .labelsHidden()
             }
 
@@ -414,7 +414,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.ocrLinkDetectionTitle,
               description: L10n.PreferencesCapture.ocrLinkDetectionDescription
             ) {
-              Toggle("", isOn: $ocrLinkDetection)
+              Toggle(L10n.PreferencesCapture.ocrLinkDetectionTitle, isOn: $ocrLinkDetection)
                 .labelsHidden()
             }
           }
@@ -531,7 +531,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.showCursorTitle,
               description: L10n.PreferencesCapture.recordingShowCursorDescription
             ) {
-              Toggle("", isOn: $recordingShowCursor)
+              Toggle(L10n.PreferencesCapture.showCursorTitle, isOn: $recordingShowCursor)
                 .labelsHidden()
             }
 
@@ -540,7 +540,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.recordingDimNonSelectedAreaTitle,
               description: L10n.PreferencesCapture.recordingDimNonSelectedAreaDescription
             ) {
-              Toggle("", isOn: $recordingDimNonSelectedArea)
+              Toggle(L10n.PreferencesCapture.recordingDimNonSelectedAreaTitle, isOn: $recordingDimNonSelectedArea)
                 .labelsHidden()
             }
 
@@ -549,7 +549,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.rememberLastAreaTitle,
               description: L10n.PreferencesCapture.rememberLastAreaDescription
             ) {
-              Toggle("", isOn: $rememberLastArea)
+              Toggle(L10n.PreferencesCapture.rememberLastAreaTitle, isOn: $rememberLastArea)
                 .labelsHidden()
             }
           }
@@ -572,7 +572,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.hoverBarVisibleTitle,
               description: L10n.PreferencesCapture.hoverBarVisibleDescription
             ) {
-              Toggle("", isOn: $recordingHoverBarVisible)
+              Toggle(L10n.PreferencesCapture.hoverBarVisibleTitle, isOn: $recordingHoverBarVisible)
                 .labelsHidden()
             }
 
@@ -581,7 +581,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.menuBarTimeTitle,
               description: L10n.PreferencesCapture.menuBarTimeDescription
             ) {
-              Toggle("", isOn: $recordingShowTimeOnMenuBar)
+              Toggle(L10n.PreferencesCapture.menuBarTimeTitle, isOn: $recordingShowTimeOnMenuBar)
                 .labelsHidden()
             }
           }
@@ -712,7 +712,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.systemAudioTitle,
               description: L10n.PreferencesCapture.systemAudioDescription
             ) {
-              Toggle("", isOn: $captureAudio)
+              Toggle(L10n.PreferencesCapture.systemAudioTitle, isOn: $captureAudio)
                 .labelsHidden()
             }
 
@@ -721,7 +721,7 @@ struct CaptureSettingsView: View {
               title: L10n.Onboarding.microphone,
               description: L10n.PreferencesCapture.microphoneDescription
             ) {
-              Toggle("", isOn: Binding(
+              Toggle(L10n.Onboarding.microphone, isOn: Binding(
                 get: { captureMicrophone },
                 set: { newValue in
                   if newValue {
@@ -773,7 +773,7 @@ struct CaptureSettingsView: View {
               title: L10n.PreferencesCapture.autoCropSubjectTitle,
               description: L10n.PreferencesCapture.autoCropSubjectDescription
             ) {
-              Toggle("", isOn: $backgroundCutoutAutoCropEnabled)
+              Toggle(L10n.PreferencesCapture.autoCropSubjectTitle, isOn: $backgroundCutoutAutoCropEnabled)
                 .labelsHidden()
             }
           }

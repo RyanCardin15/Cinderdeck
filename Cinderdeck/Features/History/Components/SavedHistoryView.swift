@@ -331,19 +331,8 @@ struct SavedHistoryView: View {
   // MARK: - Empty state
 
   private var emptyState: some View {
-    VStack(spacing: 10) {
-      Image(systemName: selectedCollection?.isFavorites == false ? "folder" : "star")
-        .font(.system(size: 26, weight: .medium))
-        .foregroundColor(.secondary.opacity(0.7))
-      Text(emptyTitle)
-        .font(.system(size: 14, weight: .semibold))
-      Text(emptyMessage)
-        .font(.caption)
-        .foregroundColor(.secondary)
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: 420)
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    DeckEmptyState(icon: selectedCollection?.isFavorites == false ? "folder" : "star",
+      title: emptyTitle, detail: emptyMessage, compact: !isExpanded)
   }
 
   private var emptyTitle: String {

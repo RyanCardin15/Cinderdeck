@@ -31,7 +31,7 @@ struct ScrollingCaptureHUDView: View {
         Text(L10n.Actions.scrollingCapture)
           .font(.system(size: 12, weight: .semibold))
         Text(headerSummary)
-          .font(.system(size: 10))
+          .font(DeckStyle.caption)
           .foregroundStyle(.secondary)
           .lineLimit(1)
       }
@@ -52,7 +52,7 @@ struct ScrollingCaptureHUDView: View {
     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     .overlay(
       RoundedRectangle(cornerRadius: 14, style: .continuous)
-        .strokeBorder(Color.white.opacity(0.12))
+        .strokeBorder(DeckStyle.border)
     )
   }
 
@@ -61,16 +61,16 @@ struct ScrollingCaptureHUDView: View {
     HStack(spacing: 8) {
       if model.phase == .ready {
         Button(L10n.Common.cancel, action: onCancel)
-          .buttonStyle(.bordered)
+          .buttonStyle(DeckButtonStyle(compact: true))
           .controlSize(.small)
 
         Button(L10n.ScrollingCapture.startCapture, action: onStart)
-          .buttonStyle(.borderedProminent)
+          .buttonStyle(DeckButtonStyle(prominent: true, compact: true))
           .controlSize(.small)
           .disabled(!model.canStartCapture)
       } else {
         Button(L10n.Common.cancel, action: onCancel)
-          .buttonStyle(.bordered)
+          .buttonStyle(DeckButtonStyle(compact: true))
           .controlSize(.small)
           .disabled(!model.canCancelSession)
 
@@ -82,12 +82,12 @@ struct ScrollingCaptureHUDView: View {
           .lineLimit(1)
           .fixedSize(horizontal: true, vertical: false)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(DeckButtonStyle(compact: true))
         .controlSize(.small)
         .disabled(!model.canToggleAutoScroll)
 
         Button(L10n.Common.done, action: onDone)
-          .buttonStyle(.borderedProminent)
+          .buttonStyle(DeckButtonStyle(prominent: true, compact: true))
           .controlSize(.small)
           .disabled(!model.canFinishCapture)
       }

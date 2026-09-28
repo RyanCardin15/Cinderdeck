@@ -43,9 +43,9 @@ enum Size {
 // MARK: - Typography
 
 enum Typography {
-  static let labelSmall: Font = .system(size: 10)
+  static let labelSmall: Font = .system(size: 11)
   static let labelMedium: Font = .system(size: 11, weight: .medium)
-  static let sectionHeader: Font = .system(size: 11, weight: .semibold)
+  static let sectionHeader: Font = .system(size: 12, weight: .semibold)
   static let body: Font = .system(size: 12)
 }
 
@@ -68,7 +68,7 @@ struct ToolbarButton: View {
       Image(systemName: displayedIcon)
         .font(.system(size: 14, weight: .medium))
         .foregroundColor(foregroundColor)
-        .frame(width: 28, height: 28)
+        .frame(width: 30, height: 30)
         .background(
           RoundedRectangle(cornerRadius: 6)
             .fill(backgroundColor)
@@ -85,12 +85,13 @@ struct ToolbarButton: View {
         }
     }
     .buttonStyle(.plain)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
     .onHover { isHovering = $0 }
   }
 
   private var backgroundColor: Color {
     if isSelected {
-      return highlightColor.opacity(0.3)
+      return highlightColor.opacity(0.15)
     } else if isHovering {
       return Color.primary.opacity(0.1)
     }
@@ -137,7 +138,7 @@ enum SidebarColors {
   // Text
   static let labelPrimary = Color.primary
   static let labelSecondary = Color.secondary
-  static let labelTertiary = Color.secondary.opacity(0.7)
+  static let labelTertiary = Color.secondary
 
   // Actions
   static let actionButton = Color.primary.opacity(0.08)
@@ -193,6 +194,7 @@ struct SidebarItemStyle: ViewModifier {
 struct ColorSwatchStyle: ViewModifier {
   let isSelected: Bool
 
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var isHovering = false
 
   init(isSelected: Bool) {
@@ -207,8 +209,8 @@ struct ColorSwatchStyle: ViewModifier {
         Circle()
           .stroke(borderColor, lineWidth: borderWidth)
       )
-      .scaleEffect(isHovering && !isSelected ? 1.1 : 1.0)
-      .animation(.easeInOut(duration: 0.15), value: isHovering)
+      .scaleEffect(isHovering && !isSelected && !reduceMotion ? 1.06 : 1.0)
+      .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isHovering)
       .onHover { isHovering = $0 }
   }
 

@@ -11,6 +11,7 @@ import SwiftUI
 struct AnnotateMainView: View {
   @StateObject var state: AnnotateState
   let eventRouter: AnnotateWindowEventRouter
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @ObservedObject private var themeManager = ThemeManager.shared
   private let quickPropertiesBarHeight: CGFloat = 48
 
@@ -55,7 +56,8 @@ struct AnnotateMainView: View {
       AnnotateBottomBarView(state: state, eventRouter: eventRouter)
     }
     .preferredColorScheme(themeManager.systemAppearance)
+    .tint(DeckStyle.accent)
     .ignoresSafeArea(.all, edges: .top) // Extend background behind title bar
-    .animation(.easeInOut(duration: 0.14), value: state.showsQuickPropertiesBar)
+    .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: state.showsQuickPropertiesBar)
   }
 }

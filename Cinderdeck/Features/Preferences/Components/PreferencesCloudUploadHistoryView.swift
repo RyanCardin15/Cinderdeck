@@ -423,33 +423,8 @@ struct CloudUploadHistoryView: View {
   }
 
   private var searchBar: some View {
-    HStack(spacing: 8) {
-      Image(systemName: "magnifyingglass")
-        .font(.system(size: 12, weight: .semibold))
-        .foregroundColor(.secondary.opacity(0.9))
-
-      TextField(L10n.PreferencesCloudHistory.searchUploads, text: $searchText)
-        .textFieldStyle(.plain)
-        .font(.system(size: 12, weight: .medium))
-
-      if !searchText.isEmpty {
-        Button(action: { searchText = "" }) {
-          Image(systemName: "xmark.circle.fill")
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundColor(.secondary.opacity(0.8))
-        }
-        .buttonStyle(.plain)
-      }
-    }
-    .padding(.horizontal, 14)
-    .padding(.vertical, 9)
-    .frame(width: 260)
-    .background(chromeSurfaceFill, in: Capsule())
-    .overlay(
-      Capsule()
-        .stroke(chromeSurfaceBorder, lineWidth: 1)
-    )
-    .shadow(color: chromeSurfaceShadow, radius: 7, x: 0, y: 3)
+    DeckSearchField(placeholder: L10n.PreferencesCloudHistory.searchUploads, text: $searchText)
+      .frame(width: 260)
   }
 
   private var filterButton: some View {
@@ -725,16 +700,14 @@ struct CloudUploadHistoryView: View {
   private var emptyState: some View {
     VStack(spacing: 8) {
       Spacer()
-      Image(systemName: "icloud.slash")
-        .font(.system(size: 32))
-        .foregroundColor(.secondary)
+      DeckFeatureIcon(systemName: "icloud", size: 44)
       Text(
         searchText.isEmpty && !hasActiveFilters
           ? L10n.PreferencesCloudHistory.noUploadsYet
           : L10n.PreferencesCloudHistory.noResultsFound
       )
-        .font(.system(size: 14))
-        .foregroundColor(.secondary)
+        .font(DeckStyle.section)
+        .foregroundColor(.primary)
       if hasActiveFilters {
         Button(L10n.PreferencesCloudHistory.resetFilters) {
           statusFilter = .all
