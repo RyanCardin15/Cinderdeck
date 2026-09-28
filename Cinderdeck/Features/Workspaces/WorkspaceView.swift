@@ -1,12 +1,13 @@
 import SwiftUI
 
 enum WorkspaceSection: String, CaseIterable {
-  case services = "Services", tasks = "Tasks", workflows = "Workflows", runs = "Runs", recordings = "Recordings"
+  case services = "Services", tasks = "Tasks", workflows = "Workflows", laneMap = "Lane map", runs = "Runs", recordings = "Recordings"
   var explanation: String {
     switch self {
     case .services: return "Keep APIs, databases, and development servers running together."
     case .tasks: return "Run a command once. Keep its result, duration, and output."
     case .workflows: return "Run tasks and service actions in order. A failed step stops the workflow."
+    case .laneMap: return "Follow lanes to their services and running tasks. Select a block to highlight its connections."
     case .runs: return "Inspect progress and results. Completed runs stay available after relaunch."
     case .recordings: return "Screen recordings saved with this workspace's logs. Every log line is stamped with its position in the video."
     }
@@ -20,6 +21,7 @@ struct WorkspaceView: View {
   @State private var editing: WorkspaceComponentEditor.Context?
   @State private var selectedRun: UUID?
   @State private var search = ""
+  @State private var expandedWorkspaces = Set<String>()
   private var workspace: StackDefinition? { model.selectedDefinition }
   private var navigation: WorkspaceNavigation { model.workspaceNavigation }
   private var workspaceRuns: [WorkspaceRun] { runner.runs.filter { $0.workspaceID == model.selectedStackID } }
@@ -53,7 +55,7 @@ struct WorkspaceView: View {
               }
             }.font(.callout)
             if file.lane != nil {
-              Text("This lane uses a snapshot of its source workspace. To change services, tasks, or workflows, edit the source and recreate the lane.")
+              Text("Edit the source workspace to change services, tasks, or workflows. Pinned lanes keep their saved definition until unpinned.")
                 .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
             }
           }
@@ -84,6 +86,7 @@ struct WorkspaceView: View {
             }
           case .tasks: tasks(file)
           case .workflows: workflows(file)
+          case .laneMap: WorkspaceLaneMapView(model: model, runner: runner)
           case .runs: runs
           case .recordings: WorkspaceReprosView(file: file, recorder: .shared, controller: .shared, runner: runner)
           }
@@ -109,8 +112,8 @@ struct WorkspaceView: View {
     .sheet(isPresented: $model.agentsSheet) { StackAgentsSheet() }
     .sheet(isPresented: $model.lanesSheet) { StackLanesView(viewModel: model) }
     .sheet(isPresented: $model.stackBranchPicker) { StackBranchPickerSheet(viewModel: model) }
-    .onChange(of: model.selectedStackID) { _ in selectedRun = nil }
-    .onAppear { consumeSectionRequest() }
+    .onChange(of: model.selectedStackID) { _ in selectedRun = nil; revealSelectedLane() }
+    .onAppear { consumeSectionRequest(); revealSelectedLane() }
     .onChange(of: model.requestedSection) { _ in consumeSectionRequest() }
   }
 
@@ -120,13 +123,20 @@ struct WorkspaceView: View {
       TextField("Find a workspace", text: $search).textFieldStyle(.roundedBorder)
       ScrollView {
         LazyVStack(spacing: 6) {
-          ForEach(navigation.workspaces.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { file in
-            sidebarRow(file, isWorkspace: true)
+          ForEach(navigation.workspaces.filter { matches($0) || navigation.lanes(for: $0.id).contains(where: matches) }) { file in
+            VStack(spacing: 4) {
+              sidebarRow(file, isWorkspace: true)
+              if expandedWorkspaces.contains(file.id) || !search.isEmpty {
+                ForEach(navigation.lanes(for: file.id).filter { search.isEmpty || matches(file) || matches($0) }) { lane in
+                  sidebarRow(lane, isWorkspace: false).padding(.leading, 16)
+                }
+              }
+            }
           }
           if !navigation.unattachedLanes.isEmpty {
             Text("Lanes without a workspace").font(.caption).foregroundColor(.secondary)
               .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
-            ForEach(navigation.unattachedLanes.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { file in
+            ForEach(navigation.unattachedLanes.filter(matches)) { file in
               sidebarRow(file, isWorkspace: false)
             }
           }
@@ -140,24 +150,59 @@ struct WorkspaceView: View {
 
   private func sidebarRow(_ file: StackDefinitionFile, isWorkspace: Bool) -> some View {
     let laneCount = isWorkspace ? navigation.lanes(for: file.id).count : 0
-    let selected = isWorkspace ? model.selectedWorkspaceID == file.id : model.selectedStackID == file.id
-    return Button { model.select(file.id) } label: {
-      HStack {
-        Image(systemName: isWorkspace ? "square.stack.3d.up.fill" : "arrow.triangle.branch").foregroundColor(.accentColor)
-        VStack(alignment: .leading, spacing: 4) {
-          Text(file.name).fontWeight(.semibold).lineLimit(1)
-          Text(runner.activeRun(file.id).map { "\($0.kind.rawValue.capitalized) running" }
-            ?? (file.definition == nil ? "Needs attention" : "\(file.definition?.services.count ?? 0) \(file.definition?.services.count == 1 ? "service" : "services") · \(file.definition?.tasks.count ?? 0) \(file.definition?.tasks.count == 1 ? "task" : "tasks")"))
-            .font(.caption).foregroundColor(.secondary).lineLimit(1)
-          if laneCount > 0 {
-            Label("\(laneCount) \(laneCount == 1 ? "lane" : "lanes")", systemImage: "arrow.triangle.branch")
-              .font(.caption).foregroundColor(.secondary)
+    let selected = model.selectedStackID == file.id
+    return HStack(spacing: 0) {
+      if laneCount > 0 {
+        Button {
+          if !expandedWorkspaces.insert(file.id).inserted { expandedWorkspaces.remove(file.id) }
+        } label: {
+          Image(systemName: expandedWorkspaces.contains(file.id) || !search.isEmpty ? "chevron.down" : "chevron.right")
+            .font(.caption.weight(.semibold)).frame(width: 22, height: 38).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+          .accessibilityLabel("\(expandedWorkspaces.contains(file.id) ? "Collapse" : "Expand") lanes for \(file.name)")
+          .accessibilityIdentifier("workspace.expand.\(file.id)")
+      }
+      Button { model.select(file.id) } label: {
+        HStack {
+          Image(systemName: isWorkspace ? "square.stack.3d.up.fill" : "arrow.triangle.branch").foregroundColor(.accentColor)
+          VStack(alignment: .leading, spacing: 4) {
+            Text(isWorkspace ? file.name : file.lane?.name ?? file.name).fontWeight(.semibold).lineLimit(2)
+            if !isWorkspace {
+              Text(WorkspaceLaneGraph.branchSummary(file, statuses: model.repoStatuses))
+                .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Text(runner.activeRun(file.id).map { "\($0.kind.rawValue.capitalized) running" }
+              ?? (file.definition == nil ? "Needs attention" : "\(file.definition?.services.count ?? 0) \(file.definition?.services.count == 1 ? "service" : "services") · \(file.definition?.tasks.count ?? 0) \(file.definition?.tasks.count == 1 ? "task" : "tasks")"))
+              .font(.caption).foregroundColor(.secondary).lineLimit(1)
+            if laneCount > 0 {
+              Label("\(laneCount) \(laneCount == 1 ? "lane" : "lanes")", systemImage: "arrow.triangle.branch")
+                .font(.caption).foregroundColor(.secondary)
+            }
           }
-        }
-        Spacer(minLength: 0)
-      }.padding(10).contentShape(Rectangle())
-        .background(selected ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
-    }.buttonStyle(.plain).accessibilityIdentifier("workspace.sidebar.\(file.id)")
+          Spacer(minLength: 0)
+        }.padding(10).contentShape(Rectangle())
+      }.buttonStyle(.plain).accessibilityIdentifier("workspace.sidebar.\(file.id)")
+    }
+    .background(selected ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
+    .help(WorkspaceLaneGraph.branchSummary(file, statuses: model.repoStatuses))
+    .contextMenu {
+      Button("Show lane map") { model.select(file.id); section = .laneMap }
+      if isWorkspace {
+        Button("Edit workspace…") { model.edit(file) }
+        Divider()
+        Button("Delete workspace…", role: .destructive) { model.deleteWorkspace(file) }
+          .accessibilityIdentifier("workspace.delete.\(file.id)")
+      }
+    }
+  }
+
+  private func matches(_ file: StackDefinitionFile) -> Bool {
+    search.isEmpty || file.name.localizedCaseInsensitiveContains(search)
+      || WorkspaceLaneGraph.branchSummary(file, statuses: model.repoStatuses).localizedCaseInsensitiveContains(search)
+  }
+
+  private func revealSelectedLane() {
+    if let source = model.selectedWorkspaceID, source != model.selectedStackID { expandedWorkspaces.insert(source) }
   }
 
   private func tasks(_ file: StackDefinitionFile) -> some View {

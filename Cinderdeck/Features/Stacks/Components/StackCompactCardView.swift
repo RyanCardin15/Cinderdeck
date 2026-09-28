@@ -41,6 +41,7 @@ struct StackCompactCardView: View {
     .stackSurface(cornerRadius: 16, selected: selected)
     .contentShape(RoundedRectangle(cornerRadius: 16))
     .onTapGesture { viewModel.select(file.id) }
+    .contextMenu { WorkspaceNavigationMenu(file: file, model: viewModel) }
     .accessibilityElement(children: .contain).accessibilityLabel(file.name)
   }
 
@@ -161,8 +162,22 @@ struct StackActionsMenu: View {
       }
       Button("Agent access…") { viewModel.agentsSheet = true }
       Button("Refresh shell environment") { viewModel.refreshEnvironment(file.definition) }
+      Divider()
+      WorkspaceNavigationMenu(file: file, model: viewModel)
     } label: { Image(systemName: "ellipsis").font(.system(size: 11, weight: .semibold)).frame(width: 18, height: 18) }
       .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Workspace actions").accessibilityLabel("Workspace actions")
+  }
+}
+
+/// Navigation and deletion are available from either workspace presentation.
+struct WorkspaceNavigationMenu: View {
+  let file: StackDefinitionFile
+  @ObservedObject var model: StacksViewModel
+  var body: some View {
+    Button("Show lane map") { WorkspaceWindowController.shared.show(workspace: file.id, section: .laneMap) }
+    if model.workspaceNavigation.workspaces.contains(where: { $0.id == file.id }) {
+      Button("Delete workspace…", role: .destructive) { model.deleteWorkspace(file) }
+    }
   }
 }
 

@@ -74,7 +74,7 @@ nonisolated enum CinderdeckMCPServer {
       ["workspace": workspace], required: ["workspace"]),
     tool("open_workspace", "Show a workspace to the user", .additive,
       "Open Cinderdeck's Workspaces window on a workspace and section so the user can look. Brings Cinderdeck to the front: use it only when the user wants to see something.",
-      ["workspace": workspace, "section": property("string", "Section to show", values: ["services", "tasks", "workflows", "runs", "recordings"])],
+      ["workspace": workspace, "section": property("string", "Section to show", values: ["services", "tasks", "workflows", "lane map", "runs", "recordings"])],
       idempotent: true),
   ]
 

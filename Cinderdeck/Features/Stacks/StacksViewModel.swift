@@ -183,6 +183,21 @@ final class StacksViewModel: ObservableObject {
   }
   func edit(_ file: StackDefinitionFile) { editor = .init(file: file.file) }
   func create() { editor = .init(file: nil) }
+  func deleteWorkspace(_ file: StackDefinitionFile) {
+    guard workspaceNavigation.workspaces.contains(where: { $0.id == file.id }) else { return }
+    do {
+      let revision = WorkspaceDefinitionWriter.revision(try String(contentsOf: file.file, encoding: .utf8))
+      guard confirm(title: "Delete \(file.name)?",
+        message: "Removes this workspace from Cinderdeck. Project files, Git branches, logs, and saved runs are kept. Stop its services and runs, and remove or release its lanes first.",
+        buttons: ["Delete workspace", "Cancel"]) == 0 else { return }
+      Task {
+        do {
+          _ = try await StackControlService.shared.handleWorkspaceLifecycle("workspace.delete",
+            params: .object(["workspace": .string(file.id), "revision": .string(revision)]), actor: .user)
+        } catch { self.error = error.localizedDescription }
+      }
+    } catch { self.error = error.localizedDescription }
+  }
   func openInEditor(_ file: StackDefinitionFile) { NSWorkspace.shared.open(file.file) }
   func refreshEnvironment(_ stack: StackDefinition?) {
     Task {
@@ -316,10 +331,12 @@ final class StacksViewModel: ObservableObject {
     }
   }
   private func confirm(title: String, message: String, buttons: [String]) -> Int {
+    let originatingWindow = NSApp.keyWindow
     isConfirming = true
     HistoryFloatingManager.shared.isPresentingAuxiliaryUI = true
     defer {
-      HistoryFloatingManager.shared.focusPanel()
+      if let originatingWindow, originatingWindow.isVisible { originatingWindow.makeKeyAndOrderFront(nil) }
+      else { HistoryFloatingManager.shared.focusPanel() }
       isConfirming = false
       HistoryFloatingManager.shared.isPresentingAuxiliaryUI = hasAuxiliaryUI
     }

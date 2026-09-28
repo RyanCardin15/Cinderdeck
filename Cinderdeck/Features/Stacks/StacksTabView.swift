@@ -194,6 +194,7 @@ struct StacksTabView: View {
           .fill(selected ? Color.accentColor.opacity(colorScheme == .dark ? 0.2 : 0.13) : Color.clear)
       )
     }.buttonStyle(.plain)
+      .contextMenu { WorkspaceNavigationMenu(file: file, model: viewModel) }
   }
 
   private var agentStatus: some View {

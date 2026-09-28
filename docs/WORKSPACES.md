@@ -9,8 +9,13 @@ A **workspace** groups a project's folders, environment, and reusable commands:
 - **Services** stay running: APIs, development servers, workers, databases. Start, stop, restart, readiness, automatic crash recovery, Git controls, and separate service terminals retain their existing behavior.
 - **Tasks** run once: tests, builds, linting, migrations, or scripts. Exit 0 succeeds; any other exit code fails. Tasks never restart automatically. Output, start/end times, duration, and exit code are recorded.
 - **Workflows** run an ordered sequence of task and service actions. Start waits for readiness; a task must succeed before the next step runs. A failure or cancellation skips remaining steps.
+- **Lane map** draws the original checkout, its lanes, services, shared dependencies, and active task/workflow steps as connected blocks. Select a lane to highlight everything it uses while dimming unrelated lanes. Select a process for commands, ports, PID/process group, logs, and navigation to its checkout. Arrows follow containment, step order, or service dependencies (dashed); zoom and Fit help with larger maps. This shows Cinderdeck-managed services and run steps, not unrelated operating-system processes.
 - **Runs** shows live progress and past results for the selected workspace. Select a step to filter output, search the log, copy text, cancel an active run, or run again using the current definition.
 - **Recordings** lists screen recordings saved with this workspace's logs, each with a `.log` file stamped with video times. **Record with Logs** records the screen, or records a task or workflow run with each step marked. It also sets which workspaces toolbar recordings capture. See [REPROS.md](REPROS.md).
+
+Workspaces with lanes have a disclosure button in the sidebar. Expand it to see each lane and the current branch for every repository; search also matches branch names. Unavailable Git status is labeled, and saved branch fallbacks are marked “last known.”
+
+Right-click a workspace and choose **Delete workspace…** to remove its definition. Confirmation preserves project files, Git branches, logs, and saved run results. Active services/runs, claims from other agents, existing lanes, and references from other workspaces block deletion with an explanation. Remove or release lanes through **Lanes** first. The same menu offers **Show lane map**.
 
 ## Create and edit
 
