@@ -131,7 +131,7 @@ struct CinderdeckOnboardingCompletionCard: View {
       )
 
       CommunityLinkPill(
-        title: "Support Snapzy’s creators",
+        title: "Support open source",
         icon: "heart.fill",
         url: "https://github.com/sponsors/duongductrong"
       )

@@ -148,7 +148,7 @@ For a signed app in `/Applications`, testing, and release packaging, see [the bu
 
 ## Coming from the customized Snapzy build
 
-On its first Release launch, Cinderdeck copies your existing local history database, configuration, stacks, preferences, and logs into its own locations. It preserves the originals and never overwrites existing Cinderdeck data. Custom project paths and original capture files stay where you chose to save them. Existing Keychain identifiers and `snapzy://` shortcuts remain supported for compatibility.
+On its first Release launch, Cinderdeck copies your existing local history database, configuration, stacks, preferences, and logs into its own locations. It preserves the originals and never overwrites existing Cinderdeck data. Original capture files stay where they were saved; future saves use Cinderdeck folder names and filename prefixes, including on installations that already completed the import. Unrelated custom folders and templates remain unchanged. New Keychain entries use Cinderdeck, with existing credentials imported when used; legacy `snapzy://` shortcuts remain supported for compatibility.
 
 The application has a new bundle identity, so macOS may ask you to grant capture or accessibility permissions to **Cinderdeck**. See [migration and compatibility](docs/MIGRATION.md).
 

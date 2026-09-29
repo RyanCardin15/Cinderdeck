@@ -9982,7 +9982,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cinderdeck is a fork of Snapzy. These optional links support Trong Duong Duc, the creator of the original project."
+            "value": "Cinderdeck builds on open-source capture and recording tools. These optional links support their original creator, Trong Duong Duc."
           }
         }
       }
@@ -9993,7 +9993,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Donations go to the original Snapzy maintainer. Cinderdeck is free to use."
+            "value": "Donations go to the original open-source creator. Cinderdeck is free to use."
           }
         }
       }
@@ -10004,7 +10004,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Support Snapzy’s creators"
+            "value": "Support open source"
           }
         }
       }

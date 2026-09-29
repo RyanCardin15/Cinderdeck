@@ -15,6 +15,6 @@ The app icon was generated using the built-in image generation tool, then resize
 
 ## Attribution
 
-Cinderdeck is an independent fork of [Snapzy](https://github.com/duongductrong/Snapzy) by Trong Duong Duc and contributors. Keep that credit visible in the README and About screen. The original copyright notice remains verbatim in LICENSE. Do not claim upstream popularity, artifacts, signing, sponsorship, or endorsements as Cinderdeck’s.
+Cinderdeck is an independent fork of [Snapzy](https://github.com/duongductrong/Snapzy) by Trong Duong Duc and contributors. Keep that credit in the README and bundled third-party notices, accessible from About's **Licenses and acknowledgments** button. App-facing product labels use Cinderdeck; About credits the original creator and open-source contributors. The original copyright notice remains verbatim in LICENSE. Do not claim upstream popularity, artifacts, signing, sponsorship, or endorsements as Cinderdeck’s.
 
-The remaining Snapzy identifiers in source are intentional compatibility contracts, migration inputs, upstream credit, or historical changelog content. They should not be blindly replaced.
+Previous product identifiers remain only where needed to import existing data, look up credentials and links, recognize older stashes, or preserve license credit and historical records. New exports, internal storage, Keychain writes, and generated service identities use Cinderdeck. See [migration](MIGRATION.md) for the repair of previously imported export settings.

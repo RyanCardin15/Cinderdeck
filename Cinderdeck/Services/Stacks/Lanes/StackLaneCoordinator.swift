@@ -128,7 +128,7 @@ final class StackLaneCoordinator {
     }
     var result = StackLaunchDefinition(stack: definition, service: service).environment(shell: [:], secrets: [:])
     for key in ["FORCE_COLOR", "CLICOLOR_FORCE", "PYTHONUNBUFFERED", "DOTNET_SYSTEM_CONSOLE_ALLOW_ANSI_COLOR_REDIRECTION",
-      "DOTNET_WATCH_RESTART_ON_RUDE_EDIT", "SNAPZY_STACK", "SNAPZY_SERVICE"] where definition.environment[key] == nil && service.environment[key] == nil {
+      "DOTNET_WATCH_RESTART_ON_RUDE_EDIT"] where definition.environment[key] == nil && service.environment[key] == nil {
       result[key] = nil
     }
     if name == nil { result["CINDERDECK_SERVICE"] = nil }

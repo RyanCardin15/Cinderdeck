@@ -1784,12 +1784,12 @@ nonisolated enum L10n {
     )
     static let sponsorDescription = string(
       "onboarding.sponsor.description",
-      defaultValue: "Cinderdeck is a fork of Snapzy. These optional links support Trong Duong Duc, the creator of the original project.",
+      defaultValue: "Cinderdeck builds on open-source capture and recording tools. These optional links support their original creator, Trong Duong Duc.",
       comment: "Onboarding sponsor step description"
     )
     static let sponsorOptionalNote = string(
       "onboarding.sponsor.optional-note",
-      defaultValue: "Donations go to the original Snapzy maintainer. Cinderdeck is free to use.",
+      defaultValue: "Donations go to the original open-source creator. Cinderdeck is free to use.",
       comment: "Note under sponsor options"
     )
 
@@ -4495,7 +4495,7 @@ nonisolated enum L10n {
     )
     static let supportTitle = string(
       "preferences-about.support-title",
-      defaultValue: "Support Snapzy’s creators",
+      defaultValue: "Support open source",
       comment: "About screen sponsor card title"
     )
     static let updateChannelTitle = string(

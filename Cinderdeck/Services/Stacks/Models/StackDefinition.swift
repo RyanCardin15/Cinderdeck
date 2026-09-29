@@ -220,9 +220,6 @@ nonisolated struct StackLaunchDefinition: Codable, Equatable, Sendable {
       // In the original checkout an explicit env.PORT keeps working as before.
       result["PORT"] = String(port)
     }
-    // Compatibility for existing project scripts.
-    result["SNAPZY_STACK"] = stack.id
-    result["SNAPZY_SERVICE"] = service.id
     return result
   }
 

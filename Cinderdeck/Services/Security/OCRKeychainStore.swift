@@ -1,4 +1,4 @@
-// Legacy Snapzy Keychain identifiers intentionally retained for credential compatibility.
+// New secrets use Cinderdeck; previous identifiers are read only for migration.
 //
 //  OCRKeychainStore.swift
 //  Cinderdeck
@@ -38,18 +38,23 @@ enum OCRKeychainError: LocalizedError, Equatable {
 /// keychain when the data-protection entitlement is unavailable (unsigned dev
 /// builds). Account = model UUID string.
 struct OCRKeychainStore: OCRKeychainStoring {
-  private static let service = "com.trongduong.snapzy.ocr"
+  private static let service = "com.ryancardin.cinderdeck.ocr"
+  private static let legacyService = "com.trongduong.snapzy.ocr"
 
   private struct Location: Equatable {
+    var service = OCRKeychainStore.service
     let usesDataProtection: Bool
   }
 
   init() {}
 
   func readKey(for modelID: UUID) -> String? {
-    for location in [Location(usesDataProtection: true), Location(usesDataProtection: false)] {
+    for location in [Location(usesDataProtection: true), Location(usesDataProtection: false),
+                     Location(service: Self.legacyService, usesDataProtection: true),
+                     Location(service: Self.legacyService, usesDataProtection: false)] {
       switch readValue(at: location, account: account(for: modelID)) {
       case .success(let value):
+        if location.service != Self.service { try? saveKey(value, for: modelID) }
         return value
       case .itemNotFound, .unavailable, .failed:
         continue
@@ -97,6 +102,8 @@ struct OCRKeychainStore: OCRKeychainStoring {
     let account = account(for: modelID)
     deleteValue(at: Location(usesDataProtection: true), account: account)
     deleteValue(at: Location(usesDataProtection: false), account: account)
+    deleteValue(at: Location(service: Self.legacyService, usesDataProtection: true), account: account)
+    deleteValue(at: Location(service: Self.legacyService, usesDataProtection: false), account: account)
   }
 
   // MARK: - Private
@@ -122,7 +129,7 @@ struct OCRKeychainStore: OCRKeychainStoring {
     var query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrAccount as String: account,
-      kSecAttrService as String: Self.service,
+      kSecAttrService as String: location.service,
     ]
     if location.usesDataProtection {
       query[kSecUseDataProtectionKeychain as String] = true

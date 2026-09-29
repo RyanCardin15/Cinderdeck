@@ -10,6 +10,57 @@ import XCTest
 
 @MainActor
 final class CinderdeckConfigurationImporterTests: XCTestCase {
+  func testLegacyDriveFolderIsRenamedWithoutChangingObjectStorageBuckets() {
+    let defaults = UserDefaultsFactory.make()
+    for (provider, expected) in [("google_drive", "Cinderdeck"), ("aws_s3", "Snapzy")] {
+      let source = """
+        schema_version = 1
+        [cloud]
+        provider = "\(provider)"
+        bucket = "Snapzy"
+        """
+      let result = CinderdeckConfigurationImporter.importTOML(source, defaults: defaults)
+      XCTAssertFalse(result.hasErrors)
+      XCTAssertEqual(defaults.string(forKey: PreferencesKeys.cloudBucket), expected)
+      let repaired = try? SimpleTOMLParser.parse(CinderdeckIdentity.configuration(source))
+      XCTAssertEqual(repaired?.value(at: ["cloud", "bucket"])?.stringValue, expected)
+    }
+  }
+
+  func testLegacyConfigCannotRestoreOldExportFolderOrFilenamePrefixes() {
+    let defaults = UserDefaultsFactory.make()
+    defaults.set("/old/path", forKey: PreferencesKeys.exportLocation)
+    defaults.set(Data([1, 2, 3]), forKey: PreferencesKeys.exportLocationBookmark)
+    let result = CinderdeckConfigurationImporter.importTOML("""
+      schema_version = 1
+      [general]
+      export_location = "~/Desktop/Snapzy"
+      [capture.naming]
+      screenshot_template = "Snapzy_{datetime}_{ms}"
+      recording_template = "Snapzy_Recording_{datetime}"
+      """, defaults: defaults)
+    XCTAssertFalse(result.hasErrors)
+    XCTAssertEqual(defaults.string(forKey: PreferencesKeys.exportLocation),
+      CinderdeckConfigurationPaths.userHomeDirectory.appendingPathComponent("Desktop/Cinderdeck").path)
+    XCTAssertNil(defaults.data(forKey: PreferencesKeys.exportLocationBookmark))
+    XCTAssertEqual(defaults.string(forKey: PreferencesKeys.screenshotFileNameTemplate), "Cinderdeck_{datetime}_{ms}")
+    XCTAssertEqual(defaults.string(forKey: PreferencesKeys.recordingFileNameTemplate), "Cinderdeck_Recording_{datetime}")
+  }
+
+  func testImportPreservesBookmarkWhenExportFolderDoesNotChange() {
+    let defaults = UserDefaultsFactory.make()
+    defaults.set("/custom/captures", forKey: PreferencesKeys.exportLocation)
+    let bookmark = Data([1, 2, 3])
+    defaults.set(bookmark, forKey: PreferencesKeys.exportLocationBookmark)
+    let result = CinderdeckConfigurationImporter.importTOML("""
+      schema_version = 1
+      [general]
+      export_location = "/custom/captures"
+      """, defaults: defaults)
+    XCTAssertFalse(result.hasErrors)
+    XCTAssertEqual(defaults.data(forKey: PreferencesKeys.exportLocationBookmark), bookmark)
+  }
+
   func testImportAppliesCaptureAndRecordingSettingsToProvidedDefaults() {
     let defaults = UserDefaultsFactory.make()
     let source = """

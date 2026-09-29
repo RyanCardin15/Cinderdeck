@@ -8,18 +8,20 @@ import SwiftUI
 enum CinderdeckMain {
   static func main() {
     if let status = StackCLI.runIfRequested(CommandLine.arguments) { exit(status) }
-    #if !DEBUG
     do {
+      #if DEBUG
+      try CinderdeckMigration.repairIdentity()
+      #else
       try CinderdeckMigration.runIfNeeded()
+      #endif
     } catch {
       let alert = NSAlert()
-      alert.messageText = "Cinderdeck could not import your Snapzy data"
+      alert.messageText = "Cinderdeck could not update your local data"
       alert.informativeText = "Your original data has not been deleted. Quit and try again after resolving this error: \(error.localizedDescription)"
       alert.addButton(withTitle: "Quit")
       alert.runModal()
       exit(1)
     }
-    #endif
     CinderdeckApp.main()
   }
 }

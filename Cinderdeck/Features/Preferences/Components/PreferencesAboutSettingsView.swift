@@ -96,12 +96,17 @@ struct AboutSettingsView: View {
       divider
 
       VStack(alignment: .leading, spacing: 5) {
-        Text("Forked from Snapzy")
+        Text("Open-source acknowledgments")
           .font(.system(size: 13, weight: .semibold))
-        Text("Cinderdeck builds on the capture and recording work of Trong Duong Duc and the Snapzy contributors.")
+        Text("Cinderdeck builds on the capture and recording work of Trong Duong Duc and the original contributors.")
           .font(.system(size: 12))
           .foregroundStyle(.secondary)
-        Link("Snapzy · BSD 3-Clause License", destination: URL(string: "https://github.com/duongductrong/Snapzy")!)
+        Button("Licenses and acknowledgments") {
+          if let url = Bundle.main.url(forResource: "ThirdPartyNotices", withExtension: "txt") {
+            NSWorkspace.shared.open(url)
+          }
+        }
+          .buttonStyle(.link)
           .font(.system(size: 12))
       }
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -112,7 +117,7 @@ struct AboutSettingsView: View {
       // Special thanks
       HStack(alignment: .top) {
         HStack(spacing: 4) {
-          Text("Snapzy contributors")
+          Text("Open-source contributors")
             .font(.system(size: 13, weight: .regular))
             .foregroundStyle(Color.primary)
 
@@ -231,7 +236,7 @@ struct AboutSettingsView: View {
           supportLink(title: L10n.PreferencesAbout.github, url: "https://github.com/RyanCardin15/Cinderdeck")
           supportLink(title: L10n.PreferencesAbout.reportBug, url: "https://github.com/RyanCardin15/Cinderdeck/issues")
           supportLink(
-            title: "Support the original Snapzy project ❤️",
+            title: "Support the original creator ❤️",
             url: "https://github.com/sponsors/duongductrong",
             isHighlighted: true
           )
