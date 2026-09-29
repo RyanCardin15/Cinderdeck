@@ -128,7 +128,13 @@ enum CinderdeckConfigurationImporter {
       mutations.append { LoginItemManager.setEnabled(startAtLogin) }
     }
     if let exportLocation = reader.string("general", "export_location") {
-      mutations.append { defaults.set(expandedPath(exportLocation), forKey: PreferencesKeys.exportLocation) }
+      mutations.append {
+        let path = expandedPath(CinderdeckIdentity.exportPath(exportLocation))
+        if defaults.string(forKey: PreferencesKeys.exportLocation) != path {
+          defaults.removeObject(forKey: PreferencesKeys.exportLocationBookmark)
+        }
+        defaults.set(path, forKey: PreferencesKeys.exportLocation)
+      }
     }
     collectBool(&reader, "updates", "check_automatically", mutations: &mutations) {
       UpdaterManager.shared.updater.automaticallyChecksForUpdates = $0
@@ -190,10 +196,10 @@ enum CinderdeckConfigurationImporter {
       defaults.set($0, forKey: PreferencesKeys.hideDesktopWidgets)
     }
     collectString(&reader, "capture", "naming", "screenshot_template", mutations: &mutations) {
-      defaults.set($0, forKey: PreferencesKeys.screenshotFileNameTemplate)
+      defaults.set(CinderdeckIdentity.captureTemplate($0), forKey: PreferencesKeys.screenshotFileNameTemplate)
     }
     collectString(&reader, "capture", "naming", "recording_template", mutations: &mutations) {
-      defaults.set($0, forKey: PreferencesKeys.recordingFileNameTemplate)
+      defaults.set(CinderdeckIdentity.captureTemplate($0), forKey: PreferencesKeys.recordingFileNameTemplate)
     }
     if let format = reader.string("capture", "screenshot", "format") {
       guard ImageFormatOption(rawValue: format) != nil else {
@@ -477,10 +483,12 @@ enum CinderdeckConfigurationImporter {
       defaults.set($0, forKey: PreferencesKeys.cloudProviderType)
     }
     collectString(&reader, "cloud", "bucket", mutations: &mutations) {
-      defaults.set($0, forKey: PreferencesKeys.cloudBucket)
+      let folder = defaults.string(forKey: PreferencesKeys.cloudProviderType) == CloudProviderType.googleDrive.rawValue
+        ? CinderdeckIdentity.googleDriveFolder($0) : $0
+      defaults.set(folder, forKey: PreferencesKeys.cloudBucket)
     }
     collectString(&reader, "cloud", "folder_name", mutations: &mutations) {
-      defaults.set($0, forKey: PreferencesKeys.cloudBucket)
+      defaults.set(CinderdeckIdentity.googleDriveFolder($0), forKey: PreferencesKeys.cloudBucket)
     }
     collectString(&reader, "cloud", "region", mutations: &mutations) {
       defaults.set($0, forKey: PreferencesKeys.cloudRegion)

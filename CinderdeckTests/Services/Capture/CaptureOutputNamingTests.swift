@@ -32,6 +32,15 @@ final class CaptureOutputNamingTests: XCTestCase {
 
   // MARK: - resolveBaseName with custom name
 
+  func testLegacyTemplatesProduceCinderdeckNamesBeforeMigration() {
+    defaults.set("Snapzy_{timestamp}", forKey: PreferencesKeys.screenshotFileNameTemplate)
+    defaults.set("Snapzy_Recording_{timestamp}", forKey: PreferencesKeys.recordingFileNameTemplate)
+    XCTAssertEqual(CaptureOutputNaming.resolveBaseName(customName: nil, kind: .screenshot,
+      date: fixedDate, defaults: defaults), "Cinderdeck_1768512645")
+    XCTAssertEqual(CaptureOutputNaming.resolveBaseName(customName: nil, kind: .recording,
+      date: fixedDate, defaults: defaults), "Cinderdeck_Recording_1768512645")
+  }
+
   func testResolveBaseName_withCustomName_returnsSanitizedName() {
     let result = CaptureOutputNaming.resolveBaseName(
       customName: "My Screenshot",

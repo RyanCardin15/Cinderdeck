@@ -106,7 +106,7 @@ enum CaptureOutputNaming {
     }
 
     let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-    return trimmed.isEmpty ? kind.defaultTemplate : trimmed
+    return trimmed.isEmpty ? kind.defaultTemplate : CinderdeckIdentity.captureTemplate(trimmed)
   }
 
   static func resolveTemplateBaseName(

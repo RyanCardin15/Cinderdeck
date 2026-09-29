@@ -47,6 +47,13 @@ final class SandboxFileAccessManager {
   }
 
   func ensureExportLocationInitialized() {
+    if let path = defaults.string(forKey: PreferencesKeys.exportLocation) {
+      let updated = CinderdeckIdentity.exportPath(path)
+      if updated != path {
+        defaults.set(updated, forKey: PreferencesKeys.exportLocation)
+        defaults.removeObject(forKey: PreferencesKeys.exportLocationBookmark)
+      }
+    }
     if defaults.string(forKey: PreferencesKeys.exportLocation)?.isEmpty != false {
       defaults.set(defaultExportDirectory.path, forKey: PreferencesKeys.exportLocation)
       DiagnosticLogger.shared.log(
@@ -279,6 +286,12 @@ final class SandboxFileAccessManager {
         relativeTo: nil,
         bookmarkDataIsStale: &isStale
       ).standardizedFileURL
+
+      // A saved bookmark must not route a new export back to the old product folder.
+      if CinderdeckIdentity.exportPath(url.path) != url.path {
+        defaults.removeObject(forKey: PreferencesKeys.exportLocationBookmark)
+        return nil
+      }
 
       if isStale {
         _ = setExportDirectory(url)

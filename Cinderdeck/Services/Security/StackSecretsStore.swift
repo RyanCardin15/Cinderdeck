@@ -1,4 +1,4 @@
-// Legacy Snapzy Keychain identifiers intentionally retained for credential compatibility.
+// New secrets use Cinderdeck; previous identifiers are read only for migration.
 import Foundation
 import Security
 
@@ -7,23 +7,29 @@ nonisolated protocol StackSecretsStoring: Sendable {
 }
 
 nonisolated struct StackSecretsStore: StackSecretsStoring {
-  static let service = "Snapzy Stacks"
+  static let service = "Cinderdeck Stacks"
+  private static let legacyService = "Snapzy Stacks"
 
-  private func query(_ name: String?, protected: Bool) -> [String: Any] {
-    var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Self.service]
+  private func query(_ name: String?, protected: Bool, service: String = Self.service) -> [String: Any] {
+    var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service]
     if let name { query[kSecAttrAccount as String] = name }
     if protected { query[kSecUseDataProtectionKeychain as String] = true }
     return query
   }
   func read(_ name: String) throws -> String {
-    for protected in [true, false] {
-      var query = query(name, protected: protected)
-      query[kSecReturnData as String] = true
-      query[kSecMatchLimit as String] = kSecMatchLimitOne
-      var result: CFTypeRef?
-      let status = SecItemCopyMatching(query as CFDictionary, &result)
-      if status == errSecSuccess, let data = result as? Data, let value = String(data: data, encoding: .utf8) { return value }
-      if ![errSecItemNotFound, errSecMissingEntitlement].contains(status) { throw failure(status) }
+    for service in [Self.service, Self.legacyService] {
+      for protected in [true, false] {
+        var query = query(name, protected: protected, service: service)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecSuccess, let data = result as? Data, let value = String(data: data, encoding: .utf8) {
+          if service != Self.service { try? save(value, named: name) }
+          return value
+        }
+        if ![errSecItemNotFound, errSecMissingEntitlement].contains(status) { throw failure(status) }
+      }
     }
     throw StackError.message("Missing Keychain secret ‘\(name)’. Add it in Manage secrets.")
   }
@@ -49,24 +55,28 @@ nonisolated struct StackSecretsStore: StackSecretsStoring {
   }
   func names() throws -> [String] {
     var names = Set<String>()
-    for protected in [true, false] {
-      var query = query(nil, protected: protected)
-      query[kSecReturnAttributes as String] = true
-      query[kSecMatchLimit as String] = kSecMatchLimitAll
-      var result: CFTypeRef?
-      let status = SecItemCopyMatching(query as CFDictionary, &result)
-      if [errSecItemNotFound, errSecMissingEntitlement].contains(status) { continue }
-      guard status == errSecSuccess else { throw failure(status) }
-      for item in result as? [[String: Any]] ?? [] {
-        if let name = item[kSecAttrAccount as String] as? String { names.insert(name) }
+    for service in [Self.service, Self.legacyService] {
+      for protected in [true, false] {
+        var query = query(nil, protected: protected, service: service)
+        query[kSecReturnAttributes as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitAll
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if [errSecItemNotFound, errSecMissingEntitlement].contains(status) { continue }
+        guard status == errSecSuccess else { throw failure(status) }
+        for item in result as? [[String: Any]] ?? [] {
+          if let name = item[kSecAttrAccount as String] as? String { names.insert(name) }
+        }
       }
     }
     return names.sorted()
   }
   func delete(_ name: String) throws {
-    for protected in [true, false] {
-      let status = SecItemDelete(query(name, protected: protected) as CFDictionary)
-      if ![errSecSuccess, errSecItemNotFound, errSecMissingEntitlement].contains(status) { throw failure(status) }
+    for service in [Self.service, Self.legacyService] {
+      for protected in [true, false] {
+        let status = SecItemDelete(query(name, protected: protected, service: service) as CFDictionary)
+        if ![errSecSuccess, errSecItemNotFound, errSecMissingEntitlement].contains(status) { throw failure(status) }
+      }
     }
   }
   private func failure(_ status: OSStatus) -> StackError { .message("Keychain operation failed (\(status))") }

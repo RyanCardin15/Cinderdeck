@@ -1,4 +1,4 @@
-// Legacy Snapzy Keychain identifiers intentionally retained for credential compatibility.
+// New secrets use Cinderdeck; previous identifiers are read only for migration.
 //
 //  CloudKeychainStore.swift
 //  Cinderdeck
@@ -21,17 +21,17 @@ enum CloudKeychainItem {
   var account: String {
     switch self {
     case .accessKey:
-      return "com.trongduong.snapzy.cloud.accessKey"
+      return "com.ryancardin.cinderdeck.cloud.accessKey"
     case .secretKey:
-      return "com.trongduong.snapzy.cloud.secretKey"
+      return "com.ryancardin.cinderdeck.cloud.secretKey"
     case .passwordHash:
-      return "com.trongduong.snapzy.cloud.passwordHash"
+      return "com.ryancardin.cinderdeck.cloud.passwordHash"
     case .googleRefreshToken:
-      return "com.trongduong.snapzy.cloud.google.refreshToken"
+      return "com.ryancardin.cinderdeck.cloud.google.refreshToken"
     case .googleClientId:
-      return "com.trongduong.snapzy.cloud.google.clientId"
+      return "com.ryancardin.cinderdeck.cloud.google.clientId"
     case .googleClientSecret:
-      return "com.trongduong.snapzy.cloud.google.clientSecret"
+      return "com.ryancardin.cinderdeck.cloud.google.clientSecret"
     }
   }
 
@@ -44,6 +44,10 @@ enum CloudKeychainItem {
     case .passwordHash, .googleRefreshToken, .googleClientId, .googleClientSecret:
       return []
     }
+  }
+
+  var previousAccount: String {
+    account.replacingOccurrences(of: "com.ryancardin.cinderdeck", with: "com.trongduong.snapzy")
   }
 }
 
@@ -78,7 +82,8 @@ struct CloudKeychainStore {
   }
 
   private static let logger = Logger(subsystem: "Cinderdeck", category: "CloudKeychainStore")
-  private static let currentService = "com.trongduong.snapzy.cloud"
+  private static let currentService = "com.ryancardin.cinderdeck.cloud"
+  private static let previousService = "com.trongduong.snapzy.cloud"
   private static let legacyService = "com.snapzy.cloud"
 
   static func read(item: CloudKeychainItem, context: String) -> CloudKeychainReadOutcome {
@@ -126,6 +131,8 @@ struct CloudKeychainStore {
         }
         return .success(value)
       case .itemNotFound:
+        continue
+      case .error(let status) where status == errSecMissingEntitlement:
         continue
       case .authRequired, .interactionNotAllowed, .error:
         return legacyOutcome
@@ -239,7 +246,9 @@ struct CloudKeychainStore {
 
   private static func legacyLocations(for item: CloudKeychainItem) -> [Location] {
     var locations = [
-      Location(service: currentService, account: item.account, usesDataProtection: false)
+      Location(service: currentService, account: item.account, usesDataProtection: false),
+      Location(service: previousService, account: item.previousAccount, usesDataProtection: true),
+      Location(service: previousService, account: item.previousAccount, usesDataProtection: false),
     ]
 
     // Legacy service + legacy account names
@@ -287,6 +296,7 @@ struct CloudKeychainStore {
     for location in legacyLocations(for: item) {
       guard location != preservedLocation else { continue }
       let status = SecItemDelete(baseQuery(for: location) as CFDictionary)
+      guard !(location.usesDataProtection && status == errSecMissingEntitlement) else { continue }
       guard status != errSecSuccess, status != errSecItemNotFound else { continue }
       logger.error(
         "Legacy cleanup failed at \(location.description, privacy: .public): \(status, privacy: .public)"

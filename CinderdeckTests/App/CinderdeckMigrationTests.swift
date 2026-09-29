@@ -78,8 +78,75 @@ final class CinderdeckMigrationTests: XCTestCase {
     try FileManager.default.createDirectory(at: old, withIntermediateDirectories: true)
     try Data("invalid sqlite".utf8).write(to: old.appendingPathComponent("snapzy.db"))
     XCTAssertThrowsError(try CinderdeckMigration.runIfNeeded(home: home, defaults: defaults, legacyPreferences: [:]))
-    XCTAssertFalse(FileManager.default.fileExists(atPath: home.appendingPathComponent("Library/Application Support/Cinderdeck/.snapzy-import-completed").path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: home.appendingPathComponent("Library/Application Support/Cinderdeck/.legacy-import-completed").path))
     XCTAssertFalse(FileManager.default.fileExists(atPath: home.appendingPathComponent("Library/Application Support/Cinderdeck/cinderdeck.db").path))
+  }
+
+  func testCompletedImportRepairsExportSettingsAndConfigurationWithoutMovingCaptures() throws {
+    let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let domain = "CinderdeckMigrationTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: domain)!
+    defer { try? FileManager.default.removeItem(at: home); defaults.removePersistentDomain(forName: domain) }
+    let support = home.appendingPathComponent("Library/Application Support/Cinderdeck")
+    let config = home.appendingPathComponent(".config/cinderdeck/config.toml")
+    let oldExports = home.appendingPathComponent("Desktop/Snapzy")
+    for url in [support, config.deletingLastPathComponent(), oldExports] {
+      try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    }
+    try Data().write(to: support.appendingPathComponent(".snapzy-import-completed"))
+    let capture = oldExports.appendingPathComponent("Snapzy_existing.png")
+    try Data("original capture".utf8).write(to: capture)
+    defaults.set(oldExports.path, forKey: "exportLocation")
+    defaults.set(try oldExports.bookmarkData(), forKey: "exportLocation.bookmark")
+    defaults.set("Snapzy_{datetime}_{ms}", forKey: "screenshot.fileNameTemplate")
+    defaults.set("snapzy_Recording_{datetime}", forKey: "recording.fileNameTemplate")
+    let original = """
+    # Snapzy migration context stays in comments.
+    schema_version = 1
+    [general]
+    export_location = "~/Desktop/Snapzy" # chosen folder
+    [capture.naming]
+    screenshot_template = "Snapzy_{datetime}_{ms}"
+    recording_template = "Snapzy_Recording_{datetime}"
+    [stacks]
+    directory = "/custom/Snapzy-project"
+
+    """
+    try original.write(to: config, atomically: true, encoding: .utf8)
+
+    try CinderdeckMigration.runIfNeeded(home: home, defaults: defaults, legacyPreferences: ["late.key": true])
+
+    XCTAssertEqual(defaults.string(forKey: "exportLocation"), home.appendingPathComponent("Desktop/Cinderdeck").path)
+    XCTAssertNil(defaults.data(forKey: "exportLocation.bookmark"))
+    XCTAssertEqual(defaults.string(forKey: "screenshot.fileNameTemplate"), "Cinderdeck_{datetime}_{ms}")
+    XCTAssertEqual(defaults.string(forKey: "recording.fileNameTemplate"), "Cinderdeck_Recording_{datetime}")
+    XCTAssertNil(defaults.object(forKey: "late.key"))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: support.appendingPathComponent(".legacy-import-completed").path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: support.appendingPathComponent(".snapzy-import-completed").path))
+    XCTAssertEqual(try Data(contentsOf: capture), Data("original capture".utf8))
+    let expected = original.replacingOccurrences(of: "~/Desktop/Snapzy", with: "~/Desktop/Cinderdeck")
+      .replacingOccurrences(of: "\"Snapzy_", with: "\"Cinderdeck_")
+    XCTAssertEqual(try String(contentsOf: config, encoding: .utf8), expected)
+    try CinderdeckMigration.runIfNeeded(home: home, defaults: defaults, legacyPreferences: [:])
+    XCTAssertEqual(try String(contentsOf: config, encoding: .utf8), expected)
+  }
+
+  func testIdentityRepairPreservesCustomExportSettingsAndDiscardsStaleLegacyBookmark() throws {
+    let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let domain = "CinderdeckMigrationTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: domain)!
+    defer { try? FileManager.default.removeItem(at: home); defaults.removePersistentDomain(forName: domain) }
+    let old = home.appendingPathComponent("Desktop/Snapzy")
+    try FileManager.default.createDirectory(at: old, withIntermediateDirectories: true)
+    defaults.set("/custom/captures", forKey: "exportLocation")
+    defaults.set(try old.bookmarkData(), forKey: "exportLocation.bookmark")
+    defaults.set("Bug_{timestamp}", forKey: "screenshot.fileNameTemplate")
+    defaults.set("Session_{datetime}", forKey: "recording.fileNameTemplate")
+    try CinderdeckMigration.repairIdentity(home: home, defaults: defaults)
+    XCTAssertEqual(defaults.string(forKey: "exportLocation"), "/custom/captures")
+    XCTAssertNil(defaults.data(forKey: "exportLocation.bookmark"))
+    XCTAssertEqual(defaults.string(forKey: "screenshot.fileNameTemplate"), "Bug_{timestamp}")
+    XCTAssertEqual(defaults.string(forKey: "recording.fileNameTemplate"), "Session_{datetime}")
   }
 
   func testUpdaterRejectsUpstreamFeedKeyAndUnconfiguredBuilds() {

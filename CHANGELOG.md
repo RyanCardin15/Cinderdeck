@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Complete the Cinderdeck identity in exports, app text, Keychain writes, and generated service environment variables. Repair old save folders, filename templates, and Google Drive default folders even after the original data import completed; preserve existing captures and unrelated custom settings.
 - Give CLI and MCP agents the same operation catalog: `cinderdeck tools` lists schemas and `cinderdeck call` invokes any tool. Add CLI workspace creation, component edits, removal, saved-run waits and window navigation. Add workspace rename/folder edits, complete TOML reads and revision-checked saves, and definition-only removal that preserves project files and run history. Add stopped-lane name/environment edits while keeping worktrees, branches and ports. Validate argument types and enums before dispatch and protect claims, active work, references and reloads.
 - Rework worktree lanes so they work beyond single-port services:
   - Write `{{port.api}}`, `{{url.api}}`, `{{lane.slug}}`, `{{repo.app}}` and `{{url.backend:api}}` in commands, environment values and readiness URLs. They resolve for the original checkout and for each lane, so a lane's frontend no longer calls the original checkout's API. A literal `localhost:<port>` pointing at another service is now a warning.

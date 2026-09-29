@@ -33,7 +33,7 @@ final class GoogleDriveCloudProvider: CloudProvider {
     self.clientId = clientId
     self.clientSecret = clientSecret
     self.refreshToken = refreshToken
-    self.folderName = folderName.isEmpty ? "Cinderdeck" : folderName
+    self.folderName = folderName.isEmpty ? "Cinderdeck" : CinderdeckIdentity.googleDriveFolder(folderName)
     self.session = session
   }
 

@@ -428,7 +428,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Cinderdeck Debug";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Ryan Cardin. Based on Snapzy by Trong Duong Duc and contributors.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Ryan Cardin. Open-source acknowledgments included.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -469,7 +469,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Cinderdeck;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Ryan Cardin. Based on Snapzy by Trong Duong Duc and contributors.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Ryan Cardin. Open-source acknowledgments included.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

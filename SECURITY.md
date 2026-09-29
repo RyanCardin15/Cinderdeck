@@ -20,7 +20,7 @@ Source builds use the signing identity you configure. A development or ad-hoc bu
 
 Configured service commands may use the network. Cinderdeck also supports Git operations, user-initiated uploads to your chosen cloud storage, Google Drive OAuth, and optional custom OCR endpoints/model downloads. Built-in OCR runs locally. Custom OCR sends the selected capture to the endpoint you choose. Cinderdeck has no account service or telemetry collector.
 
-Cloud and OCR credentials are stored in the macOS Keychain. Existing Snapzy Keychain identifiers remain for compatibility. Cloud credential export is an explicit, encrypted export with a user-provided passphrase. Configuration exports do not include secret values.
+Cloud and OCR credentials are stored in the macOS Keychain under Cinderdeck identifiers. Previous Keychain identifiers are read for migration; new writes use Cinderdeck. Cloud credential export is an explicit, encrypted export with a user-provided passphrase. Configuration exports do not include secret values.
 
 ## Updates
 

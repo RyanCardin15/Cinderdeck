@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 /// Imports the fork's previous identity once, without moving or deleting original data.
-/// Stored capture paths and user-selected folders intentionally retain their original locations.
+/// Existing capture files stay in place; future exports use the current identity.
 nonisolated enum CinderdeckMigration {
   static func runIfNeeded(
     home: URL = FileManager.default.homeDirectoryForCurrentUser,
@@ -13,8 +13,16 @@ nonisolated enum CinderdeckMigration {
     let support = home.appendingPathComponent("Library/Application Support")
     let source = support.appendingPathComponent("Snapzy")
     let destination = support.appendingPathComponent("Cinderdeck")
-    let marker = destination.appendingPathComponent(".snapzy-import-completed")
-    guard !fm.fileExists(atPath: marker.path) else { return }
+    let marker = destination.appendingPathComponent(".legacy-import-completed")
+    let previousMarker = destination.appendingPathComponent(".snapzy-import-completed")
+    if fm.fileExists(atPath: marker.path) || fm.fileExists(atPath: previousMarker.path) {
+      try repairIdentity(home: home, defaults: defaults)
+      if fm.fileExists(atPath: previousMarker.path) {
+        if !fm.fileExists(atPath: marker.path) { try fm.moveItem(at: previousMarker, to: marker) }
+        else { try fm.removeItem(at: previousMarker) }
+      }
+      return
+    }
     try fm.createDirectory(at: destination, withIntermediateDirectories: true)
 
     // A database backup includes committed WAL content, even if Snapzy is still running.
@@ -37,7 +45,7 @@ nonisolated enum CinderdeckMigration {
       try fm.moveItem(at: temporary, to: newDatabase)
     }
     try copyMissing(from: source, to: destination,
-                    excluding: ["snapzy.db", "snapzy.db-wal", "snapzy.db-shm", "Agent", "Stacks", "Stacks-Debug"])
+                    excluding: ["snapzy.db", "snapzy.db-wal", "snapzy.db-shm", "Agent", "Stacks", "Stacks-Debug", ".snapzy-import-completed"])
     // Live sockets cannot be copied. The new server regenerates its state
     // snapshot; persisted advisory claims remain useful across the rename.
     try copyMissing(from: source.appendingPathComponent("Stacks"),
@@ -75,7 +83,66 @@ nonisolated enum CinderdeckMigration {
         defaults.set(value, forKey: key)
       }
     }
-    try Data("Imported from Snapzy without deleting the original data.\n".utf8).write(to: marker, options: .atomic)
+    try repairIdentity(home: home, defaults: defaults)
+    try Data("Legacy data imported into Cinderdeck; original files preserved.\n".utf8).write(to: marker, options: .atomic)
+  }
+
+  /// Also runs for installations that already completed the original import.
+  /// Repair the TOML before automatic import can restore old export settings.
+  static func repairIdentity(
+    home: URL = FileManager.default.homeDirectoryForCurrentUser,
+    defaults: UserDefaults = .standard
+  ) throws {
+    for key in ["screenshot.fileNameTemplate", "recording.fileNameTemplate"] {
+      if let value = defaults.string(forKey: key) {
+        let updated = CinderdeckIdentity.captureTemplate(value)
+        if updated != value { defaults.set(updated, forKey: key) }
+      }
+    }
+    if defaults.string(forKey: "cloud.providerType") == "google_drive",
+       let folder = defaults.string(forKey: "cloud.bucket") {
+      let updated = CinderdeckIdentity.googleDriveFolder(folder)
+      if updated != folder { defaults.set(updated, forKey: "cloud.bucket") }
+    }
+    if let path = defaults.string(forKey: "exportLocation") {
+      let updated = CinderdeckIdentity.exportPath(path)
+      if updated != path {
+        defaults.set(updated, forKey: "exportLocation")
+        defaults.removeObject(forKey: "exportLocation.bookmark")
+      }
+    }
+    if let bookmark = bookmarkURL(defaults.data(forKey: "exportLocation.bookmark")),
+       CinderdeckIdentity.exportPath(bookmark.path) != bookmark.path {
+      if defaults.string(forKey: "exportLocation") == nil {
+        defaults.set(CinderdeckIdentity.exportPath(bookmark.path), forKey: "exportLocation")
+      }
+      defaults.removeObject(forKey: "exportLocation.bookmark")
+    }
+
+    let oldConfig = home.appendingPathComponent(".config/snapzy").standardizedFileURL
+    var configURLs = Set([home.appendingPathComponent(".config/cinderdeck/config.toml")])
+    for key in ["configuration.fileBookmark", "configuration.directoryBookmark"] {
+      guard let url = bookmarkURL(defaults.data(forKey: key)) else { continue }
+      if url == oldConfig || url == oldConfig.appendingPathComponent("config.toml") {
+        defaults.removeObject(forKey: key)
+      } else {
+        configURLs.insert(key == "configuration.directoryBookmark" ? url.appendingPathComponent("config.toml") : url)
+      }
+    }
+    for url in configURLs where FileManager.default.fileExists(atPath: url.path) {
+      let accessed = url.startAccessingSecurityScopedResource()
+      defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+      let original = try String(contentsOf: url, encoding: .utf8)
+      let updated = CinderdeckIdentity.configuration(original)
+      if updated != original { try updated.write(to: url, atomically: true, encoding: .utf8) }
+    }
+  }
+
+  private static func bookmarkURL(_ data: Data?) -> URL? {
+    guard let data else { return nil }
+    var stale = false
+    return try? URL(resolvingBookmarkData: data, options: [.withoutUI, .withoutMounting],
+                    bookmarkDataIsStale: &stale).standardizedFileURL
   }
 
   private static func copyMissing(from source: URL, to destination: URL, excluding: Set<String> = []) throws {
@@ -94,5 +161,57 @@ nonisolated enum CinderdeckMigration {
         try fm.copyItem(at: item, to: target)
       }
     }
+  }
+}
+
+/// Only old product names in export settings are changed. Project paths,
+/// comments, credentials, and previously saved files are left intact.
+nonisolated enum CinderdeckIdentity {
+  static func captureTemplate(_ value: String) -> String {
+    value.replacingOccurrences(of: "snapzy", with: "Cinderdeck", options: .caseInsensitive)
+  }
+
+  static func exportPath(_ path: String) -> String {
+    path.components(separatedBy: "/").map {
+      $0.caseInsensitiveCompare("Snapzy") == .orderedSame ? "Cinderdeck" : $0
+    }.joined(separator: "/")
+  }
+
+  static func googleDriveFolder(_ name: String) -> String {
+    name.caseInsensitiveCompare("Snapzy") == .orderedSame ? "Cinderdeck" : name
+  }
+
+  static func configuration(_ source: String) -> String {
+    var paths = [["general", "export_location"], ["capture", "naming", "screenshot_template"],
+                 ["capture", "naming", "recording_template"], ["cloud", "folder_name"]]
+    if let document = try? SimpleTOMLParser.parse(source),
+       document.value(at: ["cloud", "provider"])?.stringValue == "google_drive" {
+      paths.append(["cloud", "bucket"])
+    }
+    var section = ""
+    return source.components(separatedBy: "\n").map { line in
+      let trimmed = line.trimmingCharacters(in: .whitespaces)
+      if trimmed.hasPrefix("[") {
+        section = line
+        return line
+      }
+      guard let document = try? SimpleTOMLParser.parse(section + "\n" + line) else { return line }
+      for path in paths {
+        guard let value = document.value(at: path)?.stringValue else { continue }
+        let updated: String
+        if path == ["general", "export_location"] { updated = exportPath(value) }
+        else if path.first == "cloud" { updated = googleDriveFolder(value) }
+        else { updated = captureTemplate(value) }
+        guard updated != value,
+              let assignment = line.firstIndex(of: "="),
+              let range = line.range(of: #""(?:\\.|[^"\\])*""#, options: .regularExpression,
+                                     range: line.index(after: assignment)..<line.endIndex) else { return line }
+        let escaped = updated.replacingOccurrences(of: "\\", with: "\\\\")
+          .replacingOccurrences(of: "\"", with: "\\\"")
+          .replacingOccurrences(of: "\n", with: "\\n").replacingOccurrences(of: "\t", with: "\\t")
+        return line.replacingCharacters(in: range, with: "\"\(escaped)\"")
+      }
+      return line
+    }.joined(separator: "\n")
   }
 }
