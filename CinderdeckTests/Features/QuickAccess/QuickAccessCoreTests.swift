@@ -14,6 +14,7 @@ final class QuickAccessCoreTests: XCTestCase {
   // Keep MainActor ObservableObjects alive for the test process; XCTest scope
   // cleanup can crash while deinitializing app-level observable stores.
   private static var retainedActionStores: [QuickAccessActionConfigurationStore] = []
+  private static var retainedSwipeModeStores: [QuickAccessTrackpadSwipeModeStore] = []
   private static var retainedPinWindowStates: [QuickAccessPinWindowState] = []
 
   func testQuickAccessSound_respectsGlobalAndQuickAccessPreferences() {
@@ -268,12 +269,14 @@ final class QuickAccessCoreTests: XCTestCase {
     let defaults = makeIsolatedDefaults()
 
     let store = QuickAccessTrackpadSwipeModeStore(defaults: defaults)
+    Self.retainedSwipeModeStores.append(store)
     XCTAssertEqual(store.mode, .inverted)
 
     store.setMode(.natural)
     XCTAssertEqual(store.mode, .natural)
 
     let reloadedStore = QuickAccessTrackpadSwipeModeStore(defaults: defaults)
+    Self.retainedSwipeModeStores.append(reloadedStore)
     XCTAssertEqual(reloadedStore.mode, .natural)
   }
 
@@ -281,6 +284,7 @@ final class QuickAccessCoreTests: XCTestCase {
     let defaults = makeIsolatedDefaults()
 
     let store = QuickAccessTrackpadSwipeModeStore(defaults: defaults)
+    Self.retainedSwipeModeStores.append(store)
     store.setMode(.natural)
     store.resetToDefault()
 

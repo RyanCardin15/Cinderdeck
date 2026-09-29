@@ -3,7 +3,7 @@
 //  Cinderdeck
 //
 //  Single quick access card with swipe-to-dismiss and drag-to-external-app
-//  Direction-based gesture handling: swipe toward edge = dismiss, drag away = external app
+//  Click-and-drag exports the file; two-finger swipes perform configured actions.
 //
 
 import AppKit
@@ -243,6 +243,7 @@ struct QuickAccessCardView: View {
       swipeMode: trackpadSwipeModeStore.mode,
       onDragStarted: {
         isDragging = true
+        manager.pauseCountdownForActivity(item.id)
       },
       onDragEnded: { success in
         isDragging = false
@@ -250,6 +251,11 @@ struct QuickAccessCardView: View {
           // Only remove card from UI — don't delete the file.
           // Temp files stay available for the receiving app.
           manager.dismissCard(id: item.id)
+        } else {
+          manager.resumeCountdownForActivity(item.id)
+          if manager.pauseCountdownOnHover && isHovering {
+            manager.pauseCountdown(for: item.id)
+          }
         }
       },
       onSwipeChanged: { translation in
@@ -285,7 +291,7 @@ struct QuickAccessCardView: View {
         handleSwipeEnded(translation: finalTranslation, velocity: finalVelocity)
       },
       swipeSensitivity: CGFloat(manager.swipeSensitivity),
-      dragOnly: false,
+      dragOnly: true,
       reservedScrollAxis: nil
     )
   }

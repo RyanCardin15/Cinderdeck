@@ -44,7 +44,7 @@ Customization: `QuickAccessActionConfigurationStore` — context-menu order (`qu
 
 `QuickAccessDraggableView`:
 
-- Mouse drag: 30pt direction threshold; drag toward panel edge = swipe-dismiss; drag away = drag-to-app file drag.
+- Mouse drag: click and drag at least 6pt in any direction to export the file to another app. The auto-dismiss countdown pauses during the drag; a successful drop removes only the card and preserves the file for the receiving app.
 - Two-finger trackpad swipe: `QuickAccessTrackpadSwipeHelpers`, dismiss at distance 80 / velocity 300, sensitivity 0.5–3.0 multiplier; mode natural/inverted (`quickAccess.trackpad.swipe.mode`, default inverted).
 - Per-direction action assignment via `QuickAccessSwipeActionStore` (`quickAccess.swipe.action.left/right`, both default dismiss).
 
