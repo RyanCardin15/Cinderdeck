@@ -26,7 +26,9 @@ struct StackExpandedView: View {
   private var header: some View {
     HStack(alignment: .center, spacing: 10) {
       VStack(alignment: .leading, spacing: 5) {
-        Text(showsWorkspaceName ? file.name : "Services").font(DeckStyle.section).lineLimit(1).help(file.name)
+        Text(showsWorkspaceName ? file.name : "Services").font(DeckStyle.section).lineLimit(1)
+          .workspaceReferenceDrag(file, model: viewModel)
+          .help("Drag \(file.name) to an editor or chat to share its workspace reference")
         HStack(spacing: 6) {
           StackStateBadge(label: file.definition == nil ? "Degraded" : state.label, since: state.isActive ? state.startedAt : nil)
           if let operation = state.operation { StackChip(systemImage: "hourglass", text: operation + "…", tint: .orange) }

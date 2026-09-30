@@ -127,9 +127,12 @@ struct WorkspaceView: View {
   private func workspaceHeader(_ file: StackDefinitionFile) -> some View {
     HStack(alignment: .center, spacing: 12) {
       DeckFeatureIcon(systemName: file.lane == nil ? "square.stack.3d.up" : "arrow.triangle.branch")
+        .workspaceReferenceDrag(file, model: model)
+        .help("Drag a workspace reference to an editor or chat")
       VStack(alignment: .leading, spacing: 5) {
         DeckSectionLabel(title: file.lane == nil ? "Workspace" : "Worktree lane")
         Text(file.name).font(DeckStyle.title).lineLimit(2).help(file.name)
+          .workspaceReferenceDrag(file, model: model)
           .accessibilityAddTraits(.isHeader)
         Text((workspace?.root.path ?? file.file.path)
           .replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path + "/", with: "~/"))
@@ -139,6 +142,12 @@ struct WorkspaceView: View {
       }
       Spacer(minLength: 12)
       HStack(spacing: 8) {
+        Image(systemName: "hand.draw").foregroundStyle(.secondary)
+          .frame(width: 28, height: 28).contentShape(Rectangle())
+          .workspaceReferenceDrag(file, model: model)
+          .help("Drag a workspace reference to an editor or chat")
+          .accessibilityLabel("Drag workspace reference")
+          .accessibilityIdentifier("workspace.dragReference")
         Button { model.lanesSheet = true } label: { Label("Lanes", systemImage: "arrow.triangle.branch") }
           .accessibilityIdentifier("stacks.lanes")
         Button { model.edit(file) } label: { Image(systemName: "slider.horizontal.3") }
@@ -268,11 +277,14 @@ struct WorkspaceView: View {
           Spacer(minLength: 0)
         }.padding(10).contentShape(Rectangle())
       }.buttonStyle(.plain).accessibilityIdentifier("workspace.sidebar.\(file.id)")
+        .workspaceReferenceDrag(file, model: model)
     }
     .background(selected ? tint.opacity(0.1) : .clear, in: RoundedRectangle(cornerRadius: 10))
     .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(selected ? tint.opacity(0.35) : .clear))
     .help(WorkspaceLaneGraph.branchSummary(file, statuses: model.repoStatuses))
     .contextMenu {
+      WorkspaceReferenceCopyButton(file: file, model: model)
+      Divider()
       Button("Show lane map") { model.select(file.id); section = .laneMap }
       StackLaneAttachmentMenu(file: file, model: model)
       StackLaneDeletionMenu(file: file, model: model)

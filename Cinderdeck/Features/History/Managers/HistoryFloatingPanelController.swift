@@ -32,6 +32,7 @@ final class HistoryFloatingPanelController {
   private var panel: HistoryFloatingPanel?
   private weak var containerView: HistoryFloatingContainerView?
   private var position: HistoryPanelPosition = .topCenter
+  private var draggedFrame: NSRect?
   private let padding: CGFloat = 20
   private var state: VisibilityState = .hidden
   private var pendingPresentation: Presentation?
@@ -59,6 +60,7 @@ final class HistoryFloatingPanelController {
 
   /// Update panel position
   func updatePosition(_ newPosition: HistoryPanelPosition) {
+    draggedFrame = nil
     position = newPosition
     repositionPanel()
   }
@@ -123,6 +125,9 @@ final class HistoryFloatingPanelController {
     panel.updateWindowLevel(isPinned: HistoryFloatingManager.shared.isPinned)
     panel.onDidResignKey = { [weak self] in
       self?.handlePanelDidResignKey()
+    }
+    panel.onDidMoveByUser = { [weak self] frame in
+      self?.draggedFrame = frame
     }
     installContent(
       presentation.content,
@@ -189,6 +194,8 @@ final class HistoryFloatingPanelController {
       return
     }
 
+    // Save the actual user placement before the dismissal animation moves it.
+    if draggedFrame != nil { draggedFrame = panel.frame }
     state = .hiding
     let targetFrame = reduceMotion ? panel.frame : transitionFrame(for: panel.frame, isShowing: false)
 
@@ -221,6 +228,9 @@ final class HistoryFloatingPanelController {
     updatePanelChrome(on: panel, cornerRadius: presentation.cornerRadius)
 
     let targetFrame = frame(for: presentation.size, position: presentation.position)
+    if draggedFrame != nil {
+      DiagnosticLogger.shared.log(.debug, .history, "Floating history user placement applied", context: ["frame": NSStringFromRect(targetFrame)])
+    }
     if animated {
       NSAnimationContext.runAnimationGroup { context in
         context.duration = 0.18
@@ -271,6 +281,12 @@ final class HistoryFloatingPanelController {
   }
 
   private func frame(for size: CGSize, position: HistoryPanelPosition) -> NSRect {
+    if let draggedFrame {
+      let currentFrame = state == .visible ? (panel?.frame ?? draggedFrame) : draggedFrame
+      let screen = NSScreen.screens.first { $0.frame.contains(NSPoint(x: currentFrame.midX, y: currentFrame.midY)) }
+        ?? ScreenUtility.activeScreen()
+      return HistoryPanelPlacement.resizedFrame(from: currentFrame, to: size, visibleFrame: screen.visibleFrame)
+    }
     let screen = ScreenUtility.activeScreen()
     let origin = position.calculateOrigin(for: size, on: screen, padding: padding)
     return NSRect(origin: origin, size: size)

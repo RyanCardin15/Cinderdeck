@@ -4,6 +4,10 @@ Open **Workspaces…** from the menu bar, or **History → Workspaces → Open W
 
 The compact History panel shows up to three complete workspace cards per page. Use the previous/next buttons for more workspaces, or the arrow keys to move the selection across pages. Service details scroll within each card while Start/Stop and workspace actions stay visible. **Open Workspaces** opens the full workspace window.
 
+Drag a workspace card or sidebar row from History or Workspaces into an editor chat (such as Cursor) or a text field to share a reference. You can also drag the workspace name or hand icon in the workspace header, or right-click and choose **Copy workspace reference**. The text includes the workspace ID, definition and project paths, lane, repository branches, and configured service addresses with their current status. It omits commands, environment variables, and secret values.
+
+Drag the grip in History's header to move the floating window around your screen. It keeps your chosen location while switching sections, expanding/collapsing, and reopening during the app session. Selecting a preset History position in Settings while History is compact resets its placement.
+
 A **workspace** groups a project's folders, environment, and reusable commands:
 
 - **Services** stay running: APIs, development servers, workers, databases. Start, stop, restart, readiness, automatic crash recovery, Git controls, and separate service terminals retain their existing behavior.
