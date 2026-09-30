@@ -10,10 +10,14 @@ struct StackCompactCardView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 9) {
       VStack(alignment: .leading, spacing: 6) {
-        Text(file.name).font(.system(size: 13.5, weight: .semibold))
+        HStack(alignment: .top, spacing: 6) {
+          Text(file.name).font(.system(size: 13.5, weight: .semibold))
           .lineLimit(2, reservesSpace: true)
           .frame(maxWidth: .infinity, alignment: .leading)
-          .help(file.name)
+          Image(systemName: "hand.draw").font(.system(size: 11)).foregroundStyle(.secondary)
+        }
+        .workspaceReferenceDrag(file, model: viewModel)
+        .help("Drag \(file.name) to an editor or chat to share its workspace reference")
         StackStateBadge(label: file.definition == nil ? "Degraded" : state.label, since: state.isActive ? state.startedAt : nil)
       }
       ScrollView(.vertical, showsIndicators: true) {
@@ -41,6 +45,7 @@ struct StackCompactCardView: View {
     .stackSurface(cornerRadius: 16, selected: selected)
     .contentShape(RoundedRectangle(cornerRadius: 16))
     .onTapGesture { viewModel.select(file.id) }
+    .workspaceReferenceDrag(file, model: viewModel)
     .contextMenu { WorkspaceNavigationMenu(file: file, model: viewModel) }
     .accessibilityElement(children: .contain).accessibilityLabel(file.name)
   }
@@ -174,6 +179,8 @@ struct WorkspaceNavigationMenu: View {
   let file: StackDefinitionFile
   @ObservedObject var model: StacksViewModel
   var body: some View {
+    WorkspaceReferenceCopyButton(file: file, model: model)
+    Divider()
     Button("Show lane map") { WorkspaceWindowController.shared.show(workspace: file.id, section: .laneMap) }
     StackLaneAttachmentMenu(file: file, model: model)
     StackLaneDeletionMenu(file: file, model: model)

@@ -12,6 +12,7 @@ import Foundation
 /// Non-activating floating panel for capture history
 final class HistoryFloatingPanel: NSPanel {
   var onDidResignKey: (() -> Void)?
+  var onDidMoveByUser: ((NSRect) -> Void)?
 
   init(contentRect: NSRect) {
     super.init(
@@ -36,6 +37,7 @@ final class HistoryFloatingPanel: NSPanel {
     collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
     acceptsMouseMovedEvents = true
     ignoresMouseEvents = false
+    isMovable = true
   }
 
   func updateWindowLevel(isPinned: Bool) {

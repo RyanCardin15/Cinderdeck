@@ -190,6 +190,8 @@ struct StacksTabView: View {
           .fill(selected ? Color.accentColor.opacity(colorScheme == .dark ? 0.2 : 0.13) : Color.clear)
       )
     }.buttonStyle(.plain)
+      .workspaceReferenceDrag(file, model: viewModel)
+      .help("Drag \(file.name) to an editor or chat to share its workspace reference")
       .contextMenu { WorkspaceNavigationMenu(file: file, model: viewModel) }
   }
 

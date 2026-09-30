@@ -246,14 +246,14 @@ struct HistoryFloatingContentView: View {
       HStack(spacing: 12) {
         preferencesButton(size: controlSize)
         filters().fixedSize(horizontal: true, vertical: false)
-        Spacer(minLength: 0)
+        HistoryPanelDragHandle(height: controlSize)
         controls().fixedSize()
       }
 
       VStack(spacing: 12) {
         HStack {
           preferencesButton(size: controlSize)
-          Spacer(minLength: 12)
+          HistoryPanelDragHandle(height: controlSize)
           controls().fixedSize()
         }
         filters()
