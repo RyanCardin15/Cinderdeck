@@ -18,6 +18,7 @@ local checkout.
 | Remove copied files and links | Unchanged individual copies and links are cleaned up even when untracked. Changed copies, replaced links, and directory copies require explicit discard. Tracked changes remain protected. |
 | Remove a lane with teardown | Local changes and running dependents are checked first, services stop before teardown, and removal reserves the lane while teardown runs. A failed teardown leaves the stopped lane available for repair. |
 | Create while setup runs | The new lane is claimed before setup starts. |
+| Agent control coverage | MCP adoption accepts `env`, `from` and `copy`, matching the lane CLI; release accepts `delete_logs`. The lane skill and help cover detached worktrees, name/environment edits, actual repository folders and service-specific exports. |
 
 ## Verification
 
@@ -27,6 +28,10 @@ local checkout.
 - The final Debug build passed **93 tests with zero failures**, including **48
   lane tests**. The other suites cover workspace runs, claims/control, MCP,
   navigation, definition editing, and bundled agent skills.
+- The agent coverage follow-up passed **15 focused MCP and bundled-skill tests**,
+  including a new regression for adoption/release argument parity and invalid
+  argument types. Compiled CLI help and tool schemas matched the real MCP stdio
+  catalog and initialization guidance.
 - `scripts/lanes-e2e.py --inspect` passed against the final Debug app, its control
   socket, CLI, MCP, throwaway Git repositories, and real HTTP services. Five
   environments ran with distinct ports/worktrees/claims, including simultaneous

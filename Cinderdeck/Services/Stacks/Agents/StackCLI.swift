@@ -400,7 +400,7 @@ nonisolated enum StackCLI {
       if result["problems"] != nil { throw StackControlError(code: "service_failed", message: "Lane created, but one or more services failed. Inspect its logs, then restart the lane.") }
       if result["timedOut"]?.boolValue == true { throw StackControlError(code: "timeout", message: "Lane created; still waiting for readiness. Inspect lane status.") }
     case "remove", "rm", "release":
-      guard args.count == 1 || args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane \(command) <workspace>/<branch> [--discard-ignored] [--force-teardown] [--delete-logs]") }
+      guard args.count == 1 || args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane \(command) <workspace>/<name> [--delete-logs]" + (command == "release" ? "" : " [--discard-ignored] [--force-teardown]")) }
       params["workspace"] = .string(args.joined(separator: "/"))
       if options.has("discard-ignored") { params["discard_ignored"] = .bool(true) }
       if options.has("force-teardown") { params["force_teardown"] = .bool(true) }
@@ -417,7 +417,7 @@ nonisolated enum StackCLI {
         }
       }
     case "setup":
-      guard args.count == 1 || args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane setup <workspace>/<branch>") }
+      guard args.count == 1 || args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane setup <workspace>/<name>") }
       params["workspace"] = .string(args.joined(separator: "/"))
       let result = try connection.call("lane.setup", params, timeout: 3900)
       if options.json { printJSON(result); return }
@@ -425,7 +425,7 @@ nonisolated enum StackCLI {
       print("Setup " + status + (result["setup"]?["detail"]?.stringValue.map { ": " + $0 } ?? ""))
       if status == "failed" { throw StackControlError(code: "setup_failed", message: "Lane setup failed") }
     case "unpin":
-      guard args.count == 1 || args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane unpin <workspace>/<branch>") }
+      guard args.count == 1 || args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane unpin <workspace>/<name>") }
       params["workspace"] = .string(args.joined(separator: "/"))
       let result = try connection.call("lane.unpin", params)
       if options.json { printJSON(result) } else { print("The lane now follows its source workspace.") }
@@ -641,20 +641,26 @@ nonisolated enum StackCLI {
 
   WORKTREE LANES
     cinderdeck lane create <workspace> <branch>       Create, set up and start an isolated worktree lane
-    cinderdeck lane edit <lane> --name <name>         Rename a stopped lane; id, branches and folders stay
-    cinderdeck lane edit <lane> --env KEY=VALUE       Replace lane overrides; --clear-env clears them
       --from <ref>  --env KEY=VALUE  --copy <glob>    Start point, lane-only variables, extra files to copy
       --no-setup  --no-start                          Skip [lanes] setup, or create without starting
     cinderdeck lane adopt <workspace> [name]          Use an existing worktree (--path, default: here)
+      --setup  --no-start                            Setup is off by default; name required for detached HEAD
+      --from <ref>  --env KEY=VALUE  --copy <glob>    Copy/from apply to new worktrees of other repos
+    cinderdeck lane edit <lane> --name <name>          Rename a stopped lane; id, branches and folders stay
+    cinderdeck lane edit <lane> --env KEY=VALUE        Replace stopped lane overrides; --clear-env clears them
     cinderdeck lane list [workspace]                  Original checkout and lanes, with setup and merge state
     cinderdeck lane env <lane> [service] --export     Resolved ports, URLs and variables for your shell
+      Pass a service for its PORT and own env; otherwise returns workspace-wide values.
     cinderdeck lane setup <lane>                      Run [lanes] setup again
     cinderdeck lane remove <lane>                     Stop, tear down, remove worktrees; keep branches
-      --discard-ignored  --force-teardown             Also delete ignored files; remove if teardown fails
+      --discard-ignored                             Discard ignored files, changed copies and copied folders
+      --force-teardown                              Remove even if teardown fails; tracked changes stay protected
     cinderdeck lane release <lane>                    Forget the lane but keep its worktrees
+      --delete-logs                                 Delete saved service logs on remove or release
     cinderdeck lane prune [workspace] --dry-run       Remove lanes whose branches were merged
     cinderdeck lane unpin <lane>                      Make an older lane follow its source definition
-    Use services status|logs|start|stop|restart <workspace>/<branch> to manage a lane.
+    Use the lane's stable id or <workspace>/<name> with services status|logs|start|stop|restart.
+    Stop running dependents before removing or releasing their lane (in_use).
 
   MORE
     cinderdeck workspace --help                       Tasks, workflows, and runs

@@ -62,6 +62,32 @@ final class CinderdeckMCPServerTests: XCTestCase {
     ] { XCTAssertThrowsError(try CinderdeckMCPServer.validate(tool, arguments), tool) }
   }
 
+  func testAdoptionAndReleaseAcceptTheOptionsAvailableInTheLaneCLI() throws {
+    let adoption: [String: JSONValue] = [
+      "workspace": .string("shop"), "path": .string("/tmp/pr-worktree"), "name": .string("review/pr-123"),
+      "from": .string("origin/main"), "env": .object(["FEATURE_X": .string("1")]),
+      "copy": .array([.string(".env.local")]), "setup": .bool(false), "start": .bool(false),
+    ]
+    // The generic CLI and MCP share validation: these options must reach the existing adoption API.
+    try CinderdeckMCPServer.validate("adopt_lane", adoption)
+    let adopted = try AgentToolCLI.request(name: "adopt_lane", arguments: adoption)
+    XCTAssertEqual(adopted.0, "lane.adopt")
+    XCTAssertEqual(adopted.1, adoption)
+    let release: [String: JSONValue] = ["workspace": .string("shop/review/pr-123"), "delete_logs": .bool(true)]
+    try CinderdeckMCPServer.validate("release_lane", release)
+    let released = try AgentToolCLI.request(name: "release_lane", arguments: release)
+    XCTAssertEqual(released.0, "lane.release")
+    XCTAssertEqual(released.1, release)
+    for fields: [String: JSONValue] in [
+      ["env": .object(["FEATURE_X": .bool(true)])], ["copy": .array([.number(1)])], ["from": .number(1)],
+    ] {
+      var invalid = adoption
+      invalid.merge(fields) { _, new in new }
+      XCTAssertThrowsError(try AgentToolCLI.request(name: "adopt_lane", arguments: invalid))
+    }
+    XCTAssertThrowsError(try AgentToolCLI.request(name: "release_lane", arguments: ["workspace": .string("shop/review"), "delete_logs": .string("true")]))
+  }
+
   func testEveryMCPToolIsAvailableThroughTheCLIWithoutASeparateCatalog() throws {
     func example(_ schema: JSONValue) -> JSONValue {
       if let first = schema["enum"]?.arrayValue?.first { return first }

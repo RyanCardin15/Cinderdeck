@@ -105,7 +105,7 @@ Commands, environment values and `ready.http` can contain `{{…}}` values. They
 | --- | --- | --- |
 | `{{port.api}}`, `{{port.web.hmr}}` | Configured port | Assigned port |
 | `{{url.api}}` | `http://localhost:4000` | `http://<host>:<assigned port>` |
-| `{{port.backend:api}}`, `{{url.backend:api}}` | Another workspace's service | That workspace's lane on the same branch, if there is one |
+| `{{port.backend:api}}`, `{{url.backend:api}}` | Another workspace's service | That workspace's lane with the same lane name, if there is one |
 | `{{host}}` | `localhost` | `localhost`, or the lane hostname with `[lanes] hosts = true` |
 | `{{lane.slug}}`, `{{lane.ident}}`, `{{lane.name}}`, `{{lane.dir}}` | Empty | `agent-codex-1`, `agent_codex_1`, `agent/codex-1`, lane folder |
 | `{{repo.<id>}}` | Repo path | Worktree path |
@@ -140,7 +140,7 @@ eval "$(cinderdeck lane env shop/agent/codex-1 --export)"
 cinderdeck lane remove shop/agent/codex-1
 ```
 
-`lane create <workspace> <branch>` creates a worktree for each independent repository, claims the lane for the caller, runs the workspace's `[lanes] setup`, and starts its services in dependency order. A local branch is checked out as it is; a branch that only exists on a remote is checked out tracking it; otherwise a new branch starts at `--from` (default: `[lanes] from`, then each repository's `HEAD`). The original checkout, its local edits, and its running services stay in place. A lane can be addressed by its returned ID or `<workspace>/<branch>` with all commands, including claims, logs, Git status, and restart.
+`lane create <workspace> <branch>` creates a worktree for each independent repository, claims the lane for the caller, runs the workspace's `[lanes] setup`, and starts its services in dependency order. A local branch is checked out as it is; a branch that only exists on a remote is checked out tracking it; otherwise a new branch starts at `--from` (default: `[lanes] from`, then each repository's `HEAD`). The original checkout, its local edits, and its running services stay in place. A lane can be addressed by its returned ID or `<workspace>/<name>` with all commands, including claims, logs, Git status, and restart. Its name defaults to the branch, but adoption and later renaming can give it a different name.
 
 Worktrees go in `~/.cinderdeck/lanes/<workspace>/<lane>/<repository folder>` (change it in **Settings → History → Workspaces → Lane worktrees**, or per workspace with `[lanes] dir`). Lane folders are never created inside a source repository.
 
@@ -152,7 +152,9 @@ A lane stores only what differs from its workspace: worktrees, assigned ports, a
 
 ### Ports and environment
 
-Only services with a `port`, `ports.<name>` or `ready.port` get lane ports. A lane reserves a block of ten ports from 20000 (larger when it needs more), excluding configured ports, other lanes, live launches, and occupied IPv4/IPv6 ports; assignments persist while the lane exists. Services receive `PORT`, `CINDERDECK_PORT_<SERVICE>[_<NAME>]` and `CINDERDECK_URL_<SERVICE>` for every service, plus `CINDERDECK_LANE` (the branch), `CINDERDECK_LANE_SLUG`, `CINDERDECK_LANE_DIR`, `CINDERDECK_SOURCE_STACK`, and `COMPOSE_PROJECT_NAME=<workspace>-<slug>` unless you set it. Lane values override shell, TOML, and secret values. Readiness checks on a service's own localhost ports follow the lane automatically; use `{{url.<service>}}` everywhere else.
+Only services with a `port`, `ports.<name>` or `ready.port` get lane ports. A lane reserves a block of ten ports from 20000 (larger when it needs more), excluding configured ports, other lanes, live launches, and occupied IPv4/IPv6 ports; assignments persist while the lane exists. Services receive `PORT`, `CINDERDECK_PORT_<SERVICE>[_<NAME>]` and `CINDERDECK_URL_<SERVICE>` for every service, plus `CINDERDECK_LANE` (the lane name), `CINDERDECK_LANE_SLUG`, `CINDERDECK_LANE_DIR`, `CINDERDECK_SOURCE_STACK`, and `COMPOSE_PROJECT_NAME=<workspace>-<slug>` unless you set it. Lane values override shell, TOML, and secret values. Readiness checks on a service's own localhost ports follow the lane automatically; use `{{url.<service>}}` everywhere else.
+
+`lane env <lane> --export` (MCP `lane_env`) exports workspace-wide variables and ports/URLs. Pass a service or task, for example `lane env shop/agent/codex-1 api --export`, for its own `PORT` and environment too. Shell variables and secrets are omitted. Use the actual repository folders from `laneStatus.worktrees` when running commands; adopted folders can be outside the lane directory. Configured tasks and workflows already resolve their folders and environment.
 
 Commands must use these values. Cinderdeck fills in `{{…}}` templates but does not rewrite literal ports. If a service listens, but not on any of its assigned ports, its port chip turns orange and the lane shows which port it used and that its command ignores `$PORT`.
 
@@ -212,6 +214,10 @@ env.FEATURE_FLAGS = "lanes"    # lane-only values, after [env]
 Setup runs as a normal run in the lane (see its output under Runs). If it fails, services are not started; fix it and choose **Run setup** (`cinderdeck lane setup`, MCP `run_lane_setup`). `lane create --no-setup` skips it, `--env KEY=VALUE` adds lane-only variables, and `--copy <glob>` copies more files. Submodules are initialized in new worktrees. Databases, Docker volumes and other outside resources are not created per lane automatically; do that in setup and teardown with `{{lane.ident}}`.
 
 Agents that already work in their own worktree (Claude Code, Codex, Cursor, Conductor) can run it as a lane: choose **Existing worktree** and browse to the folder, run `cinderdeck lane adopt shop` from that folder, or use MCP `adopt_lane`. Setup is optional and off by default for adoption. An optional lane name changes its address, while other repositories still use the adopted worktree's actual branch. Cinderdeck never deletes an adopted worktree, including when another workspace shares it. When a branch is already checked out in another worktree, `lane create` suggests adopting it. Agent-created lanes are claimed before setup starts.
+
+A detached worktree requires an explicit name, for example `lane adopt shop review/pr-123 --path <folder>`; other independent repositories use that name as their branch when no branch can be inferred. Adoption accepts `--env`, `--from` and `--copy` (MCP `env`, `from`, `copy`). The start point and copied files apply only to newly created worktrees of other repositories; existing folders are left alone.
+
+`lane edit <lane> --name <name>` or `--env KEY=VALUE` (MCP `update_lane`) changes a stopped lane's name or overrides. Supplied environment values replace the entire override set; omitted fields stay unchanged, and `--clear-env` (MCP `env: {}`) clears it. The lane's ID, Git branches, folders, slug and ports stay the same. Component definitions still come from the source workspace. Use matching lane names in dependent workspaces to pair their services after a rename.
 
 ### Removing and cleaning up
 

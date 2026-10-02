@@ -325,7 +325,7 @@ final class StackControlService: ObservableObject {
 
   // MARK: Stack actions
 
-  /// Resolves `workspace` by id, name, lane reference (<workspace>/<branch>), or unique prefix.
+  /// Resolves `workspace` by id, name, lane reference (<workspace>/<name>), or unique prefix.
   func workspaceFile(_ params: JSONValue) throws -> StackDefinitionFile {
     guard let query = params["workspace"]?.stringValue?.trimmingCharacters(in: .whitespaces), !query.isEmpty else {
       if supervisor.files.count == 1, let only = supervisor.files.first { return only }
@@ -340,11 +340,11 @@ final class StackControlService: ObservableObject {
     throw StackControlError.notFound("No workspace matches \"\(query)\". Workspaces: " + files.map(\.id).joined(separator: ", "))
   }
 
-  /// A lane by id or <workspace>/<branch>; the original checkout is refused.
+  /// A lane by id or <workspace>/<name>; the original checkout is refused.
   private func laneFile(_ params: JSONValue) throws -> StackDefinitionFile {
     let file = try workspaceFile(params)
     guard file.lane != nil else {
-      throw StackControlError.invalid("\(file.name) is an original checkout, not a lane. Pass a lane id or <workspace>/<branch> (see list_lanes).")
+      throw StackControlError.invalid("\(file.name) is an original checkout, not a lane. Pass a lane id or <workspace>/<name> (see list_lanes).")
     }
     return file
   }

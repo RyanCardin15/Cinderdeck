@@ -23,12 +23,14 @@ nonisolated enum StackAgentGuide {
   invokes any operation with the same schema. cinderdeck workspace --help lists common shortcuts.
   Parallel branches: create_lane makes an isolated Git worktree copy of a workspace on a branch (tracking a remote-only branch), \
   claims it before [lanes] setup and starts it on unique ports, leaving the original running. Already in \
-  your own worktree? adopt_lane runs it as a lane without moving it. Use its stable id or <workspace>/<name> with every tool. \
+  your own worktree? adopt_lane runs it as a lane without moving it, with setup off by default. Pass name for a detached HEAD \
+  and env for lane-only feature flags. Use its stable id or <workspace>/<name> with every tool. \
   update_lane changes a stopped lane's name or environment overrides ({} clears); ids, branches, folders, slug and ports stay. \
   Edit the source workspace for component definitions and lane defaults. Adopted/released worktrees stay external across sharing; \
   release_lane forgets a lane while keeping its worktrees. Different workspaces on the same branch share files; use distinct branches for independent edits. \
   Services read PORT, CINDERDECK_PORT_<SERVICE> and CINDERDECK_URL_<SERVICE>; definition values written as {{port.api}} or \
-  {{url.api}} resolve per lane. lane_env gives those values for your own shell or tests. Services marked shared (databases) \
+  {{url.api}} resolve per lane. lane_env gives workspace ports and URLs for your shell; pass service for its PORT and own env. \
+  Run commands in the actual repo folders returned by list_lanes, or use configured tasks/workflows. Services marked shared (databases) \
   run once in the original checkout. remove_lane checks local changes and running dependents, stops services before teardown, \
   keeps branches, and needs discard_ignored=true to delete ignored files or copied directories (ask the user first). \
   switch_branch changes the original checkout and refuses \
@@ -102,10 +104,12 @@ nonisolated enum StackAgentGuide {
       - `claim <workspace> --note "running e2e" --ttl 30` / `release <workspace>` while you depend on a workspace
       - `switch <workspace> <branch> [--repo id] [--stash|--carry]`, `git <workspace>`, `branches <workspace>`
     - Parallel work: `\(command) lane create <workspace> <branch> [--from origin/main]` creates, sets up and starts a worktree lane
-      - Already in your own worktree: `\(command) lane adopt <workspace>` (from that folder) runs it as a lane; Cinderdeck never deletes it
-      - `\(command) lane list [workspace]` / `\(command) lane remove <workspace>/<branch>` (branches are kept; `--discard-ignored` also deletes node_modules and build output — ask first)
-      - Use `<workspace>/<branch>` with every command; each service receives its assigned `PORT`, every `CINDERDECK_PORT_<UPPERCASE_SERVICE>` and `CINDERDECK_URL_<SERVICE>`
-      - `eval "$(\(command) lane env <workspace>/<branch> --export)"` gives your shell the lane's ports and URLs for tests and curl
+      - Already in your own worktree: `\(command) lane adopt <workspace> [name] --env FEATURE_X=1` runs it as a lane; setup is off unless `--setup`, and a detached HEAD requires a name. Cinderdeck never deletes the adopted folder
+      - `\(command) lane list [workspace]` / `\(command) lane remove <lane>` (branches are kept; `--discard-ignored` also deletes ignored files, changed copies and copied directories — ask first)
+      - Use the stable lane ID or `<workspace>/<name>` with every command; the name defaults to the branch
+      - `\(command) lane edit <lane> --name <name>` or `--env KEY=VALUE` edits a stopped lane; env replaces all overrides, `--clear-env` clears them
+      - `eval "$(\(command) lane env <lane> <service> --export)"` gives your shell that service's `PORT`, own env, and workspace ports/URLs; omit the service for workspace-wide values. Run tests from its actual worktree folder, or use `workspace task <lane> <task> --wait`
+      - `\(command) lane release <lane>` stops and forgets a lane while keeping its worktrees; removal and release require running dependents to stop first
     - Live state without any call: `\(StackControlPaths.state.path)`; log files: `~/Library/Logs/Cinderdeck/Stacks/<workspace>/<service>.log`
     - Definitions are TOML files in `~/.config/cinderdeck/stacks/`. Edit them with the MCP `save_workspace_*` tools, or by hand and \
       validate with `\(command) services validate <file>`.

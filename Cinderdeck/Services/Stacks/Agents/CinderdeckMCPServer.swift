@@ -33,13 +33,15 @@ nonisolated enum CinderdeckMCPServer {
 
   // MARK: Shared arguments
 
-  private static let workspace = property("string", "Workspace id or name, or a lane as <workspace>/<branch> (see list_workspaces)")
+  private static let workspace = property("string", "Workspace id or name, or a lane id or <workspace>/<name> (see list_workspaces)")
   private static let force = property("boolean", "Override another agent's claim. Only with the user's approval.")
   private static let wait = property("boolean", "Wait until services are ready (default true)")
   private static let waitTimeout = property("number", "Seconds to wait (default 180, max 900)")
   private static let runID = property("string", "Run UUID returned when the task or workflow started")
   private static let environment: JSONValue = .object(["type": .string("object"), "additionalProperties": .object(["type": .string("string")]),
     "description": .string("Environment variables as NAME: \"value\". Replaces the existing set; {} clears it.")])
+  private static let laneEnvironment: JSONValue = .object(["type": .string("object"), "additionalProperties": .object(["type": .string("string")]),
+    "description": .string("Lane-only environment variables as NAME: \"value\"; they win over the definition")])
   private static let repo = property("string", "Repo id from the workspace's repos; sets the default folder and branch tracking. \"\" removes it")
   private static let cwd = property("string", "Working folder: absolute, ~/…, or relative to the repo (or the workspace folder)")
 
@@ -225,20 +227,22 @@ nonisolated enum CinderdeckMCPServer {
       "Create an isolated Git worktree copy of a workspace on a branch, claim it for you, run its [lanes] setup, and start its services on unique ports. The source keeps running. A branch that only exists on the remote is tracked; a new branch starts at from (default each repo's HEAD). Values written as {{port.<service>}} / {{url.<service>}} resolve to this lane's ports; services marked shared use the original checkout's instance. start=false creates without starting. If the branch is already checked out in your own worktree, use adopt_lane.",
       ["workspace": workspace, "branch": property("string", "Existing (local or remote) or new branch, also the lane name, e.g. agent/codex-1"),
         "from": property("string", "Start point for a new branch, e.g. origin/main (default: [lanes] from, else HEAD)"),
-        "env": .object(["type": .string("object"), "additionalProperties": .object(["type": .string("string")]),
-          "description": .string("Lane-only environment variables as NAME: \"value\"; they win over the definition")]),
+        "env": laneEnvironment,
         "copy": property("array", "Extra untracked files to copy from each original checkout, e.g. [\".env.local\"]", items: "string"),
         "setup": property("boolean", "Run the workspace's [lanes] setup before starting (default true)"),
         "start": property("boolean", "Start services after creation (default true)"), "wait": wait,
         "timeout": waitTimeout], required: ["workspace", "branch"]),
     tool("adopt_lane", "Adopt a worktree as a lane", .additive,
-      "Run an existing Git worktree (for example the one you are working in) as a lane of a workspace, with its own ports. Cinderdeck never deletes an adopted worktree, even when another workspace shares it. Other repos use the worktree's actual branch or stay shared; an optional lane name only changes its address.",
+      "Run an existing Git worktree (for example the one you are working in) as a lane of a workspace, with its own ports. Cinderdeck never deletes an adopted worktree, even when another workspace shares it. Other repos use the worktree's actual branch or stay shared; an optional lane name only changes its address. A detached HEAD requires a name; that name is also the branch for other repos when no branch can be inferred. Setup is off by default. Copy options affect only newly created worktrees, leaving adopted and reused folders alone.",
       ["workspace": workspace, "path": property("string", "Worktree folder (default: your current folder)"),
-        "name": property("string", "Lane name (default: the worktree's branch)"),
+        "name": property("string", "Lane name (default: the worktree's branch; required for detached HEAD)"),
+        "from": property("string", "Start point for new branches in other repos (default: [lanes] from, else HEAD)"),
+        "env": laneEnvironment,
+        "copy": property("array", "Extra untracked files to copy into newly created worktrees of other repos; never into the adopted folder", items: "string"),
         "setup": property("boolean", "Run [lanes] setup (default false)"),
         "start": property("boolean", "Start services (default true)"), "wait": wait, "timeout": waitTimeout], required: ["workspace"]),
     tool("lane_env", "Lane environment", .read,
-      "The ports, URLs and variables a lane (or original checkout) gives its services: PORT, CINDERDECK_PORT_*, CINDERDECK_URL_*, lane values and definition env. Use them when you run tests or curl from your own shell. Secrets are omitted.",
+      "The ports, URLs and variables a lane (or original checkout) gives its services: CINDERDECK_PORT_*, CINDERDECK_URL_*, lane values and definition env. Pass service to include its PORT and own environment. Without service, returns workspace-wide values. Use them when you run tests or curl from your own shell. Secrets are omitted.",
       ["workspace": workspace, "service": property("string", "A service or task, for its PORT and own env")], required: ["workspace"]),
     tool("update_lane", "Edit a lane", .destructive,
       "Rename a stopped lane or replace its environment overrides ({} clears them). Omitted fields are kept. Stable lane id, Git branches, folders, slug and assigned ports stay the same. Refuses active services/runs, pinned lanes and another agent's claim. Edit the source workspace for shared component definitions and [lanes] defaults. Nothing starts.",
@@ -246,16 +250,17 @@ nonisolated enum CinderdeckMCPServer {
       required: ["workspace"], idempotent: true),
     tool("run_lane_setup", "Run lane setup", .additive,
       "Run the workspace's [lanes] setup task or workflow in a lane again, e.g. after it failed, and wait for it.",
-      ["workspace": property("string", "Lane id or <workspace>/<branch>"), "force": force], required: ["workspace"]),
+      ["workspace": property("string", "Lane id or <workspace>/<name>"), "force": force], required: ["workspace"]),
     tool("remove_lane", "Remove a lane", .destructive,
       "Check local changes and running dependents, stop a lane, run its [lanes] teardown, and remove its worktrees. Refuses in_use when another running lane/workspace uses its services. Respects claims and protects tracked/untracked changes. Ignored files, changed copies and copied directories block removal unless discard_ignored=true; ask the user before discarding. Keeps Git branches and adopted worktrees. Never removes the original checkout.",
-      ["workspace": property("string", "Lane id or <workspace>/<branch> from create_lane"), "force": force,
-        "discard_ignored": property("boolean", "Also delete ignored files in the lane's worktrees"),
+      ["workspace": property("string", "Lane id or <workspace>/<name> from list_lanes"), "force": force,
+        "discard_ignored": property("boolean", "Also delete ignored files, changed copies and copied directories; tracked changes stay protected"),
         "force_teardown": property("boolean", "Remove even if teardown fails"),
         "delete_logs": property("boolean", "Also delete the lane's service logs")], required: ["workspace"]),
     tool("release_lane", "Release a lane", .destructive,
       "Stop a lane and forget it, keeping every worktree on disk and relinquishing ownership so other lanes cannot delete them later. Refuses in_use while running dependents use its services. Use for worktrees you keep working in.",
-      ["workspace": property("string", "Lane id or <workspace>/<branch>"), "force": force], required: ["workspace"]),
+      ["workspace": property("string", "Lane id or <workspace>/<name>"), "force": force,
+        "delete_logs": property("boolean", "Also delete the lane's service logs")], required: ["workspace"]),
     tool("prune_lanes", "Prune merged lanes", .destructive,
       "Remove lanes whose branches were merged into the default remote branch or whose upstream branch was deleted. Lanes with changes, or claimed by others, are kept and reported. dry_run lists them first.",
       ["workspace": workspace, "dry_run": property("boolean", "Only list what would be removed"),
@@ -263,7 +268,7 @@ nonisolated enum CinderdeckMCPServer {
         "discard_ignored": property("boolean", "Also delete ignored files"), "force": force]),
     tool("unpin_lane", "Unpin a lane", .additive,
       "Make a lane created by an older Cinderdeck follow its source workspace definition instead of its saved copy.",
-      ["workspace": property("string", "Lane id or <workspace>/<branch>"), "force": force], required: ["workspace"]),
+      ["workspace": property("string", "Lane id or <workspace>/<name>"), "force": force], required: ["workspace"]),
   ]
 
   private static let prTools: [Tool] = [
