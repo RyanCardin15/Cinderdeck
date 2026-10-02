@@ -13,12 +13,11 @@
 </p>
 
 <p align="center">
-  <a href="assets/cinderdeck-promo.mp4?raw=true">
-    <img src="assets/cinderdeck-promo.gif" width="960" alt="Cinderdeck animated demo: your projects, one control deck." />
-  </a>
-  <br />
-  <a href="assets/cinderdeck-promo.mp4?raw=true"><strong>▶ Watch the 30-second promo with sound</strong></a>
+  <strong>Watch the 30-second demo with sound</strong>
+  <br />Press play, then unmute the player.
 </p>
+
+https://github.com/user-attachments/assets/2023bfa2-3e8a-48d0-953f-c7cb9c1a1e8b
 
 Cinderdeck is a native Mac application for running your development environment. Group any set of projects into a stack, define how each service starts, and manage them together from the menu bar, a terminal, or your coding agent.
 
