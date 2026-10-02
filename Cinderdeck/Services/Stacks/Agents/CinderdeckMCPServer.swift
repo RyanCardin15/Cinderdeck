@@ -115,7 +115,8 @@ nonisolated enum CinderdeckMCPServer {
       "Take an advisory claim on a workspace while you depend on it (tests, debugging, a lane you work in). Other agents must ask before changing it. Call again to renew.",
       ["workspace": workspace, "note": property("string", "What you are doing, shown to the user"),
         "ttl_minutes": property("number", "Default 30, max 480"), "force": force], required: ["workspace"], idempotent: true),
-    tool("release_workspace", "Release a claim", .additive, "Release your claim on a workspace.",
+    tool("release_workspace", "Release an agent lease", .additive,
+      "Cancel the advisory lease on a workspace or lane using its checkout ID. Services, task runs, worktrees and files stay in place. Use force to override another holder; agents can claim it again.",
       ["workspace": workspace, "force": force], required: ["workspace"], idempotent: true),
   ]
 

@@ -259,7 +259,8 @@ struct StackClaimChip: View {
       if let note = claim.note, !note.isEmpty { Text("· \(note)").font(.system(size: 10)).lineLimit(1).truncationMode(.tail) }
       if let onRelease {
         Button(action: onRelease) { Image(systemName: "xmark").font(.system(size: 7.5, weight: .bold)) }
-          .buttonStyle(.plain).help("Release this claim").accessibilityLabel("Release claim")
+          .buttonStyle(.plain).help("Cancel agent lease").accessibilityLabel("Cancel agent lease")
+          .accessibilityIdentifier("workspace.cancelLease.\(claim.stackID)")
       }
     }
     .foregroundColor(StackPalette.agent)
@@ -270,6 +271,23 @@ struct StackClaimChip: View {
   private var helpText: String {
     let note: String = claim.note.map { ": " + $0 } ?? ""
     let expiry: String = DateFormatter.localizedString(from: claim.expiresAt, dateStyle: .none, timeStyle: .short)
-    return "\(claim.holder.label) claimed this workspace\(note). Other agents must ask before changing it. Expires \(expiry)."
+    return "\(claim.holder.label) holds the agent lease\(note). Other agents must ask before changing it. Expires \(expiry)."
+  }
+}
+
+struct StackAgentLeaseView: View {
+  let claim: StackClaim
+  let cancel: () -> Void
+
+  var body: some View {
+    HStack(spacing: 8) {
+      Text("Agent lease").font(.caption).foregroundColor(.secondary)
+      StackClaimChip(claim: claim)
+      Spacer(minLength: 8)
+      Button("Cancel agent lease…", action: cancel)
+        .buttonStyle(DeckButtonStyle(compact: true))
+        .help("Free this lease so other agents can change the workspace or lane")
+        .accessibilityIdentifier("workspace.cancelLease.\(claim.stackID)")
+    }
   }
 }

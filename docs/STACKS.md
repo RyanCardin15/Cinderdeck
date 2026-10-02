@@ -227,6 +227,8 @@ The Lanes view marks lanes whose branch was merged into the default remote branc
 
 If you switch branches inside a lane later, its name stays the same and the Lanes view shows the differing repository branch. Switching to a branch already checked out in another worktree is rejected before services are stopped or local changes are stashed. Lane records are stored in `<stacks-directory>/.lanes/<lane-id>/lane.json`. Services, logs, saved process identities, and claims use the lane's unique ID. Claims are advisory leases (30 minutes by default); renew them while using a lane. Nested repositories are not supported; mark the inner one `lane = "shared"`.
 
+Choose **Cancel agent lease…** above the selected workspace's tabs, on a card in **Lanes**, in a workspace or lane's sidebar menu, or in the lane map inspector. It cancels only that checkout's claim and immediately frees it for other agents. Services and task runs keep running, and worktrees, files, ports, and logs stay in place. The confirmation identifies the holder and workspace; if a different lease replaces it while confirmation is open, review the new holder before canceling again. Agents can claim the checkout again afterward. **Agent access → Active agent leases** also lists leases with a **Cancel lease** control. The CLI and MCP use the existing `cinderdeck services release <workspace-or-lane>` and `release_workspace` with the checkout's ID (`--force` / `force: true` to override another holder).
+
 ## Branches
 
 Branch chips show `*` for local changes and `↑n ↓n` for upstream differences. Click a chip or press **⌘B** for Recent, Local, and Remote branches. Remote-only branches create local tracking branches. Merge, rebase, cherry-pick, and revert operations block checkout.

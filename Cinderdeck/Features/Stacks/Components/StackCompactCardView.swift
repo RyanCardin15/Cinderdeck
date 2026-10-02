@@ -163,7 +163,7 @@ struct StackActionsMenu: View {
       Divider()
       Button("Show log files") { viewModel.openLogFile(stack: file.id, service: nil) }
       if viewModel.claim(file.id) != nil {
-        Button("Release agent claim…") { viewModel.releaseClaim(file.id) }
+        Button("Cancel agent lease…") { viewModel.releaseClaim(file.id) }
       }
       Button("Agent access…") { viewModel.agentsSheet = true }
       Button("Refresh shell environment") { viewModel.refreshEnvironment(file.definition) }

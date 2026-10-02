@@ -630,7 +630,7 @@ nonisolated enum StackCLI {
     cinderdeck services switch <workspace> <branch>   --repo <id>  --stash | --carry
     cinderdeck services fetch|pull <workspace> [repo]
     cinderdeck services claim <workspace> [note]      --ttl <minutes> (default 30); advisory lock
-    cinderdeck services release <workspace>
+    cinderdeck services release <workspace-or-lane>  Cancel its agent lease; --force overrides another holder
     cinderdeck services events <workspace>            Recent activity and who caused it
     cinderdeck services validate <file.toml>          Check a workspace definition
     cinderdeck services reload | where | ping

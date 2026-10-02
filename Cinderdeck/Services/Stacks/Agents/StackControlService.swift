@@ -77,6 +77,16 @@ final class StackControlService: ObservableObject {
     saveClaims()
   }
 
+  /// Cancel the lease the user saw, without canceling a replacement acquired
+  /// while the confirmation was open. Renewals of that same lease are allowed.
+  func cancelAgentLease(_ expected: StackClaim) throws {
+    guard let current = claims[expected.stackID], !current.isExpired else { return }
+    guard current.holder.key == expected.holder.key, current.since == expected.since else {
+      throw StackControlError(code: "claim_changed", message: "The agent lease changed. Review the current holder and cancel again.")
+    }
+    release(stack: expected.stackID)
+  }
+
   private func pruneClaims() {
     let expired = claims.filter { $0.value.isExpired }.map(\.key)
     guard !expired.isEmpty else { return }

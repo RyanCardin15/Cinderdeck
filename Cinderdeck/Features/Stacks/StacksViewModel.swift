@@ -98,10 +98,12 @@ final class StacksViewModel: ObservableObject {
   var hasAuxiliaryUI: Bool { branchPicker != nil || stackBranchPicker || editor != nil || isConfirming || agentsSheet || lanesSheet || laneRemoval != nil || laneAttachment != nil }
   func claim(_ stack: String) -> StackClaim? { claims[stack].flatMap { $0.isExpired ? nil : $0 } }
   func releaseClaim(_ stack: String) {
-    guard let claim = claim(stack), confirm(title: "Release \(claim.holder.name)'s claim?",
-      message: "\(claim.holder.label) is using this workspace\(claim.note.map { " (" + $0 + ")" } ?? ""). Other agents will be able to change it again.",
-      buttons: ["Release", "Cancel"]) == 0 else { return }
-    StackControlService.shared.release(stack: stack)
+    let name = files.first { $0.id == stack }?.name ?? stack
+    guard let claim = claim(stack), confirm(title: "Cancel \(claim.holder.name)'s lease?",
+      message: "\(claim.holder.label) holds the agent lease for \(name)\(claim.note.map { " (" + $0 + ")" } ?? ""). Canceling lets other agents change it. Services and task runs keep running, and worktree files stay in place. The agent can claim it again.",
+      buttons: ["Cancel lease", "Keep lease"]) == 0 else { return }
+    do { try StackControlService.shared.cancelAgentLease(claim) }
+    catch { self.error = error.localizedDescription }
   }
   func selectService(_ service: String?) {
     selectedServiceID = service
