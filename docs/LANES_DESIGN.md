@@ -4,6 +4,9 @@ Status: implemented (all four phases). Sections 1–4 describe lanes as they wer
 describe the design as built, with the differences from the proposal listed in section 8. User documentation
 is in [STACKS.md](STACKS.md#parallel-worktree-lanes).
 
+The October 2, 2026 follow-up audit, lifecycle fixes, panel improvements, and
+current local validation are recorded in [LANES_VALIDATION.md](LANES_VALIDATION.md).
+
 ## 1. Summary
 
 Lanes work for one narrow case: one or more Git repositories, where every service reads `$PORT`, no

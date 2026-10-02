@@ -98,7 +98,8 @@ extension StackLaneWorktree {
   }
 }
 
-/// A file Cinderdeck copied or linked into a lane. Unchanged copies are removed without asking.
+/// A file Cinderdeck copied or linked into a lane. Unchanged individual copies
+/// and links are removed automatically; directory contents require explicit discard.
 nonisolated struct StackLaneCopiedFile: Codable, Equatable, Sendable {
   let path: URL
   /// SHA-256 of a copied file; nil for directories and links.

@@ -50,6 +50,8 @@ cinderdeck lane adopt shop --path "$PWD" --as "Claude Code"   # your own worktre
 
 - `create` makes the worktrees, copies the files listed in `[lanes] copy` (such as `.env`), runs `[lanes] setup` (such as `npm ci`), then starts the services and waits until they are ready. Pass `--no-start` to prepare first, or `--no-setup` to skip setup.
 - `adopt` does not run setup unless you pass `--setup`. Other repositories of the workspace get worktrees on the same branch.
+- An optional adopted lane name changes its address, not its Git branch. Other repositories use the adopted worktree's actual branch. Use **Existing worktree** in the Lanes panel for the same flow; its Open menu targets the actual repositories.
+- Workspaces using the same repository and branch share files, though their services and ports are separate. Use different branches for independent edits. Adopted or released worktrees stay external even when another workspace borrows them.
 - A failed setup leaves the lane created but stopped. Read it: `cinderdeck workspace runs shop/<branch>` then `workspace logs <run-id>` (MCP `workspace_run_logs`). Fix it and run `cinderdeck lane setup shop/<branch>`.
 - `already checked out in <path>`: that worktree belongs to someone. If it is yours, adopt it. Otherwise pick another branch.
 - `problems` in the result names services that crashed, with their last output. Fix and `services restart shop/<branch>`.
@@ -79,9 +81,12 @@ cinderdeck lane release shop/agent/own                # an adopted lane: forget 
 ```
 
 - Commit or push your work first. Removal refuses tracked or untracked changes, and reports branches with commits on no remote.
+- Removal checks for running dependents and local changes before stopping services, then runs teardown with the lane stopped. Failed teardown keeps the stopped lane available for repair.
+- Unchanged copied files and links can be cleaned up automatically. Copied directories, changed copies, and replaced links require explicit discard; review their contents first.
 - `ignored_files`: the worktree has `node_modules`, build output, or a changed `.env`. The error lists them with sizes. **Ask the user** before passing `--discard-ignored` (MCP `discard_ignored: true`).
 - `teardown_failed`: the lane is kept. Read the run's output and fix it; use `--force-teardown` only if the user agrees.
 - `in_use` when stopping the original checkout: running lanes use its shared services. Stop those lanes first, or pass `--force` with the user's approval.
+- `in_use` when removing or releasing a lane: another workspace or lane uses its services. Stop those dependents first; `--force` only overrides the claim for removal.
 - `cinderdeck lane prune --dry-run` lists lanes whose branch was merged or whose upstream branch was deleted. Show the list to the user before running `lane prune`.
 - Release your claim when you are done with a lane you keep: `cinderdeck services release shop/<branch>`.
 

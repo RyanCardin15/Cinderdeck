@@ -9,6 +9,8 @@ struct StackLanesView: View {
   @Environment(\.dismiss) private var dismiss
   @State private var branch = ""
   @State private var from = ""
+  @State private var adopting = false
+  @State private var adoptPath = ""
   @State private var startAfterCreation = true
   @State private var runSetup = true
   @State private var working = false
@@ -43,25 +45,38 @@ struct StackLanesView: View {
       }
       ScrollView([.horizontal, .vertical]) {
         HStack(alignment: .top, spacing: 12) { ForEach(lanes) { card($0) } }.padding(3)
-      }.frame(maxHeight: 360)
+      }.frame(height: 360)
       Divider()
-      Text("Create a lane").font(.headline)
+      Picker("Lane source", selection: $adopting) {
+        Text("New worktree").tag(false)
+        Text("Existing worktree").tag(true)
+      }.pickerStyle(.segmented).labelsHidden().frame(width: 300)
+        .accessibilityIdentifier("stacks.laneSource")
+        .onChange(of: adopting) { value in branch = ""; from = ""; runSetup = !value }
       HStack {
-        TextField("Branch, e.g. agent/codex-1", text: $branch)
-          .textFieldStyle(.roundedBorder).accessibilityIdentifier("stacks.laneBranch")
-        TextField(source?.definition?.laneSettings?.from ?? "From (default: HEAD)", text: $from)
-          .textFieldStyle(.roundedBorder).frame(width: 200).help("Start point for a new branch, such as origin/main. Existing local or remote branches are used as they are.")
-        Button(working ? "Working…" : "Create lane") { create() }
+        if adopting {
+          TextField("Worktree folder", text: $adoptPath)
+            .textFieldStyle(.roundedBorder).accessibilityIdentifier("stacks.laneAdoptPath")
+          Button("Browse…") { chooseWorktree() }.disabled(working)
+          TextField("Name (default: branch)", text: $branch)
+            .textFieldStyle(.roundedBorder).frame(width: 200).accessibilityIdentifier("stacks.laneName")
+        } else {
+          TextField("Branch, e.g. feature/search", text: $branch)
+            .textFieldStyle(.roundedBorder).accessibilityIdentifier("stacks.laneBranch")
+          TextField(source?.definition?.laneSettings?.from ?? "From (default: HEAD)", text: $from)
+            .textFieldStyle(.roundedBorder).frame(width: 200).help("Start point for a new branch, such as origin/main. Existing local or remote branches are used as they are.")
+        }
+        Button(working ? "Working…" : adopting ? "Adopt worktree" : "Create lane") { create() }
           .buttonStyle(DeckButtonStyle(prominent: true))
-          .disabled(working || branch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || source?.definition == nil)
+          .disabled(working || (adopting ? adoptPath : branch).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || source?.definition == nil)
           .accessibilityIdentifier("stacks.createLane")
-      }
+      }.disabled(working)
       HStack(spacing: 18) {
         if let setupReference {
           Toggle("Run setup (\(setupReference))", isOn: $runSetup).disabled(working)
         }
         if source?.definition?.services.isEmpty == false {
-          Toggle("Start services after creation", isOn: $startAfterCreation).disabled(working)
+          Toggle("Start services when ready", isOn: $startAfterCreation).disabled(working)
         }
       }
       Text(hint)
@@ -75,6 +90,9 @@ struct StackLanesView: View {
   }
 
   private var hint: String {
+    if adopting {
+      return "Uses your worktree's files and branch with separate ports and logs. Setup is optional. Other repositories use the worktree's branch; the lane name can differ. Cinderdeck keeps adopted worktrees when the lane is deleted."
+    }
     var text = "Uses an existing local branch, tracks a remote-only branch, or creates one from each repository's HEAD."
     if source?.definition?.services.isEmpty == true {
       text += " Tasks and workflows run inside the new lane's working folders."
@@ -165,16 +183,22 @@ struct StackLanesView: View {
         Button("Inspect") { viewModel.select(file.id); dismiss() }
       }.disabled(working || viewModel.isBusy(file.id))
       if let lane {
+        ForEach(worktreeFolders(file), id: \.path) { folder in
+          Text(folder.path).font(.caption.monospaced()).foregroundColor(.secondary)
+            .lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+        }
         HStack {
           Menu("Open") {
-            Button("Finder") { NSWorkspace.shared.open(lane.directory) }
-            Button("Copy shell exports") { copyExports(file) }
-              .help("export lines for this lane's ports, URLs and variables, for tests you run yourself")
-            ForEach(Self.editors, id: \.bundle) { editor in
-              if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: editor.bundle) {
-                Button(editor.name) { open(lane.directory, with: app) }
+            let folders = worktreeFolders(file)
+            if folders.count == 1, let folder = folders.first {
+              folderActions(folder)
+            } else {
+              ForEach(folders, id: \.path) { folder in
+                Menu(folder.lastPathComponent) { folderActions(folder) }
               }
             }
+            Button("Copy shell exports") { copyExports(file) }
+              .help("export lines for this lane's ports, URLs and variables, for tests you run yourself")
           }.fixedSize()
           if lane.pinned { Button("Unpin") { unpin(file) }.help("Follow \(lane.sourceStackID)'s current definition") }
           Spacer()
@@ -228,24 +252,60 @@ struct StackLanesView: View {
     }
   }
 
+  private func worktreeFolders(_ file: StackDefinitionFile) -> [URL] {
+    if !file.laneWorktrees.isEmpty { return file.laneWorktrees.map(\.path) }
+    return [file.definition?.root ?? file.lane?.directory].compactMap { $0 }
+  }
+
+  @ViewBuilder private func folderActions(_ folder: URL) -> some View {
+    Button("Finder") { NSWorkspace.shared.open(folder) }
+    Button("Copy folder path") {
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(folder.path, forType: .string)
+    }
+    ForEach(Self.editors, id: \.bundle) { editor in
+      if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: editor.bundle) {
+        Button(editor.name) { open(folder, with: app) }
+      }
+    }
+  }
+
   // MARK: Actions
+
+  private func chooseWorktree() {
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = false; panel.canChooseDirectories = true; panel.allowsMultipleSelection = false
+    panel.prompt = "Use worktree"
+    guard panel.runModal() == .OK, let folder = panel.url else { return }
+    adoptPath = folder.path
+  }
 
   private func create() {
     guard let sourceID else { return }
     let name = branch.trimmingCharacters(in: .whitespacesAndNewlines)
     let start = from.trimmingCharacters(in: .whitespacesAndNewlines)
     working = true; error = nil; warnings = []
+    var params: [String: JSONValue] = ["workspace": .string(sourceID), "setup": .bool(runSetup), "start": .bool(startAfterCreation)]
+    if adopting {
+      params["path"] = .string(adoptPath.trimmingCharacters(in: .whitespacesAndNewlines))
+      if !name.isEmpty { params["name"] = .string(name) }
+    } else {
+      params["branch"] = .string(name)
+      if !start.isEmpty { params["from"] = .string(start) }
+    }
+    let method = adopting ? "lane.adopt" : "lane.create"
     Task {
       defer { working = false }
       do {
-        let created = try await coordinator.create(stack: sourceID, request: .init(branch: name, from: start.isEmpty ? nil : start),
-          actor: .user, setup: runSetup)
-        branch = ""; from = ""
-        warnings = created.warnings
-        if !created.setupSucceeded {
-          error = "Setup failed: \(created.setup?.detail ?? ""). Services were not started. Fix it, then choose Run setup."
-        } else if startAfterCreation {
-          await supervisor.start(stack: created.file.id, actor: .user)
+        let result = try await StackControlService.shared.handle(method, params: .object(params), actor: .user)
+        branch = ""; from = ""; adoptPath = ""
+        warnings = result["warnings"]?.stringsValue ?? []
+        if result["setup"]?["status"]?.stringValue == "failed" {
+          error = "Setup failed: \(result["setup"]?["detail"]?.stringValue ?? ""). Services were not started. Fix it, then choose Run setup."
+        } else if let problems = result["problems"]?.objectValue, !problems.isEmpty {
+          error = problems.keys.sorted().map { name in "\(name): \(problems[name]?["detail"]?.stringValue ?? "Failed to start")" }.joined(separator: "\n")
+        } else if result["timedOut"]?.boolValue == true {
+          error = "The lane was created. Services are still starting; inspect its status and logs."
         }
       } catch { self.error = error.localizedDescription }
     }

@@ -386,8 +386,10 @@ nonisolated enum StackCLI {
       else if let snapshot = try result["workspace"]?.decode(StackSnapshot.self) {
         printStacks([snapshot], detailed: true)
         if let lane = snapshot.lane {
-          print("Lane: \(lane.reference)\nFolder: \(lane.directory.path)")
-          print("Use `cinderdeck services logs|stop|restart \(lane.reference)` to manage this lane, and `cinderdeck lane env \(lane.reference) --export` for its ports and URLs.")
+          print("Lane: \(lane.reference)")
+          for tree in snapshot.laneStatus?.worktrees ?? [] { print("Worktree: \(tree.path.path)") }
+          let reference = shellQuote(lane.reference)
+          print("Use `cinderdeck services logs|stop|restart \(reference)` to manage this lane, and `cinderdeck lane env \(reference) --export` for its ports and URLs.")
         }
         for warning in result["warnings"]?.arrayValue ?? [] { print(paint("warning: ", .yellow) + (warning.stringValue ?? "")) }
         if let note = result["note"]?.stringValue { print(paint(note, .yellow)) }

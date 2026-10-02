@@ -242,13 +242,13 @@ nonisolated enum StackLaneStore {
 
   // MARK: Git
 
-  static func git(_ arguments: [String], at path: URL, timeout: TimeInterval = 60) async throws -> String {
+  static func git(_ arguments: [String], at path: URL, timeout: TimeInterval = 60, trim: Bool = true) async throws -> String {
     let result = try await gitResult(arguments, at: path, timeout: timeout)
     guard result.status == 0 else {
       let detail = result.errorText.isEmpty ? result.text : result.errorText
       throw StackError.message(detail.isEmpty ? "Git \(arguments.first ?? "command") failed (exit \(result.status)). Check the branch name and repository." : String(detail.prefix(4000)))
     }
-    return result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trim ? result.text.trimmingCharacters(in: .whitespacesAndNewlines) : result.text
   }
 
   static func gitResult(_ arguments: [String], at path: URL, timeout: TimeInterval = 60) async throws -> StackCommandResult {
@@ -366,21 +366,23 @@ nonisolated enum StackLaneStore {
     }
 
     // Where each repository's worktree comes from.
-    enum Plan { case create, reuse(URL), adopt }
+    // A custom adopted lane name is a display/address choice, not a Git branch.
+    let worktreeBranch = adopted?.branch ?? branch
+    enum Plan { case create, reuse(StackLaneWorktree), adopt }
     var plans: [URL: Plan] = [:]
     for root in roots {
       if adopted?.source == root { plans[root] = .adopt; continue }
-      _ = try await git(["check-ref-format", "refs/heads/" + branch], at: root)
+      _ = try await git(["check-ref-format", "refs/heads/" + worktreeBranch], at: root)
       let checkouts = try await checkouts(root)
-      if let (path, _) = checkouts.first(where: { $0.value == branch }) {
+      if let (path, _) = checkouts.first(where: { $0.value == worktreeBranch }) {
         if path == root {
-          throw StackError.message("Branch \(branch) is checked out in the original checkout \(root.path). Choose a different lane branch.")
+          throw StackError.message("Branch \(worktreeBranch) is checked out in the original checkout \(root.path). Choose a different lane branch.")
         }
         // Another workspace's lane already has this branch: share its worktree.
         if let shared = existing.lazy.flatMap(\.worktrees).first(where: { samePath($0.path, path) }) {
-          plans[root] = .reuse(shared.path); continue
+          plans[root] = .reuse(shared); continue
         }
-        throw StackError.message("Branch \(branch) is already checked out in \(path.path). Adopt that worktree with `cinderdeck lane adopt \(source.id) --path \(path.path)`, or choose a different lane branch.")
+        throw StackError.message("Branch \(worktreeBranch) is already checked out in \(path.path). Adopt that worktree with `cinderdeck lane adopt \(source.id) --path \(path.path)`, or choose a different lane branch.")
       }
       plans[root] = .create
     }
@@ -404,12 +406,15 @@ nonisolated enum StackLaneStore {
     for root in roots {
       switch plans[root] {
       case .adopt: worktrees.append(adopted!)
-      case .reuse(let path): worktrees.append(StackLaneWorktree(source: root, path: path, branch: branch, managed: true))
+      case .reuse(let tree):
+        // Borrowing an agent's worktree must never make it Cinderdeck-owned.
+        let managed = !existing.flatMap(\.worktrees).contains { samePath($0.path, tree.path) && !$0.managed }
+        worktrees.append(StackLaneWorktree(source: root, path: tree.path, branch: tree.branch, managed: managed))
       default:
         var name = root.lastPathComponent
         if used.contains(name) { var n = 2; while used.contains("\(name)-\(n)") { n += 1 }; name = "\(name)-\(n)" }
         used.insert(name)
-        worktrees.append(StackLaneWorktree(source: root, path: laneDirectory.appendingPathComponent(name, isDirectory: true), branch: branch, managed: true))
+        worktrees.append(StackLaneWorktree(source: root, path: laneDirectory.appendingPathComponent(name, isDirectory: true), branch: worktreeBranch, managed: true))
       }
     }
     let id = source.id + "--lane-" + UUID().uuidString.lowercased()
@@ -417,7 +422,7 @@ nonisolated enum StackLaneStore {
     let ports = try allocate(keys, excluding: occupiedPorts)
     var info = StackLaneInfo(sourceStackID: source.id, name: branch, owner: owner, createdAt: Date(), directory: laneDirectory,
       ports: ports, slug: slug, environment: request.environment, from: request.from ?? settings?.from)
-    info.adopted = adopted != nil
+    info.adopted = worktrees.contains { !$0.managed }
     var record = StackLaneRecord(id: id, info: info, worktrees: worktrees, ready: false)
     // Readiness checks and ports must work in a lane before anything is created.
     if let problem = derive(record, source: source).issues.first(where: { $0.severity == .error }) {
@@ -430,11 +435,11 @@ nonisolated enum StackLaneStore {
       try FileManager.default.createDirectory(at: laneDirectory, withIntermediateDirectories: true)
       for (index, tree) in worktrees.enumerated() {
         if case .create = plans[tree.source] {
-          try await addWorktree(tree, branch: branch, from: info.from)
+          try await addWorktree(tree, branch: worktreeBranch, from: info.from)
           created.append(tree)
         }
         worktrees[index].baseCommit = try? await git(["rev-parse", "HEAD"], at: tree.path)
-        if tree.managed, FileManager.default.fileExists(atPath: tree.path.appendingPathComponent(".gitmodules").path) {
+        if case .create = plans[tree.source], FileManager.default.fileExists(atPath: tree.path.appendingPathComponent(".gitmodules").path) {
           _ = try await git(["submodule", "update", "--init", "--recursive"], at: tree.path, timeout: 600)
         }
       }
@@ -450,7 +455,16 @@ nonisolated enum StackLaneStore {
         }
       }
       let patterns = (settings?.copy ?? []) + request.copy
-      record.copied = try copyFiles(patterns, link: settings?.link ?? [], worktrees: worktrees.filter { plans[$0.source].map { if case .create = $0 { return true }; return false } ?? false })
+      let newTrees = worktrees.filter { plans[$0.source].map { if case .create = $0 { return true }; return false } ?? false }
+      // Every lane sharing a managed worktree needs the cleanup metadata, even
+      // after the lane that originally copied its files has been removed.
+      record.copied = existing.flatMap(\.copied).filter { file in
+        worktrees.contains { tree in
+          if case .reuse = plans[tree.source] { return relativeEntry(file.path, to: tree.path) != nil }
+          return false
+        }
+      }
+      record.copied += try copyFiles(patterns, link: settings?.link ?? [], worktrees: newTrees)
       record.ready = true
       try write(record, in: directory)
       return Creation(record: record, warnings: warnings)
@@ -458,7 +472,7 @@ nonisolated enum StackLaneStore {
       var cleanupFailed = false
       for tree in created.reversed() where FileManager.default.fileExists(atPath: tree.path.path) {
         do {
-          for file in record.copied where relative(file.path, to: tree.path) != nil { try? FileManager.default.removeItem(at: file.path) }
+          for file in record.copied where relativeEntry(file.path, to: tree.path) != nil { try? FileManager.default.removeItem(at: file.path) }
           let inspection = try await inspect(tree, copied: [])
           guard inspection.changes.isEmpty, inspection.ignored.isEmpty else { throw StackError.message("Files were added") }
           _ = try await git(["worktree", "remove", "--", tree.path.path], at: tree.source)
@@ -632,7 +646,11 @@ nonisolated enum StackLaneStore {
   /// copies Cinderdeck made, and links it created, are not.
   static func inspect(_ tree: StackLaneWorktree, copied: [StackLaneCopiedFile]) async throws -> Inspection {
     var result = Inspection()
-    let output = try await git(["status", "--porcelain=v1", "-z", "--untracked-files=normal", "--ignored=traditional"], at: tree.path)
+    // Enumerate untracked files individually so copied files inside a new folder
+    // can be recognized, but keep ignored build directories grouped for review.
+    let status = try await git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], at: tree.path, trim: false)
+    let ignored = try await git(["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"], at: tree.path, trim: false)
+    let output = status + ignored.split(separator: "\0").map { "!! " + $0 + "\0" }.joined()
     let ours = Dictionary(copied.map { ($0.path.standardizedFileURL.path, $0) }, uniquingKeysWith: { first, _ in first })
     var fields = output.split(separator: "\0", omittingEmptySubsequences: true).map(String.init)[...]
     while let entry = fields.popFirst() {
@@ -640,11 +658,20 @@ nonisolated enum StackLaneStore {
       let code = String(entry.prefix(2)), path = String(entry.dropFirst(3))
       if code.first == "R" || code.first == "C" { _ = fields.popFirst() }
       let absolute = tree.path.appendingPathComponent(path).standardizedFileURL.path.replacingOccurrences(of: "/$", with: "", options: .regularExpression)
-      if let file = ours[absolute] {
-        if file.link { continue }
+      // A copied file that became tracked is still protected by Git's dirty check.
+      guard code == "!!" || code == "??" else { result.changes.append("\(code) \(path)"); continue }
+      let file = ours[absolute] ?? copied.first {
+        !$0.link && $0.hash == nil && relativeEntry(URL(fileURLWithPath: absolute), to: $0.path) != nil
+      }
+      if let file {
+        if file.link, let suffix = relativeEntry(file.path, to: tree.path),
+          let destination = try? FileManager.default.destinationOfSymbolicLink(atPath: file.path.path),
+          samePath(URL(fileURLWithPath: destination, relativeTo: file.path.deletingLastPathComponent()), tree.source.appendingPathComponent(suffix)) { continue }
         if let hash = file.hash, Self.hash(URL(fileURLWithPath: absolute)) == hash { continue }
-        if file.hash == nil, code == "!!" { continue }
-        result.ignored.append(.init(path: absolute, bytes: nil, note: "changed after Cinderdeck copied it"))
+        // Directory copies have no content hash. Their contents may include new
+        // work, so they always need explicit discard rather than silent deletion.
+        result.ignored.append(.init(path: absolute, bytes: nil, note: file.hash == nil && !file.link
+          ? "copied directory; contents need review" : "changed after Cinderdeck copied it"))
         continue
       }
       if code == "!!" { result.ignored.append(.init(path: absolute, bytes: nil)) }
@@ -703,13 +730,26 @@ nonisolated enum StackLaneStore {
       if !removable.contains(tree) { report.keptWorktrees.append(tree.path.path) }
     }
     for tree in removable {
-      for file in record.copied where file.link && relative(file.path, to: tree.path) != nil {
-        if (try? FileManager.default.destinationOfSymbolicLink(atPath: file.path.path)) != nil { try FileManager.default.removeItem(at: file.path) }
+      // Explicit paths cover unchanged copies/links that are untracked rather
+      // than ignored. Git clean preserves any files that have since been committed.
+      for file in record.copied {
+        guard let suffix = relativeEntry(file.path, to: tree.path), !suffix.isEmpty else { continue }
+        _ = try await git(["clean", "-fdx", "--", ":(literal)" + suffix], at: tree.path, timeout: 600)
       }
       // Only ignored files remain (checked above): unchanged copies, or what the caller agreed to discard.
       _ = try await git(["clean", "-fdX"], at: tree.path, timeout: 600)
       _ = try await git(["worktree", "remove", "--", tree.path.path], at: tree.source, timeout: 300)
       report.removedWorktrees.append(tree.path.path)
+    }
+    // Release relinquishes ownership of all its worktrees. Propagate that to
+    // borrowers so a later removal cannot delete files the user chose to keep.
+    let kept = record.worktrees.filter { options.keepWorktrees || !$0.managed }
+    for var other in others where other.id != record.id {
+      var changed = false
+      for index in other.worktrees.indices where kept.contains(where: { samePath($0.path, other.worktrees[index].path) }) {
+        if other.worktrees[index].managed { other.worktrees[index].managed = false; changed = true }
+      }
+      if changed { other.info.adopted = true; try write(other, in: directory) }
     }
     try FileManager.default.removeItem(at: manifest(id: record.id, in: directory))
     // Only remove now-empty folders, never recursively delete unexpected user files.
@@ -776,6 +816,14 @@ nonisolated enum StackLaneStore {
 
   static func samePath(_ left: URL, _ right: URL) -> Bool {
     left.resolvingSymlinksInPath().standardizedFileURL.path == right.resolvingSymlinksInPath().standardizedFileURL.path
+  }
+
+  /// Resolve ancestor symlinks but keep the final directory entry intact. A
+  /// linked .env belongs to the worktree even though its destination lives outside it.
+  static func relativeEntry(_ path: URL, to root: URL) -> String? {
+    let entry = path.standardizedFileURL
+    guard let parent = relative(entry.deletingLastPathComponent(), to: root) else { return nil }
+    return parent.isEmpty ? entry.lastPathComponent : parent + "/" + entry.lastPathComponent
   }
 
   static func relative(_ path: URL, to root: URL) -> String? {

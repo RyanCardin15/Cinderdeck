@@ -22,14 +22,16 @@ nonisolated enum StackAgentGuide {
   CLI agents: cinderdeck tools lists this same catalog; cinderdeck call <tool-name> --arguments '<json>' or --file <args.json> \
   invokes any operation with the same schema. cinderdeck workspace --help lists common shortcuts.
   Parallel branches: create_lane makes an isolated Git worktree copy of a workspace on a branch (tracking a remote-only branch), \
-  runs its [lanes] setup, and starts it on unique ports with a claim in your name, leaving the original running. Already in \
+  claims it before [lanes] setup and starts it on unique ports, leaving the original running. Already in \
   your own worktree? adopt_lane runs it as a lane without moving it. Use its stable id or <workspace>/<name> with every tool. \
   update_lane changes a stopped lane's name or environment overrides ({} clears); ids, branches, folders, slug and ports stay. \
-  Edit the source workspace for component definitions and lane defaults. release_lane forgets a lane while keeping its worktrees. \
+  Edit the source workspace for component definitions and lane defaults. Adopted/released worktrees stay external across sharing; \
+  release_lane forgets a lane while keeping its worktrees. Different workspaces on the same branch share files; use distinct branches for independent edits. \
   Services read PORT, CINDERDECK_PORT_<SERVICE> and CINDERDECK_URL_<SERVICE>; definition values written as {{port.api}} or \
   {{url.api}} resolve per lane. lane_env gives those values for your own shell or tests. Services marked shared (databases) \
-  run once in the original checkout. remove_lane keeps branches, refuses uncommitted work, and needs discard_ignored=true to \
-  delete ignored files such as node_modules (ask the user first). switch_branch changes the original checkout and refuses \
+  run once in the original checkout. remove_lane checks local changes and running dependents, stops services before teardown, \
+  keeps branches, and needs discard_ignored=true to delete ignored files or copied directories (ask the user first). \
+  switch_branch changes the original checkout and refuses \
   uncommitted work unless dirty=stash or dirty=carry.
   Repros record the screen with every service and task log on the video timeline, to reproduce bugs or test UI end to end: \
   start_repro_recording (window_id from list_repro_windows records exactly one window, followed if it moves; workspace plus \

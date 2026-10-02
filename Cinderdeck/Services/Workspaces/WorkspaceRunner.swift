@@ -67,11 +67,11 @@ final class WorkspaceRunner: ObservableObject {
 
   @discardableResult
   func submit(workspace id: String, kind: WorkspaceRunKind, definitionID: String, actor: StackActor = .user,
-    environment: [String: String] = [:]) throws -> WorkspaceRun {
+    environment: [String: String] = [:], laneLifecycle: Bool = false) throws -> WorkspaceRun {
     guard recovered && !recovering else { throw StackError.message("Run recovery is still in progress") }
     if let storageError { throw StackError.message(storageError) }
     guard activeRun(id) == nil else { throw StackError.message("A task or workflow is already running in this workspace") }
-    guard !supervisor.isBootstrapping, !supervisor.isRemovingLane(id), supervisor.states[id]?.operation == nil,
+    guard !supervisor.isBootstrapping, (!supervisor.isRemovingLane(id) || laneLifecycle), supervisor.states[id]?.operation == nil,
       let workspace = supervisor.definition(id) else { throw StackError.message("Workspace is unavailable or busy") }
     let references: [String], name: String, cleanupServices: Bool
     switch kind {
@@ -102,12 +102,13 @@ final class WorkspaceRunner: ObservableObject {
   }
 
   /// Runs a lane's `[lanes] setup` or `teardown` reference (task:<id> or workflow:<id>) and waits for it.
-  func runAndWait(workspace id: String, reference: String, actor: StackActor, timeout: TimeInterval = 3600) async throws -> WorkspaceRun {
+  func runAndWait(workspace id: String, reference: String, actor: StackActor, timeout: TimeInterval = 3600,
+    laneLifecycle: Bool = false) async throws -> WorkspaceRun {
     let parts = reference.split(separator: ":", maxSplits: 1).map(String.init)
     guard parts.count == 2, let kind = WorkspaceRunKind(rawValue: parts[0]) else {
       throw StackError.message("Use task:<id> or workflow:<id> (\(reference))")
     }
-    let started = try submit(workspace: id, kind: kind, definitionID: parts[1], actor: actor)
+    let started = try submit(workspace: id, kind: kind, definitionID: parts[1], actor: actor, laneLifecycle: laneLifecycle)
     let deadline = Date().addingTimeInterval(timeout)
     while let current = run(started.id), current.status.isActive {
       guard Date() < deadline else {

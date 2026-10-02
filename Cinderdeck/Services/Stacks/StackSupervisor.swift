@@ -570,19 +570,25 @@ final class StackSupervisor: ObservableObject {
   }
 
   @discardableResult
-  func removeLane(_ id: String, actor: StackActor, options: StackLaneRemovalOptions) async throws -> StackLaneRemovalReport {
+  func removeLane(_ id: String, actor: StackActor, options: StackLaneRemovalOptions,
+    beforeRemoval: (() async throws -> Void)? = nil) async throws -> StackLaneRemovalReport {
     guard !isBootstrapping else { throw StackError.message("Cinderdeck is still reconnecting to running services. Try again in a moment.") }
     guard activeWorkspaceRun?(id) != true else { throw StackError.message("Wait for this lane's task or workflow to finish, or cancel its run before removing it.") }
     guard let record = try StackLaneStore.record(id: id, in: lanesDirectory) else {
       throw StackError.message("Select a worktree lane. The original checkout cannot be removed.")
     }
     guard states[id]?.operation == nil, !removingLanes.contains(id) else { throw StackError.message("Wait for this lane to finish its current operation.") }
+    try checkLaneDependents(id)
     removingLanes.insert(id)
     defer { removingLanes.remove(id) }
     // Refuse before stopping anything when removal would lose work.
     _ = try await StackLaneStore.check(record, others: try StackLaneStore.records(in: lanesDirectory), options: options)
     await stop(stack: id, actor: actor)
     guard states[id]?.isActive != true else { throw StackError.message("Could not stop all lane services. Worktrees were kept.") }
+    // Reserve the lane across teardown too: duplicate removals, service starts,
+    // definition edits and ordinary tasks must not race the lifecycle hook.
+    try await beforeRemoval?()
+    try checkLaneDependents(id)
     await laneLock.acquire()
     let report: StackLaneRemovalReport
     do {
@@ -609,6 +615,14 @@ final class StackSupervisor: ObservableObject {
     laneGitStates[id] = nil
     await reloadDefinitions()
     return report
+  }
+
+  private func checkLaneDependents(_ id: String) throws {
+    let users = dependents(of: id)
+    guard users.isEmpty else {
+      let names = users.map { id in files.first { $0.id == id }?.lane?.reference ?? id }
+      throw StackControlError(code: "in_use", message: "\(names.joined(separator: ", ")) use this lane's services. Stop them before removing or releasing the lane.")
+    }
   }
 
   /// Converts a lane saved before lanes followed their source into one that does.

@@ -918,6 +918,34 @@ final class StackLaneTests: XCTestCase {
     _ = try await control.handle("lane.remove", params: .object(["workspace": .string("shop/setup-fails"), "force_teardown": .bool(true)]), actor: codex)
   }
 
+  func testCreationClaimsTheLaneBeforeSetupStarts() async throws {
+    try await write("""
+    root = "\(repo.path)"
+    shell = "/bin/sh"
+    [tasks.install]
+    cmd = "sleep 1"
+    [lanes]
+    setup = "task:install"
+    """)
+    await control.workspaceRunner.recover()
+    let creation = Task {
+      try await control.handle("lane.create", params: .object(["workspace": .string("shop"), "branch": .string("setup-claimed"),
+        "start": .bool(false)]), actor: codex)
+    }
+    let deadline = Date().addingTimeInterval(10)
+    while control.workspaceRunner.runs.first(where: { $0.status.isActive }) == nil, Date() < deadline {
+      try await Task.sleep(nanoseconds: 10_000_000)
+    }
+    let run = try XCTUnwrap(control.workspaceRunner.runs.first { $0.status.isActive })
+    XCTAssertEqual(control.claims[run.workspaceID]?.holder.key, codex.key)
+    do {
+      _ = try await control.handle("claim", params: .object(["workspace": .string(run.workspaceID)]), actor: claude)
+      XCTFail("Another agent claimed a lane during setup")
+    } catch { XCTAssertEqual((error as? StackControlError)?.code, "claimed") }
+    let result = try await creation.value
+    XCTAssertEqual(result["setup"]?["status"]?.stringValue, "succeeded")
+  }
+
   func testBindWarningWhenACommandIgnoresItsPort() async throws {
     let fixed = try StackLaneStore.availablePort(excluding: [])
     try await write("""
@@ -1005,6 +1033,25 @@ final class StackLaneTests: XCTestCase {
     catch { XCTAssertTrue(error.localizedDescription.contains("original checkout")) }
   }
 
+  func testDetachedAgentWorktreeCanRunAndReleaseWithoutResettingChanges() async throws {
+    try await load()
+    let external = root.appendingPathComponent("detached-agent")
+    _ = try await StackLaneStore.git(["worktree", "add", "--detach", external.path], at: repo)
+    try "work in progress".write(to: external.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)
+    let result = try await control.handle("lane.adopt", params: .object(["workspace": .string("shop"),
+      "name": .string("Detached review"), "path": .string(external.path)]), actor: codex)
+    let id = try XCTUnwrap(result["workspace"]?["id"]?.stringValue)
+    XCTAssertEqual(supervisor.runtime(id, "api").phase, .ready)
+    let body = try await response(try XCTUnwrap(supervisor.definition(id)))
+    XCTAssertEqual(body["lane"]?.stringValue, "Detached review")
+    XCTAssertTrue(StackLaneStore.samePath(URL(fileURLWithPath: try XCTUnwrap(body["cwd"]?.stringValue)), external))
+    _ = try await control.handle("lane.release", params: .object(["workspace": .string(id)]), actor: codex)
+    let branch = try await StackLaneStore.git(["branch", "--show-current"], at: external)
+    XCTAssertEqual(branch, "")
+    XCTAssertEqual(try String(contentsOf: external.appendingPathComponent("tracked.txt")), "work in progress")
+    XCTAssertEqual(supervisor.runtime(id, "api").phase, .stopped)
+  }
+
   func testWorkspacesSharingARepositoryShareOneWorktree() async throws {
     try await load()
     let port = try StackLaneStore.availablePort(excluding: Set(supervisor.definition("shop")?.services.compactMap(\.port) ?? []))
@@ -1022,6 +1069,172 @@ final class StackLaneTests: XCTestCase {
     XCTAssertTrue(FileManager.default.fileExists(atPath: second.root.path), "Another lane still uses the worktree")
     try await supervisor.removeLane(second.id, actor: claude)
     XCTAssertFalse(FileManager.default.fileExists(atPath: second.root.path))
+  }
+
+  func testSharedAdoptedWorktreeStaysExternalAfterItsFirstLaneIsRemoved() async throws {
+    try await load()
+    try await write("""
+    root = "\(repo.path)"
+    [tasks.check]
+    cmd = "pwd"
+    """, id: "review")
+    let external = root.appendingPathComponent("agent-own")
+    _ = try await StackLaneStore.git(["worktree", "add", "-b", "agent/own", external.path], at: repo)
+    let adopted = try await supervisor.adoptLane(stack: "shop", path: external, name: nil, actor: codex)
+    let borrowed = try await supervisor.createLane(stack: "review", branch: "agent/own", actor: claude)
+    XCTAssertEqual(borrowed.lane?.adopted, true)
+    XCTAssertEqual(borrowed.laneWorktrees.first?.managed, false)
+    try await supervisor.removeLane(adopted.file.id, actor: codex)
+    try await supervisor.removeLane(borrowed.id, actor: claude)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: external.appendingPathComponent("tracked.txt").path))
+  }
+
+  func testSharedWorktreeKeepsCopiedFileMetadataUntilTheLastLaneIsRemoved() async throws {
+    try "SECRET=base\n".write(to: repo.appendingPathComponent(".env"), atomically: true, encoding: .utf8)
+    for id in ["shop", "review"] {
+      try await write("""
+      root = "\(repo.path)"
+      [tasks.check]
+      cmd = "pwd"
+      [lanes]
+      copy = [".env"]
+      """, id: id)
+    }
+    let first = try await supervisor.createLane(stack: "shop", branch: "shared-copy", actor: codex)
+    let second = try await supervisor.createLane(stack: "review", branch: "shared-copy", actor: claude)
+    try await supervisor.removeLane(first.id, actor: codex)
+    try await supervisor.removeLane(second.id, actor: claude)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: try XCTUnwrap(second.definition?.root).path))
+    XCTAssertEqual(try String(contentsOf: repo.appendingPathComponent(".env")), "SECRET=base\n")
+  }
+
+  func testReleaseProtectsAWorktreeStillReferencedByAnotherLane() async throws {
+    try await load()
+    try await write("""
+    root = "\(repo.path)"
+    [tasks.check]
+    cmd = "pwd"
+    """, id: "review")
+    let first = try await supervisor.createLane(stack: "shop", branch: "keep-working", actor: codex)
+    let second = try await supervisor.createLane(stack: "review", branch: "keep-working", actor: claude)
+    _ = try await supervisor.removeLane(first.id, actor: codex, options: .init(keepWorktrees: true))
+    try await supervisor.removeLane(second.id, actor: claude)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: try XCTUnwrap(first.definition?.root).path))
+  }
+
+  func testUntrackedCopiesAndLinksCanBeRemovedWithoutDeletingTheirSource() async throws {
+    try "config".write(to: repo.appendingPathComponent("local.config"), atomically: true, encoding: .utf8)
+    try "linked".write(to: repo.appendingPathComponent("local.link"), atomically: true, encoding: .utf8)
+    try await write("""
+    root = "\(repo.path)"
+    [tasks.check]
+    cmd = "pwd"
+    [lanes]
+    copy = ["local.config"]
+    link = ["local.link"]
+    """)
+    let file = try await supervisor.createLane(stack: "shop", branch: "local-config", actor: codex)
+    try await supervisor.removeLane(file.id, actor: codex)
+    XCTAssertEqual(try String(contentsOf: repo.appendingPathComponent("local.config")), "config")
+    XCTAssertEqual(try String(contentsOf: repo.appendingPathComponent("local.link")), "linked")
+  }
+
+  func testCopiedDirectoriesAndReplacedLinksRequireExplicitDiscard() async throws {
+    try "cache/\n.env\n".write(to: repo.appendingPathComponent(".gitignore"), atomically: true, encoding: .utf8)
+    try await commitAll("ignore copied cache", at: repo)
+    let cache = repo.appendingPathComponent("cache")
+    try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
+    try "base".write(to: cache.appendingPathComponent("notes.txt"), atomically: true, encoding: .utf8)
+    try "base".write(to: repo.appendingPathComponent(".env"), atomically: true, encoding: .utf8)
+    try await write("""
+    root = "\(repo.path)"
+    [tasks.check]
+    cmd = "pwd"
+    [lanes]
+    copy = ["cache"]
+    link = [".env"]
+    """)
+    let file = try await supervisor.createLane(stack: "shop", branch: "changed-copies", actor: codex)
+    let path = try XCTUnwrap(file.definition?.root)
+    try "keep notes".write(to: path.appendingPathComponent("cache/notes.txt"), atomically: true, encoding: .utf8)
+    try FileManager.default.removeItem(at: path.appendingPathComponent(".env"))
+    try "keep env".write(to: path.appendingPathComponent(".env"), atomically: true, encoding: .utf8)
+    do { try await supervisor.removeLane(file.id, actor: codex); XCTFail("Lost changed copies") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "ignored_files") }
+    XCTAssertEqual(try String(contentsOf: path.appendingPathComponent("cache/notes.txt")), "keep notes")
+    XCTAssertEqual(try String(contentsOf: path.appendingPathComponent(".env")), "keep env")
+    _ = try await supervisor.removeLane(file.id, actor: codex, options: .init(discardIgnored: true))
+    XCTAssertEqual(try String(contentsOf: cache.appendingPathComponent("notes.txt")), "base")
+  }
+
+  func testRemovalStopsServicesBeforeTeardownAndProtectsRunningDependents() async throws {
+    let port = try StackLaneStore.availablePort(excluding: [])
+    try await write("""
+    root = "\(repo.path)"
+    shell = "/bin/sh"
+    [services.api]
+    cmd = "/usr/bin/python3 server.py"
+    port = \(port)
+    ready.port = \(port)
+    restart = "no"
+    [tasks.drop]
+    cmd = "/usr/bin/python3 -c \\"import socket,os; s=socket.socket(); assert s.connect_ex(('127.0.0.1',int(os.environ['CINDERDECK_PORT_API']))) != 0\\"; test $? -eq 0 && touch {{lane.dir}}/torn-down"
+    [lanes]
+    teardown = "task:drop"
+    """, id: "backend")
+    try await write("""
+    root = "\(repo.path)"
+    [services.web]
+    cmd = "sleep 300"
+    depends_on = ["backend:api"]
+    restart = "no"
+    """, id: "front")
+    let backend = try await supervisor.createLane(stack: "backend", branch: "feature", actor: codex)
+    let front = try await supervisor.createLane(stack: "front", branch: "feature", actor: claude)
+    await control.workspaceRunner.recover()
+    await supervisor.start(stack: front.id, actor: claude)
+    let process = try XCTUnwrap(supervisor.runtime(backend.id, "api").process)
+    let marker = try XCTUnwrap(backend.lane?.directory).appendingPathComponent("torn-down")
+    do { _ = try await control.lanes.remove(backend.id, actor: codex, options: .init()); XCTFail("Removed a lane still in use") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "in_use") }
+    XCTAssertEqual(supervisor.runtime(backend.id, "api").process, process)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
+    await supervisor.stop(stack: front.id, actor: claude)
+    _ = try await control.lanes.remove(backend.id, actor: codex, options: .init())
+    XCTAssertTrue(FileManager.default.fileExists(atPath: marker.path), "Teardown ran after its service stopped")
+  }
+
+  func testAdoptionUsesTheWorktreeBranchForOtherRepositoriesEvenWithACustomName() async throws {
+    try await load()
+    let other = root.appendingPathComponent("other")
+    _ = try await StackLaneStore.git(["init", "-b", "main", other.path], at: root)
+    _ = try await StackLaneStore.git(["config", "user.name", "Lane Tests"], at: other)
+    _ = try await StackLaneStore.git(["config", "user.email", "lanes@example.test"], at: other)
+    try "base".write(to: other.appendingPathComponent("version.txt"), atomically: true, encoding: .utf8)
+    try await commitAll("base", at: other)
+    _ = try await StackLaneStore.git(["checkout", "-b", "feature/actual"], at: other)
+    try "feature".write(to: other.appendingPathComponent("version.txt"), atomically: true, encoding: .utf8)
+    try await commitAll("feature", at: other)
+    _ = try await StackLaneStore.git(["checkout", "main"], at: other)
+    try await write("""
+    root = "\(repo.path)"
+    [repos.app]
+    path = "."
+    [repos.other]
+    path = "\(other.path)"
+    [tasks.check]
+    repo = "other"
+    cmd = "pwd"
+    """)
+    let external = root.appendingPathComponent("agent-own")
+    _ = try await StackLaneStore.git(["worktree", "add", "-b", "feature/actual", external.path], at: repo)
+    let result = try await supervisor.adoptLane(stack: "shop", path: external, name: "Review feature", actor: codex)
+    let lane = try XCTUnwrap(result.file.definition)
+    XCTAssertEqual(lane.lane?.name, "Review feature")
+    let checkout = try XCTUnwrap(lane.repo("other")?.path)
+    let branch = try await StackLaneStore.git(["branch", "--show-current"], at: checkout)
+    XCTAssertEqual(branch, "feature/actual")
+    XCTAssertEqual(try String(contentsOf: checkout.appendingPathComponent("version.txt")), "feature")
   }
 
   func testCrossWorkspaceDependenciesPreferTheSameBranchLane() async throws {

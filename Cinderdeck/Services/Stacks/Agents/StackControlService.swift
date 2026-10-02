@@ -371,9 +371,10 @@ final class StackControlService: ObservableObject {
     try requireIdle(source)
     // Cloning a claimed source does not change it or use its service ports.
     let created = try await lanes.create(stack: source.id, request: request, actor: actor,
-      setup: params["setup"]?.boolValue ?? !adopt)
+      setup: params["setup"]?.boolValue ?? !adopt) { file in
+      _ = try self.claim(.object(["workspace": .string(file.id), "note": .string("Worktree lane " + (file.lane?.name ?? ""))]), actor: actor)
+    }
     let file = created.file
-    _ = try claim(.object(["workspace": .string(file.id), "note": .string("Worktree lane " + (file.lane?.name ?? ""))]), actor: actor)
     var extra: [String: JSONValue] = [:]
     if !created.warnings.isEmpty { extra["warnings"] = .array(created.warnings.map(JSONValue.string)) }
     if let setup = created.setup { extra["setup"] = (try? JSONValue(encoding: setup)) ?? .null }

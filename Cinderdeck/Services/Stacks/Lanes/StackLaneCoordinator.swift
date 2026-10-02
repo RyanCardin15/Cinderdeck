@@ -21,8 +21,10 @@ final class StackLaneCoordinator {
   }
 
   /// Creates (or adopts) a lane, then runs its setup when the workspace defines one.
-  func create(stack id: String, request: StackLaneRequest, actor: StackActor, setup: Bool = true) async throws -> Creation {
+  func create(stack id: String, request: StackLaneRequest, actor: StackActor, setup: Bool = true,
+    onCreated: (StackDefinitionFile) throws -> Void = { _ in }) async throws -> Creation {
     let created = try await supervisor.createLane(stack: id, request: request, actor: actor)
+    try onCreated(created.file)
     var result = Creation(file: created.file, warnings: created.warnings)
     if let reference = created.file.definition?.laneSettings?.setup {
       if setup { result.setup = await runSetup(created.file.id, actor: actor) }
@@ -56,14 +58,12 @@ final class StackLaneCoordinator {
 
   /// Runs `[lanes] teardown` (unless the worktrees are kept), then removes the lane.
   func remove(_ id: String, actor: StackActor, options: StackLaneRemovalOptions) async throws -> StackLaneRemovalReport {
-    if !options.keepWorktrees, let teardown = supervisor.definition(id)?.laneSettings?.teardown {
-      // Never tear down data for a removal that will be refused anyway.
-      if let record = try StackLaneStore.record(id: id, in: supervisor.lanesDirectory) {
-        _ = try await StackLaneStore.check(record, others: try StackLaneStore.records(in: supervisor.lanesDirectory), options: options)
-      }
+    let teardown = options.keepWorktrees ? nil : supervisor.definition(id)?.laneSettings?.teardown
+    return try await supervisor.removeLane(id, actor: actor, options: options) {
+      guard let teardown else { return }
       var failure: String?
       do {
-        let run = try await runner.runAndWait(workspace: id, reference: teardown, actor: actor)
+        let run = try await self.runner.runAndWait(workspace: id, reference: teardown, actor: actor, laneLifecycle: true)
         if run.status != .succeeded { failure = run.detail ?? run.status.label }
       } catch { failure = error.localizedDescription }
       if let failure, !options.forceTeardown {
@@ -71,7 +71,6 @@ final class StackLaneCoordinator {
           message: "Teardown \(teardown) failed: \(failure). The lane was kept. Fix it, or pass force_teardown=true (CLI: --force-teardown) to remove anyway.")
       }
     }
-    return try await supervisor.removeLane(id, actor: actor, options: options)
   }
 
   struct PruneEntry: Codable, Sendable {
