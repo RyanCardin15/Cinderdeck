@@ -8,6 +8,8 @@ Drag a workspace card or sidebar row from History or Workspaces into an editor c
 
 Drag the grip in History's header to move the floating window around your screen. It keeps your chosen location while switching sections, expanding/collapsing, and reopening during the app session. Selecting a preset History position in Settings while History is compact resets its placement.
 
+An active **Agent lease** shows its holder above the workspace tabs. Choose **Cancel agent lease…** there, in the workspace or lane's sidebar menu, on its **Lanes** card, or in the lane map inspector. Cancellation frees only that checkout's claim for other agents; running services and tasks, worktrees, files, and logs stay in place. Agents can claim it again. **Agent access** also lists all active leases. CLI/MCP clients can use `services release <workspace-or-lane>` / `release_workspace` with the checkout's ID and `--force` / `force: true` when overriding another holder.
+
 A **workspace** groups a project's folders, environment, and reusable commands:
 
 - **Services** stay running: APIs, development servers, workers, databases. Start, stop, restart, readiness, automatic crash recovery, Git controls, and separate service terminals retain their existing behavior.

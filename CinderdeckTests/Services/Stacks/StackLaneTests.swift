@@ -403,6 +403,79 @@ final class StackLaneTests: XCTestCase {
     XCTAssertEqual(body["lane"]?.stringValue, "recover")
   }
 
+  func testCancelAgentLeasesPreservesRunningCheckoutsAndOtherClaims() async throws {
+    try await load()
+    _ = try await control.handle("claim", params: .object(["workspace": .string("shop")]), actor: claude)
+    let created = try await control.handle("lane.create", params: .object([
+      "workspace": .string("shop"), "branch": .string("agent/cancel-lease"), "start": .bool(false)]), actor: codex)
+    let id = try XCTUnwrap(created["workspace"]?["id"]?.stringValue)
+    let lane = try XCTUnwrap(supervisor.definition(id))
+    let record = try XCTUnwrap(StackLaneStore.record(id: id, in: supervisor.lanesDirectory))
+    let originalClaim = try XCTUnwrap(control.claims["shop"])
+    let laneClaim = try XCTUnwrap(control.claims[id])
+    let editedFile = lane.root.appendingPathComponent("tracked.txt")
+    try "keep these edits\n".write(to: editedFile, atomically: true, encoding: .utf8)
+    await supervisor.start(stack: "shop", actor: claude)
+    await supervisor.start(stack: id, actor: codex)
+    let originalProcess = try XCTUnwrap(supervisor.runtime("shop", "api").process)
+    let laneProcess = try XCTUnwrap(supervisor.runtime(id, "api").process)
+
+    try control.cancelAgentLease(laneClaim)
+    XCTAssertNil(control.claims[id])
+    XCTAssertEqual(control.claims["shop"], originalClaim)
+    XCTAssertNoThrow(try control.checkClaim(id, actor: claude, force: false))
+    XCTAssertThrowsError(try control.checkClaim("shop", actor: codex, force: false))
+    XCTAssertEqual(supervisor.runtime(id, "api").process, laneProcess)
+    XCTAssertEqual(supervisor.runtime(id, "api").owner, codex)
+    XCTAssertEqual(supervisor.definition(id)?.lane?.ports, lane.lane?.ports)
+    let keptRecord = try XCTUnwrap(StackLaneStore.record(id: id, in: supervisor.lanesDirectory))
+    XCTAssertEqual(keptRecord.info, record.info)
+    XCTAssertEqual(keptRecord.worktrees, record.worktrees)
+    XCTAssertEqual(try String(contentsOf: editedFile, encoding: .utf8), "keep these edits\n")
+    _ = try await response(lane)
+    let saved = try StackControlCoding.decoder().decode([StackClaim].self,
+      from: Data(contentsOf: root.appendingPathComponent("claims.json")))
+    XCTAssertEqual(saved.map(\.stackID), ["shop"])
+
+    // An agent can acquire the freed lane again; canceling the original
+    // workspace must leave that new lane lease and both processes alone.
+    _ = try await control.handle("claim", params: .object(["workspace": .string(id)]), actor: claude)
+    let reacquired = try XCTUnwrap(control.claims[id])
+    try control.cancelAgentLease(originalClaim)
+    XCTAssertNil(control.claims["shop"])
+    XCTAssertEqual(control.claims[id], reacquired)
+    XCTAssertEqual(supervisor.runtime("shop", "api").process, originalProcess)
+    XCTAssertEqual(supervisor.runtime(id, "api").process, laneProcess)
+    _ = try await response(try XCTUnwrap(supervisor.definition("shop")))
+    let remaining = try StackControlCoding.decoder().decode([StackClaim].self,
+      from: Data(contentsOf: root.appendingPathComponent("claims.json")))
+    XCTAssertEqual(remaining.map(\.stackID), [id])
+  }
+
+  func testCancelAgentLeaseRejectsReplacementAndAllowsRenewal() async throws {
+    try await load()
+    let params: JSONValue = .object(["workspace": .string("shop")])
+    _ = try await control.handle("claim", params: params, actor: codex)
+    let seen = try XCTUnwrap(control.claims["shop"])
+    _ = try await control.handle("claim", params: params, actor: codex)
+    try control.cancelAgentLease(seen)
+    XCTAssertNil(control.claims["shop"], "Renewing the same lease does not prevent cancellation")
+
+    _ = try await control.handle("claim", params: params, actor: claude)
+    let replacement = try XCTUnwrap(control.claims["shop"])
+    XCTAssertThrowsError(try control.cancelAgentLease(seen)) { error in
+      XCTAssertEqual((error as? StackControlError)?.code, "claim_changed")
+    }
+    XCTAssertEqual(control.claims["shop"], replacement)
+    try control.cancelAgentLease(replacement)
+    try control.cancelAgentLease(replacement) // Canceling an already released lease is harmless.
+
+    _ = try await control.handle("claim", params: params, actor: claude)
+    let reacquired = try XCTUnwrap(control.claims["shop"])
+    XCTAssertThrowsError(try control.cancelAgentLease(replacement), "The same agent's new lease is protected too")
+    XCTAssertEqual(control.claims["shop"], reacquired)
+  }
+
   func testMultipleRepositoriesMapEveryDirectoryAndKeepDependencies() async throws {
     try await load(twoServices: true)
     let other = root.appendingPathComponent("other")
