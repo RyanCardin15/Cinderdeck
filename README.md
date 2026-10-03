@@ -72,7 +72,7 @@ Built with SwiftUI and AppKit. Local configuration, local history, no Cinderdeck
 
 ## Start with your own projects
 
-Build and open the app, then use **Workspaces… → +**. Choose a name and project folder, then add Services, Tasks, or Workflows. The History quick panel remains available with **⌘⇧H**; expand it with **⌘E**. Shortcuts can be customized in Settings.
+Build and open the app to set up your first project, or use **Workspaces… → +**. Choose a repository, review detected services and test/build commands, and check missing tools, environment hints, and port conflicts. **Save workspace** keeps the definition for later; **Create & start** rechecks requirements and launches the selected services. The History quick panel remains available with **⌘⇧H**; expand it with **⌘E**. Shortcuts can be customized in Settings.
 
 Definitions are ordinary TOML files in `~/.config/cinderdeck/stacks/`. This example combines two independent projects; replace the paths and commands with your own:
 

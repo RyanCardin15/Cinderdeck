@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Make repository setup the first experience. Discover likely services and test/build commands, review and edit the proposal, and check login-shell runtimes, environment hints, dependencies, Docker configuration, and port conflicts before starting. Save unfinished setups without launching commands; keep the capture walkthrough optional.
+
 - Add an Existing worktree option to the Lanes panel and open actual repository folders for adopted and shared lanes. Preserve adopted/released worktree ownership and copied-file cleanup metadata across workspace sharing. Protect changed copied directories and replaced links, clean unchanged untracked copies, claim lanes before setup, and check dependents and stop services before teardown. Adopted lane names no longer select unrelated branches in other repositories.
 - Expose adoption environment, start-point and copy options plus release log cleanup through MCP and the generic CLI catalog. Update the lane skill and agent/CLI guidance for detached worktrees, lane names, stopped-lane edits and service-specific environment exports.
 - Complete the Cinderdeck identity in exports, app text, Keychain writes, and generated service environment variables. Repair old save folders, filename templates, and Google Drive default folders even after the original data import completed; preserve existing captures and unrelated custom settings.
