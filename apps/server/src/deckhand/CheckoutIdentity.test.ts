@@ -12,6 +12,23 @@ const TestLayer = CheckoutIdentity.layer.pipe(
   Layer.provideMerge(NodeServices.layer),
 );
 it.layer(TestLayer)("physical checkout identity", (it) => {
+  it.effect("distinguishes an ordinary directory from missing or damaged Git metadata", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const resolver = yield* CheckoutIdentity.CheckoutIdentity;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "deckhand-non-git-" });
+      assert.equal((yield* resolver.resolve(root).pipe(Effect.flip)).operation, "not_git");
+      assert.notEqual(
+        (yield* resolver.resolve(root + "/missing").pipe(Effect.flip)).operation,
+        "not_git",
+      );
+      yield* fs.writeFileString(
+        root + "/.git",
+        "gitdir: /nonexistent-deckhand-fixture-git-directory\n",
+      );
+      assert.notEqual((yield* resolver.resolve(root).pipe(Effect.flip)).operation, "not_git");
+    }),
+  );
   it.effect(
     "aliases, moves, worktrees and clones coordinate by physical identity while fork hosts remain distinct",
     () =>

@@ -408,6 +408,7 @@ describe("Deckhand schema migration", () => {
         yield* sql`DROP TABLE deckhand_integrations`;
         yield* sql`DROP TABLE deckhand_writer_scope`;
         yield* sql`DROP TABLE deckhand_writer_requests`;
+        yield* sql`DROP TABLE deckhand_native_writer_intents`;
         yield* sql`DELETE FROM deckhand_schema WHERE version >= 2`;
         yield* sql`INSERT INTO deckhand_schema VALUES (1)`;
         yield* Migrations.migrate;
@@ -418,7 +419,7 @@ describe("Deckhand schema migration", () => {
             ?.transcript,
           "existing conversation",
         );
-        yield* sql`INSERT INTO deckhand_schema VALUES (5)`;
+        yield* sql`INSERT INTO deckhand_schema VALUES (6)`;
         const newer = yield* Migrations.migrate.pipe(Effect.flip);
         assert.equal(newer._tag, "DeckhandStoreVersionError");
         const provenance = yield* sql<{

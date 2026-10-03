@@ -60,6 +60,7 @@ const make = Effect.gen(function* () {
           args: ["-C", path, ...args],
           timeout: Duration.seconds(10),
           maxOutputBytes: 65536,
+          env: { LC_ALL: "C" },
         })
         .pipe(
           Effect.mapError((cause) => new CheckoutIdentityError({ path, operation: "git", cause })),
@@ -93,7 +94,16 @@ const make = Effect.gen(function* () {
       "--git-dir",
     ]);
     if (roots.code !== 0 || roots.stdoutTruncated || roots.stdoutInvalidUtf8) {
-      return yield* new CheckoutIdentityError({ path, operation: "resolve Git root" });
+      const ordinaryDirectory =
+        roots.code === 128 &&
+        !roots.stderrTruncated &&
+        !roots.stderrInvalidUtf8 &&
+        roots.stderr.trim() ===
+          "fatal: not a git repository (or any of the parent directories): .git";
+      return yield* new CheckoutIdentityError({
+        path,
+        operation: ordinaryDirectory ? "not_git" : "resolve Git root",
+      });
     }
     const [rootPath, commonPath, gitPath, ...extra] = roots.stdout.trim().split("\n");
     if (!rootPath || !commonPath || !gitPath || extra.length) {

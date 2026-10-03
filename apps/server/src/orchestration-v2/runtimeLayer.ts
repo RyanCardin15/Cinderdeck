@@ -46,6 +46,7 @@ import { layer as runFinalizationServiceLayer } from "./RunFinalizationService.t
 import * as RuntimePolicy from "./RuntimePolicy.ts";
 import * as ManagedProviderAdapters from "../deckhand/ManagedProviderAdapters.ts";
 import * as ManagedCheckoutGuard from "../deckhand/ManagedCheckoutGuard.ts";
+import * as NativeWriterReservations from "../deckhand/NativeWriterReservations.ts";
 import * as WriterReservations from "../deckhand/WriterReservations.ts";
 import * as CheckoutIdentity from "../deckhand/CheckoutIdentity.ts";
 import * as Relationships from "../deckhand/Relationships.ts";
@@ -130,6 +131,7 @@ const providerAdapterRegistryProvided = ManagedProviderAdapters.layer.pipe(
   Layer.provide(providerAdapterRegistryLayerFromProviderInstances),
   Layer.provide(managedCheckoutGuardProvided),
   Layer.provide(WriterReservations.layer),
+  Layer.provide(NativeWriterReservations.layer.pipe(Layer.provide(IntegrationHub.layerLive))),
 );
 const providerSwitchServiceProvided = providerSwitchServiceLayer.pipe(
   Layer.provide(providerAdapterRegistryProvided),

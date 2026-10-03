@@ -1,4 +1,5 @@
 import * as Contracts from "@t3tools/contracts/deckhand";
+import type { IntegrationWriterReservationInput } from "@t3tools/contracts/deckhand/integration";
 import type { ThreadId } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -8,6 +9,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as CheckoutIdentity from "./CheckoutIdentity.ts";
 import * as IntegrationHub from "./IntegrationHub.ts";
 import * as Relationships from "./Relationships.ts";
+import * as Migrations from "./Migrations.ts";
 
 export class ManagedCheckoutError extends Schema.TaggedError<ManagedCheckoutError>()(
   "ManagedCheckoutError",
@@ -32,6 +34,7 @@ export interface ManagedContext {
   readonly cwd: string;
   readonly physicalId: string;
   readonly writerScope: ReadonlyArray<string>;
+  readonly native?: Omit<IntegrationWriterReservationInput, "id" | "token" | "ownerID">;
 }
 const decodeSession = Schema.decodeEffect(Schema.fromJsonString(Contracts.SessionBinding));
 const isCheckoutError = Schema.is(ManagedCheckoutError);
@@ -47,6 +50,7 @@ export class ManagedCheckoutGuard extends Context.Service<
 >()("t3/deckhand/ManagedCheckoutGuard") {}
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+  yield* Migrations.migrate;
   const identity = yield* CheckoutIdentity.CheckoutIdentity;
   const relationships = yield* Relationships.Relationships;
   const hub = yield* IntegrationHub.IntegrationHub;
@@ -81,6 +85,7 @@ const make = Effect.gen(function* () {
       const checkout = yield* identity.resolve(cwd).pipe(Effect.result);
       if (checkout._tag === "Failure") {
         if (binding !== null) return yield* fail("missing");
+        if (checkout.failure.operation !== "not_git") return yield* fail("unavailable");
         // Existing non-Git projects retain upstream behavior. They cannot acquire
         // a Git checkout reservation or masquerade as a connected checkout.
         return null;
@@ -114,6 +119,7 @@ const make = Effect.gen(function* () {
       const physical = yield* Effect.forEach(wanted, (repo) => identity.resolve(repo.root));
       if (physical.some((repo, index) => repo.physicalId !== wanted[index]?.physicalId))
         return yield* fail("wrong_checkout");
+      let nativeScope: ManagedContext["native"];
       if (target.backend === "cinderdeck") {
         if (target.nativeGeneration === undefined) return yield* fail("stale_binding");
         const native = yield* hub
@@ -138,11 +144,23 @@ const make = Effect.gen(function* () {
         );
         if (physical.some((repo) => !actual.some((item) => item.physicalId === repo.physicalId)))
           return yield* fail("wrong_checkout");
+        nativeScope = {
+          installationID: native.hello.installationID,
+          workspaceID: native.resource.workspaceID,
+          generation: native.resource.generation,
+          revision: native.resource.revision,
+          repos: (native.resource.workspace?.repos ?? [])
+            .filter((_, index) =>
+              binding.repositoryScope?.includes(actual[index]?.physicalId ?? ""),
+            )
+            .map((repo) => repo.id),
+        };
       }
       return {
         cwd: checkout.success.root,
         physicalId: checkout.success.physicalId,
         writerScope: binding.repositoryScope,
+        ...(nativeScope ? { native: nativeScope } : {}),
       };
     }).pipe(Effect.mapError(storage(threadId)));
   return ManagedCheckoutGuard.of({ connected, resolve });

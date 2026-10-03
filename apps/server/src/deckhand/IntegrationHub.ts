@@ -36,6 +36,18 @@ export class IntegrationHub extends Context.Service<
       },
       Rpc.DeckhandRpcError
     >;
+    readonly reserveWriter: (
+      actorID: string,
+      input: Contracts.IntegrationWriterReservationInput,
+    ) => Effect.Effect<Contracts.IntegrationCheckoutReservation, Rpc.DeckhandRpcError>;
+    readonly reservation: (
+      actorID: string,
+      input: Contracts.IntegrationReservationControl,
+    ) => Effect.Effect<Contracts.IntegrationCheckoutReservation, Rpc.DeckhandRpcError>;
+    readonly releaseWriter: (
+      actorID: string,
+      input: Contracts.IntegrationReservationControl,
+    ) => Effect.Effect<Contracts.IntegrationCheckoutReservation, Rpc.DeckhandRpcError>;
     readonly submit: (
       actorID: string,
       input: Contracts.IntegrationOperationInput,
@@ -307,7 +319,25 @@ const make = Effect.gen(function* () {
       yield* journal.update(actorID, key, receipt, null);
       return (yield* journal.read(actorID, key)).receipt ?? receipt;
     }).pipe(Effect.mapError(rpcError));
+  const writerCommand = (
+    method: "reserveWriter" | "reservation" | "releaseWriter",
+    actorID: string,
+    input: Contracts.IntegrationWriterReservationInput | Contracts.IntegrationReservationControl,
+  ) =>
+    Effect.gen(function* () {
+      const peer = yield* commandConnection(actorID);
+      if (input.installationID !== peer.hello.installationID)
+        return yield* new Rpc.DeckhandRpcError({ reason: "stale_binding" });
+      return yield* method === "reserveWriter" && "repos" in input
+        ? client.reserveWriter(peer, input)
+        : method === "releaseWriter"
+          ? client.releaseWriter(peer, input)
+          : client.reservation(peer, input);
+    }).pipe(Effect.mapError(rpcError));
   return IntegrationHub.of({
+    reserveWriter: (actorID, input) => writerCommand("reserveWriter", actorID, input),
+    reservation: (actorID, input) => writerCommand("reservation", actorID, input),
+    releaseWriter: (actorID, input) => writerCommand("releaseWriter", actorID, input),
     resource: (workspaceID) =>
       Effect.gen(function* () {
         yield* refresh;

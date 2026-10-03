@@ -13,6 +13,34 @@ export const IntegrationHello = Schema.Struct({
   maximumWaitMs: NonNegativeInt,
 });
 export type IntegrationHello = typeof IntegrationHello.Type;
+const ReservationIdentity = TrimmedNonEmptyString.check(Schema.isMaxLength(160));
+const ReservationToken = Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/));
+export const IntegrationReservationControl = Schema.Struct({
+  id: ReservationIdentity,
+  token: ReservationToken,
+  installationID: ReservationIdentity,
+});
+export type IntegrationReservationControl = typeof IntegrationReservationControl.Type;
+export const IntegrationWriterReservationInput = Schema.Struct({
+  ...IntegrationReservationControl.fields,
+  ownerID: ReservationIdentity,
+  workspaceID: ReservationIdentity,
+  generation: PositiveInt,
+  revision: TrimmedNonEmptyString.check(Schema.isMaxLength(64)),
+  repos: Schema.Array(ReservationIdentity).check(Schema.isMinLength(1), Schema.isMaxLength(64)),
+});
+export type IntegrationWriterReservationInput = typeof IntegrationWriterReservationInput.Type;
+export const IntegrationCheckoutReservation = Schema.Struct({
+  id: ReservationIdentity,
+  ownerID: ReservationIdentity,
+  workspaceID: ReservationIdentity,
+  generation: Schema.optionalKey(Schema.NullOr(PositiveInt)),
+  kind: Schema.Literals(["writer", "run", "git", "lifecycle"]),
+  state: Schema.Literals(["held", "uncertain", "released"]),
+  physicalIDs: Schema.Array(ReservationToken).check(Schema.isMaxLength(64)),
+  createdAt: Schema.String,
+});
+export type IntegrationCheckoutReservation = typeof IntegrationCheckoutReservation.Type;
 export const IntegrationService = Schema.Struct({
   name: Schema.String,
   phase: Schema.String,

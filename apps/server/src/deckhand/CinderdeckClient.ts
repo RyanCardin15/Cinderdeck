@@ -45,6 +45,18 @@ export class CinderdeckClient extends Context.Service<
       socketPath: string,
       expected: ExpectedIdentity,
     ) => Effect.Effect<Connection, BridgeError>;
+    readonly reserveWriter: (
+      connection: Connection,
+      input: Contracts.IntegrationWriterReservationInput,
+    ) => Effect.Effect<Contracts.IntegrationCheckoutReservation, BridgeError>;
+    readonly reservation: (
+      connection: Connection,
+      input: Contracts.IntegrationReservationControl,
+    ) => Effect.Effect<Contracts.IntegrationCheckoutReservation, BridgeError>;
+    readonly releaseWriter: (
+      connection: Connection,
+      input: Contracts.IntegrationReservationControl,
+    ) => Effect.Effect<Contracts.IntegrationCheckoutReservation, BridgeError>;
     readonly submit: (
       connection: Connection,
       input: Contracts.IntegrationOperationInput,
@@ -74,6 +86,8 @@ export class CinderdeckClient extends Context.Service<
 >()("t3/deckhand/CinderdeckClient") {}
 
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
+const decodeWriterInput = Schema.decodeUnknownEffect(Contracts.IntegrationWriterReservationInput);
+const decodeWriterControl = Schema.decodeUnknownEffect(Contracts.IntegrationReservationControl);
 const isBridgeError = Schema.is(BridgeError);
 const MAX_FRAME = 4 * 1024 * 1024;
 const make = Effect.gen(function* () {
@@ -350,6 +364,65 @@ const make = Effect.gen(function* () {
         isBridgeError(cause) ? cause : new BridgeError({ reason: "invalid_response", cause }),
       ),
     );
-  return CinderdeckClient.of({ connect, snapshot, events, submit, operation });
+  const writerRequest = (
+    connection: Connection,
+    method: "acquire" | "get" | "release",
+    input: Contracts.IntegrationReservationControl | Contracts.IntegrationWriterReservationInput,
+  ) =>
+    requiredCapability(connection, "checkout.reservations").pipe(
+      Effect.andThen(() =>
+        (method === "acquire" ? decodeWriterInput(input) : decodeWriterControl(input)).pipe(
+          Effect.mapError(() => new BridgeError({ reason: "invalid_request" })),
+        ),
+      ),
+      Effect.flatMap((validated) =>
+        connection.clientID !== undefined &&
+        boundedString(connection.clientID, 60) &&
+        validated.installationID === connection.hello.installationID &&
+        (!("repos" in input) || new Set(input.repos).size === input.repos.length)
+          ? request(
+              connection.socketPath,
+              `integration.reservation.${method}`,
+              validated,
+              5000,
+              connection.clientID,
+            )
+          : Effect.fail(new BridgeError({ reason: "invalid_request" })),
+      ),
+      Effect.flatMap(Schema.decodeUnknownEffect(Contracts.IntegrationCheckoutReservation)),
+      Effect.flatMap((record) =>
+        record.id === input.id &&
+        record.kind === "writer" &&
+        (!("ownerID" in input) ||
+          (record.ownerID === input.ownerID &&
+            record.workspaceID === input.workspaceID &&
+            record.generation === input.generation)) &&
+        (method !== "release" || record.state === "released")
+          ? Effect.succeed(record)
+          : Effect.fail(new BridgeError({ reason: "invalid_response" })),
+      ),
+      // Validation causes may contain a scoped secret: expose only the bounded error.
+      Effect.mapError((cause) =>
+        isBridgeError(cause)
+          ? new BridgeError({ reason: cause.reason, ...(cause.code ? { code: cause.code } : {}) })
+          : new BridgeError({ reason: "invalid_response" }),
+      ),
+    );
+  const reserveWriter: CinderdeckClient["Service"]["reserveWriter"] = (connection, input) =>
+    writerRequest(connection, "acquire", input);
+  const reservation: CinderdeckClient["Service"]["reservation"] = (connection, input) =>
+    writerRequest(connection, "get", input);
+  const releaseWriter: CinderdeckClient["Service"]["releaseWriter"] = (connection, input) =>
+    writerRequest(connection, "release", input);
+  return CinderdeckClient.of({
+    connect,
+    snapshot,
+    events,
+    submit,
+    operation,
+    reserveWriter,
+    reservation,
+    releaseWriter,
+  });
 });
 export const layer = Layer.effect(CinderdeckClient, make);

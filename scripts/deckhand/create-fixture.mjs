@@ -34,7 +34,7 @@ const shellQuote = (s) => "'" + s.replaceAll("'", "'\"'\"'") + "'";
 const nodeCommand = shellQuote(process.execPath);
 NodeFS.writeFileSync(
   NodePath.join(root, "payment.toml"),
-  `name = "Deckhand payment fixture"\nroot = ${q(root)}\n\n[repos.frontend]\npath = "frontend"\n[repos.api]\npath = "api"\n[repos.shared]\npath = "shared"\n\n[services.api]\nrepo = "api"\ncmd = ${q(nodeCommand + " server.mjs")}\nport = 47862\nready.log = "API READY"\n[services.web]\nrepo = "frontend"\ncmd = ${q(nodeCommand + " build.mjs && " + nodeCommand + " server.mjs")}\nport = 47861\ndepends_on = ["api"]\nready.log = "FRONTEND READY"\n\n[tasks.verify]\nrepo = "frontend"\ncmd = ${q(nodeCommand + " check.mjs")}\n\n[workflows.verify]\nsteps = ["task:verify"]\n\n[lanes]\nfrom = "main"\n`,
+  `name = "Deckhand payment fixture"\nroot = ${q(root)}\n\n[repos.frontend]\npath = "frontend"\n[repos.api]\npath = "api"\n[repos.shared]\npath = "shared"\n\n[services.api]\nrepo = "api"\ncmd = ${q(nodeCommand + " server.mjs")}\nport = 47862\nready.log = "API READY"\n[services.web]\nrepo = "frontend"\ncmd = ${q(nodeCommand + " build.mjs && " + nodeCommand + " server.mjs")}\nport = 47861\ndepends_on = ["api"]\nready.log = "FRONTEND READY"\n\n[tasks.verify]\nrepo = "frontend"\ncmd = ${q(nodeCommand + " check.mjs")}\n\n[tasks.ownership_probe]\nrepo = "frontend"\ncmd = "/usr/bin/git rev-parse --show-toplevel"\n\n[workflows.verify]\nsteps = ["task:verify"]\n\n[lanes]\nfrom = "main"\n`,
 );
 process.stdout.write(
   JSON.stringify({

@@ -25,6 +25,7 @@ import * as IntegrationHub from "./IntegrationHub.ts";
 import * as ManagedCheckoutGuard from "./ManagedCheckoutGuard.ts";
 import * as ManagedProviderAdapters from "./ManagedProviderAdapters.ts";
 import * as Relationships from "./Relationships.ts";
+import * as NativeWriterReservations from "./NativeWriterReservations.ts";
 import * as WriterReservations from "./WriterReservations.ts";
 
 const instanceId = ProviderInstanceId.make("codex-fixture");
@@ -69,9 +70,20 @@ describe("managed provider process admission", () => {
           0,
         );
         yield* fs.symlink(checkout, alias);
+        const guard = yield* ManagedCheckoutGuard.ManagedCheckoutGuard.pipe(
+          Effect.provide(guardLayer),
+        );
+        yield* fs.makeDirectory(`${root}/non-git`);
+        assert.isNull(yield* guard.resolve(ThreadId.make("ordinary"), `${root}/non-git`));
+        assert.equal(
+          (yield* guard.resolve(ThreadId.make("missing"), `${root}/missing`).pipe(Effect.flip))
+            .reason,
+          "unavailable",
+        );
         const canonicalCheckout = yield* fs.realPath(checkout);
         const opened: string[] = [];
         const closed: string[] = [];
+        const nativeReleased: string[] = [];
         let ownershipAtClose = false;
         let ensureCalls = 0;
         const providerLayer = Layer.effect(
@@ -146,6 +158,18 @@ describe("managed provider process admission", () => {
         const layer = ManagedProviderAdapters.layer.pipe(
           Layer.provide(providerLayer.pipe(Layer.provide(sharedOwnership))),
           Layer.provide(guardLayer),
+          Layer.provide(
+            Layer.succeed(NativeWriterReservations.NativeWriterReservations, {
+              acquire: (ownerId) => Effect.succeed(ownerId),
+              verify: () => Effect.void,
+              release: (ownerId) =>
+                Effect.sync(() => {
+                  // This finalizer must inspect stop proof at close time, not registration.
+                  assert.isTrue(closed.length > 0);
+                  nativeReleased.push(ownerId);
+                }),
+            }),
+          ),
           Layer.provideMerge(sharedOwnership),
         );
         yield* Effect.gen(function* () {
@@ -254,6 +278,9 @@ describe("managed provider process admission", () => {
             (yield* reservations.inspect).map((row) => [row.ownerId, row.state]),
             [["failed", "uncertain"]],
           );
+          assert.isTrue(nativeReleased.includes("first"));
+          assert.isTrue(nativeReleased.includes("second"));
+          assert.isFalse(nativeReleased.includes("failed"));
         }).pipe(Effect.provide(layer), Effect.scoped);
       }).pipe(Effect.provide(baseLayer)),
   );
