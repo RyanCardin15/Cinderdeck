@@ -142,3 +142,7 @@ Deckhand `826631a044` routes mutation inspection, authenticated inventory/connec
 ### Native lane lifecycle ownership evidence (partial DH-011–DH-014)
 
 Native `3d4a72fb`; 88 focused native tests plus fresh real-app Unix-socket lifecycle verification passed. Physical writer conflicts, borrowed teardown attribution, unstopped process retention, task-only checkouts and missing registered cleanup are covered. Evidence and remaining interface/concurrency/recovery work are recorded in `DECKHAND_FOUNDATION_EVIDENCE.md`; these items remain unchecked.
+
+### Connected lifecycle delegation evidence (partial DH-009/DH-011)
+
+Deckhand `06ae9a939c` and native `bbfc9463` add connected adopt/setup/release/remove beside create, precise capability gates, strict native inputs, final context preflight, setup attribution and conservative interrupted lifecycle inspection. Ninety-one native tests, 35 focused Deckhand tests, affected typechecks/build/patch audit and real authenticated production RPC lifecycle verification passed. See `DECKHAND_FOUNDATION_EVIDENCE.md` for evidence and remaining standalone/surface/concurrency/recovery gates. These full items remain unchecked.
