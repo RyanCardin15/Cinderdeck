@@ -627,6 +627,40 @@ final class StackLaneTests: XCTestCase {
     XCTAssertTrue(try StackLaneStore.records(in: supervisor.lanesDirectory).isEmpty)
   }
 
+  func testDurableManagedWriterCreationHandsOffToPhysicalAdmission() async throws {
+    try await load()
+    do {
+      _ = try await control.handle("lane.create", params: .object([
+        "workspace": .string("shop"), "branch": .string("invalid-direct"), "managedWriter": .bool(true), "start": .bool(false)
+      ]), actor: codex)
+      XCTFail("Direct creation cannot bypass advisory ownership")
+    } catch { XCTAssertEqual((error as? StackControlError)?.code, "invalid_params") }
+    let receipt = try await durableLane("lane.create", workspace: "shop", arguments: [
+      "branch": .string("managed-handoff"), "managedWriter": .bool(true), "setup": .bool(false), "start": .bool(false)
+    ])
+    XCTAssertEqual(receipt.state, "succeeded")
+    let id = try XCTUnwrap(receipt.result?["workspace"]?["id"]?.stringValue)
+    XCTAssertNil(control.claims[id])
+    await supervisor.refreshLaneGitStates([id])
+    let projection = try await control.handle("integration.snapshot", params: .object(["workspaceID": .string(id)]), actor: claude).decode(IntegrationSnapshot.self)
+    let resource = try XCTUnwrap(projection.resources.first)
+    let repositories = try XCTUnwrap(supervisor.definition(id)?.repos)
+    let token = String(repeating: "d", count: 64)
+    let params: JSONValue = .object([
+      "id": .string("provider-thread"), "token": .string(token), "installationID": .string(projection.installationID),
+      "ownerID": .string("thread-owner"), "workspaceID": .string(id), "generation": .number(Double(resource.generation)),
+      "revision": .string(resource.revision), "repos": .array(repositories.map { .string($0.id) })
+    ])
+    let held = try await control.handle("integration.reservation.acquire", params: params, actor: claude)
+    XCTAssertEqual(held["state"]?.stringValue, "held")
+    do { _ = try await control.handle("lane.remove", params: .object(["workspace": .string(id)]), actor: codex); XCTFail("Physical writer must protect lane") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "checkout_reserved") }
+    _ = try await control.handle("integration.reservation.release", params: .object([
+      "id": .string("provider-thread"), "token": .string(token), "installationID": .string(projection.installationID)
+    ]), actor: claude)
+    _ = try await control.handle("lane.remove", params: .object(["workspace": .string(id)]), actor: codex)
+  }
+
   func testControlCreatesClaimsAndProtectsOnlyTheOwnedLane() async throws {
     try await load()
     _ = try await control.handle("claim", params: .object(["workspace": .string("shop")]), actor: claude)

@@ -161,6 +161,8 @@ final class IntegrationOperationsTests: XCTestCase {
     let control = StackControlService(supervisor: supervisor, claimsFile: root.appendingPathComponent("claims.json"), integrationDirectory: root.appendingPathComponent("integration"))
     let installation = try control.integrationStore().installationID
     let cases: [(String, [String: JSONValue], String)] = [
+      ("lane.create", ["branch": .string("branch"), "managedWriter": .string("true")], "invalid_params"),
+      ("lane.create", ["branch": .string("branch"), "managedWriter": .bool(true)], "resource_missing"),
       ("lane.adopt", ["path": .string("relative")], "invalid_params"),
       ("lane.adopt", ["path": .string("/fixture\nother")], "invalid_params"),
       ("lane.adopt", ["path": .string("/fixture"), "setup": .string("false")], "invalid_params"),

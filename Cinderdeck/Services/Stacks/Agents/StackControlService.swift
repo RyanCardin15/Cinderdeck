@@ -369,6 +369,13 @@ final class StackControlService: ObservableObject {
   }
 
   private func createLane(_ params: JSONValue, adopt: Bool, actor: StackActor, operationID: String? = nil) async throws -> JSONValue {
+    let managedWriter: Bool
+    if let value = params["managedWriter"] {
+      guard case .bool(let selected) = value, !selected || (!adopt && operationID != nil) else {
+        throw StackControlError.invalid("Managed writer handoff requires durable lane creation")
+      }
+      managedWriter = selected
+    } else { managedWriter = false }
     let source = try workspaceFile(params)
     guard source.lane == nil else { throw StackControlError.invalid("Create lanes from the original workspace, not from lane \(source.name).") }
     var request = StackLaneRequest(branch: params["branch"]?.stringValue ?? params["name"]?.stringValue ?? "")
@@ -403,7 +410,11 @@ final class StackControlService: ObservableObject {
     do {
       created = try await lanes.create(stack: source.id, request: request, actor: actor,
         setup: params["setup"]?.boolValue ?? !adopt) { file in
-        _ = try self.claim(.object(["workspace": .string(file.id), "note": .string("Worktree lane " + (file.lane?.name ?? ""))]), actor: actor)
+        // Durable session creation uses physical writer admission next. An advisory
+        // claim held by the request actor would block the distinct provider thread actor.
+        if !managedWriter {
+          _ = try self.claim(.object(["workspace": .string(file.id), "note": .string("Worktree lane " + (file.lane?.name ?? ""))]), actor: actor)
+        }
       }
     } catch let refusal as StackLaneStore.StartRevisionRefusal {
       throw StackControlError.invalid(refusal.message)
