@@ -18,6 +18,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as CinderdeckClient from "./CinderdeckClient.ts";
 import * as OperationJournal from "./OperationJournal.ts";
 import * as IntegrationDiscovery from "./IntegrationDiscovery.ts";
+import * as Migrations from "./Migrations.ts";
 
 type Connection = Effect.Success<
   ReturnType<CinderdeckClient.CinderdeckClient["Service"]["connect"]>
@@ -36,6 +37,12 @@ export class IntegrationHub extends Context.Service<
       },
       Rpc.DeckhandRpcError
     >;
+    readonly checkoutContexts: (input: {
+      readonly physicalID: string;
+      readonly repositoryPhysicalID: string;
+      readonly physicalIDs: ReadonlyArray<string>;
+      readonly sharedRefs: boolean;
+    }) => Effect.Effect<Contracts.IntegrationCheckoutLookup, Rpc.DeckhandRpcError>;
     readonly reserveWriter: (
       actorID: string,
       input: Contracts.IntegrationWriterReservationInput,
@@ -96,6 +103,7 @@ const validatePage = (page: Page) =>
   page.limit > 0 &&
   page.limit <= 100;
 const make = Effect.gen(function* () {
+  yield* Migrations.migrate;
   const sql = yield* SqlClient.SqlClient;
   const client = yield* CinderdeckClient.CinderdeckClient;
   const journal = yield* OperationJournal.OperationJournal;
@@ -356,6 +364,16 @@ const make = Effect.gen(function* () {
           : client.reservation(peer, input);
     }).pipe(Effect.mapError(rpcError));
   return IntegrationHub.of({
+    checkoutContexts: (input) =>
+      Effect.gen(function* () {
+        yield* refresh;
+        const peer = yield* Ref.get(connection);
+        if (Option.isNone(peer)) return yield* new Rpc.DeckhandRpcError({ reason: "unavailable" });
+        return yield* client.checkoutContexts(peer.value, {
+          ...input,
+          installationID: peer.value.hello.installationID,
+        });
+      }).pipe(Effect.mapError(rpcError)),
     reserveWriter: (actorID, input) => writerCommand("reserveWriter", actorID, input),
     reservation: (actorID, input) => writerCommand("reservation", actorID, input),
     releaseWriter: (actorID, input) => writerCommand("releaseWriter", actorID, input),

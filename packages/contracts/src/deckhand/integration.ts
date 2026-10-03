@@ -21,6 +21,29 @@ export const IntegrationReservationControl = Schema.Struct({
   installationID: ReservationIdentity,
 });
 export type IntegrationReservationControl = typeof IntegrationReservationControl.Type;
+export const IntegrationCheckoutLookupInput = Schema.Struct({
+  installationID: ReservationIdentity,
+  physicalID: ReservationToken,
+  repositoryPhysicalID: ReservationToken,
+  physicalIDs: Schema.Array(ReservationToken).check(Schema.isMinLength(1), Schema.isMaxLength(64)),
+  sharedRefs: Schema.Boolean,
+});
+export type IntegrationCheckoutLookupInput = typeof IntegrationCheckoutLookupInput.Type;
+export const IntegrationCheckoutContext = Schema.Struct({
+  workspaceID: ReservationIdentity,
+  generation: PositiveInt,
+  revision: TrimmedNonEmptyString.check(Schema.isMaxLength(64)),
+  available: Schema.Boolean,
+  repos: Schema.Array(ReservationIdentity).check(Schema.isMinLength(1), Schema.isMaxLength(64)),
+  physicalIDs: Schema.Array(ReservationToken).check(Schema.isMinLength(1), Schema.isMaxLength(64)),
+});
+export type IntegrationCheckoutContext = typeof IntegrationCheckoutContext.Type;
+export const IntegrationCheckoutLookup = Schema.Struct({
+  installationID: ReservationIdentity,
+  runtimeEpoch: ReservationIdentity,
+  contexts: Schema.Array(IntegrationCheckoutContext).check(Schema.isMaxLength(64)),
+});
+export type IntegrationCheckoutLookup = typeof IntegrationCheckoutLookup.Type;
 export const IntegrationWriterReservationInput = Schema.Struct({
   ...IntegrationReservationControl.fields,
   ownerID: ReservationIdentity,
@@ -54,6 +77,8 @@ export const IntegrationService = Schema.Struct({
   dependsOn: Schema.Array(Schema.String),
 });
 export const IntegrationRepository = Schema.Struct({
+  physicalID: Schema.optionalKey(Schema.NullOr(ReservationToken)),
+  repositoryPhysicalID: Schema.optionalKey(Schema.NullOr(ReservationToken)),
   id: Schema.String,
   path: Schema.String,
   branch: Schema.String,

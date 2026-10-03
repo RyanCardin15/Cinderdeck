@@ -136,10 +136,9 @@ const TestLayer = NodeSqliteClient.layer({ filename: ":memory:" }).pipe(
 );
 describe("Deckhand integration hub", () => {
   it.effect(
-    "guards the exact lane generation and physical repository before connected execution",
+    "initializes fresh storage and guards the exact lane generation and physical repository before connected execution",
     () =>
       Effect.gen(function* () {
-        yield* Migrations.migrate;
         const fs = yield* FileSystem.FileSystem;
         const root = yield* fs.makeTempDirectoryScoped({ prefix: "dh-guard-" });
         let generation = 7;

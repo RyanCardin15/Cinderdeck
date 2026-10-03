@@ -35,6 +35,7 @@ import { parseT3ProjectFile } from "@t3tools/shared/t3ProjectFile";
 import { resolveProjectFileBackedSetting } from "@t3tools/shared/projectSettings";
 import { gitCommandDuration, gitCommandsTotal, withMetrics } from "../observability/Metrics.ts";
 import * as GitVcsDriver from "./GitVcsDriver.ts";
+import * as GitMutationPolicy from "../deckhand/GitMutationPolicy.ts";
 import {
   parseRemoteNames,
   parseRemoteNamesInGitOrder,
@@ -830,6 +831,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const { worktreesDir } = yield* ServerConfig.ServerConfig;
   const crypto = yield* Crypto.Crypto;
+  const mutationPolicy = yield* GitMutationPolicy.GitMutationPolicy;
 
   const executeRaw: GitVcsDriver.GitVcsDriver["Service"]["execute"] = Effect.fnUntraced(
     function* (input) {
@@ -962,27 +964,29 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
   );
 
   const execute: GitVcsDriver.GitVcsDriver["Service"]["execute"] = (input) =>
-    executeRaw(input).pipe(
-      withMetrics({
-        counter: gitCommandsTotal,
-        timer: gitCommandDuration,
-        attributes: {
-          operation: input.operation,
-        },
-      }),
-      (execution) =>
-        input.timeoutMs === null || (input.timeoutMs ?? DEFAULT_TIMEOUT_MS) > DEFAULT_TIMEOUT_MS
-          ? execution
-          : gitProcesses.withPermits(1)(execution),
-      Effect.withSpan(input.operation, {
-        kind: "client",
-        attributes: {
-          "git.operation": input.operation,
-          "git.cwd": input.cwd,
-          "git.args_count": input.args.length,
-        },
-      }),
-    );
+    mutationPolicy
+      .execute(input, executeRaw({ ...input, env: { ...input.env, GIT_OPTIONAL_LOCKS: "0" } }))
+      .pipe(
+        withMetrics({
+          counter: gitCommandsTotal,
+          timer: gitCommandDuration,
+          attributes: {
+            operation: input.operation,
+          },
+        }),
+        (execution) =>
+          input.timeoutMs === null || (input.timeoutMs ?? DEFAULT_TIMEOUT_MS) > DEFAULT_TIMEOUT_MS
+            ? execution
+            : gitProcesses.withPermits(1)(execution),
+        Effect.withSpan(input.operation, {
+          kind: "client",
+          attributes: {
+            "git.operation": input.operation,
+            "git.cwd": input.cwd,
+            "git.args_count": input.args.length,
+          },
+        }),
+      );
 
   const executeGit = (
     operation: string,

@@ -14,7 +14,7 @@ import * as Migrations from "./Migrations.ts";
 export class WriterReservationError extends Schema.TaggedError<WriterReservationError>()(
   "WriterReservationError",
   {
-    reason: Schema.Literals(["invalid_scope", "duplicate_owner", "retired", "storage"]),
+    reason: Schema.Literals(["invalid_scope", "duplicate_owner", "busy", "retired", "storage"]),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
@@ -33,6 +33,10 @@ export class WriterReservations extends Context.Service<
   WriterReservations,
   {
     readonly acquire: (input: {
+      readonly ownerId: string;
+      readonly physicalIds: ReadonlyArray<string>;
+    }) => Effect.Effect<void, WriterReservationError, Scope.Scope>;
+    readonly tryAcquire: (input: {
       readonly ownerId: string;
       readonly physicalIds: ReadonlyArray<string>;
     }) => Effect.Effect<void, WriterReservationError, Scope.Scope>;
@@ -144,6 +148,48 @@ const make = Effect.gen(function* () {
       yield* Deferred.await(signal);
     }
   });
+  const tryAcquire = Effect.fn("deckhand.writerReservations.tryAcquire")(function* (input: {
+    readonly ownerId: string;
+    readonly physicalIds: ReadonlyArray<string>;
+  }) {
+    const physicalIds = [...new Set(input.physicalIds)].sort();
+    if (
+      !input.ownerId ||
+      input.ownerId.length > 160 ||
+      physicalIds.length === 0 ||
+      physicalIds.length > 64 ||
+      physicalIds.some((id) => !id || id.length > 160)
+    )
+      return yield* new WriterReservationError({ reason: "invalid_scope" });
+    yield* Effect.acquireRelease(
+      sql
+        .withTransaction(
+          Effect.gen(function* () {
+            const existing = yield* sql`SELECT id FROM deckhand_writer_requests
+          WHERE owner_id = ${input.ownerId} AND state <> 'released' LIMIT 1`;
+            if (existing.length)
+              return yield* new WriterReservationError({ reason: "duplicate_owner" });
+            // Short Git/file actions refuse rather than wait for their own resident
+            // provider. Earlier queued writers retain admission priority.
+            const blockers = yield* sql`SELECT r.id FROM deckhand_writer_requests r
+          JOIN deckhand_writer_scope s ON s.request_id = r.id
+          WHERE r.state IN ('queued','held','uncertain') AND ${sql.in("s.physical_id", physicalIds)} LIMIT 1`;
+            if (blockers.length) return yield* new WriterReservationError({ reason: "busy" });
+            const id = NodeCrypto.randomUUID();
+            yield* sql`INSERT INTO deckhand_writer_requests(id,runtime_epoch,owner_id,state)
+          VALUES (${id},${epoch},${input.ownerId},'held')`;
+            for (const physicalId of physicalIds)
+              yield* sql`INSERT INTO deckhand_writer_scope(request_id,physical_id) VALUES (${id},${physicalId})`;
+            return id;
+          }),
+        )
+        .pipe(
+          Effect.mapError(storage),
+          Effect.tap(() => wake),
+        ),
+      release,
+    );
+  });
   const inspect = Effect.gen(function* () {
     const rows = yield* sql<{
       id: string;
@@ -185,6 +231,6 @@ const make = Effect.gen(function* () {
       Effect.andThen(wake),
       Effect.mapError(storage),
     );
-  return WriterReservations.of({ acquire, inspect, changes, uncertain });
+  return WriterReservations.of({ acquire, tryAcquire, inspect, changes, uncertain });
 });
 export const layer = Layer.effect(WriterReservations, make);

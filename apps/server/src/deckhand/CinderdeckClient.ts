@@ -45,6 +45,10 @@ export class CinderdeckClient extends Context.Service<
       socketPath: string,
       expected: ExpectedIdentity,
     ) => Effect.Effect<Connection, BridgeError>;
+    readonly checkoutContexts: (
+      connection: Connection,
+      input: Contracts.IntegrationCheckoutLookupInput,
+    ) => Effect.Effect<Contracts.IntegrationCheckoutLookup, BridgeError>;
     readonly reserveWriter: (
       connection: Connection,
       input: Contracts.IntegrationWriterReservationInput,
@@ -86,6 +90,10 @@ export class CinderdeckClient extends Context.Service<
 >()("t3/deckhand/CinderdeckClient") {}
 
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
+const decodeCheckoutLookupInput = Schema.decodeUnknownEffect(
+  Contracts.IntegrationCheckoutLookupInput,
+);
+const decodeCheckoutLookup = Schema.decodeUnknownEffect(Contracts.IntegrationCheckoutLookup);
 const decodeWriterInput = Schema.decodeUnknownEffect(Contracts.IntegrationWriterReservationInput);
 const decodeWriterControl = Schema.decodeUnknownEffect(Contracts.IntegrationReservationControl);
 const isBridgeError = Schema.is(BridgeError);
@@ -248,6 +256,50 @@ const make = Effect.gen(function* () {
       ),
       Effect.mapError((cause) =>
         isBridgeError(cause) ? cause : new BridgeError({ reason: "invalid_response", cause }),
+      ),
+    );
+  const checkoutContexts: CinderdeckClient["Service"]["checkoutContexts"] = (connection, input) =>
+    requiredCapability(connection, "checkout.contexts").pipe(
+      Effect.andThen(
+        decodeCheckoutLookupInput(input).pipe(
+          Effect.mapError(() => new BridgeError({ reason: "invalid_request" })),
+        ),
+      ),
+      Effect.flatMap((validated) =>
+        validated.installationID !== connection.hello.installationID
+          ? Effect.fail(new BridgeError({ reason: "stale_binding" }))
+          : new Set(validated.physicalIDs).size !== validated.physicalIDs.length ||
+              !validated.physicalIDs.includes(validated.physicalID) ||
+              (!validated.sharedRefs && validated.physicalIDs.length !== 1)
+            ? Effect.fail(new BridgeError({ reason: "invalid_request" }))
+            : request(
+                connection.socketPath,
+                "integration.checkout.contexts",
+                validated,
+                5000,
+                connection.clientID,
+              ),
+      ),
+      Effect.flatMap(decodeCheckoutLookup),
+      Effect.flatMap((result) => {
+        const valid =
+          result.installationID === connection.hello.installationID &&
+          result.runtimeEpoch === connection.hello.runtimeEpoch &&
+          new Set(result.contexts.map((item) => item.workspaceID)).size ===
+            result.contexts.length &&
+          result.contexts.every(
+            (item) =>
+              item.repos.length === item.physicalIDs.length &&
+              new Set(item.repos).size === item.repos.length &&
+              item.physicalIDs.every((id) => input.physicalIDs.includes(id)) &&
+              (input.sharedRefs || item.physicalIDs.every((id) => id === input.physicalID)),
+          );
+        return valid
+          ? Effect.succeed(result)
+          : Effect.fail(new BridgeError({ reason: "invalid_response" }));
+      }),
+      Effect.mapError((cause) =>
+        isBridgeError(cause) ? cause : new BridgeError({ reason: "invalid_response" }),
       ),
     );
   const snapshot: CinderdeckClient["Service"]["snapshot"] = (connection, input = {}) =>
@@ -416,6 +468,7 @@ const make = Effect.gen(function* () {
     writerRequest(connection, "release", input);
   return CinderdeckClient.of({
     connect,
+    checkoutContexts,
     snapshot,
     events,
     submit,

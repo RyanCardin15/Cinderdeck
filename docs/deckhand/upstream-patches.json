@@ -310,6 +310,10 @@
     "apps/web/src/routes/_chat.workspaces.tsx": "Add the Deckhand workspace overview entry point under the existing authenticated chat route.",
     "apps/web/src/routeTree.gen.ts": "Generated router registration for the Deckhand workspace route.",
     "apps/server/src/orchestration-v2/runtimeLayer.ts": "Guard managed provider startup with physical checkout identity and scoped writer reservations; connected checkouts remain Cinderdeck-owned.",
-    "apps/server/src/orchestration-v2/ProviderTurnStartService.ts": "Guard managed provider startup with physical checkout identity and scoped writer reservations; connected checkouts remain Cinderdeck-owned."
+    "apps/server/src/orchestration-v2/ProviderTurnStartService.ts": "Guard managed provider startup with physical checkout identity and scoped writer reservations; connected checkouts remain Cinderdeck-owned.",
+    "apps/server/src/vcs/GitVcsDriver.ts": "Install the Deckhand checkout mutation policy at both Git driver construction points and the server root; checkpoint restoration reserves files before effects.",
+    "apps/server/src/vcs/GitVcsDriverCore.ts": "Install the Deckhand checkout mutation policy at both Git driver construction points and the server root; checkpoint restoration reserves files before effects.",
+    "apps/server/src/server.ts": "Install the Deckhand checkout mutation policy at both Git driver construction points and the server root; checkpoint restoration reserves files before effects.",
+    "apps/server/src/orchestration-v2/CheckpointRollbackService.ts": "Admit coordinated conversation/file rollback before either side changes; a refused physical checkout cannot rewind only the provider conversation."
   }
 }

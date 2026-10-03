@@ -62,6 +62,110 @@ const peer = (
   });
 describe("same-host Cinderdeck bridge", () => {
   it.effect(
+    "attests native checkout aliases over the real Unix transport and rejects foreign, duplicate or malformed lookup scopes",
+    () =>
+      Effect.gen(function* () {
+        const physical = "a".repeat(64);
+        const other = "b".repeat(64);
+        const context = {
+          workspaceID: "workspace",
+          generation: 1,
+          revision: "revision",
+          available: true,
+          repos: ["app"],
+          physicalIDs: [physical],
+        };
+        let result: unknown = {
+          installationID: "installation",
+          runtimeEpoch: "epoch",
+          contexts: [context, { ...context, workspaceID: "alias" }],
+        };
+        let lookups = 0;
+        const socketPath = yield* peer((request) => {
+          if (request.method === "integration.hello")
+            return {
+              id: request.id,
+              result: { ...hello, capabilities: [...hello.capabilities, "checkout.contexts"] },
+            };
+          assert.equal(request.method, "integration.checkout.contexts");
+          lookups++;
+          return { id: request.id, result };
+        });
+        const client = yield* CinderdeckClient.CinderdeckClient;
+        const connection = yield* client.connect(socketPath, { channel: "development" });
+        const input = {
+          installationID: "installation",
+          physicalID: physical,
+          repositoryPhysicalID: physical,
+          physicalIDs: [physical],
+          sharedRefs: false,
+        };
+        assert.equal((yield* client.checkoutContexts(connection, input)).contexts.length, 2);
+        for (const invalid of [
+          { installationID: "foreign", runtimeEpoch: "epoch", contexts: [context] },
+          { installationID: "installation", runtimeEpoch: "foreign", contexts: [context] },
+          { installationID: "installation", runtimeEpoch: "epoch", contexts: [context, context] },
+          {
+            installationID: "installation",
+            runtimeEpoch: "epoch",
+            contexts: [{ ...context, repos: ["app", "app"], physicalIDs: [physical, physical] }],
+          },
+          {
+            installationID: "installation",
+            runtimeEpoch: "epoch",
+            contexts: [{ ...context, physicalIDs: [other] }],
+          },
+          {
+            installationID: "installation",
+            runtimeEpoch: "epoch",
+            contexts: [{ ...context, physicalIDs: [physical, physical] }],
+          },
+          {
+            installationID: "installation",
+            runtimeEpoch: "epoch",
+            contexts: Array.from({ length: 65 }, (_, i) => ({
+              ...context,
+              workspaceID: `workspace-${i}`,
+            })),
+          },
+        ]) {
+          result = invalid;
+          assert.equal(
+            (yield* client.checkoutContexts(connection, input).pipe(Effect.flip)).reason,
+            "invalid_response",
+          );
+        }
+        result = {
+          installationID: "installation",
+          runtimeEpoch: "epoch",
+          contexts: [{ ...context, physicalIDs: [other] }],
+        };
+        assert.equal(
+          (yield* client.checkoutContexts(connection, {
+            ...input,
+            sharedRefs: true,
+            physicalIDs: [physical, other],
+          })).contexts[0]?.physicalIDs[0],
+          other,
+        );
+        const before = lookups;
+        assert.equal(
+          (yield* client
+            .checkoutContexts(connection, { ...input, installationID: "foreign" })
+            .pipe(Effect.flip)).reason,
+          "stale_binding",
+        );
+        assert.equal(
+          (yield* client
+            .checkoutContexts(connection, { ...input, physicalID: "bad" })
+            .pipe(Effect.flip)).reason,
+          "invalid_request",
+        );
+        assert.equal(lookups, before);
+      }).pipe(Effect.scoped, Effect.provide(TestLayer)),
+  );
+
+  it.effect(
     "decodes fragmented replies and preserves installation binding across snapshot and replay",
     () =>
       Effect.gen(function* () {

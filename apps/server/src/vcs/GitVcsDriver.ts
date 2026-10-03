@@ -39,6 +39,7 @@ import {
 } from "./GitVcsDriverCore.ts";
 import * as VcsDriver from "./VcsDriver.ts";
 import * as VcsProcess from "./VcsProcess.ts";
+import * as GitMutationPolicy from "../deckhand/GitMutationPolicy.ts";
 
 export interface ExecuteGitInput {
   readonly operation: string;
@@ -529,6 +530,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const vcsProcess = yield* VcsProcess.VcsProcess;
+  const mutationPolicy = yield* GitMutationPolicy.GitMutationPolicy;
   const capabilities = {
     kind: "git" as const,
     supportsWorktrees: true,
@@ -552,17 +554,40 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
     ).pipe(Effect.map((result) => result.exitCode === 0 && result.stdout.trim() === "true"));
 
   const execute: VcsDriver.VcsDriver["Service"]["execute"] = (input) =>
-    gitCommand(vcsProcess, input.operation, input.cwd, input.args, {
-      ...(input.stdin !== undefined ? { stdin: input.stdin } : {}),
-      ...(input.env !== undefined ? { env: input.env } : {}),
-      ...(input.allowNonZeroExit !== undefined ? { allowNonZeroExit: input.allowNonZeroExit } : {}),
-      ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
-      ...(input.maxOutputBytes !== undefined ? { maxOutputBytes: input.maxOutputBytes } : {}),
-      ...(input.outputMode !== undefined ? { outputMode: input.outputMode } : {}),
-      ...(input.appendTruncationMarker !== undefined
-        ? { appendTruncationMarker: input.appendTruncationMarker }
-        : {}),
-    });
+    mutationPolicy
+      .execute(
+        input,
+        gitCommand(vcsProcess, input.operation, input.cwd, input.args, {
+          ...(input.stdin !== undefined ? { stdin: input.stdin } : {}),
+          ...(mutationPolicy.managed
+            ? { env: { ...input.env, GIT_OPTIONAL_LOCKS: "0" } }
+            : input.env !== undefined
+              ? { env: input.env }
+              : {}),
+          ...(input.allowNonZeroExit !== undefined
+            ? { allowNonZeroExit: input.allowNonZeroExit }
+            : {}),
+          ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
+          ...(input.maxOutputBytes !== undefined ? { maxOutputBytes: input.maxOutputBytes } : {}),
+          ...(input.outputMode !== undefined ? { outputMode: input.outputMode } : {}),
+          ...(input.appendTruncationMarker !== undefined
+            ? { appendTruncationMarker: input.appendTruncationMarker }
+            : {}),
+        }),
+      )
+      .pipe(
+        Effect.catchTag("GitCommandError", (error) =>
+          Effect.fail(
+            new VcsProcessExitError({
+              operation: input.operation,
+              command: "git",
+              cwd: input.cwd,
+              exitCode: 1,
+              detail: error.detail,
+            }),
+          ),
+        ),
+      );
 
   const detectRepository: VcsDriver.VcsDriver["Service"]["detectRepository"] = Effect.fn(
     "detectRepository",
@@ -726,7 +751,10 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
   });
 
   const initRepository: VcsDriver.VcsDriver["Service"]["initRepository"] = (input) =>
-    gitCommand(vcsProcess, "GitVcsDriver.initRepository", input.cwd, ["init"], {
+    execute({
+      operation: "GitVcsDriver.initRepository",
+      cwd: input.cwd,
+      args: ["init"],
       timeoutMs: 10_000,
       maxOutputBytes: 64 * 1024,
     }).pipe(Effect.asVoid);
@@ -1060,7 +1088,10 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
           cwd: input.cwd,
           args: [...durableWrite, "update-ref", input.checkpointRef, commitOid],
         });
-      }).pipe(Effect.ensuring(cleanupTempIndex));
+      }).pipe(
+        (effect) => mutationPolicy.capture(input.cwd, tempIndexPath, effect),
+        Effect.ensuring(cleanupTempIndex),
+      );
     }),
 
     hasCheckpointRef: (input) =>
@@ -1230,7 +1261,23 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
   return {
     capabilities,
     execute,
-    checkpoints,
+    checkpoints: {
+      ...checkpoints,
+      restoreCheckpoint: (input: VcsDriver.VcsRestoreCheckpointInput) =>
+        mutationPolicy.restore(input.cwd, checkpoints.restoreCheckpoint(input)).pipe(
+          Effect.catchTag("GitCommandError", (error) =>
+            Effect.fail(
+              new VcsProcessExitError({
+                operation: "GitVcsDriver.checkpoints.restoreCheckpoint",
+                command: "git",
+                cwd: input.cwd,
+                exitCode: 1,
+                detail: error.detail,
+              }),
+            ),
+          ),
+        ),
+    },
     detectRepository,
     isInsideWorkTree,
     listWorkspaceFiles,

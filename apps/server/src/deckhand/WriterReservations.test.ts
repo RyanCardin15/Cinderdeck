@@ -75,6 +75,65 @@ describe("physical checkout writer ownership", () => {
       assert.deepEqual(yield* store.inspect, []);
     }).pipe(Effect.provide(TestLayer)),
   );
+  it.effect(
+    "short mutation admission refuses resident and uncertain owners without bypassing queued writers",
+    () =>
+      Effect.gen(function* () {
+        const store = yield* WriterReservations.WriterReservations;
+        const firstScope = yield* Scope.make();
+        yield* store
+          .acquire({ ownerId: "resident", physicalIds: ["a"] })
+          .pipe(Effect.provideService(Scope.Scope, firstScope));
+        const queued = yield* Effect.scoped(
+          store.acquire({ ownerId: "waiting", physicalIds: ["a", "b"] }),
+        ).pipe(Effect.forkChild);
+        yield* waitFor(store, "waiting", "queued");
+        for (const physicalIds of [["a"], ["b"]]) {
+          const error = yield* Effect.scoped(
+            store.tryAcquire({ ownerId: "git", physicalIds }),
+          ).pipe(Effect.flip);
+          assert.equal(error.reason, "busy");
+        }
+        assert.deepEqual(
+          (yield* store.inspect).map((row) => row.ownerId),
+          ["resident", "waiting"],
+        );
+        yield* Fiber.interrupt(queued);
+        yield* store.uncertain("resident");
+        assert.equal(
+          (yield* Effect.scoped(store.tryAcquire({ ownerId: "git", physicalIds: ["a"] })).pipe(
+            Effect.flip,
+          )).reason,
+          "busy",
+        );
+        const otherScope = yield* Scope.make();
+        yield* store
+          .tryAcquire({ ownerId: "independent", physicalIds: ["b", "b"] })
+          .pipe(Effect.provideService(Scope.Scope, otherScope));
+        assert.deepEqual(
+          (yield* store.inspect).find((row) => row.ownerId === "independent")?.physicalIds,
+          ["b"],
+        );
+        assert.equal(
+          (yield* Effect.scoped(
+            store.tryAcquire({ ownerId: "independent", physicalIds: ["c"] }),
+          ).pipe(Effect.flip)).reason,
+          "duplicate_owner",
+        );
+        yield* Scope.close(otherScope, Exit.void);
+        yield* Scope.close(firstScope, Exit.void);
+        assert.deepEqual(
+          (yield* store.inspect).map((row) => [row.ownerId, row.state]),
+          [["resident", "uncertain"]],
+        );
+        assert.equal(
+          (yield* Effect.scoped(store.tryAcquire({ ownerId: "empty", physicalIds: [] })).pipe(
+            Effect.flip,
+          )).reason,
+          "invalid_scope",
+        );
+      }).pipe(Effect.provide(TestLayer)),
+  );
   it.effect("cancels queued admission and refuses duplicate owners or empty scopes", () =>
     Effect.gen(function* () {
       const store = yield* WriterReservations.WriterReservations;

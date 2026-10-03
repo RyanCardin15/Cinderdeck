@@ -71,6 +71,7 @@ import * as PreviewManager from "./preview/Manager.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as ProcessRunner from "./processRunner.ts";
 import * as GitManager from "./git/GitManager.ts";
+import * as GitMutationPolicy from "./deckhand/GitMutationPolicy.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
@@ -429,6 +430,7 @@ const ServerEnvironmentLayerLive = ServerEnvironment.layer.pipe(
 );
 
 const AuthLayerLive = EnvironmentAuth.layer.pipe(
+  Layer.provideMerge(GitMutationPolicy.layerLive),
   Layer.provideMerge(PersistenceLayerLive),
   Layer.provide(ServerEnvironmentLayerLive),
   Layer.provide(ServerSecretStore.layer),
@@ -505,6 +507,15 @@ const ProviderInstallationRefreshLive = Layer.effectDiscard(
 );
 
 const RuntimeCoreDependenciesBaseLive = Layer.mergeAll(
+  Layer.effectDiscard(
+    Effect.gen(function* () {
+      const policy = yield* GitMutationPolicy.GitMutationPolicy;
+      if (!policy.managed)
+        return yield* Effect.die(
+          new Error("Deckhand checkout mutation policy is missing from the server runtime."),
+        );
+    }),
+  ),
   AgentAwarenessRelay.layer,
   ThreadSettlementWorkerLive,
   Layer.effectDiscard(StorageCleanup.make.pipe(Effect.flatMap((service) => service.start()))).pipe(
