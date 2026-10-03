@@ -19,10 +19,15 @@ final class StackControlService: ObservableObject {
   private let prViews: PRViewControlService
   let workspaceRunner: WorkspaceRunner
   let lanes: StackLaneCoordinator
+  var integrationOperations: IntegrationOperations?
+  var integrationJournal: IntegrationJournal?
+  var integrationProjectionRevision: UInt64 = 0
+  let integrationDirectory: URL
 
-  init(supervisor: StackSupervisor, prViews: PRViewControlService? = nil, runner: WorkspaceRunner? = nil, claimsFile: URL = StackControlPaths.claims) {
+  init(supervisor: StackSupervisor, prViews: PRViewControlService? = nil, runner: WorkspaceRunner? = nil, claimsFile: URL = StackControlPaths.claims, integrationDirectory: URL? = nil) {
     self.supervisor = supervisor
     self.claimsFile = claimsFile
+    self.integrationDirectory = integrationDirectory ?? supervisor.logDirectory.appendingPathComponent("Integration", isDirectory: true)
     self.workspaceRunner = runner ?? WorkspaceRunner(supervisor: supervisor, store: .init(directory: supervisor.logDirectory.appendingPathComponent("Runs")))
     self.lanes = StackLaneCoordinator(supervisor: supervisor, runner: self.workspaceRunner)
     self.prViews = prViews ?? PRViewControlService()
@@ -185,6 +190,7 @@ final class StackControlService: ObservableObject {
   }
 
   private func writeState(appRunning: Bool = true) {
+    publishIntegrationProjection()
     do {
       try StackControlPaths.ensureDirectory()
       let data = try StackControlCoding.encoder(pretty: true).encode(snapshot(appRunning: appRunning))
@@ -223,7 +229,8 @@ final class StackControlService: ObservableObject {
       host: description.host, pid: peer > 0 ? peer : nil, tty: description.tty, cwd: client?.cwd)
   }
 
-  func handle(_ method: String, params: JSONValue, actor: StackActor) async throws -> JSONValue {
+  func handle(_ method: String, params: JSONValue, actor: StackActor, operationID: String? = nil) async throws -> JSONValue {
+    if method.hasPrefix("integration.") { return try await handleIntegration(method, params: params, actor: actor) }
     if method.hasPrefix("workspace.") { return try await handleWorkspace(method, params: params, actor: actor) }
     if method.hasPrefix("prs.views.") { return try await prViews.handle(method, params: params) }
     if method.hasPrefix("repro.") { return try await handleRepro(method, params: params, actor: actor) }
@@ -248,7 +255,7 @@ final class StackControlService: ObservableObject {
       let files = supervisor.files.filter { sourceID == nil || $0.id == sourceID || $0.lane?.sourceStackID == sourceID }
       await supervisor.refreshLaneGitStates(files.filter { $0.lane != nil }.map(\.id))
       return try JSONValue(encoding: files.map { stackSnapshot($0) })
-    case "lane.create", "lane.adopt": return try await createLane(params, adopt: method == "lane.adopt", actor: actor)
+    case "lane.create", "lane.adopt": return try await createLane(params, adopt: method == "lane.adopt", actor: actor, operationID: operationID)
     case "lane.update": return try await updateLane(params, actor: actor)
     case "lane.remove", "lane.release":
       let file = try laneFile(params)
@@ -359,10 +366,11 @@ final class StackControlService: ObservableObject {
     return file
   }
 
-  private func createLane(_ params: JSONValue, adopt: Bool, actor: StackActor) async throws -> JSONValue {
+  private func createLane(_ params: JSONValue, adopt: Bool, actor: StackActor, operationID: String? = nil) async throws -> JSONValue {
     let source = try workspaceFile(params)
     guard source.lane == nil else { throw StackControlError.invalid("Create lanes from the original workspace, not from lane \(source.name).") }
     var request = StackLaneRequest(branch: params["branch"]?.stringValue ?? params["name"]?.stringValue ?? "")
+    request.integrationOperationID = operationID
     if adopt {
       let path = params["path"]?.stringValue ?? actor.cwd
       guard let path, !path.isEmpty else { throw StackControlError.invalid("Pass path: the worktree to adopt") }

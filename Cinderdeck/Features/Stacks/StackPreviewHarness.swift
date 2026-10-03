@@ -23,6 +23,8 @@ enum StackPreviewHarness {
     )) ?? Data()
     overrides.merge([
       PreferencesKeys.stacksDirectory: root.appendingPathComponent("stacks").path,
+      // A stored custom lane path otherwise escapes the disposable preview root.
+      PreferencesKeys.stacksLanesDirectory: root.appendingPathComponent("lanes").path,
       PreferencesKeys.stacksEnabled: true,
       PreferencesKeys.stacksNotifyOnCrash: false,
       PreferencesKeys.stacksQuitBehavior: "ask",

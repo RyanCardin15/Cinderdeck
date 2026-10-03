@@ -424,6 +424,7 @@ nonisolated enum StackLaneStore {
       ports: ports, slug: slug, environment: request.environment, from: request.from ?? settings?.from)
     info.adopted = worktrees.contains { !$0.managed }
     var record = StackLaneRecord(id: id, info: info, worktrees: worktrees, ready: false)
+    record.integrationOperationID = request.integrationOperationID
     // Readiness checks and ports must work in a lane before anything is created.
     if let problem = derive(record, source: source).issues.first(where: { $0.severity == .error }) {
       throw StackError.message(problem.message)

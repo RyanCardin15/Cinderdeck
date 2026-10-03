@@ -1,0 +1,111 @@
+# Deckhand implementation checklist
+
+Companion to the [full implementation plan](DECKHAND_IMPLEMENTATION_PLAN.md). Completion is tracked individually; unchecked items may contain partial implementation. Check an item only after its code, meaningful tests, required documentation and evidence are complete. Record implementation PRs/commits and evidence beside the item as work proceeds.
+
+Phases P0–P11 and acceptance cases A01–A20 refer to the full plan. This is one full-release scope; finishing an early integration slice does not complete it.
+
+## P0 — Fork and isolated baseline
+
+- [x] **DH-001** Create the permanent T3-derived Deckhand repository; preserve history/license; pin the inspected baseline; record dependency/runtime versions. Gate: a reproducible clean build and standalone launch. A01.
+- [ ] **DH-002** Separate branding, app ID, data/config/secrets namespaces, URL scheme, CLI, updater and diagnostics destinations. Audit inherited cloud/relay/telemetry dependencies. Gate: no writes to live T3/Cinderdeck stores and no accidental upstream service requirement. A01, A20.
+- [ ] **DH-003** Establish the upstream patch manifest, focused CI, fixture application and isolated Cinderdeck Debug environment. Gate: baseline provider/terminal/Git flow and reproducible test roots. A01, A02.
+
+## P1 — Contracts and persistent relationships
+
+- [ ] **DH-004** Define typed environment/workspace/checkout/feature identities and provider capability projections. Gate: canonical physical checkout and fork/host identities survive rename/alias cases. A02, A08.
+- [ ] **DH-005** Add namespaced migrations for feature/context/session/artifact relationships and attention/activity projections; retain upstream session and PR records. Gate: fresh/upgrade/replay fixtures preserve data. A19.
+- [ ] **DH-006** Specify operation receipts, argument hashes, resource generations, events, cursor/resync and shared Swift/TypeScript contract fixtures. Gate: duplicate, stale, wrong-type, unknown-capability and generation-reuse cases pass. A06, A16, A19.
+
+## P2 — Cinderdeck integration bridge
+
+- [ ] **DH-007** Implement same-host discovery, identity/capability handshake, channel checks and connection state. Gate: wrong host/channel, missing app and older app produce correct recoverable states. A01, A17, A19.
+- [ ] **DH-008** Implement the Cinderdeck integration projection/journal, atomic projection snapshot cursor, long-poll replay and startup reconciliation. Gate: gaps/repeated events/restarts remain coherent. A06.
+- [ ] **DH-009** Implement operation submit/status plus per-operation lane/run/recording reconciliation; keep commands independent of long-poll connections. Gate: lost responses never blindly repeat mutations. A06.
+- [ ] **DH-010** Add bounded session/artifact registration and Deckhand server/client projections with authorization, backoff and deduplication. Gate: spoofed managed identities and unauthorized resources are rejected. A15, A17.
+
+## P3 — Checkout ownership and lane lifecycle
+
+- [ ] **DH-011** Add standalone/connected workspace backend selection and route all create/adopt/setup/release/remove operations through it. Gate: no duplicate worktree per managed lane. A02, A07.
+- [ ] **DH-012** Implement multi-repository checkout resolution, primary-checkout contexts, shared services and port/URL context. Gate: three real lanes run independently with the right source trees. A02.
+- [ ] **DH-013** Implement reservations keyed by physical checkout; queue managed writers; preserve human override and advisory-boundary semantics. Gate: aliases cannot bypass coordination. A03.
+- [ ] **DH-014** Audit and route Git/PR checkout, branch switch, reset/rebase/pull, checkpoint restoration, settlement/archive cleanup and worktree tools through connected preflight. Gate: active runs and dirty/adopted/shared worktrees remain protected. A05, A07, A10.
+- [ ] **DH-015** Implement explicit standalone adoption and connected release transitions with retained session IDs and recovery receipts. Gate: connection loss alone never changes ownership. A06, A07.
+
+## P4 — Workspace overview
+
+- [ ] **DH-016** Build the shared Deckhand theme/components and workspace/lane navigation from the approved concept; implement responsive/light/dark/keyboard states. Gate: accessible navigation to all real contexts. A18.
+- [ ] **DH-017** Build real lane rows with sessions, PRs, recordings, service summary, filters and inspector. Gate: accurate scoped counts and no transcript/log overfetch. A02, A08, A11, A18.
+- [ ] **DH-018** Implement activity, loading/empty/stale/disconnected/invalid-definition/auth states and bounded subscriptions. Gate: errors never appear as empty successful workspaces. A06, A17, A19.
+
+## P5 — Managed and external agents
+
+- [ ] **DH-019** Bind upstream thread creation to feature/checkout context and launch real Codex/Claude Code sessions with provider/account identity. Gate: process cwd and resource attribution match the lane. A02, A03.
+- [ ] **DH-020** Implement state normalization, per-session tabs, turn-versus-feature completion and provider capability presentation. Gate: working/input/approval/idle/error/disconnected states reflect events. A04, A05, A06.
+- [ ] **DH-021** Complete follow-ups, steering/queueing where supported, attachments, approval answers, questions, interruption, native resume and handoff fallbacks. Gate: no stale approval or wrong-thread input. A04, A05, A14.
+- [ ] **DH-022** Implement reviewer scheduling and enforce read-only or isolated-review behavior, with reviewed-revision attribution. Gate: a queued reviewer cannot edit the implementer's active checkout. A03.
+- [ ] **DH-023** Implement external-session registration, capabilities, last-seen expiry and child-agent attribution where available. Gate: unsupported controls remain unavailable and missing heartbeat never means completed. A15.
+- [ ] **DH-024** Integrate preview/diff/file/terminal panels and persist lane/session drafts/selections safely. Gate: switching contexts cannot retarget ongoing work or leak attachments. A05, A17.
+
+## P6 — Pull requests
+
+- [ ] **DH-025** Extend upstream persistent PR links to features/checkouts and session reverse lookup; preserve host/head/base identity. Gate: zero/one/multiple PRs and multiple repositories work. A08.
+- [ ] **DH-026** Link managed PR creation results and implement external PR suggestions, explicit association and ambiguous-match handling. Gate: same branch name in a fork/other repo does not misattach. A08.
+- [ ] **DH-027** Implement coordinated PR freshness/check/review reads, rate-limit behavior and revision/account preflight for writes. Gate: force-push, account switch and uncertain results are handled correctly. A09, A17.
+
+## P7 — Capture, media and handoff
+
+- [ ] **DH-028** Complete a real T3-preview capture/export compatibility spike. Record codec/container, capture coverage, clock mapping and fallback decision. Gate: a playable exported video with measured synchronization. A12, A13.
+- [ ] **DH-029** Integrate existing Cinderdeck screen/window/CDP recording controls and explicit primary versus captured-workspace scope. Gate: actual included/excluded sources match every interface. A11.
+- [ ] **DH-030** Implement external begin/finalize, staging ownership, media validation/normalization, import receipts and abandoned-capture recovery. Gate: pause/stop/disconnect/disk-full failures remain honest. A13.
+- [ ] **DH-031** Implement authorized opaque media resources, range playback, hashes/thumbnail cache and bounded log reads on the execution host. Gate: local and authenticated remote clients cannot read arbitrary files. A17, A18.
+- [ ] **DH-032** Build the recording library, frame/annotation references and draft evidence preparation with actual media capability checks. Gate: complete video-inclusive bundle or explicit provider fallback. A11, A14.
+
+## P8 — Revision-aware verification and review
+
+- [ ] **DH-033** Persist immutable provenance manifests for repositories, tracked/untracked source fingerprints, definitions, runs, service/build identity and capture quality. Gate: legacy/missing provenance is unknown, not inferred. A09, A10, A19.
+- [ ] **DH-034** Run full-confidence verification against a reserved or isolated pinned checkout/build and record named actual checks. Gate: changing code, stale server builds and dirty trees cannot receive a false exact-commit badge. A10, A12.
+- [ ] **DH-035** Implement evidence association/freshness classification and invalidate currentness on PR/repository/environment changes without rewriting history. Gate: failed-but-current and passed-but-old are distinct. A09, A10.
+- [ ] **DH-036** Build PR verification player, timeline, synchronized filtered logs, before/after scenario links and agent/PR inspector. Gate: the third approved screen works on real failed-then-fixed evidence. A12, A14, A18.
+
+## P9 — Complete product surfaces and agent interfaces
+
+- [ ] **DH-037** Complete Services/Runs views: dependencies, start/stop/restart, tasks/workflows, cancellation, past results, rerun, recording and validated definition edits. Gate: operations and statuses match Cinderdeck's owner. A02, A06, A16.
+- [ ] **DH-038** Build the attention inbox with approval/input/failure/review items and authoritative resolution/snooze behavior. Gate: wrong-context or stale actions are rejected. A04, A17.
+- [ ] **DH-039** Add native Cinderdeck Agents & linked work, PR/recording associations and validated bidirectional deep links. Gate: correct workspace/lane/session opens after restart and missing targets recover cleanly. A08, A16.
+- [ ] **DH-040** Complete standalone/connected onboarding and provider/connection/recording/retention/notification/update settings. Gate: setup doesn't launch unrelated work or mutate source stores. A01, A19.
+- [ ] **DH-041** Expose integration/context/evidence operations through the shared CLI/MCP domain services and update help, schemas and canonical installed skills. Gate: real UI/CLI/MCP results and validation agree. A16.
+
+## P10 — Reliability, migration and quality
+
+- [ ] **DH-042** Run the complete failure/reconnect/operation-reconciliation matrix, including interrupted writes, provider exit, expired replay cursor, source deletion and resource generation reuse. Gate: no duplicate/lost ownership or false status. A06, A13, A15.
+- [ ] **DH-043** Implement/test optional read-only T3 import, backward-compatible Cinderdeck metadata, legacy evidence and compatible upgrade/rollback paths. Gate: old data retained and unsupported downgrade refused safely. A19.
+- [ ] **DH-044** Complete keyboard/VoiceOver, focus, text scaling, contrast, reduced motion, narrow layout and error-state walkthroughs. Gate: critical actions remain usable in all supported modes. A18.
+- [ ] **DH-045** Measure/fix overview, live-event, video/log, memory, process/descriptor, and energy budgets on supported hardware with large fixtures. Gate: recorded results meet the full plan's budgets. A18.
+- [ ] **DH-046** Execute A01–A19 using real providers, real capture, controlled hosting writes and isolated data stores; rehearse development packaging checks. Reserve final signed install/update acceptance A20 for P11. Gate: every applicable external/manual test has actual evidence; no mocked success substitution.
+
+## P11 — Release and sustainable maintenance
+
+- [ ] **DH-047** Produce independently signed/notarized Deckhand and compatible Cinderdeck release candidates with notices, own feeds, version compatibility and support diagnostics. Gate: clean-machine installation works. A20.
+- [ ] **DH-048** Test real update, failed update and binary/store rollback procedures, including simultaneous Deckhand/T3/Cinderdeck installation. Gate: unrelated app settings/data survive. A19, A20.
+- [ ] **DH-049** Rehearse a real upstream update in a staging branch; run patch-boundary, stored-event migration, provider and connected-journey tests. Gate: documented update procedure succeeds without unreviewed production promotion.
+- [ ] **DH-050** Package release notes, setup/operator docs, exact revisions, acceptance videos, test/migration/performance results and known capability limits. Gate: A01–A20 and the full plan's definition of complete are satisfied.
+
+## Evidence record template
+
+For each completed item append:
+
+```text
+Implementation: repository + PR/commit
+Validation: meaningful automated checks + real/manual checks
+Environment: OS, app versions, provider versions and isolated data roots
+Evidence: recordings, logs, reports and fixture revisions
+Remaining limits: none, or explicit unresolved release blocker
+```
+
+Do not check a parent phase complete while any required item is unfinished. App compilation, generated mockups and reported agent success are insufficient evidence for a completed connected workflow.
+
+## Foundation checkpoint — 2026-10-03
+
+DH-001: permanent full-history fork, pinned upstream revision, runtime/dependency versions, frozen install, clean upstream build and actual isolated standalone web/Electron launches. Deckhand commit `5189cd544d`. Evidence and remaining limits: [foundation validation](DECKHAND_FOUNDATION_EVIDENCE.md).
+
+DH-002–DH-009 contain partial foundation work. They remain unchecked because branding/distribution assets, complete contracts/registration, discovery/reconnect, all mutation reconciliations and the full acceptance gates remain open. No parent phase is complete.

@@ -127,13 +127,14 @@ nonisolated struct StackLaneRecord: Codable, Sendable {
   /// The saved definition of a pinned lane.
   var definition: StackDefinition?
   var copied: [StackLaneCopiedFile] = []
+  var integrationOperationID: String?
   var version = 2
 
   init(id: String, info: StackLaneInfo, worktrees: [StackLaneWorktree], ready: Bool? = nil) {
     self.id = id; self.info = info; self.worktrees = worktrees; self.ready = ready
   }
 
-  enum CodingKeys: String, CodingKey { case id, info, worktrees, ready, setup, definition, copied, version }
+  enum CodingKeys: String, CodingKey { case id, info, worktrees, ready, setup, definition, copied, version, integrationOperationID }
   init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
     worktrees = try c.decode([StackLaneWorktree].self, forKey: .worktrees)
@@ -141,6 +142,7 @@ nonisolated struct StackLaneRecord: Codable, Sendable {
     setup = try c.decodeIfPresent(StackLaneSetupState.self, forKey: .setup)
     definition = try c.decodeIfPresent(StackDefinition.self, forKey: .definition)
     copied = try c.decodeIfPresent([StackLaneCopiedFile].self, forKey: .copied) ?? []
+    integrationOperationID = try c.decodeIfPresent(String.self, forKey: .integrationOperationID)
     version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
     if let info = try c.decodeIfPresent(StackLaneInfo.self, forKey: .info) {
       self.info = info
@@ -158,6 +160,7 @@ nonisolated struct StackLaneRecord: Codable, Sendable {
 
 /// What to create: a branch, where to start it, and per-lane choices.
 nonisolated struct StackLaneRequest: Sendable {
+  var integrationOperationID: String?
   var branch: String
   var from: String?
   var environment: [String: String] = [:]
