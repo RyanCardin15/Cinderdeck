@@ -439,6 +439,86 @@ describe("same-host Cinderdeck bridge", () => {
         }
       }).pipe(Effect.scoped, Effect.provide(TestLayer)),
   );
+  it.effect(
+    "repository start revisions require a precise capability and reject malformed maps before transport",
+    () =>
+      Effect.gen(function* () {
+        const capabilities = [...hello.capabilities, "operations.lane.create"];
+        let submissions = 0;
+        let receivedArguments: unknown;
+        const socketPath = yield* peer((request) => {
+          if (request.method === "integration.hello")
+            return { id: 1, result: { ...hello, capabilities } };
+          submissions++;
+          const input = request.params as { operationKey: string; arguments: unknown };
+          receivedArguments = input.arguments;
+          return {
+            id: 1,
+            result: {
+              id: "operation",
+              operationKey: input.operationKey,
+              argumentHash: "b".repeat(64),
+              workspaceID: "source",
+              generation: 1,
+              method: "lane.create",
+              state: "succeeded",
+              createdAt: "2026-10-03T00:00:00Z",
+              updatedAt: "2026-10-03T00:00:01Z",
+            },
+          };
+        });
+        const client = yield* CinderdeckClient.CinderdeckClient;
+        const input = {
+          operationKey: "create",
+          installationID: "installation",
+          workspaceID: "source",
+          generation: 1,
+          revision: "r",
+          method: "lane.create" as const,
+          arguments: {
+            workspace: "source",
+            branch: "new",
+            repositoryRefs: { app: "a".repeat(40) },
+            start: false,
+          },
+        };
+        const old = yield* client.connect(socketPath, {
+          channel: "development",
+          clientID: "actor",
+        });
+        assert.equal(
+          (yield* client.submit(old, input).pipe(Effect.flip)).reason,
+          "unsupported_capability",
+        );
+        assert.equal(submissions, 0);
+        capabilities.push("operations.lane.create.repositoryRefs");
+        const connection = yield* client.connect(socketPath, {
+          channel: "development",
+          clientID: "actor",
+        });
+        for (const repositoryRefs of [
+          null,
+          [],
+          { app: 42 },
+          { app: " " },
+          { app: "-main" },
+          { app: "main\n" },
+          { app: "a".repeat(201) },
+          Object.fromEntries(Array.from({ length: 65 }, (_, i) => [`repo-${i}`, "HEAD"])),
+        ]) {
+          assert.equal(
+            (yield* client
+              .submit(connection, { ...input, arguments: { ...input.arguments, repositoryRefs } })
+              .pipe(Effect.flip)).reason,
+            "invalid_request",
+          );
+          assert.equal(submissions, 0);
+        }
+        assert.equal((yield* client.submit(connection, input)).state, "succeeded");
+        assert.equal(submissions, 1);
+        assert.deepEqual(receivedArguments, input.arguments);
+      }).pipe(Effect.scoped, Effect.provide(TestLayer)),
+  );
   it.effect("recovers a lost submit reply by receipt lookup without repeating a mutation", () =>
     Effect.gen(function* () {
       let mutations = 0;

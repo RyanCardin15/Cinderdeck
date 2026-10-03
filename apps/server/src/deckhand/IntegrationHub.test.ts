@@ -576,6 +576,78 @@ describe("Deckhand integration hub", () => {
       }).pipe(Effect.scoped, Effect.provide(TestLayer)),
   );
   it.effect(
+    "local capability/input refusals remain terminal and never become unknown native mutations",
+    () =>
+      Effect.gen(function* () {
+        yield* Migrations.migrate;
+        let submissions = 0;
+        const socketPath = yield* peer((request) => {
+          if (request.method === "integration.hello")
+            return {
+              result: {
+                ...hello,
+                capabilities: [
+                  ...hello.capabilities,
+                  "operations.lane.create",
+                  "operations.lane.create.repositoryRefs",
+                ],
+              },
+            };
+          if (request.method === "integration.snapshot")
+            return {
+              result: {
+                installationID: "installation",
+                runtimeEpoch: "epoch",
+                cursor: "cursor",
+                resources: [],
+                total: 0,
+              },
+            };
+          submissions++;
+          return { error: { code: "unexpected" } };
+        });
+        yield* Effect.gen(function* () {
+          const hub = yield* IntegrationHub.IntegrationHub;
+          yield* hub.refresh;
+          const unsupported = {
+            ...operation,
+            operationKey: "unsupported",
+            method: "lane.adopt" as const,
+          };
+          const invalid = {
+            ...operation,
+            operationKey: "invalid",
+            method: "lane.create" as const,
+            arguments: {
+              workspace: operation.workspaceID,
+              branch: "new",
+              repositoryRefs: { app: 1 },
+            },
+          };
+          for (const input of [unsupported, invalid]) {
+            assert.include(
+              ["unsupported_capability", "invalid_request"],
+              (yield* hub.submit("actor", input).pipe(Effect.flip)).reason,
+            );
+            const record = (yield* hub.operations("actor")).find(
+              (row) => row.input.operationKey === input.operationKey,
+            );
+            assert.equal(record?.refused, true);
+            assert.equal(record?.receipt, null);
+            assert.equal(
+              (yield* hub.submit("actor", input).pipe(Effect.flip)).reason,
+              "operation_refused",
+            );
+            assert.equal(
+              (yield* hub.operation("actor", input.operationKey).pipe(Effect.flip)).reason,
+              "operation_refused",
+            );
+          }
+          assert.equal(submissions, 0);
+        }).pipe(Effect.provide(hubLayer(socketPath)), Effect.scoped);
+      }).pipe(Effect.scoped, Effect.provide(TestLayer)),
+  );
+  it.effect(
     "replays workspace changes once and retains the last catalog when a foreign event is rejected",
     () =>
       Effect.gen(function* () {

@@ -413,15 +413,17 @@ const make = Effect.gen(function* () {
               input.operationKey,
               null,
               error,
-              error.reason === "peer_rejected" &&
-                [
-                  "invalid_params",
-                  "stale_revision",
-                  "resource_missing",
-                  "installation_changed",
-                  "operation_conflict",
-                  "unauthorized_operation",
-                ].includes(error.code ?? ""),
+              error.reason === "invalid_request" ||
+                error.reason === "unsupported_capability" ||
+                (error.reason === "peer_rejected" &&
+                  [
+                    "invalid_params",
+                    "stale_revision",
+                    "resource_missing",
+                    "installation_changed",
+                    "operation_conflict",
+                    "unauthorized_operation",
+                  ].includes(error.code ?? "")),
             ),
           ),
         );

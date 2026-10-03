@@ -87,6 +87,16 @@ export const IntegrationRepository = Schema.Struct({
   ahead: Schema.Int,
   behind: Schema.Int,
 });
+export const IntegrationRepositoryStartRefs = Schema.Record(
+  Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(160)),
+  Schema.String.check(
+    Schema.isTrimmed(),
+    Schema.isNonEmpty(),
+    Schema.isMaxLength(200),
+    Schema.isPattern(/^(?!-)(?![\s\S]*[\0\n\r])[\s\S]+$/),
+  ),
+).check(Schema.isMaxProperties(64));
+export type IntegrationRepositoryStartRefs = typeof IntegrationRepositoryStartRefs.Type;
 export const IntegrationWorkspace = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
@@ -101,6 +111,7 @@ export const IntegrationWorkspace = Schema.Struct({
         directory: Schema.String,
         ports: Schema.Record(Schema.String, Schema.Int),
         from: Schema.optionalKey(Schema.NullOr(Schema.String)),
+        repositoryRefs: Schema.optionalKey(IntegrationRepositoryStartRefs),
         pinned: Schema.optionalKey(Schema.Boolean),
         adopted: Schema.optionalKey(Schema.Boolean),
       }),
