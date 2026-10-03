@@ -13,11 +13,14 @@
 </p>
 
 <p align="center">
-  <strong>Watch the 30-second demo with sound</strong>
-  <br />Press play, then unmute the player.
+  <strong>Watch the 60-second showcase with sound</strong>
+  <br />Workspaces, parallel lanes, connected agents, and recordings with logs.
 </p>
 
-https://github.com/user-attachments/assets/2023bfa2-3e8a-48d0-953f-c7cb9c1a1e8b
+<p align="center">
+  <a href="assets/cinderdeck-promo.mp4"><img src="assets/cinderdeck-promo-poster.png" width="960" alt="Watch Cinderdeck: Build in parallel. Stay in control." /></a>
+  <br /><a href="assets/cinderdeck-promo.mp4">Play the full video</a> · <a href="promo/README.md">Edit or render the showcase</a>
+</p>
 
 Cinderdeck is a native Mac application for running your development environment. Group any set of projects into a stack, define how each service starts, and manage them together from the menu bar, a terminal, or your coding agent.
 
