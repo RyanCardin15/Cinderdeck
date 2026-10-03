@@ -26,7 +26,8 @@
     "./deckhand/integration": {
       "types": "./src/deckhand/integration.ts",
       "import": "./src/deckhand/integration.ts"
-    }
+    },
+    "./deckhand/rpc": "./src/deckhand/rpc.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -1,3 +1,5 @@
+import * as DeckhandRpc from "@t3tools/contracts/deckhand/rpc";
+import * as IntegrationHub from "./deckhand/IntegrationHub.ts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
@@ -1090,6 +1092,7 @@ const makeWsRpcLayer = (
   ServerWsRpcGroup.toLayer(
     Effect.gen(function* () {
       const currentSessionId = currentSession.sessionId;
+      const deckhand = yield* IntegrationHub.IntegrationHub;
       const sql = yield* SqlClient.SqlClient;
       const threadManagement = yield* ThreadManagementService.ThreadManagementService;
       const intakeContext = yield* Effect.context<
@@ -1751,6 +1754,27 @@ const makeWsRpcLayer = (
       });
 
       const handlers = ServerWsRpcGroup.of({
+        [DeckhandRpc.DECKHAND_METHODS.operations]: () =>
+          observeRpcEffect(
+            DeckhandRpc.DECKHAND_METHODS.operations,
+            deckhand.operations(currentSessionId),
+          ),
+        [DeckhandRpc.DECKHAND_METHODS.overview]: (input) =>
+          observeRpcEffect(DeckhandRpc.DECKHAND_METHODS.overview, deckhand.overview(input)),
+        [DeckhandRpc.DECKHAND_METHODS.subscribe]: (input) =>
+          observeRpcStream(DeckhandRpc.DECKHAND_METHODS.subscribe, deckhand.subscribe(input)),
+        [DeckhandRpc.DECKHAND_METHODS.refresh]: () =>
+          observeRpcEffect(DeckhandRpc.DECKHAND_METHODS.refresh, deckhand.refresh),
+        [DeckhandRpc.DECKHAND_METHODS.submit]: (input) =>
+          observeRpcEffect(
+            DeckhandRpc.DECKHAND_METHODS.submit,
+            deckhand.submit(currentSessionId, input),
+          ),
+        [DeckhandRpc.DECKHAND_METHODS.operation]: (input) =>
+          observeRpcEffect(
+            DeckhandRpc.DECKHAND_METHODS.operation,
+            deckhand.operation(currentSessionId, input.operationKey),
+          ),
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           observeRpcEffect(
             ORCHESTRATION_V2_WS_METHODS.dispatchCommand,
@@ -3721,6 +3745,7 @@ const makeWsRpcLayer = (
 export const websocketRpcRouteLayer = Layer.unwrap(
   Effect.gen(function* () {
     const previewAutomationBroker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
+    const deckhandHub = yield* IntegrationHub.IntegrationHub;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const pullRequests = yield* PullRequestService.PullRequestService;
     const sql = yield* SqlClient.SqlClient;
@@ -3776,6 +3801,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
             ).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               Layer.provide(Layer.succeed(SqlClient.SqlClient, sql)),
+              Layer.provide(Layer.succeed(IntegrationHub.IntegrationHub, deckhandHub)),
               Layer.provide(AgentSessionScanner.layer),
               Layer.provide(ProviderMaintenanceRunner.layer),
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
@@ -3819,4 +3845,4 @@ export const websocketRpcRouteLayer = Layer.unwrap(
       ),
     );
   }),
-);
+).pipe(Layer.provide(IntegrationHub.layerLive));

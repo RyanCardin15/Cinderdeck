@@ -294,6 +294,16 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     };
   }, [navigate, pathname]);
 
+  if (pathname === "/workspaces")
+    return (
+      <>
+        <ProjectProjectionRetention />
+        {children}
+        <NavigationHistoryShortcuts />
+        <MainAppLocationTracker />
+      </>
+    );
+
   return (
     <PanelAnimationSuppressionProvider value={panelAnimationsSuppressed}>
       <SidebarProvider

@@ -402,7 +402,8 @@ describe("Deckhand schema migration", () => {
         assert.equal(rows[0]?.transcript, "existing conversation");
         // A v1 store has the same relationship tables but no feature paging index.
         yield* sql`DROP INDEX deckhand_sessions_feature_page`;
-        yield* sql`DELETE FROM deckhand_schema WHERE version = 2`;
+        yield* sql`DROP TABLE deckhand_integrations`;
+        yield* sql`DELETE FROM deckhand_schema WHERE version >= 2`;
         yield* sql`INSERT INTO deckhand_schema VALUES (1)`;
         yield* Migrations.migrate;
         const indexes = yield* sql<{ name: string }>`PRAGMA index_list(deckhand_sessions)`;
@@ -412,7 +413,7 @@ describe("Deckhand schema migration", () => {
             ?.transcript,
           "existing conversation",
         );
-        yield* sql`INSERT INTO deckhand_schema VALUES (3)`;
+        yield* sql`INSERT INTO deckhand_schema VALUES (4)`;
         const newer = yield* Migrations.migrate.pipe(Effect.flip);
         assert.equal(newer._tag, "DeckhandStoreVersionError");
         const provenance = yield* sql<{

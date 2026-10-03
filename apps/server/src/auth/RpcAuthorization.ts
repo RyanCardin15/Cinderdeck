@@ -1,3 +1,4 @@
+import { DECKHAND_METHODS } from "@t3tools/contracts/deckhand/rpc";
 import {
   type DeviceListInput,
   AuthAccessReadScope,
@@ -22,6 +23,12 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * runtime failure.
  */
 export const RPC_REQUIRED_SCOPES = {
+  [DECKHAND_METHODS.overview]: AuthOrchestrationReadScope,
+  [DECKHAND_METHODS.subscribe]: AuthOrchestrationReadScope,
+  [DECKHAND_METHODS.refresh]: AuthOrchestrationReadScope,
+  [DECKHAND_METHODS.submit]: AuthOrchestrationOperateScope,
+  [DECKHAND_METHODS.operation]: AuthOrchestrationReadScope,
+  [DECKHAND_METHODS.operations]: AuthOrchestrationReadScope,
   [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: AuthOrchestrationOperateScope,
   [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: AuthOrchestrationReadScope,
   [ORCHESTRATION_V2_WS_METHODS.getTurnDiff]: AuthOrchestrationReadScope,

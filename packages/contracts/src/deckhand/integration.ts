@@ -39,6 +39,20 @@ export const IntegrationWorkspace = Schema.Struct({
   name: Schema.String,
   file: Schema.String,
   state: Schema.String,
+  lane: Schema.optionalKey(
+    Schema.NullOr(
+      Schema.Struct({
+        sourceStackID: Schema.String,
+        name: Schema.String,
+        createdAt: Schema.String,
+        directory: Schema.String,
+        ports: Schema.Record(Schema.String, Schema.Int),
+        from: Schema.optionalKey(Schema.NullOr(Schema.String)),
+        pinned: Schema.optionalKey(Schema.Boolean),
+        adopted: Schema.optionalKey(Schema.Boolean),
+      }),
+    ),
+  ),
   definitionChanged: Schema.Boolean,
   issues: Schema.Array(Schema.String),
   services: Schema.Array(IntegrationService),
@@ -102,7 +116,27 @@ export const IntegrationOperationReceipt = Schema.Struct({
   state: Schema.Literals(["pending", "running", "succeeded", "failed", "unknown_outcome"]),
   createdAt: Schema.String,
   updatedAt: Schema.String,
-  result: Schema.optionalKey(Schema.Unknown),
+  result: Schema.optionalKey(
+    Schema.NullOr(
+      Schema.Struct({
+        workspace: Schema.optionalKey(IntegrationWorkspace),
+        createdWorkspaceID: Schema.optionalKey(Schema.String),
+        creationReady: Schema.optionalKey(Schema.Boolean),
+        reconciliation: Schema.optionalKey(Schema.String),
+        setup: Schema.optionalKey(
+          Schema.NullOr(
+            Schema.Struct({
+              status: Schema.String,
+              reference: Schema.optionalKey(Schema.NullOr(Schema.String)),
+              runID: Schema.optionalKey(Schema.NullOr(Schema.String)),
+              detail: Schema.optionalKey(Schema.NullOr(Schema.String)),
+              updatedAt: Schema.String,
+            }),
+          ),
+        ),
+      }),
+    ),
+  ),
   error: Schema.optionalKey(
     Schema.NullOr(Schema.Struct({ code: Schema.String, message: Schema.String })),
   ),

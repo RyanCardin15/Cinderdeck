@@ -312,4 +312,60 @@ describe("same-host Cinderdeck bridge", () => {
       assert.equal(mutations, 1);
     }).pipe(Effect.scoped, Effect.provide(TestLayer)),
   );
+  it.effect(
+    "removes unrecognized native environment and owner fields from returned operation context",
+    () =>
+      Effect.gen(function* () {
+        const socketPath = yield* peer((request) =>
+          request.method === "integration.hello"
+            ? { id: 1, result: { ...hello, capabilities: ["operations.receipts"] } }
+            : {
+                id: 1,
+                result: {
+                  id: "receipt",
+                  operationKey: "safe",
+                  argumentHash: "a".repeat(64),
+                  workspaceID: "lane",
+                  generation: 1,
+                  method: "lane.create",
+                  state: "succeeded",
+                  createdAt: "2026-10-03T00:00:00Z",
+                  updatedAt: "2026-10-03T00:00:00Z",
+                  result: {
+                    workspace: {
+                      id: "lane",
+                      name: "Workspace",
+                      file: "/fixture/workspace.toml",
+                      state: "Stopped",
+                      definitionChanged: false,
+                      issues: [],
+                      services: [],
+                      repos: [],
+                      lane: {
+                        sourceStackID: "workspace",
+                        name: "test",
+                        createdAt: "2026-10-03T00:00:00Z",
+                        directory: "/fixture/lane",
+                        ports: {},
+                        environment: { SECRET_TOKEN: "must-not-cross-the-boundary" },
+                        owner: { session: "native-owner" },
+                      },
+                    },
+                    extra: "unrecognized-result",
+                  },
+                },
+              },
+        );
+        const client = yield* CinderdeckClient.CinderdeckClient;
+        const connection = yield* client.connect(socketPath, {
+          channel: "development",
+          clientID: "actor",
+        });
+        const result = (yield* client.operation(connection, "safe")).result;
+        assert.equal(result?.workspace?.id, "lane");
+        assert.notProperty(result, "extra");
+        assert.notProperty(result?.workspace?.lane, "environment");
+        assert.notProperty(result?.workspace?.lane, "owner");
+      }).pipe(Effect.scoped, Effect.provide(TestLayer)),
+  );
 });
