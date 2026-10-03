@@ -15,7 +15,7 @@ import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
 import * as CheckoutIdentity from "./CheckoutIdentity.ts";
-import * as IntegrationHub from "./IntegrationHub.ts";
+import * as WorkspaceBackend from "./WorkspaceBackend.ts";
 import * as Migrations from "./Migrations.ts";
 import * as Relationships from "./Relationships.ts";
 
@@ -63,7 +63,7 @@ const bindingID = (kind: string, parts: ReadonlyArray<string | number>) =>
 const make = Effect.gen(function* () {
   yield* Migrations.migrate;
   const sql = yield* SqlClient.SqlClient;
-  const hub = yield* IntegrationHub.IntegrationHub;
+  const backend = yield* WorkspaceBackend.WorkspaceBackend;
   const identities = yield* CheckoutIdentity.CheckoutIdentity;
   const relationships = yield* Relationships.Relationships;
   const projects = yield* ProjectService.ProjectService;
@@ -116,8 +116,8 @@ const make = Effect.gen(function* () {
         // An accepted receipt records intake, never provider completion. Reading it does not
         // reopen a provider or depend on a still-present native lane.
         if (prior?.record.state === "accepted") return prior.record;
-        const snapshot = yield* hub
-          .resource(input.workspaceID)
+        const snapshot = yield* backend
+          .context(input.workspaceID)
           .pipe(Effect.mapError(() => error(key, "stale_context")));
         const resource = snapshot.resource;
         const context = resource.workspace;
@@ -139,7 +139,9 @@ const make = Effect.gen(function* () {
         if (!selected) return yield* error(key, "stale_context");
         const parentID = context.lane?.sourceStackID ?? resource.workspaceID;
         const parentSnapshot = context.lane
-          ? yield* hub.resource(parentID).pipe(Effect.mapError(() => error(key, "stale_context")))
+          ? yield* backend
+              .context(parentID)
+              .pipe(Effect.mapError(() => error(key, "stale_context")))
           : snapshot;
         const parent = parentSnapshot.resource;
         if (

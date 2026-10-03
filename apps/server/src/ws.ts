@@ -2,6 +2,7 @@ import * as DeckhandRpc from "@t3tools/contracts/deckhand/rpc";
 import * as ManagedSessions from "./deckhand/ManagedSessions.ts";
 import * as ManagedSessionLaunch from "./deckhand/ManagedSessionLaunch.ts";
 import * as IntegrationHub from "./deckhand/IntegrationHub.ts";
+import * as WorkspaceBackend from "./deckhand/WorkspaceBackend.ts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
@@ -1095,6 +1096,7 @@ const makeWsRpcLayer = (
     Effect.gen(function* () {
       const currentSessionId = currentSession.sessionId;
       const deckhand = yield* IntegrationHub.IntegrationHub;
+      const workspaceBackend = yield* WorkspaceBackend.WorkspaceBackend;
       const managedSessions = yield* ManagedSessions.ManagedSessions;
       const managedLaunch = yield* ManagedSessionLaunch.ManagedSessionLaunch;
       const sql = yield* SqlClient.SqlClient;
@@ -1800,7 +1802,10 @@ const makeWsRpcLayer = (
             deckhand.operations(currentSessionId),
           ),
         [DeckhandRpc.DECKHAND_METHODS.overview]: (input) =>
-          observeRpcEffect(DeckhandRpc.DECKHAND_METHODS.overview, deckhand.overview(input)),
+          observeRpcEffect(
+            DeckhandRpc.DECKHAND_METHODS.overview,
+            workspaceBackend.inventory(input),
+          ),
         [DeckhandRpc.DECKHAND_METHODS.subscribe]: (input) =>
           observeRpcStream(DeckhandRpc.DECKHAND_METHODS.subscribe, deckhand.subscribe(input)),
         [DeckhandRpc.DECKHAND_METHODS.refresh]: () =>
@@ -1808,7 +1813,9 @@ const makeWsRpcLayer = (
         [DeckhandRpc.DECKHAND_METHODS.submit]: (input) =>
           observeRpcEffect(
             DeckhandRpc.DECKHAND_METHODS.submit,
-            deckhand.submit(currentSessionId, input),
+            input.method === "lane.create"
+              ? workspaceBackend.createLane(currentSessionId, input)
+              : deckhand.submit(currentSessionId, input),
           ),
         [DeckhandRpc.DECKHAND_METHODS.operation]: (input) =>
           observeRpcEffect(
@@ -3786,6 +3793,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
   Effect.gen(function* () {
     const previewAutomationBroker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
     const deckhandHub = yield* IntegrationHub.IntegrationHub;
+    const workspaceBackend = yield* WorkspaceBackend.WorkspaceBackend;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const pullRequests = yield* PullRequestService.PullRequestService;
     const sql = yield* SqlClient.SqlClient;
@@ -3842,6 +3850,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
               Layer.provideMerge(RpcSerialization.layerJson),
               Layer.provide(Layer.succeed(SqlClient.SqlClient, sql)),
               Layer.provide(Layer.succeed(IntegrationHub.IntegrationHub, deckhandHub)),
+              Layer.provide(Layer.succeed(WorkspaceBackend.WorkspaceBackend, workspaceBackend)),
               Layer.provide(AgentSessionScanner.layer),
               Layer.provide(ProviderMaintenanceRunner.layer),
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
@@ -3885,4 +3894,4 @@ export const websocketRpcRouteLayer = Layer.unwrap(
       ),
     );
   }),
-).pipe(Layer.provide(IntegrationHub.layerLive));
+).pipe(Layer.provide(WorkspaceBackend.layerLive), Layer.provide(IntegrationHub.layerLive));

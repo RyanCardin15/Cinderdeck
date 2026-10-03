@@ -46,6 +46,7 @@ import { layer as runFinalizationServiceLayer } from "./RunFinalizationService.t
 import * as RuntimePolicy from "./RuntimePolicy.ts";
 import * as ManagedSessions from "../deckhand/ManagedSessions.ts";
 import * as ManagedSessionLaunch from "../deckhand/ManagedSessionLaunch.ts";
+import * as WorkspaceBackend from "../deckhand/WorkspaceBackend.ts";
 import * as ManagedProviderAdapters from "../deckhand/ManagedProviderAdapters.ts";
 import * as ManagedCheckoutGuard from "../deckhand/ManagedCheckoutGuard.ts";
 import * as NativeWriterReservations from "../deckhand/NativeWriterReservations.ts";
@@ -344,7 +345,7 @@ export const OrchestrationV2ProductionLayerLive = Layer.mergeAll(
         providerAdapterRegistryProvided,
         Relationships.layer,
         CheckoutIdentity.layer.pipe(Layer.provide(ProcessRunner.layer)),
-        IntegrationHub.layerLive,
+        WorkspaceBackend.layerLive,
       ),
     ),
   ),

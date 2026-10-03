@@ -3,12 +3,11 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import * as CheckoutIdentity from "./CheckoutIdentity.ts";
+import * as WorkspaceBackend from "./WorkspaceBackend.ts";
 import * as CheckoutMutations from "./CheckoutMutations.ts";
 import * as IntegrationHub from "./IntegrationHub.ts";
 import * as NativeWriterReservations from "./NativeWriterReservations.ts";
 import * as WriterReservations from "./WriterReservations.ts";
-import * as ProcessRunner from "../processRunner.ts";
 
 interface Command {
   readonly operation: string;
@@ -259,11 +258,10 @@ export const layer = Layer.effect(GitMutationPolicy, make);
 export const layerLive = layer.pipe(
   Layer.provide(
     CheckoutMutations.layer.pipe(
-      Layer.provide(CheckoutIdentity.layer.pipe(Layer.provide(ProcessRunner.layer))),
+      Layer.provide(WorkspaceBackend.layerLive),
       Layer.provide(WriterReservations.layer),
       Layer.provide(NativeWriterReservations.layer.pipe(Layer.provide(IntegrationHub.layerLive))),
       Layer.provide(IntegrationHub.layerLive),
-      Layer.provide(ProcessRunner.layer),
     ),
   ),
 );

@@ -1,4 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - Explicit isolated native/Git smoke verification.
+import * as Schema from "effect/Schema";
+import * as Rpc from "../../packages/contracts/src/deckhand/rpc.ts";
 import * as NodeAssert from "node:assert/strict";
 import * as NodeCrypto from "node:crypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -13,6 +15,7 @@ import * as GitMutationPolicy from "../../apps/server/src/deckhand/GitMutationPo
 import * as ProcessRunner from "../../apps/server/src/processRunner.ts";
 import * as GitVcsDriver from "../../apps/server/src/vcs/GitVcsDriver.ts";
 import * as VcsProcess from "../../apps/server/src/vcs/VcsProcess.ts";
+const decodeView = Schema.decodeUnknownEffect(Rpc.IntegrationView);
 const socketPath = process.argv[2];
 const nativeBinary = process.argv[3];
 const database = process.argv[4];
@@ -28,7 +31,7 @@ const serverUrl = process.env.DECKHAND_SMOKE_SERVER_URL;
 const bootstrap = process.env.DECKHAND_SMOKE_BOOTSTRAP;
 if (!serverUrl?.startsWith("http://127.0.0.1:") || !bootstrap)
   throw new Error("Pass the captured isolated server URL and private smoke bootstrap credential.");
-const rpcCreate = async (cwd: string, refName: string): Promise<{ _tag: string }> => {
+const rpc = async (tag: string, payload: unknown): Promise<{ _tag: string; value?: unknown }> => {
   const tokenResponse = await fetch(serverUrl + "/oauth/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -63,8 +66,8 @@ const rpcCreate = async (cwd: string, refName: string): Promise<{ _tag: string }
         JSON.stringify({
           _tag: "Request",
           id: "1",
-          tag: "vcs.createRef",
-          payload: { cwd, refName, switchRef: false },
+          tag,
+          payload,
           headers: [],
         }),
       ),
@@ -114,6 +117,39 @@ const result = await Effect.runPromise(
     const repo = resource.workspace.repos.find((repo) => repo.id === "frontend");
     NodeAssert.ok(repo);
     const checkout = yield* identities.resolve(repo.path);
+    const refreshed = yield* Effect.promise(() => rpc("deckhand.refresh", {}));
+    NodeAssert.equal(refreshed._tag, "Success");
+    const overview = yield* Effect.promise(() =>
+      rpc("deckhand.overview", { offset: 0, limit: 100 }),
+    );
+    NodeAssert.equal(overview._tag, "Success");
+    const catalog = yield* decodeView(overview.value);
+    NodeAssert.ok(
+      catalog.resources.some((item) => item.workspaceID === resource.workspaceID && item.available),
+    );
+    const staleCreate = yield* Effect.promise(() =>
+      rpc("deckhand.operation.submit", {
+        operationKey: NodeCrypto.randomUUID(),
+        installationID: peer.hello.installationID,
+        workspaceID: resource.workspaceID,
+        generation: resource.generation + 1,
+        revision: resource.revision,
+        method: "lane.create",
+        arguments: {
+          workspace: resource.workspaceID,
+          branch: `deckhand-backend-probe/${NodeCrypto.randomUUID()}`,
+          start: false,
+          setup: false,
+        },
+      }),
+    );
+    NodeAssert.equal(
+      staleCreate._tag,
+      "Failure",
+      "Backend lane creation must reject stale native generations before effects",
+    );
+    NodeAssert.match(JSON.stringify(staleCreate), /stale_revision/);
+
     const input = {
       installationID: peer.hello.installationID,
       physicalID: checkout.physicalId,
@@ -177,7 +213,9 @@ const result = await Effect.runPromise(
         (yield* driver.execute({ ...command, args: ["branch", "--list", branch] })).stdout,
         "",
       );
-      const blockedRpc = yield* Effect.promise(() => rpcCreate(checkout.root, rpcBranch));
+      const blockedRpc = yield* Effect.promise(() =>
+        rpc("vcs.createRef", { cwd: checkout.root, refName: rpcBranch, switchRef: false }),
+      );
       rpcCreated = blockedRpc._tag === "Success";
       NodeAssert.equal(
         blockedRpc._tag,
@@ -190,7 +228,9 @@ const result = await Effect.runPromise(
       if (rpcCreated) yield* driver.execute({ ...command, args: ["branch", "-D", rpcBranch] });
     }
     try {
-      const allowedRpc = yield* Effect.promise(() => rpcCreate(checkout.root, rpcBranch));
+      const allowedRpc = yield* Effect.promise(() =>
+        rpc("vcs.createRef", { cwd: checkout.root, refName: rpcBranch, switchRef: false }),
+      );
       rpcCreated = allowedRpc._tag === "Success";
       NodeAssert.equal(
         allowedRpc._tag,
@@ -252,6 +292,8 @@ const result = await Effect.runPromise(
       exactContexts: exact.contexts.length,
       sharedContexts: shared.contexts.length,
       nativeResidentRefusedGit: true,
+      authenticatedBackendInventory: true,
+      authenticatedBackendRefusedStaleCreate: true,
       authenticatedProductionRpcRefusedGit: true,
       authenticatedProductionRpcAllowedAfterRelease: true,
       branchAllowedAfterRelease: true,

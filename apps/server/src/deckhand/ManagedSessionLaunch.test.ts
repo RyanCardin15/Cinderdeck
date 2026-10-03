@@ -26,6 +26,7 @@ import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexA
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as CheckoutIdentity from "./CheckoutIdentity.ts";
 import * as IntegrationHub from "./IntegrationHub.ts";
+import * as WorkspaceBackend from "./WorkspaceBackend.ts";
 import * as ManagedCheckoutGuard from "./ManagedCheckoutGuard.ts";
 import * as ManagedSessionLaunch from "./ManagedSessionLaunch.ts";
 import * as Relationships from "./Relationships.ts";
@@ -71,6 +72,7 @@ const provider = Schema.decodeSync(ServerProvider)({
 });
 const serviceLayer = ManagedSessionLaunch.layer.pipe(
   Layer.provide(Relationships.layer),
+  Layer.provide(WorkspaceBackend.layer.pipe(Layer.provide(CheckoutIdentity.layer))),
   Layer.provide(CheckoutIdentity.layer),
 );
 const baseLayer = Layer.mergeAll(
