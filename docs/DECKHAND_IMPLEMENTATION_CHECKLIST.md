@@ -161,3 +161,11 @@ Deckhand `b25cf17f98` and native `bc4dcc43` pin explicit starts by repository ID
 ### Bounded receipt wait evidence (partial DH-006/DH-009/DH-011)
 
 Deckhand `7c65c9e785` and native `cb282ac6` provide capability-gated bounded receipt observation through WorkspaceBackend and authenticated RPC, retaining actor/key identity and conservative timeout/restart outcomes. Thirty-seven focused Deckhand tests, 13 native tests, scoped typechecks/build/lint/patch audit and a real FIFO-blocked setup wait with concurrent commands passed. Both test apps/listeners stopped with zero active claims. [Evidence and remaining connected routing work](DECKHAND_FOUNDATION_EVIDENCE.md#bounded-operation-receipt-waits-checkpoint--2026-10-03) retain automatic creation/removal delegation, frontend consumption, transport shutdown/performance and the full release matrix. No additional full checklist item is complete.
+
+
+### Connected creation API checkpoint — 2026-10-03
+
+- Combined creation persists the original request before native effects, waits on the same native operation and launches in the returned existing checkout. Read-only lookup does not launch; uncertain/setup/provider failures retain recoverable lane identity. Deckhand `bcc548cebb`, native `1ff39bf1`.
+- Explicit durable managed-writer handoff avoids a creator advisory claim blocking the provider thread; legacy creation claims and physical removal guards are verified.
+- Fifty focused Deckhand tests and thirteen native tests passed. Authenticated real Codex 0.160.0 verification proved exact checkout, approval state, one lane/thread after retry and server restart, and zero remaining writer claims after shutdown. See the foundation evidence checkpoint and `output/deckhand-session-create-2026-10-03/live-verification.json`.
+- New client creation controls, pre-creation feature/context reservations, stale resolved-launch recovery and the complete remaining acceptance scope are still open. No additional checklist item is complete.
