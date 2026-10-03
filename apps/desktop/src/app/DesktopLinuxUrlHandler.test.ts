@@ -190,7 +190,7 @@ describe("DesktopLinuxUrlHandler", () => {
     });
     assert.equal(
       writeError.message,
-      "Failed to register the t3code:// URL handler (step: write-desktop-entry).",
+      "Failed to register the deckhand:// URL handler (step: write-desktop-entry).",
     );
     assert.equal(
       writeError.desktopEntryPath,
@@ -204,7 +204,7 @@ describe("DesktopLinuxUrlHandler", () => {
     });
     assert.equal(
       exitError.message,
-      "Failed to register the t3code:// URL handler (step: set-default-handler, xdg-mime exit code 4).",
+      "Failed to register the deckhand:// URL handler (step: set-default-handler, xdg-mime exit code 4).",
     );
   });
 

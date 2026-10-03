@@ -63,6 +63,34 @@ const extractingRunner = (fs: FileSystem.FileSystem, path: Path.Path, commands: 
   });
 
 it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
+  it.effect("refuses an unconfigured Deckhand feed before downloads or runtime writes", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "deckhand-feed-" });
+      const requests: string[] = [];
+      const commands: string[] = [];
+      const failure = yield* ensurePinnedRuntimeInstalled({
+        baseDir,
+        version,
+        fs,
+        path,
+        platform: "linux",
+        arch: "x64",
+        httpClient: releaseHttpClient("", requests),
+        runner: extractingRunner(fs, path, commands),
+        validate: () => Effect.die("Must not launch a runtime without a selected feed"),
+      }).pipe(Effect.flip);
+      assert.equal(failure._tag, "PinnedRuntimeInstallError");
+      if (failure._tag !== "PinnedRuntimeInstallError") {
+        return yield* Effect.die("Expected an unconfigured-feed install refusal");
+      }
+      assert.include(failure.step, "no Deckhand feed is configured");
+      assert.deepEqual(requests, []);
+      assert.deepEqual(commands, []);
+      assert.equal(yield* fs.exists(path.join(baseDir, "runtime")), false);
+    }),
+  );
   it.effect("installs the verified release archive as the runtime executable", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -71,6 +99,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       const requests: string[] = [];
       const commands: string[] = [];
       const paths = yield* ensurePinnedRuntimeInstalled({
+        releaseBaseUrl: "https://releases.example/download",
         baseDir,
         version,
         fs,
@@ -78,7 +107,6 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
         platform: "linux",
         arch: "x64",
         httpClient: releaseHttpClient(yield* validChecksums, requests),
-        releaseBaseUrl: "https://releases.example/download",
         runner: extractingRunner(fs, path, commands),
         validate: (staging) =>
           fs.exists(staging.entryPath).pipe(
@@ -128,6 +156,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
           ),
         );
         const install = yield* ensurePinnedRuntimeInstalled({
+          releaseBaseUrl: "https://releases.example/download",
           baseDir,
           version,
           fs,
@@ -194,6 +223,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       );
       const firstChunk = yield* Deferred.make<void>();
       const install = yield* ensurePinnedRuntimeInstalled({
+        releaseBaseUrl: "https://releases.example/download",
         baseDir,
         version,
         fs,
@@ -225,6 +255,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pinned-archive-bad-" });
       const commands: string[] = [];
       const error = yield* ensurePinnedRuntimeInstalled({
+        releaseBaseUrl: "https://releases.example/download",
         baseDir,
         version,
         fs,
@@ -251,6 +282,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       let validatedDirectory = "";
 
       const installed = yield* ensurePinnedRuntimeInstalled({
+        releaseBaseUrl: "https://releases.example/download",
         baseDir,
         version,
         fs,
@@ -282,6 +314,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       const finalPaths = pinnedRuntimePaths(path, baseDir, version, "linux");
 
       yield* ensurePinnedRuntimeInstalled({
+        releaseBaseUrl: "https://releases.example/download",
         baseDir,
         version,
         fs,
@@ -314,6 +347,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       yield* fs.writeFileString(path.join(finalPaths.versionDir, "partial"), "incomplete\n");
 
       yield* ensurePinnedRuntimeInstalled({
+        releaseBaseUrl: "https://releases.example/download",
         baseDir,
         version,
         fs,
@@ -343,6 +377,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       let validations = 0;
       const requests: string[] = [];
       yield* ensurePinnedRuntimeInstalled({
+        releaseBaseUrl: "https://releases.example/download",
         baseDir,
         version,
         fs,
@@ -377,6 +412,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
         run: () => Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
       });
       const install = yield* ensurePinnedRuntimeInstalled({
+        releaseBaseUrl: "https://releases.example/download",
         baseDir,
         version,
         fs,

@@ -196,7 +196,7 @@ export function BitbucketCredentialsSettings({
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
             {current === null
-              ? "Without a saved token, the server falls back to its T3CODE_BITBUCKET_* environment variables."
+              ? "Without a saved token, the server falls back to its DECKHAND_BITBUCKET_* environment variables."
               : methodIsSaved
                 ? null
                 : `Saving replaces your ${METHODS[current].label.toLowerCase()}.`}

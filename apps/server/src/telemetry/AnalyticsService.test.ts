@@ -57,10 +57,10 @@ it.layer(NodeServices.layer)("AnalyticsService test", (it) => {
       const telemetryLayer = AnalyticsService.layer.pipe(Layer.provideMerge(serverConfigLayer));
       const configLayer = ConfigProvider.layer(
         ConfigProvider.fromUnknown({
-          T3CODE_TELEMETRY_ENABLED: true,
-          T3CODE_POSTHOG_KEY: "phc_test_key",
-          T3CODE_POSTHOG_HOST: "http://localhost",
-          T3CODE_TELEMETRY_FLUSH_BATCH_SIZE: 20,
+          DECKHAND_TELEMETRY_ENABLED: true,
+          DECKHAND_POSTHOG_KEY: "phc_test_key",
+          DECKHAND_POSTHOG_HOST: "http://localhost",
+          DECKHAND_TELEMETRY_FLUSH_BATCH_SIZE: 20,
         }),
       );
       const batchServerLayer = HttpServer.serve(
@@ -158,9 +158,9 @@ it.layer(NodeServices.layer)("AnalyticsService test", (it) => {
       const telemetryLayer = AnalyticsService.layer.pipe(Layer.provideMerge(serverConfigLayer));
       const configLayer = ConfigProvider.layer(
         ConfigProvider.fromUnknown({
-          T3CODE_TELEMETRY_ENABLED: false,
-          T3CODE_POSTHOG_KEY: "phc_test_key",
-          T3CODE_POSTHOG_HOST: "http://localhost",
+          DECKHAND_TELEMETRY_ENABLED: false,
+          DECKHAND_POSTHOG_KEY: "phc_test_key",
+          DECKHAND_POSTHOG_HOST: "http://localhost",
         }),
       );
       const batchServerLayer = HttpServer.serve(

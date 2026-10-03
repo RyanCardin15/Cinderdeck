@@ -267,6 +267,11 @@ const installFromArchive = Effect.fn("cloud.pinned_runtime.install_archive")(fun
 const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(function* (
   input: PinnedRuntimeInstallInput,
 ) {
+  if (!input.releaseBaseUrl?.trim()) {
+    return yield* new PinnedRuntimeInstallError({
+      step: "selecting a Deckhand release feed (no Deckhand feed is configured)",
+    });
+  }
   const { fs } = input;
   const paths = pinnedRuntimePaths(input.path, input.baseDir, input.version, input.platform);
   const [versionDirExists, entryExists, sentinel] = yield* Effect.all([

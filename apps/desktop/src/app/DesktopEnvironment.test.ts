@@ -14,9 +14,9 @@ const defaultInput = {
   platform: "darwin",
   processArch: "arm64",
   appVersion: "0.0.22",
-  appPath: "/Applications/T3 Code.app/Contents/Resources/app.asar",
+  appPath: "/Applications/Deckhand.app/Contents/Resources/app.asar",
   isPackaged: false,
-  resourcesPath: "/Applications/T3 Code.app/Contents/Resources",
+  resourcesPath: "/Applications/Deckhand.app/Contents/Resources",
   runningUnderArm64Translation: false,
 } satisfies DesktopEnvironment.MakeDesktopEnvironmentInput;
 
@@ -45,17 +45,17 @@ describe("DesktopEnvironment", () => {
       const environment = yield* makeEnvironment(
         {},
         {
-          T3CODE_HOME: " /tmp/t3 ",
-          T3CODE_COMMIT_HASH: " 0123456789abcdef ",
-          T3CODE_PORT: "4949",
+          DECKHAND_HOME: " /tmp/t3 ",
+          DECKHAND_COMMIT_HASH: " 0123456789abcdef ",
+          DECKHAND_PORT: "4949",
           VITE_DEV_SERVER_URL: "http://localhost:5173",
-          T3CODE_DEV_REMOTE_T3_SERVER_ENTRY_PATH: " /remote/server.mjs ",
-          T3CODE_OTLP_TRACES_URL: " http://127.0.0.1:4318/v1/traces ",
-          T3CODE_OTLP_METRICS_URL: " http://127.0.0.1:4318/v1/metrics ",
-          T3CODE_OTLP_LOGS_URL: " http://127.0.0.1:4318/v1/logs ",
-          T3CODE_OTLP_EXPORT_INTERVAL_MS: "2500",
-          T3CODE_OTLP_HEADERS: "authorization=Basic%20abc%3D%3D,x-tenant=t3",
-          T3CODE_OTLP_PROTOCOL: "http/protobuf",
+          DECKHAND_DEV_REMOTE_T3_SERVER_ENTRY_PATH: " /remote/server.mjs ",
+          DECKHAND_OTLP_TRACES_URL: " http://127.0.0.1:4318/v1/traces ",
+          DECKHAND_OTLP_METRICS_URL: " http://127.0.0.1:4318/v1/metrics ",
+          DECKHAND_OTLP_LOGS_URL: " http://127.0.0.1:4318/v1/logs ",
+          DECKHAND_OTLP_EXPORT_INTERVAL_MS: "2500",
+          DECKHAND_OTLP_HEADERS: "authorization=Basic%20abc%3D%3D,x-tenant=t3",
+          DECKHAND_OTLP_PROTOCOL: "http/protobuf",
         },
       );
 
@@ -77,9 +77,12 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.serverRoot, "/repo");
       assert.equal(environment.backendEntryPath, "/repo/apps/server/dist/bin.mjs");
       assert.equal(environment.backendCwd, "/repo");
-      assert.equal(environment.appUserModelId, "com.t3tools.t3code.dev");
-      assert.equal(environment.linuxWmClass, "t3code-dev");
-      assert.equal(environment.linuxDesktopEntryName, "com.t3tools.T3Code.Development.desktop");
+      assert.equal(environment.appUserModelId, "com.cardinlabs.deckhand.dev");
+      assert.equal(environment.linuxWmClass, "deckhand-dev");
+      assert.equal(
+        environment.linuxDesktopEntryName,
+        "com.cardinlabs.Deckhand.Development.desktop",
+      );
       assert.deepEqual(
         Option.map(environment.devServerUrl, (url) => url.href),
         Option.some("http://localhost:5173/"),
@@ -107,7 +110,7 @@ describe("DesktopEnvironment", () => {
       const environment = yield* makeEnvironment(
         {},
         {
-          T3CODE_HOME: "/tmp/t3",
+          DECKHAND_HOME: "/tmp/t3",
         },
       );
 
@@ -147,11 +150,11 @@ describe("DesktopEnvironment", () => {
       const environment = yield* makeEnvironment({
         platform: "linux",
         isPackaged: true,
-        appPath: "/tmp/.mount_t3code/resources/app.asar",
-        resourcesPath: "/tmp/.mount_t3code/resources",
+        appPath: "/tmp/.mount_deckhand/resources/app.asar",
+        resourcesPath: "/tmp/.mount_deckhand/resources",
       });
 
-      assert.equal(environment.linuxDesktopEntryName, "com.t3tools.T3Code.desktop");
+      assert.equal(environment.linuxDesktopEntryName, "com.cardinlabs.Deckhand.desktop");
     }),
   );
 
@@ -163,8 +166,8 @@ describe("DesktopEnvironment", () => {
       );
       const production = yield* makeEnvironment();
 
-      assert.equal(development.stateDir, "/Users/alice/.t3/dev");
-      assert.equal(production.stateDir, "/Users/alice/.t3/userdata");
+      assert.equal(development.stateDir, "/Users/alice/.deckhand/dev");
+      assert.equal(production.stateDir, "/Users/alice/.deckhand/userdata");
     }),
   );
 
@@ -173,12 +176,12 @@ describe("DesktopEnvironment", () => {
       const environment = yield* makeEnvironment(
         {},
         {
-          T3CODE_DESKTOP_APP_USER_MODEL_ID: " com.t3tools.t3code.dev.local ",
+          DECKHAND_DESKTOP_APP_USER_MODEL_ID: " com.cardinlabs.deckhand.dev.local ",
           VITE_DEV_SERVER_URL: "http://localhost:5173",
         },
       );
 
-      assert.equal(environment.appUserModelId, "com.t3tools.t3code.dev.local");
+      assert.equal(environment.appUserModelId, "com.cardinlabs.deckhand.dev.local");
     }),
   );
 

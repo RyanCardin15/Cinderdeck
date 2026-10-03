@@ -1,10 +1,11 @@
+import { withoutUpstreamServices } from "../../scripts/lib/deckhand-distribution.ts";
 import "vite-plus/test/config";
 import { defineConfig } from "vite-plus";
 
 import { isDesktopRuntimeExternalDependency } from "../../scripts/lib/desktop-external-packages.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
-const repoEnv = loadRepoEnv();
+const repoEnv = withoutUpstreamServices(loadRepoEnv());
 
 // The main process is bundled the same way the server CLI is: every JS
 // dependency is inlined and only packages Node must load from disk stay
@@ -13,10 +14,10 @@ const repoEnv = loadRepoEnv();
 // bundle that already carries its own copy of the same libraries.
 const isMainProcessExternal = (id: string) =>
   id === "electron" || id.startsWith("electron/") || isDesktopRuntimeExternalDependency(id);
-const shouldLaunchElectronAfterPack = process.env.T3CODE_DESKTOP_DEV === "1";
+const shouldLaunchElectronAfterPack = process.env.DECKHAND_DESKTOP_DEV === "1";
 const publicConfigDefine = {
-  __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: JSON.stringify(
-    repoEnv.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() ?? "",
+  __DECKHAND_BUILD_CLERK_PUBLISHABLE_KEY__: JSON.stringify(
+    repoEnv.DECKHAND_CLERK_PUBLISHABLE_KEY?.trim() ?? "",
   ),
 };
 
@@ -31,7 +32,7 @@ export default defineConfig({
       },
       dev: {
         command:
-          "node scripts/build-browser-secret.mjs && node scripts/build-preview-annotation-css.mjs && cross-env T3CODE_DESKTOP_DEV=1 vp pack --watch",
+          "node scripts/build-browser-secret.mjs && node scripts/build-preview-annotation-css.mjs && cross-env DECKHAND_DESKTOP_DEV=1 vp pack --watch",
         dependsOn: ["t3#build"],
         cache: false,
       },

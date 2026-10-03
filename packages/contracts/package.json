@@ -18,6 +18,14 @@
     "./relay": {
       "types": "./src/relay.ts",
       "import": "./src/relay.ts"
+    },
+    "./deckhand": {
+      "types": "./src/deckhand/index.ts",
+      "import": "./src/deckhand/index.ts"
+    },
+    "./deckhand/integration": {
+      "types": "./src/deckhand/integration.ts",
+      "import": "./src/deckhand/integration.ts"
     }
   },
   "scripts": {

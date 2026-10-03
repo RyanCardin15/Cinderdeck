@@ -42,12 +42,12 @@ const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
 
 const BitbucketApiEnvConfig = Config.all({
-  baseUrl: Config.String("T3CODE_BITBUCKET_API_BASE_URL").pipe(
+  baseUrl: Config.String("DECKHAND_BITBUCKET_API_BASE_URL").pipe(
     Config.withDefault(DEFAULT_API_BASE_URL),
   ),
-  accessToken: Config.String("T3CODE_BITBUCKET_ACCESS_TOKEN").pipe(Config.option),
-  email: Config.String("T3CODE_BITBUCKET_EMAIL").pipe(Config.option),
-  apiToken: Config.String("T3CODE_BITBUCKET_API_TOKEN").pipe(Config.option),
+  accessToken: Config.String("DECKHAND_BITBUCKET_ACCESS_TOKEN").pipe(Config.option),
+  email: Config.String("DECKHAND_BITBUCKET_EMAIL").pipe(Config.option),
+  apiToken: Config.String("DECKHAND_BITBUCKET_API_TOKEN").pipe(Config.option),
 });
 
 const BitbucketApiOperation = Schema.Literals([
@@ -565,7 +565,7 @@ function credentialFrom(input: {
 }
 
 /**
- * Credentials saved in settings win over the `T3CODE_BITBUCKET_*` environment variables, which
+ * Credentials saved in settings win over the `DECKHAND_BITBUCKET_*` environment variables, which
  * stay as a fallback. Within each source the access token wins.
  */
 function resolveCredential(
@@ -606,7 +606,7 @@ function authFromCredential(credential: BitbucketCredential | null): SourceContr
     account: Option.none(),
     host: Option.some("bitbucket.org"),
     detail: Option.some(
-      "Add a Bitbucket token in Settings → Source Control, or set the T3CODE_BITBUCKET_* environment variables on the server.",
+      "Add a Bitbucket token in Settings → Source Control, or set the DECKHAND_BITBUCKET_* environment variables on the server.",
     ),
   };
 }

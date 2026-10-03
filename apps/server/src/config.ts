@@ -117,9 +117,9 @@ export const make = (config: ServerConfig["Service"]) => ServerConfig.of(config)
  * logs report the same service identity to the collector.
  */
 export const otlpResource = (config: ServerConfig["Service"]) => ({
-  serviceName: "t3code-server",
+  serviceName: "deckhand-server",
   attributes: {
-    "service.namespace": "t3code",
+    "service.namespace": "deckhand",
     "service.runtime": "t3-server",
     "service.mode": config.mode,
   },

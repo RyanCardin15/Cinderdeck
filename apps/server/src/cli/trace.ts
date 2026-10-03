@@ -173,9 +173,9 @@ const traceSummaryCommand = Command.make("summary", {
   Command.withHandler(
     Effect.fn("cli.trace.summary")(function* (flags) {
       const fs = yield* FileSystem.FileSystem;
-      // T3CODE_TRACE_FILE, else the userdata trace file for --base-dir or
-      // T3CODE_HOME. Implicit dev runs write elsewhere; set T3CODE_TRACE_FILE.
-      const envHome = yield* Config.String("T3CODE_HOME").pipe(Config.option);
+      // DECKHAND_TRACE_FILE, else the userdata trace file for --base-dir or
+      // DECKHAND_HOME. Implicit dev runs write elsewhere; set DECKHAND_TRACE_FILE.
+      const envHome = yield* Config.String("DECKHAND_HOME").pipe(Config.option);
       const baseDir = yield* resolveBaseDir(
         Option.getOrUndefined(Option.orElse(flags.baseDir, () => envHome)),
       );

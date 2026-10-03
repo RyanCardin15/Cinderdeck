@@ -3,10 +3,12 @@ import * as Layer from "effect/Layer";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as Migrator from "effect/unstable/sql/Migrator";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 
 import { runMigrations } from "../Migrations.ts";
 import { initializeV2Database } from "../initializeV2Database.ts";
+import * as DeckhandMigrations from "../../deckhand/Migrations.ts";
 import * as ServerConfig from "../../config.ts";
 
 // Size the -wal file is cut back to on the first commit after a WAL reset.
@@ -22,6 +24,13 @@ const setup = Layer.effectDiscard(
     // PASSIVE checkpoints never shrink the -wal file, so it otherwise keeps its
     // largest size until the last connection closes.
     yield* sql.unsafe(`PRAGMA journal_size_limit = ${WAL_SIZE_LIMIT_BYTES};`);
+    yield* DeckhandMigrations.migrate.pipe(
+      Effect.catchTag("DeckhandStoreVersionError", (cause) =>
+        Effect.fail(
+          new Migrator.MigrationError({ kind: "BadState", message: cause.message, cause }),
+        ),
+      ),
+    );
     yield* runMigrations();
   }),
 );
