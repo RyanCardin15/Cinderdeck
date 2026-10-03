@@ -62,6 +62,12 @@ final class WorkspaceRunner: ObservableObject {
           $0.steps[i].finishedAt = failure == nil ? Date() : nil
         }
       }
+      if failure == nil { supervisor.releaseCheckoutMutation("run:" + saved.id.uuidString) }
+    }
+    // A crash after persisting a terminal result but before releasing ownership
+    // also has a durable stop proof. Do not release a cancelling/active run.
+    for saved in runs where !saved.status.isActive {
+      supervisor.releaseCheckoutMutation("run:" + saved.id.uuidString)
     }
   }
 
@@ -90,8 +96,11 @@ final class WorkspaceRunner: ObservableObject {
     }
     let run = WorkspaceRun(workspaceID: id, workspaceName: workspace.name, definitionID: definitionID,
       name: name, kind: kind, actor: actor, steps: steps, cleanupServices: cleanupServices)
+    let reservationID = "run:" + run.id.uuidString
+    _ = try supervisor.reserveCheckoutMutation(workspace, id: reservationID, kind: "run", actor: actor)
     // Persist before launching anything. Corrupt/unwritable history never silently loses ownership.
-    try store.save([run] + runs)
+    do { try store.save([run] + runs) }
+    catch { supervisor.releaseCheckoutMutation(reservationID); throw error }
     runs.insert(run, at: 0)
     runEnvironment[run.id] = environment
     workers[run.id] = Task { [weak self] in
@@ -130,6 +139,7 @@ final class WorkspaceRunner: ObservableObject {
       processes[id] = nil
       if run.cleanupServices { await cleanup(id) }
       change(id) { $0.status = .cancelled; $0.finishedAt = Date(); $0.detail = "Cancelled" }
+      supervisor.releaseCheckoutMutation("run:" + id.uuidString)
     }
   }
   func cancelAll() async {
@@ -184,6 +194,7 @@ final class WorkspaceRunner: ObservableObject {
       catch { outcome = .cancelling; detail = "Could not stop the command. Cancel to retry: \(error.localizedDescription)" }
     }
     change(id) { $0.status = outcome; $0.detail = detail; $0.finishedAt = outcome.isActive ? nil : Date() }
+    if !outcome.isActive { supervisor.releaseCheckoutMutation("run:" + id.uuidString) }
     workers[id] = nil
     prune()
   }

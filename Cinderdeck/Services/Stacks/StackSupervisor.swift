@@ -24,6 +24,25 @@ final class StackSupervisor: ObservableObject {
   private var watcher: StackDefinitionWatcher?
   private var watchedDirectory: URL?
   private var bootstrapped = false
+  private var physicalReservations: CheckoutReservations?
+  func checkoutReservations() throws -> CheckoutReservations {
+    if let physicalReservations { return physicalReservations }
+    let created = try CheckoutReservations(directory: logDirectory.appendingPathComponent("Integration", isDirectory: true))
+    physicalReservations = created
+    return created
+  }
+  func reserveCheckoutMutation(_ definition: StackDefinition, id: String, kind: String, actor: StackActor,
+    repos: Set<String>? = nil) throws -> CheckoutReservation {
+    let scope = try definition.repos.filter { repos == nil || repos!.contains($0.id) }.compactMap {
+      try PhysicalCheckoutIdentity.resolve($0.path)?.physicalID
+    }
+    return try checkoutReservations().begin(id: id, ownerID: kind == "run" ? id : actor.label,
+      workspaceID: definition.id, kind: kind, physicalIDs: scope, actorKey: actor.key)
+  }
+  func releaseCheckoutMutation(_ id: String) {
+    do { try checkoutReservations().releaseNative(id) }
+    catch { errorMessage = "Checkout ownership could not be released: \(error.localizedDescription)" }
+  }
   private var epochs: [String: Int] = [:]
   private var processes: [String: any ProcessLaunching] = [:]
   private var logs: [String: LogBuffer] = [:]
@@ -701,6 +720,9 @@ final class StackSupervisor: ObservableObject {
   func performGitChange(stack id: String, repos: Set<String>, eventKind: String = "branchSwitched",
     eventDetail: String? = nil, actor: StackActor? = nil, action: () async throws -> Void) async throws {
     guard let stack = definition(id) else { throw StackError.message("This stack needs a valid definition") }
+    let reservationID = "git:" + UUID().uuidString
+    _ = try reserveCheckoutMutation(stack, id: reservationID, kind: "git", actor: actor ?? .user, repos: repos)
+    defer { releaseCheckoutMutation(reservationID) }
     let paths = Set(stack.repos.filter { repos.contains($0.id) }.map { $0.path.resolvingSymlinksInPath().standardizedFileURL.path })
     // A folder may be shared by several stacks, even under different repo names.
     var affected: [String: Set<String>] = [id: []]

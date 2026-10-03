@@ -23,7 +23,7 @@ nonisolated struct IntegrationHello: Encodable, Sendable {
   let executionHostID: String
   let channel: String
   let runtimeEpoch: String
-  let capabilities = ["projection.snapshot", "projection.events", "operations.lane.create", "operations.services", "operations.receipts"]
+  let capabilities = ["projection.snapshot", "projection.events", "operations.lane.create", "operations.services", "operations.receipts", "checkout.reservations"]
   let maximumFrameBytes = StackControlSocketServer.maximumFrameBytes
   let maximumPageSize = 500
   let maximumWaitMs = 25_000
@@ -52,6 +52,7 @@ extension StackControlService {
     } catch { DiagnosticLogger.shared.log(.warning, .system, "Integration store unavailable: \(error.localizedDescription)") }
   }
   func handleIntegration(_ method: String, params: JSONValue, actor: StackActor) async throws -> JSONValue {
+    if method.hasPrefix("integration.reservation.") { return try await handleCheckoutReservation(method, params: params, actor: actor) }
     if method == "integration.operation.submit" { return try await submitIntegrationOperation(params, actor: actor) }
     if method == "integration.operation.get" { return try await getIntegrationOperation(params, actor: actor) }
     let allowed: Set<String>
@@ -98,6 +99,76 @@ extension StackControlService {
       let input: IntegrationEventParameters = try decodeIntegration(params)
       return try await JSONValue(encoding: store.events(after: input.after, limit: input.limit ?? 100, waitMs: input.waitMs ?? 0))
     }
+  }
+  private func handleCheckoutReservation(_ method: String, params: JSONValue, actor: StackActor) async throws -> JSONValue {
+    let allowed: Set<String>
+    switch method {
+    case "integration.reservation.acquire": allowed = ["id", "token", "installationID", "ownerID", "workspaceID", "generation", "revision", "repos"]
+    case "integration.reservation.get", "integration.reservation.release": allowed = ["id", "token", "installationID"]
+    case "integration.reservation.list": allowed = ["installationID", "offset", "limit"]
+    default: throw StackControlError(code: "unknown_method", message: "Unsupported reservation operation")
+    }
+    guard let object = params.objectValue, Set(object.keys).isSubset(of: allowed),
+      let installationID = params["installationID"]?.stringValue,
+      installationID == (try integrationStore()).installationID else {
+      throw StackControlError(code: "installation_changed", message: "Reservation arguments or installation identity changed.")
+    }
+    let reservations = try supervisor.checkoutReservations()
+    if method == "integration.reservation.list" {
+      let input: IntegrationReservationPage = try decodeIntegration(params)
+      return try JSONValue(encoding: reservations.list(offset: input.offset ?? 0, limit: input.limit ?? 100))
+    }
+    guard let id = params["id"]?.stringValue, !id.isEmpty, id.utf8.count <= 160,
+      let token = params["token"]?.stringValue, token.count == 64,
+      token.allSatisfy({ "0123456789abcdef".contains($0) }) else {
+      throw StackControlError.invalid("Reservation identity and scoped control token are required")
+    }
+    if method == "integration.reservation.get" {
+      return try JSONValue(encoding: reservations.get(id, actorKey: actor.key, token: token))
+    }
+    if method == "integration.reservation.release" {
+      return try JSONValue(encoding: reservations.releaseWriter(id, actorKey: actor.key, token: token))
+    }
+    let input: IntegrationWriterReservationInput = try decodeIntegration(params)
+    guard (1...64).contains(input.repos.count), Set(input.repos).count == input.repos.count,
+      input.repos.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 160 }),
+      input.generation > 0, !input.ownerID.isEmpty, input.ownerID.utf8.count <= 160,
+      !input.workspaceID.isEmpty, input.workspaceID.utf8.count <= 160,
+      !input.revision.isEmpty, input.revision.utf8.count <= 64 else {
+      throw StackControlError.invalid("Writer reservations require exact workspace generation, revision and repository scope")
+    }
+    let journal = try integrationStore()
+    try await journal.reconcile(snapshot().workspaces, sourceRevision: integrationRevision())
+    let snapshot = try await journal.snapshot(workspaceID: input.workspaceID, limit: 1)
+    guard let resource = snapshot.resources.first, resource.available,
+      resource.generation == input.generation, resource.revision == input.revision,
+      let file = supervisor.files.first(where: { $0.id == input.workspaceID }), let definition = file.definition else {
+      throw StackControlError(code: "stale_revision", message: "The checkout changed. Refresh its context before writer admission.")
+    }
+    guard !supervisor.isBootstrapping, !supervisor.isRemovingLane(file.id), supervisor.states[file.id]?.operation == nil,
+      workspaceRunner.activeRun(file.id) == nil else {
+      throw StackControlError(code: "busy", message: "Finish the native run or checkout operation before starting a writer.")
+    }
+    let repos = definition.repos.filter { input.repos.contains($0.id) }
+    guard repos.count == input.repos.count else { throw StackControlError.notFound("A selected repository is no longer in this checkout") }
+    let scope = try repos.map { repo -> String in
+      guard let identity = try PhysicalCheckoutIdentity.resolve(repo.path) else {
+        throw StackControlError(code: "unsupported_checkout", message: "Managed writers need an identifiable Git checkout.")
+      }
+      return identity.physicalID
+    }
+    try checkClaim(file.id, actor: actor, force: false)
+    // Existing advisory workspace claims must also respect physical aliases.
+    for claimed in supervisor.files where claimed.id != file.id && claims[claimed.id]?.isExpired == false {
+      let shared = try claimed.definition?.repos.contains { repo in
+        try PhysicalCheckoutIdentity.resolve(repo.path).map { scope.contains($0.physicalID) } ?? false
+      } ?? false
+      if shared { try checkClaim(claimed.id, actor: actor, force: false) }
+    }
+    // No await between final scope/preflight and durable admission. Native
+    // submit/Git use this same transactional barrier on the main actor.
+    return try JSONValue(encoding: reservations.begin(id: id, ownerID: input.ownerID, workspaceID: input.workspaceID,
+      generation: input.generation, kind: "writer", physicalIDs: scope, actorKey: actor.key, token: token))
   }
   private func operationStore() throws -> IntegrationOperations {
     if let integrationOperations { return integrationOperations }
@@ -191,6 +262,21 @@ extension StackControlService {
     do { return try value.decode(T.self) }
     catch { throw StackControlError.invalid("Integration argument types do not match the protocol") }
   }
+}
+nonisolated private struct IntegrationWriterReservationInput: Decodable {
+  let id: String
+  let token: String
+  let installationID: String
+  let ownerID: String
+  let workspaceID: String
+  let generation: Int
+  let revision: String
+  let repos: [String]
+}
+nonisolated private struct IntegrationReservationPage: Decodable {
+  let installationID: String
+  let offset: Int?
+  let limit: Int?
 }
 
 nonisolated private struct IntegrationLaneOperation: Decodable {

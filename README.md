@@ -31,6 +31,8 @@ A web app, an API in another repository, a worker, a local database: bring whate
 
 ## Services, tasks, and workflows
 
+Tasks, workflows and Git changes respect a managed Deckhand writer's physical checkout reservation, including workspace aliases. Use a separate lane while another session owns the checkout. Finishing an agent turn keeps ownership until its process stops; interrupted or unconfirmed shutdowns keep the checkout reserved for recovery.
+
 Open **Workspaces…** from the menu bar. A workspace contains **Services** that keep running, **Tasks** that finish with a result, and **Workflows** that coordinate both. Run tests, builds, or migrations; inspect each step's logs and exit status; cancel a run; and keep completed results across relaunches. Agents use the same controls through the CLI and MCP.
 
 Existing stacks appear as workspaces without moving their files. **Tasks → Move service to Tasks** converts stopped commands you previously ran as services. [Read the workspace guide](docs/WORKSPACES.md).
