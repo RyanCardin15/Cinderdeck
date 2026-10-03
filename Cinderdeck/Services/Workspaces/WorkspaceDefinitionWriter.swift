@@ -48,16 +48,16 @@ nonisolated enum WorkspaceDefinitionWriter {
     return id.isEmpty ? "workspace-" + UUID().uuidString.prefix(8).lowercased() : id
   }
 
-  /// Writes a new, empty workspace definition. Refuses to replace an existing file.
+  /// Writes a new workspace, optionally with reviewed component tables. Refuses to replace an existing file.
   @discardableResult
-  static func createWorkspace(name: String, root: String, id: String? = nil, directory: URL = StackDefinitionLoader.directory()) throws -> URL {
+  static func createWorkspace(name: String, root: String, id: String? = nil, directory: URL = StackDefinitionLoader.directory(), components: String = "") throws -> URL {
     let title = name.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !title.isEmpty else { throw StackError.message("Enter a workspace name") }
     let id = id ?? workspaceID(for: title)
     guard StackDefinitionLoader.validID(id) else { throw StackError.message("Use letters, numbers, hyphens, or underscores for the workspace ID") }
     let file = directory.appendingPathComponent(id + ".toml")
     guard !FileManager.default.fileExists(atPath: file.path) else { throw StackError.message("A workspace with this name already exists. Choose a different name.") }
-    let source = "name = \(quote(title))\nroot = \(quote(root))\n"
+    let source = "name = \(quote(title))\nroot = \(quote(root))\n" + components
     let definition = StackDefinitionLoader.load(source, file: file)
     guard definition.definition != nil else { throw StackError.message(definition.issues.map(\.message).joined(separator: "\n")) }
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

@@ -49,9 +49,9 @@ struct StacksTabView: View {
     }
     .sheet(item: $viewModel.editor) { context in
       if context.file == nil {
-        WorkspaceCreateView { id in
+        WorkspaceCreateView { id, start in
           viewModel.editor = nil
-          Task { await viewModel.supervisor.reloadDefinitions(); viewModel.select(id) }
+          Task { await viewModel.supervisor.reloadDefinitions(); viewModel.select(id); if start { await viewModel.supervisor.start(stack: id, actor: .user) } }
         }
       } else {
         StackDefinitionEditor(file: context.file) {
