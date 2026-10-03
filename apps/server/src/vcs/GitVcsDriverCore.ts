@@ -3117,98 +3117,110 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       yield* progress.onWorktreeClaimed(worktreePath);
     }
 
-    // `git worktree add` leaves submodules empty, so a repo that keeps agent
-    // skills, tooling or source in one gets a worktree that is quietly missing
-    // them. Best-effort: the objects are usually already in the parent's
-    // `.git/modules`, but a first-ever clone needs the network, and failing to
-    // populate a submodule must not roll back the caller's thread. Repos with
-    // hundreds of nested submodules opt out or stop at the top level; the
-    // caller resolves that from settings, or the checkout's t3.json decides.
-    const hasSubmodules = yield* fileSystem
-      .exists(path.join(worktreePath, ".gitmodules"))
-      .pipe(Effect.orElseSucceed(() => false));
-    const submoduleMode = !hasSubmodules
-      ? { value: "none" as const, source: "environment" as const }
-      : resolveProjectFileBackedSetting(
-          "worktreeSubmodules",
-          options?.submodules ?? null,
-          options?.submodules != null
-            ? null
-            : yield* fileSystem.readFileString(path.join(worktreePath, T3_PROJECT_FILE_NAME)).pipe(
-                Effect.flatMap((contents) => {
-                  const file = parseT3ProjectFile(contents);
-                  return file === null
-                    ? Effect.logWarning("t3.json is invalid; initializing submodules recursively", {
-                        worktreePath,
-                      }).pipe(Effect.as(null))
-                    : Effect.succeed(file);
-                }),
-                Effect.orElseSucceed(() => null),
-              ),
-        );
-    if (hasSubmodules && submoduleMode.value === "none" && progress?.onSubmodulesDisabled) {
-      yield* progress.onSubmodulesDisabled({
-        source: submoduleMode.source === "t3.json" ? "t3.json" : "settings",
-      });
-    }
-    if (submoduleMode.value !== "none") {
-      if (progress?.onSubmodulesStarted) {
-        yield* progress.onSubmodulesStarted();
-      }
-      const onSubmoduleLine = progress?.onSubmoduleLine;
-      yield* runGit(
-        "GitVcsDriver.createWorktree.updateSubmodules",
-        worktreePath,
-        submoduleMode.value === "recursive"
-          ? ["submodule", "update", "--init", "--recursive"]
-          : ["submodule", "update", "--init"],
-        onSubmoduleLine
-          ? {
-              env: { LC_ALL: "C" },
-              progress: { onStdoutLine: onSubmoduleLine, onStderrLine: onSubmoduleLine },
-            }
-          : {},
-      ).pipe(
-        Effect.matchEffect({
-          onFailure: (cause) =>
-            Effect.logWarning("worktree submodule checkout failed; submodule paths are empty", {
-              worktreePath,
-              cause,
-            }).pipe(
-              Effect.andThen(
+    return yield* mutationPolicy.createdCheckout(
+      worktreePath,
+      Effect.gen(function* () {
+        // `git worktree add` leaves submodules empty, so a repo that keeps agent
+        // skills, tooling or source in one gets a worktree that is quietly missing
+        // them. Best-effort: the objects are usually already in the parent's
+        // `.git/modules`, but a first-ever clone needs the network, and failing to
+        // populate a submodule must not roll back the caller's thread. Repos with
+        // hundreds of nested submodules opt out or stop at the top level; the
+        // caller resolves that from settings, or the checkout's t3.json decides.
+        const hasSubmodules = yield* fileSystem
+          .exists(path.join(worktreePath, ".gitmodules"))
+          .pipe(Effect.orElseSucceed(() => false));
+        const submoduleMode = !hasSubmodules
+          ? { value: "none" as const, source: "environment" as const }
+          : resolveProjectFileBackedSetting(
+              "worktreeSubmodules",
+              options?.submodules ?? null,
+              options?.submodules != null
+                ? null
+                : yield* fileSystem
+                    .readFileString(path.join(worktreePath, T3_PROJECT_FILE_NAME))
+                    .pipe(
+                      Effect.flatMap((contents) => {
+                        const file = parseT3ProjectFile(contents);
+                        return file === null
+                          ? Effect.logWarning(
+                              "t3.json is invalid; initializing submodules recursively",
+                              {
+                                worktreePath,
+                              },
+                            ).pipe(Effect.as(null))
+                          : Effect.succeed(file);
+                      }),
+                      Effect.orElseSucceed(() => null),
+                    ),
+            );
+        if (hasSubmodules && submoduleMode.value === "none" && progress?.onSubmodulesDisabled) {
+          yield* progress.onSubmodulesDisabled({
+            source: submoduleMode.source === "t3.json" ? "t3.json" : "settings",
+          });
+        }
+        if (submoduleMode.value !== "none") {
+          if (progress?.onSubmodulesStarted) {
+            yield* progress.onSubmodulesStarted();
+          }
+          const onSubmoduleLine = progress?.onSubmoduleLine;
+          yield* runGit(
+            "GitVcsDriver.createWorktree.updateSubmodules",
+            worktreePath,
+            submoduleMode.value === "recursive"
+              ? ["submodule", "update", "--init", "--recursive"]
+              : ["submodule", "update", "--init"],
+            onSubmoduleLine
+              ? {
+                  env: { LC_ALL: "C" },
+                  progress: { onStdoutLine: onSubmoduleLine, onStderrLine: onSubmoduleLine },
+                }
+              : {},
+          ).pipe(
+            Effect.matchEffect({
+              onFailure: (cause) =>
+                Effect.logWarning("worktree submodule checkout failed; submodule paths are empty", {
+                  worktreePath,
+                  cause,
+                }).pipe(
+                  Effect.andThen(
+                    progress?.onSubmodulesFinished
+                      ? progress.onSubmodulesFinished({ ok: false, detail: cause.message })
+                      : Effect.void,
+                  ),
+                ),
+              onSuccess: () =>
                 progress?.onSubmodulesFinished
-                  ? progress.onSubmodulesFinished({ ok: false, detail: cause.message })
+                  ? progress.onSubmodulesFinished({ ok: true, detail: null })
                   : Effect.void,
-              ),
-            ),
-          onSuccess: () =>
-            progress?.onSubmodulesFinished
-              ? progress.onSubmodulesFinished({ ok: true, detail: null })
-              : Effect.void,
-        }),
-      );
-    }
+            }),
+          );
+        }
 
-    if (input.newRefName && input.baseRefName) {
-      const remoteNames = yield* listRemoteNames(input.cwd).pipe(Effect.orElseSucceed(() => []));
-      const parsedBaseRef = parseRemoteRefWithRemoteNames(
-        input.baseRefName,
-        remoteNames.toSorted((left, right) => right.length - left.length),
-      );
-      const baseBranch = parsedBaseRef?.branchName ?? input.baseRefName;
-      yield* runGit("GitVcsDriver.createWorktree.configureBaseRef", input.cwd, [
-        "config",
-        `branch.${input.newRefName}.gh-merge-base`,
-        baseBranch,
-      ]);
-    }
+        if (input.newRefName && input.baseRefName) {
+          const remoteNames = yield* listRemoteNames(input.cwd).pipe(
+            Effect.orElseSucceed(() => []),
+          );
+          const parsedBaseRef = parseRemoteRefWithRemoteNames(
+            input.baseRefName,
+            remoteNames.toSorted((left, right) => right.length - left.length),
+          );
+          const baseBranch = parsedBaseRef?.branchName ?? input.baseRefName;
+          yield* runGit("GitVcsDriver.createWorktree.configureBaseRef", input.cwd, [
+            "config",
+            `branch.${input.newRefName}.gh-merge-base`,
+            baseBranch,
+          ]);
+        }
 
-    return {
-      worktree: {
-        path: worktreePath,
-        refName: targetBranch,
-      },
-    };
+        return {
+          worktree: {
+            path: worktreePath,
+            refName: targetBranch,
+          },
+        };
+      }),
+    );
   });
 
   const fetchPullRequestBranch: GitVcsDriver.GitVcsDriver["Service"]["fetchPullRequestBranch"] =
@@ -3713,7 +3725,14 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     readConfigValue,
     listRefs,
     createWorktree: (input, options) =>
-      withListRefsInvalidation(input.cwd, createWorktree(input, options)),
+      withListRefsInvalidation(
+        input.cwd,
+        mutationPolicy.lifecycle(
+          "GitVcsDriver.createWorktree",
+          input.cwd,
+          createWorktree(input, options),
+        ),
+      ),
     fetchPullRequestBranch: (input) =>
       withListRefsInvalidation(input.cwd, fetchPullRequestBranch(input)),
     fetchPullRequestHeadCommit,
@@ -3731,8 +3750,16 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     fetchRemoteTrackingBranch: (input) =>
       withListRefsInvalidation(input.cwd, fetchRemoteTrackingBranch(input)),
     setBranchUpstream: (input) => withListRefsInvalidation(input.cwd, setBranchUpstream(input)),
-    removeWorktree: (input) => withListRefsInvalidation(input.cwd, removeWorktree(input)),
-    pruneWorktrees: (input) => withListRefsInvalidation(input.cwd, pruneWorktrees(input)),
+    removeWorktree: (input) =>
+      withListRefsInvalidation(
+        input.cwd,
+        mutationPolicy.lifecycle("GitVcsDriver.removeWorktree", input.cwd, removeWorktree(input)),
+      ),
+    pruneWorktrees: (input) =>
+      withListRefsInvalidation(
+        input.cwd,
+        mutationPolicy.lifecycle("GitVcsDriver.pruneWorktrees", input.cwd, pruneWorktrees(input)),
+      ),
     deleteLocalBranch: (input) => withListRefsInvalidation(input.cwd, deleteLocalBranch(input)),
     renameBranch: (input) => withListRefsInvalidation(input.cwd, renameBranch(input)),
     createRef: (input) => withListRefsInvalidation(input.cwd, createRef(input)),

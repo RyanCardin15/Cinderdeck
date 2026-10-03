@@ -93,6 +93,64 @@ it.layer(TestLayer)("physical checkout identity", (it) => {
         assert.equal(detached.commit, initial.commit);
       }).pipe(Effect.scoped),
   );
+  it.effect(
+    "recovers a missing worktree's original physical identity and rejects mismatched metadata or an existing damaged folder",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const runner = yield* ProcessRunner.ProcessRunner;
+        const resolver = yield* CheckoutIdentity.CheckoutIdentity;
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "deckhand-registration-" });
+        const repo = root + "/repo";
+        const lane = root + "/lane with spaces";
+        const alias = root + "/alias";
+        yield* fs.makeDirectory(repo);
+        const git = (args: ReadonlyArray<string>) =>
+          runner
+            .run({ command: "git", args: ["-C", repo, ...args] })
+            .pipe(
+              Effect.tap((result) =>
+                Effect.sync(() => assert.equal(result.code, 0, result.stderr)),
+              ),
+            );
+        yield* git(["init", "-b", "main"]);
+        yield* git([
+          "-c",
+          "user.name=Fixture",
+          "-c",
+          "user.email=fixture@example.invalid",
+          "commit",
+          "--allow-empty",
+          "-m",
+          "baseline",
+        ]);
+        yield* git(["worktree", "add", "-b", "lane", lane]);
+        const source = yield* resolver.resolve(repo);
+        const original = yield* resolver.resolve(lane);
+        assert.equal(yield* resolver.missingRegistration(source, lane), null);
+        yield* fs.symlink(root, alias);
+        yield* fs.remove(lane, { recursive: true });
+        const recovered = yield* resolver.missingRegistration(source, alias + "/lane with spaces");
+        assert.equal(recovered?.physicalId, original.physicalId);
+        assert.equal(recovered?.repositoryPhysicalId, original.repositoryPhysicalId);
+        assert.equal(recovered?.root, original.root);
+        assert.equal(yield* resolver.missingRegistration(source, root + "/unregistered"), null);
+        const commonFile = original.gitDirectory + "/commondir";
+        const common = yield* fs.readFileString(commonFile);
+        yield* fs.writeFileString(commonFile, source.root + "\n");
+        assert.equal(
+          (yield* resolver.missingRegistration(source, lane).pipe(Effect.flip)).operation,
+          "validate registration common directory",
+        );
+        yield* fs.writeFileString(commonFile, common);
+        yield* fs.writeFileString(original.gitDirectory + "/gitdir", "x".repeat(4097));
+        assert.equal(yield* resolver.missingRegistration(source, lane), null);
+        yield* fs.writeFileString(original.gitDirectory + "/gitdir", lane + "/.git\n");
+        yield* fs.makeDirectory(lane);
+        yield* fs.writeFileString(lane + "/.git", "damaged");
+        assert.equal(yield* resolver.missingRegistration(source, lane), null);
+      }),
+  );
   it.effect("rejects a folder without Git metadata instead of fabricating a checkout", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

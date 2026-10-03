@@ -5,9 +5,6 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as WorkspaceBackend from "./WorkspaceBackend.ts";
 import * as CheckoutMutations from "./CheckoutMutations.ts";
-import * as IntegrationHub from "./IntegrationHub.ts";
-import * as NativeWriterReservations from "./NativeWriterReservations.ts";
-import * as WriterReservations from "./WriterReservations.ts";
 
 interface Command {
   readonly operation: string;
@@ -17,6 +14,15 @@ interface Command {
 }
 interface Policy {
   readonly managed: boolean;
+  readonly lifecycle: <A, E, R>(
+    operation: string,
+    cwd: string,
+    effect: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E | GitCommandError, R>;
+  readonly createdCheckout: <A, E, R>(
+    cwd: string,
+    effect: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E | GitCommandError, R>;
   readonly execute: <A, E, R>(
     input: Command,
     effect: Effect.Effect<A, E, R>,
@@ -40,15 +46,21 @@ interface Policy {
 export class GitMutationPolicy extends Context.Reference<Policy>("t3/deckhand/GitMutationPolicy", {
   defaultValue: () => ({
     managed: false,
+    lifecycle: (_, __, effect) => effect,
+    createdCheckout: (_, effect) => effect,
     execute: (_, effect) => effect,
     restore: (_, effect) => effect,
     rollback: (_, effect) => effect,
     capture: (_, __, effect) => effect,
   }),
 }) {}
-const Authorized = Context.Reference<CheckoutMutations.MutationInput | null>(
+interface MutationAuthority {
+  readonly input: CheckoutMutations.MutationInput;
+  readonly isActive: () => boolean;
+}
+const Authorized = Context.Reference<ReadonlyArray<MutationAuthority>>(
   "t3/deckhand/GitMutationAuthorization",
-  { defaultValue: () => null },
+  { defaultValue: () => [] },
 );
 const Capture = Context.Reference<{ readonly cwd: string; readonly index: string } | null>(
   "t3/deckhand/GitCheckpointCapture",
@@ -219,13 +231,31 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const authorized = yield* Authorized;
       if (
-        authorized?.cwd === input.cwd &&
-        (!input.sharedRefs || authorized.sharedRefs) &&
-        (!input.worktreeLifecycle || authorized.worktreeLifecycle)
+        authorized.some(
+          (authority) =>
+            authority.isActive() &&
+            authority.input.cwd === input.cwd &&
+            (!input.sharedRefs || authority.input.sharedRefs) &&
+            (!input.worktreeLifecycle || authority.input.worktreeLifecycle),
+        )
       )
         return yield* effect;
+      let active = true;
+      const authority = { input, isActive: () => active };
       return yield* mutations
-        .run(input, effect.pipe(Effect.provideService(Authorized, input)))
+        .run(
+          input,
+          effect.pipe(
+            Effect.provideService(Authorized, [...authorized, authority]),
+            // A child can inherit FiberRefs and outlive this effect. Its inherited
+            // authority must expire before the backend releases physical ownership.
+            Effect.onExit(() =>
+              Effect.sync(() => {
+                active = false;
+              }),
+            ),
+          ),
+        )
         .pipe(
           Effect.catchIf(Schema.is(CheckoutMutations.CheckoutMutationError), (error) =>
             Effect.fail(
@@ -246,6 +276,43 @@ const make = Effect.gen(function* () {
     });
   return {
     managed: true,
+    lifecycle: (operation, cwd, effect) =>
+      guarded({ cwd, sharedRefs: true, worktreeLifecycle: true }, operation, effect),
+    createdCheckout: (cwd, effect) =>
+      Effect.gen(function* () {
+        const authorized = yield* Authorized;
+        const lifecycle = authorized.findLast(
+          (authority) => authority.isActive() && authority.input.worktreeLifecycle,
+        );
+        return yield* mutations
+          .includeCheckout(
+            cwd,
+            effect.pipe(
+              Effect.provideService(Authorized, [
+                ...authorized,
+                {
+                  input: { cwd, sharedRefs: true, worktreeLifecycle: true },
+                  isActive: () => lifecycle?.isActive() ?? false,
+                },
+              ]),
+            ),
+          )
+          .pipe(
+            Effect.catchIf(Schema.is(CheckoutMutations.CheckoutMutationError), (error) =>
+              Effect.fail(
+                new GitCommandError({
+                  operation: "GitVcsDriver.createWorktree.includeCheckout",
+                  command: "git",
+                  cwd,
+                  detail:
+                    error.reason === "busy"
+                      ? "The new worktree has another writer. Its files were kept; stop that session before completing setup or removing it."
+                      : "Ownership of the new worktree could not be verified. Its files were kept for recovery.",
+                }),
+              ),
+            ),
+          );
+      }),
     execute: run,
     rollback: (cwd, effect) =>
       guarded({ cwd, sharedRefs: true }, "orchestrationV2.checkpointRollback.execute", effect),
@@ -256,12 +323,5 @@ const make = Effect.gen(function* () {
 });
 export const layer = Layer.effect(GitMutationPolicy, make);
 export const layerLive = layer.pipe(
-  Layer.provide(
-    CheckoutMutations.layer.pipe(
-      Layer.provide(WorkspaceBackend.layerLive),
-      Layer.provide(WriterReservations.layer),
-      Layer.provide(NativeWriterReservations.layer.pipe(Layer.provide(IntegrationHub.layerLive))),
-      Layer.provide(IntegrationHub.layerLive),
-    ),
-  ),
+  Layer.provide(CheckoutMutations.layer.pipe(Layer.provide(WorkspaceBackend.layerLive))),
 );

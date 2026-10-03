@@ -134,6 +134,97 @@ describe("physical checkout writer ownership", () => {
         );
       }).pipe(Effect.provide(TestLayer)),
   );
+  it.effect(
+    "extends a held lifecycle atomically, respects queued owners, and releases the expanded scope",
+    () =>
+      Effect.gen(function* () {
+        const store = yield* WriterReservations.WriterReservations;
+        const lifecycle = yield* Scope.make();
+        const resident = yield* Scope.make();
+        yield* store
+          .tryAcquire({ ownerId: "create", physicalIds: ["source"] })
+          .pipe(Effect.provideService(Scope.Scope, lifecycle));
+        yield* store.extend({ ownerId: "create", physicalIds: ["new", "source", "new"] });
+        assert.deepEqual(
+          (yield* store.inspect).find((row) => row.ownerId === "create")?.physicalIds,
+          ["new", "source"],
+        );
+        yield* store
+          .tryAcquire({ ownerId: "provider", physicalIds: ["blocked"] })
+          .pipe(Effect.provideService(Scope.Scope, resident));
+        const queued = yield* Effect.scoped(
+          store.acquire({ ownerId: "waiting", physicalIds: ["blocked", "next"] }),
+        ).pipe(Effect.forkChild);
+        yield* waitFor(store, "waiting", "queued");
+        for (const physicalIds of [
+          ["available", "blocked"],
+          ["available", "next"],
+        ]) {
+          assert.equal(
+            (yield* store.extend({ ownerId: "create", physicalIds }).pipe(Effect.flip)).reason,
+            "busy",
+          );
+          assert.deepEqual(
+            (yield* store.inspect).find((row) => row.ownerId === "create")?.physicalIds,
+            ["new", "source"],
+          );
+        }
+        assert.equal(
+          (yield* store
+            .extend({
+              ownerId: "create",
+              physicalIds: Array.from({ length: 64 }, (_, i) => `extra-${i}`),
+            })
+            .pipe(Effect.flip)).reason,
+          "invalid_scope",
+        );
+        assert.equal(
+          (yield* store
+            .extend({ ownerId: "missing", physicalIds: ["available"] })
+            .pipe(Effect.flip)).reason,
+          "retired",
+        );
+        yield* Fiber.interrupt(queued);
+        yield* Scope.close(resident, Exit.void);
+        yield* Scope.close(lifecycle, Exit.void);
+        assert.deepEqual(yield* store.inspect, []);
+        yield* Effect.scoped(
+          store.tryAcquire({ ownerId: "next-create", physicalIds: ["new", "source"] }),
+        );
+        assert.equal(
+          (yield* store
+            .extend({ ownerId: "next-create", physicalIds: ["another"] })
+            .pipe(Effect.flip)).reason,
+          "retired",
+        );
+      }).pipe(Effect.provide(TestLayer)),
+  );
+  it.effect("uncertain and previous-runtime lifecycles cannot extend their authority", () =>
+    Effect.gen(function* () {
+      const store = yield* WriterReservations.WriterReservations;
+      const sql = yield* SqlClient.SqlClient;
+      const scope = yield* Scope.make();
+      yield* store
+        .tryAcquire({ ownerId: "uncertain", physicalIds: ["source"] })
+        .pipe(Effect.provideService(Scope.Scope, scope));
+      yield* store.uncertain("uncertain");
+      assert.equal(
+        (yield* store.extend({ ownerId: "uncertain", physicalIds: ["new"] }).pipe(Effect.flip))
+          .reason,
+        "retired",
+      );
+      yield* sql`INSERT INTO deckhand_writer_requests(id,runtime_epoch,owner_id,state) VALUES ('old','previous-runtime','old','held')`;
+      assert.equal(
+        (yield* store.extend({ ownerId: "old", physicalIds: ["new"] }).pipe(Effect.flip)).reason,
+        "retired",
+      );
+      yield* Scope.close(scope, Exit.void);
+      assert.deepEqual(
+        (yield* store.inspect).find((row) => row.ownerId === "uncertain")?.physicalIds,
+        ["source"],
+      );
+    }).pipe(Effect.provide(TestLayer)),
+  );
   it.effect("cancels queued admission and refuses duplicate owners or empty scopes", () =>
     Effect.gen(function* () {
       const store = yield* WriterReservations.WriterReservations;

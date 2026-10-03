@@ -40,6 +40,11 @@ export class WriterReservations extends Context.Service<
       readonly ownerId: string;
       readonly physicalIds: ReadonlyArray<string>;
     }) => Effect.Effect<void, WriterReservationError, Scope.Scope>;
+    /** Add newly materialized standalone checkout identities to a held lifecycle. */
+    readonly extend: (input: {
+      readonly ownerId: string;
+      readonly physicalIds: ReadonlyArray<string>;
+    }) => Effect.Effect<void, WriterReservationError>;
     readonly inspect: Effect.Effect<ReadonlyArray<WriterRequest>, WriterReservationError>;
     readonly changes: Stream.Stream<ReadonlyArray<WriterRequest>, WriterReservationError>;
     readonly uncertain: (ownerId: string) => Effect.Effect<void, WriterReservationError>;
@@ -190,6 +195,42 @@ const make = Effect.gen(function* () {
       release,
     );
   });
+  const extend: WriterReservations["Service"]["extend"] = (input) => {
+    const physicalIds = [...new Set(input.physicalIds)].sort();
+    if (
+      !input.ownerId ||
+      input.ownerId.length > 160 ||
+      !physicalIds.length ||
+      physicalIds.length > 64 ||
+      physicalIds.some((id) => !id || id.length > 160)
+    )
+      return Effect.fail(new WriterReservationError({ reason: "invalid_scope" }));
+    return sql
+      .withTransaction(
+        Effect.gen(function* () {
+          const self = yield* sql<{
+            id: string;
+            state: string;
+          }>`SELECT id,state FROM deckhand_writer_requests
+        WHERE owner_id=${input.ownerId} AND runtime_epoch=${epoch} AND state='held' LIMIT 1`;
+          if (!self[0]) return yield* new WriterReservationError({ reason: "retired" });
+          const id = self[0].id;
+          const existing = yield* sql<{
+            physical_id: string;
+          }>`SELECT physical_id FROM deckhand_writer_scope WHERE request_id=${id}`;
+          const scope = [...new Set([...existing.map((row) => row.physical_id), ...physicalIds])];
+          if (scope.length > 64)
+            return yield* new WriterReservationError({ reason: "invalid_scope" });
+          const blockers =
+            yield* sql`SELECT r.id FROM deckhand_writer_requests r JOIN deckhand_writer_scope s ON s.request_id=r.id
+        WHERE r.id <> ${id} AND r.state IN ('queued','held','uncertain') AND ${sql.in("s.physical_id", physicalIds)} LIMIT 1`;
+          if (blockers.length) return yield* new WriterReservationError({ reason: "busy" });
+          for (const physicalId of physicalIds)
+            yield* sql`INSERT OR IGNORE INTO deckhand_writer_scope(request_id,physical_id) VALUES (${id},${physicalId})`;
+        }),
+      )
+      .pipe(Effect.andThen(wake), Effect.mapError(storage));
+  };
   const inspect = Effect.gen(function* () {
     const rows = yield* sql<{
       id: string;
@@ -231,6 +272,6 @@ const make = Effect.gen(function* () {
       Effect.andThen(wake),
       Effect.mapError(storage),
     );
-  return WriterReservations.of({ acquire, tryAcquire, inspect, changes, uncertain });
+  return WriterReservations.of({ acquire, tryAcquire, extend, inspect, changes, uncertain });
 });
 export const layer = Layer.effect(WriterReservations, make);

@@ -129,6 +129,183 @@ const hold = (physicalIds: ReadonlyArray<string>) =>
     return scope;
   });
 describe("checkout mutations across Git and files", () => {
+  it.effect("an asynchronous child cannot reuse its parent's expired mutation authorization", () =>
+    Effect.gen(function* () {
+      const { repo, identity } = yield* fixture;
+      const core = yield* GitVcsDriver.make;
+      const policy = yield* GitMutationPolicy.GitMutationPolicy;
+      const releaseChild = yield* Deferred.make<void>();
+      const childScope = yield* Scope.make();
+      const child = yield* policy.lifecycle(
+        "test.parent",
+        repo,
+        core
+          .execute({ operation: "child", cwd: repo, args: ["config", "fixture.expired", "true"] })
+          .pipe(
+            Effect.flip,
+            (effect) => Deferred.await(releaseChild).pipe(Effect.andThen(effect)),
+            Effect.forkIn(childScope),
+          ),
+      );
+      const held = yield* hold([identity.physicalId]);
+      yield* Deferred.succeed(releaseChild, undefined);
+      assert.include((yield* Fiber.join(child)).message, "active or uncertain writer");
+      assert.equal(yield* core.readConfigValue(repo, "fixture.expired"), null);
+      yield* Scope.close(childScope, Exit.void);
+      yield* Scope.close(held, Exit.void);
+    }).pipe(Effect.provide(testLayer())),
+  );
+  it.effect(
+    "holds source and new checkout through configuration; competing writers cannot mutate either",
+    () =>
+      Effect.gen(function* () {
+        const { root, repo, git, identity } = yield* fixture;
+        const fs = yield* FileSystem.FileSystem;
+        const identities = yield* CheckoutIdentity.CheckoutIdentity;
+        const writers = yield* WriterReservations.WriterReservations;
+        const core = yield* GitVcsDriver.make;
+        yield* fs.writeFileString(repo + "/.gitmodules", "");
+        yield* git(repo, ["add", ".gitmodules"]);
+        yield* git(repo, [
+          "-c",
+          "user.name=Fixture",
+          "-c",
+          "user.email=fixture@example.invalid",
+          "commit",
+          "-m",
+          "submodule configuration",
+        ]);
+        const path = root + "/created";
+        const admitted = yield* Deferred.make<void>();
+        const resume = yield* Deferred.make<void>();
+        const creation = yield* core
+          .createWorktree(
+            { cwd: repo, refName: "main", newRefName: "feature", baseRefName: "main", path },
+            {
+              submodules: "none",
+              progress: {
+                onSubmodulesDisabled: () =>
+                  Deferred.succeed(admitted, undefined).pipe(
+                    Effect.andThen(Deferred.await(resume)),
+                  ),
+              },
+            },
+          )
+          .pipe(Effect.forkChild);
+        yield* Deferred.await(admitted);
+        const created = yield* identities.resolve(path);
+        assert.deepEqual(
+          (yield* writers.inspect).map((row) => row.physicalIds),
+          [[identity.physicalId, created.physicalId].sort()],
+        );
+        for (const cwd of [repo, path]) {
+          assert.include(
+            (yield* core
+              .execute({ operation: "competing", cwd, args: ["config", "fixture.changed", "true"] })
+              .pipe(Effect.flip)).message,
+            "active or uncertain writer",
+          );
+        }
+        assert.equal(
+          (yield* Effect.scoped(
+            writers.tryAcquire({ ownerId: "new-provider", physicalIds: [created.physicalId] }),
+          ).pipe(Effect.flip)).reason,
+          "busy",
+        );
+        assert.equal(yield* core.readConfigValue(repo, "branch.feature.gh-merge-base"), null);
+        yield* Deferred.succeed(resume, undefined);
+        assert.equal((yield* Fiber.join(creation)).worktree.path, path);
+        assert.equal(
+          (yield* git(repo, ["config", "--get", "branch.feature.gh-merge-base"])).stdout.trim(),
+          "main",
+        );
+        assert.deepEqual(yield* writers.inspect, []);
+        const held = yield* hold([created.physicalId]);
+        assert.include(
+          (yield* core.removeWorktree({ cwd: repo, path }).pipe(Effect.flip)).message,
+          "active or uncertain writer",
+        );
+        assert.isTrue(yield* fs.exists(path));
+        yield* Scope.close(held, Exit.void);
+        yield* core.removeWorktree({ cwd: repo, path });
+        assert.isFalse(yield* fs.exists(path));
+        assert.deepEqual(yield* writers.inspect, []);
+      }).pipe(Effect.provide(testLayer())),
+  );
+  it.effect(
+    "keeps a newly created worktree and its competing owner when admission fails before setup",
+    () =>
+      Effect.gen(function* () {
+        const { root, repo, identity } = yield* fixture;
+        const fs = yield* FileSystem.FileSystem;
+        const identities = yield* CheckoutIdentity.CheckoutIdentity;
+        const writers = yield* WriterReservations.WriterReservations;
+        const core = yield* GitVcsDriver.make;
+        const resident = yield* Scope.make();
+        const path = root + "/claimed";
+        let claimed: string | null = null;
+        const failure = yield* core
+          .createWorktree(
+            { cwd: repo, refName: "main", newRefName: "claimed", baseRefName: "main", path },
+            {
+              progress: {
+                onWorktreeClaimed: (created) =>
+                  Effect.gen(function* () {
+                    claimed = created;
+                    const checkout = yield* identities.resolve(created);
+                    yield* writers
+                      .tryAcquire({ ownerId: "provider", physicalIds: [checkout.physicalId] })
+                      .pipe(Effect.provideService(Scope.Scope, resident));
+                  }).pipe(Effect.orDie),
+              },
+            },
+          )
+          .pipe(Effect.flip);
+        assert.equal(claimed, path);
+        assert.include(failure.message, "files were kept");
+        assert.isTrue(yield* fs.exists(path + "/tracked.txt"));
+        const rows = yield* writers.inspect;
+        assert.deepEqual(
+          rows.map((row) => row.ownerId),
+          ["provider"],
+        );
+        assert.notInclude(rows[0]!.physicalIds, identity.physicalId);
+        assert.equal(yield* core.readConfigValue(repo, "branch.claimed.gh-merge-base"), null);
+        assert.include(
+          (yield* core.removeWorktree({ cwd: repo, path }).pipe(Effect.flip)).message,
+          "active or uncertain writer",
+        );
+        yield* Scope.close(resident, Exit.void);
+        yield* core.removeWorktree({ cwd: repo, path });
+        assert.deepEqual(yield* writers.inspect, []);
+      }).pipe(Effect.provide(testLayer())),
+  );
+  it.effect("missing registered worktrees retain writer barriers until safe cleanup", () =>
+    Effect.gen(function* () {
+      const { root, repo, git } = yield* fixture;
+      const fs = yield* FileSystem.FileSystem;
+      const identities = yield* CheckoutIdentity.CheckoutIdentity;
+      const writers = yield* WriterReservations.WriterReservations;
+      const core = yield* GitVcsDriver.make;
+      const path = root + "/missing";
+      yield* git(repo, ["worktree", "add", "-b", "missing", path]);
+      const identity = yield* identities.resolve(path);
+      const held = yield* hold([identity.physicalId]);
+      yield* fs.remove(path, { recursive: true });
+      assert.include(
+        (yield* core.pruneWorktrees({ cwd: repo }).pipe(Effect.flip)).message,
+        "active or uncertain writer",
+      );
+      assert.isTrue(yield* fs.exists(identity.gitDirectory));
+      yield* Scope.close(held, Exit.void);
+      yield* core.pruneWorktrees({ cwd: repo });
+      assert.isFalse(yield* fs.exists(identity.gitDirectory));
+      assert.deepEqual(yield* writers.inspect, []);
+      yield* core.createWorktree({ cwd: repo, refName: "missing", path });
+      assert.isTrue(yield* fs.exists(path));
+      yield* core.removeWorktree({ cwd: repo, path });
+    }).pipe(Effect.provide(testLayer())),
+  );
   it.effect(
     "both real Git drivers refuse a resident alias before effects; status and private capture still work; restore resumes after release",
     () =>

@@ -7,6 +7,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as ProcessRunner from "../processRunner.ts";
 
@@ -46,12 +47,31 @@ export class CheckoutIdentity extends Context.Service<
   CheckoutIdentity,
   {
     readonly resolve: (path: string) => Effect.Effect<PhysicalCheckout, CheckoutIdentityError>;
+    readonly missingRegistration: (
+      repository: PhysicalCheckout,
+      root: string,
+    ) => Effect.Effect<PhysicalCheckout | null, CheckoutIdentityError>;
   }
 >()("t3/deckhand/CheckoutIdentity") {}
 
+const isIdentityError = Schema.is(CheckoutIdentityError);
 const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const runner = yield* ProcessRunner.ProcessRunner;
+  const paths = yield* Path.Path;
+  const physical = Effect.fn(function* (directory: string, path: string) {
+    const info = yield* fs
+      .stat(directory)
+      .pipe(
+        Effect.mapError((cause) => new CheckoutIdentityError({ path, operation: "stat", cause })),
+      );
+    // Inodes survive rename. Filesystems without file IDs retain a canonical-path fallback.
+    const key = Option.match(info.ino, {
+      onSome: (ino) => `${info.dev}:${ino}`,
+      onNone: () => directory,
+    });
+    return NodeCrypto.createHash("sha256").update(key).digest("hex");
+  });
   const resolve = Effect.fn("deckhand.checkoutIdentity.resolve")(function* (path: string) {
     const git = (args: ReadonlyArray<string>) =>
       runner
@@ -73,19 +93,6 @@ const make = Effect.gen(function* () {
             (cause) => new CheckoutIdentityError({ path, operation: "canonicalize", cause }),
           ),
         );
-    const physical = Effect.fn(function* (directory: string) {
-      const info = yield* fs
-        .stat(directory)
-        .pipe(
-          Effect.mapError((cause) => new CheckoutIdentityError({ path, operation: "stat", cause })),
-        );
-      // Inodes survive rename. Filesystems without file IDs retain a canonical-path fallback.
-      const key = Option.match(info.ino, {
-        onSome: (ino) => `${info.dev}:${ino}`,
-        onNone: () => directory,
-      });
-      return NodeCrypto.createHash("sha256").update(key).digest("hex");
-    });
     const roots = yield* git([
       "rev-parse",
       "--path-format=absolute",
@@ -112,8 +119,8 @@ const make = Effect.gen(function* () {
     const root = yield* canonical(rootPath);
     const commonDirectory = yield* canonical(commonPath);
     const gitDirectory = yield* canonical(gitPath);
-    const physicalId = yield* physical(gitDirectory);
-    const repositoryPhysicalId = yield* physical(commonDirectory);
+    const physicalId = yield* physical(gitDirectory, path);
+    const repositoryPhysicalId = yield* physical(commonDirectory, path);
     const head = yield* git(["rev-parse", "--verify", "HEAD"]);
     const branch = yield* git(["symbolic-ref", "--short", "-q", "HEAD"]);
     const remoteResult = yield* git(["remote", "-v"]);
@@ -136,6 +143,88 @@ const make = Effect.gen(function* () {
       remotes: [...remotes].map(([name, canonicalKey]) => ({ name, canonicalKey })),
     } satisfies PhysicalCheckout;
   });
-  return CheckoutIdentity.of({ resolve });
+  // Git retains a missing checkout's registration/inode until cleanup. Resolve
+  // it only from this repository's metadata, never from a saved pathname alone.
+  const missingRegistration: CheckoutIdentity["Service"]["missingRegistration"] = (
+    repository,
+    root,
+  ) =>
+    Effect.gen(function* () {
+      if (!paths.isAbsolute(root) || (yield* fs.exists(root))) return null;
+      const canonicalMissing = Effect.fn(function* (value: string) {
+        let ancestor = paths.resolve(value);
+        const suffix: string[] = [];
+        for (let depth = 0; depth < 128; depth++) {
+          if (yield* fs.exists(ancestor))
+            return paths.join(yield* fs.realPath(ancestor), ...suffix);
+          const parent = paths.dirname(ancestor);
+          if (parent === ancestor) break;
+          suffix.unshift(paths.basename(ancestor));
+          ancestor = parent;
+        }
+        return yield* new CheckoutIdentityError({
+          path: root,
+          operation: "canonicalize missing registration",
+        });
+      });
+      const registrations = paths.join(repository.commonDirectory, "worktrees");
+      if (!(yield* fs.exists(registrations))) return null;
+      const canonicalRegistrations = yield* fs.realPath(registrations);
+      if (canonicalRegistrations !== registrations)
+        return yield* new CheckoutIdentityError({
+          path: root,
+          operation: "validate registrations",
+        });
+      const entries = yield* fs.readDirectory(registrations);
+      if (entries.length > 64)
+        return yield* new CheckoutIdentityError({ path: root, operation: "registration limit" });
+      const expected = yield* canonicalMissing(paths.join(root, ".git"));
+      const line = Effect.fn(function* (file: string) {
+        const info = yield* fs.stat(file);
+        if (info.type !== "File" || info.size > 4096) return null;
+        const value = (yield* fs.readFileString(file)).replace(/\n$/, "");
+        return value && value.length <= 4096 && !/[\r\n\0]/.test(value) ? value : null;
+      });
+      for (const entry of entries) {
+        const directory = yield* fs.realPath(paths.join(registrations, entry));
+        if (paths.dirname(directory) !== registrations)
+          return yield* new CheckoutIdentityError({
+            path: root,
+            operation: "validate registration directory",
+          });
+        const pointer = yield* line(paths.join(directory, "gitdir"));
+        if (
+          pointer === null ||
+          (yield* canonicalMissing(paths.resolve(directory, pointer))) !== expected
+        )
+          continue;
+        const common = yield* line(paths.join(directory, "commondir"));
+        if (
+          common === null ||
+          (yield* fs.realPath(paths.resolve(directory, common))) !== repository.commonDirectory ||
+          (yield* physical(repository.commonDirectory, root)) !== repository.repositoryPhysicalId
+        )
+          return yield* new CheckoutIdentityError({
+            path: root,
+            operation: "validate registration common directory",
+          });
+        return {
+          ...repository,
+          root: paths.dirname(expected),
+          gitDirectory: directory,
+          physicalId: yield* physical(directory, root),
+          branch: null,
+          commit: null,
+        };
+      }
+      return null;
+    }).pipe(
+      Effect.mapError((cause) =>
+        isIdentityError(cause)
+          ? cause
+          : new CheckoutIdentityError({ path: root, operation: "missing registration", cause }),
+      ),
+    );
+  return CheckoutIdentity.of({ resolve, missingRegistration });
 });
 export const layer = Layer.effect(CheckoutIdentity, make);

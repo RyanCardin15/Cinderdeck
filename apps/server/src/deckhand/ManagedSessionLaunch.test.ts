@@ -16,6 +16,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as ProcessRunner from "../processRunner.ts";
@@ -26,6 +27,8 @@ import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexA
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as CheckoutIdentity from "./CheckoutIdentity.ts";
 import * as IntegrationHub from "./IntegrationHub.ts";
+import * as WriterReservations from "./WriterReservations.ts";
+import * as NativeWriterReservations from "./NativeWriterReservations.ts";
 import * as WorkspaceBackend from "./WorkspaceBackend.ts";
 import * as ManagedCheckoutGuard from "./ManagedCheckoutGuard.ts";
 import * as ManagedSessionLaunch from "./ManagedSessionLaunch.ts";
@@ -72,7 +75,13 @@ const provider = Schema.decodeSync(ServerProvider)({
 });
 const serviceLayer = ManagedSessionLaunch.layer.pipe(
   Layer.provide(Relationships.layer),
-  Layer.provide(WorkspaceBackend.layer.pipe(Layer.provide(CheckoutIdentity.layer))),
+  Layer.provide(
+    WorkspaceBackend.layer.pipe(
+      Layer.provide(CheckoutIdentity.layer),
+      Layer.provide(WriterReservations.layer),
+      Layer.provide(NativeWriterReservations.layer),
+    ),
+  ),
   Layer.provide(CheckoutIdentity.layer),
 );
 const baseLayer = Layer.mergeAll(
@@ -198,7 +207,7 @@ describe("managed lane session launch", () => {
         const f = yield* fixture;
         const sql = yield* SqlClient.SqlClient;
         const deps = yield* Effect.context<
-          SqlClient.SqlClient | FileSystem.FileSystem | ProcessRunner.ProcessRunner
+          SqlClient.SqlClient | FileSystem.FileSystem | ProcessRunner.ProcessRunner | Path.Path
         >();
         const calls: ThreadLaunchService.ThreadLaunchInput[] = [];
         const external = f.external((request) =>
