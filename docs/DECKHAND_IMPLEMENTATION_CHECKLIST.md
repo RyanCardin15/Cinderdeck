@@ -111,3 +111,7 @@ DH-001: permanent full-history fork, pinned upstream revision, runtime/dependenc
 DH-002–DH-009 contain partial foundation work. They remain unchecked because branding/distribution assets, complete contracts/registration, discovery/reconnect, all mutation reconciliations and the full acceptance gates remain open. No parent phase is complete.
 
 Additional Deckhand commits: `3c9ba03da0` (launcher lifecycle) and `b7f3cd3100` (session persistence and physical binding guards). Native integration commit: `d47ab9c1`. Relationship tests/typecheck/lint/build and two captured-PID launcher shutdown checks passed; [foundation validation](DECKHAND_FOUNDATION_EVIDENCE.md) records the scope. All additional DH items remain unchecked.
+
+## Connected workspace checkpoint — 2026-10-03
+
+Deckhand commit `2ea01a3a34`: authenticated same-host discovery, a persisted shared projection, durable actor-bound operation intents and the first real workspace overview now provide partial DH-005–DH-010 and DH-016–DH-018 implementation. Real web controls created a three-repository lane and started/stopped its two isolated services; Electron connected to the same catalog and passed a light-mode/Settings-return walkthrough. Thirty-seven focused tests and scoped typechecks/build passed. [Validation and remaining gaps](DECKHAND_FOUNDATION_EVIDENCE.md#connected-workspace-checkpoint--2026-10-03) distinguish this checkpoint from the still-open full gates. No additional item is checked complete.
