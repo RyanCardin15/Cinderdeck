@@ -345,6 +345,100 @@ describe("same-host Cinderdeck bridge", () => {
       }
     }).pipe(Effect.scoped, Effect.provide(TestLayer)),
   );
+  it.effect(
+    "requires each native lifecycle capability and preserves safe removal/setup receipts",
+    () =>
+      Effect.gen(function* () {
+        const capabilities = [
+          ...hello.capabilities,
+          "operations.lane.create",
+          "operations.services",
+        ];
+        let submissions = 0;
+        const socketPath = yield* peer((request) => {
+          if (request.method === "integration.hello")
+            return { id: 1, result: { ...hello, capabilities } };
+          assert.equal(request.method, "integration.operation.submit");
+          submissions++;
+          const input = request.params as {
+            operationKey: string;
+            workspaceID: string;
+            method: string;
+          };
+          return {
+            id: 1,
+            result: {
+              id: "receipt-" + input.method,
+              operationKey: input.operationKey,
+              argumentHash: "a".repeat(64),
+              workspaceID: input.workspaceID,
+              generation: 1,
+              method: input.method,
+              state: "succeeded",
+              createdAt: "2026-10-03T00:00:00Z",
+              updatedAt: "2026-10-03T00:00:01Z",
+              result: {
+                removed: "lane",
+                released: "lane",
+                resourceAvailable: false,
+                report: {
+                  removedWorktrees: ["/fixture/lane"],
+                  keptWorktrees: ["/fixture/adopted"],
+                  unpushed: { feature: 1 },
+                  ignored: [],
+                  environment: { SECRET: "hidden" },
+                },
+                setup: {
+                  status: "succeeded",
+                  updatedAt: "2026-10-03T00:00:01Z",
+                  integrationOperationID: "receipt-" + input.method,
+                },
+              },
+            },
+          };
+        });
+        const client = yield* CinderdeckClient.CinderdeckClient;
+        for (const method of ["lane.adopt", "lane.setup", "lane.release", "lane.remove"] as const) {
+          const input = {
+            operationKey: method,
+            installationID: "installation",
+            workspaceID: "lane",
+            generation: 1,
+            revision: "revision",
+            method,
+            arguments: { workspace: "lane" },
+          };
+          const oldPeer = yield* client.connect(socketPath, {
+            channel: "development",
+            clientID: "server",
+          });
+          const before = submissions;
+          assert.equal(
+            (yield* client.submit(oldPeer, input).pipe(Effect.flip)).reason,
+            "unsupported_capability",
+          );
+          assert.equal(
+            submissions,
+            before,
+            "Older peers must never receive unsupported lifecycle mutations",
+          );
+          capabilities.push(`operations.${method}`);
+          const upgraded = yield* client.connect(socketPath, {
+            channel: "development",
+            clientID: "server",
+          });
+          const receipt = yield* client.submit(upgraded, input);
+          assert.equal(receipt.method, method);
+          assert.equal(receipt.result?.removed, "lane");
+          assert.equal(receipt.result?.released, "lane");
+          assert.equal(receipt.result?.resourceAvailable, false);
+          assert.deepEqual(receipt.result?.report?.keptWorktrees, ["/fixture/adopted"]);
+          assert.equal(receipt.result?.setup?.integrationOperationID, receipt.id);
+          assert.notProperty(receipt.result?.report, "environment");
+          assert.equal(submissions, before + 1);
+        }
+      }).pipe(Effect.scoped, Effect.provide(TestLayer)),
+  );
   it.effect("recovers a lost submit reply by receipt lookup without repeating a mutation", () =>
     Effect.gen(function* () {
       let mutations = 0;

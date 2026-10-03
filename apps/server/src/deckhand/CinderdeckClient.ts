@@ -356,7 +356,9 @@ const make = Effect.gen(function* () {
       Effect.flatMap((validated) =>
         requiredCapability(
           connection,
-          validated.method === "lane.create" ? "operations.lane.create" : "operations.services",
+          validated.method.startsWith("lane.")
+            ? `operations.${validated.method}`
+            : "operations.services",
         ).pipe(
           Effect.andThen(
             encodeJson(validated.arguments).pipe(

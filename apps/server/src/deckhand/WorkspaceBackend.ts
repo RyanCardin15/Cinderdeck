@@ -43,6 +43,10 @@ export interface MutationContext {
   readonly contexts: ReadonlyArray<Integration.IntegrationCheckoutContext>;
   readonly installationID: string | null;
 }
+type LaneLifecycle = (
+  actorID: string,
+  input: Omit<Integration.IntegrationOperationInput, "method">,
+) => Effect.Effect<Integration.IntegrationOperationReceipt, Rpc.DeckhandRpcError>;
 // Backend selection follows physical ownership. A lost native socket cannot
 // transfer a checkout into standalone lifecycle authority.
 export class WorkspaceBackend extends Context.Service<
@@ -53,10 +57,12 @@ export class WorkspaceBackend extends Context.Service<
     ) => Effect.Effect<MutationContext | null, CheckoutMutationError>;
     readonly inventory: IntegrationHub.IntegrationHub["Service"]["overview"];
     readonly context: IntegrationHub.IntegrationHub["Service"]["resource"];
-    readonly createLane: (
-      actorID: string,
-      input: Omit<Integration.IntegrationOperationInput, "method">,
-    ) => Effect.Effect<Integration.IntegrationOperationReceipt, Rpc.DeckhandRpcError>;
+    readonly createLane: LaneLifecycle;
+    readonly adoptLane: LaneLifecycle;
+    readonly setupLane: LaneLifecycle;
+    readonly releaseLane: LaneLifecycle;
+    readonly removeLane: LaneLifecycle;
+    readonly submit: IntegrationHub.IntegrationHub["Service"]["submit"];
   }
 >()("t3/deckhand/WorkspaceBackend") {}
 const decodeCheckout = Schema.decodeUnknownEffect(Schema.fromJsonString(Contracts.CheckoutBinding));
@@ -293,6 +299,11 @@ const make = Effect.gen(function* () {
     inventory: hub.overview,
     context: hub.resource,
     createLane: (actorID, input) => hub.submit(actorID, { ...input, method: "lane.create" }),
+    adoptLane: (actorID, input) => hub.submit(actorID, { ...input, method: "lane.adopt" }),
+    setupLane: (actorID, input) => hub.submit(actorID, { ...input, method: "lane.setup" }),
+    releaseLane: (actorID, input) => hub.submit(actorID, { ...input, method: "lane.release" }),
+    removeLane: (actorID, input) => hub.submit(actorID, { ...input, method: "lane.remove" }),
+    submit: hub.submit,
   });
 });
 export const layer = Layer.effect(WorkspaceBackend, make);

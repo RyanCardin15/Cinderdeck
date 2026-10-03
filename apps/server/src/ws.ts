@@ -1813,9 +1813,7 @@ const makeWsRpcLayer = (
         [DeckhandRpc.DECKHAND_METHODS.submit]: (input) =>
           observeRpcEffect(
             DeckhandRpc.DECKHAND_METHODS.submit,
-            input.method === "lane.create"
-              ? workspaceBackend.createLane(currentSessionId, input)
-              : deckhand.submit(currentSessionId, input),
+            workspaceBackend.submit(currentSessionId, input),
           ),
         [DeckhandRpc.DECKHAND_METHODS.operation]: (input) =>
           observeRpcEffect(

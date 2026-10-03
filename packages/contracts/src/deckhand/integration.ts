@@ -149,13 +149,25 @@ export const IntegrationEvents = Schema.Struct({
 });
 export type IntegrationEvents = typeof IntegrationEvents.Type;
 
+export const IntegrationOperationMethod = Schema.Literals([
+  "lane.create",
+  "lane.adopt",
+  "lane.setup",
+  "lane.release",
+  "lane.remove",
+  "services.start",
+  "services.stop",
+  "services.restart",
+]);
+export type IntegrationOperationMethod = typeof IntegrationOperationMethod.Type;
+
 export const IntegrationOperationInput = Schema.Struct({
   operationKey: TrimmedNonEmptyString.check(Schema.isMaxLength(160)),
   installationID: TrimmedNonEmptyString,
   workspaceID: TrimmedNonEmptyString.check(Schema.isMaxLength(160)),
   generation: PositiveInt,
   revision: TrimmedNonEmptyString.check(Schema.isMaxLength(64)),
-  method: Schema.Literals(["lane.create", "services.start", "services.stop", "services.restart"]),
+  method: IntegrationOperationMethod,
   arguments: Schema.Record(Schema.String, Schema.Unknown),
 });
 export type IntegrationOperationInput = typeof IntegrationOperationInput.Type;
@@ -165,7 +177,7 @@ export const IntegrationOperationReceipt = Schema.Struct({
   argumentHash: TrimmedNonEmptyString.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
   workspaceID: TrimmedNonEmptyString,
   generation: PositiveInt,
-  method: Schema.Literals(["lane.create", "services.start", "services.stop", "services.restart"]),
+  method: IntegrationOperationMethod,
   state: Schema.Literals(["pending", "running", "succeeded", "failed", "unknown_outcome"]),
   createdAt: Schema.String,
   updatedAt: Schema.String,
@@ -175,6 +187,23 @@ export const IntegrationOperationReceipt = Schema.Struct({
         workspace: Schema.optionalKey(IntegrationWorkspace),
         createdWorkspaceID: Schema.optionalKey(Schema.String),
         creationReady: Schema.optionalKey(Schema.Boolean),
+        removed: Schema.optionalKey(Schema.String),
+        released: Schema.optionalKey(Schema.String),
+        resourceAvailable: Schema.optionalKey(Schema.Boolean),
+        report: Schema.optionalKey(
+          Schema.Struct({
+            removedWorktrees: Schema.Array(Schema.String),
+            keptWorktrees: Schema.Array(Schema.String),
+            unpushed: Schema.Record(Schema.String, Schema.Number),
+            ignored: Schema.Array(
+              Schema.Struct({
+                path: Schema.String,
+                bytes: Schema.optionalKey(Schema.NullOr(Schema.Number)),
+                note: Schema.optionalKey(Schema.NullOr(Schema.String)),
+              }),
+            ),
+          }),
+        ),
         reconciliation: Schema.optionalKey(Schema.String),
         setup: Schema.optionalKey(
           Schema.NullOr(
@@ -184,6 +213,7 @@ export const IntegrationOperationReceipt = Schema.Struct({
               runID: Schema.optionalKey(Schema.NullOr(Schema.String)),
               detail: Schema.optionalKey(Schema.NullOr(Schema.String)),
               updatedAt: Schema.String,
+              integrationOperationID: Schema.optionalKey(Schema.NullOr(Schema.String)),
             }),
           ),
         ),

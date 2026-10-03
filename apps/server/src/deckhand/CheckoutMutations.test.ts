@@ -905,4 +905,79 @@ describe("checkout mutations across Git and files", () => {
       );
     },
   );
+  it.effect(
+    "delegates every connected lifecycle intent with unchanged actor, generation and operation identity",
+    () => {
+      const seen: Array<{
+        actorID: string;
+        method: string;
+        generation: number;
+        operationKey: string;
+      }> = [];
+      return Effect.gen(function* () {
+        const backend = yield* WorkspaceBackend.WorkspaceBackend;
+        const input = {
+          operationKey: "durable-lifecycle",
+          installationID: "native",
+          workspaceID: "lane",
+          generation: 7,
+          revision: "selected-revision",
+          arguments: { workspace: "lane" },
+        };
+        for (const [entry, method] of [
+          ["createLane", "lane.create"],
+          ["adoptLane", "lane.adopt"],
+          ["setupLane", "lane.setup"],
+          ["releaseLane", "lane.release"],
+          ["removeLane", "lane.remove"],
+        ] as const) {
+          const receipt = yield* backend[entry]("authenticated-actor", input);
+          assert.equal(receipt.method, method);
+          assert.equal(
+            receipt.state,
+            "failed",
+            "Backend must preserve the owner's actual refused outcome",
+          );
+        }
+        yield* backend.submit("authenticated-actor", { ...input, method: "lane.remove" });
+        assert.deepEqual(
+          seen.map((row) => row.method),
+          ["lane.create", "lane.adopt", "lane.setup", "lane.release", "lane.remove", "lane.remove"],
+        );
+        assert.ok(
+          seen.every(
+            (row) =>
+              row.actorID === "authenticated-actor" &&
+              row.generation === 7 &&
+              row.operationKey === "durable-lifecycle",
+          ),
+        );
+      }).pipe(
+        Effect.provide(
+          testLayer({
+            submit: (actorID, input) => {
+              seen.push({
+                actorID,
+                method: input.method,
+                generation: input.generation,
+                operationKey: input.operationKey,
+              });
+              return Effect.succeed({
+                id: "native-refusal",
+                operationKey: input.operationKey,
+                argumentHash: "a".repeat(64),
+                workspaceID: input.workspaceID,
+                generation: input.generation,
+                method: input.method,
+                state: "failed",
+                createdAt: "2026-10-03T00:00:00Z",
+                updatedAt: "2026-10-03T00:00:01Z",
+                error: { code: "checkout_reserved", message: "Held writer" },
+              });
+            },
+          }),
+        ),
+      );
+    },
+  );
 });
