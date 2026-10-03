@@ -610,3 +610,38 @@
 .dh-session-row:hover {
   border-color: #d7823b;
 }
+
+.dh-feature-create {
+  border: 1px solid var(--dh-line);
+  border-left: 3px solid var(--dh-accent);
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  background: color-mix(in srgb, var(--dh-accent) 5%, var(--dh-bg));
+}
+.dh-feature-create fieldset {
+  max-width: 42rem;
+}
+.dh-revision-fields {
+  border-block: 1px solid var(--dh-line);
+  padding: 0.75rem 0;
+  margin-top: 0.5rem;
+}
+.dh-revision-fields summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.dh-revision-fields > div {
+  display: grid;
+  grid-template-columns: minmax(5rem, 1fr) 3fr;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+.dh-launcher .dh-check-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.dh-launcher .dh-check-field input {
+  width: auto;
+}

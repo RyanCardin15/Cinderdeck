@@ -48,3 +48,12 @@ export const managedSessionsView = createEnvironmentRpcSubscriptionAtomFamily(
     idleTtlMs: 0,
   },
 );
+
+export const createSession = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "deckhand:create-session",
+  tag: DECKHAND_METHODS.create,
+});
+export const inspectSessionCreation = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "deckhand:inspect-session-creation",
+  tag: DECKHAND_METHODS.createGet,
+});

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import type { EnvironmentId } from "@t3tools/contracts";
 import * as Contracts from "@t3tools/contracts/deckhand/rpc";
@@ -10,7 +10,13 @@ import * as Schema from "effect/Schema";
 import { runtime } from "../lib/runtime";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { useAtomCommand } from "../state/use-atom-command";
-import { launchSession, inspectSessionLaunch, sessionLaunchOptions } from "./state";
+import {
+  launchSession,
+  inspectSessionLaunch,
+  sessionLaunchOptions,
+  createSession,
+  inspectSessionCreation,
+} from "./state";
 import styles from "./workspace.module.css";
 
 type Resource = Contracts.IntegrationView["resources"][number];
@@ -19,6 +25,14 @@ const isDeckhandRpcError = Schema.is(Contracts.DeckhandRpcError);
 const decodeLaunchInput = Schema.decodeUnknownSync(Contracts.ManagedLaunchInput);
 const decodeDraft = Schema.decodeUnknownSync(Schema.fromJsonString(Contracts.ManagedLaunchInput));
 const encodeDraft = Schema.encodeSync(Schema.fromJsonString(Contracts.ManagedLaunchInput));
+const decodeCreationDraft = Schema.decodeUnknownSync(
+  Schema.fromJsonString(Contracts.ManagedCreateInput),
+);
+const encodeCreationDraft = Schema.encodeSync(Schema.fromJsonString(Contracts.ManagedCreateInput));
+const isCreationInput = Schema.is(Contracts.ManagedCreateInput);
+const decodeCreationInput = Schema.decodeUnknownSync(Contracts.ManagedCreateInput);
+type Record = Contracts.ManagedLaunchRecord | Contracts.ManagedCreateRecord;
+const launchRecord = (record: Record) => ("launch" in record ? record.launch : record);
 const failureReason = (cause: Cause.Cause<unknown>): string | undefined => {
   const error = Option.getOrNull(Cause.findErrorOption(cause));
   return isDeckhandRpcError(error) ? error.reason : undefined;
@@ -41,24 +55,50 @@ export function SessionLauncher({
   installationID,
   resource,
   enabled,
+  creation,
 }: {
   environmentId: EnvironmentId;
   installationID: string;
   resource: Resource;
   enabled: boolean;
+  creation?: {
+    visible: boolean;
+    onClose: () => void;
+    onLane: (id: string) => void;
+    onPending: (pending: boolean) => void;
+  };
 }) {
   const navigate = useNavigate();
-  const storageKey = `deckhand:launch:${environmentId}:${installationID}:${resource.workspaceID}:${resource.generation}`;
-  const [saved, setSaved] = useState<Contracts.ManagedLaunchInput | null>(() => {
+  const isCreation = creation !== undefined;
+  const id = useId();
+  // Creation recovery survives a native generation change. Always replay the saved scope.
+  const storageKey = isCreation
+    ? `deckhand:create:${environmentId}:${installationID}:${resource.workspaceID}`
+    : `deckhand:launch:${environmentId}:${installationID}:${resource.workspaceID}:${resource.generation}`;
+  const [initial] = useState(() => {
     try {
       const value = localStorage.getItem(storageKey);
-      return value ? decodeDraft(value) : null;
+      return {
+        request: value ? (isCreation ? decodeCreationDraft(value) : decodeDraft(value)) : null,
+        error: false,
+      };
     } catch {
-      return null;
+      return { request: null, error: true };
     }
   });
+  const [saved, setSaved] = useState<
+    Contracts.ManagedLaunchInput | Contracts.ManagedCreateInput | null
+  >(initial.request);
+  const initialCreation = isCreationInput(initial.request) ? initial.request : null;
+  const [branch, setBranch] = useState(initialCreation?.branch ?? "");
+  const [repositoryRefs, setRepositoryRefs] = useState<Readonly<{ [id: string]: string }>>(
+    initialCreation?.repositoryRefs ?? {},
+  );
+  const [setup, setSetup] = useState(initialCreation?.setup ?? true);
+  const [start, setStart] = useState(initialCreation?.start ?? false);
   const [choices, setChoices] = useState<ReadonlyArray<Choice>>([]);
   const [optionsError, setOptionsError] = useState(false);
+  const optionsGeneration = useRef(0);
   const [repositoryID, setRepositoryID] = useState(
     saved?.repositoryID ?? resource.workspace?.repos[0]?.id ?? "",
   );
@@ -74,14 +114,17 @@ export function SessionLauncher({
     saved ? "A launch request is saved. Check its result or retry the same request." : null,
   );
   const [confirmedRefusal, setConfirmedRefusal] = useState(false);
-  const [record, setRecord] = useState<Contracts.ManagedLaunchRecord | null>(null);
+  const [record, setRecord] = useState<Record | null>(null);
   const launch = useAtomCommand(launchSession, { reportFailure: false });
   const inspect = useAtomCommand(inspectSessionLaunch, { reportFailure: false });
+  const create = useAtomCommand(createSession, { reportFailure: false });
+  const inspectCreation = useAtomCommand(inspectSessionCreation, { reportFailure: false });
   const options = useAtomCommand(sessionLaunchOptions, { reportFailure: false });
-  useEffect(() => {
-    let disposed = false;
+  const formVisible = !isCreation || creation.visible || saved !== null;
+  const loadOptions = useCallback(() => {
+    const generation = ++optionsGeneration.current;
     void options({ environmentId, input: {} }).then((result) => {
-      if (disposed) return;
+      if (generation !== optionsGeneration.current) return;
       if (result._tag !== "Success") {
         setOptionsError(true);
         return;
@@ -89,10 +132,19 @@ export function SessionLauncher({
       setChoices(result.value);
       setOptionsError(false);
     });
-    return () => {
-      disposed = true;
-    };
   }, [environmentId, options]);
+  useEffect(() => {
+    if (!formVisible) return;
+    loadOptions();
+    return () => {
+      optionsGeneration.current++;
+    };
+  }, [loadOptions, formVisible]);
+  const onPending = creation?.onPending;
+  useEffect(() => {
+    onPending?.(busy || (saved !== null && !["accepted", "failed"].includes(record?.state ?? "")));
+    return () => onPending?.(false);
+  }, [onPending, busy, saved, record?.state]);
   const provider = choices.find((choice) => choice.instanceId === instanceId);
   const open = (value: Contracts.ManagedLaunchRecord) => {
     void navigate({
@@ -100,15 +152,25 @@ export function SessionLauncher({
       params: buildThreadRouteParams({ environmentId, threadId: value.threadId }),
     });
   };
-  const handleRecord = (value: Contracts.ManagedLaunchRecord) => {
+  const handleRecord = (value: Record) => {
     setConfirmedRefusal(false);
     setRecord(value);
     setMessage(
       value.state === "accepted"
         ? "Launch accepted. Open the conversation to see the agent’s progress."
-        : value.state === "failed"
-          ? "The feature and session were saved, but launch intake failed. You can retry this request."
-          : "The request was saved. Its intake result still needs to be checked.",
+        : "laneID" in value
+          ? value.state === "ready"
+            ? "The lane is ready. Continue this request to start the agent."
+            : value.state === "failed"
+              ? value.laneID
+                ? "The lane was kept, but setup or agent intake needs attention. Review it before retrying."
+                : "Creation failed. The saved result is available for review."
+              : value.state === "unknown_outcome"
+                ? "The result is uncertain. Check this saved request before creating another feature."
+                : "Creation is in progress. Check the result or continue this same request."
+          : value.state === "failed"
+            ? "The feature and session were saved, but launch intake failed. You can retry this request."
+            : "The request was saved. Its intake result still needs to be checked.",
     );
     if (value.state === "accepted") {
       try {
@@ -122,7 +184,9 @@ export function SessionLauncher({
     if (!saved || busy) return;
     setBusy(true);
     try {
-      const result = await inspect({ environmentId, input: { operationKey: saved.operationKey } });
+      const result = isCreation
+        ? await inspectCreation({ environmentId, input: { operationKey: saved.operationKey } })
+        : await inspect({ environmentId, input: { operationKey: saved.operationKey } });
       if (result._tag === "Success") handleRecord(result.value);
       else
         setMessage(
@@ -133,12 +197,12 @@ export function SessionLauncher({
     }
   };
   const submit = async () => {
-    if (busy || !enabled) return;
+    if (busy || !enabled || initial.error) return;
     setBusy(true);
     try {
       const request =
         saved ??
-        decodeLaunchInput({
+        (isCreation ? decodeCreationInput : decodeLaunchInput)({
           operationKey: await runtime.runPromise(
             Crypto.Crypto.pipe(Effect.flatMap((crypto) => crypto.randomUUIDv4)),
           ),
@@ -151,18 +215,48 @@ export function SessionLauncher({
           objective,
           modelSelection: { instanceId, model },
           runtimeMode,
+          ...(isCreation
+            ? {
+                branch: branch.trim(),
+                repositoryRefs: Object.fromEntries(
+                  Object.entries(repositoryRefs)
+                    .filter(([, ref]) => ref.trim())
+                    .map(([repo, ref]) => [repo, ref.trim()]),
+                ),
+                setup,
+                start,
+              }
+            : {}),
         });
       // Save before transport dispatch. A dropped connection keeps the same operation key,
       // immutable scope and objective available for inspection or a retry after reload.
-      localStorage.setItem(storageKey, encodeDraft(request));
+      localStorage.setItem(
+        storageKey,
+        isCreation ? encodeCreationDraft(decodeCreationInput(request)) : encodeDraft(request),
+      );
       setSaved(request);
-      const result = await launch({ environmentId, input: request });
+      const result = isCreation
+        ? await create({ environmentId, input: decodeCreationInput(request) })
+        : await launch({ environmentId, input: request });
       if (result._tag === "Success") {
         handleRecord(result.value);
-        if (result.value.state === "accepted") open(result.value);
+        const accepted = launchRecord(result.value);
+        if (result.value.state === "accepted" && accepted) open(accepted);
       } else {
         const reason = result._tag === "Failure" ? failureReason(result.cause) : undefined;
-        setConfirmedRefusal(reason === "stale_context" || reason === "unavailable_provider");
+        const refused = reason === "stale_context" || reason === "unavailable_provider";
+        // Creation can report stale context after native effects. Confirm that no intent
+        // exists before allowing edits that would discard the original operation key.
+        if (isCreation && refused) {
+          const checked = await inspectCreation({
+            environmentId,
+            input: { operationKey: request.operationKey },
+          });
+          if (checked._tag === "Success") handleRecord(checked.value);
+          setConfirmedRefusal(
+            checked._tag === "Failure" && failureReason(checked.cause) === "missing",
+          );
+        } else setConfirmedRefusal(refused);
         setMessage(reasonLabel(reason));
       }
     } catch {
@@ -173,14 +267,44 @@ export function SessionLauncher({
       setBusy(false);
     }
   };
+  const clearSaved = () => {
+    try {
+      localStorage.removeItem(storageKey);
+    } catch {
+      setMessage("The saved request could not be cleared. Check its result before continuing.");
+      return false;
+    }
+    setSaved(null);
+    setRecord(null);
+    setConfirmedRefusal(false);
+    return true;
+  };
+  if (isCreation && !creation.visible && !saved && !initial.error) return null;
+  const accepted = record ? launchRecord(record) : null;
   return (
-    <section className={styles["dh-launcher"]} aria-label="Launch an agent">
-      <h3>Agent session</h3>
+    <section
+      className={`${styles["dh-launcher"]} ${isCreation ? styles["dh-feature-create"] : ""}`}
+      aria-label={isCreation ? "Create a feature" : "Launch an agent"}
+    >
+      <h3>{isCreation ? "New feature" : "Agent session"}</h3>
       <p>
-        Start a writer in this context’s existing source tree. Choose the repository it may own.
+        {isCreation
+          ? `Create a lane in ${resource.workspace?.name ?? resource.workspaceID}, then start its agent in the selected repository. Each repository gets an independent checkout.`
+          : "Start a writer in this context’s existing source tree. Choose the repository it may own."}
       </p>
+      {initial.error ? (
+        <p role="alert">
+          The saved request could not be read. Restore browser storage before submitting; an earlier
+          creation may still exist.
+        </p>
+      ) : null}
       {optionsError ? (
-        <p role="alert">Provider choices could not be loaded. Reopen this context to try again.</p>
+        <div>
+          <p role="alert">Provider choices could not be loaded.</p>
+          <button type="button" className={styles["dh-button"]} onClick={loadOptions}>
+            Reload providers
+          </button>
+        </div>
       ) : null}
       {!choices.length && !optionsError ? (
         <p>Waiting for configured providers. Configure and sign in to a provider in Settings.</p>
@@ -191,10 +315,67 @@ export function SessionLauncher({
           void submit();
         }}
       >
-        <fieldset disabled={busy || saved !== null || !enabled}>
-          <label htmlFor="dh-launch-repo">Repository</label>
+        <fieldset disabled={busy || saved !== null || !enabled || initial.error}>
+          {isCreation ? (
+            <>
+              <label htmlFor={`${id}-branch`}>New lane branch</label>
+              <input
+                id={`${id}-branch`}
+                required
+                maxLength={200}
+                placeholder="fix/payment-retry"
+                value={branch}
+                onChange={(event) => setBranch(event.target.value)}
+              />
+              <details className={styles["dh-revision-fields"]}>
+                <summary>Repository start revisions</summary>
+                <p>
+                  Leave blank to use each repository’s workspace default. Enter a branch, tag or
+                  commit to override it.
+                </p>
+                {resource.workspace?.repos.map((repo) => (
+                  <div key={repo.id}>
+                    <label htmlFor={`${id}-ref-${repo.id}`}>{repo.id}</label>
+                    <input
+                      id={`${id}-ref-${repo.id}`}
+                      maxLength={200}
+                      placeholder="Workspace default"
+                      value={repositoryRefs[repo.id] ?? ""}
+                      onChange={(event) =>
+                        setRepositoryRefs((current) => ({
+                          ...current,
+                          [repo.id]: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                ))}
+              </details>
+              <label className={styles["dh-check-field"]}>
+                <input
+                  type="checkbox"
+                  checked={setup}
+                  onChange={(event) => setSetup(event.target.checked)}
+                />
+                Run workspace setup
+              </label>
+              <label className={styles["dh-check-field"]}>
+                <input
+                  type="checkbox"
+                  checked={start}
+                  onChange={(event) => setStart(event.target.checked)}
+                />
+                Start services after creation
+              </label>
+              <p>
+                {resource.workspace?.services.length ?? 0} configured services will use this lane’s
+                own ports.
+              </p>
+            </>
+          ) : null}
+          <label htmlFor={`${id}-repo`}>Repository</label>
           <select
-            id="dh-launch-repo"
+            id={`${id}-repo`}
             value={repositoryID}
             onChange={(event) => setRepositoryID(event.target.value)}
           >
@@ -204,9 +385,9 @@ export function SessionLauncher({
               </option>
             ))}
           </select>
-          <label htmlFor="dh-launch-provider">Provider account</label>
+          <label htmlFor={`${id}-provider`}>Provider account</label>
           <select
-            id="dh-launch-provider"
+            id={`${id}-provider`}
             required
             value={instanceId}
             onChange={(event) => {
@@ -221,9 +402,9 @@ export function SessionLauncher({
               </option>
             ))}
           </select>
-          <label htmlFor="dh-launch-model">Model</label>
+          <label htmlFor={`${id}-model`}>Model</label>
           <select
-            id="dh-launch-model"
+            id={`${id}-model`}
             required
             value={model}
             onChange={(event) => setModel(event.target.value)}
@@ -235,9 +416,9 @@ export function SessionLauncher({
               </option>
             ))}
           </select>
-          <label htmlFor="dh-launch-access">Permissions</label>
+          <label htmlFor={`${id}-access`}>Permissions</label>
           <select
-            id="dh-launch-access"
+            id={`${id}-access`}
             value={runtimeMode}
             onChange={(event) =>
               setRuntimeMode(
@@ -248,17 +429,17 @@ export function SessionLauncher({
             <option value="approval-required">Ask for approval</option>
             <option value="full-access">Full access</option>
           </select>
-          <label htmlFor="dh-launch-title">Feature title</label>
+          <label htmlFor={`${id}-title`}>Feature title</label>
           <input
-            id="dh-launch-title"
+            id={`${id}-title`}
             required
             maxLength={200}
             value={title}
             onChange={(event) => setTitle(event.target.value)}
           />
-          <label htmlFor="dh-launch-objective">Objective</label>
+          <label htmlFor={`${id}-objective`}>Objective</label>
           <textarea
-            id="dh-launch-objective"
+            id={`${id}-objective`}
             required
             maxLength={16000}
             rows={4}
@@ -267,8 +448,8 @@ export function SessionLauncher({
           />
         </fieldset>
         <div className={styles["dh-inspector-actions"]}>
-          {record?.state === "accepted" ? (
-            <button type="button" className={styles["dh-button"]} onClick={() => open(record)}>
+          {record?.state === "accepted" && accepted ? (
+            <button type="button" className={styles["dh-button"]} onClick={() => open(accepted)}>
               Open conversation
             </button>
           ) : (
@@ -278,10 +459,27 @@ export function SessionLauncher({
               disabled={
                 busy ||
                 !enabled ||
+                initial.error ||
+                (isCreation &&
+                  record?.state === "failed" &&
+                  "launch" in record &&
+                  !record.launch &&
+                  ["succeeded", "failed"].includes(record.receipt?.state ?? "")) ||
+                (isCreation && !saved && !branch.trim()) ||
                 (!saved && (!provider || !model || !title.trim() || !objective.trim()))
               }
             >
-              {busy ? "Checking launch…" : saved ? "Retry saved launch" : "Launch agent"}
+              {busy
+                ? isCreation
+                  ? "Creating feature…"
+                  : "Checking launch…"
+                : saved
+                  ? isCreation
+                    ? "Continue saved request"
+                    : "Retry saved launch"
+                  : isCreation
+                    ? "Create lane and launch agent"
+                    : "Launch agent"}
             </button>
           )}
           {saved ? (
@@ -296,34 +494,68 @@ export function SessionLauncher({
               Check result
             </button>
           ) : null}
-          {confirmedRefusal || record?.state === "failed" ? (
+          {isCreation && record && "laneID" in record && record.laneID ? (
+            <button
+              type="button"
+              className={styles["dh-button"]}
+              onClick={() => creation.onLane(record.laneID!)}
+            >
+              Review created lane
+            </button>
+          ) : null}
+          {isCreation && !saved ? (
+            <button type="button" className={styles["dh-button"]} onClick={creation.onClose}>
+              Cancel
+            </button>
+          ) : null}
+          {isCreation &&
+          record &&
+          (record.state === "accepted" ||
+            (record.state === "failed" &&
+              ["succeeded", "failed"].includes(
+                "receipt" in record ? (record.receipt?.state ?? "") : "",
+              ))) ? (
             <button
               type="button"
               className={styles["dh-button"]}
               disabled={busy}
               onClick={() => {
-                try {
-                  localStorage.removeItem(storageKey);
-                } catch {
-                  setMessage(
-                    "The saved request could not be cleared. Check its result before continuing.",
-                  );
-                  return;
-                }
-                setSaved(null);
-                setRecord(null);
-                setConfirmedRefusal(false);
+                if (!clearSaved()) return;
+                setBranch("");
+                setTitle("");
+                setObjective("");
+                setMessage(
+                  "The previous result remains in workspace history. Enter a new branch and objective for another feature.",
+                );
+              }}
+            >
+              Start another feature
+            </button>
+          ) : null}
+          {confirmedRefusal || (!isCreation && record?.state === "failed") ? (
+            <button
+              type="button"
+              className={styles["dh-button"]}
+              disabled={busy}
+              onClick={() => {
+                if (!clearSaved()) return;
                 setMessage(
                   "Edit the request before launching again. Any previously saved session remains in its context history.",
                 );
               }}
             >
-              Edit launch request
+              {isCreation ? "Edit refused request" : "Edit launch request"}
             </button>
           ) : null}
         </div>
       </form>
       {message ? <p role="status">{message}</p> : null}
+      {isCreation &&
+      record &&
+      "receipt" in record &&
+      (record.receipt?.error?.message || record.error) ? (
+        <p role="alert">{record.receipt?.error?.message ?? record.error}</p>
+      ) : null}
     </section>
   );
 }

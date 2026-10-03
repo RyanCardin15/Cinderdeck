@@ -130,6 +130,9 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
   const [filter, setFilter] = useState("all");
   const [branch, setBranch] = useState("");
   const [creating, setCreating] = useState(false);
+  const [featureCreating, setFeatureCreating] = useState(false);
+  const [featurePending, setFeaturePending] = useState(false);
+  const closeFeature = useCallback(() => setFeatureCreating(false), []);
   const [busy, setBusy] = useState(false);
   const [operation, setOperation] = useState<{
     key: string;
@@ -204,6 +207,13 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
       !["succeeded", "failed"].includes(operation.receipt.state)
     ) &&
     !(operation && !operation.refused && operation.receipt === null);
+  const canCreateFeature = [
+    "operations.lane.create",
+    "operations.lane.create.repositoryRefs",
+    "operations.lane.create.managedWriter",
+    "operations.receipts.wait",
+    "checkout.reservations",
+  ].every((capability) => view?.hello?.capabilities.includes(capability));
   const reconcile = useCallback(async () => {
     if (!operation) return;
     const response = await inspect({ environmentId, input: { operationKey: operation.key } });
@@ -313,19 +323,40 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
               {contexts.filter((resource) => resource.available).length} working contexts
             </p>
           </div>
-          <button
-            className={styles["dh-button"] + " " + styles["dh-accent"]}
-            disabled={
-              !enabled ||
-              !activeBase ||
-              !actionable(activeBase) ||
-              !view?.hello?.capabilities.includes("operations.lane.create")
-            }
-            onClick={() => setCreating(true)}
-          >
-            <PlusIcon size={17} />
-            New lane
-          </button>
+          <div className={styles["dh-inspector-actions"]}>
+            <button
+              className={`${styles["dh-button"]} ${styles["dh-accent"]}`}
+              disabled={
+                !enabled ||
+                !activeBase ||
+                !actionable(activeBase) ||
+                featurePending ||
+                !canCreateFeature
+              }
+              onClick={() => {
+                setCreating(false);
+                setFeatureCreating(true);
+              }}
+            >
+              <PlusIcon size={17} />
+              New feature
+            </button>
+            <button
+              className={styles["dh-button"]}
+              disabled={
+                !enabled ||
+                featurePending ||
+                featureCreating ||
+                !activeBase ||
+                !actionable(activeBase) ||
+                !view?.hello?.capabilities.includes("operations.lane.create")
+              }
+              onClick={() => setCreating(true)}
+            >
+              <PlusIcon size={17} />
+              New lane
+            </button>
+          </div>
         </header>
         <div className={styles["dh-tabs"]}>
           <span className={styles["dh-tab-current"]}>Overview</span>
@@ -341,6 +372,8 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
               value={activeBase?.workspaceID ?? ""}
               onChange={(event) => {
                 setWorkspaceID(event.target.value);
+                setFeatureCreating(false);
+                setCreating(false);
                 setSelectedID(null);
               }}
             >
@@ -389,6 +422,21 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
             <h2>Loading workspaces</h2>
             <p>Waiting for this computer’s workspace catalog.</p>
           </div>
+        ) : null}
+        {activeBase && view?.hello ? (
+          <SessionLauncher
+            key={`create:${environmentId}:${view.hello.installationID}:${activeBase.workspaceID}`}
+            environmentId={environmentId}
+            installationID={view.hello.installationID}
+            resource={activeBase}
+            enabled={enabled && actionable(activeBase) && canCreateFeature}
+            creation={{
+              visible: featureCreating,
+              onClose: closeFeature,
+              onLane: setSelectedID,
+              onPending: setFeaturePending,
+            }}
+          />
         ) : null}
         {creating && activeBase ? (
           <form
