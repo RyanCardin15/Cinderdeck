@@ -146,3 +146,8 @@ Native `3d4a72fb`; 88 focused native tests plus fresh real-app Unix-socket lifec
 ### Connected lifecycle delegation evidence (partial DH-009/DH-011)
 
 Deckhand `06ae9a939c` and native `bbfc9463` add connected adopt/setup/release/remove beside create, precise capability gates, strict native inputs, final context preflight, setup attribution and conservative interrupted lifecycle inspection. Ninety-one native tests, 35 focused Deckhand tests, affected typechecks/build/patch audit and real authenticated production RPC lifecycle verification passed. See `DECKHAND_FOUNDATION_EVIDENCE.md` for evidence and remaining standalone/surface/concurrency/recovery gates. These full items remain unchecked.
+
+
+### Standalone worktree lifecycle evidence (partial DH-011–DH-014)
+
+Deckhand `f66b5985ca` makes WorkspaceBackend own finite admission and keeps standalone worktree creation/removal/pruning under one lifecycle reservation. New checkout identities are included before configuration; collisions preserve files/other owners, missing registrations retain writer barriers, and inherited authorization expires with its operation. The final 197 focused tests, server typecheck/build, scoped lint/patch audit and fresh authenticated standalone/native lifecycle verification passed with zero remaining claims or listeners. [Evidence and remaining boundaries](DECKHAND_FOUNDATION_EVIDENCE.md#standalone-worktree-lifecycle-ownership-checkpoint--2026-10-03) retain future-target admission, higher-level workflow atomicity, connected surface delegation and transition/recovery gates. Only DH-001 remains checked complete.
