@@ -47,6 +47,76 @@ final class IntegrationOperationsTests: XCTestCase {
     XCTAssertEqual(inspected.state, "unknown_outcome")
     XCTAssertEqual(inspected.result?["createdWorkspaceID"], .string("lane"))
   }
+  func testReceiptWaitObservesCommittedTerminalWithoutRepeatingEffectsAndReleasesObservers() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("deckhand-wait-\(UUID())")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = try IntegrationOperations(directory: root)
+    let actor = StackActor(kind: .agent, name: "Deckhand", session: "owner")
+    let pending = try await store.begin(input(), actor: actor).0
+    let first = Task { try await store.wait(key: "operation", actor: actor, waitMs: 25_000) }
+    let second = Task { try await store.wait(key: "operation", actor: actor, waitMs: 25_000) }
+    while await store.activeWaitCount < 2 { await Task.yield() }
+    _ = try await store.transition(key: "operation", actor: actor, state: "running")
+    let observers = await store.activeWaitCount
+    XCTAssertEqual(observers, 2, "Running state does not release terminal observers")
+    let succeeded = try await store.transition(key: "operation", actor: actor, state: "succeeded", result: .object(["workspaceID": .string("lane")]))
+    let one = try await first.value; let two = try await second.value
+    XCTAssertEqual(one.id, pending.id); XCTAssertEqual(two.id, succeeded.id)
+    XCTAssertEqual(one.state, "succeeded"); XCTAssertEqual(two.result?["workspaceID"], .string("lane"))
+    let remaining = await store.activeWaitCount; XCTAssertEqual(remaining, 0)
+    let immediate = try await store.wait(key: "operation", actor: actor, waitMs: 25_000)
+    XCTAssertEqual(immediate.id, succeeded.id)
+  }
+  func testReceiptWaitTimeoutCancellationLimitsAndOwnershipNeverChangeIntent() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("deckhand-wait-bounds-\(UUID())")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = try IntegrationOperations(directory: root)
+    let actor = StackActor(kind: .agent, name: "Deckhand", session: "owner")
+    let pending = try await store.begin(input(), actor: actor).0
+    let timeout = try await store.wait(key: "operation", actor: actor, waitMs: 1)
+    XCTAssertEqual(timeout.id, pending.id); XCTAssertEqual(timeout.state, "pending")
+    for waitMs in [-1, 25_001] {
+      do { _ = try await store.wait(key: "operation", actor: actor, waitMs: waitMs); XCTFail("Accepted invalid wait") }
+      catch { XCTAssertEqual((error as? StackControlError)?.code, "invalid_params") }
+    }
+    do { _ = try await store.wait(key: "operation", actor: .init(kind: .agent, name: "Other", session: "other"), waitMs: 1); XCTFail("Allowed another actor to wait") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "unauthorized_operation") }
+    let waits = (0..<8).map { _ in Task { try await store.wait(key: "operation", actor: actor, waitMs: 25_000) } }
+    while await store.activeWaitCount < 8 { await Task.yield() }
+    do { _ = try await store.wait(key: "operation", actor: actor, waitMs: 25_000); XCTFail("Exceeded observer bound") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "busy") }
+    for wait in waits { wait.cancel() }
+    for wait in waits { do { _ = try await wait.value; XCTFail("Cancelled wait returned success") } catch { XCTAssertTrue(error is CancellationError) } }
+    let remaining = await store.activeWaitCount; XCTAssertEqual(remaining, 0)
+    let unchanged = try await store.get(key: "operation", actor: actor)
+    XCTAssertEqual(unchanged.id, pending.id); XCTAssertEqual(unchanged.state, "pending")
+    let duplicate = try await store.begin(input(), actor: actor); XCTAssertFalse(duplicate.1)
+  }
+  func testReceiptWaitGlobalBoundAndRestartKeepUnknownOutcomeHonest() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("deckhand-wait-global-\(UUID())")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = try IntegrationOperations(directory: root)
+    var waits: [Task<IntegrationOperationReceipt, Error>] = []
+    for index in 0..<16 {
+      let actor = StackActor(kind: .agent, name: "Deckhand", session: "owner-\(index)")
+      let key = "operation-\(index)"
+      _ = try await store.begin(input(key: key), actor: actor)
+      waits += (0..<8).map { _ in Task { try await store.wait(key: key, actor: actor, waitMs: 25_000) } }
+    }
+    while await store.activeWaitCount < 128 { await Task.yield() }
+    let extra = StackActor(kind: .agent, name: "Deckhand", session: "extra")
+    _ = try await store.begin(input(key: "extra"), actor: extra)
+    do { _ = try await store.wait(key: "extra", actor: extra, waitMs: 25_000); XCTFail("Exceeded global wait bound") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "busy") }
+    for wait in waits { wait.cancel() }
+    for wait in waits { _ = try? await wait.value }
+    let remaining = await store.activeWaitCount; XCTAssertEqual(remaining, 0)
+    let restarted = try IntegrationOperations(directory: root)
+    let recovered = try await restarted.wait(key: "extra", actor: extra, waitMs: 25_000)
+    XCTAssertEqual(recovered.state, "unknown_outcome")
+    let duplicate = try await restarted.begin(input(key: "extra"), actor: extra)
+    XCTAssertFalse(duplicate.1); XCTAssertEqual(duplicate.0.id, recovered.id)
+  }
   @MainActor
   func testControllerRejectsUnsupportedUnknownAndMistypedInputsBeforeEffects() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("deckhand-op-control-\(UUID())")
@@ -73,6 +143,12 @@ final class IntegrationOperationsTests: XCTestCase {
     }
     do { _ = try await control.handle("integration.operation.submit", params: .object(object), actor: actor); XCTFail("Expected missing workspace") }
     catch { XCTAssertEqual((error as? StackControlError)?.code, "resource_missing") }
+    for value in [JSONValue.string("1"), .number(1.5), .number(-1), .number(25_001), .null, .bool(true)] {
+      do {
+        _ = try await control.handle("integration.operation.get", params: .object(["installationID": .string(try control.integrationStore().installationID), "operationKey": .string("operation"), "waitMs": value]), actor: actor)
+        XCTFail("Accepted mistyped receipt wait")
+      } catch { XCTAssertEqual((error as? StackControlError)?.code, "invalid_params") }
+    }
     XCTAssertTrue(supervisor.files.isEmpty)
   }
   @MainActor

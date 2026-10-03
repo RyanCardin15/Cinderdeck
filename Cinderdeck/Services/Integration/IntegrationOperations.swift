@@ -30,6 +30,13 @@ nonisolated struct IntegrationOperationReceipt: Codable, Sendable {
 actor IntegrationOperations {
   private let pool: DatabasePool
   private let epoch = UUID().uuidString
+  private struct Waiter {
+    let actor: StackActor
+    let continuation: CheckedContinuation<IntegrationOperationReceipt, Error>
+    let timeout: Task<Void, Never>
+  }
+  private var waiters: [String: [UUID: Waiter]] = [:]
+
   init(directory: URL) throws {
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     let path = directory.appendingPathComponent("operations.sqlite").path
@@ -89,6 +96,51 @@ actor IntegrationOperations {
       return try StackControlCoding.decoder().decode(IntegrationOperationReceipt.self, from: row["receipt"])
     }
   }
+  /// Observe a committed terminal receipt without polling or granting mutation authority.
+  func wait(key: String, actor: StackActor, waitMs: Int) async throws -> IntegrationOperationReceipt {
+    guard (0...25_000).contains(waitMs) else { throw StackControlError.invalid("Receipt wait must be between 0 and 25000 milliseconds") }
+    let token = UUID()
+    return try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { continuation in
+        do {
+          let receipt = try get(key: key, actor: actor)
+          guard !Task.isCancelled else { throw CancellationError() }
+          guard waitMs > 0, ["pending", "running"].contains(receipt.state) else {
+            continuation.resume(returning: receipt); return
+          }
+          let all = waiters.values.flatMap { $0.values }
+          guard all.count < 128, all.filter({ $0.actor.key == actor.key }).count < 8 else {
+            throw StackControlError(code: "busy", message: "Too many operation receipt waits; finish an existing wait before opening another.")
+          }
+          let timeout = Task { [weak self] in
+            do { try await Task.sleep(nanoseconds: UInt64(waitMs) * 1_000_000) }
+            catch { return }
+            await self?.finishWait(key: key, token: token)
+          }
+          waiters[key, default: [:]][token] = Waiter(actor: actor, continuation: continuation, timeout: timeout)
+        } catch { continuation.resume(throwing: error) }
+      }
+    } onCancel: {
+      Task { await self.cancelWait(key: key, token: token) }
+    }
+  }
+  private func takeWaiter(key: String, token: UUID) -> Waiter? {
+    let waiter = waiters[key]?.removeValue(forKey: token)
+    if waiters[key]?.isEmpty == true { waiters.removeValue(forKey: key) }
+    return waiter
+  }
+  private func finishWait(key: String, token: UUID) {
+    guard let waiter = takeWaiter(key: key, token: token) else { return }
+    do { waiter.continuation.resume(returning: try get(key: key, actor: waiter.actor)) }
+    catch { waiter.continuation.resume(throwing: error) }
+  }
+  private func cancelWait(key: String, token: UUID) {
+    guard let waiter = takeWaiter(key: key, token: token) else { return }
+    waiter.timeout.cancel()
+    waiter.continuation.resume(throwing: CancellationError())
+  }
+  // Internal observation used by focused tests; an active wait never owns effects.
+  var activeWaitCount: Int { waiters.values.reduce(0) { $0 + $1.count } }
   func transition(key: String, actor: StackActor, state: String, result: JSONValue? = nil, error: StackControlError? = nil) throws -> IntegrationOperationReceipt {
     var receipt = try get(key: key, actor: actor)
     let allowed: [String: Set<String>] = ["pending": ["running"], "running": ["succeeded", "failed", "unknown_outcome"], "unknown_outcome": ["unknown_outcome"]]
@@ -99,6 +151,12 @@ actor IntegrationOperations {
     receipt.state = state; receipt.result = result; receipt.error = error; receipt.updatedAt = Date()
     try pool.write { db in
       try db.execute(sql: "UPDATE operations SET receipt = ? WHERE operation_key = ?", arguments: [try StackControlCoding.encoder().encode(receipt), key])
+    }
+    if !["pending", "running"].contains(state), let completed = waiters.removeValue(forKey: key) {
+      for waiter in completed.values {
+        waiter.timeout.cancel()
+        waiter.continuation.resume(returning: receipt)
+      }
     }
     return receipt
   }

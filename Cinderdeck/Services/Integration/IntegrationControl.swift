@@ -43,7 +43,7 @@ nonisolated struct IntegrationHello: Encodable, Sendable {
   let executionHostID: String
   let channel: String
   let runtimeEpoch: String
-  let capabilities = ["projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.adopt", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "checkout.reservations", "checkout.contexts"]
+  let capabilities = ["projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.adopt", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.reservations", "checkout.contexts"]
   let maximumFrameBytes = StackControlSocketServer.maximumFrameBytes
   let maximumPageSize = 500
   let maximumWaitMs = 25_000
@@ -333,11 +333,18 @@ extension StackControlService {
     return try JSONValue(encoding: receipt)
   }
   private func getIntegrationOperation(_ params: JSONValue, actor: StackActor) async throws -> JSONValue {
-    guard let object = params.objectValue, Set(object.keys).isSubset(of: ["operationKey", "installationID"]),
+    guard let object = params.objectValue, Set(object.keys).isSubset(of: ["operationKey", "installationID", "waitMs"]),
       let key = object["operationKey"]?.stringValue, !key.isEmpty, key.utf8.count <= 160,
       object["installationID"]?.stringValue == (try integrationStore()).installationID else { throw StackControlError.invalid("A bounded operation key and selected installation are required") }
     let operations = try operationStore()
-    var receipt = try await operations.get(key: key, actor: actor)
+    let waitMs: Int
+    if let value = params["waitMs"] {
+      guard case .number(let number) = value, let integer = Int(exactly: number), (0...25_000).contains(integer) else {
+        throw StackControlError.invalid("Receipt wait must be an integer between 0 and 25000 milliseconds")
+      }
+      waitMs = integer
+    } else { waitMs = 0 }
+    var receipt = try await operations.wait(key: key, actor: actor, waitMs: waitMs)
     if receipt.state == "unknown_outcome", ["lane.create", "lane.adopt"].contains(receipt.method) {
       let records = try StackLaneStore.records(in: supervisor.lanesDirectory)
       if let lane = records.first(where: { $0.integrationOperationID == receipt.id }) {
