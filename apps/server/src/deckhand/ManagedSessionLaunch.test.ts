@@ -36,6 +36,17 @@ import * as Relationships from "./Relationships.ts";
 
 const instanceId = ProviderInstanceId.make("codex-fixture");
 const decodeInput = Schema.decodeUnknownSync(Rpc.ManagedLaunchInput);
+const decodeCreationInput = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Rpc.ManagedCreateInput),
+);
+const decodeCreationRecord = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Rpc.ManagedCreateRecord),
+);
+const decodeLaunchInputJson = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Rpc.ManagedLaunchInput),
+);
+const decodeCreationInputSync = Schema.decodeUnknownSync(Rpc.ManagedCreateInput);
+const decodeReceipt = Schema.decodeUnknownEffect(Integration.IntegrationOperationReceipt);
 const decodeRecord = Schema.decodeUnknownEffect(Schema.fromJsonString(Rpc.ManagedLaunchRecord));
 const input = (key = "launch-one") =>
   decodeInput({
@@ -59,7 +70,12 @@ const hello = Schema.decodeUnknownSync(Integration.IntegrationHello)({
   maximumFrameBytes: 4194304,
   maximumPageSize: 100,
   maximumWaitMs: 25000,
-  capabilities: ["checkout.reservations"],
+  capabilities: [
+    "checkout.reservations",
+    "operations.lane.create.repositoryRefs",
+    "operations.receipts.wait",
+    "operations.lane.create.managedWriter",
+  ],
 });
 const provider = Schema.decodeSync(ServerProvider)({
   instanceId,
@@ -89,6 +105,7 @@ const baseLayer = Layer.mergeAll(
   ProcessRunner.layer,
 ).pipe(Layer.provideMerge(NodeServices.layer));
 const fixture = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
   const fs = yield* FileSystem.FileSystem;
   const runner = yield* ProcessRunner.ProcessRunner;
   const root = yield* fs.makeTempDirectoryScoped({ prefix: "dh-launch-" });
@@ -157,9 +174,12 @@ const fixture = Effect.gen(function* () {
         : Effect.fail(new Rpc.DeckhandRpcError({ reason: "unavailable" }));
     },
   });
-  const external = (launch: ThreadLaunchService.ThreadLaunchService["Service"]["launch"]) =>
+  const external = (
+    launch: ThreadLaunchService.ThreadLaunchService["Service"]["launch"],
+    hub = hubLayer,
+  ) =>
     Layer.mergeAll(
-      hubLayer,
+      hub,
       Layer.mock(ProjectService.ProjectService)({
         bootstrap: (request) =>
           Effect.succeed({
@@ -182,7 +202,77 @@ const fixture = Effect.gen(function* () {
       }),
       Layer.mock(ThreadLaunchService.ThreadLaunchService)({ launch }),
     );
-  return { root, source, lane, git, fs, resources, external, hubLayer };
+  const nativeCreation = (
+    mode: "ready" | "native_shape" | "setup_failed" | "pending" | "unknown_outcome" = "ready",
+  ) => {
+    const receipts = new Map<string, Integration.IntegrationOperationReceipt>();
+    let creations = 0;
+    const created = `${root}/created`;
+    const hub = Layer.mock(IntegrationHub.IntegrationHub)({
+      resource: (id) => {
+        const item = resources.get(id);
+        return item
+          ? Effect.succeed({ hello, resource: item })
+          : Effect.fail(new Rpc.DeckhandRpcError({ reason: "unavailable" }));
+      },
+      submit: (_actor, request) =>
+        Effect.gen(function* () {
+          const prior = receipts.get(request.operationKey);
+          if (prior) return prior;
+          const intents = yield* sql<{
+            input_json: string;
+          }>`SELECT input_json FROM deckhand_managed_creations`;
+          assert.equal(intents.length, 1, "intent must commit before native Git effects");
+          assert.equal(
+            (yield* decodeCreationInput(intents[0]!.input_json)).objective,
+            input().objective,
+          );
+          yield* git(source, [
+            "worktree",
+            "add",
+            "-b",
+            String(request.arguments.branch),
+            created,
+            String((request.arguments.repositoryRefs as Record<string, string>).frontend),
+          ]);
+          creations++;
+          const resource = structuredClone(resources.get("lane")!);
+          resource.workspaceID = "created";
+          resource.workspace.id = "created";
+          resource.workspace.lane!.directory = created;
+          resource.workspace.repos[0]!.path = created;
+          resources.set("created", resource);
+          const receipt = yield* decodeReceipt({
+            id: "native-operation",
+            operationKey: request.operationKey,
+            argumentHash: "a".repeat(64),
+            workspaceID: "payment",
+            generation: 2,
+            method: "lane.create",
+            state: mode === "pending" ? "running" : mode === "unknown_outcome" ? mode : "succeeded",
+            createdAt: "now",
+            updatedAt: "now",
+            result: {
+              ...(mode === "unknown_outcome" ? {} : { createdWorkspaceID: "created" }),
+              ...(mode === "native_shape"
+                ? { workspace: resource.workspace }
+                : { creationReady: mode === "ready" }),
+              setup: { status: mode === "setup_failed" ? "failed" : "skipped", updatedAt: "now" },
+            },
+          });
+          receipts.set(request.operationKey, receipt);
+          return receipt;
+        }).pipe(Effect.orDie),
+      operation: (_actor, key) =>
+        Effect.gen(function* () {
+          const receipt = receipts.get(key);
+          if (!receipt) return yield* new Rpc.DeckhandRpcError({ reason: "missing" });
+          return receipt;
+        }),
+    });
+    return { hub, created, receipts, creations: () => creations };
+  };
+  return { root, source, lane, git, fs, resources, external, hubLayer, nativeCreation };
 });
 const accepted = (request: ThreadLaunchService.ThreadLaunchInput) => ({
   threadId: request.threadId!,
@@ -198,6 +288,217 @@ const failed = (request: ThreadLaunchService.ThreadLaunchInput) =>
       cause: "fixture failure",
     }),
   );
+
+const creationInput = (key = "create-one") =>
+  decodeCreationInputSync({
+    ...input(key),
+    workspaceID: "payment",
+    generation: 2,
+    branch: "created-lane",
+    repositoryRefs: { frontend: "main" },
+    setup: false,
+    start: false,
+  });
+
+describe("connected lane and session creation", () => {
+  it.effect.each(["ready", "native_shape"] as const)(
+    "commits intent before Git, launches returned checkout, and replays requests (%s)",
+    (mode) =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const native = f.nativeCreation(mode);
+        const calls: ThreadLaunchService.ThreadLaunchInput[] = [];
+        const sql = yield* SqlClient.SqlClient;
+        const external = f.external(
+          (request) =>
+            Effect.gen(function* () {
+              calls.push(request);
+              assert.equal(request.workspaceStrategy.type, "existing_worktree");
+              if (request.workspaceStrategy.type === "existing_worktree")
+                assert.equal(
+                  request.workspaceStrategy.worktreePath,
+                  yield* f.fs.realPath(native.created),
+                );
+              const saved = yield* sql<{
+                launch_input_json: string;
+                record_json: string;
+              }>`SELECT * FROM deckhand_managed_creations`;
+              assert.equal(
+                (yield* decodeLaunchInputJson(saved[0]!.launch_input_json)).workspaceID,
+                "created",
+              );
+              assert.equal((yield* decodeCreationRecord(saved[0]!.record_json)).laneID, "created");
+              return accepted(request);
+            }).pipe(Effect.orDie),
+          native.hub,
+        );
+        const layer = serviceLayer.pipe(Layer.provide(external));
+        const one = yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          const [a, b] = yield* Effect.all(
+            [service.create("actor", creationInput()), service.create("actor", creationInput())],
+            { concurrency: "unbounded" },
+          );
+          assert.deepEqual(a, b);
+          assert.equal(a.state, "accepted");
+          assert.equal(a.laneID, "created");
+          assert.equal(
+            (yield* service.create("other", creationInput()).pipe(Effect.flip)).reason,
+            "wrong_actor",
+          );
+          assert.equal(
+            (yield* service
+              .create("actor", { ...creationInput(), objective: "different" })
+              .pipe(Effect.flip)).reason,
+            "key_conflict",
+          );
+          return a;
+        }).pipe(Effect.provide(layer));
+        f.resources.clear();
+        yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          assert.deepEqual(yield* service.create("actor", creationInput()), one);
+          assert.deepEqual(yield* service.getCreation("actor", creationInput().operationKey), one);
+        }).pipe(Effect.provide(layer));
+        assert.equal(native.creations(), 1);
+        assert.equal(calls.length, 1);
+        assert.equal(
+          (yield* f.git(f.source, ["symbolic-ref", "--short", "HEAD"])).stdout.trim(),
+          "main",
+        );
+        assert.equal(
+          (yield* f.git(f.source, ["worktree", "list", "--porcelain"])).stdout.split("worktree ")
+            .length - 1,
+          3,
+        );
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+
+  it.effect.each(["setup_failed", "unknown_outcome"] as const)(
+    "retains the native lane after %s without launching or recreating it",
+    (mode) =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const native = f.nativeCreation(mode);
+        let launches = 0;
+        const layer = serviceLayer.pipe(
+          Layer.provide(
+            f.external((request) => {
+              launches++;
+              return Effect.succeed(accepted(request));
+            }, native.hub),
+          ),
+        );
+        yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          let one = yield* service.create("actor", creationInput());
+          assert.equal(one.state, mode === "setup_failed" ? "failed" : "unknown_outcome");
+          if (mode === "unknown_outcome") {
+            assert.equal(one.laneID, null);
+            const receipt = native.receipts.get(one.laneOperationKey)!;
+            native.receipts.set(one.laneOperationKey, {
+              ...receipt,
+              result: { ...receipt.result, createdWorkspaceID: "created" },
+            });
+            one = yield* service.getCreation("actor", one.operationKey);
+            assert.equal(
+              one.state,
+              "unknown_outcome",
+              "manifest recovery does not infer successful creation",
+            );
+          }
+          assert.equal(one.laneID, "created");
+          assert.isTrue(yield* f.fs.exists(native.created));
+          assert.deepEqual(yield* service.create("actor", creationInput()), one);
+          assert.deepEqual(yield* service.getCreation("actor", creationInput().operationKey), one);
+        }).pipe(Effect.provide(layer));
+        assert.equal(native.creations(), 1);
+        assert.equal(launches, 0);
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+
+  it.effect(
+    "refuses stale review and unavailable providers before persisting intent or creating a lane",
+    () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const native = f.nativeCreation();
+        const layer = serviceLayer.pipe(
+          Layer.provide(f.external((request) => Effect.succeed(accepted(request)), native.hub)),
+        );
+        yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          assert.equal(
+            (yield* service
+              .create("actor", { ...creationInput(), revision: "old" })
+              .pipe(Effect.flip)).reason,
+            "stale_context",
+          );
+          assert.equal(
+            (yield* service
+              .create("actor", {
+                ...creationInput(),
+                modelSelection: {
+                  instanceId: ProviderInstanceId.make("missing"),
+                  model: "fixture-model",
+                },
+              })
+              .pipe(Effect.flip)).reason,
+            "unavailable_provider",
+          );
+          const sql = yield* SqlClient.SqlClient;
+          assert.equal(
+            (yield* sql`SELECT operation_key FROM deckhand_managed_creations`).length,
+            0,
+          );
+        }).pipe(Effect.provide(layer));
+        assert.equal(native.creations(), 0);
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+
+  it.effect(
+    "reconciles a delayed receipt without provider effects, then explicitly retries the saved launch",
+    () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const native = f.nativeCreation("pending");
+        const calls: ThreadLaunchService.ThreadLaunchInput[] = [];
+        const layer = serviceLayer.pipe(
+          Layer.provide(
+            f.external((request) => {
+              calls.push(request);
+              return calls.length === 1 ? failed(request) : Effect.succeed(accepted(request));
+            }, native.hub),
+          ),
+        );
+        yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          const first = yield* service.create("actor", creationInput());
+          assert.equal(first.state, "creating");
+          const old = native.receipts.get(first.laneOperationKey)!;
+          native.receipts.set(first.laneOperationKey, {
+            ...old,
+            state: "succeeded",
+            result: { ...old.result, creationReady: true },
+          });
+          const ready = yield* service.getCreation("actor", first.operationKey);
+          assert.equal(ready.state, "ready");
+          assert.equal(calls.length, 0);
+          const failure = yield* service.create("actor", creationInput());
+          assert.equal(failure.state, "failed");
+          assert.equal(failure.error, "launch_failed");
+          assert.equal(failure.launch?.state, "failed");
+          assert.deepEqual(yield* service.getCreation("actor", first.operationKey), failure);
+          assert.equal(calls.length, 1);
+          const accepted = yield* service.create("actor", creationInput());
+          assert.equal(accepted.state, "accepted");
+          assert.equal(accepted.launch?.threadId, failure.launch?.threadId);
+          assert.equal(calls[0]!.threadId, calls[1]!.threadId);
+        }).pipe(Effect.provide(layer));
+        assert.equal(native.creations(), 1);
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+});
 
 describe("managed lane session launch", () => {
   it.effect(

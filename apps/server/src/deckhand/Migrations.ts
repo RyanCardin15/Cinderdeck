@@ -10,7 +10,7 @@ export class DeckhandStoreVersionError extends Schema.TaggedError<DeckhandStoreV
     return "This Deckhand store requires a newer application. Restore a compatible binary or store backup.";
   }
 }
-const VERSION = 6;
+const VERSION = 7;
 /** Separate migration ledger prevents a new upstream migration number from colliding with fork state. */
 export const migrate = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -116,6 +116,14 @@ export const migrate = Effect.gen(function* () {
       if (found < 6) {
         yield* sql`CREATE TABLE deckhand_managed_launches (
           operation_key TEXT PRIMARY KEY, actor_id TEXT NOT NULL, input_json TEXT NOT NULL CHECK(json_valid(input_json)),
+          record_json TEXT NOT NULL CHECK(json_valid(record_json))
+        )`;
+      }
+      if (found < 7) {
+        yield* sql`CREATE TABLE deckhand_managed_creations (
+          operation_key TEXT PRIMARY KEY, actor_id TEXT NOT NULL,
+          input_json TEXT NOT NULL CHECK(json_valid(input_json)),
+          launch_input_json TEXT CHECK(launch_input_json IS NULL OR json_valid(launch_input_json)),
           record_json TEXT NOT NULL CHECK(json_valid(record_json))
         )`;
       }

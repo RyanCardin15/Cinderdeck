@@ -1771,6 +1771,29 @@ const makeWsRpcLayer = (
                 ),
               ),
           ),
+        [DeckhandRpc.DECKHAND_METHODS.create]: (input) =>
+          observeRpcEffect(
+            DeckhandRpc.DECKHAND_METHODS.create,
+            startup.enqueueCommand(managedLaunch.create(currentSessionId, input)).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new DeckhandRpc.DeckhandRpcError({
+                    reason: "reason" in cause ? cause.reason : "startup",
+                  }),
+              ),
+            ),
+          ),
+        [DeckhandRpc.DECKHAND_METHODS.createGet]: (input) =>
+          observeRpcEffect(
+            DeckhandRpc.DECKHAND_METHODS.createGet,
+            managedLaunch
+              .getCreation(currentSessionId, input.operationKey)
+              .pipe(
+                Effect.mapError(
+                  (cause) => new DeckhandRpc.DeckhandRpcError({ reason: cause.reason }),
+                ),
+              ),
+          ),
         [DeckhandRpc.DECKHAND_METHODS.launch]: (input) =>
           observeRpcEffect(
             DeckhandRpc.DECKHAND_METHODS.launch,

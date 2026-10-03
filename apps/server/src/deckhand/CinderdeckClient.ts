@@ -374,6 +374,18 @@ const make = Effect.gen(function* () {
                 )
               : Effect.void,
           ),
+          Effect.andThen(() =>
+            validated.method === "lane.create" &&
+            Object.hasOwn(validated.arguments, "managedWriter")
+              ? requiredCapability(connection, "operations.lane.create.managedWriter").pipe(
+                  Effect.andThen(() =>
+                    typeof validated.arguments.managedWriter === "boolean"
+                      ? Effect.void
+                      : Effect.fail(new BridgeError({ reason: "invalid_request" })),
+                  ),
+                )
+              : Effect.void,
+          ),
           Effect.andThen(
             encodeJson(validated.arguments).pipe(
               Effect.mapError((cause) => new BridgeError({ reason: "invalid_request", cause })),

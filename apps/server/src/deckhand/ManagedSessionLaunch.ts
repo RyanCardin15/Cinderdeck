@@ -49,6 +49,14 @@ export class ManagedSessionLaunch extends Context.Service<
       actorID: string,
       operationKey: string,
     ) => Effect.Effect<Rpc.ManagedLaunchRecord, ManagedLaunchError>;
+    readonly create: (
+      actorID: string,
+      input: Rpc.ManagedCreateInput,
+    ) => Effect.Effect<Rpc.ManagedCreateRecord, ManagedLaunchError>;
+    readonly getCreation: (
+      actorID: string,
+      operationKey: string,
+    ) => Effect.Effect<Rpc.ManagedCreateRecord, ManagedLaunchError>;
     readonly options: Effect.Effect<ReadonlyArray<typeof Rpc.ManagedLaunchOption.Type>>;
   }
 >()("t3/deckhand/ManagedSessionLaunch") {}
@@ -363,6 +371,211 @@ const make = Effect.gen(function* () {
         );
       }).pipe(Effect.mapError(storage(input.operationKey))),
     );
-  return ManagedSessionLaunch.of({ launch, get, options });
+  const creationLocks = yield* makeKeyedSerialExecutor<string>();
+  const encodeCreationInput = Schema.encodeEffect(Schema.fromJsonString(Rpc.ManagedCreateInput));
+  const encodeCreation = Schema.encodeEffect(Schema.fromJsonString(Rpc.ManagedCreateRecord));
+  const decodeCreation = Schema.decodeUnknownEffect(Schema.fromJsonString(Rpc.ManagedCreateRecord));
+  const decodeLaunchInput = Schema.decodeUnknownEffect(
+    Schema.fromJsonString(Rpc.ManagedLaunchInput),
+  );
+  const readCreation = (actorID: string, key: string) =>
+    Effect.gen(function* () {
+      const rows = yield* sql<{
+        actor_id: string;
+        input_json: string;
+        launch_input_json: string | null;
+        record_json: string;
+      }>`SELECT actor_id, input_json, launch_input_json, record_json FROM deckhand_managed_creations
+      WHERE operation_key = ${key}`;
+      const row = rows[0];
+      if (!row) return null;
+      if (row.actor_id !== actorID) return yield* error(key, "wrong_actor");
+      return {
+        input: row.input_json,
+        launchInput: row.launch_input_json ? yield* decodeLaunchInput(row.launch_input_json) : null,
+        record: yield* decodeCreation(row.record_json),
+      };
+    }).pipe(Effect.mapError(storage(key)));
+  const saveCreation = (record: Rpc.ManagedCreateRecord) =>
+    Effect.gen(function* () {
+      const json = yield* encodeCreation(record);
+      yield* sql`UPDATE deckhand_managed_creations SET record_json = ${json}
+      WHERE operation_key = ${record.operationKey}`;
+      return record;
+    }).pipe(Effect.mapError(storage(record.operationKey)));
+  const observeCreation = (actorID: string, record: Rpc.ManagedCreateRecord, waitMs: number) =>
+    Effect.gen(function* () {
+      const receipt =
+        record.receipt && !["pending", "running", "unknown_outcome"].includes(record.receipt.state)
+          ? record.receipt
+          : yield* backend.operation(actorID, record.laneOperationKey, waitMs);
+      const laneID =
+        receipt.result?.createdWorkspaceID ?? receipt.result?.workspace?.id ?? record.laneID;
+      const ready =
+        receipt.state === "succeeded" &&
+        !!laneID &&
+        (!receipt.result?.setup ||
+          ["succeeded", "skipped"].includes(receipt.result.setup.status)) &&
+        (receipt.result?.creationReady === true ||
+          (receipt.result?.creationReady === undefined &&
+            !!receipt.result?.workspace?.lane &&
+            !receipt.result.workspace.definitionChanged &&
+            !receipt.result.workspace.issues.length));
+      return yield* saveCreation({
+        ...record,
+        receipt,
+        laneID,
+        state: ready
+          ? "ready"
+          : receipt.state === "unknown_outcome"
+            ? "unknown_outcome"
+            : receipt.state === "failed" || receipt.state === "succeeded"
+              ? "failed"
+              : "creating",
+        error: ready
+          ? null
+          : (receipt.error?.code ?? (receipt.state === "succeeded" ? "creation_not_ready" : null)),
+      });
+    }).pipe(Effect.mapError(() => error(record.operationKey, "stale_context")));
+  // Receipt inspection may reconcile native state; it never submits creation or starts a provider.
+  const getCreation = (actorID: string, key: string) =>
+    creationLocks.withLock(
+      key,
+      Effect.gen(function* () {
+        const saved = yield* readCreation(actorID, key);
+        if (!saved) return yield* error(key, "missing");
+        if (saved.record.state === "accepted" || saved.record.launch) return saved.record;
+        return yield* observeCreation(actorID, saved.record, 0).pipe(
+          Effect.catch(() => Effect.succeed(saved.record)),
+        );
+      }),
+    );
+  const create = (actorID: string, input: Rpc.ManagedCreateInput) =>
+    creationLocks.withLock(
+      input.operationKey,
+      Effect.gen(function* () {
+        const key = input.operationKey;
+        const encoded = yield* encodeCreationInput(input);
+        let saved = yield* readCreation(actorID, key);
+        if (saved && saved.input !== encoded) return yield* error(key, "key_conflict");
+        if (saved?.record.state === "accepted") return saved.record;
+        if (!saved) {
+          const source = yield* backend.context(input.workspaceID);
+          const workspace = source.resource.workspace;
+          if (
+            source.hello.installationID !== input.installationID ||
+            !source.resource.available ||
+            source.resource.generation !== input.generation ||
+            source.resource.revision !== input.revision ||
+            !workspace ||
+            workspace.lane ||
+            workspace.definitionChanged ||
+            workspace.issues.length ||
+            !workspace.repos.some((repo) => repo.id === input.repositoryID) ||
+            !source.hello.capabilities.includes("operations.lane.create.repositoryRefs") ||
+            !source.hello.capabilities.includes("operations.lane.create.managedWriter") ||
+            !source.hello.capabilities.includes("operations.receipts.wait") ||
+            !source.hello.capabilities.includes("checkout.reservations")
+          )
+            return yield* error(key, "stale_context");
+          // Reject unavailable providers before creating a checkout that cannot launch its session.
+          const metadata = adapters.getMetadata
+            ? yield* adapters
+                .getMetadata(input.modelSelection.instanceId)
+                .pipe(Effect.mapError(() => error(key, "unavailable_provider")))
+            : null;
+          const provider = (yield* providers.getProviders).find(
+            (item) => item.instanceId === input.modelSelection.instanceId,
+          );
+          if (
+            !metadata?.enabled ||
+            !provider?.enabled ||
+            !provider.installed ||
+            provider.availability === "unavailable" ||
+            (provider.supportedRuntimeModes &&
+              !provider.supportedRuntimeModes.includes(input.runtimeMode))
+          )
+            return yield* error(key, "unavailable_provider");
+          const record: Rpc.ManagedCreateRecord = {
+            operationKey: key,
+            laneOperationKey: bindingID("lane", [key]),
+            launchOperationKey: bindingID("session", [key]),
+            state: "prepared",
+            laneID: null,
+            receipt: null,
+            launch: null,
+            error: null,
+          };
+          const json = yield* encodeCreation(record);
+          // Full intent is committed before native Git, setup, service, or provider effects.
+          yield* sql`INSERT INTO deckhand_managed_creations(operation_key, actor_id, input_json, record_json)
+          VALUES (${key}, ${actorID}, ${encoded}, ${json})`;
+          saved = { input: encoded, record, launchInput: null };
+        }
+        let record = saved.record;
+        if (!record.receipt) {
+          const receipt = yield* backend.createLane(actorID, {
+            operationKey: record.laneOperationKey,
+            installationID: input.installationID,
+            workspaceID: input.workspaceID,
+            generation: input.generation,
+            revision: input.revision,
+            arguments: {
+              workspace: input.workspaceID,
+              branch: input.branch,
+              repositoryRefs: input.repositoryRefs,
+              managedWriter: true,
+              setup: input.setup,
+              start: input.start,
+            },
+          });
+          record = yield* saveCreation({ ...record, receipt, state: "creating" });
+        }
+        record = yield* observeCreation(actorID, record, 25000);
+        if (record.state !== "ready" && !(record.state === "failed" && record.launch))
+          return record;
+        let launchInput = saved.launchInput;
+        if (!launchInput) {
+          const target = yield* backend.context(record.laneID!);
+          if (
+            target.hello.installationID !== input.installationID ||
+            target.resource.workspace?.lane?.sourceStackID !== input.workspaceID
+          )
+            return yield* error(key, "stale_context");
+          launchInput = {
+            operationKey: record.launchOperationKey,
+            installationID: input.installationID,
+            workspaceID: record.laneID!,
+            generation: target.resource.generation,
+            revision: target.resource.revision,
+            repositoryID: input.repositoryID,
+            title: input.title,
+            objective: input.objective,
+            modelSelection: input.modelSelection,
+            runtimeMode: input.runtimeMode,
+          };
+          const json = yield* encodeInput(launchInput);
+          yield* sql`UPDATE deckhand_managed_creations SET launch_input_json = ${json} WHERE operation_key = ${key}`;
+        }
+        const result = yield* launch(actorID, launchInput).pipe(Effect.result);
+        if (result._tag === "Success")
+          return yield* saveCreation({
+            ...record,
+            launch: result.success,
+            state: "accepted",
+            error: null,
+          });
+        const priorLaunch = yield* get(actorID, record.launchOperationKey).pipe(
+          Effect.catch(() => Effect.succeed(null)),
+        );
+        return yield* saveCreation({
+          ...record,
+          launch: priorLaunch,
+          state: "failed",
+          error: result.failure.reason,
+        });
+      }).pipe(Effect.mapError(storage(input.operationKey))),
+    );
+  return ManagedSessionLaunch.of({ launch, get, options, create, getCreation });
 });
 export const layer = Layer.effect(ManagedSessionLaunch, make);

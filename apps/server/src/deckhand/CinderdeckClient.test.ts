@@ -517,6 +517,30 @@ describe("same-host Cinderdeck bridge", () => {
         assert.equal((yield* client.submit(connection, input)).state, "succeeded");
         assert.equal(submissions, 1);
         assert.deepEqual(receivedArguments, input.arguments);
+        const managed = { ...input, arguments: { ...input.arguments, managedWriter: true } };
+        assert.equal(
+          (yield* client.submit(connection, managed).pipe(Effect.flip)).reason,
+          "unsupported_capability",
+        );
+        assert.equal(submissions, 1);
+        capabilities.push("operations.lane.create.managedWriter");
+        const upgraded = yield* client.connect(socketPath, {
+          channel: "development",
+          clientID: "actor",
+        });
+        assert.equal(
+          (yield* client
+            .submit(upgraded, {
+              ...managed,
+              arguments: { ...managed.arguments, managedWriter: "true" },
+            })
+            .pipe(Effect.flip)).reason,
+          "invalid_request",
+        );
+        assert.equal(submissions, 1);
+        assert.equal((yield* client.submit(upgraded, managed)).state, "succeeded");
+        assert.equal(submissions, 2);
+        assert.deepEqual(receivedArguments, managed.arguments);
       }).pipe(Effect.scoped, Effect.provide(TestLayer)),
   );
   it.effect(

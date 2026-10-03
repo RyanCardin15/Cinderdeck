@@ -18,12 +18,15 @@ import {
   IntegrationSnapshot,
   IntegrationEvents,
   IntegrationOperationInput,
+  IntegrationRepositoryStartRefs,
   IntegrationOperationReceipt,
 } from "./integration.ts";
 
 export const DECKHAND_METHODS = {
   sessions: "deckhand.sessions.subscribe",
   launch: "deckhand.session.launch",
+  create: "deckhand.session.create",
+  createGet: "deckhand.session.create.get",
   launchGet: "deckhand.session.launch.get",
   launchOptions: "deckhand.session.launch.options",
   overview: "deckhand.overview",
@@ -101,6 +104,32 @@ export const ManagedLaunchRecord = Schema.Struct({
   state: Schema.Literals(["prepared", "accepted", "failed"]),
 });
 export type ManagedLaunchRecord = typeof ManagedLaunchRecord.Type;
+export const ManagedCreateInput = Schema.Struct({
+  ...ManagedLaunchInput.fields,
+  branch: Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(200)),
+  repositoryRefs: IntegrationRepositoryStartRefs,
+  setup: Schema.Boolean,
+  start: Schema.Boolean,
+});
+export type ManagedCreateInput = typeof ManagedCreateInput.Type;
+export const ManagedCreateRecord = Schema.Struct({
+  operationKey: Schema.String,
+  laneOperationKey: Schema.String,
+  launchOperationKey: Schema.String,
+  state: Schema.Literals([
+    "prepared",
+    "creating",
+    "ready",
+    "accepted",
+    "failed",
+    "unknown_outcome",
+  ]),
+  laneID: Schema.NullOr(Schema.String),
+  receipt: Schema.NullOr(IntegrationOperationReceipt),
+  launch: Schema.NullOr(ManagedLaunchRecord),
+  error: Schema.NullOr(Schema.String),
+});
+export type ManagedCreateRecord = typeof ManagedCreateRecord.Type;
 export const ManagedSessionsInput = Schema.Struct({
   installationID: launchIdentifier,
   workspaceID: launchIdentifier,
@@ -127,6 +156,16 @@ export const DeckhandRpcGroup = RpcGroup.make(
     success: Schema.Array(ManagedSessionView),
     error: ErrorSchema,
     stream: true,
+  }),
+  Rpc.make(DECKHAND_METHODS.create, {
+    payload: ManagedCreateInput,
+    success: ManagedCreateRecord,
+    error: ErrorSchema,
+  }),
+  Rpc.make(DECKHAND_METHODS.createGet, {
+    payload: Schema.Struct({ operationKey: launchIdentifier }),
+    success: ManagedCreateRecord,
+    error: ErrorSchema,
   }),
   Rpc.make(DECKHAND_METHODS.launch, {
     payload: ManagedLaunchInput,
