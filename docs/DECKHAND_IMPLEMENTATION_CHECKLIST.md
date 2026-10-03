@@ -138,3 +138,7 @@ Deckhand `245c058b49` and native `9dfd4b6f` coordinate both Git drivers and chec
 ## Workspace backend selection checkpoint — 2026-10-03
 
 Deckhand `826631a044` routes mutation inspection, authenticated inventory/connected creation and managed launch context lookup through the common WorkspaceBackend. Missing Git metadata retains native ownership; standalone/native transfer remains explicit, and shared refs preserve separately owned worktrees. Three hundred twelve focused tests, server typecheck/build, scoped lint and the patch audit passed. Real authenticated native inventory, stale creation refusal, held-owner Git refusal and scoped release were verified with all test processes stopped. [Evidence and remaining lifecycle work](DECKHAND_FOUNDATION_EVIDENCE.md#workspace-backend-selection-checkpoint--2026-10-03) distinguish this partial interface from complete backend lifecycle delegation and native lane lifecycle reservations. DH-011–DH-014 remain open; only DH-001 is checked.
+
+### Native lane lifecycle ownership evidence (partial DH-011–DH-014)
+
+Native `3d4a72fb`; 88 focused native tests plus fresh real-app Unix-socket lifecycle verification passed. Physical writer conflicts, borrowed teardown attribution, unstopped process retention, task-only checkouts and missing registered cleanup are covered. Evidence and remaining interface/concurrency/recovery work are recorded in `DECKHAND_FOUNDATION_EVIDENCE.md`; these items remain unchecked.
