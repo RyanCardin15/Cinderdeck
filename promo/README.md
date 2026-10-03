@@ -30,7 +30,17 @@ The repository's distributable assets are:
 - `../assets/cinderdeck-promo-poster.png` — opening hero frame.
 - `../assets/cinderdeck-promo.gif` — silent, condensed 16-second overview.
 
-These are local deliverables. The old GitHub user-attachment URL is not the new video. The README now links the versioned MP4; uploading another GitHub attachment is a separate publishing step.
+The root README plays the full film through a GitHub video attachment and offers the versioned MP4 as a download. Keep playback on the attachment: linking to the repository's MP4 file opens GitHub's file viewer, which can fail in GitHub Mobile.
+
+### Publish a replacement video
+
+After rendering and updating the distributable assets, upload the new MP4 to the showcase pull request. A current GitHub CLI with attachment support can do this from this folder:
+
+```sh
+gh pr edit <pull-request-number> --attach ../assets/cinderdeck-promo.mp4
+```
+
+Alternatively, attach the video in GitHub's Markdown editor. Copy the resulting `https://github.com/user-attachments/assets/…` URL into the root README as a bare URL in its own paragraph so GitHub renders a native video player. Use the permanent attachment URL, not its expiring redirect. Verify the rendered player loads, plays with audio, and seeks before merging; check the GitHub phone app when available. See [GitHub's attachment instructions](https://docs.github.com/en/github-cli/github-cli/attaching-files-with-github-cli).
 
 ## Story and motion
 
