@@ -26,6 +26,8 @@ const decodeFeature = Schema.decodeUnknownEffect(Schema.fromJsonString(Contracts
 const encodeWorkspace = Schema.encodeEffect(Schema.fromJsonString(Contracts.WorkspaceBinding));
 const encodeCheckout = Schema.encodeEffect(Schema.fromJsonString(Contracts.CheckoutBinding));
 const encodeFeature = Schema.encodeEffect(Schema.fromJsonString(Contracts.Feature));
+const decodeSession = Schema.decodeUnknownEffect(Schema.fromJsonString(Contracts.SessionBinding));
+const encodeSession = Schema.encodeEffect(Schema.fromJsonString(Contracts.SessionBinding));
 type Result<A> = Effect.Effect<A, RelationshipError>;
 export class Relationships extends Context.Service<
   Relationships,
@@ -50,6 +52,16 @@ export class Relationships extends Context.Service<
     readonly workspace: (id: string) => Result<Contracts.WorkspaceBinding>;
     readonly feature: (id: string) => Result<Contracts.Feature>;
     readonly checkout: (id: string) => Result<Contracts.CheckoutBinding>;
+    readonly putSession: (
+      record: Contracts.SessionBinding,
+      expectedSequence: number | null,
+    ) => Result<void>;
+    readonly session: (id: string) => Result<Contracts.SessionBinding>;
+    readonly sessions: (input: {
+      readonly featureId: string;
+      readonly afterId?: string;
+      readonly limit: number;
+    }) => Result<ReadonlyArray<Contracts.SessionBinding>>;
   }
 >()("t3/deckhand/Relationships") {}
 
@@ -85,6 +97,103 @@ const make = Effect.gen(function* () {
       if (!rows[0]) return yield* error(id, "missing");
       return yield* decodeCheckout(rows[0].record_json);
     }).pipe(Effect.mapError(storage(id)));
+  const session = (id: string) =>
+    Effect.gen(function* () {
+      const rows = yield* sql<{
+        record_json: string;
+      }>`SELECT record_json FROM deckhand_sessions WHERE id = ${id}`;
+      if (!rows[0]) return yield* error(id, "missing");
+      return yield* decodeSession(rows[0].record_json);
+    }).pipe(Effect.mapError(storage(id)));
+  // Only the environment's managed orchestration service may supply these projections.
+  // External registration has a separate authority and cannot claim a managed thread.
+  const putSession = (record: Contracts.SessionBinding, expectedSequence: number | null) =>
+    sql
+      .withTransaction(
+        Effect.gen(function* () {
+          const encoded = yield* encodeSession(record);
+          if (!record.capabilities.managed) return yield* error(record.id, "wrong_context");
+          if (expectedSequence === null) {
+            if (record.lastSequence !== 0) return yield* error(record.id, "stale");
+            const existing =
+              yield* sql`SELECT id FROM deckhand_sessions WHERE id = ${record.id} OR thread_id = ${record.threadId}`;
+            if (existing.length) return yield* error(record.id, "stale");
+            const item = yield* feature(record.featureId);
+            const target = yield* checkout(record.checkoutId);
+            const parent = yield* workspace(target.workspaceId);
+            const source = yield* workspace(item.workspaceId);
+            const links =
+              yield* sql`SELECT checkout_id FROM deckhand_feature_checkouts WHERE feature_id = ${record.featureId} AND checkout_id = ${record.checkoutId}`;
+            if (
+              !links.length ||
+              item.status !== "active" ||
+              target.state !== "ready" ||
+              parent.state !== "active" ||
+              source.state !== "active" ||
+              parent.environmentId !== source.environmentId ||
+              parent.generation !== target.workspaceGeneration ||
+              (record.role === "reviewer" && record.desiredAccess === "write") ||
+              (record.desiredAccess === "read_only" && !record.capabilities.enforcedReadOnly)
+            ) {
+              return yield* error(record.id, "wrong_context");
+            }
+            if (record.role === "reviewer" && record.desiredAccess === "isolated") {
+              const primary = yield* sql<{
+                checkout_id: string;
+              }>`SELECT checkout_id FROM deckhand_feature_checkouts
+            WHERE feature_id = ${record.featureId} AND is_primary = 1`;
+              if (
+                !primary[0] ||
+                primary[0].checkout_id === target.id ||
+                target.kind !== "lane" ||
+                !target.repositories.length
+              )
+                return yield* error(record.id, "wrong_context");
+              const original = yield* checkout(primary[0].checkout_id);
+              const sourceIds = new Set(original.repositories.map((repo) => repo.physicalId));
+              if (
+                !sourceIds.size ||
+                target.repositories.some((repo) => sourceIds.has(repo.physicalId))
+              )
+                return yield* error(record.id, "wrong_context");
+            }
+            yield* sql`INSERT INTO deckhand_sessions(id, thread_id, feature_id, checkout_id, record_json)
+          VALUES(${record.id}, ${record.threadId}, ${record.featureId}, ${record.checkoutId}, ${encoded})`;
+          } else {
+            const old = yield* session(record.id);
+            if (old.lastSequence !== expectedSequence || record.lastSequence <= expectedSequence)
+              return yield* error(record.id, "stale");
+            if (
+              old.threadId !== record.threadId ||
+              old.featureId !== record.featureId ||
+              old.checkoutId !== record.checkoutId ||
+              old.role !== record.role ||
+              old.desiredAccess !== record.desiredAccess ||
+              (record.desiredAccess === "read_only" && !record.capabilities.enforcedReadOnly)
+            ) {
+              return yield* error(record.id, "wrong_context");
+            }
+            // Missing/released checkouts retain their history and can still receive a disconnect/exit.
+            const updated = yield* sql`UPDATE deckhand_sessions SET record_json = ${encoded}
+          WHERE id = ${record.id} AND json_extract(record_json, '$.lastSequence') = ${expectedSequence} RETURNING id`;
+            if (!updated.length) return yield* error(record.id, "stale");
+          }
+        }),
+      )
+      .pipe(Effect.mapError(storage(record.id)));
+  const sessions = (input: {
+    readonly featureId: string;
+    readonly afterId?: string;
+    readonly limit: number;
+  }) =>
+    Effect.gen(function* () {
+      if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 100)
+        return yield* error(input.featureId, "wrong_context");
+      yield* feature(input.featureId);
+      const rows = yield* sql<{ record_json: string }>`SELECT record_json FROM deckhand_sessions
+        WHERE feature_id = ${input.featureId} AND id > ${input.afterId ?? ""} ORDER BY id LIMIT ${input.limit}`;
+      return yield* Effect.forEach(rows, (row) => decodeSession(row.record_json));
+    }).pipe(Effect.mapError(storage(input.featureId)));
   const putWorkspace = (record: Contracts.WorkspaceBinding, expectedRevision: number | null) =>
     sql
       .withTransaction(
@@ -129,6 +238,13 @@ const make = Effect.gen(function* () {
           ) {
             return yield* error(record.id, "wrong_context");
           }
+          const identities = new Set(record.repositories.map((repo) => repo.physicalId));
+          if (
+            (record.state === "ready" && !identities.size) ||
+            identities.size !== record.repositories.length ||
+            (record.kind === "primary" ? record.laneId !== null : record.laneId === null)
+          )
+            return yield* error(record.id, "wrong_context");
           if (record.revision !== (expectedRevision ?? 0) + 1)
             return yield* error(record.id, "stale");
           const encoded = yield* encodeCheckout(record);
@@ -148,6 +264,20 @@ const make = Effect.gen(function* () {
             ) {
               return yield* error(record.id, "wrong_context");
             }
+            // Roots, branches and commits can change. A physical checkout replacement needs a new binding.
+            if (
+              old.repositories.length &&
+              (old.repositories.length !== record.repositories.length ||
+                old.repositories.some(
+                  (repo) =>
+                    !record.repositories.some(
+                      (next) =>
+                        next.physicalId === repo.physicalId &&
+                        next.repositoryPhysicalId === repo.repositoryPhysicalId,
+                    ),
+                ))
+            )
+              return yield* error(record.id, "wrong_context");
             const changed =
               yield* sql`UPDATE deckhand_checkouts SET revision = ${record.revision}, record_json = ${encoded}
         WHERE id = ${record.id} AND revision = ${expectedRevision} RETURNING id`;
@@ -213,6 +343,9 @@ const make = Effect.gen(function* () {
     workspace,
     feature,
     checkout,
+    putSession,
+    session,
+    sessions,
   });
 });
 export const layer = Layer.effect(Relationships, make);
