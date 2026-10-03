@@ -64,6 +64,7 @@ export const CheckoutBinding = Schema.Struct({
   id: CheckoutBindingId,
   workspaceId: WorkspaceBindingId,
   workspaceGeneration: PositiveInt,
+  nativeGeneration: Schema.optionalKey(PositiveInt),
   environmentId: EnvironmentId,
   backend: BackendKind,
   kind: Schema.Literals(["primary", "lane"]),
@@ -91,6 +92,9 @@ export const SessionBinding = Schema.Struct({
   providerInstanceId: identifier,
   featureId: FeatureId,
   checkoutId: CheckoutBindingId,
+  // Absent on pre-v4 history. Such a session must be deliberately rebound
+  // before launch; a multi-repository checkout never supplies an implicit cwd.
+  repositoryScope: Schema.optionalKey(Schema.Array(identifier).check(Schema.isMaxLength(64))),
   role: Schema.Literals(["writer", "reviewer", "observer"]),
   desiredAccess: Schema.Literals(["write", "read_only", "isolated"]),
   execution: ExecutionState,

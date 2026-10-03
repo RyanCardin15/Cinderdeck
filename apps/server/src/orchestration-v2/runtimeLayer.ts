@@ -44,6 +44,13 @@ import { layer as providerTurnStartServiceLayer } from "./ProviderTurnStartServi
 import { layer as runExecutionServiceLayer } from "./RunExecutionService.ts";
 import { layer as runFinalizationServiceLayer } from "./RunFinalizationService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
+import * as ManagedProviderAdapters from "../deckhand/ManagedProviderAdapters.ts";
+import * as ManagedCheckoutGuard from "../deckhand/ManagedCheckoutGuard.ts";
+import * as WriterReservations from "../deckhand/WriterReservations.ts";
+import * as CheckoutIdentity from "../deckhand/CheckoutIdentity.ts";
+import * as Relationships from "../deckhand/Relationships.ts";
+import * as IntegrationHub from "../deckhand/IntegrationHub.ts";
+import * as ProcessRunner from "../processRunner.ts";
 import { layer as runtimeRequestServiceLayer } from "./RuntimeRequestService.ts";
 import { layerWithLegacyImporter as threadManagementServiceLayer } from "./ThreadManagementService.ts";
 import { layer as threadLaunchServiceLayer } from "./ThreadLaunchService.ts";
@@ -114,7 +121,16 @@ const contextHandoffServiceProvided = contextHandoffServiceLayer.pipe(
   Layer.provide(idAllocatorLayer),
 );
 
-const providerAdapterRegistryProvided = providerAdapterRegistryLayerFromProviderInstances;
+const managedCheckoutGuardProvided = ManagedCheckoutGuard.layer.pipe(
+  Layer.provide(Relationships.layer),
+  Layer.provide(CheckoutIdentity.layer.pipe(Layer.provide(ProcessRunner.layer))),
+  Layer.provide(IntegrationHub.layerLive),
+);
+const providerAdapterRegistryProvided = ManagedProviderAdapters.layer.pipe(
+  Layer.provide(providerAdapterRegistryLayerFromProviderInstances),
+  Layer.provide(managedCheckoutGuardProvided),
+  Layer.provide(WriterReservations.layer),
+);
 const providerSwitchServiceProvided = providerSwitchServiceLayer.pipe(
   Layer.provide(providerAdapterRegistryProvided),
 );
@@ -147,6 +163,7 @@ const runExecutionServiceProvided = runExecutionServiceLayer.pipe(
 );
 
 const providerTurnStartServiceProvided = providerTurnStartServiceLayer.pipe(
+  Layer.provide(managedCheckoutGuardProvided),
   Layer.provide(
     Layer.mergeAll(
       contextHandoffServiceProvided,

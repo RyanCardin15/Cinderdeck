@@ -14,7 +14,18 @@ import * as IntegrationDiscovery from "./IntegrationDiscovery.ts";
 import * as IntegrationHub from "./IntegrationHub.ts";
 import * as Migrations from "./Migrations.ts";
 import * as OperationJournal from "./OperationJournal.ts";
+import * as Contracts from "@t3tools/contracts/deckhand";
+import { ThreadId } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
+import * as CheckoutIdentity from "./CheckoutIdentity.ts";
+import * as ManagedCheckoutGuard from "./ManagedCheckoutGuard.ts";
+import * as Relationships from "./Relationships.ts";
+import * as ProcessRunner from "../processRunner.ts";
 
+const decodeWorkspaceBinding = Schema.decodeUnknownEffect(Contracts.WorkspaceBinding);
+const decodeCheckoutBinding = Schema.decodeUnknownEffect(Contracts.CheckoutBinding);
+const decodeFeature = Schema.decodeUnknownEffect(Contracts.Feature);
+const decodeSessionBinding = Schema.decodeUnknownEffect(Contracts.SessionBinding);
 const hello = {
   protocolVersion: 1,
   installationID: "installation",
@@ -124,6 +135,173 @@ const TestLayer = NodeSqliteClient.layer({ filename: ":memory:" }).pipe(
   Layer.provideMerge(NodeServices.layer),
 );
 describe("Deckhand integration hub", () => {
+  it.effect(
+    "guards the exact lane generation and physical repository before connected execution",
+    () =>
+      Effect.gen(function* () {
+        yield* Migrations.migrate;
+        const fs = yield* FileSystem.FileSystem;
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "dh-guard-" });
+        let generation = 7;
+        let available = true;
+        const socketPath = yield* peer((request) => {
+          if (request.method === "integration.hello") return { result: hello };
+          if (request.method === "integration.snapshot")
+            return {
+              result: {
+                installationID: "installation",
+                runtimeEpoch: "epoch",
+                cursor: "installation:0",
+                total: 1,
+                resources: [
+                  {
+                    workspaceID: "native-lane",
+                    generation,
+                    revision: "rev",
+                    available,
+                    workspace: {
+                      id: "native-lane",
+                      name: "Lane",
+                      file: "/lane.toml",
+                      state: "stopped",
+                      definitionChanged: false,
+                      issues: [],
+                      services: [],
+                      repos: [
+                        {
+                          id: "app",
+                          path: root,
+                          branch: "main",
+                          dirty: false,
+                          changedFiles: 0,
+                          ahead: 0,
+                          behind: 0,
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            };
+          return null;
+        });
+        const guardLayer = ManagedCheckoutGuard.layer.pipe(
+          Layer.provideMerge(Relationships.layer),
+          Layer.provideMerge(CheckoutIdentity.layer.pipe(Layer.provideMerge(ProcessRunner.layer))),
+          Layer.provide(hubLayer(socketPath)),
+        );
+        yield* Effect.gen(function* () {
+          const runner = yield* ProcessRunner.ProcessRunner;
+          const identity = yield* CheckoutIdentity.CheckoutIdentity;
+          const store = yield* Relationships.Relationships;
+          const guard = yield* ManagedCheckoutGuard.ManagedCheckoutGuard;
+          const initialized = yield* runner.run({
+            command: "git",
+            args: ["-C", root, "init", "-b", "main"],
+          });
+          assert.equal(initialized.code, 0);
+          const physical = yield* identity.resolve(root);
+          const workspace = yield* decodeWorkspaceBinding({
+            id: "workspace",
+            environmentId: "installation",
+            backend: "cinderdeck",
+            ownerId: "native-base",
+            generation: 2,
+            revision: 1,
+            name: "Workspace",
+            state: "active",
+          });
+          const checkout = yield* decodeCheckoutBinding({
+            id: "checkout",
+            workspaceId: workspace.id,
+            workspaceGeneration: 2,
+            nativeGeneration: 7,
+            environmentId: "installation",
+            backend: "cinderdeck",
+            kind: "lane",
+            laneId: "native-lane",
+            state: "ready",
+            repositories: [physical],
+            revision: 1,
+          });
+          const feature = yield* decodeFeature({
+            id: "feature",
+            workspaceId: workspace.id,
+            title: "Payment",
+            objective: "Verify payment",
+            status: "active",
+            revision: 1,
+            createdAt: "created",
+            updatedAt: "created",
+          });
+          const binding = yield* decodeSessionBinding({
+            id: "session",
+            threadId: "thread",
+            providerSessionId: null,
+            providerInstanceId: "codex",
+            featureId: feature.id,
+            checkoutId: checkout.id,
+            repositoryScope: [physical.physicalId],
+            role: "writer",
+            desiredAccess: "write",
+            execution: "queued",
+            connection: "connected",
+            lastSequence: 0,
+            capabilities: {
+              nativeResume: true,
+              interrupt: true,
+              steering: false,
+              approvals: true,
+              questions: true,
+              enforcedReadOnly: false,
+              imageInput: true,
+              videoInput: false,
+              managed: true,
+            },
+          });
+          yield* store.putWorkspace(workspace, null);
+          yield* store.putCheckout(checkout, null);
+          yield* store.putFeature(feature, null);
+          yield* store.linkCheckout(feature.id, checkout.id, true);
+          yield* store.putSession(binding, null);
+          assert.isTrue(yield* guard.connected(binding.threadId));
+          assert.equal(
+            (yield* guard.resolve(binding.threadId, root))?.physicalId,
+            physical.physicalId,
+          );
+          generation = 8;
+          assert.equal(
+            (yield* guard.resolve(binding.threadId, root).pipe(Effect.flip)).reason,
+            "stale_binding",
+          );
+          generation = 7;
+          available = false;
+          assert.equal(
+            (yield* guard.resolve(binding.threadId, root).pipe(Effect.flip)).reason,
+            "stale_binding",
+          );
+          available = true;
+          assert.equal(
+            (yield* guard.resolve(binding.threadId, `${root}/gone`).pipe(Effect.flip)).reason,
+            "missing",
+          );
+          const reviewer = {
+            ...binding,
+            id: Contracts.SessionBindingId.make("review"),
+            threadId: ThreadId.make("review"),
+            role: "reviewer" as const,
+            desiredAccess: "read_only" as const,
+            capabilities: { ...binding.capabilities, enforcedReadOnly: true },
+          };
+          yield* store.putSession(reviewer, null);
+          assert.equal(
+            (yield* guard.resolve(reviewer.threadId, root).pipe(Effect.flip)).reason,
+            "unsupported_access",
+          );
+          assert.equal((yield* store.session(binding.id)).checkoutId, checkout.id);
+        }).pipe(Effect.provide(guardLayer));
+      }).pipe(Effect.provide(TestLayer)),
+  );
   it.effect(
     "publishes a coherent paged snapshot, refuses torn pagination and pins the installation after reopen",
     () =>

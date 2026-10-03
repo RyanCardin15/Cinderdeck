@@ -10,7 +10,7 @@ export class DeckhandStoreVersionError extends Schema.TaggedError<DeckhandStoreV
     return "This Deckhand store requires a newer application. Restore a compatible binary or store backup.";
   }
 }
-const VERSION = 3;
+const VERSION = 4;
 /** Separate migration ledger prevents a new upstream migration number from colliding with fork state. */
 export const migrate = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -90,6 +90,19 @@ export const migrate = Effect.gen(function* () {
           channel TEXT PRIMARY KEY, installation_id TEXT NOT NULL, host_id TEXT NOT NULL,
           record_json TEXT NOT NULL CHECK(json_valid(record_json))
         )`;
+      }
+      if (found < 4) {
+        yield* sql`CREATE TABLE deckhand_writer_requests (
+          sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
+          runtime_epoch TEXT NOT NULL, owner_id TEXT NOT NULL,
+          state TEXT NOT NULL CHECK(state IN ('queued','held','uncertain','released'))
+        )`;
+        yield* sql`CREATE TABLE deckhand_writer_scope (
+          request_id TEXT NOT NULL REFERENCES deckhand_writer_requests(id),
+          physical_id TEXT NOT NULL, PRIMARY KEY(request_id, physical_id)
+        )`;
+        yield* sql`CREATE INDEX deckhand_writer_scope_physical ON deckhand_writer_scope(physical_id, request_id)`;
+        yield* sql`CREATE INDEX deckhand_writer_requests_owner ON deckhand_writer_requests(owner_id, state)`;
       }
       yield* sql`INSERT INTO deckhand_schema(version) VALUES (${VERSION})`;
     }),

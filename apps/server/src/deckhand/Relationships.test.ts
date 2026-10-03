@@ -24,6 +24,7 @@ const session = (id = "session", threadId = "thread") =>
     providerInstanceId: "codex-local",
     featureId: "feature",
     checkoutId: "checkout",
+    repositoryScope: ["physical-checkout"],
     role: "writer",
     desiredAccess: "write",
     execution: "starting",
@@ -73,6 +74,7 @@ const checkout = (
     id,
     workspaceId,
     workspaceGeneration: generation,
+    nativeGeneration: generation,
     environmentId,
     backend: "cinderdeck",
     kind: "lane",
@@ -248,6 +250,7 @@ describe("Deckhand relationship persistence", () => {
           ...session("isolated-review", "isolated-thread"),
           role: "reviewer",
           checkoutId: isolated.id,
+          repositoryScope: isolated.repositories.map((repo) => repo.physicalId),
           desiredAccess: "isolated",
         },
         null,
@@ -403,6 +406,8 @@ describe("Deckhand schema migration", () => {
         // A v1 store has the same relationship tables but no feature paging index.
         yield* sql`DROP INDEX deckhand_sessions_feature_page`;
         yield* sql`DROP TABLE deckhand_integrations`;
+        yield* sql`DROP TABLE deckhand_writer_scope`;
+        yield* sql`DROP TABLE deckhand_writer_requests`;
         yield* sql`DELETE FROM deckhand_schema WHERE version >= 2`;
         yield* sql`INSERT INTO deckhand_schema VALUES (1)`;
         yield* Migrations.migrate;
@@ -413,7 +418,7 @@ describe("Deckhand schema migration", () => {
             ?.transcript,
           "existing conversation",
         );
-        yield* sql`INSERT INTO deckhand_schema VALUES (4)`;
+        yield* sql`INSERT INTO deckhand_schema VALUES (5)`;
         const newer = yield* Migrations.migrate.pipe(Effect.flip);
         assert.equal(newer._tag, "DeckhandStoreVersionError");
         const provenance = yield* sql<{

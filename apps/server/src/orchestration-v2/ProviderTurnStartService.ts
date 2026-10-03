@@ -12,6 +12,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
+import * as ManagedCheckoutGuard from "../deckhand/ManagedCheckoutGuard.ts";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -455,6 +456,30 @@ export const layer: Layer.Layer<
         }
       }
       const { worktreePath, branch } = projection.thread;
+      const checkoutGuard = yield* Effect.serviceOption(ManagedCheckoutGuard.ManagedCheckoutGuard);
+      if (
+        Option.isSome(checkoutGuard) &&
+        (yield* checkoutGuard.value
+          .connected(projection.thread.id)
+          .pipe(
+            Effect.mapError((cause) => new ProviderTurnStartError({ runId: input.runId, cause })),
+          ))
+      ) {
+        const boundPolicy = yield* runtimePolicy
+          .resolve({ thread: projection.thread, modelSelection: run.modelSelection })
+          .pipe(
+            Effect.mapError((cause) => new ProviderTurnStartError({ runId: input.runId, cause })),
+          );
+        yield* checkoutGuard.value.resolve(projection.thread.id, boundPolicy.cwd).pipe(
+          Effect.mapError(
+            (cause) =>
+              new ProviderTurnStartError({
+                runId: input.runId,
+                cause,
+              }),
+          ),
+        );
+      }
       if (worktreePath !== null && branch !== null) {
         const exists = yield* fileSystem
           .exists(worktreePath)

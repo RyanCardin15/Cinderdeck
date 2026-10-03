@@ -29,6 +29,13 @@ export class IntegrationHub extends Context.Service<
     readonly overview: (input: Page) => Effect.Effect<Rpc.IntegrationView, Rpc.DeckhandRpcError>;
     readonly subscribe: (input: Page) => Stream.Stream<Rpc.IntegrationView, Rpc.DeckhandRpcError>;
     readonly refresh: Effect.Effect<void, Rpc.DeckhandRpcError>;
+    readonly resource: (workspaceID: string) => Effect.Effect<
+      {
+        readonly hello: Contracts.IntegrationHello;
+        readonly resource: Contracts.IntegrationSnapshot["resources"][number];
+      },
+      Rpc.DeckhandRpcError
+    >;
     readonly submit: (
       actorID: string,
       input: Contracts.IntegrationOperationInput,
@@ -301,6 +308,17 @@ const make = Effect.gen(function* () {
       return (yield* journal.read(actorID, key)).receipt ?? receipt;
     }).pipe(Effect.mapError(rpcError));
   return IntegrationHub.of({
+    resource: (workspaceID) =>
+      Effect.gen(function* () {
+        yield* refresh;
+        const view = yield* SubscriptionRef.get(state);
+        if (view.state !== "connected" || view.hello === null)
+          return yield* new Rpc.DeckhandRpcError({ reason: "unavailable" });
+        const resource = view.resources.find((item) => item.workspaceID === workspaceID);
+        if (!resource?.available || !resource.workspace)
+          return yield* new Rpc.DeckhandRpcError({ reason: "stale_binding" });
+        return { hello: view.hello, resource };
+      }),
     overview,
     subscribe,
     refresh,

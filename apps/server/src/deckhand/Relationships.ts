@@ -132,6 +132,11 @@ const make = Effect.gen(function* () {
               source.state !== "active" ||
               parent.environmentId !== source.environmentId ||
               parent.generation !== target.workspaceGeneration ||
+              !record.repositoryScope?.length ||
+              new Set(record.repositoryScope).size !== record.repositoryScope.length ||
+              record.repositoryScope.some(
+                (id) => !target.repositories.some((repo) => repo.physicalId === id),
+              ) ||
               (record.role === "reviewer" && record.desiredAccess === "write") ||
               (record.desiredAccess === "read_only" && !record.capabilities.enforcedReadOnly)
             ) {
@@ -169,6 +174,8 @@ const make = Effect.gen(function* () {
               old.checkoutId !== record.checkoutId ||
               old.role !== record.role ||
               old.desiredAccess !== record.desiredAccess ||
+              (old.repositoryScope ?? []).length !== (record.repositoryScope ?? []).length ||
+              (old.repositoryScope ?? []).some((id) => !record.repositoryScope?.includes(id)) ||
               (record.desiredAccess === "read_only" && !record.capabilities.enforcedReadOnly)
             ) {
               return yield* error(record.id, "wrong_context");
@@ -241,6 +248,9 @@ const make = Effect.gen(function* () {
           const identities = new Set(record.repositories.map((repo) => repo.physicalId));
           if (
             (record.state === "ready" && !identities.size) ||
+            (record.state === "ready" &&
+              record.backend === "cinderdeck" &&
+              record.nativeGeneration === undefined) ||
             identities.size !== record.repositories.length ||
             (record.kind === "primary" ? record.laneId !== null : record.laneId === null)
           )
@@ -259,6 +269,7 @@ const make = Effect.gen(function* () {
               old.environmentId !== record.environmentId ||
               old.backend !== record.backend ||
               old.workspaceGeneration !== record.workspaceGeneration ||
+              old.nativeGeneration !== record.nativeGeneration ||
               old.laneId !== record.laneId ||
               old.kind !== record.kind
             ) {
