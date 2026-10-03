@@ -43,7 +43,7 @@ nonisolated struct IntegrationHello: Encodable, Sendable {
   let executionHostID: String
   let channel: String
   let runtimeEpoch: String
-  let capabilities = ["projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.adopt", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "checkout.reservations", "checkout.contexts"]
+  let capabilities = ["projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.adopt", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "checkout.reservations", "checkout.contexts"]
   let maximumFrameBytes = StackControlSocketServer.maximumFrameBytes
   let maximumPageSize = 500
   let maximumWaitMs = 25_000
@@ -256,8 +256,11 @@ extension StackControlService {
     }
     let allowed: Set<String>
     if input.method == "lane.create" {
-      allowed = ["workspace", "branch", "from", "start", "setup"]
+      allowed = ["workspace", "branch", "from", "repositoryRefs", "start", "setup"]
       let decoded: IntegrationLaneOperation = try decodeIntegration(input.arguments)
+      guard decoded.repositoryRefs.map({ $0.count <= 64 && $0.allSatisfy({ bounded($0.key, 160) && bounded($0.value, 200) && !$0.value.hasPrefix("-") && !$0.value.contains("\0") && !$0.value.contains("\n") && !$0.value.contains("\r") }) }) ?? true else {
+        throw StackControlError.invalid("Invalid repository start revisions")
+      }
       guard bounded(decoded.branch, 200), decoded.from.map({ bounded($0, 200) }) ?? true else { throw StackControlError.invalid("Invalid lane branch or source") }
     } else if input.method == "lane.adopt" {
       allowed = ["workspace", "path", "name", "from", "start", "setup"]
@@ -391,6 +394,7 @@ nonisolated private struct IntegrationLaneOperation: Decodable {
   let workspace: String
   let branch: String
   let from: String?
+  let repositoryRefs: [String: String]?
   let start: Bool?
   let setup: Bool?
 }

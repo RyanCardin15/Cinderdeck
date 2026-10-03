@@ -380,6 +380,15 @@ final class StackControlService: ObservableObject {
     } else if request.branch.isEmpty {
       throw StackControlError.invalid("Pass a branch name for the new lane.")
     }
+    if let refs = params["repositoryRefs"] {
+      guard !adopt, let values = refs.objectValue, values.count <= 64 else {
+        throw StackControlError.invalid("repositoryRefs must map repository IDs to start revisions for lane creation")
+      }
+      for (id, value) in values {
+        guard let ref = value.stringValue else { throw StackControlError.invalid("repositoryRefs.\(id) must be a string") }
+        request.repositoryRefs[id] = ref
+      }
+    }
     request.from = params["from"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
     if let values = params["env"]?.objectValue {
       for (key, value) in values {
@@ -390,9 +399,14 @@ final class StackControlService: ObservableObject {
     request.copy = params["copy"]?.stringsValue ?? []
     try requireIdle(source)
     // Cloning a claimed source does not change it or use its service ports.
-    let created = try await lanes.create(stack: source.id, request: request, actor: actor,
-      setup: params["setup"]?.boolValue ?? !adopt) { file in
-      _ = try self.claim(.object(["workspace": .string(file.id), "note": .string("Worktree lane " + (file.lane?.name ?? ""))]), actor: actor)
+    let created: StackLaneCoordinator.Creation
+    do {
+      created = try await lanes.create(stack: source.id, request: request, actor: actor,
+        setup: params["setup"]?.boolValue ?? !adopt) { file in
+        _ = try self.claim(.object(["workspace": .string(file.id), "note": .string("Worktree lane " + (file.lane?.name ?? ""))]), actor: actor)
+      }
+    } catch let refusal as StackLaneStore.StartRevisionRefusal {
+      throw StackControlError.invalid(refusal.message)
     }
     let file = created.file
     var extra: [String: JSONValue] = [:]

@@ -1044,6 +1044,125 @@ final class StackLaneTests: XCTestCase {
     return remote
   }
 
+  func testRepositoryStartRevisionsPinIndependentCommitsAndPersistWithoutChangingSources() async throws {
+    try await load(twoServices: true)
+    let other = root.appendingPathComponent("other")
+    _ = try await StackLaneStore.git(["clone", repo.path, other.path], at: root)
+    let appStart = try await StackLaneStore.git(["rev-parse", "HEAD"], at: repo)
+    try "new app commit\n".write(to: repo.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)
+    try await commitAll("new app commit", at: repo)
+    let appHead = try await StackLaneStore.git(["rev-parse", "HEAD"], at: repo)
+    try "independent api commit\n".write(to: other.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)
+    try await commitAll("independent api commit", at: other)
+    let apiHead = try await StackLaneStore.git(["rev-parse", "HEAD"], at: other)
+    var source = try XCTUnwrap(supervisor.definition("shop"))
+    source.root = root; source.repos.append(.init(id: "other", path: other))
+    source.services[1].repo = "other"; source.services[1].directory = other
+    var request = StackLaneRequest(branch: "explicit-starts")
+    request.repositoryRefs = ["app": appStart, "other": "main"]
+    let record = try await StackLaneStore.create(source: source, request: request, owner: codex,
+      directory: supervisor.lanesDirectory, worktreeRoot: supervisor.worktreeRoot, occupiedPorts: Set(source.services.compactMap(\.port))).record
+    let app = try XCTUnwrap(record.worktrees.first { StackLaneStore.samePath($0.source, repo) })
+    let api = try XCTUnwrap(record.worktrees.first { StackLaneStore.samePath($0.source, other) })
+    let appActual = try await StackLaneStore.git(["rev-parse", "HEAD"], at: app.path)
+    let apiActual = try await StackLaneStore.git(["rev-parse", "HEAD"], at: api.path)
+    XCTAssertEqual(appActual, appStart); XCTAssertEqual(apiActual, apiHead)
+    XCTAssertEqual(record.info.repositoryRefs, ["app": appStart, "other": apiHead])
+    let saved = try XCTUnwrap(StackLaneStore.records(in: supervisor.lanesDirectory).first)
+    XCTAssertEqual(saved.info.repositoryRefs, record.info.repositoryRefs)
+    let appSourceAfter = try await StackLaneStore.git(["rev-parse", "HEAD"], at: repo)
+    let apiSourceAfter = try await StackLaneStore.git(["rev-parse", "HEAD"], at: other)
+    XCTAssertEqual(appSourceAfter, appHead); XCTAssertEqual(apiSourceAfter, apiHead)
+    _ = try await StackLaneStore.remove(record, in: supervisor.lanesDirectory, others: [], options: .init())
+  }
+
+  func testRepositoryStartRevisionsRejectInvalidSharedOrConflictingAliasesBeforeEffects() async throws {
+    try await load()
+    let baseline = try await StackLaneStore.git(["rev-parse", "HEAD"], at: repo)
+    try "later\n".write(to: repo.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)
+    try await commitAll("later", at: repo)
+    var source = try XCTUnwrap(supervisor.definition("shop"))
+    source.repos.append(.init(id: "alias", path: repo))
+    var shared = RepoDefinition(id: "shared", path: repo); shared.laneMode = .shared
+    // A shared alias would make the whole physical root shared. Check that case
+    // separately rather than hiding the conflicting isolated alias case.
+    for refs in [["missing": "HEAD"], ["app": "missing-ref"], ["app": baseline, "alias": "HEAD"], ["app": "-HEAD"]] {
+      var request = StackLaneRequest(branch: "must-not-create")
+      request.repositoryRefs = refs
+      do {
+        _ = try await StackLaneStore.create(source: source, request: request, owner: codex,
+          directory: supervisor.lanesDirectory, worktreeRoot: supervisor.worktreeRoot, occupiedPorts: [])
+        XCTFail("Accepted invalid repository starts")
+      } catch {}
+      XCTAssertTrue(try StackLaneStore.records(in: supervisor.lanesDirectory).isEmpty)
+      let branches = try await StackLaneStore.git(["branch", "--list", "must-not-create"], at: repo)
+      XCTAssertTrue(branches.isEmpty)
+    }
+    source.repos.append(shared)
+    var sharedRequest = StackLaneRequest(branch: "shared-refused"); sharedRequest.repositoryRefs = ["shared": "HEAD"]
+    do {
+      _ = try await StackLaneStore.create(source: source, request: sharedRequest, owner: codex,
+        directory: supervisor.lanesDirectory, worktreeRoot: supervisor.worktreeRoot, occupiedPorts: [])
+      XCTFail("Accepted a shared repository start")
+    } catch {}
+    XCTAssertTrue(try StackLaneStore.records(in: supervisor.lanesDirectory).isEmpty)
+  }
+
+  func testExplicitRepositoryStartOverridesRemoteInferenceAndRefusesExistingLocalBranch() async throws {
+    try await load()
+    _ = try await addOrigin()
+    let remoteHead = try await StackLaneStore.git(["rev-parse", "HEAD"], at: repo)
+    _ = try await StackLaneStore.git(["update-ref", "refs/remotes/origin/pinned", remoteHead], at: repo)
+    try "explicit head\n".write(to: repo.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)
+    try await commitAll("explicit head", at: repo)
+    let explicitHead = try await StackLaneStore.git(["rev-parse", "HEAD"], at: repo)
+    var request = StackLaneRequest(branch: "pinned"); request.repositoryRefs = ["app": "main"]
+    let source = try XCTUnwrap(supervisor.definition("shop"))
+    let record = try await StackLaneStore.create(source: source, request: request, owner: codex,
+      directory: supervisor.lanesDirectory, worktreeRoot: supervisor.worktreeRoot, occupiedPorts: []).record
+    let actual = try await StackLaneStore.git(["rev-parse", "HEAD"], at: record.worktrees[0].path)
+    XCTAssertEqual(actual, explicitHead); XCTAssertNotEqual(actual, remoteHead)
+    let upstream = try await StackLaneStore.gitResult(["rev-parse", "--abbrev-ref", "pinned@{upstream}"], at: record.worktrees[0].path)
+    XCTAssertNotEqual(upstream.status, 0)
+    _ = try await StackLaneStore.remove(record, in: supervisor.lanesDirectory, others: [], options: .init())
+    request.repositoryRefs = ["app": remoteHead]
+    do {
+      _ = try await StackLaneStore.create(source: source, request: request, owner: codex,
+        directory: supervisor.lanesDirectory, worktreeRoot: supervisor.worktreeRoot, occupiedPorts: [])
+      XCTFail("Moved an existing local branch")
+    } catch { XCTAssertTrue(error.localizedDescription.contains("already exists")) }
+    let unchanged = try await StackLaneStore.git(["rev-parse", "pinned"], at: repo)
+    XCTAssertEqual(unchanged, explicitHead)
+    XCTAssertTrue(try StackLaneStore.records(in: supervisor.lanesDirectory).isEmpty)
+  }
+
+  func testDurableRepositoryStartRefsAreTypedAndCreateAtThePinnedCommit() async throws {
+    try await load()
+    let baseline = try await StackLaneStore.git(["rev-parse", "HEAD"], at: repo)
+    let receipt = try await durableLane("lane.create", workspace: "shop", arguments: ["branch": .string("durable-start"),
+      "repositoryRefs": .object(["app": .string(baseline)]), "start": .bool(false), "setup": .bool(false)])
+    XCTAssertEqual(receipt.state, "succeeded")
+    let id = try XCTUnwrap(receipt.result?["workspace"]?["id"]?.stringValue)
+    let record = try XCTUnwrap(StackLaneStore.records(in: supervisor.lanesDirectory).first { $0.id == id })
+    XCTAssertEqual(record.info.repositoryRefs, ["app": baseline])
+    let count = try StackLaneStore.records(in: supervisor.lanesDirectory).count
+    for refs in [JSONValue.array([]), .object(["app": .number(1)]), .object(["app": .string(String(repeating: "x", count: 201))])] {
+      do {
+        _ = try await durableLane("lane.create", workspace: "shop", arguments: ["branch": .string("invalid-ref"), "repositoryRefs": refs, "start": .bool(false)])
+        XCTFail("Accepted invalid typed repository starts")
+      } catch {}
+      XCTAssertEqual(try StackLaneStore.records(in: supervisor.lanesDirectory).count, count)
+    }
+    for refs in [["app": "missing-start"], ["unknown": "HEAD"], ["app": baseline]] {
+      let failed = try await durableLane("lane.create", workspace: "shop", arguments: ["branch": .string(refs["app"] == baseline ? "durable-start" : "semantic-refused"),
+        "repositoryRefs": .object(refs.mapValues(JSONValue.string)), "start": .bool(false), "setup": .bool(false)])
+      XCTAssertEqual(failed.state, "failed", "A rejected start before effects has a definitive receipt")
+      XCTAssertEqual(failed.error?.code, "invalid_params")
+      XCTAssertEqual(try StackLaneStore.records(in: supervisor.lanesDirectory).count, count)
+    }
+    try await supervisor.removeLane(id, actor: codex)
+  }
+
   func testRemoteOnlyBranchIsTrackedAndNewBranchesStartAtFrom() async throws {
     try await load()
     let remote = try await addOrigin()

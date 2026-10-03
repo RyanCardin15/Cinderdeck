@@ -8,6 +8,12 @@ import Foundation
 /// definition a lane runs is derived from the current source every time it loads.
 /// The supervisor serializes mutations; reads can also run off the main actor.
 nonisolated enum StackLaneStore {
+  /// Refused while resolving explicit starts, before lane filesystem/Git effects.
+  struct StartRevisionRefusal: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
+  }
+
   static func directory(for definitions: URL) -> URL { definitions.appendingPathComponent(".lanes", isDirectory: true) }
 
   /// Default folder for worktrees; the Settings value or `[lanes] dir` override it.
@@ -359,10 +365,40 @@ nonisolated enum StackLaneStore {
       throw StackError.message("Use a valid local Git branch name for the lane.")
     }
     guard !existing.contains(where: { $0.info.reference == source.id + "/" + branch }) else {
-      throw StackError.message("Lane \(source.id)/\(branch) already exists. Start or inspect it with that name.")
+      let message = "Lane \(source.id)/\(branch) already exists. Start or inspect it with that name."
+      if !request.repositoryRefs.isEmpty { throw StartRevisionRefusal(message: message) }
+      throw StackError.message(message)
     }
     for (key, _) in request.environment where key.range(of: "^[A-Za-z_][A-Za-z0-9_]*$", options: .regularExpression) == nil {
       throw StackError.message("Invalid environment variable name \(key)")
+    }
+
+    // Explicit start revisions belong to repository IDs, not every Git root in
+    // the workspace. Pin them before any manifest, branch or folder is created.
+    guard request.repositoryRefs.count <= 64, request.adoptPath == nil || request.repositoryRefs.isEmpty else {
+      throw StartRevisionRefusal(message: "Repository start revisions require lane creation and at most 64 repositories.")
+    }
+    var starts: [URL: String] = [:]
+    var repositoryRefs: [String: String] = [:]
+    do {
+      for (id, ref) in request.repositoryRefs.sorted(by: { $0.key < $1.key }) {
+        guard !id.isEmpty, id.utf8.count <= 160, !ref.isEmpty, ref.utf8.count <= 200,
+          !ref.hasPrefix("-"), !ref.contains("\0"), !ref.contains("\n"), !ref.contains("\r"),
+          let repo = source.repo(id), repo.laneMode == .worktree, let root = await topLevel(repo.path), roots.contains(root) else {
+          throw StackError.message("Choose a valid start revision for an isolated repository in this workspace: \(id).")
+        }
+        let commit = try await git(["rev-parse", "--verify", "--quiet", ref + "^{commit}"], at: root)
+        if let previous = starts[root], previous != commit {
+          throw StackError.message("Repository aliases request different start revisions for \(root.path).")
+        }
+        let local = try await git(["for-each-ref", "--format=%(refname)", "refs/heads/" + branch], at: root)
+          .components(separatedBy: "\n").contains("refs/heads/" + branch)
+        guard !local else { throw StackError.message("Branch \(branch) already exists in \(id). Explicit repository start revisions create a new branch.") }
+        starts[root] = commit
+        repositoryRefs[id] = commit
+      }
+    } catch {
+      throw StartRevisionRefusal(message: error.localizedDescription)
     }
 
     // Where each repository's worktree comes from.
@@ -422,6 +458,7 @@ nonisolated enum StackLaneStore {
     let ports = try allocate(keys, excluding: occupiedPorts)
     var info = StackLaneInfo(sourceStackID: source.id, name: branch, owner: owner, createdAt: Date(), directory: laneDirectory,
       ports: ports, slug: slug, environment: request.environment, from: request.from ?? settings?.from)
+    info.repositoryRefs = repositoryRefs
     info.adopted = worktrees.contains { !$0.managed }
     var record = StackLaneRecord(id: id, info: info, worktrees: worktrees, ready: false)
     record.integrationOperationID = request.integrationOperationID
@@ -436,7 +473,7 @@ nonisolated enum StackLaneStore {
       try FileManager.default.createDirectory(at: laneDirectory, withIntermediateDirectories: true)
       for (index, tree) in worktrees.enumerated() {
         if case .create = plans[tree.source] {
-          try await addWorktree(tree, branch: worktreeBranch, from: info.from)
+          try await addWorktree(tree, branch: worktreeBranch, from: starts[tree.source] ?? info.from, explicitStart: starts[tree.source] != nil)
           created.append(tree)
         }
         worktrees[index].baseCommit = try? await git(["rev-parse", "HEAD"], at: tree.path)
@@ -505,20 +542,21 @@ nonisolated enum StackLaneStore {
   }
 
   /// Local branch → check it out. Only on a remote → track it. Otherwise branch from `from` (default HEAD).
-  private static func addWorktree(_ tree: StackLaneWorktree, branch: String, from: String?) async throws {
+  private static func addWorktree(_ tree: StackLaneWorktree, branch: String, from: String?, explicitStart: Bool = false) async throws {
     let local = try await git(["for-each-ref", "--format=%(refname)", "refs/heads/" + branch], at: tree.source)
       .components(separatedBy: "\n").contains("refs/heads/" + branch)
     if local {
+      guard !explicitStart else { throw StackError.message("The new lane branch was created by another operation. Refresh before retrying.") }
       _ = try await git(["worktree", "add", "--", tree.path.path, branch], at: tree.source)
       return
     }
     let remotes = try await git(["for-each-ref", "--format=%(refname:short)", "refs/remotes/*/" + branch], at: tree.source)
       .components(separatedBy: "\n").filter { !$0.isEmpty && !$0.hasSuffix("/HEAD") }
-    if let remote = remotes.first(where: { $0.hasPrefix("origin/") }) ?? (remotes.count == 1 ? remotes.first : nil) {
+    if !explicitStart, let remote = remotes.first(where: { $0.hasPrefix("origin/") }) ?? (remotes.count == 1 ? remotes.first : nil) {
       _ = try await git(["worktree", "add", "--track", "-b", branch, "--", tree.path.path, remote], at: tree.source)
       return
     }
-    if remotes.count > 1 {
+    if !explicitStart, remotes.count > 1 {
       throw StackError.message("Branch \(branch) exists on several remotes (\(remotes.joined(separator: ", "))). Create the local branch first.")
     }
     let start = from ?? "HEAD"
