@@ -65,6 +65,7 @@ export class IntegrationHub extends Context.Service<
     readonly operation: (
       actorID: string,
       operationKey: string,
+      waitMs?: number,
     ) => Effect.Effect<Contracts.IntegrationOperationReceipt, Rpc.DeckhandRpcError>;
   }
 >()("t3/deckhand/IntegrationHub") {}
@@ -328,7 +329,7 @@ const make = Effect.gen(function* () {
         clientID: actorID,
       });
     }).pipe(Effect.mapError(rpcError));
-  const reconcile = (actorID: string, key: string) =>
+  const reconcile = (actorID: string, key: string, waitMs = 0) =>
     Effect.gen(function* () {
       const old = yield* journal.read(actorID, key);
       if (old.refused)
@@ -339,7 +340,7 @@ const make = Effect.gen(function* () {
       const peer = yield* commandConnection(actorID);
       if (old.input.installationID !== peer.hello.installationID)
         return yield* new Rpc.DeckhandRpcError({ reason: "stale_binding" });
-      const receipt = yield* client.operation(peer, key).pipe(
+      const receipt = yield* client.operation(peer, key, waitMs).pipe(
         Effect.mapError(rpcError),
         Effect.tapError((error) => journal.update(actorID, key, null, error)),
       );

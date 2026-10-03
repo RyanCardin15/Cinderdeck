@@ -519,6 +519,67 @@ describe("same-host Cinderdeck bridge", () => {
         assert.deepEqual(receivedArguments, input.arguments);
       }).pipe(Effect.scoped, Effect.provide(TestLayer)),
   );
+  it.effect(
+    "receipt waits require capability, bound the wait and preserve actor/key without submitting effects",
+    () =>
+      Effect.gen(function* () {
+        const capabilities = ["operations.receipts"];
+        const received: Array<{ params: object; client?: { session?: string } }> = [];
+        const socketPath = yield* peer((request) => {
+          if (request.method === "integration.hello")
+            return { id: request.id, result: { ...hello, capabilities } };
+          received.push(request);
+          return {
+            id: request.id,
+            result: {
+              id: "waited",
+              operationKey: "stable",
+              argumentHash: "a".repeat(64),
+              workspaceID: "workspace",
+              generation: 1,
+              method: "lane.create",
+              state: "running",
+              createdAt: "2026-10-03",
+              updatedAt: "2026-10-03",
+            },
+          };
+        });
+        const client = yield* CinderdeckClient.CinderdeckClient;
+        const old = yield* client.connect(socketPath, {
+          channel: "development",
+          clientID: "owner",
+        });
+        assert.equal(
+          (yield* client.operation(old, "stable", 50).pipe(Effect.flip)).reason,
+          "unsupported_capability",
+        );
+        assert.equal(received.length, 0);
+        capabilities.push("operations.receipts.wait");
+        const connection = yield* client.connect(socketPath, {
+          channel: "development",
+          clientID: "owner",
+        });
+        for (const wait of [-1, 1.5, 25001, NaN, Infinity])
+          assert.equal(
+            (yield* client.operation(connection, "stable", wait).pipe(Effect.flip)).reason,
+            "invalid_request",
+          );
+        assert.equal(received.length, 0);
+        assert.equal((yield* client.operation(connection, "stable", 50)).state, "running");
+        assert.deepEqual(received[0]?.params, {
+          operationKey: "stable",
+          installationID: "installation",
+          waitMs: 50,
+        });
+        assert.equal(received[0]?.client?.session, "owner");
+        yield* client.operation(connection, "stable");
+        assert.deepEqual(received[1]?.params, {
+          operationKey: "stable",
+          installationID: "installation",
+        });
+      }).pipe(Effect.scoped, Effect.provide(TestLayer)),
+  );
+
   it.effect("recovers a lost submit reply by receipt lookup without repeating a mutation", () =>
     Effect.gen(function* () {
       let mutations = 0;

@@ -476,7 +476,13 @@ describe("Deckhand integration hub", () => {
         yield* Migrations.migrate;
         let mutations = 0;
         const socketPath = yield* peer((request, socket) => {
-          if (request.method === "integration.hello") return { result: hello };
+          if (request.method === "integration.hello")
+            return {
+              result: {
+                ...hello,
+                capabilities: [...hello.capabilities, "operations.receipts.wait"],
+              },
+            };
           if (request.method === "integration.snapshot")
             return {
               result: {
@@ -494,6 +500,8 @@ describe("Deckhand integration hub", () => {
           }
           assert.equal(request.method, "integration.operation.get");
           assert.equal(request.client?.session, "actor");
+          if ((request.params as { waitMs?: number }).waitMs !== undefined)
+            assert.equal((request.params as { waitMs: number }).waitMs, 100);
           return { result: receipt };
         });
         yield* Effect.gen(function* () {
@@ -525,6 +533,7 @@ describe("Deckhand integration hub", () => {
               .pipe(Effect.flip)).reason,
             "operation_key_conflict",
           );
+          assert.equal((yield* hub.operation("actor", "durable-key", 100)).state, "succeeded");
           assert.equal((yield* hub.submit("actor", operation)).state, "succeeded");
           assert.equal(mutations, 1);
           assert.equal((yield* hub.operations("actor"))[0]?.receipt?.id, "native-receipt");

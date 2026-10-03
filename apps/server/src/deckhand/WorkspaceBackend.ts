@@ -87,6 +87,7 @@ export class WorkspaceBackend extends Context.Service<
     readonly releaseLane: LaneLifecycle;
     readonly removeLane: LaneLifecycle;
     readonly submit: IntegrationHub.IntegrationHub["Service"]["submit"];
+    readonly operation: IntegrationHub.IntegrationHub["Service"]["operation"];
   }
 >()("t3/deckhand/WorkspaceBackend") {}
 const decodeCheckout = Schema.decodeUnknownEffect(Schema.fromJsonString(Contracts.CheckoutBinding));
@@ -480,6 +481,7 @@ const make = Effect.gen(function* () {
     releaseLane: (actorID, input) => hub.submit(actorID, { ...input, method: "lane.release" }),
     removeLane: (actorID, input) => hub.submit(actorID, { ...input, method: "lane.remove" }),
     submit: hub.submit,
+    operation: hub.operation,
   });
 });
 export const layer = Layer.effect(WorkspaceBackend, make);

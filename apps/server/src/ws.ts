@@ -1818,7 +1818,7 @@ const makeWsRpcLayer = (
         [DeckhandRpc.DECKHAND_METHODS.operation]: (input) =>
           observeRpcEffect(
             DeckhandRpc.DECKHAND_METHODS.operation,
-            deckhand.operation(currentSessionId, input.operationKey),
+            workspaceBackend.operation(currentSessionId, input.operationKey, input.waitMs),
           ),
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           observeRpcEffect(

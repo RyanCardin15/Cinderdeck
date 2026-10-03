@@ -170,7 +170,10 @@ export const DeckhandRpcGroup = RpcGroup.make(
     error: ErrorSchema,
   }),
   Rpc.make(DECKHAND_METHODS.operation, {
-    payload: Schema.Struct({ operationKey: TrimmedNonEmptyString.check(Schema.isMaxLength(160)) }),
+    payload: Schema.Struct({
+      operationKey: TrimmedNonEmptyString.check(Schema.isMaxLength(160)),
+      waitMs: Schema.optional(NonNegativeInt.check(Schema.isLessThanOrEqualTo(25000))),
+    }),
     success: IntegrationOperationReceipt,
     error: ErrorSchema,
   }),

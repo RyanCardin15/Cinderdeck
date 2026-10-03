@@ -68,6 +68,7 @@ export class CinderdeckClient extends Context.Service<
     readonly operation: (
       connection: Connection,
       operationKey: string,
+      waitMs?: number,
     ) => Effect.Effect<Contracts.IntegrationOperationReceipt, BridgeError>;
     readonly snapshot: (
       connection: Connection,
@@ -408,15 +409,30 @@ const make = Effect.gen(function* () {
         isBridgeError(cause) ? cause : new BridgeError({ reason: "invalid_response", cause }),
       ),
     );
-  const operation: CinderdeckClient["Service"]["operation"] = (connection, operationKey) =>
+  const operation: CinderdeckClient["Service"]["operation"] = (
+    connection,
+    operationKey,
+    waitMs = 0,
+  ) =>
     requiredCapability(connection, "operations.receipts").pipe(
       Effect.andThen(() =>
-        boundedString(operationKey, 160) && connection.clientID !== undefined
+        waitMs > 0 ? requiredCapability(connection, "operations.receipts.wait") : Effect.void,
+      ),
+      Effect.andThen(() =>
+        boundedString(operationKey, 160) &&
+        connection.clientID !== undefined &&
+        Number.isInteger(waitMs) &&
+        waitMs >= 0 &&
+        waitMs <= Math.min(connection.hello.maximumWaitMs, 25000)
           ? request(
               connection.socketPath,
               "integration.operation.get",
-              { operationKey, installationID: connection.hello.installationID },
-              5000,
+              {
+                operationKey,
+                installationID: connection.hello.installationID,
+                ...(waitMs > 0 ? { waitMs } : {}),
+              },
+              waitMs + 5000,
               connection.clientID,
             )
           : Effect.fail(new BridgeError({ reason: "invalid_request" })),
