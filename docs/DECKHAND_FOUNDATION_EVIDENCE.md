@@ -5,6 +5,7 @@ This records implementation progress against the full [plan](DECKHAND_IMPLEMENTA
 ## Source and environment
 
 - Deckhand: `/Users/ryancardin/Src/Deckhand`, branch `deckhand/main`, foundation commit `5189cd544d`, derived from T3 `4f7760e6a0037b06917adaae1b8a220e3ee6e5cc` with complete upstream history and license.
+- Cinderdeck foundation commit: `d47ab9c1`.
 - Cinderdeck: isolated `codex/deckhand-integration` worktree at `/Users/ryancardin/.codex/worktrees/deckhand-integration/Cinderdeck`, based on `d838773a9bbca82732abbe5f9c5739f1693294ad`. The original checkout's unrelated work was preserved.
 - macOS 26.3, arm64; Xcode 26.3; Node 24.19.0, pnpm 11.10.0, Electron 44.4.2; local Deckhand version `0.1.0-alpha.1`.
 - Codex 0.159.0 installed under Deckhand's ignored test root. The globally installed Codex 0.141.0 was preserved. Claude 2.1.281 connected, but its weekly account limit prevented execution.
@@ -35,10 +36,18 @@ An initial lane smoke test exposed a stored lane-directory preference escaping t
 - 360 focused Deckhand tests passed across 24 files, including transport framing/refusals, lost-response receipt recovery, persistence and packaging isolation. The feed-refusal tests were rerun after fixing a test-only TypeScript narrowing error: 11 passed.
 - 65 focused native tests passed: journal, operation receipts, existing control and lane behavior. Result bundle: `.build/deckhand-integration/Logs/Test/Test-Cinderdeck-2026.10.03_08-10-48--0500.xcresult`.
 - Server, web, desktop, contracts and shared package typechecks passed; targeted foundation lint passed; bundled desktop build passed; patch-boundary audit covered 309 files; both repository whitespace checks passed. CI is configured but has not run remotely.
-- A restarted desktop initially contacted an orphaned test backend occupying its configured port. Its exact listener and checkout were verified before stopping it. The fresh direct Electron launch then returned to onboarding with the own product mark. Graceful launcher/process shutdown remains part of P10 reliability acceptance.
+- A restarted desktop initially contacted an orphaned test backend occupying its configured port. Its exact listener and checkout were verified before stopping it. The fresh direct Electron launch then returned to onboarding with the own product mark. The launcher fix (`3c9ba03da0`) now forwards Ctrl-C as SIGTERM and waits for Electron. Two controlled tests signaled the captured launcher PID; both exited cleanly and left no listener. The reproducible script is `scripts/deckhand/smoke-desktop-lifecycle.mjs`. The broader P10 process/failure matrix remains open.
 
 ## Current limits
 
 The full workspace/feature/agent/verification screens, managed session binding and reservations, exhaustive connected Git preflight, PR/evidence/media integration, external registration, complete CLI/MCP/native navigation, import/migration matrix, accessibility/performance acceptance and independently signed distribution/update/upstream-sync rehearsal remain incomplete. Durable mutations currently cover lane creation and service start/stop/restart; other mutation capabilities are refused explicitly. Operation recovery retains uncertainty rather than claiming exactly-once effects.
 
 Local checks do not establish remote CI, successful Claude execution, real capture/export, signed install/update or the A01–A20 release acceptance matrix. No implementation PR or hosted Deckhand release repository has been created.
+
+## Relationship checkpoint — 2026-10-03
+
+Deckhand commit `b7f3cd3100` persists managed session references with monotonic source sequence, immutable thread/feature/checkout/role binding, bounded feature paging and retained disconnected history. A completed turn leaves the feature active. Read-only reviewer metadata requires an enforced capability; isolated reviewers must point to physically different worktrees, including when two logical checkout IDs alias the same worktree. Root/branch/commit changes preserve checkout binding; replacing or erasing its physical identities is refused.
+
+Nine relationship tests passed, including a file-backed close/reopen and the v1-to-v2 namespaced index migration. The focused relationship/SQLite run passed 12 tests; server typecheck, targeted lint and refreshed desktop build passed. A fresh actual desktop launch exercised the new store schema. Logs and lifecycle JSON remain under the isolated `.deckhand` evidence roots.
+
+These services are internal persistence APIs. Authenticated managed registration, authoritative provider capability projection, process cwd preflight, reservation enforcement and UI/thread orchestration wiring remain unfinished. This checkpoint does not satisfy DH-005, DH-010, DH-019 or DH-022 on its own.

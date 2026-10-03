@@ -109,3 +109,5 @@ Do not check a parent phase complete while any required item is unfinished. App 
 DH-001: permanent full-history fork, pinned upstream revision, runtime/dependency versions, frozen install, clean upstream build and actual isolated standalone web/Electron launches. Deckhand commit `5189cd544d`. Evidence and remaining limits: [foundation validation](DECKHAND_FOUNDATION_EVIDENCE.md).
 
 DH-002–DH-009 contain partial foundation work. They remain unchecked because branding/distribution assets, complete contracts/registration, discovery/reconnect, all mutation reconciliations and the full acceptance gates remain open. No parent phase is complete.
+
+Additional Deckhand commits: `3c9ba03da0` (launcher lifecycle) and `b7f3cd3100` (session persistence and physical binding guards). Native integration commit: `d47ab9c1`. Relationship tests/typecheck/lint/build and two captured-PID launcher shutdown checks passed; [foundation validation](DECKHAND_FOUNDATION_EVIDENCE.md) records the scope. All additional DH items remain unchecked.
