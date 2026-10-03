@@ -1,8 +1,18 @@
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
+import { SessionBinding } from "./index.ts";
+import { ProviderInstanceId } from "../providerInstance.ts";
+import { ModelSelection } from "../modelSelection.ts";
+import { RuntimeMode } from "../providerPolicy.ts";
 import { EnvironmentAuthorizationError } from "../auth.ts";
-import { NonNegativeInt, PositiveInt, TrimmedNonEmptyString } from "../baseSchemas.ts";
+import {
+  ThreadId,
+  ProjectId,
+  NonNegativeInt,
+  PositiveInt,
+  TrimmedNonEmptyString,
+} from "../baseSchemas.ts";
 import {
   IntegrationHello,
   IntegrationSnapshot,
@@ -12,6 +22,10 @@ import {
 } from "./integration.ts";
 
 export const DECKHAND_METHODS = {
+  sessions: "deckhand.sessions.subscribe",
+  launch: "deckhand.session.launch",
+  launchGet: "deckhand.session.launch.get",
+  launchOptions: "deckhand.session.launch.options",
   overview: "deckhand.overview",
   subscribe: "deckhand.subscribe",
   refresh: "deckhand.refresh",
@@ -63,8 +77,72 @@ export const OperationRecord = Schema.Struct({
   ),
 });
 export type OperationRecord = typeof OperationRecord.Type;
+const launchIdentifier = TrimmedNonEmptyString.check(Schema.isMaxLength(160));
+export const ManagedLaunchInput = Schema.Struct({
+  operationKey: TrimmedNonEmptyString.check(Schema.isMaxLength(100)),
+  installationID: launchIdentifier,
+  workspaceID: launchIdentifier,
+  generation: PositiveInt,
+  revision: launchIdentifier,
+  repositoryID: launchIdentifier,
+  title: TrimmedNonEmptyString.check(Schema.isMaxLength(200)),
+  objective: TrimmedNonEmptyString.check(Schema.isMaxLength(16000)),
+  modelSelection: ModelSelection,
+  runtimeMode: RuntimeMode,
+});
+export type ManagedLaunchInput = typeof ManagedLaunchInput.Type;
+export const ManagedLaunchRecord = Schema.Struct({
+  operationKey: Schema.String,
+  projectId: ProjectId,
+  threadId: ThreadId,
+  featureId: Schema.String,
+  sessionId: Schema.String,
+  checkoutId: Schema.String,
+  state: Schema.Literals(["prepared", "accepted", "failed"]),
+});
+export type ManagedLaunchRecord = typeof ManagedLaunchRecord.Type;
+export const ManagedSessionsInput = Schema.Struct({
+  installationID: launchIdentifier,
+  workspaceID: launchIdentifier,
+  generation: PositiveInt,
+  limit: PositiveInt.check(Schema.isLessThanOrEqualTo(20)),
+});
+export type ManagedSessionsInput = typeof ManagedSessionsInput.Type;
+export const ManagedSessionView = Schema.Struct({
+  binding: SessionBinding,
+  title: Schema.String,
+  source: Schema.Literals(["current", "unavailable"]),
+  archived: Schema.Boolean,
+});
+export type ManagedSessionView = typeof ManagedSessionView.Type;
+export const ManagedLaunchOption = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  label: Schema.String,
+  models: Schema.Array(Schema.Struct({ id: Schema.String, label: Schema.String })),
+});
 const ErrorSchema = Schema.Union([DeckhandRpcError, EnvironmentAuthorizationError]);
 export const DeckhandRpcGroup = RpcGroup.make(
+  Rpc.make(DECKHAND_METHODS.sessions, {
+    payload: ManagedSessionsInput,
+    success: Schema.Array(ManagedSessionView),
+    error: ErrorSchema,
+    stream: true,
+  }),
+  Rpc.make(DECKHAND_METHODS.launch, {
+    payload: ManagedLaunchInput,
+    success: ManagedLaunchRecord,
+    error: ErrorSchema,
+  }),
+  Rpc.make(DECKHAND_METHODS.launchGet, {
+    payload: Schema.Struct({ operationKey: launchIdentifier }),
+    success: ManagedLaunchRecord,
+    error: ErrorSchema,
+  }),
+  Rpc.make(DECKHAND_METHODS.launchOptions, {
+    payload: Schema.Struct({}),
+    success: Schema.Array(ManagedLaunchOption),
+    error: ErrorSchema,
+  }),
   Rpc.make(DECKHAND_METHODS.operations, {
     payload: Schema.Struct({}),
     success: Schema.Array(OperationRecord),

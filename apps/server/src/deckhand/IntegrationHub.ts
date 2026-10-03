@@ -301,6 +301,25 @@ const make = Effect.gen(function* () {
         clientID: actorID,
       });
     }).pipe(Effect.mapError(rpcError));
+  const releaseConnection = (actorID: string, installationID: string) =>
+    Effect.gen(function* () {
+      if (!actorID || actorID.length > 60)
+        return yield* new Rpc.DeckhandRpcError({ reason: "invalid_request" });
+      const view = yield* SubscriptionRef.get(state);
+      if (!view.hello || view.hello.installationID !== installationID)
+        return yield* new Rpc.DeckhandRpcError({ reason: "stale_binding" });
+      // Provider cleanup outlives catalog subscriptions. Rediscover the socket but
+      // retain the saved installation and host; a replacement peer cannot release it.
+      const location = yield* discovery.locate;
+      if (location.hostID !== view.hello.executionHostID || location.channel !== view.hello.channel)
+        return yield* new Rpc.DeckhandRpcError({ reason: "stale_binding" });
+      return yield* client.connect(location.socketPath, {
+        installationID,
+        executionHostID: view.hello.executionHostID,
+        channel: view.hello.channel,
+        clientID: actorID,
+      });
+    }).pipe(Effect.mapError(rpcError));
   const reconcile = (actorID: string, key: string) =>
     Effect.gen(function* () {
       const old = yield* journal.read(actorID, key);
@@ -325,7 +344,9 @@ const make = Effect.gen(function* () {
     input: Contracts.IntegrationWriterReservationInput | Contracts.IntegrationReservationControl,
   ) =>
     Effect.gen(function* () {
-      const peer = yield* commandConnection(actorID);
+      const peer = yield* method === "releaseWriter"
+        ? releaseConnection(actorID, input.installationID)
+        : commandConnection(actorID);
       if (input.installationID !== peer.hello.installationID)
         return yield* new Rpc.DeckhandRpcError({ reason: "stale_binding" });
       return yield* method === "reserveWriter" && "repos" in input

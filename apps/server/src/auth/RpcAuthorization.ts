@@ -23,6 +23,10 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * runtime failure.
  */
 export const RPC_REQUIRED_SCOPES = {
+  [DECKHAND_METHODS.sessions]: AuthOrchestrationReadScope,
+  [DECKHAND_METHODS.launch]: AuthOrchestrationOperateScope,
+  [DECKHAND_METHODS.launchGet]: AuthOrchestrationReadScope,
+  [DECKHAND_METHODS.launchOptions]: AuthOrchestrationReadScope,
   [DECKHAND_METHODS.overview]: AuthOrchestrationReadScope,
   [DECKHAND_METHODS.subscribe]: AuthOrchestrationReadScope,
   [DECKHAND_METHODS.refresh]: AuthOrchestrationReadScope,

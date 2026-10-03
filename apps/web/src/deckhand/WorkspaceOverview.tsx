@@ -24,6 +24,8 @@ import type { IntegrationView } from "@t3tools/contracts/deckhand/rpc";
 import type { IntegrationOperationReceipt } from "@t3tools/contracts/deckhand/integration";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { useAtomCommand } from "../state/use-atom-command";
+import { SessionList } from "./SessionList";
+import { SessionLauncher } from "./SessionLauncher";
 import { DeckhandMark } from "./DeckhandMark";
 import {
   workspaceView,
@@ -618,6 +620,23 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
                 Stop
               </button>
             </div>
+            {view?.hello ? (
+              <SessionList
+                environmentId={environmentId}
+                installationID={view.hello.installationID}
+                workspaceID={selected.workspaceID}
+                generation={selected.generation}
+              />
+            ) : null}
+            {view?.hello ? (
+              <SessionLauncher
+                key={`${environmentId}:${view.hello.installationID}:${selected.workspaceID}:${selected.generation}`}
+                environmentId={environmentId}
+                installationID={view.hello.installationID}
+                resource={selected}
+                enabled={enabled && actionable(selected)}
+              />
+            ) : null}
             <h3>Services</h3>
             {selected.workspace?.services.map((service) => (
               <div key={service.name} className={styles["dh-inspector-service"]}>

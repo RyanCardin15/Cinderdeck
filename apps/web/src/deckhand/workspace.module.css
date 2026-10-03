@@ -542,3 +542,71 @@
     padding: 24px 16px;
   }
 }
+
+.dh-launcher {
+  margin: 1.5rem 0;
+  border-block: 1px solid var(--border);
+  padding: 0.75rem 0 1.25rem;
+}
+.dh-launcher p {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.dh-launcher fieldset {
+  border: 0;
+  padding: 0;
+  margin: 1rem 0;
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+.dh-launcher label {
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
+}
+.dh-launcher input,
+.dh-launcher select,
+.dh-launcher textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.55rem;
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 0.8rem;
+}
+.dh-launcher textarea {
+  resize: vertical;
+}
+.dh-launcher fieldset:disabled {
+  opacity: 0.7;
+}
+
+.dh-session-list p {
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.dh-session-row {
+  display: grid;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  text-decoration: none;
+}
+.dh-session-row strong {
+  font-size: 0.85rem;
+  color: var(--foreground);
+}
+.dh-session-row span {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+.dh-session-row:hover {
+  border-color: #d7823b;
+}

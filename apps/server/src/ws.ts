@@ -1,4 +1,6 @@
 import * as DeckhandRpc from "@t3tools/contracts/deckhand/rpc";
+import * as ManagedSessions from "./deckhand/ManagedSessions.ts";
+import * as ManagedSessionLaunch from "./deckhand/ManagedSessionLaunch.ts";
 import * as IntegrationHub from "./deckhand/IntegrationHub.ts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
@@ -1093,6 +1095,8 @@ const makeWsRpcLayer = (
     Effect.gen(function* () {
       const currentSessionId = currentSession.sessionId;
       const deckhand = yield* IntegrationHub.IntegrationHub;
+      const managedSessions = yield* ManagedSessions.ManagedSessions;
+      const managedLaunch = yield* ManagedSessionLaunch.ManagedSessionLaunch;
       const sql = yield* SqlClient.SqlClient;
       const threadManagement = yield* ThreadManagementService.ThreadManagementService;
       const intakeContext = yield* Effect.context<
@@ -1754,6 +1758,42 @@ const makeWsRpcLayer = (
       });
 
       const handlers = ServerWsRpcGroup.of({
+        [DeckhandRpc.DECKHAND_METHODS.sessions]: (input) =>
+          observeRpcStream(
+            DeckhandRpc.DECKHAND_METHODS.sessions,
+            managedSessions
+              .subscribe(input)
+              .pipe(
+                Stream.mapError(
+                  (cause) => new DeckhandRpc.DeckhandRpcError({ reason: cause.reason }),
+                ),
+              ),
+          ),
+        [DeckhandRpc.DECKHAND_METHODS.launch]: (input) =>
+          observeRpcEffect(
+            DeckhandRpc.DECKHAND_METHODS.launch,
+            startup.enqueueCommand(managedLaunch.launch(currentSessionId, input)).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new DeckhandRpc.DeckhandRpcError({
+                    reason: "reason" in cause ? cause.reason : "startup",
+                  }),
+              ),
+            ),
+          ),
+        [DeckhandRpc.DECKHAND_METHODS.launchGet]: (input) =>
+          observeRpcEffect(
+            DeckhandRpc.DECKHAND_METHODS.launchGet,
+            managedLaunch
+              .get(currentSessionId, input.operationKey)
+              .pipe(
+                Effect.mapError(
+                  (cause) => new DeckhandRpc.DeckhandRpcError({ reason: cause.reason }),
+                ),
+              ),
+          ),
+        [DeckhandRpc.DECKHAND_METHODS.launchOptions]: () =>
+          observeRpcEffect(DeckhandRpc.DECKHAND_METHODS.launchOptions, managedLaunch.options),
         [DeckhandRpc.DECKHAND_METHODS.operations]: () =>
           observeRpcEffect(
             DeckhandRpc.DECKHAND_METHODS.operations,

@@ -26,3 +26,25 @@ export const recentOperations = createEnvironmentRpcCommand(connectionAtomRuntim
   label: "deckhand:recent-operations",
   tag: DECKHAND_METHODS.operations,
 });
+
+export const launchSession = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "deckhand:launch-session",
+  tag: DECKHAND_METHODS.launch,
+});
+export const inspectSessionLaunch = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "deckhand:inspect-session-launch",
+  tag: DECKHAND_METHODS.launchGet,
+});
+export const sessionLaunchOptions = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "deckhand:session-launch-options",
+  tag: DECKHAND_METHODS.launchOptions,
+});
+
+export const managedSessionsView = createEnvironmentRpcSubscriptionAtomFamily(
+  connectionAtomRuntime,
+  {
+    label: "deckhand:managed-sessions",
+    tag: DECKHAND_METHODS.sessions,
+    idleTtlMs: 0,
+  },
+);

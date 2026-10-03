@@ -303,6 +303,7 @@
     "apps/desktop/scripts/start-electron.mjs": "Forward launcher shutdown signals and await the Electron lifecycle so isolated test backends are not orphaned.",
     "packages/contracts/src/rpc.ts": "Merge the namespaced Deckhand integration RPC contract into the shared authenticated transport.",
     "apps/server/src/ws.ts": "Delegate Deckhand RPCs to the integration service using the authenticated actor and one server-scoped hub.",
+    "apps/server/src/auth/RpcAuthorization.test.ts": "Verify managed-session reads and launch mutations use the existing authenticated environment scope boundary.",
     "apps/server/src/auth/RpcAuthorization.ts": "Require existing read or operate scopes for each Deckhand integration method.",
     "packages/client-runtime/src/rpc/client.ts": "Register the namespaced Deckhand subscription with existing per-environment RPC clients.",
     "apps/web/src/components/AppSidebarLayout.tsx": "Render the dedicated workspace shell while retaining existing project subscriptions, navigation shortcuts and return-location tracking.",

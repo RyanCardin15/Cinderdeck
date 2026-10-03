@@ -376,6 +376,9 @@ describe("Deckhand integration hub", () => {
         yield* Migrations.migrate;
         let polls = 0;
         let activePolls = 0;
+        let releases = 0;
+        let installationID = hello.installationID;
+        const control = { id: "writer", installationID, token: "b".repeat(64) };
         let resolvePollStarted: () => void = () => {};
         let resolvePollClosed: () => void = () => {};
         const pollStarted = new Promise<void>((resolve) => {
@@ -385,7 +388,14 @@ describe("Deckhand integration hub", () => {
           resolvePollClosed = resolve;
         });
         const socketPath = yield* peer((request, socket) => {
-          if (request.method === "integration.hello") return { result: hello };
+          if (request.method === "integration.hello")
+            return {
+              result: {
+                ...hello,
+                installationID,
+                capabilities: [...hello.capabilities, "checkout.reservations"],
+              },
+            };
           if (request.method === "integration.snapshot")
             return {
               result: {
@@ -410,6 +420,22 @@ describe("Deckhand integration hub", () => {
             return null;
           }
           assert.equal(request.client?.session, "actor");
+          if (request.method === "integration.reservation.release") {
+            releases++;
+            assert.deepEqual(request.params, control);
+            return {
+              result: {
+                id: control.id,
+                ownerID: "actor",
+                workspaceID: "one",
+                generation: 1,
+                kind: "writer",
+                state: "released",
+                physicalIDs: ["a".repeat(64)],
+                createdAt: "2026-10-03T00:00:00Z",
+              },
+            };
+          }
           return { result: receipt };
         });
         yield* Effect.gen(function* () {
@@ -429,6 +455,12 @@ describe("Deckhand integration hub", () => {
           yield* Effect.promise(() => pollClosed);
           assert.equal(activePolls, 0);
           assert.equal((yield* hub.overview({ offset: 0, limit: 1 })).state, "reconnecting");
+          assert.equal((yield* hub.releaseWriter("actor", control)).state, "released");
+          assert.equal(releases, 1);
+          assert.equal(polls, 1);
+          installationID = "replacement";
+          yield* hub.releaseWriter("actor", control).pipe(Effect.flip);
+          assert.equal(releases, 1);
           assert.equal(
             (yield* hub.submit("actor", { ...operation, operationKey: "other" }).pipe(Effect.flip))
               .reason,

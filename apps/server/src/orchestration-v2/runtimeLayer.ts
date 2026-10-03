@@ -44,6 +44,8 @@ import { layer as providerTurnStartServiceLayer } from "./ProviderTurnStartServi
 import { layer as runExecutionServiceLayer } from "./RunExecutionService.ts";
 import { layer as runFinalizationServiceLayer } from "./RunFinalizationService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
+import * as ManagedSessions from "../deckhand/ManagedSessions.ts";
+import * as ManagedSessionLaunch from "../deckhand/ManagedSessionLaunch.ts";
 import * as ManagedProviderAdapters from "../deckhand/ManagedProviderAdapters.ts";
 import * as ManagedCheckoutGuard from "../deckhand/ManagedCheckoutGuard.ts";
 import * as NativeWriterReservations from "../deckhand/NativeWriterReservations.ts";
@@ -331,6 +333,21 @@ export const OrchestrationV2ProductionLayerLive = Layer.mergeAll(
   ProjectServiceLayerLive,
   managedProjectFoldersProvided,
   threadLaunchProvided,
+  ManagedSessions.layer.pipe(
+    Layer.provide(Layer.mergeAll(Relationships.layer, projectionStoreLayer, eventSinkProvided)),
+  ),
+  ManagedSessionLaunch.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        threadLaunchProvided,
+        ProjectServiceLayerLive,
+        providerAdapterRegistryProvided,
+        Relationships.layer,
+        CheckoutIdentity.layer.pipe(Layer.provide(ProcessRunner.layer)),
+        IntegrationHub.layerLive,
+      ),
+    ),
+  ),
   threadLifecycleProvided,
   scheduledTaskProvided,
   UsageLimitRecoveryWorker.workerLive.pipe(

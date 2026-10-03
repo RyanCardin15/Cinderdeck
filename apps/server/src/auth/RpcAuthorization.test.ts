@@ -6,6 +6,7 @@ import {
   WS_METHODS,
   WsRpcGroup,
 } from "@t3tools/contracts";
+import { DECKHAND_METHODS } from "@t3tools/contracts/deckhand/rpc";
 import { describe, expect, it } from "@effect/vitest";
 
 import {
@@ -17,6 +18,17 @@ import {
 describe("RPC authorization scopes", () => {
   it("declares exactly one scope for every RPC in the server group", () => {
     expect(new Set(Object.keys(RPC_REQUIRED_SCOPES))).toEqual(new Set(WsRpcGroup.requests.keys()));
+  });
+
+  it("separates managed lane launch authority from session and receipt observation", () => {
+    expect(requiredScopeForRpcMethod(DECKHAND_METHODS.launch)).toBe(AuthOrchestrationOperateScope);
+    for (const method of [
+      DECKHAND_METHODS.sessions,
+      DECKHAND_METHODS.launchGet,
+      DECKHAND_METHODS.launchOptions,
+    ]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationReadScope);
+    }
   });
 
   it("authorizes background policy reporting and observation deliberately", () => {
