@@ -299,6 +299,7 @@
     "scripts/lib/public-config.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/web/src/components/sidebar/SidebarChrome.tsx": "Use the Deckhand product mark and name on reused provider and navigation surfaces.",
     "apps/web/src/components/chat/V2LifecycleRow.tsx": "Use the Deckhand product mark and name on reused provider and navigation surfaces.",
-    "apps/server/src/cloud/pinnedRuntime.test.ts": "Test refusal of an unconfigured fork feed; retained installer tests use an explicit fixture feed."
+    "apps/server/src/cloud/pinnedRuntime.test.ts": "Test refusal of an unconfigured fork feed; retained installer tests use an explicit fixture feed.",
+    "apps/desktop/scripts/start-electron.mjs": "Forward launcher shutdown signals and await the Electron lifecycle so isolated test backends are not orphaned."
   }
 }
