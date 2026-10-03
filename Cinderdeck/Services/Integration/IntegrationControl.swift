@@ -43,7 +43,7 @@ nonisolated struct IntegrationHello: Encodable, Sendable {
   let executionHostID: String
   let channel: String
   let runtimeEpoch: String
-  let capabilities = ["projection.snapshot", "projection.events", "operations.lane.create", "operations.services", "operations.receipts", "checkout.reservations", "checkout.contexts"]
+  let capabilities = ["projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.adopt", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "checkout.reservations", "checkout.contexts"]
   let maximumFrameBytes = StackControlSocketServer.maximumFrameBytes
   let maximumPageSize = 500
   let maximumWaitMs = 25_000
@@ -259,6 +259,18 @@ extension StackControlService {
       allowed = ["workspace", "branch", "from", "start", "setup"]
       let decoded: IntegrationLaneOperation = try decodeIntegration(input.arguments)
       guard bounded(decoded.branch, 200), decoded.from.map({ bounded($0, 200) }) ?? true else { throw StackControlError.invalid("Invalid lane branch or source") }
+    } else if input.method == "lane.adopt" {
+      allowed = ["workspace", "path", "name", "from", "start", "setup"]
+      let decoded: IntegrationLaneAdoption = try decodeIntegration(input.arguments)
+      guard bounded(decoded.path, 4096), decoded.path.hasPrefix("/"), !decoded.path.contains("\0"), !decoded.path.contains("\n"),
+        decoded.name.map({ bounded($0, 200) }) ?? true,
+        decoded.from.map({ bounded($0, 200) }) ?? true else { throw StackControlError.invalid("Adoption requires an absolute worktree path and bounded name/source") }
+    } else if input.method == "lane.setup" {
+      allowed = ["workspace", "force"]
+      let _: IntegrationLaneSetup = try decodeIntegration(input.arguments)
+    } else if ["lane.remove", "lane.release"].contains(input.method) {
+      allowed = input.method == "lane.release" ? ["workspace", "force", "delete_logs"] : ["workspace", "force", "discard_ignored", "delete_logs", "force_teardown"]
+      let _: IntegrationLaneRemoval = try decodeIntegration(input.arguments)
     } else if ["services.start", "services.stop", "services.restart"].contains(input.method) {
       allowed = ["workspace", "services", "force", "wait", "timeout"]
       let decoded: IntegrationServiceOperation = try decodeIntegration(input.arguments)
@@ -266,6 +278,20 @@ extension StackControlService {
         decoded.timeout.map({ $0.isFinite && (0...120).contains($0) }) ?? true else { throw StackControlError.invalid("Invalid service selection or timeout") }
     } else { throw StackControlError(code: "unsupported_capability", message: "This mutation is not yet supported by durable integration operations") }
     guard Set(arguments.keys).isSubset(of: allowed) else { throw StackControlError.invalid("Unknown mutation argument") }
+  }
+  private func validateOperationResource(_ input: IntegrationOperationInput, journal: IntegrationJournal) async throws {
+    try await journal.reconcile(snapshot().workspaces, sourceRevision: integrationRevision())
+    let projection = try await journal.snapshot(workspaceID: input.workspaceID, limit: 1)
+    // A broken/missing lane still needs owner-directed cleanup. A tombstone or
+    // an unavailable original workspace cannot gain lifecycle authority this way.
+    let cleanup = ["lane.remove", "lane.release"].contains(input.method)
+      && supervisor.files.contains { $0.id == input.workspaceID && $0.lane != nil }
+    guard let resource = projection.resources.first, resource.available || cleanup else {
+      throw StackControlError(code: "resource_missing", message: "This workspace is no longer available")
+    }
+    guard resource.generation == input.generation, resource.revision == input.revision else {
+      throw StackControlError(code: "stale_revision", message: "The workspace changed. Refresh and review the operation before submitting it")
+    }
   }
   private func submitIntegrationOperation(_ params: JSONValue, actor: StackActor) async throws -> JSONValue {
     let allowed: Set<String> = ["operationKey", "installationID", "workspaceID", "generation", "revision", "method", "arguments"]
@@ -276,10 +302,7 @@ extension StackControlService {
     guard input.installationID == journal.installationID else { throw StackControlError(code: "installation_changed", message: "Reconnect to the selected installation before changing its resources") }
     let operations = try operationStore()
     if let receipt = try await operations.existing(input, actor: actor) { return try JSONValue(encoding: receipt) }
-    try await journal.reconcile(snapshot().workspaces, sourceRevision: integrationRevision())
-    let projection = try await journal.snapshot(workspaceID: input.workspaceID, limit: 1)
-    guard let resource = projection.resources.first, resource.available else { throw StackControlError(code: "resource_missing", message: "This workspace is no longer available") }
-    guard resource.generation == input.generation, resource.revision == input.revision else { throw StackControlError(code: "stale_revision", message: "The workspace changed. Refresh and review the operation before submitting it") }
+    try await validateOperationResource(input, journal: journal)
     let (receipt, created) = try await operations.begin(input, actor: actor)
     if created {
       Task { [weak self] in
@@ -288,6 +311,9 @@ extension StackControlService {
         var resultReturned = false
         do {
           _ = try await operations.transition(key: input.operationKey, actor: actor, state: "running")
+          // Accepted intent can wait behind other actors. Recheck its exact
+          // resource immediately before dispatch rather than retargeting it.
+          try await self.validateOperationResource(input, journal: journal)
           effectsStarted = true
           let result = try await self.handle(input.method, params: input.arguments, actor: actor, operationID: receipt.id)
           resultReturned = true
@@ -309,7 +335,7 @@ extension StackControlService {
       object["installationID"]?.stringValue == (try integrationStore()).installationID else { throw StackControlError.invalid("A bounded operation key and selected installation are required") }
     let operations = try operationStore()
     var receipt = try await operations.get(key: key, actor: actor)
-    if receipt.state == "unknown_outcome", receipt.method == "lane.create" {
+    if receipt.state == "unknown_outcome", ["lane.create", "lane.adopt"].contains(receipt.method) {
       let records = try StackLaneStore.records(in: supervisor.lanesDirectory)
       if let lane = records.first(where: { $0.integrationOperationID == receipt.id }) {
         receipt = try await operations.transition(key: key, actor: actor, state: "unknown_outcome", result: .object([
@@ -318,6 +344,19 @@ extension StackControlService {
           "reconciliation": .string("Lane manifest inspected; this operation will not be repeated"),
         ]), error: receipt.error)
       }
+    } else if receipt.state == "unknown_outcome", receipt.method == "lane.setup",
+      let record = try StackLaneStore.record(id: receipt.workspaceID, in: supervisor.lanesDirectory),
+      record.setup?.integrationOperationID == receipt.id {
+      receipt = try await operations.transition(key: key, actor: actor, state: "unknown_outcome", result: .object([
+        "setup": (try? JSONValue(encoding: record.setup)) ?? .null,
+        "reconciliation": .string("This operation's setup state was inspected; its earlier outcome remains uncertain"),
+      ]), error: receipt.error)
+    } else if receipt.state == "unknown_outcome", ["lane.remove", "lane.release"].contains(receipt.method) {
+      let record = try StackLaneStore.record(id: receipt.workspaceID, in: supervisor.lanesDirectory)
+      receipt = try await operations.transition(key: key, actor: actor, state: "unknown_outcome", result: .object([
+        "resourceAvailable": .bool(record != nil),
+        "reconciliation": .string("Lane record presence was inspected; absence alone does not prove this operation removed or released its worktrees"),
+      ]), error: receipt.error)
     } else if receipt.state == "unknown_outcome", receipt.method.hasPrefix("services."),
       let file = supervisor.files.first(where: { $0.id == receipt.workspaceID }) {
       receipt = try await operations.transition(key: key, actor: actor, state: "unknown_outcome", result: .object([
@@ -361,4 +400,24 @@ nonisolated private struct IntegrationServiceOperation: Decodable {
   let force: Bool?
   let wait: Bool?
   let timeout: Double?
+}
+
+nonisolated private struct IntegrationLaneAdoption: Decodable {
+  let workspace: String
+  let path: String
+  let name: String?
+  let from: String?
+  let start: Bool?
+  let setup: Bool?
+}
+nonisolated private struct IntegrationLaneSetup: Decodable {
+  let workspace: String
+  let force: Bool?
+}
+nonisolated private struct IntegrationLaneRemoval: Decodable {
+  let workspace: String
+  let force: Bool?
+  let discard_ignored: Bool?
+  let delete_logs: Bool?
+  let force_teardown: Bool?
 }

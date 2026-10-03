@@ -114,6 +114,8 @@ nonisolated struct StackLaneSetupState: Codable, Equatable, Sendable {
   var runID: UUID?
   var detail: String?
   var updatedAt = Date()
+  /// Durable integration operation whose setup state this is, when supplied.
+  var integrationOperationID: String?
 }
 
 /// `lane.json`. Version 2 stores an overlay on the source definition; version 1

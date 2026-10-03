@@ -89,6 +89,136 @@ final class StackLaneTests: XCTestCase {
     if let root { try? FileManager.default.removeItem(at: root) }
   }
 
+
+  private func durableLane(_ method: String, workspace: String, arguments: [String: JSONValue] = [:]) async throws -> IntegrationOperationReceipt {
+    // Newly configured worktrees publish their first real Git status asynchronously.
+    // Review the ready context rather than issuing setup against its Loading state.
+    let readinessDeadline = Date().addingTimeInterval(5)
+    while supervisor.definition(workspace)?.repos.contains(where: { supervisor.gitMonitor.statuses[$0.path] == nil }) == true {
+      guard Date() < readinessDeadline else { throw StackError.message("Git checkout context did not become ready") }
+      try await Task.sleep(nanoseconds: 20_000_000)
+    }
+    let projection = try await control.handle("integration.snapshot", params: .object(["workspaceID": .string(workspace)]), actor: codex).decode(IntegrationSnapshot.self)
+    let resource = try XCTUnwrap(projection.resources.first)
+    var values = arguments; values["workspace"] = .string(workspace)
+    let input = IntegrationOperationInput(operationKey: UUID().uuidString, installationID: projection.installationID,
+      workspaceID: workspace, generation: resource.generation, revision: resource.revision, method: method, arguments: .object(values))
+    let submitted = try await control.handle("integration.operation.submit", params: JSONValue(encoding: input), actor: codex).decode(IntegrationOperationReceipt.self)
+    let deadline = Date().addingTimeInterval(10)
+    while Date() < deadline {
+      let terminal = try await control.handle("integration.operation.get", params: .object(["installationID": .string(projection.installationID), "operationKey": .string(input.operationKey)]), actor: codex).decode(IntegrationOperationReceipt.self)
+      if !["pending", "running"].contains(terminal.state) {
+        XCTAssertEqual(terminal.id, submitted.id)
+        let duplicate = try await control.handle("integration.operation.submit", params: JSONValue(encoding: input), actor: codex).decode(IntegrationOperationReceipt.self)
+        XCTAssertEqual(duplicate.id, terminal.id)
+        XCTAssertEqual(duplicate.state, terminal.state, "Exact intent remains idempotent after setup or lane deletion changes the resource")
+        return terminal
+      }
+      try await Task.sleep(nanoseconds: 20_000_000)
+    }
+    throw StackError.message("Durable lane operation did not finish")
+  }
+
+  func testDurableLifecycleRoutesSetupReleaseAdoptionAndMissingCleanupThroughNativeOwner() async throws {
+    try await load()
+    let source = try String(contentsOf: definitions.appendingPathComponent("shop.toml"))
+    try await write(source + """
+
+    [tasks.prepare]
+    repo = "app"
+    cmd = "true"
+    [tasks.teardown]
+    repo = "app"
+    cmd = "true"
+    [lanes]
+    setup = "task:prepare"
+    teardown = "task:teardown"
+    """)
+    await control.workspaceRunner.recover()
+    let created = try await durableLane("lane.create", workspace: "shop", arguments: ["branch": .string("durable-owned"), "start": .bool(false), "setup": .bool(false)])
+    XCTAssertEqual(created.state, "succeeded")
+    let id = try XCTUnwrap(created.result?["workspace"]?["id"]?.stringValue)
+    let laneRoot = try XCTUnwrap(supervisor.definition(id)?.root)
+    let setup = try await durableLane("lane.setup", workspace: id)
+    XCTAssertEqual(setup.state, "succeeded", setup.error?.localizedDescription ?? "No native error")
+    XCTAssertEqual(setup.result?["setup"]?["status"]?.stringValue, "succeeded")
+    XCTAssertEqual(try StackLaneStore.record(id: id, in: supervisor.lanesDirectory)?.setup?.integrationOperationID, setup.id)
+    let released = try await durableLane("lane.release", workspace: id)
+    XCTAssertEqual(released.state, "succeeded")
+    XCTAssertEqual(released.result?["released"]?.stringValue, id)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: laneRoot.path))
+    let adopted = try await durableLane("lane.adopt", workspace: "shop", arguments: ["path": .string(laneRoot.path), "start": .bool(false), "setup": .bool(false)])
+    XCTAssertEqual(adopted.state, "succeeded")
+    let adoptedID = try XCTUnwrap(adopted.result?["workspace"]?["id"]?.stringValue)
+    XCTAssertEqual(try StackLaneStore.record(id: adoptedID, in: supervisor.lanesDirectory)?.integrationOperationID, adopted.id)
+    let adoptedRemoval = try await durableLane("lane.remove", workspace: adoptedID)
+    XCTAssertEqual(adoptedRemoval.state, "succeeded")
+    XCTAssertTrue(FileManager.default.fileExists(atPath: laneRoot.path), "Adopted checkout stays on disk")
+    let missing = try await durableLane("lane.create", workspace: "shop", arguments: ["branch": .string("durable-missing"), "start": .bool(false), "setup": .bool(false)])
+    let missingID = try XCTUnwrap(missing.result?["workspace"]?["id"]?.stringValue)
+    let missingRoot = try XCTUnwrap(supervisor.definition(missingID)?.root)
+    let physical = try XCTUnwrap(PhysicalCheckoutIdentity.resolve(missingRoot))
+    try FileManager.default.removeItem(at: missingRoot)
+    await supervisor.reloadDefinitions()
+    XCTAssertNil(supervisor.definition(missingID))
+    let removed = try await durableLane("lane.remove", workspace: missingID)
+    XCTAssertEqual(removed.state, "succeeded")
+    XCTAssertEqual(removed.result?["removed"]?.stringValue, missingID)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: physical.gitDirectory.path))
+    XCTAssertTrue(try supervisor.checkoutReservations().list().isEmpty)
+  }
+
+  func testInterruptedLifecycleInspectsOnlyItsOwnSetupAndNeverInfersRemovalSuccess() async throws {
+    try await load()
+    let source = try String(contentsOf: definitions.appendingPathComponent("shop.toml"))
+    try await write(source + """
+
+    [tasks.prepare]
+    repo = "app"
+    cmd = "touch must-not-replay"
+    [lanes]
+    setup = "task:prepare"
+    """)
+    let kept = try await supervisor.createLane(stack: "shop", branch: "interrupted-setup", actor: codex)
+    let removed = try await supervisor.createLane(stack: "shop", branch: "interrupted-remove", actor: codex)
+    let keptRoot = try XCTUnwrap(kept.definition?.root)
+    let journal = try control.integrationStore()
+    let operations = try IntegrationOperations(directory: control.integrationDirectory)
+    func intent(_ key: String, _ method: String, _ workspace: String) async throws -> IntegrationOperationInput {
+      let projection = try await control.handle("integration.snapshot", params: .object(["workspaceID": .string(workspace)]), actor: codex).decode(IntegrationSnapshot.self)
+      let resource = try XCTUnwrap(projection.resources.first)
+      return IntegrationOperationInput(operationKey: key, installationID: journal.installationID, workspaceID: workspace,
+        generation: resource.generation, revision: resource.revision, method: method, arguments: .object(["workspace": .string(workspace)]))
+    }
+    let setup = try await intent("interrupted-setup", "lane.setup", kept.id)
+    let unrelated = try await intent("unrelated-setup", "lane.setup", kept.id)
+    let removal = try await intent("interrupted-remove", "lane.remove", removed.id)
+    let setupReceipt = try await operations.begin(setup, actor: codex).0
+    for input in [setup, unrelated, removal] {
+      _ = try await operations.begin(input, actor: codex)
+      _ = try await operations.transition(key: input.operationKey, actor: codex, state: "running")
+    }
+    // Persist a controlled interrupted setup boundary, then simulate a separate
+    // cleanup. Record absence must not be attributed as this removal's success.
+    supervisor.setLaneSetup(kept.id, .init(status: .running, reference: "task:prepare", integrationOperationID: setupReceipt.id))
+    try await supervisor.removeLane(removed.id, actor: codex)
+    for input in [setup, unrelated, removal] {
+      let inspected = try await control.handle("integration.operation.get", params: .object(["installationID": .string(journal.installationID), "operationKey": .string(input.operationKey)]), actor: codex).decode(IntegrationOperationReceipt.self)
+      XCTAssertEqual(inspected.state, "unknown_outcome")
+      if input.operationKey == setup.operationKey {
+        XCTAssertEqual(inspected.result?["setup"]?["integrationOperationID"]?.stringValue, setupReceipt.id)
+        XCTAssertEqual(inspected.result?["setup"]?["status"]?.stringValue, "running")
+      } else if input.operationKey == unrelated.operationKey { XCTAssertNil(inspected.result) }
+      else { XCTAssertEqual(inspected.result?["resourceAvailable"]?.boolValue, false) }
+      let duplicate = try await control.handle("integration.operation.submit", params: JSONValue(encoding: input), actor: codex).decode(IntegrationOperationReceipt.self)
+      XCTAssertEqual(duplicate.id, inspected.id)
+      XCTAssertEqual(duplicate.state, "unknown_outcome")
+    }
+    XCTAssertTrue(FileManager.default.fileExists(atPath: keptRoot.path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: keptRoot.appendingPathComponent("must-not-replay").path))
+    XCTAssertTrue(control.workspaceRunner.runs.isEmpty)
+  }
+
   func testResidentLinkedWriterBlocksLaneLifecycleGitAndTasksBeforeEffects() async throws {
     try await load()
     let source = try String(contentsOf: definitions.appendingPathComponent("shop.toml"))

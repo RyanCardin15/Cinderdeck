@@ -75,4 +75,39 @@ final class IntegrationOperationsTests: XCTestCase {
     catch { XCTAssertEqual((error as? StackControlError)?.code, "resource_missing") }
     XCTAssertTrue(supervisor.files.isEmpty)
   }
+  @MainActor
+  func testLifecycleArgumentsRejectMistypedOptionsAndRelativeAdoptionBeforeEffects() async throws {
+    let root = try StackTestSupport.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let defaults = UserDefaults(suiteName: "deckhand-lifecycle-types-\(UUID())")!
+    defaults.set(root.path, forKey: PreferencesKeys.stacksDirectory)
+    let supervisor = StackSupervisor(store: nil, defaults: defaults, logRoot: root.appendingPathComponent("logs"))
+    let control = StackControlService(supervisor: supervisor, claimsFile: root.appendingPathComponent("claims.json"), integrationDirectory: root.appendingPathComponent("integration"))
+    let installation = try control.integrationStore().installationID
+    let cases: [(String, [String: JSONValue], String)] = [
+      ("lane.adopt", ["path": .string("relative")], "invalid_params"),
+      ("lane.adopt", ["path": .string("/fixture\nother")], "invalid_params"),
+      ("lane.adopt", ["path": .string("/fixture"), "setup": .string("false")], "invalid_params"),
+      ("lane.adopt", ["path": .string("/fixture"), "name": .string("")], "invalid_params"),
+      ("lane.setup", ["force": .string("true")], "invalid_params"),
+      ("lane.setup", ["unexpected": .bool(true)], "invalid_params"),
+      ("lane.remove", ["discard_ignored": .string("true")], "invalid_params"),
+      ("lane.remove", ["force_teardown": .number(1)], "invalid_params"),
+      ("lane.release", ["discard_ignored": .bool(true)], "invalid_params"),
+      ("lane.release", ["force_teardown": .bool(true)], "invalid_params"),
+      ("lane.adopt", ["path": .string("/fixture"), "setup": .bool(false)], "resource_missing"),
+      ("lane.setup", ["force": .bool(false)], "resource_missing"),
+      ("lane.remove", ["force_teardown": .bool(false)], "resource_missing"),
+      ("lane.release", ["delete_logs": .bool(false)], "resource_missing"),
+    ]
+    for (method, values, expected) in cases {
+      var arguments = values; arguments["workspace"] = .string("payment")
+      let candidate = IntegrationOperationInput(operationKey: UUID().uuidString, installationID: installation,
+        workspaceID: "payment", generation: 1, revision: "revision", method: method, arguments: .object(arguments))
+      do { _ = try await control.handle("integration.operation.submit", params: JSONValue(encoding: candidate), actor: .user); XCTFail("Accepted \(method) \(values)") }
+      catch { XCTAssertEqual((error as? StackControlError)?.code, expected) }
+    }
+    XCTAssertTrue(supervisor.files.isEmpty)
+  }
+
 }

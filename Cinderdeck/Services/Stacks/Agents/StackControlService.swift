@@ -277,7 +277,7 @@ final class StackControlService: ObservableObject {
       guard file.definition?.laneSettings?.setup != nil else {
         throw StackControlError.invalid("\(file.lane?.sourceStackID ?? file.id) has no [lanes] setup. Add setup = \"task:<id>\" or \"workflow:<id>\".")
       }
-      let state = await lanes.runSetup(file.id, actor: actor)
+      let state = await lanes.runSetup(file.id, actor: actor, operationID: operationID)
       let refreshed = supervisor.files.first { $0.id == file.id } ?? file
       return .object(["setup": (try? JSONValue(encoding: state)) ?? .null, "workspace": (try? JSONValue(encoding: stackSnapshot(refreshed))) ?? .null])
     case "lane.unpin":
