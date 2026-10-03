@@ -17,13 +17,33 @@ nonisolated struct IntegrationEventParameters: Decodable {
   let limit: Int?
   let waitMs: Int?
 }
+nonisolated struct IntegrationCheckoutLookupInput: Decodable {
+  let installationID: String
+  let physicalID: String
+  let repositoryPhysicalID: String
+  let physicalIDs: [String]
+  let sharedRefs: Bool
+}
+nonisolated struct IntegrationCheckoutContext: Encodable, Sendable {
+  let workspaceID: String
+  let generation: Int
+  let revision: String
+  let available: Bool
+  let repos: [String]
+  let physicalIDs: [String]
+}
+nonisolated struct IntegrationCheckoutLookup: Encodable, Sendable {
+  let installationID: String
+  let runtimeEpoch: String
+  let contexts: [IntegrationCheckoutContext]
+}
 nonisolated struct IntegrationHello: Encodable, Sendable {
   let protocolVersion = 1
   let installationID: String
   let executionHostID: String
   let channel: String
   let runtimeEpoch: String
-  let capabilities = ["projection.snapshot", "projection.events", "operations.lane.create", "operations.services", "operations.receipts", "checkout.reservations"]
+  let capabilities = ["projection.snapshot", "projection.events", "operations.lane.create", "operations.services", "operations.receipts", "checkout.reservations", "checkout.contexts"]
   let maximumFrameBytes = StackControlSocketServer.maximumFrameBytes
   let maximumPageSize = 500
   let maximumWaitMs = 25_000
@@ -52,6 +72,7 @@ extension StackControlService {
     } catch { DiagnosticLogger.shared.log(.warning, .system, "Integration store unavailable: \(error.localizedDescription)") }
   }
   func handleIntegration(_ method: String, params: JSONValue, actor: StackActor) async throws -> JSONValue {
+    if method == "integration.checkout.contexts" { return try await lookupCheckoutContexts(params) }
     if method.hasPrefix("integration.reservation.") { return try await handleCheckoutReservation(method, params: params, actor: actor) }
     if method == "integration.operation.submit" { return try await submitIntegrationOperation(params, actor: actor) }
     if method == "integration.operation.get" { return try await getIntegrationOperation(params, actor: actor) }
@@ -99,6 +120,54 @@ extension StackControlService {
       let input: IntegrationEventParameters = try decodeIntegration(params)
       return try await JSONValue(encoding: store.events(after: input.after, limit: input.limit ?? 100, waitMs: input.waitMs ?? 0))
     }
+  }
+  private func lookupCheckoutContexts(_ params: JSONValue) async throws -> JSONValue {
+    guard let object = params.objectValue, Set(object.keys) == ["installationID", "physicalID", "repositoryPhysicalID", "physicalIDs", "sharedRefs"] else {
+      throw StackControlError.invalid("Checkout lookup requires exact physical and repository identities")
+    }
+    let input: IntegrationCheckoutLookupInput = try decodeIntegration(params)
+    let journal = try integrationStore()
+    guard input.installationID == journal.installationID else {
+      throw StackControlError(code: "installation_changed", message: "The selected Cinderdeck installation has changed.")
+    }
+    func identity(_ value: String) -> Bool { value.count == 64 && value.allSatisfy { "0123456789abcdef".contains($0) } }
+    guard identity(input.physicalID), identity(input.repositoryPhysicalID) else { throw StackControlError.invalid("Invalid physical checkout identity") }
+    guard !input.physicalIDs.isEmpty, input.physicalIDs.count <= 64,
+      input.physicalIDs.allSatisfy(identity), Set(input.physicalIDs).count == input.physicalIDs.count,
+      input.physicalIDs.contains(input.physicalID), input.sharedRefs || input.physicalIDs == [input.physicalID] else {
+      throw StackControlError.invalid("Invalid mutation checkout scope")
+    }
+    // Durable ownership outlives the definition that originally declared it.
+    // Include the caller's attested Git worktree inventory even with no live alias.
+    if try supervisor.checkoutReservations().isReserved(physicalIDs: input.physicalIDs) {
+      throw StackControlError(code: "checkout_reserved", message: "A checkout in this mutation scope has an active or uncertain owner.")
+    }
+    let candidates = try supervisor.files.compactMap { file -> (String, [String], [String])? in
+      guard let definition = file.definition else { return nil }
+      var repos: [String] = [], physicalIDs: [String] = []
+      for repo in definition.repos {
+        // Resolve declared repositories independently so a missing unrelated repo
+        // does not hide an identifiable checkout in the same workspace.
+        guard let checkout = try? PhysicalCheckoutIdentity.resolve(repo.path) else { continue }
+        let match = input.sharedRefs
+          ? try checkout.repositoryPhysicalID() == input.repositoryPhysicalID
+          : checkout.physicalID == input.physicalID
+        if match { repos.append(repo.id); physicalIDs.append(checkout.physicalID) }
+      }
+      return repos.isEmpty ? nil : (file.id, repos, physicalIDs)
+    }
+    guard candidates.count <= 64 else { throw StackControlError(code: "capacity", message: "Too many native checkout aliases for one mutation.") }
+    try await journal.reconcile(snapshot().workspaces, sourceRevision: integrationRevision())
+    var contexts: [IntegrationCheckoutContext] = []
+    for (id, repos, physicalIDs) in candidates {
+      guard let resource = try await journal.snapshot(workspaceID: id, limit: 1).resources.first else {
+        throw StackControlError(code: "stale_revision", message: "The selected native checkout changed during lookup.")
+      }
+      contexts.append(.init(workspaceID: id, generation: resource.generation, revision: resource.revision,
+        available: resource.available && resource.workspace?.definitionChanged != true && resource.workspace?.issues.isEmpty == true, repos: repos, physicalIDs: physicalIDs))
+    }
+    return try JSONValue(encoding: IntegrationCheckoutLookup(installationID: journal.installationID,
+      runtimeEpoch: journal.runtimeEpoch, contexts: contexts))
   }
   private func handleCheckoutReservation(_ method: String, params: JSONValue, actor: StackActor) async throws -> JSONValue {
     let allowed: Set<String>

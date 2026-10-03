@@ -113,6 +113,8 @@ nonisolated struct StackLaneStatusSnapshot: Codable, Sendable {
 }
 
 nonisolated struct StackRepoSnapshot: Codable, Sendable {
+  var physicalID: String? = nil
+  var repositoryPhysicalID: String? = nil
   let id: String
   let path: String
   let branch: String

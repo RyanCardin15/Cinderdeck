@@ -48,6 +48,26 @@ nonisolated struct PhysicalCheckoutIdentity: Equatable, Sendable {
     }
     throw StackControlError.invalid("Checkout nesting exceeds the supported depth")
   }
+  func repositoryPhysicalID() throws -> String {
+    let fm = FileManager.default
+    let entry = gitDirectory.appendingPathComponent("commondir")
+    let common: URL
+    if fm.fileExists(atPath: entry.path) {
+      let attributes = try fm.attributesOfItem(atPath: entry.path)
+      guard ((attributes[.size] as? NSNumber)?.intValue ?? 4097) <= 4096 else {
+        throw StackControlError.invalid("Git common-directory metadata is too large")
+      }
+      let value = try String(contentsOf: entry, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !value.isEmpty, !value.contains("\n") else { throw StackControlError.invalid("Invalid Git common-directory metadata") }
+      common = URL(fileURLWithPath: value, relativeTo: URL(fileURLWithPath: gitDirectory.path, isDirectory: true)).resolvingSymlinksInPath().standardizedFileURL
+    } else { common = gitDirectory }
+    let attributes = try fm.attributesOfItem(atPath: common.path)
+    guard attributes[.type] as? FileAttributeType == .typeDirectory,
+      let device = attributes[.systemNumber] as? NSNumber, let inode = attributes[.systemFileNumber] as? NSNumber else {
+      throw StackControlError(code: "checkout_missing", message: "Cannot identify the repository's shared Git directory.")
+    }
+    return Self.digest("\(device.uint64Value):\(inode.uint64Value)")
+  }
   static func digest(_ value: String) -> String {
     SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
   }
@@ -166,6 +186,14 @@ final class CheckoutReservations {
       let record = try StackControlCoding.decoder().decode(CheckoutReservation.self, from: row["payload"])
       guard record.kind != "writer" else { throw StackControlError.invalid("External writers need their scoped token") }
       _ = try release(db, record)
+    }
+  }
+  func isReserved(physicalIDs: [String]) throws -> Bool {
+    let scope = Array(Set(physicalIDs))
+    guard !scope.isEmpty, scope.count <= 64 else { throw StackControlError.invalid("Invalid checkout lookup scope") }
+    let slots = Array(repeating: "?", count: scope.count).joined(separator: ",")
+    return try database.read { db in
+      try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM reservation_scope s JOIN reservations r ON r.id=s.reservation_id WHERE r.state IN ('held','uncertain') AND s.physical_id IN (\(slots)))", arguments: StatementArguments(scope)) ?? false
     }
   }
   func list(offset: Int = 0, limit: Int = 100) throws -> [CheckoutReservation] {

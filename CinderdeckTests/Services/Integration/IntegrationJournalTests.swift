@@ -82,7 +82,7 @@ final class IntegrationJournalTests: XCTestCase {
     let actor = StackActor(kind: .agent, name: "Deckhand", session: "unit")
     let hello = try await control.handle("integration.hello", params: .object(["protocolVersions": .array([.number(1)])]), actor: actor)
     XCTAssertEqual(hello["protocolVersion"], .number(1))
-    XCTAssertEqual(hello["capabilities"]?.stringsValue, ["projection.snapshot", "projection.events", "operations.lane.create", "operations.services", "operations.receipts"])
+    XCTAssertEqual(hello["capabilities"]?.stringsValue, ["projection.snapshot", "projection.events", "operations.lane.create", "operations.services", "operations.receipts", "checkout.reservations", "checkout.contexts"])
     for (params, expected) in [
       (JSONValue.object(["protocolVersions": .array([.number(2)])]), "unsupported_version"),
       (.object(["protocolVersions": .array([.number(1)]), "expectedInstallationID": .string("wrong")]), "installation_changed"),

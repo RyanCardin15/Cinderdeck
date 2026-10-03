@@ -173,7 +173,9 @@ final class StackControlService: ObservableObject {
       },
       repos: repos.map { repo in
         let status = supervisor.gitMonitor.statuses[repo.path] ?? GitRepoStatus(branch: "Loading…")
-        return StackRepoSnapshot(id: repo.id, path: repo.path.path, branch: status.branchLabel, dirty: status.isDirty,
+        let checkout = try? PhysicalCheckoutIdentity.resolve(repo.path)
+        return StackRepoSnapshot(physicalID: checkout?.physicalID,
+          repositoryPhysicalID: try? checkout?.repositoryPhysicalID(), id: repo.id, path: repo.path.path, branch: status.branchLabel, dirty: status.isDirty,
           changedFiles: status.changedFiles, ahead: status.ahead, behind: status.behind, upstream: status.upstream,
           operation: status.operation, error: status.error)
       }, lane: file.lane)
