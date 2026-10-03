@@ -35,6 +35,11 @@ final class CheckoutReservationsTests: XCTestCase {
     let nested = repo.appendingPathComponent("nested")
     try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
     XCTAssertEqual(try PhysicalCheckoutIdentity.resolve(nested)?.physicalID, original.physicalID)
+    let sharedScope = try await PhysicalCheckoutIdentity.repositoryScope([repo, alias])
+    XCTAssertEqual(Set(sharedScope), [original.physicalID, linked.physicalID])
+    try FileManager.default.removeItem(at: moved)
+    let missingScope = try await PhysicalCheckoutIdentity.repositoryScope([repo])
+    XCTAssertEqual(Set(missingScope), [original.physicalID, linked.physicalID], "Missing registered worktrees retain physical ownership during cleanup")
     try "invalid\nsecond-line".write(to: linked.gitDirectory.appendingPathComponent("commondir"), atomically: true, encoding: .utf8)
     XCTAssertThrowsError(try linked.repositoryPhysicalID())
   }
@@ -75,6 +80,25 @@ final class CheckoutReservationsTests: XCTestCase {
     XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
     let bytes = try Data(contentsOf: root.appendingPathComponent("checkout-reservations.sqlite"))
     XCTAssertNil(bytes.range(of: Data(token.utf8)))
+  }
+  func testLifecycleBorrowRequiresExactHeldNativeAuthorityAndNeverExpandsScope() async throws {
+    let root = try StackTestSupport.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = try CheckoutReservations(directory: root)
+    let physical = String(repeating: "a", count: 64), other = String(repeating: "b", count: 64)
+    _ = try store.begin(id: "lifecycle", ownerID: "owner", workspaceID: "lane", kind: "lifecycle", physicalIDs: [physical], actorKey: "owner")
+    XCTAssertEqual(try store.borrowLifecycle("lifecycle", workspaceID: "lane", actorKey: "owner", physicalIDs: [physical]).state, "held")
+    for (workspace, actor, scope) in [("other", "owner", [physical]), ("lane", "other", [physical]), ("lane", "owner", [other])] {
+      XCTAssertThrowsError(try store.borrowLifecycle("lifecycle", workspaceID: workspace, actorKey: actor, physicalIDs: scope))
+    }
+    XCTAssertThrowsError(try store.begin(id: "writer", ownerID: "other", workspaceID: "alias", kind: "writer", physicalIDs: [physical], actorKey: "other", token: other))
+    try store.uncertainNative("lifecycle")
+    XCTAssertThrowsError(try store.borrowLifecycle("lifecycle", workspaceID: "lane", actorKey: "owner", physicalIDs: [physical]))
+    try store.releaseNative("lifecycle")
+    XCTAssertThrowsError(try store.borrowLifecycle("lifecycle", workspaceID: "lane", actorKey: "owner", physicalIDs: [physical]))
+    _ = try store.begin(id: "run", ownerID: "owner", workspaceID: "lane", kind: "run", physicalIDs: [physical], actorKey: "owner")
+    XCTAssertThrowsError(try store.borrowLifecycle("run", workspaceID: "lane", actorKey: "owner", physicalIDs: [physical]))
+    try store.releaseNative("run")
   }
   func testWriterBlocksActualNativeRunAndGitBeforeEffectsAndReleaseAllowsRun() async throws {
     let root = try StackTestSupport.temporaryDirectory()

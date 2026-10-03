@@ -85,6 +85,9 @@ nonisolated struct WorkspaceRun: Codable, Equatable, Identifiable, Sendable {
   var steps: [WorkspaceRunStep]
   var detail: String?
   var cleanupServices = false
+  // A teardown borrows its parent's lifecycle lease; ending the run must not
+  // release that parent before file/manifest removal completes.
+  var borrowedCheckoutReservationID: String?
   var startedServices: [String: StackProcessIdentity] = [:]
   var duration: TimeInterval { (finishedAt ?? Date()).timeIntervalSince(createdAt) }
 }

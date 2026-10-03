@@ -25,6 +25,19 @@ private actor LaneReloadGate {
   func release(_ number: Int) { pending.removeValue(forKey: number)?.resume() }
 }
 
+private actor LifecycleEnvironmentGate {
+  private let onEntry: @Sendable () -> Void
+  private var pending: CheckedContinuation<Void, Never>?
+  private var open = false
+  init(onEntry: @escaping @Sendable () -> Void) { self.onEntry = onEntry }
+  func block() async -> [String: String] {
+    onEntry()
+    if !open { await withCheckedContinuation { pending = $0 } }
+    return ProcessInfo.processInfo.environment
+  }
+  func release() { open = true; pending?.resume(); pending = nil }
+}
+
 @MainActor
 final class StackLaneTests: XCTestCase {
   private var root: URL!
@@ -74,6 +87,124 @@ final class StackLaneTests: XCTestCase {
     await supervisor?.shutdownMonitoring()
     control = nil; supervisor = nil; defaults = nil
     if let root { try? FileManager.default.removeItem(at: root) }
+  }
+
+  func testResidentLinkedWriterBlocksLaneLifecycleGitAndTasksBeforeEffects() async throws {
+    try await load()
+    let source = try String(contentsOf: definitions.appendingPathComponent("shop.toml"))
+    try await write(source + """
+
+    [tasks.prepare]
+    cmd = "touch \\"$CINDERDECK_LANE_DIR/setup-marker\\""
+    [lanes]
+    setup = "task:prepare"
+    """)
+    await control.workspaceRunner.recover()
+    let held = try await supervisor.createLane(stack: "shop", branch: "held-writer", actor: codex)
+    let other = try await supervisor.createLane(stack: "shop", branch: "other-lane", actor: codex)
+    let heldRoot = try XCTUnwrap(held.definition?.root)
+    let heldIdentity = try XCTUnwrap(PhysicalCheckoutIdentity.resolve(heldRoot))
+    let external = root.appendingPathComponent("external-adoption")
+    _ = try await StackLaneStore.git(["worktree", "add", "-b", "external-adoption", external.path], at: repo)
+    await supervisor.start(stack: held.id, actor: codex)
+    XCTAssertEqual(supervisor.runtime(held.id, "api").phase, .ready)
+    let running = supervisor.runtime(held.id, "api").process
+    let store = try supervisor.checkoutReservations(), token = String(repeating: "e", count: 64)
+    _ = try store.begin(id: "external-writer", ownerID: "provider", workspaceID: "unbound-alias", kind: "writer", physicalIDs: [heldIdentity.physicalID], actorKey: "external", token: token)
+    let before = try StackLaneStore.records(in: supervisor.lanesDirectory).map(\.id).sorted()
+    do { _ = try await supervisor.createLane(stack: "shop", branch: "blocked-create", actor: codex); XCTFail("Created against a linked writer") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "checkout_reserved") }
+    do { _ = try await supervisor.adoptLane(stack: "shop", path: external, name: nil, actor: codex); XCTFail("Adopted against shared ownership") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "checkout_reserved") }
+    var changed = false
+    do { try await supervisor.performGitChange(stack: "shop", repos: ["app"]) { changed = true }; XCTFail("Changed shared refs") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "checkout_reserved") }
+    XCTAssertFalse(changed)
+    for method in ["lane.remove", "lane.release"] {
+      do { _ = try await control.handle(method, params: .object(["workspace": .string(held.id)]), actor: codex); XCTFail("Stopped or removed an owned checkout") }
+      catch { XCTAssertEqual((error as? StackControlError)?.code, "checkout_reserved") }
+    }
+    do { try await supervisor.removeLane(other.id, actor: codex); XCTFail("Removed a linked worktree while shared ownership was held") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "checkout_reserved") }
+    let refusedSetup = await control.lanes.runSetup(held.id, actor: codex)
+    XCTAssertEqual(refusedSetup?.status, .failed)
+    XCTAssertTrue(control.workspaceRunner.runs.isEmpty)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: try XCTUnwrap(held.lane?.directory).appendingPathComponent("setup-marker").path))
+    XCTAssertEqual(try StackLaneStore.records(in: supervisor.lanesDirectory).map(\.id).sorted(), before)
+    XCTAssertEqual(supervisor.runtime(held.id, "api").process, running)
+    XCTAssertEqual(supervisor.runtime(held.id, "api").phase, .ready)
+    XCTAssertEqual(try store.list().map(\.id), ["external-writer"])
+    _ = try store.releaseWriter("external-writer", actorKey: "external", token: token)
+    let setup = await control.lanes.runSetup(held.id, actor: codex)
+    XCTAssertEqual(setup?.status, .succeeded)
+    try "retained work".write(to: heldRoot.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)
+    _ = try await control.handle("lane.release", params: .object(["workspace": .string(held.id)]), actor: codex)
+    XCTAssertEqual(try String(contentsOf: heldRoot.appendingPathComponent("tracked.txt")), "retained work")
+    XCTAssertEqual(supervisor.runtime(held.id, "api").phase, .stopped)
+    try await supervisor.removeLane(other.id, actor: codex)
+    _ = try await supervisor.adoptLane(stack: "shop", path: external, name: nil, actor: codex)
+    _ = try await supervisor.createLane(stack: "shop", branch: "after-release", actor: codex)
+    XCTAssertTrue(try store.list().isEmpty)
+  }
+
+  func testTeardownBorrowsLifecycleUntilRemovalAndPersistsItsAttribution() async throws {
+    try await write("""
+    root = "\(repo.path)"
+    shell = "/bin/sh"
+    [tasks.drop]
+    cmd = "true"
+    [lanes]
+    teardown = "task:drop"
+    """)
+    let lane = try await supervisor.createLane(stack: "shop", branch: "borrowed-teardown", actor: codex)
+    let entered = expectation(description: "teardown entered its environment boundary")
+    let gate = LifecycleEnvironmentGate(onEntry: { entered.fulfill() })
+    let runs = WorkspaceRunStore(directory: root.appendingPathComponent("borrowed-runs"))
+    let runner = WorkspaceRunner(supervisor: supervisor, store: runs, environment: { _ in await gate.block() })
+    await runner.recover()
+    control = StackControlService(supervisor: supervisor, runner: runner, claimsFile: root.appendingPathComponent("claims.json"))
+    let removal = Task { try await self.control.handle("lane.remove", params: .object(["workspace": .string(lane.id)]), actor: self.codex) }
+    defer { Task { await gate.release(); _ = try? await removal.value } }
+    await fulfillment(of: [entered], timeout: 8)
+    let run = try XCTUnwrap(runner.activeRun(lane.id))
+    let parentID = try XCTUnwrap(run.borrowedCheckoutReservationID)
+    let store = try supervisor.checkoutReservations()
+    let parent = try XCTUnwrap(store.list().first { $0.id == parentID })
+    XCTAssertEqual(parent.kind, "lifecycle")
+    XCTAssertEqual(parent.state, "held")
+    let identity = try XCTUnwrap(PhysicalCheckoutIdentity.resolve(try XCTUnwrap(lane.definition?.root)))
+    XCTAssertTrue(parent.physicalIDs.contains(identity.physicalID))
+    XCTAssertThrowsError(try store.begin(id: "racing-writer", ownerID: "other", workspaceID: "alias", kind: "writer", physicalIDs: [identity.physicalID], actorKey: "other", token: String(repeating: "a", count: 64)))
+    XCTAssertThrowsError(try runner.submit(workspace: "shop", kind: .task, definitionID: "drop", actor: claude))
+    XCTAssertEqual(try runs.load().first?.borrowedCheckoutReservationID, parentID)
+    XCTAssertNotNil(supervisor.definition(lane.id))
+    await gate.release()
+    _ = try await removal.value
+    XCTAssertNil(supervisor.definition(lane.id))
+    XCTAssertEqual(try runs.load().first?.status, .succeeded)
+    XCTAssertEqual(try runs.load().first?.borrowedCheckoutReservationID, parentID)
+    XCTAssertTrue(try store.list().isEmpty)
+  }
+
+  func testRemovalKeepsUnstoppedTeardownEvenWithForcedTeardown() async throws {
+    try await load()
+    let lane = try await supervisor.createLane(stack: "shop", branch: "unstopped-teardown", actor: codex)
+    var stillActive = false
+    supervisor.activeWorkspaceRun = { id in id == lane.id && stillActive }
+    do {
+      _ = try await supervisor.removeLane(lane.id, actor: codex, options: .init(forceTeardown: true)) { stillActive = true }
+      XCTFail("Removed a worktree while teardown remained active")
+    } catch { XCTAssertEqual((error as? StackControlError)?.code, "teardown_active") }
+    XCTAssertNotNil(supervisor.definition(lane.id))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: try XCTUnwrap(lane.definition?.root).path))
+    let store = try supervisor.checkoutReservations()
+    let retained = try XCTUnwrap(store.list().first)
+    XCTAssertEqual(retained.kind, "lifecycle")
+    XCTAssertEqual(retained.state, "uncertain")
+    XCTAssertFalse(supervisor.isRemovingLane(lane.id))
+    stillActive = false
+    try store.releaseNative(retained.id) // The controlled runtime boundary has no process; explicit fixture repair.
+    try await supervisor.removeLane(lane.id, actor: codex)
   }
 
   func testLaneEditingKeepsIdentityAndWorktreesAndHonorsClaims() async throws {
@@ -523,6 +654,35 @@ final class StackLaneTests: XCTestCase {
     XCTAssertTrue(supervisor.files.first { $0.id == "damaged" }?.issues.contains { $0.severity == .error } == true)
   }
 
+  func testMissingRegisteredWorktreeRetainsOwnershipUntilOwnerStopsThenCleansOnlyItsRegistration() async throws {
+    try await load()
+    let missing = try await supervisor.createLane(stack: "shop", branch: "missing-owned", actor: codex)
+    let neighbour = try await supervisor.createLane(stack: "shop", branch: "retained-neighbour", actor: codex)
+    let missingRoot = try XCTUnwrap(missing.definition?.root)
+    let physical = try XCTUnwrap(PhysicalCheckoutIdentity.resolve(missingRoot))
+    let store = try supervisor.checkoutReservations(), token = String(repeating: "c", count: 64)
+    _ = try store.begin(id: "missing-owner", ownerID: "provider", workspaceID: missing.id, kind: "writer", physicalIDs: [physical.physicalID], actorKey: "external", token: token)
+    try FileManager.default.removeItem(at: missingRoot) // Controlled external edit; ownership survives loss of the directory.
+    await supervisor.reloadDefinitions()
+    do { try await supervisor.removeLane(missing.id, actor: codex); XCTFail("Removed metadata while its writer remained held") }
+    catch { XCTAssertEqual((error as? StackControlError)?.code, "checkout_reserved") }
+    XCTAssertNotNil(try StackLaneStore.record(id: missing.id, in: supervisor.lanesDirectory))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: physical.gitDirectory.path))
+    _ = try store.releaseWriter("missing-owner", actorKey: "external", token: token)
+    let before = try XCTUnwrap(StackLaneStore.record(id: missing.id, in: supervisor.lanesDirectory))
+    XCTAssertTrue(before.worktrees.allSatisfy { $0.managed })
+    XCTAssertFalse(FileManager.default.fileExists(atPath: missingRoot.path))
+    let report = try await supervisor.removeLane(missing.id, actor: codex, options: .init())
+    XCTAssertNil(try StackLaneStore.record(id: missing.id, in: supervisor.lanesDirectory))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: physical.gitDirectory.path), "Registration remains; removed=\(report.removedWorktrees), kept=\(report.keptWorktrees), trees=\(before.worktrees)")
+    let neighbourRoot = try XCTUnwrap(neighbour.definition?.root)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: neighbourRoot.path))
+    XCTAssertNotNil(supervisor.definition(neighbour.id))
+    let inventory = try await StackLaneStore.git(["worktree", "list", "--porcelain", "-z"], at: repo, trim: false)
+    XCTAssertFalse(inventory.contains(missingRoot.path), "Missing path: \(missingRoot.path); inventory: \(inventory)")
+    XCTAssertTrue(inventory.contains(neighbourRoot.path))
+    XCTAssertTrue(try store.list().isEmpty)
+  }
   func testMissingWorktreeKeepsItsAliasAndCanBeRemoved() async throws {
     try await load()
     let file = try await supervisor.createLane(stack: "shop", branch: "missing", actor: codex)

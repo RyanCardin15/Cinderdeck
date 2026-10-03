@@ -742,6 +742,22 @@ nonisolated enum StackLaneStore {
       _ = try await git(["worktree", "remove", "--", tree.path.path], at: tree.source, timeout: 300)
       report.removedWorktrees.append(tree.path.path)
     }
+    // A physically missing managed worktree can still have a Git registration.
+    // Remove only this lane's unshared entry; never prune another lane's entries.
+    if !options.keepWorktrees {
+      for tree in record.worktrees where tree.managed && !FileManager.default.fileExists(atPath: tree.path.path) &&
+        !others.contains(where: { $0.id != record.id && $0.worktrees.contains(where: { samePath($0.path, tree.path) }) }) {
+        let inventory = try await git(["worktree", "list", "--porcelain", "-z"], at: tree.source, timeout: 10, trim: false)
+        let registered = inventory.components(separatedBy: "\0").contains { field in
+          field.hasPrefix("worktree ") && samePath(URL(fileURLWithPath: String(field.dropFirst(9))), tree.path)
+        }
+        if registered {
+          _ = try await git(["worktree", "remove", "--force", "--", tree.path.path], at: tree.source, timeout: 300)
+          report.keptWorktrees.removeAll { $0 == tree.path.path }
+          report.removedWorktrees.append(tree.path.path)
+        }
+      }
+    }
     // Release relinquishes ownership of all its worktrees. Propagate that to
     // borrowers so a later removal cannot delete files the user chose to keep.
     let kept = record.worktrees.filter { options.keepWorktrees || !$0.managed }
@@ -815,8 +831,23 @@ nonisolated enum StackLaneStore {
     return result
   }
 
+  /// Foundation leaves ancestor aliases unresolved when the final path is missing.
+  /// Resolve the nearest existing ancestor before rebuilding the absent suffix so
+  /// a deleted /var checkout still matches Git's /private/var registration.
+  static func canonicalPath(_ path: URL) -> URL {
+    var ancestor = path.standardizedFileURL
+    var suffix: [String] = []
+    while !FileManager.default.fileExists(atPath: ancestor.path) {
+      let parent = ancestor.deletingLastPathComponent()
+      guard parent.path != ancestor.path else { break }
+      suffix.append(ancestor.lastPathComponent)
+      ancestor = parent
+    }
+    return suffix.reversed().reduce(ancestor.resolvingSymlinksInPath().standardizedFileURL) { $0.appendingPathComponent($1) }
+  }
+
   static func samePath(_ left: URL, _ right: URL) -> Bool {
-    left.resolvingSymlinksInPath().standardizedFileURL.path == right.resolvingSymlinksInPath().standardizedFileURL.path
+    canonicalPath(left).path == canonicalPath(right).path
   }
 
   /// Resolve ancestor symlinks but keep the final directory entry intact. A

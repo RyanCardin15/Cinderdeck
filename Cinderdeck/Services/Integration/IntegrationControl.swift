@@ -294,7 +294,7 @@ extension StackControlService {
           _ = try await operations.transition(key: input.operationKey, actor: actor, state: "succeeded", result: result)
         } catch {
           let failure = (error as? StackControlError) ?? StackControlError(code: "failed", message: error.localizedDescription)
-          let refusedBeforeEffects: Set<String> = ["invalid_params", "not_found", "claimed", "busy", "stale_revision", "resource_missing", "unsupported_capability"]
+          let refusedBeforeEffects: Set<String> = ["invalid_params", "not_found", "claimed", "busy", "stale_revision", "resource_missing", "unsupported_capability", "checkout_reserved"]
           let state = effectsStarted && (resultReturned || !refusedBeforeEffects.contains(failure.code)) ? "unknown_outcome" : "failed"
           do { _ = try await operations.transition(key: input.operationKey, actor: actor, state: state, error: failure) }
           catch { DiagnosticLogger.shared.log(.warning, .system, "Integration operation outcome could not be saved") }

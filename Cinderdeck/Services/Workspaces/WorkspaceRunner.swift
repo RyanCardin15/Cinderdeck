@@ -94,10 +94,13 @@ final class WorkspaceRunner: ObservableObject {
       return WorkspaceRunStep(reference: reference, title: task?.name ?? reference.replacingOccurrences(of: ":", with: " "),
         command: task?.command, directory: task?.directory.path)
     }
-    let run = WorkspaceRun(workspaceID: id, workspaceName: workspace.name, definitionID: definitionID,
+    var run = WorkspaceRun(workspaceID: id, workspaceName: workspace.name, definitionID: definitionID,
       name: name, kind: kind, actor: actor, steps: steps, cleanupServices: cleanupServices)
     let reservationID = "run:" + run.id.uuidString
-    _ = try supervisor.reserveCheckoutMutation(workspace, id: reservationID, kind: "run", actor: actor)
+    run.borrowedCheckoutReservationID = laneLifecycle ? try supervisor.borrowLaneLifecycle(workspace, actor: actor) : nil
+    if run.borrowedCheckoutReservationID == nil {
+      _ = try supervisor.reserveCheckoutMutation(workspace, id: reservationID, kind: "run", actor: actor)
+    }
     // Persist before launching anything. Corrupt/unwritable history never silently loses ownership.
     do { try store.save([run] + runs) }
     catch { supervisor.releaseCheckoutMutation(reservationID); throw error }

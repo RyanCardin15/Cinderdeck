@@ -48,7 +48,7 @@ nonisolated struct PhysicalCheckoutIdentity: Equatable, Sendable {
     }
     throw StackControlError.invalid("Checkout nesting exceeds the supported depth")
   }
-  func repositoryPhysicalID() throws -> String {
+  func commonDirectory() throws -> URL {
     let fm = FileManager.default
     let entry = gitDirectory.appendingPathComponent("commondir")
     let common: URL
@@ -61,12 +61,71 @@ nonisolated struct PhysicalCheckoutIdentity: Equatable, Sendable {
       guard !value.isEmpty, !value.contains("\n") else { throw StackControlError.invalid("Invalid Git common-directory metadata") }
       common = URL(fileURLWithPath: value, relativeTo: URL(fileURLWithPath: gitDirectory.path, isDirectory: true)).resolvingSymlinksInPath().standardizedFileURL
     } else { common = gitDirectory }
-    let attributes = try fm.attributesOfItem(atPath: common.path)
+    return common
+  }
+  private static func directoryID(_ directory: URL) throws -> String {
+    let attributes = try FileManager.default.attributesOfItem(atPath: directory.path)
     guard attributes[.type] as? FileAttributeType == .typeDirectory,
       let device = attributes[.systemNumber] as? NSNumber, let inode = attributes[.systemFileNumber] as? NSNumber else {
       throw StackControlError(code: "checkout_missing", message: "Cannot identify the repository's shared Git directory.")
     }
-    return Self.digest("\(device.uint64Value):\(inode.uint64Value)")
+    return digest("\(device.uint64Value):\(inode.uint64Value)")
+  }
+  func repositoryPhysicalID() throws -> String { try Self.directoryID(commonDirectory()) }
+  /// A removed checkout still has a physical reservation identity while Git
+  /// retains its worktree registration. Preserve that identity during safe cleanup.
+  private func missingRegistration(_ root: URL) throws -> PhysicalCheckoutIdentity? {
+    let fm = FileManager.default
+    guard !fm.fileExists(atPath: root.path) else { return nil }
+    let registrations = try commonDirectory().appendingPathComponent("worktrees")
+    guard fm.fileExists(atPath: registrations.path) else { return nil }
+    let entries = try fm.contentsOfDirectory(at: registrations, includingPropertiesForKeys: nil)
+    guard entries.count <= 64 else { throw StackControlError.invalid("Too many worktree registrations") }
+    let expected = StackLaneStore.canonicalPath(root.appendingPathComponent(".git"))
+    for entry in entries {
+      let pointer = entry.appendingPathComponent("gitdir")
+      guard fm.fileExists(atPath: pointer.path),
+        ((try fm.attributesOfItem(atPath: pointer.path)[.size] as? NSNumber)?.intValue ?? 4097) <= 4096 else { continue }
+      let value = try String(contentsOf: pointer, encoding: .utf8).trimmingCharacters(in: .newlines)
+      guard !value.isEmpty, !value.contains("\n") else { continue }
+      let target = StackLaneStore.canonicalPath(URL(fileURLWithPath: value, relativeTo: entry))
+      if target == expected {
+        let directory = entry.resolvingSymlinksInPath().standardizedFileURL
+        let linked = Self(root: root, gitDirectory: directory, physicalID: try Self.directoryID(directory))
+        guard try linked.repositoryPhysicalID() == repositoryPhysicalID() else { throw StackControlError.invalid("Worktree common-directory identity changed") }
+        return linked
+      }
+    }
+    return nil
+  }
+  /// Inventory Git's actual worktrees, including unbound aliases and detached
+  /// checkouts. Shared refs and lane creation/removal coordinate the whole repository.
+  static func repositoryScope(_ paths: [URL]) async throws -> [String] {
+    var scope = Set<String>(), repositories = Set<String>()
+    for path in paths {
+      guard let current = try resolve(path) else { continue }
+      let common = try current.repositoryPhysicalID()
+      guard repositories.insert(common).inserted else { continue }
+      let result = try await StackLaneStore.gitResult(["worktree", "list", "--porcelain", "-z"], at: current.root, timeout: 10)
+      guard result.status == 0, result.output.count <= 65_536, let output = String(data: result.output, encoding: .utf8) else {
+        throw StackControlError(code: "checkout_unavailable", message: "Cannot inventory this repository's physical worktrees.")
+      }
+      let records = output.components(separatedBy: "\0\0").filter { !$0.isEmpty }
+      guard !records.isEmpty, records.count <= 64 else { throw StackControlError.invalid("Unsupported Git worktree inventory") }
+      for record in records {
+        let fields = record.components(separatedBy: "\0")
+        guard let first = fields.first, first.hasPrefix("worktree ") else { throw StackControlError.invalid("Invalid Git worktree inventory") }
+        if fields.contains("bare") { continue }
+        let root = URL(fileURLWithPath: String(first.dropFirst(9))).resolvingSymlinksInPath().standardizedFileURL
+        let linked = FileManager.default.fileExists(atPath: root.path) ? try resolve(root) : try current.missingRegistration(root)
+        guard let linked, try linked.repositoryPhysicalID() == common else {
+          throw StackControlError(code: "stale_revision", message: "A repository worktree is missing or has changed identity.")
+        }
+        scope.insert(linked.physicalID)
+      }
+      guard scope.contains(current.physicalID), scope.count <= 64 else { throw StackControlError.invalid("Unsupported physical mutation scope") }
+    }
+    return scope.sorted()
   }
   static func digest(_ value: String) -> String {
     SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
@@ -167,6 +226,30 @@ final class CheckoutReservations {
       }
       // Return the persisted timestamp precision, including on the first reply.
       return try StackControlCoding.decoder().decode(CheckoutReservation.self, from: payload)
+    }
+  }
+  /// Internal teardown may use its already-held lifecycle scope. This never
+  /// grants a writer token, broadens the scope, or accepts uncertain ownership.
+  func borrowLifecycle(_ id: String, workspaceID: String, actorKey: String, physicalIDs: [String]) throws -> CheckoutReservation {
+    try database.read { db in
+      guard let row = try Row.fetchOne(db, sql: "SELECT owner_key,payload FROM reservations WHERE id=?", arguments: [id]) else {
+        throw StackControlError(code: "checkout_reserved", message: "Lifecycle ownership is unavailable.")
+      }
+      let record = try StackControlCoding.decoder().decode(CheckoutReservation.self, from: row["payload"])
+      guard row["owner_key"] as String == actorKey, record.kind == "lifecycle", record.state == "held",
+        record.workspaceID == workspaceID, Set(physicalIDs).isSubset(of: Set(record.physicalIDs)) else {
+        throw StackControlError(code: "checkout_reserved", message: "Teardown requires its lifecycle owner's unchanged physical scope.")
+      }
+      return record
+    }
+  }
+  func uncertainNative(_ id: String) throws {
+    try database.write { db in
+      guard let row = try Row.fetchOne(db, sql: "SELECT payload FROM reservations WHERE id=?", arguments: [id]) else { return }
+      var record = try StackControlCoding.decoder().decode(CheckoutReservation.self, from: row["payload"])
+      guard record.kind != "writer", record.state != "released" else { throw StackControlError.invalid("Cannot retain this native reservation") }
+      record.state = "uncertain"
+      try db.execute(sql: "UPDATE reservations SET state='uncertain',payload=? WHERE id=?", arguments: [try StackControlCoding.encoder().encode(record), id])
     }
   }
   func get(_ id: String, actorKey: String, token: String) throws -> CheckoutReservation {
