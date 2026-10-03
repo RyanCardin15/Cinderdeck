@@ -1,3 +1,5 @@
+// @effect-diagnostics nodeBuiltinImport:off - construct an adversarial derived launch-key collision.
+import * as NodeCrypto from "node:crypto";
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
@@ -38,6 +40,11 @@ const instanceId = ProviderInstanceId.make("codex-fixture");
 const decodeInput = Schema.decodeUnknownSync(Rpc.ManagedLaunchInput);
 const decodeCreationInput = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Rpc.ManagedCreateInput),
+);
+const decodeFeatureJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Contracts.Feature));
+const encodeCreationInputJson = Schema.encodeEffect(Schema.fromJsonString(Rpc.ManagedCreateInput));
+const encodeCreationRecordJson = Schema.encodeEffect(
+  Schema.fromJsonString(Rpc.ManagedCreateRecord),
 );
 const decodeCreationRecord = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Rpc.ManagedCreateRecord),
@@ -221,11 +228,35 @@ const fixture = Effect.gen(function* () {
           if (prior) return prior;
           const intents = yield* sql<{
             input_json: string;
-          }>`SELECT input_json FROM deckhand_managed_creations`;
+            record_json: string;
+          }>`SELECT input_json, record_json FROM deckhand_managed_creations`;
           assert.equal(intents.length, 1, "intent must commit before native Git effects");
           assert.equal(
             (yield* decodeCreationInput(intents[0]!.input_json)).objective,
             input().objective,
+          );
+          const intended = (yield* decodeCreationRecord(intents[0]!.record_json)).contextIntent;
+          assert.isDefined(intended, "feature/context intent must exist before native Git");
+          const features = yield* sql<{
+            id: string;
+            record_json: string;
+          }>`SELECT id, record_json FROM deckhand_features`;
+          const intendedFeatures = features.filter((feature) => feature.id === intended!.featureId);
+          assert.equal(intendedFeatures.length, 1);
+          const feature = yield* decodeFeatureJson(intendedFeatures[0]!.record_json);
+          assert.equal(feature.objective, input().objective);
+          assert.equal(feature.workspaceId, intended!.workspaceBindingId);
+          assert.deepEqual(intended!.repositoryIDs, ["frontend"]);
+          assert.equal(
+            (yield* sql`SELECT checkout_id FROM deckhand_feature_checkouts WHERE feature_id = ${intended!.featureId}`)
+              .length,
+            0,
+            "a planned target is not a confirmed physical checkout",
+          );
+          assert.equal(
+            (yield* sql`SELECT id FROM deckhand_sessions WHERE feature_id = ${intended!.featureId}`)
+              .length,
+            0,
           );
           yield* git(source, [
             "worktree",
@@ -342,6 +373,9 @@ describe("connected lane and session creation", () => {
           assert.deepEqual(a, b);
           assert.equal(a.state, "accepted");
           assert.equal(a.laneID, "created");
+          assert.equal(a.contextIntent?.featureId, a.launch?.featureId);
+          const sql = yield* SqlClient.SqlClient;
+          assert.equal((yield* sql`SELECT id FROM deckhand_features`).length, 1);
           assert.equal(
             (yield* service.create("other", creationInput()).pipe(Effect.flip)).reason,
             "wrong_actor",
@@ -408,6 +442,11 @@ describe("connected lane and session creation", () => {
             );
           }
           assert.equal(one.laneID, "created");
+          assert.isDefined(one.contextIntent);
+          const sql = yield* SqlClient.SqlClient;
+          assert.equal((yield* sql`SELECT id FROM deckhand_features`).length, 1);
+          assert.equal((yield* sql`SELECT id FROM deckhand_checkouts`).length, 0);
+          assert.equal((yield* sql`SELECT id FROM deckhand_sessions`).length, 0);
           assert.isTrue(yield* f.fs.exists(native.created));
           assert.deepEqual(yield* service.create("actor", creationInput()), one);
           assert.deepEqual(yield* service.getCreation("actor", creationInput().operationKey), one);
@@ -457,6 +496,274 @@ describe("connected lane and session creation", () => {
   );
 
   it.effect(
+    "rolls back the feature and workspace if operation intent cannot commit, before any native effect",
+    () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const native = f.nativeCreation();
+        const layer = serviceLayer.pipe(
+          Layer.provide(f.external((request) => Effect.succeed(accepted(request)), native.hub)),
+        );
+        yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`CREATE TRIGGER refuse_creation BEFORE INSERT ON deckhand_managed_creations BEGIN SELECT RAISE(ABORT, 'fixture storage failure'); END`;
+          assert.equal(
+            (yield* service.create("actor", creationInput()).pipe(Effect.flip)).reason,
+            "storage",
+          );
+          assert.equal((yield* sql`SELECT id FROM deckhand_features`).length, 0);
+          assert.equal((yield* sql`SELECT id FROM deckhand_workspaces`).length, 0);
+          assert.equal(
+            (yield* sql`SELECT operation_key FROM deckhand_managed_creations`).length,
+            0,
+          );
+          assert.equal(native.creations(), 0);
+          yield* sql`DROP TRIGGER refuse_creation`;
+          const saved = yield* service.create("actor", creationInput());
+          assert.equal(saved.state, "accepted");
+          assert.equal(saved.launch?.featureId, saved.contextIntent?.featureId);
+          assert.equal((yield* sql`SELECT id FROM deckhand_features`).length, 1);
+        }).pipe(Effect.provide(layer));
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+
+  it.effect(
+    "retains a prepared feature after transport loss and resumes it after service restart",
+    () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const native = f.nativeCreation();
+        let attempts = 0;
+        const missingTransport = Layer.mock(IntegrationHub.IntegrationHub)({
+          resource: (id) => {
+            const item = f.resources.get(id);
+            return item
+              ? Effect.succeed({ hello, resource: item })
+              : Effect.fail(new Rpc.DeckhandRpcError({ reason: "unavailable" }));
+          },
+          operation: () => Effect.fail(new Rpc.DeckhandRpcError({ reason: "missing" })),
+          submit: () => {
+            attempts++;
+            return Effect.fail(new Rpc.DeckhandRpcError({ reason: "unavailable" }));
+          },
+        });
+        const firstLayer = serviceLayer.pipe(
+          Layer.provide(
+            f.external((request) => Effect.succeed(accepted(request)), missingTransport),
+          ),
+        );
+        const key = creationInput().operationKey;
+        const original = yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          yield* service.create("actor", creationInput()).pipe(Effect.flip);
+          const record = yield* service.getCreation("actor", key);
+          assert.equal(record.state, "prepared");
+          assert.isDefined(record.contextIntent);
+          assert.equal(
+            (yield* service.launch("other", input(record.launchOperationKey)).pipe(Effect.flip))
+              .reason,
+            "wrong_actor",
+          );
+          assert.equal(
+            (yield* service.launch("actor", input(record.launchOperationKey)).pipe(Effect.flip))
+              .reason,
+            "key_conflict",
+          );
+          const sql = yield* SqlClient.SqlClient;
+          assert.equal((yield* sql`SELECT id FROM deckhand_features`).length, 1);
+          assert.equal((yield* sql`SELECT id FROM deckhand_checkouts`).length, 0);
+          assert.equal((yield* sql`SELECT id FROM deckhand_sessions`).length, 0);
+          return record;
+        }).pipe(Effect.provide(firstLayer));
+        assert.equal(attempts, 1);
+        const nextLayer = serviceLayer.pipe(
+          Layer.provide(f.external((request) => Effect.succeed(accepted(request)), native.hub)),
+        );
+        yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          const resumed = yield* service.create("actor", creationInput());
+          assert.equal(resumed.contextIntent?.featureId, original.contextIntent?.featureId);
+          assert.equal(resumed.launch?.featureId, original.contextIntent?.featureId);
+          assert.equal(resumed.state, "accepted");
+        }).pipe(Effect.provide(nextLayer));
+        assert.equal(native.creations(), 1);
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+
+  it.effect(
+    "upgrades an unlaunched legacy request before native effects while lookup remains read-only",
+    () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const native = f.nativeCreation();
+        const layer = serviceLayer.pipe(
+          Layer.provide(f.external((request) => Effect.succeed(accepted(request)), native.hub)),
+        );
+        yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          const sql = yield* SqlClient.SqlClient;
+          const legacy: Rpc.ManagedCreateRecord = {
+            operationKey: creationInput().operationKey,
+            laneOperationKey: "legacy-native",
+            launchOperationKey: "legacy-launch",
+            state: "prepared",
+            laneID: null,
+            receipt: null,
+            launch: null,
+            error: null,
+          };
+          yield* sql`INSERT INTO deckhand_managed_creations(operation_key, actor_id, input_json, record_json) VALUES (${legacy.operationKey}, 'actor', ${yield* encodeCreationInputJson(creationInput())}, ${yield* encodeCreationRecordJson(legacy)})`;
+          const read = yield* service.getCreation("actor", legacy.operationKey);
+          assert.isUndefined(read.contextIntent);
+          assert.equal((yield* sql`SELECT id FROM deckhand_features`).length, 0);
+          assert.equal(native.creations(), 0);
+          const accepted = yield* service.create("actor", creationInput());
+          assert.isDefined(accepted.contextIntent);
+          assert.equal(accepted.launch?.featureId, accepted.contextIntent?.featureId);
+          assert.equal(accepted.laneOperationKey, legacy.laneOperationKey);
+          assert.equal(accepted.launchOperationKey, legacy.launchOperationKey);
+          assert.equal(native.creations(), 1);
+          assert.equal((yield* sql`SELECT id FROM deckhand_features`).length, 1);
+        }).pipe(Effect.provide(layer));
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+
+  it.effect(
+    "preserves an accepted version-7 creation and feature after upgrade with its source unavailable",
+    () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const native = f.nativeCreation();
+        let launches = 0;
+        const layer = serviceLayer.pipe(
+          Layer.provide(
+            f.external((request) => {
+              launches++;
+              return Effect.succeed(accepted(request));
+            }, native.hub),
+          ),
+        );
+        const sql = yield* SqlClient.SqlClient;
+        const one = yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          return yield* service.create("actor", creationInput());
+        }).pipe(Effect.provide(layer));
+        const legacy: Rpc.ManagedCreateRecord = {
+          operationKey: one.operationKey,
+          laneOperationKey: one.laneOperationKey,
+          launchOperationKey: one.launchOperationKey,
+          state: one.state,
+          laneID: one.laneID,
+          receipt: one.receipt,
+          launch: one.launch,
+          error: one.error,
+        };
+        const json = yield* encodeCreationRecordJson(legacy);
+        yield* sql`UPDATE deckhand_managed_creations SET record_json = ${json} WHERE operation_key = ${one.operationKey}`;
+        yield* sql`DROP INDEX deckhand_creations_launch_key`;
+        yield* sql`DELETE FROM deckhand_schema WHERE version = 8`;
+        yield* sql`INSERT INTO deckhand_schema VALUES (7)`;
+        f.resources.clear();
+        yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          assert.deepEqual(yield* service.create("actor", creationInput()), legacy);
+          assert.deepEqual(yield* service.getCreation("actor", legacy.operationKey), legacy);
+          assert.equal((yield* sql`SELECT id FROM deckhand_features`).length, 1);
+          assert.equal(
+            (yield* sql<{
+              record_json: string;
+            }>`SELECT record_json FROM deckhand_managed_creations`)[0]!.record_json,
+            json,
+          );
+          assert.isTrue(
+            (yield* sql<{ name: string }>`PRAGMA index_list(deckhand_managed_creations)`).some(
+              (row) => row.name === "deckhand_creations_launch_key",
+            ),
+          );
+        }).pipe(Effect.provide(layer));
+        assert.equal(native.creations(), 1);
+        assert.equal(launches, 1);
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+
+  it.effect("reserves the feature in an existing canonical workspace binding", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture;
+      const native = f.nativeCreation();
+      const layer = serviceLayer.pipe(
+        Layer.provide(f.external((request) => Effect.succeed(accepted(request)), native.hub)),
+      );
+      yield* Effect.gen(function* () {
+        const store = yield* Relationships.Relationships;
+        yield* store.putWorkspace(
+          {
+            id: Contracts.WorkspaceBindingId.make("existing-workspace"),
+            environmentId: Contracts.EnvironmentId.make("installation"),
+            backend: "cinderdeck",
+            ownerId: "payment",
+            generation: 2,
+            revision: 1,
+            name: "Existing workspace",
+            state: "active",
+          },
+          null,
+        );
+        const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+        const one = yield* service.create("actor", creationInput());
+        assert.equal(one.contextIntent?.workspaceBindingId, "existing-workspace");
+        assert.equal(
+          (yield* store.feature(one.contextIntent!.featureId)).workspaceId,
+          "existing-workspace",
+        );
+        assert.equal(
+          (yield* store.checkout(one.launch!.checkoutId)).workspaceId,
+          "existing-workspace",
+        );
+        const sql = yield* SqlClient.SqlClient;
+        assert.equal((yield* sql`SELECT id FROM deckhand_workspaces`).length, 1);
+      }).pipe(Effect.provide(Relationships.layer.pipe(Layer.provideMerge(layer))));
+    }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+
+  it.effect(
+    "keeps a new feature separate from an unrelated earlier launch with a colliding derived key",
+    () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const native = f.nativeCreation();
+        let launches = 0;
+        const layer = serviceLayer.pipe(
+          Layer.provide(
+            f.external((request) => {
+              launches++;
+              return Effect.succeed(accepted(request));
+            }, native.hub),
+          ),
+        );
+        yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          const launchKey =
+            "session:" +
+            NodeCrypto.createHash("sha256")
+              .update(`["${creationInput().operationKey}"]`)
+              .digest("hex");
+          const earlier = yield* service.launch("actor", input(launchKey));
+          const collision = yield* service.create("actor", creationInput());
+          assert.equal(collision.state, "failed");
+          assert.equal(collision.error, "key_conflict");
+          assert.equal(collision.launch, null);
+          assert.notEqual(collision.contextIntent!.featureId, earlier.featureId);
+          assert.equal(launches, 1);
+          const sql = yield* SqlClient.SqlClient;
+          assert.equal((yield* sql`SELECT id FROM deckhand_features`).length, 2);
+          assert.equal((yield* sql`SELECT id FROM deckhand_sessions`).length, 1);
+          assert.equal(native.creations(), 1);
+        }).pipe(Effect.provide(layer));
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+
+  it.effect(
     "reconciles a delayed receipt without provider effects, then explicitly retries the saved launch",
     () =>
       Effect.gen(function* () {
@@ -494,6 +801,8 @@ describe("connected lane and session creation", () => {
           assert.equal(accepted.state, "accepted");
           assert.equal(accepted.launch?.threadId, failure.launch?.threadId);
           assert.equal(calls[0]!.threadId, calls[1]!.threadId);
+          assert.equal(accepted.launch?.featureId, first.contextIntent?.featureId);
+          assert.equal(failure.contextIntent?.featureId, first.contextIntent?.featureId);
         }).pipe(Effect.provide(layer));
         assert.equal(native.creations(), 1);
       }).pipe(Effect.provide(baseLayer), Effect.scoped),

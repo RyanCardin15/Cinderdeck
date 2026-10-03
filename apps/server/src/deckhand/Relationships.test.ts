@@ -416,12 +416,17 @@ describe("Deckhand schema migration", () => {
         yield* Migrations.migrate;
         const indexes = yield* sql<{ name: string }>`PRAGMA index_list(deckhand_sessions)`;
         assert.isTrue(indexes.some((row) => row.name === "deckhand_sessions_feature_page"));
+        assert.isTrue(
+          (yield* sql<{ name: string }>`PRAGMA index_list(deckhand_managed_creations)`).some(
+            (row) => row.name === "deckhand_creations_launch_key",
+          ),
+        );
         assert.equal(
           (yield* sql<{ transcript: string }>`SELECT transcript FROM upstream_history`)[0]
             ?.transcript,
           "existing conversation",
         );
-        yield* sql`INSERT INTO deckhand_schema VALUES (8)`;
+        yield* sql`INSERT INTO deckhand_schema VALUES (9)`;
         const newer = yield* Migrations.migrate.pipe(Effect.flip);
         assert.equal(newer._tag, "DeckhandStoreVersionError");
         const provenance = yield* sql<{

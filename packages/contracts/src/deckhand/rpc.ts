@@ -1,7 +1,7 @@
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
-import { SessionBinding } from "./index.ts";
+import { SessionBinding, FeatureId, WorkspaceBindingId } from "./index.ts";
 import { ProviderInstanceId } from "../providerInstance.ts";
 import { ModelSelection } from "../modelSelection.ts";
 import { RuntimeMode } from "../providerPolicy.ts";
@@ -112,10 +112,21 @@ export const ManagedCreateInput = Schema.Struct({
   start: Schema.Boolean,
 });
 export type ManagedCreateInput = typeof ManagedCreateInput.Type;
+export const ManagedCreationContextIntent = Schema.Struct({
+  featureId: FeatureId,
+  workspaceBindingId: WorkspaceBindingId,
+  repositoryIDs: Schema.Array(launchIdentifier).check(
+    Schema.isMinLength(1),
+    Schema.isMaxLength(64),
+  ),
+});
+export type ManagedCreationContextIntent = typeof ManagedCreationContextIntent.Type;
 export const ManagedCreateRecord = Schema.Struct({
   operationKey: Schema.String,
   laneOperationKey: Schema.String,
   launchOperationKey: Schema.String,
+  // Older saved receipts remain decodable; new creation commits this before native effects.
+  contextIntent: Schema.optionalKey(ManagedCreationContextIntent),
   state: Schema.Literals([
     "prepared",
     "creating",

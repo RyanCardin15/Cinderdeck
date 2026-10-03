@@ -64,6 +64,8 @@ export class ManagedSessionLaunch extends Context.Service<
 const encodeInput = Schema.encodeEffect(Schema.fromJsonString(Rpc.ManagedLaunchInput));
 const encodeRecord = Schema.encodeEffect(Schema.fromJsonString(Rpc.ManagedLaunchRecord));
 const decodeRecord = Schema.decodeUnknownEffect(Schema.fromJsonString(Rpc.ManagedLaunchRecord));
+const decodeCreation = Schema.decodeUnknownEffect(Schema.fromJsonString(Rpc.ManagedCreateRecord));
+const encodeCreation = Schema.encodeEffect(Schema.fromJsonString(Rpc.ManagedCreateRecord));
 const isLaunchError = Schema.is(ManagedLaunchError);
 const bindingID = (kind: string, parts: ReadonlyArray<string | number>) =>
   `${kind}:${NodeCrypto.createHash("sha256").update(JSON.stringify(parts)).digest("hex")}`;
@@ -124,6 +126,19 @@ const make = Effect.gen(function* () {
         // An accepted receipt records intake, never provider completion. Reading it does not
         // reopen a provider or depend on a still-present native lane.
         if (prior?.record.state === "accepted") return prior.record;
+        const creationRows = yield* sql<{
+          actor_id: string;
+          launch_input_json: string | null;
+          record_json: string;
+        }>`SELECT actor_id, launch_input_json, record_json FROM deckhand_managed_creations
+          WHERE json_extract(record_json, '$.launchOperationKey') = ${key}`;
+        const creation = creationRows[0];
+        if (creation && creation.actor_id !== actorID) return yield* error(key, "wrong_actor");
+        if (creation && creation.launch_input_json !== encodedInput)
+          return yield* error(key, "key_conflict");
+        const reservedContext = creation
+          ? (yield* decodeCreation(creation.record_json)).contextIntent
+          : undefined;
         const snapshot = yield* backend
           .context(input.workspaceID)
           .pipe(Effect.mapError(() => error(key, "stale_context")));
@@ -196,6 +211,25 @@ const make = Effect.gen(function* () {
               linkedWorkspaces[0]?.id ??
                 bindingID("workspace", [input.installationID, parentID, parent.generation]),
             );
+            const reservedFeature = reservedContext
+              ? yield* relationships
+                  .feature(reservedContext.featureId)
+                  .pipe(Effect.mapError(() => error(key, "stale_context")))
+              : null;
+            if (
+              reservedContext &&
+              (!reservedFeature ||
+                reservedContext.workspaceBindingId !== workspaceId ||
+                reservedFeature.workspaceId !== workspaceId ||
+                reservedFeature.status !== "active" ||
+                new Set(reservedContext.repositoryIDs).size !==
+                  reservedContext.repositoryIDs.length ||
+                reservedContext.repositoryIDs.length !== context.repos.length ||
+                reservedContext.repositoryIDs.some(
+                  (id) => !context.repos.some((repo) => repo.id === id),
+                ))
+            )
+              return yield* error(key, "stale_context");
             const checkoutId = Contracts.CheckoutBindingId.make(
               bindingID("checkout", [
                 workspaceId,
@@ -226,7 +260,8 @@ const make = Effect.gen(function* () {
                 })
                 .pipe(Effect.mapError(() => error(key, "launch_failed")));
               const now = DateTime.formatIso(yield* DateTime.now);
-              const featureId = Contracts.FeatureId.make(NodeCrypto.randomUUID());
+              const featureId =
+                reservedFeature?.id ?? Contracts.FeatureId.make(NodeCrypto.randomUUID());
               const sessionId = Contracts.SessionBindingId.make(NodeCrypto.randomUUID());
               const threadId = ThreadId.make(NodeCrypto.randomUUID());
               record = {
@@ -282,19 +317,20 @@ const make = Effect.gen(function* () {
                       );
                     else if ((yield* relationships.checkout(checkoutId)).state !== "ready")
                       return yield* error(key, "stale_context");
-                    yield* relationships.putFeature(
-                      {
-                        id: featureId,
-                        workspaceId,
-                        title: input.title,
-                        objective: input.objective,
-                        status: "active",
-                        revision: 1,
-                        createdAt: now,
-                        updatedAt: now,
-                      },
-                      null,
-                    );
+                    if (!reservedFeature)
+                      yield* relationships.putFeature(
+                        {
+                          id: featureId,
+                          workspaceId,
+                          title: input.title,
+                          objective: input.objective,
+                          status: "active",
+                          revision: 1,
+                          createdAt: now,
+                          updatedAt: now,
+                        },
+                        null,
+                      );
                     yield* relationships.linkCheckout(featureId, checkoutId, true);
                     yield* relationships.putSession(
                       {
@@ -373,8 +409,6 @@ const make = Effect.gen(function* () {
     );
   const creationLocks = yield* makeKeyedSerialExecutor<string>();
   const encodeCreationInput = Schema.encodeEffect(Schema.fromJsonString(Rpc.ManagedCreateInput));
-  const encodeCreation = Schema.encodeEffect(Schema.fromJsonString(Rpc.ManagedCreateRecord));
-  const decodeCreation = Schema.decodeUnknownEffect(Schema.fromJsonString(Rpc.ManagedCreateRecord));
   const decodeLaunchInput = Schema.decodeUnknownEffect(
     Schema.fromJsonString(Rpc.ManagedLaunchInput),
   );
@@ -450,6 +484,87 @@ const make = Effect.gen(function* () {
         );
       }),
     );
+  const reserveFeatureContext = (
+    actorID: string,
+    input: Rpc.ManagedCreateInput,
+    source: Rpc.IntegrationView["resources"][number],
+    record: Rpc.ManagedCreateRecord,
+    insertInput?: string,
+  ) =>
+    locks.withLock(
+      bindingID("context", [input.installationID, input.workspaceID, input.generation]),
+      sql
+        .withTransaction(
+          Effect.gen(function* () {
+            const workspace = source.workspace;
+            if (
+              !workspace ||
+              !workspace.repos.length ||
+              workspace.repos.length > 64 ||
+              new Set(workspace.repos.map((repo) => repo.id)).size !== workspace.repos.length
+            )
+              return yield* error(input.operationKey, "stale_context");
+            const linked = yield* sql<{ id: string }>`SELECT id FROM deckhand_workspaces
+        WHERE environment_id = ${input.installationID} AND backend = 'cinderdeck'
+          AND owner_id = ${input.workspaceID} AND generation = ${input.generation}`;
+            const workspaceBindingId = Contracts.WorkspaceBindingId.make(
+              linked[0]?.id ??
+                bindingID("workspace", [input.installationID, input.workspaceID, input.generation]),
+            );
+            if (!linked.length)
+              yield* relationships.putWorkspace(
+                {
+                  id: workspaceBindingId,
+                  environmentId: Contracts.EnvironmentId.make(input.installationID),
+                  backend: "cinderdeck",
+                  ownerId: input.workspaceID,
+                  generation: input.generation,
+                  revision: 1,
+                  name: workspace.name,
+                  state: "active",
+                },
+                null,
+              );
+            else if ((yield* relationships.workspace(workspaceBindingId)).state !== "active")
+              return yield* error(input.operationKey, "stale_context");
+            const now = DateTime.formatIso(yield* DateTime.now);
+            const featureId = Contracts.FeatureId.make(NodeCrypto.randomUUID());
+            yield* relationships.putFeature(
+              {
+                id: featureId,
+                workspaceId: workspaceBindingId,
+                title: input.title,
+                objective: input.objective,
+                status: "active",
+                revision: 1,
+                createdAt: now,
+                updatedAt: now,
+              },
+              null,
+            );
+            const next = {
+              ...record,
+              contextIntent: {
+                featureId,
+                workspaceBindingId,
+                repositoryIDs: workspace.repos.map((repo) => repo.id),
+              },
+            };
+            const json = yield* encodeCreation(next);
+            if (insertInput !== undefined) {
+              // Commit the feature, reviewed target and full operation intent atomically before Git.
+              yield* sql`INSERT INTO deckhand_managed_creations(operation_key, actor_id, input_json, record_json)
+          VALUES (${input.operationKey}, ${actorID}, ${insertInput}, ${json})`;
+            } else {
+              const changed = yield* sql`UPDATE deckhand_managed_creations SET record_json = ${json}
+          WHERE operation_key = ${input.operationKey} AND actor_id = ${actorID} RETURNING operation_key`;
+              if (!changed.length) return yield* error(input.operationKey, "missing");
+            }
+            return next;
+          }),
+        )
+        .pipe(Effect.mapError(storage(input.operationKey))),
+    );
   const create = (actorID: string, input: Rpc.ManagedCreateInput) =>
     creationLocks.withLock(
       input.operationKey,
@@ -496,21 +611,45 @@ const make = Effect.gen(function* () {
               !provider.supportedRuntimeModes.includes(input.runtimeMode))
           )
             return yield* error(key, "unavailable_provider");
-          const record: Rpc.ManagedCreateRecord = {
-            operationKey: key,
-            laneOperationKey: bindingID("lane", [key]),
-            launchOperationKey: bindingID("session", [key]),
-            state: "prepared",
-            laneID: null,
-            receipt: null,
-            launch: null,
-            error: null,
-          };
-          const json = yield* encodeCreation(record);
-          // Full intent is committed before native Git, setup, service, or provider effects.
-          yield* sql`INSERT INTO deckhand_managed_creations(operation_key, actor_id, input_json, record_json)
-          VALUES (${key}, ${actorID}, ${encoded}, ${json})`;
+          const record = yield* reserveFeatureContext(
+            actorID,
+            input,
+            source.resource,
+            {
+              operationKey: key,
+              laneOperationKey: bindingID("lane", [key]),
+              launchOperationKey: bindingID("session", [key]),
+              state: "prepared",
+              laneID: null,
+              receipt: null,
+              launch: null,
+              error: null,
+            },
+            encoded,
+          );
           saved = { input: encoded, record, launchInput: null };
+        }
+        // Upgrade an unlaunched legacy intent before allowing any further native effects.
+        if (!saved.record.contextIntent && !saved.record.launch) {
+          const source = yield* backend.context(input.workspaceID);
+          if (
+            source.hello.installationID !== input.installationID ||
+            source.resource.generation !== input.generation ||
+            source.resource.revision !== input.revision ||
+            !source.resource.available ||
+            !source.resource.workspace ||
+            source.resource.workspace.lane ||
+            source.resource.workspace.definitionChanged ||
+            source.resource.workspace.issues.length
+          )
+            return yield* error(input.operationKey, "stale_context");
+          const record = yield* reserveFeatureContext(
+            actorID,
+            input,
+            source.resource,
+            saved.record,
+          );
+          saved = { ...saved, record };
         }
         let record = saved.record;
         if (!record.receipt) {
@@ -565,9 +704,12 @@ const make = Effect.gen(function* () {
             state: "accepted",
             error: null,
           });
-        const priorLaunch = yield* get(actorID, record.launchOperationKey).pipe(
+        const failedLaunch = yield* read(actorID, record.launchOperationKey).pipe(
           Effect.catch(() => Effect.succeed(null)),
         );
+        // A collision with an earlier launch must never attach that unrelated session.
+        const priorLaunch =
+          failedLaunch?.input === (yield* encodeInput(launchInput)) ? failedLaunch.record : null;
         return yield* saveCreation({
           ...record,
           launch: priorLaunch,
