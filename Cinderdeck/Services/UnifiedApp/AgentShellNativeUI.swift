@@ -21,6 +21,9 @@ enum AgentShellNativeUI {
       WorkspaceWindowController.shared.show(workspace: request.workspaceID, section: request.surface == "lane-map" ? .laneMap : nil)
     case "history":
       guard request.mode == nil else { throw StackControlError.invalid("History does not accept a mode") }
+      if HistoryFloatingManager.shared.selectedSection == .stacks {
+        HistoryFloatingManager.shared.selectedSection = .captures
+      }
       HistoryWindowController.shared.showWindow()
     case "preferences":
       let tab: PreferencesTab?
