@@ -3,6 +3,7 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeCrypto from "node:crypto";
+import * as NodeVM from "node:vm";
 import { describe, expect, it, vi } from "vite-plus/test";
 const state = vi.hoisted(() => ({
   handler: null as
@@ -49,9 +50,106 @@ vi.mock("electron", () => ({
     }
   },
 }));
-import { acceptsEncoderSender, createOwnedPreviewEncoder } from "./OwnedPreviewEncoder.ts";
+import {
+  acceptsEncoderSender,
+  createOwnedPreviewEncoder,
+  OWNED_ENCODER_HTML,
+} from "./OwnedPreviewEncoder.ts";
 const event = () => ({ sender: { id: 7 }, senderFrame: state.window!.webContents.mainFrame });
 describe("Private owned encoder", () => {
+  it("retains fifteen seconds of a static actual browser frame and its final stop sample without inflating browser-frame evidence", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const samples: Array<{ time: number; image: string }> = [];
+    const reports: Array<{ kind: string; frameCount?: number }> = [];
+    const callbacks: { frame?: (data: string) => void; stop?: () => void } = {};
+    let drawnImage = "";
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: () => ({
+        drawImage: (image: { src: string }) => {
+          drawnImage = image.src;
+        },
+      }),
+      captureStream: () => ({
+        getVideoTracks: () => [
+          {
+            requestFrame: () =>
+              samples.push({ time: vi.getMockedSystemTime()?.getTime() ?? -1, image: drawnImage }),
+          },
+        ],
+        getTracks: () => [{ stop: () => undefined }],
+      }),
+    };
+    class Recorder {
+      static isTypeSupported() {
+        return true;
+      }
+      state = "inactive";
+      onstop?: () => void;
+      start() {
+        this.state = "recording";
+      }
+      stop() {
+        this.state = "inactive";
+        this.onstop?.();
+      }
+    }
+    class DecodedImage {
+      src = "";
+      width = 640;
+      height = 480;
+      async decode() {}
+    }
+    const flush = async () => {
+      for (let index = 0; index < 12; index++) await Promise.resolve();
+    };
+    try {
+      const source = /<script>([\s\S]*)<\/script>/.exec(OWNED_ENCODER_HTML)?.[1];
+      expect(source).toBeDefined();
+      await NodeVM.runInNewContext(source!, {
+        document: { querySelector: () => canvas },
+        Image: DecodedImage,
+        MediaRecorder: Recorder,
+        setInterval,
+        clearInterval,
+        window: {
+          deckhandOwnedEncoder: {
+            report: async (value: { kind: string; frameCount?: number }) => {
+              reports.push(value);
+            },
+            onFrame: (callback: (data: string) => void) => {
+              callbacks.frame = callback;
+            },
+            onStop: (callback: () => void) => {
+              callbacks.stop = callback;
+            },
+          },
+        },
+      });
+      callbacks.frame?.("actual-browser-jpeg");
+      await flush();
+      expect(samples).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(15050);
+      expect(samples.at(-1)?.time).toBe(15000);
+      callbacks.stop?.();
+      await flush();
+      expect(samples.at(-1)?.time).toBe(15050);
+      expect(
+        samples.every((sample) => sample.image === "data:image/jpeg;base64,actual-browser-jpeg"),
+      ).toBe(true);
+      expect(samples.length).toBeLessThanOrEqual(152);
+      expect(reports.find((report) => report.kind === "finished")?.frameCount).toBe(1);
+      const countAtStop = samples.length;
+      callbacks.frame?.("late-browser-frame");
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(samples).toHaveLength(countAtStop);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("writes and hashes only chunks from its exact hidden window and main frame", async () => {
     const directory = await NodeFSP.mkdtemp(
       NodePath.join(NodeOS.tmpdir(), "deckhand-encoder-test-"),
