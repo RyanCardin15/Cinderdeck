@@ -24,6 +24,7 @@ export function resolveThreadRouteRenderState(input: {
   bootstrapComplete: boolean;
   serverThreadExists: boolean;
   serverThreadDeleted: boolean;
+  serverThreadMissingConfirmed?: boolean;
   draftThreadExists: boolean;
 }): ThreadRouteRenderState {
   if (!input.bootstrapComplete) {
@@ -32,10 +33,12 @@ export function resolveThreadRouteRenderState(input: {
   if (input.draftThreadExists) {
     return "ready";
   }
-  if (input.serverThreadDeleted) {
+  if (input.serverThreadDeleted || input.serverThreadMissingConfirmed) {
     return "missing";
   }
-  return input.serverThreadExists ? "ready" : "missing";
+  // The shell stream can lag a successful launch. Only the exact thread
+  // lookup may establish absence; an older bootstrapped shell cannot.
+  return input.serverThreadExists ? "ready" : "loading";
 }
 
 export function buildThreadRouteParams(ref: ScopedThreadRef): {

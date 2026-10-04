@@ -2,6 +2,7 @@ import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import * as Option from "effect/Option";
 
 import ChatView from "./ChatView";
 import { resolveDraftPromotionNavigationTarget, threadHasStarted } from "./ChatView.logic";
@@ -17,6 +18,7 @@ import { useSidebarPendingFileDropStore } from "../sidebarPendingFileDropStore";
 import { useEnvironmentThreadRefs, useThreadRefs, useThreadShell } from "../state/entities";
 import { useEnvironmentQuery } from "../state/query";
 import { environmentShell } from "../state/shell";
+import { useEnvironmentThread } from "../state/threads";
 import {
   buildThreadRouteParams,
   resolveThreadRouteRenderState,
@@ -76,6 +78,18 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
   const draftThread = useComposerDraftStore((store) =>
     serverThreadRef ? store.getDraftThreadByRef(serverThreadRef) : null,
   );
+  // A just-accepted thread may not have reached the independent shell stream.
+  // Mount the existing shared exact-thread stream only while its shell is absent;
+  // ChatView owns detail observation once the shell arrives.
+  const missingThreadRef =
+    target.kind === "server" && serverThread === null && draftThread === null
+      ? target.threadRef
+      : null;
+  const availability = useEnvironmentThread(
+    missingThreadRef?.environmentId ?? null,
+    missingThreadRef?.threadId ?? null,
+  );
+  const availabilityError = Option.getOrNull(availability.error);
   const promotedDraftId = useComposerDraftStore((store) =>
     target.kind === "server" ? store.getDraftIdByRef(target.threadRef) : null,
   );
@@ -102,6 +116,7 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
     bootstrapComplete,
     serverThreadExists: serverThreadShell !== null,
     serverThreadDeleted: serverThreadShell?.deletedAt != null,
+    serverThreadMissingConfirmed: missingThreadRef !== null && availability.status === "deleted",
     draftThreadExists: draftThread !== null,
   });
   const serverThreadStarted = threadHasStarted(serverThreadShell);
@@ -189,6 +204,17 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
     );
   }
 
+  if (target.kind === "server" && renderState === "loading" && view === null) {
+    view = (
+      <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">
+        {availabilityError ? (
+          <p role="alert">This conversation is unavailable: {availabilityError}</p>
+        ) : (
+          <p role="status">Waiting for this conversation…</p>
+        )}
+      </div>
+    );
+  }
   return (
     <SidebarInset className="h-svh min-h-0 overflow-hidden overscroll-y-none md:h-dvh">
       {view}

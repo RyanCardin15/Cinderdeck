@@ -5,6 +5,9 @@ import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as Base from "@t3tools/contracts/deckhand";
 import * as C from "@t3tools/contracts/deckhand/externalSessionsRpc";
 import * as Effect from "effect/Effect";
+import * as Deferred from "effect/Deferred";
+import * as Fiber from "effect/Fiber";
+import * as Semaphore from "effect/Semaphore";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -30,7 +33,11 @@ const input = Schema.decodeUnknownSync(C.ExternalSessionRegister)({
   reportedCapabilities: ["read_only", "resume"],
 });
 const state = () => ({ installationID: "installation", generation: 3, available: true });
-const layer = (native: ReturnType<typeof state>, filename = ":memory:") => {
+const layer = (
+  native: ReturnType<typeof state>,
+  filename = ":memory:",
+  beforeNativeRead: Effect.Effect<void> = Effect.void,
+) => {
   const sql = NodeSqliteClient.layer({ filename });
   return External.layer.pipe(
     Layer.provideMerge(
@@ -43,10 +50,10 @@ const layer = (native: ReturnType<typeof state>, filename = ":memory:") => {
             Effect.succeed({
               state: "connected" as const,
               hello: {
-                protocolVersion: 1,
+                protocolVersion: 1 as const,
                 installationID: native.installationID,
                 executionHostID: "host",
-                channel: "development",
+                channel: "development" as const,
                 runtimeEpoch: "epoch",
                 capabilities: ["projection.snapshot"],
                 maximumFrameBytes: 65536,
@@ -63,25 +70,29 @@ const layer = (native: ReturnType<typeof state>, filename = ":memory:") => {
               ],
             }),
           resource: () =>
-            Effect.succeed({
-              hello: {
-                protocolVersion: 1,
-                installationID: native.installationID,
-                executionHostID: "host",
-                channel: "development",
-                runtimeEpoch: "epoch",
-                capabilities: ["projection.snapshot"],
-                maximumFrameBytes: 65536,
-                maximumPageSize: 100,
-                maximumWaitMs: 30000,
-              },
-              resource: {
-                workspaceID: "native-lane",
-                generation: native.generation,
-                available: native.available,
-                revision: "revision",
-              },
-            }),
+            beforeNativeRead.pipe(
+              Effect.andThen(
+                Effect.succeed({
+                  hello: {
+                    protocolVersion: 1 as const,
+                    installationID: native.installationID,
+                    executionHostID: "host",
+                    channel: "development" as const,
+                    runtimeEpoch: "epoch",
+                    capabilities: ["projection.snapshot"],
+                    maximumFrameBytes: 65536,
+                    maximumPageSize: 100,
+                    maximumWaitMs: 30000,
+                  },
+                  resource: {
+                    workspaceID: "native-lane",
+                    generation: native.generation,
+                    available: native.available,
+                    revision: "revision",
+                  },
+                }),
+              ),
+            ),
         }),
       ),
     ),
@@ -230,6 +241,82 @@ describe("ExternalSessions", () => {
           "stale",
         );
       }).pipe(Effect.provide(layer(state()))),
+  );
+
+  it.effect.each(["register", "heartbeat"] as const)(
+    "allows a native event refresh to persist while an external %s waits for its context",
+    (action) =>
+      Effect.gen(function* () {
+        const refreshLock = yield* Semaphore.make(1);
+        const eventHasLock = yield* Deferred.make<void>();
+        const waitingForNative = yield* Deferred.make<void>();
+        const persistEvent = yield* Deferred.make<void>();
+        let blocked = false;
+        const nativeRead = Effect.gen(function* () {
+          if (!blocked) return;
+          yield* Deferred.succeed(waitingForNative, undefined);
+          yield* refreshLock.withPermits(1)(Effect.void);
+        });
+        yield* Effect.gen(function* () {
+          yield* seed;
+          const service = yield* External.ExternalSessions;
+          const sql = yield* SqlClient.SqlClient;
+          const original = yield* service.register("owner", input);
+          yield* sql`CREATE TABLE event_refresh_proof(value TEXT)`;
+          // The real Hub owns its refresh semaphore before native snapshot I/O,
+          // then persists that snapshot through the shared SQLite connection.
+          const eventRefresh = yield* refreshLock
+            .withPermits(1)(
+              Effect.gen(function* () {
+                yield* Deferred.succeed(eventHasLock, undefined);
+                yield* Deferred.await(persistEvent);
+                yield* sql`INSERT INTO event_refresh_proof(value) VALUES('writer released')`;
+              }),
+            )
+            .pipe(Effect.forkChild);
+          yield* Deferred.await(eventHasLock);
+          blocked = true;
+          const update = yield* (
+            action === "heartbeat"
+              ? service.heartbeat("owner", heartbeat(original.id))
+              : service.register("owner", {
+                  ...input,
+                  operationKey: "register-after-release",
+                  providerSessionId: "new-reported-session",
+                })
+          ).pipe(Effect.forkChild);
+          yield* Deferred.await(waitingForNative);
+          yield* Deferred.succeed(persistEvent, undefined);
+          yield* Fiber.join(eventRefresh);
+          const result = yield* Fiber.join(update);
+          assert.equal(result.lastSequence, action === "heartbeat" ? 1 : 0);
+          assert.equal(result.connection, "connected");
+          assert.equal(
+            (yield* sql`SELECT value FROM event_refresh_proof`)[0]?.value,
+            "writer released",
+          );
+          assert.equal((yield* service.list(listInput)).length, action === "heartbeat" ? 1 : 2);
+        }).pipe(Effect.provide(layer(state(), ":memory:", nativeRead)));
+      }),
+  );
+
+  it.effect(
+    "rechecks native generation before publication when refresh returns a replaced context",
+    () =>
+      Effect.gen(function* () {
+        const changing = state();
+        const replaceAfterSnapshot = Effect.sync(() => {
+          changing.generation = 4;
+        });
+        yield* Effect.gen(function* () {
+          yield* seed;
+          const service = yield* External.ExternalSessions;
+          const refused = yield* service.register("owner", input).pipe(Effect.flip);
+          assert.equal(refused.reason, "stale");
+          const sql = yield* SqlClient.SqlClient;
+          assert.equal((yield* sql`SELECT id FROM deckhand_external_sessions`).length, 0);
+        }).pipe(Effect.provide(layer(changing, ":memory:", replaceAfterSnapshot)));
+      }),
   );
 
   it.effect(
@@ -405,6 +492,14 @@ describe("ExternalSessions", () => {
     Effect.gen(function* () {
       yield* seed;
       const sql = yield* SqlClient.SqlClient;
+      // Reconstruct an actual v11 shape, including removal of later authority
+      // views/tables, rather than only rolling back its migration marker.
+      yield* sql`DROP VIEW deckhand_current_checkouts`;
+      yield* sql`DROP TABLE deckhand_checkout_ownership`;
+      yield* sql`DROP TABLE deckhand_ownership_transitions`;
+      yield* sql`DROP TABLE deckhand_owned_preview_proofs`;
+      yield* sql`DROP TABLE deckhand_owned_preview_captures`;
+      yield* sql`DROP TABLE deckhand_verification_scenarios`;
       yield* sql`DROP TABLE deckhand_external_sessions`;
       yield* sql`DROP TABLE IF EXISTS deckhand_verification_attempts`;
       yield* sql`DELETE FROM deckhand_schema`;
