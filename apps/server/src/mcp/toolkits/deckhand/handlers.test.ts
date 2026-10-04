@@ -7,7 +7,14 @@ import {
   ProviderInstanceId,
   OrchestratorMcpFailure,
 } from "@t3tools/contracts";
-import type { ThreadContextView } from "@t3tools/contracts/deckhand/rpc";
+import {
+  ContextPullRequestsPage,
+  type ContextPullRequestsInput,
+  type ThreadContextView,
+} from "@t3tools/contracts/deckhand/rpc";
+import * as ManagedSessions from "../../../deckhand/ManagedSessions.ts";
+import * as Hub from "../../../deckhand/IntegrationHub.ts";
+import * as Stream from "effect/Stream";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -289,4 +296,211 @@ describe("Scoped before/after agent comparisons", () => {
       ),
     );
   });
+});
+
+describe("Scoped PR agent page", () => {
+  const decodePage = Schema.decodeSync(ContextPullRequestsPage);
+  const page = decodePage({
+    ...context,
+    offset: 10000,
+    total: 10001,
+    nextOffset: null,
+    items: [
+      {
+        projectId: "original-project",
+        threadId: "historical-thread",
+        link: {
+          host: "github.com",
+          repository: "cardin/app",
+          number: 17,
+          url: "https://github.com/cardin/app/pull/17",
+          source: "manual",
+          linkedAt: "2026-10-04T00:00:00Z",
+          snapshot: null,
+          stack: null,
+        },
+      },
+    ],
+  });
+  it.effect(
+    "derives current lane scope, preserves actual metadata and closes after the first bounded page",
+    () => {
+      let observed: ContextPullRequestsInput | null = null;
+      let extraReads = 0;
+      let closed = 0;
+      const input = {
+        offset: 10000,
+        limit: 50,
+        installationID: "attacker",
+        workspaceID: "other",
+        generation: 99,
+        projectId: "other-project",
+      };
+      return Effect.gen(function* () {
+        const result = yield* handlers.deckhand_context_pull_requests(input);
+        assert.deepEqual(observed, { ...context, offset: 10000, limit: 50 });
+        assert.deepEqual(result, page);
+        assert.equal(extraReads, 0);
+        assert.equal(closed, 1);
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            Layer.mock(Access.DeckhandMcpAccess)({
+              resolve: (mutation) => {
+                assert.isNotTrue(mutation);
+                return Effect.succeed({ actor: "mcp:session", input: context, view });
+              },
+            }),
+            Layer.mock(ManagedSessions.ManagedSessions)({
+              subscribePullRequests: (input) => {
+                observed = input;
+                return Stream.concat(
+                  Stream.succeed(page),
+                  Stream.fromEffect(
+                    Effect.sync(() => {
+                      extraReads++;
+                      return page;
+                    }),
+                  ),
+                ).pipe(
+                  Stream.ensuring(
+                    Effect.sync(() => {
+                      closed++;
+                    }),
+                  ),
+                );
+              },
+            }),
+            Layer.mock(Hub.IntegrationHub)({}),
+            Layer.succeed(Invocation.McpInvocationContext, invocation),
+          ),
+        ),
+      );
+    },
+  );
+  it.effect(
+    "uses bounded defaults and keeps an authoritative empty page distinct from missing context",
+    () => {
+      let observed: ContextPullRequestsInput | null = null;
+      const empty = { ...page, offset: 0, items: [], total: 0 };
+      return Effect.gen(function* () {
+        const result = yield* handlers.deckhand_context_pull_requests({});
+        assert.deepEqual(observed, { ...context, offset: 0, limit: 20 });
+        assert.deepEqual(result, empty);
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            Layer.mock(Access.DeckhandMcpAccess)({
+              resolve: () => Effect.succeed({ actor: "mcp:session", input: context, view }),
+            }),
+            Layer.mock(ManagedSessions.ManagedSessions)({
+              subscribePullRequests: (input) => {
+                observed = input;
+                return Stream.succeed(empty);
+              },
+            }),
+            Layer.mock(Hub.IntegrationHub)({}),
+            Layer.succeed(Invocation.McpInvocationContext, invocation),
+          ),
+        ),
+      );
+    },
+  );
+  it.effect("refuses invalid page bounds before access or native/domain reads", () => {
+    let accessReads = 0;
+    let pageReads = 0;
+    return Effect.gen(function* () {
+      for (const input of [
+        { offset: -1 },
+        { offset: 10001 },
+        { offset: 0.5 },
+        { limit: 0 },
+        { limit: 51 },
+        { limit: 1.5 },
+      ]) {
+        assert.equal(
+          (yield* handlers.deckhand_context_pull_requests(input).pipe(Effect.result))._tag,
+          "Failure",
+        );
+      }
+      assert.equal(accessReads, 0);
+      assert.equal(pageReads, 0);
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          Layer.mock(Access.DeckhandMcpAccess)({
+            resolve: () => {
+              accessReads++;
+              return Effect.succeed({ actor: "mcp:session", input: context, view });
+            },
+          }),
+          Layer.mock(ManagedSessions.ManagedSessions)({
+            subscribePullRequests: () => {
+              pageReads++;
+              return Stream.succeed(page);
+            },
+          }),
+          Layer.mock(Hub.IntegrationHub)({}),
+          Layer.succeed(Invocation.McpInvocationContext, invocation),
+        ),
+      ),
+    );
+  });
+  it.effect("cannot replace an unavailable calling context with a supplied lane", () => {
+    let pageReads = 0;
+    const input = { offset: 0, workspaceID: "other", installationID: "attacker", generation: 99 };
+    return Effect.gen(function* () {
+      const result = yield* handlers.deckhand_context_pull_requests(input).pipe(Effect.result);
+      assert.equal(result._tag, "Failure");
+      assert.equal(pageReads, 0);
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          Layer.mock(Access.DeckhandMcpAccess)({ resolve: () => Effect.fail(failure) }),
+          Layer.mock(ManagedSessions.ManagedSessions)({
+            subscribePullRequests: () => {
+              pageReads++;
+              return Stream.succeed(page);
+            },
+          }),
+          Layer.mock(Hub.IntegrationHub)({}),
+          Layer.succeed(Invocation.McpInvocationContext, invocation),
+        ),
+      ),
+    );
+  });
+  it.effect(
+    "keeps native context refusal and missing stream state as failures instead of empty success",
+    () => {
+      let reads = 0;
+      return Effect.gen(function* () {
+        assert.equal(
+          (yield* handlers.deckhand_context_pull_requests({}).pipe(Effect.result))._tag,
+          "Failure",
+        );
+        assert.equal(
+          (yield* handlers.deckhand_context_pull_requests({}).pipe(Effect.result))._tag,
+          "Failure",
+        );
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            Layer.mock(Access.DeckhandMcpAccess)({
+              resolve: () => Effect.succeed({ actor: "mcp:session", input: context, view }),
+            }),
+            Layer.mock(ManagedSessions.ManagedSessions)({
+              subscribePullRequests: () =>
+                ++reads === 1
+                  ? Stream.fail(
+                      new ManagedSessions.ManagedSessionsError({ reason: "source_unavailable" }),
+                    )
+                  : Stream.empty,
+            }),
+            Layer.mock(Hub.IntegrationHub)({}),
+            Layer.succeed(Invocation.McpInvocationContext, invocation),
+          ),
+        ),
+      );
+    },
+  );
 });
