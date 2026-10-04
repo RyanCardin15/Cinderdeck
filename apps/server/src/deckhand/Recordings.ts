@@ -28,6 +28,7 @@ const Chunk = Schema.Struct({
 });
 export type MediaGrant = {
   readonly actorID: string;
+  readonly authenticatedSessionID: string;
   readonly input: C.RecordingIdentity;
   readonly expiresAt: number;
   readonly size: number;
@@ -43,6 +44,7 @@ export class Recordings extends Context.Service<
     readonly thumbnail: (
       actor: string,
       input: C.RecordingIdentity,
+      authenticatedSessionID?: string,
     ) => Effect.Effect<C.RecordingThumbnail, C.RecordingError>;
     readonly readEvidenceChunk: (
       actor: string,
@@ -59,6 +61,7 @@ export class Recordings extends Context.Service<
     readonly evidenceResource: (
       actor: string,
       input: C.EvidenceResourceInput,
+      authenticatedSessionID?: string,
     ) => Effect.Effect<C.RecordingMedia, C.RecordingError>;
     readonly overview: (
       actor: string,
@@ -95,6 +98,7 @@ export class Recordings extends Context.Service<
     readonly media: (
       actor: string,
       input: C.RecordingIdentity,
+      authenticatedSessionID?: string,
     ) => Effect.Effect<C.RecordingMedia, C.RecordingError>;
     readonly grant: (token: string) => Effect.Effect<MediaGrant, C.RecordingError>;
     readonly chunk: (
@@ -201,7 +205,7 @@ export const layer = Layer.effect(
           grants.delete(token);
           return yield* new C.RecordingError({ reason: "media_expired" });
         }
-        const sessionId = yield* decodeSessionID(value.actorID).pipe(
+        const sessionId = yield* decodeSessionID(value.authenticatedSessionID).pipe(
           Effect.mapError(() => new C.RecordingError({ reason: "media_expired" })),
         );
         const session = yield* sessions
@@ -219,7 +223,7 @@ export const layer = Layer.effect(
         }
         return value;
       });
-    const media: Recordings["Service"]["media"] = (actor, input) =>
+    const media: Recordings["Service"]["media"] = (actor, input, authenticatedSessionID = actor) =>
       Effect.gen(function* () {
         const recording = yield* get(actor, input);
         if (!recording.playable)
@@ -233,6 +237,7 @@ export const layer = Layer.effect(
         const expiresAt = nowMillis + 10 * 60 * 1000;
         grants.set(token, {
           actorID: actor,
+          authenticatedSessionID,
           input,
           expiresAt,
           size: info.size,
@@ -250,7 +255,11 @@ export const layer = Layer.effect(
           isError(cause) ? cause : new C.RecordingError({ reason: "invalid_response" }),
         ),
       );
-    const thumbnail: Recordings["Service"]["thumbnail"] = (actor, input) =>
+    const thumbnail: Recordings["Service"]["thumbnail"] = (
+      actor,
+      input,
+      authenticatedSessionID = actor,
+    ) =>
       Effect.gen(function* () {
         const info = yield* transport
           .request(actor, "integration.recording.thumbnail", input)
@@ -267,6 +276,7 @@ export const layer = Layer.effect(
         const existing = Array.from(grants).find(
           ([, value]) =>
             value.actorID === actor &&
+            value.authenticatedSessionID === authenticatedSessionID &&
             value.thumbnailID === info.thumbnailID &&
             value.version === info.version &&
             value.input.installationID === input.installationID &&
@@ -281,6 +291,7 @@ export const layer = Layer.effect(
         if (!existing)
           grants.set(token, {
             actorID: actor,
+            authenticatedSessionID,
             input,
             expiresAt,
             size: info.size,
@@ -345,7 +356,11 @@ export const layer = Layer.effect(
           isError(cause) ? cause : new C.RecordingError({ reason: "invalid_response" }),
         ),
       );
-    const evidenceResource: Recordings["Service"]["evidenceResource"] = (actor, input) =>
+    const evidenceResource: Recordings["Service"]["evidenceResource"] = (
+      actor,
+      input,
+      authenticatedSessionID = actor,
+    ) =>
       Effect.gen(function* () {
         const { resourceID, ...preparationInput } = input;
         const preparation = yield* getEvidence(actor, preparationInput);
@@ -376,6 +391,7 @@ export const layer = Layer.effect(
         const { preparationID, ...identity } = preparationInput;
         grants.set(token, {
           actorID: actor,
+          authenticatedSessionID,
           input: identity,
           resource: { preparationID, resourceID },
           name: asset.name,

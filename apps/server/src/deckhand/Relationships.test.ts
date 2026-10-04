@@ -421,6 +421,12 @@ describe("Deckhand schema migration", () => {
         yield* sql`DROP TABLE deckhand_reviewer_queue`;
         yield* sql`DROP TABLE IF EXISTS deckhand_verification_attempts`;
         yield* sql`DROP TABLE IF EXISTS deckhand_external_sessions`;
+        yield* sql`DROP VIEW deckhand_current_checkouts`;
+        yield* sql`DROP TABLE deckhand_checkout_ownership`;
+        yield* sql`DROP TABLE deckhand_ownership_transitions`;
+        yield* sql`DROP TABLE deckhand_owned_preview_proofs`;
+        yield* sql`DROP TABLE deckhand_owned_preview_captures`;
+        yield* sql`DROP TABLE deckhand_verification_scenarios`;
         yield* sql`DROP TABLE deckhand_attention_dispositions`;
         yield* sql`DROP INDEX deckhand_attention_source`;
         yield* sql`DROP INDEX deckhand_attention_page`;
