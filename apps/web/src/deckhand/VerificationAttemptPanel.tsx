@@ -428,13 +428,15 @@ function ScopedVerificationAttemptPanel({
                 <span>{item.preview.serviceID}</span>
                 <span>{item.phase}</span>
                 <span>
-                  {item.verdict === "matches"
-                    ? "Matches revision"
-                    : item.verdict === "earlier_revision"
-                      ? "Earlier revision"
-                      : item.verdict === "checks_failed"
-                        ? "Checks failed"
-                        : "Incomplete"}
+                  {item.phase === "completed" && item.verdict === "incomplete"
+                    ? "Open saved result"
+                    : item.verdict === "matches"
+                      ? "Matches revision"
+                      : item.verdict === "earlier_revision"
+                        ? "Earlier revision"
+                        : item.verdict === "checks_failed"
+                          ? "Checks failed"
+                          : "Incomplete"}
                 </span>
                 <time dateTime={item.createdAt}>
                   {new Date(item.createdAt).toLocaleString(undefined, {

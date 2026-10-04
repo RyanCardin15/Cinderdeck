@@ -125,6 +125,10 @@
   flex-wrap: wrap;
   justify-content: space-between;
 }
+.history time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 .summary [data-state="matches"] {
   color: var(--success, var(--foreground));
 }

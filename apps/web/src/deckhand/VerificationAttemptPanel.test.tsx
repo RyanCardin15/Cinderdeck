@@ -467,29 +467,50 @@ it("allows a slow exact GET to settle before scheduling another status read", as
   expect(commands.read).toHaveBeenCalledTimes(1);
 });
 
-it("distinguishes saved attempts for the same revision and opens the chosen result by its exact key", async () => {
+it("opens the chosen completed result by its timestamp and exact key without claiming fresh list integrity", async () => {
   const matched = {
     ...attempt("completed", null),
     operationKey: "matched-attempt",
+    createdAt: "2026-10-04T10:02:00Z",
     verdict: "matches" as const,
   };
-  const incomplete = { ...attempt("completed", null), operationKey: "incomplete-attempt" };
+  const incomplete = {
+    ...attempt("completed", null),
+    operationKey: "incomplete-attempt",
+    createdAt: "2026-10-04T10:01:00Z",
+  };
+  // Real listings intentionally downgrade a saved match until exact GET can
+  // recheck the selected recording's current bytes and proof.
   commands.list.mockResolvedValue({
     _tag: "Success",
-    value: [C.toAttemptSummary(incomplete), C.toAttemptSummary(matched)],
+    value: [
+      C.toAttemptSummary(incomplete),
+      C.toAttemptSummary({ ...matched, verdict: "incomplete" }),
+    ],
   });
   commands.get.mockImplementation(async ({ input }) => ({
     _tag: "Success",
     value: input.operationKey === matched.operationKey ? matched : incomplete,
   }));
   await render();
-  await click("Matches revision");
+  const dates = [...element.querySelectorAll("time")];
+  expect(dates).toHaveLength(2);
+  expect(dates[0]?.textContent).not.toBe(dates[1]?.textContent);
+  const buttons = dates.map((date) => date.closest("button"));
+  expect(buttons.every((button) => button?.textContent?.includes("Open saved result"))).toBe(true);
+  expect(element.textContent).not.toContain("Matches revision");
+  const selected = element
+    .querySelector(`time[datetime="${matched.createdAt}"]`)
+    ?.closest("button");
+  expect(selected?.disabled).toBe(false);
+  await act(async () => selected?.click());
   expect(commands.get).toHaveBeenCalledWith({
     environmentId: "computer",
     input: { operationKey: "matched-attempt" },
   });
   expect(element.textContent).toContain("Verification matches this commit");
-  expect(element.querySelectorAll("time")).toHaveLength(2);
+  expect(commands.get).toHaveBeenCalledTimes(1);
+  expect(commands.read).not.toHaveBeenCalled();
   expect(commands.advance).not.toHaveBeenCalled();
   expect(commands.start).not.toHaveBeenCalled();
 });
