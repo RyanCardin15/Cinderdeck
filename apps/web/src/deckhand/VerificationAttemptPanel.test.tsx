@@ -466,3 +466,30 @@ it("allows a slow exact GET to settle before scheduling another status read", as
   });
   expect(commands.read).toHaveBeenCalledTimes(1);
 });
+
+it("distinguishes saved attempts for the same revision and opens the chosen result by its exact key", async () => {
+  const matched = {
+    ...attempt("completed", null),
+    operationKey: "matched-attempt",
+    verdict: "matches" as const,
+  };
+  const incomplete = { ...attempt("completed", null), operationKey: "incomplete-attempt" };
+  commands.list.mockResolvedValue({
+    _tag: "Success",
+    value: [C.toAttemptSummary(incomplete), C.toAttemptSummary(matched)],
+  });
+  commands.get.mockImplementation(async ({ input }) => ({
+    _tag: "Success",
+    value: input.operationKey === matched.operationKey ? matched : incomplete,
+  }));
+  await render();
+  await click("Matches revision");
+  expect(commands.get).toHaveBeenCalledWith({
+    environmentId: "computer",
+    input: { operationKey: "matched-attempt" },
+  });
+  expect(element.textContent).toContain("Verification matches this commit");
+  expect(element.querySelectorAll("time")).toHaveLength(2);
+  expect(commands.advance).not.toHaveBeenCalled();
+  expect(commands.start).not.toHaveBeenCalled();
+});
