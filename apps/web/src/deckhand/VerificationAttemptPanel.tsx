@@ -6,9 +6,14 @@ import type {
   AttemptAdvance,
   AttemptSummary,
 } from "@t3tools/contracts/deckhand/verificationAttemptsRpc";
-import { toAttemptSummary } from "@t3tools/contracts/deckhand/verificationAttemptsRpc";
-import { useEffect, useRef, useState } from "react";
+import {
+  AttemptError,
+  toAttemptSummary,
+} from "@t3tools/contracts/deckhand/verificationAttemptsRpc";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
+import * as Schema from "effect/Schema";
 import { ShieldCheckIcon, GitCommitHorizontalIcon, RefreshCwIcon } from "lucide-react";
 import { randomUUID } from "../lib/utils";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -18,23 +23,46 @@ import {
   getAttempt,
   listAttempts,
   advanceAttempt,
+  pendingAttemptView,
+  needsAttemptObservation,
 } from "./verificationAttemptState";
 import type { RecordingContext } from "@t3tools/contracts/deckhand/recordingsRpc";
 import styles from "./verificationAttempt.module.css";
 import { OwnedPreviewCaptureControl } from "./OwnedPreviewCaptureControl";
-export function VerificationAttemptPanel({
-  environmentId,
-  reference,
-  candidate,
-  recordingID,
-  onCaptureContext,
-}: {
+const isAttemptError = Schema.is(AttemptError);
+type VerificationAttemptPanelProps = {
   environmentId: EnvironmentId;
   reference: PullRequestRef;
   candidate: VerificationContext | undefined;
   recordingID: string;
   onCaptureContext: (value: { context: RecordingContext; receiptID: string } | null) => void;
-}) {
+};
+export function VerificationAttemptPanel(props: VerificationAttemptPanelProps) {
+  return (
+    <ScopedVerificationAttemptPanel
+      key={JSON.stringify([
+        props.environmentId,
+        props.reference.projectId,
+        props.reference.host,
+        props.reference.expectedAccountId,
+        props.reference.allowStale,
+        props.reference.repository,
+        props.reference.number,
+      ])}
+      {...props}
+    />
+  );
+}
+function ScopedVerificationAttemptPanel({
+  environmentId,
+  reference: incomingReference,
+  candidate,
+  recordingID,
+  onCaptureContext,
+}: VerificationAttemptPanelProps) {
+  // The keyed parent fixes this reference for the lifetime of this scope.
+  // Equivalent parent renders must not invalidate an in-flight action.
+  const [reference] = useState(incomingReference);
   const previewCommand = useAtomCommand(previewAttempt, { reportFailure: false });
   const startCommand = useAtomCommand(startAttempt, { reportFailure: false });
   const getCommand = useAtomCommand(getAttempt, { reportFailure: false });
@@ -44,11 +72,23 @@ export function VerificationAttemptPanel({
   const [preview, setPreview] = useState<AttemptPreview | null>(null);
   const [attempt, setAttempt] = useState<VerificationAttempt | null>(null);
   const [history, setHistory] = useState<ReadonlyArray<AttemptSummary>>([]);
-  const [ownedRecordingID, setOwnedRecordingID] = useState("");
-  useEffect(() => {
-    setOwnedRecordingID("");
-  }, [attempt?.operationKey]);
+  const [ownedRecording, setOwnedRecording] = useState<{
+    operationKey: string;
+    recordingID: string;
+  } | null>(null);
+  const attemptKey = attempt?.operationKey;
+  const ownedRecordingID =
+    ownedRecording && ownedRecording.operationKey === attemptKey ? ownedRecording.recordingID : "";
+  const saveOwnedRecording = useCallback(
+    (recordingID: string) => {
+      if (attemptKey) setOwnedRecording({ operationKey: attemptKey, recordingID });
+    },
+    [attemptKey],
+  );
   const [busy, setBusy] = useState(false);
+  // A failed command may have persisted its intent even before its response
+  // arrives. Recover that exact key; never start another action automatically.
+  const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const epoch = useRef(0);
   const originalKey = useRef<string | null>(null);
@@ -89,8 +129,11 @@ export function VerificationAttemptPanel({
         }
       } else {
         const key =
-          action === "start" ? (originalKey.current ??= randomUUID()) : selected?.operationKey;
+          action === "start"
+            ? (originalKey.current ??= randomUUID())
+            : (selected?.operationKey ?? recoveryKey);
         if (!key) return;
+        if (action !== "refresh") setRecoveryKey(key);
         const result =
           action === "start" && preview
             ? await startCommand({ environmentId, input: { operationKey: key, preview } })
@@ -119,6 +162,7 @@ export function VerificationAttemptPanel({
         if (result._tag === "Failure") throw Cause.squash(result.cause);
         if (version === epoch.current) {
           setAttempt(result.value);
+          setRecoveryKey(needsAttemptObservation(result.value) ? key : null);
           cancellationKey.current = null;
           setHistory((items) =>
             [
@@ -129,16 +173,46 @@ export function VerificationAttemptPanel({
         }
       }
     } catch (cause) {
-      if (version === epoch.current)
+      if (version === epoch.current) {
+        // The server rejects this named refusal before persisting an attempt
+        // or starting its build. A transport failure cannot establish that.
+        if (action === "start" && isAttemptError(cause) && cause.reason === "stale_preview") {
+          setRecoveryKey(null);
+          setPreview(null);
+        }
         setError(
           cause instanceof Error
             ? cause.message
             : "Verification is unavailable. Refresh the saved receipt before retrying.",
         );
+      }
     } finally {
       if (version === epoch.current) setBusy(false);
     }
   };
+  const observe = useCallback(
+    (value: VerificationAttempt) => {
+      const expectedKey = recoveryKey ?? attempt?.operationKey;
+      if (
+        value.operationKey !== expectedKey ||
+        (attempt?.operationKey === value.operationKey && value.updatedAt < attempt.updatedAt)
+      )
+        return;
+      setAttempt(value);
+      setRecoveryKey(needsAttemptObservation(value) ? value.operationKey : null);
+      if (!needsAttemptObservation(value)) setError(null);
+      setHistory((items) =>
+        [
+          toAttemptSummary(value),
+          ...items.filter((item) => item.operationKey !== value.operationKey),
+        ].slice(0, 30),
+      );
+    },
+    [recoveryKey, attempt],
+  );
+  const observedKey =
+    recoveryKey ?? (attempt && needsAttemptObservation(attempt) ? attempt.operationKey : null);
+  const recovering = Boolean(observedKey);
   const receipt = attempt?.receipt;
   useEffect(() => {
     onCaptureContext(
@@ -155,7 +229,12 @@ export function VerificationAttemptPanel({
       !attempt.pendingAction);
   const terminal = attempt?.phase === "completed" || attempt?.phase === "cancelled";
   const blocked =
-    busy || !receipt || attempt?.phase === "unknown" || Boolean(attempt?.pendingAction) || terminal;
+    busy ||
+    recovering ||
+    !receipt ||
+    attempt?.phase === "unknown" ||
+    Boolean(attempt?.pendingAction) ||
+    terminal;
   return (
     <section className={styles.panel} aria-label="Pinned verification attempt">
       <header>
@@ -165,6 +244,21 @@ export function VerificationAttemptPanel({
           <p>Build and check the exact PR source, then capture the running result.</p>
         </div>
       </header>
+      {!busy && observedKey ? (
+        <PendingAttemptObservation
+          key={`${environmentId}:${observedKey}`}
+          environmentId={environmentId}
+          operationKey={observedKey}
+          minimumUpdatedAt={attempt?.updatedAt ?? ""}
+          onObserved={observe}
+        />
+      ) : null}
+      {!attempt && recoveryKey ? (
+        <button disabled={busy} onClick={() => void run("refresh")}>
+          <RefreshCwIcon size={13} />
+          Refresh saved attempt
+        </button>
+      ) : null}
       {!attempt ? (
         <>
           <div className={styles.form}>
@@ -177,11 +271,11 @@ export function VerificationAttemptPanel({
                   setPreview(null);
                 }}
                 placeholder="Configured service name, for example web"
-                disabled={busy}
+                disabled={busy || recovering}
               />
             </label>
             <button
-              disabled={busy || !candidate || !serviceID.trim()}
+              disabled={busy || recovering || !candidate || !serviceID.trim()}
               onClick={() => void run("preview")}
             >
               Pin current PR head
@@ -199,7 +293,7 @@ export function VerificationAttemptPanel({
                 {preview.repositories.length} repositories ·{" "}
                 {preview.descriptor.adapter.requiredTaskIDs.length} required checks
               </span>
-              <button disabled={busy} onClick={() => void run("start")}>
+              <button disabled={busy || recovering} onClick={() => void run("start")}>
                 Build pinned revision
               </button>
             </div>
@@ -228,6 +322,7 @@ export function VerificationAttemptPanel({
                 disabled={busy}
                 onClick={() => {
                   setAttempt(null);
+                  setRecoveryKey(null);
                   setPreview(null);
                   originalKey.current = null;
                   onCaptureContext(null);
@@ -240,7 +335,11 @@ export function VerificationAttemptPanel({
           <p>{attempt.detail}</p>
           {attempt.buildAndChecksMatch ? (
             <p className={styles.hint}>
-              Build and check receipts match pinned source. The video target is unverified.
+              {attempt.verdict === "matches"
+                ? "Pinned source, required checks, served artifact and the owned browser video match."
+                : attempt.verdict === "earlier_revision"
+                  ? "Build and check receipts match the pinned source. This evidence belongs to an earlier PR revision."
+                  : "Build and check receipts match pinned source. Full video verification remains incomplete."}
             </p>
           ) : null}
           {receipt ? (
@@ -299,7 +398,7 @@ export function VerificationAttemptPanel({
               enabled={
                 !blocked && receipt.state === "running" && receipt.reservationState === "held"
               }
-              onRecording={setOwnedRecordingID}
+              onRecording={saveOwnedRecording}
             />
           ) : null}
           <p className={styles.hint}>
@@ -334,5 +433,44 @@ export function VerificationAttemptPanel({
         </details>
       ) : null}
     </section>
+  );
+}
+
+function PendingAttemptObservation({
+  environmentId,
+  operationKey,
+  minimumUpdatedAt,
+  onObserved,
+}: {
+  environmentId: EnvironmentId;
+  operationKey: string;
+  minimumUpdatedAt: string;
+  onObserved: (value: VerificationAttempt) => void;
+}) {
+  const result = useAtomValue(
+    pendingAttemptView({
+      environmentId,
+      input: { operationKey },
+    }),
+  );
+  useEffect(() => {
+    if (
+      result._tag === "Success" &&
+      !result.waiting &&
+      result.value.operationKey === operationKey &&
+      result.value.updatedAt >= minimumUpdatedAt
+    ) {
+      onObserved(result.value);
+    }
+  }, [result, operationKey, minimumUpdatedAt, onObserved]);
+  return result._tag === "Failure" ? (
+    <p role="alert" className={styles.error}>
+      Status is unavailable. The last receipt is retained; automatic reads will retry. You can also
+      refresh the saved attempt manually.
+    </p>
+  ) : (
+    <p role="status" className={styles.hint}>
+      Watching the saved action for a definitive receipt…
+    </p>
   );
 }

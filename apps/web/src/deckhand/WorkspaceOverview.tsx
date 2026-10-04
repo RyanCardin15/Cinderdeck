@@ -889,6 +889,12 @@ function ConnectedWorkspace({
               </details>
             ) : null}
             <h3>Services</h3>
+            {selected.available &&
+            selected.workspace &&
+            !selected.workspace.issues.length &&
+            !selected.workspace.services.length ? (
+              <p>No services in this context.</p>
+            ) : null}
             {selected.workspace?.services.map((service) => (
               <div key={service.name} className={styles["dh-inspector-service"]}>
                 <strong>{service.name}</strong>
