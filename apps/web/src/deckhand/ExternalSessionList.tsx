@@ -5,6 +5,7 @@ import { useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { connectionAtomRuntime } from "../connection/runtime";
+import { useAgentObservation } from "./useAgentObservation";
 import styles from "./workspace.module.css";
 export const externalSessionsView = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
   label: "deckhand:external-sessions",
@@ -47,6 +48,11 @@ function ScopedExternalSessionList({
   );
   const sessions = Option.getOrNull(AsyncResult.value(result));
   const unavailable = result._tag === "Failure";
+  const observation = useAgentObservation(
+    environmentId,
+    `${installationID}:${workspaceID}:${generation}`,
+    sessions,
+  );
   return (
     <section className={styles["dh-session-list"]} aria-label="Reported external sessions">
       <h3>External sessions</h3>
@@ -57,6 +63,11 @@ function ScopedExternalSessionList({
       {unavailable ? (
         <p role="status">
           External session state is unavailable. Retained rows show only the last observed report.
+        </p>
+      ) : observation.stale ? (
+        <p role="status">
+          {observation.reconnecting ? "Reconnecting." : "Connection unavailable."} External
+          registrations show only the last observed report.
         </p>
       ) : sessions === null ? (
         <p>Loading external sessions…</p>
@@ -71,9 +82,11 @@ function ScopedExternalSessionList({
           </span>
           <span>
             Last reported: {session.reportedExecution.replaceAll("_", " ")} ·{" "}
-            {unavailable || session.connection === "stale"
-              ? "Connection lost / last seen"
-              : "Registration connected"}
+            {unavailable || observation.stale
+              ? "Last observed · Connection unavailable"
+              : session.connection === "stale"
+                ? "Connection lost / last seen"
+                : "Registration connected"}
           </span>
           <span>Last seen {session.lastSeenAt}</span>
           <details>
