@@ -49,6 +49,13 @@ import {
   recordingMedia,
 } from "./recordingState";
 import { RecordingThumbnail } from "./RecordingThumbnail";
+import {
+  overviewResources,
+  savedWorkspaceMatches,
+  type WorkspaceSearch,
+} from "./workspaceNavigation";
+import { recordingContextForSearch } from "./recordingNavigation";
+import { useAgentObservation } from "./useAgentObservation";
 import styles from "./recordings.module.css";
 const EMPTY_CAPTURE_CONTEXTS: ReadonlyArray<{ id: string; label: string }> = [];
 const decodeSavedStart = Schema.decodeUnknownSync(Schema.fromJsonString(RecordingStartSchema));
@@ -78,28 +85,68 @@ export function RecordingsPage() {
 }
 function RecordingWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
   const search = useSearch({ from: "/_chat/recordings" });
-  const result = useAtomValue(workspaceView({ environmentId, input: { offset: 0, limit: 100 } }));
+  const result = useAtomValue(
+    workspaceView({
+      environmentId,
+      input: {
+        offset: 0,
+        limit: 100,
+        ...(search.workspace ? { selectedContextID: search.workspace } : {}),
+      },
+    }),
+  );
   const view = Option.getOrNull(AsyncResult.value(result));
   const navigate = useNavigate();
   const { environments } = useEnvironments();
   const workspace = search.workspace ?? "";
-  const resources = view?.resources.filter((item) => item.available) ?? [];
+  const resources = overviewResources(view).filter((item) => item.available);
   const selected = workspace
     ? resources.find((item) => item.workspaceID === workspace)
     : resources[0];
+  const observation = useAgentObservation(
+    environmentId,
+    JSON.stringify([search.workspace, search.expectedInstallationID, search.expectedGeneration]),
+    view,
+  );
+  const connected = result._tag !== "Failure" && !observation.stale && view?.state === "connected";
+  const savedMatches = savedWorkspaceMatches(
+    search,
+    view?.hello?.installationID,
+    selected?.generation,
+  );
+  const context = recordingContextForSearch(
+    search,
+    selected && view?.hello
+      ? {
+          installationID: view.hello.installationID,
+          workspaceID: selected.workspaceID,
+          generation: selected.generation,
+        }
+      : null,
+  );
+  const returnContextID = workspace || selected?.workspaceID;
+  const returnWorkspaceID = selected?.workspace?.lane?.sourceStackID ?? returnContextID;
+  const returnSearch: WorkspaceSearch = {
+    environment: environmentId,
+    ...(returnWorkspaceID ? { workspace: returnWorkspaceID } : {}),
+    ...(returnContextID ? { context: returnContextID } : {}),
+    ...(context
+      ? { expectedInstallationID: context.installationID, expectedGeneration: context.generation }
+      : {}),
+  };
   return (
     <div className={styles.shell}>
       <ProductNavigation
         current="recordings"
         connection={{
-          label: view?.state === "connected" ? "Cinderdeck connected" : "Cinderdeck unavailable",
-          connected: view?.state === "connected",
+          label: connected ? "Cinderdeck connected" : "Cinderdeck unavailable",
+          connected,
         }}
       />
       <main className={styles.page}>
         <header className={styles.pageHeader}>
           <div>
-            <Link to="/workspaces">
+            <Link to="/workspaces" search={returnSearch}>
               <ArrowLeftIcon size={15} /> Workspaces
             </Link>
             <h1>Recorded verification</h1>
@@ -147,20 +194,50 @@ function RecordingWorkspace({ environmentId }: { environmentId: EnvironmentId })
             </select>
           </label>
         </header>
-        {view?.state === "connected" && view.hello && selected ? (
+        {view?.state === "connected" && !savedMatches ? (
+          <section className={styles.empty} role="alert">
+            <h2>This saved recording belongs to a different workspace identity</h2>
+            <p>
+              The installation or workspace generation changed. Saved evidence keeps its original
+              identity; capture and recording changes are unavailable.
+            </p>
+            {selected ? (
+              <button
+                type="button"
+                onClick={() =>
+                  void navigate({
+                    to: "/recordings",
+                    search: { environment: environmentId, workspace: selected.workspaceID },
+                  })
+                }
+              >
+                Open current workspace
+              </button>
+            ) : null}
+          </section>
+        ) : observation.stale && context ? (
+          <p role="status" className={styles.error}>
+            Showing last observed evidence. Reconnect this computer before capturing or changing
+            recordings.
+          </p>
+        ) : null}
+        {context ? (
           <Recordings
-            key={`${environmentId}:${selected.workspaceID}:${selected.generation}:${search.recording ?? ""}`}
+            key={`${environmentId}:${context.installationID}:${context.workspaceID}:${context.generation}:${search.recording ?? ""}`}
             environmentId={environmentId}
-            context={{
-              installationID: view.hello.installationID,
-              workspaceID: selected.workspaceID,
-              generation: selected.generation,
-            }}
+            context={context}
+            nativeActionsEnabled={connected && savedMatches}
             initialRecordingID={search.recording}
             onSelectRecording={(recording) => {
               void navigate({
                 to: "/recordings",
-                search: { environment: environmentId, workspace: selected.workspaceID, recording },
+                search: {
+                  environment: environmentId,
+                  workspace: context.workspaceID,
+                  recording,
+                  expectedInstallationID: context.installationID,
+                  expectedGeneration: context.generation,
+                },
               });
             }}
             captureContexts={resources.map((item) => ({
@@ -191,6 +268,7 @@ export function Recordings({
   context,
   initialRecordingID,
   buildReceiptID,
+  nativeActionsEnabled = true,
   captureContexts = EMPTY_CAPTURE_CONTEXTS,
   onSelectRecording,
 }: {
@@ -198,6 +276,7 @@ export function Recordings({
   context: RecordingContext;
   initialRecordingID?: string | undefined;
   buildReceiptID?: string | undefined;
+  nativeActionsEnabled?: boolean;
   captureContexts?: ReadonlyArray<{ id: string; label: string }>;
   onSelectRecording?: (recording: string) => void;
 }) {
@@ -398,6 +477,7 @@ export function Recordings({
     void refreshLogs(target);
   };
   const openCreate = async () => {
+    if (!nativeActionsEnabled) return;
     setCreating(true);
     setError(null);
     setBusy(true);
@@ -412,7 +492,7 @@ export function Recordings({
     setBusy(false);
   };
   const begin = async () => {
-    if (!title.trim() || !windowID) return;
+    if (!nativeActionsEnabled || !title.trim() || !windowID) return;
     setBusy(true);
     setError(null);
     const input = pendingStart ?? {
@@ -456,7 +536,7 @@ export function Recordings({
     setBusy(false);
   };
   const act = async (action: "stop" | "pause" | "resume") => {
-    if (!selected) return;
+    if (!nativeActionsEnabled || !selected) return;
     setBusy(true);
     const response = await control({ environmentId, input: { ...identity(selected.id), action } });
     if (response._tag === "Success") {
@@ -469,7 +549,7 @@ export function Recordings({
     setBusy(false);
   };
   const annotate = async (outcome: "pass" | "fail" | "info") => {
-    if (!selected || !check.trim()) return;
+    if (!nativeActionsEnabled || !selected || !check.trim()) return;
     setBusy(true);
     const response = await mark({
       environmentId,
@@ -536,7 +616,7 @@ export function Recordings({
           <button
             type="button"
             className={styles.accent}
-            disabled={busy || active}
+            disabled={!nativeActionsEnabled || busy || active}
             onClick={() => void openCreate()}
           >
             <PlusIcon size={15} /> Record verification
@@ -641,7 +721,10 @@ export function Recordings({
             <button type="button" onClick={() => setCreating(false)}>
               Close
             </button>
-            <button className={styles.accent} disabled={busy || !windowID || !title.trim()}>
+            <button
+              className={styles.accent}
+              disabled={!nativeActionsEnabled || busy || !windowID || !title.trim()}
+            >
               {pendingStart ? "Retry saved request" : "Start recording"}
             </button>
           </div>
@@ -660,7 +743,12 @@ export function Recordings({
             Record a real application window with synchronized workspace logs, then review the
             result alongside captured repository revisions.
           </p>
-          <button type="button" className={styles.accent} onClick={() => void openCreate()}>
+          <button
+            type="button"
+            className={styles.accent}
+            disabled={!nativeActionsEnabled}
+            onClick={() => void openCreate()}
+          >
             Record your first verification
           </button>
         </div>
@@ -763,7 +851,7 @@ export function Recordings({
                 {selected.controlAllowed ? (
                   <div className={styles.actions}>
                     <button
-                      disabled={busy}
+                      disabled={!nativeActionsEnabled || busy}
                       type="button"
                       onClick={() => void act(selected.paused ? "resume" : "pause")}
                     >
@@ -771,7 +859,7 @@ export function Recordings({
                       {selected.paused ? "Resume capture" : "Pause capture"}
                     </button>
                     <button
-                      disabled={busy}
+                      disabled={!nativeActionsEnabled || busy}
                       type="button"
                       className={styles.stop}
                       onClick={() => void act("stop")}
@@ -968,21 +1056,21 @@ export function Recordings({
                   <div className={styles.actions}>
                     <button
                       type="button"
-                      disabled={busy || !check.trim()}
+                      disabled={!nativeActionsEnabled || busy || !check.trim()}
                       onClick={() => void annotate("pass")}
                     >
                       <CheckIcon size={15} /> Pass
                     </button>
                     <button
                       type="button"
-                      disabled={busy || !check.trim()}
+                      disabled={!nativeActionsEnabled || busy || !check.trim()}
                       onClick={() => void annotate("fail")}
                     >
                       <XIcon size={15} /> Fail
                     </button>
                     <button
                       type="button"
-                      disabled={busy || !check.trim()}
+                      disabled={!nativeActionsEnabled || busy || !check.trim()}
                       onClick={() => void annotate("info")}
                     >
                       Note
