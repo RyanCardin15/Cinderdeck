@@ -105,6 +105,8 @@
     "apps/server/src/auth/RpcAuthorization.test.ts": "Verify managed-session reads and launch mutations use the existing authenticated environment scope boundary.",
     "apps/server/src/auth/RpcAuthorization.ts": "Require existing read or operate scopes for each Deckhand integration method.",
     "apps/server/src/binCli.ts": "Keep Deckhand CLI entrypoints and runtime identity separate, including the bounded offline diagnostics export command delegated to its shared domain helper.",
+    "apps/server/src/bootstrap.test.ts": "Use cancellable event-loop reads for inherited POSIX bootstrap/telemetry pipes so graceful backend exit does not wait for parent IPC writes; retain NDJSON framing, durable finalizers, regular-file ownership and the existing Windows fallback. Verify real child exit/restart with writer held open.",
+    "apps/server/src/bootstrap.ts": "Use cancellable event-loop reads for inherited POSIX bootstrap/telemetry pipes so graceful backend exit does not wait for parent IPC writes; retain NDJSON framing, durable finalizers, regular-file ownership and the existing Windows fallback. Verify real child exit/restart with writer held open.",
     "apps/server/src/cli/acpMcpBridge.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/server/src/cli/app.test.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/server/src/cli/app.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
@@ -139,6 +141,8 @@
     "apps/server/src/cloud/publicConfig.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/server/src/config.ts": "App identity and state isolation",
     "apps/server/src/http.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
+    "apps/server/src/inheritedPipeInput.test.ts": "Use cancellable event-loop reads for inherited POSIX bootstrap/telemetry pipes so graceful backend exit does not wait for parent IPC writes; retain NDJSON framing, durable finalizers, regular-file ownership and the existing Windows fallback. Verify real child exit/restart with writer held open.",
+    "apps/server/src/inheritedPipeInput.ts": "Use cancellable event-loop reads for inherited POSIX bootstrap/telemetry pipes so graceful backend exit does not wait for parent IPC writes; retain NDJSON framing, durable finalizers, regular-file ownership and the existing Windows fallback. Verify real child exit/restart with writer held open.",
     "apps/server/src/mcp/DeckhandMcpAccess.test.ts": "Expose provider-scoped Deckhand lane/services/recording/evidence tools through existing authenticated MCP transport and shared domain validation; retain upstream toolkit behavior.",
     "apps/server/src/mcp/DeckhandMcpAccess.ts": "Expose provider-scoped Deckhand lane/services/recording/evidence tools through existing authenticated MCP transport and shared domain validation; retain upstream toolkit behavior.",
     "apps/server/src/mcp/McpHttpServer.ts": "Expose provider-scoped Deckhand lane/services/recording/evidence tools through existing authenticated MCP transport and shared domain validation; retain upstream toolkit behavior.",
@@ -197,6 +201,7 @@
     "apps/server/src/provider/providerMaintenance.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/server/src/provider/providerMaintenanceRunner.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/server/src/provider/providerStatusCache.test.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
+    "apps/server/src/resourceTelemetry/DesktopTelemetryReceiver.ts": "Use cancellable event-loop reads for inherited POSIX bootstrap/telemetry pipes so graceful backend exit does not wait for parent IPC writes; retain NDJSON framing, durable finalizers, regular-file ownership and the existing Windows fallback. Verify real child exit/restart with writer held open.",
     "apps/server/src/resourceTelemetry/ResourceMonitorBinary.test.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/server/src/resourceTelemetry/ResourceMonitorBinary.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/server/src/server.ts": "Serve authenticated, bounded Cinderdeck recording media through the existing same-origin HTTP server.",
@@ -208,6 +213,7 @@
     "apps/server/src/telemetry/AnalyticsService.ts": "App identity and state isolation",
     "apps/server/src/terminal/Manager.test.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/server/src/terminal/Manager.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
+    "apps/server/src/testing/desktopPipeShutdown.fixture.mjs": "Use cancellable event-loop reads for inherited POSIX bootstrap/telemetry pipes so graceful backend exit does not wait for parent IPC writes; retain NDJSON framing, durable finalizers, regular-file ownership and the existing Windows fallback. Verify real child exit/restart with writer held open.",
     "apps/server/src/textGeneration/CodexTextGeneration.test.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/server/src/vcs/GitVcsDriver.ts": "Install the Deckhand checkout mutation policy at both Git driver construction points and the server root; reserve entire worktree lifecycles including newly materialized checkouts, and reserve checkpoint restoration before file effects.",
     "apps/server/src/vcs/GitVcsDriverCore.ts": "Install the Deckhand checkout mutation policy at both Git driver construction points and the server root; reserve entire worktree lifecycles including newly materialized checkouts, and reserve checkpoint restoration before file effects.",
@@ -911,6 +917,23 @@
       ],
       "tests": ["apps/server/src/orchestration-v2/Orchestrator.control-reads.test.ts"],
       "conflictResolution": "Adapt to upstream detach and runtime-request event transactions. Keep exact thread/provider-session scope, cancelled node/turn-item persistence and zero provider-response effects after detach. Never approve or resume a stopped provider or cancel requests in other conversations."
+    },
+    {
+      "owner": "Server inherited IPC lifecycle",
+      "files": [
+        "apps/server/src/bootstrap.ts",
+        "apps/server/src/bootstrap.test.ts",
+        "apps/server/src/inheritedPipeInput.ts",
+        "apps/server/src/inheritedPipeInput.test.ts",
+        "apps/server/src/resourceTelemetry/DesktopTelemetryReceiver.ts",
+        "apps/server/src/testing/desktopPipeShutdown.fixture.mjs"
+      ],
+      "tests": [
+        "apps/server/src/inheritedPipeInput.test.ts",
+        "apps/server/src/bootstrap.test.ts",
+        "apps/server/src/resourceTelemetry/DesktopTelemetryReceiver.test.ts"
+      ],
+      "conflictResolution": "Retain upstream bootstrap/telemetry schemas and scoped cleanup. Reapply only event-loop-backed POSIX pipe/socket reads and descriptor ownership; preserve regular-file reopen and Windows fallback semantics. Never substitute a forced process exit for durable finalizers. Run the real writer-open shutdown/restart and EOF regressions; Windows fast shutdown remains unproven until a Windows acceptance gate."
     }
   ]
 }
