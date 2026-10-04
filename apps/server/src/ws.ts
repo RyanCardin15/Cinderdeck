@@ -2622,6 +2622,16 @@ const makeWsRpcLayer = (
                 ),
               ),
           ),
+        [DeckhandRpc.DECKHAND_METHODS.contextPullRequests]: (input) =>
+          observeRpcStream(
+            DeckhandRpc.DECKHAND_METHODS.contextPullRequests,
+            managedSessions.subscribePullRequests(input).pipe(
+              Stream.provideService(IntegrationHub.IntegrationHub, deckhand),
+              Stream.mapError(
+                (cause) => new DeckhandRpc.DeckhandRpcError({ reason: cause.reason }),
+              ),
+            ),
+          ),
         [DeckhandRpc.DECKHAND_METHODS.contexts]: (input) =>
           observeRpcStream(
             DeckhandRpc.DECKHAND_METHODS.contexts,

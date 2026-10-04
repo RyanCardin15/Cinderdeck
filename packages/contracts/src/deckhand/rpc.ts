@@ -76,6 +76,7 @@ import {
 export const DECKHAND_METHODS = {
   sessions: "deckhand.sessions.subscribe",
   contexts: "deckhand.contexts.subscribe",
+  contextPullRequests: "deckhand.context.pull-requests.subscribe",
   launch: "deckhand.session.launch",
   create: "deckhand.session.create",
   createGet: "deckhand.session.create.get",
@@ -249,6 +250,30 @@ export const ManagedContextView = Schema.Struct({
   externalSessions: Schema.optionalKey(ExternalSessionSummary),
 });
 export type ManagedContextView = typeof ManagedContextView.Type;
+export const ContextPullRequestsInput = Schema.Struct({
+  installationID: launchIdentifier,
+  workspaceID: launchIdentifier,
+  generation: PositiveInt,
+  offset: NonNegativeInt,
+  limit: PositiveInt.check(Schema.isLessThanOrEqualTo(50)),
+});
+export type ContextPullRequestsInput = typeof ContextPullRequestsInput.Type;
+export const ContextPullRequest = Schema.Struct({
+  projectId: ProjectId,
+  threadId: ThreadId,
+  link: ThreadPullRequestLink,
+});
+export type ContextPullRequest = typeof ContextPullRequest.Type;
+export const ContextPullRequestsPage = Schema.Struct({
+  installationID: launchIdentifier,
+  workspaceID: launchIdentifier,
+  generation: PositiveInt,
+  items: Schema.Array(ContextPullRequest).check(Schema.isMaxLength(50)),
+  offset: NonNegativeInt,
+  total: NonNegativeInt,
+  nextOffset: Schema.NullOr(NonNegativeInt),
+});
+export type ContextPullRequestsPage = typeof ContextPullRequestsPage.Type;
 export const ManagedLaunchOption = Schema.Struct({
   instanceId: ProviderInstanceId,
   label: Schema.String,
@@ -315,6 +340,12 @@ export const DeckhandRpcGroup = RpcGroup.make(
   Rpc.make(THREAD_CONTEXT_METHOD, {
     payload: ThreadContextInput,
     success: Schema.NullOr(ThreadContextView),
+    error: ErrorSchema,
+    stream: true,
+  }),
+  Rpc.make(DECKHAND_METHODS.contextPullRequests, {
+    payload: ContextPullRequestsInput,
+    success: ContextPullRequestsPage,
     error: ErrorSchema,
     stream: true,
   }),
