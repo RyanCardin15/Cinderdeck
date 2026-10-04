@@ -427,6 +427,23 @@ function ScopedVerificationAttemptPanel({
                 <code>{item.preview.head.slice(0, 12)}</code>
                 <span>{item.preview.serviceID}</span>
                 <span>{item.phase}</span>
+                <span>
+                  {item.verdict === "matches"
+                    ? "Matches revision"
+                    : item.verdict === "earlier_revision"
+                      ? "Earlier revision"
+                      : item.verdict === "checks_failed"
+                        ? "Checks failed"
+                        : "Incomplete"}
+                </span>
+                <time dateTime={item.createdAt}>
+                  {new Date(item.createdAt).toLocaleString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </time>
               </button>
             ))}
           </div>
