@@ -14,6 +14,7 @@ const boundary = vi.hoisted(() => ({
   phase: "connected",
   navigate: vi.fn(),
   recent: vi.fn(),
+  inspect: vi.fn(),
   recordings: vi.fn(),
   mutation: vi.fn(),
 }));
@@ -61,7 +62,9 @@ vi.mock("../state/use-atom-command", () => ({
       ? boundary.recent
       : command === "recordings"
         ? boundary.recordings
-        : boundary.mutation,
+        : command === "inspect"
+          ? boundary.inspect
+          : boundary.mutation,
 }));
 const nativeAtom = Atom.make<AsyncResult.AsyncResult<IntegrationView, Error>>(
   AsyncResult.initial(),
@@ -230,6 +233,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   registry.dispose();
   container.remove();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -358,4 +362,70 @@ it("settles an initial agent-summary refusal without a permanent spinner or fals
   await act(async () => button("Needs attention").click());
   expect(container.textContent).toContain("Agent attention could not be verified");
   expect(container.textContent).not.toContain("No contexts need attention");
+});
+
+it("keeps a departed workspace selected when its recovered lane creation completes in flight", async () => {
+  vi.useFakeTimers();
+  boundary.search = { environment: "computer", workspace: "primary", tab: "agents" };
+  const receipt = {
+    operationID: "native-operation",
+    method: "lane.create",
+    state: "pending",
+    result: null,
+  };
+  boundary.recent.mockResolvedValue({
+    _tag: "Success",
+    value: [
+      {
+        input: {
+          operationKey: "saved-create",
+          installationID: "installation",
+          workspaceID: "primary",
+        },
+        receipt,
+        refused: false,
+      },
+    ],
+  });
+  let complete!: (value: unknown) => void;
+  boundary.inspect.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+  );
+  await render();
+  expect(container.textContent).toContain("Recovered a previously submitted operation");
+  await act(async () => vi.advanceTimersByTime(800));
+  expect(boundary.inspect).toHaveBeenCalledWith({
+    environmentId,
+    input: { operationKey: "saved-create" },
+  });
+  await changeSelect("Workspace", "other");
+  await render();
+  expect(container.textContent).toContain("Saved sessions for other");
+  boundary.navigate.mockClear();
+  await act(async () =>
+    complete({
+      _tag: "Success",
+      value: { ...receipt, state: "succeeded", result: { createdWorkspaceID: "created-lane" } },
+    }),
+  );
+  expect(boundary.navigate).not.toHaveBeenCalled();
+  expect(boundary.search).toEqual({
+    environment: environmentId,
+    workspace: "other",
+    tab: "agents",
+  });
+  expect(container.textContent).toContain("Saved sessions for other");
+  const url = await follow("Open created lane");
+  expect(url.pathname).toBe("/workspaces");
+  expect(Object.fromEntries(url.searchParams)).toEqual({
+    environment: "computer",
+    workspace: "primary",
+    context: "created-lane",
+    expectedInstallationID: "installation",
+    tab: "agents",
+  });
+  expect(boundary.mutation).not.toHaveBeenCalled();
 });
