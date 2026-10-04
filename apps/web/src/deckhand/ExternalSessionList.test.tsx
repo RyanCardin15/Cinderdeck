@@ -126,8 +126,11 @@ const render = async (generation = 3) =>
 it("shows stale external claims without managed navigation or controls", async () => {
   commands.list.mockResolvedValue({ _tag: "Success", value: [reported] });
   await render();
-  expect(element.textContent).toContain("Last reported: working");
+  expect(element.textContent).toContain("Last reported: Working");
   expect(element.textContent).toContain("Last observed · Agent not connected");
+  const lastSeen = element.querySelector("time");
+  expect(lastSeen?.dateTime).toBe(reported.lastSeenAt);
+  expect(lastSeen?.textContent).not.toContain(reported.lastSeenAt);
   expect(element.textContent).toContain("Agents registered by other apps appear here.");
   expect(element.textContent).toContain(
     "Their status comes from that app; open it to control them.",
