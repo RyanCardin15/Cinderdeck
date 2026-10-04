@@ -11,6 +11,7 @@ import {
   type ResourceTelemetrySourceStatus,
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -27,6 +28,7 @@ import * as Ndjson from "effect/unstable/encoding/Ndjson";
 
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import { openInheritedPipeInput } from "../inheritedPipeInput.ts";
 import { subscribeBeforeSnapshotWithoutMutex } from "../utils/subscribeBeforeSnapshot.ts";
 
 const INITIAL_SAMPLE_DEADLINE_MS = 90_000;
@@ -463,9 +465,11 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
 
   if (config.desktopTelemetryFd !== undefined) {
     const fd = config.desktopTelemetryFd;
+    const platform = yield* HostProcessPlatform;
     const readable = yield* Effect.acquireRelease(
       Effect.try({
         try: () =>
+          openInheritedPipeInput(fd, platform) ??
           NodeFS.createReadStream("", {
             fd,
             autoClose: true,

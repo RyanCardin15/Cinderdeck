@@ -236,10 +236,9 @@ it.layer(NodeServices.layer)("readBootstrapEnvelope", (it) => {
             }),
         );
 
-        const fd = yield* Effect.acquireRelease(
-          Effect.sync(() => NodeFS.openSync(fifoPath, "r")),
-          (fd) => Effect.sync(() => closeIfOpen(fd)),
-        );
+        // The evented POSIX pipe reader owns this inherited descriptor. Its
+        // asynchronous destroy closes it; a second synchronous close races it.
+        const fd = yield* Effect.sync(() => NodeFS.openSync(fifoPath, "r"));
 
         const fiber = yield* readBootstrapEnvelope(TestEnvelopeSchema, fd, {
           timeoutMs: 100,

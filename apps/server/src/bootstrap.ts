@@ -11,6 +11,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { decodeJsonResult } from "@t3tools/shared/schemaJson";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { openInheritedPipeInput } from "./inheritedPipeInput.ts";
 
 export class BootstrapFdStatError extends Schema.TaggedError<BootstrapFdStatError>()(
   "BootstrapFdStatError",
@@ -172,6 +173,11 @@ const makeBootstrapInputStream = (fd: number) =>
     const fdPath = resolveFdPath(fd, platform);
     return yield* Effect.try<NodeStream.Readable, BootstrapInputStreamOpenError>({
       try: () => {
+        const pipe = openInheritedPipeInput(fd, platform);
+        if (pipe !== undefined) {
+          pipe.setEncoding("utf8");
+          return pipe;
+        }
         if (fdPath === undefined) {
           return makeDirectBootstrapStream(fd);
         }
