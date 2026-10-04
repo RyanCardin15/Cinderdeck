@@ -1,3 +1,4 @@
+import { APP_MCP_SERVER_NAME } from "../../mcp/McpProviderSession.ts";
 /**
  * Source for the T3-owned Pi extension that consumes T3's HTTP MCP server.
  *
@@ -26,6 +27,8 @@ export const PI_T3_MCP_EXTENSION_SOURCE = `\
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
+const MCP_SERVER_NAME = ${JSON.stringify(APP_MCP_SERVER_NAME)};
+const MCP_TOOL_PREFIX = ${JSON.stringify(`mcp__${APP_MCP_SERVER_NAME}__`)};
 const URL_ENV = ${JSON.stringify(T3_MCP_URL_ENV)};
 const TOKEN_ENV = ${JSON.stringify(T3_MCP_BEARER_ENV)};
 const RUNTIME_MODE_ENV = ${JSON.stringify(T3_PI_RUNTIME_MODE_ENV)};
@@ -242,7 +245,7 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
       toolInputSummary(event.input),
     );
     if (!approved) {
-      return { block: true, reason: \`\${event.toolName} was declined in T3 Code.\` };
+      return { block: true, reason: \`\${event.toolName} was declined in Deckhand.\` };
     }
   });
 
@@ -251,7 +254,7 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
   if (endpoint === undefined || token === undefined) {
     pi.on("session_start", async (_event, ctx) => {
       ctx.ui.notify(
-        "t3-code MCP unavailable: T3_MCP_URL or T3_MCP_BEARER_TOKEN is missing.",
+        "Deckhand MCP unavailable: T3_MCP_URL or T3_MCP_BEARER_TOKEN is missing.",
         "warning",
       );
     });
@@ -269,7 +272,7 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
       const tools = await client.listTools(signal);
       for (const tool of tools) {
         const name = tool.name;
-        const registeredName = \`mcp__t3-code__\${name}\`;
+        const registeredName = \`\${MCP_TOOL_PREFIX}\${name}\`;
         const description = tool.description ?? name;
         pi.registerTool({
           name: registeredName,
@@ -277,7 +280,7 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
           description,
           promptSnippet: description.split("\\n")[0] ?? name,
           promptGuidelines: [
-            \`Use \${registeredName} from the t3-code MCP server when the user asks for T3 orchestration that this tool covers.\`,
+            \`Use \${registeredName} from the \${MCP_SERVER_NAME} MCP server when the user asks for T3 orchestration that this tool covers.\`,
           ],
           parameters: jsonSchemaToTypebox(tool.inputSchema),
           async execute(_toolCallId, params, signal) {
@@ -289,7 +292,7 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
             const text = formatMcpContent(result);
             return {
               content: [{ type: "text", text }],
-              details: { server: "t3-code", tool: name },
+              details: { server: MCP_SERVER_NAME, tool: name },
               ...(isMcpToolError(result) ? { isError: true } : {}),
             };
           },
@@ -314,7 +317,7 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
       await ensureStarted();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      ctx.ui.notify(\`t3-code MCP unavailable: \${message}\`, "warning");
+      ctx.ui.notify(\`Deckhand MCP unavailable: \${message}\`, "warning");
     }
   });
 

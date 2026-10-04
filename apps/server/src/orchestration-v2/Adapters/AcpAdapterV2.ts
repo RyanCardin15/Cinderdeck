@@ -693,7 +693,7 @@ function acpMcpContext(threadId: ThreadId | null, self: SelfInvocation): AcpMcpC
   return {
     servers: [
       {
-        name: "t3-code",
+        name: McpProviderSession.APP_MCP_SERVER_NAME,
         command: self.command,
         args: [...selfInvocationArgs(self, ["acp-mcp-bridge"])],
         env: [
@@ -703,7 +703,10 @@ function acpMcpContext(threadId: ThreadId | null, self: SelfInvocation): AcpMcpC
         ],
       },
     ],
-    acpServers: [{ type: "acp", name: "t3-code", serverId: "t3-code" }],
+    // The bridge route ID is independent of the provider-facing name.
+    acpServers: [
+      { type: "acp", name: McpProviderSession.APP_MCP_SERVER_NAME, serverId: "t3-code" },
+    ],
     endpoint: session.endpoint,
     authorization: session.authorizationHeader,
     processEnvironment: {

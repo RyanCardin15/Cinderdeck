@@ -771,8 +771,12 @@ describe("AcpAdapterV2", () => {
 
       const mcpServer = runtimeInput?.mcpServers[0];
       if (mcpServer === undefined || !("command" in mcpServer)) {
-        return yield* Effect.die("ACP runtime must receive the t3-code stdio MCP server");
+        return yield* Effect.die("ACP runtime must receive the Deckhand stdio MCP server");
       }
+      assert.equal(mcpServer.name, "deckhand");
+      assert.deepEqual(runtimeInput?.acpMcpServers, [
+        { type: "acp", name: "deckhand", serverId: "t3-code" },
+      ]);
       assert.equal(mcpServer.command, process.execPath);
       assert.deepEqual(mcpServer.args, ["acp-mcp-bridge"]);
       assert.equal(runtimeInput?.processEnvironment?.T3_ACP_MCP_NODE, process.execPath);
@@ -2045,7 +2049,7 @@ describe("AcpAdapterV2", () => {
         mcpServers: [
           {
             type: "stdio",
-            name: "t3-code",
+            name: "deckhand",
             command: process.execPath,
             args: [
               process.argv[1] === undefined ? "t3" : NodePath.resolve(process.argv[1]),

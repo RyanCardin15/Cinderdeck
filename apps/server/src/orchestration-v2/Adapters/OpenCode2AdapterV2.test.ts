@@ -73,10 +73,11 @@ const event = (type: string, data: Record<string, unknown>): ProviderReplayEntry
 });
 const durable = { durable: { aggregateID: SESSION, seq: 1, version: 1 } };
 
-/** The rules T3 gives every session it runs, with only this thread's own T3 MCP server allowed. */
+/** The rules T3 gives every session it runs, with only this thread's own Deckhand MCP server allowed. */
 const mcpRules = [
   { action: "t3-code-*", resource: "*", effect: "deny" },
-  { action: "t3-code-thread_opencode2-adapter_*", resource: "*", effect: "allow" },
+  { action: "deckhand-*", resource: "*", effect: "deny" },
+  { action: "deckhand-thread_opencode2-adapter_*", resource: "*", effect: "allow" },
 ];
 const t3Rules = [{ action: "*", resource: "*", effect: "allow" }, ...mcpRules];
 const sessionInfo = (overrides: Record<string, unknown> = {}) => ({
@@ -1522,18 +1523,22 @@ describe("OpenCode2 adapter", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("gives a resumed session T3's rules when it was made with others", () =>
+  it.effect("replaces legacy and other-thread MCP grants when resuming a session", () =>
     Effect.gen(function* () {
       const runtime = yield* openCode2ReplayRuntimeWithInstructions([
         ...opening,
         out("session.get", { sessionID: SESSION }),
-        // Made by an earlier build that denied subagents; resuming drops the deny.
+        // An earlier build allowed its legacy MCP server and a different thread.
+        // Resuming keeps only the current thread's Deckhand MCP grant.
         replyData(
           "session.get",
           sessionInfo({
             permissions: [
               { action: "*", resource: "*", effect: "allow" },
               { action: "subagent", resource: "*", effect: "deny" },
+              { action: "t3-code-*", resource: "*", effect: "deny" },
+              { action: "t3-code-thread_opencode2-adapter_*", resource: "*", effect: "allow" },
+              { action: "deckhand-another-thread_*", resource: "*", effect: "allow" },
             ],
           }),
         ),
@@ -2654,7 +2659,7 @@ describe("OpenCode2 adapter", () => {
   );
 
   it.effect(
-    "registers T3's MCP server for the thread alone and removes it when the thread unloads",
+    "registers Deckhand's MCP server for the thread alone and removes it when the thread unloads",
     () =>
       Effect.gen(function* () {
         McpProviderSession.setMcpProviderSession({
@@ -2669,7 +2674,7 @@ describe("OpenCode2 adapter", () => {
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId)),
         );
-        const server = "t3-code-thread_opencode2-adapter";
+        const server = "deckhand-thread_opencode2-adapter";
         const { runtime, thread } = yield* resumed([
           // Registered for the session's directory under the thread's own name;
           // the session's rules allow only this name's tools (see `t3Rules`).
@@ -3584,7 +3589,8 @@ describe("OpenCode2 adapter", () => {
           permissions: [
             { action: "*", resource: "*", effect: "allow" },
             { action: "t3-code-*", resource: "*", effect: "deny" },
-            { action: "t3-code-thread_opencode2-adapter_fork_*", resource: "*", effect: "allow" },
+            { action: "deckhand-*", resource: "*", effect: "deny" },
+            { action: "deckhand-thread_opencode2-adapter_fork_*", resource: "*", effect: "allow" },
           ],
         }),
         reply("session.update", null),

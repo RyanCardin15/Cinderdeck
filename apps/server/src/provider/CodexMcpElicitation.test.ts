@@ -45,6 +45,23 @@ describe("Codex MCP elicitation approvals", () => {
     });
   });
 
+  it("uses the injected Deckhand server name in app approvals while preserving native choices", () => {
+    const { _meta, ...bareRequest } = request;
+    const approval = describeMcpElicitation({
+      ...bareRequest,
+      serverName: "deckhand",
+      message: "Allow the deckhand MCP server to run tool deckhand_context_pull_requests?",
+    });
+    NodeAssert.equal(approval.appName, "deckhand");
+    NodeAssert.deepStrictEqual(
+      approval.options,
+      describeMcpElicitation({
+        ...bareRequest,
+        serverName: "t3-code",
+        message: "Allow the t3-code MCP server to run tool deckhand_context_pull_requests?",
+      }).options,
+    );
+  });
   it("extracts the app name from a Computer Use request without metadata", () => {
     const { _meta, ...requestWithoutMetadata } = request;
 

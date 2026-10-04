@@ -9,6 +9,7 @@ import {
   mergeToolActivityData,
 } from "@t3tools/shared/toolActivity";
 import { T3_MCP_TOOL_NAMES } from "@t3tools/shared/t3McpToolPresentation";
+import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import type {
   OrchestrationV2ProviderThreadNativeMetadata,
   ThreadTokenUsageSnapshot,
@@ -1080,24 +1081,22 @@ function acpMcpFallbackInput(value: string | undefined): Record<string, unknown>
 }
 
 /**
- * Agents flatten injected MCP tools into model-facing function names with no
- * shared convention (survey of the 2026-08 registry builds): Kilo and
- * opencode use `t3-code_<tool>`, claude-acp and qwen `mcp__t3-code__<tool>`,
- * Amp `mcp__t3_code__<tool>` (hyphens mangled), droid `t3-code___<tool>`,
- * Copilot `t3-code-<tool>`, cline appends `: <args json>`. T3 always injects
- * its server as "t3-code", and matches are additionally gated on the known
- * T3 tool inventory, so the separator match can stay loose.
+ * Agents flatten injected MCP tools with underscores, hyphens, slashes, or a
+ * tool-first suffix. Preserve the origin of historical T3 calls while new
+ * sessions use Deckhand. Loose matches still require the known tool inventory.
  */
-const T3_MCP_TITLE_CALL =
-  /^(?:mcp[-_]{1,2})?t3[-_ ]?code[-_.:/ ]{1,3}(?<tool>[A-Za-z0-9][A-Za-z0-9_.-]*)(?::.*)?$/i;
+const APP_MCP_TITLE_CALL =
+  /^(?:mcp[-_]{1,2})?(?<server>deckhand|t3[-_ ]?code)[-_.:/ ]{1,3}(?<tool>[A-Za-z0-9][A-Za-z0-9_.-]*)(?::.*)?$/i;
 
-/**
- * Gemini CLI titles injected MCP calls "<tool> (<server> MCP Server)" and
- * qwen-code appends ": <args json>" to the same template; Auggie namespaces
- * tool-first as "<tool>_t3-code".
- */
-const T3_MCP_TITLE_SUFFIX_CALL =
-  /^(?<tool>[A-Za-z0-9][A-Za-z0-9_.-]*?)(?: \(t3[-_ ]?code MCP Server\)(?::|$)|[-_.]t3[-_ ]?code$)/i;
+/** Gemini and qwen use "<tool> (<server> MCP Server)"; Auggie uses a suffix. */
+const APP_MCP_TITLE_SUFFIX_CALL =
+  /^(?<tool>[A-Za-z0-9][A-Za-z0-9_.-]*?)(?: \((?<server>deckhand|t3[-_ ]?code) MCP Server\)(?::|$)|[-_.](?<suffixServer>deckhand|t3[-_ ]?code)$)/i;
+
+function appMcpOrigin(server: string): string | undefined {
+  if (/^deckhand$/i.test(server)) return McpProviderSession.APP_MCP_SERVER_NAME;
+  if (/^t3[-_ ]?code$/i.test(server)) return "t3-code";
+  return undefined;
+}
 
 /**
  * glm-acp-agent and Kimi CLI register injected MCP tools under their bare
@@ -1143,11 +1142,23 @@ export function extractMcpToolCallIdentity(
       ? meta.goose.toolCall
       : undefined
     : undefined;
-  // qwen asserts the origin server explicitly, so any known tool suffix in
-  // its toolName identifies the call even under future prefix formats.
+  // An explicit foreign origin vetoes loose name matching, including titles
+  // that resemble an app tool. Check all assertions before recovering a name.
   const metaServerId = typeof meta?.serverId === "string" ? meta.serverId.trim() : "";
   const metaToolName = typeof meta?.toolName === "string" ? meta.toolName.trim() : "";
-  if (/^t3[-_ ]?code$/i.test(metaServerId) && metaToolName.length > 0) {
+  const gooseExtension =
+    typeof gooseToolCall?.extensionName === "string" ? gooseToolCall.extensionName.trim() : "";
+  const metaOrigin = appMcpOrigin(metaServerId);
+  const gooseOrigin = appMcpOrigin(gooseExtension);
+  const assertsForeignOrigin =
+    (metaServerId.length > 0 && metaOrigin === undefined) ||
+    (gooseExtension.length > 0 && gooseOrigin === undefined);
+  if (assertsForeignOrigin) {
+    return undefined;
+  }
+  // qwen's serverId asserts the origin, so a known tool suffix suffices even
+  // if its prefix format changes.
+  if (metaOrigin !== undefined && metaToolName.length > 0) {
     for (const knownTool of T3_MCP_TOOL_NAMES) {
       const boundary = metaToolName.length - knownTool.length - 1;
       if (
@@ -1156,19 +1167,9 @@ export function extractMcpToolCallIdentity(
           boundary >= 0 &&
           !/[A-Za-z0-9]/.test(metaToolName.charAt(boundary)))
       ) {
-        return { server: "t3-code", tool: knownTool };
+        return { server: metaOrigin, tool: knownTool };
       }
     }
-  }
-  // A present-but-foreign origin assertion marks the whole call as another
-  // server's MCP call, so no loose name matching (meta or title) may brand it.
-  const gooseExtension =
-    typeof gooseToolCall?.extensionName === "string" ? gooseToolCall.extensionName.trim() : "";
-  const assertsForeignOrigin =
-    (metaServerId.length > 0 && !/^t3[-_ ]?code$/i.test(metaServerId)) ||
-    (gooseExtension.length > 0 && !/^t3[-_ ]?code$/i.test(gooseExtension));
-  if (assertsForeignOrigin) {
-    return undefined;
   }
   const candidates = [
     meta?.toolName,
@@ -1179,12 +1180,19 @@ export function extractMcpToolCallIdentity(
   for (const candidate of candidates) {
     const trimmed = candidate.trim();
     const match =
-      T3_MCP_TITLE_CALL.exec(trimmed) ??
-      T3_MCP_TITLE_SUFFIX_CALL.exec(trimmed) ??
+      APP_MCP_TITLE_CALL.exec(trimmed) ??
+      APP_MCP_TITLE_SUFFIX_CALL.exec(trimmed) ??
       T3_MCP_BARE_TITLE_CALL.exec(trimmed);
     const candidateTool = match?.groups?.tool;
     if (candidateTool !== undefined && T3_MCP_TOOL_NAMES.has(candidateTool)) {
-      return { server: "t3-code", tool: candidateTool };
+      return {
+        server:
+          metaOrigin ??
+          gooseOrigin ??
+          appMcpOrigin(match?.groups?.server ?? match?.groups?.suffixServer ?? "") ??
+          McpProviderSession.APP_MCP_SERVER_NAME,
+        tool: candidateTool,
+      };
     }
   }
   const commands = [
@@ -1196,10 +1204,13 @@ export function extractMcpToolCallIdentity(
   for (const command of commands) {
     const match = ACP_MCP_FALLBACK_CALL.exec(command);
     if (match?.[1] !== undefined) {
-      // The acp-mcp-call CLI exists only as T3's bridge fallback, so the
-      // server identity is T3's by construction.
+      // The bridge CLI invokes the current app-owned MCP server.
       const input = acpMcpFallbackInput(match[2]);
-      return { server: "t3-code", tool: match[1], ...(input === undefined ? {} : { input }) };
+      return {
+        server: McpProviderSession.APP_MCP_SERVER_NAME,
+        tool: match[1],
+        ...(input === undefined ? {} : { input }),
+      };
     }
   }
   return undefined;

@@ -1367,7 +1367,7 @@ describe("extractMcpToolCallIdentity", () => {
     });
   });
 
-  it("recovers T3 identity from acp-mcp-call fallback commands", () => {
+  it("recovers Deckhand identity from acp-mcp-call fallback commands", () => {
     const toolCall = toolCallFromUpdate({
       sessionUpdate: "tool_call",
       toolCallId: "exec-1",
@@ -1382,10 +1382,10 @@ describe("extractMcpToolCallIdentity", () => {
           '/usr/bin/node /srv/t3/bin.ts acp-mcp-call delegate_task {"task":"x"}',
         ],
       }),
-    ).toEqual({ server: "t3-code", tool: "delegate_task", input: { task: "x" } });
+    ).toEqual({ server: "deckhand", tool: "delegate_task", input: { task: "x" } });
   });
 
-  it("recovers T3 identity from pi-acp title-only fallback execs", () => {
+  it("recovers Deckhand identity from pi-acp title-only fallback execs", () => {
     // Captured verbatim from pi-acp 0.0.33 2026-08-14: rawInput is null and
     // the command line only appears as the verbatim title, which the
     // presentation layer summarizes into "Ran command".
@@ -1407,7 +1407,7 @@ describe("extractMcpToolCallIdentity", () => {
 
     expect(toolCall.title).toBe("Ran command");
     expect(extractMcpToolCallIdentity(toolCall)).toEqual({
-      server: "t3-code",
+      server: "deckhand",
       tool: "orchestrator_capabilities",
       input: {},
     });
@@ -1482,7 +1482,6 @@ describe("extractMcpToolCallIdentity", () => {
       't3-code__delegate_task: {"mode":"async"}',
       "delegate_task_t3-code",
       "t3-code/delegate_task",
-      'delegate_task: {"mode":"async"}',
     ]) {
       const toolCall = toolCallFromUpdate({
         sessionUpdate: "tool_call",
@@ -1539,6 +1538,100 @@ describe("extractMcpToolCallIdentity", () => {
     });
   });
 
+  it("preserves current Deckhand origins across ACP provider naming conventions", () => {
+    for (const title of [
+      "deckhand_orchestrator_capabilities",
+      "deckhand___orchestrator_capabilities",
+      "deckhand-orchestrator_capabilities",
+      'mcp__deckhand__orchestrator_capabilities: {"mode":"async"}',
+      'deckhand__orchestrator_capabilities: {"mode":"async"}',
+      "orchestrator_capabilities_deckhand",
+      "deckhand/orchestrator_capabilities",
+      "orchestrator_capabilities (Deckhand MCP Server)",
+      'orchestrator_capabilities (deckhand MCP Server): {"mode":"async"}',
+      'orchestrator_capabilities: {"mode":"async"}',
+    ]) {
+      const toolCall = toolCallFromUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: "deckhand-convention-1",
+        kind: "other",
+        title,
+        status: "pending",
+      });
+      expect(extractMcpToolCallIdentity(toolCall), title).toEqual({
+        server: "deckhand",
+        tool: "orchestrator_capabilities",
+      });
+    }
+  });
+
+  it("retains the asserted current or historical server for raw and enriched calls", () => {
+    for (const server of ["deckhand", "t3-code"]) {
+      const tagged = toolCallFromUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: `${server}-tagged-1`,
+        kind: "execute",
+        title: `mcp.${server}.orchestrator_capabilities`,
+        status: "in_progress",
+        rawInput: { server, tool: "orchestrator_capabilities", arguments: {} },
+        _meta: { is_mcp_tool_call: true },
+      });
+      expect(extractMcpToolCallIdentity(tagged)).toEqual({
+        server,
+        tool: "orchestrator_capabilities",
+      });
+      for (const meta of [
+        { serverId: server, toolName: `mcp::${server}::t3_thread_send` },
+        { goose: { toolCall: { toolName: "t3_thread_send", extensionName: server } } },
+      ]) {
+        const enriched = toolCallFromUpdate({
+          sessionUpdate: "tool_call",
+          toolCallId: `${server}-meta-1`,
+          kind: "other",
+          title: "Sending an update",
+          status: "pending",
+          _meta: meta,
+        });
+        expect(extractMcpToolCallIdentity(enriched), JSON.stringify(meta)).toEqual({
+          server,
+          tool: "t3_thread_send",
+        });
+      }
+    }
+  });
+
+  it("refuses loose app identity when any origin assertion is foreign", () => {
+    for (const title of [
+      "deckhand_delegate_task",
+      "t3-code_delegate_task",
+      "delegate_task",
+      "acp-mcp-call delegate_task '{}'",
+    ]) {
+      for (const meta of [
+        { serverId: "other-orchestrator", toolName: "deckhand__delegate_task" },
+        { goose: { toolCall: { extensionName: "other-orchestrator", toolName: "delegate_task" } } },
+        {
+          serverId: "deckhand",
+          toolName: "delegate_task",
+          goose: { toolCall: { extensionName: "other-orchestrator" } },
+        },
+      ]) {
+        const toolCall = toolCallFromUpdate({
+          sessionUpdate: "tool_call",
+          toolCallId: "foreign-deckhand-1",
+          kind: "other",
+          title,
+          status: "pending",
+          _meta: meta,
+        });
+        expect(
+          extractMcpToolCallIdentity(toolCall),
+          `${title}: ${JSON.stringify(meta)}`,
+        ).toBeUndefined();
+      }
+    }
+  });
+
   it("does not brand tools whose meta asserts a foreign server", () => {
     // The foreign assertion vetoes every loose source, including a title
     // that would otherwise match a T3 convention.
@@ -1555,7 +1648,12 @@ describe("extractMcpToolCallIdentity", () => {
   });
 
   it("does not brand path-like or unknown-tool titles", () => {
-    for (const title of ["t3-code/README.md", "t3-code_not_a_real_tool"]) {
+    for (const title of [
+      "t3-code/README.md",
+      "t3-code_not_a_real_tool",
+      "deckhand/README.md",
+      "deckhand_not_a_real_tool",
+    ]) {
       const toolCall = toolCallFromUpdate({
         sessionUpdate: "tool_call",
         toolCallId: "path-1",

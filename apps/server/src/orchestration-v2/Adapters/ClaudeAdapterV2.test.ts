@@ -464,7 +464,7 @@ describe("ClaudeAdapterV2 runtime query policy", () => {
 
 describe("ClaudeAdapterV2 MCP query overrides", () => {
   const T3_MCP_SERVERS = {
-    "t3-code": {
+    deckhand: {
       type: "http",
       url: "http://127.0.0.1:43123/mcp",
       headers: {
@@ -510,7 +510,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
     assert.deepEqual(overrides, { allowedTools: ["Read"] });
   });
 
-  it("pre-approves all t3-code tools when attaching an MCP session without an allowlist", () => {
+  it("pre-approves all deckhand tools when attaching an MCP session without an allowlist", () => {
     const threadId = ThreadId.make("thread-claude-mcp-no-allowlist");
     withMcpSession(threadId, () => {
       const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({
@@ -525,7 +525,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
     });
   });
 
-  it("extends an explicit allowlist with the t3-code wildcard", () => {
+  it("extends an explicit allowlist without dropping legacy server grants", () => {
     const threadId = ThreadId.make("thread-claude-mcp-with-allowlist");
     withMcpSession(threadId, () => {
       const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({
@@ -535,13 +535,13 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
       });
 
       assert.deepEqual(overrides, {
-        allowedTools: ["Read", "mcp__t3-code__*"],
+        allowedTools: ["Read", "mcp__t3-code__*", "mcp__deckhand__*"],
         mcpServers: T3_MCP_SERVERS,
       });
     });
   });
 
-  it("pre-approves only read-only t3-code tools in a read-only sandbox", () => {
+  it("pre-approves only read-only deckhand tools in a read-only sandbox", () => {
     const threadId = ThreadId.make("thread-claude-mcp-read-only");
     withMcpSession(threadId, () => {
       const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({
@@ -561,7 +561,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
     });
   });
 
-  it("pre-approves only read-only t3-code tools in a read-only sandbox without an allowlist", () => {
+  it("pre-approves only read-only deckhand tools in a read-only sandbox without an allowlist", () => {
     const threadId = ThreadId.make("thread-claude-mcp-read-only-no-allowlist");
     withMcpSession(threadId, () => {
       const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({
@@ -650,7 +650,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
       ...Object.values(PreviewControlsToolkit.tools),
     ]
       .filter((tool) => Context.get(tool.annotations, Tool.Readonly))
-      .map((tool) => `mcp__t3-code__${tool.name}`)
+      .map((tool) => `mcp__deckhand__${tool.name}`)
       .sort();
 
     assert.deepEqual(
@@ -680,9 +680,9 @@ describe("ClaudeAdapterV2 native protocol logging", () => {
         allowedTools: ["Read"],
       });
       assert.deepEqual(overrides, {
-        allowedTools: ["Read", "mcp__t3-code__*"],
+        allowedTools: ["Read", "mcp__deckhand__*"],
         mcpServers: {
-          "t3-code": {
+          deckhand: {
             type: "http",
             url: "http://127.0.0.1:43123/mcp",
             headers: {

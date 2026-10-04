@@ -974,7 +974,7 @@ export function makeOpenCodeAdapterV2(
         if (hasT3Mcp) {
           yield* OpenCodeRuntime.runOpenCodeSdk("mcp.add", () =>
             client.mcp.add({
-              name: "t3-code",
+              name: McpProviderSession.APP_MCP_SERVER_NAME,
               config: {
                 type: "remote",
                 url: mcpSession.endpoint,

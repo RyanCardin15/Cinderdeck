@@ -207,7 +207,7 @@ export function cursorMcpServers(threadId: ThreadId): Record<string, McpServerCo
     return undefined;
   }
   return {
-    "t3-code": {
+    [McpProviderSession.APP_MCP_SERVER_NAME]: {
       type: "http",
       url: session.endpoint,
       headers: {
