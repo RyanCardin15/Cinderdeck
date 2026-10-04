@@ -327,7 +327,7 @@
     "apps/web/src/routes/_chat.index.tsx": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/web/src/routes/_chat.linked-work.tsx": "Expose native Cinderdeck linked-work discovery and preview using a dedicated Deckhand route.",
     "apps/web/src/routes/_chat.pull-requests.tsx": "Compose selected Deckhand Verification across the existing maximizable PR surface, with reversible browse controls, preserved upstream PR filters/list/scroll state and existing detail tabs.",
-    "apps/web/src/routes/_chat.recordings.tsx": "Expose Cinderdeck-backed Deckhand recording library through the existing chat route and navigation.",
+    "apps/web/src/routes/_chat.recordings.tsx": "Expose Cinderdeck-backed recording library with saved workspace, installation and generation route pins; refuse a stale selection before recording reads or controls while preserving standalone navigation.",
     "apps/web/src/routes/_chat.services.tsx": "Expose Cinderdeck-owned services, finite runs and scoped execution-computer selection in the existing client router.",
     "apps/web/src/routes/_chat.tsx": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/web/src/routes/_chat.workspaces.tsx": "Expose Deckhand workspace navigation and preserve selected context in URL state.",
@@ -381,8 +381,9 @@
     "third-party-licenses.config.json": "Include explicit upstream T3 MIT attribution in the shipped license presentation while retaining dependency notices.",
     "apps/desktop/src/preview/OwnedPreviewLoad.ts": "Require fresh network artifact consumption and pin exact document identity before trusted preview capture.",
     "apps/desktop/src/preview/OwnedPreviewLoad.test.ts": "Require fresh network artifact consumption and pin exact document identity before trusted preview capture.",
-    "apps/server/src/orchestration-v2/Orchestrator.ts": "Cancel only the exact detached provider session/thread\u2019s live requests in the persisted detach transaction; safely dismiss legacy detached requests without resuming or answering a provider.",
-    "apps/server/src/orchestration-v2/Orchestrator.control-reads.test.ts": "Cancel only the exact detached provider session/thread\u2019s live requests in the persisted detach transaction; safely dismiss legacy detached requests without resuming or answering a provider."
+    "apps/server/src/orchestration-v2/Orchestrator.ts": "Cancel only the exact detached provider session/thread’s live requests in the persisted detach transaction; safely dismiss legacy detached requests without resuming or answering a provider.",
+    "apps/server/src/orchestration-v2/Orchestrator.control-reads.test.ts": "Cancel only the exact detached provider session/thread’s live requests in the persisted detach transaction; safely dismiss legacy detached requests without resuming or answering a provider.",
+    "packages/contracts/src/rpc.test.ts": "Verify additive managed-agent paging defaults and the bounded offset schema while retaining upstream RPC compatibility assertions."
   },
   "policies": [
     {
@@ -794,7 +795,13 @@
         "apps/web/src/deckhand/SessionLauncher.test.tsx",
         "apps/web/src/deckhand/pullRequestFocus.test.ts",
         "apps/web/src/deckhand/workspaceNavigation.test.ts",
-        "apps/web/src/hooks/useTheme.test.ts"
+        "apps/web/src/hooks/useTheme.test.ts",
+        "apps/web/src/deckhand/connectedWorkspaceNavigation.test.tsx",
+        "apps/web/src/deckhand/WorkspaceOverview.test.tsx",
+        "apps/web/src/deckhand/Recordings.test.tsx",
+        "apps/web/src/deckhand/recordingNavigation.test.ts",
+        "apps/web/src/deckhand/SessionList.test.tsx",
+        "apps/web/src/deckhand/agentPresentation.test.ts"
       ],
       "conflictResolution": "Reapply the documented Deckhand seam to the new upstream API; retain upstream behavior in standalone mode. Review each diff rather than choosing ours/theirs wholesale. Run the listed focused proofs plus candidate contracts, migrations, provider and connected journey gates before promotion."
     },
@@ -805,7 +812,8 @@
         "packages/client-runtime/src/state/projectGrouping.test.ts",
         "packages/contracts/package.json",
         "packages/contracts/src/ipc.ts",
-        "packages/contracts/src/rpc.ts"
+        "packages/contracts/src/rpc.ts",
+        "packages/contracts/src/rpc.test.ts"
       ],
       "tests": [
         "apps/desktop/src/app/DesktopEnvironment.test.ts",
@@ -899,7 +907,9 @@
         "apps/server/src/orchestration-v2/Orchestrator.ts",
         "apps/server/src/orchestration-v2/Orchestrator.control-reads.test.ts"
       ],
-      "tests": ["apps/server/src/orchestration-v2/Orchestrator.control-reads.test.ts"],
+      "tests": [
+        "apps/server/src/orchestration-v2/Orchestrator.control-reads.test.ts"
+      ],
       "conflictResolution": "Adapt to upstream detach and runtime-request event transactions. Keep exact thread/provider-session scope, cancelled node/turn-item persistence and zero provider-response effects after detach. Never approve or resume a stopped provider or cancel requests in other conversations."
     }
   ]
