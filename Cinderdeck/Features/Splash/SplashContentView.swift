@@ -102,7 +102,7 @@ private extension SplashContentView {
         .font(.system(size: 22, weight: .bold))
         .foregroundStyle(VSDesignSystem.Colors.primary)
 
-      Text(L10n.Splash.welcomeSubtitle)
+      Text("Get your project running. Services, tests, logs, and recordings in one workspace.")
         .font(.system(size: 14))
         .foregroundStyle(VSDesignSystem.Colors.secondary)
         .multilineTextAlignment(.center)

@@ -46,18 +46,7 @@ final class TempCaptureManager {
   /// Uses Application Support instead of /tmp/ so macOS won't purge files
   /// during drag-and-drop — same pattern as CleanShot X.
   let tempCaptureDirectory: URL = {
-    guard let appSupport = FileManager.default.urls(
-      for: .applicationSupportDirectory, in: .userDomainMask
-    ).first else {
-      // Fallback if Application Support unavailable
-      let fallback = FileManager.default.temporaryDirectory
-        .appendingPathComponent("Cinderdeck_Captures", isDirectory: true)
-      try? FileManager.default.createDirectory(at: fallback, withIntermediateDirectories: true)
-      return fallback
-    }
-    let capturesDir = appSupport
-      .appendingPathComponent("Cinderdeck", isDirectory: true)
-      .appendingPathComponent("Captures", isDirectory: true)
+    let capturesDir = TempCaptureManager.tempCaptureRootDirectory()
     try? FileManager.default.createDirectory(at: capturesDir, withIntermediateDirectories: true)
     return capturesDir
   }()
@@ -376,6 +365,14 @@ final class TempCaptureManager {
   // MARK: - Private
 
   private static func tempCaptureRootDirectory() -> URL {
+    #if DEBUG
+      // Unsaved screenshots and recording sidecars must share the fixture's
+      // isolation even when Auto-save is off; the export preference is insufficient.
+      if let path = ProcessInfo.processInfo.environment["CINDERDECK_STACKS_PREVIEW_ROOT"], path.hasPrefix("/") {
+        return URL(fileURLWithPath: path, isDirectory: true)
+          .appendingPathComponent("TemporaryCaptures", isDirectory: true)
+      }
+    #endif
     guard let appSupport = FileManager.default.urls(
       for: .applicationSupportDirectory, in: .userDomainMask
     ).first else {

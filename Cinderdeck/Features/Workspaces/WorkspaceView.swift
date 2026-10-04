@@ -13,6 +13,9 @@ enum WorkspaceSection: String, CaseIterable {
     case .linkedWork: return "person.2.badge.gearshape"
     }
   }
+  static func initialSection(_ workspace: StackDefinition) -> WorkspaceSection {
+    workspace.services.isEmpty && !workspace.tasks.isEmpty ? .tasks : .services
+  }
   var explanation: String {
     switch self {
     case .services: return "Keep APIs, databases, and development servers running together."
@@ -99,7 +102,7 @@ struct WorkspaceView: View {
           case .linkedWork: WorkspaceLinkedWorkView(workspaceID: file.id)
           }
         } else {
-          empty("Your development work, together", "A workspace contains services that stay running, tasks that finish, and workflows that coordinate both.", action: "Create workspace") { model.create() }
+          empty("Get your project running", "Choose a repository to discover services, tests, and builds. Review the workspace and check launch requirements before starting.", action: "Set up project") { model.create() }
         }
       }.padding(24).frame(minWidth: 680, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -108,9 +111,13 @@ struct WorkspaceView: View {
     .tint(DeckStyle.accent)
     .sheet(item: $model.editor) { context in
       if context.file == nil {
-        WorkspaceCreateView { id in
+        WorkspaceCreateView { id, start in
           model.editor = nil
-          Task { await model.supervisor.reloadDefinitions(); model.select(id) }
+          Task {
+            await model.supervisor.reloadDefinitions(); model.select(id)
+            section = model.supervisor.definition(id).map(WorkspaceSection.initialSection) ?? .services
+            if start { await model.supervisor.start(stack: id, actor: .user) }
+          }
         }
       } else {
         StackDefinitionEditor(file: context.file) { model.editor = nil; Task { await model.supervisor.reloadDefinitions() } }

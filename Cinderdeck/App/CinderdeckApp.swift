@@ -151,11 +151,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
     guard didFinishLaunching else { return .terminateNow }
-    return StackQuitCoordinator.shouldTerminate(sender)
+    return StackQuitCoordinator.shouldTerminate(sender, beforeTermination: {
+      await AgentShellController.shared.stopForTermination()
+    })
   }
 
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
     guard didFinishLaunching else { return true }
+    if AgentShellController.shared.configured {
+      WorkspaceWindowController.shared.show()
+      return false
+    }
     let showsMenuBarIcon = UserDefaults.standard.object(forKey: PreferencesKeys.showMenuBarIcon) as? Bool ?? true
     guard !showsMenuBarIcon else { return true }
 

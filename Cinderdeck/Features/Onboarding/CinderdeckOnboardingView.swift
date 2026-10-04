@@ -12,13 +12,32 @@ struct CinderdeckOnboardingView: View {
 
   @StateObject private var state = CinderdeckOnboardingState()
   @State private var isShowingCompletion = false
+  @State private var isShowingProjectSetup = true
   @EnvironmentObject private var onboardingLocalization: OnboardingLocalizationController
 
   var body: some View {
     ZStack(alignment: .topLeading) {
       CinderdeckGlassWindowBackdrop()
 
-      if isShowingCompletion {
+      if isShowingProjectSetup {
+        VStack(spacing: 16) {
+          HStack {
+            brand
+            Spacer()
+            CinderdeckOnboardingLanguagePicker()
+            Button("Capture walkthrough") { isShowingProjectSetup = false }
+            CinderdeckOnboardingCloseButton(action: finish)
+          }
+          WorkspaceSetupView(onCancel: finish, onSaved: { id, start in
+            finish()
+            Task { @MainActor in
+              await StackSupervisor.shared.reloadDefinitions()
+              WorkspaceWindowController.shared.show(workspace: id, section: StackSupervisor.shared.definition(id).map(WorkspaceSection.initialSection) ?? .services)
+              if start { await StackSupervisor.shared.start(stack: id, actor: .user) }
+            }
+          }, isOnboarding: true)
+        }.padding(CinderdeckOnboardingMetrics.gutter)
+      } else if isShowingCompletion {
         VStack(spacing: 0) {
           header
             .frame(height: CinderdeckOnboardingMetrics.headerHeight)
@@ -114,7 +133,7 @@ struct CinderdeckOnboardingView: View {
       maxHeight: CinderdeckOnboardingMetrics.maxSize.height
     )
     .environment(\.colorScheme, .dark)
-    .background(keyboardShortcuts)
+    .background { if !isShowingProjectSetup { keyboardShortcuts } }
     .animation(CinderdeckMotionPreferences.shared.spec(.morph).animation, value: state.currentStep)
   }
 
@@ -123,6 +142,7 @@ struct CinderdeckOnboardingView: View {
   private var header: some View {
     HStack(spacing: 0) {
       brand
+      Button("Project setup") { isShowingProjectSetup = true }.padding(.leading, 16)
 
       Spacer(minLength: CinderdeckSpace.xxl)
 

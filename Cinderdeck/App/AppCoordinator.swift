@@ -75,10 +75,12 @@ final class AppCoordinator {
       // Agent and Workspaces recordings confirm through their own controls.
       if session.origin == .recording { ReproControlsPanel.shared.showCaptured(session) }
     }
+    AgentShellNativeUI.configure(environment.screenCaptureViewModel)
     Task {
       await StackSupervisor.shared.bootstrap()
       await WorkspaceRunner.shared.recover()
       StackControlService.shared.start()
+      AgentShellController.shared.startIfAvailable()
     }
     DiagnosticLogger.shared.log(.debug, .lifecycle, "Background schedulers started")
 
@@ -110,6 +112,7 @@ final class AppCoordinator {
     RecordingMetadataCleanupScheduler.shared.stop()
     CinderdeckConfigurationSyncCoordinator.shared.stop()
     ClipboardTextHistoryStore.shared.stop()
+    AgentShellController.shared.closeInputOnTermination()
     StackControlService.shared.stop()
 
     for observer in observers {

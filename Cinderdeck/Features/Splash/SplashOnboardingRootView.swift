@@ -9,6 +9,7 @@ import SwiftUI
 
 enum SplashScreen: Equatable {
   case splash
+  case project
   case language
   case sponsor
   case permissions
@@ -37,7 +38,7 @@ struct SplashOnboardingRootView: View {
   @ObservedObject private var screenCaptureManager = ScreenCaptureManager.shared
 
   private static let defaultOnboardingSteps: [SplashScreen] = [
-    .language, .permissions, .configAccess, .shortcuts, .diagnostics, .completion,
+    .project, .completion,
   ]
 
   init(
@@ -51,7 +52,7 @@ struct SplashOnboardingRootView: View {
     self.showSponsorPrompt = showSponsorPrompt
     self.onboardingSteps = onboardingSteps ?? Self.defaultOnboardingSteps
     self.onDismiss = onDismiss
-    _currentScreen = State(initialValue: initialScreen)
+    _currentScreen = State(initialValue: needsOnboarding && initialScreen == .splash ? .project : initialScreen)
   }
 
   private var isOnboardingStep: Bool {
@@ -73,6 +74,20 @@ struct SplashOnboardingRootView: View {
         case .splash:
           SplashContentView(onContinue: { skipSplash in handleSplashContinue(skipSplash: skipSplash) })
             .transition(.opacity)
+
+        case .project:
+          VStack(spacing: 12) {
+            HStack {
+              Text("Welcome to Cinderdeck").font(.headline)
+              Spacer()
+              CinderdeckOnboardingLanguagePicker()
+            }
+            WorkspaceSetupView(onCancel: handleComplete, onSaved: projectCreated, isOnboarding: true)
+          }
+          .padding(32)
+          .padding(.bottom, VSDesignSystem.Metrics.pageIndicatorArea)
+          .frame(maxWidth: 900, maxHeight: .infinity)
+          .transition(stepTransition)
 
         case .language:
           OnboardingLanguageSelectionView(
@@ -175,7 +190,7 @@ struct SplashOnboardingRootView: View {
     }
 
     if needsOnboarding {
-      navigateForward(to: .language)
+      navigateForward(to: .project)
     } else if showSponsorPrompt {
       navigateForward(to: .sponsor)
     } else {
@@ -220,6 +235,15 @@ struct SplashOnboardingRootView: View {
     navigationDirection = .backward
     withAnimation(.easeInOut(duration: 0.4)) {
       currentScreen = screen
+    }
+  }
+
+  private func projectCreated(_ id: String, start: Bool) {
+    handleComplete()
+    Task { @MainActor in
+      await StackSupervisor.shared.reloadDefinitions()
+      WorkspaceWindowController.shared.show(workspace: id, section: StackSupervisor.shared.definition(id).map(WorkspaceSection.initialSection) ?? .services)
+      if start { await StackSupervisor.shared.start(stack: id, actor: .user) }
     }
   }
 

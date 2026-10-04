@@ -21,6 +21,17 @@ enum StackPreviewHarness {
     overrides[PreferencesKeys.exportLocationBookmark] = (try? captures.bookmarkData(
       options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil
     )) ?? Data()
+    // PreferencesManager reads this JSON-backed key when the capture model is
+    // created below. Keep fixture output predictable without changing stored
+    // preferences or replacing the user's clipboard.
+    let fixtureCaptureActions: [String: [String: Bool]] = [
+      AfterCaptureAction.save.rawValue: [CaptureType.screenshot.rawValue: true, CaptureType.recording.rawValue: true],
+      AfterCaptureAction.copyFile.rawValue: [CaptureType.screenshot.rawValue: false, CaptureType.recording.rawValue: false],
+      AfterCaptureAction.showQuickAccess.rawValue: [CaptureType.screenshot.rawValue: true, CaptureType.recording.rawValue: true],
+      AfterCaptureAction.openAnnotate.rawValue: [CaptureType.screenshot.rawValue: false, CaptureType.recording.rawValue: false],
+    ]
+    overrides["afterCaptureActions"] = try? JSONEncoder().encode(fixtureCaptureActions)
+    overrides[PreferencesKeys.historyEnabled] = true
     overrides.merge([
       PreferencesKeys.stacksDirectory: root.appendingPathComponent("stacks").path,
       // A stored custom lane path otherwise escapes the disposable preview root.
@@ -33,21 +44,29 @@ enum StackPreviewHarness {
     ]) { _, preview in preview }
     UserDefaults.standard.setVolatileDomain(overrides, forName: UserDefaults.argumentDomain)
     NSApp.setActivationPolicy(.regular)
+    let usesUnifiedShell = AgentShellController.shared.configured
+    if usesUnifiedShell {
+      let capture = ScreenCaptureViewModel()
+      recordingViewModel = capture
+      AgentShellNativeUI.configure(capture)
+    }
     Task {
       await StackSupervisor.shared.bootstrap()
       await WorkspaceRunner.shared.recover()
       ReproRecorder.shared.start()
       StackControlService.shared.start()
       WorkspaceWindowController.shared.show()
-      let manager = HistoryFloatingManager.shared
-      manager.show(section: .stacks)
-      if !manager.isPinned { manager.togglePin() }
+      if !usesUnifiedShell {
+        let manager = HistoryFloatingManager.shared
+        manager.show(section: .stacks)
+        if !manager.isPinned { manager.togglePin() }
+      }
       NSApp.activate(ignoringOtherApps: true)
       // "1" opens area selection; "toolbar" opens the real toolbar at a fixed region
       // so the workspace picker can be exercised without automating a display overlay.
       let recordingPreview = ProcessInfo.processInfo.environment["CINDERDECK_PREVIEW_RECORD"]
       if recordingPreview == "1" || recordingPreview == "toolbar" {
-        let capture = ScreenCaptureViewModel()
+        let capture = recordingViewModel ?? ScreenCaptureViewModel()
         recordingViewModel = capture
         await capture.updatePermissionState()
         if recordingPreview == "toolbar", capture.hasPermission, let screen = NSScreen.main {

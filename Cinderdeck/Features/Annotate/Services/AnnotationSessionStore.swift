@@ -229,6 +229,12 @@ final class AnnotationSessionStore {
   }
 
   private nonisolated static func defaultRootDirectory() -> URL {
+    #if DEBUG
+      if let path = ProcessInfo.processInfo.environment["CINDERDECK_STACKS_PREVIEW_ROOT"], path.hasPrefix("/") {
+        return URL(fileURLWithPath: path, isDirectory: true)
+          .appendingPathComponent("AnnotationSessions", isDirectory: true)
+      }
+    #endif
     let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
     return appSupport
       .appendingPathComponent("Cinderdeck", isDirectory: true)

@@ -170,7 +170,7 @@ final class StackControlService: ObservableObject {
           url: link.port.map { "http://\(link.host):\($0)" }, startedAt: runtime.startedAt, restarts: runtime.restartCount,
           detail: runtime.detail, owner: runtime.owner, repo: nil, branch: nil, cwd: nil, command: nil, dependsOn: [],
           autostart: false, logFile: supervisor.logURL(stack: link.stack, service: link.service).path,
-          ports: link.ports.isEmpty ? nil : link.ports, sharedFrom: link.stack)
+          ports: link.ports.isEmpty ? nil : link.ports, sharedFrom: link.stack, sharedServiceID: link.service)
       },
       repos: repos.map { repo in
         let status = supervisor.gitMonitor.statuses[repo.path] ?? GitRepoStatus(branch: "Loading…")
@@ -233,6 +233,7 @@ final class StackControlService: ObservableObject {
   }
 
   func handle(_ method: String, params: JSONValue, actor: StackActor, operationID: String? = nil) async throws -> JSONValue {
+    if method.hasPrefix("integration.ui.") { return try handleUnifiedUI(method, params: params, actor: actor) }
     if method.hasPrefix("integration.") { return try await handleIntegration(method, params: params, actor: actor) }
     if method.hasPrefix("workspace.") { return try await handleWorkspace(method, params: params, actor: actor) }
     if method.hasPrefix("prs.views.") { return try await prViews.handle(method, params: params) }
