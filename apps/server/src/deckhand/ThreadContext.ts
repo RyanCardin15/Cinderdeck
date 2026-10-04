@@ -80,24 +80,26 @@ const make = Effect.gen(function* () {
         const workspaceID = saved.checkout.laneId ?? saved.workspace.ownerId;
         // A failed refresh preserves history, never turns remembered service URLs into live ones.
         yield* hub.resource(workspaceID).pipe(Effect.ignore);
-        let offset = 0;
-        let page = yield* hub.overview({ offset, limit: 100 });
-        while (
-          !page.resources.some((item) => item.workspaceID === workspaceID) &&
-          page.nextOffset !== null
-        ) {
-          offset = page.nextOffset;
-          page = yield* hub.overview({ offset, limit: 100 });
-        }
         const states = sessions.subscribe({
           installationID: saved.workspace.environmentId,
           workspaceID,
           generation: saved.checkout.nativeGeneration!,
           limit: 20,
         });
-        return hub.subscribe({ offset, limit: 100 }).pipe(
-          Stream.zipLatestWith(states, (view, currentSessions) => {
-            const resource = view.resources.find(
+        const exact = sessions.subscribeThread({
+          installationID: saved.workspace.environmentId,
+          workspaceID,
+          generation: saved.checkout.nativeGeneration!,
+          sessionID: saved.session.id,
+          threadID: saved.session.threadId,
+          checkoutID: saved.session.checkoutId,
+        });
+        const current = states.pipe(
+          Stream.zipLatestWith(exact, (siblings, selected) => ({ siblings, selected })),
+        );
+        return hub.subscribe({ offset: 0, limit: 1, selectedContextID: workspaceID }).pipe(
+          Stream.zipLatestWith(current, (view, currentSessions) => {
+            const resource = view.selectedResources?.find(
               (item) =>
                 item.workspaceID === workspaceID &&
                 item.generation === saved.checkout.nativeGeneration,
@@ -105,13 +107,16 @@ const make = Effect.gen(function* () {
             const sameHost = view.hello?.installationID === saved.workspace.environmentId;
             return {
               ...saved,
-              session: currentSessions.find((item) => item.binding.id === saved.session.id)
-                ?.binding ?? { ...saved.session, execution: "unknown", connection: "unavailable" },
+              session: currentSessions.selected?.binding ?? {
+                ...saved.session,
+                execution: "unknown",
+                connection: "unavailable",
+              },
               native:
                 sameHost && view.state === "connected" && resource?.available ? resource : null,
               nativeConnection: sameHost ? view.state : "identity_changed",
               ...(sameHost && view.hello ? { nativeChannel: view.hello.channel } : {}),
-              sessions: currentSessions,
+              sessions: currentSessions.siblings,
             } satisfies Rpc.ThreadContextView;
           }),
         );

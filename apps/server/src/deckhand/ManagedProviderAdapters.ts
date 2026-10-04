@@ -241,6 +241,11 @@ export const layer = Layer.effect(
                           Effect.andThen(startEffects(request.targetThreadId)),
                           Effect.andThen(runtime.forkThread(request)),
                         ),
+                      steerTurn: (request) =>
+                        check(
+                          request.threadId,
+                          ownership.get(request.threadId)?.context.cwd ?? input.runtimePolicy.cwd,
+                        ).pipe(Effect.andThen(runtime.steerTurn(request))),
                       startTurn: (request) =>
                         check(request.threadId, request.runtimePolicy.cwd).pipe(
                           Effect.andThen(startEffects(request.threadId)),

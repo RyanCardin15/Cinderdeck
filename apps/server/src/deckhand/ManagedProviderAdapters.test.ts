@@ -5,6 +5,10 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   ProviderSessionId,
+  ProviderThreadId,
+  ProviderTurnId,
+  RunId,
+  MessageId,
   ThreadId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -48,6 +52,157 @@ const guardLayer = ManagedCheckoutGuard.layer.pipe(
   Layer.provide(CheckoutIdentity.layer),
 );
 describe("managed provider process admission", () => {
+  it.effect(
+    "refuses active steering after generation or physical binding changes while allowing Stop and cleanup",
+    () =>
+      Effect.gen(function* () {
+        const threadId = ThreadId.make("steering-thread");
+        const sessionId = ProviderSessionId.make("steering-session");
+        const now = yield* DateTime.now;
+        let generation = 7;
+        let physicalId = "original-checkout";
+        let steered = 0;
+        let stopped = 0;
+        let released = 0;
+        const context = { cwd: "/fixture/checkout", physicalId, writerScope: [physicalId] };
+        const upstream = Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({
+          get: () =>
+            Effect.succeed({
+              instanceId,
+              driver,
+              getCapabilities: () => Effect.succeed(CodexProviderCapabilitiesV2),
+              planSelectionTransition: () =>
+                Effect.succeed({ type: "apply_on_next_turn" as const }),
+              openSession: () =>
+                Effect.succeed({
+                  instanceId,
+                  driver,
+                  providerSessionId: sessionId,
+                  providerSession: {
+                    id: sessionId,
+                    driver,
+                    providerInstanceId: instanceId,
+                    status: "ready" as const,
+                    cwd: context.cwd,
+                    model: "fixture",
+                    capabilities: CodexProviderCapabilitiesV2,
+                    createdAt: now,
+                    updatedAt: now,
+                    lastError: null,
+                  },
+                  events: Stream.empty,
+                  ensureThread: () => Effect.die("unused"),
+                  resumeThread: () => Effect.die("unused"),
+                  forkThread: () => Effect.die("unused"),
+                  readThreadSnapshot: () => Effect.die("unused"),
+                  rollbackThread: () => Effect.die("unused"),
+                  startTurn: () => Effect.void,
+                  steerTurn: () =>
+                    Effect.sync(() => {
+                      steered++;
+                    }),
+                  interruptTurn: () =>
+                    Effect.sync(() => {
+                      stopped++;
+                    }),
+                  respondToRuntimeRequest: () => Effect.void,
+                }),
+            }),
+        });
+        const guarded = Layer.mock(ManagedCheckoutGuard.ManagedCheckoutGuard)({
+          resolve: () =>
+            Effect.suspend(() =>
+              generation !== 7
+                ? Effect.fail(
+                    new ManagedCheckoutGuard.ManagedCheckoutError({
+                      threadId,
+                      reason: "stale_binding",
+                    }),
+                  )
+                : Effect.succeed({ ...context, physicalId, writerScope: [physicalId] }),
+            ),
+        });
+        const native = Layer.mock(NativeWriterReservations.NativeWriterReservations)({
+          acquire: () => Effect.succeed("lease"),
+          verify: () => Effect.void,
+          release: () =>
+            Effect.sync(() => {
+              released++;
+            }),
+        });
+        const layer = ManagedProviderAdapters.layer.pipe(
+          Layer.provide(upstream),
+          Layer.provide(guarded),
+          Layer.provide(native),
+          Layer.provideMerge(WriterReservations.layer),
+        );
+        yield* Effect.gen(function* () {
+          const registry = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
+          const adapter = yield* registry.get(instanceId);
+          const scope = yield* Scope.make();
+          const runtime = yield* adapter
+            .openSession({
+              threadId,
+              providerSessionId: sessionId,
+              modelSelection,
+              runtimePolicy: policy(context.cwd),
+            })
+            .pipe(Effect.provideService(Scope.Scope, scope));
+          const providerThread = {
+            id: ProviderThreadId.make("steering-provider-thread"),
+            driver,
+            providerInstanceId: instanceId,
+            providerSessionId: sessionId,
+            appThreadId: threadId,
+            ownerNodeId: null,
+            nativeThreadRef: null,
+            nativeConversationHeadRef: null,
+            status: "active" as const,
+            pendingBackgroundTasks: [],
+            contextUsage: null,
+            nativeMetadata: null,
+            firstRunOrdinal: 1,
+            lastRunOrdinal: 1,
+            handoffIds: [],
+            forkedFrom: null,
+            createdAt: now,
+            updatedAt: now,
+          };
+          const request = {
+            threadId,
+            runId: RunId.make("run"),
+            providerThread,
+            providerTurnId: ProviderTurnId.make("turn"),
+            message: {
+              messageId: MessageId.make("message"),
+              text: "Please check again.",
+              attachments: [],
+              createdBy: "user" as const,
+              creationSource: "web" as const,
+            },
+          };
+          yield* runtime.steerTurn(request);
+          assert.equal(steered, 1);
+          generation = 8;
+          assert.equal(
+            (yield* runtime.steerTurn(request).pipe(Effect.flip))._tag,
+            "ProviderAdapterProtocolError",
+          );
+          generation = 7;
+          physicalId = "replacement-checkout";
+          assert.equal(
+            (yield* runtime.steerTurn(request).pipe(Effect.flip))._tag,
+            "ProviderAdapterProtocolError",
+          );
+          assert.equal(steered, 1);
+          yield* runtime.interruptTurn({ providerThread, providerTurnId: request.providerTurnId });
+          assert.equal(stopped, 1);
+          yield* Scope.close(scope, Exit.void);
+          assert.equal(released, 1);
+        }).pipe(Effect.provide(layer));
+      }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" })), Effect.scoped),
+  );
+
   it.effect(
     "uses the canonical Git root, queues a path alias before spawn, and releases after process close",
     () =>
