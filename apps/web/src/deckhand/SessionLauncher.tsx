@@ -79,6 +79,9 @@ export function SessionLauncher({
   const isCreation = creation !== undefined;
   const id = useId();
   const branchInput = useRef<HTMLInputElement>(null);
+  const launcher = useRef<HTMLElement>(null);
+  const launchButton = useRef<HTMLButtonElement>(null);
+  const focusRequest = useRef<"open" | "close" | null>(null);
   // Creation recovery survives a native generation change. Always replay the saved scope.
   const storageKey = isCreation
     ? `deckhand:create:${environmentId}:${installationID}:${resource.workspaceID}`
@@ -140,6 +143,17 @@ export function SessionLauncher({
   useEffect(() => {
     if (isCreation && creation.visible) branchInput.current?.focus();
   }, [isCreation, creation?.visible]);
+  useEffect(() => {
+    if (isCreation) return;
+    if (formVisible && focusRequest.current === "open") {
+      focusRequest.current = null;
+      launcher.current?.focus({ preventScroll: true });
+      launcher.current?.scrollIntoView({ block: "start", behavior: "instant" });
+    } else if (!formVisible && focusRequest.current === "close") {
+      focusRequest.current = null;
+      launchButton.current?.focus();
+    }
+  }, [formVisible, isCreation]);
   const loadOptions = useCallback(() => {
     const generation = ++optionsGeneration.current;
     setOptionsLoaded(false);
@@ -395,10 +409,14 @@ export function SessionLauncher({
           <p>{contextLabel} · choose a configured provider and repository.</p>
         </div>
         <button
+          ref={launchButton}
           type="button"
           className={sessionStyles.primary}
           disabled={!enabled}
-          onClick={() => setFormOpen(true)}
+          onClick={() => {
+            focusRequest.current = "open";
+            setFormOpen(true);
+          }}
         >
           ＋ New session
         </button>
@@ -411,12 +429,14 @@ export function SessionLauncher({
     );
   return (
     <section
+      ref={launcher}
+      tabIndex={-1}
       className={`${styles["dh-launcher"]} ${sessionStyles.launcher} ${isCreation ? styles["dh-feature-create"] : ""}`}
-      aria-label={isCreation ? "Create a feature" : "New session"}
+      aria-labelledby={`${id}-heading`}
     >
       <header className={sessionStyles.formHeading}>
         <div>
-          <h3>{isCreation ? "New feature" : "New session"}</h3>
+          <h3 id={`${id}-heading`}>{isCreation ? "New feature" : "New session"}</h3>
           {!isCreation ? <p>{contextLabel}</p> : null}
         </div>
         {isCreation || !saved ? (
@@ -424,7 +444,13 @@ export function SessionLauncher({
             type="button"
             className={sessionStyles.quiet}
             disabled={busy}
-            onClick={() => (isCreation ? creation.onClose() : setFormOpen(false))}
+            onClick={() => {
+              if (isCreation) creation.onClose();
+              else {
+                focusRequest.current = "close";
+                setFormOpen(false);
+              }
+            }}
           >
             Close
           </button>
