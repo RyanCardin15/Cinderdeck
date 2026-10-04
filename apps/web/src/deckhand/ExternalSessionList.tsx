@@ -57,8 +57,8 @@ function ScopedExternalSessionList({
     <section className={styles["dh-session-list"]} aria-label="Reported external sessions">
       <h3>External sessions</h3>
       <p>
-        Registrant-reported visibility. Provider status is unverified; process controls are
-        unavailable.
+        Agents registered by other apps appear here. Their status comes from that app; open it to
+        control them.
       </p>
       {unavailable ? (
         <p role="status">
@@ -85,8 +85,8 @@ function ScopedExternalSessionList({
             {unavailable || observation.stale
               ? "Last observed · Connection unavailable"
               : session.connection === "stale"
-                ? "Connection lost / last seen"
-                : "Registration connected"}
+                ? "Last observed · Agent not connected"
+                : "Agent connected"}
           </span>
           <span>Last seen {session.lastSeenAt}</span>
           <details>

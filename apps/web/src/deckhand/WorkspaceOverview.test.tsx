@@ -112,7 +112,10 @@ const resource = (id: string, source?: string): IntegrationView["resources"][num
     state: "ready",
     definitionChanged: false,
     issues: [],
-    services: [],
+    services:
+      id === "other"
+        ? []
+        : [{ name: "web", phase: "stopped", status: "stopped", ready: false, dependsOn: [] }],
     repos: [
       {
         id: "app",
@@ -308,6 +311,11 @@ it("preserves Agents while changing workspace and checkout, with selected-lane s
   expect(
     container.querySelector('section[aria-label="Agents in selected context"]')?.textContent,
   ).toContain("Saved sessions for other");
+  expect(container.textContent).toContain("No services in this context");
+  expect(button("Start services").disabled).toBe(true);
+  expect(button("Stop services").disabled).toBe(true);
+  expect(button("Launch selected agent").disabled).toBe(false);
+  expect(boundary.mutation).not.toHaveBeenCalled();
 });
 it("retains navigation but fences all write controls through reconnect until fresh native context arrives", async () => {
   await render();

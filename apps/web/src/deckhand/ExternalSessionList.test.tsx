@@ -127,7 +127,11 @@ it("shows stale external claims without managed navigation or controls", async (
   commands.list.mockResolvedValue({ _tag: "Success", value: [reported] });
   await render();
   expect(element.textContent).toContain("Last reported: working");
-  expect(element.textContent).toContain("Connection lost / last seen");
+  expect(element.textContent).toContain("Last observed · Agent not connected");
+  expect(element.textContent).toContain("Agents registered by other apps appear here.");
+  expect(element.textContent).toContain(
+    "Their status comes from that app; open it to control them.",
+  );
   expect(element.textContent).toContain("do not grant Deckhand controls");
   expect(element.querySelectorAll("button,a")).toHaveLength(0);
   expect(commands.list.mock.calls[0]?.[0]).toEqual({
@@ -202,19 +206,19 @@ it("keeps connected reports historical across transport loss until a fresh read 
     .mockResolvedValueOnce({ _tag: "Success", value: [connected] })
     .mockResolvedValue({ _tag: "Success", value: [connected] });
   await render();
-  expect(element.textContent).toContain("Registration connected");
+  expect(element.textContent).toContain("Agent connected");
   transport.phase = "reconnecting";
   await render();
   expect(element.textContent).toContain("Reported review");
   expect(element.textContent).toContain("Last observed · Connection unavailable");
-  expect(element.textContent).not.toContain("Registration connected");
+  expect(element.textContent).not.toContain("Agent connected");
   expect(commands.list).toHaveBeenCalledTimes(1);
   transport.phase = "connected";
   await render();
-  expect(element.textContent).not.toContain("Registration connected");
+  expect(element.textContent).not.toContain("Agent connected");
   await act(async () => {
     await vi.advanceTimersByTimeAsync(15000);
   });
-  expect(element.textContent).toContain("Registration connected");
+  expect(element.textContent).toContain("Agent connected");
   expect(element.textContent).not.toContain("Last observed · Connection unavailable");
 });
