@@ -1,18 +1,18 @@
+import { PullRequestGlyph } from "../components/pullRequest/pullRequestIcons";
 import { useAtomValue } from "@effect/atom-react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   GitBranchIcon,
-  LayersIcon,
   PlusIcon,
   ArrowRightIcon,
   RefreshCwIcon,
-  SettingsIcon,
-  MessagesSquareIcon,
   FolderGit2Icon,
   ActivityIcon,
   XIcon,
+  CircleDotIcon,
+  ChevronRightIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as Option from "effect/Option";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -20,20 +20,31 @@ import { runtime } from "../lib/runtime";
 import { readPullRequestListPreferences } from "../components/pullRequest/pullRequestListPreferences";
 import { AsyncResult } from "effect/unstable/reactivity";
 import type { EnvironmentId } from "@t3tools/contracts";
-import type { IntegrationView } from "@t3tools/contracts/deckhand/rpc";
+import type { IntegrationView, ManagedContextView } from "@t3tools/contracts/deckhand/rpc";
 import type { IntegrationOperationReceipt } from "@t3tools/contracts/deckhand/integration";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { useAtomCommand } from "../state/use-atom-command";
+import { buildThreadRouteParams } from "../threadRoutes";
+import {
+  overviewPageSelection,
+  overviewResources,
+  overviewWorkspaceContexts,
+  savedWorkspaceMatches,
+} from "./workspaceNavigation";
 import { SessionList } from "./SessionList";
 import { SessionLauncher } from "./SessionLauncher";
-import { DeckhandMark } from "./DeckhandMark";
+import { ProductNavigation } from "./ProductNavigation";
 import {
   workspaceView,
+  managedContextsView,
   refreshWorkspaces,
   submitOperation,
   inspectOperation,
   recentOperations,
 } from "./state";
+import type { RecordingContextOverview } from "@t3tools/contracts/deckhand/recordingsRpc";
+import { recordingOverview } from "./recordingState";
+import { RecordingThumbnail } from "./RecordingThumbnail";
 import styles from "./workspace.module.css";
 
 type Resource = IntegrationView["resources"][number];
@@ -59,80 +70,87 @@ const terminal = (receipt: IntegrationOperationReceipt) =>
 export function WorkspaceOverview() {
   const { environments } = useEnvironments();
   const primary = usePrimaryEnvironmentId();
-  const [selected, select] = useState<EnvironmentId | null>(null);
-  const environmentId = selected ?? primary ?? environments[0]?.environmentId;
-  return (
-    <div className={styles["dh-shell"]}>
-      <aside className={styles["dh-nav"]} aria-label="Deckhand navigation">
-        <Link className={styles["dh-brand"]} to="/workspaces">
-          <DeckhandMark aria-hidden="true" />
-          <strong>Deckhand</strong>
-        </Link>
-        <nav className={styles["dh-main-links"]}>
-          <Link className={styles["dh-nav-current"]} to="/workspaces">
-            <LayersIcon size={18} />
-            Workspaces
-          </Link>
-          <Link to="/">
-            <MessagesSquareIcon size={18} />
-            Agent conversations
-          </Link>
-        </nav>
-        <label className={styles["dh-field-label"]} htmlFor="dh-environment">
-          Execution computer
-        </label>
-        <select
-          id="dh-environment"
-          value={environmentId ?? ""}
-          onChange={(event) =>
-            select(
-              environments.find((item) => item.environmentId === event.target.value)
-                ?.environmentId ?? null,
-            )
-          }
-        >
-          {environments.map((item) => (
-            <option key={item.environmentId} value={item.environmentId}>
-              {item.label}
-            </option>
-          ))}
-        </select>
-        <p className={styles["dh-nav-note"]}>
-          Workspaces keep agents, source trees, and running services in context.
-        </p>
-        <div className={styles["dh-nav-bottom"]}>
-          <Link to="/settings">
-            <SettingsIcon size={17} />
-            Settings
-          </Link>
-        </div>
-      </aside>
-      {environmentId ? (
-        <ConnectedWorkspace key={environmentId} environmentId={environmentId} />
-      ) : (
-        <main className={styles["dh-empty"]}>
-          <h1>Choose an execution computer</h1>
-          <p>Connect a computer to browse its workspaces.</p>
-          <Link to="/settings/connections">
-            Manage connections <ArrowRightIcon size={16} />
-          </Link>
-        </main>
-      )}
-    </div>
+  const search = useSearch({ from: "/_chat/workspaces" });
+  const navigate = useNavigate();
+  const environmentId = search.environment
+    ? environments.find((item) => item.environmentId === search.environment)?.environmentId
+    : (primary ?? environments[0]?.environmentId);
+  const select = (id: EnvironmentId | null) => {
+    void navigate({ to: "/workspaces", search: id ? { environment: id } : {} });
+  };
+  return environmentId ? (
+    <ConnectedWorkspace
+      key={environmentId}
+      environmentId={environmentId}
+      environments={environments}
+      selectEnvironment={select}
+    />
+  ) : (
+    <main className={styles["dh-empty"]}>
+      <h1>
+        {search.environment ? "Execution computer unavailable" : "Choose an execution computer"}
+      </h1>
+      <p>Connect a computer to browse its workspaces.</p>
+      <Link to="/settings/connections">
+        Manage connections <ArrowRightIcon size={16} />
+      </Link>
+    </main>
   );
 }
-function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId }) {
+
+function ConnectedWorkspace({
+  environmentId,
+  environments,
+  selectEnvironment,
+}: {
+  environmentId: EnvironmentId;
+  environments: ReturnType<typeof useEnvironments>["environments"];
+  selectEnvironment: (id: EnvironmentId | null) => void;
+}) {
+  const search = useSearch({ from: "/_chat/workspaces" });
+  const navigate = useNavigate();
+  const setWorkspaceID = (workspace: string) => {
+    void navigate({ to: "/workspaces", search: { environment: environmentId, workspace } });
+  };
+  const setSelectedID = useCallback(
+    (context: string | null) => {
+      void navigate({
+        to: "/workspaces",
+        search: context
+          ? {
+              environment: environmentId,
+              ...(search.workspace ? { workspace: search.workspace } : {}),
+              context,
+            }
+          : search.workspace
+            ? { environment: environmentId, workspace: search.workspace }
+            : { environment: environmentId },
+      });
+    },
+    [navigate, search, environmentId],
+  );
+  const workspaceID = search.workspace ?? null;
+  const selectedID = search.context ?? null;
   const [offset, setOffset] = useState(0);
-  const result = useAtomValue(workspaceView({ environmentId, input: { offset, limit: 100 } }));
+  const pageWorkspaceID = workspaceID ?? selectedID ?? `catalog:${offset}`;
+  const [workspacePage, setWorkspacePage] = useState<{
+    workspaceID: string | null;
+    offset: number;
+  }>({ workspaceID: pageWorkspaceID, offset: 0 });
+  const workspaceOffset = workspacePage.workspaceID === pageWorkspaceID ? workspacePage.offset : 0;
+  const pageInput = overviewPageSelection(search, offset, workspaceOffset);
+  const result = useAtomValue(workspaceView({ environmentId, input: pageInput }));
   const view = Option.getOrNull(AsyncResult.value(result));
-  const [workspaceID, setWorkspaceID] = useState<string | null>(null);
-  const [selectedID, setSelectedID] = useState<string | null>(null);
   const [filter, setFilter] = useState("all");
   const [branch, setBranch] = useState("");
   const [creating, setCreating] = useState(false);
   const [featureCreating, setFeatureCreating] = useState(false);
   const [featurePending, setFeaturePending] = useState(false);
-  const closeFeature = useCallback(() => setFeatureCreating(false), []);
+  const newFeatureButton = useRef<HTMLButtonElement>(null);
+  const closeFeature = useCallback(() => {
+    setFeatureCreating(false);
+    newFeatureButton.current?.focus();
+  }, []);
   const [busy, setBusy] = useState(false);
   const [operation, setOperation] = useState<{
     key: string;
@@ -178,26 +196,80 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
       disposed = true;
     };
   }, [environmentId, recent, recovered, operation, view?.state, recoveryError]);
-  const resources = view?.resources ?? [];
-  const bases = resources.filter((resource) => !resource.workspace?.lane && resource.available);
-  const activeBase = bases.find((resource) => resource.workspaceID === workspaceID) ?? bases[0];
-  const contexts = activeBase
-    ? resources.filter(
-        (resource) =>
-          resource.workspaceID === activeBase.workspaceID ||
-          resource.workspace?.lane?.sourceStackID === activeBase.workspaceID,
-      )
-    : resources;
-  const lanes = contexts.filter((resource) => resource.workspace?.lane);
-  const visible = contexts.filter(
-    (resource) =>
-      filter !== "attention" ||
-      !actionable(resource) ||
-      resource.workspace?.services.some((service) => ["failed", "error"].includes(service.phase)),
+  const recordingSummary = useAtomCommand(recordingOverview, { reportFailure: false });
+  const [recordingSummaries, setRecordingSummaries] =
+    useState<ReadonlyArray<RecordingContextOverview> | null>(null);
+  const [recordingSummaryError, setRecordingSummaryError] = useState(false);
+  useEffect(() => {
+    if (view?.state !== "connected" || !view.hello) return;
+    let active = true;
+    void recordingSummary({
+      environmentId,
+      input: {
+        installationID: view.hello.installationID,
+        contexts: overviewResources(view).map((resource) => ({
+          workspaceID: resource.workspaceID,
+          generation: resource.generation,
+        })),
+      },
+    }).then((response) => {
+      if (!active) return;
+      setRecordingSummaryError(response._tag !== "Success");
+      if (response._tag === "Success") setRecordingSummaries(response.value);
+    });
+    return () => {
+      active = false;
+    };
+  }, [view, environmentId, recordingSummary]);
+  const resources = overviewResources(view);
+  const contextResult = useAtomValue(
+    managedContextsView({
+      environmentId,
+      input: {
+        installationID: view?.hello?.installationID ?? "unconnected",
+        contexts: resources.map((resource) => ({
+          workspaceID: resource.workspaceID,
+          generation: resource.generation,
+        })),
+      },
+    }),
   );
-  const selected =
-    contexts.find((resource) => resource.workspaceID === selectedID) ?? lanes[0] ?? activeBase;
+  const summaries = Option.getOrNull(AsyncResult.value(contextResult));
+  const summaryFor = (resource: Resource) =>
+    summaries?.find(
+      (item) =>
+        item.workspaceID === resource.workspaceID && item.generation === resource.generation,
+    );
+  const needsAttention = (resource: Resource) =>
+    !actionable(resource) ||
+    resource.workspace?.services.some((service) => ["failed", "error"].includes(service.phase)) ||
+    summaryFor(resource)?.sessions.some(
+      (session) =>
+        session.source === "unavailable" ||
+        ["waiting_input", "waiting_approval", "failed"].includes(session.binding.execution),
+    );
+  const bases = resources.filter((resource) => !resource.workspace?.lane && resource.available);
+  const activeBase = workspaceID
+    ? bases.find((resource) => resource.workspaceID === workspaceID)
+    : bases[0];
+  const contexts = activeBase
+    ? overviewWorkspaceContexts(view, activeBase.workspaceID)
+    : workspaceID
+      ? []
+      : resources;
+  const lanes = contexts.filter((resource) => resource.workspace?.lane);
+  const visible = contexts.filter((resource) => filter !== "attention" || needsAttention(resource));
+  const selectedCandidate = selectedID
+    ? contexts.find((resource) => resource.workspaceID === selectedID)
+    : search.expectedGeneration !== undefined
+      ? activeBase
+      : (lanes[0] ?? activeBase);
+  const savedContextChanged =
+    view?.state === "connected" &&
+    !savedWorkspaceMatches(search, view.hello?.installationID, selectedCandidate?.generation);
+  const selected = savedContextChanged ? undefined : selectedCandidate;
   const enabled =
+    !savedContextChanged &&
     view?.state === "connected" &&
     !busy &&
     recovered &&
@@ -240,7 +312,7 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
             }
           : current,
       );
-  }, [operation, inspect, environmentId]);
+  }, [operation, inspect, environmentId, setSelectedID]);
   useEffect(() => {
     if (!operation?.receipt || terminal(operation.receipt)) return;
     const timer = window.setTimeout(() => {
@@ -310,7 +382,73 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
     }
   };
   return (
-    <>
+    <div className={styles["dh-shell"]}>
+      <ProductNavigation
+        current="workspaces"
+        connection={{
+          label: view ? label(view.state) : "Connecting…",
+          connected: view?.state === "connected",
+        }}
+      >
+        <label className={styles["dh-field-label"]} htmlFor="dh-environment">
+          Execution computer
+        </label>
+        <select
+          id="dh-environment"
+          value={environmentId}
+          onChange={(event) =>
+            selectEnvironment(
+              environments.find((item) => item.environmentId === event.target.value)
+                ?.environmentId ?? null,
+            )
+          }
+        >
+          {environments.map((item) => (
+            <option key={item.environmentId} value={item.environmentId}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+        <div className={styles["dh-tree-heading"]}>Workspaces</div>
+        <nav className={styles["dh-workspace-tree"]} aria-label="Workspaces and lanes">
+          {bases.map((base) => (
+            <div key={base.workspaceID}>
+              <button
+                className={
+                  base.workspaceID === activeBase?.workspaceID ? styles["dh-tree-current"] : ""
+                }
+                aria-pressed={base.workspaceID === activeBase?.workspaceID}
+                onClick={() => {
+                  setWorkspaceID(base.workspaceID);
+                  setFeatureCreating(false);
+                  setCreating(false);
+                }}
+              >
+                <FolderGit2Icon size={16} />
+                <span>{base.workspace?.name}</span>
+              </button>
+              {base.workspaceID === activeBase?.workspaceID
+                ? contexts.map((context) => (
+                    <button
+                      key={context.workspaceID}
+                      className={styles["dh-tree-lane"]}
+                      aria-current={
+                        selected?.workspaceID === context.workspaceID ? "true" : undefined
+                      }
+                      onClick={() => setSelectedID(context.workspaceID)}
+                    >
+                      <GitBranchIcon size={14} />
+                      <span>{context.workspace?.lane?.name ?? "Primary checkout"}</span>
+                      {needsAttention(context) ? (
+                        <CircleDotIcon size={10} className={styles["dh-attention-dot"]} />
+                      ) : null}
+                    </button>
+                  ))
+                : null}
+            </div>
+          ))}
+        </nav>
+      </ProductNavigation>
       <main className={styles["dh-main"]} aria-labelledby="dh-title">
         <header className={styles["dh-header"]}>
           <div>
@@ -319,12 +457,36 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
             </div>
             <h1 id="dh-title">{activeBase?.workspace?.name ?? "Workspaces"}</h1>
             <p>
-              {lanes.length} lanes on this page <span>·</span>{" "}
-              {contexts.filter((resource) => resource.available).length} working contexts
+              {view?.workspaceContexts &&
+              view.workspaceContexts.workspaceID === activeBase?.workspaceID
+                ? view.workspaceContexts.laneCount
+                : lanes.length}{" "}
+              lanes <span>·</span>{" "}
+              {summaries
+                ? contexts.reduce((sum, resource) => sum + (summaryFor(resource)?.total ?? 0), 0) +
+                  " managed sessions" +
+                  (view?.workspaceContexts &&
+                  view.workspaceContexts.total > view.workspaceContexts.resources.length
+                    ? " on this page"
+                    : "")
+                : "Loading agents…"}
+              {summaries ? (
+                <>
+                  <span> · </span>
+                  {contexts.some(
+                    (resource) =>
+                      !summaryFor(resource)?.externalSessions ||
+                      summaryFor(resource)?.externalSessions?.unavailable,
+                  )
+                    ? "External registrations unavailable"
+                    : `${contexts.reduce((sum, resource) => sum + (summaryFor(resource)?.externalSessions?.activeCount ?? 0), 0)} reported external`}
+                </>
+              ) : null}
             </p>
           </div>
           <div className={styles["dh-inspector-actions"]}>
             <button
+              ref={newFeatureButton}
               className={`${styles["dh-button"]} ${styles["dh-accent"]}`}
               disabled={
                 !enabled ||
@@ -360,9 +522,27 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
         </header>
         <div className={styles["dh-tabs"]}>
           <span className={styles["dh-tab-current"]}>Overview</span>
-          <Link to="/">Agent conversations</Link>
+          <Link to="/">Agents</Link>
           <Link to="/pull-requests" search={readPullRequestListPreferences()}>
             Pull requests
+          </Link>
+          <Link
+            to="/recordings"
+            search={{
+              environment: environmentId,
+              ...(activeBase ? { workspace: activeBase.workspaceID } : {}),
+            }}
+          >
+            Recordings
+          </Link>
+          <Link
+            to="/services"
+            search={{
+              environment: environmentId,
+              ...(activeBase ? { workspace: activeBase.workspaceID } : {}),
+            }}
+          >
+            Services
           </Link>
         </div>
         <div className={styles["dh-toolbar"]}>
@@ -374,9 +554,13 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
                 setWorkspaceID(event.target.value);
                 setFeatureCreating(false);
                 setCreating(false);
-                setSelectedID(null);
               }}
             >
+              {!activeBase ? (
+                <option value="" disabled>
+                  Choose an available workspace
+                </option>
+              ) : null}
               {bases.map((resource) => (
                 <option key={resource.workspaceID} value={resource.workspaceID}>
                   {resource.workspace?.name}
@@ -389,6 +573,7 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
             aria-pressed={filter === "attention"}
             onClick={() => setFilter(filter === "all" ? "attention" : "all")}
           >
+            <i aria-hidden="true" className={styles["dh-filter-dot"]} />
             Needs attention
           </button>
           <button
@@ -401,6 +586,20 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
             <RefreshCwIcon size={16} />
           </button>
         </div>
+        {savedContextChanged ? (
+          <div role="alert" className={styles["dh-status-error"]}>
+            This saved context belongs to an earlier lane or Cinderdeck installation. Its actions
+            are unavailable. Choose an available context to inspect its current work.
+          </div>
+        ) : null}
+        {view?.state === "connected" &&
+        !savedContextChanged &&
+        ((workspaceID && !activeBase) || (selectedID && !selected)) ? (
+          <div role="status" className={styles["dh-status-error"]}>
+            The selected workspace or lane is unavailable on this computer. Choose an available
+            context to continue.
+          </div>
+        ) : null}
         {result._tag === "Failure" ? (
           <div role="alert" className={styles["dh-status-error"]}>
             This computer could not provide workspace data. Check its connection and try refreshing.
@@ -519,85 +718,74 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
             ) : null}
           </div>
         ) : null}
+        {contextResult._tag === "Failure" ? (
+          <p role="status" className={styles["dh-status-error"]}>
+            Agent relationships could not be refreshed. Saved details may be out of date.
+          </p>
+        ) : null}
         <section className={styles["dh-lane-list"]} aria-label="Workspace contexts">
           {visible.map((resource) => (
-            <button
+            <LaneRow
               key={resource.workspaceID}
-              className={`${styles["dh-lane-row"]} ${selected?.workspaceID === resource.workspaceID ? styles["dh-lane-selected"] : ""}`}
-              aria-pressed={selected?.workspaceID === resource.workspaceID}
-              onClick={() => setSelectedID(resource.workspaceID)}
-            >
-              <div className={styles["dh-lane-identity"]}>
-                <h2>{resource.workspace?.lane?.name ?? "Primary checkout"}</h2>
-                <span className={styles["dh-branch"]}>
-                  <GitBranchIcon size={16} />
-                  {resource.workspace?.repos[0]?.branch || "Branch unavailable"}
-                </span>
-                <p>
-                  {resource.workspace?.lane
-                    ? `${resource.workspace.repos.length} repositories · ${resource.workspace.lane.adopted ? "Adopted worktree" : "Managed lane"}`
-                    : "The workspace’s original source trees."}
-                </p>
-                <div className={styles["dh-service-chips"]}>
-                  {resource.workspace?.services.map((service) => (
-                    <span key={service.name}>
-                      <i data-ready={service.ready} />
-                      {service.name}
-                      {service.port ? ` :${service.port}` : ""}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <div className={styles["dh-row-column"]}>
-                <span className={styles["dh-column-label"]}>Services</span>
-                <strong>{resource.workspace?.state ?? "Unavailable"}</strong>
-                <p>
-                  {resource.workspace?.services.filter((service) => service.ready).length ?? 0}{" "}
-                  ready / {resource.workspace?.services.length ?? 0}
-                </p>
-              </div>
-              <div className={styles["dh-row-column"]}>
-                <span className={styles["dh-column-label"]}>Source trees</span>
-                <strong>
-                  {resource.workspace?.repos.reduce(
-                    (count, repo) => count + repo.changedFiles,
-                    0,
-                  ) ?? 0}{" "}
-                  changed files
-                </strong>
-                <p>
-                  {resource.workspace?.repos.map((repo) => repo.id).join(" · ") ||
-                    "No repository data"}
-                </p>
-              </div>
-              <div className={styles["dh-row-column"]}>
-                <span className={styles["dh-column-label"]}>Context</span>
-                <strong>
-                  {resource.available
-                    ? resource.workspace?.definitionChanged
-                      ? "Definition changed"
-                      : resource.workspace?.issues.length
-                        ? "Needs attention"
-                        : "Available"
-                    : "Removed"}
-                </strong>
-                <p>
-                  {resource.workspace?.issues[0] ??
-                    (resource.workspace?.lane
-                      ? "Independent service environment"
-                      : "Primary workspace")}
-                </p>
-              </div>
-            </button>
+              environmentId={environmentId}
+              resource={resource}
+              summary={summaryFor(resource)}
+              recordingInstallationID={view?.hello?.installationID}
+              recording={recordingSummaries?.find(
+                (item) =>
+                  item.workspaceID === resource.workspaceID &&
+                  item.generation === resource.generation,
+              )}
+              recordingUnavailable={recordingSummaryError || view?.state !== "connected"}
+              unavailable={contextResult._tag === "Failure" || view?.state !== "connected"}
+              selected={selected?.workspaceID === resource.workspaceID}
+              select={() => setSelectedID(resource.workspaceID)}
+            />
           ))}
         </section>
+        {view?.workspaceContexts && view.workspaceContexts.total > 50 ? (
+          <nav className={styles["dh-page-footer"]} aria-label="Selected workspace context pages">
+            <span>
+              Workspace contexts {view.workspaceContexts.offset + 1}–
+              {Math.min(
+                view.workspaceContexts.offset + view.workspaceContexts.resources.length,
+                view.workspaceContexts.total,
+              )}{" "}
+              of {view.workspaceContexts.total}
+            </span>
+            <button
+              className={styles["dh-button"]}
+              disabled={!workspaceOffset}
+              onClick={() =>
+                setWorkspacePage({
+                  workspaceID: pageWorkspaceID,
+                  offset: Math.max(0, workspaceOffset - 50),
+                })
+              }
+            >
+              Previous contexts
+            </button>
+            <button
+              className={styles["dh-button"]}
+              disabled={view.workspaceContexts.nextOffset === null}
+              onClick={() =>
+                setWorkspacePage({
+                  workspaceID: pageWorkspaceID,
+                  offset: view.workspaceContexts?.nextOffset ?? workspaceOffset,
+                })
+              }
+            >
+              Next contexts
+            </button>
+          </nav>
+        ) : null}
         {view?.state === "connected" && !resources.length ? (
           <div className={styles["dh-empty"]}>
             <FolderGit2Icon size={28} />
             <h2>No workspaces yet</h2>
             <p>Add a workspace in Cinderdeck to manage its lanes and services here.</p>
           </div>
-        ) : view?.state === "connected" && resources.length && !visible.length ? (
+        ) : view?.state === "connected" && activeBase && resources.length && !visible.length ? (
           <div className={styles["dh-empty"]}>
             <h2>No contexts need attention</h2>
             <p>Choose all contexts to see this workspace.</p>
@@ -610,12 +798,12 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
           <footer className={styles["dh-page-footer"]}>
             <span>
               Contexts {view.total ? offset + 1 : 0}–
-              {Math.min(offset + resources.length, view.total)} of {view.total}
+              {Math.min(offset + view.resources.length, view.total)} of {view.total}
             </span>
             <button
               className={styles["dh-button"]}
               disabled={!offset}
-              onClick={() => setOffset(Math.max(0, offset - 100))}
+              onClick={() => setOffset(Math.max(0, offset - pageInput.limit))}
             >
               Previous
             </button>
@@ -640,6 +828,18 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
               <GitBranchIcon size={16} />
               {selected.workspace?.repos[0]?.branch || "Branch unavailable"}
             </span>
+            {summaryFor(selected)?.sessions[0] ? (
+              <Link
+                className={styles["dh-button"] + " " + styles["dh-accent"]}
+                to="/$environmentId/$threadId"
+                params={buildThreadRouteParams({
+                  environmentId,
+                  threadId: summaryFor(selected)!.sessions[0]!.binding.threadId,
+                })}
+              >
+                Open conversation <ArrowRightIcon size={15} />
+              </Link>
+            ) : null}
             <div className={styles["dh-inspector-actions"]}>
               <button
                 className={styles["dh-button"] + " " + styles["dh-accent"]}
@@ -677,13 +877,16 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
               />
             ) : null}
             {view?.hello ? (
-              <SessionLauncher
-                key={`${environmentId}:${view.hello.installationID}:${selected.workspaceID}:${selected.generation}`}
-                environmentId={environmentId}
-                installationID={view.hello.installationID}
-                resource={selected}
-                enabled={enabled && actionable(selected)}
-              />
+              <details className={styles["dh-add-agent"]}>
+                <summary>Add an agent</summary>
+                <SessionLauncher
+                  key={`${environmentId}:${view.hello.installationID}:${selected.workspaceID}:${selected.generation}`}
+                  environmentId={environmentId}
+                  installationID={view.hello.installationID}
+                  resource={selected}
+                  enabled={enabled && actionable(selected)}
+                />
+              </details>
             ) : null}
             <h3>Services</h3>
             {selected.workspace?.services.map((service) => (
@@ -698,7 +901,10 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
               <div className={styles["dh-inspector-repo"]} key={repo.id}>
                 <strong>{repo.id}</strong>
                 <span>{repo.dirty ? `${repo.changedFiles} changed files` : "Clean"}</span>
-                <code>{repo.path}</code>
+                <details>
+                  <summary>Source location</summary>
+                  <code>{repo.path}</code>
+                </details>
               </div>
             ))}
           </>
@@ -707,6 +913,13 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
           <ActivityIcon size={17} />
           Activity
         </h3>
+        {!view?.activity.some((event) =>
+          contexts.some((resource) => resource.workspaceID === event.workspaceID),
+        ) ? (
+          <p className={styles["dh-activity-empty"]}>
+            New workspace activity appears here while connected.
+          </p>
+        ) : null}
         <ol className={styles["dh-activity"]}>
           {view?.activity
             .filter((event) =>
@@ -727,6 +940,234 @@ function ConnectedWorkspace({ environmentId }: { environmentId: EnvironmentId })
           <span>{view ? label(view.state) : "Waiting for this computer"}</span>
         </div>
       </aside>
-    </>
+    </div>
+  );
+}
+
+const sessionLabel = (
+  session: NonNullable<ManagedContextView>["sessions"][number],
+  stale: boolean,
+) =>
+  stale || session.source === "unavailable"
+    ? "State unavailable"
+    : {
+        queued: "Queued",
+        starting: "Starting",
+        working: "Working",
+        waiting_input: "Needs input",
+        waiting_approval: "Needs approval",
+        idle: "Idle",
+        finished_turn: "Turn complete",
+        interrupted: "Interrupted",
+        failed: "Failed",
+        unknown: "Unknown",
+      }[session.binding.execution];
+function LaneRow({
+  environmentId,
+  resource,
+  summary,
+  recording,
+  recordingInstallationID,
+  recordingUnavailable,
+  unavailable,
+  selected,
+  select,
+}: {
+  environmentId: EnvironmentId;
+  resource: Resource;
+  summary: ManagedContextView | undefined;
+  recording: RecordingContextOverview | undefined;
+  recordingInstallationID: string | undefined;
+  recordingUnavailable: boolean;
+  unavailable: boolean;
+  selected: boolean;
+  select: () => void;
+}) {
+  const sessions = summary?.sessions ?? [];
+  const prs = [
+    ...new Map(
+      sessions
+        .flatMap((session) =>
+          (session.pullRequests ?? []).filter((pr) => pr.source !== "stack-dismissed"),
+        )
+        .map((pr) => [`${pr.host}/${pr.repository}/${pr.number}`, pr]),
+    ).values(),
+  ];
+  return (
+    <article
+      className={`${styles["dh-lane-row"]} ${selected ? styles["dh-lane-selected"] : ""}`}
+      aria-label={resource.workspace?.lane?.name ?? "Primary checkout"}
+    >
+      <div className={styles["dh-lane-identity"]}>
+        <button className={styles["dh-lane-select"]} aria-pressed={selected} onClick={select}>
+          <h2>{sessions[0]?.title ?? resource.workspace?.lane?.name ?? "Primary checkout"}</h2>
+          <ChevronRightIcon size={16} />
+        </button>
+        <span className={styles["dh-branch"]}>
+          <GitBranchIcon size={15} />
+          {resource.workspace?.repos[0]?.branch || "Branch unavailable"}
+        </span>
+        <p className={styles["dh-objective"]}>
+          {sessions[0]?.objective ??
+            (resource.workspace?.lane
+              ? "Independent workspace for changes and verification."
+              : "The workspace’s primary source trees.")}
+        </p>
+        <div className={styles["dh-service-chips"]}>
+          {resource.workspace?.services.map((service) => (
+            <span key={service.name}>
+              <i data-ready={!unavailable && service.ready} />
+              {service.name}
+              {service.port ? ` :${service.port}` : ""}
+            </span>
+          ))}
+        </div>
+        {!resource.available ||
+        resource.workspace?.issues.length ||
+        resource.workspace?.definitionChanged ? (
+          <p role="status" className={styles["dh-attention-text"]}>
+            {!resource.available
+              ? "Context removed"
+              : (resource.workspace?.issues[0] ?? "Workspace definition changed")}
+          </p>
+        ) : null}
+      </div>
+      <div className={styles["dh-row-column"]}>
+        <span className={styles["dh-column-label"]}>
+          Managed agents{summary ? ` · ${summary.total}` : ""}
+        </span>
+        {!summary ? (
+          <p>{unavailable ? "Agents unavailable" : "Loading agents…"}</p>
+        ) : !sessions.length ? (
+          <p>No managed agents yet</p>
+        ) : (
+          sessions.map((session) => (
+            <Link
+              key={session.binding.id}
+              to="/$environmentId/$threadId"
+              params={buildThreadRouteParams({ environmentId, threadId: session.binding.threadId })}
+              className={styles["dh-row-agent"]}
+            >
+              <strong>{session.binding.providerInstanceId}</strong>
+              <span
+                data-execution={
+                  unavailable || session.source === "unavailable"
+                    ? "unknown"
+                    : session.binding.execution
+                }
+              >
+                <i />
+                {sessionLabel(session, unavailable)}
+              </span>
+              <small>
+                {session.binding.role}
+                {session.archived ? " · Archived" : ""}
+              </small>
+            </Link>
+          ))
+        )}
+        {summary?.externalSessions && !summary.externalSessions.unavailable ? (
+          <p>
+            {summary.externalSessions.activeCount} reported external
+            {summary.externalSessions.staleCount
+              ? ` · ${summary.externalSessions.staleCount} last seen`
+              : ""}
+          </p>
+        ) : (
+          <p>External registrations unavailable</p>
+        )}
+        {summary && summary.total > sessions.length ? (
+          <p>Showing {sessions.length} newest agents. Select this lane for more.</p>
+        ) : null}
+      </div>
+      <div className={styles["dh-row-column"]}>
+        <span className={styles["dh-column-label"]}>Pull requests</span>
+        {prs.map((pr) => (
+          <a
+            key={`${pr.host}/${pr.repository}/${pr.number}`}
+            href={pr.url}
+            target="_blank"
+            rel="noreferrer"
+            className={styles["dh-row-pr"]}
+          >
+            <strong>
+              <PullRequestGlyph.pullRequest size={14} />#{pr.number}{" "}
+              <span className={styles["dh-pr-status"]}>
+                {pr.snapshot?.isDraft ? "Draft" : (pr.snapshot?.state ?? "Not refreshed")}
+              </span>
+            </strong>
+            <p>{pr.snapshot?.title ?? pr.repository}</p>
+            {pr.snapshot ? (
+              <small>Cached {new Date(pr.snapshot.syncedAt).toLocaleString()}</small>
+            ) : null}
+          </a>
+        ))}
+        {!prs.length ? (
+          <p>
+            {!summary || unavailable ? "PR links unavailable" : "No PR linked to these agents."}
+          </p>
+        ) : null}
+      </div>
+      <div className={styles["dh-row-column"]}>
+        <span className={styles["dh-column-label"]}>
+          Recordings{recording ? ` · ${recording.count}` : ""}
+        </span>
+        {recordingUnavailable ? (
+          <p>Recording library unavailable</p>
+        ) : !recording ? (
+          <p>Loading recordings…</p>
+        ) : recording.latest ? (
+          <Link
+            className={styles["dh-row-recording"]}
+            to="/recordings"
+            search={{
+              environment: environmentId,
+              workspace: resource.workspaceID,
+              recording: recording.latest.id,
+            }}
+          >
+            {recordingInstallationID ? (
+              <RecordingThumbnail
+                className={styles["dh-recording-frame"]}
+                environmentId={environmentId}
+                context={{
+                  installationID: recordingInstallationID,
+                  workspaceID: resource.workspaceID,
+                  generation: resource.generation,
+                }}
+                recordingID={recording.latest.id}
+                playable={recording.latest.playable}
+                title={recording.latest.title}
+                duration={recording.latest.duration}
+              />
+            ) : null}
+            <strong>{recording.latest.title}</strong>
+            <small>
+              {recording.active
+                ? "Capture in progress"
+                : recording.latest.playable
+                  ? "Video available"
+                  : "Video unavailable"}{" "}
+              ·{" "}
+              {recording.latest.checkOutcome === "unverified"
+                ? "No check recorded"
+                : `Recorded check ${recording.latest.checkOutcome}`}
+            </small>
+          </Link>
+        ) : (
+          <p>No recordings yet</p>
+        )}
+        <Link
+          className={styles["dh-text-button"]}
+          to="/services"
+          search={{ environment: environmentId, workspace: resource.workspaceID }}
+        >
+          Services & runs <ArrowRightIcon size={13} />
+        </Link>
+        <button className={styles["dh-text-button"]} onClick={select}>
+          Inspect lane <ArrowRightIcon size={13} />
+        </button>
+      </div>
+    </article>
   );
 }

@@ -4,6 +4,7 @@ import { EnvironmentId } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
 
+import { connectedWorkspaceSearch } from "../deckhand/connectionPresentation";
 import { NoProjectsHero } from "../components/NoProjectsHero";
 import { WelcomeWizard } from "../components/onboarding/WelcomeWizard";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
@@ -45,8 +46,16 @@ function WelcomeRouteView() {
         <WelcomeWizard
           localAvailable={localAvailable}
           resumeEnvironmentId={resumeEnvironmentId}
-          onDone={async (projectRef) => {
+          onDone={async (projectRef, workspaceSelection) => {
             setDismissed(true);
+            if (workspaceSelection !== undefined) {
+              await navigate({
+                to: "/workspaces",
+                search: connectedWorkspaceSearch(workspaceSelection),
+                replace: true,
+              });
+              return;
+            }
             if (projectRef !== undefined) {
               await openNewThread(projectRef, { replace: true }).catch(() =>
                 navigate({ to: "/", replace: true }),

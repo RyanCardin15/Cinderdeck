@@ -29,6 +29,8 @@ import {
   INCOGNITO_BROWSER_PROFILE_ID,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Owned from "@t3tools/contracts/deckhand/ownedPreviewRpc";
+import * as OwnedCapture from "../../preview/OwnedPreviewCapture.ts";
 import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
 import * as NodeURL from "node:url";
@@ -480,6 +482,21 @@ export const saveRecording = DesktopIpc.makeIpcMethod({
     const manager = yield* PreviewManager.PreviewManager;
     return yield* manager.saveRecording(tabId, mimeType, data);
   }),
+});
+
+export const startOwnedCapture = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.PREVIEW_OWNED_CAPTURE_START_CHANNEL,
+  payload: Schema.Struct({ ...Owned.OwnedPreviewIntent.fields, tabID: Schema.String }),
+  result: Owned.OwnedPreviewStatus,
+  handler: (input) =>
+    Effect.flatMap(OwnedCapture.OwnedPreviewCapture, (service) => service.start(input)),
+});
+export const stopOwnedCapture = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.PREVIEW_OWNED_CAPTURE_STOP_CHANNEL,
+  payload: Owned.OwnedPreviewLookup,
+  result: Owned.OwnedPreviewStatus,
+  handler: (input) =>
+    Effect.flatMap(OwnedCapture.OwnedPreviewCapture, (service) => service.stop(input.captureKey)),
 });
 
 export const methods = [

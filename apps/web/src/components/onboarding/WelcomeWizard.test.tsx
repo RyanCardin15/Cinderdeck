@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import type { ConnectedWorkspaceSelection } from "../../deckhand/connectionPresentation";
 import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 
@@ -11,6 +12,27 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   toast: vi.fn(),
   projects: [] as Array<{ id: string; environmentId: string; workspaceRoot: string }>,
+}));
+vi.mock("../../deckhand/CinderdeckConnectionPanel", () => ({
+  CinderdeckConnectionPanel: ({
+    onChoose,
+  }: {
+    onChoose: (selection: ConnectedWorkspaceSelection) => void;
+  }) => (
+    <button
+      onClick={() =>
+        onChoose({
+          environmentId: EnvironmentId.make("test-env"),
+          baseWorkspaceID: "chosen-native-workspace",
+          contextID: "chosen-native-workspace",
+          expectedInstallationID: "native-installation",
+          expectedGeneration: 1,
+        })
+      }
+    >
+      Open selected workspace
+    </button>
+  ),
 }));
 vi.mock("../../state/agentSessions", () => ({ agentSessionImport: "import" }));
 vi.mock("../../state/projects", () => ({ projectEnvironment: { create: "create" } }));
@@ -124,7 +146,7 @@ afterEach(async () => {
 
 async function click(label: string) {
   const button = [...document.querySelectorAll("button")].find(
-    (element) => element.textContent?.trim() === label,
+    (element) => (element.getAttribute("aria-label") ?? element.textContent?.trim()) === label,
   );
   expect(button, `button ${label}`).toBeDefined();
   await act(async () => button!.click());
@@ -211,4 +233,33 @@ it("keeps setup open when saving completion fails and preserves the import warni
       description: "Imported 28 threads. 1 thread could not be imported.",
     }),
   );
+});
+
+it("completes connected setup for the deliberately chosen workspace without importing projects", async () => {
+  const onDone = vi.fn();
+  await act(async () => root.render(<WelcomeWizard localAvailable onDone={onDone} />));
+  await click("Connect to Cinderdeck");
+  await click("Open selected workspace");
+  expect(mocks.complete).toHaveBeenCalledOnce();
+  expect(onDone).toHaveBeenCalledWith(undefined, {
+    environmentId: "test-env",
+    baseWorkspaceID: "chosen-native-workspace",
+    contextID: "chosen-native-workspace",
+    expectedInstallationID: "native-installation",
+    expectedGeneration: 1,
+  });
+  expect(mocks.createProject).not.toHaveBeenCalled();
+  expect(mocks.importThreads).not.toHaveBeenCalled();
+});
+
+it("retains standalone onboarding after returning from the Cinderdeck path", async () => {
+  const onDone = vi.fn();
+  await act(async () => root.render(<WelcomeWizard localAvailable onDone={onDone} />));
+  await click("Connect to Cinderdeck");
+  await click("Back to standalone setup");
+  await click("Continue");
+  await click("Continue");
+  await click("Do not import projects");
+  expect(onDone).toHaveBeenCalledWith(undefined);
+  expect(mocks.createProject).not.toHaveBeenCalled();
 });

@@ -32,7 +32,11 @@ import { Route as SettingsArchivedRouteImport } from './routes/settings.archived
 import { Route as SettingsAppearanceRouteImport } from './routes/settings.appearance'
 import { Route as ProjectsProjectKeyRouteImport } from './routes/projects.$projectKey'
 import { Route as ChatWorkspacesRouteImport } from './routes/_chat.workspaces'
+import { Route as ChatServicesRouteImport } from './routes/_chat.services'
+import { Route as ChatRecordingsRouteImport } from './routes/_chat.recordings'
 import { Route as ChatPullRequestsRouteImport } from './routes/_chat.pull-requests'
+import { Route as ChatLinkedWorkRouteImport } from './routes/_chat.linked-work'
+import { Route as ChatInboxRouteImport } from './routes/_chat.inbox'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
 
@@ -151,9 +155,29 @@ const ChatWorkspacesRoute = ChatWorkspacesRouteImport.update({
   path: '/workspaces',
   getParentRoute: () => ChatRoute,
 } as any)
+const ChatServicesRoute = ChatServicesRouteImport.update({
+  id: '/services',
+  path: '/services',
+  getParentRoute: () => ChatRoute,
+} as any)
+const ChatRecordingsRoute = ChatRecordingsRouteImport.update({
+  id: '/recordings',
+  path: '/recordings',
+  getParentRoute: () => ChatRoute,
+} as any)
 const ChatPullRequestsRoute = ChatPullRequestsRouteImport.update({
   id: '/pull-requests',
   path: '/pull-requests',
+  getParentRoute: () => ChatRoute,
+} as any)
+const ChatLinkedWorkRoute = ChatLinkedWorkRouteImport.update({
+  id: '/linked-work',
+  path: '/linked-work',
+  getParentRoute: () => ChatRoute,
+} as any)
+const ChatInboxRoute = ChatInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
   getParentRoute: () => ChatRoute,
 } as any)
 const ChatDraftDraftIdRoute = ChatDraftDraftIdRouteImport.update({
@@ -175,7 +199,11 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRouteWithChildren
   '/usage': typeof UsageRoute
   '/welcome': typeof WelcomeRoute
+  '/inbox': typeof ChatInboxRoute
+  '/linked-work': typeof ChatLinkedWorkRoute
   '/pull-requests': typeof ChatPullRequestsRoute
+  '/recordings': typeof ChatRecordingsRoute
+  '/services': typeof ChatServicesRoute
   '/workspaces': typeof ChatWorkspacesRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
@@ -201,7 +229,11 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRouteWithChildren
   '/usage': typeof UsageRoute
   '/welcome': typeof WelcomeRoute
+  '/inbox': typeof ChatInboxRoute
+  '/linked-work': typeof ChatLinkedWorkRoute
   '/pull-requests': typeof ChatPullRequestsRoute
+  '/recordings': typeof ChatRecordingsRoute
+  '/services': typeof ChatServicesRoute
   '/workspaces': typeof ChatWorkspacesRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
@@ -230,7 +262,11 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRouteWithChildren
   '/usage': typeof UsageRoute
   '/welcome': typeof WelcomeRoute
+  '/_chat/inbox': typeof ChatInboxRoute
+  '/_chat/linked-work': typeof ChatLinkedWorkRoute
   '/_chat/pull-requests': typeof ChatPullRequestsRoute
+  '/_chat/recordings': typeof ChatRecordingsRoute
+  '/_chat/services': typeof ChatServicesRoute
   '/_chat/workspaces': typeof ChatWorkspacesRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
@@ -260,7 +296,11 @@ export interface FileRouteTypes {
     | '/settings'
     | '/usage'
     | '/welcome'
+    | '/inbox'
+    | '/linked-work'
     | '/pull-requests'
+    | '/recordings'
+    | '/services'
     | '/workspaces'
     | '/projects/$projectKey'
     | '/settings/appearance'
@@ -286,7 +326,11 @@ export interface FileRouteTypes {
     | '/settings'
     | '/usage'
     | '/welcome'
+    | '/inbox'
+    | '/linked-work'
     | '/pull-requests'
+    | '/recordings'
+    | '/services'
     | '/workspaces'
     | '/projects/$projectKey'
     | '/settings/appearance'
@@ -314,7 +358,11 @@ export interface FileRouteTypes {
     | '/settings'
     | '/usage'
     | '/welcome'
+    | '/_chat/inbox'
+    | '/_chat/linked-work'
     | '/_chat/pull-requests'
+    | '/_chat/recordings'
+    | '/_chat/services'
     | '/_chat/workspaces'
     | '/projects/$projectKey'
     | '/settings/appearance'
@@ -509,11 +557,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatWorkspacesRouteImport
       parentRoute: typeof ChatRoute
     }
+    '/_chat/services': {
+      id: '/_chat/services'
+      path: '/services'
+      fullPath: '/services'
+      preLoaderRoute: typeof ChatServicesRouteImport
+      parentRoute: typeof ChatRoute
+    }
+    '/_chat/recordings': {
+      id: '/_chat/recordings'
+      path: '/recordings'
+      fullPath: '/recordings'
+      preLoaderRoute: typeof ChatRecordingsRouteImport
+      parentRoute: typeof ChatRoute
+    }
     '/_chat/pull-requests': {
       id: '/_chat/pull-requests'
       path: '/pull-requests'
       fullPath: '/pull-requests'
       preLoaderRoute: typeof ChatPullRequestsRouteImport
+      parentRoute: typeof ChatRoute
+    }
+    '/_chat/linked-work': {
+      id: '/_chat/linked-work'
+      path: '/linked-work'
+      fullPath: '/linked-work'
+      preLoaderRoute: typeof ChatLinkedWorkRouteImport
+      parentRoute: typeof ChatRoute
+    }
+    '/_chat/inbox': {
+      id: '/_chat/inbox'
+      path: '/inbox'
+      fullPath: '/inbox'
+      preLoaderRoute: typeof ChatInboxRouteImport
       parentRoute: typeof ChatRoute
     }
     '/_chat/draft/$draftId': {
@@ -534,7 +610,11 @@ declare module '@tanstack/react-router' {
 }
 
 interface ChatRouteChildren {
+  ChatInboxRoute: typeof ChatInboxRoute
+  ChatLinkedWorkRoute: typeof ChatLinkedWorkRoute
   ChatPullRequestsRoute: typeof ChatPullRequestsRoute
+  ChatRecordingsRoute: typeof ChatRecordingsRoute
+  ChatServicesRoute: typeof ChatServicesRoute
   ChatWorkspacesRoute: typeof ChatWorkspacesRoute
   ChatIndexRoute: typeof ChatIndexRoute
   ChatEnvironmentIdThreadIdRoute: typeof ChatEnvironmentIdThreadIdRoute
@@ -542,7 +622,11 @@ interface ChatRouteChildren {
 }
 
 const ChatRouteChildren: ChatRouteChildren = {
+  ChatInboxRoute: ChatInboxRoute,
+  ChatLinkedWorkRoute: ChatLinkedWorkRoute,
   ChatPullRequestsRoute: ChatPullRequestsRoute,
+  ChatRecordingsRoute: ChatRecordingsRoute,
+  ChatServicesRoute: ChatServicesRoute,
   ChatWorkspacesRoute: ChatWorkspacesRoute,
   ChatIndexRoute: ChatIndexRoute,
   ChatEnvironmentIdThreadIdRoute: ChatEnvironmentIdThreadIdRoute,

@@ -9,6 +9,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as CheckoutIdentity from "./CheckoutIdentity.ts";
 import * as IntegrationHub from "./IntegrationHub.ts";
 import * as Relationships from "./Relationships.ts";
+import * as CurrentCheckout from "./CurrentCheckout.ts";
 import * as Migrations from "./Migrations.ts";
 
 export class ManagedCheckoutError extends Schema.TaggedError<ManagedCheckoutError>()(
@@ -53,6 +54,13 @@ const make = Effect.gen(function* () {
   yield* Migrations.migrate;
   const identity = yield* CheckoutIdentity.CheckoutIdentity;
   const relationships = yield* Relationships.Relationships;
+  const ownershipDependencies = yield* Effect.context<
+    SqlClient.SqlClient | Relationships.Relationships
+  >();
+  const currentCheckout = (id: string) =>
+    CurrentCheckout.resolveCurrentCheckout(id).pipe(Effect.provide(ownershipDependencies));
+  const assertOwnership = (id: string) =>
+    CurrentCheckout.assertPhysicalAvailable(id).pipe(Effect.provide(ownershipDependencies));
   const hub = yield* IntegrationHub.IntegrationHub;
   const session = (threadId: ThreadId) =>
     Effect.gen(function* () {
@@ -69,8 +77,7 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const binding = yield* session(threadId);
       return (
-        binding !== null &&
-        (yield* relationships.checkout(binding.checkoutId)).backend === "cinderdeck"
+        binding !== null && (yield* currentCheckout(binding.checkoutId)).backend === "cinderdeck"
       );
     }).pipe(Effect.mapError(storage(threadId)));
   const resolve = (threadId: ThreadId, cwd: string | null) =>
@@ -90,13 +97,18 @@ const make = Effect.gen(function* () {
         // a Git checkout reservation or masquerade as a connected checkout.
         return null;
       }
-      if (binding === null)
+      yield* assertOwnership(checkout.success.physicalId);
+      if (binding === null) {
+        const managed =
+          yield* sql`SELECT origin_id FROM deckhand_current_checkouts WHERE json_extract(record_json,'$.backend')='cinderdeck' AND EXISTS(SELECT 1 FROM json_each(record_json,'$.repositories') repo WHERE json_extract(repo.value,'$.physicalId')=${checkout.success.physicalId}) LIMIT 1`;
+        if (managed.length) return yield* fail("missing");
         return {
           cwd: checkout.success.root,
           physicalId: checkout.success.physicalId,
           writerScope: [checkout.success.physicalId],
         };
-      const target = yield* relationships.checkout(binding.checkoutId);
+      }
+      const target = yield* currentCheckout(binding.checkoutId);
       const workspace = yield* relationships.workspace(target.workspaceId);
       if (
         target.state !== "ready" ||

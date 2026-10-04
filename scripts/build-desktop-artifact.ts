@@ -846,6 +846,15 @@ const resolveGitCommitHash = Effect.fn("resolveGitCommitHash")(function* (repoRo
   return hash.toLowerCase();
 });
 
+const resolveGitSourceDirty = Effect.fn("resolveGitSourceDirty")(function* (repoRoot: string) {
+  const result = yield* spawnAndCollectOutput(
+    ChildProcess.make("git", ["status", "--porcelain", "--untracked-files=normal"], {
+      cwd: repoRoot,
+    }),
+  ).pipe(Effect.orElseSucceed(() => ({ stdout: "", stderr: "", exitCode: 1 })));
+  return result.exitCode === 0 ? result.stdout.trim().length > 0 : null;
+});
+
 const resolvePythonForNodeGyp = Effect.fn("resolvePythonForNodeGyp")(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -926,6 +935,7 @@ interface StagePackageJson {
   readonly version: string;
   readonly buildVersion: string;
   readonly deckhandCommitHash: string;
+  readonly deckhandSourceDirty: boolean | null;
   readonly private: true;
   readonly packageManager: string;
   readonly description: string;
@@ -937,6 +947,48 @@ interface StagePackageJson {
   readonly devDependencies: {
     readonly electron: string;
   };
+}
+
+export const copyDesktopBuildOutputs = Effect.fn("copyDesktopBuildOutputs")(function* (
+  stageDistDir: string,
+  outputDir: string,
+  target: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  yield* fs.makeDirectory(outputDir, { recursive: true });
+  const artifacts: string[] = [];
+  for (const entry of yield* fs.readDirectory(stageDistDir)) {
+    const source = path.join(stageDistDir, entry);
+    const destination = path.join(outputDir, entry);
+    const stat = yield* fs.stat(source);
+    if (stat.type === "Directory" && target === "dir") {
+      // Framework links must remain relative when the app is moved out of staging.
+      yield* Effect.tryPromise({
+        try: () =>
+          NodeFSP.cp(source, destination, {
+            recursive: true,
+            verbatimSymlinks: true,
+            errorOnExist: true,
+            force: false,
+          }),
+        catch: (cause) => new DesktopBuildOutputCopyError({ cause }),
+      });
+      artifacts.push(destination);
+    } else if (stat.type === "File") {
+      yield* fs.copyFile(source, destination);
+      if (!entry.startsWith("builder-")) artifacts.push(destination);
+    }
+  }
+  return artifacts;
+});
+export class DesktopBuildOutputCopyError extends Schema.TaggedError<DesktopBuildOutputCopyError>()(
+  "DesktopBuildOutputCopyError",
+  { cause: Schema.Defect() },
+) {
+  override get message() {
+    return "Could not copy the unpacked application. Choose a new output directory; existing app directories are not overwritten.";
+  }
 }
 
 export const STAGE_INSTALL_ARGS = ["install", "--prod"] as const;
@@ -2576,7 +2628,15 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
   if (!rawRepo) return undefined;
 
   const [owner, repo, ...rest] = rawRepo.split("/");
-  if (!owner || !repo || rest.length > 0) return undefined;
+  if (
+    !owner ||
+    !repo ||
+    rest.length > 0 ||
+    !/^[A-Za-z0-9_.-]+$/.test(owner) ||
+    !/^[A-Za-z0-9_.-]+$/.test(repo) ||
+    rawRepo.toLowerCase() === "pingdotgg/t3code"
+  )
+    return undefined;
 
   return {
     provider: "github",
@@ -2640,6 +2700,7 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 }
 
 export function resolveDesktopProductName(version: string): string {
+  if (isDesktopPreviewVersion(version)) return "Deckhand (Preview)";
   return resolveDesktopUpdateChannel(version) === "nightly"
     ? "Deckhand (Nightly)"
     : (desktopPackageJson.productName ?? "Deckhand");
@@ -2667,7 +2728,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
-    artifactName: "T3-Code-${version}-${arch}.${ext}",
+    artifactName: "Deckhand-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [
       ...DESKTOP_FILE_EXCLUSIONS,
@@ -2770,7 +2831,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       category: "Development",
       synopsis: "Desktop GUI for coding agents",
       // Required by the .deb control file.
-      maintainer: "T3 Tools <hello@t3.codes>",
+      maintainer: "Cardin Labs",
       // electron-builder turns these into MimeType=x-scheme-handler/<scheme>;
       // in the .desktop entry (Exec already gets %U), so browsers can hand
       // t3code:// OAuth callbacks to the app.
@@ -3452,9 +3513,10 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const appVersion = options.version ?? serverPackageJson.version;
   const iconAssets = resolveDesktopBuildIconAssets(appVersion);
   const commitHash = yield* resolveGitCommitHash(repoRoot);
+  const sourceDirty = yield* resolveGitSourceDirty(repoRoot);
   const mkdir = options.keepStage ? fs.makeTempDirectory : fs.makeTempDirectoryScoped;
   const stageRoot = yield* mkdir({
-    prefix: `t3code-desktop-${options.platform}-stage-`,
+    prefix: `deckhand-desktop-${options.platform}-stage-`,
   });
 
   const stageAppDir = path.join(stageRoot, "app");
@@ -3574,6 +3636,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   }
 
   yield* Effect.log("[desktop-artifact] Staging release app...");
+  yield* fs.copyFile(path.join(repoRoot, "LICENSE"), path.join(stageAppDir, "LICENSE"));
   yield* fs.copy(distDirs.desktopDist, path.join(stageAppDir, "apps/desktop/dist-electron"));
   yield* fs.copy(distDirs.desktopResources, stageResourcesDir);
   if (options.platform === "linux") {
@@ -3689,16 +3752,17 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       ? path.join(stageAppDir, WINDOWS_SERVER_RESOURCE_SOURCE_DIR, WINDOWS_SERVER_ASAR_RESOURCE)
       : undefined;
   const stagePackageJson: StagePackageJson = {
-    name: "t3code",
+    name: "deckhand",
     version: appVersion,
     buildVersion: appVersion,
     deckhandCommitHash: commitHash,
+    deckhandSourceDirty: sourceDirty,
     private: true,
     packageManager: rootPackageJson.packageManager,
     description: "Deckhand desktop build",
     // Required by the .deb control file.
-    homepage: "https://t3.codes",
-    author: "T3 Tools",
+    homepage: "https://cardinlabs.com",
+    author: "Cardin Labs",
     main: "apps/desktop/dist-electron/boot.cjs",
     build: yield* createBuildConfig(
       options.platform,
@@ -3897,19 +3961,11 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     });
   }
 
-  const stageEntries = yield* fs.readDirectory(stageDistDir);
-  yield* fs.makeDirectory(options.outputDir, { recursive: true });
-
-  const copiedArtifacts: string[] = [];
-  for (const entry of stageEntries) {
-    const from = path.join(stageDistDir, entry);
-    const stat = yield* fs.stat(from).pipe(Effect.orElseSucceed(() => null));
-    if (!stat || stat.type !== "File") continue;
-
-    const to = path.join(options.outputDir, entry);
-    yield* fs.copyFile(from, to);
-    copiedArtifacts.push(to);
-  }
+  const copiedArtifacts = yield* copyDesktopBuildOutputs(
+    stageDistDir,
+    options.outputDir,
+    options.target,
+  );
 
   if (copiedArtifacts.length === 0) {
     return yield* new DesktopBuildNoArtifactsProducedError({

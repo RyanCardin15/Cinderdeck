@@ -30,6 +30,12 @@ export class IntegrationHub extends Context.Service<
     readonly overview: (input: Page) => Effect.Effect<Rpc.IntegrationView, Rpc.DeckhandRpcError>;
     readonly subscribe: (input: Page) => Stream.Stream<Rpc.IntegrationView, Rpc.DeckhandRpcError>;
     readonly refresh: Effect.Effect<void, Rpc.DeckhandRpcError>;
+    readonly currentResources: (
+      workspaceIDs: ReadonlyArray<string>,
+    ) => Effect.Effect<
+      Pick<Rpc.IntegrationView, "state" | "hello" | "resources">,
+      Rpc.DeckhandRpcError
+    >;
     readonly resource: (workspaceID: string) => Effect.Effect<
       {
         readonly hello: Contracts.IntegrationHello;
@@ -92,17 +98,70 @@ const empty: Rpc.IntegrationView = {
   total: 0,
   nextOffset: null,
 };
-const pageView = (view: Rpc.IntegrationView, page: Page): Rpc.IntegrationView => ({
-  ...view,
-  resources: view.resources.slice(page.offset, page.offset + page.limit),
-  nextOffset: page.offset + page.limit < view.total ? page.offset + page.limit : null,
-});
+const pageView = (view: Rpc.IntegrationView, page: Page): Rpc.IntegrationView => {
+  const resources = view.resources.slice(page.offset, page.offset + page.limit);
+  const selectedContext = page.selectedContextID
+    ? view.resources.find((resource) => resource.workspaceID === page.selectedContextID)
+    : undefined;
+  const firstResource = resources[0];
+  const baseID =
+    page.selectedWorkspaceID ??
+    selectedContext?.workspace?.lane?.sourceStackID ??
+    (page.workspacePage
+      ? (firstResource?.workspace?.lane?.sourceStackID ?? firstResource?.workspaceID)
+      : undefined);
+  const selectedIDs = new Set([baseID, page.selectedContextID].filter((id) => id !== undefined));
+  // Both pages reuse one authoritative catalog snapshot; they never fetch per-lane detail.
+  const contexts =
+    page.workspacePage && baseID
+      ? view.resources.filter(
+          (resource) =>
+            resource.workspaceID === baseID || resource.workspace?.lane?.sourceStackID === baseID,
+        )
+      : [];
+  const workspacePage = page.workspacePage;
+  return {
+    ...view,
+    resources,
+    selectedResources: view.resources.filter((resource) => selectedIDs.has(resource.workspaceID)),
+    ...(workspacePage && baseID
+      ? {
+          workspaceContexts: {
+            workspaceID: baseID,
+            resources: contexts.slice(
+              workspacePage.offset,
+              workspacePage.offset + workspacePage.limit,
+            ),
+            total: contexts.length,
+            laneCount: contexts.filter((resource) => resource.workspace?.lane).length,
+            offset: workspacePage.offset,
+            nextOffset:
+              workspacePage.offset + workspacePage.limit < contexts.length
+                ? workspacePage.offset + workspacePage.limit
+                : null,
+          },
+        }
+      : {}),
+    nextOffset: page.offset + page.limit < view.total ? page.offset + page.limit : null,
+  };
+};
 const validatePage = (page: Page) =>
   Number.isInteger(page.offset) &&
   page.offset >= 0 &&
   Number.isInteger(page.limit) &&
   page.limit > 0 &&
-  page.limit <= 100;
+  page.limit <= 100 &&
+  (!page.workspacePage ||
+    (Number.isInteger(page.workspacePage.offset) &&
+      page.workspacePage.offset >= 0 &&
+      Number.isInteger(page.workspacePage.limit) &&
+      page.workspacePage.limit > 0 &&
+      page.workspacePage.limit <= 50 &&
+      page.limit + page.workspacePage.limit + 2 <= 100)) &&
+  [page.selectedWorkspaceID, page.selectedContextID].every(
+    (id) =>
+      id === undefined || (typeof id === "string" && id.trim().length > 0 && id.length <= 160),
+  );
 const make = Effect.gen(function* () {
   yield* Migrations.migrate;
   const sql = yield* SqlClient.SqlClient;
@@ -296,17 +355,19 @@ const make = Effect.gen(function* () {
       : Effect.fail(new Rpc.DeckhandRpcError({ reason: "invalid_request" }));
   const commandConnection = (actorID: string) =>
     Effect.gen(function* () {
-      const peer = yield* Ref.get(connection);
-      const view = yield* SubscriptionRef.get(state);
-      if (Option.isNone(peer) || view.state !== "connected")
-        return yield* new Rpc.DeckhandRpcError({ reason: "unavailable" });
       if (!actorID || actorID.length > 60)
         return yield* new Rpc.DeckhandRpcError({ reason: "invalid_request" });
-      // Recheck the peer epoch on a separate command connection before every mutation or reconciliation.
-      return yield* client.connect(peer.value.socketPath, {
-        installationID: peer.value.hello.installationID,
-        executionHostID: peer.value.hello.executionHostID,
-        channel: peer.value.hello.channel,
+      const view = yield* SubscriptionRef.get(state);
+      if (!view.hello) return yield* new Rpc.DeckhandRpcError({ reason: "unavailable" });
+      // Viewer lifetimes do not own command authority. Rediscover and negotiate a
+      // fresh connection while retaining the previously observed installation/host.
+      const location = yield* discovery.locate;
+      if (location.hostID !== view.hello.executionHostID || location.channel !== view.hello.channel)
+        return yield* new Rpc.DeckhandRpcError({ reason: "stale_binding" });
+      return yield* client.connect(location.socketPath, {
+        installationID: view.hello.installationID,
+        executionHostID: view.hello.executionHostID,
+        channel: view.hello.channel,
         clientID: actorID,
       });
     }).pipe(Effect.mapError(rpcError));
@@ -365,6 +426,18 @@ const make = Effect.gen(function* () {
           : client.reservation(peer, input);
     }).pipe(Effect.mapError(rpcError));
   return IntegrationHub.of({
+    currentResources: (workspaceIDs) =>
+      Effect.gen(function* () {
+        if (workspaceIDs.length > 100 || new Set(workspaceIDs).size !== workspaceIDs.length)
+          return yield* new Rpc.DeckhandRpcError({ reason: "invalid_request" });
+        const view = yield* SubscriptionRef.get(state);
+        const requested = new Set(workspaceIDs);
+        return {
+          state: view.state,
+          hello: view.hello,
+          resources: view.resources.filter((resource) => requested.has(resource.workspaceID)),
+        };
+      }),
     checkoutContexts: (input) =>
       Effect.gen(function* () {
         yield* refresh;
@@ -400,12 +473,22 @@ const make = Effect.gen(function* () {
       ),
     submit: (actorID, input) =>
       Effect.gen(function* () {
-        const peer = yield* commandConnection(actorID);
-        if (input.installationID !== peer.hello.installationID)
-          return yield* new Rpc.DeckhandRpcError({ reason: "stale_binding" });
-        // Once intent is durable, even an interrupted request must reconcile instead of resubmitting.
+        if (!actorID || actorID.length > 60)
+          return yield* new Rpc.DeckhandRpcError({ reason: "invalid_request" });
+        // No native submit can precede this durable claim. An interrupted intent
+        // remains uncertain; an observed failure before dispatch is definitely refused.
         const fresh = yield* journal.claim(actorID, input);
         if (!fresh) return yield* reconcile(actorID, input.operationKey);
+        const peer = yield* commandConnection(actorID).pipe(
+          Effect.tapError((error) =>
+            journal.update(actorID, input.operationKey, null, error, true),
+          ),
+        );
+        if (input.installationID !== peer.hello.installationID) {
+          const error = new Rpc.DeckhandRpcError({ reason: "stale_binding" });
+          yield* journal.update(actorID, input.operationKey, null, error, true);
+          return yield* error;
+        }
         const receipt = yield* client.submit(peer, input).pipe(
           Effect.mapError(rpcError),
           Effect.tapError((error) =>

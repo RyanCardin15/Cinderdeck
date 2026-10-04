@@ -1,3 +1,4 @@
+import { Run } from "./runsRpc.ts";
 import * as Schema from "effect/Schema";
 import { NonNegativeInt, PositiveInt, TrimmedNonEmptyString } from "../baseSchemas.ts";
 
@@ -169,6 +170,10 @@ export const IntegrationOperationMethod = Schema.Literals([
   "services.start",
   "services.stop",
   "services.restart",
+  "runs.start",
+  "runs.cancel",
+  "runs.rerun",
+  "definition.apply",
 ]);
 export type IntegrationOperationMethod = typeof IntegrationOperationMethod.Type;
 
@@ -195,6 +200,10 @@ export const IntegrationOperationReceipt = Schema.Struct({
   result: Schema.optionalKey(
     Schema.NullOr(
       Schema.Struct({
+        run: Schema.optionalKey(Run),
+        saved: Schema.optionalKey(Schema.Boolean),
+        workspaceID: Schema.optionalKey(Schema.String),
+        sourceHash: Schema.optionalKey(Schema.String),
         workspace: Schema.optionalKey(IntegrationWorkspace),
         createdWorkspaceID: Schema.optionalKey(Schema.String),
         creationReady: Schema.optionalKey(Schema.Boolean),

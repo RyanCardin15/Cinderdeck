@@ -1,3 +1,4 @@
+import deckhandShellStyles from "../../deckhand/pullRequestsShell.module.css";
 import { parseChangeRequestUrl } from "@t3tools/shared/changeRequestUrl";
 import { useAtomValue } from "@effect/atom-react";
 import { usePullRequestStack } from "~/state/usePullRequestStack";
@@ -53,7 +54,12 @@ import {
   type ReactNode,
 } from "react";
 
-import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
+import {
+  type DraftId,
+  type ComposerFileAttachment,
+  type ComposerImageAttachment,
+  useComposerDraftStore,
+} from "~/composerDraftStore";
 import { useNewThreadHandler } from "~/hooks/useHandleNewThread";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { isCommandPaletteOpen } from "~/commandPaletteBus";
@@ -71,7 +77,7 @@ import {
 } from "~/logicalProject";
 import { changeRequestRepositoryUrl, gitHubPullRequestBrowserUrl } from "~/lib/openPullRequestLink";
 import { usePreparePullRequestThreadAction } from "~/lib/sourceControlActions";
-import { cn } from "~/lib/utils";
+import { cn, randomUUID } from "~/lib/utils";
 import { readLocalApi } from "~/localApi";
 import type { ReviewCommentContext } from "~/reviewCommentContext";
 import { buildPhysicalToLogicalProjectKeyMap } from "~/sidebarProjectGrouping";
@@ -183,7 +189,8 @@ import {
 } from "./pullRequestPresentation";
 import { PullRequestGlyph } from "./pullRequestIcons";
 
-type DetailTab = "summary" | "timeline" | "code";
+export type PullRequestDetailTab = "summary" | "timeline" | "code" | "verification";
+type DetailTab = PullRequestDetailTab;
 
 const ACTION_SUCCESS_LABELS: Record<PullRequestAction, string> = {
   merge: "Pull request merged",
@@ -252,12 +259,18 @@ const TABS: ReadonlyArray<{ value: DetailTab; label: string }> = [
   { value: "summary", label: "Summary" },
   { value: "timeline", label: "Timeline" },
   { value: "code", label: "Code" },
+  { value: "verification", label: "Verification" },
 ];
 
 // The diff viewer pulls in its worker pool, so load it only when the reader approaches Code.
 // Start the download on tab hover or focus, before the click, without loading it for every PR.
 const loadCodeTab = () => import("./PullRequestCodeTab");
 const PullRequestCodeTab = lazy(loadCodeTab);
+const PullRequestVerification = lazy(() =>
+  import("../../deckhand/PullRequestVerification").then((module) => ({
+    default: module.PullRequestVerification,
+  })),
+);
 
 /**
  * What the last hand-off wrote into each draft, kept outside React because the panel that wrote it
@@ -428,7 +441,12 @@ export function PullRequestDetailPanel({
   composerDraftTarget,
   onBack,
   onSelectPullRequest,
+  onDetailTabChange,
+  presentation,
 }: {
+  /** Page shell can give evidence its full width while keeping all upstream tabs mounted. */
+  onDetailTabChange?: (tab: PullRequestDetailTab) => void;
+  presentation?: "deckhand";
   environmentId: EnvironmentId;
   shortcutsEnabled: boolean;
   getShortcutContext: () => ShortcutMatchContext;
@@ -507,6 +525,9 @@ export function PullRequestDetailPanel({
       : null;
   const [threadPickerOpen, setThreadPickerOpen] = useState(false);
   const [tab, setTab] = useState<DetailTab>("summary");
+  useEffect(() => {
+    onDetailTabChange?.(tab);
+  }, [onDetailTabChange, tab]);
   const [timelineOrder, setTimelineOrder] = useState<"newest" | "oldest">("newest");
   const [codeCommitScope, setCodeCommitScope] = useState<{
     readonly pullRequestKey: string;
@@ -1066,6 +1087,7 @@ export function PullRequestDetailPanel({
   type ThreadTask = {
     prompt: string;
     reviewComments?: ReadonlyArray<ReviewCommentContext>;
+    files?: ReadonlyArray<File>;
   };
 
   const attachTarget = composerDraftTarget ?? null;
@@ -1106,6 +1128,35 @@ export function PullRequestDetailPanel({
         insertAtCaret: false,
       });
     }
+    let acceptedFiles = 0;
+    for (const file of task.files ?? []) {
+      const id = randomUUID();
+      if (file.type.startsWith("image/")) {
+        const image: ComposerImageAttachment = {
+          type: "image",
+          id,
+          name: file.name,
+          mimeType: file.type,
+          sizeBytes: file.size,
+          previewUrl: URL.createObjectURL(file),
+          file,
+        };
+        const accepted = store.addImages(target, [image]);
+        acceptedFiles += accepted.length;
+        if (!accepted.length) URL.revokeObjectURL(image.previewUrl);
+      } else {
+        const attachment: ComposerFileAttachment = {
+          type: "file",
+          id,
+          name: file.name,
+          mimeType: file.type || "application/octet-stream",
+          sizeBytes: file.size,
+          file,
+        };
+        acceptedFiles += store.addFiles(target, [attachment]).length;
+      }
+    }
+    return { accepted: acceptedFiles, total: task.files?.length ?? 0 };
   };
 
   /**
@@ -1138,9 +1189,9 @@ export function PullRequestDetailPanel({
 
   /** A question about the change, which needs a thread and nothing else. */
   const startAsk = async (kind: string, task: ThreadTask) => {
-    if (!detail || handoff !== null) return;
+    if (!detail || handoff !== null) return null;
     if (attachTarget !== null) {
-      writeTaskToComposer(attachTarget, task);
+      const attachments = writeTaskToComposer(attachTarget, task);
       toastManager.add({
         type: "success",
         title: "Added to the composer",
@@ -1149,11 +1200,11 @@ export function PullRequestDetailPanel({
             ? "The question is in the composer — read it over, then send."
             : "The pull request is in the composer — type your question, then send.",
       });
-      return;
+      return attachments;
     }
     setHandoff(kind);
     const projectRef = scopeProjectRef(actingEnvironmentId, acting?.projectId ?? detail.projectId);
-    const opened = await openThreadWithTask(projectRef, task);
+    const opened = await openThreadWithTask(projectRef, null);
     setHandoff(null);
     if (opened === null) {
       toastManager.add({
@@ -1161,11 +1212,12 @@ export function PullRequestDetailPanel({
         title: "Could not open a thread",
         description: "Try again from the project, or open a thread first.",
       });
-      return;
+      return null;
     }
+    const attachments = writeTaskToComposer(opened.draftId, task);
     toastManager.add({
       type: "success",
-      title: "Asked in a thread",
+      title: "Prepared in a thread",
       // "Ask" leaves the composer empty on purpose, so saying the question is in it would send
       // the reader looking for something that is not there. The chips are what landed.
       description:
@@ -1173,6 +1225,7 @@ export function PullRequestDetailPanel({
           ? "The question is in the composer — read it over, then send."
           : "The pull request is in the composer — type your question, then send.",
     });
+    return attachments;
   };
 
   // Every handoff works the same way: check the pull request out into its own worktree, open a
@@ -1652,7 +1705,13 @@ export function PullRequestDetailPanel({
   }
 
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-col bg-background">
+    <div
+      className={cn(
+        "relative flex h-full min-h-0 w-full flex-col bg-background",
+        presentation === "deckhand" && deckhandShellStyles.detail,
+      )}
+      data-detail-tab={tab}
+    >
       {threadPickerOpen && detail ? (
         <PullRequestThreadLinks
           key={`${environmentId}:${detail.url}`}
@@ -1667,6 +1726,7 @@ export function PullRequestDetailPanel({
       <div
         className={cn(
           "@container/pr-header grid min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2",
+          presentation === "deckhand" && deckhandShellStyles.detailHeader,
           detail && "border-b border-border/60",
           !detail && !onClose && "hidden",
         )}
@@ -2373,7 +2433,12 @@ export function PullRequestDetailPanel({
                     <Tooltip>
                       <TooltipTrigger
                         render={
-                          <h1 className="min-w-0 flex-1 truncate text-base font-semibold leading-snug">
+                          <h1
+                            className={cn(
+                              "min-w-0 flex-1 truncate text-base font-semibold leading-snug",
+                              presentation === "deckhand" && deckhandShellStyles.detailTitle,
+                            )}
+                          >
                             {detail.title}
                           </h1>
                         }
@@ -2782,6 +2847,22 @@ export function PullRequestDetailPanel({
                     onFixFinding={startFixFinding}
                     onRefresh={refreshDetail}
                     refreshToken={codeRefreshToken}
+                  />
+                </Suspense>
+              </div>
+            ) : null}
+            {tab === "verification" ? (
+              <div className="absolute inset-0">
+                <Suspense fallback={<DiffPanelLoadingState label="Loading verification…" />}>
+                  <PullRequestVerification
+                    key={pullRequestKey}
+                    environmentId={environmentId}
+                    reference={reference}
+                    detail={detail}
+                    preparingDraft={handoff !== null}
+                    onPrepareDraft={(prompt, files) =>
+                      startAsk("verification-evidence", { prompt, ...(files ? { files } : {}) })
+                    }
                   />
                 </Suspense>
               </div>

@@ -1,4 +1,39 @@
+import * as OwnershipTransitions from "./deckhand/OwnershipTransitions.ts";
+import { OWNERSHIP_METHODS, OwnershipError } from "@t3tools/contracts/deckhand/ownershipRpc";
+import * as HistoryImports from "./deckhand/HistoryImports.ts";
+import {
+  HISTORY_IMPORT_METHODS,
+  HistoryImportError,
+} from "@t3tools/contracts/deckhand/historyImportRpc";
+import * as OwnedPreviewCapture from "./deckhand/OwnedPreviewCapture.ts";
+import {
+  OWNED_PREVIEW_METHODS,
+  OwnedPreviewError,
+} from "@t3tools/contracts/deckhand/ownedPreviewRpc";
+import * as VerificationAttempts from "./deckhand/VerificationAttempts.ts";
+import { ATTEMPT_METHODS, AttemptError } from "@t3tools/contracts/deckhand/verificationAttemptsRpc";
+import * as ExternalSessions from "./deckhand/ExternalSessions.ts";
+import {
+  EXTERNAL_SESSION_METHODS,
+  ExternalSessionError,
+} from "@t3tools/contracts/deckhand/externalSessionsRpc";
+import * as Attention from "./deckhand/Attention.ts";
+import { ATTENTION_METHODS, AttentionError } from "@t3tools/contracts/deckhand/attentionRpc";
+import * as Verification from "./deckhand/Verification.ts";
+import {
+  VERIFICATION_METHODS,
+  VerificationError,
+} from "@t3tools/contracts/deckhand/verificationRpc";
+import * as LinkedWorkBridge from "./deckhand/LinkedWorkBridge.ts";
+import { LINKED_WORK_METHODS } from "@t3tools/contracts/deckhand/linkedWorkRpc";
+import * as PreviewCapture from "./deckhand/PreviewCapture.ts";
+import { RUN_METHODS } from "@t3tools/contracts/deckhand/runsRpc";
+import * as DeckhandRuns from "./deckhand/Runs.ts";
+import * as ReviewerLaunch from "./deckhand/ReviewerLaunch.ts";
 import * as DeckhandRpc from "@t3tools/contracts/deckhand/rpc";
+import { RECORDING_METHODS, RecordingError } from "@t3tools/contracts/deckhand/recordingsRpc";
+import * as DeckhandRecordings from "./deckhand/Recordings.ts";
+import * as DeckhandThreadContext from "./deckhand/ThreadContext.ts";
 import * as ManagedSessions from "./deckhand/ManagedSessions.ts";
 import * as ManagedSessionLaunch from "./deckhand/ManagedSessionLaunch.ts";
 import * as IntegrationHub from "./deckhand/IntegrationHub.ts";
@@ -12,14 +47,12 @@ import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Encoding from "effect/Encoding";
 import * as Effect from "effect/Effect";
-import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
-import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Result from "effect/Result";
 import * as Stream from "effect/Stream";
@@ -101,6 +134,7 @@ import {
   type PullRequestRef,
   WS_METHODS,
   WsRpcGroup,
+  UpstreamWsRpcGroup,
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import {
@@ -202,7 +236,6 @@ import * as ProjectEnrichmentService from "./project/ProjectEnrichmentService.ts
 import * as ProjectService from "./project/ProjectService.ts";
 import * as ManagedProjectFolders from "./project/ManagedProjectFolders.ts";
 import { projectMutationOperation } from "./project/ProjectMutation.ts";
-import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
 import * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import * as WorktreeSetupTracker from "./project/WorktreeSetupTracker.ts";
@@ -248,6 +281,15 @@ import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
 const isProviderUploadFeedbackError = Schema.is(ProviderUploadFeedbackError);
+const isHistoryImportError = Schema.is(HistoryImportError);
+const isOwnershipError = Schema.is(OwnershipError);
+const isOwnedPreviewError = Schema.is(OwnedPreviewError);
+const isAttemptError = Schema.is(AttemptError);
+const isExternalSessionError = Schema.is(ExternalSessionError);
+const isAttentionError = Schema.is(AttentionError);
+const isVerificationError = Schema.is(VerificationError);
+const isRecordingError = Schema.is(RecordingError);
+const isManagedLaunchError = Schema.is(ManagedSessionLaunch.ManagedLaunchError);
 
 const resolveDiscoveryForConfig = <A, E, R>(
   discovery: Effect.Effect<A, E, R>,
@@ -1092,13 +1134,26 @@ const makeWsRpcLayer = (
   clientAnalyticsProps: Readonly<Record<string, unknown>>,
   previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
 ) =>
-  ServerWsRpcGroup.toLayer(
+  Layer.unwrap(
     Effect.gen(function* () {
       const currentSessionId = currentSession.sessionId;
       const deckhand = yield* IntegrationHub.IntegrationHub;
       const workspaceBackend = yield* WorkspaceBackend.WorkspaceBackend;
       const managedSessions = yield* ManagedSessions.ManagedSessions;
+      const recordings = yield* DeckhandRecordings.Recordings;
+      const previewCapture = yield* PreviewCapture.PreviewCapture;
+      const linkedWork = yield* LinkedWorkBridge.LinkedWorkBridge;
+      const ownershipTransitions = yield* OwnershipTransitions.OwnershipTransitions;
+      const historyImports = yield* HistoryImports.HistoryImports;
+      const ownedPreviewCapture = yield* OwnedPreviewCapture.OwnedPreviewCapture;
+      const verification = yield* Verification.Verification;
+      const verificationAttempts = yield* VerificationAttempts.VerificationAttempts;
+      const attention = yield* Attention.Attention;
+      const externalSessions = yield* ExternalSessions.ExternalSessions;
+      const deckhandThreadContext = yield* DeckhandThreadContext.ThreadContext;
       const managedLaunch = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+      const reviewerLaunch = yield* ReviewerLaunch.ReviewerLaunch;
+      const runs = yield* DeckhandRuns.Runs;
       const sql = yield* SqlClient.SqlClient;
       const threadManagement = yield* ThreadManagementService.ThreadManagementService;
       const intakeContext = yield* Effect.context<
@@ -1153,7 +1208,6 @@ const makeWsRpcLayer = (
             );
       const usage = yield* UsageService.UsageService;
       const usageLimitSources = yield* UsageLimitSources.UsageLimitSources;
-      const projectSetupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
       const worktreeSetupTracker = yield* WorktreeSetupTracker.WorktreeSetupTracker;
       const projectCloneTracker = yield* ProjectCloneTracker.ProjectCloneTracker;
       const repositoryIdentityResolver =
@@ -1759,7 +1813,466 @@ const makeWsRpcLayer = (
         return result;
       });
 
-      const handlers = ServerWsRpcGroup.of({
+      const deckhandHandlers = DeckhandRpc.DeckhandRpcGroup.of({
+        [OWNERSHIP_METHODS.preview]: (input) =>
+          observeRpcEffect(
+            OWNERSHIP_METHODS.preview,
+            ownershipTransitions.preview(currentSessionId, input),
+          ),
+        [OWNERSHIP_METHODS.get]: (input) =>
+          observeRpcEffect(
+            OWNERSHIP_METHODS.get,
+            ownershipTransitions.get(currentSessionId, input),
+          ),
+        [OWNERSHIP_METHODS.list]: (input) =>
+          observeRpcEffect(
+            OWNERSHIP_METHODS.list,
+            ownershipTransitions.list(currentSessionId, input),
+          ),
+        [OWNERSHIP_METHODS.submit]: (input) =>
+          observeRpcEffect(
+            OWNERSHIP_METHODS.submit,
+            startup
+              .enqueueCommand(ownershipTransitions.submit(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isOwnershipError(cause) ? cause : new OwnershipError({ reason: "storage" }),
+                ),
+              ),
+          ),
+        [HISTORY_IMPORT_METHODS.import]: (input) =>
+          observeRpcEffect(
+            HISTORY_IMPORT_METHODS.import,
+            startup.enqueueCommand(historyImports.importHistory(currentSessionId, input)).pipe(
+              Effect.mapError((cause) =>
+                isHistoryImportError(cause)
+                  ? cause
+                  : new HistoryImportError({
+                      code: "unavailable",
+                      reason: "History import is unavailable.",
+                    }),
+              ),
+            ),
+          ),
+        [HISTORY_IMPORT_METHODS.remove]: (input) =>
+          observeRpcEffect(
+            HISTORY_IMPORT_METHODS.remove,
+            startup.enqueueCommand(historyImports.remove(input)).pipe(
+              Effect.mapError((cause) =>
+                isHistoryImportError(cause)
+                  ? cause
+                  : new HistoryImportError({
+                      code: "unavailable",
+                      reason: "History import is unavailable.",
+                    }),
+              ),
+            ),
+          ),
+        [HISTORY_IMPORT_METHODS.get]: (input) =>
+          observeRpcEffect(HISTORY_IMPORT_METHODS.get, historyImports.get(input)),
+        [HISTORY_IMPORT_METHODS.list]: (input) =>
+          observeRpcEffect(HISTORY_IMPORT_METHODS.list, historyImports.list(input)),
+        [HISTORY_IMPORT_METHODS.threads]: (input) =>
+          observeRpcEffect(HISTORY_IMPORT_METHODS.threads, historyImports.threads(input)),
+        [HISTORY_IMPORT_METHODS.messages]: (input) =>
+          observeRpcEffect(HISTORY_IMPORT_METHODS.messages, historyImports.messages(input)),
+        [HISTORY_IMPORT_METHODS.messageText]: (input) =>
+          observeRpcEffect(HISTORY_IMPORT_METHODS.messageText, historyImports.messageText(input)),
+        [OWNED_PREVIEW_METHODS.intent]: (input) =>
+          observeRpcEffect(
+            OWNED_PREVIEW_METHODS.intent,
+            startup
+              .enqueueCommand(ownedPreviewCapture.intent(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isOwnedPreviewError(cause)
+                    ? cause
+                    : new OwnedPreviewError({ reason: "unavailable" }),
+                ),
+              ),
+          ),
+        [OWNED_PREVIEW_METHODS.get]: (input) =>
+          observeRpcEffect(
+            OWNED_PREVIEW_METHODS.get,
+            ownedPreviewCapture.get(currentSessionId, input),
+          ),
+        [ATTEMPT_METHODS.preview]: (input) =>
+          observeRpcEffect(
+            ATTEMPT_METHODS.preview,
+            verificationAttempts.preview(currentSessionId, input),
+          ),
+        [ATTEMPT_METHODS.get]: (input) =>
+          observeRpcEffect(ATTEMPT_METHODS.get, verificationAttempts.get(currentSessionId, input)),
+        [ATTEMPT_METHODS.list]: (input) =>
+          observeRpcEffect(
+            ATTEMPT_METHODS.list,
+            verificationAttempts.list(currentSessionId, input),
+          ),
+        [ATTEMPT_METHODS.start]: (input) =>
+          observeRpcEffect(
+            ATTEMPT_METHODS.start,
+            startup
+              .enqueueCommand(verificationAttempts.start(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isAttemptError(cause) ? cause : new AttemptError({ reason: "unavailable" }),
+                ),
+              ),
+          ),
+        [ATTEMPT_METHODS.advance]: (input) =>
+          observeRpcEffect(
+            ATTEMPT_METHODS.advance,
+            startup
+              .enqueueCommand(verificationAttempts.advance(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isAttemptError(cause) ? cause : new AttemptError({ reason: "unavailable" }),
+                ),
+              ),
+          ),
+        [ATTENTION_METHODS.list]: (input) =>
+          observeRpcEffect(ATTENTION_METHODS.list, attention.list(currentSessionId, input)),
+        [EXTERNAL_SESSION_METHODS.list]: (input) =>
+          observeRpcEffect(EXTERNAL_SESSION_METHODS.list, externalSessions.list(input)),
+        [EXTERNAL_SESSION_METHODS.register]: (input) =>
+          observeRpcEffect(
+            EXTERNAL_SESSION_METHODS.register,
+            startup
+              .enqueueCommand(externalSessions.register(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isExternalSessionError(cause)
+                    ? cause
+                    : new ExternalSessionError({ reason: "storage" }),
+                ),
+              ),
+          ),
+        [EXTERNAL_SESSION_METHODS.visibility]: (input) =>
+          observeRpcEffect(
+            EXTERNAL_SESSION_METHODS.visibility,
+            startup
+              .enqueueCommand(externalSessions.changeVisibility(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isExternalSessionError(cause)
+                    ? cause
+                    : new ExternalSessionError({ reason: "storage" }),
+                ),
+              ),
+          ),
+        [EXTERNAL_SESSION_METHODS.heartbeat]: (input) =>
+          observeRpcEffect(
+            EXTERNAL_SESSION_METHODS.heartbeat,
+            startup
+              .enqueueCommand(externalSessions.heartbeat(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isExternalSessionError(cause)
+                    ? cause
+                    : new ExternalSessionError({ reason: "storage" }),
+                ),
+              ),
+          ),
+        [ATTENTION_METHODS.change]: (input) =>
+          observeRpcEffect(
+            ATTENTION_METHODS.change,
+            startup
+              .enqueueCommand(attention.change(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isAttentionError(cause) ? cause : new AttentionError({ reason: "storage" }),
+                ),
+              ),
+          ),
+        [VERIFICATION_METHODS.list]: (input) =>
+          observeRpcEffect(VERIFICATION_METHODS.list, verification.list(currentSessionId, input)),
+        [VERIFICATION_METHODS.link]: (input) =>
+          observeRpcEffect(
+            VERIFICATION_METHODS.link,
+            startup
+              .enqueueCommand(verification.link(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isVerificationError(cause)
+                    ? cause
+                    : new VerificationError({ reason: "startup_failed" }),
+                ),
+              ),
+          ),
+        [VERIFICATION_METHODS.unlink]: (input) =>
+          observeRpcEffect(
+            VERIFICATION_METHODS.unlink,
+            startup
+              .enqueueCommand(verification.unlink(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isVerificationError(cause)
+                    ? cause
+                    : new VerificationError({ reason: "startup_failed" }),
+                ),
+              ),
+          ),
+        [VERIFICATION_METHODS.scenarioSave]: (input) =>
+          observeRpcEffect(
+            VERIFICATION_METHODS.scenarioSave,
+            startup
+              .enqueueCommand(verification.scenarioSave(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isVerificationError(cause)
+                    ? cause
+                    : new VerificationError({ reason: "startup_failed" }),
+                ),
+              ),
+          ),
+        [VERIFICATION_METHODS.scenarioRemove]: (input) =>
+          observeRpcEffect(
+            VERIFICATION_METHODS.scenarioRemove,
+            startup
+              .enqueueCommand(verification.scenarioRemove(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isVerificationError(cause)
+                    ? cause
+                    : new VerificationError({ reason: "startup_failed" }),
+                ),
+              ),
+          ),
+        [LINKED_WORK_METHODS.publish]: (input) =>
+          observeRpcEffect(
+            LINKED_WORK_METHODS.publish,
+            linkedWork.publish(currentSessionId, input),
+          ),
+        [LINKED_WORK_METHODS.resolve]: (input) =>
+          observeRpcEffect(LINKED_WORK_METHODS.resolve, linkedWork.resolve(input)),
+        [RECORDING_METHODS.prepareEvidence]: (input) =>
+          observeRpcEffect(
+            RECORDING_METHODS.prepareEvidence,
+            startup
+              .enqueueCommand(recordings.prepareEvidence(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isRecordingError(cause)
+                    ? cause
+                    : new RecordingError({ reason: "startup_failed" }),
+                ),
+              ),
+          ),
+        [RECORDING_METHODS.evidenceGet]: (input) =>
+          observeRpcEffect(
+            RECORDING_METHODS.evidenceGet,
+            recordings.getEvidence(currentSessionId, input),
+          ),
+        [RECORDING_METHODS.evidenceResource]: (input) =>
+          observeRpcEffect(
+            RECORDING_METHODS.evidenceResource,
+            recordings.evidenceResource(currentSessionId, input),
+          ),
+        [RECORDING_METHODS.importBegin]: (input) =>
+          observeRpcEffect(
+            RECORDING_METHODS.importBegin,
+            startup
+              .enqueueCommand(previewCapture.begin(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isRecordingError(cause)
+                    ? cause
+                    : new RecordingError({ reason: "startup_failed" }),
+                ),
+              ),
+          ),
+        [RECORDING_METHODS.importGet]: (input) =>
+          observeRpcEffect(
+            RECORDING_METHODS.importGet,
+            previewCapture.get(currentSessionId, input),
+          ),
+        [RECORDING_METHODS.importEvent]: (input) =>
+          observeRpcEffect(
+            RECORDING_METHODS.importEvent,
+            previewCapture.event(currentSessionId, input),
+          ),
+        [RECORDING_METHODS.importChunk]: (input) =>
+          observeRpcEffect(
+            RECORDING_METHODS.importChunk,
+            previewCapture.upload(currentSessionId, input),
+          ),
+        [RECORDING_METHODS.importFinish]: (input) =>
+          observeRpcEffect(
+            RECORDING_METHODS.importFinish,
+            startup
+              .enqueueCommand(previewCapture.finish(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isRecordingError(cause)
+                    ? cause
+                    : new RecordingError({ reason: "startup_failed" }),
+                ),
+              ),
+          ),
+        [RECORDING_METHODS.overview]: (input) =>
+          observeRpcEffect(
+            RECORDING_METHODS.overview,
+            recordings.overview(currentSessionId, input),
+          ),
+        [RECORDING_METHODS.list]: (input) =>
+          observeRpcEffect(RECORDING_METHODS.list, recordings.list(currentSessionId, input)),
+        [RECORDING_METHODS.get]: (input) =>
+          observeRpcEffect(RECORDING_METHODS.get, recordings.get(currentSessionId, input)),
+        [RECORDING_METHODS.windows]: (input) =>
+          observeRpcEffect(RECORDING_METHODS.windows, recordings.windows(currentSessionId, input)),
+        [RECORDING_METHODS.logs]: (input) =>
+          observeRpcEffect(RECORDING_METHODS.logs, recordings.logs(currentSessionId, input)),
+        [RECORDING_METHODS.media]: (input) =>
+          observeRpcEffect(RECORDING_METHODS.media, recordings.media(currentSessionId, input)),
+        [RECORDING_METHODS.thumbnail]: (input) =>
+          observeRpcEffect(
+            RECORDING_METHODS.thumbnail,
+            recordings.thumbnail(currentSessionId, input),
+          ),
+        [RECORDING_METHODS.start]: (input) =>
+          observeRpcEffect(
+            RECORDING_METHODS.start,
+            startup
+              .enqueueCommand(recordings.start(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isRecordingError(cause)
+                    ? cause
+                    : new RecordingError({ reason: "startup_failed" }),
+                ),
+              ),
+          ),
+        [RECORDING_METHODS.control]: (input) =>
+          observeRpcEffect(
+            RECORDING_METHODS.control,
+            startup
+              .enqueueCommand(recordings.control(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isRecordingError(cause)
+                    ? cause
+                    : new RecordingError({ reason: "startup_failed" }),
+                ),
+              ),
+          ),
+        [RECORDING_METHODS.mark]: (input) =>
+          observeRpcEffect(
+            RECORDING_METHODS.mark,
+            startup
+              .enqueueCommand(recordings.mark(currentSessionId, input))
+              .pipe(
+                Effect.mapError((cause) =>
+                  isRecordingError(cause)
+                    ? cause
+                    : new RecordingError({ reason: "startup_failed" }),
+                ),
+              ),
+          ),
+        [RUN_METHODS.list]: (input) =>
+          observeRpcEffect(RUN_METHODS.list, runs.list(currentSessionId, input)),
+        [RUN_METHODS.get]: (input) =>
+          observeRpcEffect(RUN_METHODS.get, runs.get(currentSessionId, input)),
+        [RUN_METHODS.failures]: (input) =>
+          observeRpcEffect(RUN_METHODS.failures, runs.failures(currentSessionId, input)),
+        [RUN_METHODS.logs]: (input) =>
+          observeRpcEffect(RUN_METHODS.logs, runs.logs(currentSessionId, input)),
+        [RUN_METHODS.definition]: (input) =>
+          observeRpcEffect(RUN_METHODS.definition, runs.definition(currentSessionId, input)),
+        [RUN_METHODS.validate]: (input) =>
+          observeRpcEffect(RUN_METHODS.validate, runs.validate(currentSessionId, input)),
+        [DeckhandRpc.REVIEWER_METHODS.preview]: (input) =>
+          observeRpcEffect(
+            DeckhandRpc.REVIEWER_METHODS.preview,
+            reviewerLaunch
+              .preview(input)
+              .pipe(
+                Effect.mapError(
+                  (cause) => new DeckhandRpc.DeckhandRpcError({ reason: cause.reason }),
+                ),
+              ),
+          ),
+        [DeckhandRpc.REVIEWER_METHODS.stopSource]: (input) =>
+          observeRpcEffect(
+            DeckhandRpc.REVIEWER_METHODS.stopSource,
+            startup.enqueueCommand(reviewerLaunch.stopSource(currentSessionId, input)).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new DeckhandRpc.DeckhandRpcError({
+                    reason: isManagedLaunchError(cause) ? cause.reason : "startup_failed",
+                  }),
+              ),
+            ),
+          ),
+        [DeckhandRpc.REVIEWER_METHODS.schedule]: (input) =>
+          observeRpcEffect(
+            DeckhandRpc.REVIEWER_METHODS.schedule,
+            startup.enqueueCommand(reviewerLaunch.schedule(currentSessionId, input)).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new DeckhandRpc.DeckhandRpcError({
+                    reason: isManagedLaunchError(cause) ? cause.reason : "startup_failed",
+                  }),
+              ),
+            ),
+          ),
+        [DeckhandRpc.REVIEWER_METHODS.get]: (input) =>
+          observeRpcEffect(
+            DeckhandRpc.REVIEWER_METHODS.get,
+            reviewerLaunch.getScheduled(currentSessionId, input).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new DeckhandRpc.DeckhandRpcError({
+                    reason: isManagedLaunchError(cause) ? cause.reason : "startup_failed",
+                  }),
+              ),
+            ),
+          ),
+        [DeckhandRpc.REVIEWER_METHODS.cancel]: (input) =>
+          observeRpcEffect(
+            DeckhandRpc.REVIEWER_METHODS.cancel,
+            startup.enqueueCommand(reviewerLaunch.cancelScheduled(currentSessionId, input)).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new DeckhandRpc.DeckhandRpcError({
+                    reason: isManagedLaunchError(cause) ? cause.reason : "startup_failed",
+                  }),
+              ),
+            ),
+          ),
+        [DeckhandRpc.REVIEWER_METHODS.launch]: (input) =>
+          observeRpcEffect(
+            DeckhandRpc.REVIEWER_METHODS.launch,
+            startup.enqueueCommand(reviewerLaunch.launch(currentSessionId, input)).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new DeckhandRpc.DeckhandRpcError({
+                    reason: isManagedLaunchError(cause) ? cause.reason : "startup_failed",
+                  }),
+              ),
+            ),
+          ),
+        [DeckhandRpc.THREAD_CONTEXT_METHOD]: (input) =>
+          observeRpcStream(
+            DeckhandRpc.THREAD_CONTEXT_METHOD,
+            deckhandThreadContext
+              .subscribe(input)
+              .pipe(
+                Stream.mapError(
+                  (cause) => new DeckhandRpc.DeckhandRpcError({ reason: cause.reason }),
+                ),
+              ),
+          ),
+        [DeckhandRpc.DECKHAND_METHODS.contexts]: (input) =>
+          observeRpcStream(
+            DeckhandRpc.DECKHAND_METHODS.contexts,
+            managedSessions
+              .subscribeContexts(input)
+              .pipe(
+                Stream.mapError(
+                  (cause) => new DeckhandRpc.DeckhandRpcError({ reason: cause.reason }),
+                ),
+              ),
+          ),
         [DeckhandRpc.DECKHAND_METHODS.sessions]: (input) =>
           observeRpcStream(
             DeckhandRpc.DECKHAND_METHODS.sessions,
@@ -1866,6 +2379,8 @@ const makeWsRpcLayer = (
             DeckhandRpc.DECKHAND_METHODS.operation,
             workspaceBackend.operation(currentSessionId, input.operationKey, input.waitMs),
           ),
+      });
+      const upstreamHandlers = UpstreamWsRpcGroup.of({
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           observeRpcEffect(
             ORCHESTRATION_V2_WS_METHODS.dispatchCommand,
@@ -3458,7 +3973,9 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             WS_METHODS.reviewGetDiffFileContents,
             review.getDiffFileContents(input),
-            { "rpc.aggregate": "review" },
+            {
+              "rpc.aggregate": "review",
+            },
           ),
         [WS_METHODS.terminalOpen]: (input) =>
           observeRpcEffect(WS_METHODS.terminalOpen, terminalManager.open(input), {
@@ -3829,7 +4346,10 @@ const makeWsRpcLayer = (
             { "rpc.aggregate": "server" },
           ),
       });
-      return handlers;
+      return Layer.merge(
+        DeckhandRpc.DeckhandRpcGroup.toLayer(deckhandHandlers),
+        UpstreamWsRpcGroup.toLayer(upstreamHandlers),
+      );
     }),
   );
 
@@ -3938,4 +4458,4 @@ export const websocketRpcRouteLayer = Layer.unwrap(
       ),
     );
   }),
-).pipe(Layer.provide(WorkspaceBackend.layerLive), Layer.provide(IntegrationHub.layerLive));
+);

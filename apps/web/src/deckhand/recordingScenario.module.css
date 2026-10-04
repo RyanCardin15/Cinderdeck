@@ -1,0 +1,133 @@
+.section {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  padding: 20px;
+  color: var(--foreground);
+}
+.section header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.section h3,
+.section h4 {
+  margin: 0;
+  font-weight: 600;
+}
+.section h3 {
+  font-size: 17px;
+}
+.section p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.note {
+  color: var(--muted-foreground);
+}
+.saved,
+.fields {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+.section label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  min-width: 150px;
+  flex: 1;
+}
+.section select,
+.section input {
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--foreground);
+  padding: 8px;
+  min-width: 0;
+  width: 100%;
+}
+.section button {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-size: 12px;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  cursor: pointer;
+}
+.section button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.section button:focus-visible,
+.section select:focus-visible,
+.section input:focus-visible,
+.section summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+.recording {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 14px;
+}
+.recording header {
+  font-size: 13px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.recording h4 {
+  font-size: 15px;
+  margin-bottom: 12px;
+}
+.recording video {
+  width: 100%;
+  aspect-ratio: 16/10;
+  background: #10151c;
+  border-radius: 7px;
+}
+.recording dl {
+  font-size: 12px;
+}
+.recording dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0;
+}
+.recording dt {
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+.recording dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.create {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+.create summary {
+  font-size: 13px;
+  cursor: pointer;
+}
+@media (max-width: 900px) {
+  .pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

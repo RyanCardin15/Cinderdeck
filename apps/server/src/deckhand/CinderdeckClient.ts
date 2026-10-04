@@ -310,7 +310,15 @@ const make = Effect.gen(function* () {
         validInteger(input.limit, 1, Math.min(500, connection.hello.maximumPageSize)) &&
         boundedString(input.workspaceID, 160) &&
         boundedString(input.expectedCursor, 512)
-          ? request(connection.socketPath, "integration.snapshot", input, 5000, connection.clientID)
+          ? request(
+              connection.socketPath,
+              "integration.snapshot",
+              input,
+              // An explicit initial catalogue read refreshes every source. Selected
+              // reads and cursor-pinned continuation pages retain the short deadline.
+              input.workspaceID === undefined && input.expectedCursor === undefined ? 10000 : 5000,
+              connection.clientID,
+            )
           : Effect.fail(new BridgeError({ reason: "invalid_request" })),
       ),
       Effect.flatMap(Schema.decodeUnknownEffect(Contracts.IntegrationSnapshot)),
@@ -360,7 +368,9 @@ const make = Effect.gen(function* () {
           connection,
           validated.method.startsWith("lane.")
             ? `operations.${validated.method}`
-            : "operations.services",
+            : validated.method.startsWith("runs.") || validated.method === "definition.apply"
+              ? "runs.library"
+              : "operations.services",
         ).pipe(
           Effect.andThen(() =>
             validated.method === "lane.create" &&

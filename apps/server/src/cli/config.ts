@@ -453,6 +453,7 @@ export const resolveServerConfig = (
       noBrowser,
       startupPresentation,
       desktopBootstrapToken,
+      desktopCaptureToken: bootstrap?.desktopCaptureToken,
       desktopTelemetryFd,
       desktopTelemetryControlFd,
       resourceMonitorPath,

@@ -64,6 +64,7 @@ import * as BrowserImport from "./preview/BrowserImport/BrowserImport.ts";
 import * as LinuxBrowserSecret from "./preview/BrowserImport/LinuxBrowserSecret.ts";
 import * as BrowserSession from "./preview/BrowserSession.ts";
 import * as PreviewManager from "./preview/Manager.ts";
+import * as OwnedPreviewCapture from "./preview/OwnedPreviewCapture.ts";
 import * as DesktopWindow from "./window/DesktopWindow.ts";
 import * as DesktopWslBackend from "./wsl/DesktopWslBackend.ts";
 import * as DesktopWslEnvironment from "./wsl/DesktopWslEnvironment.ts";
@@ -203,6 +204,12 @@ const desktopApplicationLayer = Layer.mergeAll(
   Layer.provideMerge(DesktopUpdates.layer),
   Layer.provideMerge(desktopWslBackendLayer),
   Layer.provideMerge(desktopLocalEnvironmentAuthLayer),
+  Layer.provideMerge(
+    OwnedPreviewCapture.layer.pipe(
+      Layer.provideMerge(desktopBackendLayer),
+      Layer.provideMerge(desktopPreviewLayer),
+    ),
+  ),
 );
 
 // Clerk resolves userData before Electron is ready, so it gets the synchronous FileSystem.

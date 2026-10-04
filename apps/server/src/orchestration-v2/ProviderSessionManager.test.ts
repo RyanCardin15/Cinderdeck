@@ -3134,3 +3134,58 @@ it.effect(
       assert.isFalse(denied?.capabilities?.has("device"));
     }),
 );
+
+it.effect(
+  "ProviderSessionManagerV2 scoped stop refuses shared ownership and closes only the sole attached thread",
+  () =>
+    Effect.gen(function* () {
+      const state = yield* Ref.make(emptyState);
+      yield* Effect.gen(function* () {
+        const events = yield* EventSink.EventSinkV2;
+        const ids = yield* IdAllocator.IdAllocatorV2;
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+        const now = yield* DateTime.now;
+        const writer = ThreadId.make("scoped-writer"),
+          other = ThreadId.make("scoped-other");
+        const session = yield* ids.allocate.providerSession({
+          providerInstanceId: modelSelection.instanceId,
+          threadId: writer,
+        });
+        yield* events.write({
+          events: [
+            yield* makeThreadCreatedEvent({ idAllocator: ids, threadId: writer, now }),
+            yield* makeThreadCreatedEvent({ idAllocator: ids, threadId: other, now }),
+          ],
+        });
+        yield* manager.open({
+          threadId: writer,
+          providerSessionId: session,
+          modelSelection,
+          runtimePolicy,
+        });
+        yield* manager.open({
+          threadId: other,
+          providerSessionId: session,
+          modelSelection,
+          runtimePolicy,
+        });
+        assert.equal(
+          yield* manager.closeForThread!({ threadId: writer, providerSessionId: session }),
+          "shared",
+        );
+        assert.equal((yield* Ref.get(state)).closeCount, 0);
+        assert.isTrue(Option.isSome(yield* manager.get(session)));
+        yield* manager.detach({ threadId: other, providerSessionId: session });
+        assert.equal(
+          yield* manager.closeForThread!({ threadId: writer, providerSessionId: session }),
+          "closed",
+        );
+        assert.equal((yield* Ref.get(state)).closeCount, 1);
+        assert.isTrue(Option.isNone(yield* manager.get(session)));
+        assert.equal(
+          yield* manager.closeForThread!({ threadId: writer, providerSessionId: session }),
+          "missing",
+        );
+      }).pipe(Effect.provide(makeTestLayer({ state, idleTimeoutMs: 60_000 })));
+    }),
+);

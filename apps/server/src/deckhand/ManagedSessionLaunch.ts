@@ -18,6 +18,9 @@ import * as CheckoutIdentity from "./CheckoutIdentity.ts";
 import * as WorkspaceBackend from "./WorkspaceBackend.ts";
 import * as Migrations from "./Migrations.ts";
 import * as Relationships from "./Relationships.ts";
+import { resolveReviewerSource } from "./ReviewerSource.ts";
+import { currentFeatureWorkspaceAuthorized, resolveCurrentCheckout } from "./CurrentCheckout.ts";
+import * as ProcessRunner from "../processRunner.ts";
 
 export class ManagedLaunchError extends Schema.TaggedError<ManagedLaunchError>()(
   "ManagedLaunchError",
@@ -32,6 +35,7 @@ export class ManagedLaunchError extends Schema.TaggedError<ManagedLaunchError>()
       "storage",
       "launch_failed",
       "not_retryable",
+      "dirty_source",
     ]),
   },
 ) {
@@ -80,12 +84,20 @@ const decodeReview = Schema.decodeUnknownEffect(Schema.fromJsonString(Rpc.Manage
 const encodeCheckouts = Schema.encodeSync(
   Schema.fromJsonString(Schema.Array(Contracts.PhysicalCheckout)),
 );
+const encodeReviewerContext = Schema.encodeSync(Schema.fromJsonString(Rpc.ReviewerLaunchContext));
 const isLaunchError = Schema.is(ManagedLaunchError);
 const bindingID = (kind: string, parts: ReadonlyArray<string | number>) =>
   `${kind}:${NodeCrypto.createHash("sha256").update(JSON.stringify(parts)).digest("hex")}`;
 
 const make = Effect.gen(function* () {
   yield* Migrations.migrate;
+  const reviewerDependencies = yield* Effect.context<
+    | Relationships.Relationships
+    | WorkspaceBackend.WorkspaceBackend
+    | CheckoutIdentity.CheckoutIdentity
+    | ProcessRunner.ProcessRunner
+    | SqlClient.SqlClient
+  >();
   const sql = yield* SqlClient.SqlClient;
   const backend = yield* WorkspaceBackend.WorkspaceBackend;
   const identities = yield* CheckoutIdentity.CheckoutIdentity;
@@ -165,6 +177,11 @@ const make = Effect.gen(function* () {
           return yield* error(key, "key_conflict");
         const review = savedReview ? yield* decodeReview(savedReview.review_json) : null;
         if (
+          input.reviewerContext &&
+          (!creation || reservedContext?.featureId !== input.reviewerContext.featureId)
+        )
+          return yield* error(key, "stale_context");
+        if (
           review &&
           (review.installationID !== input.installationID ||
             review.workspaceID !== input.workspaceID ||
@@ -229,6 +246,44 @@ const make = Effect.gen(function* () {
               .getMetadata(input.modelSelection.instanceId)
               .pipe(Effect.mapError(() => error(key, "unavailable_provider")))
           : null;
+        if (input.reviewerContext) {
+          const pinned = input.reviewerContext;
+          const original = yield* relationships
+            .checkout(pinned.sourceCheckoutId)
+            .pipe(Effect.mapError(() => error(key, "stale_context")));
+          const currentSource = yield* resolveCurrentCheckout(original.id).pipe(
+            Effect.provideContext(reviewerDependencies),
+            Effect.mapError(() => error(key, "stale_context")),
+          );
+          const currentSourceWorkspace = yield* relationships
+            .workspace(currentSource.workspaceId)
+            .pipe(Effect.mapError(() => error(key, "stale_context")));
+          if (
+            !context.lane ||
+            resource.workspaceID === pinned.sourceWorkspaceID ||
+            currentSource.workspaceId !== reservedContext?.workspaceBindingId ||
+            currentSource.backend !== "cinderdeck" ||
+            currentSource.state !== "ready" ||
+            currentSource.environmentId !== input.installationID ||
+            currentSource.nativeGeneration !== pinned.sourceGeneration ||
+            (currentSource.laneId ?? currentSourceWorkspace.ownerId) !== pinned.sourceWorkspaceID ||
+            currentSourceWorkspace.state !== "active" ||
+            currentSource.workspaceGeneration !== currentSourceWorkspace.generation ||
+            pinned.repositories.length !== context.repos.length ||
+            physical.some((repo, index) => {
+              const expected = pinned.repositories.find(
+                (item) => item.repositoryID === context.repos[index]?.id,
+              );
+              return (
+                !expected ||
+                expected.commit !== repo.commit ||
+                expected.repositoryPhysicalId !== repo.repositoryPhysicalId ||
+                pinned.repositories.some((item) => item.sourcePhysicalId === repo.physicalId)
+              );
+            })
+          )
+            return yield* error(key, "stale_context");
+        }
         const provider = (yield* providers.getProviders).find(
           (item) => item.instanceId === input.modelSelection.instanceId,
         );
@@ -258,11 +313,18 @@ const make = Effect.gen(function* () {
                   .feature(reservedContext.featureId)
                   .pipe(Effect.mapError(() => error(key, "stale_context")))
               : null;
+            const reservedFeatureWorkspaceAuthorized =
+              reservedFeature &&
+              (reservedFeature.workspaceId === workspaceId ||
+                (yield* currentFeatureWorkspaceAuthorized(reservedFeature.id, workspaceId).pipe(
+                  Effect.provideService(SqlClient.SqlClient, sql),
+                  Effect.mapError(() => error(key, "stale_context")),
+                )));
             if (
               reservedContext &&
               (!reservedFeature ||
                 reservedContext.workspaceBindingId !== workspaceId ||
-                reservedFeature.workspaceId !== workspaceId ||
+                !reservedFeatureWorkspaceAuthorized ||
                 reservedFeature.status !== "active" ||
                 new Set(reservedContext.repositoryIDs).size !==
                   reservedContext.repositoryIDs.length ||
@@ -392,7 +454,11 @@ const make = Effect.gen(function* () {
                         },
                         null,
                       );
-                    yield* relationships.linkCheckout(featureId, checkoutId, true);
+                    yield* relationships.linkCheckout(
+                      featureId,
+                      checkoutId,
+                      !input.reviewerContext,
+                    );
                     yield* relationships.putSession(
                       {
                         id: sessionId,
@@ -402,8 +468,8 @@ const make = Effect.gen(function* () {
                         featureId,
                         checkoutId,
                         repositoryScope: [cwd.physicalId],
-                        role: "writer",
-                        desiredAccess: "write",
+                        role: input.reviewerContext ? "reviewer" : "writer",
+                        desiredAccess: input.reviewerContext ? "isolated" : "write",
                         execution: "queued",
                         connection: "connected",
                         lastSequence: 0,
@@ -589,20 +655,42 @@ const make = Effect.gen(function* () {
             else if ((yield* relationships.workspace(workspaceBindingId)).state !== "active")
               return yield* error(input.operationKey, "stale_context");
             const now = DateTime.formatIso(yield* DateTime.now);
-            const featureId = Contracts.FeatureId.make(NodeCrypto.randomUUID());
-            yield* relationships.putFeature(
-              {
-                id: featureId,
-                workspaceId: workspaceBindingId,
-                title: input.title,
-                objective: input.objective,
-                status: "active",
-                revision: 1,
-                createdAt: now,
-                updatedAt: now,
-              },
-              null,
-            );
+            const reviewedFeature = input.reviewerContext
+              ? yield* relationships
+                  .feature(input.reviewerContext.featureId)
+                  .pipe(Effect.mapError(() => error(input.operationKey, "stale_context")))
+              : null;
+            const reviewedFeatureWorkspaceAuthorized =
+              reviewedFeature &&
+              (reviewedFeature.workspaceId === workspaceBindingId ||
+                (yield* currentFeatureWorkspaceAuthorized(
+                  reviewedFeature.id,
+                  workspaceBindingId,
+                ).pipe(
+                  Effect.provideService(SqlClient.SqlClient, sql),
+                  Effect.mapError(() => error(input.operationKey, "stale_context")),
+                )));
+            if (
+              reviewedFeature &&
+              (!reviewedFeatureWorkspaceAuthorized || reviewedFeature.status !== "active")
+            )
+              return yield* error(input.operationKey, "stale_context");
+            const featureId =
+              reviewedFeature?.id ?? Contracts.FeatureId.make(NodeCrypto.randomUUID());
+            if (!reviewedFeature)
+              yield* relationships.putFeature(
+                {
+                  id: featureId,
+                  workspaceId: workspaceBindingId,
+                  title: input.title,
+                  objective: input.objective,
+                  status: "active",
+                  revision: 1,
+                  createdAt: now,
+                  updatedAt: now,
+                },
+                null,
+              );
             const next = {
               ...record,
               contextIntent: {
@@ -654,6 +742,35 @@ const make = Effect.gen(function* () {
             !source.hello.capabilities.includes("checkout.reservations")
           )
             return yield* error(key, "stale_context");
+          if (input.reviewerContext) {
+            const pinned = input.reviewerContext;
+            const selected = pinned.repositories.find(
+              (repo) => repo.repositoryID === input.repositoryID,
+            );
+            if (!selected) return yield* error(key, "stale_context");
+            const current = yield* resolveReviewerSource({
+              featureId: pinned.featureId,
+              sourceCheckoutId: pinned.sourceCheckoutId,
+              repositoryPhysicalId: selected.sourcePhysicalId,
+            }).pipe(
+              Effect.provideContext(reviewerDependencies),
+              Effect.mapError((cause) =>
+                error(key, cause.reason === "dirty_source" ? "dirty_source" : "stale_context"),
+              ),
+            );
+            if (
+              current.installationID !== input.installationID ||
+              current.workspaceID !== input.workspaceID ||
+              current.generation !== input.generation ||
+              current.revision !== input.revision ||
+              encodeReviewerContext(current.reviewerContext) !== encodeReviewerContext(pinned) ||
+              Object.keys(input.repositoryRefs).length !== pinned.repositories.length ||
+              pinned.repositories.some(
+                (repo) => input.repositoryRefs[repo.repositoryID] !== repo.commit,
+              )
+            )
+              return yield* error(key, "stale_context");
+          }
           // Reject unavailable providers before creating a checkout that cannot launch its session.
           const metadata = adapters.getMetadata
             ? yield* adapters
@@ -753,6 +870,7 @@ const make = Effect.gen(function* () {
             objective: input.objective,
             modelSelection: input.modelSelection,
             runtimeMode: input.runtimeMode,
+            ...(input.reviewerContext ? { reviewerContext: input.reviewerContext } : {}),
           };
           const json = yield* encodeInput(launchInput);
           yield* sql`UPDATE deckhand_managed_creations SET launch_input_json = ${json} WHERE operation_key = ${key}`;

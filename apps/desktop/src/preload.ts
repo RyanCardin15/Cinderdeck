@@ -337,6 +337,12 @@ contextBridge.exposeInMainWorld("desktopBridge", {
         ipcRenderer.invoke(IpcChannels.PREVIEW_PICTURE_IN_PICTURE_CLOSE_CHANNEL, { tabId }),
     },
     recording: {
+      owned: {
+        start: (input) =>
+          ipcRenderer.invoke(IpcChannels.PREVIEW_OWNED_CAPTURE_START_CHANNEL, input),
+        stop: (captureKey) =>
+          ipcRenderer.invoke(IpcChannels.PREVIEW_OWNED_CAPTURE_STOP_CHANNEL, { captureKey }),
+      },
       onInput: (listener) => {
         const wrappedListener = (_event: Electron.IpcRendererEvent, event: unknown) => {
           if (typeof event !== "object" || event === null) return;

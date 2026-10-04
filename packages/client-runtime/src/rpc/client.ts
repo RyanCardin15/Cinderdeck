@@ -1,4 +1,4 @@
-import { DECKHAND_METHODS } from "@t3tools/contracts/deckhand/rpc";
+import { DECKHAND_METHODS, THREAD_CONTEXT_METHOD } from "@t3tools/contracts/deckhand/rpc";
 import { ORCHESTRATION_V2_WS_METHODS, WS_METHODS } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -43,6 +43,8 @@ type RpcMethod<TTag extends EnvironmentRpcTag> = WsRpcProtocolClient[TTag];
 
 export type EnvironmentSubscriptionRpcTag =
   | typeof DECKHAND_METHODS.subscribe
+  | typeof THREAD_CONTEXT_METHOD
+  | typeof DECKHAND_METHODS.contexts
   | typeof DECKHAND_METHODS.sessions
   | typeof WS_METHODS.codexAuthCallbackSubscribe
   | typeof WS_METHODS.providerAuthSubscribe

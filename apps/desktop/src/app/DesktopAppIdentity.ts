@@ -17,6 +17,7 @@ const COMMIT_HASH_DISPLAY_LENGTH = 12;
 
 const AppPackageMetadata = Schema.Struct({
   deckhandCommitHash: Schema.optional(Schema.String),
+  deckhandSourceDirty: Schema.optional(Schema.NullOr(Schema.Boolean)),
 });
 const decodeAppPackageMetadata = Schema.decodeEffect(Schema.fromJsonString(AppPackageMetadata));
 
@@ -57,6 +58,13 @@ export const make = Effect.gen(function* () {
           Effect.map((parsed) =>
             Option.fromNullishOr(parsed.deckhandCommitHash).pipe(
               Option.flatMap(normalizeCommitHash),
+              Option.map((hash) =>
+                parsed.deckhandSourceDirty === true
+                  ? `${hash} + local changes`
+                  : parsed.deckhandSourceDirty === null
+                    ? `${hash} + source state unknown`
+                    : hash,
+              ),
             ),
           ),
           Effect.orElseSucceed(() => Option.none<string>()),

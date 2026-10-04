@@ -131,7 +131,7 @@ export default defineConfig({
       dts: false,
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
-      entry: ["src/preview-pip-preload.ts"],
+      entry: ["src/preview-pip-preload.ts", "src/preview-owned-encoder-preload.ts"],
     },
     {
       // Sandboxed preloads must be self-contained, without shared runtime chunks.

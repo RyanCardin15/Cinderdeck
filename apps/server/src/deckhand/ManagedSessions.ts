@@ -10,7 +10,10 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as Migrations from "./Migrations.ts";
+import * as CurrentCheckout from "./CurrentCheckout.ts";
+import * as Option from "effect/Option";
 import * as Relationships from "./Relationships.ts";
+import * as External from "./ExternalSessions.ts";
 
 export class ManagedSessionsError extends Schema.TaggedError<ManagedSessionsError>()(
   "ManagedSessionsError",
@@ -29,6 +32,12 @@ export class ManagedSessions extends Context.Service<
     readonly list: (
       input: Rpc.ManagedSessionsInput,
     ) => Effect.Effect<ReadonlyArray<Rpc.ManagedSessionView>, ManagedSessionsError>;
+    readonly contexts: (
+      input: Rpc.ManagedContextsInput,
+    ) => Effect.Effect<ReadonlyArray<Rpc.ManagedContextView>, ManagedSessionsError>;
+    readonly subscribeContexts: (
+      input: Rpc.ManagedContextsInput,
+    ) => Stream.Stream<ReadonlyArray<Rpc.ManagedContextView>, ManagedSessionsError>;
     readonly subscribe: (
       input: Rpc.ManagedSessionsInput,
     ) => Stream.Stream<ReadonlyArray<Rpc.ManagedSessionView>, ManagedSessionsError>;
@@ -78,13 +87,27 @@ const stateEvent = (type: string) =>
   type.startsWith("provider-thread.") ||
   type.startsWith("runtime-request.") ||
   type.startsWith("thread.");
+const isManagedContextsInput = Schema.is(Rpc.ManagedContextsInput);
+const encodeContextTargets = Schema.encodeEffect(
+  Schema.fromJsonString(Rpc.ManagedContextsInput.fields.contexts),
+);
 const make = Effect.gen(function* () {
   yield* Migrations.migrate;
   const sql = yield* SqlClient.SqlClient;
   const relationships = yield* Relationships.Relationships;
   const projections = yield* ProjectionStore.ProjectionStoreV2;
   const events = yield* EventSink.EventSinkV2;
-  const readCurrent = (binding: Contracts.SessionBinding, title: string) =>
+  const external = yield* External.ExternalSessions;
+  const ownership = yield* Effect.serviceOption(CurrentCheckout.CurrentCheckout);
+  const ownershipChanges = Option.isSome(ownership)
+    ? ownership.value.changes.pipe(Stream.map(() => undefined))
+    : Stream.empty;
+  const readCurrent = (
+    binding: Contracts.SessionBinding,
+    title: string,
+    sequence: number,
+    objective?: string,
+  ) =>
     sql
       .withTransaction(
         Effect.gen(function* () {
@@ -104,7 +127,7 @@ const make = Effect.gen(function* () {
           );
           const live = session && ["ready", "running", "waiting"].includes(session.status);
           const old = yield* relationships.session(binding.id);
-          const sequence = yield* events.latestSequence();
+
           if (sequence < old.lastSequence)
             return yield* new ManagedSessionsError({ reason: "source_unavailable" });
           const next: Contracts.SessionBinding = {
@@ -134,6 +157,8 @@ const make = Effect.gen(function* () {
           return {
             binding: next,
             title,
+            ...(objective !== undefined ? { objective } : {}),
+            pullRequests: shell.pullRequests ?? [],
             source: "current" as const,
             archived: shell.archivedAt !== null || shell.deletedAt !== null,
           };
@@ -148,6 +173,7 @@ const make = Effect.gen(function* () {
               connection: "unavailable" as const,
             },
             title,
+            ...(objective !== undefined ? { objective } : {}),
             source: "unavailable" as const,
             archived: false,
           }),
@@ -157,10 +183,11 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       if (!isSessionsInput(input))
         return yield* new ManagedSessionsError({ reason: "invalid_request" });
+      const sequence = yield* events.latestSequence();
       const rows = yield* sql<{ record_json: string; title: string }>`SELECT s.record_json,
       json_extract(f.record_json, '$.title') AS title FROM deckhand_sessions s
       JOIN deckhand_features f ON f.id = s.feature_id
-      JOIN deckhand_checkouts c ON c.id = s.checkout_id
+      JOIN deckhand_current_checkouts c ON c.origin_id = s.checkout_id
       JOIN deckhand_workspaces w ON w.id = c.workspace_id
       WHERE c.workspace_id = w.id AND w.environment_id = ${input.installationID} AND w.backend = 'cinderdeck'
         AND json_extract(c.record_json, '$.nativeGeneration') = ${input.generation}
@@ -168,14 +195,126 @@ const make = Effect.gen(function* () {
       ORDER BY s.rowid DESC LIMIT ${input.limit}`;
       return yield* Effect.forEach(rows, (row) =>
         decodeBinding(row.record_json).pipe(
-          Effect.flatMap((binding) => readCurrent(binding, row.title)),
+          Effect.flatMap((binding) => readCurrent(binding, row.title, sequence)),
         ),
       );
     }).pipe(
+      sql.withTransaction,
       Effect.mapError((cause) =>
         isManagedSessionsError(cause)
           ? cause
           : new ManagedSessionsError({ reason: "storage", cause }),
+      ),
+    );
+  const contexts = (input: Rpc.ManagedContextsInput) =>
+    Effect.gen(function* () {
+      if (
+        !isManagedContextsInput(input) ||
+        new Set(input.contexts.map((item) => item.workspaceID)).size !== input.contexts.length
+      )
+        return yield* new ManagedSessionsError({ reason: "invalid_request" });
+      // One page-scoped query, not an independent subscription per lane. Window counts
+      // include saved sessions beyond the four visible summaries; no transcript is read.
+      const targets = yield* encodeContextTargets(input.contexts);
+      // One durable watermark per SQL snapshot, shared by every bounded session summary.
+      const sequence = yield* events.latestSequence();
+      const rows = yield* sql<{
+        workspace_id: string;
+        generation: number;
+        total: number;
+        record_json: string;
+        title: string;
+        objective: string;
+      }>`
+      WITH scoped AS (
+        SELECT COALESCE(json_extract(c.record_json, '$.laneId'), w.owner_id) AS workspace_id,
+          json_extract(c.record_json, '$.nativeGeneration') AS generation,
+          s.record_json, json_extract(f.record_json, '$.title') AS title,
+          json_extract(f.record_json, '$.objective') AS objective,
+          ROW_NUMBER() OVER (PARTITION BY COALESCE(json_extract(c.record_json, '$.laneId'), w.owner_id), json_extract(c.record_json, '$.nativeGeneration') ORDER BY s.rowid DESC) AS rank,
+          COUNT(*) OVER (PARTITION BY COALESCE(json_extract(c.record_json, '$.laneId'), w.owner_id), json_extract(c.record_json, '$.nativeGeneration')) AS total
+        FROM deckhand_sessions s JOIN deckhand_features f ON f.id = s.feature_id
+        JOIN deckhand_current_checkouts c ON c.origin_id = s.checkout_id JOIN deckhand_workspaces w ON w.id = c.workspace_id
+        WHERE w.environment_id = ${input.installationID} AND w.backend = 'cinderdeck'
+          AND EXISTS (SELECT 1 FROM json_each(${targets}) t
+            WHERE json_extract(t.value, '$.workspaceID') = COALESCE(json_extract(c.record_json, '$.laneId'), w.owner_id)
+              AND json_extract(t.value, '$.generation') = json_extract(c.record_json, '$.nativeGeneration'))
+      ) SELECT workspace_id, generation, total, record_json, title, objective FROM scoped WHERE rank <= 4 ORDER BY workspace_id, rank`;
+      const externalSummaries = yield* external.summaries(input).pipe(
+        Effect.catch(() =>
+          Effect.succeed(
+            input.contexts.map((target) => ({
+              ...target,
+              activeCount: 0,
+              staleCount: 0,
+              lastSeenAt: null,
+              unavailable: true,
+            })),
+          ),
+        ),
+      );
+      return yield* Effect.forEach(input.contexts, (target) =>
+        Effect.gen(function* () {
+          const group = rows.filter(
+            (row) =>
+              row.workspace_id === target.workspaceID && row.generation === target.generation,
+          );
+          const sessions = yield* Effect.forEach(group, (row) =>
+            decodeBinding(row.record_json).pipe(
+              Effect.flatMap((binding) => readCurrent(binding, row.title, sequence, row.objective)),
+            ),
+          );
+          return {
+            ...target,
+            total: group[0]?.total ?? 0,
+            sessions,
+            externalSessions: externalSummaries.find(
+              (item) =>
+                item.workspaceID === target.workspaceID && item.generation === target.generation,
+            ) ?? { ...target, activeCount: 0, staleCount: 0, lastSeenAt: null, unavailable: true },
+          };
+        }),
+      );
+    }).pipe(
+      sql.withTransaction,
+      Effect.mapError((cause) =>
+        isManagedSessionsError(cause)
+          ? cause
+          : new ManagedSessionsError({ reason: "storage", cause }),
+      ),
+    );
+  const subscribeContexts = (input: Rpc.ManagedContextsInput) =>
+    Stream.unwrap(
+      Effect.gen(function* () {
+        const afterSequence = yield* events.latestSequence();
+        const initial = yield* contexts(input);
+        return Stream.concat(
+          Stream.make(initial),
+          Stream.mergeAll(
+            [
+              events.stream({ afterSequence }).pipe(
+                Stream.filter((stored) => stateEvent(stored.event.type)),
+                Stream.map(() => undefined),
+              ),
+              external.changes,
+              ownershipChanges,
+              // Expiry changes only reported connection freshness, never process execution.
+              Stream.tick("30 seconds"),
+            ],
+            { concurrency: 4 },
+          ).pipe(
+            // Each refresh reads the latest canonical image; keep only one
+            // pending invalidation while a bounded page is being projected.
+            Stream.buffer({ capacity: 1, strategy: "sliding" }),
+            Stream.mapEffect(() => contexts(input)),
+          ),
+        );
+      }),
+    ).pipe(
+      Stream.mapError((cause) =>
+        isManagedSessionsError(cause)
+          ? cause
+          : new ManagedSessionsError({ reason: "source_unavailable", cause }),
       ),
     );
   const subscribe = (input: Rpc.ManagedSessionsInput) =>
@@ -187,8 +326,14 @@ const make = Effect.gen(function* () {
         // live subscription. Only lifecycle/control events trigger another bounded read.
         return Stream.concat(
           Stream.make(initial),
-          events.stream({ afterSequence }).pipe(
-            Stream.filter((stored) => stateEvent(stored.event.type)),
+          Stream.merge(
+            events.stream({ afterSequence }).pipe(
+              Stream.filter((stored) => stateEvent(stored.event.type)),
+              Stream.map(() => undefined),
+            ),
+            ownershipChanges,
+          ).pipe(
+            Stream.buffer({ capacity: 1, strategy: "sliding" }),
             Stream.mapEffect(() => list(input)),
           ),
         );
@@ -200,6 +345,6 @@ const make = Effect.gen(function* () {
           : new ManagedSessionsError({ reason: "source_unavailable", cause }),
       ),
     );
-  return ManagedSessions.of({ list, subscribe });
+  return ManagedSessions.of({ list, subscribe, contexts, subscribeContexts });
 });
 export const layer = Layer.effect(ManagedSessions, make);

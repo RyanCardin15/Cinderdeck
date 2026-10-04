@@ -1,9 +1,60 @@
+import { OwnershipRpcGroup } from "./ownershipRpc.ts";
+import { HistoryImportsRpcGroup } from "./historyImportRpc.ts";
+import { OwnedPreviewRpcGroup } from "./ownedPreviewRpc.ts";
+import { VerificationAttemptRpcGroup } from "./verificationAttemptsRpc.ts";
+import { ExternalSessionRpcGroup, ExternalSessionSummary } from "./externalSessionsRpc.ts";
+import { AttentionRpcGroup } from "./attentionRpc.ts";
+import { VerificationRpcGroup } from "./verificationRpc.ts";
+import {
+  LINKED_WORK_METHODS,
+  LinkedWorkPublishInput,
+  LinkedWorkRecord,
+  LinkedWorkTarget,
+  LinkedWorkResolution,
+  LinkedWorkError,
+} from "./linkedWorkRpc.ts";
+export * from "./linkedWorkRpc.ts";
+import { RunsRpcGroup } from "./runsRpc.ts";
+import {
+  REVIEWER_METHODS,
+  ReviewerLaunchContext,
+  ReviewerLaunchPreview,
+  ReviewerPreviewInput,
+  ReviewerLaunchInput,
+  ReviewerQueueRecord,
+  ReviewerQueueLookup,
+  ReviewerSourceStopInput,
+  ReviewerSourceStopResult,
+} from "./reviewerRpc.ts";
+export {
+  REVIEWER_METHODS,
+  ReviewerLaunchContext,
+  ReviewerLaunchPreview,
+  ReviewerPreviewInput,
+  ReviewerLaunchInput,
+  ReviewerQueueRecord,
+  ReviewerQueueLookup,
+  ReviewerSourceStopInput,
+  ReviewerSourceStopResult,
+} from "./reviewerRpc.ts";
+import {
+  THREAD_CONTEXT_METHOD,
+  ThreadContextInput,
+  ThreadContextView,
+} from "./threadContextRpc.ts";
+export {
+  THREAD_CONTEXT_METHOD,
+  ThreadContextInput,
+  ThreadContextView,
+} from "./threadContextRpc.ts";
+import { RecordingRpcGroup } from "./recordingsRpc.ts";
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { SessionBinding, FeatureId, WorkspaceBindingId, PhysicalCheckout } from "./index.ts";
 import { ProviderInstanceId } from "../providerInstance.ts";
 import { ModelSelection } from "../modelSelection.ts";
+import { ThreadPullRequestLink } from "../threadPullRequest.ts";
 import { RuntimeMode } from "../providerPolicy.ts";
 import { EnvironmentAuthorizationError } from "../auth.ts";
 import {
@@ -24,6 +75,7 @@ import {
 
 export const DECKHAND_METHODS = {
   sessions: "deckhand.sessions.subscribe",
+  contexts: "deckhand.contexts.subscribe",
   launch: "deckhand.session.launch",
   create: "deckhand.session.create",
   createGet: "deckhand.session.create.get",
@@ -49,6 +101,14 @@ export class DeckhandRpcError extends Schema.TaggedError<DeckhandRpcError>()("De
 export const OverviewPageInput = Schema.Struct({
   offset: NonNegativeInt,
   limit: PositiveInt.check(Schema.isLessThanOrEqualTo(100)),
+  selectedWorkspaceID: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(160))),
+  selectedContextID: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(160))),
+  workspacePage: Schema.optionalKey(
+    Schema.Struct({
+      offset: NonNegativeInt,
+      limit: PositiveInt.check(Schema.isLessThanOrEqualTo(50)),
+    }),
+  ),
 });
 export const IntegrationView = Schema.Struct({
   state: Schema.Literals([
@@ -67,6 +127,19 @@ export const IntegrationView = Schema.Struct({
     Schema.Struct({ reason: Schema.String, code: Schema.optionalKey(Schema.String) }),
   ),
   resources: IntegrationSnapshot.fields.resources,
+  selectedResources: Schema.optionalKey(
+    IntegrationSnapshot.fields.resources.check(Schema.isMaxLength(2)),
+  ),
+  workspaceContexts: Schema.optionalKey(
+    Schema.Struct({
+      workspaceID: TrimmedNonEmptyString,
+      resources: IntegrationSnapshot.fields.resources.check(Schema.isMaxLength(50)),
+      total: NonNegativeInt,
+      laneCount: NonNegativeInt,
+      offset: NonNegativeInt,
+      nextOffset: Schema.NullOr(NonNegativeInt),
+    }),
+  ),
   activity: IntegrationEvents.fields.events,
   total: NonNegativeInt,
   nextOffset: Schema.NullOr(NonNegativeInt),
@@ -94,6 +167,7 @@ export const ManagedLaunchInput = Schema.Struct({
   objective: TrimmedNonEmptyString.check(Schema.isMaxLength(16000)),
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
+  reviewerContext: Schema.optionalKey(ReviewerLaunchContext),
 });
 export type ManagedLaunchInput = typeof ManagedLaunchInput.Type;
 export const ManagedLaunchRecord = Schema.Struct({
@@ -153,10 +227,27 @@ export type ManagedSessionsInput = typeof ManagedSessionsInput.Type;
 export const ManagedSessionView = Schema.Struct({
   binding: SessionBinding,
   title: Schema.String,
+  objective: Schema.optionalKey(Schema.String),
+  pullRequests: Schema.optionalKey(Schema.Array(ThreadPullRequestLink)),
   source: Schema.Literals(["current", "unavailable"]),
   archived: Schema.Boolean,
 });
 export type ManagedSessionView = typeof ManagedSessionView.Type;
+export const ManagedContextsInput = Schema.Struct({
+  installationID: launchIdentifier,
+  contexts: Schema.Array(
+    Schema.Struct({ workspaceID: launchIdentifier, generation: PositiveInt }),
+  ).check(Schema.isMaxLength(100)),
+});
+export type ManagedContextsInput = typeof ManagedContextsInput.Type;
+export const ManagedContextView = Schema.Struct({
+  workspaceID: launchIdentifier,
+  generation: PositiveInt,
+  total: NonNegativeInt,
+  sessions: Schema.Array(ManagedSessionView),
+  externalSessions: Schema.optionalKey(ExternalSessionSummary),
+});
+export type ManagedContextView = typeof ManagedContextView.Type;
 export const ManagedLaunchOption = Schema.Struct({
   instanceId: ProviderInstanceId,
   label: Schema.String,
@@ -180,6 +271,58 @@ export const ManagedLaunchReview = Schema.Struct({
 export type ManagedLaunchReview = typeof ManagedLaunchReview.Type;
 const ErrorSchema = Schema.Union([DeckhandRpcError, EnvironmentAuthorizationError]);
 export const DeckhandRpcGroup = RpcGroup.make(
+  Rpc.make(LINKED_WORK_METHODS.publish, {
+    payload: LinkedWorkPublishInput,
+    success: LinkedWorkRecord,
+    error: Schema.Union([LinkedWorkError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make(LINKED_WORK_METHODS.resolve, {
+    payload: LinkedWorkTarget,
+    success: LinkedWorkResolution,
+    error: Schema.Union([LinkedWorkError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make(REVIEWER_METHODS.preview, {
+    payload: ReviewerPreviewInput,
+    success: ReviewerLaunchPreview,
+    error: ErrorSchema,
+  }),
+  Rpc.make(REVIEWER_METHODS.launch, {
+    payload: ReviewerLaunchInput,
+    success: ManagedCreateRecord,
+    error: ErrorSchema,
+  }),
+  Rpc.make(REVIEWER_METHODS.stopSource, {
+    payload: ReviewerSourceStopInput,
+    success: ReviewerSourceStopResult,
+    error: ErrorSchema,
+  }),
+  Rpc.make(REVIEWER_METHODS.schedule, {
+    payload: ReviewerLaunchInput,
+    success: ReviewerQueueRecord,
+    error: ErrorSchema,
+  }),
+  Rpc.make(REVIEWER_METHODS.get, {
+    payload: ReviewerQueueLookup,
+    success: Schema.NullOr(ReviewerQueueRecord),
+    error: ErrorSchema,
+  }),
+  Rpc.make(REVIEWER_METHODS.cancel, {
+    payload: ReviewerQueueLookup,
+    success: ReviewerQueueRecord,
+    error: ErrorSchema,
+  }),
+  Rpc.make(THREAD_CONTEXT_METHOD, {
+    payload: ThreadContextInput,
+    success: Schema.NullOr(ThreadContextView),
+    error: ErrorSchema,
+    stream: true,
+  }),
+  Rpc.make(DECKHAND_METHODS.contexts, {
+    payload: ManagedContextsInput,
+    success: Schema.Array(ManagedContextView),
+    error: ErrorSchema,
+    stream: true,
+  }),
   Rpc.make(DECKHAND_METHODS.sessions, {
     payload: ManagedSessionsInput,
     success: Schema.Array(ManagedSessionView),
@@ -255,4 +398,13 @@ export const DeckhandRpcGroup = RpcGroup.make(
     success: IntegrationOperationReceipt,
     error: ErrorSchema,
   }),
-);
+)
+  .merge(RecordingRpcGroup)
+  .merge(RunsRpcGroup)
+  .merge(VerificationRpcGroup)
+  .merge(AttentionRpcGroup)
+  .merge(ExternalSessionRpcGroup)
+  .merge(VerificationAttemptRpcGroup)
+  .merge(OwnedPreviewRpcGroup)
+  .merge(HistoryImportsRpcGroup)
+  .merge(OwnershipRpcGroup);

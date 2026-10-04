@@ -1,6 +1,13 @@
 {
   "customNotices": [
     {
+      "bundles": ["desktop", "web", "server"],
+      "license": "MIT",
+      "name": "T3 Code upstream source",
+      "sourceUrl": "https://github.com/pingdotgg/t3code",
+      "noticeFile": "LICENSE"
+    },
+    {
       "bundles": ["assets", "desktop", "web"],
       "license": "CC0-1.0",
       "name": "Notification Sound 1 by deadrobotmusic",

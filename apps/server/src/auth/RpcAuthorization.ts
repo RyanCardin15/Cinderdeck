@@ -1,7 +1,19 @@
-import { DECKHAND_METHODS } from "@t3tools/contracts/deckhand/rpc";
+import { OWNERSHIP_METHODS } from "@t3tools/contracts/deckhand/ownershipRpc";
+import { HISTORY_IMPORT_METHODS } from "@t3tools/contracts/deckhand/historyImportRpc";
+import { OWNED_PREVIEW_METHODS } from "@t3tools/contracts/deckhand/ownedPreviewRpc";
+import { ATTEMPT_METHODS } from "@t3tools/contracts/deckhand/verificationAttemptsRpc";
+import { EXTERNAL_SESSION_METHODS } from "@t3tools/contracts/deckhand/externalSessionsRpc";
+import { ATTENTION_METHODS } from "@t3tools/contracts/deckhand/attentionRpc";
+import { LINKED_WORK_METHODS } from "@t3tools/contracts/deckhand/linkedWorkRpc";
+import { VERIFICATION_METHODS } from "@t3tools/contracts/deckhand/verificationRpc";
+import { RUN_METHODS } from "@t3tools/contracts/deckhand/runsRpc";
+import { REVIEWER_METHODS } from "@t3tools/contracts/deckhand/rpc";
+import { RECORDING_METHODS } from "@t3tools/contracts/deckhand/recordingsRpc";
+import { DECKHAND_METHODS, THREAD_CONTEXT_METHOD } from "@t3tools/contracts/deckhand/rpc";
 import {
   type DeviceListInput,
   AuthAccessReadScope,
+  AuthAccessWriteScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   AuthRelayReadScope,
@@ -23,6 +35,70 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * runtime failure.
  */
 export const RPC_REQUIRED_SCOPES = {
+  [OWNERSHIP_METHODS.preview]: AuthOrchestrationReadScope,
+  [OWNERSHIP_METHODS.get]: AuthOrchestrationOperateScope,
+  [OWNERSHIP_METHODS.list]: AuthOrchestrationReadScope,
+  [OWNERSHIP_METHODS.submit]: AuthOrchestrationOperateScope,
+  [HISTORY_IMPORT_METHODS.import]: AuthAccessWriteScope,
+  [HISTORY_IMPORT_METHODS.remove]: AuthAccessWriteScope,
+  [HISTORY_IMPORT_METHODS.get]: AuthAccessReadScope,
+  [HISTORY_IMPORT_METHODS.list]: AuthAccessReadScope,
+  [HISTORY_IMPORT_METHODS.threads]: AuthAccessReadScope,
+  [HISTORY_IMPORT_METHODS.messages]: AuthAccessReadScope,
+  [HISTORY_IMPORT_METHODS.messageText]: AuthAccessReadScope,
+
+  [OWNED_PREVIEW_METHODS.intent]: AuthOrchestrationOperateScope,
+  [OWNED_PREVIEW_METHODS.get]: AuthOrchestrationReadScope,
+  [ATTEMPT_METHODS.preview]: AuthOrchestrationReadScope,
+  [ATTEMPT_METHODS.get]: AuthOrchestrationReadScope,
+  [ATTEMPT_METHODS.list]: AuthOrchestrationReadScope,
+  [ATTEMPT_METHODS.start]: AuthOrchestrationOperateScope,
+  [ATTEMPT_METHODS.advance]: AuthOrchestrationOperateScope,
+  [EXTERNAL_SESSION_METHODS.list]: AuthOrchestrationReadScope,
+  [EXTERNAL_SESSION_METHODS.register]: AuthOrchestrationOperateScope,
+  [EXTERNAL_SESSION_METHODS.heartbeat]: AuthOrchestrationOperateScope,
+  [EXTERNAL_SESSION_METHODS.visibility]: AuthOrchestrationOperateScope,
+  [ATTENTION_METHODS.list]: AuthOrchestrationReadScope,
+  [ATTENTION_METHODS.change]: AuthOrchestrationOperateScope,
+  [LINKED_WORK_METHODS.publish]: AuthOrchestrationOperateScope,
+  [LINKED_WORK_METHODS.resolve]: AuthOrchestrationReadScope,
+  [VERIFICATION_METHODS.list]: AuthOrchestrationReadScope,
+  [VERIFICATION_METHODS.link]: AuthReviewWriteScope,
+  [VERIFICATION_METHODS.unlink]: AuthReviewWriteScope,
+  [VERIFICATION_METHODS.scenarioSave]: AuthReviewWriteScope,
+  [VERIFICATION_METHODS.scenarioRemove]: AuthReviewWriteScope,
+  [REVIEWER_METHODS.preview]: AuthOrchestrationReadScope,
+  [REVIEWER_METHODS.launch]: AuthOrchestrationOperateScope,
+  [REVIEWER_METHODS.schedule]: AuthOrchestrationOperateScope,
+  [REVIEWER_METHODS.get]: AuthOrchestrationReadScope,
+  [REVIEWER_METHODS.cancel]: AuthOrchestrationOperateScope,
+  [REVIEWER_METHODS.stopSource]: AuthOrchestrationOperateScope,
+  [RUN_METHODS.list]: AuthOrchestrationReadScope,
+  [RUN_METHODS.get]: AuthOrchestrationReadScope,
+  [RUN_METHODS.failures]: AuthOrchestrationReadScope,
+  [RUN_METHODS.logs]: AuthOrchestrationReadScope,
+  [RUN_METHODS.definition]: AuthOrchestrationReadScope,
+  [RUN_METHODS.validate]: AuthOrchestrationReadScope,
+  [RECORDING_METHODS.prepareEvidence]: AuthOrchestrationOperateScope,
+  [RECORDING_METHODS.evidenceGet]: AuthOrchestrationReadScope,
+  [RECORDING_METHODS.evidenceResource]: AuthOrchestrationReadScope,
+  [RECORDING_METHODS.importBegin]: AuthOrchestrationOperateScope,
+  [RECORDING_METHODS.importGet]: AuthOrchestrationReadScope,
+  [RECORDING_METHODS.importEvent]: AuthOrchestrationOperateScope,
+  [RECORDING_METHODS.importChunk]: AuthOrchestrationOperateScope,
+  [RECORDING_METHODS.importFinish]: AuthOrchestrationOperateScope,
+  [RECORDING_METHODS.overview]: AuthOrchestrationReadScope,
+  [RECORDING_METHODS.list]: AuthOrchestrationReadScope,
+  [RECORDING_METHODS.get]: AuthOrchestrationReadScope,
+  [RECORDING_METHODS.windows]: AuthOrchestrationReadScope,
+  [RECORDING_METHODS.logs]: AuthOrchestrationReadScope,
+  [RECORDING_METHODS.media]: AuthOrchestrationReadScope,
+  [RECORDING_METHODS.thumbnail]: AuthOrchestrationReadScope,
+  [RECORDING_METHODS.start]: AuthOrchestrationOperateScope,
+  [RECORDING_METHODS.control]: AuthOrchestrationOperateScope,
+  [RECORDING_METHODS.mark]: AuthOrchestrationOperateScope,
+  [THREAD_CONTEXT_METHOD]: AuthOrchestrationReadScope,
+  [DECKHAND_METHODS.contexts]: AuthOrchestrationReadScope,
   [DECKHAND_METHODS.sessions]: AuthOrchestrationReadScope,
   [DECKHAND_METHODS.create]: AuthOrchestrationOperateScope,
   [DECKHAND_METHODS.createGet]: AuthOrchestrationReadScope,

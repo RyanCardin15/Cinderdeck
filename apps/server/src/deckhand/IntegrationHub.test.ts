@@ -136,6 +136,203 @@ const TestLayer = NodeSqliteClient.layer({ filename: ":memory:" }).pipe(
 );
 describe("Deckhand integration hub", () => {
   it.effect(
+    "keeps off-page selected resources authoritative and bounded across catalog pages",
+    () =>
+      Effect.gen(function* () {
+        const catalog = Array.from({ length: 600 }, (_, index) => ({
+          ...resource(`context-${index}`),
+          workspace: {
+            id: `context-${index}`,
+            name: `Workspace ${index}`,
+            file: "/fixture.toml",
+            state: "stopped",
+            definitionChanged: false,
+            issues: [],
+            services: [],
+            repos: [],
+            ...(index % 6
+              ? {
+                  lane: {
+                    sourceStackID: `context-${index - (index % 6)}`,
+                    name: `Lane ${index}`,
+                    createdAt: "2026-10-03T00:00:00Z",
+                    directory: "/fixture",
+                    ports: {},
+                  },
+                }
+              : {}),
+          },
+        }));
+        let removed = false;
+        const offsets: number[] = [];
+        const socketPath = yield* peer((request) => {
+          if (request.method === "integration.hello")
+            return { result: { ...hello, maximumPageSize: 100 } };
+          if (request.method === "integration.events")
+            return {
+              result: {
+                installationID: "installation",
+                runtimeEpoch: "epoch",
+                cursor: "cursor",
+                events: [],
+              },
+            };
+          const offset = Number(request.params.offset ?? 0);
+          const limit = Number(request.params.limit);
+          const resources = removed ? catalog.slice(0, 599) : catalog;
+          offsets.push(offset);
+          return {
+            result: {
+              installationID: "installation",
+              runtimeEpoch: "epoch",
+              cursor: "cursor",
+              resources: resources.slice(offset, offset + limit),
+              total: resources.length,
+              nextOffset: offset + limit < resources.length ? offset + limit : null,
+            },
+          };
+        });
+        yield* Effect.gen(function* () {
+          const hub = yield* IntegrationHub.IntegrationHub;
+          yield* hub.refresh;
+          assert.deepEqual(offsets, [0, 100, 200, 300, 400, 500]);
+          for (const offset of [0, 196, 490]) {
+            const page = yield* hub.overview({
+              offset,
+              limit: 98,
+              selectedWorkspaceID: "context-594",
+              selectedContextID: "context-599",
+            });
+            assert.equal(page.resources.length, 98);
+            assert.deepEqual(
+              page.selectedResources?.map((item) => item.workspaceID),
+              ["context-594", "context-599"],
+            );
+            assert.equal(page.total, 600);
+            assert.equal(page.nextOffset, offset + 98);
+          }
+          // A selected workspace beyond the global page retains all five actual lanes.
+          for (const offset of [0, 48, 480]) {
+            const scoped = yield* hub.overview({
+              offset,
+              limit: 48,
+              selectedWorkspaceID: "context-594",
+              selectedContextID: "context-599",
+              workspacePage: { offset: 0, limit: 50 },
+            });
+            assert.equal(scoped.workspaceContexts?.laneCount, 5);
+            assert.equal(scoped.workspaceContexts?.total, 6);
+            assert.deepEqual(
+              scoped.workspaceContexts?.resources.map((item) => item.workspaceID),
+              Array.from({ length: 6 }, (_, index) => `context-${594 + index}`),
+            );
+            assert.equal(scoped.workspaceContexts?.nextOffset, null);
+            assert.ok(
+              scoped.resources.length +
+                (scoped.selectedResources?.length ?? 0) +
+                (scoped.workspaceContexts?.resources.length ?? 0) <=
+                100,
+            );
+          }
+          // Scoped context paging and selected pins are independent, within the same budget.
+          const small = yield* hub.overview({
+            offset: 0,
+            limit: 48,
+            selectedWorkspaceID: "context-594",
+            selectedContextID: "context-599",
+            workspacePage: { offset: 0, limit: 2 },
+          });
+          assert.equal(small.workspaceContexts?.nextOffset, 2);
+          const second = yield* hub.overview({
+            offset: 48,
+            limit: 48,
+            selectedWorkspaceID: "context-594",
+            selectedContextID: "context-599",
+            workspacePage: { offset: 2, limit: 2 },
+          });
+          assert.deepEqual(
+            second.workspaceContexts?.resources.map((item) => item.workspaceID),
+            ["context-596", "context-597"],
+          );
+          assert.deepEqual(
+            second.selectedResources?.map((item) => item.workspaceID),
+            ["context-594", "context-599"],
+          );
+          assert.equal(
+            (yield* hub
+              .overview({ offset: 0, limit: 49, workspacePage: { offset: 0, limit: 50 } })
+              .pipe(Effect.flip)).reason,
+            "invalid_request",
+          );
+          const implicit = yield* hub.overview({
+            offset: 595,
+            limit: 48,
+            workspacePage: { offset: 0, limit: 50 },
+          });
+          assert.equal(implicit.workspaceContexts?.workspaceID, "context-594");
+          assert.equal(implicit.workspaceContexts?.laneCount, 5);
+          const readsBefore = offsets.length;
+          const cached = yield* hub.currentResources(
+            Array.from({ length: 100 }, (_, index) => `context-${index}`),
+          );
+          assert.equal(cached.state, "connected");
+          assert.equal(cached.resources.length, 100);
+          assert.equal(offsets.length, readsBefore);
+          assert.equal(
+            (yield* hub
+              .currentResources(Array.from({ length: 101 }, (_, index) => `context-${index}`))
+              .pipe(Effect.flip)).reason,
+            "invalid_request",
+          );
+          assert.equal(
+            (yield* hub.currentResources(["context-1", "context-1"]).pipe(Effect.flip)).reason,
+            "invalid_request",
+          );
+          // Selected detail reads and streamed initial values reuse the same shared catalog.
+          const first = yield* hub
+            .subscribe({
+              offset: 196,
+              limit: 48,
+              workspacePage: { offset: 0, limit: 50 },
+              selectedWorkspaceID: "context-594",
+              selectedContextID: "context-599",
+            })
+            .pipe(
+              Stream.filter((view) => view.state === "connected"),
+              Stream.take(1),
+              Stream.runCollect,
+            );
+          assert.equal(first[0]?.resources.length, 48);
+          assert.equal(first[0]?.workspaceContexts?.laneCount, 5);
+          assert.equal(first[0]?.selectedResources?.length, 2);
+          const duplicate = yield* hub.overview({
+            offset: 0,
+            limit: 100,
+            selectedWorkspaceID: "context-594",
+            selectedContextID: "context-594",
+          });
+          assert.equal(duplicate.selectedResources?.length, 1);
+          removed = true;
+          yield* hub.refresh;
+          const missing = yield* hub.overview({
+            offset: 0,
+            limit: 98,
+            selectedWorkspaceID: "context-594",
+            selectedContextID: "context-599",
+          });
+          assert.deepEqual(
+            missing.selectedResources?.map((item) => item.workspaceID),
+            ["context-594"],
+          );
+          assert.equal(missing.total, 599);
+          assert.equal(
+            (yield* hub.overview({ offset: 0, limit: 101 }).pipe(Effect.flip)).reason,
+            "invalid_request",
+          );
+        }).pipe(Effect.provide(hubLayer(socketPath)), Effect.scoped);
+      }).pipe(Effect.provide(TestLayer), Effect.scoped),
+  );
+  it.effect(
     "initializes fresh storage and guards the exact lane generation and physical repository before connected execution",
     () =>
       Effect.gen(function* () {
@@ -435,7 +632,12 @@ describe("Deckhand integration hub", () => {
               },
             };
           }
-          return { result: receipt };
+          return {
+            result: {
+              ...receipt,
+              operationKey: request.params.operationKey ?? receipt.operationKey,
+            },
+          };
         });
         yield* Effect.gen(function* () {
           const hub = yield* IntegrationHub.IntegrationHub;
@@ -457,13 +659,28 @@ describe("Deckhand integration hub", () => {
           assert.equal((yield* hub.releaseWriter("actor", control)).state, "released");
           assert.equal(releases, 1);
           assert.equal(polls, 1);
+          // A fresh actor-bound mutation still works after the last viewer closes.
+          const afterView = yield* hub.submit("actor", {
+            ...operation,
+            operationKey: "after-view",
+          });
+          assert.equal(afterView.operationKey, "after-view");
+          assert.equal(polls, 1);
           installationID = "replacement";
           yield* hub.releaseWriter("actor", control).pipe(Effect.flip);
           assert.equal(releases, 1);
           assert.equal(
             (yield* hub.submit("actor", { ...operation, operationKey: "other" }).pipe(Effect.flip))
               .reason,
-            "unavailable",
+            "invalid_response",
+          );
+          const refused = (yield* hub.operations("actor")).find(
+            (record) => record.input.operationKey === "other",
+          );
+          assert.equal(refused?.refused, true);
+          assert.equal(
+            (yield* hub.operation("actor", "other").pipe(Effect.flip)).reason,
+            "operation_refused",
           );
         }).pipe(Effect.provide(hubLayer(socketPath)), Effect.scoped);
       }).pipe(Effect.scoped, Effect.provide(TestLayer)),

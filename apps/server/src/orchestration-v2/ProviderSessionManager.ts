@@ -157,6 +157,11 @@ export interface ProviderSessionManagerV2Shape {
   readonly close: (
     providerSessionId: ProviderSessionId,
   ) => Effect.Effect<void, ProviderSessionManagerV2Error>;
+  /** Closes an actual process only when this is its sole attached thread. */
+  readonly closeForThread?: (input: {
+    readonly providerSessionId: ProviderSessionId;
+    readonly threadId: ThreadId;
+  }) => Effect.Effect<"closed" | "shared" | "missing", ProviderSessionManagerV2Error>;
   /** Closes every live runtime owned by one provider instance. */
   readonly closeInstance: (
     instanceId: ProviderInstanceId,
@@ -715,14 +720,26 @@ export const layerWithOptions = (
         readonly cancelIdleFiber?: boolean;
         readonly onlyIfIdleGeneration?: number;
         readonly gracefulSubscribers?: boolean;
+        readonly onlyThreadId?: ThreadId;
+        readonly scopeDecision?: (decision: "closed" | "shared" | "missing") => void;
       }) =>
         Effect.acquireUseRelease(
           Ref.modify(sessions, (current) => {
             const key = sessionKey(input.providerSessionId);
             const existing = current.get(key);
             if (existing === undefined) {
+              input.scopeDecision?.("missing");
               return [Option.none<LiveSessionEntry>(), current] as const;
             }
+            if (
+              input.onlyThreadId !== undefined &&
+              (!existing.attachedThreadIds.has(input.onlyThreadId) ||
+                existing.attachedThreadIds.size !== 1)
+            ) {
+              input.scopeDecision?.("shared");
+              return [Option.none<LiveSessionEntry>(), current] as const;
+            }
+            input.scopeDecision?.("closed");
             if (
               input.onlyIfIdleGeneration !== undefined &&
               (existing.busyCount > 0 || existing.idleGeneration !== input.onlyIfIdleGeneration)
@@ -1740,6 +1757,28 @@ export const layerWithOptions = (
                 }),
             ),
           ),
+        closeForThread: (input) =>
+          Effect.suspend(() => {
+            let decision: "closed" | "shared" | "missing" = "missing";
+            return releaseEntry({
+              providerSessionId: input.providerSessionId,
+              reason: "manual_shutdown",
+              onlyThreadId: input.threadId,
+              scopeDecision: (value) => {
+                decision = value;
+              },
+              detail: "The sole writer session was stopped to release its repository reservation.",
+            }).pipe(
+              Effect.map(() => decision),
+              Effect.mapError(
+                (cause) =>
+                  new ProviderSessionCloseError({
+                    providerSessionId: input.providerSessionId,
+                    cause,
+                  }),
+              ),
+            );
+          }),
         closeInstance: (instanceId) =>
           Effect.gen(function* () {
             const active = [...(yield* Ref.get(sessions)).values()].filter(

@@ -141,6 +141,9 @@ vi.mock("./PullRequestCodeTab", () => ({
   ),
 }));
 
+vi.mock("../../deckhand/PullRequestVerification", () => ({
+  PullRequestVerification: () => <div>Actual verification panel</div>,
+}));
 import { PullRequestDetailPanel } from "./PullRequestDetailPanel";
 import { pullRequestPanelContext } from "./pullRequestDetail.logic";
 
@@ -334,5 +337,40 @@ describe.each([
     } else {
       expect(newThread).toHaveBeenCalled();
     }
+  });
+});
+
+describe("Deckhand verification layout seam", () => {
+  it("notifies the page of real tab changes and preserves summary/code access", async () => {
+    const changed = vi.fn();
+    await act(async () => {
+      renderer = create(
+        <PullRequestDetailPanel
+          environmentId={threadRef.environmentId}
+          reference={detail}
+          shortcutsEnabled={false}
+          presentation="deckhand"
+          onDetailTabChange={changed}
+          getShortcutContext={() => ({
+            terminalFocus: false,
+            terminalOpen: false,
+            previewFocus: false,
+            previewOpen: false,
+            isWeb: true,
+            isDesktop: false,
+          })}
+        />,
+      );
+    });
+    expect(changed).toHaveBeenLastCalledWith("summary");
+    await click("Verification");
+    expect(changed).toHaveBeenLastCalledWith("verification");
+    expect(
+      renderer.root.findAll((node) => node.props["data-detail-tab"] === "verification"),
+    ).toHaveLength(1);
+    await click("Code");
+    expect(changed).toHaveBeenLastCalledWith("code");
+    await click("Summary");
+    expect(changed).toHaveBeenLastCalledWith("summary");
   });
 });

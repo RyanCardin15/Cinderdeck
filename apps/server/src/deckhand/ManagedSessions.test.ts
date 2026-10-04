@@ -18,6 +18,7 @@ import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
 import * as Relationships from "./Relationships.ts";
 import * as ManagedSessions from "./ManagedSessions.ts";
+import * as External from "./ExternalSessions.ts";
 
 const threadId = ThreadId.make("thread");
 const instanceId = ProviderInstanceId.make("codex-account");
@@ -145,11 +146,108 @@ const source = () => {
       latestSequence: () => Effect.sync(() => state.sequence),
       stream,
     });
-  const layer = (stream?: EventSink.EventSinkV2Shape["stream"]) =>
-    ManagedSessions.layer.pipe(Layer.provide(projectionLayer), Layer.provide(eventLayer(stream)));
+  const layer = (
+    stream?: EventSink.EventSinkV2Shape["stream"],
+    externalLayer?: Layer.Layer<External.ExternalSessions>,
+  ) =>
+    ManagedSessions.layer.pipe(
+      Layer.provide(projectionLayer),
+      Layer.provide(eventLayer(stream)),
+      Layer.provide(
+        externalLayer ??
+          Layer.mock(External.ExternalSessions)({
+            changes: Stream.never,
+            summaries: (input) =>
+              Effect.succeed(
+                input.contexts.map((target) => ({
+                  ...target,
+                  activeCount: 2,
+                  staleCount: 1,
+                  lastSeenAt: "2026-10-03T00:00:00Z",
+                  unavailable: false,
+                })),
+              ),
+          }),
+      ),
+    );
   return { state, layer };
 };
 describe("managed session provider projection", () => {
+  it.effect(
+    "summarizes a bounded page with exact saved counts, PR identity and generation isolation",
+    () =>
+      Effect.gen(function* () {
+        const f = source();
+        yield* Effect.gen(function* () {
+          yield* seed;
+          const store = yield* Relationships.Relationships;
+          const original = yield* store.session("session");
+          for (let index = 2; index <= 6; index++)
+            yield* store.putSession(
+              {
+                ...original,
+                id: Contracts.SessionBindingId.make(`session${index}`),
+                threadId: ThreadId.make(`thread${index}`),
+              },
+              null,
+            );
+          f.state.shell = {
+            ...f.state.shell!,
+            pullRequests: [
+              {
+                host: "github.com",
+                repository: "fixture/shop",
+                number: 14,
+                url: "https://github.com/fixture/shop/pull/14",
+                source: "manual",
+                linkedAt: "2026-10-03T00:00:00Z",
+                snapshot: null,
+                stack: null,
+              },
+            ],
+          };
+          const service = yield* ManagedSessions.ManagedSessions;
+          const input = {
+            installationID: "installation",
+            contexts: [
+              { workspaceID: "lane", generation: 7 },
+              { workspaceID: "lane-replaced", generation: 8 },
+            ],
+          };
+          const page = yield* service.contexts(input);
+          assert.equal(page[0]!.total, 6);
+          assert.equal(page[0]!.externalSessions?.activeCount, 2);
+          assert.equal(page[0]!.externalSessions?.staleCount, 1);
+          assert.equal(page[0]!.sessions.length, 4);
+          assert.equal(page[0]!.sessions[0]!.objective, "Verify retry");
+          assert.equal(page[0]!.sessions[0]!.pullRequests![0]!.host, "github.com");
+          assert.equal(page[1]!.total, 0);
+          assert.equal(
+            (yield* service.contexts({ ...input, installationID: "other" }))[0]!.total,
+            0,
+          );
+          assert.equal(
+            (yield* service.contexts({
+              ...input,
+              contexts: [{ workspaceID: "lane", generation: 8 }],
+            }))[0]!.total,
+            0,
+          );
+          assert.equal(
+            (yield* service
+              .contexts({ ...input, contexts: [input.contexts[0]!, input.contexts[0]!] })
+              .pipe(Effect.flip)).reason,
+            "invalid_request",
+          );
+          f.state.shell = null;
+          const unavailable = yield* service.contexts(input);
+          assert.equal(unavailable[0]!.total, 6);
+          assert.equal(unavailable[0]!.sessions[0]!.source, "unavailable");
+          assert.equal(unavailable[0]!.sessions[0]!.binding.execution, "unknown");
+        }).pipe(Effect.provide(f.layer()));
+      }).pipe(Effect.provide(baseLayer)),
+  );
+
   it.effect(
     "projects actual work, approval, question, and completion states while retaining checkout scope",
     () =>
@@ -275,6 +373,47 @@ describe("managed session provider projection", () => {
           assert.equal((yield* service.list({ ...scope, generation: 8 })).length, 0);
           assert.equal((yield* service.list({ ...scope, installationID: "different" })).length, 0);
         }).pipe(Effect.provide(f.layer()));
+      }).pipe(Effect.provide(baseLayer)),
+  );
+
+  it.effect(
+    "consumes context summaries and shared external visibility changes without a stream defect",
+    () =>
+      Effect.gen(function* () {
+        const f = source();
+        let externalCount = 0;
+        const externalLayer = Layer.mock(External.ExternalSessions)({
+          summaries: (input) =>
+            Effect.succeed(
+              input.contexts.map((target) => ({
+                ...target,
+                activeCount: externalCount,
+                staleCount: 0,
+                lastSeenAt: null,
+                unavailable: false,
+              })),
+            ),
+          changes: Stream.unwrap(
+            Effect.sync(() => {
+              externalCount = 1;
+              return Stream.make(undefined);
+            }),
+          ),
+        });
+        yield* Effect.gen(function* () {
+          yield* seed;
+          const service = yield* ManagedSessions.ManagedSessions;
+          const updates = yield* service
+            .subscribeContexts({
+              installationID: "installation",
+              contexts: [{ workspaceID: "lane", generation: 7 }],
+            })
+            .pipe(Stream.take(2), Stream.runCollect);
+          assert.equal(updates.length, 2);
+          assert.equal(updates[0]?.[0]?.externalSessions?.activeCount, 0);
+          assert.equal(updates[1]?.[0]?.externalSessions?.activeCount, 1);
+          assert.equal(updates[1]?.[0]?.sessions[0]?.binding.execution, "working");
+        }).pipe(Effect.provide(f.layer(undefined, externalLayer)));
       }).pipe(Effect.provide(baseLayer)),
   );
 

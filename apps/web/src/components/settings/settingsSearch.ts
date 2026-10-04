@@ -132,6 +132,24 @@ const KEYBINDING_SEARCH_ITEMS = STATIC_KEYBINDING_COMMANDS.toSorted((left, right
  */
 export const SETTINGS_SEARCH_ITEMS = [
   {
+    id: "workspace-ownership",
+    title: "Worktree ownership",
+    to: "/settings/integrations",
+    targetId: "workspace-ownership",
+    scope: "environment",
+    searchTerms: [
+      "adopt release standalone connected cinderdeck lane retain conversations worktree ownership transition recovery",
+    ],
+  },
+  {
+    id: "storage-history-import",
+    title: "Import T3 history",
+    to: "/settings/storage",
+    targetId: "storage-history-import",
+    searchTerms: ["previous conversations archive import t3 history database snapshot migration"],
+    scope: "environment",
+  },
+  {
     id: "storage-worktrees",
     title: "Worktree cleanup",
     to: "/settings/storage",
@@ -593,6 +611,15 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/providers",
     searchTerms: ["refresh availability versions auth state models background probes seconds off"],
     providerSettingsOnly: true,
+  },
+  {
+    id: "cinderdeck-connection",
+    title: "Cinderdeck connection",
+    to: "/settings/integrations",
+    targetId: "cinderdeck",
+    searchTerms: [
+      "workspace lanes installation execution host capabilities connect onboarding pending operation recovery",
+    ],
   },
   {
     id: "agent-browser-access",

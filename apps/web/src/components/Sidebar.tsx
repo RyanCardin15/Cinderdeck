@@ -1,3 +1,6 @@
+import { ProductNavigation } from "../deckhand/ProductNavigation";
+import { useLaneSessionContext } from "../deckhand/LaneSessionContext";
+import { ConnectedLaneSidebar } from "../deckhand/ConnectedLaneSidebar";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "./ThreadHoverCard";
 import { CollapsibleSectionHeader } from "./ui/collapsible-section-header";
 import { setThreadChangeRequestSnapshot } from "./ThreadStatusIndicators";
@@ -4670,6 +4673,24 @@ export default function Sidebar() {
     shortcutLabelForCommand(keybindings, "chat.new") ??
     (projectGroups.length <= 1 ? shortcutLabelForCommand(keybindings, "chat.newLocal") : undefined);
   const newThreadInProjectShortcutLabel = shortcutLabelForCommand(keybindings, "chat.newLocal");
+  const connectedContext = useLaneSessionContext(routeThreadRef);
+  if (connectedContext.data) {
+    return (
+      <div className="flex h-full min-h-0 flex-col [&>aside]:flex-1">
+        <ProductNavigation
+          current="conversations"
+          connection={{
+            connected: !connectedContext.error && connectedContext.data.native !== null,
+            label: connectedContext.error
+              ? "Saved workspace context"
+              : connectedContext.data.workspace.name,
+          }}
+        >
+          <ConnectedLaneSidebar threadRef={routeThreadRef} />
+        </ProductNavigation>
+      </div>
+    );
+  }
   return (
     <>
       <ThreadContextDragGhost />

@@ -74,6 +74,7 @@ export function SessionLauncher({
   const navigate = useNavigate();
   const isCreation = creation !== undefined;
   const id = useId();
+  const branchInput = useRef<HTMLInputElement>(null);
   // Creation recovery survives a native generation change. Always replay the saved scope.
   const storageKey = isCreation
     ? `deckhand:create:${environmentId}:${installationID}:${resource.workspaceID}`
@@ -127,6 +128,9 @@ export function SessionLauncher({
   const confirmReview = useAtomCommand(confirmLaunchReview, { reportFailure: false });
   const options = useAtomCommand(sessionLaunchOptions, { reportFailure: false });
   const formVisible = !isCreation || creation.visible || saved !== null;
+  useEffect(() => {
+    if (isCreation && creation.visible) branchInput.current?.focus();
+  }, [isCreation, creation?.visible]);
   const loadOptions = useCallback(() => {
     const generation = ++optionsGeneration.current;
     void options({ environmentId, input: {} }).then((result) => {
@@ -364,6 +368,7 @@ export function SessionLauncher({
             <>
               <label htmlFor={`${id}-branch`}>New lane branch</label>
               <input
+                ref={branchInput}
                 id={`${id}-branch`}
                 required
                 maxLength={200}

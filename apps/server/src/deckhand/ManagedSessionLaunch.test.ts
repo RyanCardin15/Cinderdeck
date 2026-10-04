@@ -1,3 +1,6 @@
+import * as ReviewerLaunch from "./ReviewerLaunch.ts";
+import * as ProviderSessionManager from "../orchestration-v2/ProviderSessionManager.ts";
+import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 // @effect-diagnostics nodeBuiltinImport:off - construct an adversarial derived launch-key collision.
 import * as NodeCrypto from "node:crypto";
 import { assert, describe, it } from "@effect/vitest";
@@ -5,6 +8,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import {
   ProjectId,
+  ThreadId,
   ProviderDriverKind,
   ProviderInstanceId,
   type Project,
@@ -35,6 +39,8 @@ import * as WorkspaceBackend from "./WorkspaceBackend.ts";
 import * as ManagedCheckoutGuard from "./ManagedCheckoutGuard.ts";
 import * as ManagedSessionLaunch from "./ManagedSessionLaunch.ts";
 import * as Relationships from "./Relationships.ts";
+import { resolveReviewerSource } from "./ReviewerSource.ts";
+import { currentFeatureWorkspaceAuthorized } from "./CurrentCheckout.ts";
 
 const instanceId = ProviderInstanceId.make("codex-fixture");
 const decodeInput = Schema.decodeUnknownSync(Rpc.ManagedLaunchInput);
@@ -97,15 +103,15 @@ const provider = Schema.decodeSync(ServerProvider)({
   models: [{ slug: "fixture-model", name: "Fixture model", isCustom: false, capabilities: null }],
 });
 const serviceLayer = ManagedSessionLaunch.layer.pipe(
-  Layer.provide(Relationships.layer),
-  Layer.provide(
+  Layer.provideMerge(Relationships.layer),
+  Layer.provideMerge(
     WorkspaceBackend.layer.pipe(
       Layer.provide(CheckoutIdentity.layer),
       Layer.provide(WriterReservations.layer),
       Layer.provide(NativeWriterReservations.layer),
     ),
   ),
-  Layer.provide(CheckoutIdentity.layer),
+  Layer.provideMerge(CheckoutIdentity.layer),
 );
 const baseLayer = Layer.mergeAll(
   NodeSqliteClient.layer({ filename: ":memory:" }),
@@ -240,10 +246,8 @@ const fixture = Effect.gen(function* () {
             record_json: string;
           }>`SELECT input_json, record_json FROM deckhand_managed_creations`;
           assert.equal(intents.length, 1, "intent must commit before native Git effects");
-          assert.equal(
-            (yield* decodeCreationInput(intents[0]!.input_json)).objective,
-            input().objective,
-          );
+          const intentInput = yield* decodeCreationInput(intents[0]!.input_json);
+          if (!intentInput.reviewerContext) assert.equal(intentInput.objective, input().objective);
           const intended = (yield* decodeCreationRecord(intents[0]!.record_json)).contextIntent;
           assert.isDefined(intended, "feature/context intent must exist before native Git");
           const features = yield* sql<{
@@ -254,18 +258,24 @@ const fixture = Effect.gen(function* () {
           assert.equal(intendedFeatures.length, 1);
           const feature = yield* decodeFeatureJson(intendedFeatures[0]!.record_json);
           assert.equal(feature.objective, input().objective);
-          assert.equal(feature.workspaceId, intended!.workspaceBindingId);
+          assert.isTrue(
+            feature.workspaceId === intended!.workspaceBindingId ||
+              (yield* currentFeatureWorkspaceAuthorized(
+                feature.id,
+                intended!.workspaceBindingId,
+              ).pipe(Effect.provideService(SqlClient.SqlClient, sql))),
+          );
           assert.deepEqual(intended!.repositoryIDs, ["frontend"]);
           assert.equal(
             (yield* sql`SELECT checkout_id FROM deckhand_feature_checkouts WHERE feature_id = ${intended!.featureId}`)
               .length,
-            0,
+            intentInput.reviewerContext ? 1 : 0,
             "a planned target is not a confirmed physical checkout",
           );
           assert.equal(
             (yield* sql`SELECT id FROM deckhand_sessions WHERE feature_id = ${intended!.featureId}`)
               .length,
-            0,
+            intentInput.reviewerContext ? 1 : 0,
           );
           yield* git(source, [
             "worktree",
@@ -673,6 +683,18 @@ describe("connected lane and session creation", () => {
         yield* sql`DROP INDEX deckhand_creations_launch_key`;
         yield* sql`DELETE FROM deckhand_schema WHERE version >= 8`;
         yield* sql`DROP TABLE deckhand_launch_reviews`;
+        yield* sql`DROP TABLE deckhand_reviewer_queue`;
+        yield* sql`DROP VIEW IF EXISTS deckhand_current_checkouts`;
+        yield* sql`DROP TABLE IF EXISTS deckhand_checkout_ownership`;
+        yield* sql`DROP TABLE IF EXISTS deckhand_ownership_transitions`;
+        yield* sql`DROP TABLE IF EXISTS deckhand_owned_preview_proofs`;
+        yield* sql`DROP TABLE IF EXISTS deckhand_owned_preview_captures`;
+        yield* sql`DROP TABLE IF EXISTS deckhand_verification_scenarios`;
+        yield* sql`DROP TABLE IF EXISTS deckhand_verification_attempts`;
+        yield* sql`DROP TABLE IF EXISTS deckhand_external_sessions`;
+        yield* sql`DROP TABLE deckhand_attention_dispositions`;
+        yield* sql`DROP INDEX deckhand_attention_source`;
+        yield* sql`DROP INDEX deckhand_attention_page`;
         yield* sql`INSERT INTO deckhand_schema VALUES (7)`;
         f.resources.clear();
         yield* Effect.gen(function* () {
@@ -1260,5 +1282,334 @@ describe("managed lane session launch", () => {
         assert.equal((yield* sql`SELECT id FROM deckhand_features`).length, 1);
         assert.equal((yield* sql`SELECT id FROM deckhand_sessions`).length, 1);
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+});
+
+describe("isolated reviewer scheduling", () => {
+  it.effect.each([false, true])(
+    "pins reviewed commits, reuses the original feature, and preserves its primary checkout (adopted=%s)",
+    (adopted) =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const native = f.nativeCreation();
+        let launches = 0;
+        const layer = serviceLayer.pipe(
+          Layer.provide(
+            f.external((request) => {
+              launches++;
+              return Effect.succeed(accepted(request));
+            }, native.hub),
+          ),
+        );
+        yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          const store = yield* Relationships.Relationships;
+          let writer = yield* service.launch("actor", input("writer"));
+          const sql = yield* SqlClient.SqlClient;
+          if (adopted) {
+            const target = yield* store.checkout(writer.checkoutId);
+            const targetWorkspace = yield* store.workspace(target.workspaceId);
+            const originalFeature = yield* store.feature(writer.featureId);
+            const originalSession = yield* store.session(writer.sessionId);
+            const originWorkspaceID = Contracts.WorkspaceBindingId.make("original-standalone");
+            const originCheckoutID = Contracts.CheckoutBindingId.make("original-checkout");
+            const featureID = Contracts.FeatureId.make("original-feature");
+            const sessionID = Contracts.SessionBindingId.make("original-session");
+            yield* store.putWorkspace(
+              {
+                ...targetWorkspace,
+                id: originWorkspaceID,
+                backend: "standalone",
+                ownerId: originWorkspaceID,
+                generation: 1,
+              },
+              null,
+            );
+            const { nativeGeneration, ...originalCheckout } = target;
+            void nativeGeneration;
+            yield* store.putCheckout(
+              {
+                ...originalCheckout,
+                id: originCheckoutID,
+                workspaceId: originWorkspaceID,
+                workspaceGeneration: 1,
+                backend: "standalone",
+                kind: "primary",
+                laneId: null,
+              },
+              null,
+            );
+            yield* store.putFeature(
+              { ...originalFeature, id: featureID, workspaceId: originWorkspaceID },
+              null,
+            );
+            yield* store.linkCheckout(featureID, originCheckoutID, true);
+            yield* store.putSession(
+              {
+                ...originalSession,
+                id: sessionID,
+                threadId: ThreadId.make("original-thread"),
+                featureId: featureID,
+                checkoutId: originCheckoutID,
+              },
+              null,
+            );
+            yield* sql`INSERT INTO deckhand_ownership_transitions(id,actor_id,physical_id,original_json,record_json) VALUES('fixture-adoption','actor',${target.repositories[0]!.physicalId},'{}','{"state":"completed"}')`;
+            yield* sql`INSERT INTO deckhand_checkout_ownership(original_checkout_id,target_checkout_id,transition_id,revision) VALUES(${originCheckoutID},${target.id},'fixture-adoption',1)`;
+            writer = {
+              ...writer,
+              featureId: featureID,
+              sessionId: sessionID,
+              checkoutId: originCheckoutID,
+              threadId: ThreadId.make("original-thread"),
+            };
+          }
+          const originalRows = yield* sql<{
+            record_json: string;
+          }>`SELECT record_json FROM deckhand_features WHERE id=${writer.featureId}`;
+          const originalSessions = yield* sql<{
+            record_json: string;
+          }>`SELECT record_json FROM deckhand_sessions WHERE id=${writer.sessionId}`;
+          const preview = yield* resolveReviewerSource({
+            featureId: writer.featureId,
+            sourceCheckoutId: writer.checkoutId,
+          });
+          const request = {
+            ...creationInput("reviewer"),
+            ...preview,
+            reviewerContext: preview.reviewerContext,
+            repositoryRefs: Object.fromEntries(
+              preview.reviewerContext.repositories.map((repo) => [repo.repositoryID, repo.commit]),
+            ),
+          };
+          const reviewed = yield* service.create("actor", request);
+          assert.equal(reviewed.state, "accepted", reviewed.error ?? undefined);
+          assert.equal(reviewed.launch?.featureId, writer.featureId);
+          const binding = yield* store.session(reviewed.launch!.sessionId);
+          const checkout = yield* store.checkout(reviewed.launch!.checkoutId);
+          assert.equal(binding.role, "reviewer");
+          assert.equal(binding.desiredAccess, "isolated");
+          assert.isFalse(binding.capabilities.enforcedReadOnly);
+          assert.notEqual(
+            checkout.repositories[0]!.physicalId,
+            (yield* store.checkout(writer.checkoutId)).repositories[0]!.physicalId,
+          );
+          assert.equal(
+            checkout.repositories[0]!.commit,
+            preview.reviewerContext.repositories[0]!.commit,
+          );
+          const links = yield* sql<{
+            checkout_id: string;
+          }>`SELECT checkout_id FROM deckhand_feature_checkouts WHERE feature_id=${writer.featureId} AND is_primary=1`;
+          assert.equal(links[0]!.checkout_id, writer.checkoutId);
+          assert.equal((yield* sql`SELECT id FROM deckhand_features`).length, adopted ? 2 : 1);
+          assert.deepEqual(
+            yield* sql<{
+              record_json: string;
+            }>`SELECT record_json FROM deckhand_features WHERE id=${writer.featureId}`,
+            originalRows,
+          );
+          assert.deepEqual(
+            yield* sql<{
+              record_json: string;
+            }>`SELECT record_json FROM deckhand_sessions WHERE id=${writer.sessionId}`,
+            originalSessions,
+          );
+          f.resources.clear();
+          assert.deepEqual(yield* service.create("actor", request), reviewed);
+        }).pipe(Effect.provide(Relationships.layer.pipe(Layer.provideMerge(layer))));
+        assert.equal(native.creations(), 1);
+        assert.equal(launches, 2);
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+  it.effect.each(["dirty", "head_changed"] as const)(
+    "refuses %s source changes before native creation",
+    (mode) =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const native = f.nativeCreation();
+        const layer = serviceLayer.pipe(
+          Layer.provide(f.external((request) => Effect.succeed(accepted(request)), native.hub)),
+        );
+        yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          const writer = yield* service.launch("actor", input("writer"));
+          const preview = yield* resolveReviewerSource({
+            featureId: writer.featureId,
+            sourceCheckoutId: writer.checkoutId,
+          });
+          if (mode === "dirty") yield* f.fs.writeFileString(`${f.lane}/uncommitted.txt`, "pending");
+          else
+            yield* f.git(f.lane, [
+              "-c",
+              "user.name=Fixture",
+              "-c",
+              "user.email=fixture@example.invalid",
+              "commit",
+              "--allow-empty",
+              "-m",
+              "New source head",
+            ]);
+          const refused = yield* service
+            .create("actor", {
+              ...creationInput("reviewer"),
+              ...preview,
+              repositoryRefs: Object.fromEntries(
+                preview.reviewerContext.repositories.map((repo) => [
+                  repo.repositoryID,
+                  repo.commit,
+                ]),
+              ),
+            })
+            .pipe(Effect.flip);
+          assert.equal(refused.reason, mode === "dirty" ? "dirty_source" : "stale_context");
+          assert.equal(native.creations(), 0);
+          assert.equal(
+            (yield* (yield* SqlClient.SqlClient)`SELECT operation_key FROM deckhand_managed_creations`)
+              .length,
+            0,
+          );
+        }).pipe(Effect.provide(Relationships.layer.pipe(Layer.provideMerge(layer))));
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+});
+
+describe("durable reviewer scheduling", () => {
+  const queueLayer = (
+    f: Effect.Success<typeof fixture>,
+    native: ReturnType<Effect.Success<typeof fixture>["nativeCreation"]>,
+  ) =>
+    ReviewerLaunch.layer.pipe(
+      Layer.provideMerge(serviceLayer),
+      Layer.provide(f.external((request) => Effect.succeed(accepted(request)), native.hub)),
+      Layer.provide(
+        Layer.mergeAll(
+          Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({}),
+          Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
+        ),
+      ),
+    );
+  const queuedInput = (preview: Rpc.ReviewerLaunchPreview, operationKey = "queued-review") => ({
+    operationKey,
+    preview,
+    modelSelection: { instanceId, model: "fixture-model" },
+    runtimeMode: "approval-required" as const,
+    objective: "Inspect correctness",
+  });
+  it.effect(
+    "persists an immutable review, waits for the writer, then creates exactly one pinned lane",
+    () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const native = f.nativeCreation();
+        yield* Effect.gen(function* () {
+          const managed = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          const queue = yield* ReviewerLaunch.ReviewerLaunch;
+          const sql = yield* SqlClient.SqlClient;
+          const writer = yield* managed.launch("actor", input("writer"));
+          const preview = yield* queue.preview({ threadId: writer.threadId! });
+          const request = queuedInput(preview);
+          yield* sql`INSERT INTO deckhand_native_writer_intents(id,owner_id,installation_id,state,control_json) VALUES('fixture-writer',${writer.threadId},'installation','held','{}')`;
+          const waiting = yield* queue.schedule("actor", request);
+          assert.equal(waiting.state, "waiting_writer");
+          assert.equal(waiting.attempts, 0);
+          assert.equal(native.creations(), 0);
+          assert.equal(
+            (yield* queue.schedule("other", request).pipe(Effect.flip)).reason,
+            "wrong_actor",
+          );
+          assert.equal(
+            (yield* queue.schedule("actor", { ...request, objective: "Changed" }).pipe(Effect.flip))
+              .reason,
+            "key_conflict",
+          );
+          const original = (yield* sql<{
+            original_input_json: string;
+          }>`SELECT original_input_json FROM deckhand_reviewer_queue`)[0]!.original_input_json;
+          yield* sql`UPDATE deckhand_native_writer_intents SET state='released' WHERE id='fixture-writer'`;
+          const ready = yield* queue.schedule("actor", request);
+          assert.equal(ready.state, "accepted");
+          assert.equal(ready.attempts, 1);
+          assert.notEqual(ready.creation?.threadID, writer.threadId);
+          assert.equal(native.creations(), 1);
+          assert.deepEqual(yield* queue.schedule("actor", request), ready);
+          assert.equal(
+            (yield* sql<{
+              original_input_json: string;
+            }>`SELECT original_input_json FROM deckhand_reviewer_queue`)[0]!.original_input_json,
+            original,
+          );
+          const intent = yield* decodeCreationInput(
+            (yield* sql<{
+              input_json: string;
+            }>`SELECT input_json FROM deckhand_managed_creations`)[0]!.input_json,
+          );
+          assert.equal(intent.reviewerContext?.featureId, writer.featureId);
+          assert.equal(
+            intent.repositoryRefs.frontend,
+            preview.reviewerContext.repositories[0]!.commit,
+          );
+          assert.equal((yield* sql`SELECT id FROM deckhand_features`).length, 1);
+        }).pipe(Effect.provide(queueLayer(f, native)));
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+  it.effect("refuses dirty queued source before effects and safely cancels waiting work", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture;
+      const native = f.nativeCreation();
+      yield* Effect.gen(function* () {
+        const managed = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+        const queue = yield* ReviewerLaunch.ReviewerLaunch;
+        const sql = yield* SqlClient.SqlClient;
+        const writer = yield* managed.launch("actor", input("writer"));
+        const preview = yield* queue.preview({ threadId: writer.threadId! });
+        yield* sql`INSERT INTO deckhand_native_writer_intents(id,owner_id,installation_id,state,control_json) VALUES('fixture-writer',${writer.threadId},'installation','held','{}')`;
+        yield* queue.schedule("actor", queuedInput(preview, "cancelled"));
+        assert.equal(
+          (yield* queue.cancelScheduled("actor", { operationKey: "cancelled" })).state,
+          "cancelled",
+        );
+        yield* queue.schedule("actor", queuedInput(preview));
+        yield* f.fs.writeFileString(`${f.lane}/uncommitted.txt`, "pending");
+        yield* sql`UPDATE deckhand_native_writer_intents SET state='released' WHERE id='fixture-writer'`;
+        assert.equal((yield* queue.schedule("actor", queuedInput(preview))).state, "needs_refresh");
+        assert.equal(native.creations(), 0);
+        assert.equal(
+          (yield* queue.schedule("actor", queuedInput(preview, "dirty-new")).pipe(Effect.flip))
+            .reason,
+          "dirty_source",
+        );
+        assert.equal(
+          (yield* sql`SELECT operation_key FROM deckhand_reviewer_queue WHERE operation_key='dirty-new'`)
+            .length,
+          0,
+        );
+      }).pipe(Effect.provide(queueLayer(f, native)));
+    }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+  it.effect("preserves uncertain native outcomes on one durable attempt key", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture;
+      const native = f.nativeCreation("unknown_outcome");
+      yield* Effect.gen(function* () {
+        const managed = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+        const queue = yield* ReviewerLaunch.ReviewerLaunch;
+        const writer = yield* managed.launch("actor", input("writer"));
+        const preview = yield* queue.preview({ threadId: writer.threadId! });
+        const request = queuedInput(preview);
+        const first = yield* queue.schedule("actor", request);
+        assert.equal(first.state, "unknown_outcome");
+        assert.equal(
+          (yield* queue
+            .cancelScheduled("actor", { operationKey: request.operationKey })
+            .pipe(Effect.flip)).reason,
+          "not_retryable",
+        );
+        const retry = yield* queue.schedule("actor", request);
+        assert.equal(retry.attemptKey, first.attemptKey);
+        assert.equal(retry.attempts, 1);
+        assert.equal(native.creations(), 1);
+      }).pipe(Effect.provide(queueLayer(f, native)));
+    }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 });

@@ -237,6 +237,23 @@ describe("DesktopAppIdentity", () => {
     );
   });
 
+  it.effect(
+    "identifies a local modified build instead of presenting its base commit as the whole source",
+    () => {
+      const calls: ElectronAppCalls = { setAboutPanelOptions: [], setDockIcon: [], setName: [] };
+      return withIdentity(
+        Effect.gen(function* () {
+          yield* (yield* DesktopAppIdentity.DesktopAppIdentity).configure;
+          assert.equal(calls.setAboutPanelOptions[0]?.version, "abcdef123456 + local changes");
+        }),
+        {
+          calls,
+          packageJson: '{"deckhandCommitHash":"abcdef1234567890","deckhandSourceDirty":true}',
+          environment: { isPackaged: true },
+        },
+      );
+    },
+  );
   it.effect("sets the dock icon only when running unpackaged", () => {
     const calls: ElectronAppCalls = {
       setAboutPanelOptions: [],

@@ -1,3 +1,5 @@
+import { OwnershipTransitionPanel } from "../../deckhand/OwnershipTransitionPanel";
+import { CinderdeckConnectionPanel } from "../../deckhand/CinderdeckConnectionPanel";
 import { DeviceHostUpdates } from "../device/DeviceHostUpdates";
 import { DeviceToolVersions } from "../device/DeviceToolVersions";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
@@ -1426,6 +1428,7 @@ function BrowserProfilesSetting({ disabled }: { readonly disabled: boolean }) {
 }
 
 export function IntegrationsSettingsPanel() {
+  const { environment } = useSettingsScope();
   // Client-local preview defaults are editable only where the preview exists.
   const previewDefaultsDisabled = !isElectron;
   const previewDefaults = (
@@ -1445,6 +1448,13 @@ export function IntegrationsSettingsPanel() {
     <SettingsPageContainer>
       {/* Server-authoritative agent access is scoped by the header selection;
           the preview defaults below are device-local and ignore it. */}
+      <SettingsSection id="cinderdeck" title="Cinderdeck">
+        <CinderdeckConnectionPanel
+          key={environment?.environmentId ?? "choose-computer"}
+          initialEnvironmentId={environment?.environmentId}
+        />
+      </SettingsSection>
+      <OwnershipTransitionPanel />
       <ProjectDefaultsSettings category="integrations" />
       <SettingsSection id="browser" title="Browser">
         {previewDefaultsDisabled ? (

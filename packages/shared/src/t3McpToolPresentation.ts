@@ -74,10 +74,69 @@ function tool(
   return { displayName, labels, icon, summaryAction };
 }
 
-const T3_MCP_SERVER_ALIASES = new Set(["t3-code", "t3_code", "t3code"]);
+const T3_MCP_SERVER_ALIASES = new Set(["t3-code", "t3_code", "t3code", "deckhand"]);
 
 // Cards, activity rows, summaries, and provider identity recovery share this inventory.
 const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
+  deckhand_evidence_read: tool(["Read", "Reading", "Read", "evidence bytes"], "attachment-prepare"),
+  deckhand_recording_windows: tool(
+    ["List", "Listing", "Listed", "capture windows"],
+    "attachment-prepare",
+  ),
+  deckhand_recording_start: tool(
+    ["Start", "Starting", "Started", "a recording"],
+    "attachment-prepare",
+  ),
+  deckhand_recording_control: tool(
+    ["Control", "Controlling", "Controlled", "a recording"],
+    "attachment-prepare",
+  ),
+  deckhand_recording_mark: tool(["Mark", "Marking", "Marked", "a recording"], "attachment-prepare"),
+  deckhand_external_session_register: tool(
+    ["Register", "Registering", "Registered", "External session"],
+    "worktree-status",
+  ),
+  deckhand_external_session_heartbeat: tool(
+    ["Report", "Reporting", "Reported", "External heartbeat"],
+    "worktree-status",
+  ),
+  deckhand_external_session_visibility: tool(
+    ["Save", "Saving", "Saved", "External visibility"],
+    "worktree-status",
+  ),
+  deckhand_external_sessions: tool(
+    ["Read", "Reading", "Read", "External sessions"],
+    "worktree-status",
+  ),
+  deckhand_context: tool(["Read", "Reading", "Read", "Deckhand lane context"], "worktree-status"),
+  deckhand_services_runs: tool(["Read", "Reading", "Read", "services and runs"], "task-status"),
+  deckhand_run_logs: tool(["Read", "Reading", "Read", "run output"], "task-status"),
+  deckhand_recordings: tool(["List", "Listing", "Listed", "recordings"], "attachment-prepare"),
+  deckhand_recording: tool(
+    ["Read", "Reading", "Read", "recording provenance"],
+    "attachment-prepare",
+  ),
+  deckhand_recording_logs: tool(
+    ["Read", "Reading", "Read", "recording logs"],
+    "attachment-prepare",
+  ),
+  deckhand_evidence_prepare: tool(
+    ["Prepare", "Preparing", "Prepared", "evidence bundle"],
+    "attachment-prepare",
+  ),
+  deckhand_evidence_get: tool(
+    ["Inspect", "Inspecting", "Inspected", "evidence assets"],
+    "attachment-prepare",
+  ),
+  deckhand_operation_submit: tool(
+    ["Submit", "Submitting", "Submitted", "local operation"],
+    "task-status",
+  ),
+  deckhand_operation_get: tool(
+    ["Inspect", "Inspecting", "Inspected", "durable operation"],
+    "task-status",
+  ),
+
   link_pull_request: tool(
     ["Link", "Linking", "Linked", "a pull request"],
     "link-pr",
@@ -303,9 +362,8 @@ function resolveT3McpToolName(value: string): string | null {
       : null;
   }
 
-  const namespaceMatch = /^(?<server>t3-code|t3_code|t3code)(?:[.:/]|\s*·\s*)(?<tool>.+)$/i.exec(
-    label,
-  );
+  const namespaceMatch =
+    /^(?<server>t3-code|t3_code|t3code|deckhand)(?:[.:/]|\s*·\s*)(?<tool>.+)$/i.exec(label);
   if (namespaceMatch?.groups) {
     return namespaceMatch.groups.tool ?? null;
   }

@@ -69,21 +69,23 @@ export class ElectronSafeStorage extends Context.Service<
 export const make = Effect.gen(function* () {
   const platform = yield* HostProcessPlatform;
 
+  // OS-backed secure storage may wait for Keychain approval. Keep that work off
+  // Electron's main thread so windows, IPC, and shutdown remain responsive.
   return ElectronSafeStorage.of({
-    isEncryptionAvailable: Effect.try({
-      try: () => Electron.safeStorage.isEncryptionAvailable(),
+    isEncryptionAvailable: Effect.tryPromise({
+      try: () => Electron.safeStorage.isAsyncEncryptionAvailable(),
       catch: (cause) => new ElectronSafeStorageAvailabilityError({ cause }),
     }),
     encryptString: (value) =>
-      Effect.try({
-        try: () => Electron.safeStorage.encryptString(value),
+      Effect.tryPromise({
+        try: () => Electron.safeStorage.encryptStringAsync(value),
         catch: (cause) => new ElectronSafeStorageEncryptError({ cause }),
       }),
     decryptString: (value) =>
-      Effect.try({
-        try: () => Electron.safeStorage.decryptString(Buffer.from(value)),
+      Effect.tryPromise({
+        try: () => Electron.safeStorage.decryptStringAsync(Buffer.from(value)),
         catch: (cause) => new ElectronSafeStorageDecryptError({ cause }),
-      }),
+      }).pipe(Effect.map((decrypted) => decrypted.result)),
     selectedStorageBackend: Effect.sync(() => {
       if (platform !== "linux") {
         return Option.none();

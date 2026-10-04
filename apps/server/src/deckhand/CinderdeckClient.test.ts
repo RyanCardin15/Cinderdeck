@@ -4,7 +4,9 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as TestClock from "effect/testing/TestClock";
 import * as CinderdeckClient from "./CinderdeckClient.ts";
 
 const TestLayer = CinderdeckClient.layer.pipe(Layer.provideMerge(NodeServices.layer));
@@ -20,12 +22,15 @@ const hello = {
   maximumWaitMs: 25000,
 };
 const peer = (
-  respond: (request: {
-    id: number;
-    method: string;
-    params: object;
-    client?: { session?: string };
-  }) => object | string | Buffer,
+  respond: (
+    request: {
+      id: number;
+      method: string;
+      params: object;
+      client?: { session?: string };
+    },
+    socket: NodeNet.Socket,
+  ) => object | string | Buffer | undefined,
 ) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -37,7 +42,8 @@ const peer = (
         input += chunk.toString("utf8");
         if (!input.endsWith("\n")) return;
         const request = JSON.parse(input);
-        const response = respond(request);
+        const response = respond(request, socket);
+        if (response === undefined) return;
         const result = Buffer.isBuffer(response)
           ? response
           : Buffer.from(typeof response === "string" ? response : JSON.stringify(response) + "\n");
@@ -61,6 +67,65 @@ const peer = (
     return path;
   });
 describe("same-host Cinderdeck bridge", () => {
+  it.effect(
+    "bounds fresh catalogue refreshes without extending selected or pinned-page deadlines",
+    () =>
+      Effect.gen(function* () {
+        let requestArrived!: () => void;
+        let arrived = new Promise<void>((resolve) => {
+          requestArrived = resolve;
+        });
+        let pending: { id: number; socket: NodeNet.Socket } | undefined;
+        let snapshots = 0;
+        const socketPath = yield* peer((request, socket) => {
+          if (request.method === "integration.hello") return { id: request.id, result: hello };
+          assert.equal(request.method, "integration.snapshot");
+          snapshots++;
+          pending = { id: request.id, socket };
+          requestArrived();
+          return undefined;
+        });
+        const client = yield* CinderdeckClient.CinderdeckClient;
+        const connection = yield* client.connect(socketPath, { channel: "development" });
+        const catalogue = yield* client
+          .snapshot(connection, { limit: 100 })
+          .pipe(Effect.forkChild({ startImmediately: true }));
+        yield* Effect.promise(() => arrived);
+        yield* TestClock.adjust("6 seconds");
+        assert.isDefined(pending);
+        pending!.socket.end(
+          // @effect-diagnostics-next-line preferSchemaOverJson:off - Deliberately construct the raw native wire fixture.
+          JSON.stringify({
+            id: pending!.id,
+            result: {
+              installationID: "installation",
+              runtimeEpoch: "epoch",
+              cursor: "opaque",
+              resources: [],
+              total: 0,
+            },
+          }) + "\n",
+        );
+        assert.equal((yield* Fiber.join(catalogue)).cursor, "opaque");
+        for (const input of [
+          { workspaceID: "workspace", limit: 1 },
+          { expectedCursor: "opaque", offset: 100, limit: 100 },
+        ]) {
+          arrived = new Promise<void>((resolve) => {
+            requestArrived = resolve;
+          });
+          const read = yield* client
+            .snapshot(connection, input)
+            .pipe(Effect.flip, Effect.forkChild({ startImmediately: true }));
+          yield* Effect.promise(() => arrived);
+          yield* TestClock.adjust("5 seconds");
+          assert.equal((yield* Fiber.join(read)).reason, "timeout");
+        }
+        // Timeouts are explicit, with no hidden transport retries.
+        assert.equal(snapshots, 3);
+      }).pipe(Effect.scoped, Effect.provide(TestLayer)),
+  );
+
   it.effect(
     "attests native checkout aliases over the real Unix transport and rejects foreign, duplicate or malformed lookup scopes",
     () =>

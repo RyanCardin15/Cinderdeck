@@ -74,6 +74,8 @@ import { TerminalViewport } from "../ThreadTerminalDrawer";
 import { CloudEnvironmentConnectRows } from "../cloud/CloudEnvironmentConnectList";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { DeckhandMark } from "../../deckhand/DeckhandMark";
+import { CinderdeckConnectionPanel } from "../../deckhand/CinderdeckConnectionPanel";
+import type { ConnectedWorkspaceSelection } from "../../deckhand/connectionPresentation";
 import { Alert, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
@@ -97,7 +99,7 @@ import { formatRelativeTime } from "../../timestampFormat";
  * re-runnable by clearing the flag.
  */
 
-type WizardStep = "connection" | "agents" | "import";
+type WizardStep = "connection" | "cinderdeck" | "agents" | "import";
 const NO_ENVIRONMENTS: readonly EnvironmentId[] = [];
 
 const AGENT_ONBOARDING_THREAD_ID = ThreadId.make("onboarding-agent-setup");
@@ -112,7 +114,10 @@ export function WelcomeWizard({
   /** Whether this client is authenticated to the server serving the app. */
   readonly localAvailable: boolean;
   readonly resumeEnvironmentId?: EnvironmentId | undefined;
-  readonly onDone: (projectRef?: ScopedProjectRef) => void | Promise<void>;
+  readonly onDone: (
+    projectRef?: ScopedProjectRef,
+    workspaceSelection?: ConnectedWorkspaceSelection,
+  ) => void | Promise<void>;
 }) {
   const completeOnboarding = useCompleteOnboarding();
   const [step, setStep] = useState<WizardStep>(resumeEnvironmentId ? "agents" : "connection");
@@ -156,7 +161,12 @@ export function WelcomeWizard({
   };
   const stageIndex = step === "agents" ? 1 : step === "import" ? 2 : 0;
   const finish = useCallback(
-    (projectRef?: ScopedProjectRef, importWarning?: string, importedThreadCount = 0) => {
+    (
+      projectRef?: ScopedProjectRef,
+      importWarning?: string,
+      importedThreadCount = 0,
+      workspaceSelection?: ConnectedWorkspaceSelection,
+    ) => {
       if (finishingPromiseRef.current !== null) return finishingPromiseRef.current;
       if (completionErrorToastIdRef.current !== null) {
         toastManager.close(completionErrorToastIdRef.current);
@@ -169,7 +179,8 @@ export function WelcomeWizard({
             toastManager.close(completionErrorToastIdRef.current);
             completionErrorToastIdRef.current = null;
           }
-          await onDone(projectRef);
+          if (workspaceSelection) await onDone(projectRef, workspaceSelection);
+          else await onDone(projectRef);
           if (importWarning) {
             toastManager.add({
               type: "warning",
@@ -242,6 +253,7 @@ export function WelcomeWizard({
         <WizardPanel holdHeight={isLoadingProjects}>
           {step === "connection" ? (
             <ConnectionStep
+              onConnectCinderdeck={() => setStep("cinderdeck")}
               expandPairingInitially={!localAvailable && !hasCloudPublicConfig()}
               selectedIds={selectedIds}
               autoSelectedComputers={autoSelectedComputers.current}
@@ -265,6 +277,20 @@ export function WelcomeWizard({
                 setSelection(new Set([...selectedIds, environmentId]));
               }}
             />
+          ) : step === "cinderdeck" ? (
+            <div className="space-y-5">
+              <CinderdeckConnectionPanel
+                initialEnvironmentId={primaryEnvironment?.environmentId}
+                onChoose={(workspace) => finish(undefined, undefined, 0, workspace)}
+              />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Provider accounts use Deckhand’s existing setup in Settings → Providers. Choosing
+                this workspace keeps its operational runtime in Cinderdeck.
+              </p>
+              <Button variant="ghost" onClick={() => setStep("connection")}>
+                Back to standalone setup
+              </Button>
+            </div>
           ) : step === "agents" ? (
             <AgentsStep environmentIds={setupIds} onContinue={() => setStep("import")} />
           ) : (
@@ -292,6 +318,7 @@ function ConnectionStep({
   onToggleEnvironment,
   onContinue,
   onPaired,
+  onConnectCinderdeck,
 }: {
   readonly autoSelectedComputers: Set<EnvironmentId>;
   readonly expandPairingInitially: boolean;
@@ -300,6 +327,7 @@ function ConnectionStep({
   readonly onToggleEnvironment: (environmentId: EnvironmentId, checked: boolean) => void;
   readonly onContinue: () => void;
   readonly onPaired: (environmentId: EnvironmentId) => void;
+  readonly onConnectCinderdeck: () => void;
 }) {
   const { environments } = useEnvironments();
   const cloudEnabled = hasCloudPublicConfig();
@@ -328,9 +356,23 @@ function ConnectionStep({
   }, [ready]);
   return (
     <>
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-        Connect your computers
-      </h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-foreground">Choose your setup</h1>
+      <button
+        type="button"
+        className="mt-4 flex w-full items-center gap-3 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        onClick={onConnectCinderdeck}
+        aria-label="Connect to Cinderdeck"
+      >
+        <DeckhandMark className="h-5 w-auto shrink-0 text-muted-foreground" aria-hidden />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">Connect to Cinderdeck</span>
+          <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+            Bring your existing workspaces, lanes, services, and recordings into Deckhand.
+          </span>
+        </span>
+        <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      </button>
+      <h2 className="mt-6 text-sm font-semibold text-foreground">Use Deckhand on its own</h2>
       <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
         Choose one or more computers. We’ll set up agents and projects on each.
       </p>

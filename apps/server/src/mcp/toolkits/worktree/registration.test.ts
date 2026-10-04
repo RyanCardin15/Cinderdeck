@@ -1,3 +1,8 @@
+import * as DeckhandExternal from "../../../deckhand/ExternalSessions.ts";
+import * as DeckhandContext from "../../../deckhand/ThreadContext.ts";
+import * as DeckhandRuns from "../../../deckhand/Runs.ts";
+import * as DeckhandRecordings from "../../../deckhand/Recordings.ts";
+import * as DeckhandHub from "../../../deckhand/IntegrationHub.ts";
 import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "../../../orchestration-v2/ProjectionStore.ts";
 import * as DeviceService from "../../../device/DeviceService.ts";
@@ -26,6 +31,11 @@ import * as McpSessionRegistry from "../../McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "../../PreviewAutomationBroker.ts";
 
 const StubServicesLive = Layer.mergeAll(
+  Layer.mock(DeckhandContext.ThreadContext)({}),
+  Layer.mock(DeckhandRuns.Runs)({}),
+  Layer.mock(DeckhandRecordings.Recordings)({}),
+  Layer.mock(DeckhandHub.IntegrationHub)({}),
+  Layer.mock(DeckhandExternal.ExternalSessions)({}),
   Layer.mock(Orchestrator.OrchestratorV2)({}),
   Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
   Layer.mock(DeviceService.DeviceService)({}),
@@ -123,6 +133,17 @@ it.effect("production mcp layer lists worktree tools over http", () =>
       // than replacing them.
       expect(toolNames).toContain("preview_status");
       expect(toolNames).toContain("delegate_task");
+      for (const name of [
+        "deckhand_external_session_register",
+        "deckhand_external_session_heartbeat",
+        "deckhand_external_session_visibility",
+        "deckhand_external_sessions",
+      ]) {
+        expect(toolNames).toContain(name);
+        expect(tools.find((tool) => tool.name === name)?.annotations?.readOnlyHint).toBe(
+          name === "deckhand_external_sessions",
+        );
+      }
 
       // The handoff tool mutates thread state, reaches the network (origin
       // fetch), and runs project setup scripts, so its MCP hints must not

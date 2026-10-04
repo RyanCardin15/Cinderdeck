@@ -94,7 +94,10 @@ import {
 import { assignProjectsToEnvironments } from "../components/pullRequest/pullRequestProjectAssignment.logic";
 import { pullRequestFilterProjects } from "../components/pullRequest/pullRequestProjectFilter.logic";
 import { environmentMachineIcon } from "../components/EnvironmentMachineIcon";
-import { PullRequestDetailPanel } from "../components/pullRequest/PullRequestDetailPanel";
+import {
+  PullRequestDetailPanel,
+  type PullRequestDetailTab,
+} from "../components/pullRequest/PullRequestDetailPanel";
 import {
   PullRequestFiltersMenu,
   PullRequestFilterOptionIcon,
@@ -159,6 +162,12 @@ import { Separator } from "~/components/ui/separator";
 import { primaryServerKeybindingsAtom } from "~/state/server";
 import { getSourceControlPresentationForKind } from "~/sourceControlPresentation";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
+import shellStyles from "../deckhand/pullRequestsShell.module.css";
+import {
+  pullRequestEvidenceFocused,
+  updatePullRequestDetailFocus,
+  type PullRequestDetailFocus,
+} from "../deckhand/pullRequestFocus";
 
 function getShortcutContext() {
   return {
@@ -341,6 +350,7 @@ export const Route = createFileRoute("/_chat/pull-requests")({
 });
 
 function PullRequestsRouteView() {
+  const [detailFocus, setDetailFocus] = useState<PullRequestDetailFocus>(null);
   useEscapeToGoBack();
   const search = Route.useSearch();
   const sort = search.sort ?? "ready";
@@ -1632,6 +1642,7 @@ function PullRequestsRouteView() {
   const toggleRightPanel = () => {
     if (rightPanelRef === null) return;
     if (rightPanelState.isOpen) {
+      setDetailFocus(null);
       useRightPanelStore.getState().close(rightPanelRef);
       updateSearch(clearedSelection);
       return;
@@ -2075,15 +2086,60 @@ function PullRequestsRouteView() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [keybindings]);
 
+  const detailSurfaceId = renderedPullRequestSurface?.id ?? null;
+  const detailTabChanged = useCallback(
+    (tab: PullRequestDetailTab) => {
+      if (detailSurfaceId === null) return;
+      setDetailFocus((previous) => updatePullRequestDetailFocus(previous, detailSurfaceId, tab));
+    },
+    [detailSurfaceId],
+  );
+  const verificationFocused =
+    rightPanelState.isOpen && pullRequestEvidenceFocused(detailFocus, detailSurfaceId);
+  const verificationSelected =
+    detailFocus?.surfaceId === detailSurfaceId && detailFocus?.tab === "verification";
+  const detailLayoutControls = (
+    <div className={shellStyles.layoutControls}>
+      {verificationSelected ? (
+        <button
+          type="button"
+          className={shellStyles.browseControl}
+          aria-expanded={!verificationFocused}
+          aria-controls="deckhand-pull-request-browser"
+          onClick={() =>
+            setDetailFocus((previous) =>
+              previous === null ? previous : { ...previous, browsing: !previous.browsing },
+            )
+          }
+        >
+          {verificationFocused ? (
+            <LayersIcon aria-hidden size={15} />
+          ) : (
+            <Maximize2Icon aria-hidden size={15} />
+          )}
+          <span>{verificationFocused ? "Browse pull requests" : "Focus verification"}</span>
+        </button>
+      ) : null}
+      {panelToggleControls}
+    </div>
+  );
+
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
-      <div className="relative flex min-h-0 flex-1">
-        {pullRequestsSupported && rightPanelPresent ? openPanelControls : null}
-        <PullRequestsColumn {...columnProps} />
+      <div className={cn("relative flex min-h-0 flex-1", shellStyles.page)}>
+        <div
+          id="deckhand-pull-request-browser"
+          hidden={verificationFocused}
+          className={shellStyles.browserColumn}
+        >
+          <PullRequestsColumn {...columnProps} active={!verificationFocused} />
+        </div>
 
         {rightPanelPresent && renderedPullRequestSurface && panelEnvironmentId !== null ? (
           <RightPanelTabs
             mode="inline"
+            maximized={verificationFocused}
+            layoutControls={detailLayoutControls}
             open={rightPanelState.isOpen}
             widthStorageKey="deckhand:pull-request-panel-width"
             // Default to roughly half the viewport: the PR list needs more
@@ -2129,6 +2185,8 @@ function PullRequestsRouteView() {
             pullRequestStatusSeeds={listedPullRequestTabStatuses}
           >
             <PullRequestDetailPanel
+              presentation="deckhand"
+              onDetailTabChange={detailTabChanged}
               getShortcutContext={getShortcutContext}
               shortcutsEnabled={activePullRequestSurface?.id === renderedPullRequestSurface.id}
               key={renderedPullRequestSurface.id}
@@ -2367,6 +2425,7 @@ function ExpandableSearch({
  * descendant rules.
  */
 function PullRequestsColumn({
+  active,
   refreshing,
   onRefresh,
   searchValue,
@@ -2386,6 +2445,7 @@ function PullRequestsColumn({
   listBody,
   scrollRef,
 }: {
+  active: boolean;
   refreshing: boolean;
   onRefresh: () => void;
   searchValue: string;
@@ -2431,7 +2491,7 @@ function PullRequestsColumn({
   // it focuses the in-flow bar and selects the query the way a find field would.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
+      if (!active || event.defaultPrevented) return;
       if (event.key.toLowerCase() !== "f" || !(event.metaKey || event.ctrlKey)) return;
       if (event.altKey || event.shiftKey) return;
       event.preventDefault();
@@ -2446,7 +2506,7 @@ function PullRequestsColumn({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [condensed]);
+  }, [active, condensed]);
   useEffect(() => {
     if (condensed) return;
     // The fold-out is gone from the chrome; forgetting it open keeps the next condensing

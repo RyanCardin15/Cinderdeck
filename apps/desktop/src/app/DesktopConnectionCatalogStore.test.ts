@@ -28,9 +28,13 @@ const encodeLegacySavedEnvironments = Schema.encodeEffect(
     Schema.Struct({ version: Schema.Literal(1), records: Schema.Array(Schema.Unknown) }),
   ),
 );
-function makeSafeStorageLayer(available: boolean, failDecrypt: Ref.Ref<boolean> | null = null) {
+function makeSafeStorageLayer(
+  available: boolean,
+  failDecrypt: Ref.Ref<boolean> | null = null,
+  probe?: Effect.Effect<boolean, ElectronSafeStorage.ElectronSafeStorageAvailabilityError>,
+) {
   return Layer.succeed(ElectronSafeStorage.ElectronSafeStorage, {
-    isEncryptionAvailable: Effect.succeed(available),
+    isEncryptionAvailable: probe ?? Effect.succeed(available),
     encryptString: (value) => Effect.succeed(textEncoder.encode(`encrypted:${value}`)),
     decryptString: (value) => {
       return Effect.gen(function* () {
@@ -55,6 +59,7 @@ function makeLayer(
   encryptionAvailable = true,
   failDecrypt: Ref.Ref<boolean> | null = null,
   fileSystemLayer: Layer.Layer<FileSystem.FileSystem> = NodeServices.layer,
+  probe?: Effect.Effect<boolean, ElectronSafeStorage.ElectronSafeStorageAvailabilityError>,
 ) {
   const environmentLayer = DesktopEnvironment.layer({
     dirname: "/repo/apps/desktop/src",
@@ -71,7 +76,7 @@ function makeLayer(
       Layer.mergeAll(NodeServices.layer, DesktopConfig.layerTest({ DECKHAND_HOME: baseDir })),
     ),
   );
-  const safeStorageLayer = makeSafeStorageLayer(encryptionAvailable, failDecrypt);
+  const safeStorageLayer = makeSafeStorageLayer(encryptionAvailable, failDecrypt, probe);
   const dependencies = Layer.mergeAll(
     environmentLayer,
     safeStorageLayer,
@@ -101,6 +106,30 @@ const withStore = <A, E, R>(
   }).pipe(Effect.provide(NodeServices.layer), Effect.scoped);
 
 describe("DesktopConnectionCatalogStore", () => {
+  it.effect("does not initialize native secure storage for an empty desktop profile", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const baseDir = yield* fs.makeTempDirectoryScoped({
+        prefix: "deckhand-empty-desktop-profile-",
+      });
+      const calls = yield* Ref.make(0);
+      const probe = Ref.update(calls, (value) => value + 1).pipe(
+        Effect.andThen(
+          Effect.fail(
+            new ElectronSafeStorage.ElectronSafeStorageAvailabilityError({
+              cause: "native secure storage unavailable",
+            }),
+          ),
+        ),
+      );
+      const stored = yield* Effect.gen(function* () {
+        const store = yield* DesktopConnectionCatalogStore.DesktopConnectionCatalogStore;
+        return yield* store.get;
+      }).pipe(Effect.provide(makeLayer(baseDir, true, null, NodeServices.layer, probe)));
+      assert.deepStrictEqual(stored, Option.none());
+      assert.strictEqual(yield* Ref.get(calls), 0);
+    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+  );
   it.effect("persists, reads, and clears an encrypted connection catalog", () =>
     withStore(
       Effect.gen(function* () {

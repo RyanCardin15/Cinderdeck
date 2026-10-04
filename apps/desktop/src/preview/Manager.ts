@@ -6,6 +6,7 @@
  * here). Single layer-scoped browser session partition.
  */
 import * as NodeCrypto from "node:crypto";
+import { OwnedPreviewTarget } from "@t3tools/contracts/deckhand/ownedPreviewRpc";
 import {
   DesktopPreviewRecordingInputSchema,
   DESKTOP_PREVIEW_RECORDING_CAPTURE_TRIGGER,
@@ -3653,6 +3654,93 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     );
   });
 
+  const ownedCaptureTarget = Effect.fn("PreviewManager.ownedCaptureTarget")(function* (
+    tabId: string,
+  ) {
+    const wc = yield* requireWebContents(tabId);
+    yield* ensureControlSession(wc);
+    const target = yield* attemptPromise({ operation: "ownedCapture.target", tabId }, () =>
+      wc.debugger.sendCommand("Target.getTargetInfo"),
+    );
+    const tree = yield* attemptPromise({ operation: "ownedCapture.frame", tabId }, () =>
+      wc.debugger.sendCommand("Page.getFrameTree"),
+    );
+    const info = yield* Schema.decodeUnknownEffect(
+      Schema.Struct({ targetInfo: Schema.Struct({ targetId: Schema.String }) }),
+    )(target).pipe(
+      Effect.mapError(
+        (cause) => new PreviewOperationError({ operation: "ownedCapture.target", cause }),
+      ),
+    );
+    const root = yield* Schema.decodeUnknownEffect(
+      Schema.Struct({
+        frameTree: Schema.Struct({
+          frame: Schema.Struct({ id: Schema.String, url: Schema.String, loaderId: Schema.String }),
+        }),
+      }),
+    )(tree).pipe(
+      Effect.mapError(
+        (cause) => new PreviewOperationError({ operation: "ownedCapture.frame", cause }),
+      ),
+    );
+    if (wc.isLoadingMainFrame() || root.frameTree.frame.url !== wc.getURL())
+      return yield* new PreviewOperationError({
+        operation: "ownedCapture.loading",
+        tabId,
+        cause: new Error("The document is not loaded"),
+      });
+    return yield* Schema.decodeUnknownEffect(OwnedPreviewTarget)({
+      tabID: tabId,
+      webContentsID: wc.id,
+      targetID: info.targetInfo.targetId,
+      frameID: root.frameTree.frame.id,
+      documentID: root.frameTree.frame.loaderId,
+      url: wc.getURL(),
+      observedAt: yield* currentIso,
+    }).pipe(
+      Effect.mapError(
+        (cause) => new PreviewOperationError({ operation: "ownedCapture.decode", cause }),
+      ),
+    );
+  });
+  const startOwnedCaptureFrames = Effect.fn("PreviewManager.startOwnedCaptureFrames")(function* (
+    tabId: string,
+  ) {
+    if (
+      (yield* SynchronizedRef.get(frameCaptureSessionsRef)).get(tabId)?.consumers.has("recording")
+    )
+      return yield* new PreviewOperationError({
+        operation: "ownedCapture.busy",
+        tabId,
+        cause: new Error("Another recorder owns this tab"),
+      });
+    yield* startFrameCapture(tabId, "recording");
+    const wc = yield* requireWebContents(tabId);
+    yield* ensureControlSession(wc);
+    yield* attemptPromise({ operation: "ownedCapture.enable", tabId }, () =>
+      wc.debugger.sendCommand("Page.enable"),
+    );
+    yield* attemptPromise({ operation: "ownedCapture.startScreencast", tabId }, () =>
+      wc.debugger.sendCommand("Page.startScreencast", {
+        format: "jpeg",
+        quality: 80,
+        maxWidth: 1600,
+        maxHeight: 1200,
+        everyNthFrame: 1,
+      }),
+    );
+  });
+  const stopOwnedCaptureFrames = Effect.fn("PreviewManager.stopOwnedCaptureFrames")(function* (
+    tabId: string,
+  ) {
+    yield* Effect.gen(function* () {
+      const wc = yield* requireWebContents(tabId);
+      yield* attemptPromise({ operation: "ownedCapture.stopScreencast", tabId }, () =>
+        wc.debugger.sendCommand("Page.stopScreencast"),
+      );
+    }).pipe(Effect.ensuring(stopFrameCapture(tabId, "recording")));
+  });
+
   const stopRecording = Effect.fn("PreviewManager.stopRecording")(function* (tabId: string) {
     // Clearing runs under the tab lock so it cannot land before an in-flight start arms.
     yield* withTabLifecycleLock(
@@ -4724,6 +4812,9 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     setColorScheme,
     setMainWindow,
     startRecording,
+    ownedCaptureTarget,
+    startOwnedCaptureFrames,
+    stopOwnedCaptureFrames,
     closePictureInPicture,
     stopRecording,
     subscribePointerEvents: (listener: PointerEventListener) =>
@@ -5099,6 +5190,11 @@ export class PreviewManager extends Context.Service<
       tabId: string,
       options?: RecordingInputOptions,
     ) => Effect.Effect<void, PreviewManagerError>;
+    readonly ownedCaptureTarget: (
+      tabId: string,
+    ) => Effect.Effect<typeof OwnedPreviewTarget.Type, PreviewManagerError>;
+    readonly startOwnedCaptureFrames: (tabId: string) => Effect.Effect<void, PreviewManagerError>;
+    readonly stopOwnedCaptureFrames: (tabId: string) => Effect.Effect<void, PreviewManagerError>;
     readonly stopRecording: (tabId: string) => Effect.Effect<void, PreviewManagerError>;
     readonly saveRecording: (
       tabId: string,
@@ -5225,6 +5321,9 @@ export const make = Effect.gen(function* PreviewManagerMake() {
     openPictureInPicture: operations.openPictureInPicture,
     closePictureInPicture: operations.closePictureInPicture,
     startRecording: operations.startRecording,
+    ownedCaptureTarget: operations.ownedCaptureTarget,
+    startOwnedCaptureFrames: operations.startOwnedCaptureFrames,
+    stopOwnedCaptureFrames: operations.stopOwnedCaptureFrames,
     stopRecording: operations.stopRecording,
     saveRecording: operations.saveRecording,
     automationStatus: operations.automationStatus,

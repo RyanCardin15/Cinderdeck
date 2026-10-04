@@ -18,6 +18,7 @@ jobs:
         with:
           version: 11.10.0
       - run: pnpm install --frozen-lockfile
+      - run: node --test scripts/deckhand/upstream-maintenance.test.mjs
       - run: node scripts/deckhand/check-upstream-patches.mjs
       - run: pnpm exec vp lint apps/server/src/deckhand packages/contracts/src/deckhand apps/web/src/deckhand scripts/deckhand scripts/lib/deckhand-distribution.ts
       - run: pnpm exec vp test run scripts/deckhand/distribution.test.ts apps/server/src/deckhand apps/server/src/persistence/Layers/Sqlite.test.ts packages/shared/src/devHome.test.ts packages/shared/src/providerAuthReturnUrl.test.ts packages/shared/src/codexAuthHandoff.test.ts apps/desktop/src/app/DesktopEnvironment.test.ts apps/desktop/src/app/DesktopUserData.test.ts apps/desktop/src/electron/ElectronProtocol.test.ts apps/server/src/telemetry/AnalyticsService.test.ts apps/web/src/branding.test.ts

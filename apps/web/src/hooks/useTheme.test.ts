@@ -102,7 +102,7 @@ describe("theme failure handling", () => {
     await expect(import("./useTheme")).resolves.toBeDefined();
 
     expect(errorLog).toHaveBeenCalledWith(
-      "Failed to read theme preference for t3code:theme.",
+      "Failed to read theme preference for deckhand:theme.",
       expect.objectContaining({
         operation: "read",
         storageKey: "deckhand:theme",

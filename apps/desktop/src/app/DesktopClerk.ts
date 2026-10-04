@@ -1,3 +1,7 @@
+import {
+  parseLinkedWorkURL,
+  linkedWorkDesktopURL,
+} from "@t3tools/contracts/deckhand/linkedWorkRpc";
 import { createClerkBridge } from "@clerk/electron";
 import { storage } from "@clerk/electron/storage";
 import * as Context from "effect/Context";
@@ -182,13 +186,52 @@ export const make = Effect.gen(function* () {
         );
         return true;
       };
+      let latestLinkedWorkRequest = 0;
+      const openLinkedWork = (value: string | undefined) => {
+        const target = value ? parseLinkedWorkURL(value, environment.isDevelopment) : null;
+        if (!target) return false;
+        const destination = linkedWorkDesktopURL(target, environment.isDevelopment);
+        const request = ++latestLinkedWorkRequest;
+        void runPromise(
+          Effect.gen(function* () {
+            let mainWindow = yield* electronWindow.currentMainOrFirst;
+            for (
+              let attempt = 0;
+              Option.isNone(mainWindow) && attempt < 120 && request === latestLinkedWorkRequest;
+              attempt++
+            ) {
+              yield* Effect.sleep("250 millis");
+              mainWindow = yield* electronWindow.currentMainOrFirst;
+            }
+            if (request !== latestLinkedWorkRequest) return;
+            if (Option.isNone(mainWindow)) {
+              yield* Effect.logWarning(
+                "Linked-work navigation is waiting for a main window; open the link again after startup",
+              );
+              return;
+            }
+            const currentWindow = mainWindow.value;
+            yield* Effect.promise(() => currentWindow.loadURL(destination));
+            yield* electronWindow.reveal(currentWindow);
+          }).pipe(
+            Effect.catchCause((cause) => Effect.logWarning("Could not open linked work", cause)),
+          ),
+        );
+        return true;
+      };
       const args = yield* HostProcessArguments;
-      args.some((value) => startProviderAuthHandoff(value));
+      args.some((value) => startProviderAuthHandoff(value) || openLinkedWork(value));
       yield* electronApp.on("open-url", (event: { preventDefault: () => void }, url: string) => {
-        if (startProviderAuthHandoff(url) || resumeProviderAuth(url)) event.preventDefault();
+        if (startProviderAuthHandoff(url) || resumeProviderAuth(url) || openLinkedWork(url))
+          event.preventDefault();
       });
       yield* electronApp.on("second-instance", (_event: unknown, argv: readonly string[]) => {
-        if (argv?.some((value) => startProviderAuthHandoff(value) || resumeProviderAuth(value)))
+        if (
+          argv?.some(
+            (value) =>
+              startProviderAuthHandoff(value) || resumeProviderAuth(value) || openLinkedWork(value),
+          )
+        )
           return;
         void runPromise(
           Effect.gen(function* () {

@@ -33,6 +33,7 @@ import {
 import { cn } from "~/lib/utils";
 
 interface ChatHeaderProps {
+  hideProjectBreadcrumb?: boolean;
   activeThreadEnvironmentId: EnvironmentId;
   activeThreadId: ThreadId;
   activeThreadTitle: string;
@@ -66,6 +67,7 @@ export function resolveRenameCommit(input: {
 // opens immediately.
 const TITLE_MENU_OPEN_DELAY_MS = 500;
 export const ChatHeader = memo(function ChatHeader({
+  hideProjectBreadcrumb = false,
   activeThreadEnvironmentId,
   activeThreadId,
   activeThreadTitle,
@@ -243,7 +245,7 @@ export const ChatHeader = memo(function ChatHeader({
         {/* The project always leads the header: knowing which project a
             thread lives in is priority zero, and the thread title alone
             doesn't answer it. */}
-        {activeProject ? (
+        {activeProject && !hideProjectBreadcrumb ? (
           <>
             <WorkspaceBreadcrumbItem className="shrink">
               <Tooltip>

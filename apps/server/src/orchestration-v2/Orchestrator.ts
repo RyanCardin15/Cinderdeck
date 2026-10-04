@@ -3092,7 +3092,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
     ) {
       const projection = yield* projectionStore
-        .getThreadRecords(command.threadId, ["providerSessions"])
+        .getThreadRecords(
+          command.threadId,
+          ["providerSessions", "runtimeRequests", "nodes", "turnItems"],
+          { turnItemTypes: ["approval_request", "user_input_request"] },
+        )
         .pipe(
           Effect.mapError(
             (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
@@ -3109,6 +3113,76 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         });
       }
       const now = yield* DateTime.now;
+      // Detaching this conversation invalidates its live callbacks even when the
+      // shared provider process stays up for other conversations. Persist the
+      // cancellation with the detach so history and attention cannot offer an
+      // approval against an unloaded provider thread.
+      for (const request of projection.runtimeRequests) {
+        if (
+          request.status !== "pending" ||
+          request.responseCapability.type !== "live" ||
+          request.responseCapability.providerSessionId !== session.id
+        )
+          continue;
+        const requestNode = projection.nodes.find((node) => node.id === request.nodeId);
+        yield* emit(
+          events,
+          command,
+        )({
+          type: "runtime-request.updated",
+          threadId: command.threadId,
+          nodeId: request.nodeId,
+          ...(requestNode?.runId == null ? {} : { runId: requestNode.runId }),
+          driver: session.driver,
+          providerInstanceId: session.providerInstanceId,
+          occurredAt: now,
+          payload: {
+            ...request,
+            status: "cancelled",
+            responseCapability: {
+              type: "not_resumable",
+              reason: "Provider session was detached from this conversation.",
+            },
+            resolvedAt: now,
+          },
+        });
+        if (requestNode?.completedAt === null) {
+          yield* emit(
+            events,
+            command,
+          )({
+            type: "node.updated",
+            threadId: command.threadId,
+            nodeId: requestNode.id,
+            ...(requestNode.runId === null ? {} : { runId: requestNode.runId }),
+            driver: session.driver,
+            providerInstanceId: session.providerInstanceId,
+            occurredAt: now,
+            payload: { ...requestNode, status: "cancelled", completedAt: now },
+          });
+        }
+        for (const item of projection.turnItems) {
+          if (
+            (item.type === "approval_request" || item.type === "user_input_request") &&
+            item.requestId === request.id &&
+            item.completedAt === null
+          ) {
+            yield* emit(
+              events,
+              command,
+            )({
+              type: "turn-item.updated",
+              threadId: command.threadId,
+              ...(item.nodeId === null ? {} : { nodeId: item.nodeId }),
+              ...(item.runId === null ? {} : { runId: item.runId }),
+              driver: session.driver,
+              providerInstanceId: session.providerInstanceId,
+              occurredAt: now,
+              payload: { ...item, status: "cancelled", completedAt: now, updatedAt: now },
+            });
+          }
+        }
+      }
       yield* emit(
         events,
         command,
@@ -6612,30 +6686,41 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           cause: `Runtime request ${command.requestId} is ${runtimeRequest.status}.`,
         });
       }
-      if (runtimeRequest.responseCapability.type === "not_resumable") {
-        return yield* new OrchestratorDispatchError({
-          commandId: command.commandId,
-          commandType: command.type,
-          cause: runtimeRequest.responseCapability.reason,
-        });
-      }
       const providerSessionId =
         runtimeRequest.responseCapability.type === "live"
           ? runtimeRequest.responseCapability.providerSessionId
           : null;
       const providerSession = context.session;
-      if (providerSessionId !== null && providerSession === undefined) {
+      const detachedRequest =
+        runtimeRequest.responseCapability.type === "not_resumable" ||
+        (providerSessionId !== null && providerSession === undefined);
+      if (
+        detachedRequest &&
+        (!(command.decision === "cancel" || command.decision === "decline") ||
+          command.answers !== undefined)
+      ) {
         return yield* new OrchestratorDispatchError({
           commandId: command.commandId,
           commandType: command.type,
-          cause: `Provider session ${providerSessionId} was not found.`,
+          cause:
+            runtimeRequest.responseCapability.type === "not_resumable"
+              ? runtimeRequest.responseCapability.reason
+              : `Provider session ${providerSessionId} was not found.`,
         });
       }
 
       const now = yield* DateTime.now;
       const resolvedRequest = {
         ...runtimeRequest,
-        status: "resolved" as const,
+        status: detachedRequest ? ("cancelled" as const) : ("resolved" as const),
+        ...(detachedRequest
+          ? {
+              responseCapability: {
+                type: "not_resumable" as const,
+                reason: "This request was dismissed after its provider session became unavailable.",
+              },
+            }
+          : {}),
         resolvedAt: now,
         ...(command.decision === undefined ? {} : { decision: command.decision }),
         ...(command.answers === undefined ? {} : { answers: command.answers }),
@@ -6797,7 +6882,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           effects,
         );
       }
-      if (providerSessionId === null) return;
+      // A stale callback can be dismissed locally; never send that dismissal to
+      // a replacement/shared provider process that no longer owns this request.
+      if (providerSessionId === null || detachedRequest) return;
       yield* Ref.update(effects, (existing) => [
         ...existing,
         {

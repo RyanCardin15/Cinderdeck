@@ -16,6 +16,7 @@ import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as CheckoutIdentity from "./CheckoutIdentity.ts";
 import * as IntegrationHub from "./IntegrationHub.ts";
+import * as CurrentCheckout from "./CurrentCheckout.ts";
 import * as Migrations from "./Migrations.ts";
 import * as ProcessRunner from "../processRunner.ts";
 
@@ -98,6 +99,7 @@ const isMutationError = Schema.is(CheckoutMutationError);
 const make = Effect.gen(function* () {
   yield* Migrations.migrate;
   const sql = yield* SqlClient.SqlClient;
+  const ownershipDependencies = yield* Effect.context<SqlClient.SqlClient>();
   const fs = yield* FileSystem.FileSystem;
   const identities = yield* CheckoutIdentity.CheckoutIdentity;
   const runner = yield* ProcessRunner.ProcessRunner;
@@ -109,7 +111,9 @@ const make = Effect.gen(function* () {
       const within = (parent: string) =>
         cwd === parent || cwd.startsWith(parent.replace(/\/+$/, "") + "/");
       const canonical = (root: string) => fs.realPath(root).pipe(Effect.orElseSucceed(() => root));
-      const rows = yield* sql<{ record_json: string }>`SELECT record_json FROM deckhand_checkouts
+      const rows = yield* sql<{
+        record_json: string;
+      }>`SELECT record_json FROM deckhand_current_checkouts
       WHERE json_extract(record_json, '$.backend')='cinderdeck' LIMIT 5001`;
       if (rows.length > 5000) return yield* new CheckoutMutationError({ reason: "unavailable" });
       for (const row of rows) {
@@ -143,6 +147,10 @@ const make = Effect.gen(function* () {
         return yield* new CheckoutMutationError({ reason: "unavailable" });
       }
       const current = checkout.success;
+      yield* CurrentCheckout.assertPhysicalAvailable(current.physicalId).pipe(
+        Effect.provide(ownershipDependencies),
+        Effect.mapError(() => new CheckoutMutationError({ reason: "uncertain" })),
+      );
       if (input.gitDirectory) {
         const selected = yield* fs
           .realPath(input.gitDirectory)
@@ -153,8 +161,8 @@ const make = Effect.gen(function* () {
       const rows = yield* sql<{
         checkout_json: string;
         workspace_json: string;
-      }>`SELECT c.record_json AS checkout_json,
-      w.record_json AS workspace_json FROM deckhand_checkouts c JOIN deckhand_workspaces w ON w.id=c.workspace_id
+      }>`SELECT DISTINCT c.record_json AS checkout_json,
+      w.record_json AS workspace_json FROM deckhand_current_checkouts c JOIN deckhand_workspaces w ON w.id=c.workspace_id
       WHERE EXISTS (SELECT 1 FROM json_each(c.record_json, '$.repositories') repo
         WHERE json_extract(repo.value,'$.physicalId')=${current.physicalId}
           OR json_extract(repo.value,'$.root')=${current.root}

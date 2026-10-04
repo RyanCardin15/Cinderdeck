@@ -70,6 +70,7 @@ import {
   STAGE_INSTALL_ARGS,
   ancestorNodeModulesPaths,
   copyDirectoryPreservingSymlinks,
+  copyDesktopBuildOutputs,
   LinuxBrowserSecretHostError,
   stageBrowserSecret,
   validateWindowsPackagedPayload,
@@ -266,6 +267,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it("switches desktop packaging product names to nightly for nightly builds", () => {
     assert.equal(resolveDesktopProductName("0.0.17"), "Deckhand (Alpha)");
     assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "Deckhand (Nightly)");
+    assert.equal(resolveDesktopProductName("0.0.17-preview.20261003.3"), "Deckhand (Preview)");
+    assert.equal(resolveDesktopProductName("0.0.17-pr.42.1"), "Deckhand (Preview)");
   });
 
   it("switches desktop packaging icons to the nightly artwork for nightly versions", () => {
@@ -326,6 +329,23 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         channel: "nightly",
       });
     }),
+  );
+
+  it.effect("refuses an explicit T3 update repository for Deckhand artifacts", () =>
+    Effect.gen(function* () {
+      const publish = yield* resolveGitHubPublishConfig("latest");
+      assert.isUndefined(publish);
+    }).pipe(
+      Effect.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({
+            env: {
+              DECKHAND_DESKTOP_UPDATE_REPOSITORY: "pingdotgg/t3code",
+            },
+          }),
+        ),
+      ),
+    ),
   );
 
   it.effect("never acquires an upstream feed from an ambient GitHub workflow", () =>
@@ -2005,6 +2025,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
       const mac = config.mac as Record<string, unknown>;
       assert.equal(config.appId, "com.cardinlabs.deckhand");
+      assert.equal(config.artifactName, "Deckhand-${version}-${arch}.${ext}");
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
       assert.match(String(mac.sign), /[\\/]scripts[\\/]sign-macos\.ts$/);
@@ -2428,3 +2449,52 @@ it("ignores trailing separators", () => {
     ancestorNodeModulesPaths("C:\\tmp\\probe\\app", "\\"),
   );
 });
+
+it.effect.skipIf(!symlinksSupported)(
+  "copies unpacked app artifacts with relocatable framework links instead of reporting debug metadata as the application",
+  () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "deckhand-unpacked-artifact-" });
+      const source = path.join(root, "stage");
+      const output = path.join(root, "output");
+      const framework = path.join(
+        source,
+        "mac-arm64",
+        "Deckhand.app",
+        "Contents",
+        "Frameworks",
+        "Example.framework",
+        "Versions",
+      );
+      yield* fs.makeDirectory(path.join(framework, "A"), { recursive: true });
+      yield* fs.writeFileString(path.join(framework, "A", "Example"), "packaged-library");
+      yield* fs.symlink("A", path.join(framework, "Current"));
+      yield* fs.writeFileString(path.join(source, "builder-debug.yml"), "metadata");
+      const artifacts = yield* copyDesktopBuildOutputs(source, output, "dir");
+      assert.deepEqual(artifacts, [path.join(output, "mac-arm64")]);
+      yield* fs.remove(source, { recursive: true });
+      const copied = path.join(
+        output,
+        "mac-arm64",
+        "Deckhand.app",
+        "Contents",
+        "Frameworks",
+        "Example.framework",
+        "Versions",
+      );
+      assert.equal(yield* fs.readLink(path.join(copied, "Current")), "A");
+      assert.equal(
+        yield* fs.readFileString(path.join(copied, "Current", "Example")),
+        "packaged-library",
+      );
+      const empty = path.join(root, "empty");
+      yield* fs.makeDirectory(empty);
+      yield* fs.writeFileString(path.join(empty, "builder-debug.yml"), "metadata");
+      assert.deepEqual(
+        yield* copyDesktopBuildOutputs(empty, path.join(root, "metadata-only"), "zip"),
+        [],
+      );
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);

@@ -1683,7 +1683,7 @@ const WsSubscribeResourceTelemetryRpc = Rpc.make(WS_METHODS.subscribeResourceTel
   stream: true,
 });
 
-export const WsRpcGroup = RpcGroup.make(
+export const UpstreamWsRpcGroup = RpcGroup.make(
   WsServerProbeRpc,
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,
@@ -1857,4 +1857,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeArchivedShellRpc,
   WsOrchestrationV2SubscribeShellRpc,
   WsOrchestrationV2SubscribeThreadRpc,
-).merge(DeckhandRpcGroup);
+);
+
+export const WsRpcGroup = UpstreamWsRpcGroup.merge(DeckhandRpcGroup);

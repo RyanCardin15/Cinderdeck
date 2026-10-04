@@ -1,3 +1,5 @@
+import * as OwnedPreviewRoutes from "./deckhand/OwnedPreviewRoutes.ts";
+import * as RecordingMediaRoutes from "./deckhand/RecordingMediaRoutes.ts";
 import type { RelayManagedEndpointRuntimeConfig } from "@t3tools/contracts/relay";
 import * as Clock from "effect/Clock";
 import * as Random from "effect/Random";
@@ -445,6 +447,7 @@ const CloudManagedEndpointRuntimeLive = Layer.mergeAll(
 );
 
 const OrchestrationV2RuntimeLayerLive = OrchestrationV2ProductionLayerLive.pipe(
+  Layer.provide(PullRequestServiceLive.pipe(Layer.provide(ProjectServiceLayerLive))),
   Layer.provide(ProviderEventIngestor.analyticsLive),
   Layer.provide(CheckpointStoreLayerLive),
   Layer.provide(GitWorkflowLayerLive),
@@ -645,6 +648,8 @@ const makeRoutesLayer = Layer.mergeAll(
     ),
     otlpTracesProxyRouteLayer,
     assetRouteLayer,
+    RecordingMediaRoutes.layer,
+    OwnedPreviewRoutes.routesLayer,
     attachmentUploadRouteLayer,
     deviceHubProxyRouteLayer,
     staticAndDevRouteLayer,

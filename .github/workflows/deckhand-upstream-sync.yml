@@ -1,0 +1,44 @@
+name: Deckhand upstream staging
+on:
+  schedule:
+    - cron: "23 8 * * 1"
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: "Full T3 commit SHA; blank resolves upstream/main once and records its SHA"
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: deckhand-upstream-staging
+  cancel-in-progress: false
+jobs:
+  rehearse:
+    if: github.repository != 'pingdotgg/t3code' && vars.DECKHAND_UPSTREAM_SYNC_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+      - name: Resolve immutable upstream candidate and rehearse
+        env:
+          CANDIDATE: ${{ inputs.candidate }}
+        run: |
+          git fetch https://github.com/pingdotgg/t3code.git main
+          candidate="${CANDIDATE:-$(git rev-parse FETCH_HEAD)}"
+          node scripts/deckhand/upstream-maintenance.mjs rehearse "$candidate" "$(git rev-parse HEAD)" "$RUNNER_TEMP/deckhand-upstream" "$RUNNER_TEMP/upstream-report.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upstream-rehearsal
+          path: ${{ runner.temp }}/upstream-report.json
+      - name: Open staging review when configured
+        if: vars.DECKHAND_UPSTREAM_PR_ENABLED == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.DECKHAND_UPSTREAM_STAGING_TOKEN }}
+          STAGING_BASE: ${{ vars.DECKHAND_UPSTREAM_STAGING_BRANCH }}
+        run: |
+          node scripts/deckhand/open-upstream-review.mjs "$RUNNER_TEMP/upstream-report.json" "$STAGING_BASE"

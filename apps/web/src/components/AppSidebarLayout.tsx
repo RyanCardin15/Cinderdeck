@@ -55,6 +55,8 @@ import {
   useSidebarVisibility,
 } from "./ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { ProductNavigation } from "../deckhand/ProductNavigation";
+import productStyles from "../deckhand/pullRequestsShell.module.css";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "var(--desktop-window-controls-inset, 90px)";
 
@@ -294,7 +296,25 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     };
   }, [navigate, pathname]);
 
-  if (pathname === "/workspaces")
+  if (pathname === "/pull-requests" || pathname === "/pull-requests/")
+    return (
+      <PanelAnimationSuppressionProvider value={panelAnimationsSuppressed}>
+        <SidebarProvider
+          className="grid! h-dvh! min-h-0! min-w-0! grid-cols-[220px_minmax(0,1fr)]! overflow-hidden! max-[700px]:grid-cols-1! max-[700px]:grid-rows-[auto_minmax(0,1fr)]!"
+          data-panel-animations={routePanelAnimationsActive ? "true" : "false"}
+          defaultOpen
+          style={sidebarProviderStyle}
+        >
+          <ProjectProjectionRetention />
+          <ProductNavigation current="pull-requests" />
+          <div className={productStyles.content}>{children}</div>
+          <NavigationHistoryShortcuts />
+          <MainAppLocationTracker />
+        </SidebarProvider>
+      </PanelAnimationSuppressionProvider>
+    );
+
+  if (["/workspaces", "/inbox", "/services", "/recordings", "/linked-work"].includes(pathname))
     return (
       <>
         <ProjectProjectionRetention />

@@ -1,0 +1,58 @@
+/* Default Deckhand colors use the upstream semantic roles. A saved or previewed
+   theme owns its palette through data-theme-id and takes precedence unchanged. */
+html:not([data-theme-id]) {
+  --primary: #a84413;
+  --primary-foreground: #fff;
+  --ring: #a84413;
+}
+html.dark:not([data-theme-id]) {
+  --background: #11171d;
+  --surface-raised: #1b232c;
+  --foreground: #f0f3f6;
+  --card: #192129;
+  --card-foreground: #f0f3f6;
+  --popover: #1b232c;
+  --popover-foreground: #f0f3f6;
+  --primary: #ed7b42;
+  --primary-foreground: #171b1f;
+  --secondary: #222c36;
+  --secondary-foreground: #f0f3f6;
+  --muted: #1b242d;
+  --muted-foreground: #adb7c4;
+  --accent: #25313c;
+  --accent-foreground: #f0f3f6;
+  --border: #2c343e;
+  --input: #3a4653;
+  --ring: #ed7b42;
+  --sidebar: #10171d;
+  --sidebar-control-surface: #1b242d;
+  --sidebar-row-hover: #202a34;
+  --sidebar-row-active: #26313b;
+  --sidebar-row-selected: #222c36;
+  --sidebar-stage-fade: #10171d;
+  --terminal-background: #0d1319;
+  --terminal-foreground: #e2e8ef;
+  --terminal-cursor: #ed7b42;
+  --terminal-selection-background: rgb(237 123 66 / 25%);
+}
+html.dark:not([data-theme-id]) [data-app-sidebar] {
+  --background: #10171d;
+  --foreground: #f0f3f6;
+  --card: #10171d;
+  --card-foreground: #f0f3f6;
+  --accent: #25313c;
+  --accent-foreground: #f0f3f6;
+  --muted: #1b242d;
+  --muted-foreground: #adb7c4;
+  --border: #2c343e;
+  --input: #3a4653;
+  --sidebar: #10171d;
+  --sidebar-foreground: #f0f3f6;
+  --sidebar-muted-foreground: #adb7c4;
+  --sidebar-control-surface: #1b242d;
+  --sidebar-row-hover: #202a34;
+  --sidebar-row-active: #26313b;
+  --sidebar-row-selected: #222c36;
+  --sidebar-border: #2c343e;
+  --sidebar-stage-fade: #10171d;
+}

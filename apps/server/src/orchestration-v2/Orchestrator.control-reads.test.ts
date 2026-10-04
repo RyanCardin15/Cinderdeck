@@ -1,6 +1,8 @@
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
+  type OrchestrationV2DomainEvent,
+  type OrchestrationV2RuntimeRequest,
   MessageId,
   EventId,
   NodeId,
@@ -25,6 +27,10 @@ import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
+import * as EventSink from "./EventSink.ts";
+import * as EventStore from "./EventStore.ts";
+import * as EffectOutbox from "./EffectOutbox.ts";
+import * as Stream from "effect/Stream";
 import type { ProviderAdapterV2Shape } from "./ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import { makeOrchestratorV2ReplayLayerWithRegistry } from "./testkit/ProviderReplayHarness.ts";
@@ -42,6 +48,8 @@ const database = SqlitePersistenceMemory;
 const testLayer = Layer.mergeAll(
   database,
   ProjectionStore.layer.pipe(Layer.provide(database)),
+  EventStore.layer.pipe(Layer.provide(database)),
+  EffectOutbox.layer.pipe(Layer.provide(database)),
   makeOrchestratorV2ReplayLayerWithRegistry(
     { name: "control-reads" },
     ProviderAdapterRegistry.makeLayer([adapter]),
@@ -533,4 +541,279 @@ it.effect("settles only the stopped run's background work, once", () =>
       `${commandItem(3)}:running`,
     ]);
   }).pipe(Effect.provide(testLayer)),
+);
+
+const requestFixture = (
+  threadId: ThreadId,
+  key: string,
+  now: DateTime.Utc,
+  responseCapability: OrchestrationV2RuntimeRequest["responseCapability"],
+  kind: OrchestrationV2RuntimeRequest["kind"] = "command",
+): ReadonlyArray<OrchestrationV2DomainEvent> => {
+  const requestId = RuntimeRequestId.make(`detach-request:${key}`);
+  const nodeId = NodeId.make(`detach-node:${key}`);
+  const itemId = TurnItemId.make(`detach-item:${key}`);
+  return [
+    {
+      id: EventId.make(`seed-request:${key}`),
+      type: "runtime-request.updated",
+      threadId,
+      occurredAt: now,
+      payload: {
+        id: requestId,
+        nodeId,
+        providerTurnId: null,
+        nativeRequestRef: null,
+        kind,
+        status: "pending",
+        responseCapability,
+        createdAt: now,
+        resolvedAt: null,
+      },
+    },
+    {
+      id: EventId.make(`seed-node:${key}`),
+      type: "node.updated",
+      threadId,
+      occurredAt: now,
+      payload: {
+        id: nodeId,
+        threadId,
+        runId: null,
+        parentNodeId: null,
+        rootNodeId: nodeId,
+        kind: kind === "command" ? "approval_request" : "user_input_request",
+        status: "waiting",
+        countsForRun: false,
+        providerThreadId: null,
+        providerTurnId: null,
+        nativeItemRef: null,
+        runtimeRequestId: requestId,
+        checkpointScopeId: null,
+        startedAt: now,
+        completedAt: null,
+      },
+    },
+    {
+      id: EventId.make(`seed-item:${key}`),
+      type: "turn-item.updated",
+      threadId,
+      occurredAt: now,
+      payload: {
+        id: itemId,
+        threadId,
+        runId: null,
+        nodeId,
+        providerThreadId: null,
+        providerTurnId: null,
+        nativeItemRef: null,
+        parentItemId: null,
+        ordinal: 1,
+        status: "waiting",
+        title: null,
+        startedAt: now,
+        completedAt: null,
+        updatedAt: now,
+        ...(kind === "command"
+          ? { type: "approval_request", requestId, requestKind: "command" }
+          : { type: "user_input_request", requestId, questions: [] }),
+      },
+    },
+  ];
+};
+
+it.effect("detaching a shared session cancels only this conversation's exact live callbacks", () =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const sink = yield* EventSink.EventSinkV2;
+    const outbox = yield* EffectOutbox.EffectOutboxV2;
+    const store = yield* EventStore.EventStoreV2;
+    const now = yield* DateTime.now;
+    const threadId = ThreadId.make("detach-control");
+    const otherThreadId = ThreadId.make("detach-other-conversation");
+    const sessionId = ProviderSessionId.make("detach-shared-session");
+    const unrelatedSession = ProviderSessionId.make("detach-other-session");
+    for (const id of [threadId, otherThreadId]) {
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make(`create:${id}`),
+        threadId: id,
+        projectId: ProjectId.make("detach-project"),
+        title: String(id),
+        modelSelection,
+        runtimeMode: "approval-required",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdBy: "user",
+        creationSource: "web",
+      });
+      yield* sink.write({
+        events: [
+          {
+            id: EventId.make(`attach:${id}`),
+            type: "provider-session.attached",
+            threadId: id,
+            occurredAt: now,
+            payload: {
+              id: sessionId,
+              driver: adapter.driver,
+              providerInstanceId: instanceId,
+              status: "ready",
+              cwd: "/repo",
+              model: modelSelection.model,
+              capabilities: CodexProviderCapabilitiesV2,
+              createdAt: now,
+              updatedAt: now,
+              lastError: null,
+            },
+          },
+        ],
+      });
+    }
+    yield* sink.write({
+      events: [
+        ...requestFixture(threadId, "own-approval", now, {
+          type: "live",
+          providerSessionId: sessionId,
+        }),
+        ...requestFixture(
+          threadId,
+          "own-question",
+          now,
+          { type: "live", providerSessionId: sessionId },
+          "user_input",
+        ),
+        ...requestFixture(threadId, "other-session", now, {
+          type: "live",
+          providerSessionId: unrelatedSession,
+        }),
+        ...requestFixture(threadId, "async-message", now, { type: "message" }, "user_input"),
+        ...requestFixture(otherThreadId, "other-conversation", now, {
+          type: "live",
+          providerSessionId: sessionId,
+        }),
+      ],
+    });
+    const command = {
+      type: "provider-session.detach" as const,
+      commandId: CommandId.make("detach-with-requests"),
+      threadId,
+      providerSessionId: sessionId,
+      reason: "Stop this conversation",
+    };
+    const first = yield* orchestrator.dispatch(command);
+    for (const key of ["own-approval", "own-question"]) {
+      const context = yield* projections.getRuntimeResponseContext(
+        threadId,
+        RuntimeRequestId.make(`detach-request:${key}`),
+      );
+      assert.equal(context.request?.status, "cancelled");
+      assert.equal(context.request?.responseCapability.type, "not_resumable");
+      assert.isNotNull(context.request?.resolvedAt);
+      assert.equal(context.node?.status, "cancelled");
+      assert.equal(context.item?.status, "cancelled");
+    }
+    for (const [id, key] of [
+      [threadId, "other-session"],
+      [threadId, "async-message"],
+      [otherThreadId, "other-conversation"],
+    ] as const) {
+      assert.equal(
+        (yield* projections.getRuntimeRequest(id, RuntimeRequestId.make(`detach-request:${key}`)))
+          ?.status,
+        "pending",
+      );
+    }
+    assert.equal(
+      (yield* projections.getThreadProjection(otherThreadId)).providerSessions[0]?.id,
+      sessionId,
+    );
+    const effects = yield* outbox.listByCommandId(command.commandId);
+    assert.deepEqual(
+      effects.map((effect) => effect.request.type),
+      ["provider-session.detach"],
+    );
+    const duplicate = yield* orchestrator.dispatch(command);
+    assert.equal(duplicate.sequence, first.sequence);
+    const persisted = yield* store.read({ threadId }).pipe(Stream.runCollect);
+    assert.equal(
+      persisted.filter(
+        (event) =>
+          event.event.type === "runtime-request.updated" &&
+          event.event.payload.status === "cancelled",
+      ).length,
+      2,
+    );
+  }).pipe(Effect.provide(testLayer)),
+);
+
+it.effect(
+  "a detached legacy callback can only be dismissed locally, never approved or answered",
+  () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const sink = yield* EventSink.EventSinkV2;
+      const outbox = yield* EffectOutbox.EffectOutboxV2;
+      const now = yield* DateTime.now;
+      const threadId = ThreadId.make("legacy-detached-request");
+      const sessionId = ProviderSessionId.make("missing-detached-session");
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("create-legacy-detached"),
+        threadId,
+        projectId: ProjectId.make("legacy-project"),
+        title: "Stopped",
+        modelSelection,
+        runtimeMode: "approval-required",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdBy: "user",
+        creationSource: "web",
+      });
+      yield* sink.write({
+        events: requestFixture(threadId, "legacy", now, {
+          type: "live",
+          providerSessionId: sessionId,
+        }),
+      });
+      const requestId = RuntimeRequestId.make("detach-request:legacy");
+      for (const [key, response] of [
+        ["approve", { decision: "accept" as const }],
+        ["answer", { answers: {} }],
+      ] as const) {
+        const result = yield* Effect.exit(
+          orchestrator.dispatch({
+            type: "runtime-request.respond",
+            commandId: CommandId.make(`legacy:${key}`),
+            threadId,
+            requestId,
+            ...response,
+          }),
+        );
+        assert.equal(result._tag, "Failure");
+        assert.equal(
+          (yield* projections.getRuntimeRequest(threadId, requestId))?.status,
+          "pending",
+        );
+      }
+      const commandId = CommandId.make("dismiss-legacy");
+      yield* orchestrator.dispatch({
+        type: "runtime-request.respond",
+        commandId,
+        threadId,
+        requestId,
+        decision: "decline",
+      });
+      const context = yield* projections.getRuntimeResponseContext(threadId, requestId);
+      assert.equal(context.request?.status, "cancelled");
+      assert.equal(context.request?.responseCapability.type, "not_resumable");
+      assert.equal(context.node?.status, "cancelled");
+      assert.equal(context.item?.status, "cancelled");
+      assert.isEmpty(yield* outbox.listByCommandId(commandId));
+      assert.isNull((yield* projections.getThreadShell(threadId))?.pendingRuntimeRequest);
+    }).pipe(Effect.provide(testLayer)),
 );

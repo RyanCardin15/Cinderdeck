@@ -15,6 +15,9 @@ import { McpProtocol, McpSchema, McpServer, Tool } from "effect/unstable/ai";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 import { PreviewAutomationError } from "@t3tools/contracts";
 
+import { DeckhandToolkit } from "./toolkits/deckhand/tools.ts";
+import { DeckhandToolkitHandlersLive } from "./toolkits/deckhand/handlers.ts";
+import * as DeckhandMcpAccess from "./DeckhandMcpAccess.ts";
 import packageJson from "../../package.json" with { type: "json" };
 import * as ServerConfig from "../config.ts";
 import * as DeviceService from "../device/DeviceService.ts";
@@ -708,14 +711,20 @@ export const DeviceToolkitRegistrationLive = Layer.mergeAll(
   DeviceScreenshotRegistrationLive,
 );
 
+export const DeckhandToolkitRegistrationLive = McpServer.toolkit(DeckhandToolkit).pipe(
+  Layer.provide(DeckhandToolkitHandlersLive),
+  Layer.provide(DeckhandMcpAccess.layer),
+);
+
 const McpTransportLive = McpServer.layerHttp({
-  name: "T3 Code",
+  name: "Deckhand",
   version: packageJson.version,
   path: "/mcp",
   protocols: [McpProtocol.v2025_06_18],
 }).pipe(Layer.provide(McpAuthMiddlewareLive));
 
 export const layer = Layer.mergeAll(
+  DeckhandToolkitRegistrationLive,
   PreviewToolkitRegistrationLive,
   OrchestratorToolkitRegistrationLive,
   ThreadToolkitRegistrationLive,

@@ -15,7 +15,7 @@ import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopConfig from "./DesktopConfig.ts";
 import { resolveLinuxDesktopEntryName } from "./DesktopEarlyElectronStartup.ts";
 import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePaths.ts";
-import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
+import { isNightlyDesktopVersion, isPreviewDesktopVersion } from "../updates/updateChannels.ts";
 import type { OtlpProtocol } from "@t3tools/shared/observability";
 
 export interface MakeDesktopEnvironmentInput {
@@ -103,6 +103,7 @@ function resolveDesktopAppStageLabel(input: {
     return "Dev";
   }
 
+  if (isPreviewDesktopVersion(input.appVersion)) return "Preview";
   return isNightlyDesktopVersion(input.appVersion) ? "Nightly" : "Alpha";
 }
 

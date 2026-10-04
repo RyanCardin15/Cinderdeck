@@ -1,3 +1,4 @@
+import { HistoryImportPanel } from "../../deckhand/HistoryImportPanel";
 import type { StorageCleanupSettings, WorktreeCleanupRules } from "@t3tools/contracts";
 import { resolveWorktreeCleanup } from "@t3tools/shared/projectSettings";
 import { useState } from "react";
@@ -151,6 +152,7 @@ export function StorageSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      {!isProjectScope ? <HistoryImportPanel /> : null}
       <SettingsSection id="storage-worktrees" title="Worktrees">
         {isProjectScope && (
           <SettingsRow

@@ -533,3 +533,15 @@ describe("settings sidebar scope", () => {
     expect(isSettingsOverviewVisible({ project: "project", checkout: "checkout" })).toBe(true);
   });
 });
+
+it("finds the actual Cinderdeck connection panel for workspace recovery searches", () => {
+  const result = searchSettings("cinderdeck")[0];
+  expect(result).toMatchObject({
+    id: "cinderdeck-connection",
+    to: "/settings/integrations",
+    targetId: "cinderdeck",
+  });
+  expect(searchSettings("pending operation").map((item) => item.id)).toContain(
+    "cinderdeck-connection",
+  );
+});

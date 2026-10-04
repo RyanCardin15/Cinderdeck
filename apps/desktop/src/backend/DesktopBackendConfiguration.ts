@@ -258,6 +258,7 @@ const readBackendObservabilitySettings = Effect.gen(function* () {
 
 interface SharedBootstrapInput {
   readonly bootstrapToken: string;
+  readonly captureToken?: string;
   readonly observabilitySettings: BackendObservabilitySettings;
 }
 
@@ -556,6 +557,7 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       t3Home: environment.baseDir,
       host: backendExposure.bindHost,
       desktopBootstrapToken: input.bootstrapToken,
+      ...(input.captureToken ? { desktopCaptureToken: input.captureToken } : {}),
       tailscaleServeEnabled: backendExposure.tailscaleServeEnabled,
       tailscaleServePort: backendExposure.tailscaleServePort,
       desktopTelemetryFd: 4,
@@ -854,13 +856,14 @@ export const make = Effect.gen(function* () {
   // talking to. Observability settings get re-read each resolve so a
   // hot-swap of the server-settings file is picked up on the next
   // restart cycle without having to bounce the desktop process.
+  const captureToken = Encoding.encodeHex(yield* crypto.randomBytes(32));
   const sharedInputs = Effect.gen(function* () {
     const bootstrapToken = yield* getOrCreateBootstrapToken;
     const observabilitySettings = yield* readBackendObservabilitySettings.pipe(
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(DesktopEnvironment.DesktopEnvironment, environment),
     );
-    return { bootstrapToken, observabilitySettings } satisfies SharedBootstrapInput;
+    return { bootstrapToken, captureToken, observabilitySettings } satisfies SharedBootstrapInput;
   });
 
   const buildWslPrimaryConfig = Effect.gen(function* () {

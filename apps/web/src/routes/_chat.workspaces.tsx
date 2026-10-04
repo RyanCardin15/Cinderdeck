@@ -1,3 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { WorkspaceOverview } from "../deckhand/WorkspaceOverview";
-export const Route = createFileRoute("/_chat/workspaces")({ component: WorkspaceOverview });
+export type { WorkspaceSearch } from "../deckhand/workspaceNavigation";
+import { validateWorkspaceSearch } from "../deckhand/workspaceNavigation";
+export const Route = createFileRoute("/_chat/workspaces")({
+  validateSearch: validateWorkspaceSearch,
+  component: WorkspaceOverview,
+});

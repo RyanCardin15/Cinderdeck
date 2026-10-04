@@ -1,4 +1,8 @@
+import { OWNERSHIP_METHODS } from "@t3tools/contracts/deckhand/ownershipRpc";
 import {
+  AuthAccessReadScope,
+  AuthAccessWriteScope,
+  AuthStandardClientScopes,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   AuthRelayReadScope,
@@ -6,6 +10,8 @@ import {
   WS_METHODS,
   WsRpcGroup,
 } from "@t3tools/contracts";
+import { HISTORY_IMPORT_METHODS } from "@t3tools/contracts/deckhand/historyImportRpc";
+import { OWNED_PREVIEW_METHODS } from "@t3tools/contracts/deckhand/ownedPreviewRpc";
 import { DECKHAND_METHODS } from "@t3tools/contracts/deckhand/rpc";
 import { describe, expect, it } from "@effect/vitest";
 
@@ -16,6 +22,12 @@ import {
 } from "./RpcAuthorization.ts";
 
 describe("RPC authorization scopes", () => {
+  it("requires operation authority for ownership submission and recovery", () => {
+    for (const method of [OWNERSHIP_METHODS.submit, OWNERSHIP_METHODS.get])
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationOperateScope);
+    for (const method of [OWNERSHIP_METHODS.preview, OWNERSHIP_METHODS.list])
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationReadScope);
+  });
   it("declares exactly one scope for every RPC in the server group", () => {
     expect(new Set(Object.keys(RPC_REQUIRED_SCOPES))).toEqual(new Set(WsRpcGroup.requests.keys()));
   });
@@ -108,6 +120,30 @@ describe("RPC authorization scopes", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.pullRequestsRequestReviewers)).toBe(
       requiredScopeForRpcMethod(WS_METHODS.pullRequestsComment),
     );
+  });
+
+  it("keeps local history archives outside standard provider authority", () => {
+    for (const method of [HISTORY_IMPORT_METHODS.import, HISTORY_IMPORT_METHODS.remove]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthAccessWriteScope);
+    }
+    for (const method of [
+      HISTORY_IMPORT_METHODS.get,
+      HISTORY_IMPORT_METHODS.list,
+      HISTORY_IMPORT_METHODS.threads,
+      HISTORY_IMPORT_METHODS.messages,
+      HISTORY_IMPORT_METHODS.messageText,
+    ]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthAccessReadScope);
+    }
+    expect(AuthStandardClientScopes).not.toContain(AuthAccessReadScope);
+    expect(AuthStandardClientScopes).not.toContain(AuthAccessWriteScope);
+  });
+
+  it("requires operation authority to begin preview capture", () => {
+    expect(requiredScopeForRpcMethod(OWNED_PREVIEW_METHODS.intent)).toBe(
+      AuthOrchestrationOperateScope,
+    );
+    expect(requiredScopeForRpcMethod(OWNED_PREVIEW_METHODS.get)).toBe(AuthOrchestrationReadScope);
   });
 
   it("rejects unknown RPC method names", () => {

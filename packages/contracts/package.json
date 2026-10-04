@@ -27,7 +27,23 @@
       "types": "./src/deckhand/integration.ts",
       "import": "./src/deckhand/integration.ts"
     },
-    "./deckhand/rpc": "./src/deckhand/rpc.ts"
+    "./deckhand/rpc": "./src/deckhand/rpc.ts",
+    "./deckhand/recordingsRpc": "./src/deckhand/recordingsRpc.ts",
+    "./deckhand/runsRpc": "./src/deckhand/runsRpc.ts",
+    "./deckhand/builds": "./src/deckhand/builds.ts",
+    "./deckhand/linkedWorkRpc": "./src/deckhand/linkedWorkRpc.ts",
+    "./deckhand/reviewerRpc": "./src/deckhand/reviewerRpc.ts",
+    "./deckhand/verificationRpc": "./src/deckhand/verificationRpc.ts",
+    "./deckhand/threadContextRpc": "./src/deckhand/threadContextRpc.ts",
+    "./deckhand/attentionRpc": {
+      "types": "./src/deckhand/attentionRpc.ts",
+      "import": "./src/deckhand/attentionRpc.ts"
+    },
+    "./deckhand/externalSessionsRpc": "./src/deckhand/externalSessionsRpc.ts",
+    "./deckhand/verificationAttemptsRpc": "./src/deckhand/verificationAttemptsRpc.ts",
+    "./deckhand/ownedPreviewRpc": "./src/deckhand/ownedPreviewRpc.ts",
+    "./deckhand/historyImportRpc": "./src/deckhand/historyImportRpc.ts",
+    "./deckhand/ownershipRpc": "./src/deckhand/ownershipRpc.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

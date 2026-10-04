@@ -1,3 +1,20 @@
+import * as CurrentCheckout from "../deckhand/CurrentCheckout.ts";
+import * as OwnershipTransitions from "../deckhand/OwnershipTransitions.ts";
+import * as HistoryImports from "../deckhand/HistoryImports.ts";
+import * as OwnedPreviewCapture from "../deckhand/OwnedPreviewCapture.ts";
+import * as OwnedPreviewAttestations from "../deckhand/OwnedPreviewAttestations.ts";
+import * as VerificationAttempts from "../deckhand/VerificationAttempts.ts";
+import * as Builds from "../deckhand/Builds.ts";
+import * as ExternalSessions from "../deckhand/ExternalSessions.ts";
+import * as Attention from "../deckhand/Attention.ts";
+import * as Verification from "../deckhand/Verification.ts";
+import * as GitHubPullRequestCli from "../pullRequest/GitHubPullRequestCli.ts";
+import * as GitHubGraphQlBudget from "../sourceControl/githubGraphQlBudget.ts";
+import * as GitHubCli from "../sourceControl/GitHubCli.ts";
+import * as LinkedWorkBridge from "../deckhand/LinkedWorkBridge.ts";
+import * as PreviewCapture from "../deckhand/PreviewCapture.ts";
+import * as DeckhandRuns from "../deckhand/Runs.ts";
+import * as ReviewerLaunch from "../deckhand/ReviewerLaunch.ts";
 import * as UsageLimitRecoveryWorker from "./UsageLimitRecoveryWorker.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as Layer from "effect/Layer";
@@ -44,6 +61,12 @@ import { layer as providerTurnStartServiceLayer } from "./ProviderTurnStartServi
 import { layer as runExecutionServiceLayer } from "./RunExecutionService.ts";
 import { layer as runFinalizationServiceLayer } from "./RunFinalizationService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
+import * as AuthSessions from "../persistence/AuthSessions.ts";
+import * as DeckhandRecordings from "../deckhand/Recordings.ts";
+import * as RecordingTransport from "../deckhand/RecordingTransport.ts";
+import * as IntegrationDiscovery from "../deckhand/IntegrationDiscovery.ts";
+import * as CinderdeckClient from "../deckhand/CinderdeckClient.ts";
+import * as DeckhandThreadContext from "../deckhand/ThreadContext.ts";
 import * as ManagedSessions from "../deckhand/ManagedSessions.ts";
 import * as ManagedSessionLaunch from "../deckhand/ManagedSessionLaunch.ts";
 import * as WorkspaceBackend from "../deckhand/WorkspaceBackend.ts";
@@ -329,26 +352,162 @@ export const OrchestrationV2LayerLive = Layer.mergeAll(
   legacyV1ThreadImporterProvided,
 );
 
-export const OrchestrationV2ProductionLayerLive = Layer.mergeAll(
-  OrchestrationV2LayerLive.pipe(Layer.provide(ProjectServiceLayerLive)),
-  ProjectServiceLayerLive,
-  managedProjectFoldersProvided,
-  threadLaunchProvided,
-  ManagedSessions.layer.pipe(
-    Layer.provide(Layer.mergeAll(Relationships.layer, projectionStoreLayer, eventSinkProvided)),
+export const externalSessionsProvided = ExternalSessions.layer.pipe(
+  Layer.provide(Layer.mergeAll(Relationships.layer, IntegrationHub.layerLive)),
+);
+const deckhandTransportProvided = RecordingTransport.layer.pipe(
+  Layer.provide(CinderdeckClient.layer),
+  Layer.provide(
+    IntegrationDiscovery.layer.pipe(
+      Layer.provideMerge(IntegrationDiscovery.configLayer),
+      Layer.provide(IntegrationDiscovery.hostLayer.pipe(Layer.provide(ProcessRunner.layer))),
+    ),
   ),
-  ManagedSessionLaunch.layer.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        threadLaunchProvided,
-        ProjectServiceLayerLive,
-        providerAdapterRegistryProvided,
-        Relationships.layer,
-        CheckoutIdentity.layer.pipe(Layer.provide(ProcessRunner.layer)),
-        WorkspaceBackend.layerLive,
+);
+const deckhandRecordingsProvided = DeckhandRecordings.layer.pipe(
+  Layer.provide(AuthSessions.layer),
+  Layer.provide(deckhandTransportProvided),
+);
+const managedLaunchDependencies = Layer.mergeAll(
+  threadLaunchProvided,
+  ProjectServiceLayerLive,
+  providerAdapterRegistryProvided,
+  Relationships.layer,
+  ProcessRunner.layer,
+  CheckoutIdentity.layer.pipe(Layer.provide(ProcessRunner.layer)),
+  WorkspaceBackend.layerLive,
+);
+const managedLaunchProvided = ManagedSessionLaunch.layer.pipe(
+  Layer.provide(managedLaunchDependencies),
+);
+const reviewerLaunchProvided = ReviewerLaunch.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      managedLaunchProvided,
+      managedLaunchDependencies,
+      providerSessionManagerProvided,
+      projectionStoreLayer,
+    ),
+  ),
+);
+const verificationProvided = Verification.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      Relationships.layer,
+      deckhandRecordingsProvided,
+      GitHubPullRequestCli.layer.pipe(
+        Layer.provide(GitHubCli.layer),
+        Layer.provide(GitHubGraphQlBudget.layer),
       ),
     ),
   ),
+);
+const buildsProvided = Builds.layer.pipe(Layer.provide(deckhandTransportProvided));
+const currentCheckoutProvided = CurrentCheckout.layer.pipe(Layer.provide(Relationships.layer));
+const managedSessionsProvided = ManagedSessions.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      Relationships.layer,
+      projectionStoreLayer,
+      eventSinkProvided,
+      externalSessionsProvided,
+      currentCheckoutProvided,
+    ),
+  ),
+);
+const ownershipTransitionsProvided = OwnershipTransitions.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      currentCheckoutProvided,
+      Relationships.layer,
+      IntegrationHub.layerLive,
+      WriterReservations.layer,
+      CheckoutIdentity.layer.pipe(Layer.provide(ProcessRunner.layer)),
+      projectionStoreLayer,
+    ),
+  ),
+);
+const ownedPreviewAttestationsProvided = OwnedPreviewAttestations.layer;
+const verificationAttemptsProvided = VerificationAttempts.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      currentCheckoutProvided,
+      ownedPreviewAttestationsProvided,
+      buildsProvided,
+      verificationProvided,
+      deckhandRecordingsProvided,
+      Relationships.layer,
+      WorkspaceBackend.layerLive,
+      CheckoutIdentity.layer.pipe(Layer.provide(ProcessRunner.layer)),
+      ProcessRunner.layer,
+    ),
+  ),
+);
+const ownedPreviewCaptureProvided = OwnedPreviewCapture.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      currentCheckoutProvided,
+      ownedPreviewAttestationsProvided,
+      verificationAttemptsProvided,
+      deckhandTransportProvided,
+      buildsProvided,
+      deckhandRecordingsProvided,
+      Relationships.layer,
+    ),
+  ),
+);
+export const OrchestrationV2ProductionLayerLive = Layer.mergeAll(
+  HistoryImports.layer,
+  currentCheckoutProvided,
+  ownershipTransitionsProvided,
+  ownedPreviewAttestationsProvided,
+  ownedPreviewCaptureProvided,
+  OrchestrationV2LayerLive.pipe(Layer.provide(ProjectServiceLayerLive)),
+  ProjectServiceLayerLive,
+  deckhandRecordingsProvided,
+  verificationProvided,
+  verificationAttemptsProvided,
+  PreviewCapture.layer.pipe(
+    Layer.provide(Layer.mergeAll(Relationships.layer, deckhandTransportProvided)),
+  ),
+  managedProjectFoldersProvided,
+  threadLaunchProvided,
+  managedSessionsProvided,
+  DeckhandThreadContext.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        Relationships.layer,
+        IntegrationHub.layerLive,
+        managedSessionsProvided,
+        currentCheckoutProvided,
+      ),
+    ),
+  ),
+  managedLaunchProvided,
+  reviewerLaunchProvided,
+  externalSessionsProvided,
+  Attention.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        projectionStoreLayer,
+        IntegrationHub.layerLive,
+        DeckhandRuns.layer.pipe(Layer.provide(deckhandTransportProvided)),
+      ),
+    ),
+  ),
+  LinkedWorkBridge.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        Relationships.layer,
+        deckhandTransportProvided,
+        IntegrationHub.layerLive,
+        CheckoutIdentity.layer.pipe(Layer.provide(ProcessRunner.layer)),
+        managedSessionsProvided,
+        currentCheckoutProvided,
+      ),
+    ),
+  ),
+  DeckhandRuns.layer.pipe(Layer.provide(deckhandTransportProvided)),
   threadLifecycleProvided,
   scheduledTaskProvided,
   UsageLimitRecoveryWorker.workerLive.pipe(
@@ -359,4 +518,8 @@ export const OrchestrationV2ProductionLayerLive = Layer.mergeAll(
 ).pipe(
   Layer.provide(Scheduler.layer),
   Layer.provideMerge(OrchestrationEventInfrastructureLayerLive),
+  // Export the same memoized native integration services to route registration.
+  // The WebSocket and managed contexts must share one connection/cache lifetime.
+  Layer.provideMerge(IntegrationHub.layerLive),
+  Layer.provideMerge(WorkspaceBackend.layerLive),
 );

@@ -400,6 +400,12 @@ describe("Deckhand schema migration", () => {
             Effect.exit,
           );
         assert.equal(immutable._tag, "Failure");
+        yield* sql`INSERT INTO deckhand_reviewer_queue VALUES ('review', 'actor', '{}', 'queued', 'now', '{}')`;
+        const reviewImmutable =
+          yield* sql`UPDATE deckhand_reviewer_queue SET original_input_json='{"changed":true}' WHERE operation_key='review'`.pipe(
+            Effect.exit,
+          );
+        assert.equal(reviewImmutable._tag, "Failure");
         yield* Migrations.migrate;
         const rows = yield* sql<{ transcript: string }>`SELECT transcript FROM upstream_history`;
         assert.equal(rows[0]?.transcript, "existing conversation");
@@ -412,6 +418,12 @@ describe("Deckhand schema migration", () => {
         yield* sql`DROP TABLE deckhand_managed_launches`;
         yield* sql`DROP TABLE deckhand_managed_creations`;
         yield* sql`DROP TABLE deckhand_launch_reviews`;
+        yield* sql`DROP TABLE deckhand_reviewer_queue`;
+        yield* sql`DROP TABLE IF EXISTS deckhand_verification_attempts`;
+        yield* sql`DROP TABLE IF EXISTS deckhand_external_sessions`;
+        yield* sql`DROP TABLE deckhand_attention_dispositions`;
+        yield* sql`DROP INDEX deckhand_attention_source`;
+        yield* sql`DROP INDEX deckhand_attention_page`;
         yield* sql`DELETE FROM deckhand_schema WHERE version >= 2`;
         yield* sql`INSERT INTO deckhand_schema VALUES (1)`;
         yield* Migrations.migrate;
@@ -427,7 +439,7 @@ describe("Deckhand schema migration", () => {
             ?.transcript,
           "existing conversation",
         );
-        yield* sql`INSERT INTO deckhand_schema VALUES (10)`;
+        yield* sql`INSERT INTO deckhand_schema SELECT MAX(version)+1 FROM deckhand_schema`;
         const newer = yield* Migrations.migrate.pipe(Effect.flip);
         assert.equal(newer._tag, "DeckhandStoreVersionError");
         const provenance = yield* sql<{
@@ -435,5 +447,36 @@ describe("Deckhand schema migration", () => {
         }>`SELECT record_json FROM deckhand_evidence_manifests`;
         assert.equal(provenance[0]?.record_json, '{"commit":"a"}');
       }).pipe(Effect.provide(SqlLayer)),
+  );
+  it.effect("rolls back an interrupted migration and can retry without losing upstream data", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`CREATE TABLE upstream_history(id TEXT PRIMARY KEY, transcript TEXT NOT NULL)`;
+      yield* sql`INSERT INTO upstream_history VALUES ('thread','preserved')`;
+      // Inject a conflict partway through the fresh migration to exercise the transaction.
+      yield* sql`CREATE TABLE deckhand_writer_requests(id TEXT PRIMARY KEY)`;
+      assert.equal((yield* Migrations.migrate.pipe(Effect.exit))._tag, "Failure");
+      const tables = yield* sql<{
+        name: string;
+      }>`SELECT name FROM sqlite_master WHERE type='table' AND name IN ('deckhand_schema','deckhand_workspaces','deckhand_sessions')`;
+      assert.equal(tables.length, 0);
+      assert.equal(
+        (yield* sql<{ transcript: string }>`SELECT transcript FROM upstream_history`)[0]!
+          .transcript,
+        "preserved",
+      );
+      yield* sql`DROP TABLE deckhand_writer_requests`;
+      yield* Migrations.migrate;
+      assert.equal(
+        (yield* sql<{ version: number }>`SELECT MAX(version) AS version FROM deckhand_schema`)[0]!
+          .version,
+        Migrations.VERSION,
+      );
+      assert.equal(
+        (yield* sql<{ transcript: string }>`SELECT transcript FROM upstream_history`)[0]!
+          .transcript,
+        "preserved",
+      );
+    }).pipe(Effect.provide(SqlLayer)),
   );
 });
