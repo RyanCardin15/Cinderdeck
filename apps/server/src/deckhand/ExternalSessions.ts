@@ -108,12 +108,27 @@ const make = Effect.gen(function* () {
       )
         return yield* fail("stale");
     });
+  // Refresh owns the Hub lock and writes its snapshot through this same SQL
+  // connection. Never await it while holding a registry transaction: an event
+  // refresh (including writer release) would otherwise wait on our SQL lock.
+  const currentNativeContext = (input: typeof C.ExternalSessionContext.Type) =>
+    Effect.gen(function* () {
+      const native = yield* hub.currentResources([input.workspaceID]);
+      if (native.state !== "connected" || !native.hello) return yield* fail("source_unavailable");
+      const resource = native.resources.find((item) => item.workspaceID === input.workspaceID);
+      if (
+        native.hello.installationID !== input.installationID ||
+        resource?.generation !== input.generation ||
+        !resource.available
+      )
+        return yield* fail("stale");
+    }).pipe(Effect.mapError(wrap));
   const context = (
     input: typeof C.ExternalSessionContext.Type,
     repositoryScope?: ReadonlyArray<string>,
   ) =>
     Effect.gen(function* () {
-      yield* nativeContext(input);
+      yield* currentNativeContext(input);
       const feature = yield* relationships
         .feature(input.featureId)
         .pipe(Effect.mapError(() => fail("wrong_context")));
@@ -157,6 +172,7 @@ const make = Effect.gen(function* () {
         Effect.mapError(() => fail("invalid_request")),
       );
       const argumentHash = hash(yield* encodeRegister(input));
+      yield* nativeContext(input);
       return yield* sql.withTransaction(
         Effect.gen(function* () {
           yield* context(input, input.repositoryScope);
@@ -190,6 +206,25 @@ const make = Effect.gen(function* () {
         }),
       );
     }).pipe(Effect.tap(publish), Effect.mapError(wrap));
+  const heartbeatRecord = (actor: string, input: C.ExternalSessionHeartbeat) =>
+    Effect.gen(function* () {
+      const rows =
+        yield* sql<Row>`SELECT actor_id,argument_hash,report_hash,expires_at,record_json FROM deckhand_external_sessions WHERE id=${input.id}`;
+      if (!rows[0]) return yield* fail("missing");
+      const row = rows[0];
+      if (row.actor_id !== actor) return yield* fail("unauthorized");
+      const old = yield* decodeRecord(row.record_json);
+      if (
+        old.installationID !== input.installationID ||
+        old.workspaceID !== input.workspaceID ||
+        old.generation !== input.generation ||
+        old.featureId !== input.featureId ||
+        old.checkoutId !== input.checkoutId
+      )
+        return yield* fail("wrong_context");
+      if (old.archivedAt) return yield* fail("stale");
+      return { row, old };
+    });
   const heartbeat: ExternalSessions["Service"]["heartbeat"] = (actor, payload) =>
     Effect.gen(function* () {
       if (!actorValid(actor)) return yield* fail("unauthorized");
@@ -197,23 +232,13 @@ const make = Effect.gen(function* () {
         Effect.mapError(() => fail("invalid_request")),
       );
       const reportHash = hash(yield* encodeHeartbeat(input));
+      // Refuse a foreign or retargeted registration before doing native I/O,
+      // then reread under the transaction to preserve ownership and CAS.
+      yield* heartbeatRecord(actor, input);
+      yield* nativeContext(input);
       return yield* sql.withTransaction(
         Effect.gen(function* () {
-          const rows =
-            yield* sql<Row>`SELECT actor_id,argument_hash,report_hash,expires_at,record_json FROM deckhand_external_sessions WHERE id=${input.id}`;
-          if (!rows[0]) return yield* fail("missing");
-          const row = rows[0];
-          if (row.actor_id !== actor) return yield* fail("unauthorized");
-          const old = yield* decodeRecord(row.record_json);
-          if (
-            old.installationID !== input.installationID ||
-            old.workspaceID !== input.workspaceID ||
-            old.generation !== input.generation ||
-            old.featureId !== input.featureId ||
-            old.checkoutId !== input.checkoutId
-          )
-            return yield* fail("wrong_context");
-          if (old.archivedAt) return yield* fail("stale");
+          const { row, old } = yield* heartbeatRecord(actor, input);
           yield* context(input, old.repositoryScope);
           const clock = yield* now;
           // A lost response can replay exactly; replay does not extend the original lease.
