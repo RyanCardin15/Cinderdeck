@@ -1,3 +1,4 @@
+import { DECKHAND_METHODS, type ContextPullRequestsPage } from "@t3tools/contracts/deckhand/rpc";
 import {
   DEFAULT_SERVER_SETTINGS,
   EnvironmentAuthorizationError,
@@ -92,6 +93,36 @@ const makeHarness = Effect.fn("TestEnvironmentRpc.makeHarness")(function* () {
 });
 
 describe("environment RPC", () => {
+  it.effect(
+    "subscribes to exact context PR pages using the saved scope and bounded typed transport",
+    () =>
+      Effect.gen(function* () {
+        const input = {
+          installationID: "installation",
+          workspaceID: "lane",
+          generation: 7,
+          offset: 50,
+          limit: 50,
+        };
+        const page: ContextPullRequestsPage = { ...input, items: [], total: 50, nextOffset: null };
+        const calls: unknown[] = [];
+        const client = {
+          [DECKHAND_METHODS.contextPullRequests]: (received: typeof input) => {
+            calls.push(received);
+            return Stream.make(page);
+          },
+        } as unknown as WsRpcProtocolClient;
+        const { activeSession, supervisor } = yield* makeHarness();
+        yield* SubscriptionRef.set(activeSession, Option.some(session(client)));
+        const received = yield* subscribe(DECKHAND_METHODS.contextPullRequests, input).pipe(
+          Stream.runHead,
+          Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        );
+        expect(received).toEqual(Option.some(page));
+        expect(calls).toEqual([input]);
+      }),
+  );
+
   it.effect("registers a fresh preview host after completion without replaying requests", () =>
     Effect.gen(function* () {
       const firstCompleted = yield* Deferred.make<void>();

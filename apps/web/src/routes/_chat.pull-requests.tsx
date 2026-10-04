@@ -1,3 +1,8 @@
+import { ContextPullRequests } from "../deckhand/ContextPullRequests";
+import {
+  validateConnectedPullRequestSearch,
+  type ConnectedPullRequestSearch,
+} from "../deckhand/contextPullRequestScope";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { Spinner } from "~/components/ui/spinner";
 import { pullRequestHostOf, resolveEnvironmentMachineKind } from "@t3tools/contracts";
@@ -181,7 +186,10 @@ function getShortcutContext() {
   };
 }
 
-export interface PullRequestsSearch extends PullRequestListPreferences {
+export interface PullRequestsSearch
+  extends
+    PullRequestListPreferences,
+    Partial<Omit<ConnectedPullRequestSearch, "involvement" | "state">> {
   /**
    * Narrows the list to one server. Absent means every connected one, which is the default the
    * page has now — so a link written before servers could be chosen still opens the whole list.
@@ -345,11 +353,18 @@ export const Route = createFileRoute("/_chat/pull-requests")({
       ? { author: raw.author.trim().slice(0, 200) }
       : {}),
     ...pullRequestSearchLabels(raw.labels),
+    ...validateConnectedPullRequestSearch(raw),
   }),
   component: PullRequestsRouteView,
 });
 
 function PullRequestsRouteView() {
+  const search = Route.useSearch();
+  if (search.deckhandContext !== undefined)
+    return <ContextPullRequests scope={search as ConnectedPullRequestSearch} />;
+  return <GlobalPullRequestsRouteView />;
+}
+function GlobalPullRequestsRouteView() {
   const [detailFocus, setDetailFocus] = useState<PullRequestDetailFocus>(null);
   useEscapeToGoBack();
   const search = Route.useSearch();

@@ -49,6 +49,7 @@ export type EnvironmentSubscriptionRpcTag =
   | typeof DECKHAND_METHODS.subscribe
   | typeof THREAD_CONTEXT_METHOD
   | typeof DECKHAND_METHODS.contexts
+  | typeof DECKHAND_METHODS.contextPullRequests
   | typeof DECKHAND_METHODS.sessions
   | typeof WS_METHODS.codexAuthCallbackSubscribe
   | typeof WS_METHODS.providerAuthSubscribe

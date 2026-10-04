@@ -367,8 +367,9 @@ it("settles an initial agent-summary refusal without a permanent spinner or fals
   await render();
   expect(container.textContent).toContain("Agents unavailable");
   expect(container.textContent).not.toContain("Loading agents");
-  await act(async () => button("Needs attention").click());
-  expect(container.textContent).toContain("Agent attention could not be verified");
+  await changeSelect("Activity", "attention");
+  expect(container.textContent).toContain("Agent state is last observed");
+  expect(container.querySelectorAll("article[aria-label]").length).toBeGreaterThan(0);
   expect(container.textContent).not.toContain("No contexts need attention");
 });
 
@@ -434,6 +435,162 @@ it("keeps a departed workspace selected when its recovered lane creation complet
     context: "created-lane",
     expectedInstallationID: "installation",
     tab: "agents",
+  });
+  expect(boundary.mutation).not.toHaveBeenCalled();
+});
+
+it("opens the selected lane's pull requests with original pins and a scoped return", async () => {
+  boundary.search = {
+    environment: "computer",
+    workspace: "primary",
+    context: "lane",
+    tab: "agents",
+  };
+  await render();
+  const url = await follow("Pull requests");
+  expect(Object.fromEntries(url.searchParams)).toEqual({
+    involvement: "all",
+    state: "all",
+    environmentId: "computer",
+    deckhandWorkspace: "primary",
+    deckhandContext: "lane",
+    deckhandInstallationID: "installation",
+    deckhandGeneration: "7",
+    deckhandTab: "agents",
+  });
+});
+it("keeps a replaced lane's original PR scope instead of linking its replacement", async () => {
+  boundary.search = {
+    environment: "computer",
+    workspace: "primary",
+    context: "lane",
+    expectedInstallationID: "installation",
+    expectedGeneration: 6,
+    tab: "agents",
+  };
+  await render();
+  const url = await follow("Pull requests");
+  expect(url.searchParams.get("deckhandGeneration")).toBe("6");
+  expect(url.searchParams.get("deckhandInstallationID")).toBe("installation");
+  expect(url.searchParams.get("deckhandContext")).toBe("lane");
+});
+
+it.each(["missing", "lane"])(
+  "keeps original lifecycle recovery visible when its child cannot own scope %s",
+  async (context) => {
+    boundary.search = {
+      environment: "computer",
+      workspace: "primary",
+      context,
+      expectedInstallationID: "installation",
+      expectedGeneration: context === "lane" ? 6 : 7,
+    };
+    boundary.recent.mockResolvedValue({
+      _tag: "Success",
+      value: [
+        {
+          input: {
+            operationKey: "saved-lifecycle",
+            method: "lane.setup",
+            installationID: "installation",
+            workspaceID: context,
+          },
+          receipt: { method: "lane.setup", state: "unknown_outcome", result: null },
+          refused: false,
+        },
+      ],
+    });
+    await render();
+    expect(container.textContent).toContain("Recovered a previously submitted operation");
+    expect(button("Check operation")).toBeDefined();
+    expect(boundary.mutation).not.toHaveBeenCalled();
+  },
+);
+it("recovers a delegated lifecycle request when leaving its named-lane inspector", async () => {
+  boundary.search = { environment: "computer", workspace: "primary", context: "lane" };
+  const receipt = { method: "lane.setup", state: "unknown_outcome", result: null };
+  boundary.recent.mockResolvedValue({
+    _tag: "Success",
+    value: [
+      {
+        input: {
+          operationKey: "saved-lifecycle",
+          method: "lane.setup",
+          installationID: "installation",
+          workspaceID: "lane",
+        },
+        receipt,
+        refused: false,
+      },
+    ],
+  });
+  registry.set(
+    nativeAtom,
+    AsyncResult.success({
+      ...view,
+      hello: {
+        ...view.hello!,
+        capabilities: [...view.hello!.capabilities, "operations.receipts", "operations.lane.setup"],
+      },
+    }),
+  );
+  await render();
+  expect(container.textContent).not.toContain("Recovered a previously submitted operation");
+  await changeSelect("Workspace", "other");
+  await render();
+  expect(container.textContent).toContain("Recovered a previously submitted operation");
+  expect(button("Check operation")).toBeDefined();
+  expect(boundary.mutation).not.toHaveBeenCalled();
+});
+
+it("checks a new scope's journal even while retaining a terminal operation", async () => {
+  boundary.search = { environment: "computer", workspace: "primary", tab: "agents" };
+  const original = {
+    input: {
+      operationKey: "saved-original",
+      installationID: "installation",
+      workspaceID: "primary",
+    },
+    receipt: { method: "services.start", state: "unknown_outcome", result: null },
+    refused: false,
+  };
+  boundary.recent.mockResolvedValue({ _tag: "Success", value: [original] });
+  boundary.inspect.mockResolvedValue({
+    _tag: "Success",
+    value: { ...original.receipt, state: "succeeded" },
+  });
+  await render();
+  await act(async () => button("Check operation").click());
+  expect(container.textContent).toContain("services.start: succeeded");
+  let complete!: (value: unknown) => void;
+  boundary.recent.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+  );
+  boundary.recent.mockClear();
+  await changeSelect("Workspace", "other");
+  await render();
+  expect(boundary.recent).toHaveBeenCalledWith({ environmentId, input: {} });
+  expect(button("New lane").disabled).toBe(true);
+  await act(async () =>
+    complete({
+      _tag: "Success",
+      value: [
+        {
+          ...original,
+          input: { ...original.input, operationKey: "saved-new-scope", workspaceID: "other" },
+        },
+      ],
+    }),
+  );
+  expect(button("New lane").disabled).toBe(true);
+  boundary.inspect.mockClear();
+  await act(async () => button("Check operation").click());
+  expect(boundary.inspect).toHaveBeenCalledWith({
+    environmentId,
+    input: { operationKey: "saved-new-scope" },
   });
   expect(boundary.mutation).not.toHaveBeenCalled();
 });

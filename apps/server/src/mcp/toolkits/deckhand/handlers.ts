@@ -2,11 +2,16 @@ import * as Verification from "../../../deckhand/Verification.ts";
 import * as Attempts from "../../../deckhand/VerificationAttempts.ts";
 import * as External from "../../../deckhand/ExternalSessions.ts";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as ManagedSessions from "../../../deckhand/ManagedSessions.ts";
 import * as Access from "../../DeckhandMcpAccess.ts";
 import * as Runs from "../../../deckhand/Runs.ts";
 import * as Recordings from "../../../deckhand/Recordings.ts";
 import * as Hub from "../../../deckhand/IntegrationHub.ts";
-import { DeckhandToolkit } from "./tools.ts";
+import { DeckhandToolkit, ContextPullRequestsParameters } from "./tools.ts";
+const isContextPullRequestsParameters = Schema.is(ContextPullRequestsParameters);
 export const handlers = {
   deckhand_verification_scenarios: (input) =>
     Effect.gen(function* () {
@@ -124,6 +129,22 @@ export const handlers = {
     Effect.gen(function* () {
       return (yield* (yield* Access.DeckhandMcpAccess).resolve()).view;
     }),
+  deckhand_context_pull_requests: (input) =>
+    Effect.gen(function* () {
+      if (!isContextPullRequestsParameters(input))
+        return yield* Access.deckhandFailure({ reason: "invalid_request" });
+      const c = yield* (yield* Access.DeckhandMcpAccess).resolve();
+      const page = yield* (yield* ManagedSessions.ManagedSessions)
+        .subscribePullRequests({
+          ...c.input,
+          offset: input.offset ?? 0,
+          limit: input.limit ?? 20,
+        })
+        .pipe(Stream.runHead);
+      if (Option.isNone(page))
+        return yield* Access.deckhandFailure({ reason: "source_unavailable" });
+      return page.value;
+    }).pipe(Effect.mapError(Access.deckhandFailure)),
   deckhand_services_runs: () =>
     Effect.gen(function* () {
       const c = yield* (yield* Access.DeckhandMcpAccess).resolve();

@@ -17,7 +17,7 @@ import * as Option from "effect/Option";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import { runtime } from "../lib/runtime";
-import { readPullRequestListPreferences } from "../components/pullRequest/pullRequestListPreferences";
+import { connectedPullRequestSearch } from "./contextPullRequestScope";
 import { AsyncResult } from "effect/unstable/reactivity";
 import type { EnvironmentId } from "@t3tools/contracts";
 import type { IntegrationView, ManagedContextView } from "@t3tools/contracts/deckhand/rpc";
@@ -32,6 +32,13 @@ import {
   savedWorkspaceMatches,
 } from "./workspaceNavigation";
 import { SessionList } from "./SessionList";
+import { WorkspaceFilters } from "./WorkspaceFilters";
+import { LaneLifecycleControls } from "./LaneLifecycleControls";
+import {
+  defaultWorkspaceFilters,
+  selectWorkspaceContexts,
+  type WorkspaceFilterValue,
+} from "./workspaceContextFilters";
 import { useAgentObservation } from "./useAgentObservation";
 import { agentExecutionLabel, agentProviderLabel } from "./agentPresentation";
 import { environmentServerConfigsAtom } from "../state/server";
@@ -189,7 +196,9 @@ function ConnectedWorkspace({
   const providers = deriveProviderInstanceEntries(
     serverConfigs.get(environmentId)?.providers ?? [],
   );
-  const [filter, setFilter] = useState("all");
+  const [filters, setFilters] = useState<WorkspaceFilterValue>(() => ({
+    ...defaultWorkspaceFilters,
+  }));
   const [branch, setBranch] = useState("");
   const [creating, setCreating] = useState(false);
   const [featureCreating, setFeatureCreating] = useState(false);
@@ -200,6 +209,7 @@ function ConnectedWorkspace({
     newFeatureButton.current?.focus();
   }, []);
   const [busy, setBusy] = useState(false);
+  const [lifecyclePending, setLifecyclePending] = useState(false);
   const [operation, setOperation] = useState<{
     key: string;
     workspaceID: string;
@@ -212,40 +222,8 @@ function ConnectedWorkspace({
   const submit = useAtomCommand(submitOperation, { reportFailure: false });
   const inspect = useAtomCommand(inspectOperation, { reportFailure: false });
   const recent = useAtomCommand(recentOperations, { reportFailure: false });
-  const [recovered, setRecovered] = useState(false);
-  const [recoveryError, setRecoveryError] = useState(false);
-  useEffect(() => {
-    if (recovered || operation || recoveryError || view?.state !== "connected") return;
-    let disposed = false;
-    void recent({ environmentId, input: {} }).then((response) => {
-      if (disposed) return;
-      if (response._tag !== "Success") {
-        setRecoveryError(true);
-        return;
-      }
-      setRecoveryError(false);
-      const unresolved = response.value.find(
-        (record) =>
-          !record.refused &&
-          (!record.receipt ||
-            ["pending", "running", "unknown_outcome"].includes(record.receipt.state)),
-      );
-      if (unresolved)
-        setOperation({
-          key: unresolved.input.operationKey,
-          workspaceID: unresolved.input.workspaceID,
-          installationID: unresolved.input.installationID,
-          receipt: unresolved.receipt,
-          refused: false,
-          message:
-            "Recovered a previously submitted operation. Check its result before taking another action.",
-        });
-      setRecovered(true);
-    });
-    return () => {
-      disposed = true;
-    };
-  }, [environmentId, recent, recovered, operation, view?.state, recoveryError]);
+  const [recoveredScope, setRecoveredScope] = useState<string | null>(null);
+  const [recoveryErrorScope, setRecoveryErrorScope] = useState<string | null>(null);
   const recordingSummary = useAtomCommand(recordingOverview, { reportFailure: false });
   const [recordingSummaries, setRecordingSummaries] =
     useState<ReadonlyArray<RecordingContextOverview> | null>(null);
@@ -301,14 +279,6 @@ function ConnectedWorkspace({
       (item) =>
         item.workspaceID === resource.workspaceID && item.generation === resource.generation,
     );
-  const needsAttention = (resource: Resource) =>
-    !actionable(resource) ||
-    resource.workspace?.services.some((service) => ["failed", "error"].includes(service.phase)) ||
-    summaryFor(resource)?.sessions.some(
-      (session) =>
-        session.source === "unavailable" ||
-        ["waiting_input", "waiting_approval", "failed"].includes(session.binding.execution),
-    );
   const bases = resources.filter((resource) => !resource.workspace?.lane && resource.available);
   const activeBase = workspaceID
     ? bases.find((resource) => resource.workspaceID === workspaceID)
@@ -322,7 +292,20 @@ function ConnectedWorkspace({
       ? []
       : resources;
   const lanes = contexts.filter((resource) => resource.workspace?.lane);
-  const visible = contexts.filter((resource) => filter !== "attention" || needsAttention(resource));
+  const filterOptions = {
+    nativeUnavailable: !nativeCurrent,
+    agentsUnavailable,
+    providers,
+    activity: view?.activity,
+  };
+  const visible = selectWorkspaceContexts(contexts, summaries, filters, filterOptions).resources;
+  const needsAttention = (resource: Resource) =>
+    selectWorkspaceContexts(
+      [resource],
+      summaries,
+      { ...defaultWorkspaceFilters, activity: "attention" },
+      filterOptions,
+    ).matchedCount > 0;
   const selectedCandidate = selectedID
     ? contexts.find((resource) => resource.workspaceID === selectedID)
     : activeBase;
@@ -330,7 +313,87 @@ function ConnectedWorkspace({
     view?.state === "connected" &&
     !savedWorkspaceMatches(search, view.hello?.installationID, selectedCandidate?.generation);
   const selected = savedContextChanged ? undefined : selectedCandidate;
-  const enabled =
+  const lifecycleRecoveryWorkspaceID =
+    selected?.workspace?.lane && view?.hello?.capabilities.includes("operations.receipts")
+      ? selected.workspaceID
+      : null;
+  const lifecycleRecoveryInstallationID = lifecycleRecoveryWorkspaceID
+    ? view?.hello?.installationID
+    : null;
+  const recoveryScope = JSON.stringify([
+    environmentId,
+    search.workspace,
+    search.context,
+    search.expectedInstallationID,
+    search.expectedGeneration,
+    lifecycleRecoveryWorkspaceID,
+    lifecycleRecoveryInstallationID,
+  ]);
+  const rootOwnsRecovery =
+    operation !== null &&
+    !operation.refused &&
+    (!operation.receipt ||
+      ["pending", "running", "unknown_outcome"].includes(operation.receipt.state));
+  const settledOperationKey = rootOwnsRecovery ? null : operation?.key;
+  const recovered = recoveredScope === recoveryScope || rootOwnsRecovery;
+  const recoveryError = recoveryErrorScope === recoveryScope;
+  useEffect(() => {
+    if (
+      recoveredScope === recoveryScope ||
+      rootOwnsRecovery ||
+      recoveryError ||
+      view?.state !== "connected"
+    )
+      return;
+    let disposed = false;
+    void recent({ environmentId, input: {} }).then((response) => {
+      if (disposed) return;
+      if (response._tag !== "Success") {
+        setRecoveryErrorScope(recoveryScope);
+        return;
+      }
+      setRecoveryErrorScope(null);
+      const unresolved = response.value.find(
+        (record) =>
+          !record.refused &&
+          record.input.operationKey !== settledOperationKey &&
+          !(
+            lifecycleRecoveryWorkspaceID &&
+            ["lane.setup", "lane.release", "lane.remove"].includes(record.input.method) &&
+            record.input.workspaceID === lifecycleRecoveryWorkspaceID &&
+            record.input.installationID === lifecycleRecoveryInstallationID
+          ) &&
+          (!record.receipt ||
+            ["pending", "running", "unknown_outcome"].includes(record.receipt.state)),
+      );
+      if (unresolved)
+        setOperation({
+          key: unresolved.input.operationKey,
+          workspaceID: unresolved.input.workspaceID,
+          installationID: unresolved.input.installationID,
+          receipt: unresolved.receipt,
+          refused: false,
+          message:
+            "Recovered a previously submitted operation. Check its result before taking another action.",
+        });
+      setRecoveredScope(recoveryScope);
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [
+    environmentId,
+    recent,
+    recoveredScope,
+    recoveryScope,
+    rootOwnsRecovery,
+    settledOperationKey,
+    view?.state,
+    recoveryError,
+    lifecycleRecoveryWorkspaceID,
+    lifecycleRecoveryInstallationID,
+  ]);
+  const nativeActionsEnabled =
     !savedContextChanged &&
     nativeCurrent &&
     !busy &&
@@ -341,6 +404,7 @@ function ConnectedWorkspace({
       !["succeeded", "failed"].includes(operation.receipt.state)
     ) &&
     !(operation && !operation.refused && operation.receipt === null);
+  const enabled = nativeActionsEnabled && !lifecyclePending;
   const createdLaneID =
     operation?.receipt?.result?.workspace?.id ?? operation?.receipt?.result?.createdWorkspaceID;
   const tabSearch = {
@@ -652,7 +716,43 @@ function ConnectedWorkspace({
           >
             Agents
           </Link>
-          <Link to="/pull-requests" search={readPullRequestListPreferences()}>
+          <Link
+            to="/pull-requests"
+            search={
+              selected && view?.hello
+                ? connectedPullRequestSearch(
+                    environmentId,
+                    {
+                      workspaceID:
+                        activeBase?.workspaceID ??
+                        selected.workspace?.lane?.sourceStackID ??
+                        selected.workspaceID,
+                      contextID: selected.workspaceID,
+                      installationID: view.hello.installationID,
+                      generation: selected.generation,
+                    },
+                    agentMode ? "agents" : "overview",
+                  )
+                : {
+                    involvement: "all",
+                    state: "all",
+                    environmentId,
+                    ...(search.context || search.workspace
+                      ? {
+                          deckhandWorkspace: search.workspace ?? search.context,
+                          deckhandContext: search.context ?? search.workspace,
+                          ...(search.expectedGeneration !== undefined
+                            ? { deckhandGeneration: search.expectedGeneration }
+                            : {}),
+                          ...(search.expectedInstallationID
+                            ? { deckhandInstallationID: search.expectedInstallationID }
+                            : {}),
+                          deckhandTab: agentMode ? ("agents" as const) : ("overview" as const),
+                        }
+                      : {}),
+                  }
+            }
+          >
             Pull requests
           </Link>
           <Link to="/recordings" search={contextLinkSearch}>
@@ -704,16 +804,7 @@ function ConnectedWorkspace({
                 ))}
               </select>
             </label>
-          ) : (
-            <button
-              className={`${styles["dh-filter"]} ${filter === "attention" ? styles["dh-filter-active"] : ""}`}
-              aria-pressed={filter === "attention"}
-              onClick={() => setFilter(filter === "all" ? "attention" : "all")}
-            >
-              <i aria-hidden="true" className={styles["dh-filter-dot"]} />
-              Needs attention
-            </button>
-          )}
+          ) : null}
           <button
             className={styles["dh-icon-button"]}
             aria-label="Refresh workspaces"
@@ -724,6 +815,17 @@ function ConnectedWorkspace({
             <RefreshCwIcon size={16} />
           </button>
         </div>
+        {!agentMode ? (
+          <WorkspaceFilters
+            value={filters}
+            onChange={setFilters}
+            resources={contexts}
+            summaries={summaries}
+            loading={!view}
+            totalContextCount={view?.workspaceContexts?.total ?? contexts.length}
+            {...filterOptions}
+          />
+        ) : null}
         {savedContextChanged ? (
           <div role="alert" className={styles["dh-status-error"]}>
             This saved context belongs to an earlier lane or Cinderdeck installation. Its actions
@@ -828,7 +930,7 @@ function ConnectedWorkspace({
         {recoveryError ? (
           <div role="alert" className={styles["dh-status-error"]}>
             <p>Previous operations could not be checked. Check them before starting new work.</p>
-            <button className={styles["dh-button"]} onClick={() => setRecoveryError(false)}>
+            <button className={styles["dh-button"]} onClick={() => setRecoveryErrorScope(null)}>
               Check previous operations
             </button>
           </div>
@@ -1005,17 +1107,16 @@ function ConnectedWorkspace({
           resources.length &&
           !visible.length ? (
           <div className={styles["dh-empty"]}>
-            <h2>
-              {agentsUnavailable || !summaries
-                ? "Agent attention could not be verified"
-                : "No contexts need attention"}
-            </h2>
+            <h2>No loaded contexts match these filters</h2>
             <p>
-              Choose all contexts to see this workspace
-              {agentsUnavailable || !summaries ? " and its last observed details" : ""}.
+              Clear the filters or inspect another context page. Your selected context stays
+              available in the inspector.
             </p>
-            <button className={styles["dh-button"]} onClick={() => setFilter("all")}>
-              Show all contexts
+            <button
+              className={styles["dh-button"]}
+              onClick={() => setFilters({ ...defaultWorkspaceFilters })}
+            >
+              Show all loaded contexts
             </button>
           </div>
         ) : null}
@@ -1095,6 +1196,17 @@ function ConnectedWorkspace({
                 Stop services
               </button>
             </div>
+            {view?.hello && selected.workspace?.lane ? (
+              <LaneLifecycleControls
+                key={`lifecycle:${environmentId}:${view.hello.installationID}:${selected.workspaceID}:${selected.generation}`}
+                environmentId={environmentId}
+                installationID={view.hello.installationID}
+                resource={selected}
+                capabilities={view.hello.capabilities}
+                enabled={nativeActionsEnabled && actionable(selected)}
+                onPending={setLifecyclePending}
+              />
+            ) : null}
             {!agentMode && view?.hello ? (
               <SessionList
                 environmentId={environmentId}

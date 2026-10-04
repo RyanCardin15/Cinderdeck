@@ -8,7 +8,12 @@ import * as U from "@t3tools/contracts/deckhand/runsRpc";
 import * as X from "@t3tools/contracts/deckhand/externalSessionsRpc";
 import * as External from "../../../deckhand/ExternalSessions.ts";
 import * as I from "@t3tools/contracts/deckhand/integration";
-import { ThreadContextView } from "@t3tools/contracts/deckhand/rpc";
+import {
+  ThreadContextView,
+  ContextPullRequestsInput,
+  ContextPullRequestsPage,
+} from "@t3tools/contracts/deckhand/rpc";
+import * as ManagedSessions from "../../../deckhand/ManagedSessions.ts";
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/unstable/ai";
 import * as Access from "../../DeckhandMcpAccess.ts";
@@ -22,6 +27,12 @@ const base = {
   dependencies: [Access.DeckhandMcpAccess, Invocation.McpInvocationContext],
 };
 const read = [Tool.Readonly, true] as const;
+export const ContextPullRequestsParameters = Schema.Struct({
+  offset: Schema.optionalKey(
+    ContextPullRequestsInput.fields.offset.check(Schema.isLessThanOrEqualTo(10000)),
+  ),
+  limit: Schema.optionalKey(ContextPullRequestsInput.fields.limit),
+});
 export const DeckhandToolkit = Toolkit.make(
   Tool.make("deckhand_verification_scenarios", {
     ...base,
@@ -176,6 +187,14 @@ export const DeckhandToolkit = Toolkit.make(
     description:
       "Read this calling agent's managed lane and current native service context. No cross-workspace selection.",
     success: ThreadContextView,
+  }).annotate(...read),
+  Tool.make("deckhand_context_pull_requests", {
+    ...base,
+    dependencies: [...base.dependencies, ManagedSessions.ManagedSessions, Hub.IntegrationHub],
+    description:
+      "Read one page of real PR associations from this calling agent's exact current managed workspace/lane, including historical contributors. Defaults offset 0, limit 20; offset is bounded to 10000 and limit to 50. No caller-selected workspace, project or native identity. Returns total/nextOffset; does not refresh hosting status or write to a PR.",
+    parameters: ContextPullRequestsParameters,
+    success: ContextPullRequestsPage,
   }).annotate(...read),
   Tool.make("deckhand_services_runs", {
     ...base,

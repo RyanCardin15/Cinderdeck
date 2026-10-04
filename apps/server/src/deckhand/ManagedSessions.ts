@@ -14,6 +14,7 @@ import * as CurrentCheckout from "./CurrentCheckout.ts";
 import * as Option from "effect/Option";
 import * as Relationships from "./Relationships.ts";
 import * as External from "./ExternalSessions.ts";
+import * as IntegrationHub from "./IntegrationHub.ts";
 
 export class ManagedSessionsError extends Schema.TaggedError<ManagedSessionsError>()(
   "ManagedSessionsError",
@@ -47,6 +48,13 @@ export class ManagedSessions extends Context.Service<
     readonly contexts: (
       input: Rpc.ManagedContextsInput,
     ) => Effect.Effect<ReadonlyArray<Rpc.ManagedContextView>, ManagedSessionsError>;
+    readonly subscribePullRequests: (
+      input: Rpc.ContextPullRequestsInput,
+    ) => Stream.Stream<
+      Rpc.ContextPullRequestsPage,
+      ManagedSessionsError,
+      IntegrationHub.IntegrationHub
+    >;
     readonly subscribeContexts: (
       input: Rpc.ManagedContextsInput,
     ) => Stream.Stream<ReadonlyArray<Rpc.ManagedContextView>, ManagedSessionsError>;
@@ -58,6 +66,11 @@ export class ManagedSessions extends Context.Service<
 
 const isManagedSessionsError = Schema.is(ManagedSessionsError);
 const isSessionsInput = Schema.is(Rpc.ManagedSessionsInput);
+const isContextPullRequestsInput = Schema.is(Rpc.ContextPullRequestsInput);
+const decodeContextPullRequest = Schema.decodeUnknownEffect(Rpc.ContextPullRequest);
+const decodeContextPullRequestLink = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Rpc.ContextPullRequest.fields.link),
+);
 const decodeBinding = Schema.decodeUnknownEffect(Schema.fromJsonString(Contracts.SessionBinding));
 const execution = (shell: OrchestrationV2ThreadShell): Contracts.SessionBinding["execution"] => {
   if (shell.pendingRuntimeRequest) {
@@ -353,6 +366,132 @@ const make = Effect.gen(function* () {
           : new ManagedSessionsError({ reason: "storage", cause }),
       ),
     );
+  const subscribePullRequests = (input: Rpc.ContextPullRequestsInput) =>
+    Stream.unwrap(
+      Effect.gen(function* () {
+        if (!isContextPullRequestsInput(input))
+          return yield* new ManagedSessionsError({ reason: "invalid_request" });
+        const hub = yield* IntegrationHub.IntegrationHub;
+        // Refresh before SQL ownership: native I/O must never wait inside the transaction.
+        const fresh = yield* hub
+          .freshResource(input.workspaceID)
+          .pipe(Effect.mapError(() => new ManagedSessionsError({ reason: "source_unavailable" })));
+        if (
+          fresh.hello.installationID !== input.installationID ||
+          fresh.resource.workspaceID !== input.workspaceID ||
+          fresh.resource.generation !== input.generation ||
+          !fresh.resource.available ||
+          !fresh.resource.workspace ||
+          fresh.resource.workspace.definitionChanged ||
+          fresh.resource.workspace.issues.length
+        )
+          return yield* new ManagedSessionsError({ reason: "source_unavailable" });
+        const read = Effect.gen(function* () {
+          const current = yield* hub.currentResources([input.workspaceID]);
+          const resource = current.resources.find((item) => item.workspaceID === input.workspaceID);
+          if (
+            current.state !== "connected" ||
+            current.hello?.installationID !== input.installationID ||
+            current.hello.runtimeEpoch !== fresh.hello.runtimeEpoch ||
+            !resource?.available ||
+            resource.generation !== input.generation ||
+            !resource.workspace ||
+            resource.workspace.definitionChanged ||
+            resource.workspace.issues.length
+          )
+            return yield* new ManagedSessionsError({ reason: "source_unavailable" });
+          // Read PR metadata directly, never transcripts. Canonical deduplication precedes
+          // pagination, so old/archived contributors and every repository remain reachable.
+          const rows = yield* sql<{
+            project_id: string;
+            thread_id: string;
+            link_json: string;
+            total: number;
+          }>`
+          WITH linked AS (
+            SELECT json_extract(t.payload_json,'$.projectId') AS project_id, s.thread_id,
+              p.value AS link_json,
+              ROW_NUMBER() OVER (PARTITION BY lower(json_extract(p.value,'$.host')),
+                lower(json_extract(p.value,'$.repository')), json_extract(p.value,'$.number')
+                ORDER BY s.rowid DESC, p.key DESC) AS rank
+            FROM deckhand_sessions s
+            JOIN deckhand_current_checkouts c ON c.origin_id=s.checkout_id
+            JOIN deckhand_workspaces w ON w.id=c.workspace_id
+            JOIN orchestration_v2_projection_threads t ON t.thread_id=s.thread_id
+            JOIN json_each(t.payload_json,'$.pullRequests') p
+            WHERE w.environment_id=${input.installationID} AND w.backend='cinderdeck'
+              AND json_extract(c.record_json,'$.backend')='cinderdeck'
+              AND json_extract(c.record_json,'$.environmentId')=${input.installationID}
+              AND json_extract(c.record_json,'$.nativeGeneration')=${input.generation}
+              AND COALESCE(json_extract(c.record_json,'$.laneId'),w.owner_id)=${input.workspaceID}
+              AND t.deleted_at IS NULL AND json_extract(p.value,'$.source')!='stack-dismissed'
+          ), canonical AS (SELECT * FROM linked WHERE rank=1),
+          page AS (SELECT *,COUNT(*) OVER () AS total FROM canonical
+            ORDER BY lower(json_extract(link_json,'$.host')),lower(json_extract(link_json,'$.repository')),
+              json_extract(link_json,'$.number') LIMIT ${input.limit} OFFSET ${input.offset})
+          SELECT project_id,thread_id,link_json,total FROM page
+          UNION ALL SELECT NULL,NULL,NULL,(SELECT COUNT(*) FROM canonical) WHERE NOT EXISTS(SELECT 1 FROM page)`;
+          const items = yield* Effect.forEach(
+            rows.filter((row) => row.link_json !== null),
+            (row) =>
+              decodeContextPullRequestLink(row.link_json).pipe(
+                Effect.flatMap((link) =>
+                  decodeContextPullRequest({
+                    projectId: row.project_id,
+                    threadId: row.thread_id,
+                    link,
+                  }),
+                ),
+              ),
+          );
+          const total = rows[0]?.total ?? 0;
+          return {
+            ...input,
+            items,
+            total,
+            nextOffset: input.offset + items.length < total ? input.offset + items.length : null,
+          };
+        }).pipe(sql.withTransaction);
+        const afterSequence = yield* events.latestSequence();
+        const initial = yield* read;
+        const changes = Stream.mergeAll({ concurrency: 3 })([
+          events.stream({ afterSequence }).pipe(
+            Stream.filter((stored) =>
+              [
+                "thread.created",
+                "thread.metadata-updated",
+                "thread.pull-request-synced",
+                "thread.deleted",
+                "thread.archived",
+                "thread.unarchived",
+              ].includes(stored.event.type),
+            ),
+            Stream.map(() => undefined),
+            Stream.mapError(
+              (cause) => new ManagedSessionsError({ reason: "source_unavailable", cause }),
+            ),
+          ),
+          ownershipChanges,
+          hub.subscribe({ offset: 0, limit: 1, selectedContextID: input.workspaceID }).pipe(
+            // The first subscription image may already differ from the initial read.
+            Stream.map(() => undefined),
+            Stream.mapError(
+              (cause) => new ManagedSessionsError({ reason: "source_unavailable", cause }),
+            ),
+          ),
+        ]).pipe(
+          Stream.buffer({ capacity: 1, strategy: "sliding" }),
+          Stream.mapEffect(() => read),
+        );
+        return Stream.concat(Stream.make(initial), changes);
+      }),
+    ).pipe(
+      Stream.mapError((cause) =>
+        isManagedSessionsError(cause)
+          ? cause
+          : new ManagedSessionsError({ reason: "storage", cause }),
+      ),
+    );
   const subscribeContexts = (input: Rpc.ManagedContextsInput) =>
     Stream.unwrap(
       Effect.gen(function* () {
@@ -415,6 +554,13 @@ const make = Effect.gen(function* () {
           : new ManagedSessionsError({ reason: "source_unavailable", cause }),
       ),
     );
-  return ManagedSessions.of({ list, subscribe, subscribeThread, contexts, subscribeContexts });
+  return ManagedSessions.of({
+    list,
+    subscribe,
+    subscribeThread,
+    contexts,
+    subscribeContexts,
+    subscribePullRequests,
+  });
 });
 export const layer = Layer.effect(ManagedSessions, make);

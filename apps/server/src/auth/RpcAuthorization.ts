@@ -99,6 +99,7 @@ export const RPC_REQUIRED_SCOPES = {
   [RECORDING_METHODS.mark]: AuthOrchestrationOperateScope,
   [THREAD_CONTEXT_METHOD]: AuthOrchestrationReadScope,
   [DECKHAND_METHODS.contexts]: AuthOrchestrationReadScope,
+  [DECKHAND_METHODS.contextPullRequests]: AuthOrchestrationReadScope,
   [DECKHAND_METHODS.sessions]: AuthOrchestrationReadScope,
   [DECKHAND_METHODS.create]: AuthOrchestrationOperateScope,
   [DECKHAND_METHODS.createGet]: AuthOrchestrationReadScope,

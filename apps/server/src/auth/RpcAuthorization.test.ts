@@ -39,6 +39,7 @@ describe("RPC authorization scopes", () => {
     );
     for (const method of [
       DECKHAND_METHODS.sessions,
+      DECKHAND_METHODS.contextPullRequests,
       DECKHAND_METHODS.launchGet,
       DECKHAND_METHODS.launchOptions,
       DECKHAND_METHODS.reviewPreview,

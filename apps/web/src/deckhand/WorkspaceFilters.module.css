@@ -1,0 +1,21 @@
+.controls label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 12px;
+}
+.controls input,
+.controls select {
+  width: 100%;
+  max-width: 100%;
+  font-size: 13px;
+}
+.controls label:first-child {
+  flex: 1 1 220px;
+}
+.controls > button {
+  align-self: flex-end;
+}
