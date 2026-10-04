@@ -292,3 +292,33 @@ it("does not claim a context is quiet when external-agent execution is only repo
   expect(result.matchedCount).toBe(0);
   expect(result.uncertainCount).toBe(1);
 });
+
+it("does not exclude a disconnected lane by provider using a complete cached zero or different-provider summary", () => {
+  const rows = contexts.slice(0, 2);
+  const cached = [summary("payments", [session("idle", "codex-work")]), summary("account")];
+  const filters = { ...defaultWorkspaceFilters, provider: "claude-work" };
+  expect(selectWorkspaceContexts(rows, cached, filters, options).resources).toHaveLength(0);
+  const stale = selectWorkspaceContexts(rows, cached, filters, {
+    ...options,
+    agentsUnavailable: true,
+  });
+  expect(stale.resources.map((item) => item.workspaceID)).toEqual(["payments", "account"]);
+  expect(stale.matchedCount).toBe(0);
+  expect(stale.uncertainCount).toBe(2);
+});
+
+it("keeps text no-matches uncertain when complete cached agent or native details become unavailable", () => {
+  const rows = contexts.slice(0, 2);
+  const cached = [summary("payments", [session("idle")]), summary("account")];
+  const filters = { ...defaultWorkspaceFilters, search: "newly added task or branch" };
+  expect(selectWorkspaceContexts(rows, cached, filters, options).resources).toHaveLength(0);
+  for (const unavailable of [
+    { ...options, agentsUnavailable: true },
+    { ...options, nativeUnavailable: true },
+  ]) {
+    const result = selectWorkspaceContexts(rows, cached, filters, unavailable);
+    expect(result.resources).toHaveLength(2);
+    expect(result.matchedCount).toBe(0);
+    expect(result.uncertainCount).toBe(2);
+  }
+});

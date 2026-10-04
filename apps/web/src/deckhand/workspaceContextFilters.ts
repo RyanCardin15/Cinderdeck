@@ -127,7 +127,7 @@ export function selectWorkspaceContexts(
       value.provider === "all" ||
       summary?.sessions.some((session) => session.binding.providerInstanceId === value.provider)
         ? "yes"
-        : incomplete(summary)
+        : options.agentsUnavailable || incomplete(summary)
           ? "unknown"
           : "no";
     const searchable = [
@@ -149,7 +149,7 @@ export function selectWorkspaceContexts(
     const search: Match =
       !words.length || words.every((word) => searchable.includes(word))
         ? "yes"
-        : incomplete(summary) || !native
+        : options.agentsUnavailable || options.nativeUnavailable || incomplete(summary) || !native
           ? "unknown"
           : "no";
     const match = combine([
