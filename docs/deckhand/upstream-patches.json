@@ -360,6 +360,7 @@
     "packages/contracts/package.json": "App identity and state isolation",
     "packages/contracts/src/desktopBootstrap.ts": "Bind declared-build preview capture to Main-owned CDP frames, a private encoder and a backend-only bootstrap capability; retain native session and media validation before attestation.",
     "packages/contracts/src/ipc.ts": "Add the Deckhand Preview runtime stage label used by the shared desktop identity contract without changing existing IPC behavior.",
+    "packages/contracts/src/rpc.test.ts": "Verify additive managed-agent paging defaults and the bounded offset schema while retaining upstream RPC compatibility assertions.",
     "packages/contracts/src/rpc.ts": "Merge Deckhand domain RPCs into the maintained upstream wire catalog while exporting the upstream base for bounded per-domain server handler inference.",
     "packages/shared/src/cliRelease.ts": "App identity and state isolation",
     "packages/shared/src/codexAuthHandoff.ts": "App identity and state isolation",
@@ -821,6 +822,7 @@
         "packages/client-runtime/src/state/projectGrouping.test.ts",
         "packages/contracts/package.json",
         "packages/contracts/src/ipc.ts",
+        "packages/contracts/src/rpc.test.ts",
         "packages/contracts/src/rpc.ts"
       ],
       "tests": [
