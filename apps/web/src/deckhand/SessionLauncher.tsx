@@ -478,20 +478,26 @@ export function SessionLauncher({
             <option value="approval-required">Ask for approval</option>
             <option value="full-access">Full access</option>
           </select>
-          <label htmlFor={`${id}-title`}>Feature title</label>
+          <label htmlFor={`${id}-title`}>{isCreation ? "Feature title" : "Agent task"}</label>
           <input
             id={`${id}-title`}
             required
             maxLength={200}
+            placeholder={isCreation ? "Payment retries" : "Investigate payment retries"}
             value={title}
             onChange={(event) => setTitle(event.target.value)}
           />
-          <label htmlFor={`${id}-objective`}>Objective</label>
+          <label htmlFor={`${id}-objective`}>{isCreation ? "Objective" : "Instructions"}</label>
           <textarea
             id={`${id}-objective`}
             required
             maxLength={16000}
             rows={4}
+            placeholder={
+              isCreation
+                ? "Describe the feature and what success looks like."
+                : "Describe what this agent should do in the selected checkout."
+            }
             value={objective}
             onChange={(event) => setObjective(event.target.value)}
           />
