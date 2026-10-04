@@ -10,12 +10,16 @@ nonisolated final class StackDirectoryWatcher: @unchecked Sendable {
   private let queue = DispatchQueue(label: "Cinderdeck.StackDirectoryWatcher", qos: .utility)
 
   private final class Callback: @unchecked Sendable {
-    let onChange: @Sendable () -> Void
-    init(_ onChange: @escaping @Sendable () -> Void) { self.onChange = onChange }
+    let onPathsChange: @Sendable ([String]) -> Void
+    init(_ onPathsChange: @escaping @Sendable ([String]) -> Void) { self.onPathsChange = onPathsChange }
   }
 
-  init(directories: [URL], delay: TimeInterval = 0.6, onChange: @escaping @Sendable () -> Void) throws {
-    let callback = Callback(onChange)
+  convenience init(directories: [URL], delay: TimeInterval = 0.6, onChange: @escaping @Sendable () -> Void) throws {
+    try self.init(directories: directories, delay: delay, onPathsChange: { _ in onChange() })
+  }
+
+  init(directories: [URL], delay: TimeInterval = 0.6, onPathsChange: @escaping @Sendable ([String]) -> Void) throws {
+    let callback = Callback(onPathsChange)
     var context = FSEventStreamContext(version: 0,
       info: Unmanaged.passUnretained(callback).toOpaque(),
       retain: { info in
@@ -27,11 +31,17 @@ nonisolated final class StackDirectoryWatcher: @unchecked Sendable {
         if let info { Unmanaged<Callback>.fromOpaque(info).release() }
       }, copyDescription: nil)
     let paths = Array(Set(directories.map { $0.standardizedFileURL.resolvingSymlinksInPath().path })).sorted()
-    guard !paths.isEmpty, let stream = FSEventStreamCreate(kCFAllocatorDefault, { _, info, _, _, _, _ in
+    guard !paths.isEmpty, let stream = FSEventStreamCreate(kCFAllocatorDefault, { _, info, count, eventPaths, flags, _ in
       guard let info else { return }
-      Unmanaged<Callback>.fromOpaque(info).takeUnretainedValue().onChange()
+      let callback = Unmanaged<Callback>.fromOpaque(info).takeUnretainedValue()
+      let lost = FSEventStreamEventFlags(kFSEventStreamEventFlagMustScanSubDirs | kFSEventStreamEventFlagUserDropped | kFSEventStreamEventFlagKernelDropped)
+      if (0..<count).contains(where: { flags[$0] & lost != 0 }) {
+        callback.onPathsChange([])
+      } else {
+        callback.onPathsChange((unsafeBitCast(eventPaths, to: NSArray.self) as? [String]) ?? [])
+      }
     }, &context, paths as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow), delay,
-      FSEventStreamCreateFlags(kFSEventStreamCreateFlagWatchRoot)) else {
+      FSEventStreamCreateFlags(kFSEventStreamCreateFlagWatchRoot | kFSEventStreamCreateFlagUseCFTypes | kFSEventStreamCreateFlagFileEvents)) else {
       throw StackError.message("Could not monitor Git repository changes")
     }
     FSEventStreamSetDispatchQueue(stream, queue)

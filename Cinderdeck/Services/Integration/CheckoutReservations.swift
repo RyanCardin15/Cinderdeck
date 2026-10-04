@@ -111,7 +111,12 @@ nonisolated struct PhysicalCheckoutIdentity: Equatable, Sendable {
         throw StackControlError(code: "checkout_unavailable", message: "Cannot inventory this repository's physical worktrees.")
       }
       let records = output.components(separatedBy: "\0\0").filter { !$0.isEmpty }
-      guard !records.isEmpty, records.count <= 64 else { throw StackControlError.invalid("Unsupported Git worktree inventory") }
+      guard !records.isEmpty else {
+        throw StackControlError(code: "checkout_unavailable", message: "Git returned an empty physical worktree inventory.")
+      }
+      guard records.count <= 64 else {
+        throw StackControlError(code: "capacity", message: "Physical worktree inventory exceeds the supported limit (\(records.count) entries; maximum 64).")
+      }
       for record in records {
         let fields = record.components(separatedBy: "\0")
         guard let first = fields.first, first.hasPrefix("worktree ") else { throw StackControlError.invalid("Invalid Git worktree inventory") }
@@ -243,6 +248,17 @@ final class CheckoutReservations {
       return record
     }
   }
+  /// A declared verifier's native task borrows only its owner's already-held writer scope.
+  func borrowWriter(_ id: String, actorKey: String, token: String, workspaceID: String, generation: Int, physicalIDs: [String]) throws -> CheckoutReservation {
+    try database.read { db in
+      let record = try authorized(db, id: id, actorKey: actorKey, token: token)
+      guard record.kind == "writer", record.state == "held", record.workspaceID == workspaceID, record.generation == generation,
+        !physicalIDs.isEmpty, Set(physicalIDs).isSubset(of: Set(record.physicalIDs)) else {
+        throw StackControlError(code: "checkout_reserved", message: "Verification requires its owner's held exact physical writer scope")
+      }
+      return record
+    }
+  }
   func uncertainNative(_ id: String) throws {
     try database.write { db in
       guard let row = try Row.fetchOne(db, sql: "SELECT payload FROM reservations WHERE id=?", arguments: [id]) else { return }
@@ -254,6 +270,13 @@ final class CheckoutReservations {
   }
   func get(_ id: String, actorKey: String, token: String) throws -> CheckoutReservation {
     try database.read { db in try authorized(db, id: id, actorKey: actorKey, token: token) }
+  }
+  /// Internal recovery only: absence is distinct from an unauthorized existing lease.
+  func existingWriter(_ id: String, actorKey: String, token: String) throws -> CheckoutReservation? {
+    try database.read { db in
+      guard try Row.fetchOne(db, sql: "SELECT id FROM reservations WHERE id=?", arguments: [id]) != nil else { return nil }
+      return try authorized(db, id: id, actorKey: actorKey, token: token)
+    }
   }
   func releaseWriter(_ id: String, actorKey: String, token: String) throws -> CheckoutReservation {
     try database.write { db in

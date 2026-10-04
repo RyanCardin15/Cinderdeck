@@ -27,6 +27,25 @@ struct CinderdeckDeepLinkHandler {
       return
     }
 
+    if url.host == "linked-work" {
+      guard let target = IntegrationLinkedWorkNavigation(url: url) else { return }
+      Task {
+        do {
+          let control = StackControlService.shared
+          let journal = try control.integrationStore()
+          guard target.installationID == journal.installationID else { throw StackControlError.invalid("This link belongs to a different Cinderdeck installation") }
+          control.integrationProjectionRevision += 1
+          try await journal.reconcile(control.snapshot().workspaces, sourceRevision: control.integrationProjectionRevision)
+          let snapshot = try await journal.snapshot(workspaceID: target.workspaceID, offset: 0, limit: 1)
+          guard let resource = snapshot.resources.first, resource.available, resource.generation == target.generation else { throw StackControlError.invalid("This workspace is missing or has been replaced. Select its current context in Workspaces") }
+          WorkspaceWindowController.shared.show(workspace: target.workspaceID, section: .linkedWork)
+        } catch {
+          WorkspaceWindowController.shared.show(section: .linkedWork)
+          let alert = NSAlert(); alert.messageText = "Linked workspace is unavailable"; alert.informativeText = error.localizedDescription; alert.runModal()
+        }
+      }
+      return
+    }
     guard let action = CinderdeckDeepLinkAction(url: url) else {
       DiagnosticLogger.shared.log(
         .warning,

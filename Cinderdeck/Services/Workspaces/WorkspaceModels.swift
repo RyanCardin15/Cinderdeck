@@ -69,10 +69,20 @@ nonisolated struct WorkspaceRunStep: Codable, Equatable, Identifiable, Sendable 
   var exitCode: Int32?
   var detail: String?
   var process: StackProcessIdentity?
+  var executionProcess: StackProcessIdentity?
+  var definitionHash: String?
+  var environmentKeys: [String]?
+  var sourceScopeComplete: Bool?
+  var repositoriesAtStart: [WorkspaceRunRepositorySnapshot]?
+  var repositoriesAtEnd: [WorkspaceRunRepositorySnapshot]?
 }
 
 nonisolated struct WorkspaceRun: Codable, Equatable, Identifiable, Sendable {
   var id = UUID()
+  var integrationOperationID: String?
+  var rerunOfID: UUID?
+  var integrationAuthority: WorkspaceRunAuthority?
+  var outcomeHash: String?
   var workspaceID: String
   var workspaceName: String
   var definitionID: String
@@ -85,6 +95,9 @@ nonisolated struct WorkspaceRun: Codable, Equatable, Identifiable, Sendable {
   var steps: [WorkspaceRunStep]
   var detail: String?
   var cleanupServices = false
+  var sourceProvenance: WorkspaceRunSourceProvenance?
+  var buildReceiptID: String?
+  var buildObservations: [WorkspaceBuildObservation]?
   // A teardown borrows its parent's lifecycle lease; ending the run must not
   // release that parent before file/manifest removal completes.
   var borrowedCheckoutReservationID: String?

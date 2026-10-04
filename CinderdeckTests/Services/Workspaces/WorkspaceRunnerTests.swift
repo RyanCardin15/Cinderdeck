@@ -70,6 +70,22 @@ final class WorkspaceRunnerTests: XCTestCase {
     let restored = try store.load()
     XCTAssertEqual(restored.first?.status, .succeeded)
     XCTAssertEqual(restored.first?.steps.first?.exitCode, 0)
+    XCTAssertNotNil(result.sourceProvenance?.definitionHash)
+    XCTAssertEqual(result.sourceProvenance?.buildState, "unknown")
+    XCTAssertEqual(result.sourceProvenance?.state, "unknown") // This fixture declares no Git checkout.
+    let original = try XCTUnwrap(result.sourceProvenance), persisted = try XCTUnwrap(restored.first?.sourceProvenance)
+    XCTAssertEqual(persisted.definitionHash, original.definitionHash)
+    XCTAssertEqual(persisted.workflowHash, original.workflowHash)
+    XCTAssertEqual(persisted.state, original.state)
+    XCTAssertEqual(persisted.buildState, original.buildState)
+    XCTAssertEqual(persisted.repositoriesAtStart.map(\.fingerprint), original.repositoriesAtStart.map(\.fingerprint))
+    XCTAssertEqual(persisted.repositoriesAtEnd.map(\.fingerprint), original.repositoriesAtEnd.map(\.fingerprint))
+    if let before = original.capturedAt, let after = persisted.capturedAt { XCTAssertLessThan(abs(before.timeIntervalSince(after)), 1) }
+    if let before = original.finishedAt, let after = persisted.finishedAt { XCTAssertLessThan(abs(before.timeIntervalSince(after)), 1) }
+    XCTAssertEqual(restored.first?.steps.first?.command, "printf finished")
+    XCTAssertNotNil(restored.first?.steps.first?.definitionHash)
+    XCTAssertNotNil(restored.first?.steps.first?.executionProcess)
+    XCTAssertNotNil(restored.first?.steps.first?.environmentKeys)
   }
   func testWorkflowStopsAtFailureAndDoesNotExecuteLaterSteps() async throws {
     try await load("""

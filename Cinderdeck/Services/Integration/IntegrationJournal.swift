@@ -49,6 +49,9 @@ actor IntegrationJournal {
   private let pool: DatabasePool
   private let retention: Int
   private var sourceRevision: UInt64 = 0
+  // A fresh selected read can overtake an earlier queued full publication.
+  // Keep its authority until a newer full publication includes that resource.
+  private var selectedSourceRevisions: [String: UInt64] = [:]
   private var waiters: [UUID: CheckedContinuation<Void, Never>] = [:]
 
   init(directory: URL, retention: Int = 10_000) throws {
@@ -83,7 +86,7 @@ actor IntegrationJournal {
   func reconcile(_ workspaces: [StackSnapshot], sourceRevision revision: UInt64) throws {
     guard revision > sourceRevision else { return }
     // Encode before the transaction. A failed encode cannot publish a partly updated projection.
-    let prepared = try workspaces.map { workspace -> (String, Data, String) in
+    let prepared = try workspaces.filter { (selectedSourceRevisions[$0.id] ?? 0) < revision }.map { workspace -> (String, Data, String) in
       let data = try StackControlCoding.encoder().encode(workspace)
       return (workspace.id, data, SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined())
     }
@@ -92,7 +95,7 @@ actor IntegrationJournal {
       var changed = false
       let old = try Row.fetchAll(db, sql: "SELECT workspace_id, generation, available, hash FROM resources")
       let byID = Dictionary(uniqueKeysWithValues: old.map { row -> (String, Row) in (row["workspace_id"], row) })
-      let live = Set(prepared.map { $0.0 })
+      let live = Set(workspaces.map(\.id))
       for (id, data, hash) in prepared {
         let prior = byID[id]
         let available: Bool = prior?["available"] ?? false
@@ -107,7 +110,7 @@ actor IntegrationJournal {
       for row in old {
         let id: String = row["workspace_id"]
         let available: Bool = row["available"]
-        guard available && !live.contains(id) else { continue }
+        guard available && !live.contains(id), (selectedSourceRevisions[id] ?? 0) < revision else { continue }
         let generation: Int = row["generation"]
         try db.execute(sql: "UPDATE resources SET available = 0, payload = NULL, hash = '' WHERE workspace_id = ?", arguments: [id])
         try db.execute(sql: "INSERT INTO journal(workspace_id, generation, kind, revision, observed_at) VALUES (?, ?, 'workspace.unavailable', '', ?)", arguments: [id, generation, observedAt])
@@ -117,7 +120,44 @@ actor IntegrationJournal {
       return changed
     }
     sourceRevision = revision
+    selectedSourceRevisions = selectedSourceRevisions.filter { $0.value > revision }
     if changed { wakeWaiters() }
+  }
+
+  /// Update exactly one current workspace without tombstoning unrelated rows or
+  /// claiming that its source revision refreshed the entire catalog.
+  func reconcileSelected(_ workspace: StackSnapshot?, workspaceID: String, sourceRevision revision: UInt64) throws {
+    guard workspace == nil || workspace?.id == workspaceID else { throw StackControlError.invalid("Selected projection identity differs") }
+    guard workspaceID.utf8.count <= 1_024 else { throw StackControlError.invalid("Selected projection identity exceeds its bound") }
+    guard revision > sourceRevision, revision > (selectedSourceRevisions[workspaceID] ?? 0) else { return }
+    guard selectedSourceRevisions[workspaceID] != nil || selectedSourceRevisions.count < 5_000 else {
+      throw StackControlError(code: "capacity", message: "Refresh the full projection before requesting more selected identities.")
+    }
+    let payload = try workspace.map { try StackControlCoding.encoder().encode($0) }
+    let hash = payload.map { SHA256.hash(data: $0).map { String(format: "%02x", $0) }.joined() } ?? ""
+    let observedAt = ISO8601DateFormatter().string(from: Date())
+    let result = try pool.write { db -> (changed: Bool, known: Bool) in
+      let prior = try Row.fetchOne(db, sql: "SELECT generation, available, hash FROM resources WHERE workspace_id = ?", arguments: [workspaceID])
+      let available: Bool = prior?["available"] ?? false
+      let previousGeneration: Int = prior?["generation"] ?? 0
+      if let payload {
+        let generation = prior == nil ? 1 : available ? previousGeneration : previousGeneration + 1
+        let previousHash: String = prior?["hash"] ?? ""
+        guard !available || previousHash != hash else { return (false, true) }
+        try db.execute(sql: "INSERT INTO resources(workspace_id, generation, available, hash, payload) VALUES (?, ?, 1, ?, ?) ON CONFLICT(workspace_id) DO UPDATE SET generation = excluded.generation, available = 1, hash = excluded.hash, payload = excluded.payload", arguments: [workspaceID, generation, hash, payload])
+        try db.execute(sql: "INSERT INTO journal(workspace_id, generation, kind, revision, observed_at) VALUES (?, ?, ?, ?, ?)", arguments: [workspaceID, generation, available ? "workspace.updated" : "workspace.available", hash, observedAt])
+      } else {
+        guard available else { return (false, prior != nil) }
+        try db.execute(sql: "UPDATE resources SET available = 0, payload = NULL, hash = '' WHERE workspace_id = ?", arguments: [workspaceID])
+        try db.execute(sql: "INSERT INTO journal(workspace_id, generation, kind, revision, observed_at) VALUES (?, ?, 'workspace.unavailable', '', ?)", arguments: [workspaceID, previousGeneration, observedAt])
+      }
+      try db.execute(sql: "DELETE FROM journal WHERE sequence NOT IN (SELECT sequence FROM journal ORDER BY sequence DESC LIMIT ?)", arguments: [retention])
+      return (true, true)
+    }
+    // Even absence must fence an older queued publication that has not inserted
+    // this ID yet. Unknown lookups do not create persisted resource rows.
+    selectedSourceRevisions[workspaceID] = revision
+    if result.changed { wakeWaiters() }
   }
 
   func snapshot(workspaceID: String? = nil, offset: Int = 0, limit: Int = 100) throws -> IntegrationSnapshot {

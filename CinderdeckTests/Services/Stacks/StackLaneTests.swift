@@ -661,6 +661,46 @@ final class StackLaneTests: XCTestCase {
     _ = try await control.handle("lane.remove", params: .object(["workspace": .string(id)]), actor: codex)
   }
 
+  func testDurableManagedAdoptionRetainsFilesWithoutGrantingAWriterOrStartingServices() async throws {
+    try await load()
+    let external = root.appendingPathComponent("managed-adoption")
+    _ = try await StackLaneStore.git(["worktree", "add", "-b", "managed-adoption", external.path], at: repo)
+    let arguments: [String: JSONValue] = ["path": .string(external.path), "name": .string("Managed adoption"),
+      "managedWriter": .bool(true), "setup": .bool(false), "start": .bool(false)]
+    var direct = arguments; direct["workspace"] = .string("shop")
+    do {
+      _ = try await control.handle("lane.adopt", params: .object(direct), actor: codex)
+      XCTFail("Direct adoption cannot bypass advisory ownership")
+    } catch { XCTAssertEqual((error as? StackControlError)?.code, "invalid_params") }
+    let receipt = try await durableLane("lane.adopt", workspace: "shop", arguments: arguments)
+    XCTAssertEqual(receipt.state, "succeeded")
+    let id = try XCTUnwrap(receipt.result?["workspace"]?["id"]?.stringValue)
+    XCTAssertNil(control.claims[id])
+    let file = try XCTUnwrap(supervisor.definition(id))
+    XCTAssertTrue(file.services.allSatisfy { supervisor.runtime(id, $0.id).phase == .stopped })
+    await supervisor.refreshLaneGitStates([id])
+    let projection = try await control.handle("integration.snapshot", params: .object(["workspaceID": .string(id)]), actor: claude).decode(IntegrationSnapshot.self)
+    let resource = try XCTUnwrap(projection.resources.first)
+    let token = String(repeating: "e", count: 64)
+    let reservation: JSONValue = .object(["id": .string("adopted-provider-thread"), "token": .string(token),
+      "installationID": .string(projection.installationID), "ownerID": .string("provider-owner"),
+      "workspaceID": .string(id), "generation": .number(Double(resource.generation)),
+      "revision": .string(resource.revision), "repos": .array(file.repos.map { .string($0.id) })])
+    let held = try await control.handle("integration.reservation.acquire", params: reservation, actor: claude)
+    XCTAssertEqual(held["state"]?.stringValue, "held", "Adoption leaves real physical admission to the provider owner")
+    do {
+      _ = try await control.handle("lane.release", params: .object(["workspace": .string(id)]), actor: codex)
+      XCTFail("An admitted writer must protect the adopted checkout")
+    } catch { XCTAssertEqual((error as? StackControlError)?.code, "checkout_reserved") }
+    _ = try await control.handle("integration.reservation.release", params: .object([
+      "id": .string("adopted-provider-thread"), "token": .string(token), "installationID": .string(projection.installationID)
+    ]), actor: claude)
+    let released = try await durableLane("lane.release", workspace: id)
+    XCTAssertEqual(released.state, "succeeded")
+    XCTAssertEqual(try String(contentsOf: external.appendingPathComponent("tracked.txt")), "original\n")
+    XCTAssertNil(supervisor.definition(id))
+  }
+
   func testControlCreatesClaimsAndProtectsOnlyTheOwnedLane() async throws {
     try await load()
     _ = try await control.handle("claim", params: .object(["workspace": .string("shop")]), actor: claude)

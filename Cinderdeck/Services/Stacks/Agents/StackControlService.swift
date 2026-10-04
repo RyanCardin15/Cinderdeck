@@ -21,6 +21,7 @@ final class StackControlService: ObservableObject {
   let lanes: StackLaneCoordinator
   var integrationOperations: IntegrationOperations?
   var integrationJournal: IntegrationJournal?
+  lazy var linkedWork = IntegrationLinkedWorkStore(directory: integrationDirectory.appendingPathComponent("LinkedWork", isDirectory: true))
   var integrationProjectionRevision: UInt64 = 0
   let integrationDirectory: URL
 
@@ -248,6 +249,7 @@ final class StackControlService: ObservableObject {
     case "services.status":
       let file = try workspaceFile(params)
       return try JSONValue(encoding: stackSnapshot(file))
+    case "runs.start", "runs.cancel", "runs.rerun", "definition.apply": return try await handleRunOperation(method, params: params, actor: actor, operationID: operationID)
     case "services.start": return try await start(params, actor: actor)
     case "services.stop": return try await stop(params, actor: actor)
     case "services.restart": return try await restart(params, actor: actor)
@@ -371,8 +373,8 @@ final class StackControlService: ObservableObject {
   private func createLane(_ params: JSONValue, adopt: Bool, actor: StackActor, operationID: String? = nil) async throws -> JSONValue {
     let managedWriter: Bool
     if let value = params["managedWriter"] {
-      guard case .bool(let selected) = value, !selected || (!adopt && operationID != nil) else {
-        throw StackControlError.invalid("Managed writer handoff requires durable lane creation")
+      guard case .bool(let selected) = value, !selected || operationID != nil else {
+        throw StackControlError.invalid("Managed writer handoff requires durable lane creation or adoption")
       }
       managedWriter = selected
     } else { managedWriter = false }

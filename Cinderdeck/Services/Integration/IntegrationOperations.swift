@@ -96,6 +96,15 @@ actor IntegrationOperations {
       return try StackControlCoding.decoder().decode(IntegrationOperationReceipt.self, from: row["receipt"])
     }
   }
+  /// Recover the authenticated immutable accepted scope before native run admission.
+  func intent(id: String, actor: StackActor) throws -> IntegrationOperationInput {
+    try pool.read { db in
+      guard let row = try Row.fetchOne(db, sql: "SELECT * FROM operations WHERE id = ?", arguments: [id]) else { throw StackControlError.notFound("Operation intent is unavailable") }
+      let owner: String = row["actor_key"]
+      guard owner == actor.key || actor.kind == .user else { throw StackControlError(code: "unauthorized_operation", message: "This operation belongs to a different actor.") }
+      return try StackControlCoding.decoder().decode(IntegrationOperationInput.self, from: row["input"])
+    }
+  }
   /// Observe a committed terminal receipt without polling or granting mutation authority.
   func wait(key: String, actor: StackActor, waitMs: Int) async throws -> IntegrationOperationReceipt {
     guard (0...25_000).contains(waitMs) else { throw StackControlError.invalid("Receipt wait must be between 0 and 25000 milliseconds") }

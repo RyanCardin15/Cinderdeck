@@ -176,6 +176,15 @@ nonisolated struct ReproRepoState: Codable, Equatable, Sendable {
   /// Relative path of the saved uncommitted diff inside the repro folder.
   var diffFile: String?
   var diffTruncated: Bool?
+  var canonicalRepositoryKeys: [String]?
+  var repositoryPhysicalId: String?
+  var snapshotComplete: Bool?
+  var startSnapshotComplete: Bool?
+  var capturedAt: Date?
+  var diffHash: String?
+  var sourceFingerprint: ReproSourceFingerprintSnapshot?
+  var endSourceFingerprint: ReproSourceFingerprintSnapshot?
+  var endHead: String?
 }
 
 nonisolated struct ReproServiceState: Codable, Equatable, Sendable {
@@ -209,6 +218,9 @@ nonisolated struct ReproRunLink: Codable, Equatable, Sendable {
   var startedAt: Double
   var finishedAt: Double?
   var failedStep: String?
+  var sourceProvenance: WorkspaceRunSourceProvenance?
+  var buildReceiptID: String?
+  var buildObservations: [WorkspaceBuildObservation]?
 }
 
 nonisolated enum ReproStatus: String, Codable, Sendable {
@@ -295,6 +307,8 @@ nonisolated struct ReproSession: Codable, Equatable, Identifiable, Sendable {
   /// Explicit choices, saved before asynchronous context capture. Older recordings
   /// and the automatic running-workspace scope derive membership from context/output.
   var selectedWorkspaceIDs: [String]?
+  var buildProof: WorkspaceBuildCaptureProof?
+  var importedMedia: IntegrationPreviewMediaIdentity?
   var workspaces: [ReproWorkspaceContext] = []
   var sources: [ReproSource] = []
   var markers: [ReproMarker] = []

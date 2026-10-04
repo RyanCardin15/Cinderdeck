@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum WorkspaceSection: String, CaseIterable {
-  case services = "Services", tasks = "Tasks", workflows = "Workflows", laneMap = "Lane map", runs = "Runs", recordings = "Recordings"
+  case services = "Services", tasks = "Tasks", workflows = "Workflows", laneMap = "Lane map", runs = "Runs", recordings = "Recordings", linkedWork = "Agents & linked work"
   var icon: String {
     switch self {
     case .services: return "server.rack"
@@ -10,6 +10,7 @@ enum WorkspaceSection: String, CaseIterable {
     case .laneMap: return "arrow.triangle.branch"
     case .runs: return "play.rectangle"
     case .recordings: return "record.circle"
+    case .linkedWork: return "person.2.badge.gearshape"
     }
   }
   var explanation: String {
@@ -19,6 +20,7 @@ enum WorkspaceSection: String, CaseIterable {
     case .workflows: return "Run tasks and service actions in order. A failed step stops the workflow."
     case .laneMap: return "Follow lanes to their services and running tasks. Select a block to highlight its connections."
     case .runs: return "Inspect progress and results. Completed runs stay available after relaunch."
+    case .linkedWork: return "Deckhand sessions linked to this workspace, with their last observed state and review artifacts."
     case .recordings: return "Screen recordings saved with this workspace's logs. Every log line is stamped with its position in the video."
     }
   }
@@ -94,6 +96,7 @@ struct WorkspaceView: View {
           case .laneMap: WorkspaceLaneMapView(model: model, runner: runner)
           case .runs: runs
           case .recordings: WorkspaceReprosView(file: file, recorder: .shared, controller: .shared, runner: runner)
+          case .linkedWork: WorkspaceLinkedWorkView(workspaceID: file.id)
           }
         } else {
           empty("Your development work, together", "A workspace contains services that stay running, tasks that finish, and workflows that coordinate both.", action: "Create workspace") { model.create() }

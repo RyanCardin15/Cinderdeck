@@ -8,6 +8,79 @@ final class IntegrationJournalTests: XCTestCase {
     StackSnapshot(id: id, name: name, file: "/fixture/\(id).toml", state: "Stopped", operation: nil,
       definitionChanged: false, issues: [], claim: nil, services: [], repos: [], lane: nil)
   }
+  func testSelectedRefreshPreservesUnrelatedRowsAndDefeatsOlderFullPublication() async throws {
+    let root = try StackTestSupport.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = try IntegrationJournal(directory: root)
+    try await store.reconcile([workspace("A", id: "a"), workspace("B", id: "b")], sourceRevision: 1)
+    let initial = try await store.snapshot(limit: 1)
+    try await store.reconcileSelected(workspace("Fresh A", id: "a"), workspaceID: "a", sourceRevision: 3)
+    // An older queued full publication may still bring a newer unrelated B.
+    try await store.reconcile([workspace("B changed", id: "b")], sourceRevision: 2)
+    let selected = try await store.snapshot(workspaceID: "a")
+    let unrelated = try await store.snapshot(workspaceID: "b")
+    XCTAssertEqual(selected.resources.first?.workspace?.name, "Fresh A")
+    XCTAssertTrue(selected.resources.first?.available ?? false)
+    XCTAssertEqual(unrelated.resources.first?.workspace?.name, "B changed")
+    XCTAssertEqual(unrelated.resources.first?.generation, 1)
+    XCTAssertNotEqual(selected.cursor, initial.cursor)
+    let secondPage = try await store.snapshot(offset: 1, limit: 1)
+    XCTAssertEqual(secondPage.cursor, selected.cursor)
+    XCTAssertEqual(secondPage.total, 2)
+    XCTAssertEqual(secondPage.resources.first?.workspaceID, "b")
+    try await store.reconcile([workspace("Fresh A", id: "a"), workspace("B changed", id: "b")], sourceRevision: 4)
+    let unchanged = try await store.snapshot()
+    XCTAssertEqual(unchanged.cursor, secondPage.cursor)
+    try await store.reconcileSelected(nil, workspaceID: "never-present", sourceRevision: 5)
+    let missing = try await store.snapshot(workspaceID: "never-present")
+    XCTAssertTrue(missing.resources.isEmpty)
+    XCTAssertEqual(missing.cursor, unchanged.cursor)
+    do {
+      try await store.reconcileSelected(workspace("Wrong", id: "a"), workspaceID: "b", sourceRevision: 6)
+      XCTFail("Selected context cannot update another workspace")
+    } catch { XCTAssertEqual((error as? StackControlError)?.code, "invalid_params") }
+  }
+
+  func testSelectedTombstoneRecreationAndNewFullDeletionPreserveGeneration() async throws {
+    let root = try StackTestSupport.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = try IntegrationJournal(directory: root)
+    try await store.reconcile([workspace("A", id: "a"), workspace("B", id: "b")], sourceRevision: 1)
+    try await store.reconcileSelected(nil, workspaceID: "a", sourceRevision: 3)
+    try await store.reconcile([workspace("Old A", id: "a"), workspace("B", id: "b")], sourceRevision: 2)
+    let removed = try await store.snapshot(workspaceID: "a")
+    XCTAssertFalse(removed.resources.first?.available ?? true)
+    XCTAssertNil(removed.resources.first?.workspace)
+    XCTAssertEqual(removed.resources.first?.generation, 1)
+    try await store.reconcileSelected(workspace("Recreated A", id: "a"), workspaceID: "a", sourceRevision: 4)
+    let recreated = try await store.snapshot(workspaceID: "a")
+    XCTAssertTrue(recreated.resources.first?.available ?? false)
+    XCTAssertEqual(recreated.resources.first?.generation, 2)
+    try await store.reconcile([workspace("B", id: "b")], sourceRevision: 5)
+    let deleted = try await store.snapshot(workspaceID: "a")
+    let preserved = try await store.snapshot(workspaceID: "b")
+    XCTAssertFalse(deleted.resources.first?.available ?? true)
+    XCTAssertEqual(deleted.resources.first?.generation, 2)
+    XCTAssertTrue(preserved.resources.first?.available ?? false)
+    let events = try await store.events(after: recreated.cursor)
+    XCTAssertEqual(events.events.map(\.workspaceID), ["a"])
+    XCTAssertEqual(events.events.map(\.kind), ["workspace.unavailable"])
+  }
+
+  func testFreshSelectedAbsenceFencesAnUnpublishedOlderResourceWithoutCreatingPlaceholder() async throws {
+    let root = try StackTestSupport.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = try IntegrationJournal(directory: root)
+    try await store.reconcileSelected(nil, workspaceID: "removed-before-publish", sourceRevision: 3)
+    try await store.reconcile([workspace("Old queued value", id: "removed-before-publish")], sourceRevision: 2)
+    let absent = try await store.snapshot(workspaceID: "removed-before-publish")
+    XCTAssertEqual(absent.total, 0)
+    XCTAssertTrue(absent.resources.isEmpty)
+    try await store.reconcile([workspace("Actually recreated", id: "removed-before-publish")], sourceRevision: 4)
+    let created = try await store.snapshot(workspaceID: "removed-before-publish")
+    XCTAssertEqual(created.resources.first?.generation, 1)
+    XCTAssertEqual(created.resources.first?.workspace?.name, "Actually recreated")
+  }
   func testCoherentSnapshotReplayRestartAndGenerationReuse() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("deckhand-journal-\(UUID())")
     defer { try? FileManager.default.removeItem(at: root) }
@@ -82,7 +155,10 @@ final class IntegrationJournalTests: XCTestCase {
     let actor = StackActor(kind: .agent, name: "Deckhand", session: "unit")
     let hello = try await control.handle("integration.hello", params: .object(["protocolVersions": .array([.number(1)])]), actor: actor)
     XCTAssertEqual(hello["protocolVersion"], .number(1))
-    XCTAssertEqual(hello["capabilities"]?.stringsValue, ["projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.create.managedWriter", "operations.lane.adopt", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.reservations", "checkout.contexts"])
+    let capabilities = try XCTUnwrap(hello["capabilities"]?.stringsValue)
+    XCTAssertEqual(Set(capabilities).count, capabilities.count, "Capabilities must be unique")
+    let required: Set<String> = ["projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.create.managedWriter", "operations.lane.adopt", "operations.lane.adopt.managedWriter", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.reservations", "checkout.contexts"]
+    XCTAssertTrue(required.isSubset(of: Set(capabilities)), "Additive capabilities must retain the supported consumer contract")
     for (params, expected) in [
       (JSONValue.object(["protocolVersions": .array([.number(2)])]), "unsupported_version"),
       (.object(["protocolVersions": .array([.number(1)]), "expectedInstallationID": .string("wrong")]), "installation_changed"),

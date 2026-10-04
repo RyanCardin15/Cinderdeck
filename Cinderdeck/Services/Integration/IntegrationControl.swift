@@ -43,7 +43,7 @@ nonisolated struct IntegrationHello: Encodable, Sendable {
   let executionHostID: String
   let channel: String
   let runtimeEpoch: String
-  let capabilities = ["projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.create.managedWriter", "operations.lane.adopt", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.reservations", "checkout.contexts"]
+  let capabilities = ["projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.create.managedWriter", "operations.lane.adopt", "operations.lane.adopt.managedWriter", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.reservations", "checkout.contexts", "recordings.library", "runs.library", "runs.detail", "runs.failures", "builds.declared", "linked-work.projection"]
   let maximumFrameBytes = StackControlSocketServer.maximumFrameBytes
   let maximumPageSize = 500
   let maximumWaitMs = 25_000
@@ -72,7 +72,11 @@ extension StackControlService {
     } catch { DiagnosticLogger.shared.log(.warning, .system, "Integration store unavailable: \(error.localizedDescription)") }
   }
   func handleIntegration(_ method: String, params: JSONValue, actor: StackActor) async throws -> JSONValue {
+    if method.hasPrefix("integration.build.") { return try await handleIntegrationBuild(method, params: params, actor: actor) }
+    if method.hasPrefix("integration.linked-work.") { return try await handleIntegrationLinkedWork(method, params: params, actor: actor) }
     if method == "integration.checkout.contexts" { return try await lookupCheckoutContexts(params) }
+    if method.hasPrefix("integration.runs.") { return try await handleIntegrationRuns(method, params: params, actor: actor) }
+    if method.hasPrefix("integration.recording.") { return try await handleIntegrationRecording(method, params: params, actor: actor) }
     if method.hasPrefix("integration.reservation.") { return try await handleCheckoutReservation(method, params: params, actor: actor) }
     if method == "integration.operation.submit" { return try await submitIntegrationOperation(params, actor: actor) }
     if method == "integration.operation.get" { return try await getIntegrationOperation(params, actor: actor) }
@@ -110,7 +114,14 @@ extension StackControlService {
       return try JSONValue(encoding: IntegrationHello(installationID: store.installationID, executionHostID: store.executionHostID, channel: channel, runtimeEpoch: store.runtimeEpoch))
     case "integration.snapshot":
       let input: IntegrationSnapshotParameters = try decodeIntegration(params)
-      try await store.reconcile(snapshot().workspaces, sourceRevision: integrationRevision())
+      if let id = input.workspaceID {
+        let workspace = supervisor.files.first(where: { $0.id == id }).map { stackSnapshot($0) }
+        try await store.reconcileSelected(workspace, workspaceID: id, sourceRevision: integrationRevision())
+      } else if input.expectedCursor == nil {
+        // Cursor-pinned continuation pages must read the same projection, not
+        // rebuild every physical checkout and silently mix a newer catalog.
+        try await store.reconcile(snapshot().workspaces, sourceRevision: integrationRevision())
+      }
       let result = try await store.snapshot(workspaceID: input.workspaceID, offset: input.offset ?? 0, limit: input.limit ?? 100)
       if let expected = input.expectedCursor, expected != result.cursor {
         throw StackControlError(code: "snapshot_changed", message: "The projection changed during pagination. Begin a new snapshot.")
@@ -254,6 +265,10 @@ extension StackControlService {
       let arguments = input.arguments.objectValue, arguments["workspace"]?.stringValue == input.workspaceID else {
       throw StackControlError.invalid("Operations require a bounded key, exact workspace identity, generation, revision and arguments")
     }
+    if ["runs.start", "runs.cancel", "runs.rerun", "definition.apply"].contains(input.method) {
+      try validateRunOperation(input.method, input.arguments)
+      return
+    }
     let allowed: Set<String>
     if input.method == "lane.create" {
       allowed = ["workspace", "branch", "from", "repositoryRefs", "managedWriter", "start", "setup"]
@@ -263,7 +278,7 @@ extension StackControlService {
       }
       guard bounded(decoded.branch, 200), decoded.from.map({ bounded($0, 200) }) ?? true else { throw StackControlError.invalid("Invalid lane branch or source") }
     } else if input.method == "lane.adopt" {
-      allowed = ["workspace", "path", "name", "from", "start", "setup"]
+      allowed = ["workspace", "path", "name", "from", "managedWriter", "start", "setup"]
       let decoded: IntegrationLaneAdoption = try decodeIntegration(input.arguments)
       guard bounded(decoded.path, 4096), decoded.path.hasPrefix("/"), !decoded.path.contains("\0"), !decoded.path.contains("\n"),
         decoded.name.map({ bounded($0, 200) }) ?? true,
@@ -354,6 +369,9 @@ extension StackControlService {
           "reconciliation": .string("Lane manifest inspected; this operation will not be repeated"),
         ]), error: receipt.error)
       }
+    } else if receipt.state == "unknown_outcome", ["runs.start", "runs.rerun"].contains(receipt.method),
+      let result = reconciledRunOperation(receipt.id, actor: actor) {
+      receipt = try await operations.transition(key: key, actor: actor, state: "unknown_outcome", result: result, error: receipt.error)
     } else if receipt.state == "unknown_outcome", receipt.method == "lane.setup",
       let record = try StackLaneStore.record(id: receipt.workspaceID, in: supervisor.lanesDirectory),
       record.setup?.integrationOperationID == receipt.id {
@@ -417,6 +435,7 @@ nonisolated private struct IntegrationServiceOperation: Decodable {
 nonisolated private struct IntegrationLaneAdoption: Decodable {
   let workspace: String
   let path: String
+  let managedWriter: Bool?
   let name: String?
   let from: String?
   let start: Bool?

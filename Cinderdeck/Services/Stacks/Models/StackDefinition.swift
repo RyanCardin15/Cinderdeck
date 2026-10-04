@@ -54,6 +54,7 @@ nonisolated struct ServiceDefinition: Codable, Equatable, Identifiable, Sendable
   var laneMode: StackServiceLaneMode?
   /// Values as written in the TOML, kept when they contain `{{…}}` templates.
   var raw: StackRawValues?
+  var buildAdapter: WorkspaceBuildAdapterDefinition?
 
   /// Primary port plus named ports, keyed "" for the primary port.
   var allPorts: [String: Int] {
@@ -293,7 +294,7 @@ extension RepoDefinition {
 extension ServiceDefinition {
   nonisolated enum CodingKeys: String, CodingKey {
     case id, command, repo, directory, dependencies, port, readiness, readyTimeout, environment, restartOnFailure
-    case stopSignal, stopTimeout, autostart, ports, laneMode, raw
+    case stopSignal, stopTimeout, autostart, ports, laneMode, raw, buildAdapter
   }
   nonisolated init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -313,6 +314,7 @@ extension ServiceDefinition {
     ports = try c.decodeIfPresent([String: Int].self, forKey: .ports) ?? [:]
     laneMode = try c.decodeIfPresent(StackServiceLaneMode.self, forKey: .laneMode)
     raw = try c.decodeIfPresent(StackRawValues.self, forKey: .raw)
+    buildAdapter = try c.decodeIfPresent(WorkspaceBuildAdapterDefinition.self, forKey: .buildAdapter)
   }
 }
 

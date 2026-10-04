@@ -25,6 +25,7 @@ final class ReproRecordingController: ObservableObject {
     var systemAudio = false
     var note: String?
     var browser: BrowserReproOptions?
+    var buildProof: WorkspaceBuildCaptureProof?
   }
 
   static let maximumSeconds: Double = 3600
@@ -62,7 +63,7 @@ final class ReproRecordingController: ObservableObject {
     let store = repros.store
     do { try store.prepare(id) } catch { throw StackControlError(code: "failed", message: "Could not create the repro folder: \(error.localizedDescription)") }
     let request = ReproRequest(id: id, title: options.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
-      origin: origin, actor: actor, workspaces: options.workspaces, capture: target.description, note: options.note)
+      origin: origin, actor: actor, workspaces: options.workspaces, capture: target.description, note: options.note, buildProof: options.buildProof)
     repros.expect(request)
     var fps = UserDefaults.standard.integer(forKey: PreferencesKeys.recordingFPS)
     if fps <= 0 { fps = 30 }

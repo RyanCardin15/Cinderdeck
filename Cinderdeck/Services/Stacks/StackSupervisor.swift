@@ -24,6 +24,7 @@ final class StackSupervisor: ObservableObject {
   private var watcher: StackDefinitionWatcher?
   private var watchedDirectory: URL?
   private var bootstrapped = false
+  lazy var buildArtifacts = WorkspaceBuildStore(directory: logDirectory.appendingPathComponent("Integration/BuildArtifacts"))
   private var physicalReservations: CheckoutReservations?
   func checkoutReservations() throws -> CheckoutReservations {
     if let physicalReservations { return physicalReservations }
@@ -302,7 +303,27 @@ final class StackSupervisor: ObservableObject {
       guard current() else { return }
       let process = makeProcess()
       let url = logRoot.appendingPathComponent(id).appendingPathComponent(service + ".log")
-      let identity = try await process.launch(launch, environment: launch.environment(shell: shellEnvironment, secrets: values), logURL: url)
+      let buildOwner = try buildArtifacts.launchOwner(launch)
+      if let buildOwner { try WorkspaceBuildScope.lease(buildOwner, supervisor: self) }
+      let build = try await buildArtifacts.launchContext(launch)
+      guard current() else { return }
+      if let buildOwner { try WorkspaceBuildScope.lease(buildOwner, supervisor: self) }
+      var launchEnvironment = launch.environment(shell: shellEnvironment, secrets: values)
+      if let build, let nonce = build.launchNonce, let artifact = build.artifact {
+        launchEnvironment["CINDERDECK_BUILD_ID"] = build.id
+        launchEnvironment["CINDERDECK_BUILD_ARTIFACT"] = buildArtifacts.artifact(build).path
+        launchEnvironment["CINDERDECK_BUILD_ARTIFACT_SHA256"] = artifact.sha256
+        launchEnvironment["CINDERDECK_BUILD_LAUNCH_NONCE"] = nonce
+      }
+      let identity = try await process.launch(launch, environment: launchEnvironment, logURL: url)
+      if let buildOwner {
+        do { try buildArtifacts.ownedServiceLaunched(buildOwner, serviceID: service, process: identity) }
+        catch { try? await process.stop(signal: SIGTERM, timeout: 1); throw error }
+      }
+      if let build {
+        do { try buildArtifacts.launched(build, process: identity) }
+        catch { try? await process.stop(signal: SIGTERM, timeout: 1); throw error }
+      }
       if !current() { try await process.stop(signal: launch.service.stopSignal, timeout: launch.service.stopTimeout); return }
       let started = Date()
       do {

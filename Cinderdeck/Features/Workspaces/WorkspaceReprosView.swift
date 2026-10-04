@@ -375,6 +375,7 @@ private struct WorkspaceReproDetail: View {
         .disabled(session.status.isActive)
 
         ReproAgentDragCard(session: session)
+        NativeLinkedWorkSection(target: .recording(session.id))
 
         if !session.markers.isEmpty {
           section("Timeline") {

@@ -61,7 +61,7 @@ nonisolated enum StackDefinitionLoader {
         let prefix = "services.\(serviceID)"
         guard case .table(let table) = value else { reader.error("\(prefix) must be a table"); continue }
         if !validID(serviceID) { reader.error("Invalid service ID: \(serviceID)") }
-        reader.warnUnknown(table, allowed: ["cmd", "repo", "cwd", "depends_on", "port", "ports", "ready", "env", "restart", "stop_signal", "stop_timeout", "autostart", "lane"], at: prefix)
+        reader.warnUnknown(table, allowed: ["cmd", "repo", "cwd", "depends_on", "port", "ports", "ready", "env", "restart", "stop_signal", "stop_timeout", "autostart", "lane", "build"], at: prefix)
         guard let cmd = reader.string(table, "cmd", at: prefix), !cmd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
           reader.error("\(prefix).cmd is required"); continue
         }
@@ -116,10 +116,31 @@ nonisolated enum StackDefinitionLoader {
           catch { reader.error("\(prefix).ready.log is not a valid regular expression") }
         }
         if !raw.isEmpty { service.raw = raw }
+        if table["build"] != nil {
+          let build = reader.table(table, "build", at: prefix)
+          reader.warnUnknown(build, allowed: ["task", "artifact", "stamp", "served_artifact", "checks"], at: "\(prefix).build")
+          if let task = reader.string(build, "task", at: "\(prefix).build"), let artifact = reader.string(build, "artifact", at: "\(prefix).build"),
+            let stamp = reader.string(build, "stamp", at: "\(prefix).build"), let served = reader.string(build, "served_artifact", at: "\(prefix).build") {
+            let checks = reader.array(build, "checks", at: "\(prefix).build") ?? []
+            if !validID(task) || !WorkspaceBuildArtifactFiles.validRelative(artifact) || !WorkspaceBuildHTTP.validPath(stamp) || !WorkspaceBuildHTTP.validPath(served)
+              || checks.count > 32 || Set(checks).count != checks.count || !checks.allSatisfy(validID) || service.port == nil {
+              reader.error("\(prefix).build requires an exact task, bounded artifact name, relative HTTP paths, unique check tasks and this service's own port")
+            } else { service.buildAdapter = .init(buildTaskID: task, requiredTaskIDs: checks, artifactName: artifact, stampPath: stamp, servedArtifactPath: served) }
+          } else { reader.error("\(prefix).build requires task, artifact, stamp and served_artifact") }
+        }
         stack.services.append(service)
       }
       readWorkspaceComponents(document.root, into: &stack, reader: &reader, validatePaths: validatePaths)
       readLaneSettings(document.root, into: &stack, reader: &reader)
+      for service in stack.services {
+        guard let adapter = service.buildAdapter else { continue }
+        guard let task = stack.task(adapter.buildTaskID), task.requiresServices.isEmpty, service.repo != nil, task.repo == service.repo,
+          adapter.requiredTaskIDs.allSatisfy({ stack.task($0) != nil && $0 != adapter.buildTaskID }) else {
+          reader.error("services.\(service.id).build requires a build task in the same explicit repository with no running-service dependency, and existing finite check tasks")
+          continue
+        }
+      }
+
       for service in stack.services {
         for dependency in service.dependencies {
           if dependency.contains(":") {

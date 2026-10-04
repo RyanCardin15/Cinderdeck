@@ -48,6 +48,24 @@ final class ReproRecorderTests: XCTestCase {
     recorder = nil; runner = nil; supervisor = nil; events = nil; store = nil; root = nil
   }
 
+  func testImportedMediaIdentityIsScopedImmutableAndSurvivesFailedCaptureWithoutClaimingPlayback() async throws {
+    let id = UUID()
+    recorder.beginBrowser(ReproRequest(id: id, title: "Imported preview", origin: .workspace, actor: .user, workspaces: []), at: Date())
+    let media = IntegrationPreviewMediaIdentity(sourceSHA256: String(repeating: "a", count: 64), sourceSize: 25,
+      videoSHA256: String(repeating: "b", count: 64), videoSize: 30)
+    XCTAssertThrowsError(try recorder.setImportedMedia(media, id: UUID()))
+    try recorder.setImportedMedia(media, id: id)
+    XCTAssertThrowsError(try recorder.setImportedMedia(media, id: id))
+    recorder.browserEvent(.stopping(Date()), id: id)
+    recorder.browserEvent(.noVideo, id: id)
+    let result = await recorder.waitUntilSaved(id)
+    let saved = try XCTUnwrap(result)
+    XCTAssertEqual(saved.importedMedia, media)
+    XCTAssertNil(saved.videoURL)
+    XCTAssertEqual(saved.status, .failed)
+    XCTAssertNil(saved.buildProof)
+  }
+
   private func load(_ source: String) async throws {
     try ("root = \(WorkspaceDefinitionWriter.quote(root.path))\nshell = \"/bin/sh\"\n" + source)
       .write(to: root.appendingPathComponent("shop.toml"), atomically: true, encoding: .utf8)
