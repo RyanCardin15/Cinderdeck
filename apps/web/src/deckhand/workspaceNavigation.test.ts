@@ -29,6 +29,22 @@ describe("saved workspace navigation", () => {
     ).toThrow();
     expect(() => validateWorkspaceSearch({ expectedGeneration: 3 })).toThrow();
   });
+  it("validates the scoped Agents view without changing native identity pins", () => {
+    const search = validateWorkspaceSearch({
+      environment: "remote-computer",
+      workspace: "primary",
+      context: "lane",
+      expectedGeneration: 7,
+      expectedInstallationID: "native-installation",
+      tab: "agents",
+    });
+    expect(search.tab).toBe("agents");
+    expect(savedWorkspaceMatches(search, "native-installation", 7)).toBe(true);
+    expect(savedWorkspaceMatches(search, "native-installation", 8)).toBe(false);
+    expect(validateWorkspaceSearch({ tab: "overview" }).tab).toBe("overview");
+    for (const tab of ["all", "", 1, null])
+      expect(() => validateWorkspaceSearch({ tab })).toThrow();
+  });
   it("keeps deliberate ordinary navigation available without a saved identity", () => {
     expect(
       savedWorkspaceMatches(

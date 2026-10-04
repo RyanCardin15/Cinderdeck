@@ -4,29 +4,54 @@ import { ChevronLeftIcon, GitBranchIcon, MessageSquareIcon } from "lucide-react"
 import { buildThreadRouteParams } from "../threadRoutes";
 import { useLaneSessionContext } from "./LaneSessionContext";
 import styles from "./laneSession.module.css";
+import { useAgentObservation } from "./useAgentObservation";
+import { connectedWorkspaceSearch } from "./workspaceNavigation";
+import { agentExecutionLabel, agentProviderLabel, agentCheckoutLabel } from "./agentPresentation";
 
-export function ConnectedLaneSidebar({ threadRef }: { threadRef: ScopedThreadRef | null }) {
+const noProviders: ReadonlyArray<{ readonly instanceId: string; readonly displayName: string }> =
+  [];
+
+export function ConnectedLaneSidebar({
+  threadRef,
+  providers = noProviders,
+}: {
+  threadRef: ScopedThreadRef | null;
+  providers?: ReadonlyArray<{ readonly instanceId: string; readonly displayName: string }>;
+}) {
   const result = useLaneSessionContext(threadRef);
   const context = result.data;
+  const observation = useAgentObservation(
+    threadRef?.environmentId ?? null,
+    JSON.stringify([
+      threadRef?.environmentId,
+      threadRef?.threadId,
+      context?.workspace.environmentId,
+      context?.checkout.laneId ?? context?.workspace.ownerId,
+      context?.checkout.nativeGeneration,
+    ]),
+    context,
+  );
   if (!context || !threadRef) return null;
+  const workspaceSearch = connectedWorkspaceSearch(threadRef.environmentId, context);
   return (
     <section className={styles.sidebarContext} aria-label="Current connected lane">
-      <Link
-        className={styles.backLink}
-        to="/workspaces"
-        search={{
-          workspace: context.workspace.ownerId,
-          context: context.checkout.laneId ?? context.workspace.ownerId,
-        }}
-      >
+      <Link className={styles.backLink} to="/workspaces" search={workspaceSearch}>
         <ChevronLeftIcon aria-hidden size={14} />
         {context.workspace.name}
       </Link>
       <div className={styles.sidebarLane}>
         <GitBranchIcon aria-hidden size={16} />
-        <strong>{context.feature.title}</strong>
+        <strong>
+          {agentCheckoutLabel(context.checkout, context.native?.workspace?.lane?.name)}
+        </strong>
       </div>
+      <p className={styles.sidebarObjective}>{context.feature.title}</p>
       <p className={styles.sidebarObjective}>{context.feature.objective}</p>
+      {result.error || observation.stale ? (
+        <p className={styles.sidebarObjective} role="status">
+          Last observed · Current agent state unavailable
+        </p>
+      ) : null}
       <h2 className={styles.sidebarLabel}>Lane agents</h2>
       <nav aria-label="Conversations in current lane">
         {context.sessions.slice(0, 6).map((session) => (
@@ -41,13 +66,17 @@ export function ConnectedLaneSidebar({ threadRef }: { threadRef: ScopedThreadRef
           >
             <MessageSquareIcon aria-hidden size={14} />
             <span>
-              {session.binding.providerInstanceId}
-              <small>{session.binding.role}</small>
+              {session.title}
+              <small>
+                {agentProviderLabel(session.binding.providerInstanceId, providers)} ·{" "}
+                {session.binding.role}
+              </small>
             </span>
             <span className={styles.sidebarState}>
-              {result.error || session.source === "unavailable"
-                ? "Unknown"
-                : session.binding.execution.replaceAll("_", " ")}
+              {agentExecutionLabel(
+                session.binding.execution,
+                Boolean(result.error) || observation.stale || session.source === "unavailable",
+              )}
             </span>
           </Link>
         ))}
@@ -56,10 +85,7 @@ export function ConnectedLaneSidebar({ threadRef }: { threadRef: ScopedThreadRef
         <Link
           className={styles.backLink}
           to="/workspaces"
-          search={{
-            workspace: context.workspace.ownerId,
-            context: context.checkout.laneId ?? context.workspace.ownerId,
-          }}
+          search={connectedWorkspaceSearch(threadRef.environmentId, context, "agents")}
         >
           View lane sessions
         </Link>
