@@ -21,6 +21,7 @@ import * as CheckoutIdentity from "./CheckoutIdentity.ts";
 import * as ManagedCheckoutGuard from "./ManagedCheckoutGuard.ts";
 import * as Relationships from "./Relationships.ts";
 import * as ProcessRunner from "../processRunner.ts";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 const decodeWorkspaceBinding = Schema.decodeUnknownEffect(Contracts.WorkspaceBinding);
 const decodeCheckoutBinding = Schema.decodeUnknownEffect(Contracts.CheckoutBinding);
@@ -135,6 +136,177 @@ const TestLayer = NodeSqliteClient.layer({ filename: ":memory:" }).pipe(
   Layer.provideMerge(NodeServices.layer),
 );
 describe("Deckhand integration hub", () => {
+  it.effect(
+    "reads one fresh off-page resource without replacing the 609-context catalogue or advancing replay",
+    () =>
+      Effect.gen(function* () {
+        const catalog = Array.from({ length: 609 }, (_, index) => ({
+          ...resource(`context-${index}`),
+          workspace: {
+            id: `context-${index}`,
+            name: `Workspace ${index}`,
+            file: "/fixture.toml",
+            state: "stopped",
+            definitionChanged: false,
+            issues: [],
+            services: [],
+            repos: [],
+          },
+        }));
+        let fresh = false;
+        let fullReads = 0;
+        const selectedReads: Array<string> = [];
+        let observePoll!: () => void;
+        const pollSeen = new Promise<void>((resolve) => {
+          observePoll = resolve;
+        });
+        let replayAfter: unknown;
+        const socketPath = yield* peer((request) => {
+          if (request.method === "integration.hello")
+            return { result: { ...hello, maximumPageSize: 500 } };
+          if (request.method === "integration.events") {
+            replayAfter = request.params.after;
+            observePoll();
+            return null;
+          }
+          assert.equal(request.method, "integration.snapshot");
+          if (request.params.workspaceID !== undefined) {
+            selectedReads.push(String(request.params.workspaceID));
+            const selected = catalog.find(
+              (item) => item.workspaceID === request.params.workspaceID,
+            )!;
+            return {
+              result: {
+                installationID: "installation",
+                runtimeEpoch: "epoch",
+                cursor: fresh ? "selected-new-cursor" : "catalog-cursor",
+                resources: [
+                  { ...selected, revision: fresh ? "fresh-revision" : selected.revision },
+                ],
+                total: 1,
+              },
+            };
+          }
+          fullReads += 1;
+          const offset = Number(request.params.offset ?? 0);
+          const limit = Number(request.params.limit);
+          return {
+            result: {
+              installationID: "installation",
+              runtimeEpoch: "epoch",
+              cursor: "catalog-cursor",
+              resources: catalog.slice(offset, offset + limit),
+              total: catalog.length,
+              nextOffset: offset + limit < catalog.length ? offset + limit : null,
+            },
+          };
+        });
+        yield* Effect.gen(function* () {
+          const hub = yield* IntegrationHub.IntegrationHub;
+          // The first selected request bootstraps authority once; subsequent ones
+          // must not make another full read even when their source revision changes.
+          assert.equal((yield* hub.freshResource("context-608")).resource.revision, "revision");
+          assert.equal(fullReads, 2);
+          const sql = yield* SqlClient.SqlClient;
+          const persisted = (yield* sql<{
+            record_json: string;
+          }>`SELECT record_json FROM deckhand_integrations`)[0]!.record_json;
+          fresh = true;
+          assert.equal(
+            (yield* hub.freshResource("context-608")).resource.revision,
+            "fresh-revision",
+          );
+          assert.equal(fullReads, 2);
+          assert.deepEqual(selectedReads, ["context-608", "context-608"]);
+          const overview = yield* hub.overview({ offset: 500, limit: 100 });
+          assert.equal(overview.total, 609);
+          assert.equal(overview.resources[0]?.workspaceID, "context-500");
+          assert.equal(
+            (yield* hub.currentResources(["context-608"])).resources[0]?.revision,
+            "revision",
+          );
+          assert.equal(
+            (yield* sql<{ record_json: string }>`SELECT record_json FROM deckhand_integrations`)[0]!
+              .record_json,
+            persisted,
+          );
+          yield* hub.subscribe({ offset: 0, limit: 1 }).pipe(Stream.runDrain, Effect.forkChild);
+          yield* Effect.promise(() => pollSeen);
+          assert.equal(replayAfter, "catalog-cursor");
+          assert.equal(fullReads, 2);
+        }).pipe(Effect.provide(hubLayer(socketPath)), Effect.scoped);
+      }).pipe(Effect.scoped, Effect.provide(TestLayer)),
+  );
+
+  it.effect.each([
+    "installation",
+    "host",
+    "channel",
+    "snapshot-epoch",
+    "workspace",
+    "removed",
+  ] as const)(
+    "refuses a %s replacement during a selected read while retaining the saved catalogue",
+    (replacement) =>
+      Effect.gen(function* () {
+        let changed = false;
+        const original = {
+          ...resource("one"),
+          workspace: {
+            id: "one",
+            name: "Workspace",
+            file: "/fixture.toml",
+            state: "stopped",
+            definitionChanged: false,
+            issues: [],
+            services: [],
+            repos: [],
+          },
+        };
+        const socketPath = yield* peer((request) => {
+          if (request.method === "integration.hello")
+            return {
+              result: {
+                ...hello,
+                ...(changed && replacement === "installation" ? { installationID: "foreign" } : {}),
+                ...(changed && replacement === "host" ? { executionHostID: "foreign" } : {}),
+                ...(changed && replacement === "channel" ? { channel: "release" } : {}),
+              },
+            };
+          assert.equal(request.method, "integration.snapshot");
+          const selected = request.params.workspaceID !== undefined;
+          return {
+            result: {
+              installationID: "installation",
+              runtimeEpoch:
+                selected && replacement === "snapshot-epoch" ? "foreign-epoch" : "epoch",
+              cursor: "catalog-cursor",
+              resources: [
+                {
+                  ...original,
+                  ...(selected && replacement === "workspace" ? { workspaceID: "other" } : {}),
+                  ...(selected && replacement === "removed" ? { available: false } : {}),
+                },
+              ],
+              total: 1,
+            },
+          };
+        });
+        yield* Effect.gen(function* () {
+          const hub = yield* IntegrationHub.IntegrationHub;
+          yield* hub.refresh;
+          changed = true;
+          const refused = yield* hub.freshResource("one").pipe(Effect.flip);
+          assert.include(["stale_binding", "invalid_response"], refused.reason);
+          const overview = yield* hub.overview({ offset: 0, limit: 1 });
+          assert.equal(overview.state, "connected");
+          assert.equal(overview.hello?.installationID, "installation");
+          assert.equal(overview.resources[0]?.workspaceID, "one");
+          assert.equal(overview.resources[0]?.available, true);
+        }).pipe(Effect.provide(hubLayer(socketPath)), Effect.scoped);
+      }).pipe(Effect.scoped, Effect.provide(TestLayer)),
+  );
+
   it.effect(
     "keeps off-page selected resources authoritative and bounded across catalog pages",
     () =>

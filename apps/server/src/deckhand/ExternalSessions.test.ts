@@ -69,7 +69,7 @@ const layer = (
                 },
               ],
             }),
-          resource: () =>
+          freshResource: () =>
             beforeNativeRead.pipe(
               Effect.andThen(
                 Effect.succeed({

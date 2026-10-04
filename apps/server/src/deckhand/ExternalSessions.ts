@@ -99,7 +99,7 @@ const make = Effect.gen(function* () {
   const nativeContext = (input: typeof C.ExternalSessionContext.Type | C.ExternalSessionList) =>
     Effect.gen(function* () {
       const native = yield* hub
-        .resource(input.workspaceID)
+        .freshResource(input.workspaceID)
         .pipe(Effect.mapError(() => fail("source_unavailable")));
       if (
         native.hello.installationID !== input.installationID ||
