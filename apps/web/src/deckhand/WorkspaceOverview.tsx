@@ -291,7 +291,11 @@ function ConnectedWorkspace({
   const summaries = Option.getOrNull(AsyncResult.value(contextResult));
   const agentObservation = useAgentObservation(environmentId, agentScope, summaries);
   const agentsUnavailable =
-    contextResult._tag === "Failure" || agentObservation.stale || !nativeCurrent;
+    contextResult._tag === "Failure" ||
+    agentObservation.stale ||
+    nativeObservation.stale ||
+    result._tag === "Failure" ||
+    (view !== null && view.state !== "connected");
   const summaryFor = (resource: Resource) =>
     summaries?.find(
       (item) =>
@@ -1067,6 +1071,7 @@ function ConnectedWorkspace({
                 disabled={
                   !enabled ||
                   !actionable(selected) ||
+                  !selected.workspace?.services.length ||
                   !view?.hello?.capabilities.includes("operations.services")
                 }
                 onClick={() => {
@@ -1080,6 +1085,7 @@ function ConnectedWorkspace({
                 disabled={
                   !enabled ||
                   !actionable(selected) ||
+                  !selected.workspace?.services.length ||
                   !view?.hello?.capabilities.includes("operations.services")
                 }
                 onClick={() => {
