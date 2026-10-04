@@ -18,6 +18,10 @@ const commands = vi.hoisted(() => ({
   >(),
   clear: () => {},
 }));
+const transport = vi.hoisted(() => ({ phase: "connected" }));
+vi.mock("../state/environments", () => ({
+  useEnvironment: () => ({ connection: { phase: transport.phase } }),
+}));
 vi.mock("@t3tools/client-runtime/state/runtime", async () => {
   const { Atom } = await import("effect/unstable/reactivity");
   const Effect = await import("effect/Effect");
@@ -93,6 +97,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   commands.list.mockReset();
   commands.clear();
+  transport.phase = "connected";
   registry = AtomRegistry.make({ defaultIdleTTL: 400 });
   element = document.createElement("div");
   document.body.append(element);
@@ -188,4 +193,28 @@ it("preserves last observed rows on refresh failure and clears them when selecte
   await render(4);
   expect(element.textContent).not.toContain("Reported review");
   expect(element.textContent).toContain("unavailable");
+});
+
+it("keeps connected reports historical across transport loss until a fresh read arrives", async () => {
+  vi.useFakeTimers();
+  const connected = { ...reported, connection: "connected" as const };
+  commands.list
+    .mockResolvedValueOnce({ _tag: "Success", value: [connected] })
+    .mockResolvedValue({ _tag: "Success", value: [connected] });
+  await render();
+  expect(element.textContent).toContain("Registration connected");
+  transport.phase = "reconnecting";
+  await render();
+  expect(element.textContent).toContain("Reported review");
+  expect(element.textContent).toContain("Last observed · Connection unavailable");
+  expect(element.textContent).not.toContain("Registration connected");
+  expect(commands.list).toHaveBeenCalledTimes(1);
+  transport.phase = "connected";
+  await render();
+  expect(element.textContent).not.toContain("Registration connected");
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(15000);
+  });
+  expect(element.textContent).toContain("Registration connected");
+  expect(element.textContent).not.toContain("Last observed · Connection unavailable");
 });

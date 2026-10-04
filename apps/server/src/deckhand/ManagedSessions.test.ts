@@ -174,6 +174,81 @@ const source = () => {
 };
 describe("managed session provider projection", () => {
   it.effect(
+    "projects the 21st saved agent exactly while retaining a bounded sibling list and refusing mismatched bindings",
+    () =>
+      Effect.gen(function* () {
+        const f = source();
+        yield* Effect.gen(function* () {
+          yield* seed;
+          const relationships = yield* Relationships.Relationships;
+          const original = yield* relationships.session("session");
+          for (let index = 1; index <= 20; index++)
+            yield* relationships.putSession(
+              {
+                ...original,
+                id: Contracts.SessionBindingId.make(`newer-${index}`),
+                threadId: ThreadId.make(`newer-thread-${index}`),
+              },
+              null,
+            );
+          const service = yield* ManagedSessions.ManagedSessions;
+          const siblings = yield* service.list(scope);
+          assert.equal(siblings.length, 20);
+          assert.isFalse(siblings.some((item) => item.binding.id === original.id));
+          assert.deepEqual(yield* service.list({ ...scope, offset: 0 }), siblings);
+          const older = yield* service.list({ ...scope, offset: 20 });
+          assert.equal(older.length, 1);
+          assert.equal(older[0]?.binding.id, original.id);
+          const [liveOlderPage] = yield* service
+            .subscribe({ ...scope, offset: 20 })
+            .pipe(Stream.take(1), Stream.runCollect);
+          assert.equal(liveOlderPage?.[0]?.binding.threadId, original.threadId);
+          for (const wrong of [
+            { ...scope, offset: 20, installationID: "different-installation" },
+            { ...scope, offset: 20, workspaceID: "different-lane" },
+            { ...scope, offset: 20, generation: 8 },
+          ])
+            assert.deepEqual(yield* service.list(wrong), []);
+          for (const invalid of [
+            { ...scope, offset: -1 },
+            { ...scope, offset: 10001 },
+            { ...scope, limit: 21 },
+          ]) {
+            assert.equal(
+              (yield* service.list(invalid).pipe(Effect.flip)).reason,
+              "invalid_request",
+            );
+          }
+          const input = {
+            ...scope,
+            sessionID: original.id,
+            threadID: original.threadId,
+            checkoutID: original.checkoutId,
+          };
+          const [selected] = yield* service
+            .subscribeThread(input)
+            .pipe(Stream.take(1), Stream.runCollect);
+          assert.equal(selected?.binding.execution, "working");
+          assert.equal(selected?.binding.connection, "connected");
+          assert.equal(selected?.binding.threadId, original.threadId);
+          for (const wrong of [
+            { ...input, installationID: "another-installation" },
+            { ...input, workspaceID: "another-lane" },
+            { ...input, generation: 8 },
+            { ...input, threadID: ThreadId.make("another-thread") },
+            { ...input, sessionID: Contracts.SessionBindingId.make("newer-1") },
+            { ...input, checkoutID: Contracts.CheckoutBindingId.make("another-checkout") },
+          ]) {
+            const [rejected] = yield* service
+              .subscribeThread(wrong)
+              .pipe(Stream.take(1), Stream.runCollect);
+            assert.isNull(rejected);
+          }
+        }).pipe(Effect.provide(f.layer()));
+      }).pipe(Effect.provide(baseLayer)),
+  );
+
+  it.effect(
     "summarizes a bounded page with exact saved counts, PR identity and generation isolation",
     () =>
       Effect.gen(function* () {
@@ -414,6 +489,47 @@ describe("managed session provider projection", () => {
           assert.equal(updates[1]?.[0]?.externalSessions?.activeCount, 1);
           assert.equal(updates[1]?.[0]?.sessions[0]?.binding.execution, "working");
         }).pipe(Effect.provide(f.layer(undefined, externalLayer)));
+      }).pipe(Effect.provide(baseLayer)),
+  );
+
+  it.effect(
+    "replays the exact opened thread after its initial watermark without widening scope",
+    () =>
+      Effect.gen(function* () {
+        const f = source();
+        let cursor: number | undefined;
+        const layer = f.layer((request) =>
+          Stream.unwrap(
+            Effect.sync(() => {
+              cursor = request?.afterSequence;
+              f.state.sequence = 9;
+              f.state.shell = { ...f.state.shell!, status: "completed", activityRunStatus: null };
+              return Stream.make({
+                sequence: 9,
+                commandId: null,
+                event: { type: "run.updated" },
+              } as OrchestrationV2StoredEvent);
+            }),
+          ),
+        );
+        yield* Effect.gen(function* () {
+          yield* seed;
+          const service = yield* ManagedSessions.ManagedSessions;
+          const binding = yield* (yield* Relationships.Relationships).session("session");
+          const updates = yield* service
+            .subscribeThread({
+              ...scope,
+              sessionID: binding.id,
+              threadID: binding.threadId,
+              checkoutID: binding.checkoutId,
+            })
+            .pipe(Stream.take(2), Stream.runCollect);
+          assert.equal(cursor, 8);
+          assert.equal(updates[0]?.binding.execution, "working");
+          assert.equal(updates[1]?.binding.execution, "finished_turn");
+          assert.equal(updates[1]?.binding.threadId, binding.threadId);
+          assert.equal(updates[1]?.binding.lastSequence, 9);
+        }).pipe(Effect.provide(layer));
       }).pipe(Effect.provide(baseLayer)),
   );
 

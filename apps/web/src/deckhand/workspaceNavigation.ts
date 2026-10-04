@@ -1,13 +1,41 @@
-import type { IntegrationView } from "@t3tools/contracts/deckhand/rpc";
+import type { EnvironmentId } from "@t3tools/contracts";
+import type { IntegrationView, ThreadContextView } from "@t3tools/contracts/deckhand/rpc";
 export type WorkspaceSearch = {
   workspace?: string;
   context?: string;
   environment?: string;
+  tab?: "agents" | "overview";
   expectedGeneration?: number;
   expectedInstallationID?: string;
 };
+// A conversation belongs to its execution environment, even when the viewer's
+// primary computer differs. Saved native pins refuse a replaced lane/install.
+export function connectedWorkspaceSearch(
+  environmentId: EnvironmentId,
+  context: {
+    workspace: Pick<ThreadContextView["workspace"], "ownerId" | "environmentId">;
+    checkout: Pick<ThreadContextView["checkout"], "laneId" | "nativeGeneration">;
+  },
+  tab?: WorkspaceSearch["tab"],
+): WorkspaceSearch {
+  return {
+    environment: environmentId,
+    ...(tab === undefined ? {} : { tab }),
+    workspace: context.workspace.ownerId,
+    context: context.checkout.laneId ?? context.workspace.ownerId,
+    expectedInstallationID: context.workspace.environmentId,
+    ...(context.checkout.nativeGeneration === undefined
+      ? {}
+      : { expectedGeneration: context.checkout.nativeGeneration }),
+  };
+}
 export function validateWorkspaceSearch(value: Record<string, unknown>): WorkspaceSearch {
   const search: WorkspaceSearch = {};
+  if (value.tab !== undefined) {
+    if (value.tab !== "agents" && value.tab !== "overview")
+      throw new Error("This workspace link has an invalid view.");
+    search.tab = value.tab;
+  }
   for (const key of ["environment", "workspace", "context"] as const) {
     if (typeof value[key] === "string" && value[key].length <= 160) search[key] = value[key];
   }

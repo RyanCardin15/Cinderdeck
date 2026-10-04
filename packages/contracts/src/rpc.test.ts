@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
+import { ManagedSessionsInput } from "./deckhand/rpc.js";
 
 import { ORCHESTRATION_V2_WS_METHODS } from "./orchestrationV2.ts";
 import { WsRpcGroup, WsSubscribeServerConfigRpc } from "./rpc.ts";
@@ -66,5 +67,25 @@ describe("WebSocket RPC contracts", () => {
         }),
       ),
     ).toBe(true);
+  });
+});
+
+const decodeManagedSessions = Schema.decodeUnknownSync(ManagedSessionsInput);
+const decodeManagedSessionsExit = Schema.decodeUnknownExit(ManagedSessionsInput);
+
+describe("managed agent paging compatibility", () => {
+  const input = { installationID: "installation", workspaceID: "lane", generation: 7, limit: 20 };
+  it("accepts legacy page-zero clients and bounded explicit pages", () => {
+    const decode = decodeManagedSessions;
+    expect(decode(input).offset).toBeUndefined();
+    expect(decode({ ...input, offset: 0 }).offset).toBe(0);
+    expect(decode({ ...input, offset: 20 }).offset).toBe(20);
+    expect(decode({ ...input, offset: 10000 }).offset).toBe(10000);
+  });
+  it("refuses negative, excessive and non-integer offsets and unbounded page sizes", () => {
+    const decode = decodeManagedSessionsExit;
+    for (const offset of [-1, 10001, 1.5])
+      expect(Exit.isFailure(decode({ ...input, offset }))).toBe(true);
+    expect(Exit.isFailure(decode({ ...input, limit: 21 }))).toBe(true);
   });
 });

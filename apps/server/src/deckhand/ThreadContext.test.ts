@@ -145,55 +145,80 @@ const view: IntegrationView = {
     },
   ],
 };
-const fixture = (native = view, showSession = true) => {
+const fixture = (native = view, showSession = true, updates = [native], olderSelected = false) => {
+  const sessionState = () =>
+    Stream.unwrap(
+      Effect.gen(function* () {
+        const binding = yield* decodeSession({
+          id: "session",
+          threadId,
+          providerSessionId: null,
+          providerInstanceId: instanceId,
+          featureId: "feature",
+          checkoutId: "checkout",
+          repositoryScope: ["physical"],
+          role: "writer",
+          desiredAccess: "write",
+          execution: "queued",
+          connection: "connected",
+          lastSequence: 0,
+          capabilities: {
+            nativeResume: true,
+            interrupt: false,
+            steering: false,
+            approvals: false,
+            questions: false,
+            enforcedReadOnly: false,
+            imageInput: false,
+            videoInput: false,
+            managed: true,
+          },
+        }).pipe(Effect.orDie);
+        return Stream.make(
+          showSession
+            ? [
+                {
+                  binding: { ...binding, execution: "working" as const },
+                  title: "Retry",
+                  source: "current" as const,
+                  archived: false,
+                } satisfies ManagedSessionView,
+              ]
+            : [],
+        );
+      }),
+    );
   const projection = Layer.mock(ManagedSessions.ManagedSessions)({
     subscribe: () =>
-      Stream.unwrap(
-        Effect.gen(function* () {
-          const binding = yield* decodeSession({
-            id: "session",
-            threadId,
-            providerSessionId: null,
-            providerInstanceId: instanceId,
-            featureId: "feature",
-            checkoutId: "checkout",
-            repositoryScope: ["physical"],
-            role: "writer",
-            desiredAccess: "write",
-            execution: "queued",
-            connection: "connected",
-            lastSequence: 0,
-            capabilities: {
-              nativeResume: true,
-              interrupt: false,
-              steering: false,
-              approvals: false,
-              questions: false,
-              enforcedReadOnly: false,
-              imageInput: false,
-              videoInput: false,
-              managed: true,
-            },
-          }).pipe(Effect.orDie);
-          return Stream.make(
-            showSession
-              ? [
-                  {
-                    binding: { ...binding, execution: "working" as const },
-                    title: "Retry",
-                    source: "current" as const,
-                    archived: false,
-                  } satisfies ManagedSessionView,
-                ]
-              : [],
-          );
-        }),
+      sessionState().pipe(
+        Stream.map((rows) =>
+          olderSelected && rows[0]
+            ? Array.from({ length: 20 }, (_, index) => ({
+                ...rows[0]!,
+                binding: {
+                  ...rows[0]!.binding,
+                  id: Contracts.SessionBindingId.make(`newer-${index}`),
+                  threadId: ThreadId.make(`newer-thread-${index}`),
+                },
+              }))
+            : rows,
+        ),
       ),
+    subscribeThread: () => sessionState().pipe(Stream.map((rows) => rows[0] ?? null)),
   });
   const nativeLayer = Layer.mock(IntegrationHub.IntegrationHub)({
     overview: () => Effect.succeed(native),
     resource: () => Effect.fail({ reason: "offline" } as never),
-    subscribe: () => Stream.make(native),
+    subscribe: (page) =>
+      Stream.fromIterable(updates).pipe(
+        Stream.map((current) => ({
+          ...current,
+          resources: current.resources.slice(page.offset, page.offset + page.limit),
+          selectedResources: current.resources.filter(
+            (resource) => resource.workspaceID === page.selectedContextID,
+          ),
+        })),
+      ),
   });
   return ThreadContext.layer.pipe(
     Layer.provide(projection),
@@ -217,6 +242,58 @@ describe("connected conversation context", () => {
       assert.equal(context.native?.workspace?.services[0]?.url, "http://localhost:3101");
     }).pipe(Effect.provide(fixture())),
   );
+  it.effect(
+    "keeps the opened older agent live independently of the twenty newer sibling summaries",
+    () =>
+      Effect.gen(function* () {
+        yield* seed;
+        const service = yield* ThreadContext.ThreadContext;
+        const [context] = yield* service
+          .subscribe({ threadId })
+          .pipe(Stream.take(1), Stream.runCollect);
+        assert.equal(context?.sessions.length, 20);
+        assert.isFalse(context!.sessions.some((item) => item.binding.threadId === threadId));
+        assert.equal(context?.session.threadId, threadId);
+        assert.equal(context?.session.execution, "working");
+        assert.equal(context?.session.connection, "connected");
+      }).pipe(Effect.provide(fixture(view, true, [view], true))),
+  );
+
+  it.effect(
+    "retains the exact selected lane when catalog insertions move it off the watched page",
+    () =>
+      Effect.gen(function* () {
+        yield* seed;
+        const service = yield* ThreadContext.ThreadContext;
+        const contexts = yield* service
+          .subscribe({ threadId })
+          .pipe(Stream.take(2), Stream.runCollect);
+        assert.equal(contexts.length, 2);
+        for (const context of contexts) {
+          assert.equal(context?.native?.workspaceID, "lane");
+          assert.equal(context?.native?.generation, 7);
+          assert.equal(context?.session.execution, "working");
+        }
+      }).pipe(
+        Effect.provide(
+          fixture(view, true, [
+            view,
+            {
+              ...view,
+              total: 102,
+              resources: [
+                ...Array.from({ length: 101 }, (_, index) => ({
+                  ...view.resources[0]!,
+                  workspaceID: `earlier-${index}`,
+                })),
+                view.resources[0]!,
+              ],
+            },
+          ]),
+        ),
+      ),
+  );
+
   it.effect("keeps saved breadcrumbs while refusing another native generation", () =>
     Effect.gen(function* () {
       yield* seed;

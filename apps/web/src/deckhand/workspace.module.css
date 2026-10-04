@@ -1010,3 +1010,59 @@
 .dh-activity span {
   font-size: 12px;
 }
+
+.dh-agent-panel {
+  border: 1px solid var(--dh-line);
+  border-radius: 10px;
+  padding: 20px;
+  background: color-mix(in srgb, var(--foreground) 2%, var(--dh-bg));
+}
+.dh-agent-panel > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--dh-line);
+}
+.dh-agent-panel h2 {
+  margin: 6px 0;
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+.dh-agent-panel p {
+  color: var(--dh-muted);
+  line-height: 1.5;
+}
+.dh-agent-panel > header p {
+  margin: 8px 0 0;
+  max-width: 44rem;
+}
+.dh-agent-panel .dh-add-agent {
+  margin: 18px 0;
+}
+.dh-agent-panel .dh-add-agent > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  padding: 9px 12px;
+  border: 1px solid var(--dh-line);
+  border-radius: 6px;
+  color: var(--dh-accent-text);
+  font-size: 14px;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--dh-accent) 6%, var(--dh-bg));
+}
+.dh-agent-panel .dh-launcher {
+  max-width: 42rem;
+}
+.dh-agent-panel .dh-session-list > h3 {
+  margin: 18px 0 12px;
+  font-weight: 600;
+}
+.dh-row-agent strong {
+  overflow-wrap: anywhere;
+}

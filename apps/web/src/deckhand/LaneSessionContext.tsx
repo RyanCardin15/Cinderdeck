@@ -22,6 +22,9 @@ import { buildThreadRouteParams } from "../threadRoutes";
 import { useEnvironmentQuery } from "../state/query";
 import { threadContextView } from "./state";
 import styles from "./laneSession.module.css";
+import { useAgentObservation } from "./useAgentObservation";
+import { connectedWorkspaceSearch } from "./workspaceNavigation";
+import { agentExecutionLabel, agentProviderLabel, agentCheckoutLabel } from "./agentPresentation";
 
 export function useLaneSessionContext(threadRef: ScopedThreadRef | null) {
   return useEnvironmentQuery(
@@ -33,23 +36,11 @@ export function useLaneSessionContext(threadRef: ScopedThreadRef | null) {
       : null,
   );
 }
-const stateLabels: Record<ThreadContextView["session"]["execution"], string> = {
-  queued: "Queued",
-  starting: "Starting",
-  working: "Working",
-  waiting_input: "Needs your input",
-  waiting_approval: "Needs approval",
-  idle: "Idle",
-  finished_turn: "Turn complete",
-  interrupted: "Interrupted",
-  failed: "Failed",
-  unknown: "Unknown",
-};
 export function LaneSessionContext({
   context,
   threadRef,
   providers,
-  stale,
+  stale: suppliedStale,
   previewAvailable,
   onOpenPreview,
   onOpenDiff,
@@ -72,6 +63,18 @@ export function LaneSessionContext({
   pullRequestsAvailable: boolean;
   pullRequestCount: number;
 }) {
+  const observation = useAgentObservation(
+    threadRef.environmentId,
+    JSON.stringify([
+      threadRef.environmentId,
+      threadRef.threadId,
+      context.workspace.environmentId,
+      context.checkout.laneId ?? context.workspace.ownerId,
+      context.checkout.nativeGeneration,
+    ]),
+    context,
+  );
+  const stale = suppliedStale || observation.stale;
   const native = stale ? null : context.native?.workspace;
   const connected = !stale && context.nativeConnection === "connected" && Boolean(native);
   const services = native?.services ?? [];
@@ -81,20 +84,16 @@ export function LaneSessionContext({
   const repository = context.checkout.repositories.find((repo) =>
     context.session.repositoryScope?.includes(repo.physicalId),
   );
-  const workspaceSearch = {
-    workspace: context.workspace.ownerId,
-    context: context.checkout.laneId ?? context.workspace.ownerId,
-  };
-  const label =
-    context.checkout.kind === "lane"
-      ? (native?.lane?.name ?? context.feature.title)
-      : "Primary checkout";
+  const workspaceSearch = connectedWorkspaceSearch(threadRef.environmentId, context);
+  const label = agentCheckoutLabel(context.checkout, native?.lane?.name);
   return (
     <section className={styles.context} aria-label="Connected lane context">
       <div className={styles.breadcrumb}>
-        <Link to="/workspaces">Workspaces</Link>
+        <Link to="/workspaces" search={workspaceSearch}>
+          Workspaces
+        </Link>
         <ChevronRightIcon aria-hidden size={13} />
-        <Link to="/workspaces" search={{ workspace: context.workspace.ownerId }}>
+        <Link to="/workspaces" search={workspaceSearch}>
           {context.workspace.name}
         </Link>
         <ChevronRightIcon aria-hidden size={13} />
@@ -110,7 +109,11 @@ export function LaneSessionContext({
             </span>
             <span className={styles.connection} data-connected={connected}>
               <span aria-hidden className={styles.dot} />
-              {connected ? "Cinderdeck connected" : "Cinderdeck unavailable"}
+              {stale
+                ? "Last observed"
+                : connected
+                  ? "Cinderdeck connected"
+                  : "Cinderdeck unavailable"}
             </span>
             <span className={styles.role}>
               {context.session.role} · {context.session.desiredAccess.replaceAll("_", " ")}
@@ -302,15 +305,16 @@ export function LaneSessionContext({
                 )}
               </span>
               <span>
-                <strong>{provider?.displayName ?? session.binding.providerInstanceId}</strong>
+                <strong>{session.title}</strong>
                 <small>
+                  {agentProviderLabel(session.binding.providerInstanceId, providers)} ·{" "}
                   {session.binding.role}
                   {session.archived ? " · Archived" : ""}
                 </small>
               </span>
               <span className={styles.sessionState} data-state={execution}>
                 <span className={styles.dot} aria-hidden />
-                {stateLabels[execution]}
+                {agentExecutionLabel(execution, stale || session.source === "unavailable")}
               </span>
             </Link>
           );

@@ -222,6 +222,7 @@ export const ManagedSessionsInput = Schema.Struct({
   workspaceID: launchIdentifier,
   generation: PositiveInt,
   limit: PositiveInt.check(Schema.isLessThanOrEqualTo(20)),
+  offset: Schema.optionalKey(NonNegativeInt.check(Schema.isLessThanOrEqualTo(10000))),
 });
 export type ManagedSessionsInput = typeof ManagedSessionsInput.Type;
 export const ManagedSessionView = Schema.Struct({

@@ -32,6 +32,10 @@ import {
   savedWorkspaceMatches,
 } from "./workspaceNavigation";
 import { SessionList } from "./SessionList";
+import { useAgentObservation } from "./useAgentObservation";
+import { agentExecutionLabel, agentProviderLabel } from "./agentPresentation";
+import { environmentServerConfigsAtom } from "../state/server";
+import { deriveProviderInstanceEntries } from "../providerInstances";
 import { SessionLauncher } from "./SessionLauncher";
 import { ProductNavigation } from "./ProductNavigation";
 import {
@@ -109,11 +113,36 @@ function ConnectedWorkspace({
 }) {
   const search = useSearch({ from: "/_chat/workspaces" });
   const navigate = useNavigate();
+  const agentMode = search.tab === "agents";
+  const selectedBaseRef = useRef<string | null>(search.workspace ?? null);
+  const mountedRef = useRef(true);
+  const selectionVersionRef = useRef(
+    JSON.stringify([search.workspace, search.context, search.tab]),
+  );
+  useEffect(() => {
+    selectionVersionRef.current = JSON.stringify([search.workspace, search.context, search.tab]);
+  }, [search.workspace, search.context, search.tab, selectionVersionRef]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const setWorkspaceID = (workspace: string) => {
-    void navigate({ to: "/workspaces", search: { environment: environmentId, workspace } });
+    selectedBaseRef.current = workspace;
+    selectionVersionRef.current = JSON.stringify([workspace, undefined, search.tab]);
+    void navigate({
+      to: "/workspaces",
+      search: { environment: environmentId, workspace, ...(search.tab ? { tab: search.tab } : {}) },
+    });
   };
   const setSelectedID = useCallback(
     (context: string | null) => {
+      selectionVersionRef.current = JSON.stringify([
+        search.workspace,
+        context ?? undefined,
+        search.tab,
+      ]);
       void navigate({
         to: "/workspaces",
         search: context
@@ -121,10 +150,15 @@ function ConnectedWorkspace({
               environment: environmentId,
               ...(search.workspace ? { workspace: search.workspace } : {}),
               context,
+              ...(search.tab ? { tab: search.tab } : {}),
             }
           : search.workspace
-            ? { environment: environmentId, workspace: search.workspace }
-            : { environment: environmentId },
+            ? {
+                environment: environmentId,
+                workspace: search.workspace,
+                ...(search.tab ? { tab: search.tab } : {}),
+              }
+            : { environment: environmentId, ...(search.tab ? { tab: search.tab } : {}) },
       });
     },
     [navigate, search, environmentId],
@@ -141,6 +175,20 @@ function ConnectedWorkspace({
   const pageInput = overviewPageSelection(search, offset, workspaceOffset);
   const result = useAtomValue(workspaceView({ environmentId, input: pageInput }));
   const view = Option.getOrNull(AsyncResult.value(result));
+  const nativeObservation = useAgentObservation(environmentId, JSON.stringify(pageInput), view);
+  const nativeCurrent =
+    result._tag !== "Failure" && !nativeObservation.stale && view?.state === "connected";
+  const connectionLabel = nativeObservation.stale
+    ? nativeObservation.reconnecting
+      ? "Reconnecting to this computer"
+      : "Computer connection unavailable"
+    : view
+      ? label(view.state)
+      : "Connecting…";
+  const serverConfigs = useAtomValue(environmentServerConfigsAtom);
+  const providers = deriveProviderInstanceEntries(
+    serverConfigs.get(environmentId)?.providers ?? [],
+  );
   const [filter, setFilter] = useState("all");
   const [branch, setBranch] = useState("");
   const [creating, setCreating] = useState(false);
@@ -155,6 +203,7 @@ function ConnectedWorkspace({
   const [operation, setOperation] = useState<{
     key: string;
     workspaceID: string;
+    installationID: string;
     receipt: IntegrationOperationReceipt | null;
     refused: boolean;
     message: string | null;
@@ -185,6 +234,7 @@ function ConnectedWorkspace({
         setOperation({
           key: unresolved.input.operationKey,
           workspaceID: unresolved.input.workspaceID,
+          installationID: unresolved.input.installationID,
           receipt: unresolved.receipt,
           refused: false,
           message:
@@ -222,19 +272,26 @@ function ConnectedWorkspace({
     };
   }, [view, environmentId, recordingSummary]);
   const resources = overviewResources(view);
+  const agentContexts = resources
+    .map((resource) => ({ workspaceID: resource.workspaceID, generation: resource.generation }))
+    .sort(
+      (left, right) =>
+        left.workspaceID.localeCompare(right.workspaceID) || left.generation - right.generation,
+    );
+  const agentScope = JSON.stringify([view?.hello?.installationID, agentContexts]);
   const contextResult = useAtomValue(
     managedContextsView({
       environmentId,
       input: {
         installationID: view?.hello?.installationID ?? "unconnected",
-        contexts: resources.map((resource) => ({
-          workspaceID: resource.workspaceID,
-          generation: resource.generation,
-        })),
+        contexts: agentContexts,
       },
     }),
   );
   const summaries = Option.getOrNull(AsyncResult.value(contextResult));
+  const agentObservation = useAgentObservation(environmentId, agentScope, summaries);
+  const agentsUnavailable =
+    contextResult._tag === "Failure" || agentObservation.stale || !nativeCurrent;
   const summaryFor = (resource: Resource) =>
     summaries?.find(
       (item) =>
@@ -252,6 +309,9 @@ function ConnectedWorkspace({
   const activeBase = workspaceID
     ? bases.find((resource) => resource.workspaceID === workspaceID)
     : bases[0];
+  useEffect(() => {
+    selectedBaseRef.current = activeBase?.workspaceID ?? null;
+  }, [activeBase?.workspaceID, selectedBaseRef]);
   const contexts = activeBase
     ? overviewWorkspaceContexts(view, activeBase.workspaceID)
     : workspaceID
@@ -261,16 +321,14 @@ function ConnectedWorkspace({
   const visible = contexts.filter((resource) => filter !== "attention" || needsAttention(resource));
   const selectedCandidate = selectedID
     ? contexts.find((resource) => resource.workspaceID === selectedID)
-    : search.expectedGeneration !== undefined
-      ? activeBase
-      : (lanes[0] ?? activeBase);
+    : activeBase;
   const savedContextChanged =
     view?.state === "connected" &&
     !savedWorkspaceMatches(search, view.hello?.installationID, selectedCandidate?.generation);
   const selected = savedContextChanged ? undefined : selectedCandidate;
   const enabled =
     !savedContextChanged &&
-    view?.state === "connected" &&
+    nativeCurrent &&
     !busy &&
     recovered &&
     !(
@@ -279,6 +337,43 @@ function ConnectedWorkspace({
       !["succeeded", "failed"].includes(operation.receipt.state)
     ) &&
     !(operation && !operation.refused && operation.receipt === null);
+  const createdLaneID =
+    operation?.receipt?.result?.workspace?.id ?? operation?.receipt?.result?.createdWorkspaceID;
+  const tabSearch = {
+    ...search,
+    environment: environmentId,
+    ...(activeBase ? { workspace: activeBase.workspaceID } : {}),
+    ...(selected
+      ? {
+          context: selected.workspaceID,
+          expectedGeneration: selected.generation,
+          ...(view?.hello ? { expectedInstallationID: view.hello.installationID } : {}),
+        }
+      : {}),
+  };
+  const contextLinkSearch = {
+    environment: environmentId,
+    ...(selected || selectedID || activeBase
+      ? { workspace: selected?.workspaceID ?? selectedID ?? activeBase!.workspaceID }
+      : {}),
+    ...(search.expectedGeneration !== undefined
+      ? { expectedGeneration: search.expectedGeneration }
+      : selected
+        ? { expectedGeneration: selected.generation }
+        : {}),
+    ...(search.expectedInstallationID
+      ? { expectedInstallationID: search.expectedInstallationID }
+      : view?.hello
+        ? { expectedInstallationID: view.hello.installationID }
+        : {}),
+  };
+  const selectedName = selected?.workspace?.lane
+    ? `Lane · ${selected.workspace.lane.name}`
+    : "Primary checkout";
+  const managedTotal = contexts.reduce(
+    (sum, resource) => sum + (summaryFor(resource)?.total ?? 0),
+    0,
+  );
   const canCreateFeature = [
     "operations.lane.create",
     "operations.lane.create.repositoryRefs",
@@ -288,14 +383,18 @@ function ConnectedWorkspace({
   ].every((capability) => view?.hello?.capabilities.includes(capability));
   const reconcile = useCallback(async () => {
     if (!operation) return;
+    const selectionVersion = selectionVersionRef.current;
     const response = await inspect({ environmentId, input: { operationKey: operation.key } });
+    if (!mountedRef.current) return;
     if (response._tag === "Success") {
       const createdID =
         response.value.result?.workspace?.id ?? response.value.result?.createdWorkspaceID;
       if (
         response.value.method === "lane.create" &&
         response.value.state === "succeeded" &&
-        createdID
+        createdID &&
+        selectedBaseRef.current === operation.workspaceID &&
+        selectionVersionRef.current === selectionVersion
       )
         setSelectedID(createdID);
       setOperation((current) =>
@@ -312,7 +411,15 @@ function ConnectedWorkspace({
             }
           : current,
       );
-  }, [operation, inspect, environmentId, setSelectedID]);
+  }, [
+    operation,
+    inspect,
+    environmentId,
+    setSelectedID,
+    selectedBaseRef,
+    selectionVersionRef,
+    mountedRef,
+  ]);
   useEffect(() => {
     if (!operation?.receipt || terminal(operation.receipt)) return;
     const timer = window.setTimeout(() => {
@@ -332,6 +439,7 @@ function ConnectedWorkspace({
     setOperation({
       key,
       workspaceID: target.workspaceID,
+      installationID: view.hello.installationID,
       receipt: null,
       refused: false,
       message: null,
@@ -356,6 +464,7 @@ function ConnectedWorkspace({
       setOperation({
         key,
         workspaceID: target.workspaceID,
+        installationID: view.hello.installationID,
         receipt: response.value,
         refused: false,
         message: null,
@@ -373,6 +482,7 @@ function ConnectedWorkspace({
       setOperation({
         key,
         workspaceID: target.workspaceID,
+        installationID: view.hello.installationID,
         receipt: null,
         refused: record?.refused ?? false,
         message: record?.refused
@@ -386,8 +496,8 @@ function ConnectedWorkspace({
       <ProductNavigation
         current="workspaces"
         connection={{
-          label: view ? label(view.state) : "Connecting…",
-          connected: view?.state === "connected",
+          label: connectionLabel,
+          connected: nativeCurrent,
         }}
       >
         <label className={styles["dh-field-label"]} htmlFor="dh-environment">
@@ -463,13 +573,14 @@ function ConnectedWorkspace({
                 : lanes.length}{" "}
               lanes <span>·</span>{" "}
               {summaries
-                ? contexts.reduce((sum, resource) => sum + (summaryFor(resource)?.total ?? 0), 0) +
-                  " managed sessions" +
+                ? `${managedTotal} managed ${managedTotal === 1 ? "agent" : "agents"}${agentsUnavailable ? " · last observed" : ""}` +
                   (view?.workspaceContexts &&
                   view.workspaceContexts.total > view.workspaceContexts.resources.length
                     ? " on this page"
                     : "")
-                : "Loading agents…"}
+                : agentsUnavailable
+                  ? "Agents unavailable"
+                  : "Loading agents…"}
               {summaries ? (
                 <>
                   <span> · </span>
@@ -479,7 +590,7 @@ function ConnectedWorkspace({
                       summaryFor(resource)?.externalSessions?.unavailable,
                   )
                     ? "External registrations unavailable"
-                    : `${contexts.reduce((sum, resource) => sum + (summaryFor(resource)?.externalSessions?.activeCount ?? 0), 0)} reported external`}
+                    : `${contexts.reduce((sum, resource) => sum + (summaryFor(resource)?.externalSessions?.activeCount ?? 0), 0)} reported external${agentsUnavailable ? " · last observed" : ""}`}
                 </>
               ) : null}
             </p>
@@ -521,27 +632,29 @@ function ConnectedWorkspace({
           </div>
         </header>
         <div className={styles["dh-tabs"]}>
-          <span className={styles["dh-tab-current"]}>Overview</span>
-          <Link to="/">Agents</Link>
+          <Link
+            to="/workspaces"
+            search={{ ...tabSearch, tab: "overview" }}
+            aria-current={!agentMode ? "page" : undefined}
+            className={!agentMode ? styles["dh-tab-current"] : undefined}
+          >
+            Overview
+          </Link>
+          <Link
+            to="/workspaces"
+            search={{ ...tabSearch, tab: "agents" }}
+            aria-current={agentMode ? "page" : undefined}
+            className={agentMode ? styles["dh-tab-current"] : undefined}
+          >
+            Agents
+          </Link>
           <Link to="/pull-requests" search={readPullRequestListPreferences()}>
             Pull requests
           </Link>
-          <Link
-            to="/recordings"
-            search={{
-              environment: environmentId,
-              ...(activeBase ? { workspace: activeBase.workspaceID } : {}),
-            }}
-          >
+          <Link to="/recordings" search={contextLinkSearch}>
             Recordings
           </Link>
-          <Link
-            to="/services"
-            search={{
-              environment: environmentId,
-              ...(activeBase ? { workspace: activeBase.workspaceID } : {}),
-            }}
-          >
+          <Link to="/services" search={contextLinkSearch}>
             Services
           </Link>
         </div>
@@ -568,14 +681,35 @@ function ConnectedWorkspace({
               ))}
             </select>
           </label>
-          <button
-            className={`${styles["dh-filter"]} ${filter === "attention" ? styles["dh-filter-active"] : ""}`}
-            aria-pressed={filter === "attention"}
-            onClick={() => setFilter(filter === "all" ? "attention" : "all")}
-          >
-            <i aria-hidden="true" className={styles["dh-filter-dot"]} />
-            Needs attention
-          </button>
+          {agentMode ? (
+            <label>
+              Context{" "}
+              <select
+                value={selected?.workspaceID ?? ""}
+                onChange={(event) => setSelectedID(event.target.value)}
+              >
+                {!selected ? (
+                  <option value="" disabled>
+                    Choose an available context
+                  </option>
+                ) : null}
+                {contexts.map((resource) => (
+                  <option key={resource.workspaceID} value={resource.workspaceID}>
+                    {resource.workspace?.lane?.name ?? "Primary checkout"}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <button
+              className={`${styles["dh-filter"]} ${filter === "attention" ? styles["dh-filter-active"] : ""}`}
+              aria-pressed={filter === "attention"}
+              onClick={() => setFilter(filter === "all" ? "attention" : "all")}
+            >
+              <i aria-hidden="true" className={styles["dh-filter-dot"]} />
+              Needs attention
+            </button>
+          )}
           <button
             className={styles["dh-icon-button"]}
             aria-label="Refresh workspaces"
@@ -603,6 +737,15 @@ function ConnectedWorkspace({
         {result._tag === "Failure" ? (
           <div role="alert" className={styles["dh-status-error"]}>
             This computer could not provide workspace data. Check its connection and try refreshing.
+          </div>
+        ) : null}
+        {nativeObservation.stale && view?.state === "connected" ? (
+          <div role="status" className={styles["dh-status-error"]}>
+            <strong>{connectionLabel}</strong>
+            <p>
+              Showing last observed workspace and agent details. Actions resume after fresh context
+              is verified.
+            </p>
           </div>
         ) : null}
         {view && view.state !== "connected" ? (
@@ -701,6 +844,23 @@ function ConnectedWorkspace({
                   ? "Recorded by Cinderdeck."
                   : "Waiting for Cinderdeck to confirm the result.")}
             </p>
+            {operation.receipt?.method === "lane.create" &&
+            operation.receipt.state === "succeeded" &&
+            createdLaneID ? (
+              <Link
+                className={styles["dh-button"]}
+                to="/workspaces"
+                search={{
+                  environment: environmentId,
+                  workspace: operation.workspaceID,
+                  context: createdLaneID,
+                  expectedInstallationID: operation.installationID,
+                  ...(search.tab ? { tab: search.tab } : {}),
+                }}
+              >
+                Open created lane <ArrowRightIcon size={15} />
+              </Link>
+            ) : null}
             {!operation.refused &&
             (!operation.receipt || operation.receipt.state === "unknown_outcome") ? (
               <button
@@ -723,26 +883,76 @@ function ConnectedWorkspace({
             Agent relationships could not be refreshed. Saved details may be out of date.
           </p>
         ) : null}
-        <section className={styles["dh-lane-list"]} aria-label="Workspace contexts">
-          {visible.map((resource) => (
-            <LaneRow
-              key={resource.workspaceID}
-              environmentId={environmentId}
-              resource={resource}
-              summary={summaryFor(resource)}
-              recordingInstallationID={view?.hello?.installationID}
-              recording={recordingSummaries?.find(
-                (item) =>
-                  item.workspaceID === resource.workspaceID &&
-                  item.generation === resource.generation,
-              )}
-              recordingUnavailable={recordingSummaryError || view?.state !== "connected"}
-              unavailable={contextResult._tag === "Failure" || view?.state !== "connected"}
-              selected={selected?.workspaceID === resource.workspaceID}
-              select={() => setSelectedID(resource.workspaceID)}
-            />
-          ))}
-        </section>
+        {agentMode ? (
+          <section className={styles["dh-agent-panel"]} aria-label="Agents in selected context">
+            <header>
+              <div>
+                <span className={styles["dh-eyebrow"]}>Agents in</span>
+                <h2>{selected ? selectedName : "Choose a context"}</h2>
+                <p>
+                  Each agent has its own conversation. Agents in this context work in its repository
+                  checkouts.
+                </p>
+              </div>
+              {selected?.workspace?.repos[0]?.branch ? (
+                <span className={styles["dh-branch"]}>
+                  <GitBranchIcon size={15} />
+                  {selected.workspace.repos[0].branch}
+                </span>
+              ) : null}
+            </header>
+            {selected && view?.hello ? (
+              <>
+                <details
+                  className={styles["dh-add-agent"]}
+                  key={`add:${environmentId}:${view.hello.installationID}:${selected.workspaceID}:${selected.generation}`}
+                >
+                  <summary>
+                    <PlusIcon size={16} /> Add an agent to{" "}
+                    {selected.workspace?.lane?.name ?? "Primary checkout"}
+                  </summary>
+                  <SessionLauncher
+                    environmentId={environmentId}
+                    installationID={view.hello.installationID}
+                    resource={selected}
+                    enabled={enabled && actionable(selected)}
+                  />
+                </details>
+                <SessionList
+                  environmentId={environmentId}
+                  installationID={view.hello.installationID}
+                  workspaceID={selected.workspaceID}
+                  generation={selected.generation}
+                  providers={providers}
+                />
+              </>
+            ) : (
+              <p>Select an available workspace and checkout to see its agents.</p>
+            )}
+          </section>
+        ) : (
+          <section className={styles["dh-lane-list"]} aria-label="Workspace contexts">
+            {visible.map((resource) => (
+              <LaneRow
+                key={resource.workspaceID}
+                environmentId={environmentId}
+                resource={resource}
+                summary={summaryFor(resource)}
+                recordingInstallationID={view?.hello?.installationID}
+                recording={recordingSummaries?.find(
+                  (item) =>
+                    item.workspaceID === resource.workspaceID &&
+                    item.generation === resource.generation,
+                )}
+                recordingUnavailable={recordingSummaryError || !nativeCurrent}
+                unavailable={agentsUnavailable}
+                providers={providers}
+                selected={selected?.workspaceID === resource.workspaceID}
+                select={() => setSelectedID(resource.workspaceID)}
+              />
+            ))}
+          </section>
+        )}
         {view?.workspaceContexts && view.workspaceContexts.total > 50 ? (
           <nav className={styles["dh-page-footer"]} aria-label="Selected workspace context pages">
             <span>
@@ -779,22 +989,33 @@ function ConnectedWorkspace({
             </button>
           </nav>
         ) : null}
-        {view?.state === "connected" && !resources.length ? (
+        {!agentMode && view?.state === "connected" && !resources.length ? (
           <div className={styles["dh-empty"]}>
             <FolderGit2Icon size={28} />
             <h2>No workspaces yet</h2>
             <p>Add a workspace in Cinderdeck to manage its lanes and services here.</p>
           </div>
-        ) : view?.state === "connected" && activeBase && resources.length && !visible.length ? (
+        ) : !agentMode &&
+          view?.state === "connected" &&
+          activeBase &&
+          resources.length &&
+          !visible.length ? (
           <div className={styles["dh-empty"]}>
-            <h2>No contexts need attention</h2>
-            <p>Choose all contexts to see this workspace.</p>
+            <h2>
+              {agentsUnavailable || !summaries
+                ? "Agent attention could not be verified"
+                : "No contexts need attention"}
+            </h2>
+            <p>
+              Choose all contexts to see this workspace
+              {agentsUnavailable || !summaries ? " and its last observed details" : ""}.
+            </p>
             <button className={styles["dh-button"]} onClick={() => setFilter("all")}>
               Show all contexts
             </button>
           </div>
         ) : null}
-        {view ? (
+        {!agentMode && view ? (
           <footer className={styles["dh-page-footer"]}>
             <span>
               Contexts {view.total ? offset + 1 : 0}–
@@ -837,7 +1058,7 @@ function ConnectedWorkspace({
                   threadId: summaryFor(selected)!.sessions[0]!.binding.threadId,
                 })}
               >
-                Open conversation <ArrowRightIcon size={15} />
+                Open latest conversation <ArrowRightIcon size={15} />
               </Link>
             ) : null}
             <div className={styles["dh-inspector-actions"]}>
@@ -865,18 +1086,19 @@ function ConnectedWorkspace({
                   void run(selected, "services.stop");
                 }}
               >
-                Stop
+                Stop services
               </button>
             </div>
-            {view?.hello ? (
+            {!agentMode && view?.hello ? (
               <SessionList
                 environmentId={environmentId}
                 installationID={view.hello.installationID}
                 workspaceID={selected.workspaceID}
                 generation={selected.generation}
+                providers={providers}
               />
             ) : null}
-            {view?.hello ? (
+            {!agentMode && view?.hello ? (
               <details className={styles["dh-add-agent"]}>
                 <summary>Add an agent</summary>
                 <SessionLauncher
@@ -941,33 +1163,15 @@ function ConnectedWorkspace({
               </li>
             ))}
         </ol>
-        <div className={styles["dh-connection"]} data-connected={view?.state === "connected"}>
+        <div className={styles["dh-connection"]} data-connected={nativeCurrent}>
           <i />
-          <span>{view ? label(view.state) : "Waiting for this computer"}</span>
+          <span>{connectionLabel}</span>
         </div>
       </aside>
     </div>
   );
 }
 
-const sessionLabel = (
-  session: NonNullable<ManagedContextView>["sessions"][number],
-  stale: boolean,
-) =>
-  stale || session.source === "unavailable"
-    ? "State unavailable"
-    : {
-        queued: "Queued",
-        starting: "Starting",
-        working: "Working",
-        waiting_input: "Needs input",
-        waiting_approval: "Needs approval",
-        idle: "Idle",
-        finished_turn: "Turn complete",
-        interrupted: "Interrupted",
-        failed: "Failed",
-        unknown: "Unknown",
-      }[session.binding.execution];
 function LaneRow({
   environmentId,
   resource,
@@ -976,6 +1180,7 @@ function LaneRow({
   recordingInstallationID,
   recordingUnavailable,
   unavailable,
+  providers,
   selected,
   select,
 }: {
@@ -986,6 +1191,7 @@ function LaneRow({
   recordingInstallationID: string | undefined;
   recordingUnavailable: boolean;
   unavailable: boolean;
+  providers: ReadonlyArray<{ instanceId: string; displayName: string }>;
   selected: boolean;
   select: () => void;
 }) {
@@ -1006,7 +1212,7 @@ function LaneRow({
     >
       <div className={styles["dh-lane-identity"]}>
         <button className={styles["dh-lane-select"]} aria-pressed={selected} onClick={select}>
-          <h2>{sessions[0]?.title ?? resource.workspace?.lane?.name ?? "Primary checkout"}</h2>
+          <h2>{resource.workspace?.lane?.name ?? "Primary checkout"}</h2>
           <ChevronRightIcon size={16} />
         </button>
         <span className={styles["dh-branch"]}>
@@ -1054,7 +1260,7 @@ function LaneRow({
               params={buildThreadRouteParams({ environmentId, threadId: session.binding.threadId })}
               className={styles["dh-row-agent"]}
             >
-              <strong>{session.binding.providerInstanceId}</strong>
+              <strong>{session.title}</strong>
               <span
                 data-execution={
                   unavailable || session.source === "unavailable"
@@ -1063,9 +1269,15 @@ function LaneRow({
                 }
               >
                 <i />
-                {sessionLabel(session, unavailable)}
+                {unavailable
+                  ? "Last observed"
+                  : agentExecutionLabel(
+                      session.binding.execution,
+                      session.source === "unavailable",
+                    )}
               </span>
               <small>
+                {agentProviderLabel(session.binding.providerInstanceId, providers)} ·{" "}
                 {session.binding.role}
                 {session.archived ? " · Archived" : ""}
               </small>
@@ -1075,6 +1287,7 @@ function LaneRow({
         {summary?.externalSessions && !summary.externalSessions.unavailable ? (
           <p>
             {summary.externalSessions.activeCount} reported external
+            {unavailable ? " · last observed" : ""}
             {summary.externalSessions.staleCount
               ? ` · ${summary.externalSessions.staleCount} last seen`
               : ""}
@@ -1083,7 +1296,9 @@ function LaneRow({
           <p>External registrations unavailable</p>
         )}
         {summary && summary.total > sessions.length ? (
-          <p>Showing {sessions.length} newest agents. Select this lane for more.</p>
+          <p>
+            Showing {sessions.length} newest agents. Open the Agents tab for older conversations.
+          </p>
         ) : null}
       </div>
       <div className={styles["dh-row-column"]}>
@@ -1130,6 +1345,10 @@ function LaneRow({
               environment: environmentId,
               workspace: resource.workspaceID,
               recording: recording.latest.id,
+              expectedGeneration: resource.generation,
+              ...(recordingInstallationID
+                ? { expectedInstallationID: recordingInstallationID }
+                : {}),
             }}
           >
             {recordingInstallationID ? (
@@ -1166,12 +1385,17 @@ function LaneRow({
         <Link
           className={styles["dh-text-button"]}
           to="/services"
-          search={{ environment: environmentId, workspace: resource.workspaceID }}
+          search={{
+            environment: environmentId,
+            workspace: resource.workspaceID,
+            expectedGeneration: resource.generation,
+            ...(recordingInstallationID ? { expectedInstallationID: recordingInstallationID } : {}),
+          }}
         >
           Services & runs <ArrowRightIcon size={13} />
         </Link>
         <button className={styles["dh-text-button"]} onClick={select}>
-          Inspect lane <ArrowRightIcon size={13} />
+          Inspect {resource.workspace?.lane ? "lane" : "checkout"} <ArrowRightIcon size={13} />
         </button>
       </div>
     </article>

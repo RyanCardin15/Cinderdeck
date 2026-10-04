@@ -322,6 +322,42 @@ it("refuses transport dispatch when storage is corrupt or cannot save the new op
   expect(container.textContent).toContain("could not be saved or sent");
 });
 
+it("launches an agent task in the selected existing context without native lane creation", async () => {
+  const launchKey = "deckhand:launch:computer:installation:source:1";
+  commands.launch.mockImplementation(async ({ input }) => {
+    expect(JSON.parse(localStorage.getItem(launchKey)!)).toEqual(input);
+    expect(input).toMatchObject({
+      operationKey: "new-operation",
+      installationID: "installation",
+      workspaceID: "source",
+      generation: 1,
+      revision: "reviewed-revision",
+      repositoryID: "app",
+      title: "Investigate payment retries",
+      objective: "Inspect the retry flow and propose a focused fix.",
+      modelSelection: { instanceId: "codex", model: "gpt-test" },
+      runtimeMode: "approval-required",
+    });
+    expect(input).not.toHaveProperty("branch");
+    return success(acceptedLaunch);
+  });
+  await render(resource, false);
+  expect(container.textContent).not.toContain("Feature title");
+  expect(container.textContent).not.toContain("Objective");
+  await change("Provider account", "codex");
+  await change("Model", "gpt-test");
+  await change("Agent task", "Investigate payment retries");
+  await change("Instructions", "Inspect the retry flow and propose a focused fix.");
+  await click("Launch agent");
+  expect(commands.launch).toHaveBeenCalledTimes(1);
+  expect(commands.create).not.toHaveBeenCalled();
+  expect(commands.navigate).toHaveBeenCalledWith({
+    to: "/$environmentId/$threadId",
+    params: { environmentId, threadId: "thread" },
+  });
+  expect(localStorage.getItem(launchKey)).toBeNull();
+});
+
 it("preserves existing-checkout launch behavior with no native creation", async () => {
   localStorage.setItem("deckhand:launch:computer:installation:source:1", JSON.stringify(request));
   await render(resource, false);
