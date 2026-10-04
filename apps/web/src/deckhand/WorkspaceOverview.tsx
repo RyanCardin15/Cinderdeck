@@ -116,10 +116,12 @@ function ConnectedWorkspace({
   const agentMode = search.tab === "agents";
   const selectedBaseRef = useRef<string | null>(search.workspace ?? null);
   const mountedRef = useRef(true);
-  const selectionVersionRef = useRef(0);
+  const selectionVersionRef = useRef(
+    JSON.stringify([search.workspace, search.context, search.tab]),
+  );
   useEffect(() => {
-    selectionVersionRef.current += 1;
-  }, [search.workspace, search.context, search.tab]);
+    selectionVersionRef.current = JSON.stringify([search.workspace, search.context, search.tab]);
+  }, [search.workspace, search.context, search.tab, selectionVersionRef]);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -128,7 +130,7 @@ function ConnectedWorkspace({
   }, []);
   const setWorkspaceID = (workspace: string) => {
     selectedBaseRef.current = workspace;
-    selectionVersionRef.current += 1;
+    selectionVersionRef.current = JSON.stringify([workspace, undefined, search.tab]);
     void navigate({
       to: "/workspaces",
       search: { environment: environmentId, workspace, ...(search.tab ? { tab: search.tab } : {}) },
@@ -136,7 +138,11 @@ function ConnectedWorkspace({
   };
   const setSelectedID = useCallback(
     (context: string | null) => {
-      selectionVersionRef.current += 1;
+      selectionVersionRef.current = JSON.stringify([
+        search.workspace,
+        context ?? undefined,
+        search.tab,
+      ]);
       void navigate({
         to: "/workspaces",
         search: context
@@ -305,7 +311,7 @@ function ConnectedWorkspace({
     : bases[0];
   useEffect(() => {
     selectedBaseRef.current = activeBase?.workspaceID ?? null;
-  }, [activeBase?.workspaceID]);
+  }, [activeBase?.workspaceID, selectedBaseRef]);
   const contexts = activeBase
     ? overviewWorkspaceContexts(view, activeBase.workspaceID)
     : workspaceID
@@ -405,7 +411,15 @@ function ConnectedWorkspace({
             }
           : current,
       );
-  }, [operation, inspect, environmentId, setSelectedID]);
+  }, [
+    operation,
+    inspect,
+    environmentId,
+    setSelectedID,
+    selectedBaseRef,
+    selectionVersionRef,
+    mountedRef,
+  ]);
   useEffect(() => {
     if (!operation?.receipt || terminal(operation.receipt)) return;
     const timer = window.setTimeout(() => {
