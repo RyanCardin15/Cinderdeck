@@ -1,6 +1,193 @@
-.shell{display:grid;grid-template-columns:230px minmax(0,1fr);height:100dvh;min-width:0;min-height:0;background:var(--background);color:var(--foreground)}
-.main{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}.header{padding:24px 24px 0;border-bottom:1px solid var(--border);flex-shrink:0}.header>div{font-size:13px;color:var(--muted-foreground);margin-bottom:16px}.header>div a{color:inherit}.header>div strong{color:var(--foreground);font-weight:500}.header nav{display:flex;gap:22px;overflow:auto}.header nav a{display:flex;gap:7px;align-items:center;padding:10px 0 14px;text-decoration:none;white-space:nowrap;font-size:12px;color:var(--muted-foreground)}.header nav [aria-current]{color:var(--foreground);border-bottom:2px solid #ed7b42}.body{display:grid;grid-template-columns:260px minmax(0,1fr);flex:1;min-width:0;min-height:0}.sessions{padding:18px 12px;overflow:auto;border-right:1px solid var(--border);min-width:0}.conversation{min-width:0;min-height:0;display:flex;overflow:hidden}.conversation>*{flex:1;min-width:0;min-height:0}.treeHeading{font-size:11px;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.7px}.tree{display:grid;gap:16px}.tree>div{display:grid;gap:4px}.tree a{display:flex;gap:9px;align-items:center;text-decoration:none;font-size:12px;padding:9px 8px;border-radius:5px;color:var(--muted-foreground);min-width:0}.tree a span,.tree a strong{overflow-wrap:anywhere}.tree>div>a:not(:first-child){margin-left:14px;border-left:1px solid var(--border);border-radius:0}.tree [aria-current]{color:#ed7b42;background:color-mix(in srgb,#ed7b42 9%,transparent)}.tree .currentWorkspace{color:var(--foreground)}.newSession{display:block;padding:11px;text-align:center;border:1px solid var(--border);border-radius:6px;font-size:12px;text-decoration:none;color:var(--foreground);margin-top:14px}.shell :focus-visible{outline:2px solid #ed7b42;outline-offset:3px}
-.helperNotice {font-size:12px;line-height:1.6;padding:10px;border:1px solid var(--border);border-radius:6px;color:var(--muted-foreground)}
-@media(max-width:1100px){.shell{grid-template-columns:210px minmax(0,1fr)}.body{grid-template-columns:220px minmax(0,1fr)}}
-@media(max-width:850px){.shell{grid-template-columns:185px minmax(0,1fr)}.body{grid-template-columns:minmax(0,1fr)}.sessions{display:none}.header{padding:18px 16px 0}.header nav{gap:16px}}
-@media(max-width:700px){.shell{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}.shell>aside{max-height:160px;overflow:auto}.tree,.treeHeading{display:none}.header>div{margin-bottom:8px}.header{padding-top:12px}.header nav a{font-size:11px;padding-bottom:10px}}
+.shell {
+  flex: 1;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  height: 100dvh;
+  min-width: 0;
+  min-height: 0;
+  background: var(--background);
+  color: var(--foreground);
+}
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.header {
+  padding: 24px 24px 0;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.header > div {
+  font-size: 13px;
+  color: var(--muted-foreground);
+  margin-bottom: 16px;
+}
+.header > div a {
+  color: inherit;
+}
+.header > div strong {
+  color: var(--foreground);
+  font-weight: 500;
+}
+.header nav {
+  display: flex;
+  gap: 22px;
+  overflow: auto;
+}
+.header nav a {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  padding: 10px 0 14px;
+  text-decoration: none;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.header nav [aria-current] {
+  color: var(--foreground);
+  border-bottom: 2px solid #ed7b42;
+}
+.body {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.sessions {
+  padding: 18px 12px;
+  overflow: auto;
+  border-right: 1px solid var(--border);
+  min-width: 0;
+}
+.conversation {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+.conversation > * {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+}
+.treeHeading {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+.tree {
+  display: grid;
+  gap: 16px;
+}
+.tree > div {
+  display: grid;
+  gap: 4px;
+}
+.tree a {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  text-decoration: none;
+  font-size: 12px;
+  padding: 9px 8px;
+  border-radius: 5px;
+  color: var(--muted-foreground);
+  min-width: 0;
+}
+.tree a span,
+.tree a strong {
+  overflow-wrap: anywhere;
+}
+.tree > div > a:not(:first-child) {
+  margin-left: 14px;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+}
+.tree [aria-current] {
+  color: #ed7b42;
+  background: color-mix(in srgb, #ed7b42 9%, transparent);
+}
+.tree .currentWorkspace {
+  color: var(--foreground);
+}
+.newSession {
+  display: block;
+  padding: 11px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  text-decoration: none;
+  color: var(--foreground);
+  margin-top: 14px;
+}
+.shell :focus-visible {
+  outline: 2px solid #ed7b42;
+  outline-offset: 3px;
+}
+.helperNotice {
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted-foreground);
+}
+@media (max-width: 1100px) {
+  .shell {
+    grid-template-columns: 210px minmax(0, 1fr);
+  }
+  .body {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+}
+@media (max-width: 850px) {
+  .shell {
+    grid-template-columns: 185px minmax(0, 1fr);
+  }
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sessions {
+    display: none;
+  }
+  .header {
+    padding: 18px 16px 0;
+  }
+  .header nav {
+    gap: 16px;
+  }
+}
+@media (max-width: 700px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .shell > aside {
+    max-height: 160px;
+    overflow: auto;
+  }
+  .tree,
+  .treeHeading {
+    display: none;
+  }
+  .header > div {
+    margin-bottom: 8px;
+  }
+  .header {
+    padding-top: 12px;
+  }
+  .header nav a {
+    font-size: 11px;
+    padding-bottom: 10px;
+  }
+}
