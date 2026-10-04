@@ -6,6 +6,7 @@ import * as Option from "effect/Option";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { connectionAtomRuntime } from "../connection/runtime";
 import { useAgentObservation } from "./useAgentObservation";
+import { agentExecutionLabel } from "./agentPresentation";
 import styles from "./workspace.module.css";
 export const externalSessionsView = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
   label: "deckhand:external-sessions",
@@ -81,16 +82,25 @@ function ScopedExternalSessionList({
             {session.providerName} · Reported {session.role}
           </span>
           <span>
-            Last reported: {session.reportedExecution.replaceAll("_", " ")} ·{" "}
+            Last reported: {agentExecutionLabel(session.reportedExecution)} ·{" "}
             {unavailable || observation.stale
               ? "Last observed · Connection unavailable"
               : session.connection === "stale"
                 ? "Last observed · Agent not connected"
                 : "Agent connected"}
           </span>
-          <span>Last seen {session.lastSeenAt}</span>
+          <span>
+            Last seen{" "}
+            <time dateTime={session.lastSeenAt}>
+              {new Date(session.lastSeenAt).toLocaleString(undefined, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </time>
+          </span>
           <details>
             <summary>Registration details</summary>
+            <p>Last seen (ISO): {session.lastSeenAt}</p>
             <p>
               {session.id} · {session.providerSessionId}
             </p>

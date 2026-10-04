@@ -43,6 +43,13 @@ export class IntegrationHub extends Context.Service<
       },
       Rpc.DeckhandRpcError
     >;
+    readonly freshResource: (workspaceID: string) => Effect.Effect<
+      {
+        readonly hello: Contracts.IntegrationHello;
+        readonly resource: Contracts.IntegrationSnapshot["resources"][number];
+      },
+      Rpc.DeckhandRpcError
+    >;
     readonly checkoutContexts: (input: {
       readonly physicalID: string;
       readonly repositoryPhysicalID: string;
@@ -462,6 +469,40 @@ const make = Effect.gen(function* () {
           return yield* new Rpc.DeckhandRpcError({ reason: "stale_binding" });
         return { hello: view.hello, resource };
       }),
+    freshResource: (workspaceID) =>
+      Effect.gen(function* () {
+        if (!workspaceID.trim() || workspaceID.length > 160)
+          return yield* new Rpc.DeckhandRpcError({ reason: "invalid_request" });
+        let baseline = yield* SubscriptionRef.get(state);
+        if (baseline.state !== "connected" || baseline.hello === null) {
+          yield* refresh;
+          baseline = yield* SubscriptionRef.get(state);
+        }
+        if (baseline.hello === null)
+          return yield* new Rpc.DeckhandRpcError({ reason: "unavailable" });
+        const location = yield* discovery.locate;
+        if (
+          location.hostID !== baseline.hello.executionHostID ||
+          location.channel !== baseline.hello.channel
+        )
+          return yield* new Rpc.DeckhandRpcError({ reason: "stale_binding" });
+        const peer = yield* client.connect(location.socketPath, {
+          installationID: baseline.hello.installationID,
+          executionHostID: baseline.hello.executionHostID,
+          channel: baseline.hello.channel,
+        });
+        const selected = yield* client.snapshot(peer, { workspaceID, limit: 1 });
+        if (selected.total !== 1 || selected.resources.length !== 1 || selected.nextOffset != null)
+          return yield* new Rpc.DeckhandRpcError({ reason: "stale_binding" });
+        const resource = selected.resources[0]!;
+        if (resource.workspaceID !== workspaceID)
+          return yield* new Rpc.DeckhandRpcError({ reason: "invalid_response" });
+        if (!resource.available || !resource.workspace)
+          return yield* new Rpc.DeckhandRpcError({ reason: "stale_binding" });
+        // A fresh selected read is not a new catalogue. Publishing its partial
+        // rows/cursor would mix snapshots or skip unconsumed global events.
+        return { hello: peer.hello, resource };
+      }).pipe(Effect.mapError(rpcError)),
     overview,
     subscribe,
     refresh,
