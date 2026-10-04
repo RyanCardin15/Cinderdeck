@@ -26,6 +26,7 @@ function fixture(
   const wc = new NodeEvents.EventEmitter() as NodeEvents.EventEmitter & {
     id: number;
     getURL: () => string;
+    reloadIgnoringCache: () => void;
     debugger: NodeEvents.EventEmitter & {
       sendCommand: (method: string, params?: unknown) => Promise<any>;
     };
@@ -42,27 +43,28 @@ function fixture(
         };
       if (method === "Network.getResponseBody")
         return { body: mode === "wrong" ? "stale bytes" : body, base64Encoded: false };
-      if (method === "Page.reload") {
-        wc.emit("did-start-navigation", { isMainFrame: true, url });
-        if (mode === "navigate")
-          wc.emit("did-start-navigation", { isMainFrame: true, url: url + "elsewhere" });
-        if (mode !== "missing") {
-          wc.debugger.emit("message", {}, "Network.responseReceived", {
-            requestId: "request",
-            loaderId: "fresh",
-            frameId: "frame",
-            response: { url, status: 200, fromDiskCache: mode === "cached" },
-          });
-          wc.debugger.emit("message", {}, "Network.loadingFinished", {
-            requestId: "request",
-            encodedDataLength: body.length,
-          });
-        }
-        wc.emit("did-finish-load");
-      }
+      if (method === "Page.reload") throw new Error("Guest CDP reload targets the embedder");
       return {};
     },
   });
+  wc.reloadIgnoringCache = () => {
+    wc.emit("did-start-navigation", { isMainFrame: true, url });
+    if (mode === "navigate")
+      wc.emit("did-start-navigation", { isMainFrame: true, url: url + "elsewhere" });
+    if (mode !== "missing") {
+      wc.debugger.emit("message", {}, "Network.responseReceived", {
+        requestId: "request",
+        loaderId: "fresh",
+        frameId: "frame",
+        response: { url, status: 200, fromDiskCache: mode === "cached" },
+      });
+      wc.debugger.emit("message", {}, "Network.loadingFinished", {
+        requestId: "request",
+        encodedDataLength: body.length,
+      });
+    }
+    wc.emit("did-finish-load");
+  };
   return { wc: wc as unknown as WebContents, emitter: wc, commands };
 }
 describe("owned preview fresh artifact consumption", () => {
