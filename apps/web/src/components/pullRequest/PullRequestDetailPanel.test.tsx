@@ -11,6 +11,8 @@ import { act, type ReactNode, type ReactElement, type ComponentProps } from "rea
 import { create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
+import { collectInlineContextIds } from "~/lib/composerContextReferences";
+import { reconcileAttachmentContextReferences } from "../chat/composerContextUndo";
 
 const { newThread, prepareThread, refresh, Wrapper, Trigger } = vi.hoisted(() => ({
   newThread: vi.fn(),
@@ -142,7 +144,30 @@ vi.mock("./PullRequestCodeTab", () => ({
 }));
 
 vi.mock("../../deckhand/PullRequestVerification", () => ({
-  PullRequestVerification: () => <div>Actual verification panel</div>,
+  PullRequestVerification: ({
+    onPrepareDraft,
+  }: ComponentProps<
+    typeof import("../../deckhand/PullRequestVerification").PullRequestVerification
+  >) => (
+    <button
+      onClick={() =>
+        onPrepareDraft(
+          "Review these seven evidence assets before sending.",
+          [
+            ["video.mp4", "video/mp4"],
+            ["frame.png", "image/png"],
+            ["recording.log", "text/plain"],
+            ["manifest.json", "application/json"],
+            ["README.md", "text/markdown"],
+            ["repro.json", "application/json"],
+            ["summary.md", "text/markdown"],
+          ].map(([name, type]) => new File([name!], name!, { type: type! })),
+        )
+      }
+    >
+      Prepare evidence draft
+    </button>
+  ),
 }));
 import { PullRequestDetailPanel } from "./PullRequestDetailPanel";
 import { pullRequestPanelContext } from "./pullRequestDetail.logic";
@@ -311,6 +336,49 @@ describe.each([
       .findAllByType("button")
       .filter((node) => node.props["aria-label"] === "Check out");
     expect(checkout).toHaveLength(thread === stackThread ? 0 : 1);
+  });
+
+  it("retains all seven evidence assets through composer focus and prompt edits", async () => {
+    await act(async () => render());
+    await click("Verification");
+    await click("Prepare evidence draft");
+    const store = useComposerDraftStore.getState();
+    const destination = target ?? newDraftId;
+    const retained = { files: new Map(), previewAnnotations: new Map() };
+    const original = store.getComposerDraft(destination)!;
+    expect(original.files).toHaveLength(6);
+    expect(original.images).toHaveLength(1);
+    expect(original.files.some((file) => file.mimeType === "video/mp4")).toBe(true);
+    const bytes = original.files.map((file) => file.file);
+    // The editor reports these IDs on selection/focus changes and after a text edit.
+    // Exercise the same reference reconciler used by ChatComposer, with the real handoff draft.
+    for (const prompt of [original.prompt, `${original.prompt}\nPlease verify the logs too.`]) {
+      store.setPrompt(destination, prompt);
+      const draft = store.getComposerDraft(destination)!;
+      const result = reconcileAttachmentContextReferences({
+        referencedContextIds: new Set(collectInlineContextIds(prompt)),
+        files: draft.files,
+        images: draft.images,
+        previewAnnotations: draft.previewAnnotations,
+        retained,
+      });
+      for (const id of result.filesToRemove) store.removeFile(destination, id);
+      expect(result.filesToRemove).toEqual([]);
+      expect(store.getComposerDraft(destination)!.files.map((file) => file.file)).toEqual(bytes);
+      expect(store.getComposerDraft(destination)!.images).toHaveLength(1);
+    }
+    // Explicitly removing one evidence chip still removes only its attachment.
+    const draft = store.getComposerDraft(destination)!;
+    const references = collectInlineContextIds(draft.prompt);
+    const removed = reconcileAttachmentContextReferences({
+      referencedContextIds: new Set(references.slice(1)),
+      files: draft.files,
+      images: draft.images,
+      previewAnnotations: draft.previewAnnotations,
+      retained,
+    });
+    expect(removed.filesToRemove).toHaveLength(1);
+    expect(removed.filesToRestore).toEqual([]);
   });
 
   it.each(actions)("%s writes to the correct composer", async (action) => {
