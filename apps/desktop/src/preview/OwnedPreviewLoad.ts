@@ -161,7 +161,9 @@ export async function reloadOwnedPreview(
       () => refuse("Declared artifact was not observed in a fresh document"),
       timeoutMs,
     );
-    await wc.debugger.sendCommand("Page.reload", { ignoreCache: true });
+    // A guest debugger's Page.reload can reload its embedder in Electron.
+    // Reload the exact verified guest, keeping CDP solely for response evidence.
+    wc.reloadIgnoringCache();
     await ready;
     if (timer) clearTimeout(timer);
     // Response collection ends once the exact load is established; lifecycle guards remain.

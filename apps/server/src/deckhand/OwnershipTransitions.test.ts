@@ -14,6 +14,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as PlatformError from "effect/PlatformError";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as Current from "./CurrentCheckout.ts";
 import * as Ownership from "./OwnershipTransitions.ts";
@@ -130,6 +131,9 @@ const fixture = () => {
     submits: 0,
     method: "lane.adopt" as I.IntegrationOperationInput["method"],
     replaced: false,
+    keptPath: physical.root,
+    keptRoot: physical.root,
+    keptPathAvailable: true,
     multi: false,
     key: "",
     blocked: false,
@@ -154,7 +158,7 @@ const fixture = () => {
                   released: "lane",
                   report: {
                     removedWorktrees: [],
-                    keptWorktrees: [physical.root],
+                    keptWorktrees: [state.keptPath],
                     unpushed: {},
                     ignored: [],
                   },
@@ -169,7 +173,21 @@ const fixture = () => {
   const shared = Layer.mergeAll(
     current,
     writers,
-    FileSystem.layerNoop({ realPath: (path) => Effect.succeed(path) }),
+    FileSystem.layerNoop({
+      realPath: (path) =>
+        path === state.keptPath && path !== physical.root
+          ? state.keptPathAvailable
+            ? Effect.succeed(state.keptRoot)
+            : Effect.fail(
+                PlatformError.systemError({
+                  _tag: "NotFound",
+                  module: "FileSystem",
+                  method: "realPath",
+                  pathOrDescriptor: path,
+                }),
+              )
+          : Effect.succeed(path),
+    }),
     Layer.mock(Identity.CheckoutIdentity)({
       resolve: (path) =>
         Effect.succeed({
@@ -330,6 +348,8 @@ describe("explicit ownership transitions", () => {
         const releasing = yield* s.submit("actor", { ...releaseIntent, preview: releaseView });
         f.state.phase = "succeeded";
         f.state.native = false;
+        f.state.keptPath = "/tmp/fixture/lane";
+        f.state.keptRoot = physical.root;
         const released = yield* s.get("actor", { id: releasing.id });
         assert.equal(released.state, "completed");
         assert.equal((yield* current.forThread(threadId))?.checkout.backend, "standalone");
@@ -397,6 +417,61 @@ describe("explicit ownership transitions", () => {
       ).pipe(Effect.provide(f.layer));
     },
   );
+  it.effect(
+    "keeps a succeeded release uncertain for missing or substitute roots, then recovers the same receipt without replay",
+    () => {
+      const f = fixture();
+      return Effect.gen(function* () {
+        yield* f.seed;
+        const service = yield* Ownership.OwnershipTransitions;
+        const preview = yield* service.preview("actor", intent);
+        const adopted = yield* service.submit("actor", { ...intent, preview });
+        f.state.phase = "succeeded";
+        f.state.native = true;
+        yield* service.get("actor", { id: adopted.id });
+        const sql = yield* SqlClient.SqlClient;
+        const original = yield* sql`SELECT * FROM deckhand_sessions`;
+        const releaseIntent: C.OwnershipIntent = {
+          ...intent,
+          operationKey: "release-proof",
+          direction: "release",
+          workspaceID: "lane",
+          generation: 2,
+        };
+        f.state.phase = "running";
+        const view = yield* service.preview("actor", releaseIntent);
+        const released = yield* service.submit("actor", { ...releaseIntent, preview: view });
+        f.state.phase = "succeeded";
+        f.state.native = false;
+        f.state.keptPath = "/tmp/reported/lane";
+        f.state.keptRoot = physical.root + "/child";
+        assert.equal((yield* service.get("actor", { id: released.id })).state, "unknown_outcome");
+        f.state.keptRoot = "/different/checkout";
+        assert.equal((yield* service.get("actor", { id: released.id })).state, "unknown_outcome");
+        f.state.keptPathAvailable = false;
+        assert.equal((yield* service.get("actor", { id: released.id })).state, "unknown_outcome");
+        f.state.keptRoot = physical.root;
+        f.state.keptPathAvailable = true;
+        f.state.replaced = true;
+        assert.equal((yield* service.get("actor", { id: released.id })).state, "unknown_outcome");
+        f.state.replaced = false;
+        const recovered = yield* service.get("actor", { id: released.id });
+        assert.equal(recovered.state, "completed");
+        assert.equal(recovered.id, released.id);
+        assert.equal(recovered.nativeOperationID, released.nativeOperationID);
+        assert.deepEqual(recovered.original, released.original);
+        assert.deepEqual(yield* sql`SELECT * FROM deckhand_sessions`, original);
+        assert.equal(
+          (yield* (yield* Current.CurrentCheckout).forThread(threadId))?.checkout.backend,
+          "standalone",
+        );
+        assert.equal(f.state.submits, 2);
+        assert.equal((yield* service.get("actor", { id: released.id })).state, "completed");
+        assert.equal(f.state.submits, 2);
+      }).pipe(Effect.provide(f.layer));
+    },
+  );
+
   it.effect("uncertain outcomes preserve a blocked checkout, actor and stable intent", () => {
     const f = fixture();
     return Effect.gen(function* () {

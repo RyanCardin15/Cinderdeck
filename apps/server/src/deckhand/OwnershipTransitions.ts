@@ -428,12 +428,23 @@ export const layer = Layer.effect(
         });
         if (lookup.installationID !== input.installationID) return yield* fail("stale_context");
         if (input.direction === "release") {
-          if (
-            native.result?.released !== input.workspaceID ||
-            lookup.contexts.length ||
-            !native.result?.report?.keptWorktrees.includes(physical.root)
-          )
+          if (native.result?.released !== input.workspaceID || lookup.contexts.length)
             return yield* fail("stale_context");
+          // Native reports retain the original configured path spelling (for example
+          // /tmp on macOS). The checkout identity above is canonical and freshly
+          // verifies both physical IDs; require an exact existing kept root, not a
+          // textual spelling or a parent/child path match.
+          let selectedWorktreeKept = false;
+          for (const reportedPath of native.result.report?.keptWorktrees ?? []) {
+            const keptRoot = yield* fs
+              .realPath(reportedPath)
+              .pipe(Effect.match({ onFailure: () => null, onSuccess: (root) => root }));
+            if (keptRoot === physical.root) {
+              selectedWorktreeKept = true;
+              break;
+            }
+          }
+          if (!selectedWorktreeKept) return yield* fail("stale_context");
           const workspaceID = B.WorkspaceBindingId.make(
             stable("ownership-standalone-workspace", record.id),
           );
