@@ -111,6 +111,11 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
     "worktree-status",
   ),
   deckhand_context: tool(["Read", "Reading", "Read", "Deckhand lane context"], "worktree-status"),
+  deckhand_context_pull_requests: tool(
+    ["Read", "Reading", "Read", "lane pull requests"],
+    "list-prs",
+    "pull-request",
+  ),
   deckhand_services_runs: tool(["Read", "Reading", "Read", "services and runs"], "task-status"),
   deckhand_run_logs: tool(["Read", "Reading", "Read", "run output"], "task-status"),
   deckhand_recordings: tool(["List", "Listing", "Listed", "recordings"], "attachment-prepare"),

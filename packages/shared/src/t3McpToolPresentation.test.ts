@@ -13,6 +13,7 @@ describe("resolveT3McpToolPresentation", () => {
         "T3-code.",
         "t3_code/",
         "deckhand:",
+        "mcp__deckhand__",
         "mcp_t3-code_",
         "T3 Code ",
         "t3-code · ",
@@ -87,6 +88,16 @@ describe("resolveT3McpToolPresentation", () => {
     }
   });
 
+  it("recognizes exact lane pull request reads across current and historical namespaces without branding foreign servers", () => {
+    expect(T3_MCP_TOOL_NAMES.has("deckhand_context_pull_requests")).toBe(true);
+    for (const prefix of ["deckhand.", "mcp__deckhand__", "mcp__t3-code__"]) {
+      expect(resolveT3McpToolPresentation(`${prefix}deckhand_context_pull_requests`)).toEqual({
+        displayName: "Read lane pull requests",
+        logo: "t3-code",
+      });
+    }
+    expect(resolveT3McpToolPresentation("mcp__github__deckhand_context_pull_requests")).toBeNull();
+  });
   it("keeps unknown MCP tools on the generic renderer path", () => {
     expect(resolveT3McpToolPresentation("mcp__github__search_issues")).toBeNull();
     expect(resolveT3McpToolPresentation("t3-code.not_a_real_tool")).toBeNull();

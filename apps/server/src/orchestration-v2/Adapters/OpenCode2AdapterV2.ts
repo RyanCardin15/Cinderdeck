@@ -444,11 +444,11 @@ const rule = (action: string, effect: Rule["effect"]): Rule => ({ action, resour
  */
 /**
  * T3's MCP server is registered per directory, not per session, so each thread
- * gets its own `t3-code-<thread>` entry with its own credential. OpenCode names
+ * gets its own `deckhand-<thread>` entry with its own credential. OpenCode names
  * an MCP tool's permission `<server>_<tool>` (non-alphanumerics become `_`).
  */
-const t3McpServerName = (threadId: string) =>
-  `t3-code-${threadId.replaceAll(/[^a-zA-Z0-9_-]/g, "_")}`;
+const appMcpServerName = (threadId: string) =>
+  `${McpProviderSession.APP_MCP_SERVER_NAME}-${threadId.replaceAll(/[^a-zA-Z0-9_-]/g, "_")}`;
 
 /**
  * The rules that keep T3's MCP servers to their own thread, after the mode's:
@@ -461,7 +461,8 @@ const mcpRules = (threadId: string | null): ReadonlyArray<Rule> =>
     ? []
     : [
         { action: "t3-code-*", resource: "*", effect: "deny" },
-        { action: `${t3McpServerName(threadId)}_*`, resource: "*", effect: "allow" },
+        { action: `${McpProviderSession.APP_MCP_SERVER_NAME}-*`, resource: "*", effect: "deny" },
+        { action: `${appMcpServerName(threadId)}_*`, resource: "*", effect: "allow" },
       ];
 
 const sessionRules = (
@@ -3229,7 +3230,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
     ) {
       const mcpSession = McpProviderSession.readMcpProviderSession(turnInput.threadId);
       const directory = turnInput.runtimePolicy.cwd ?? serverConfig.cwd;
-      const name = t3McpServerName(turnInput.threadId);
+      const name = appMcpServerName(turnInput.threadId);
       // An external server may not reach T3's MCP endpoint, as with 1.x.
       const wanted =
         mcpSession === undefined || connection.external

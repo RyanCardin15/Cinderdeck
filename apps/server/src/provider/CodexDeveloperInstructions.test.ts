@@ -76,7 +76,7 @@ describe("T3 browser developer instructions", () => {
   it("prefers the product-native preview tools in both collaboration modes", () => {
     {
       const instructions = toolInstructions(runtime, true);
-      NodeAssert.match(instructions, /t3-code/);
+      NodeAssert.match(instructions, /deckhand/);
       NodeAssert.match(instructions, /preview_status/);
       NodeAssert.match(instructions, /preview_open/);
       NodeAssert.match(instructions, /Do not switch to global browser skills/);
@@ -98,6 +98,15 @@ describe("T3 browser developer instructions", () => {
     }
   });
 
+  it("keeps advertised server names and lazy tool prefixes aligned with Deckhand injection", () => {
+    const context = buildCodexAdditionalContext(runtime, { browser: true, device: true });
+    const text = Object.values(context)
+      .map((item) => item.value)
+      .join("\n");
+    NodeAssert.match(text, /mcp__deckhand__orchestrator_capabilities/);
+    NodeAssert.match(text, /The `deckhand` MCP server also exposes `device_/);
+    NodeAssert.doesNotMatch(text, /t3-code|mcp__t3_code__/);
+  });
   it("tracks the turn's MCP configuration rather than defaulting to on", () => {
     NodeAssert.match(toolInstructions(runtime, true), /preview_open/);
     NodeAssert.doesNotMatch(toolInstructions(runtime, false), /preview_open/);

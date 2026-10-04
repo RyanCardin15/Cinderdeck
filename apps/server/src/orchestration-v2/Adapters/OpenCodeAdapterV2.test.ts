@@ -32,6 +32,8 @@ import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as ServerConfig from "../../config.ts";
+import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import { EnvironmentId } from "@t3tools/contracts";
 import type { EventNdjsonLogger } from "../../provider/Layers/EventNdjsonLogger.ts";
 import type { OpenCodeRuntimeShape } from "../../provider/opencodeRuntime.ts";
 import * as IdAllocator from "../IdAllocator.ts";
@@ -146,6 +148,7 @@ const makeOpenCodeRuntimeHarness = Effect.fn("makeOpenCodeRuntimeHarness")(funct
   suffix: string,
   nativeSessionId: string,
   client: object,
+  options: { external?: boolean } = {},
 ) {
   const idAllocator = yield* IdAllocator.IdAllocatorV2;
   const instanceId = ProviderInstanceId.make(`opencode-${suffix}`);
@@ -161,7 +164,12 @@ const makeOpenCodeRuntimeHarness = Effect.fn("makeOpenCodeRuntimeHarness")(funct
     settings: OPEN_CODE_TEST_SETTINGS,
     environment: {},
     runtime: {
-      connectToOpenCodeServer: () => Effect.succeed({ url: "http://test.invalid", external: true }),
+      connectToOpenCodeServer: () =>
+        Effect.succeed({
+          url: "http://test.invalid",
+          external: options.external ?? true,
+          exitCode: null,
+        }),
       createOpenCodeSdkClient: () => client,
     } as unknown as OpenCodeRuntimeShape,
     idAllocator,
@@ -237,6 +245,65 @@ const makeOpenCodeRuntimeHarness = Effect.fn("makeOpenCodeRuntimeHarness")(funct
 });
 
 describe("OpenCodeAdapterV2", () => {
+  it.effect.each([false, true])(
+    "exposes the Deckhand MCP identity only on an owned OpenCode server (external=%s)",
+    (external) =>
+      Effect.gen(function* () {
+        const suffix = `mcp-identity-${external}`;
+        const threadId = ThreadId.make(`thread-opencode-${suffix}`);
+        const calls: Array<unknown> = [];
+        const nativeEvents = asyncEventStream();
+        McpProviderSession.setMcpProviderSession({
+          environmentId: EnvironmentId.make("fixture"),
+          threadId,
+          providerSessionId: "fixture",
+          providerInstanceId: ProviderInstanceId.make(`opencode-${suffix}`),
+          endpoint: "http://fixture.invalid/mcp",
+          authorizationHeader: "Bearer fixture-token",
+          browserToolsAvailable: true,
+        });
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            McpProviderSession.clearMcpProviderSession(threadId);
+            nativeEvents.close();
+          }),
+        );
+        yield* makeOpenCodeRuntimeHarness(
+          suffix,
+          "root",
+          {
+            mcp: {
+              add: async (input: unknown) => {
+                calls.push(input);
+                return { data: {} };
+              },
+            },
+            event: { subscribe: async () => ({ stream: nativeEvents.stream }) },
+            session: {
+              create: async () => ({ data: { id: "root", time: { created: 1, updated: 1 } } }),
+            },
+          },
+          { external },
+        );
+        assert.deepEqual(
+          calls,
+          external
+            ? []
+            : [
+                {
+                  name: "deckhand",
+                  config: {
+                    type: "remote",
+                    url: "http://fixture.invalid/mcp",
+                    headers: { Authorization: "Bearer fixture-token" },
+                    oauth: false,
+                  },
+                },
+              ],
+        );
+      }).pipe(Effect.provide(IdAllocator.layer), Effect.scoped),
+  );
+
   it.effect.each(["completed", "failed", "unresolved", "unavailable", "reconnect"] as const)(
     "normalizes OpenCode step usage for %s turns",
     (ending) =>
