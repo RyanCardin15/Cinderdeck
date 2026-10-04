@@ -1,6 +1,7 @@
 import { ProductNavigation } from "../deckhand/ProductNavigation";
 import { useLaneSessionContext } from "../deckhand/LaneSessionContext";
 import { ConnectedLaneSidebar } from "../deckhand/ConnectedLaneSidebar";
+import { useAgentObservation } from "../deckhand/useAgentObservation";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "./ThreadHoverCard";
 import { CollapsibleSectionHeader } from "./ui/collapsible-section-header";
 import { setThreadChangeRequestSnapshot } from "./ThreadStatusIndicators";
@@ -4674,19 +4675,42 @@ export default function Sidebar() {
     (projectGroups.length <= 1 ? shortcutLabelForCommand(keybindings, "chat.newLocal") : undefined);
   const newThreadInProjectShortcutLabel = shortcutLabelForCommand(keybindings, "chat.newLocal");
   const connectedContext = useLaneSessionContext(routeThreadRef);
+  const contextObservation = useAgentObservation(
+    routeThreadRef?.environmentId ?? null,
+    JSON.stringify([
+      routeThreadRef?.threadId,
+      connectedContext.data?.workspace.environmentId,
+      connectedContext.data?.checkout.laneId,
+      connectedContext.data?.checkout.nativeGeneration,
+    ]),
+    connectedContext.data,
+  );
   if (connectedContext.data) {
     return (
       <div className="flex h-full min-h-0 flex-col [&>aside]:flex-1">
         <ProductNavigation
           current="conversations"
           connection={{
-            connected: !connectedContext.error && connectedContext.data.native !== null,
-            label: connectedContext.error
-              ? "Saved workspace context"
-              : connectedContext.data.workspace.name,
+            connected:
+              !connectedContext.error &&
+              !contextObservation.stale &&
+              connectedContext.data.native !== null,
+            label:
+              connectedContext.error || contextObservation.stale
+                ? "Saved workspace context"
+                : connectedContext.data.workspace.name,
           }}
         >
-          <ConnectedLaneSidebar threadRef={routeThreadRef} />
+          <ConnectedLaneSidebar
+            threadRef={routeThreadRef}
+            providers={
+              routeThreadRef
+                ? Array.from(
+                    providerEntriesByEnvironment.get(routeThreadRef.environmentId)?.values() ?? [],
+                  )
+                : []
+            }
+          />
         </ProductNavigation>
       </div>
     );
