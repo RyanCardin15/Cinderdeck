@@ -136,11 +136,23 @@ describe("threadRoutes", () => {
     expect(
       resolveThreadRouteRenderState({
         bootstrapComplete: true,
+        serverThreadMissingConfirmed: true,
         serverThreadExists: false,
         serverThreadDeleted: false,
         draftThreadExists: false,
       }),
     ).toBe("missing");
+  });
+
+  it("waits for a just-launched thread while the bootstrapped shell catches up", () => {
+    expect(
+      resolveThreadRouteRenderState({
+        bootstrapComplete: true,
+        serverThreadExists: false,
+        serverThreadDeleted: false,
+        draftThreadExists: false,
+      }),
+    ).toBe("loading");
   });
 
   it("redirects deleted server threads", () => {
