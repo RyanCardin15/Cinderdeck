@@ -1153,7 +1153,7 @@ export function PullRequestDetailPanel({
           sizeBytes: file.size,
           file,
         };
-        acceptedFiles += store.addFiles(target, [attachment]).length;
+        acceptedFiles += store.addFiles(target, [attachment], { appendReference: true }).length;
       }
     }
     return { accepted: acceptedFiles, total: task.files?.length ?? 0 };
