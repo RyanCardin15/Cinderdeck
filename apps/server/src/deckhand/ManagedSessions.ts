@@ -181,7 +181,7 @@ const make = Effect.gen(function* () {
           if (sequence > old.lastSequence) yield* relationships.putSession(next, old.lastSequence);
           return {
             binding: next,
-            title,
+            title: shell.title || title,
             ...(objective !== undefined ? { objective } : {}),
             pullRequests: shell.pullRequests ?? [],
             source: "current" as const,

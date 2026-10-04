@@ -2,12 +2,15 @@ import { ExternalSessionList } from "./ExternalSessionList";
 import { useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
-import type { EnvironmentId } from "@t3tools/contracts";
+import { ThreadId, type EnvironmentId } from "@t3tools/contracts";
+import type { ManagedSessionView } from "@t3tools/contracts/deckhand/rpc";
 import type { SessionBinding } from "@t3tools/contracts/deckhand";
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { buildThreadRouteParams } from "../threadRoutes";
-import { managedSessionsView } from "./state";
+import { managedSessionsView, threadContextView } from "./state";
+import { useEnvironmentQuery } from "../state/query";
+import { useThreadShell } from "../state/entities";
 import { useAgentObservation } from "./useAgentObservation";
 import { agentExecutionLabel, agentProviderLabel } from "./agentPresentation";
 import styles from "./sessions.module.css";
@@ -77,6 +80,48 @@ function ScopedSessionList({
     `${installationID}:${workspaceID}:${generation}:${page.offset}`,
     sessions,
   );
+  const selectedOnPage = sessions?.find((session) => session.binding.threadId === selectedThreadId);
+  const selectedRef =
+    selectedThreadId && !selectedOnPage
+      ? { environmentId, threadId: ThreadId.make(selectedThreadId) }
+      : null;
+  const selectedQuery = useEnvironmentQuery(
+    selectedRef
+      ? threadContextView({
+          environmentId,
+          input: { threadId: selectedRef.threadId },
+        })
+      : null,
+  );
+  const selectedContext = selectedQuery.data;
+  const selectedShell = useThreadShell(selectedRef);
+  const selectedObservation = useAgentObservation(
+    environmentId,
+    `${installationID}:${workspaceID}:${generation}:${selectedThreadId ?? ""}:selected`,
+    selectedContext,
+  );
+  const selectedContextMatchesScope =
+    selectedContext !== null &&
+    selectedContext.workspace.environmentId === installationID &&
+    (selectedContext.checkout.laneId ?? selectedContext.workspace.ownerId) === workspaceID &&
+    selectedContext.checkout.nativeGeneration === generation;
+  const selectedMatchesScope =
+    selectedContextMatchesScope &&
+    selectedContext?.session.threadId === selectedThreadId &&
+    (selectedContext?.requestedThreadId ?? selectedContext?.session.threadId) === selectedThreadId;
+  const selectedIsHelper =
+    selectedContextMatchesScope &&
+    selectedContext?.requestedThreadId === selectedThreadId &&
+    selectedContext?.session.threadId !== selectedThreadId;
+  const exactSelected: ManagedSessionView | null =
+    selectedMatchesScope && selectedContext
+      ? {
+          binding: selectedContext.session,
+          title: selectedShell?.title || selectedContext.feature.title,
+          source: selectedContext.session.execution === "unknown" ? "unavailable" : "current",
+          archived: Boolean(selectedShell?.archivedAt || selectedShell?.deletedAt),
+        }
+      : null;
   const pagingUnavailable =
     page.offset > 0 &&
     sessions !== null &&
@@ -117,6 +162,56 @@ function ScopedSessionList({
   );
   const hasFilters = query !== "" || statusFilter !== "all" || providerFilter !== "all";
   const rangeOffset = pagingUnavailable ? Math.max(0, page.offset - 20) : page.offset;
+  const sessionRow = (
+    session: ManagedSessionView,
+    rowStale = observation.stale,
+    rowUnavailable = unavailable,
+  ) => (
+    <Link
+      key={session.binding.id}
+      to="/$environmentId/$threadId"
+      params={buildThreadRouteParams({
+        environmentId,
+        threadId: session.binding.threadId,
+      })}
+      aria-current={selectedThreadId === session.binding.threadId ? "page" : undefined}
+      className={styles.session}
+    >
+      <div className={styles.sessionIdentity}>
+        <span className={styles.provider}>
+          {agentProviderLabel(session.binding.providerInstanceId, providers)}
+        </span>
+        <strong>{session.title}</strong>
+        <span className={styles.sessionScope}>
+          {contextLabel} ·{" "}
+          {session.binding.role === "writer"
+            ? "Implementation"
+            : session.binding.role === "reviewer"
+              ? "Review"
+              : session.binding.desiredAccess === "read_only" &&
+                  session.binding.capabilities.enforcedReadOnly
+                ? "Analysis · read only"
+                : "Observer"}
+          {session.archived ? " · Archived" : ""}
+        </span>
+      </div>
+      <span className={styles.sessionStatus}>
+        {rowStale
+          ? "Last observed · Agent not connected"
+          : rowUnavailable || session.source === "unavailable"
+            ? "Unknown · Agent not connected"
+            : `${session.binding.connection === "stale" ? "Last observed" : agentExecutionLabel(session.binding.execution)} · ${connectionLabels[session.binding.connection]}`}
+      </span>
+    </Link>
+  );
+  const selectedOutsideFilters =
+    selectedOnPage && !filtered.some((session) => session.binding.id === selectedOnPage.binding.id);
+  const selectedOutsidePage = selectedThreadId && !selectedOnPage;
+  const retainedSelected = selectedOutsideFilters
+    ? selectedOnPage
+    : selectedOutsidePage
+      ? exactSelected
+      : null;
   const filterControls = (
     <>
       <div className={styles.filters}>
@@ -222,6 +317,27 @@ function ScopedSessionList({
             No sessions match these filters on this page. Clear filters or check another page.
           </p>
         ) : null}
+        {retainedSelected ? (
+          <section className={styles.group} aria-label="Current session">
+            <h4>
+              Current session ·{" "}
+              {selectedOutsideFilters ? "outside these filters" : "outside this page"}
+            </h4>
+            {sessionRow(
+              retainedSelected,
+              selectedOutsideFilters ? observation.stale : selectedObservation.stale,
+              selectedOutsideFilters
+                ? unavailable
+                : !selectedQuery.isSuccess || selectedQuery.error !== null,
+            )}
+          </section>
+        ) : selectedOutsidePage && !selectedIsHelper ? (
+          <p className={styles.notice} role="status">
+            {selectedQuery.isPending && !selectedContext
+              ? "Loading the current session…"
+              : "The current session could not be confirmed in this context. Its conversation remains open."}
+          </p>
+        ) : null}
         {groups.map((group) => {
           const rows = filtered.filter((session) => groupFor(session) === group.id);
           return rows.length ? (
@@ -230,44 +346,7 @@ function ScopedSessionList({
                 {observation.stale || unavailable ? "Last observed · " : ""}
                 {group.label} <span>{rows.length}</span>
               </h4>
-              {rows.map((session) => (
-                <Link
-                  key={session.binding.id}
-                  to="/$environmentId/$threadId"
-                  params={buildThreadRouteParams({
-                    environmentId,
-                    threadId: session.binding.threadId,
-                  })}
-                  aria-current={selectedThreadId === session.binding.threadId ? "page" : undefined}
-                  className={styles.session}
-                >
-                  <div className={styles.sessionIdentity}>
-                    <span className={styles.provider}>
-                      {agentProviderLabel(session.binding.providerInstanceId, providers)}
-                    </span>
-                    <strong>{session.title}</strong>
-                    <span className={styles.sessionScope}>
-                      {contextLabel} ·{" "}
-                      {session.binding.role === "writer"
-                        ? "Implementation"
-                        : session.binding.role === "reviewer"
-                          ? "Review"
-                          : session.binding.desiredAccess === "read_only" &&
-                              session.binding.capabilities.enforcedReadOnly
-                            ? "Analysis · read only"
-                            : "Observer"}
-                      {session.archived ? " · Archived" : ""}
-                    </span>
-                  </div>
-                  <span className={styles.sessionStatus}>
-                    {observation.stale
-                      ? "Last observed · Agent not connected"
-                      : unavailable || session.source === "unavailable"
-                        ? "Unknown · Agent not connected"
-                        : `${session.binding.connection === "stale" ? "Last observed" : agentExecutionLabel(session.binding.execution)} · ${connectionLabels[session.binding.connection]}`}
-                  </span>
-                </Link>
-              ))}
+              {rows.map((session) => sessionRow(session))}
             </section>
           ) : null;
         })}
