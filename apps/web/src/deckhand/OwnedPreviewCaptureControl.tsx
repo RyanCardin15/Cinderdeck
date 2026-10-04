@@ -112,7 +112,7 @@ export function OwnedPreviewCaptureControl({
       <div>
         <strong>Record the owned browser preview</strong>
         <p>
-          Deckhand captures its browser frames and binds the saved video to this declared build.
+          Cinderdeck captures its browser frames and binds the saved video to this declared build.
           Open the launched service in a connected conversation preview first. Starting reloads it
           to verify the actual loaded build. Leaving or reloading this page keeps the recording but
           makes its exact-preview proof incomplete.
@@ -155,7 +155,7 @@ export function OwnedPreviewCaptureControl({
         </div>
       ) : (
         <p>
-          Owned preview verification is available in the local Deckhand desktop app. Other capture
+          Owned preview verification is available in the local Cinderdeck desktop app. Other capture
           targets retain their recorded source and build facts.
         </p>
       )}

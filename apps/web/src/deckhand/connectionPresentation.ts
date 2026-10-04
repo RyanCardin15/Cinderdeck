@@ -10,21 +10,26 @@ export interface ConnectedWorkspaceSelection {
   readonly expectedGeneration: number;
 }
 
-export function presentCinderdeckConnection(view: Pick<IntegrationView, "state"> | null) {
+export function presentCinderdeckConnection(
+  view: Pick<IntegrationView, "state"> | null,
+  nativeHost = false,
+) {
   if (view === null)
     return {
-      title: "Checking Cinderdeck",
+      title: nativeHost ? "Loading workspaces" : "Checking Cinderdeck",
       detail: "Reading the connection on this execution computer.",
     };
   const states: Record<IntegrationView["state"], { title: string; detail: string }> = {
     connecting: {
-      title: "Connecting to Cinderdeck",
-      detail: "Discovering the same-host Cinderdeck installation and checking its identity.",
+      title: nativeHost ? "Loading workspaces" : "Connecting to Cinderdeck",
+      detail: nativeHost
+        ? "Checking this application's workspace inventory and identity."
+        : "Discovering the same-host Cinderdeck installation and checking its identity.",
     },
     connected: {
-      title: "Cinderdeck connected",
+      title: nativeHost ? "Workspaces ready" : "Cinderdeck connected",
       detail:
-        "Cinderdeck owns these workspaces, lanes, services, and recordings. Deckhand uses the verified connection to coordinate your agents.",
+        "Cinderdeck manages these workspaces, lanes, services and recordings alongside your agents.",
     },
     reconnecting: {
       title: "Reconnecting to Cinderdeck",
@@ -32,14 +37,15 @@ export function presentCinderdeckConnection(view: Pick<IntegrationView, "state">
         "The last workspace snapshot is retained. Wait for a fresh connection before choosing a workspace.",
     },
     unavailable: {
-      title: "Cinderdeck unavailable",
-      detail:
-        "Open Cinderdeck on this execution computer, then check the connection again. You can continue with standalone projects.",
+      title: nativeHost ? "Workspace connection unavailable" : "Cinderdeck unavailable",
+      detail: nativeHost
+        ? "The workspace connection is unavailable. Check it again before choosing a workspace."
+        : "Open Cinderdeck on this execution computer, then check the connection again. You can continue with code projects.",
     },
     incompatible: {
       title: "Cinderdeck needs attention",
       detail:
-        "The installation could not provide a compatible integration response. Update Cinderdeck and Deckhand, then check again.",
+        "The installation could not provide a compatible response. Update Cinderdeck, then check again.",
     },
     identity_changed: {
       title: "Connection identity changed",
@@ -54,7 +60,7 @@ export function presentCinderdeckConnection(view: Pick<IntegrationView, "state">
     unsupported: {
       title: "Cinderdeck requires macOS",
       detail:
-        "Connect a macOS execution computer running Cinderdeck, or continue with standalone projects on this computer.",
+        "Connect a macOS execution computer running Cinderdeck, or continue with code projects on this computer.",
     },
   };
   return states[view.state];

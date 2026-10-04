@@ -10,6 +10,7 @@ import * as Schema from "effect/Schema";
 import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 
 import * as PtyAdapter from "./PtyAdapter.ts";
+import { subprocessEnvironment } from "../process/SubprocessEnvironment.ts";
 
 export class NodePtyModuleLoadError extends Schema.TaggedError<NodePtyModuleLoadError>()(
   "NodePtyModuleLoadError",
@@ -265,10 +266,11 @@ export const make = Effect.fn("NodePtyAdapter.make")(function* () {
       // node-pty only writes `name` into the child's TERM on the Unix path;
       // the ConPTY path leaves the environment untouched, so Windows children
       // inherit a missing or 16-color TERM unless it is set here.
-      const env =
+      const env = subprocessEnvironment(
         platform === "win32" && input.env["TERM"] === undefined
           ? { ...input.env, TERM: "xterm-256color" }
-          : input.env;
+          : input.env,
+      );
       const ptyProcess = yield* Effect.try({
         try: () => {
           const nativeProcess = nodePty.spawn(input.shell, input.args ?? [], {

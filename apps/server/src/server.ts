@@ -40,6 +40,7 @@ import { guardHttpResponseWriteErrors } from "./httpResponseErrorGuard.ts";
 import { fixPath } from "./os-jank.ts";
 import { websocketRpcRouteLayer } from "./ws.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
+import * as SubprocessSpawner from "./process/SubprocessSpawner.ts";
 import * as NodePtyAdapter from "./terminal/NodePtyAdapter.ts";
 import { pullRequestHttpApiLayer } from "./pullRequest/http.ts";
 import * as PullRequestProviderRegistry from "./pullRequest/PullRequestProviderRegistry.ts";
@@ -263,7 +264,7 @@ const HttpServerLive = Layer.unwrap(
   }),
 );
 
-const PlatformServicesLive = NodeServices.layer;
+const PlatformServicesLive = SubprocessSpawner.layer.pipe(Layer.provideMerge(NodeServices.layer));
 
 const PersistenceLayerLive = Layer.empty.pipe(Layer.provideMerge(SqlitePersistence.layerConfig));
 

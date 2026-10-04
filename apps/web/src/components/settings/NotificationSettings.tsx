@@ -22,7 +22,7 @@ export function NotificationSettings() {
       {...searchableSetting("thread-notifications")}
       description={
         permissionMessage ??
-        "System alerts when a thread finishes, fails, or needs input or approval. Applies to this device while Deckhand is open."
+        "System alerts when a thread finishes, fails, or needs input or approval. Applies to this device while Cinderdeck is open."
       }
       control={
         <Select

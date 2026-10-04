@@ -31,6 +31,8 @@ import {
   ServerSettingsError,
   type ServerSettingsPatch,
 } from "@t3tools/contracts";
+import { HostProcessEnvironment } from "@t3tools/shared/hostProcess";
+import * as CinderdeckCliProviders from "./provider/acp/CinderdeckCliProviders.ts";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -619,6 +621,7 @@ function foldLegacyProjectSettings(
 
 const make = Effect.gen(function* () {
   const { settingsPath } = yield* ServerConfig.ServerConfig;
+  const hostEnvironment = yield* HostProcessEnvironment;
   const fs = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
   const secretStore = yield* ServerSecretStore.ServerSecretStore;
@@ -716,7 +719,29 @@ const make = Effect.gen(function* () {
     // the fold below only writes when it started from the file's real contents.
     let settingsFileTrusted = true;
 
-    if (yield* readConfigExists) {
+    const settingsFileExists = yield* readConfigExists;
+    let seededCinderdeckProviders = false;
+    if (!settingsFileExists && hostEnvironment.CINDERDECK_NATIVE_HOST === "1") {
+      const existing = yield* sql<{ readonly used: number }>`
+        SELECT EXISTS(SELECT 1 FROM projection_projects LIMIT 1)
+          OR EXISTS(SELECT 1 FROM projection_threads LIMIT 1) AS used
+      `.pipe(
+        Effect.mapError(
+          (cause) =>
+            new ServerSettingsError({
+              settingsPath,
+              operation: "read-provider-history",
+              cause,
+            }),
+        ),
+      );
+      if (existing[0]?.used === 0) {
+        settings = CinderdeckCliProviders.seedFreshCinderdeckCliProviders(settings);
+        seededCinderdeckProviders = true;
+      }
+    }
+
+    if (settingsFileExists) {
       const raw = yield* readRawConfig;
       const decoded = decodeServerSettingsJsonExit(raw);
       const persistedSettings = decodePersistedOptionalProviderSettingsJsonExit(raw);
@@ -795,7 +820,7 @@ const make = Effect.gen(function* () {
       : loaded;
     // Only rewrite a file that decoded cleanly; an untrusted one stays for the user to repair.
     const migrated = settingsFileTrusted ? yield* moveInlineBitbucketTokens(folded) : folded;
-    if (migrated !== loaded) {
+    if (migrated !== loaded || seededCinderdeckProviders) {
       yield* writeSettingsAtomically(migrated);
     }
     return migrated;

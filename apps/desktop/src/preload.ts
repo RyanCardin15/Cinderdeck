@@ -1,5 +1,6 @@
 import type {
   DesktopBridge,
+  NativeHostRoute,
   DesktopPreviewPointerEvent,
   DesktopPreviewRecordingInputEvent,
   DesktopPreviewRecordingFrame,
@@ -63,6 +64,14 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  isNativeHost: () => ipcRenderer.sendSync("cinderdeck:native-host-info") === true,
+  openNativeTool: (request) => ipcRenderer.invoke("cinderdeck:native-tool", request),
+  onNativeHostRoute: (listener) => {
+    const wrapped = (_event: Electron.IpcRendererEvent, route: NativeHostRoute) => listener(route);
+    ipcRenderer.on("cinderdeck:native-host-route", wrapped);
+    ipcRenderer.send("cinderdeck:native-host-ready");
+    return () => ipcRenderer.removeListener("cinderdeck:native-host-route", wrapped);
+  },
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);
     if (typeof result !== "object" || result === null) {

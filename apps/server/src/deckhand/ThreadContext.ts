@@ -1,4 +1,4 @@
-import type { ThreadId } from "@t3tools/contracts";
+import { isProviderNativeSubagentThread, type ThreadId } from "@t3tools/contracts";
 import * as Contracts from "@t3tools/contracts/deckhand";
 import * as Rpc from "@t3tools/contracts/deckhand/rpc";
 import * as Context from "effect/Context";
@@ -13,6 +13,7 @@ import * as ManagedSessions from "./ManagedSessions.ts";
 import * as CurrentCheckout from "./CurrentCheckout.ts";
 import * as Relationships from "./Relationships.ts";
 import * as Migrations from "./Migrations.ts";
+import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 
 export class ThreadContextError extends Schema.TaggedError<ThreadContextError>()(
   "ThreadContextError",
@@ -48,6 +49,7 @@ const make = Effect.gen(function* () {
 
   const hub = yield* IntegrationHub.IntegrationHub;
   const sessions = yield* ManagedSessions.ManagedSessions;
+  const projectionStore = yield* Effect.serviceOption(ProjectionStore.ProjectionStoreV2);
   const load = (threadId: ThreadId) =>
     Effect.gen(function* () {
       const rows = yield* sql<{
@@ -63,11 +65,37 @@ const make = Effect.gen(function* () {
         return yield* new ThreadContextError({ reason: "invalid_context" });
       return { session, checkout, workspace, feature };
     });
+  // Provider-owned helpers have no independent managed binding. Follow only their
+  // saved display lineage; launch, MCP and writer admission retain exact lookups.
+  const loadDisplayContext = (requestedThreadId: ThreadId) =>
+    Effect.gen(function* () {
+      const direct = yield* load(requestedThreadId);
+      if (direct) return { ...direct, requestedThreadId };
+      if (Option.isNone(projectionStore)) return null;
+      const visited = new Set<ThreadId>([requestedThreadId]);
+      let child = yield* projectionStore.value.getThreadShell(requestedThreadId);
+      let parentThreadId: ThreadId | undefined;
+      for (let depth = 0; depth < 16; depth += 1) {
+        if (!child || child.deletedAt !== null || !isProviderNativeSubagentThread(child))
+          return null;
+        const nextId = child.lineage.parentThreadId;
+        if (!nextId || visited.has(nextId)) return null;
+        visited.add(nextId);
+        parentThreadId ??= nextId;
+        const parent = yield* projectionStore.value.getThreadShell(nextId);
+        if (!parent || parent.deletedAt !== null || parent.projectId !== child.projectId)
+          return null;
+        const managed = yield* load(nextId);
+        if (managed) return { ...managed, requestedThreadId, parentThreadId };
+        child = parent;
+      }
+      return null;
+    });
   const ownership = yield* Effect.serviceOption(CurrentCheckout.CurrentCheckout);
   const build = (input: Rpc.ThreadContextInput) =>
     Stream.unwrap(
       Effect.gen(function* () {
-        const savedResult = yield* load(input.threadId).pipe(Effect.result);
+        const savedResult = yield* loadDisplayContext(input.threadId).pipe(Effect.result);
         if (
           savedResult._tag === "Failure" &&
           isCurrentError(savedResult.failure) &&

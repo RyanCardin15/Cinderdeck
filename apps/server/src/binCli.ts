@@ -27,8 +27,12 @@ import { serviceCommand } from "./cli/service.ts";
 import { servicePreflightCommand } from "./cli/servicePreflight.ts";
 import { themeCommand } from "./cli/theme.ts";
 import { traceCommand } from "./cli/trace.ts";
+import * as SubprocessSpawner from "./process/SubprocessSpawner.ts";
 
-const CliRuntimeLayer = Layer.mergeAll(NodeServices.layer, NetService.layer);
+const CliRuntimeLayer = Layer.mergeAll(
+  SubprocessSpawner.layer.pipe(Layer.provideMerge(NodeServices.layer)),
+  NetService.layer,
+);
 
 const connectPublicConfigMissingMessage =
   "T3 Connect commands are unavailable: this build is missing T3 Connect public configuration.";
@@ -56,7 +60,7 @@ const connectUnavailableCommand = Command.make("connect", {
 
 export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
   Command.make("deckhand", { ...sharedServerCommandFlags }).pipe(
-    Command.withDescription("Run the Deckhand server."),
+    Command.withDescription("Run the Cinderdeck agent backend."),
     Command.withHandler((flags) => runServerCommand(flags)),
     Command.withSubcommands([
       acpMcpBridgeCommand,

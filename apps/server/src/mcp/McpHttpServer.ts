@@ -18,6 +18,7 @@ import { PreviewAutomationError } from "@t3tools/contracts";
 import { DeckhandToolkit } from "./toolkits/deckhand/tools.ts";
 import { DeckhandToolkitHandlersLive } from "./toolkits/deckhand/handlers.ts";
 import * as DeckhandMcpAccess from "./DeckhandMcpAccess.ts";
+import * as ManagedMcpToolPolicy from "./ManagedMcpToolPolicy.ts";
 import packageJson from "../../package.json" with { type: "json" };
 import * as ServerConfig from "../config.ts";
 import * as DeviceService from "../device/DeviceService.ts";
@@ -716,12 +717,64 @@ export const DeckhandToolkitRegistrationLive = McpServer.toolkit(DeckhandToolkit
   Layer.provide(DeckhandMcpAccess.layer),
 );
 
+// Every tool, including manually registered image tools, passes the same guard
+// before its handler can invoke a server-side filesystem/native/process effect.
+const ManagedToolRegistrationLive = Layer.effect(
+  McpServer.McpServer,
+  Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const policy = yield* ManagedMcpToolPolicy.ManagedMcpToolPolicy;
+    return McpServer.McpServer.of({
+      ...server,
+      addTool: (options) =>
+        server.addTool({
+          ...options,
+          handle: (payload) =>
+            Effect.withFiber((fiber) => {
+              const invocation = Context.getUnsafe(
+                fiber.context,
+                McpInvocationContext.McpInvocationContext,
+              );
+              return policy
+                .authorize({
+                  name: options.tool.name,
+                  readonly: Context.get(options.annotations, Tool.Readonly),
+                  payload,
+                })
+                .pipe(
+                  Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+                  Effect.matchEffect({
+                    onFailure: (error) =>
+                      Effect.succeed(
+                        new McpSchema.CallToolResult({
+                          isError: true,
+                          content: [
+                            {
+                              type: "text",
+                              text: JSON.stringify({ code: error.code, message: error.message }),
+                            },
+                          ],
+                        }),
+                      ),
+                    onSuccess: () => options.handle(payload),
+                  }),
+                );
+            }),
+        }),
+    });
+  }),
+).pipe(Layer.provide(ManagedMcpToolPolicy.layer));
+
 const McpTransportLive = McpServer.layerHttp({
   name: "Deckhand",
   version: packageJson.version,
   path: "/mcp",
   protocols: [McpProtocol.v2025_06_18],
 }).pipe(Layer.provide(McpAuthMiddlewareLive));
+
+const ManagedMcpTransportLive = ManagedToolRegistrationLive.pipe(
+  Layer.provideMerge(McpTransportLive),
+);
 
 export const layer = Layer.mergeAll(
   DeckhandToolkitRegistrationLive,
@@ -735,4 +788,4 @@ export const layer = Layer.mergeAll(
   WorktreeToolkitRegistrationLive,
   PullRequestsToolkitRegistrationLive,
   DeviceToolkitRegistrationLive,
-).pipe(Layer.provideMerge(McpTransportLive));
+).pipe(Layer.provideMerge(ManagedMcpTransportLive));

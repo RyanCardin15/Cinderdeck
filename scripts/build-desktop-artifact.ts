@@ -55,6 +55,9 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
 const DESKTOP_APP_ID = "com.cardinlabs.deckhand";
+// The native Cinderdeck bundle owns installation, URL registration and updates.
+// Keep the upstream packaging pipeline for its private Chromium agent window.
+const nativeShellBuild = process.env.CINDERDECK_NATIVE_SHELL_BUILD === "1";
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -2700,6 +2703,7 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 }
 
 export function resolveDesktopProductName(version: string): string {
+  if (nativeShellBuild) return "AgentShell";
   if (isDesktopPreviewVersion(version)) return "Deckhand (Preview)";
   return resolveDesktopUpdateChannel(version) === "nightly"
     ? "Deckhand (Nightly)"
@@ -2726,9 +2730,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   arch?: typeof BuildArch.Type,
 ) {
   const buildConfig: Record<string, unknown> = {
-    appId: DESKTOP_APP_ID,
+    appId: nativeShellBuild ? "com.ryancardin.cinderdeck.agentshell" : DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
-    artifactName: "Deckhand-${version}-${arch}.${ext}",
+    artifactName: nativeShellBuild ? "AgentShell-${version}-${arch}.${ext}" : "Deckhand-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [
       ...DESKTOP_FILE_EXCLUSIONS,
@@ -2781,7 +2785,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         NSScreenCaptureUsageDescription:
           "Deckhand captures the active window when you use the window capture shortcut.",
       },
-      protocols: [
+      protocols: nativeShellBuild ? [] : [
         {
           name: "Deckhand",
           schemes: ["deckhand", "deckhand-dev"],
@@ -3759,7 +3763,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     deckhandSourceDirty: sourceDirty,
     private: true,
     packageManager: rootPackageJson.packageManager,
-    description: "Deckhand desktop build",
+    description: nativeShellBuild ? "Cinderdeck internal agent window" : "Deckhand desktop build",
     // Required by the .deb control file.
     homepage: "https://cardinlabs.com",
     author: "Cardin Labs",

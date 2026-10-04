@@ -38,6 +38,7 @@ export class DesktopEnvironment extends Context.Service<
     readonly platform: NodeJS.Platform;
     readonly processArch: string;
     readonly isPackaged: boolean;
+    readonly nativeHost: boolean;
     readonly isDevelopment: boolean;
     readonly appVersion: string;
     readonly appPath: string;
@@ -93,7 +94,7 @@ export class DesktopEnvironment extends Context.Service<
   }
 >()("@t3tools/desktop/app/DesktopEnvironment") {}
 
-const APP_BASE_NAME = "Deckhand";
+const APP_BASE_NAME = "Cinderdeck";
 
 function resolveDesktopAppStageLabel(input: {
   readonly isDevelopment: boolean;
@@ -195,6 +196,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const resourcesPath = input.resourcesPath;
 
   return DesktopEnvironment.of({
+    nativeHost: config.nativeHost,
     path,
     dirname: input.dirname,
     platform: input.platform,

@@ -32,6 +32,7 @@ import * as ServerConfig from "../config.ts";
 import { resolveBaseDir } from "../os-jank.ts";
 import { isProcessAlive, readPersistedServerRuntimeState } from "../serverRuntimeState.ts";
 import { baseDirFlag } from "./config.ts";
+import { subprocessEnvironment } from "../process/SubprocessEnvironment.ts";
 import { resolveCliCommand } from "./invocation.ts";
 import {
   buildTriageContext,
@@ -135,6 +136,7 @@ const runInteractiveSession = (input: {
       cwd: input.cwd,
       stdio: "inherit",
       shell: input.shell,
+      env: subprocessEnvironment(process.env),
     });
     child.once("error", (cause) =>
       resume(Effect.fail(new TriageAgentSpawnError({ command: input.command, cause }))),

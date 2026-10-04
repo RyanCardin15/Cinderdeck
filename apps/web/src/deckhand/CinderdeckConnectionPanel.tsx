@@ -23,9 +23,11 @@ import styles from "./connection.module.css";
 export function CinderdeckConnectionPanel({
   initialEnvironmentId,
   onChoose,
+  nativeHost = false,
 }: {
   initialEnvironmentId?: EnvironmentId | undefined;
   onChoose?: ((selection: ConnectedWorkspaceSelection) => Promise<boolean> | void) | undefined;
+  nativeHost?: boolean;
 }) {
   const { environments } = useEnvironments();
   const primary = usePrimaryEnvironmentId();
@@ -34,14 +36,18 @@ export function CinderdeckConnectionPanel({
   );
   const selected = environments.find((environment) => environment.environmentId === selectedID);
   return (
-    <section className={styles.panel} aria-label="Cinderdeck connection">
+    <section
+      className={styles.panel}
+      aria-label={nativeHost ? "Cinderdeck workspaces" : "Cinderdeck connection"}
+    >
       <header className={styles.header}>
         <span className={styles.identity}>
           <FlameIcon size={20} aria-hidden /> Cinderdeck
         </span>
         <p>
-          Connect to the Cinderdeck installation on your chosen execution computer. Choosing a
-          workspace opens its context without starting services.
+          {nativeHost
+            ? "Your workspaces, lanes, services and recordings are managed here. Choose a workspace to continue; choosing does not start services."
+            : "Use the native workspaces on your chosen execution computer. Choosing a workspace opens its context without starting services."}
         </p>
       </header>
       <label className={styles.computer}>
@@ -71,6 +77,7 @@ export function CinderdeckConnectionPanel({
           key={selected.environmentId}
           environmentId={selected.environmentId}
           onChoose={onChoose}
+          nativeHost={nativeHost}
         />
       ) : (
         <div className={styles.notice} role="status">
@@ -96,14 +103,16 @@ export function CinderdeckConnectionPanel({
 function ConnectionDetails({
   environmentId,
   onChoose,
+  nativeHost,
 }: {
   environmentId: EnvironmentId;
   onChoose?: ((selection: ConnectedWorkspaceSelection) => Promise<boolean> | void) | undefined;
+  nativeHost: boolean;
 }) {
   const [offset, setOffset] = useState(0);
   const result = useAtomValue(workspaceView({ environmentId, input: { offset, limit: 20 } }));
   const view = Option.getOrNull(AsyncResult.value(result));
-  const presentation = presentCinderdeckConnection(view);
+  const presentation = presentCinderdeckConnection(view, nativeHost);
   const [selection, setSelection] = useState<{
     installationID: string;
     workspaceID: string;
@@ -214,7 +223,11 @@ function ConnectionDetails({
           onClick={() => void checkConnection()}
         >
           <RefreshCwIcon size={14} aria-hidden />
-          {busy === "refresh" ? "Checking…" : "Check connection"}
+          {busy === "refresh"
+            ? "Checking…"
+            : nativeHost
+              ? "Refresh workspaces"
+              : "Check connection"}
         </button>
       </div>
       {AsyncResult.isFailure(result) ? (
@@ -311,8 +324,9 @@ function ConnectionDetails({
         })}
         {view?.state === "connected" && view.resources.length === 0 ? (
           <p>
-            No Cinderdeck workspaces are available on this computer. Add a workspace in Cinderdeck,
-            then check the connection.
+            {nativeHost
+              ? "No workspaces are configured on this computer yet. You can add one from the workspace overview after setup."
+              : "No native workspaces are available on this computer. Add a workspace there, then check the connection."}
           </p>
         ) : null}
         {selection && !selected ? (

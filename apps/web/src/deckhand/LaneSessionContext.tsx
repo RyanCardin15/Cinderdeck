@@ -2,6 +2,7 @@ import { LinkedWorkContext } from "./LinkedWorkContext";
 import { PreviewCaptureControl } from "./PreviewCaptureControl";
 import { RecordingContextSummary } from "./RecordingContextSummary";
 import { ReviewerLauncher } from "./ReviewerLauncher";
+import { ManagedSessionControl } from "./ManagedSessionControl";
 import { PullRequestGlyph } from "../components/pullRequest/pullRequestIcons";
 import { Link } from "@tanstack/react-router";
 import type { ScopedThreadRef } from "@t3tools/contracts";
@@ -11,20 +12,16 @@ import {
   CircleAlertIcon,
   GitBranchIcon,
   GlobeIcon,
-  LayersIcon,
   TerminalIcon,
   FilesIcon,
   ChevronRightIcon,
 } from "lucide-react";
 import type { ProviderInstanceEntry } from "../providerInstances";
-import { ProviderInstanceIcon } from "../components/chat/ProviderInstanceIcon";
-import { buildThreadRouteParams } from "../threadRoutes";
 import { useEnvironmentQuery } from "../state/query";
 import { threadContextView } from "./state";
 import styles from "./laneSession.module.css";
 import { useAgentObservation } from "./useAgentObservation";
 import { connectedWorkspaceSearch } from "./workspaceNavigation";
-import { agentExecutionLabel, agentProviderLabel, agentCheckoutLabel } from "./agentPresentation";
 
 export function useLaneSessionContext(threadRef: ScopedThreadRef | null) {
   return useEnvironmentQuery(
@@ -39,7 +36,6 @@ export function useLaneSessionContext(threadRef: ScopedThreadRef | null) {
 export function LaneSessionContext({
   context,
   threadRef,
-  providers,
   stale: suppliedStale,
   previewAvailable,
   onOpenPreview,
@@ -74,7 +70,10 @@ export function LaneSessionContext({
     ]),
     context,
   );
-  const stale = suppliedStale || observation.stale;
+  const inherited =
+    context.requestedThreadId !== undefined &&
+    context.requestedThreadId !== context.session.threadId;
+  const stale = suppliedStale || observation.stale || inherited;
   const native = stale ? null : context.native?.workspace;
   const connected = !stale && context.nativeConnection === "connected" && Boolean(native);
   const services = native?.services ?? [];
@@ -85,23 +84,10 @@ export function LaneSessionContext({
     context.session.repositoryScope?.includes(repo.physicalId),
   );
   const workspaceSearch = connectedWorkspaceSearch(threadRef.environmentId, context);
-  const label = agentCheckoutLabel(context.checkout, native?.lane?.name);
   return (
-    <section className={styles.context} aria-label="Connected lane context">
-      <div className={styles.breadcrumb}>
-        <Link to="/workspaces" search={workspaceSearch}>
-          Workspaces
-        </Link>
-        <ChevronRightIcon aria-hidden size={13} />
-        <Link to="/workspaces" search={workspaceSearch}>
-          {context.workspace.name}
-        </Link>
-        <ChevronRightIcon aria-hidden size={13} />
-        <span>{label}</span>
-      </div>
+    <section className={styles.context} aria-label="Connected lane controls">
       <div className={styles.titleRow}>
         <div className={styles.heading}>
-          <h1>{context.feature.title}</h1>
           <div className={styles.metadata}>
             <span aria-label={repository?.root}>
               <GitBranchIcon aria-hidden size={15} />
@@ -112,8 +98,8 @@ export function LaneSessionContext({
               {stale
                 ? "Last observed"
                 : connected
-                  ? "Cinderdeck connected"
-                  : "Cinderdeck unavailable"}
+                  ? "Workspace connected"
+                  : "Workspace unavailable"}
             </span>
             <span className={styles.role}>
               {context.session.role} · {context.session.desiredAccess.replaceAll("_", " ")}
@@ -134,18 +120,13 @@ export function LaneSessionContext({
       {!connected ? (
         <p className={styles.warning} role="status">
           <CircleAlertIcon aria-hidden size={14} />
-          Saved conversation context. Reconnect Cinderdeck to inspect current services.
+          {inherited
+            ? "Helper task in this parent’s lane. Managed checkout actions belong to the parent session."
+            : "Saved conversation context. Reconnect Cinderdeck to inspect current services."}
         </p>
       ) : null}
       <div className={styles.tools}>
-        <nav className={styles.views} aria-label="Lane views">
-          <Link to="/workspaces" search={workspaceSearch}>
-            <LayersIcon aria-hidden size={15} />
-            Overview
-          </Link>
-          <span aria-current="page">
-            Agents<span className={styles.count}>{context.sessions.length}</span>
-          </span>
+        <nav className={styles.views} aria-label="Lane tools">
           <button
             type="button"
             onClick={onOpenPullRequests}
@@ -190,8 +171,8 @@ export function LaneSessionContext({
               ))}
               {!previewAvailable && services.some((service) => service.url) ? (
                 <p>
-                  These addresses belong to the execution computer. Open Deckhand desktop there to
-                  use the integrated preview.
+                  These addresses belong to the execution computer. Open Cinderdeck there to use the
+                  integrated preview.
                 </p>
               ) : null}
               <Link to="/workspaces" search={workspaceSearch}>
@@ -226,17 +207,22 @@ export function LaneSessionContext({
           ) : null}
         </nav>
         <div className={styles.panelActions} aria-label="Repository panels">
+          <ManagedSessionControl threadRef={threadRef} context={context} enabled={connected} />
           <LinkedWorkContext threadRef={threadRef} context={context} enabled={connected} />
-          <ReviewerLauncher
-            key={`${threadRef.environmentId}:${threadRef.threadId}`}
-            threadRef={threadRef}
-            providerSessionId={
-              context.session.role === "writer" ? context.session.providerSessionId : null
-            }
-            enabled={
-              connected && context.checkout.state === "ready" && context.feature.status === "active"
-            }
-          />
+          {context.session.role === "writer" ? (
+            <ReviewerLauncher
+              key={`${threadRef.environmentId}:${threadRef.threadId}`}
+              threadRef={threadRef}
+              providerSessionId={
+                context.session.role === "writer" ? context.session.providerSessionId : null
+              }
+              enabled={
+                connected &&
+                context.checkout.state === "ready" &&
+                context.feature.status === "active"
+              }
+            />
+          ) : null}
           <button
             type="button"
             onClick={onOpenSource}
@@ -272,57 +258,6 @@ export function LaneSessionContext({
           ) : null}
         </div>
       </div>
-      <nav className={styles.sessions} aria-label="Agent conversations in this lane">
-        {context.sessions.map((session) => {
-          const provider = providers.find(
-            (item) => item.instanceId === session.binding.providerInstanceId,
-          );
-          const selected = session.binding.threadId === threadRef.threadId;
-          const execution =
-            stale || session.source === "unavailable" ? "unknown" : session.binding.execution;
-          return (
-            <Link
-              key={session.binding.id}
-              to="/$environmentId/$threadId"
-              params={buildThreadRouteParams({
-                environmentId: threadRef.environmentId,
-                threadId: session.binding.threadId,
-              })}
-              className={styles.session}
-              data-active={selected}
-              aria-current={selected ? "page" : undefined}
-              aria-label={`${session.title} · ${session.binding.role}`}
-            >
-              <span className={styles.providerMark}>
-                {provider ? (
-                  <ProviderInstanceIcon
-                    driverKind={provider.driverKind}
-                    displayName={provider.displayName}
-                    showBadge={false}
-                  />
-                ) : (
-                  <LayersIcon aria-hidden size={19} />
-                )}
-              </span>
-              <span>
-                <strong>{session.title}</strong>
-                <small>
-                  {agentProviderLabel(session.binding.providerInstanceId, providers)} ·{" "}
-                  {session.binding.role}
-                  {session.archived ? " · Archived" : ""}
-                </small>
-              </span>
-              <span className={styles.sessionState} data-state={execution}>
-                <span className={styles.dot} aria-hidden />
-                {agentExecutionLabel(execution, stale || session.source === "unavailable")}
-              </span>
-            </Link>
-          );
-        })}
-        {context.sessions.length === 20 ? (
-          <span className={styles.historyNote}>20 newest sessions</span>
-        ) : null}
-      </nav>
     </section>
   );
 }

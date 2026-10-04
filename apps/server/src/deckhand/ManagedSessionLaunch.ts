@@ -32,6 +32,7 @@ export class ManagedLaunchError extends Schema.TaggedError<ManagedLaunchError>()
       "key_conflict",
       "stale_context",
       "unavailable_provider",
+      "unsupported_access",
       "storage",
       "launch_failed",
       "not_retryable",
@@ -128,17 +129,39 @@ const make = Effect.gen(function* () {
   const options = providers.getProviders.pipe(
     Effect.map((snapshots) =>
       snapshots
-        .filter(
-          (provider) =>
-            provider.enabled && provider.installed && provider.availability !== "unavailable",
-        )
+        .filter((provider) => provider.enabled)
         .map((provider) => ({
+          supportsReadOnly: provider.driver === "codex",
           instanceId: provider.instanceId,
           label: provider.displayName ?? provider.instanceId,
           models: provider.models.map((model) => ({ id: model.slug, label: model.name })),
+          readiness:
+            !provider.installed ||
+            provider.availability === "unavailable" ||
+            provider.status === "error"
+              ? ("unavailable" as const)
+              : provider.auth.status === "unauthenticated"
+                ? ("sign_in_required" as const)
+                : provider.auth.status === "authenticated"
+                  ? ("ready" as const)
+                  : ("unknown" as const),
+          ...(provider.message ? { message: provider.message } : {}),
         })),
     ),
   );
+  const validateAccess = (input: Rpc.ManagedLaunchInput) =>
+    Effect.gen(function* () {
+      if (input.reviewerContext && input.access !== undefined)
+        return yield* error(input.operationKey, "unsupported_access");
+      if (input.access !== "read_only") return;
+      const metadata = adapters.getMetadata
+        ? yield* adapters
+            .getMetadata(input.modelSelection.instanceId)
+            .pipe(Effect.mapError(() => error(input.operationKey, "unavailable_provider")))
+        : null;
+      if (!metadata?.enabled || metadata.driver !== "codex")
+        return yield* error(input.operationKey, "unsupported_access");
+    });
   const launch = (actorID: string, input: Rpc.ManagedLaunchInput) =>
     locks.withLock(
       input.operationKey,
@@ -152,6 +175,7 @@ const make = Effect.gen(function* () {
         // An accepted receipt records intake, never provider completion. Reading it does not
         // reopen a provider or depend on a still-present native lane.
         if (prior?.record.state === "accepted") return prior.record;
+        yield* validateAccess(input);
         const creationRows = yield* sql<{
           actor_id: string;
           launch_input_json: string | null;
@@ -468,14 +492,23 @@ const make = Effect.gen(function* () {
                         featureId,
                         checkoutId,
                         repositoryScope: [cwd.physicalId],
-                        role: input.reviewerContext ? "reviewer" : "writer",
-                        desiredAccess: input.reviewerContext ? "isolated" : "write",
+                        role: input.reviewerContext
+                          ? "reviewer"
+                          : input.access === "read_only"
+                            ? "observer"
+                            : "writer",
+                        desiredAccess: input.reviewerContext
+                          ? "isolated"
+                          : input.access === "read_only"
+                            ? "read_only"
+                            : "write",
                         execution: "queued",
                         connection: "connected",
                         lastSequence: 0,
                         capabilities: {
                           managed: true,
-                          enforcedReadOnly: false,
+                          enforcedReadOnly:
+                            input.access === "read_only" && metadata.driver === "codex",
                           // Upstream identity strength does not attest resumability.
                           nativeResume: false,
                           interrupt: caps.turns.supportsInterrupt,
@@ -714,6 +747,83 @@ const make = Effect.gen(function* () {
         )
         .pipe(Effect.mapError(storage(input.operationKey))),
     );
+  // A native creation receipt can precede Git-monitor hydration. Its revision
+  // covers presentation/runtime state as well as source; wait for the created
+  // checkout to settle before committing the immutable provider intake request.
+  const createdLaunchContext = (input: Rpc.ManagedCreateInput, record: Rpc.ManagedCreateRecord) =>
+    Effect.gen(function* () {
+      const created = record.receipt?.result?.workspace;
+      if (
+        !record.laneID ||
+        record.receipt?.state !== "succeeded" ||
+        !created?.lane ||
+        created.id !== record.laneID ||
+        created.lane.sourceStackID !== input.workspaceID ||
+        created.lane.name !== input.branch ||
+        !created.repos.length ||
+        created.repos.some((repo) => !repo.physicalID || !repo.repositoryPhysicalID)
+      )
+        return yield* error(input.operationKey, "stale_context");
+      let initialPhysical: string | null = null;
+      let initialGeneration: number | null = null;
+      let readyRevision: string | null = null;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const target: Effect.Success<ReturnType<typeof backend.context>> = yield* backend
+          .context(record.laneID)
+          .pipe(Effect.mapError(() => error(input.operationKey, "stale_context")));
+        const workspace = target.resource.workspace;
+        if (
+          target.hello.installationID !== input.installationID ||
+          target.resource.workspaceID !== record.laneID ||
+          !target.resource.available ||
+          !workspace?.lane ||
+          workspace.id !== created.id ||
+          workspace.lane.sourceStackID !== input.workspaceID ||
+          workspace.lane.name !== created.lane.name ||
+          workspace.lane.directory !== created.lane.directory ||
+          workspace.definitionChanged ||
+          workspace.issues.length ||
+          workspace.repos.length !== created.repos.length ||
+          new Set(workspace.repos.map((repo) => repo.id)).size !== workspace.repos.length ||
+          (initialGeneration !== null && target.resource.generation !== initialGeneration)
+        )
+          return yield* error(input.operationKey, "stale_context");
+        initialGeneration ??= target.resource.generation;
+        const physical = yield* Effect.forEach(workspace.repos, (repo) =>
+          identities
+            .resolve(repo.path)
+            .pipe(Effect.mapError(() => error(input.operationKey, "stale_context"))),
+        );
+        for (const [index, repo] of workspace.repos.entries()) {
+          const original = created.repos.find((item) => item.id === repo.id);
+          const actual = physical[index]!;
+          const pinnedHead = created.lane.repositoryRefs?.[repo.id];
+          if (
+            !original ||
+            original.physicalID !== actual.physicalId ||
+            original.repositoryPhysicalID !== actual.repositoryPhysicalId ||
+            (pinnedHead !== undefined && actual.commit !== pinnedHead)
+          )
+            return yield* error(input.operationKey, "stale_context");
+        }
+        const observedPhysical = encodeCheckouts(
+          [...physical].sort((a, b) => a.physicalId.localeCompare(b.physicalId)),
+        );
+        // A changed head, physical checkout, branch or remote needs review; only
+        // native display hydration may settle during this first intake window.
+        if (initialPhysical !== null && observedPhysical !== initialPhysical)
+          return yield* error(input.operationKey, "stale_context");
+        initialPhysical ??= observedPhysical;
+        const hydrated = workspace.repos.every(
+          (repo, index) =>
+            physical[index]!.branch !== null && repo.branch === physical[index]!.branch,
+        );
+        if (hydrated && readyRevision === target.resource.revision) return target;
+        readyRevision = hydrated ? target.resource.revision : null;
+        if (attempt < 7) yield* Effect.sleep("150 millis");
+      }
+      return yield* error(input.operationKey, "stale_context");
+    });
   const create = (actorID: string, input: Rpc.ManagedCreateInput) =>
     creationLocks.withLock(
       input.operationKey,
@@ -723,6 +833,7 @@ const make = Effect.gen(function* () {
         let saved = yield* readCreation(actorID, key);
         if (saved && saved.input !== encoded) return yield* error(key, "key_conflict");
         if (saved?.record.state === "accepted") return saved.record;
+        yield* validateAccess(input);
         if (!saved) {
           const source = yield* backend.context(input.workspaceID);
           const workspace = source.resource.workspace;
@@ -853,12 +964,7 @@ const make = Effect.gen(function* () {
           return record;
         let launchInput = saved.launchInput;
         if (!launchInput) {
-          const target = yield* backend.context(record.laneID!);
-          if (
-            target.hello.installationID !== input.installationID ||
-            target.resource.workspace?.lane?.sourceStackID !== input.workspaceID
-          )
-            return yield* error(key, "stale_context");
+          const target = yield* createdLaunchContext(input, record);
           launchInput = {
             operationKey: record.launchOperationKey,
             installationID: input.installationID,
@@ -870,6 +976,7 @@ const make = Effect.gen(function* () {
             objective: input.objective,
             modelSelection: input.modelSelection,
             runtimeMode: input.runtimeMode,
+            ...(input.access === undefined ? {} : { access: input.access }),
             ...(input.reviewerContext ? { reviewerContext: input.reviewerContext } : {}),
           };
           const json = yield* encodeInput(launchInput);

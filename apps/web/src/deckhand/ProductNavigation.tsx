@@ -10,26 +10,42 @@ import {
   SettingsIcon,
 } from "lucide-react";
 import { readPullRequestListPreferences } from "../components/pullRequest/pullRequestListPreferences";
-import { DeckhandMark } from "./DeckhandMark";
+import { CinderdeckMark } from "./CinderdeckMark";
+import { NativeToolsMenu } from "./NativeToolsSettings";
 import styles from "./navigation.module.css";
+import type { WorkspaceSearch } from "./workspaceNavigation";
 export function ProductNavigation({
   current,
   children,
   connection,
+  workspaceSearch,
 }: {
-  current: "workspaces" | "inbox" | "recordings" | "services" | "conversations" | "pull-requests";
+  current:
+    | "workspaces"
+    | "inbox"
+    | "recordings"
+    | "services"
+    | "conversations"
+    | "pull-requests"
+    | "settings";
   children?: ReactNode;
   connection?: { label: string; connected: boolean };
+  workspaceSearch?: WorkspaceSearch;
 }) {
   return (
-    <aside className={styles.rail} aria-label="Deckhand navigation">
-      <Link className={styles.brand} to="/workspaces">
-        <DeckhandMark aria-hidden="true" />
-        <strong>Deckhand</strong>
+    <aside className={styles.rail} aria-label="Cinderdeck navigation">
+      <Link
+        className={styles.brand}
+        to="/workspaces"
+        search={{ ...workspaceSearch, tab: "overview" }}
+      >
+        <CinderdeckMark aria-hidden="true" />
+        <strong>Cinderdeck</strong>
       </Link>
       <nav className={styles.links}>
         <Link
           to="/workspaces"
+          search={{ ...workspaceSearch, tab: "overview" }}
           className={current === "workspaces" ? styles.current : ""}
           aria-current={current === "workspaces" ? "page" : undefined}
         >
@@ -45,12 +61,13 @@ export function ProductNavigation({
           Inbox
         </Link>
         <Link
-          to="/"
+          to="/workspaces"
+          search={{ ...workspaceSearch, tab: "agents" }}
           className={current === "conversations" ? styles.current : ""}
           aria-current={current === "conversations" ? "page" : undefined}
         >
           <MessagesSquareIcon size={18} />
-          Conversations
+          Agents
         </Link>
         <Link
           to="/pull-requests"
@@ -80,13 +97,14 @@ export function ProductNavigation({
       </nav>
       {children}
       <div className={styles.bottom}>
+        <NativeToolsMenu className={styles.tools} />
         {connection ? (
           <p data-connected={connection.connected}>
             <i />
             {connection.label}
           </p>
         ) : null}
-        <Link to="/settings">
+        <Link to="/settings" aria-current={current === "settings" ? "page" : undefined}>
           <SettingsIcon size={17} />
           Settings
         </Link>

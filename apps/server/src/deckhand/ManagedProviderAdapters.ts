@@ -4,6 +4,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as ProviderAdapter from "../orchestration-v2/ProviderAdapter.ts";
+import { forceCodexReadOnlyPolicy } from "../orchestration-v2/CodexReadOnlyPolicy.ts";
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import { makeKeyedSerialExecutor } from "../orchestration-v2/KeyedSerialExecutor.ts";
 import * as ManagedCheckoutGuard from "./ManagedCheckoutGuard.ts";
@@ -32,6 +33,19 @@ export const layer = Layer.effect(
                 openSession: (input) =>
                   Effect.gen(function* () {
                     const context = yield* guard.resolve(input.threadId, input.runtimePolicy.cwd);
+                    if (context?.access === "read_only" && adapter.driver !== "codex")
+                      return yield* new ManagedCheckoutGuard.ManagedCheckoutError({
+                        threadId: input.threadId,
+                        reason: "unsupported_access",
+                      });
+                    const sessionReadOnly = context?.access === "read_only";
+                    const policy = (
+                      value: ProviderAdapter.ProviderAdapterV2RuntimePolicy,
+                      current: ManagedCheckoutGuard.ManagedContext | null,
+                    ) =>
+                      current?.access === "read_only"
+                        ? forceCodexReadOnlyPolicy({ ...value, cwd: current.cwd })
+                        : { ...value, cwd: current?.cwd ?? value.cwd };
                     const processScope = yield* Scope.make();
                     const ownership = new Map<
                       typeof input.threadId,
@@ -47,6 +61,7 @@ export const layer = Layer.effect(
                         ownerId: typeof input.threadId;
                         effectsStarted: boolean;
                         confirmedStopped: boolean;
+                        writeAccess: boolean;
                       }
                     >();
                     const admission = yield* makeKeyedSerialExecutor<typeof input.threadId>();
@@ -60,7 +75,7 @@ export const layer = Layer.effect(
                         for (const [scope, owner] of ownershipScopes) {
                           const ownerId = owner.ownerId;
                           owner.confirmedStopped = Exit.isSuccess(closed);
-                          if (Exit.isFailure(closed))
+                          if (Exit.isFailure(closed) && owner.writeAccess)
                             yield* reservations.uncertain(ownerId).pipe(Effect.orDie);
                           yield* Scope.close(scope, exit);
                         }
@@ -78,11 +93,20 @@ export const layer = Layer.effect(
                                 reason: "unavailable",
                               });
                             const current = yield* guard.resolve(threadId, cwd);
+                            if (
+                              (current?.access === "read_only" && adapter.driver !== "codex") ||
+                              (sessionReadOnly && current?.access !== "read_only")
+                            )
+                              return yield* new ManagedCheckoutGuard.ManagedCheckoutError({
+                                threadId,
+                                reason: "unsupported_access",
+                              });
                             const existing = ownership.get(threadId);
                             if (existing !== undefined) {
                               if (
                                 current === null ||
                                 current.physicalId !== existing.context.physicalId ||
+                                current.access !== existing.context.access ||
                                 current.writerScope.length !==
                                   existing.context.writerScope.length ||
                                 current.writerScope.some(
@@ -109,15 +133,17 @@ export const layer = Layer.effect(
                               ownerId: threadId,
                               effectsStarted: false,
                               confirmedStopped: false,
+                              writeAccess: current.access !== "read_only",
                             };
                             ownershipScopes.set(scope, owner);
                             const cleanup = Scope.close(scope, Exit.void).pipe(
                               Effect.tap(() => Effect.sync(() => ownershipScopes.delete(scope))),
                             );
                             return yield* Effect.gen(function* () {
-                              yield* reservations
-                                .acquire({ ownerId: threadId, physicalIds: current.writerScope })
-                                .pipe(Effect.provideService(Scope.Scope, scope));
+                              if (current.access !== "read_only")
+                                yield* reservations
+                                  .acquire({ ownerId: threadId, physicalIds: current.writerScope })
+                                  .pipe(Effect.provideService(Scope.Scope, scope));
                               if (closing)
                                 return yield* new ManagedCheckoutGuard.ManagedCheckoutError({
                                   threadId,
@@ -127,6 +153,7 @@ export const layer = Layer.effect(
                               if (
                                 admitted === null ||
                                 admitted.physicalId !== current.physicalId ||
+                                admitted.access !== current.access ||
                                 admitted.writerScope.length !== current.writerScope.length ||
                                 admitted.writerScope.some((id) => !current.writerScope.includes(id))
                               )
@@ -137,15 +164,21 @@ export const layer = Layer.effect(
                               // Keep acquisition and finalizer registration atomic with cancellation.
                               yield* Effect.uninterruptible(
                                 Effect.gen(function* () {
-                                  const lease = yield* native
-                                    .acquire(threadId, admitted)
-                                    .pipe(
-                                      Effect.tapError((error) =>
-                                        error.reason === "uncertain" || error.reason === "storage"
-                                          ? reservations.uncertain(threadId).pipe(Effect.orDie)
-                                          : Effect.void,
-                                      ),
-                                    );
+                                  const lease =
+                                    admitted.access === "read_only"
+                                      ? null
+                                      : yield* native
+                                          .acquire(threadId, admitted)
+                                          .pipe(
+                                            Effect.tapError((error) =>
+                                              error.reason === "uncertain" ||
+                                              error.reason === "storage"
+                                                ? reservations
+                                                    .uncertain(threadId)
+                                                    .pipe(Effect.orDie)
+                                                : Effect.void,
+                                            ),
+                                          );
                                   if (lease !== null)
                                     yield* Scope.addFinalizer(
                                       scope,
@@ -201,18 +234,23 @@ export const layer = Layer.effect(
                     const runtime = yield* adapter
                       .openSession({
                         ...input,
-                        runtimePolicy: {
-                          ...input.runtimePolicy,
-                          cwd: admitted?.cwd ?? input.runtimePolicy.cwd,
-                        },
+                        runtimePolicy: policy(input.runtimePolicy, admitted),
                       })
                       .pipe(Effect.provideService(Scope.Scope, processScope));
                     return {
                       ...runtime,
                       ensureThread: (request) =>
                         check(request.threadId, request.runtimePolicy.cwd).pipe(
-                          Effect.andThen(startEffects(request.threadId)),
-                          Effect.andThen(runtime.ensureThread(request)),
+                          Effect.flatMap((current) =>
+                            startEffects(request.threadId).pipe(
+                              Effect.andThen(
+                                runtime.ensureThread({
+                                  ...request,
+                                  runtimePolicy: policy(request.runtimePolicy, current),
+                                }),
+                              ),
+                            ),
+                          ),
                         ),
                       resumeThread: (request) => {
                         const threadId = request.threadId ?? request.providerThread.appThreadId;
@@ -229,8 +267,19 @@ export const layer = Layer.effect(
                             ownership.get(threadId)?.context.cwd ??
                             input.runtimePolicy.cwd,
                         ).pipe(
-                          Effect.andThen(startEffects(threadId)),
-                          Effect.andThen(runtime.resumeThread(request)),
+                          Effect.flatMap((current) =>
+                            startEffects(threadId).pipe(
+                              Effect.andThen(
+                                runtime.resumeThread({
+                                  ...request,
+                                  runtimePolicy: policy(
+                                    request.runtimePolicy ?? input.runtimePolicy,
+                                    current,
+                                  ),
+                                }),
+                              ),
+                            ),
+                          ),
                         );
                       },
                       forkThread: (request) =>
@@ -238,8 +287,19 @@ export const layer = Layer.effect(
                           request.targetThreadId,
                           request.runtimePolicy?.cwd ?? input.runtimePolicy.cwd,
                         ).pipe(
-                          Effect.andThen(startEffects(request.targetThreadId)),
-                          Effect.andThen(runtime.forkThread(request)),
+                          Effect.flatMap((current) =>
+                            startEffects(request.targetThreadId).pipe(
+                              Effect.andThen(
+                                runtime.forkThread({
+                                  ...request,
+                                  runtimePolicy: policy(
+                                    request.runtimePolicy ?? input.runtimePolicy,
+                                    current,
+                                  ),
+                                }),
+                              ),
+                            ),
+                          ),
                         ),
                       steerTurn: (request) =>
                         check(
@@ -248,8 +308,16 @@ export const layer = Layer.effect(
                         ).pipe(Effect.andThen(runtime.steerTurn(request))),
                       startTurn: (request) =>
                         check(request.threadId, request.runtimePolicy.cwd).pipe(
-                          Effect.andThen(startEffects(request.threadId)),
-                          Effect.andThen(runtime.startTurn(request)),
+                          Effect.flatMap((current) =>
+                            startEffects(request.threadId).pipe(
+                              Effect.andThen(
+                                runtime.startTurn({
+                                  ...request,
+                                  runtimePolicy: policy(request.runtimePolicy, current),
+                                }),
+                              ),
+                            ),
+                          ),
                         ),
                     } satisfies ProviderAdapter.ProviderAdapterV2SessionRuntime;
                   }).pipe(

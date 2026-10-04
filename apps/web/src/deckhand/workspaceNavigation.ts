@@ -4,7 +4,7 @@ export type WorkspaceSearch = {
   workspace?: string;
   context?: string;
   environment?: string;
-  tab?: "agents" | "overview";
+  tab?: "agents" | "overview" | "lane-map";
   expectedGeneration?: number;
   expectedInstallationID?: string;
 };
@@ -32,7 +32,7 @@ export function connectedWorkspaceSearch(
 export function validateWorkspaceSearch(value: Record<string, unknown>): WorkspaceSearch {
   const search: WorkspaceSearch = {};
   if (value.tab !== undefined) {
-    if (value.tab !== "agents" && value.tab !== "overview")
+    if (value.tab !== "agents" && value.tab !== "overview" && value.tab !== "lane-map")
       throw new Error("This workspace link has an invalid view.");
     search.tab = value.tab;
   }

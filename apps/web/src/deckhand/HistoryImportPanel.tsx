@@ -26,8 +26,8 @@ export function HistoryImportPanel() {
     <section id="storage-history-import" className={styles.panel} aria-label="Import T3 history">
       <h2>Bring your T3 history</h2>
       <p>
-        Copy previous conversations into a separate Deckhand history archive. Your T3 database stays
-        unchanged. Credentials, pending work and provider sessions are not imported.
+        Copy previous conversations into a separate Cinderdeck history archive. Your T3 database
+        stays unchanged. Credentials, pending work and provider sessions are not imported.
       </p>
       <label className={styles.field}>
         Execution computer

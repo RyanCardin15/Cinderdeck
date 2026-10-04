@@ -482,6 +482,7 @@ export const OrchestrationV2ProductionLayerLive = Layer.mergeAll(
         IntegrationHub.layerLive,
         managedSessionsProvided,
         currentCheckoutProvided,
+        projectionStoreLayer,
       ),
     ),
   ),

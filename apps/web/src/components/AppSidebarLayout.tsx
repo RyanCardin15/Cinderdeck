@@ -56,7 +56,11 @@ import {
 } from "./ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { ProductNavigation } from "../deckhand/ProductNavigation";
+import { ConnectedWorkspaceShell } from "../deckhand/ConnectedWorkspaceShell";
+import { useLaneSessionContext } from "../deckhand/LaneSessionContext";
+import { NativeHostNavigation } from "../deckhand/NativeHostNavigation";
 import productStyles from "../deckhand/pullRequestsShell.module.css";
+import unifiedStyles from "../deckhand/unifiedLayout.module.css";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "var(--desktop-window-controls-inset, 90px)";
 
@@ -229,6 +233,11 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   const pathname = useLocation({ select: (location) => location.pathname });
   const panelAnimationsSuppressed = usePanelNavigationSuppression(pathname);
   const routePanelAnimationsActive = panelAnimationsActive && !panelAnimationsSuppressed;
+  const connectedThreadRef = useParams({
+    strict: false,
+    select: (params) => resolveThreadRouteRef(params),
+  });
+  const connectedThread = useLaneSessionContext(connectedThreadRef);
   const isOnSettings = pathname === "/settings" || pathname.startsWith("/settings/");
   const isMacosDesktop = isElectron && isMacPlatform(navigator.platform);
   const [sidebarWidth, setSidebarWidth] = useState(readInitialThreadSidebarWidth);
@@ -296,6 +305,26 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     };
   }, [navigate, pathname]);
 
+  if (connectedThreadRef && connectedThread.data) {
+    return (
+      <PanelAnimationSuppressionProvider value={panelAnimationsSuppressed}>
+        <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={sidebarProviderStyle}>
+          <NativeHostNavigation />
+          <ProjectProjectionRetention />
+          <ConnectedWorkspaceShell
+            context={connectedThread.data}
+            threadRef={connectedThreadRef}
+            stale={!connectedThread.isSuccess || connectedThread.error !== null}
+          >
+            {children}
+          </ConnectedWorkspaceShell>
+          <NavigationHistoryShortcuts />
+          <MainAppLocationTracker />
+        </SidebarProvider>
+      </PanelAnimationSuppressionProvider>
+    );
+  }
+
   if (pathname === "/pull-requests" || pathname === "/pull-requests/")
     return (
       <PanelAnimationSuppressionProvider value={panelAnimationsSuppressed}>
@@ -305,6 +334,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
           defaultOpen
           style={sidebarProviderStyle}
         >
+          <NativeHostNavigation />
           <ProjectProjectionRetention />
           <ProductNavigation current="pull-requests" />
           <div className={productStyles.content}>{children}</div>
@@ -317,12 +347,44 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   if (["/workspaces", "/inbox", "/services", "/recordings", "/linked-work"].includes(pathname))
     return (
       <>
+        <NativeHostNavigation />
         <ProjectProjectionRetention />
         {children}
         <NavigationHistoryShortcuts />
         <MainAppLocationTracker />
       </>
     );
+
+  if (isOnSettings || pathname === "/" || connectedThreadRef || pathname.startsWith("/draft/")) {
+    return (
+      <PanelAnimationSuppressionProvider value={panelAnimationsSuppressed}>
+        <SidebarProvider
+          className="grid! h-dvh! min-h-0! min-w-0 grid-cols-[220px_230px_minmax(0,1fr)] overflow-hidden max-[1000px]:grid-cols-[185px_205px_minmax(0,1fr)] max-[700px]:grid-cols-1 max-[700px]:grid-rows-[auto_auto_minmax(0,1fr)] max-[700px]:[&>aside:first-of-type]:max-h-[145px]"
+          defaultOpen
+          style={sidebarProviderStyle}
+        >
+          <NativeHostNavigation />
+          <ProjectProjectionRetention />
+          <ProductNavigation current={isOnSettings ? "settings" : "conversations"} />
+          <aside
+            className={unifiedStyles.secondary}
+            aria-label={isOnSettings ? "Settings categories" : "Other agent conversations"}
+          >
+            {isOnSettings ? (
+              <SettingsSidebarNav pathname={pathname} />
+            ) : legacySidebarEnabled ? (
+              <LegacyThreadSidebar />
+            ) : (
+              <ThreadSidebar />
+            )}
+          </aside>
+          <div className={unifiedStyles.content}>{children}</div>
+          <NavigationHistoryShortcuts />
+          <MainAppLocationTracker />
+        </SidebarProvider>
+      </PanelAnimationSuppressionProvider>
+    );
+  }
 
   return (
     <PanelAnimationSuppressionProvider value={panelAnimationsSuppressed}>
@@ -332,6 +394,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         defaultOpen
         style={sidebarProviderStyle}
       >
+        <NativeHostNavigation />
         <ProjectProjectionRetention />
         <Sidebar
           side="left"

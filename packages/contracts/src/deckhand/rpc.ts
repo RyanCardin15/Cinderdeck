@@ -168,6 +168,7 @@ export const ManagedLaunchInput = Schema.Struct({
   objective: TrimmedNonEmptyString.check(Schema.isMaxLength(16000)),
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
+  access: Schema.optionalKey(Schema.Literals(["read_only", "write"])),
   reviewerContext: Schema.optionalKey(ReviewerLaunchContext),
 });
 export type ManagedLaunchInput = typeof ManagedLaunchInput.Type;
@@ -275,9 +276,14 @@ export const ContextPullRequestsPage = Schema.Struct({
 });
 export type ContextPullRequestsPage = typeof ContextPullRequestsPage.Type;
 export const ManagedLaunchOption = Schema.Struct({
+  supportsReadOnly: Schema.optional(Schema.Boolean),
   instanceId: ProviderInstanceId,
   label: Schema.String,
   models: Schema.Array(Schema.Struct({ id: Schema.String, label: Schema.String })),
+  readiness: Schema.optional(
+    Schema.Literals(["ready", "sign_in_required", "unavailable", "unknown"]),
+  ),
+  message: Schema.optional(Schema.String),
 });
 export const ManagedLaunchReviewInput = Schema.Struct({
   operationKey: launchIdentifier,

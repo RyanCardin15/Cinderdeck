@@ -1,0 +1,395 @@
+.roster,
+.launcher,
+.launchPrompt {
+  --session-accent: var(--dh-accent, #ed7b42);
+  --session-line: color-mix(in srgb, var(--foreground) 13%, transparent);
+  color: var(--foreground);
+  min-width: 0;
+}
+.roster {
+  display: grid;
+  gap: 16px;
+}
+.rosterHeading,
+.formHeading,
+.launchPrompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.rosterHeading h3,
+.formHeading h3,
+.launchPrompt h3 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.35px;
+}
+.rosterHeading p,
+.formHeading p,
+.launchPrompt p {
+  color: var(--muted-foreground);
+  margin: 5px 0 0;
+  font-size: 12px;
+}
+.launchPrompt {
+  flex-wrap: wrap;
+  padding: 20px;
+  margin-bottom: 22px;
+  border: 1px solid var(--session-line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--foreground) 3%, var(--background));
+}
+.count {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.filters {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.filters label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.filters .search {
+  flex: 1 1 230px;
+}
+.filters input,
+.filters select,
+.form input:not([type="checkbox"]),
+.form select,
+.form textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--session-line);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+  padding: 10px 12px;
+}
+.filters input,
+.filters select {
+  min-height: 39px;
+  font-size: 12px;
+}
+.scopeNote {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.7;
+  margin: 0;
+}
+.notice {
+  margin: 0;
+  border-left: 2px solid var(--session-accent);
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--session-accent) 7%, var(--background));
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.empty {
+  padding: 26px 16px;
+  color: var(--muted-foreground);
+  text-align: center;
+  border: 1px dashed var(--session-line);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.group {
+  display: grid;
+  gap: 7px;
+}
+.group h4 {
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.6px;
+}
+.group h4 span {
+  color: var(--muted-foreground);
+  border: 1px solid var(--session-line);
+  border-radius: 4px;
+  padding: 1px 5px;
+  letter-spacing: 0;
+}
+.session {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--session-line);
+  border-radius: 8px;
+  color: inherit;
+  background: color-mix(in srgb, var(--foreground) 2%, var(--background));
+  text-decoration: none;
+}
+.session:hover {
+  border-color: color-mix(in srgb, var(--session-accent) 50%, var(--session-line));
+  background: color-mix(in srgb, var(--foreground) 5%, var(--background));
+}
+.session[aria-current="page"] {
+  border-color: var(--session-accent);
+  background: color-mix(in srgb, var(--session-accent) 7%, var(--background));
+}
+.sessionIdentity {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.sessionIdentity strong {
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.provider {
+  color: var(--session-accent);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.sessionScope,
+.sessionStatus {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.sessionStatus {
+  max-width: 230px;
+  text-align: right;
+}
+.pages {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+.quiet,
+.primary,
+.providerChoice {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.quiet {
+  border: 1px solid var(--session-line);
+  background: transparent;
+  color: var(--foreground);
+  padding: 9px 12px;
+  font-size: 12px;
+}
+.primary {
+  border: 1px solid var(--session-accent);
+  background: var(--session-accent);
+  color: #191a1c;
+  padding: 10px 15px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.quiet:hover {
+  background: color-mix(in srgb, var(--foreground) 5%, var(--background));
+}
+.primary:hover {
+  filter: brightness(1.08);
+}
+.quiet:disabled,
+.primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.launcher {
+  padding: 22px !important;
+  border: 1px solid var(--session-line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--foreground) 2%, var(--background));
+  margin-bottom: 22px;
+}
+.launcher > p {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  line-height: 1.7;
+}
+.form fieldset {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px 18px;
+  border: 0;
+  padding: 0;
+  margin: 20px 0;
+}
+.form fieldset > label,
+.form fieldset > span {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  padding-top: 10px;
+}
+.form fieldset > details,
+.form fieldset > p,
+.form fieldset > label:has(input[type="checkbox"]) {
+  grid-column: 1 / -1;
+}
+.form fieldset:disabled {
+  opacity: 0.65;
+}
+.providerChoices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+.providerChoice,
+.savedProvider {
+  display: grid;
+  gap: 6px;
+  padding: 13px 15px;
+  text-align: left;
+  min-width: 0;
+  border: 1px solid var(--session-line);
+  color: var(--foreground);
+  background: var(--background);
+}
+.providerChoice strong,
+.savedProvider strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.providerChoice span,
+.savedProvider span {
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+.providerChoice[aria-pressed="true"] {
+  border-color: var(--session-accent);
+  background: color-mix(in srgb, var(--session-accent) 8%, var(--background));
+}
+.providerChoice:hover {
+  border-color: var(--session-accent);
+}
+.roster :focus-visible,
+.launcher :focus-visible,
+.launchPrompt :focus-visible {
+  outline: 2px solid var(--session-accent);
+  outline-offset: 3px;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (max-width: 650px) {
+  .session {
+    align-items: start;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+  }
+  .sessionStatus {
+    max-width: none;
+    text-align: left;
+  }
+  .form fieldset {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+  }
+  .form fieldset > label,
+  .form fieldset > span {
+    padding-top: 7px;
+  }
+  .launcher {
+    padding: 16px !important;
+  }
+  .launchPrompt {
+    align-items: start;
+  }
+  .rosterHeading {
+    align-items: start;
+  }
+}
+
+/* The conversation shell already provides the selected checkout heading. */
+.compact {
+  gap: 9px;
+}
+.compact .rosterHeading {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.compact .rosterHeading h3 {
+  font-size: 14px;
+  letter-spacing: 0;
+}
+.compact .count {
+  font-size: 11px;
+  white-space: normal;
+}
+.filterFold > summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  padding: 3px 0;
+}
+.filterFold > summary:focus-visible {
+  outline: 2px solid var(--session-accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+.filterFold[open] > summary {
+  margin-bottom: 8px;
+}
+.compact .filters {
+  gap: 8px;
+}
+.compact .filters label {
+  flex: 1 1 110px;
+  min-width: 0;
+}
+.compact .filters input,
+.compact .filters select {
+  min-height: 32px;
+  padding: 7px 8px;
+  font-size: 11px;
+}
+.compact .scopeNote {
+  margin-top: 8px;
+}
+.compact .session {
+  display: grid;
+  justify-content: stretch;
+  gap: 5px;
+  padding: 10px 11px;
+}
+.compact .sessionIdentity {
+  gap: 3px;
+}
+.compact .sessionIdentity strong {
+  font-size: 12px;
+}
+.compact .sessionStatus {
+  max-width: none;
+  text-align: left;
+}
+.compact .notice {
+  padding: 8px 10px;
+  font-size: 11px;
+}
+.compact .pages {
+  flex-wrap: wrap;
+}
+.compact .quiet {
+  padding: 6px 8px;
+  font-size: 11px;
+}

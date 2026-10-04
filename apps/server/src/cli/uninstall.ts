@@ -21,6 +21,7 @@ import * as BootService from "../cloud/bootService.ts";
 import { pinnedRuntimeVersionsDir } from "../cloud/pinnedRuntime.ts";
 import { projectLocationFlags, resolveCliAuthConfig } from "./config.ts";
 import { bootServiceLayer } from "./service.ts";
+import { subprocessEnvironment } from "../process/SubprocessEnvironment.ts";
 import { findWindowsShim, launcherOwnsVersionsDir, resolveLauncherPath } from "./update.ts";
 
 export class CliUninstallError extends Schema.TaggedError<CliUninstallError>()(
@@ -196,7 +197,12 @@ const runUninstall = Effect.fn("cli.uninstall.run")(function* (input: {
           const child = NodeChildProcess.spawn(
             comspec,
             ["/d", "/c", `ping -n 3 127.0.0.1 >nul & rmdir /s /q "${runtimeDir}"`],
-            { detached: true, stdio: "ignore", windowsHide: true },
+            {
+              detached: true,
+              stdio: "ignore",
+              windowsHide: true,
+              env: subprocessEnvironment(environment),
+            },
           );
           child.unref();
         },

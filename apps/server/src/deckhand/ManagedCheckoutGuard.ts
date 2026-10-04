@@ -35,6 +35,7 @@ export interface ManagedContext {
   readonly cwd: string;
   readonly physicalId: string;
   readonly writerScope: ReadonlyArray<string>;
+  readonly access?: "read_only" | "write";
   readonly native?: Omit<IntegrationWriterReservationInput, "id" | "token" | "ownerID">;
 }
 const decodeSession = Schema.decodeEffect(Schema.fromJsonString(Contracts.SessionBinding));
@@ -118,9 +119,13 @@ const make = Effect.gen(function* () {
         !binding.repositoryScope?.length
       )
         return yield* fail("stale_binding");
-      // Read-only enforcement is a provider policy, never a prompt. Until that
-      // provider-specific policy is installed, these bindings fail closed.
-      if (binding.desiredAccess === "read_only" || binding.role === "observer")
+      // Admission only accepts the persisted, enforced observer contract. The
+      // provider wrapper separately checks the actual adapter before effects.
+      const readOnly = binding.desiredAccess === "read_only";
+      if (
+        (readOnly && (binding.role !== "observer" || !binding.capabilities.enforcedReadOnly)) ||
+        (binding.role === "observer" && !readOnly)
+      )
         return yield* fail("unsupported_access");
       if (!binding.repositoryScope.includes(checkout.success.physicalId))
         return yield* fail("wrong_checkout");
@@ -172,6 +177,7 @@ const make = Effect.gen(function* () {
         cwd: checkout.success.root,
         physicalId: checkout.success.physicalId,
         writerScope: binding.repositoryScope,
+        access: readOnly ? "read_only" as const : "write" as const,
         ...(nativeScope ? { native: nativeScope } : {}),
       };
     }).pipe(Effect.mapError(storage(threadId)));

@@ -26,7 +26,7 @@ const base = {
   failureMode: "return" as const,
   dependencies: [Access.DeckhandMcpAccess, Invocation.McpInvocationContext],
 };
-const read = [Tool.Readonly, true] as const;
+
 export const ContextPullRequestsParameters = Schema.Struct({
   offset: Schema.optionalKey(
     ContextPullRequestsInput.fields.offset.check(Schema.isLessThanOrEqualTo(10000)),
@@ -41,7 +41,9 @@ export const DeckhandToolkit = Toolkit.make(
       "Read saved before/after scenarios for this calling feature and exact PR reference. Immutable recording IDs and manifest hashes retain the original source evidence; comparison does not establish an exact running build.",
     parameters: Comparison.VerificationInput,
     success: Schema.Array(Comparison.VerificationScenario),
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
   Tool.make("deckhand_verification_scenario_save", {
     ...base,
     dependencies: [...base.dependencies, Verification.Verification],
@@ -123,14 +125,18 @@ export const DeckhandToolkit = Toolkit.make(
       includeArchived: X.ExternalSessionList.fields.includeArchived,
     }),
     success: Schema.Array(X.ExternalSessionView),
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
   Tool.make("deckhand_recording_windows", {
     ...base,
     dependencies: [...base.dependencies, Recordings.Recordings],
     description:
       "List available native capture windows for explicit target selection in this lane. Listing does not start capture.",
     success: Schema.Array(R.RecordingWindow),
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
   Tool.make("deckhand_recording_start", {
     ...base,
     dependencies: [...base.dependencies, Recordings.Recordings],
@@ -181,13 +187,17 @@ export const DeckhandToolkit = Toolkit.make(
       length: R.EvidenceChunkInput.fields.length,
     }),
     success: R.EvidenceChunk,
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
   Tool.make("deckhand_context", {
     ...base,
     description:
       "Read this calling agent's managed lane and current native service context. No cross-workspace selection.",
     success: ThreadContextView,
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
   Tool.make("deckhand_context_pull_requests", {
     ...base,
     dependencies: [...base.dependencies, ManagedSessions.ManagedSessions, Hub.IntegrationHub],
@@ -195,14 +205,18 @@ export const DeckhandToolkit = Toolkit.make(
       "Read one page of real PR associations from this calling agent's exact current managed workspace/lane, including historical contributors. Defaults offset 0, limit 20; offset is bounded to 10000 and limit to 50. No caller-selected workspace, project or native identity. Returns total/nextOffset; does not refresh hosting status or write to a PR.",
     parameters: ContextPullRequestsParameters,
     success: ContextPullRequestsPage,
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
   Tool.make("deckhand_services_runs", {
     ...base,
     dependencies: [...base.dependencies, Runs.Runs],
     description:
       "Read actual services, readiness, task/workflow definitions and recent runs for this agent's lane.",
     success: U.RunsOverview,
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
   Tool.make("deckhand_run_detail", {
     ...base,
     dependencies: [...base.dependencies, Runs.Runs],
@@ -214,7 +228,9 @@ export const DeckhandToolkit = Toolkit.make(
       stepLimit: Schema.optionalKey(U.RunGetInput.fields.stepLimit),
     }),
     success: U.RunDetail,
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
   Tool.make("deckhand_run_failures", {
     ...base,
     dependencies: [...base.dependencies, Runs.Runs],
@@ -222,7 +238,9 @@ export const DeckhandToolkit = Toolkit.make(
       "Read compact bounded failed/interrupted run inventory and positive matching-rerun resolutions in this calling lane. Optional exact runIDs revalidate up to 100 retained causes. Absence or truncated inventory never means resolved.",
     parameters: Schema.Struct({ runIDs: U.RunFailuresInput.fields.runIDs }),
     success: U.RunFailures,
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
   Tool.make("deckhand_verification_attempt_preview", {
     ...base,
     dependencies: [...base.dependencies, Attempts.VerificationAttempts],
@@ -233,7 +251,9 @@ export const DeckhandToolkit = Toolkit.make(
       serviceID: V.AttemptPreviewInput.fields.serviceID,
     }),
     success: V.AttemptPreview,
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
   Tool.make("deckhand_verification_attempt_start", {
     ...base,
     dependencies: [...base.dependencies, Attempts.VerificationAttempts],
@@ -251,7 +271,9 @@ export const DeckhandToolkit = Toolkit.make(
       "Recover one saved attempt belonging to this provider session and its exact current lane. Native read reconciliation never replays build/launch/check effects. Full verification remains incomplete without trusted capture target attestation.",
     parameters: V.AttemptLookup,
     success: V.VerificationAttempt,
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
   Tool.make("deckhand_verification_attempt_list", {
     ...base,
     dependencies: [...base.dependencies, Attempts.VerificationAttempts],
@@ -259,7 +281,9 @@ export const DeckhandToolkit = Toolkit.make(
       "List up to 30 compact saved attempt summaries for the requested PR and this exact calling feature/checkout. Includes actual run IDs; use get for one full proof. Saved native phase is last observed, not live process status.",
     parameters: Schema.Struct({ reference: V.AttemptPreviewInput.fields.reference }),
     success: Schema.Array(V.AttemptSummary).check(Schema.isMaxLength(30)),
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
   Tool.make("deckhand_verification_attempt_advance", {
     ...base,
     dependencies: [...base.dependencies, Attempts.VerificationAttempts],
@@ -280,14 +304,18 @@ export const DeckhandToolkit = Toolkit.make(
       stepID: U.RunLogInput.fields.stepID,
     }),
     success: U.RunLogs,
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
   Tool.make("deckhand_recordings", {
     ...base,
     dependencies: [...base.dependencies, Recordings.Recordings],
     description:
       "List real recordings in this agent's lane, including immutable capture provenance.",
     success: Schema.Array(R.Recording),
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
   Tool.make("deckhand_recording", {
     ...base,
     dependencies: [...base.dependencies, Recordings.Recordings],
@@ -295,7 +323,9 @@ export const DeckhandToolkit = Toolkit.make(
       "Read a recording, action markers and source provenance. Source identity never proves served build freshness.",
     parameters: Schema.Struct({ recordingID: R.RecordingIdentity.fields.recordingID }),
     success: R.Recording,
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
   Tool.make("deckhand_recording_logs", {
     ...base,
     dependencies: [...base.dependencies, Recordings.Recordings],
@@ -307,7 +337,9 @@ export const DeckhandToolkit = Toolkit.make(
       source: R.RecordingLogInput.fields.source,
     }),
     success: R.RecordingLogs,
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
   Tool.make("deckhand_evidence_prepare", {
     ...base,
     dependencies: [...base.dependencies, Recordings.Recordings],
@@ -331,7 +363,9 @@ export const DeckhandToolkit = Toolkit.make(
       preparationID: R.EvidenceIdentity.fields.preparationID,
     }),
     success: R.EvidencePreparation,
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
   Tool.make("deckhand_operation_submit", {
     ...base,
     dependencies: [...base.dependencies, Hub.IntegrationHub],
@@ -362,5 +396,7 @@ export const DeckhandToolkit = Toolkit.make(
       "Reconcile a durable operation belonging to this provider session without resubmitting it.",
     parameters: Schema.Struct({ operationKey: I.IntegrationOperationInput.fields.operationKey }),
     success: I.IntegrationOperationReceipt,
-  }).annotate(...read),
+  })
+    .annotate(Tool.Readonly, true)
+    .annotate(Tool.Destructive, false),
 );

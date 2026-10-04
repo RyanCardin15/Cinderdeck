@@ -1,4 +1,5 @@
 import { useAuth } from "@clerk/react";
+import { Link } from "@tanstack/react-router";
 import { useAtomValue } from "@effect/atom-react";
 import type {
   AgentSessionProjectCandidate,
@@ -73,7 +74,7 @@ import { buildProviderInstanceUpdatePatch } from "../settings/SettingsPanels.log
 import { TerminalViewport } from "../ThreadTerminalDrawer";
 import { CloudEnvironmentConnectRows } from "../cloud/CloudEnvironmentConnectList";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
-import { DeckhandMark } from "../../deckhand/DeckhandMark";
+import { CinderdeckMark } from "../../deckhand/CinderdeckMark";
 import { CinderdeckConnectionPanel } from "../../deckhand/CinderdeckConnectionPanel";
 import type { ConnectedWorkspaceSelection } from "../../deckhand/connectionPresentation";
 import { Alert, AlertDescription } from "../ui/alert";
@@ -104,6 +105,7 @@ const NO_ENVIRONMENTS: readonly EnvironmentId[] = [];
 
 const AGENT_ONBOARDING_THREAD_ID = ThreadId.make("onboarding-agent-setup");
 const ONBOARDING_STAGES = ["Connect", "Agents", "Projects"] as const;
+const NATIVE_ONBOARDING_STAGES = ["Workspaces", "Agents"] as const;
 const SCAN_LIMIT_MESSAGE = "Scan limit reached. Some projects or conversations may be missing.";
 
 export function WelcomeWizard({
@@ -120,7 +122,11 @@ export function WelcomeWizard({
   ) => void | Promise<void>;
 }) {
   const completeOnboarding = useCompleteOnboarding();
-  const [step, setStep] = useState<WizardStep>(resumeEnvironmentId ? "agents" : "connection");
+  const nativeHost = window.desktopBridge?.isNativeHost?.() === true;
+  const [step, setStep] = useState<WizardStep>(
+    nativeHost ? "cinderdeck" : resumeEnvironmentId ? "agents" : "connection",
+  );
+  const [nativeWorkspace, setNativeWorkspace] = useState<ConnectedWorkspaceSelection | undefined>();
   const { environments } = useEnvironments();
   const [selection, setSelection] = useState<ReadonlySet<EnvironmentId> | null>(null);
   const autoSelectedComputers = useRef(new Set<EnvironmentId>());
@@ -229,23 +235,23 @@ export function WelcomeWizard({
         initialFocus={() => document.getElementById("onboarding-pairing-url") ?? true}
       >
         <WizardHeader
-          title="Set up Deckhand"
+          title="Set up Cinderdeck"
           identity={
-            <div className="flex items-baseline gap-1.5" role="img" aria-label="Deckhand">
-              <DeckhandMark className="h-4 w-auto shrink-0" aria-hidden />
+            <div className="flex items-baseline gap-1.5" role="img" aria-label="Cinderdeck">
+              <CinderdeckMark className="h-4 w-auto shrink-0" aria-hidden />
               <span className="text-2xl font-medium tracking-tight text-muted-foreground">
-                Deckhand
+                Cinderdeck
               </span>
             </div>
           }
         >
           <WizardSteps
-            steps={ONBOARDING_STAGES}
+            steps={nativeHost ? NATIVE_ONBOARDING_STAGES : ONBOARDING_STAGES}
             currentStep={stageIndex}
             isStepDisabled={(index) => isImporting || index >= stageIndex}
             onStepChange={(index) => {
               if (isImporting || index > stageIndex) return;
-              setStep(index === 0 ? "connection" : "agents");
+              setStep(index === 0 ? (nativeHost ? "cinderdeck" : "connection") : "agents");
             }}
           />
         </WizardHeader>
@@ -281,18 +287,44 @@ export function WelcomeWizard({
             <div className="space-y-5">
               <CinderdeckConnectionPanel
                 initialEnvironmentId={primaryEnvironment?.environmentId}
-                onChoose={(workspace) => finish(undefined, undefined, 0, workspace)}
+                nativeHost={nativeHost}
+                onChoose={(workspace) => {
+                  if (!nativeHost) return finish(undefined, undefined, 0, workspace);
+                  setNativeWorkspace(workspace);
+                  startSetup([workspace.environmentId]);
+                }}
               />
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Provider accounts use Deckhand’s existing setup in Settings → Providers. Choosing
-                this workspace keeps its operational runtime in Cinderdeck.
+                Set up your provider accounts next. You can change them later in Settings →
+                Providers.
               </p>
-              <Button variant="ghost" onClick={() => setStep("connection")}>
-                Back to standalone setup
-              </Button>
+              {nativeHost ? (
+                <Button
+                  variant="ghost"
+                  disabled={primaryEnvironment?.connection.phase !== "connected"}
+                  onClick={() => {
+                    if (primaryEnvironment) {
+                      setNativeWorkspace(undefined);
+                      startSetup([primaryEnvironment.environmentId]);
+                    }
+                  }}
+                >
+                  Set up agents without selecting a workspace
+                </Button>
+              ) : (
+                <Button variant="ghost" onClick={() => setStep("connection")}>
+                  Back to code project setup
+                </Button>
+              )}
             </div>
           ) : step === "agents" ? (
-            <AgentsStep environmentIds={setupIds} onContinue={() => setStep("import")} />
+            <AgentsStep
+              environmentIds={setupIds}
+              onContinue={() => {
+                if (nativeHost) void finish(undefined, undefined, 0, nativeWorkspace);
+                else setStep("import");
+              }}
+            />
           ) : (
             <ImportStep
               scans={scans}
@@ -361,18 +393,18 @@ function ConnectionStep({
         type="button"
         className="mt-4 flex w-full items-center gap-3 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         onClick={onConnectCinderdeck}
-        aria-label="Connect to Cinderdeck"
+        aria-label="Use native workspaces"
       >
-        <DeckhandMark className="h-5 w-auto shrink-0 text-muted-foreground" aria-hidden />
+        <CinderdeckMark className="h-5 w-auto shrink-0 text-muted-foreground" aria-hidden />
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold">Connect to Cinderdeck</span>
+          <span className="block text-sm font-semibold">Use native workspaces</span>
           <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
-            Bring your existing workspaces, lanes, services, and recordings into Deckhand.
+            Manage workspaces, lanes, services and recordings on your selected computer.
           </span>
         </span>
         <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       </button>
-      <h2 className="mt-6 text-sm font-semibold text-foreground">Use Deckhand on its own</h2>
+      <h2 className="mt-6 text-sm font-semibold text-foreground">Set up code projects</h2>
       <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
         Choose one or more computers. We’ll set up agents and projects on each.
       </p>
@@ -542,7 +574,7 @@ function ConnectAccountOption({
             </p>
             <CommandBlock command="npx t3 connect" className="mt-3" />
             <p className="mt-3 text-xs text-muted-foreground">
-              Keep Deckhand running. Select the computers you want to set up above.
+              Keep Cinderdeck running. Select the computers you want to set up above.
             </p>
           </div>
         </CollapsiblePanel>
@@ -656,7 +688,7 @@ function PairingForm({
             </p>
             <CommandBlock command="npx t3 pair" className="mt-2" />
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Start Deckhand first, or run <code className="font-mono">npx t3 serve</code>. Add{" "}
+              Start Cinderdeck first, or run <code className="font-mono">npx t3 serve</code>. Add{" "}
               <code className="font-mono">--tailscale</code> to use your tailnet.
             </p>
           </CollapsiblePanel>
@@ -746,6 +778,11 @@ function ConnectedAgentsStep({
   }, [environmentId, refreshProviders]);
 
   const byDriver = useMemo(() => selectOnboardingProvidersByDriver(providers), [providers]);
+  const additionalProviders =
+    providers?.filter(
+      (provider) =>
+        (provider.driver === "cursor" && provider.enabled) || provider.driver === "acpRegistry",
+    ) ?? [];
 
   const primaryAgents = PRIMARY_AGENT_DRIVERS.flatMap((driver) => {
     const instances =
@@ -835,6 +872,38 @@ function ConnectedAgentsStep({
             />
           ),
         )}
+        {additionalProviders.map((provider) => {
+          const summary = getProviderSummary(provider);
+          const state = getOnboardingProviderState(provider);
+          const displayName =
+            provider.displayName ?? getDriverOption(provider.driver)?.label ?? provider.instanceId;
+          return (
+            <div
+              key={provider.instanceId}
+              className="flex items-center gap-3 rounded-lg border border-border bg-background px-4 py-4"
+            >
+              <ProviderInstanceIcon
+                driverKind={provider.driver}
+                displayName={displayName}
+                iconClassName="size-5"
+              />
+              <div className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-foreground">{displayName}</span>
+                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                  {state === "ready" ? "Ready to code." : summary.headline}
+                  {state !== "ready" && summary.detail ? ` · ${summary.detail}` : ""}
+                </p>
+              </div>
+              <Link
+                to="/settings/providers"
+                search={{ environmentId, instanceId: provider.instanceId }}
+                className="text-xs text-muted-foreground underline underline-offset-4"
+              >
+                Configure
+              </Link>
+            </div>
+          );
+        })}
       </div>
       {providers?.some(
         (provider) =>

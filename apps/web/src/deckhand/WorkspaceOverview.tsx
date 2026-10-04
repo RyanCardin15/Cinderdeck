@@ -45,6 +45,8 @@ import { environmentServerConfigsAtom } from "../state/server";
 import { deriveProviderInstanceEntries } from "../providerInstances";
 import { SessionLauncher } from "./SessionLauncher";
 import { ProductNavigation } from "./ProductNavigation";
+import { WorkspaceLaneMap } from "./WorkspaceLaneMap";
+import { NativeWorkspaceTools } from "./NativeWorkspaceTools";
 import {
   workspaceView,
   managedContextsView,
@@ -121,6 +123,7 @@ function ConnectedWorkspace({
   const search = useSearch({ from: "/_chat/workspaces" });
   const navigate = useNavigate();
   const agentMode = search.tab === "agents";
+  const mapMode = search.tab === "lane-map";
   const selectedBaseRef = useRef<string | null>(search.workspace ?? null);
   const mountedRef = useRef(true);
   const selectionVersionRef = useRef(
@@ -560,9 +563,15 @@ function ConnectedWorkspace({
     }
   };
   return (
-    <div className={styles["dh-shell"]}>
+    <div className={`${styles["dh-shell"]} ${agentMode ? styles["dh-shell-agents"] : ""}`}>
       <ProductNavigation
-        current="workspaces"
+        current={agentMode ? "conversations" : "workspaces"}
+        workspaceSearch={{
+          ...search,
+          environment: environmentId,
+          ...(activeBase ? { workspace: activeBase.workspaceID } : {}),
+          ...(selected ? { context: selected.workspaceID } : {}),
+        }}
         connection={{
           label: connectionLabel,
           connected: nativeCurrent,
@@ -682,6 +691,7 @@ function ConnectedWorkspace({
               <PlusIcon size={17} />
               New feature
             </button>
+            <NativeWorkspaceTools enabled={nativeCurrent} />
             <button
               className={styles["dh-button"]}
               disabled={
@@ -703,8 +713,8 @@ function ConnectedWorkspace({
           <Link
             to="/workspaces"
             search={{ ...tabSearch, tab: "overview" }}
-            aria-current={!agentMode ? "page" : undefined}
-            className={!agentMode ? styles["dh-tab-current"] : undefined}
+            aria-current={!agentMode && !mapMode ? "page" : undefined}
+            className={!agentMode && !mapMode ? styles["dh-tab-current"] : undefined}
           >
             Overview
           </Link>
@@ -715,6 +725,14 @@ function ConnectedWorkspace({
             className={agentMode ? styles["dh-tab-current"] : undefined}
           >
             Agents
+          </Link>
+          <Link
+            to="/workspaces"
+            search={{ ...tabSearch, tab: "lane-map" }}
+            aria-current={mapMode ? "page" : undefined}
+            className={mapMode ? styles["dh-tab-current"] : undefined}
+          >
+            Lane map
           </Link>
           <Link
             to="/pull-requests"
@@ -881,7 +899,11 @@ function ConnectedWorkspace({
             creation={{
               visible: featureCreating,
               onClose: closeFeature,
-              onLane: setSelectedID,
+              onResume: () => setFeatureCreating(true),
+              onLane: (id) => {
+                setSelectedID(id);
+                closeFeature();
+              },
               onPending: setFeaturePending,
             }}
           />
@@ -989,47 +1011,46 @@ function ConnectedWorkspace({
             Agent relationships could not be refreshed. Saved details may be out of date.
           </p>
         ) : null}
-        {agentMode ? (
+        {mapMode && view?.hello ? (
+          <WorkspaceLaneMap
+            environmentId={environmentId}
+            installationID={view.hello.installationID}
+            resources={contexts}
+            selectedContextID={selected?.workspaceID ?? ""}
+            onSelectContext={setSelectedID}
+            current={nativeCurrent}
+            providers={providers}
+            {...(!agentsUnavailable && summaries ? { summaries } : {})}
+            cameraKey={activeBase?.workspaceID ?? "catalog"}
+          />
+        ) : agentMode ? (
           <section className={styles["dh-agent-panel"]} aria-label="Agents in selected context">
             <header>
               <div>
                 <span className={styles["dh-eyebrow"]}>Agents in</span>
                 <h2>{selected ? selectedName : "Choose a context"}</h2>
                 <p>
-                  Each agent has its own conversation. Agents in this context work in its repository
-                  checkouts.
+                  Each session keeps its provider, task and checkout. Helper tasks stay inside their
+                  parent conversation.
                 </p>
               </div>
-              {selected?.workspace?.repos[0]?.branch ? (
-                <span className={styles["dh-branch"]}>
-                  <GitBranchIcon size={15} />
-                  {selected.workspace.repos[0].branch}
-                </span>
-              ) : null}
             </header>
             {selected && view?.hello ? (
               <>
-                <details
-                  className={styles["dh-add-agent"]}
+                <SessionLauncher
                   key={`add:${environmentId}:${view.hello.installationID}:${selected.workspaceID}:${selected.generation}`}
-                >
-                  <summary>
-                    <PlusIcon size={16} /> Add an agent to{" "}
-                    {selected.workspace?.lane?.name ?? "Primary checkout"}
-                  </summary>
-                  <SessionLauncher
-                    environmentId={environmentId}
-                    installationID={view.hello.installationID}
-                    resource={selected}
-                    enabled={enabled && actionable(selected)}
-                  />
-                </details>
+                  environmentId={environmentId}
+                  installationID={view.hello.installationID}
+                  resource={selected}
+                  enabled={enabled && actionable(selected)}
+                />
                 <SessionList
                   environmentId={environmentId}
                   installationID={view.hello.installationID}
                   workspaceID={selected.workspaceID}
                   generation={selected.generation}
                   providers={providers}
+                  contextLabel={selected.workspace?.lane?.name ?? "Primary checkout"}
                 />
               </>
             ) : (
@@ -1143,149 +1164,158 @@ function ConnectedWorkspace({
           </footer>
         ) : null}
       </main>
-      <aside className={styles["dh-inspector"]} aria-label="Selected context">
-        <span className={styles["dh-eyebrow"]}>Selected context</span>
-        <h2>
-          {selected?.workspace?.lane?.name ?? (selected ? "Primary checkout" : "Choose a context")}
-        </h2>
-        {selected ? (
-          <>
-            <span className={styles["dh-branch"]}>
-              <GitBranchIcon size={16} />
-              {selected.workspace?.repos[0]?.branch || "Branch unavailable"}
-            </span>
-            {summaryFor(selected)?.sessions[0] ? (
-              <Link
-                className={styles["dh-button"] + " " + styles["dh-accent"]}
-                to="/$environmentId/$threadId"
-                params={buildThreadRouteParams({
-                  environmentId,
-                  threadId: summaryFor(selected)!.sessions[0]!.binding.threadId,
-                })}
-              >
-                Open latest conversation <ArrowRightIcon size={15} />
-              </Link>
-            ) : null}
-            <div className={styles["dh-inspector-actions"]}>
-              <button
-                className={styles["dh-button"] + " " + styles["dh-accent"]}
-                disabled={
-                  !enabled ||
-                  !actionable(selected) ||
-                  !selected.workspace?.services.length ||
-                  !view?.hello?.capabilities.includes("operations.services")
-                }
-                onClick={() => {
-                  void run(selected, "services.start");
-                }}
-              >
-                Start services
-              </button>
-              <button
-                className={styles["dh-button"]}
-                disabled={
-                  !enabled ||
-                  !actionable(selected) ||
-                  !selected.workspace?.services.length ||
-                  !view?.hello?.capabilities.includes("operations.services")
-                }
-                onClick={() => {
-                  void run(selected, "services.stop");
-                }}
-              >
-                Stop services
-              </button>
-            </div>
-            {view?.hello && selected.workspace?.lane ? (
-              <LaneLifecycleControls
-                key={`lifecycle:${environmentId}:${view.hello.installationID}:${selected.workspaceID}:${selected.generation}`}
-                environmentId={environmentId}
-                installationID={view.hello.installationID}
-                resource={selected}
-                capabilities={view.hello.capabilities}
-                enabled={nativeActionsEnabled && actionable(selected)}
-                onPending={setLifecyclePending}
-              />
-            ) : null}
-            {!agentMode && view?.hello ? (
-              <SessionList
-                environmentId={environmentId}
-                installationID={view.hello.installationID}
+      {!agentMode ? (
+        <aside className={styles["dh-inspector"]} aria-label="Selected context">
+          <span className={styles["dh-eyebrow"]}>Selected context</span>
+          <h2>
+            {selected?.workspace?.lane?.name ??
+              (selected ? "Primary checkout" : "Choose a context")}
+          </h2>
+          {selected ? (
+            <>
+              <NativeWorkspaceTools
+                enabled={nativeCurrent && !savedContextChanged}
                 workspaceID={selected.workspaceID}
-                generation={selected.generation}
-                providers={providers}
+                sourceWorkspaceID={activeBase?.workspaceID}
+                showSetup={false}
               />
-            ) : null}
-            {!agentMode && view?.hello ? (
-              <details className={styles["dh-add-agent"]}>
-                <summary>Add an agent</summary>
-                <SessionLauncher
-                  key={`${environmentId}:${view.hello.installationID}:${selected.workspaceID}:${selected.generation}`}
+              <span className={styles["dh-branch"]}>
+                <GitBranchIcon size={16} />
+                {selected.workspace?.repos[0]?.branch || "Branch unavailable"}
+              </span>
+              {summaryFor(selected)?.sessions[0] ? (
+                <Link
+                  className={styles["dh-button"] + " " + styles["dh-accent"]}
+                  to="/$environmentId/$threadId"
+                  params={buildThreadRouteParams({
+                    environmentId,
+                    threadId: summaryFor(selected)!.sessions[0]!.binding.threadId,
+                  })}
+                >
+                  Open latest conversation <ArrowRightIcon size={15} />
+                </Link>
+              ) : null}
+              <div className={styles["dh-inspector-actions"]}>
+                <button
+                  className={styles["dh-button"] + " " + styles["dh-accent"]}
+                  disabled={
+                    !enabled ||
+                    !actionable(selected) ||
+                    !selected.workspace?.services.length ||
+                    !view?.hello?.capabilities.includes("operations.services")
+                  }
+                  onClick={() => {
+                    void run(selected, "services.start");
+                  }}
+                >
+                  Start services
+                </button>
+                <button
+                  className={styles["dh-button"]}
+                  disabled={
+                    !enabled ||
+                    !actionable(selected) ||
+                    !selected.workspace?.services.length ||
+                    !view?.hello?.capabilities.includes("operations.services")
+                  }
+                  onClick={() => {
+                    void run(selected, "services.stop");
+                  }}
+                >
+                  Stop services
+                </button>
+              </div>
+              {view?.hello && selected.workspace?.lane ? (
+                <LaneLifecycleControls
+                  key={`lifecycle:${environmentId}:${view.hello.installationID}:${selected.workspaceID}:${selected.generation}`}
                   environmentId={environmentId}
                   installationID={view.hello.installationID}
                   resource={selected}
-                  enabled={enabled && actionable(selected)}
+                  capabilities={view.hello.capabilities}
+                  enabled={nativeActionsEnabled && actionable(selected)}
+                  onPending={setLifecyclePending}
                 />
-              </details>
-            ) : null}
-            <h3>Services</h3>
-            {selected.available &&
-            selected.workspace &&
-            !selected.workspace.issues.length &&
-            !selected.workspace.services.length ? (
-              <p>No services in this context.</p>
-            ) : null}
-            {selected.workspace?.services.map((service) => (
-              <div key={service.name} className={styles["dh-inspector-service"]}>
-                <strong>{service.name}</strong>
-                <span>{service.phase}</span>
-                {service.url ? <code>{service.url}</code> : null}
-              </div>
-            ))}
-            <h3>Repositories</h3>
-            {selected.workspace?.repos.map((repo) => (
-              <div className={styles["dh-inspector-repo"]} key={repo.id}>
-                <strong>{repo.id}</strong>
-                <span>{repo.dirty ? `${repo.changedFiles} changed files` : "Clean"}</span>
-                <details>
-                  <summary>Source location</summary>
-                  <code>{repo.path}</code>
+              ) : null}
+              {!agentMode && view?.hello ? (
+                <SessionList
+                  environmentId={environmentId}
+                  installationID={view.hello.installationID}
+                  workspaceID={selected.workspaceID}
+                  generation={selected.generation}
+                  providers={providers}
+                />
+              ) : null}
+              {!agentMode && view?.hello ? (
+                <details className={styles["dh-add-agent"]}>
+                  <summary>Add an agent</summary>
+                  <SessionLauncher
+                    key={`${environmentId}:${view.hello.installationID}:${selected.workspaceID}:${selected.generation}`}
+                    environmentId={environmentId}
+                    installationID={view.hello.installationID}
+                    resource={selected}
+                    enabled={enabled && actionable(selected)}
+                  />
                 </details>
-              </div>
-            ))}
-          </>
-        ) : null}
-        <h3>
-          <ActivityIcon size={17} />
-          Activity
-        </h3>
-        {!view?.activity.some((event) =>
-          contexts.some((resource) => resource.workspaceID === event.workspaceID),
-        ) ? (
-          <p className={styles["dh-activity-empty"]}>
-            New workspace activity appears here while connected.
-          </p>
-        ) : null}
-        <ol className={styles["dh-activity"]}>
-          {view?.activity
-            .filter((event) =>
-              contexts.some((resource) => resource.workspaceID === event.workspaceID),
-            )
-            .toReversed()
-            .slice(0, 12)
-            .map((event) => (
-              <li key={event.eventID}>
-                <i />
-                <strong>{event.kind.replace("workspace.", "Context ")}</strong>
-                <span>{event.occurredAt ?? event.observedAt ?? "Time unavailable"}</span>
-              </li>
-            ))}
-        </ol>
-        <div className={styles["dh-connection"]} data-connected={nativeCurrent}>
-          <i />
-          <span>{connectionLabel}</span>
-        </div>
-      </aside>
+              ) : null}
+              <h3>Services</h3>
+              {selected.available &&
+              selected.workspace &&
+              !selected.workspace.issues.length &&
+              !selected.workspace.services.length ? (
+                <p>No services in this context.</p>
+              ) : null}
+              {selected.workspace?.services.map((service) => (
+                <div key={service.name} className={styles["dh-inspector-service"]}>
+                  <strong>{service.name}</strong>
+                  <span>{service.phase}</span>
+                  {service.url ? <code>{service.url}</code> : null}
+                </div>
+              ))}
+              <h3>Repositories</h3>
+              {selected.workspace?.repos.map((repo) => (
+                <div className={styles["dh-inspector-repo"]} key={repo.id}>
+                  <strong>{repo.id}</strong>
+                  <span>{repo.dirty ? `${repo.changedFiles} changed files` : "Clean"}</span>
+                  <details>
+                    <summary>Source location</summary>
+                    <code>{repo.path}</code>
+                  </details>
+                </div>
+              ))}
+            </>
+          ) : null}
+          <h3>
+            <ActivityIcon size={17} />
+            Activity
+          </h3>
+          {!view?.activity.some((event) =>
+            contexts.some((resource) => resource.workspaceID === event.workspaceID),
+          ) ? (
+            <p className={styles["dh-activity-empty"]}>
+              New workspace activity appears here while connected.
+            </p>
+          ) : null}
+          <ol className={styles["dh-activity"]}>
+            {view?.activity
+              .filter((event) =>
+                contexts.some((resource) => resource.workspaceID === event.workspaceID),
+              )
+              .toReversed()
+              .slice(0, 12)
+              .map((event) => (
+                <li key={event.eventID}>
+                  <i />
+                  <strong>{event.kind.replace("workspace.", "Context ")}</strong>
+                  <span>{event.occurredAt ?? event.observedAt ?? "Time unavailable"}</span>
+                </li>
+              ))}
+          </ol>
+          <div className={styles["dh-connection"]} data-connected={nativeCurrent}>
+            <i />
+            <span>{connectionLabel}</span>
+          </div>
+        </aside>
+      ) : null}
     </div>
   );
 }

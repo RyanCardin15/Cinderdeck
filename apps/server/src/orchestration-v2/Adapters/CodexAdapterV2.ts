@@ -1,5 +1,6 @@
 import { revertCodexThread } from "../../provider/CodexThreadRevert.ts";
 import { historyResponseItems } from "../ContextHandoffBudget.ts";
+import { forceCodexReadOnlyPolicy, isCodexReadOnlyPolicy } from "../CodexReadOnlyPolicy.ts";
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
 import {
   mcpToolPresentation,
@@ -763,7 +764,9 @@ export function buildCodexTurnStartParams(input: {
       summary: "detailed",
       // Always explicit: omitting this on resume leaves Codex's previous
       // reviewer sticky after switching away from Auto mode.
-      approvalsReviewer: runtimeModeDefaults.approvalsReviewer,
+      approvalsReviewer: isCodexReadOnlyPolicy(input.runtimePolicy)
+        ? "user"
+        : runtimeModeDefaults.approvalsReviewer,
       ...(approvalPolicy === undefined ? {} : { approvalPolicy }),
       ...(sandboxPolicy === undefined ? {} : { sandboxPolicy }),
       ...(effort === undefined ? {} : { effort }),
@@ -778,6 +781,7 @@ function providerSession(input: {
   readonly providerInstanceId: ProviderInstanceId;
   readonly cwd: string | null;
   readonly model: string;
+  readonly capabilities: OrchestrationV2ProviderCapabilities;
   readonly now: DateTime.Utc;
 }): OrchestrationV2ProviderSession {
   return {
@@ -787,7 +791,7 @@ function providerSession(input: {
     status: "ready",
     cwd: input.cwd ?? process.cwd(),
     model: input.model,
-    capabilities: CodexProviderCapabilitiesV2,
+    capabilities: input.capabilities,
     createdAt: input.now,
     updatedAt: input.now,
     lastError: null,
@@ -1203,6 +1207,8 @@ export function codexThreadRuntimeParams(input: {
 }): {
   readonly cwd?: string;
   readonly model?: string;
+  readonly sandbox?: "read-only";
+  readonly approvalPolicy?: "never";
   readonly config: Readonly<Record<string, Schema.Json>>;
 } {
   const mcpSession =
@@ -1210,6 +1216,9 @@ export function codexThreadRuntimeParams(input: {
   return {
     ...(input.runtimePolicy?.cwd == null ? {} : { cwd: input.runtimePolicy.cwd }),
     ...(input.modelSelection === undefined ? {} : { model: input.modelSelection.model }),
+    ...(isCodexReadOnlyPolicy(input.runtimePolicy)
+      ? { sandbox: "read-only" as const, approvalPolicy: "never" as const }
+      : {}),
     config: {
       ...CODEX_THREAD_CONFIG,
       ...(mcpSession === undefined
@@ -1548,14 +1557,31 @@ export interface CodexAdapterV2Options {
 export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): ProviderAdapterV2Shape {
   const { clientFactory, fileSystem, idAllocator, serverConfig } = adapterOptions;
   const continuationRequests = adapterOptions.continuationRequests;
+  // Native managed chats need independently owned processes for policy and Stop.
+  // Provider-native helper threads remain in their parent's process.
+  const capabilities: OrchestrationV2ProviderCapabilities =
+    process.env.CINDERDECK_NATIVE_HOST === "1"
+      ? {
+          ...CodexProviderCapabilitiesV2,
+          sessions: {
+            ...CodexProviderCapabilitiesV2.sessions,
+            supportsMultipleProviderThreadsPerSession: false,
+          },
+        }
+      : CodexProviderCapabilitiesV2;
 
   return ProviderAdapterV2.of({
     instanceId: adapterOptions.instanceId,
     driver: CODEX_PROVIDER,
-    getCapabilities: () => Effect.succeed(CodexProviderCapabilitiesV2),
+    getCapabilities: () => Effect.succeed(capabilities),
     planSelectionTransition: () => Effect.succeed(turnScopedSelectionTransition()),
     openSession: (input) =>
       Effect.gen(function* () {
+        // A managed observer cannot regain write access by changing a runtime
+        // mode or omitting policy on a later resume/fork in this session.
+        const readOnlySession = isCodexReadOnlyPolicy(input.runtimePolicy);
+        const sessionPolicy = (policy: ProviderAdapterV2RuntimePolicy | undefined) =>
+          readOnlySession ? forceCodexReadOnlyPolicy(policy ?? input.runtimePolicy) : policy;
         const scope = yield* Scope.Scope;
         const resolvedRuntime =
           adapterOptions.resolveRuntime === undefined
@@ -1628,6 +1654,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
           providerInstanceId: adapterOptions.instanceId,
           cwd: input.runtimePolicy.cwd,
           model: input.modelSelection.model,
+          capabilities,
           now,
         });
         const events = yield* Queue.unbounded<ProviderAdapterV2Event>();
@@ -2661,7 +2688,13 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             }
             if (task.model === null) {
               yield* client.raw
-                .request("thread/resume", { threadId: input.nativeThreadId, excludeTurns: true })
+                .request("thread/resume", {
+                  threadId: input.nativeThreadId,
+                  excludeTurns: true,
+                  ...(isCodexReadOnlyPolicy(sessionPolicy(input.context.input.runtimePolicy))
+                    ? { sandbox: "read-only", approvalPolicy: "never" }
+                    : {}),
+                })
                 .pipe(
                   Effect.flatMap(decodeCodexChildModel),
                   Effect.timeout("5 seconds"),
@@ -5403,7 +5436,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                   codexThreadRuntimeParams({
                     threadId: threadInput.threadId,
                     modelSelection: threadInput.modelSelection,
-                    runtimePolicy: threadInput.runtimePolicy,
+                    runtimePolicy: sessionPolicy(threadInput.runtimePolicy)!,
                   }),
                 ),
               ),
@@ -5441,9 +5474,9 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                       ...(threadInput.modelSelection === undefined
                         ? {}
                         : { modelSelection: threadInput.modelSelection }),
-                      ...(threadInput.runtimePolicy === undefined
+                      ...(sessionPolicy(threadInput.runtimePolicy) === undefined
                         ? {}
-                        : { runtimePolicy: threadInput.runtimePolicy }),
+                        : { runtimePolicy: sessionPolicy(threadInput.runtimePolicy)! }),
                     }),
                   }),
                 ),
@@ -5540,7 +5573,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
               const turnStartParams = yield* buildCodexTurnStartParams({
                 nativeThreadId: threadId,
                 codexInput,
-                runtimePolicy: turnInput.runtimePolicy,
+                runtimePolicy: sessionPolicy(turnInput.runtimePolicy)!,
                 modelSelection: turnInput.modelSelection,
                 hasT3Mcp: mcpSession !== undefined,
                 browserToolsAvailable: mcpSession?.browserToolsAvailable ?? true,
@@ -6166,7 +6199,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                   ...codexThreadRuntimeParams({
                     threadId: threadInput.providerThread.appThreadId,
                     modelSelection: input.modelSelection,
-                    runtimePolicy: input.runtimePolicy,
+                    runtimePolicy: sessionPolicy(input.runtimePolicy)!,
                   }),
                 });
               }
@@ -6217,9 +6250,9 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                       ...(threadInput.modelSelection === undefined
                         ? {}
                         : { modelSelection: threadInput.modelSelection }),
-                      ...(threadInput.runtimePolicy === undefined
+                      ...(sessionPolicy(threadInput.runtimePolicy) === undefined
                         ? {}
-                        : { runtimePolicy: threadInput.runtimePolicy }),
+                        : { runtimePolicy: sessionPolicy(threadInput.runtimePolicy)! }),
                     }),
                   }),
                 ),

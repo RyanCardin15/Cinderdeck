@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import type { EnvironmentId } from "@t3tools/contracts";
 import * as Contracts from "@t3tools/contracts/deckhand/rpc";
 import * as Cause from "effect/Cause";
@@ -20,6 +20,7 @@ import {
   confirmLaunchReview,
 } from "./state";
 import styles from "./workspace.module.css";
+import sessionStyles from "./sessions.module.css";
 
 type Resource = Contracts.IntegrationView["resources"][number];
 type Choice = typeof Contracts.ManagedLaunchOption.Type;
@@ -45,6 +46,8 @@ const reasonLabel = (reason: string | undefined) =>
     not_retryable: "This request is not ready for launch recovery. Check its saved result first.",
     unavailable_provider:
       "This provider is unavailable or does not support the selected permissions.",
+    unsupported_access:
+      "This provider cannot enforce the selected purpose. Choose Codex for read-only analysis, or choose implementation.",
     launch_failed:
       "The launch was saved, but intake failed. Check the result or retry this launch.",
     wrong_actor:
@@ -67,6 +70,7 @@ export function SessionLauncher({
   creation?: {
     visible: boolean;
     onClose: () => void;
+    onResume?: () => void;
     onLane: (id: string) => void;
     onPending: (pending: boolean) => void;
   };
@@ -102,6 +106,8 @@ export function SessionLauncher({
   const [start, setStart] = useState(initialCreation?.start ?? false);
   const [choices, setChoices] = useState<ReadonlyArray<Choice>>([]);
   const [optionsError, setOptionsError] = useState(false);
+  const [optionsLoaded, setOptionsLoaded] = useState(false);
+  const [formOpen, setFormOpen] = useState(initial.request !== null || initial.error);
   const optionsGeneration = useRef(0);
   const [repositoryID, setRepositoryID] = useState(
     saved?.repositoryID ?? resource.workspace?.repos[0]?.id ?? "",
@@ -113,6 +119,7 @@ export function SessionLauncher({
   const [runtimeMode, setRuntimeMode] = useState<Contracts.ManagedLaunchInput["runtimeMode"]>(
     saved?.runtimeMode ?? "approval-required",
   );
+  const [access, setAccess] = useState<"read_only" | "write">(saved?.access ?? "write");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(
     saved ? "A launch request is saved. Check its result or retry the same request." : null,
@@ -127,14 +134,18 @@ export function SessionLauncher({
   const previewReview = useAtomCommand(previewLaunchReview, { reportFailure: false });
   const confirmReview = useAtomCommand(confirmLaunchReview, { reportFailure: false });
   const options = useAtomCommand(sessionLaunchOptions, { reportFailure: false });
-  const formVisible = !isCreation || creation.visible || saved !== null;
+  const formVisible = isCreation
+    ? creation.visible || saved !== null || initial.error
+    : formOpen || saved !== null;
   useEffect(() => {
     if (isCreation && creation.visible) branchInput.current?.focus();
   }, [isCreation, creation?.visible]);
   const loadOptions = useCallback(() => {
     const generation = ++optionsGeneration.current;
+    setOptionsLoaded(false);
     void options({ environmentId, input: {} }).then((result) => {
       if (generation !== optionsGeneration.current) return;
+      setOptionsLoaded(true);
       if (result._tag !== "Success") {
         setOptionsError(true);
         return;
@@ -207,7 +218,14 @@ export function SessionLauncher({
     }
   };
   const submit = async () => {
-    if (busy || !enabled || initial.error || review !== null) return;
+    if (
+      busy ||
+      !enabled ||
+      initial.error ||
+      review !== null ||
+      (!saved && (optionsError || !optionsLoaded))
+    )
+      return;
     setBusy(true);
     try {
       const request =
@@ -225,6 +243,7 @@ export function SessionLauncher({
           objective,
           modelSelection: { instanceId, model },
           runtimeMode,
+          access,
           ...(isCreation
             ? {
                 branch: branch.trim(),
@@ -329,16 +348,92 @@ export function SessionLauncher({
   };
   if (isCreation && !creation.visible && !saved && !initial.error) return null;
   const accepted = record ? launchRecord(record) : null;
+  const contextLabel = resource.workspace?.lane?.name ?? "Primary checkout";
+  if (isCreation && !creation.visible) {
+    if (record?.state === "accepted") return null;
+    return (
+      <section className={sessionStyles.launchPrompt} aria-label="Saved feature request">
+        <div>
+          <h3>{saved?.title ?? "Saved feature request"}</h3>
+          <p>
+            {initial.error
+              ? "The saved request could not be read. Restore storage before creating another feature."
+              : "A feature request is saved. Review its result before starting another."}
+          </p>
+          {message ? <p role="status">{message}</p> : null}
+        </div>
+        <div className={styles["dh-inspector-actions"]}>
+          {saved ? (
+            <button
+              type="button"
+              className={sessionStyles.quiet}
+              disabled={busy}
+              onClick={() => {
+                void check();
+              }}
+            >
+              {busy ? "Checking…" : "Check result"}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={sessionStyles.primary}
+            disabled={busy}
+            onClick={creation.onResume}
+          >
+            Review saved feature
+          </button>
+        </div>
+      </section>
+    );
+  }
+  if (!isCreation && !formVisible)
+    return (
+      <section className={sessionStyles.launchPrompt} aria-label="New session">
+        <div>
+          <h3>Start a new session</h3>
+          <p>{contextLabel} · choose a configured provider and repository.</p>
+        </div>
+        <button
+          type="button"
+          className={sessionStyles.primary}
+          disabled={!enabled}
+          onClick={() => setFormOpen(true)}
+        >
+          ＋ New session
+        </button>
+        {!enabled ? (
+          <p className={sessionStyles.scopeNote}>
+            A fresh, available checkout is needed to start a session.
+          </p>
+        ) : null}
+      </section>
+    );
   return (
     <section
-      className={`${styles["dh-launcher"]} ${isCreation ? styles["dh-feature-create"] : ""}`}
-      aria-label={isCreation ? "Create a feature" : "Launch an agent"}
+      className={`${styles["dh-launcher"]} ${sessionStyles.launcher} ${isCreation ? styles["dh-feature-create"] : ""}`}
+      aria-label={isCreation ? "Create a feature" : "New session"}
     >
-      <h3>{isCreation ? "New feature" : "Agent session"}</h3>
-      <p>
+      <header className={sessionStyles.formHeading}>
+        <div>
+          <h3>{isCreation ? "New feature" : "New session"}</h3>
+          {!isCreation ? <p>{contextLabel}</p> : null}
+        </div>
+        {isCreation || !saved ? (
+          <button
+            type="button"
+            className={sessionStyles.quiet}
+            disabled={busy}
+            onClick={() => (isCreation ? creation.onClose() : setFormOpen(false))}
+          >
+            Close
+          </button>
+        ) : null}
+      </header>
+      <p className={sessionStyles.scopeNote}>
         {isCreation
-          ? `Create a lane in ${resource.workspace?.name ?? resource.workspaceID}, then start its agent in the selected repository. Each repository gets an independent checkout.`
-          : "Start a writer in this context’s existing source tree. Choose the repository it may own."}
+          ? `Create a lane in ${resource.workspace?.name ?? resource.workspaceID}, then start its agent in the selected repository. Repository and service sharing follow the workspace definition.`
+          : "Choose a provider and purpose. Keep analysis alongside your feature sessions, or give one session permission to implement changes."}
       </p>
       {initial.error ? (
         <p role="alert">
@@ -355,15 +450,30 @@ export function SessionLauncher({
         </div>
       ) : null}
       {!choices.length && !optionsError ? (
-        <p>Waiting for configured providers. Configure and sign in to a provider in Settings.</p>
+        <p role="status">
+          {optionsLoaded
+            ? "No configured provider is ready. Configure and sign in to a provider in Settings."
+            : "Loading configured providers…"}
+        </p>
+      ) : null}
+      {saved && !provider ? (
+        <p role="status" className={sessionStyles.notice}>
+          The saved provider instance is not currently available. Its original selection is retained
+          for recovery.
+        </p>
       ) : null}
       <form
+        className={sessionStyles.form}
         onSubmit={(event) => {
           event.preventDefault();
           void submit();
         }}
       >
-        <fieldset disabled={busy || saved !== null || !enabled || initial.error}>
+        <fieldset
+          disabled={
+            busy || saved !== null || !enabled || initial.error || optionsError || !optionsLoaded
+          }
+        >
           {isCreation ? (
             <>
               <label htmlFor={`${id}-branch`}>New lane branch</label>
@@ -417,7 +527,7 @@ export function SessionLauncher({
                 Start services after creation
               </label>
               <p>
-                {resource.workspace?.services.length ?? 0} configured services will use this lane’s
+                Shared services keep their workspace owners. Isolated services receive this lane’s
                 own ports.
               </p>
             </>
@@ -434,23 +544,68 @@ export function SessionLauncher({
               </option>
             ))}
           </select>
-          <label htmlFor={`${id}-provider`}>Provider account</label>
-          <select
-            id={`${id}-provider`}
-            required
-            value={instanceId}
-            onChange={(event) => {
-              setInstanceId(event.target.value);
-              setModel("");
-            }}
+          <span id={`${id}-provider-label`}>Provider account</span>
+          <div
+            className={sessionStyles.providerChoices}
+            role="group"
+            aria-labelledby={`${id}-provider-label`}
           >
-            <option value="">Choose a provider</option>
             {choices.map((choice) => (
-              <option key={choice.instanceId} value={choice.instanceId}>
-                {choice.label}
-              </option>
+              <button
+                key={choice.instanceId}
+                type="button"
+                className={sessionStyles.providerChoice}
+                aria-pressed={instanceId === choice.instanceId}
+                aria-label={`${choice.label} · ${choice.instanceId}`}
+                disabled={
+                  choice.readiness === "unavailable" || choice.readiness === "sign_in_required"
+                }
+                onClick={() => {
+                  setInstanceId(choice.instanceId);
+                  setModel(choice.models.length === 1 ? choice.models[0]!.id : "");
+                  setAccess(
+                    choice.supportsReadOnly && !resource.workspace?.lane && !isCreation
+                      ? "read_only"
+                      : "write",
+                  );
+                }}
+              >
+                <strong>{choice.label}</strong>
+                <span>
+                  {choice.readiness === "sign_in_required"
+                    ? "Sign in required"
+                    : choice.readiness === "unavailable"
+                      ? "Unavailable"
+                      : choice.readiness === "unknown"
+                        ? "Sign-in not verified"
+                        : "Ready"}
+                  {choice.models.length === 1 && choice.models[0]?.id === "default"
+                    ? " · CLI default model"
+                    : choice.models.length > 0
+                      ? ` · ${choice.models.length} models`
+                      : ""}
+                </span>
+              </button>
             ))}
-          </select>
+            {saved && !provider ? (
+              <div className={sessionStyles.savedProvider}>
+                <strong>{saved.modelSelection.instanceId}</strong>
+                <span>Saved instance · unavailable</span>
+              </div>
+            ) : null}
+          </div>
+          {choices.some(
+            (choice) =>
+              choice.readiness === "sign_in_required" || choice.readiness === "unavailable",
+          ) ? (
+            <p className={sessionStyles.scopeNote}>
+              Set up accounts in{" "}
+              <Link to="/settings/providers" search={{ machine: environmentId }}>
+                Provider settings
+              </Link>
+              .
+            </p>
+          ) : null}
           <label htmlFor={`${id}-model`}>Model</label>
           <select
             id={`${id}-model`}
@@ -459,25 +614,52 @@ export function SessionLauncher({
             onChange={(event) => setModel(event.target.value)}
           >
             <option value="">Choose a model</option>
+            {model && !provider?.models.some((item) => item.id === model) ? (
+              <option value={model}>{model} · saved selection</option>
+            ) : null}
             {provider?.models.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.label}
               </option>
             ))}
           </select>
-          <label htmlFor={`${id}-access`}>Permissions</label>
+          <label htmlFor={`${id}-purpose`}>Purpose</label>
           <select
-            id={`${id}-access`}
-            value={runtimeMode}
+            id={`${id}-purpose`}
+            value={access}
             onChange={(event) =>
-              setRuntimeMode(
-                event.target.value === "full-access" ? "full-access" : "approval-required",
-              )
+              setAccess(event.target.value === "read_only" ? "read_only" : "write")
             }
           >
-            <option value="approval-required">Ask for approval</option>
-            <option value="full-access">Full access</option>
+            <option value="read_only" disabled={!provider?.supportsReadOnly}>
+              Analyze · read only
+            </option>
+            <option value="write">Implement · can change files</option>
           </select>
+          <p className={sessionStyles.scopeNote}>
+            {access === "read_only"
+              ? "The agent can inspect this checkout. File changes, commands that write, and Cinderdeck changes are blocked. Other sessions can keep working."
+              : provider?.supportsReadOnly
+                ? "Implementation uses this checkout’s writer slot. Choose Analyze when you only need investigation or planning."
+                : "This provider supports implementation sessions. Enforced analysis is currently available with Codex."}
+          </p>
+          {access === "write" ? (
+            <>
+              <label htmlFor={`${id}-access`}>Permissions</label>
+              <select
+                id={`${id}-access`}
+                value={runtimeMode}
+                onChange={(event) =>
+                  setRuntimeMode(
+                    event.target.value === "full-access" ? "full-access" : "approval-required",
+                  )
+                }
+              >
+                <option value="approval-required">Ask for approval</option>
+                <option value="full-access">Full access</option>
+              </select>
+            </>
+          ) : null}
           <label htmlFor={`${id}-title`}>{isCreation ? "Feature title" : "Agent task"}</label>
           <input
             id={`${id}-title`}
@@ -522,7 +704,16 @@ export function SessionLauncher({
                   !record.launch &&
                   ["succeeded", "failed"].includes(record.receipt?.state ?? "")) ||
                 (isCreation && !saved && !branch.trim()) ||
-                (!saved && (!provider || !model || !title.trim() || !objective.trim()))
+                (!saved &&
+                  (optionsError ||
+                    !optionsLoaded ||
+                    !provider ||
+                    provider.readiness === "unavailable" ||
+                    provider.readiness === "sign_in_required" ||
+                    (access === "read_only" && !provider.supportsReadOnly) ||
+                    !model ||
+                    !title.trim() ||
+                    !objective.trim()))
               }
             >
               {busy
@@ -535,7 +726,7 @@ export function SessionLauncher({
                     : "Retry saved launch"
                   : isCreation
                     ? "Create lane and launch agent"
-                    : "Launch agent"}
+                    : "Start session"}
             </button>
           )}
           {saved && record?.state !== "accepted" ? (
@@ -560,6 +751,24 @@ export function SessionLauncher({
               }}
             >
               Check result
+            </button>
+          ) : null}
+          {!isCreation && record?.state === "accepted" ? (
+            <button
+              type="button"
+              className={styles["dh-button"]}
+              disabled={busy || !enabled}
+              onClick={() => {
+                if (!clearSaved()) return;
+                setInstanceId("");
+                setModel("");
+                setTitle("");
+                setObjective("");
+                setMessage(null);
+                setFormOpen(true);
+              }}
+            >
+              New session
             </button>
           ) : null}
           {isCreation && record && "laneID" in record && record.laneID ? (

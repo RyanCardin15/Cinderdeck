@@ -7,6 +7,7 @@
  * @module TerminalManager
  */
 import { withWorkspaceLease } from "../workspace/workspaceLease.ts";
+import { subprocessEnvironment } from "../process/SubprocessEnvironment.ts";
 import {
   DEFAULT_TERMINAL_ID,
   TerminalCwdError,
@@ -1332,7 +1333,7 @@ function createTerminalSpawnEnv(
   if (!spawnEnv.COLORTERM && runtimeEnv?.COLORTERM === undefined) {
     spawnEnv.COLORTERM = "truecolor";
   }
-  return stripAppImageRuntimeEnv(spawnEnv);
+  return subprocessEnvironment(stripAppImageRuntimeEnv(spawnEnv));
 }
 
 function normalizedRuntimeEnv(

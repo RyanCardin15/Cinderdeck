@@ -1,0 +1,52 @@
+.tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.tools button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 11px;
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--foreground) 3%, var(--background));
+  color: var(--foreground);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.tools button:first-child {
+  border-color: color-mix(in srgb, var(--dh-accent, #ed7b42) 50%, var(--border));
+}
+.tools button:hover {
+  border-color: var(--dh-accent, #ed7b42);
+}
+.tools button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.tools button:focus-visible {
+  outline: 2px solid var(--dh-accent, #ed7b42);
+  outline-offset: 3px;
+}
+.tools svg {
+  flex-shrink: 0;
+}
+.notice {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.7;
+}
+@media (max-width: 600px) {
+  .tools button {
+    min-height: 40px;
+  }
+  .notice {
+    width: 100%;
+  }
+}

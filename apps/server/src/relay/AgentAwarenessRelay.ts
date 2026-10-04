@@ -804,9 +804,7 @@ export const make = Effect.gen(function* () {
       });
       switch (startupState) {
         case "waiting-for-link":
-          yield* Effect.logInfo(
-            "agent activity publishing standby; waiting for T3 Connect link reconciliation",
-          );
+          yield* Effect.logInfo("Cinderdeck agent activity sharing is idle.");
           break;
         case "disabled":
           yield* Effect.logInfo("agent activity publishing disabled by T3 Connect configuration");

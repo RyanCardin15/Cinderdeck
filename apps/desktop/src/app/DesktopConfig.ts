@@ -34,6 +34,7 @@ const compactEnv = (env: Readonly<Record<string, string | undefined>>): Record<s
   );
 
 export const DesktopConfig = Config.all({
+  nativeHost: Config.String("CINDERDECK_NATIVE_HOST").pipe(Config.withDefault("0"), Config.map(value => value === "1")),
   deckhandProfileRoot: trimmedString("DECKHAND_PROFILE_ROOT"),
   appDataDirectory: trimmedString("APPDATA"),
   xdgConfigHome: trimmedString("XDG_CONFIG_HOME"),

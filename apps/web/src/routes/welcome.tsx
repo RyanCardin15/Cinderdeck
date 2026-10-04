@@ -39,6 +39,7 @@ function WelcomeRouteView() {
   // no matter what hostname the browser used. Only hosted-static has no
   // local server to offer.
   const localAvailable = authGateState.status === "authenticated";
+  const nativeHost = window.desktopBridge?.isNativeHost?.() === true;
   return (
     <>
       <NoProjectsHero />
@@ -54,6 +55,10 @@ function WelcomeRouteView() {
                 search: connectedWorkspaceSearch(workspaceSelection),
                 replace: true,
               });
+              return;
+            }
+            if (nativeHost) {
+              await navigate({ to: "/workspaces", replace: true });
               return;
             }
             if (projectRef !== undefined) {

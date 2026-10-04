@@ -870,7 +870,10 @@ export function ServicesRuns({
                 </span>
               </h2>
               <p>
-                {selected.actor} · {elapsed(selected.duration)} · {selected.id.slice(0, 8)}
+                {/^Deckhand\s*·\s*dh-admin:[^\s]+(?:\s+in\s+.+)?$/.test(selected.actor)
+                  ? "Cinderdeck workspace controls"
+                  : selected.actor.replace(/^Deckhand(?=\s|$)/, "Cinderdeck")}{" "}
+                · {elapsed(selected.duration)}
               </p>
             </div>
             <div className={styles.actions}>
@@ -906,6 +909,15 @@ export function ServicesRuns({
               ) : null}
             </div>
           </div>
+          <details className={styles.runDetail}>
+            <summary>Execution details</summary>
+            <p>
+              Started by: <code className="break-all">{selected.actor}</code>
+            </p>
+            <p>
+              Run ID: <code className="break-all">{selected.id}</code>
+            </p>
+          </details>
           {!overview?.detailAvailable ? (
             <p className={styles.runDetail}>
               Legacy run projection: step completeness is unknown. Exact command and exit values

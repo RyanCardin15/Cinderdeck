@@ -77,6 +77,8 @@ const emptyBackendObservabilitySettings: BackendObservabilitySettings = {
 };
 
 const DESKTOP_BACKEND_ENV_NAMES = [
+  // Launch-only native UI capability stays in Electron's trusted main process.
+  "CINDERDECK_NATIVE_UI_TOKEN",
   "DECKHAND_PORT",
   "DECKHAND_MODE",
   "DECKHAND_NO_BROWSER",

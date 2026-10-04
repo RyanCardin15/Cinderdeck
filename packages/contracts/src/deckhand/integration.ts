@@ -75,6 +75,8 @@ export const IntegrationService = Schema.Struct({
   cwd: Schema.optionalKey(Schema.String),
   command: Schema.optionalKey(Schema.String),
   sharedFrom: Schema.optionalKey(Schema.String),
+  // A shared alias may have a different name than its owner's actual service.
+  sharedServiceID: Schema.optionalKey(Schema.String),
   dependsOn: Schema.Array(Schema.String),
 });
 export const IntegrationRepository = Schema.Struct({

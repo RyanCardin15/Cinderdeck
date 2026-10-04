@@ -19,13 +19,13 @@ export const runServerCommand = (
   });
 
 export const startCommand = Command.make("start", { ...sharedServerCommandFlags }).pipe(
-  Command.withDescription("Run the Deckhand server."),
+  Command.withDescription("Run the Cinderdeck agent backend."),
   Command.withHandler((flags) => runServerCommand(flags)),
 );
 
 export const serveCommand = Command.make("serve", { ...sharedServerCommandFlags }).pipe(
   Command.withDescription(
-    "Run the Deckhand server without opening a browser and print headless pairing details.",
+    "Run the Cinderdeck agent backend without opening a browser and print pairing details.",
   ),
   Command.withHandler((flags) =>
     runServerCommand(flags, {

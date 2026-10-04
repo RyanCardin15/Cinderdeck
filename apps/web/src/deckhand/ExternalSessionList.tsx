@@ -109,7 +109,7 @@ function ScopedExternalSessionList({
               {session.reportedCapabilities.length
                 ? session.reportedCapabilities.join(", ").replaceAll("_", " ")
                 : "None"}
-              . These do not grant Deckhand controls or enforce read-only execution.
+              . These do not grant Cinderdeck controls or enforce read-only execution.
             </p>
           </details>
           <span>No transcript, stop/resume, approvals or writer reservation.</span>

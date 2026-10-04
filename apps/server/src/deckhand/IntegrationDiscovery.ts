@@ -26,11 +26,17 @@ export const configLayer = Layer.effect(
   DiscoveryConfig,
   Effect.gen(function* () {
     const path = yield* Path.Path;
-    const channel = yield* Config.Literals(
+    const configuredChannel = yield* Config.Literals(
       ["development", "release"],
       "DECKHAND_CINDERDECK_CHANNEL",
     ).pipe(Config.withDefault("release"));
-    const socket = yield* Config.option(Config.String("DECKHAND_CINDERDECK_SOCKET"));
+    const inheritedSocket = yield* Config.option(Config.String("CINDERDECK_NATIVE_SOCKET_PATH"));
+    const inheritedChannel = yield* Config.option(Config.String("CINDERDECK_NATIVE_CHANNEL"));
+    const nativeHost = yield* Config.String("CINDERDECK_NATIVE_HOST").pipe(Config.withDefault("0"));
+    const channel = nativeHost === "1" && Option.isSome(inheritedChannel) && ["development","release"].includes(inheritedChannel.value)
+      ? inheritedChannel.value as "development" | "release" : configuredChannel;
+    const configuredSocket = yield* Config.option(Config.String("DECKHAND_CINDERDECK_SOCKET"));
+    const socket = nativeHost === "1" && Option.isSome(inheritedSocket) ? inheritedSocket : configuredSocket;
     const state = yield* Config.option(Config.String("DECKHAND_CINDERDECK_STATE"));
     return DiscoveryConfig.of({
       channel,

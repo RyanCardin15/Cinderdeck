@@ -1,6 +1,7 @@
 import { SettingsGroup } from "./SettingsGroup";
 import { Spinner } from "~/components/ui/spinner";
 import { NotificationSettings } from "./NotificationSettings";
+import { NativeToolsSettings } from "../../deckhand/NativeToolsSettings";
 import { ArchiveIcon, ArchiveX, CheckIcon, ChevronRightIcon, SettingsIcon } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { CSSProperties, ReactNode } from "react";
@@ -2247,6 +2248,7 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <NativeToolsSettings />
       <ProjectDefaultsSettings category="general" />
       <SettingsSection id="organization" title="Organization">
         <SettingsRow
@@ -3357,7 +3359,7 @@ export function GeneralSettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("open-source-licenses")}
-          description="Notices for dependencies, assets, and optional tools used by Deckhand."
+          description="Notices for dependencies, assets, and optional tools used by Cinderdeck."
           control={
             <Button
               render={<Link to="/settings/open-source-licenses" />}

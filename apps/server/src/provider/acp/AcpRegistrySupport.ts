@@ -41,6 +41,7 @@ import * as NodeCrypto from "node:crypto";
 
 import { collectUint8StreamText } from "../../stream/collectUint8StreamText.ts";
 import type { AcpSpawnInput } from "./AcpSessionRuntime.ts";
+import * as CinderdeckCliProviders from "./CinderdeckCliProviders.ts";
 
 const ACP_REGISTRY_URL = "https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json";
 
@@ -1610,11 +1611,43 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
       } satisfies AcpRegistryPrepareResult;
     });
 
+  // Older Cursor builds interpret an unknown "acp" command as a chat prompt.
+  // Check help before either discovery or turn startup, so no model can be invoked by accident.
+  const requireCursorAcp = Effect.fn("AcpRegistryCatalog.requireCursorAcp")(function* (
+    settings: AcpRegistrySettings,
+    environment: NodeJS.ProcessEnv,
+  ) {
+    if (settings.agentId !== "cursor" || settings.commandPath.trim().length === 0) return;
+    const help = yield* runCommand(settings.commandPath.trim(), ["help", "acp"], {
+      env: environment,
+      timeout: "5 seconds",
+    }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new AcpRegistryError({
+            reason: "runner_unavailable",
+            detail:
+              "Could not confirm Cursor CLI ACP support. Check its executable and update the CLI before starting a session.",
+            cause,
+          }),
+      ),
+    );
+    if (!/^Usage:\s+\S+\s+acp(?:\s|$)/mu.test(help)) {
+      return yield* new AcpRegistryError({
+        reason: "runner_unavailable",
+        detail:
+          "This Cursor CLI does not support ACP. Update Cursor CLI before starting a session.",
+      });
+    }
+  });
+
   const inspect: AcpRegistryCatalog["Service"]["inspect"] = (settings, environment) =>
     Effect.gen(function* () {
       const agentId = settings.agentId.trim();
       if (agentId.length === 0) return { status: "unconfigured" } as const;
-      const registry = yield* loadCachedRegistry();
+      const registry = yield* CinderdeckCliProviders.isCinderdeckLocalCli(settings)
+        ? loadRegistry()
+        : loadCachedRegistry();
       const agent = registry.agents.find((candidate) => candidate.id === agentId);
       if (agent === undefined) return { status: "not_found", agentId } as const;
       const documentationUrl = agent.website ?? agent.repository;
@@ -1632,6 +1665,7 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
         const available =
           resolveExecutable(commandOverride, platform, environment ?? hostEnvironment) !==
           undefined;
+        if (available) yield* requireCursorAcp(settings, environment ?? hostEnvironment);
         return available
           ? ({
               status: "ready",
@@ -1737,6 +1771,7 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
             detail: `ACP Registry agent ${agent.id} requires '${commandOverride}', but it is not available on this provider instance's PATH.`,
           });
         }
+        yield* requireCursorAcp(settings, effectiveEnvironment);
         command = resolvedOverride;
         args = distribution.args;
       } else if (distribution.kind === "npx" || distribution.kind === "uvx") {

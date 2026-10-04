@@ -14,6 +14,9 @@
   font-family: var(--font-sans);
   font-size: 14px;
 }
+.dh-shell-agents {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
 .dh-shell button,
 .dh-shell input,
 .dh-shell select {

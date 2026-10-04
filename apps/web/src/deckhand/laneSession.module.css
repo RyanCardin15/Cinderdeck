@@ -3,7 +3,7 @@
   --lane-line: color-mix(in srgb, var(--foreground) 12%, transparent);
   container: lane-header / inline-size;
   flex: none;
-  padding: 18px var(--workspace-gutter-end, 24px) 0 var(--workspace-gutter-start, 24px);
+  padding: 9px var(--workspace-gutter-end, 18px) 7px var(--workspace-gutter-start, 18px);
   background: color-mix(in srgb, var(--foreground) 2%, var(--background));
   border-bottom: 1px solid var(--lane-line);
   color: var(--foreground);
@@ -42,8 +42,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  margin: 10px 0 15px;
+  gap: 12px;
+  margin: 0 0 5px;
 }
 .heading {
   min-width: 0;
@@ -59,8 +59,8 @@
 .metadata {
   display: flex;
   align-items: center;
-  gap: 14px;
-  font-size: 12px;
+  gap: 10px;
+  font-size: 11px;
   flex-wrap: wrap;
 }
 .metadata > span {
@@ -76,7 +76,7 @@
   color: var(--muted-foreground);
   border: 1px solid var(--lane-line);
   border-radius: 5px;
-  padding: 4px 7px;
+  padding: 3px 6px;
 }
 .connection[data-connected="true"] {
   color: #26bd79;
@@ -101,7 +101,7 @@
   white-space: nowrap;
   border: 1px solid #f28a57;
   border-radius: 7px;
-  padding: 9px 13px;
+  padding: 6px 10px;
   background: #f5773c;
   color: #171b1f;
   font-size: 12px;
@@ -117,7 +117,7 @@
   align-items: center;
   color: var(--muted-foreground);
   font-size: 12px;
-  margin: 0 0 10px;
+  margin: 5px 0 7px;
 }
 .tools {
   display: flex;
@@ -141,8 +141,9 @@
   gap: 7px;
   background: none;
   border: 0;
-  border-bottom: 3px solid transparent;
-  padding: 10px 9px 11px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 6px 8px;
   font-size: 12px;
   white-space: nowrap;
   color: var(--muted-foreground);
@@ -353,7 +354,7 @@
 }
 @media (max-width: 640px) {
   .context {
-    padding: 12px 15px 0;
+    padding: 8px 12px;
   }
   .titleRow {
     gap: 9px;
@@ -642,7 +643,7 @@
   --lane-ember: #ed7b42;
 }
 
-@container lane-header (max-width: 1120px) {
+@container lane-header (max-width: 760px) {
   .tools {
     flex-wrap: wrap;
   }
@@ -654,6 +655,6 @@
   }
   .panelActions {
     flex-wrap: wrap;
-    margin: 2px 0 10px;
+    margin: 2px 0 0;
   }
 }

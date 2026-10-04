@@ -1,6 +1,6 @@
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { LinkIcon, PlusIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -31,6 +31,7 @@ function ChatIndexRouteView() {
     if (environments.length === 0) return <HostedStaticOnboardingState />;
   }
 
+  if (window.desktopBridge?.isNativeHost?.()) return <Navigate to="/workspaces" replace />;
   return <IndexDraftLanding />;
 }
 
@@ -140,10 +141,10 @@ function HostedStaticOnboardingState() {
               <div className="mx-auto mb-5 flex size-11 items-center justify-center rounded-xl border border-border/70 bg-background/70 text-muted-foreground">
                 <LinkIcon className="size-5" />
               </div>
-              <EmptyTitle>Connect to a computer running Deckhand</EmptyTitle>
+              <EmptyTitle>Connect to a computer running Cinderdeck</EmptyTitle>
               <EmptyDescription>
-                This app connects to Deckhand running on your computer or a server. Start the
-                Deckhand desktop app or command-line server on that machine and keep it running.
+                This app connects to Cinderdeck running on your computer or a server. Start the
+                Cinderdeck desktop app or command-line server on that machine and keep it running.
               </EmptyDescription>
               <EmptyDescription>{description}</EmptyDescription>
               <div className="mt-6 flex justify-center">

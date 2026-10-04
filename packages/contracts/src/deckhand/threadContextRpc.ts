@@ -7,6 +7,10 @@ export const THREAD_CONTEXT_METHOD = "deckhand.thread.context.subscribe";
 export const ThreadContextInput = Schema.Struct({ threadId: ThreadId });
 export type ThreadContextInput = typeof ThreadContextInput.Type;
 export const ThreadContextView = Schema.Struct({
+  /** Exact chat being viewed. The session below may be its managed ancestor for display only. */
+  requestedThreadId: Schema.optionalKey(ThreadId),
+  /** Immediate provider-owned helper parent; this association grants no managed-session access. */
+  parentThreadId: Schema.optionalKey(ThreadId),
   workspace: WorkspaceBinding,
   checkout: CheckoutBinding,
   feature: Feature,

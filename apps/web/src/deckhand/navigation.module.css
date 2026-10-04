@@ -101,7 +101,20 @@
     padding: 7px 9px;
   }
   .bottom {
-    display: none;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 0;
+    padding-top: 8px;
+  }
+  .bottom p {
+    margin: 0;
+    padding: 7px 9px;
+    margin-left: auto;
+  }
+  .bottom .tools {
+    width: auto;
   }
 }
 
@@ -136,4 +149,8 @@
 }
 :global(.dark) .rail {
   --muted-foreground: #adb7c4;
+}
+
+.tools {
+  width: 100%;
 }

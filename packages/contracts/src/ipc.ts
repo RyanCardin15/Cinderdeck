@@ -1122,7 +1122,20 @@ export const DesktopPreviewAutomationWaitForInputSchema = Schema.Struct({
 export const SystemSettingsPaneSchema = Schema.Literals(["full-disk-access"]);
 export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 
+export interface NativeHostRoute {
+  readonly workspaceID?: string;
+  readonly section?: string;
+}
+export interface NativeToolRequest {
+  readonly surface: "workspace" | "lane-map" | "workspace-setup" | "workspace-editor" | "execution-map" | "history" | "preferences" | "capture" | "recording" | "annotate" | "updates";
+  readonly mode?: string;
+  readonly workspaceID?: string;
+}
+
 export interface DesktopBridge {
+  isNativeHost?: () => boolean;
+  onNativeHostRoute?: (listener: (route: NativeHostRoute) => void) => () => void;
+  openNativeTool?: (request: NativeToolRequest) => Promise<boolean>;
   getAppBranding: () => DesktopAppBranding | null;
   /** Absolute path of a dropped or picked file; absent on desktop builds predating it. */
   getPathForFile?: (file: File) => string;

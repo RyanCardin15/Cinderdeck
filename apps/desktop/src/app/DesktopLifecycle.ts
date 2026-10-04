@@ -1,3 +1,4 @@
+import { delegateQuitToNative } from "../cinderdeck/NativeHostBridge.ts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -102,6 +103,7 @@ function handleBeforeQuit(
   allowQuit: () => boolean,
   markQuitAllowed: () => void,
 ): void {
+  if (delegateQuitToNative(event)) return;
   if (allowQuit()) {
     void runEffect(
       Effect.gen(function* () {
