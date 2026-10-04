@@ -31,6 +31,7 @@ export class ManagedLaunchError extends Schema.TaggedError<ManagedLaunchError>()
       "unavailable_provider",
       "storage",
       "launch_failed",
+      "not_retryable",
     ]),
   },
 ) {
@@ -57,6 +58,14 @@ export class ManagedSessionLaunch extends Context.Service<
       actorID: string,
       operationKey: string,
     ) => Effect.Effect<Rpc.ManagedCreateRecord, ManagedLaunchError>;
+    readonly reviewPreview: (
+      actorID: string,
+      input: Rpc.ManagedLaunchReviewInput,
+    ) => Effect.Effect<Rpc.ManagedLaunchReview, ManagedLaunchError>;
+    readonly reviewConfirm: (
+      actorID: string,
+      input: Rpc.ManagedLaunchReview,
+    ) => Effect.Effect<Rpc.ManagedLaunchReview, ManagedLaunchError>;
     readonly options: Effect.Effect<ReadonlyArray<typeof Rpc.ManagedLaunchOption.Type>>;
   }
 >()("t3/deckhand/ManagedSessionLaunch") {}
@@ -66,6 +75,11 @@ const encodeRecord = Schema.encodeEffect(Schema.fromJsonString(Rpc.ManagedLaunch
 const decodeRecord = Schema.decodeUnknownEffect(Schema.fromJsonString(Rpc.ManagedLaunchRecord));
 const decodeCreation = Schema.decodeUnknownEffect(Schema.fromJsonString(Rpc.ManagedCreateRecord));
 const encodeCreation = Schema.encodeEffect(Schema.fromJsonString(Rpc.ManagedCreateRecord));
+const encodeReview = Schema.encodeEffect(Schema.fromJsonString(Rpc.ManagedLaunchReview));
+const decodeReview = Schema.decodeUnknownEffect(Schema.fromJsonString(Rpc.ManagedLaunchReview));
+const encodeCheckouts = Schema.encodeSync(
+  Schema.fromJsonString(Schema.Array(Contracts.PhysicalCheckout)),
+);
 const isLaunchError = Schema.is(ManagedLaunchError);
 const bindingID = (kind: string, parts: ReadonlyArray<string | number>) =>
   `${kind}:${NodeCrypto.createHash("sha256").update(JSON.stringify(parts)).digest("hex")}`;
@@ -139,6 +153,24 @@ const make = Effect.gen(function* () {
         const reservedContext = creation
           ? (yield* decodeCreation(creation.record_json)).contextIntent
           : undefined;
+        const reviews = yield* sql<{
+          actor_id: string;
+          original_input_json: string;
+          review_json: string;
+        }>`SELECT * FROM deckhand_launch_reviews WHERE launch_operation_key = ${key}`;
+        const savedReview = reviews[0];
+        if (savedReview && savedReview.actor_id !== actorID)
+          return yield* error(key, "wrong_actor");
+        if (savedReview && savedReview.original_input_json !== encodedInput)
+          return yield* error(key, "key_conflict");
+        const review = savedReview ? yield* decodeReview(savedReview.review_json) : null;
+        if (
+          review &&
+          (review.installationID !== input.installationID ||
+            review.workspaceID !== input.workspaceID ||
+            review.generation !== input.generation)
+        )
+          return yield* error(key, "stale_context");
         const snapshot = yield* backend
           .context(input.workspaceID)
           .pipe(Effect.mapError(() => error(key, "stale_context")));
@@ -149,7 +181,7 @@ const make = Effect.gen(function* () {
           !context ||
           !resource.available ||
           resource.generation !== input.generation ||
-          resource.revision !== input.revision ||
+          resource.revision !== (review?.revision ?? input.revision) ||
           context.definitionChanged ||
           context.issues.length ||
           !context.repos.length ||
@@ -179,6 +211,16 @@ const make = Effect.gen(function* () {
         const physical = yield* Effect.forEach(context.repos, (repo) =>
           identities.resolve(repo.path).pipe(Effect.mapError(() => error(key, "stale_context"))),
         );
+        if (
+          review &&
+          (review.repositories.length !== context.repos.length ||
+            review.repositories.some(
+              (item, index) => item.repositoryID !== context.repos[index]?.id,
+            ) ||
+            encodeCheckouts(review.repositories.map((item) => item.checkout)) !==
+              encodeCheckouts(physical))
+        )
+          return yield* error(key, "stale_context");
         if (new Set(physical.map((repo) => repo.physicalId)).size !== physical.length)
           return yield* error(key, "stale_context");
         const cwd = physical[context.repos.indexOf(selected)]!;
@@ -245,9 +287,28 @@ const make = Effect.gen(function* () {
               : null;
             if (
               expectedCheckout &&
-              (expectedCheckout.id !== checkoutId || expectedCheckout.state !== "ready")
+              (expectedCheckout.id !== checkoutId ||
+                expectedCheckout.state !== "ready" ||
+                (!review &&
+                  encodeCheckouts(expectedCheckout.repositories) !== encodeCheckouts(physical)))
             )
               return yield* error(key, "stale_context");
+            if (
+              review &&
+              expectedCheckout &&
+              encodeCheckouts(expectedCheckout.repositories) !== encodeCheckouts(physical)
+            ) {
+              yield* relationships
+                .putCheckout(
+                  {
+                    ...expectedCheckout,
+                    repositories: physical,
+                    revision: expectedCheckout.revision + 1,
+                  },
+                  expectedCheckout.revision,
+                )
+                .pipe(Effect.mapError(() => error(key, "stale_context")));
+            }
             let record = prior?.record;
             if (!record) {
               const project = yield* projects
@@ -718,6 +779,141 @@ const make = Effect.gen(function* () {
         });
       }).pipe(Effect.mapError(storage(input.operationKey))),
     );
-  return ManagedSessionLaunch.of({ launch, get, options, create, getCreation });
+  const reviewSource = (actorID: string, input: Rpc.ManagedLaunchReviewInput) =>
+    Effect.gen(function* () {
+      if (input.kind === "launch") {
+        const saved = yield* read(actorID, input.operationKey);
+        if (!saved) return yield* error(input.operationKey, "missing");
+        if (saved.record.state === "accepted")
+          return yield* error(input.operationKey, "not_retryable");
+        return { input: yield* decodeLaunchInput(saved.input), record: saved.record };
+      }
+      const creation = yield* readCreation(actorID, input.operationKey);
+      if (!creation) return yield* error(input.operationKey, "missing");
+      if (
+        creation.record.state === "accepted" ||
+        !creation.launchInput ||
+        creation.record.receipt?.state !== "succeeded" ||
+        (creation.record.receipt.result?.setup &&
+          !["succeeded", "skipped"].includes(creation.record.receipt.result.setup.status))
+      )
+        return yield* error(input.operationKey, "not_retryable");
+      const launch = yield* read(actorID, creation.launchInput.operationKey);
+      if (launch && launch.input !== (yield* encodeInput(creation.launchInput)))
+        return yield* error(input.operationKey, "key_conflict");
+      if (launch?.record.state === "accepted")
+        return yield* error(input.operationKey, "not_retryable");
+      return { input: creation.launchInput, record: launch?.record ?? null };
+    });
+  const currentReview = (actorID: string, input: Rpc.ManagedLaunchReviewInput) =>
+    Effect.gen(function* () {
+      const saved = yield* reviewSource(actorID, input);
+      const target = yield* backend
+        .context(saved.input.workspaceID)
+        .pipe(Effect.mapError(() => error(input.operationKey, "stale_context")));
+      const resource = target.resource;
+      const workspace = resource.workspace;
+      if (
+        target.hello.installationID !== saved.input.installationID ||
+        resource.generation !== saved.input.generation ||
+        !resource.available ||
+        !workspace ||
+        workspace.definitionChanged ||
+        workspace.issues.length ||
+        !workspace.repos.length ||
+        workspace.repos.length > 64 ||
+        new Set(workspace.repos.map((repo) => repo.id)).size !== workspace.repos.length ||
+        !workspace.repos.some((repo) => repo.id === saved.input.repositoryID)
+      )
+        return yield* error(input.operationKey, "stale_context");
+      const physical = yield* Effect.forEach(workspace.repos, (repo) =>
+        identities
+          .resolve(repo.path)
+          .pipe(Effect.mapError(() => error(input.operationKey, "stale_context"))),
+      );
+      if (new Set(physical.map((repo) => repo.physicalId)).size !== physical.length)
+        return yield* error(input.operationKey, "stale_context");
+      if (saved.record) {
+        const original = yield* relationships
+          .checkout(saved.record.checkoutId)
+          .pipe(Effect.mapError(() => error(input.operationKey, "stale_context")));
+        if (
+          original.state !== "ready" ||
+          original.repositories.length !== physical.length ||
+          original.repositories.some(
+            (old) =>
+              !physical.some(
+                (next) =>
+                  old.physicalId === next.physicalId &&
+                  old.repositoryPhysicalId === next.repositoryPhysicalId &&
+                  old.root === next.root &&
+                  old.branch === next.branch,
+              ),
+          )
+        )
+          return yield* error(input.operationKey, "stale_context");
+      }
+      const review: Rpc.ManagedLaunchReview = {
+        operationKey: input.operationKey,
+        kind: input.kind,
+        installationID: saved.input.installationID,
+        workspaceID: saved.input.workspaceID,
+        generation: resource.generation,
+        revision: resource.revision,
+        repositories: workspace.repos.map((repo, index) => ({
+          repositoryID: repo.id,
+          checkout: physical[index]!,
+        })),
+      };
+      return { saved, review };
+    }).pipe(Effect.mapError(storage(input.operationKey)));
+  const withReviewLock = <A>(
+    actorID: string,
+    input: Rpc.ManagedLaunchReviewInput,
+    action: Effect.Effect<A, ManagedLaunchError>,
+  ) =>
+    input.kind === "creation"
+      ? creationLocks.withLock(
+          input.operationKey,
+          Effect.gen(function* () {
+            const saved = yield* readCreation(actorID, input.operationKey);
+            if (!saved) return yield* error(input.operationKey, "missing");
+            return yield* locks.withLock(saved.record.launchOperationKey, action);
+          }),
+        )
+      : locks.withLock(input.operationKey, action);
+  const reviewPreview = (actorID: string, input: Rpc.ManagedLaunchReviewInput) =>
+    withReviewLock(
+      actorID,
+      input,
+      currentReview(actorID, input).pipe(Effect.map((value) => value.review)),
+    );
+  const reviewConfirm = (actorID: string, input: Rpc.ManagedLaunchReview) =>
+    withReviewLock(
+      actorID,
+      input,
+      Effect.gen(function* () {
+        const { saved, review } = yield* currentReview(actorID, input);
+        const encoded = yield* encodeReview(input);
+        if (encoded !== (yield* encodeReview(review)))
+          return yield* error(input.operationKey, "stale_context");
+        const updated =
+          yield* sql`INSERT INTO deckhand_launch_reviews(launch_operation_key, actor_id, original_input_json, review_json)
+        VALUES (${saved.input.operationKey}, ${actorID}, ${yield* encodeInput(saved.input)}, ${encoded})
+        ON CONFLICT(launch_operation_key) DO UPDATE SET original_input_json = excluded.original_input_json, review_json = excluded.review_json
+        WHERE actor_id = excluded.actor_id RETURNING launch_operation_key`;
+        if (!updated.length) return yield* error(input.operationKey, "wrong_actor");
+        return review;
+      }).pipe(Effect.mapError(storage(input.operationKey))),
+    );
+  return ManagedSessionLaunch.of({
+    launch,
+    get,
+    options,
+    create,
+    getCreation,
+    reviewPreview,
+    reviewConfirm,
+  });
 });
 export const layer = Layer.effect(ManagedSessionLaunch, make);

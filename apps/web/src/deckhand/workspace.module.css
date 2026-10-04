@@ -645,3 +645,27 @@
 .dh-launcher .dh-check-field input {
   width: auto;
 }
+
+.dh-launch-review {
+  border: 1px solid var(--dh-line);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+.dh-launch-review h4 {
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+}
+.dh-launch-review > div {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--dh-line);
+  font-size: 0.75rem;
+}
+.dh-launch-review code {
+  overflow-wrap: anywhere;
+}
+.dh-launch-review > button {
+  margin: 0.5rem 0.5rem 0 0;
+}

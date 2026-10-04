@@ -26,6 +26,8 @@ export const RPC_REQUIRED_SCOPES = {
   [DECKHAND_METHODS.sessions]: AuthOrchestrationReadScope,
   [DECKHAND_METHODS.create]: AuthOrchestrationOperateScope,
   [DECKHAND_METHODS.createGet]: AuthOrchestrationReadScope,
+  [DECKHAND_METHODS.reviewPreview]: AuthOrchestrationReadScope,
+  [DECKHAND_METHODS.reviewConfirm]: AuthOrchestrationOperateScope,
   [DECKHAND_METHODS.launch]: AuthOrchestrationOperateScope,
   [DECKHAND_METHODS.launchGet]: AuthOrchestrationReadScope,
   [DECKHAND_METHODS.launchOptions]: AuthOrchestrationReadScope,

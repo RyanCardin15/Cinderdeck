@@ -14,6 +14,8 @@ const commands = vi.hoisted(() => ({
   inspectLaunch: vi.fn(),
   options: vi.fn(),
   navigate: vi.fn(),
+  previewReview: vi.fn(),
+  confirmReview: vi.fn(),
 }));
 vi.mock("./state", () => ({
   createSession: "create",
@@ -21,6 +23,8 @@ vi.mock("./state", () => ({
   launchSession: "launch",
   inspectSessionLaunch: "inspectLaunch",
   sessionLaunchOptions: "options",
+  previewLaunchReview: "previewReview",
+  confirmLaunchReview: "confirmReview",
 }));
 vi.mock("../state/use-atom-command", () => ({
   useAtomCommand: (command: keyof typeof commands) => commands[command],
@@ -28,6 +32,7 @@ vi.mock("../state/use-atom-command", () => ({
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => commands.navigate }));
 vi.mock("../lib/runtime", () => ({ runtime: { runPromise: async () => "new-operation" } }));
 import { SessionLauncher } from "./SessionLauncher";
+const decodeReview = Schema.decodeSync(Contracts.ManagedLaunchReview);
 
 const environmentId = EnvironmentId.make("computer");
 const storageKey = "deckhand:create:computer:installation:source";
@@ -350,4 +355,45 @@ it("can reload provider choices after a transient failure without changing the s
   expect(container.textContent).not.toContain("could not be loaded");
   expect(JSON.parse(localStorage.getItem(storageKey)!)).toEqual(request);
   expect(commands.create).not.toHaveBeenCalled();
+});
+
+it("shows a fresh context for explicit confirmation and retries only the immutable saved request", async () => {
+  save();
+  const review = decodeReview({
+    operationKey: request.operationKey,
+    kind: "creation",
+    installationID: "installation",
+    workspaceID: "created-lane",
+    generation: 7,
+    revision: "new-revision",
+    repositories: [
+      {
+        repositoryID: "app",
+        checkout: {
+          physicalId: "physical",
+          repositoryPhysicalId: "repo",
+          root: "/fixture/created/app",
+          commonDirectory: "/fixture/app/.git",
+          gitDirectory: "/fixture/app/.git/worktrees/created",
+          branch: "fix/saved",
+          commit: "abc123",
+          remotes: [],
+        },
+      },
+    ],
+  });
+  commands.previewReview.mockResolvedValue(success(review));
+  commands.confirmReview.mockResolvedValue(success(review));
+  await render();
+  await click("Review latest context");
+  expect(container.textContent).toContain("/fixture/created/app");
+  expect(button("Continue saved request").disabled).toBe(true);
+  expect(commands.create).not.toHaveBeenCalled();
+  expect(commands.confirmReview).not.toHaveBeenCalled();
+  await click("Confirm reviewed context");
+  expect(commands.confirmReview).toHaveBeenCalledWith({ environmentId, input: review });
+  expect(commands.create).not.toHaveBeenCalled();
+  expect(JSON.parse(localStorage.getItem(storageKey)!)).toEqual(request);
+  await click("Continue saved request");
+  expect(commands.create).toHaveBeenCalledWith({ environmentId, input: request });
 });

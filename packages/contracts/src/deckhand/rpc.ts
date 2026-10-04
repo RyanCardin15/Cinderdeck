@@ -1,7 +1,7 @@
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
-import { SessionBinding, FeatureId, WorkspaceBindingId } from "./index.ts";
+import { SessionBinding, FeatureId, WorkspaceBindingId, PhysicalCheckout } from "./index.ts";
 import { ProviderInstanceId } from "../providerInstance.ts";
 import { ModelSelection } from "../modelSelection.ts";
 import { RuntimeMode } from "../providerPolicy.ts";
@@ -29,6 +29,8 @@ export const DECKHAND_METHODS = {
   createGet: "deckhand.session.create.get",
   launchGet: "deckhand.session.launch.get",
   launchOptions: "deckhand.session.launch.options",
+  reviewPreview: "deckhand.session.launch.review.preview",
+  reviewConfirm: "deckhand.session.launch.review.confirm",
   overview: "deckhand.overview",
   subscribe: "deckhand.subscribe",
   refresh: "deckhand.refresh",
@@ -160,6 +162,22 @@ export const ManagedLaunchOption = Schema.Struct({
   label: Schema.String,
   models: Schema.Array(Schema.Struct({ id: Schema.String, label: Schema.String })),
 });
+export const ManagedLaunchReviewInput = Schema.Struct({
+  operationKey: launchIdentifier,
+  kind: Schema.Literals(["launch", "creation"]),
+});
+export type ManagedLaunchReviewInput = typeof ManagedLaunchReviewInput.Type;
+export const ManagedLaunchReview = Schema.Struct({
+  ...ManagedLaunchReviewInput.fields,
+  installationID: launchIdentifier,
+  workspaceID: launchIdentifier,
+  generation: PositiveInt,
+  revision: launchIdentifier,
+  repositories: Schema.Array(
+    Schema.Struct({ repositoryID: launchIdentifier, checkout: PhysicalCheckout }),
+  ).check(Schema.isMinLength(1), Schema.isMaxLength(64)),
+});
+export type ManagedLaunchReview = typeof ManagedLaunchReview.Type;
 const ErrorSchema = Schema.Union([DeckhandRpcError, EnvironmentAuthorizationError]);
 export const DeckhandRpcGroup = RpcGroup.make(
   Rpc.make(DECKHAND_METHODS.sessions, {
@@ -186,6 +204,16 @@ export const DeckhandRpcGroup = RpcGroup.make(
   Rpc.make(DECKHAND_METHODS.launchGet, {
     payload: Schema.Struct({ operationKey: launchIdentifier }),
     success: ManagedLaunchRecord,
+    error: ErrorSchema,
+  }),
+  Rpc.make(DECKHAND_METHODS.reviewPreview, {
+    payload: ManagedLaunchReviewInput,
+    success: ManagedLaunchReview,
+    error: ErrorSchema,
+  }),
+  Rpc.make(DECKHAND_METHODS.reviewConfirm, {
+    payload: ManagedLaunchReview,
+    success: ManagedLaunchReview,
     error: ErrorSchema,
   }),
   Rpc.make(DECKHAND_METHODS.launchOptions, {

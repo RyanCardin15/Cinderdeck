@@ -16,6 +16,8 @@ import {
   sessionLaunchOptions,
   createSession,
   inspectSessionCreation,
+  previewLaunchReview,
+  confirmLaunchReview,
 } from "./state";
 import styles from "./workspace.module.css";
 
@@ -39,7 +41,8 @@ const failureReason = (cause: Cause.Cause<unknown>): string | undefined => {
 };
 const reasonLabel = (reason: string | undefined) =>
   ({
-    stale_context: "This context changed. Refresh the workspace before launching again.",
+    stale_context: "This context changed. Review the latest context before retrying this request.",
+    not_retryable: "This request is not ready for launch recovery. Check its saved result first.",
     unavailable_provider:
       "This provider is unavailable or does not support the selected permissions.",
     launch_failed:
@@ -114,11 +117,14 @@ export function SessionLauncher({
     saved ? "A launch request is saved. Check its result or retry the same request." : null,
   );
   const [confirmedRefusal, setConfirmedRefusal] = useState(false);
+  const [review, setReview] = useState<Contracts.ManagedLaunchReview | null>(null);
   const [record, setRecord] = useState<Record | null>(null);
   const launch = useAtomCommand(launchSession, { reportFailure: false });
   const inspect = useAtomCommand(inspectSessionLaunch, { reportFailure: false });
   const create = useAtomCommand(createSession, { reportFailure: false });
   const inspectCreation = useAtomCommand(inspectSessionCreation, { reportFailure: false });
+  const previewReview = useAtomCommand(previewLaunchReview, { reportFailure: false });
+  const confirmReview = useAtomCommand(confirmLaunchReview, { reportFailure: false });
   const options = useAtomCommand(sessionLaunchOptions, { reportFailure: false });
   const formVisible = !isCreation || creation.visible || saved !== null;
   const loadOptions = useCallback(() => {
@@ -197,7 +203,7 @@ export function SessionLauncher({
     }
   };
   const submit = async () => {
-    if (busy || !enabled || initial.error) return;
+    if (busy || !enabled || initial.error || review !== null) return;
     setBusy(true);
     try {
       const request =
@@ -267,6 +273,43 @@ export function SessionLauncher({
       setBusy(false);
     }
   };
+  const inspectLatest = async () => {
+    if (!saved || busy) return;
+    setBusy(true);
+    try {
+      const result = await previewReview({
+        environmentId,
+        input: { operationKey: saved.operationKey, kind: isCreation ? "creation" : "launch" },
+      });
+      if (result._tag === "Success") setReview(result.value);
+      else
+        setMessage(
+          reasonLabel(result._tag === "Failure" ? failureReason(result.cause) : undefined),
+        );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const approveLatest = async () => {
+    if (!review || busy || !enabled) return;
+    setBusy(true);
+    try {
+      const result = await confirmReview({ environmentId, input: review });
+      if (result._tag === "Success") {
+        setReview(null);
+        setMessage(
+          "The reviewed context was saved. Continue the original request to retry its launch.",
+        );
+      } else {
+        setReview(null);
+        setMessage(
+          reasonLabel(result._tag === "Failure" ? failureReason(result.cause) : undefined),
+        );
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
   const clearSaved = () => {
     try {
       localStorage.removeItem(storageKey);
@@ -276,6 +319,7 @@ export function SessionLauncher({
     }
     setSaved(null);
     setRecord(null);
+    setReview(null);
     setConfirmedRefusal(false);
     return true;
   };
@@ -460,6 +504,7 @@ export function SessionLauncher({
                 busy ||
                 !enabled ||
                 initial.error ||
+                review !== null ||
                 (isCreation &&
                   record?.state === "failed" &&
                   "launch" in record &&
@@ -482,6 +527,18 @@ export function SessionLauncher({
                     : "Launch agent"}
             </button>
           )}
+          {saved && record?.state !== "accepted" ? (
+            <button
+              type="button"
+              className={styles["dh-button"]}
+              disabled={busy}
+              onClick={() => {
+                void inspectLatest();
+              }}
+            >
+              Review latest context
+            </button>
+          ) : null}
           {saved ? (
             <button
               type="button"
@@ -549,6 +606,43 @@ export function SessionLauncher({
           ) : null}
         </div>
       </form>
+      {review ? (
+        <section className={styles["dh-launch-review"]} aria-label="Review latest launch context">
+          <h4>Latest launch context</h4>
+          <p>
+            Review these repositories before retrying the original request. Confirming keeps the
+            same feature and conversation; the agent starts only when you continue.
+          </p>
+          {review.repositories.map((repo) => (
+            <div key={repo.repositoryID}>
+              <strong>{repo.repositoryID}</strong>
+              <code>{repo.checkout.root}</code>
+              <span>
+                {repo.checkout.branch ?? "Detached HEAD"} ·{" "}
+                {repo.checkout.commit?.slice(0, 12) ?? "Commit unavailable"}
+              </span>
+            </div>
+          ))}
+          <button
+            type="button"
+            className={styles["dh-button"]}
+            disabled={busy || !enabled}
+            onClick={() => {
+              void approveLatest();
+            }}
+          >
+            Confirm reviewed context
+          </button>
+          <button
+            type="button"
+            className={styles["dh-button"]}
+            disabled={busy}
+            onClick={() => setReview(null)}
+          >
+            Cancel review
+          </button>
+        </section>
+      ) : null}
       {message ? <p role="status">{message}</p> : null}
       {isCreation &&
       record &&

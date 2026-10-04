@@ -22,10 +22,14 @@ describe("RPC authorization scopes", () => {
 
   it("separates managed lane launch authority from session and receipt observation", () => {
     expect(requiredScopeForRpcMethod(DECKHAND_METHODS.launch)).toBe(AuthOrchestrationOperateScope);
+    expect(requiredScopeForRpcMethod(DECKHAND_METHODS.reviewConfirm)).toBe(
+      AuthOrchestrationOperateScope,
+    );
     for (const method of [
       DECKHAND_METHODS.sessions,
       DECKHAND_METHODS.launchGet,
       DECKHAND_METHODS.launchOptions,
+      DECKHAND_METHODS.reviewPreview,
     ]) {
       expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationReadScope);
     }

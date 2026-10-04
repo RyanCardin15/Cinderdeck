@@ -57,3 +57,11 @@ export const inspectSessionCreation = createEnvironmentRpcCommand(connectionAtom
   label: "deckhand:inspect-session-creation",
   tag: DECKHAND_METHODS.createGet,
 });
+export const previewLaunchReview = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "deckhand:preview-launch-review",
+  tag: DECKHAND_METHODS.reviewPreview,
+});
+export const confirmLaunchReview = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "deckhand:confirm-launch-review",
+  tag: DECKHAND_METHODS.reviewConfirm,
+});

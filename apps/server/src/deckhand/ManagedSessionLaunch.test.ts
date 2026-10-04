@@ -210,14 +210,23 @@ const fixture = Effect.gen(function* () {
       Layer.mock(ThreadLaunchService.ThreadLaunchService)({ launch }),
     );
   const nativeCreation = (
-    mode: "ready" | "native_shape" | "setup_failed" | "pending" | "unknown_outcome" = "ready",
+    mode:
+      | "ready"
+      | "native_shape"
+      | "setup_failed"
+      | "pending"
+      | "unknown_outcome"
+      | "stale_target" = "ready",
   ) => {
     const receipts = new Map<string, Integration.IntegrationOperationReceipt>();
     let creations = 0;
+    let targetReads = 0;
     const created = `${root}/created`;
     const hub = Layer.mock(IntegrationHub.IntegrationHub)({
       resource: (id) => {
         const item = resources.get(id);
+        if (item && mode === "stale_target" && id === "created" && ++targetReads > 1)
+          item.revision = "changed";
         return item
           ? Effect.succeed({ hello, resource: item })
           : Effect.fail(new Rpc.DeckhandRpcError({ reason: "unavailable" }));
@@ -287,7 +296,7 @@ const fixture = Effect.gen(function* () {
               ...(mode === "unknown_outcome" ? {} : { createdWorkspaceID: "created" }),
               ...(mode === "native_shape"
                 ? { workspace: resource.workspace }
-                : { creationReady: mode === "ready" }),
+                : { creationReady: mode === "ready" || mode === "stale_target" }),
               setup: { status: mode === "setup_failed" ? "failed" : "skipped", updatedAt: "now" },
             },
           });
@@ -662,7 +671,8 @@ describe("connected lane and session creation", () => {
         const json = yield* encodeCreationRecordJson(legacy);
         yield* sql`UPDATE deckhand_managed_creations SET record_json = ${json} WHERE operation_key = ${one.operationKey}`;
         yield* sql`DROP INDEX deckhand_creations_launch_key`;
-        yield* sql`DELETE FROM deckhand_schema WHERE version = 8`;
+        yield* sql`DELETE FROM deckhand_schema WHERE version >= 8`;
+        yield* sql`DROP TABLE deckhand_launch_reviews`;
         yield* sql`INSERT INTO deckhand_schema VALUES (7)`;
         f.resources.clear();
         yield* Effect.gen(function* () {
@@ -805,6 +815,196 @@ describe("connected lane and session creation", () => {
           assert.equal(failure.contextIntent?.featureId, first.contextIntent?.featureId);
         }).pipe(Effect.provide(layer));
         assert.equal(native.creations(), 1);
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+});
+
+describe("saved launch context review", () => {
+  it.effect(
+    "repairs a stale resolved creation before any thread exists while retaining its original feature and lane",
+    () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const native = f.nativeCreation("stale_target");
+        let launches = 0;
+        const layer = serviceLayer.pipe(
+          Layer.provide(
+            f.external((request) => {
+              launches++;
+              return Effect.succeed(accepted(request));
+            }, native.hub),
+          ),
+        );
+        yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          const first = yield* service.create("actor", creationInput());
+          assert.equal(first.state, "failed");
+          assert.equal(first.error, "stale_context");
+          assert.equal(first.launch, null);
+          const review = yield* service.reviewPreview("actor", {
+            kind: "creation",
+            operationKey: first.operationKey,
+          });
+          assert.equal(review.workspaceID, first.laneID);
+          assert.equal(review.revision, "changed");
+          yield* service.reviewConfirm("actor", review);
+          assert.equal(launches, 0);
+          const accepted = yield* service.create("actor", creationInput());
+          assert.equal(accepted.state, "accepted");
+          assert.equal(accepted.launch?.featureId, first.contextIntent?.featureId);
+          assert.equal(accepted.laneID, first.laneID);
+          assert.equal(native.creations(), 1);
+          assert.equal(launches, 1);
+          const sql = yield* SqlClient.SqlClient;
+          assert.equal((yield* sql`SELECT id FROM deckhand_features`).length, 1);
+          assert.equal(
+            (yield* decodeLaunchInputJson(
+              (yield* sql<{
+                launch_input_json: string;
+              }>`SELECT launch_input_json FROM deckhand_managed_creations`)[0]!.launch_input_json,
+            )).revision,
+            "current",
+          );
+        }).pipe(Effect.provide(layer));
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+
+  it.effect(
+    "requires explicit fresh review, preserves immutable intent and thread through restart, and rejects changed heads",
+    () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        let calls = 0;
+        const layer = serviceLayer.pipe(
+          Layer.provide(
+            f.external((request) => {
+              calls++;
+              return calls === 1 ? failed(request) : Effect.succeed(accepted(request));
+            }),
+          ),
+        );
+        const reviewInput: Rpc.ManagedLaunchReviewInput = {
+          kind: "launch",
+          operationKey: input().operationKey,
+        };
+        const sql = yield* SqlClient.SqlClient;
+        const original = yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          yield* service.launch("actor", input()).pipe(Effect.flip);
+          const original = yield* service.get("actor", input().operationKey);
+          yield* f.git(f.lane, [
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "Head changed before review",
+          ]);
+          assert.equal(
+            (yield* service.launch("actor", input()).pipe(Effect.flip)).reason,
+            "stale_context",
+            "a changed head requires review even if native metadata revision is unchanged",
+          );
+          f.resources.get("lane")!.revision = "changed";
+          assert.equal(
+            (yield* service.launch("actor", input()).pipe(Effect.flip)).reason,
+            "stale_context",
+          );
+          const review = yield* service.reviewPreview("actor", reviewInput);
+          assert.equal(review.revision, "changed");
+          assert.equal(calls, 1);
+          assert.equal(
+            (yield* sql`SELECT launch_operation_key FROM deckhand_launch_reviews`).length,
+            0,
+          );
+          assert.equal(
+            (yield* service.reviewPreview("other", reviewInput).pipe(Effect.flip)).reason,
+            "wrong_actor",
+          );
+          assert.equal(
+            (yield* service
+              .reviewConfirm("actor", { ...review, revision: "old" })
+              .pipe(Effect.flip)).reason,
+            "stale_context",
+          );
+          yield* service.reviewConfirm("actor", review);
+          assert.equal(calls, 1, "confirmation cannot start a provider");
+          yield* f.git(f.lane, [
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "New reviewed head",
+          ]);
+          assert.equal(
+            (yield* service.launch("actor", input()).pipe(Effect.flip)).reason,
+            "stale_context",
+          );
+          yield* service.reviewConfirm("actor", yield* service.reviewPreview("actor", reviewInput));
+          return original;
+        }).pipe(Effect.provide(layer));
+        yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          const current = yield* service.launch("actor", input());
+          assert.equal(current.state, "accepted");
+          assert.equal(current.threadId, original.threadId);
+          assert.equal(current.featureId, original.featureId);
+          const checkout = yield* Effect.gen(function* () {
+            const store = yield* Relationships.Relationships;
+            return yield* store.checkout(current.checkoutId);
+          }).pipe(Effect.provide(Relationships.layer));
+          assert.equal(
+            checkout.repositories[0]!.commit,
+            (yield* f.git(f.lane, ["rev-parse", "HEAD"])).stdout.trim(),
+          );
+          assert.equal(
+            (yield* service.reviewPreview("actor", reviewInput).pipe(Effect.flip)).reason,
+            "not_retryable",
+          );
+          assert.equal(
+            (yield* decodeLaunchInputJson(
+              (yield* sql<{
+                input_json: string;
+              }>`SELECT input_json FROM deckhand_managed_launches`)[0]!.input_json,
+            )).revision,
+            "current",
+          );
+        }).pipe(Effect.provide(layer));
+        assert.equal(calls, 2);
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+
+  it.effect(
+    "refuses to retarget an existing saved conversation to another physical checkout or generation",
+    () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const layer = serviceLayer.pipe(Layer.provide(f.external((request) => failed(request))));
+        yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          yield* service.launch("actor", input()).pipe(Effect.flip);
+          const request: Rpc.ManagedLaunchReviewInput = {
+            kind: "launch",
+            operationKey: input().operationKey,
+          };
+          const lane = f.resources.get("lane")!;
+          lane.workspace.repos[0]!.path = f.source;
+          assert.equal(
+            (yield* service.reviewPreview("actor", request).pipe(Effect.flip)).reason,
+            "stale_context",
+          );
+          lane.workspace.repos[0]!.path = f.lane;
+          lane.generation++;
+          assert.equal(
+            (yield* service.reviewPreview("actor", request).pipe(Effect.flip)).reason,
+            "stale_context",
+          );
+        }).pipe(Effect.provide(layer));
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 });
