@@ -114,7 +114,21 @@ function ConnectedWorkspace({
   const search = useSearch({ from: "/_chat/workspaces" });
   const navigate = useNavigate();
   const agentMode = search.tab === "agents";
+  const selectedBaseRef = useRef<string | null>(search.workspace ?? null);
+  const mountedRef = useRef(true);
+  const selectionVersionRef = useRef(0);
+  useEffect(() => {
+    selectionVersionRef.current += 1;
+  }, [search.workspace, search.context, search.tab]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const setWorkspaceID = (workspace: string) => {
+    selectedBaseRef.current = workspace;
+    selectionVersionRef.current += 1;
     void navigate({
       to: "/workspaces",
       search: { environment: environmentId, workspace, ...(search.tab ? { tab: search.tab } : {}) },
@@ -122,6 +136,7 @@ function ConnectedWorkspace({
   };
   const setSelectedID = useCallback(
     (context: string | null) => {
+      selectionVersionRef.current += 1;
       void navigate({
         to: "/workspaces",
         search: context
@@ -288,6 +303,9 @@ function ConnectedWorkspace({
   const activeBase = workspaceID
     ? bases.find((resource) => resource.workspaceID === workspaceID)
     : bases[0];
+  useEffect(() => {
+    selectedBaseRef.current = activeBase?.workspaceID ?? null;
+  }, [activeBase?.workspaceID]);
   const contexts = activeBase
     ? overviewWorkspaceContexts(view, activeBase.workspaceID)
     : workspaceID
@@ -359,7 +377,9 @@ function ConnectedWorkspace({
   ].every((capability) => view?.hello?.capabilities.includes(capability));
   const reconcile = useCallback(async () => {
     if (!operation) return;
+    const selectionVersion = selectionVersionRef.current;
     const response = await inspect({ environmentId, input: { operationKey: operation.key } });
+    if (!mountedRef.current) return;
     if (response._tag === "Success") {
       const createdID =
         response.value.result?.workspace?.id ?? response.value.result?.createdWorkspaceID;
@@ -367,7 +387,8 @@ function ConnectedWorkspace({
         response.value.method === "lane.create" &&
         response.value.state === "succeeded" &&
         createdID &&
-        activeBase?.workspaceID === operation.workspaceID
+        selectedBaseRef.current === operation.workspaceID &&
+        selectionVersionRef.current === selectionVersion
       )
         setSelectedID(createdID);
       setOperation((current) =>
@@ -384,7 +405,7 @@ function ConnectedWorkspace({
             }
           : current,
       );
-  }, [operation, inspect, environmentId, setSelectedID, activeBase?.workspaceID]);
+  }, [operation, inspect, environmentId, setSelectedID]);
   useEffect(() => {
     if (!operation?.receipt || terminal(operation.receipt)) return;
     const timer = window.setTimeout(() => {
@@ -855,8 +876,8 @@ function ConnectedWorkspace({
                 <span className={styles["dh-eyebrow"]}>Agents in</span>
                 <h2>{selected ? selectedName : "Choose a context"}</h2>
                 <p>
-                  Each agent has its own conversation. Agents in this context share the same
-                  checkout.
+                  Each agent has its own conversation. Agents in this context work in its repository
+                  checkouts.
                 </p>
               </div>
               {selected?.workspace?.repos[0]?.branch ? (
