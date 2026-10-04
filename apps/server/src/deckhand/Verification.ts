@@ -131,6 +131,16 @@ export class Verification extends Context.Service<
     ) => Effect.Effect<C.VerificationOverview, C.VerificationError>;
   }
 >()("t3/deckhand/Verification") {}
+export const verificationReferenceKey = (input: C.VerificationInput) =>
+  digest(
+    json([
+      input.reference.projectId,
+      input.reference.host ?? "github.com",
+      input.reference.repository.toLowerCase(),
+      input.reference.number,
+    ]),
+  );
+
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const relationships = yield* Relationships.Relationships;
@@ -139,15 +149,7 @@ const make = Effect.gen(function* () {
   const github = yield* GitHubPullRequestCli.GitHubPullRequestCli;
   const fail = (reason: string) => new C.VerificationError({ reason });
   const wrap = (cause: unknown) => (isError(cause) ? cause : fail("unavailable"));
-  const key = (input: C.VerificationInput) =>
-    digest(
-      json([
-        input.reference.projectId,
-        input.reference.host ?? "github.com",
-        input.reference.repository.toLowerCase(),
-        input.reference.number,
-      ]),
-    );
+  const key = verificationReferenceKey;
   const current = (input: C.VerificationInput) =>
     Effect.gen(function* () {
       // Resolve project/account authority before reading an authoritative current head.

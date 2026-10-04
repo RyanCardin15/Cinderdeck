@@ -1,3 +1,4 @@
+import * as ActorAccess from "../deckhand/ActorAccess.ts";
 import * as CurrentCheckout from "../deckhand/CurrentCheckout.ts";
 import * as OwnershipTransitions from "../deckhand/OwnershipTransitions.ts";
 import * as HistoryImports from "../deckhand/HistoryImports.ts";
@@ -457,6 +458,7 @@ const ownedPreviewCaptureProvided = OwnedPreviewCapture.layer.pipe(
   ),
 );
 export const OrchestrationV2ProductionLayerLive = Layer.mergeAll(
+  ActorAccess.layer,
   HistoryImports.layer,
   currentCheckoutProvided,
   ownershipTransitionsProvided,

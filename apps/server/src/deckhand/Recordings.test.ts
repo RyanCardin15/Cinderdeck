@@ -62,11 +62,18 @@ const authRecord = () =>
 const testLayer = (
   request: RecordingTransport.RecordingTransport["Service"]["request"],
   session: () => Option.Option<AuthSessions.AuthSessionRecord> = () => Option.some(authRecord()),
+  lookup?: (sessionID: string) => void,
 ) =>
   Recordings.layer.pipe(
     Layer.provide(Layer.mock(RecordingTransport.RecordingTransport)({ request })),
     Layer.provide(
-      Layer.mock(AuthSessions.AuthSessionRepository)({ getById: () => Effect.sync(session) }),
+      Layer.mock(AuthSessions.AuthSessionRepository)({
+        getById: (input) =>
+          Effect.sync(() => {
+            lookup?.(input.sessionId);
+            return session();
+          }),
+      }),
     ),
   );
 const evidence: C.EvidencePreparation = {
@@ -206,7 +213,7 @@ describe("recording evidence and media authority", () => {
       let chunks = 0;
       return Effect.gen(function* () {
         const service = yield* Recordings.Recordings;
-        const media = yield* service.media(actor, context);
+        const media = yield* service.media("dh-admin:original-native-owner", context, actor);
         const token = media.path.split("/").at(-1)!;
         assert.equal(media.size, 4);
         assert.deepEqual(Array.from(yield* service.chunk(token, 1, 2)), [2, 3]);
@@ -220,6 +227,7 @@ describe("recording evidence and media authority", () => {
           testLayer(
             (_actor, method, input) =>
               Effect.sync(() => {
+                assert.equal(_actor, "dh-admin:original-native-owner");
                 if (method === "integration.recording.get") return recording;
                 const offset = Number(input.offset);
                 const length = Number(input.length);
@@ -233,6 +241,7 @@ describe("recording evidence and media authority", () => {
                 };
               }),
             () => (revoked ? Option.none() : Option.some(authRecord())),
+            (sessionID) => assert.equal(sessionID, actor),
           ),
         ),
       );

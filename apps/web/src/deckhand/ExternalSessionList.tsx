@@ -1,16 +1,19 @@
-import {
-  EXTERNAL_SESSION_METHODS,
-  type ExternalSessionView,
-} from "@t3tools/contracts/deckhand/externalSessionsRpc";
+import { EXTERNAL_SESSION_METHODS } from "@t3tools/contracts/deckhand/externalSessionsRpc";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { createEnvironmentRpcCommand } from "@t3tools/client-runtime/state/runtime";
-import { useEffect, useState } from "react";
+import { createEnvironmentRpcQueryAtomFamily } from "@t3tools/client-runtime/state/runtime";
+import { useAtomValue } from "@effect/atom-react";
+import * as Option from "effect/Option";
+import { AsyncResult } from "effect/unstable/reactivity";
 import { connectionAtomRuntime } from "../connection/runtime";
-import { useAtomCommand } from "../state/use-atom-command";
 import styles from "./workspace.module.css";
-export const externalSessionsList = createEnvironmentRpcCommand(connectionAtomRuntime, {
+export const externalSessionsView = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
   label: "deckhand:external-sessions",
   tag: EXTERNAL_SESSION_METHODS.list,
+  staleTimeMs: 15000,
+  refreshIntervalMs: 15000,
+  // A departed inspector must release its read, rather than queue old native
+  // context refreshes behind the currently selected lane.
+  idleTtlMs: 0,
 });
 export function ExternalSessionList(props: {
   environmentId: EnvironmentId;
@@ -36,35 +39,14 @@ function ScopedExternalSessionList({
   workspaceID: string;
   generation: number;
 }) {
-  const list = useAtomCommand(externalSessionsList, { reportFailure: false });
-  const [sessions, setSessions] = useState<ReadonlyArray<ExternalSessionView> | null>(null);
-  const [unavailable, setUnavailable] = useState(false);
-  useEffect(() => {
-    let disposed = false;
-    let running = false;
-    const load = async () => {
-      if (running || disposed) return;
-      running = true;
-      try {
-        const response = await list({
-          environmentId,
-          input: { installationID, workspaceID, generation, limit: 20 },
-        });
-        if (disposed) return;
-        setUnavailable(response._tag !== "Success");
-        if (response._tag === "Success") setSessions(response.value);
-      } finally {
-        running = false;
-      }
-    };
-    void load();
-    const timer = setInterval(() => void load(), 15000);
-    return () => {
-      disposed = true;
-      clearInterval(timer);
-    };
-    // The outer component remounts this scoped subscription for every identity/generation change.
-  }, []);
+  const result = useAtomValue(
+    externalSessionsView({
+      environmentId,
+      input: { installationID, workspaceID, generation, limit: 20 },
+    }),
+  );
+  const sessions = Option.getOrNull(AsyncResult.value(result));
+  const unavailable = result._tag === "Failure";
   return (
     <section className={styles["dh-session-list"]} aria-label="Reported external sessions">
       <h3>External sessions</h3>

@@ -1,3 +1,4 @@
+import * as ActorAccess from "./deckhand/ActorAccess.ts";
 import * as OwnershipTransitions from "./deckhand/OwnershipTransitions.ts";
 import { OWNERSHIP_METHODS, OwnershipError } from "@t3tools/contracts/deckhand/ownershipRpc";
 import * as HistoryImports from "./deckhand/HistoryImports.ts";
@@ -25,9 +26,9 @@ import {
   VerificationError,
 } from "@t3tools/contracts/deckhand/verificationRpc";
 import * as LinkedWorkBridge from "./deckhand/LinkedWorkBridge.ts";
-import { LINKED_WORK_METHODS } from "@t3tools/contracts/deckhand/linkedWorkRpc";
+import { LINKED_WORK_METHODS, LinkedWorkError } from "@t3tools/contracts/deckhand/linkedWorkRpc";
 import * as PreviewCapture from "./deckhand/PreviewCapture.ts";
-import { RUN_METHODS } from "@t3tools/contracts/deckhand/runsRpc";
+import { RUN_METHODS, RunsError } from "@t3tools/contracts/deckhand/runsRpc";
 import * as DeckhandRuns from "./deckhand/Runs.ts";
 import * as ReviewerLaunch from "./deckhand/ReviewerLaunch.ts";
 import * as DeckhandRpc from "@t3tools/contracts/deckhand/rpc";
@@ -1137,6 +1138,18 @@ const makeWsRpcLayer = (
   Layer.unwrap(
     Effect.gen(function* () {
       const currentSessionId = currentSession.sessionId;
+      const actorAccess = yield* ActorAccess.ActorAccess;
+      // Domain ownership survives a trusted desktop login; credentials still use
+      // the exact live upstream auth session and are never replaced by owner IDs.
+      const withActor = <A, E, R, X>(
+        resource: ActorAccess.ActorResource | readonly ActorAccess.ActorResource[] | undefined,
+        run: (actor: string) => Effect.Effect<A, E, R>,
+        error: (reason: string) => X,
+      ) =>
+        actorAccess.resolve(currentSession, resource).pipe(
+          Effect.mapError((cause) => error(cause.reason)),
+          Effect.flatMap(run),
+        );
       const deckhand = yield* IntegrationHub.IntegrationHub;
       const workspaceBackend = yield* WorkspaceBackend.WorkspaceBackend;
       const managedSessions = yield* ManagedSessions.ManagedSessions;
@@ -1817,23 +1830,51 @@ const makeWsRpcLayer = (
         [OWNERSHIP_METHODS.preview]: (input) =>
           observeRpcEffect(
             OWNERSHIP_METHODS.preview,
-            ownershipTransitions.preview(currentSessionId, input),
+            withActor(
+              [
+                { type: "ownership-key", operationKey: input.operationKey },
+                ...(input.direction === "release"
+                  ? [{ type: "ownership-thread" as const, threadId: input.threadId }]
+                  : []),
+              ],
+              (actor) => ownershipTransitions.preview(actor, input),
+              () => new OwnershipError({ reason: "storage" }),
+            ),
           ),
         [OWNERSHIP_METHODS.get]: (input) =>
           observeRpcEffect(
             OWNERSHIP_METHODS.get,
-            ownershipTransitions.get(currentSessionId, input),
+            withActor(
+              { type: "ownership-id", id: input.id },
+              (actor) => ownershipTransitions.get(actor, input),
+              () => new OwnershipError({ reason: "storage" }),
+            ),
           ),
         [OWNERSHIP_METHODS.list]: (input) =>
           observeRpcEffect(
             OWNERSHIP_METHODS.list,
-            ownershipTransitions.list(currentSessionId, input),
+            withActor(
+              undefined,
+              (actor) => ownershipTransitions.list(actor, input),
+              () => new OwnershipError({ reason: "storage" }),
+            ),
           ),
         [OWNERSHIP_METHODS.submit]: (input) =>
           observeRpcEffect(
             OWNERSHIP_METHODS.submit,
             startup
-              .enqueueCommand(ownershipTransitions.submit(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  [
+                    { type: "ownership-key", operationKey: input.operationKey },
+                    ...(input.direction === "release"
+                      ? [{ type: "ownership-thread" as const, threadId: input.threadId }]
+                      : []),
+                  ],
+                  (actor) => ownershipTransitions.submit(actor, input),
+                  () => new OwnershipError({ reason: "storage" }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isOwnershipError(cause) ? cause : new OwnershipError({ reason: "storage" }),
@@ -1843,16 +1884,24 @@ const makeWsRpcLayer = (
         [HISTORY_IMPORT_METHODS.import]: (input) =>
           observeRpcEffect(
             HISTORY_IMPORT_METHODS.import,
-            startup.enqueueCommand(historyImports.importHistory(currentSessionId, input)).pipe(
-              Effect.mapError((cause) =>
-                isHistoryImportError(cause)
-                  ? cause
-                  : new HistoryImportError({
-                      code: "unavailable",
-                      reason: "History import is unavailable.",
-                    }),
+            startup
+              .enqueueCommand(
+                withActor(
+                  undefined,
+                  (actor) => historyImports.importHistory(actor, input),
+                  (reason) => new HistoryImportError({ code: "unavailable", reason }),
+                ),
+              )
+              .pipe(
+                Effect.mapError((cause) =>
+                  isHistoryImportError(cause)
+                    ? cause
+                    : new HistoryImportError({
+                        code: "unavailable",
+                        reason: "History import is unavailable.",
+                      }),
+                ),
               ),
-            ),
           ),
         [HISTORY_IMPORT_METHODS.remove]: (input) =>
           observeRpcEffect(
@@ -1882,7 +1931,16 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             OWNED_PREVIEW_METHODS.intent,
             startup
-              .enqueueCommand(ownedPreviewCapture.intent(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  [
+                    { type: "capture", captureKey: input.captureKey },
+                    { type: "attempt", operationKey: input.attemptOperationKey },
+                  ],
+                  (actor) => ownedPreviewCapture.intent(actor, input),
+                  (reason) => new OwnedPreviewError({ reason }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isOwnedPreviewError(cause)
@@ -1894,25 +1952,50 @@ const makeWsRpcLayer = (
         [OWNED_PREVIEW_METHODS.get]: (input) =>
           observeRpcEffect(
             OWNED_PREVIEW_METHODS.get,
-            ownedPreviewCapture.get(currentSessionId, input),
+            withActor(
+              { type: "capture", captureKey: input.captureKey },
+              (actor) => ownedPreviewCapture.get(actor, input),
+              (reason) => new OwnedPreviewError({ reason }),
+            ),
           ),
         [ATTEMPT_METHODS.preview]: (input) =>
           observeRpcEffect(
             ATTEMPT_METHODS.preview,
-            verificationAttempts.preview(currentSessionId, input),
+            withActor(
+              undefined,
+              (actor) => verificationAttempts.preview(actor, input),
+              (reason) => new AttemptError({ reason }),
+            ),
           ),
         [ATTEMPT_METHODS.get]: (input) =>
-          observeRpcEffect(ATTEMPT_METHODS.get, verificationAttempts.get(currentSessionId, input)),
+          observeRpcEffect(
+            ATTEMPT_METHODS.get,
+            withActor(
+              { type: "attempt", operationKey: input.operationKey },
+              (actor) => verificationAttempts.get(actor, input),
+              (reason) => new AttemptError({ reason }),
+            ),
+          ),
         [ATTEMPT_METHODS.list]: (input) =>
           observeRpcEffect(
             ATTEMPT_METHODS.list,
-            verificationAttempts.list(currentSessionId, input),
+            withActor(
+              undefined,
+              (actor) => verificationAttempts.list(actor, input),
+              (reason) => new AttemptError({ reason }),
+            ),
           ),
         [ATTEMPT_METHODS.start]: (input) =>
           observeRpcEffect(
             ATTEMPT_METHODS.start,
             startup
-              .enqueueCommand(verificationAttempts.start(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  { type: "attempt", operationKey: input.operationKey },
+                  (actor) => verificationAttempts.start(actor, input),
+                  (reason) => new AttemptError({ reason }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isAttemptError(cause) ? cause : new AttemptError({ reason: "unavailable" }),
@@ -1923,7 +2006,13 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             ATTEMPT_METHODS.advance,
             startup
-              .enqueueCommand(verificationAttempts.advance(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  { type: "attempt", operationKey: input.operationKey },
+                  (actor) => verificationAttempts.advance(actor, input),
+                  (reason) => new AttemptError({ reason }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isAttemptError(cause) ? cause : new AttemptError({ reason: "unavailable" }),
@@ -1931,14 +2020,27 @@ const makeWsRpcLayer = (
               ),
           ),
         [ATTENTION_METHODS.list]: (input) =>
-          observeRpcEffect(ATTENTION_METHODS.list, attention.list(currentSessionId, input)),
+          observeRpcEffect(
+            ATTENTION_METHODS.list,
+            withActor(
+              undefined,
+              (actor) => attention.list(actor, input),
+              () => new AttentionError({ reason: "source_unavailable" }),
+            ),
+          ),
         [EXTERNAL_SESSION_METHODS.list]: (input) =>
           observeRpcEffect(EXTERNAL_SESSION_METHODS.list, externalSessions.list(input)),
         [EXTERNAL_SESSION_METHODS.register]: (input) =>
           observeRpcEffect(
             EXTERNAL_SESSION_METHODS.register,
             startup
-              .enqueueCommand(externalSessions.register(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  { type: "external-key", operationKey: input.operationKey },
+                  (actor) => externalSessions.register(actor, input),
+                  () => new ExternalSessionError({ reason: "storage" }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isExternalSessionError(cause)
@@ -1951,7 +2053,13 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             EXTERNAL_SESSION_METHODS.visibility,
             startup
-              .enqueueCommand(externalSessions.changeVisibility(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  { type: "external", id: input.id },
+                  (actor) => externalSessions.changeVisibility(actor, input),
+                  () => new ExternalSessionError({ reason: "storage" }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isExternalSessionError(cause)
@@ -1964,7 +2072,13 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             EXTERNAL_SESSION_METHODS.heartbeat,
             startup
-              .enqueueCommand(externalSessions.heartbeat(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  { type: "external", id: input.id },
+                  (actor) => externalSessions.heartbeat(actor, input),
+                  () => new ExternalSessionError({ reason: "storage" }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isExternalSessionError(cause)
@@ -1977,7 +2091,13 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             ATTENTION_METHODS.change,
             startup
-              .enqueueCommand(attention.change(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  { type: "attention", attentionID: input.id },
+                  (actor) => attention.change(actor, input),
+                  () => new AttentionError({ reason: "source_unavailable" }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isAttentionError(cause) ? cause : new AttentionError({ reason: "storage" }),
@@ -1985,12 +2105,25 @@ const makeWsRpcLayer = (
               ),
           ),
         [VERIFICATION_METHODS.list]: (input) =>
-          observeRpcEffect(VERIFICATION_METHODS.list, verification.list(currentSessionId, input)),
+          observeRpcEffect(
+            VERIFICATION_METHODS.list,
+            withActor(
+              undefined,
+              (actor) => verification.list(actor, input),
+              (reason) => new VerificationError({ reason }),
+            ),
+          ),
         [VERIFICATION_METHODS.link]: (input) =>
           observeRpcEffect(
             VERIFICATION_METHODS.link,
             startup
-              .enqueueCommand(verification.link(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  { type: "recording", recordingID: input.recording.recordingID },
+                  (actor) => verification.link(actor, input),
+                  (reason) => new VerificationError({ reason }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isVerificationError(cause)
@@ -2003,7 +2136,13 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             VERIFICATION_METHODS.unlink,
             startup
-              .enqueueCommand(verification.unlink(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  undefined,
+                  (actor) => verification.unlink(actor, input),
+                  (reason) => new VerificationError({ reason }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isVerificationError(cause)
@@ -2016,7 +2155,17 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             VERIFICATION_METHODS.scenarioSave,
             startup
-              .enqueueCommand(verification.scenarioSave(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  {
+                    type: "scenario",
+                    prKey: Verification.verificationReferenceKey(input),
+                    scenarioID: input.scenarioID,
+                  },
+                  (actor) => verification.scenarioSave(actor, input),
+                  (reason) => new VerificationError({ reason }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isVerificationError(cause)
@@ -2029,7 +2178,17 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             VERIFICATION_METHODS.scenarioRemove,
             startup
-              .enqueueCommand(verification.scenarioRemove(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  {
+                    type: "scenario",
+                    prKey: Verification.verificationReferenceKey(input),
+                    scenarioID: input.scenarioID,
+                  },
+                  (actor) => verification.scenarioRemove(actor, input),
+                  (reason) => new VerificationError({ reason }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isVerificationError(cause)
@@ -2041,7 +2200,11 @@ const makeWsRpcLayer = (
         [LINKED_WORK_METHODS.publish]: (input) =>
           observeRpcEffect(
             LINKED_WORK_METHODS.publish,
-            linkedWork.publish(currentSessionId, input),
+            withActor(
+              { type: "thread", threadId: input.threadId },
+              (actor) => linkedWork.publish(actor, input),
+              () => new LinkedWorkError({ reason: "storage" }),
+            ),
           ),
         [LINKED_WORK_METHODS.resolve]: (input) =>
           observeRpcEffect(LINKED_WORK_METHODS.resolve, linkedWork.resolve(input)),
@@ -2049,7 +2212,13 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             RECORDING_METHODS.prepareEvidence,
             startup
-              .enqueueCommand(recordings.prepareEvidence(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  { type: "recording", recordingID: input.recordingID },
+                  (actor) => recordings.prepareEvidence(actor, input),
+                  (reason) => new RecordingError({ reason }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isRecordingError(cause)
@@ -2061,18 +2230,40 @@ const makeWsRpcLayer = (
         [RECORDING_METHODS.evidenceGet]: (input) =>
           observeRpcEffect(
             RECORDING_METHODS.evidenceGet,
-            recordings.getEvidence(currentSessionId, input),
+            withActor(
+              { type: "recording", recordingID: input.recordingID },
+              (actor) => recordings.getEvidence(actor, input),
+              (reason) => new RecordingError({ reason }),
+            ),
           ),
         [RECORDING_METHODS.evidenceResource]: (input) =>
           observeRpcEffect(
             RECORDING_METHODS.evidenceResource,
-            recordings.evidenceResource(currentSessionId, input),
+            withActor(
+              { type: "recording", recordingID: input.recordingID },
+              (actor) => recordings.evidenceResource(actor, input, currentSessionId),
+              (reason) => new RecordingError({ reason }),
+            ),
           ),
         [RECORDING_METHODS.importBegin]: (input) =>
           observeRpcEffect(
             RECORDING_METHODS.importBegin,
             startup
-              .enqueueCommand(previewCapture.begin(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  [
+                    { type: "preview-import", operationKey: input.operationKey },
+                    ...(input.attemptOperationKey
+                      ? [{ type: "attempt" as const, operationKey: input.attemptOperationKey }]
+                      : []),
+                    ...(input.buildReceiptID
+                      ? [{ type: "build" as const, receiptID: input.buildReceiptID }]
+                      : []),
+                  ],
+                  (actor) => previewCapture.begin(actor, input),
+                  (reason) => new RecordingError({ reason }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isRecordingError(cause)
@@ -2084,23 +2275,41 @@ const makeWsRpcLayer = (
         [RECORDING_METHODS.importGet]: (input) =>
           observeRpcEffect(
             RECORDING_METHODS.importGet,
-            previewCapture.get(currentSessionId, input),
+            withActor(
+              { type: "preview-import", operationKey: input.operationKey },
+              (actor) => previewCapture.get(actor, input),
+              (reason) => new RecordingError({ reason }),
+            ),
           ),
         [RECORDING_METHODS.importEvent]: (input) =>
           observeRpcEffect(
             RECORDING_METHODS.importEvent,
-            previewCapture.event(currentSessionId, input),
+            withActor(
+              { type: "preview-import", operationKey: input.operationKey },
+              (actor) => previewCapture.event(actor, input),
+              (reason) => new RecordingError({ reason }),
+            ),
           ),
         [RECORDING_METHODS.importChunk]: (input) =>
           observeRpcEffect(
             RECORDING_METHODS.importChunk,
-            previewCapture.upload(currentSessionId, input),
+            withActor(
+              { type: "preview-import", operationKey: input.operationKey },
+              (actor) => previewCapture.upload(actor, input),
+              (reason) => new RecordingError({ reason }),
+            ),
           ),
         [RECORDING_METHODS.importFinish]: (input) =>
           observeRpcEffect(
             RECORDING_METHODS.importFinish,
             startup
-              .enqueueCommand(previewCapture.finish(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  { type: "preview-import", operationKey: input.operationKey },
+                  (actor) => previewCapture.finish(actor, input),
+                  (reason) => new RecordingError({ reason }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isRecordingError(cause)
@@ -2112,28 +2321,77 @@ const makeWsRpcLayer = (
         [RECORDING_METHODS.overview]: (input) =>
           observeRpcEffect(
             RECORDING_METHODS.overview,
-            recordings.overview(currentSessionId, input),
+            withActor(
+              undefined,
+              (actor) => recordings.overview(actor, input),
+              (reason) => new RecordingError({ reason }),
+            ),
           ),
         [RECORDING_METHODS.list]: (input) =>
-          observeRpcEffect(RECORDING_METHODS.list, recordings.list(currentSessionId, input)),
+          observeRpcEffect(
+            RECORDING_METHODS.list,
+            withActor(
+              undefined,
+              (actor) => recordings.list(actor, input),
+              (reason) => new RecordingError({ reason }),
+            ),
+          ),
         [RECORDING_METHODS.get]: (input) =>
-          observeRpcEffect(RECORDING_METHODS.get, recordings.get(currentSessionId, input)),
+          observeRpcEffect(
+            RECORDING_METHODS.get,
+            withActor(
+              { type: "recording", recordingID: input.recordingID },
+              (actor) => recordings.get(actor, input),
+              (reason) => new RecordingError({ reason }),
+            ),
+          ),
         [RECORDING_METHODS.windows]: (input) =>
-          observeRpcEffect(RECORDING_METHODS.windows, recordings.windows(currentSessionId, input)),
+          observeRpcEffect(
+            RECORDING_METHODS.windows,
+            withActor(
+              undefined,
+              (actor) => recordings.windows(actor, input),
+              (reason) => new RecordingError({ reason }),
+            ),
+          ),
         [RECORDING_METHODS.logs]: (input) =>
-          observeRpcEffect(RECORDING_METHODS.logs, recordings.logs(currentSessionId, input)),
+          observeRpcEffect(
+            RECORDING_METHODS.logs,
+            withActor(
+              { type: "recording", recordingID: input.recordingID },
+              (actor) => recordings.logs(actor, input),
+              (reason) => new RecordingError({ reason }),
+            ),
+          ),
         [RECORDING_METHODS.media]: (input) =>
-          observeRpcEffect(RECORDING_METHODS.media, recordings.media(currentSessionId, input)),
+          observeRpcEffect(
+            RECORDING_METHODS.media,
+            withActor(
+              { type: "recording", recordingID: input.recordingID },
+              (actor) => recordings.media(actor, input, currentSessionId),
+              (reason) => new RecordingError({ reason }),
+            ),
+          ),
         [RECORDING_METHODS.thumbnail]: (input) =>
           observeRpcEffect(
             RECORDING_METHODS.thumbnail,
-            recordings.thumbnail(currentSessionId, input),
+            withActor(
+              { type: "recording", recordingID: input.recordingID },
+              (actor) => recordings.thumbnail(actor, input, currentSessionId),
+              (reason) => new RecordingError({ reason }),
+            ),
           ),
         [RECORDING_METHODS.start]: (input) =>
           observeRpcEffect(
             RECORDING_METHODS.start,
             startup
-              .enqueueCommand(recordings.start(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  undefined,
+                  (actor) => recordings.start(actor, input),
+                  (reason) => new RecordingError({ reason }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isRecordingError(cause)
@@ -2146,7 +2404,13 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             RECORDING_METHODS.control,
             startup
-              .enqueueCommand(recordings.control(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  { type: "recording", recordingID: input.recordingID },
+                  (actor) => recordings.control(actor, input),
+                  (reason) => new RecordingError({ reason }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isRecordingError(cause)
@@ -2159,7 +2423,13 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             RECORDING_METHODS.mark,
             startup
-              .enqueueCommand(recordings.mark(currentSessionId, input))
+              .enqueueCommand(
+                withActor(
+                  { type: "recording", recordingID: input.recordingID },
+                  (actor) => recordings.mark(actor, input),
+                  (reason) => new RecordingError({ reason }),
+                ),
+              )
               .pipe(
                 Effect.mapError((cause) =>
                   isRecordingError(cause)
@@ -2169,17 +2439,59 @@ const makeWsRpcLayer = (
               ),
           ),
         [RUN_METHODS.list]: (input) =>
-          observeRpcEffect(RUN_METHODS.list, runs.list(currentSessionId, input)),
+          observeRpcEffect(
+            RUN_METHODS.list,
+            withActor(
+              undefined,
+              (actor) => runs.list(actor, input),
+              (reason) => new RunsError({ reason }),
+            ),
+          ),
         [RUN_METHODS.get]: (input) =>
-          observeRpcEffect(RUN_METHODS.get, runs.get(currentSessionId, input)),
+          observeRpcEffect(
+            RUN_METHODS.get,
+            withActor(
+              undefined,
+              (actor) => runs.get(actor, input),
+              (reason) => new RunsError({ reason }),
+            ),
+          ),
         [RUN_METHODS.failures]: (input) =>
-          observeRpcEffect(RUN_METHODS.failures, runs.failures(currentSessionId, input)),
+          observeRpcEffect(
+            RUN_METHODS.failures,
+            withActor(
+              undefined,
+              (actor) => runs.failures(actor, input),
+              (reason) => new RunsError({ reason }),
+            ),
+          ),
         [RUN_METHODS.logs]: (input) =>
-          observeRpcEffect(RUN_METHODS.logs, runs.logs(currentSessionId, input)),
+          observeRpcEffect(
+            RUN_METHODS.logs,
+            withActor(
+              undefined,
+              (actor) => runs.logs(actor, input),
+              (reason) => new RunsError({ reason }),
+            ),
+          ),
         [RUN_METHODS.definition]: (input) =>
-          observeRpcEffect(RUN_METHODS.definition, runs.definition(currentSessionId, input)),
+          observeRpcEffect(
+            RUN_METHODS.definition,
+            withActor(
+              undefined,
+              (actor) => runs.definition(actor, input),
+              (reason) => new RunsError({ reason }),
+            ),
+          ),
         [RUN_METHODS.validate]: (input) =>
-          observeRpcEffect(RUN_METHODS.validate, runs.validate(currentSessionId, input)),
+          observeRpcEffect(
+            RUN_METHODS.validate,
+            withActor(
+              undefined,
+              (actor) => runs.validate(actor, input),
+              (reason) => new RunsError({ reason }),
+            ),
+          ),
         [DeckhandRpc.REVIEWER_METHODS.preview]: (input) =>
           observeRpcEffect(
             DeckhandRpc.REVIEWER_METHODS.preview,
@@ -2194,31 +2506,57 @@ const makeWsRpcLayer = (
         [DeckhandRpc.REVIEWER_METHODS.stopSource]: (input) =>
           observeRpcEffect(
             DeckhandRpc.REVIEWER_METHODS.stopSource,
-            startup.enqueueCommand(reviewerLaunch.stopSource(currentSessionId, input)).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new DeckhandRpc.DeckhandRpcError({
-                    reason: isManagedLaunchError(cause) ? cause.reason : "startup_failed",
-                  }),
+            startup
+              .enqueueCommand(
+                withActor(
+                  { type: "thread", threadId: input.threadId },
+                  (actor) => reviewerLaunch.stopSource(actor, input),
+                  (reason) => new DeckhandRpc.DeckhandRpcError({ reason }),
+                ),
+              )
+              .pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new DeckhandRpc.DeckhandRpcError({
+                      reason: isManagedLaunchError(cause) ? cause.reason : "startup_failed",
+                    }),
+                ),
               ),
-            ),
           ),
         [DeckhandRpc.REVIEWER_METHODS.schedule]: (input) =>
           observeRpcEffect(
             DeckhandRpc.REVIEWER_METHODS.schedule,
-            startup.enqueueCommand(reviewerLaunch.schedule(currentSessionId, input)).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new DeckhandRpc.DeckhandRpcError({
-                    reason: isManagedLaunchError(cause) ? cause.reason : "startup_failed",
-                  }),
+            startup
+              .enqueueCommand(
+                withActor(
+                  [
+                    { type: "reviewer", operationKey: input.operationKey },
+                    { type: "creation", operationKey: input.operationKey },
+                  ],
+                  (actor) => reviewerLaunch.schedule(actor, input),
+                  (reason) => new DeckhandRpc.DeckhandRpcError({ reason }),
+                ),
+              )
+              .pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new DeckhandRpc.DeckhandRpcError({
+                      reason: isManagedLaunchError(cause) ? cause.reason : "startup_failed",
+                    }),
+                ),
               ),
-            ),
           ),
         [DeckhandRpc.REVIEWER_METHODS.get]: (input) =>
           observeRpcEffect(
             DeckhandRpc.REVIEWER_METHODS.get,
-            reviewerLaunch.getScheduled(currentSessionId, input).pipe(
+            withActor(
+              [
+                { type: "reviewer", operationKey: input.operationKey },
+                { type: "creation", operationKey: input.operationKey },
+              ],
+              (actor) => reviewerLaunch.getScheduled(actor, input),
+              (reason) => new DeckhandRpc.DeckhandRpcError({ reason }),
+            ).pipe(
               Effect.mapError(
                 (cause) =>
                   new DeckhandRpc.DeckhandRpcError({
@@ -2230,26 +2568,48 @@ const makeWsRpcLayer = (
         [DeckhandRpc.REVIEWER_METHODS.cancel]: (input) =>
           observeRpcEffect(
             DeckhandRpc.REVIEWER_METHODS.cancel,
-            startup.enqueueCommand(reviewerLaunch.cancelScheduled(currentSessionId, input)).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new DeckhandRpc.DeckhandRpcError({
-                    reason: isManagedLaunchError(cause) ? cause.reason : "startup_failed",
-                  }),
+            startup
+              .enqueueCommand(
+                withActor(
+                  [
+                    { type: "reviewer", operationKey: input.operationKey },
+                    { type: "creation", operationKey: input.operationKey },
+                  ],
+                  (actor) => reviewerLaunch.cancelScheduled(actor, input),
+                  (reason) => new DeckhandRpc.DeckhandRpcError({ reason }),
+                ),
+              )
+              .pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new DeckhandRpc.DeckhandRpcError({
+                      reason: isManagedLaunchError(cause) ? cause.reason : "startup_failed",
+                    }),
+                ),
               ),
-            ),
           ),
         [DeckhandRpc.REVIEWER_METHODS.launch]: (input) =>
           observeRpcEffect(
             DeckhandRpc.REVIEWER_METHODS.launch,
-            startup.enqueueCommand(reviewerLaunch.launch(currentSessionId, input)).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new DeckhandRpc.DeckhandRpcError({
-                    reason: isManagedLaunchError(cause) ? cause.reason : "startup_failed",
-                  }),
+            startup
+              .enqueueCommand(
+                withActor(
+                  [
+                    { type: "reviewer", operationKey: input.operationKey },
+                    { type: "creation", operationKey: input.operationKey },
+                  ],
+                  (actor) => reviewerLaunch.launch(actor, input),
+                  (reason) => new DeckhandRpc.DeckhandRpcError({ reason }),
+                ),
+              )
+              .pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new DeckhandRpc.DeckhandRpcError({
+                      reason: isManagedLaunchError(cause) ? cause.reason : "startup_failed",
+                    }),
+                ),
               ),
-            ),
           ),
         [DeckhandRpc.THREAD_CONTEXT_METHOD]: (input) =>
           observeRpcStream(
@@ -2287,78 +2647,124 @@ const makeWsRpcLayer = (
         [DeckhandRpc.DECKHAND_METHODS.create]: (input) =>
           observeRpcEffect(
             DeckhandRpc.DECKHAND_METHODS.create,
-            startup.enqueueCommand(managedLaunch.create(currentSessionId, input)).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new DeckhandRpc.DeckhandRpcError({
-                    reason: "reason" in cause ? cause.reason : "startup",
-                  }),
+            startup
+              .enqueueCommand(
+                withActor(
+                  { type: "creation", operationKey: input.operationKey },
+                  (actor) => managedLaunch.create(actor, input),
+                  (reason) => new DeckhandRpc.DeckhandRpcError({ reason }),
+                ),
+              )
+              .pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new DeckhandRpc.DeckhandRpcError({
+                      reason: "reason" in cause ? cause.reason : "startup",
+                    }),
+                ),
               ),
-            ),
           ),
         [DeckhandRpc.DECKHAND_METHODS.createGet]: (input) =>
           observeRpcEffect(
             DeckhandRpc.DECKHAND_METHODS.createGet,
-            managedLaunch
-              .getCreation(currentSessionId, input.operationKey)
-              .pipe(
-                Effect.mapError(
-                  (cause) => new DeckhandRpc.DeckhandRpcError({ reason: cause.reason }),
-                ),
+            withActor(
+              { type: "creation", operationKey: input.operationKey },
+              (actor) => managedLaunch.getCreation(actor, input.operationKey),
+              (reason) => new DeckhandRpc.DeckhandRpcError({ reason }),
+            ).pipe(
+              Effect.mapError(
+                (cause) => new DeckhandRpc.DeckhandRpcError({ reason: cause.reason }),
               ),
+            ),
           ),
         [DeckhandRpc.DECKHAND_METHODS.launch]: (input) =>
           observeRpcEffect(
             DeckhandRpc.DECKHAND_METHODS.launch,
-            startup.enqueueCommand(managedLaunch.launch(currentSessionId, input)).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new DeckhandRpc.DeckhandRpcError({
-                    reason: "reason" in cause ? cause.reason : "startup",
-                  }),
+            startup
+              .enqueueCommand(
+                withActor(
+                  { type: "launch", operationKey: input.operationKey },
+                  (actor) => managedLaunch.launch(actor, input),
+                  (reason) => new DeckhandRpc.DeckhandRpcError({ reason }),
+                ),
+              )
+              .pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new DeckhandRpc.DeckhandRpcError({
+                      reason: "reason" in cause ? cause.reason : "startup",
+                    }),
+                ),
               ),
-            ),
           ),
         [DeckhandRpc.DECKHAND_METHODS.launchGet]: (input) =>
           observeRpcEffect(
             DeckhandRpc.DECKHAND_METHODS.launchGet,
-            managedLaunch
-              .get(currentSessionId, input.operationKey)
-              .pipe(
-                Effect.mapError(
-                  (cause) => new DeckhandRpc.DeckhandRpcError({ reason: cause.reason }),
-                ),
+            withActor(
+              { type: "launch", operationKey: input.operationKey },
+              (actor) => managedLaunch.get(actor, input.operationKey),
+              (reason) => new DeckhandRpc.DeckhandRpcError({ reason }),
+            ).pipe(
+              Effect.mapError(
+                (cause) => new DeckhandRpc.DeckhandRpcError({ reason: cause.reason }),
               ),
+            ),
           ),
         [DeckhandRpc.DECKHAND_METHODS.reviewPreview]: (input) =>
           observeRpcEffect(
             DeckhandRpc.DECKHAND_METHODS.reviewPreview,
-            managedLaunch
-              .reviewPreview(currentSessionId, input)
-              .pipe(
-                Effect.mapError(
-                  (cause) => new DeckhandRpc.DeckhandRpcError({ reason: cause.reason }),
-                ),
+            withActor(
+              [
+                { type: "review", launchOperationKey: input.operationKey },
+                {
+                  type: input.kind === "creation" ? "creation" : "launch",
+                  operationKey: input.operationKey,
+                },
+              ],
+              (actor) => managedLaunch.reviewPreview(actor, input),
+              (reason) => new DeckhandRpc.DeckhandRpcError({ reason }),
+            ).pipe(
+              Effect.mapError(
+                (cause) => new DeckhandRpc.DeckhandRpcError({ reason: cause.reason }),
               ),
+            ),
           ),
         [DeckhandRpc.DECKHAND_METHODS.reviewConfirm]: (input) =>
           observeRpcEffect(
             DeckhandRpc.DECKHAND_METHODS.reviewConfirm,
-            startup.enqueueCommand(managedLaunch.reviewConfirm(currentSessionId, input)).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new DeckhandRpc.DeckhandRpcError({
-                    reason: "reason" in cause ? cause.reason : "startup",
-                  }),
+            startup
+              .enqueueCommand(
+                withActor(
+                  [
+                    { type: "review", launchOperationKey: input.operationKey },
+                    {
+                      type: input.kind === "creation" ? "creation" : "launch",
+                      operationKey: input.operationKey,
+                    },
+                  ],
+                  (actor) => managedLaunch.reviewConfirm(actor, input),
+                  (reason) => new DeckhandRpc.DeckhandRpcError({ reason }),
+                ),
+              )
+              .pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new DeckhandRpc.DeckhandRpcError({
+                      reason: "reason" in cause ? cause.reason : "startup",
+                    }),
+                ),
               ),
-            ),
           ),
         [DeckhandRpc.DECKHAND_METHODS.launchOptions]: () =>
           observeRpcEffect(DeckhandRpc.DECKHAND_METHODS.launchOptions, managedLaunch.options),
         [DeckhandRpc.DECKHAND_METHODS.operations]: () =>
           observeRpcEffect(
             DeckhandRpc.DECKHAND_METHODS.operations,
-            deckhand.operations(currentSessionId),
+            withActor(
+              undefined,
+              (actor) => deckhand.operations(actor),
+              (reason) => new DeckhandRpc.DeckhandRpcError({ reason }),
+            ),
           ),
         [DeckhandRpc.DECKHAND_METHODS.overview]: (input) =>
           observeRpcEffect(
@@ -2372,12 +2778,20 @@ const makeWsRpcLayer = (
         [DeckhandRpc.DECKHAND_METHODS.submit]: (input) =>
           observeRpcEffect(
             DeckhandRpc.DECKHAND_METHODS.submit,
-            workspaceBackend.submit(currentSessionId, input),
+            withActor(
+              { type: "operation", operationKey: input.operationKey },
+              (actor) => workspaceBackend.submit(actor, input),
+              (reason) => new DeckhandRpc.DeckhandRpcError({ reason }),
+            ),
           ),
         [DeckhandRpc.DECKHAND_METHODS.operation]: (input) =>
           observeRpcEffect(
             DeckhandRpc.DECKHAND_METHODS.operation,
-            workspaceBackend.operation(currentSessionId, input.operationKey, input.waitMs),
+            withActor(
+              { type: "operation", operationKey: input.operationKey },
+              (actor) => workspaceBackend.operation(actor, input.operationKey, input.waitMs),
+              (reason) => new DeckhandRpc.DeckhandRpcError({ reason }),
+            ),
           ),
       });
       const upstreamHandlers = UpstreamWsRpcGroup.of({
