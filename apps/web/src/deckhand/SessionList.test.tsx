@@ -97,19 +97,19 @@ afterEach(async () => {
 it("retains conversation navigation but requires a fresh session value after transport recovery", async () => {
   await render();
   await act(async () => registry.set(resultAtom(), AsyncResult.success([session])));
-  expect(element.textContent).toContain("Working · connected");
+  expect(element.textContent).toContain("Working · Agent connected");
   expect(element.textContent).toContain("Configured Codex");
   transport.phase = "reconnecting";
   await render();
   expect(element.textContent).toContain("Current review");
   expect(element.textContent).toContain("Last observed · Connection unavailable");
-  expect(element.textContent).not.toContain("Working · connected");
+  expect(element.textContent).not.toContain("Working · Agent connected");
   expect(element.querySelector("a")).not.toBeNull();
   transport.phase = "connected";
   await render();
-  expect(element.textContent).not.toContain("Working · connected");
+  expect(element.textContent).not.toContain("Working · Agent connected");
   await act(async () => registry.set(resultAtom(), AsyncResult.success([{ ...session }])));
-  expect(element.textContent).toContain("Working · connected");
+  expect(element.textContent).toContain("Working · Agent connected");
   expect(element.textContent).not.toContain("Last observed");
 });
 it("clears a departed generation and cannot show its late session response", async () => {
@@ -140,8 +140,33 @@ it("settles initial failures as unavailable and preserves historical rows after 
     ),
   );
   expect(element.textContent).toContain("Current review");
-  expect(element.textContent).toContain("Unknown · Connection unavailable");
-  expect(element.textContent).not.toContain("Working · connected");
+  expect(element.textContent).toContain("Unknown · Agent not connected");
+  expect(element.textContent).not.toContain("Working · Agent connected");
+});
+it("presents current agent connection states plainly and keeps stale execution historical", async () => {
+  await render();
+  const labels = {
+    connected: "Interrupted · Agent connected",
+    reconnecting: "Interrupted · Agent connecting",
+    unavailable: "Interrupted · Agent not connected",
+    stale: "Last observed · Agent not connected",
+  } as const;
+  for (const connection of Object.keys(labels) as Array<keyof typeof labels>) {
+    await act(async () =>
+      registry.set(
+        resultAtom(),
+        AsyncResult.success([
+          {
+            ...session,
+            binding: { ...session.binding, execution: "interrupted", connection },
+          },
+        ]),
+      ),
+    );
+    expect(element.textContent).toContain(labels[connection]);
+    expect(element.textContent).not.toContain("· unavailable");
+    if (connection === "stale") expect(element.textContent).not.toContain("Interrupted");
+  }
 });
 
 const firstPage = () =>

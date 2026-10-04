@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import type { EnvironmentId } from "@t3tools/contracts";
+import type { SessionBinding } from "@t3tools/contracts/deckhand";
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { buildThreadRouteParams } from "../threadRoutes";
@@ -14,6 +15,12 @@ const EMPTY_PROVIDERS: ReadonlyArray<{
   readonly instanceId: string;
   readonly displayName: string;
 }> = [];
+const connectionLabels: Record<SessionBinding["connection"], string> = {
+  connected: "Agent connected",
+  reconnecting: "Agent connecting",
+  unavailable: "Agent not connected",
+  stale: "Agent not connected",
+};
 type SessionListProps = {
   environmentId: EnvironmentId;
   installationID: string;
@@ -104,8 +111,8 @@ function ScopedSessionList({
               {observation.stale
                 ? "Last observed · Connection unavailable"
                 : unavailable || session.source === "unavailable"
-                  ? "Unknown · Connection unavailable"
-                  : `${agentExecutionLabel(session.binding.execution)} · ${session.binding.connection}`}
+                  ? "Unknown · Agent not connected"
+                  : `${session.binding.connection === "stale" ? "Last observed" : agentExecutionLabel(session.binding.execution)} · ${connectionLabels[session.binding.connection]}`}
             </span>
           </Link>
         ))}
