@@ -355,6 +355,7 @@
     "apps/web/src/worktreeCleanup.test.ts": "App identity and state isolation",
     "apps/web/tsconfig.json": "Include the distribution environment filter used by Vite.",
     "apps/web/vite.config.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
+    "packages/client-runtime/src/rpc/client.test.ts": "Verify bounded Deckhand context PR streams use the existing typed client without transcript or log subscriptions.",
     "packages/client-runtime/src/rpc/client.ts": "Register Deckhand context subscriptions with the existing typed stream client.",
     "packages/client-runtime/src/state/projectGrouping.test.ts": "App identity and state isolation",
     "packages/contracts/package.json": "App identity and state isolation",
@@ -818,11 +819,14 @@
     {
       "owner": "Client and wire compatibility",
       "files": [
+        "packages/client-runtime/src/rpc/client.test.ts",
         "packages/client-runtime/src/rpc/client.ts",
         "packages/client-runtime/src/state/projectGrouping.test.ts",
         "packages/contracts/package.json",
         "packages/contracts/src/ipc.ts",
         "packages/contracts/src/rpc.test.ts",
+        "packages/client-runtime/src/rpc/client.test.ts",
+        "apps/server/src/deckhand/ContextPullRequests.test.ts",
         "packages/contracts/src/rpc.ts"
       ],
       "tests": [
