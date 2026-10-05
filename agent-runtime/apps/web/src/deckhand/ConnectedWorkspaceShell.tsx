@@ -5,21 +5,11 @@ import * as Option from "effect/Option";
 import type { ReactNode } from "react";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import type { ThreadContextView } from "@t3tools/contracts/deckhand/rpc";
-import {
-  FolderGit2Icon,
-  GitBranchIcon,
-  LayersIcon,
-  ServerIcon,
-  FilmIcon,
-  MessagesSquareIcon,
-} from "lucide-react";
+import { LayersIcon, ServerIcon, FilmIcon, MessagesSquareIcon } from "lucide-react";
 import { ProductNavigation } from "./ProductNavigation";
+import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { workspaceView } from "./state";
-import {
-  overviewResources,
-  overviewWorkspaceContexts,
-  connectedWorkspaceSearch,
-} from "./workspaceNavigation";
+import { overviewResources, connectedWorkspaceSearch } from "./workspaceNavigation";
 import { SessionList } from "./SessionList";
 import { useAgentObservation } from "./useAgentObservation";
 import { environmentServerConfigsAtom } from "../state/server";
@@ -78,8 +68,6 @@ export function ConnectedWorkspaceShell({
   const stale = suppliedStale || contextObservation.stale || treeStale;
   const connected = !stale && context.nativeConnection === "connected";
   const resources = overviewResources(sameInstallation ? view : null);
-  const bases = resources.filter((r) => r.workspace && !r.workspace.lane);
-  const contexts = overviewWorkspaceContexts(sameInstallation ? view : null, baseID);
   const config = useAtomValue(environmentServerConfigsAtom);
   const providers = deriveProviderInstanceEntries(
     config.get(threadRef.environmentId)?.providers ?? [],
@@ -102,59 +90,17 @@ export function ConnectedWorkspaceShell({
               : "Workspace unavailable",
         }}
       >
-        <div className={styles.treeHeading}>Workspaces</div>
         {treeStale ? (
           <p className={styles.treeHeading} role="status">
             {view ? "Last observed workspace list" : "Workspace list unavailable"}
           </p>
         ) : null}
-        <nav className={styles.tree} aria-label="Workspaces and lanes">
-          {bases.map((base) => (
-            <div key={base.workspaceID}>
-              <Link
-                to="/workspaces"
-                search={{
-                  environment: threadRef.environmentId,
-                  workspace: base.workspaceID,
-                  context: base.workspaceID,
-                  tab: "agents",
-                  expectedInstallationID: context.workspace.environmentId,
-                  expectedGeneration: base.generation,
-                }}
-                className={base.workspaceID === baseID ? styles.currentWorkspace : undefined}
-              >
-                <FolderGit2Icon size={15} />
-                <strong>{base.workspace?.name}</strong>
-              </Link>
-              {base.workspaceID === baseID
-                ? contexts.map((c) => (
-                    <Link
-                      key={c.workspaceID}
-                      to="/workspaces"
-                      search={{
-                        environment: threadRef.environmentId,
-                        workspace: baseID,
-                        context: c.workspaceID,
-                        tab: "agents",
-                        expectedInstallationID: context.workspace.environmentId,
-                        expectedGeneration: c.generation,
-                      }}
-                      aria-current={c.workspaceID === contextID ? "page" : undefined}
-                    >
-                      <GitBranchIcon size={14} />
-                      <span>{c.workspace?.lane?.name ?? "Primary"}</span>
-                    </Link>
-                  ))
-                : null}
-            </div>
-          ))}
-          {!bases.some((b) => b.workspaceID === baseID) ? (
-            <Link to="/workspaces" search={search}>
-              <FolderGit2Icon size={15} />
-              {context.workspace.name}
-            </Link>
-          ) : null}
-        </nav>
+        <WorkspaceSidebar
+          environmentId={threadRef.environmentId}
+          installationID={context.workspace.environmentId}
+          resources={resources}
+          search={search}
+        />
       </ProductNavigation>
       <div className={styles.main}>
         <header className={styles.header}>

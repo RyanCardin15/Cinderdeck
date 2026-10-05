@@ -9,7 +9,6 @@ import {
   FolderGit2Icon,
   ActivityIcon,
   XIcon,
-  CircleDotIcon,
   ChevronRightIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -48,6 +47,7 @@ import { environmentServerConfigsAtom } from "../state/server";
 import { deriveProviderInstanceEntries } from "../providerInstances";
 import { SessionLauncher } from "./SessionLauncher";
 import { ProductNavigation } from "./ProductNavigation";
+import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { WorkspaceLaneMap } from "./WorkspaceLaneMap";
 import { NativeWorkspaceTools } from "./NativeWorkspaceTools";
 import {
@@ -613,45 +613,21 @@ function ConnectedWorkspace({
             </option>
           ))}
         </select>
-        <div className={styles["dh-tree-heading"]}>Workspaces</div>
-        <nav className={styles["dh-workspace-tree"]} aria-label="Workspaces and lanes">
-          {bases.map((base) => (
-            <div key={base.workspaceID}>
-              <button
-                className={
-                  base.workspaceID === activeBase?.workspaceID ? styles["dh-tree-current"] : ""
-                }
-                aria-pressed={base.workspaceID === activeBase?.workspaceID}
-                onClick={() => {
-                  setWorkspaceID(base.workspaceID);
-                  setFeatureCreating(false);
-                  setCreating(false);
-                }}
-              >
-                <FolderGit2Icon size={16} />
-                <span>{base.workspace?.name}</span>
-              </button>
-              {base.workspaceID === activeBase?.workspaceID
-                ? contexts.map((context) => (
-                    <button
-                      key={context.workspaceID}
-                      className={styles["dh-tree-lane"]}
-                      aria-current={
-                        selected?.workspaceID === context.workspaceID ? "true" : undefined
-                      }
-                      onClick={() => setSelectedID(context.workspaceID)}
-                    >
-                      <GitBranchIcon size={14} />
-                      <span>{context.workspace?.lane?.name ?? "Primary checkout"}</span>
-                      {needsAttention(context) ? (
-                        <CircleDotIcon size={10} className={styles["dh-attention-dot"]} />
-                      ) : null}
-                    </button>
-                  ))
-                : null}
-            </div>
-          ))}
-        </nav>
+        <WorkspaceSidebar
+          environmentId={environmentId}
+          installationID={view?.hello?.installationID ?? "unconnected"}
+          resources={resources}
+          needsAttention={needsAttention}
+          onNavigate={() => {
+            setFeatureCreating(false);
+            setCreating(false);
+          }}
+          search={{
+            ...tabSearch,
+            ...(activeBase ? { workspace: activeBase.workspaceID } : {}),
+            ...(selected ? { context: selected.workspaceID } : {}),
+          }}
+        />
       </ProductNavigation>
       <main className={styles["dh-main"]} aria-labelledby="dh-title">
         {sessionActions.renameDialog}
