@@ -16,6 +16,7 @@ const commands = vi.hoisted(() => ({
   navigate: vi.fn(),
   previewReview: vi.fn(),
   confirmReview: vi.fn(),
+  refresh: vi.fn(),
   defaultModel: null as import("@cinderdeck/contracts").ModelSelection | null,
   planEnabled: false,
   nextOperation: 0,
@@ -28,6 +29,7 @@ vi.mock("./state", () => ({
   sessionLaunchOptions: "options",
   previewLaunchReview: "previewReview",
   confirmLaunchReview: "confirmReview",
+  refreshWorkspaces: "refresh",
 }));
 vi.mock("../state/use-atom-command", () => ({
   useAtomCommand: (command: keyof typeof commands) => commands[command],
@@ -182,6 +184,7 @@ beforeEach(() => {
   );
   commands.launch.mockResolvedValue(success(acceptedLaunch));
   commands.navigate.mockResolvedValue(undefined);
+  commands.refresh.mockResolvedValue(success(undefined));
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -192,14 +195,14 @@ afterEach(async () => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
-async function render(current = resource, creation = true, visible = true) {
+async function render(current = resource, creation = true, visible = true, enabled = true) {
   await act(async () =>
     root.render(
       <SessionLauncher
         environmentId={environmentId}
         installationID="installation"
         resource={current}
-        enabled
+        enabled={enabled}
         {...(creation ? { creation: { visible, onClose: vi.fn(), onLane, onPending } } : {})}
       />,
     ),
@@ -423,6 +426,59 @@ it("opens an empty chat in the selected checkout without asking for a task or na
   expect(localStorage.getItem(launchKey)).toBeNull();
 });
 
+it("opens a folder workspace despite service warnings and changed running service settings", async () => {
+  await render(
+    {
+      ...resource,
+      workspace: {
+        ...resource.workspace!,
+        root: "/fixture/suite",
+        definitionChanged: true,
+        issues: ["warning: api hard-codes localhost:3000"],
+        repos: [
+          {
+            ...resource.workspace!.repos[0]!,
+            id: "workspace",
+            path: "/fixture/suite",
+            branch: "Not a Git repository",
+          },
+        ],
+      },
+    },
+    false,
+  );
+  expect(button("+ New chat").disabled).toBe(false);
+  await click("+ New chat");
+  expect(commands.launch).toHaveBeenCalledWith({
+    environmentId,
+    input: expect.objectContaining({ repositoryID: "workspace", deferStart: true }),
+  });
+});
+
+it("explains a workspace error and refreshes without dispatching a chat", async () => {
+  await render(
+    { ...resource, workspace: { ...resource.workspace!, issues: ["error: Folder is missing"] } },
+    false,
+  );
+  expect(button("+ New chat").disabled).toBe(true);
+  expect(container.textContent).toContain("Workspace settings need attention: Folder is missing");
+  expect(container.textContent).not.toContain("Reconnect this checkout");
+  await click("Refresh workspaces");
+  expect(commands.refresh).toHaveBeenCalledWith({ environmentId, input: {} });
+  expect(commands.launch).not.toHaveBeenCalled();
+});
+
+it("offers refresh for a computer connection and enables chat after current context arrives", async () => {
+  await render(resource, false, true, false);
+  expect(button("+ New chat").disabled).toBe(true);
+  expect(container.textContent).toContain("connection to this computer");
+  await click("Refresh workspaces");
+  await render(resource, false);
+  expect(button("+ New chat").disabled).toBe(false);
+  await click("+ New chat");
+  expect(commands.launch).toHaveBeenCalledTimes(1);
+});
+
 it("opens a sidebar lane session once under StrictMode with its first configured folder despite an old folder preference", async () => {
   const lane = {
     ...resource,
@@ -595,10 +651,7 @@ it("replays the exact saved empty chat after an uncertain transport result", asy
   await click("+ New chat");
   // Recover a request made before the folder selector was removed.
   const original = { ...commands.launch.mock.calls[0]![0].input, repositoryID: "api" };
-  localStorage.setItem(
-    "deckhand:launch:computer:installation:source:1",
-    JSON.stringify(original),
-  );
+  localStorage.setItem("deckhand:launch:computer:installation:source:1", JSON.stringify(original));
   expect(
     JSON.parse(localStorage.getItem("deckhand:launch:computer:installation:source:1")!),
   ).toEqual(original);

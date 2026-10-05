@@ -4,6 +4,8 @@ Open Workspaces and select a workspace. New feature creates an independent nativ
 
 To open a conversation in a primary checkout or existing lane, use **+ New chat** in Agents or the **+** on its sidebar row. Cinderdeck automatically uses the first configured folder as the starting directory and gives the chat access to all workspace folders and files. Choose the provider and model in the chat; no folder selection is required. Saved launch requests retain their original starting directory when recovered.
 
+Workspace roots can be ordinary folders containing repositories; Git at the workspace root is not required. Service warnings, changed settings for running services, and pending service/lane operation recovery do not block New chat. Chat validates the current workspace identity, revision and folders separately. An unavailable computer or invalid workspace shows the specific reason beside New chat with **Refresh workspaces** to reload the current context. Errors in Workspace settings must be corrected before opening a new chat.
+
 Agent sessions keeps the newest 20 conversations for the selected context. Open one to continue its work or inspect its saved history. A finished turn means the agent has answered; it does not mark the feature complete. Connection state is shown separately, so a saved result can remain available while its provider is stopped.
 
 If a launch reply is lost, use Check result or Retry saved launch. Cinderdeck keeps that launch request and its conversation identity across a page reload. Change the request only after Cinderdeck confirms it was refused or failed. Selecting another workspace does not move an existing conversation.

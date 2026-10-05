@@ -97,6 +97,7 @@ vi.mock("./SessionList", () => ({
 vi.mock("./useSessionActions", () => ({
   useSessionActions: () => ({ showMenu: vi.fn(), renameDialog: null }),
 }));
+vi.mock("./NativeWorkspaceTools", () => ({ NativeWorkspaceTools: () => null }));
 vi.mock("./SessionLauncher", () => ({
   SessionLauncher: ({ enabled, creation }: { enabled: boolean; creation?: unknown }) =>
     creation ? null : <button disabled={!enabled}>Launch selected agent</button>,
@@ -444,6 +445,55 @@ it("retains navigation but fences all write controls through reconnect until fre
   await act(async () => registry.set(nativeAtom, AsyncResult.success({ ...view })));
   for (const name of ["Launch selected agent", "New lane", "Start services", "Stop services"])
     expect(button(name).disabled).toBe(false);
+  expect(boundary.mutation).not.toHaveBeenCalled();
+});
+
+it("keeps New Chat available while unrelated service operation recovery is unavailable", async () => {
+  boundary.search = { workspace: "primary", tab: "agents" };
+  boundary.recent.mockResolvedValue({ _tag: "Failure" });
+  registry.set(
+    nativeAtom,
+    AsyncResult.success({
+      ...view,
+      resources: [
+        {
+          ...primary,
+          workspace: {
+            ...primary.workspace!,
+            definitionChanged: true,
+            issues: ["warning: Use a lane URL for api"],
+          },
+        },
+        lane,
+        other,
+      ],
+    }),
+  );
+  await render();
+  expect(button("Launch selected agent").disabled).toBe(false);
+  expect(boundary.mutation).not.toHaveBeenCalled();
+});
+
+it("keeps New Chat available during a saved native service operation", async () => {
+  boundary.search = { workspace: "primary", tab: "agents" };
+  boundary.recent.mockResolvedValue({
+    _tag: "Success",
+    value: [
+      {
+        input: {
+          operationKey: "service-operation",
+          method: "services.start",
+          installationID: "installation",
+          workspaceID: "other",
+        },
+        receipt: null,
+        refused: false,
+      },
+    ],
+  });
+  await render();
+  expect(container.textContent).toContain("Recovered a previously submitted operation");
+  expect(button("Launch selected agent").disabled).toBe(false);
   expect(boundary.mutation).not.toHaveBeenCalled();
 });
 it("refuses a replaced saved lane without retargeting its agent or service actions", async () => {

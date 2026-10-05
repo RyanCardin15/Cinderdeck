@@ -1034,6 +1034,153 @@ describe("saved launch context review", () => {
 });
 
 describe("managed lane session launch", () => {
+  it.effect(
+    "opens a parent folder workspace containing repos despite service warnings and changed service settings",
+    () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const workspace = f.resources.get("payment")!.workspace;
+        workspace.repos.unshift({
+          ...workspace.repos[0]!,
+          id: "workspace",
+          path: f.root,
+          physicalID: "",
+          repositoryPhysicalID: "",
+          branch: "Not a Git repository",
+        });
+        Object.assign(workspace, {
+          root: f.root,
+          definitionChanged: true,
+          issues: ["warning: api hard-codes localhost:3000"],
+        });
+        const dependencies = yield* Effect.context<
+          FileSystem.FileSystem | Path.Path | ProcessRunner.ProcessRunner | SqlClient.SqlClient
+        >();
+        let called = false;
+        const external = f.external((request) =>
+          Effect.gen(function* () {
+            assert.equal(request.workspaceStrategy.type, "existing_worktree");
+            assert.equal(
+              request.workspaceStrategy.type === "existing_worktree" &&
+                request.workspaceStrategy.worktreePath,
+              yield* f.fs.realPath(f.root),
+            );
+            assert.isUndefined(request.initialMessage);
+            const guard = yield* ManagedCheckoutGuard.ManagedCheckoutGuard;
+            const context = yield* guard.resolve(request.threadId!, f.root);
+            assert.equal(context?.cwd, yield* f.fs.realPath(f.root));
+            assert.deepEqual(context?.folders, [f.root, f.source]);
+            called = true;
+            return accepted(request);
+          }).pipe(
+            Effect.provide(
+              ManagedCheckoutGuard.layer.pipe(
+                Layer.provide(Relationships.layer),
+                Layer.provide(CheckoutIdentity.layer),
+                Layer.provide(f.hubLayer),
+              ),
+            ),
+            Effect.provide(dependencies),
+            Effect.orDie,
+          ),
+        );
+        const service = yield* ManagedSessionLaunch.ManagedSessionLaunch.pipe(
+          Effect.provide(serviceLayer.pipe(Layer.provide(external))),
+        );
+        assert.equal(
+          (yield* service.launch("actor", {
+            ...input("folder-workspace"),
+            workspaceID: "payment",
+            generation: 2,
+            repositoryID: "workspace",
+            deferStart: true,
+            objective: "",
+          })).state,
+          "accepted",
+        );
+        assert.isTrue(called);
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+
+  it.effect("refuses workspace definition errors before allocating or launching a chat", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture;
+      Object.assign(f.resources.get("lane")!.workspace, { issues: ["error: Folder is missing"] });
+      let called = false;
+      const external = f.external((request) => {
+        called = true;
+        return Effect.succeed(accepted(request));
+      });
+      const service = yield* ManagedSessionLaunch.ManagedSessionLaunch.pipe(
+        Effect.provide(serviceLayer.pipe(Layer.provide(external))),
+      );
+      assert.equal(
+        (yield* service
+          .launch("actor", { ...input("invalid-workspace"), deferStart: true, objective: "" })
+          .pipe(Effect.flip)).reason,
+        "stale_context",
+      );
+      assert.isFalse(called);
+      const sql = yield* SqlClient.SqlClient;
+      const rows = yield* sql`SELECT * FROM deckhand_managed_launches`;
+      assert.equal(rows.length, 0);
+    }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+
+  it.effect("reviews and retries the same interrupted chat in an ordinary workspace folder", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture;
+      const resource = f.resources.get("payment")!;
+      Object.assign(resource.workspace, {
+        root: f.root,
+        definitionChanged: true,
+        issues: ["warning: Service URL uses the source port"],
+        repos: [
+          {
+            ...resource.workspace.repos[0]!,
+            id: "workspace",
+            path: f.root,
+            physicalID: "",
+            repositoryPhysicalID: "",
+            branch: "Not a Git repository",
+          },
+        ],
+      });
+      let failLaunch = true;
+      const calls: ThreadLaunchService.ThreadLaunchInput[] = [];
+      const external = f.external((request) => {
+        calls.push(request);
+        return failLaunch ? failed(request) : Effect.succeed(accepted(request));
+      });
+      const service = yield* ManagedSessionLaunch.ManagedSessionLaunch.pipe(
+        Effect.provide(serviceLayer.pipe(Layer.provide(external))),
+      );
+      const request = {
+        ...input("recover-folder-chat"),
+        workspaceID: "payment",
+        generation: 2,
+        repositoryID: "workspace",
+        deferStart: true,
+        objective: "",
+      };
+      assert.equal(
+        (yield* service.launch("actor", request).pipe(Effect.flip)).reason,
+        "launch_failed",
+      );
+      resource.revision = "refreshed";
+      const review = yield* service.reviewPreview("actor", {
+        operationKey: request.operationKey,
+        kind: "launch",
+      });
+      assert.equal(review.repositories[0]?.checkout.root, yield* f.fs.realPath(f.root));
+      yield* service.reviewConfirm("actor", review);
+      failLaunch = false;
+      assert.equal((yield* service.launch("actor", request)).state, "accepted");
+      assert.equal(calls.length, 2);
+      assert.equal(calls[0]?.threadId, calls[1]?.threadId);
+    }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+
   it.effect("launches across Git and ordinary folders with individual file context", () =>
     Effect.gen(function* () {
       const f = yield* fixture;
