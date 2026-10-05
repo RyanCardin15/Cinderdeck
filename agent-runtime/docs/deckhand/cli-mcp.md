@@ -69,7 +69,7 @@ A generic native window cannot prove that its video depicts the declared service
 
 ## External application debugging
 
-The `deckhand_debug_*` tools attach to selected native Mac windows with `mac://local`, independently of a Cinderdeck lane. Sessions belong to the calling thread and can be recovered with `deckhand_debug_sessions`. Session side-panel attachments share the calling thread’s namespace, so its agent can inspect the same selected windows. Other threads cannot read, control, or detach them. Legacy RPC callers that omit threadId retain separate signed-in actor sessions.
+The `deckhand_debug_*` tools attach to selected native Mac windows with `mac://local`, independently of a Cinderdeck lane. Sessions belong to the calling thread and can be recovered with `deckhand_debug_sessions`. Session side-panel attachments share the calling thread’s namespace, so its agent can inspect the same selected windows. Other agent threads cannot read, control, or detach them. The authenticated UI can show accessible blocking connections in **Resolve window connection** and, after an explicit user choice, release them through their owning thread before reconnecting here. Legacy RPC callers that omit threadId retain separate signed-in actor sessions.
 
 ```sh
 deckhand integration call deckhand_debug_open '{"bundleId":"com.microsoft.Excel"}'

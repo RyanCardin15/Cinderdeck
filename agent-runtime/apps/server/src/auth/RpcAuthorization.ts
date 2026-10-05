@@ -45,6 +45,7 @@ export const RPC_REQUIRED_SCOPES = {
   [AGENT_ACCESS_METHOD]: AuthOrchestrationReadScope,
   [EXTERNAL_DEBUG_METHODS.discover]: AuthOrchestrationReadScope,
   [EXTERNAL_DEBUG_METHODS.sessions]: AuthOrchestrationReadScope,
+  [EXTERNAL_DEBUG_METHODS.conflicts]: AuthOrchestrationReadScope,
   [EXTERNAL_DEBUG_METHODS.read]: AuthOrchestrationReadScope,
   [EXTERNAL_DEBUG_METHODS.open]: AuthOrchestrationOperateScope,
   [EXTERNAL_DEBUG_METHODS.attach]: AuthOrchestrationOperateScope,

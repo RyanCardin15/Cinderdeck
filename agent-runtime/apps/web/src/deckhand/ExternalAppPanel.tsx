@@ -9,7 +9,11 @@ import {
   UnplugIcon,
 } from "lucide-react";
 import type { ScopedThreadRef } from "@cinderdeck/contracts";
-import type { DebugSession, DebugTarget } from "@cinderdeck/contracts/deckhand/externalDebugRpc";
+import type {
+  DebugConflict,
+  DebugSession,
+  DebugTarget,
+} from "@cinderdeck/contracts/deckhand/externalDebugRpc";
 import { resolveExternalAppProfiles } from "@cinderdeck/contracts/deckhand/externalAppPreferences";
 import { squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
 import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings";
@@ -17,6 +21,14 @@ import { useAtomCommand } from "../state/use-atom-command";
 import { useEnvironments } from "../state/environments";
 import { useRightPanelStore } from "../rightPanelStore";
 import { Button } from "../components/ui/button";
+import {
+  Dialog,
+  DialogPopup,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "../components/ui/dialog";
 import { MacWindowPanel } from "./MacWindowPanel";
 import { ExcelPerformancePanel } from "./ExcelPerformancePanel";
 import {
@@ -24,6 +36,7 @@ import {
   detachDebugSession,
   discoverDebugTargets,
   listDebugSessions,
+  listDebugConflicts,
   openDebugApp,
 } from "./externalDebugState";
 import {
@@ -38,20 +51,29 @@ const failureText = (value: unknown) =>
   typeof value === "object" && value !== null && "message" in value
     ? String(value.message)
     : "Couldn’t connect to the selected Mac window. Try again.";
+const isBusyFailure = (value: unknown) =>
+  typeof value === "object" && value !== null && "reason" in value && value.reason === "busy";
 export const matchesExternalApp = (target: DebugTarget, filter: string) =>
   `${target.app ?? ""} ${target.url} ${target.title}`
     .toLowerCase()
     .includes(filter.trim().toLowerCase());
 
-export function ExternalAppPanel({
-  threadRef,
-  profileId,
-  visible,
-}: {
+type ExternalAppPanelProps = {
   threadRef: ScopedThreadRef;
   profileId: string | null;
   visible: boolean;
-}) {
+};
+
+export function ExternalAppPanel(props: ExternalAppPanelProps) {
+  return (
+    <ScopedExternalAppPanel
+      key={externalAppBindingKey(props.threadRef, props.profileId ?? "new")}
+      {...props}
+    />
+  );
+}
+
+function ScopedExternalAppPanel({ threadRef, profileId, visible }: ExternalAppPanelProps) {
   const settings = useClientSettings();
   const profiles = resolveExternalAppProfiles(settings.externalAppProfiles);
   const update = useUpdateClientSettings();
@@ -77,6 +99,7 @@ export function ExternalAppPanel({
   const attach = useAtomCommand(attachDebugTarget, { reportFailure: false });
   const detach = useAtomCommand(detachDebugSession, { reportFailure: false });
   const list = useAtomCommand(listDebugSessions, { reportFailure: false });
+  const conflicts = useAtomCommand(listDebugConflicts, { reportFailure: false });
   const open = useAtomCommand(openDebugApp, { reportFailure: false });
   const disconnect = useDisconnectExternalApps();
   const occupied = useExternalAppSessions((state) => state.bindings);
@@ -95,6 +118,12 @@ export function ExternalAppPanel({
   const [showAll, setShowAll] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [conflict, setConflict] = useState<{
+    targetIds: string[];
+    sessions: readonly DebugConflict[];
+    selected: string[];
+    error: string;
+  } | null>(null);
   const [view, setView] = useState<"app" | "inspector" | "split">("app");
   const AppIcon = profile?.id === "excel" ? FileSpreadsheetIcon : AppWindowIcon;
   const mounted = useRef(true);
@@ -158,11 +187,76 @@ export function ExternalAppPanel({
       if (mounted.current) setBusy(false);
     }
   }
+  async function showConflicts(targetIds: string[], epoch: number) {
+    const entries: DebugConflict[] = [];
+    for (const targetId of targetIds) {
+      const result = await conflicts({
+        environmentId: threadRef.environmentId,
+        input: { endpoint: "mac://local", targetId, threadId: threadRef.threadId },
+      });
+      if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+      entries.push(...result.value);
+    }
+    if (!mounted.current || connectionEpoch.current !== epoch) return;
+    const sessions = [
+      ...new Map(entries.map((entry) => [entry.session.sessionId, entry])).values(),
+    ];
+    const exact = sessions.filter((entry) => targetIds.includes(entry.session.target.id));
+    setConflict({
+      targetIds,
+      sessions,
+      selected: (exact.length ? exact : sessions.slice(0, 1)).map(
+        (entry) => entry.session.sessionId,
+      ),
+      error: "",
+    });
+  }
+  async function replaceConnection() {
+    if (!conflict || busy) return;
+    const request = conflict;
+    const epoch = connectionEpoch.current;
+    setBusy(true);
+    setConflict({ ...request, error: "" });
+    try {
+      for (const entry of request.sessions.filter((entry) =>
+        request.selected.includes(entry.session.sessionId),
+      )) {
+        if (!mounted.current || connectionEpoch.current !== epoch) return;
+        const result = await detach({
+          environmentId: threadRef.environmentId,
+          input: {
+            sessionId: entry.session.sessionId,
+            ...(entry.threadId ? { threadId: entry.threadId } : {}),
+          },
+        });
+        if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+        // Only remove connections the server has successfully released, preserving
+        // other windows (and bindings on other computers).
+        const store = useExternalAppSessions.getState();
+        for (const [key, binding] of Object.entries(store.bindings)) {
+          if (binding.threadRef.environmentId !== threadRef.environmentId) continue;
+          const sessions = binding.sessions.filter((s) => s.sessionId !== entry.session.sessionId);
+          if (sessions.length === binding.sessions.length) continue;
+          if (sessions.length) store.bind({ ...binding, sessions });
+          else store.remove(key);
+        }
+      }
+      if (!mounted.current || connectionEpoch.current !== epoch) return;
+      setConflict(null);
+      await connect(request.targetIds, true);
+    } catch (cause) {
+      if (mounted.current && connectionEpoch.current === epoch)
+        setConflict({ ...request, error: failureText(cause) });
+    } finally {
+      if (mounted.current && connectionEpoch.current === epoch) setBusy(false);
+    }
+  }
   async function openApp() {
     if (!profile || busy) return;
     setBusy(true);
     setError("");
     const epoch = connectionEpoch.current;
+    let requestedTargets: string[] = [];
     try {
       const result = await open({
         environmentId: threadRef.environmentId,
@@ -180,8 +274,10 @@ export function ExternalAppPanel({
       setTargets(result.value.targets);
       if (result.value.session) {
         const session = result.value.session;
+        requestedTargets = [session.target.id];
+        setAppId(session.target.id);
         if (usedElsewhere(session.sessionId, useExternalAppSessions.getState().bindings))
-          throw new Error("This window is open in another external app tab.");
+          throw { reason: "busy" };
         useExternalAppSessions
           .getState()
           .bind({ threadRef, profileId: profile.id, sessions: [session] });
@@ -191,13 +287,44 @@ export function ExternalAppPanel({
         );
       }
     } catch (cause) {
-      if (mounted.current) setError(failureText(cause));
+      if (mounted.current && connectionEpoch.current === epoch) {
+        if (isBusyFailure(cause)) {
+          try {
+            if (!requestedTargets.length) {
+              const found = await discover({
+                environmentId: threadRef.environmentId,
+                input: { endpoint: "mac://local" },
+              });
+              if (found._tag === "Failure") throw squashAtomCommandFailure(found);
+              if (!mounted.current || connectionEpoch.current !== epoch) return;
+              const matching = found.value.filter((target) =>
+                matchesExternalApp(target, profile.applicationFilter),
+              );
+              if (matching.length !== 1) {
+                setTargets(found.value);
+                setError("Choose the window to connect below.");
+                return;
+              }
+              requestedTargets = [matching[0]!.id];
+              setTargets(found.value);
+              setAppId(matching[0]!.id);
+            }
+            await showConflicts(requestedTargets, epoch);
+          } catch (failure) {
+            if (mounted.current && connectionEpoch.current === epoch)
+              setError(failureText(failure));
+          }
+        } else setError(failureText(cause));
+      }
     } finally {
-      if (mounted.current) setBusy(false);
+      if (mounted.current && connectionEpoch.current === epoch) setBusy(false);
     }
   }
-  async function connect() {
-    if (!profile || !profile.enabled || busy || !appId) return;
+  async function connect(
+    targetIds = [appId, ...(profile?.includeInspector && inspectorId ? [inspectorId] : [])],
+    replacing = false,
+  ) {
+    if (!profile || !profile.enabled || (busy && !replacing) || !targetIds[0]) return;
     setBusy(true);
     setError("");
     const epoch = connectionEpoch.current;
@@ -208,17 +335,19 @@ export function ExternalAppPanel({
     const created: DebugSession[] = [],
       connected: DebugSession[] = [];
     try {
-      for (const targetId of [
-        appId,
-        ...(profile.includeInspector && inspectorId ? [inspectorId] : []),
-      ]) {
+      const listed = await list({
+        environmentId: threadRef.environmentId,
+        input: { threadId: threadRef.threadId },
+      });
+      if (listed._tag === "Failure") throw squashAtomCommandFailure(listed);
+      const current = listed.value.filter((session) => session.state === "connected");
+      for (const targetId of targetIds) {
         ensureOpen();
-        const recovered = existing.find((session) => session.target.id === targetId);
+        const recovered = current.find(
+          (session) => session.target.id === targetId && session.endpoint.startsWith("mac:"),
+        );
         if (recovered) {
-          if (usedElsewhere(recovered.sessionId))
-            throw new Error(
-              "This window is open in another external app tab. Disconnect it there first.",
-            );
+          if (usedElsewhere(recovered.sessionId)) throw { reason: "busy" };
           connected.push(recovered);
           continue;
         }
@@ -240,13 +369,11 @@ export function ExternalAppPanel({
           usedElsewhere(session.sessionId, useExternalAppSessions.getState().bindings),
         )
       )
-        throw new Error(
-          "This window was opened in another external app tab. Disconnect it there first.",
-        );
+        throw { reason: "busy" };
       useExternalAppSessions
         .getState()
         .bind({ threadRef, profileId: profile.id, sessions: connected });
-      setExisting((previous) => [...previous, ...created]);
+      setExisting([...current, ...created]);
     } catch (cause) {
       await Promise.all(
         created.map((session) =>
@@ -256,9 +383,18 @@ export function ExternalAppPanel({
           }),
         ),
       );
-      if (mounted.current) setError(failureText(cause));
+      if (mounted.current && connectionEpoch.current === epoch) {
+        if (isBusyFailure(cause)) {
+          try {
+            await showConflicts(targetIds, epoch);
+          } catch (failure) {
+            if (mounted.current && connectionEpoch.current === epoch)
+              setError(failureText(failure));
+          }
+        } else setError(failureText(cause));
+      }
     } finally {
-      if (mounted.current) setBusy(false);
+      if (mounted.current && connectionEpoch.current === epoch) setBusy(false);
     }
   }
   const settingsLink = (
@@ -323,6 +459,112 @@ export function ExternalAppPanel({
   );
   return (
     <div className={styles.panel} data-app={profile.id}>
+      <Dialog
+        open={conflict !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen && !busy) setConflict(null);
+        }}
+      >
+        <DialogPopup showCloseButton={!busy}>
+          <DialogHeader>
+            <DialogTitle>Resolve window connection</DialogTitle>
+            <DialogDescription>
+              This window is attached elsewhere, or the connection limit has been reached on{" "}
+              {computer}. Choose a connection to disconnect, then connect the selected windows here.
+              The app stays open.
+            </DialogDescription>
+          </DialogHeader>
+          <div className={styles.conflictList}>
+            {conflict?.sessions.length ? (
+              conflict.sessions.map((entry) => {
+                const binding = Object.values(occupied).find(
+                  (binding) =>
+                    binding.threadRef.environmentId === threadRef.environmentId &&
+                    binding.sessions.some(
+                      (session) => session.sessionId === entry.session.sessionId,
+                    ),
+                );
+                const pane = profiles.find((profile) => profile.id === binding?.profileId)?.name;
+                return (
+                  <label key={entry.session.sessionId} className={styles.conflictEntry}>
+                    <input
+                      type="checkbox"
+                      disabled={busy}
+                      checked={conflict.selected.includes(entry.session.sessionId)}
+                      onChange={(event) =>
+                        setConflict({
+                          ...conflict,
+                          selected: event.target.checked
+                            ? [...conflict.selected, entry.session.sessionId]
+                            : conflict.selected.filter((id) => id !== entry.session.sessionId),
+                        })
+                      }
+                    />
+                    <span>
+                      <strong>
+                        {entry.session.target.app || "Mac app"} ·{" "}
+                        {entry.session.target.title || "Untitled window"}
+                      </strong>
+                      <span>
+                        {entry.threadTitle ||
+                          (entry.threadId === threadRef.threadId
+                            ? "This conversation"
+                            : "Other conversation")}
+                        {pane ? ` · ${pane} pane` : ""}
+                      </span>
+                      {entry.threadId ? (
+                        <span>Conversation: {entry.threadId}</span>
+                      ) : (
+                        <span>Signed-in session</span>
+                      )}
+                      <span>
+                        Session: {entry.session.sessionId} · {entry.session.state}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })
+            ) : (
+              <p>
+                A connection may still be starting, or belongs to a session you cannot access. Retry
+                once it becomes available.
+              </p>
+            )}
+            {conflict?.error ? (
+              <p role="alert" className={styles.error}>
+                {conflict.error}
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" disabled={busy} onClick={() => setConflict(null)}>
+              Cancel
+            </Button>
+            {conflict?.sessions.length ? (
+              <Button
+                disabled={busy || !conflict.selected.length}
+                onClick={() => {
+                  void replaceConnection();
+                }}
+              >
+                {busy ? "Connecting…" : "Disconnect and connect here"}
+              </Button>
+            ) : (
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  if (!conflict) return;
+                  const targetIds = conflict.targetIds;
+                  setConflict(null);
+                  void connect(targetIds);
+                }}
+              >
+                Retry connection
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
       <div className={styles.toolbar}>
         <span className={styles.appMark}>
           <AppIcon size={17} aria-hidden />

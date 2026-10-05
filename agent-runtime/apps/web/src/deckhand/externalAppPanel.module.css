@@ -440,3 +440,29 @@
   font-size: 11px;
   line-height: 1.5;
 }
+
+.conflictList {
+  display: grid;
+  gap: 12px;
+  max-height: 50vh;
+  overflow: auto;
+  padding: 0 24px 20px;
+  font-size: 12px;
+}
+.conflictEntry {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.conflictEntry > span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.conflictEntry span span {
+  color: var(--muted-foreground);
+}

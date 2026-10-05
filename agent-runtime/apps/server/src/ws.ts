@@ -1943,6 +1943,43 @@ const makeWsRpcLayer = (
           observeRpcEffect(HISTORY_IMPORT_METHODS.messageText, historyImports.messageText(input)),
         [EXTERNAL_DEBUG_METHODS.discover]: (input) =>
           observeRpcEffect(EXTERNAL_DEBUG_METHODS.discover, externalDebug.discover(input)),
+        [EXTERNAL_DEBUG_METHODS.conflicts]: (input) =>
+          observeRpcEffect(
+            EXTERNAL_DEBUG_METHODS.conflicts,
+            withActor(
+              input.threadId ? { type: "thread", threadId: input.threadId } : undefined,
+              (actor) =>
+                Effect.gen(function* () {
+                  const conflicts = yield* externalDebug.conflicts(
+                    input.threadId ? ExternalDebug.externalDebugThreadOwner(input.threadId) : actor,
+                    input,
+                  );
+                  const visible = yield* Effect.forEach(conflicts, (conflict) =>
+                    Effect.gen(function* () {
+                      if (!conflict.threadId) return conflict;
+                      const access = yield* actorAccess
+                        .resolve(currentSession, {
+                          type: "thread",
+                          threadId: conflict.threadId,
+                        })
+                        .pipe(Effect.result);
+                      if (access._tag === "Failure") return null;
+                      const shell = yield* threadManagement
+                        .getThreadShell(conflict.threadId)
+                        .pipe(Effect.result);
+                      return {
+                        ...conflict,
+                        ...(shell._tag === "Success" && shell.success
+                          ? { threadTitle: shell.success.title }
+                          : {}),
+                      };
+                    }),
+                  );
+                  return visible.filter((conflict) => conflict !== null);
+                }),
+              () => new ExternalDebugError({ reason: "unavailable" }),
+            ),
+          ),
         [EXTERNAL_DEBUG_METHODS.sessions]: (input) =>
           observeRpcEffect(
             EXTERNAL_DEBUG_METHODS.sessions,

@@ -19,6 +19,7 @@ export const EXTERNAL_DEBUG_METHODS = {
   discover: "deckhand.externalDebug.discover",
   open: "deckhand.externalDebug.open",
   attach: "deckhand.externalDebug.attach",
+  conflicts: "deckhand.externalDebug.conflicts",
   sessions: "deckhand.externalDebug.sessions",
   read: "deckhand.externalDebug.read",
   command: "deckhand.externalDebug.command",
@@ -55,6 +56,13 @@ export const DebugSession = Schema.Struct({
   paused: Schema.Boolean,
 });
 export type DebugSession = typeof DebugSession.Type;
+// UI-only inventory for resolving attachment conflicts. MCP remains thread scoped.
+export const DebugConflict = Schema.Struct({
+  session: DebugSession,
+  threadId: Schema.NullOr(ThreadId),
+  threadTitle: Schema.optionalKey(text),
+});
+export type DebugConflict = typeof DebugConflict.Type;
 export const DebugOpenResult = Schema.Struct({
   targets: Schema.Array(DebugTarget).check(Schema.isMaxLength(200)),
   session: Schema.NullOr(DebugSession),
@@ -215,6 +223,11 @@ export const ExternalDebugRpcGroup = RpcGroup.make(
   Rpc.make(EXTERNAL_DEBUG_METHODS.sessions, {
     payload: Schema.Struct(threadScope),
     success: Schema.Array(DebugSession),
+    error,
+  }),
+  Rpc.make(EXTERNAL_DEBUG_METHODS.conflicts, {
+    payload: Schema.Struct({ ...DebugAttach.fields, ...threadScope }),
+    success: Schema.Array(DebugConflict),
     error,
   }),
   Rpc.make(EXTERNAL_DEBUG_METHODS.read, {

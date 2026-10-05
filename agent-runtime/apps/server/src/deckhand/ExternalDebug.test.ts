@@ -121,6 +121,78 @@ const withService = (
     }).pipe(Effect.provide(f.layer)),
   );
 describe("external runtime debugging", () => {
+  it.effect("reports the blocking thread and releases the exact connection before retry", () => {
+    const f = fixture(true);
+    return withService(f, (service) =>
+      Effect.gen(function* () {
+        const owner = Service.externalDebugThreadOwner("first-chat");
+        const requester = Service.externalDebugThreadOwner("second-chat");
+        const input = { endpoint: "mac://local", targetId: f.target.id };
+        const original = yield* service.attach(owner, input);
+        expect(yield* service.conflicts(requester, input)).toEqual([
+          { session: original, threadId: "first-chat" },
+        ]);
+        expect(
+          (yield* service.detach(requester, { sessionId: original.sessionId }).pipe(Effect.result))
+            ._tag,
+        ).toBe("Failure");
+        yield* service.detach(owner, { sessionId: original.sessionId });
+        expect(yield* service.conflicts(requester, input)).toEqual([]);
+        const replacement = yield* service.attach(requester, input);
+        expect(replacement.sessionId).not.toBe(original.sessionId);
+        expect(yield* service.sessions(owner)).toEqual([]);
+      }),
+    );
+  });
+  it.effect("offers disconnected sessions when the thread limit is reached", () => {
+    const f = fixture(true);
+    const targets = Array.from({ length: 5 }, (_, i) => ({ ...f.target, id: `window-${i}` }));
+    f.targets(targets);
+    return withService(f, (service) =>
+      Effect.gen(function* () {
+        const owner = Service.externalDebugThreadOwner("limited-chat");
+        const sessions: C.DebugSession[] = [];
+        for (const target of targets.slice(0, 4))
+          sessions.push(
+            yield* service.attach(owner, { endpoint: "mac://local", targetId: target.id }),
+          );
+        f.disconnect();
+        const input = { endpoint: "mac://local", targetId: targets[4]!.id };
+        const conflicts = yield* service.conflicts(owner, input);
+        expect(conflicts).toHaveLength(4);
+        expect(conflicts.at(-1)?.session.state).toBe("disconnected");
+        yield* service.detach(owner, { sessionId: sessions[3]!.sessionId });
+        expect((yield* service.attach(owner, input)).state).toBe("connected");
+      }),
+    );
+  });
+  it.effect("offers global capacity connections and prioritizes an exact target conflict", () => {
+    const f = fixture(true);
+    const targets = Array.from({ length: 17 }, (_, i) => ({ ...f.target, id: `global-${i}` }));
+    f.targets(targets);
+    return withService(f, (service) =>
+      Effect.gen(function* () {
+        for (let i = 0; i < 16; i++)
+          yield* service.attach(Service.externalDebugThreadOwner(`chat-${Math.floor(i / 4)}`), {
+            endpoint: "mac://local",
+            targetId: targets[i]!.id,
+          });
+        const requester = Service.externalDebugThreadOwner("new-chat");
+        expect(
+          yield* service.conflicts(requester, {
+            endpoint: "mac://local",
+            targetId: targets[16]!.id,
+          }),
+        ).toHaveLength(16);
+        const exact = yield* service.conflicts(requester, {
+          endpoint: "mac://local",
+          targetId: targets[0]!.id,
+        });
+        expect(exact).toHaveLength(1);
+        expect(exact[0]?.threadId).toBe("chat-0");
+      }),
+    );
+  });
   it.effect("opens an exact app identity and reuses the thread's single attachment", () => {
     const f = fixture(true);
     return withService(f, (service) =>

@@ -14,6 +14,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as C from "@cinderdeck/contracts/deckhand/externalDebugRpc";
+import { ThreadId } from "@cinderdeck/contracts";
 import {
   array,
   debugEndpoint,
@@ -62,6 +63,10 @@ export class ExternalDebug extends Context.Service<
     readonly discover: (input: C.DebugEndpoint) => Result<ReadonlyArray<C.DebugTarget>>;
     readonly attach: (actor: string, input: C.DebugAttach) => Result<C.DebugSession>;
     readonly sessions: (actor: string) => Result<ReadonlyArray<C.DebugSession>>;
+    readonly conflicts: (
+      actor: string,
+      input: C.DebugAttach,
+    ) => Result<ReadonlyArray<C.DebugConflict>>;
     readonly read: (actor: string, input: C.DebugRead) => Result<C.DebugSnapshot>;
     readonly command: (actor: string, input: C.DebugCommand) => Result<C.DebugCommandResult>;
     readonly detach: (actor: string, input: C.DebugIdentity) => Result<void>;
@@ -909,6 +914,34 @@ const make = Effect.gen(function* () {
     attach,
     read,
     command,
+    conflicts: (actor, input) =>
+      attempt(async () => {
+        const endpoint = debugEndpoint(input.endpoint).href;
+        const all = [...sessions.values()];
+        const target = all.filter(
+          (s) =>
+            s.view.state === "connected" &&
+            s.view.endpoint === endpoint &&
+            s.view.target.id === input.targetId,
+        );
+        const own = all.filter((s) => s.actor === actor);
+        // Show the exact target first. Capacity includes disconnected sessions until
+        // released; reservations have no completed session to disconnect yet.
+        const candidates = target.length
+          ? target
+          : own.length + [...reservations.values()].filter((owner) => owner === actor).length >= 4
+            ? own
+            : all.length + reservations.size >= 16
+              ? all
+              : [];
+        return candidates.flatMap((s) => {
+          const prefix = "external-debug:thread:";
+          const threadId = s.actor.startsWith(prefix)
+            ? ThreadId.make(s.actor.slice(prefix.length))
+            : null;
+          return threadId || s.actor === actor ? [{ session: s.view, threadId }] : [];
+        });
+      }),
     sessions: (actor) =>
       attempt(async () =>
         [...sessions.values()].filter((s) => s.actor === actor).map((s) => s.view),

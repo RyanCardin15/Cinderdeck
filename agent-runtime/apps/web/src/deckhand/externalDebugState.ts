@@ -13,6 +13,10 @@ export const listDebugSessions = createEnvironmentRpcCommand(connectionAtomRunti
   label: "external-debug:sessions",
   tag: EXTERNAL_DEBUG_METHODS.sessions,
 });
+export const listDebugConflicts = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "external-debug:conflicts",
+  tag: EXTERNAL_DEBUG_METHODS.conflicts,
+});
 export const readDebugSession = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "external-debug:read",
   tag: EXTERNAL_DEBUG_METHODS.read,
