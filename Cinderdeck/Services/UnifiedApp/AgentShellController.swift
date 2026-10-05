@@ -201,11 +201,14 @@ final class AgentShellController: ObservableObject {
       quitRequested = true
       // terminateLater enters AppKit's nested event loop. Calling it inside the
       // stdout MainActor task keeps that task active and blocks the asynchronous
-      // shutdown task that must reply. Start termination from the AppKit queue.
-      DispatchQueue.main.async { [weak self] in
-        NSApp.terminate(nil)
-        // A cancelled native quit must allow a subsequent explicit Quit request.
-        self?.quitRequested = false
+      // shutdown task that must reply. A dispatch-main block also holds that
+      // queue during the nested loop, so use a run-loop callback instead.
+      RunLoop.main.perform(inModes: [.common]) { [weak self] in
+        MainActor.assumeIsolated {
+          NSApp.terminate(nil)
+          // A cancelled native quit must allow a subsequent explicit Quit request.
+          self?.quitRequested = false
+        }
       }
       return
     }

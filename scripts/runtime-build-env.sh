@@ -34,9 +34,9 @@ install_runtime_dependencies() {
   printf 'Installing locked agent runtime dependencies (pnpm %s).\n' "$pnpm_version"
   # Pin the package manager too; never depend on another checkout's node_modules.
   if [[ -x "$npm_binary" ]]; then
-    (cd "$RUNTIME_SOURCE" && PATH="$(dirname "$NODE_BINARY"):$PATH" "$npm_binary" exec --yes --package="pnpm@$pnpm_version" -- pnpm install --frozen-lockfile)
+    (cd "$RUNTIME_SOURCE" && VP_GIT_HOOKS=0 PATH="$(dirname "$NODE_BINARY"):$PATH" "$npm_binary" exec --yes --package="pnpm@$pnpm_version" -- pnpm install --frozen-lockfile)
   elif command -v pnpm >/dev/null 2>&1 && [[ "$(PATH="$(dirname "$NODE_BINARY"):$PATH" pnpm --version)" == "$pnpm_version" ]]; then
-    (cd "$RUNTIME_SOURCE" && PATH="$(dirname "$NODE_BINARY"):$PATH" pnpm install --frozen-lockfile)
+    (cd "$RUNTIME_SOURCE" && VP_GIT_HOOKS=0 PATH="$(dirname "$NODE_BINARY"):$PATH" pnpm install --frozen-lockfile)
   else
     fail "Node installation lacks npm. Use a full Node 24 installation or install pnpm@$pnpm_version."
   fi
