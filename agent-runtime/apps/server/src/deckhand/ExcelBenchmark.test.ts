@@ -31,6 +31,8 @@ function simulated(
     events?: Omit<ProbeEvent, "sequence" | "client">[];
     pendingUntil?: number;
   },
+  // Repaints that happen regardless of input, e.g. Excel redrawing while idle.
+  background?: (t: number) => RepaintChange | null,
 ) {
   let clock = 1_700_000_000_000;
   let index = 0;
@@ -54,7 +56,14 @@ function simulated(
       return at;
     },
     timeline: async (since) => ({
-      changes: changes.filter((change) => change.t > since && change.t <= clock),
+      changes: [
+        ...changes,
+        ...Array.from({ length: Math.max(0, Math.floor((clock - since) / 50)) }, (_, i) =>
+          background?.(Math.floor(since / 50) * 50 + (i + 1) * 50),
+        ).filter((change): change is RepaintChange => Boolean(change)),
+      ]
+        .filter((change) => change.t > since && change.t <= clock)
+        .toSorted((a, b) => a.t - b.t),
       samples: samples.filter((sample) => sample.t > since),
     }),
     probeEvents: (from, to) =>
@@ -160,7 +169,7 @@ describe("Excel interaction benchmarks", () => {
           }
         : step.label === "Spinner"
           ? {
-              paints: Array.from({ length: 200 }, (_, i) => ({
+              paints: Array.from({ length: 30 }, (_, i) => ({
                 t: at + i * 50,
                 area: 0.3,
                 rects: [[0, 0, 1, 1]],
@@ -187,6 +196,54 @@ describe("Excel interaction benchmarks", () => {
     expect(result.samples.some((sample) => sample.label === "Select A1")).toBe(false);
     expect(result.steps.find((step) => step.label === "Spinner")?.timedOut).toBe(2);
     expect(result.warnings.join(" ")).toContain('"Spinner" did not settle within 1000 ms');
+  });
+
+  it("ignores repaints that were already happening before the input", async () => {
+    const respond = (_step: BenchmarkStep, at: number) => ({
+      paints: [{ t: at + 60, area: 0.1, rects: [[0.7, 0.1, 0.25, 0.3]] }],
+      events: [{ kind: "sync" as const, start: at + 5, end: at + 180, ok: true }],
+    });
+    // A status area that redraws every 50 ms forever, as real Excel did while idle.
+    const status = (t: number) => ({ t, area: 0.01, rects: [[0.02, 0.96, 0.3, 0.03]] });
+    const settled = await runBenchmark(
+      simulated(respond, status),
+      plan({ iterations: 2 }),
+      report(),
+      () => undefined,
+    );
+    expect(settled.steps[0]).toMatchObject({ timedOut: 0 });
+    expect(settled.steps[0]!.duration.p50).toBe(180);
+    expect(settled.steps[0]!.firstPaint?.p50).toBe(60);
+    expect(settled.warnings.join(" ")).toContain("were ignored");
+    // Without dirty rectangles every frame covers the whole window: fall back to
+    // add-in activity instead of timing out, and do not report a misleading first paint.
+    const whole = await runBenchmark(
+      simulated(respond, (t) => ({ t, area: 1, rects: [[0, 0, 1, 1]] })),
+      plan({ iterations: 2 }),
+      report(),
+      () => undefined,
+    );
+    expect(whole.steps[0]).toMatchObject({ timedOut: 0, firstPaint: null });
+    expect(whole.steps[0]!.duration.p50).toBe(180);
+    expect(whole.warnings.join(" ")).toContain("repainted across most of its area");
+  });
+
+  it("names where repaints continued when a step times out", async () => {
+    const result = await runBenchmark(
+      simulated((_step, at) => ({
+        paints: Array.from({ length: 80 }, (_, i) => ({
+          t: at + i * 50,
+          area: 0.02,
+          rects: [[0.5, 0.5, 0.1, 0.1]],
+        })),
+      })),
+      plan({ iterations: 1, warmup: 0, timeoutMs: 1000 }),
+      report(),
+      () => undefined,
+    );
+    expect(result.warnings.join(" ")).toContain(
+      "Repaints continued around x=0.5, y=0.5, width=0.1, height=0.1",
+    );
   });
 
   it("filters repaints to a region and flags regressions only beyond noise", () => {

@@ -43,6 +43,12 @@ jobs:
           packages/shared/src/cliRelease.test.ts
           apps/server/src/deckhand/LocalDiagnostics.test.ts
           apps/server/src/deckhand/CinderdeckClient.test.ts
+          apps/server/src/deckhand/ExcelProbe.test.ts
+          apps/server/src/deckhand/ExcelBenchmark.test.ts
+          apps/server/src/deckhand/ExternalDebug.test.ts
+          apps/server/src/deckhand/ExternalDebugCDP.test.ts
+          apps/server/src/deckhand/ExternalDebugMcpResult.test.ts
+          apps/web/src/deckhand/ExternalAppPanel.test.tsx
           apps/desktop/src/app/DesktopAssets.test.ts
           apps/desktop/src/app/DesktopEnvironment.test.ts
           apps/web/src/components/desktopUpdate.logic.test.ts

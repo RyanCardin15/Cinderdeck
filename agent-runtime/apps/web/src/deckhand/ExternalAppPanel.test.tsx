@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   detach: vi.fn<(request: Request) => Promise<unknown>>(),
   read: vi.fn<(request: Request) => Promise<unknown>>(),
   run: vi.fn<(request: Request) => Promise<unknown>>(),
+  probe: vi.fn<(request: Request) => Promise<unknown>>(),
+  benchmark: vi.fn<(request: Request) => Promise<unknown>>(),
   settings: { externalAppProfiles: [] as (typeof EXCEL_EXTERNAL_APP)[] },
   listeners: new Set<() => void>(),
 }));
@@ -27,10 +29,22 @@ vi.mock("./externalDebugState", () => ({
   detachDebugSession: "detach",
   readDebugSession: "read",
   runDebugCommand: "run",
+  excelProbe: "probe",
+  excelBenchmark: "benchmark",
 }));
 vi.mock("../state/use-atom-command", () => ({
-  useAtomCommand: (name: "open" | "discover" | "attach" | "sessions" | "detach" | "read" | "run") =>
-    mocks[name],
+  useAtomCommand: (
+    name:
+      | "open"
+      | "discover"
+      | "attach"
+      | "sessions"
+      | "detach"
+      | "read"
+      | "run"
+      | "probe"
+      | "benchmark",
+  ) => mocks[name],
 }));
 vi.mock("../state/environments", () => ({
   useEnvironments: () => ({ environments: [{ environmentId: "local", label: "Test Mac" }] }),
@@ -69,6 +83,7 @@ vi.mock("../hooks/useSettings", async () => {
 import { agentAppBindings, useAgentExternalApps } from "./useAgentExternalApps";
 import { useRightPanelStore } from "../rightPanelStore";
 import { ExternalAppPanel } from "./ExternalAppPanel";
+import { ExcelPerformancePanel } from "./ExcelPerformancePanel";
 import { ExternalAppsSettings } from "../components/settings/ExternalAppsSettings";
 import { externalAppBindingKey, useExternalAppSessions } from "./externalAppSessions";
 
@@ -95,7 +110,17 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   mocks.settings = { externalAppProfiles: [{ ...EXCEL_EXTERNAL_APP, enabled: true }] };
-  for (const key of ["open", "discover", "attach", "sessions", "detach", "read", "run"] as const)
+  for (const key of [
+    "open",
+    "discover",
+    "attach",
+    "sessions",
+    "detach",
+    "read",
+    "run",
+    "probe",
+    "benchmark",
+  ] as const)
     mocks[key].mockReset();
   mocks.open.mockResolvedValue(success({ targets: [app], session: session(app) }));
   mocks.discover.mockResolvedValue(success([app, inspector]));
@@ -163,6 +188,110 @@ const tick = () =>
   act(async () => {
     await vi.advanceTimersByTimeAsync(1200);
   });
+
+const probeStatus = (armed = false) => ({
+  armed,
+  listening: true,
+  port: 47823,
+  unavailable: null,
+  clients: [],
+  summary: null,
+});
+async function performancePanel(visible = true) {
+  await act(async () =>
+    root.render(
+      <ExcelPerformancePanel
+        environmentId={ref.environmentId}
+        threadId={ref.threadId}
+        visible={visible}
+      />,
+    ),
+  );
+}
+it("loads Excel performance only when expanded and stops polling when hidden", async () => {
+  mocks.probe.mockResolvedValue(success({ status: probeStatus() }));
+  mocks.benchmark.mockResolvedValue(success({ reports: [] }));
+  await performancePanel();
+  expect(mocks.probe).not.toHaveBeenCalled();
+  await click("Add-in performance");
+  expect(mocks.probe).toHaveBeenCalledWith({
+    environmentId: ref.environmentId,
+    input: { action: "status", threadId: ref.threadId },
+  });
+  expect(mocks.benchmark).toHaveBeenCalledWith({
+    environmentId: ref.environmentId,
+    input: { action: "list", threadId: ref.threadId },
+  });
+  const calls = mocks.probe.mock.calls.length;
+  await performancePanel(false);
+  await act(async () => vi.advanceTimersByTimeAsync(5000));
+  expect(mocks.probe).toHaveBeenCalledTimes(calls);
+});
+it("arms and disarms collection for the selected Excel thread", async () => {
+  mocks.probe.mockImplementation(async ({ input }) =>
+    success({ status: probeStatus(input.action === "arm") }),
+  );
+  mocks.benchmark.mockResolvedValue(success({ reports: [] }));
+  await performancePanel();
+  await click("Add-in performance");
+  await click("Collect add-in telemetry");
+  expect(mocks.probe).toHaveBeenLastCalledWith({
+    environmentId: ref.environmentId,
+    input: { action: "arm", waitForClientMs: 0, threadId: ref.threadId },
+  });
+  await click("Stop collecting");
+  expect(mocks.probe).toHaveBeenLastCalledWith({
+    environmentId: ref.environmentId,
+    input: { action: "disarm", waitForClientMs: 0, threadId: ref.threadId },
+  });
+});
+it("shows probe command failures and keeps collection available to retry", async () => {
+  mocks.probe.mockResolvedValue(success({ status: probeStatus() }));
+  mocks.benchmark.mockResolvedValue(success({ reports: [] }));
+  await performancePanel();
+  await click("Add-in performance");
+  mocks.probe.mockResolvedValue({ _tag: "Failure", cause: new Error("Probe unavailable") });
+  await click("Collect add-in telemetry");
+  expect(element.textContent).toContain("Probe unavailable");
+  expect((button("Collect add-in telemetry") as HTMLButtonElement).disabled).toBe(false);
+});
+it("opens a saved Excel benchmark and displays unavailable metric warnings", async () => {
+  mocks.probe.mockResolvedValue(success({ status: probeStatus() }));
+  mocks.benchmark.mockImplementation(async ({ input }) =>
+    input.action === "list"
+      ? success({
+          reports: [
+            {
+              id: "saved-run",
+              name: "Validate fixture",
+              state: "completed",
+              steps: [],
+              regressions: 0,
+            },
+          ],
+        })
+      : success({
+          report: {
+            id: "saved-run",
+            state: "completed",
+            progress: { iteration: 1, iterations: 1 },
+            steps: [],
+            warnings: ["Repaint timing unavailable"],
+          },
+        }),
+  );
+  await performancePanel();
+  await click("Add-in performance");
+  const saved = [...element.querySelectorAll<HTMLButtonElement>("button")].find((node) =>
+    node.textContent?.includes("Validate fixture"),
+  )!;
+  await act(async () => saved.click());
+  expect(mocks.benchmark).toHaveBeenCalledWith({
+    environmentId: ref.environmentId,
+    input: { action: "get", runId: "saved-run", threadId: ref.threadId },
+  });
+  expect(element.textContent).toContain("Repaint timing unavailable");
+});
 
 it("reveals configuration only after enabling Excel and supports a custom app", async () => {
   mocks.settings = { externalAppProfiles: [{ ...EXCEL_EXTERNAL_APP, enabled: false }] };

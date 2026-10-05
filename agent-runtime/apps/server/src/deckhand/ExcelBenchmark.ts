@@ -75,7 +75,54 @@ export function significantChanges(
   );
 }
 
-type StepOutcome = { start: number; end: number; timedOut: boolean; paints: number[] };
+// Background repaints, such as Excel redrawing its grid while idle, are learned per step
+// from a pre-input observation on a coarse grid. Later repaints only count when they touch
+// a cell that was quiet before the input.
+const GRID = 24;
+export type NoiseMask = { cells: ReadonlySet<number>; coverage: number };
+const cellsOf = (rect: ReadonlyArray<number>, dilate: number) => {
+  const [x = 0, y = 0, width = 0, height = 0] = rect;
+  const clamp = (value: number) => Math.max(0, Math.min(GRID - 1, value));
+  const cells: number[] = [];
+  const left = clamp(Math.floor(x * GRID) - dilate),
+    right = clamp(Math.ceil((x + width) * GRID) - 1 + dilate),
+    top = clamp(Math.floor(y * GRID) - dilate),
+    bottom = clamp(Math.ceil((y + height) * GRID) - 1 + dilate);
+  for (let row = top; row <= bottom; row++)
+    for (let column = left; column <= right; column++) cells.push(row * GRID + column);
+  return cells;
+};
+export function noiseMask(changes: ReadonlyArray<RepaintChange>): NoiseMask {
+  const cells = new Set<number>();
+  for (const change of changes)
+    for (const rect of change.rects) for (const cell of cellsOf(rect, 1)) cells.add(cell);
+  return { cells, coverage: cells.size / (GRID * GRID) };
+}
+export const relevantChange = (change: RepaintChange, mask: NoiseMask) =>
+  change.rects.some((rect) => cellsOf(rect, 0).some((cell) => !mask.cells.has(cell)));
+// When background repaints cover most of the window, repaints cannot show completion.
+const UNUSABLE_COVERAGE = 0.9;
+
+export type StepOutcome = {
+  start: number;
+  end: number;
+  timedOut: boolean;
+  paints: RepaintChange[];
+  // Share of the window that repainted before input and was ignored; null without paint.
+  backgroundCoverage: number | null;
+  paintIgnored: boolean;
+};
+const bounds = (changes: ReadonlyArray<RepaintChange>) => {
+  const rects = changes.flatMap((change) => change.rects);
+  if (!rects.length) return null;
+  const left = Math.min(...rects.map((rect) => rect[0] ?? 0)),
+    top = Math.min(...rects.map((rect) => rect[1] ?? 0)),
+    right = Math.max(...rects.map((rect) => (rect[0] ?? 0) + (rect[2] ?? 0))),
+    bottom = Math.max(...rects.map((rect) => (rect[1] ?? 0) + (rect[3] ?? 0)));
+  const fixed = (value: number) => Math.round(value * 100) / 100;
+  return { x: fixed(left), y: fixed(top), width: fixed(right - left), height: fixed(bottom - top) };
+};
+export const repaintArea = bounds;
 // Waits until a step's effects end: no relevant repaint, probe activity or outstanding
 // Office/network work for settleMs, with every probe event up to then delivered. A
 // step with `until` ends at its named mark or measure instead.
@@ -89,19 +136,42 @@ export async function measureStep(
   if (step.action === "wait") {
     const start = deps.now();
     await deps.sleep(step.waitMs ?? 0);
-    return { start, end: deps.now(), timedOut: false, paints: [] };
+    return {
+      start,
+      end: deps.now(),
+      timedOut: false,
+      paints: [],
+      backgroundCoverage: null,
+      paintIgnored: false,
+    };
   }
+  let mask: NoiseMask | null = null;
+  if (plan.paint) {
+    // Any background repaint frequent enough to prevent settling recurs within settleMs.
+    const observed = deps.now();
+    await deps.sleep(settle);
+    mask = noiseMask(significantChanges((await deps.timeline(observed)).changes, plan.region));
+  }
+  const paintIgnored = (mask?.coverage ?? 0) > UNUSABLE_COVERAGE;
   const start = await deps.act(step);
-  const paints: number[] = [];
+  const paints: RepaintChange[] = [];
+  const outcome = (end: number, timedOut: boolean): StepOutcome => ({
+    start,
+    end,
+    timedOut,
+    paints,
+    backgroundCoverage: mask ? Math.round(mask.coverage * 1000) / 1000 : null,
+    paintIgnored,
+  });
   let since = start - 1;
   while (true) {
     if (deps.cancelled()) throw new Error("cancelled");
     await deps.sleep(POLL_MS);
     const now = deps.now();
-    if (plan.paint) {
+    if (plan.paint && !paintIgnored) {
       const timeline = await deps.timeline(since);
       for (const change of significantChanges(timeline.changes, plan.region))
-        if (change.t >= start) paints.push(change.t);
+        if (change.t >= start && (!mask || relevantChange(change, mask))) paints.push(change);
       since = Math.max(since, ...timeline.changes.map((change) => change.t));
     }
     const events = deps.probeEvents(start - 5, now);
@@ -113,21 +183,20 @@ export async function measureStep(
             event.start >= start - 50
           : event.kind === "mark" && event.name === step.until?.mark && event.start >= start,
       );
-      if (match) return { start, end: match.end ?? match.start, timedOut: false, paints };
+      if (match) return outcome(match.end ?? match.start, false);
     } else {
       const activity = deps.probeActivity();
       const last = Math.max(
         start,
-        ...paints,
+        ...paints.map((change) => change.t),
         ...events
           .filter((event) => event.kind !== "jank" && event.kind !== "probe")
           .map((event) => event.end ?? event.start),
       );
       const delivered = activity.clients === 0 || (activity.deliveredThrough ?? 0) >= last;
-      if (activity.pending === 0 && delivered && now - last >= settle)
-        return { start, end: last, timedOut: false, paints };
+      if (activity.pending === 0 && delivered && now - last >= settle) return outcome(last, false);
     }
-    if (now - start >= timeout) return { start, end: now, timedOut: true, paints };
+    if (now - start >= timeout) return outcome(now, true);
   }
 }
 
@@ -139,6 +208,7 @@ export async function sampleStep(
   plan: BenchmarkPlan,
 ): Promise<BenchmarkSample> {
   const { start, end } = outcome;
+  const paints = outcome.paints.map((change) => change.t);
   const events = deps.probeEvents(start - 5, end + 5);
   const of = (kind: ProbeEvent["kind"]) => events.filter((event) => event.kind === kind);
   const syncs = of("sync");
@@ -157,10 +227,8 @@ export async function sampleStep(
     start,
     duration: round(end - start),
     timedOut: outcome.timedOut,
-    firstPaint:
-      plan.paint && outcome.paints.length ? round(Math.min(...outcome.paints) - start) : null,
-    lastPaint:
-      plan.paint && outcome.paints.length ? round(Math.max(...outcome.paints) - start) : null,
+    firstPaint: paints.length ? round(Math.min(...paints) - start) : null,
+    lastPaint: paints.length ? round(Math.max(...paints) - start) : null,
     runs: of("run").length,
     syncs: syncs.length,
     syncTime: round(syncs.reduce((sum, event) => sum + duration(event), 0)),
@@ -288,9 +356,19 @@ export async function runBenchmark(
       for (const step of plan.steps) {
         deps.progress(iteration, step.label);
         const outcome = await measureStep(deps, plan, step);
-        if (outcome.timedOut)
+        if (outcome.timedOut) {
+          const area = bounds(outcome.paints.filter((change) => change.t >= outcome.end - 2000));
           warnings.add(
-            `"${step.label}" did not settle within ${step.timeoutMs ?? plan.timeoutMs} ms; its duration is the timeout. Use a region to ignore animations, or until with a mark/measure.`,
+            `"${step.label}" did not settle within ${step.timeoutMs ?? plan.timeoutMs} ms; its duration is the timeout.${area ? ` Repaints continued around x=${area.x}, y=${area.y}, width=${area.width}, height=${area.height}; exclude that area with region.` : ""} Or end the step with until and a mark/measure.`,
+          );
+        }
+        if (outcome.paintIgnored)
+          warnings.add(
+            `"${step.label}": the window repainted across most of its area before input, so repaints could not show completion and first paint is unavailable; durations use add-in activity. Set region, such as the task pane, for paint timing.`,
+          );
+        else if (outcome.backgroundCoverage)
+          warnings.add(
+            `"${step.label}": repaints already occurring before input (about ${Math.round(outcome.backgroundCoverage * 100)}% of the window) were ignored.`,
           );
         if (!measured) continue;
         const sample = await sampleStep(deps, outcome, iteration - plan.warmup, step.label, plan);
