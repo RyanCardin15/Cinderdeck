@@ -834,6 +834,57 @@ final class StackLaneTests: XCTestCase {
     _ = try await StackLaneStore.remove(record, in: supervisor.lanesDirectory, others: [], options: .init())
   }
 
+  func testDiscoveredMultiRepositoryWorkspaceCreatesAndRunsLaneInEveryCorrectFolder() async throws {
+    let other = root.appendingPathComponent("other", isDirectory: true)
+    _ = try await StackLaneStore.git(["clone", repo.path, other.path], at: root)
+    for path in [repo!, other] {
+      try "test:\n\t@pwd\n".write(to: path.appendingPathComponent("Makefile"), atomically: true, encoding: .utf8)
+      _ = try await StackLaneStore.git(["add", "Makefile"], at: path)
+      _ = try await StackLaneStore.git(["-c", "commit.gpgsign=false", "-c", "user.name=Lane Tests", "-c", "user.email=lanes@example.test", "commit", "-m", "add test task"], at: path)
+    }
+    let docs = root.appendingPathComponent("docs", isDirectory: true)
+    try FileManager.default.createDirectory(at: docs, withIntermediateDirectories: true)
+    try "test:\n\t@pwd\n".write(to: docs.appendingPathComponent("Makefile"), atomically: true, encoding: .utf8)
+    let scan = try WorkspaceDiscovery.discover(root: repo, additionalFolders: [other, docs])
+    let components = try WorkspaceSetupModel.components(root: scan.root, commands: scan.commands, repositories: scan.repositories)
+    let file = try WorkspaceDefinitionWriter.createWorkspace(name: "Suite", root: scan.root.path, directory: definitions, components: components)
+    let source = try XCTUnwrap(StackDefinitionLoader.load(String(contentsOf: file), file: file).definition)
+    let record = try await StackLaneStore.create(source: source, request: .init(branch: "discovered-suite"), owner: codex,
+      directory: supervisor.lanesDirectory, worktreeRoot: supervisor.worktreeRoot, occupiedPorts: []).record
+    defer { try? FileManager.default.removeItem(at: record.info.directory) }
+    let lane = StackLaneStore.derive(record, source: source).definition
+    XCTAssertEqual(record.worktrees.count, 2)
+    XCTAssertEqual(lane.tasks.count, 3)
+    for task in lane.tasks {
+      let result = try await StackCommandRunner.run("/bin/sh", ["-c", task.command], directory: task.directory,
+        environment: ProcessInfo.processInfo.environment, timeout: 10)
+      XCTAssertEqual(result.status, 0)
+      XCTAssertTrue(StackLaneStore.samePath(URL(fileURLWithPath: result.text.trimmingCharacters(in: .whitespacesAndNewlines)), task.directory), "Task must run in its configured physical folder")
+      if source.repo(try XCTUnwrap(task.repo))?.laneMode == .shared { XCTAssertEqual(task.directory, docs) }
+      else {
+        XCTAssertTrue(record.worktrees.contains { $0.path == task.directory })
+        let branch = try await StackLaneStore.git(["branch", "--show-current"], at: task.directory)
+        XCTAssertEqual(branch, "discovered-suite")
+      }
+    }
+    _ = try await StackLaneStore.remove(record, in: supervisor.lanesDirectory, others: [], options: .init())
+  }
+
+  func testSharedNestedRepositoryTaskKeepsOriginalFolderInOuterLane() async throws {
+    try await load()
+    let inner = repo.appendingPathComponent("inner", isDirectory: true)
+    try FileManager.default.createDirectory(at: inner, withIntermediateDirectories: true)
+    var source = try XCTUnwrap(supervisor.definition("shop"))
+    source.repos.append(.init(id: "inner", path: inner, laneMode: .shared))
+    source.tasks = [.init(id: "shared-test", name: "Shared tests", command: "pwd", repo: "inner", directory: inner)]
+    let tree = StackLaneWorktree(source: repo, path: root.appendingPathComponent("lane/shop"))
+    let info = StackLaneInfo(sourceStackID: source.id, name: "shared", owner: codex, createdAt: Date(), directory: root.appendingPathComponent("lane"), ports: [:])
+    let record = StackLaneRecord(id: "shared-lane", info: info, worktrees: [tree])
+    let lane = StackLaneStore.derive(record, source: source).definition
+    XCTAssertEqual(lane.tasks.first?.directory, inner)
+    XCTAssertEqual(lane.repo("inner")?.path, inner)
+  }
+
   func testFailedCreateRollsBackWorktreesAndMalformedRecordDoesNotHideBase() async throws {
     try await load()
     let subfolder = repo.appendingPathComponent("new-folder")

@@ -515,8 +515,9 @@ export function SessionLauncher({
               <details className={styles["dh-revision-fields"]}>
                 <summary>Repository start revisions</summary>
                 <p>
-                  Leave blank to use each repository’s workspace default. Enter a branch, tag or
-                  commit to override it.
+                  A workspace can include several repositories and regular folders. Leave blank to
+                  use each repository’s workspace default. Enter a branch, tag or commit to override
+                  it.
                 </p>
                 {resource.workspace?.repos.map((repo) => (
                   <div key={repo.id}>

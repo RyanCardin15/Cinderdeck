@@ -17,12 +17,15 @@ nonisolated struct WorkspaceDiscoveredCommand: Identifiable, Equatable, Sendable
   var dependencyFolder: String?
   var composeFile: String?
   var fixedPort: Int?
+  var discoveryRoot: URL?
 }
 
 nonisolated struct WorkspaceDiscoveryResult: Sendable {
   var root: URL
   var commands: [WorkspaceDiscoveredCommand]
   var notes: [String]
+  var folders: [URL] = []
+  var repositories: [RepoDefinition] = []
 }
 
 /// Bounded static inspection. Does not follow directory symlinks, read source code,
@@ -37,15 +40,18 @@ nonisolated enum WorkspaceDiscovery {
     guard FileManager.default.fileExists(atPath: root.path, isDirectory: &isDirectory), isDirectory.boolValue else {
       throw StackError.message("Choose an existing project folder.")
     }
-    var result = WorkspaceDiscoveryResult(root: root, commands: [], notes: [])
-    if !FileManager.default.fileExists(atPath: root.appendingPathComponent(".git").path) {
-      result.notes.append("This folder has no Git metadata. Commands can still run; choose the repository root to use worktree lanes.")
-    }
+    var result = WorkspaceDiscoveryResult(root: root, commands: [], notes: [], folders: [root])
     var queue: [(URL, Int, String)] = [(root, 0, "")]
     var visited = 0
     while !queue.isEmpty && visited < 200 {
       let (folder, depth, relative) = queue.removeFirst(); visited += 1
       try Task.checkCancellation()
+      if let repository = repositoryRoot(containing: folder), !result.repositories.contains(where: { $0.path == repository }) {
+        let base = repository == root ? "project" : repositoryIdentifier(repository.lastPathComponent)
+        var id = base; var suffix = 2
+        while result.repositories.contains(where: { $0.id == id }) { id = base + "-" + String(suffix); suffix += 1 }
+        result.repositories.append(.init(id: id, path: repository))
+      }
       let prefix = relative.isEmpty ? "" : identifier(relative) + "-"
       func candidateID(_ kind: WorkspaceDiscoveredCommand.Kind, _ key: String) -> String {
         let base = prefix + key
@@ -66,7 +72,7 @@ nonisolated enum WorkspaceDiscovery {
             throw StackError.message("Expected a JSON object")
           }
           let scripts = package["scripts"] as? [String: String] ?? [:]
-          let manager = packageManager(package: package, directory: folder, root: root)
+          let manager = packageManager(package: package, directory: folder, root: repositoryRoot(containing: folder) ?? root)
           let tools = manager == "bun" ? ["bun"] : ["node", manager]
           let dependencies = (package["dependencies"] as? [String: Any] ?? [:]).merging(package["devDependencies"] as? [String: Any] ?? [:]) { first, _ in first }
           let serviceKey = ["dev", "start", "serve"].first { scripts[$0] != nil }
@@ -166,9 +172,67 @@ nonisolated enum WorkspaceDiscovery {
     if !queue.isEmpty { result.notes.append("Discovery reached its 200-folder limit. Select a smaller project folder to inspect more packages.") }
     if result.commands.isEmpty { result.notes.append("No supported commands found. Add a service or task below, or save an empty workspace.") }
     result.notes.append("Suggestions come from manifests up to three folders deep. Review commands and ports; custom scripts may need additional tools or configuration.")
+    if result.repositories.isEmpty {
+      result.repositories = [.init(id: "project", path: root, laneMode: .shared)]
+      result.notes.append("This folder can run services and tasks without Git. Branch lanes need at least one Git repository; regular folders stay shared.")
+    }
+    for index in result.commands.indices { result.commands[index].discoveryRoot = repositoryRoot(containing: result.commands[index].directory) ?? root }
     var seenNotes = Set<String>()
     result.notes = result.notes.filter { seenNotes.insert($0).inserted }
     return result
+  }
+
+  /// Combine independent selections, keeping one command per physical folder and
+  /// renaming its port templates together with its ID. No project commands run.
+  static func discover(root: URL, additionalFolders: [URL]) throws -> WorkspaceDiscoveryResult {
+    guard additionalFolders.count < 64 else { throw StackError.message("Choose up to 64 workspace folders.") }
+    var scans: [WorkspaceDiscoveryResult] = []
+    for folder in [root] + additionalFolders {
+      let normalized = folder.standardizedFileURL.resolvingSymlinksInPath()
+      if scans.contains(where: { $0.root == normalized }) { continue }
+      scans.append(try discover(root: normalized))
+    }
+    guard scans.count > 1 else { return scans[0] }
+    var result = WorkspaceDiscoveryResult(root: scans[0].root, commands: [], notes: [], folders: scans.map(\.root))
+    var usedIDs = Set<String>()
+    for scan in scans {
+      for var command in scan.commands {
+        if result.commands.contains(where: { $0.kind == command.kind && $0.directory == command.directory && $0.evidence == command.evidence }) { continue }
+        let base = identifier(scan.root.lastPathComponent) + "-" + command.id
+        var id = base; var suffix = 2
+        while usedIDs.contains(id) { id = base + "-" + String(suffix); suffix += 1 }
+        usedIDs.insert(id)
+        command.command = command.command.replacingOccurrences(of: "{{port.\(command.id)}}", with: "{{port.\(id)}}")
+        command.id = id
+        command.title = scan.root.lastPathComponent + " · " + command.title
+        result.commands.append(command)
+      }
+      for repo in scan.repositories where !result.repositories.contains(where: { $0.path == repo.path }) {
+        let base = repositoryIdentifier(repo.path.lastPathComponent)
+        var id = base; var suffix = 2
+        while result.repositories.contains(where: { $0.id == id }) { id = base + "-" + String(suffix); suffix += 1 }
+        result.repositories.append(.init(id: id, path: repo.path, laneMode: repo.laneMode))
+      }
+      result.notes += scan.notes.map { scan.root.lastPathComponent + ": " + $0 }
+    }
+    // A container folder is the workspace root, not a shared repository covering
+    // the Git repositories below it (which would suppress their lane worktrees).
+    let gitPaths = result.repositories.filter { $0.laneMode == .worktree }.map(\.path)
+    result.repositories.removeAll { repo in repo.laneMode == .shared && gitPaths.contains { StackLaneStore.relative($0, to: repo.path) != nil } }
+    return result
+  }
+
+  /// .git can be a directory or a worktree/submodule metadata file. Walk upward
+  /// so selecting a package inside a repository still registers its Git root.
+  static func repositoryRoot(containing directory: URL) -> URL? {
+    var folder = directory.standardizedFileURL.resolvingSymlinksInPath()
+    while true {
+      if FileManager.default.fileExists(atPath: folder.appendingPathComponent(".git").path) { return folder }
+      if folder.path == "/" { return nil }
+      let parent = folder.deletingLastPathComponent().standardizedFileURL
+      if parent.path == folder.path { return nil }
+      folder = parent
+    }
   }
 
   /// Nested packages inherit their nearest manifest/lockfile's package manager.
@@ -182,7 +246,7 @@ nonisolated enum WorkspaceDiscovery {
         if FileManager.default.fileExists(atPath: folder.appendingPathComponent(file).path) { return manager }
       }
       if folder.standardizedFileURL.path == root.standardizedFileURL.path { break }
-      let parent = folder.deletingLastPathComponent()
+      let parent = folder.deletingLastPathComponent().standardizedFileURL
       if parent.path == folder.path { break }
       folder = parent
       current = (try? read(folder.appendingPathComponent("package.json"))).flatMap {
@@ -190,6 +254,11 @@ nonisolated enum WorkspaceDiscovery {
       } ?? [:]
     }
     return "npm"
+  }
+
+  private static func repositoryIdentifier(_ value: String) -> String {
+    let id = identifier(value)
+    return id.isEmpty ? "repository" : id
   }
 
   static func identifier(_ value: String) -> String {

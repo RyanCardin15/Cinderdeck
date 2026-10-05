@@ -197,6 +197,139 @@ final class WorkspaceDiscoveryTests: XCTestCase {
     XCTAssertTrue(issues.contains { $0.id.hasSuffix("compose-config") && $0.severity == .blocker })
     XCTAssertTrue(issues.contains { $0.id.hasSuffix("docker-engine") && $0.severity == .blocker })
   }
+  func testContainerDiscoversEveryGitRootIncludingWorktreeMetadataWithoutCommands() throws {
+    try write("api/.git/HEAD", "ref: refs/heads/main")
+    try write("web/.git", "gitdir: /tmp/worktree-metadata")
+    try write("api/package.json", #"{"scripts":{"test":"echo tested"}}"#)
+    let result = try WorkspaceDiscovery.discover(root: root)
+    XCTAssertEqual(Set(result.repositories.map { $0.path.lastPathComponent }), ["api", "web"])
+    XCTAssertTrue(result.repositories.allSatisfy { $0.laneMode == .worktree })
+    let components = try WorkspaceSetupModel.components(root: root, commands: result.commands, repositories: result.repositories)
+    let loaded = try XCTUnwrap(StackDefinitionLoader.load("root = \"\(root.path)\"\n" + components, file: root.appendingPathComponent("workspace.toml")).definition)
+    XCTAssertEqual(loaded.repos.count, 2)
+    XCTAssertEqual(loaded.tasks.first?.repo, "api")
+    XCTAssertEqual(loaded.tasks.first?.directory, root.appendingPathComponent("api", isDirectory: true))
+  }
+
+  func testIndependentFoldersKeepUniqueCommandsPortTemplatesAndSharedFoldersAfterSave() throws {
+    let manifest = #"{"scripts":{"dev":"vite","test":"echo tested"}}"#
+    try write("one/app/.git/HEAD")
+    try write("two/app/.git/HEAD")
+    try write("one/app/package.json", manifest)
+    try write("two/app/package.json", manifest)
+    try write("docs/Makefile", "test:\n\techo docs\n")
+    let first = root.appendingPathComponent("one/app", isDirectory: true)
+    let second = root.appendingPathComponent("two/app", isDirectory: true)
+    let docs = root.appendingPathComponent("docs", isDirectory: true)
+    let result = try WorkspaceDiscovery.discover(root: first, additionalFolders: [second, docs, first])
+    XCTAssertEqual(result.folders.count, 3)
+    XCTAssertEqual(result.repositories.count, 3)
+    XCTAssertEqual(Set(result.repositories.map(\.id)).count, 3)
+    XCTAssertEqual(Set(result.commands.map(\.id)).count, 5)
+    for command in result.commands where command.kind == .service { XCTAssertTrue(command.command.contains("{{port.\(command.id)}}")) }
+    let source = "root = \"\(first.path)\"\n" + (try WorkspaceSetupModel.components(root: first, commands: result.commands, repositories: result.repositories))
+    let loaded = try XCTUnwrap(StackDefinitionLoader.load(source, file: root.appendingPathComponent("workspace.toml")).definition)
+    XCTAssertEqual(Set(loaded.services.map(\.directory)), [first, second])
+    XCTAssertEqual(loaded.repo(try XCTUnwrap(loaded.tasks.first { $0.directory == docs }?.repo))?.laneMode, .shared)
+    for command in loaded.services { XCTAssertEqual(loaded.repo(try XCTUnwrap(command.repo))?.path, command.directory) }
+  }
+
+  func testOverlappingFoldersDeduplicateCommandsAndSubfolderUsesItsGitRoot() throws {
+    try write(".git/HEAD")
+    try write("apps/web/package.json", #"{"scripts":{"dev":"vite"}}"#)
+    let web = root.appendingPathComponent("apps/web", isDirectory: true)
+    let overlap = try WorkspaceDiscovery.discover(root: root, additionalFolders: [web])
+    XCTAssertEqual(overlap.commands.count, 1)
+    XCTAssertEqual(overlap.repositories.count, 1)
+    let selected = try WorkspaceDiscovery.discover(root: web)
+    XCTAssertEqual(selected.repositories.first?.path.path, root.path)
+    let source = "root = \"\(web.path)\"\n" + (try WorkspaceSetupModel.components(root: web, commands: selected.commands, repositories: selected.repositories))
+    let loaded = try XCTUnwrap(StackDefinitionLoader.load(source, file: root.appendingPathComponent("workspace.toml")).definition)
+    XCTAssertEqual(loaded.services.first?.directory, web, "A selected package must not launch at the repository root")
+  }
+
+  func testFolderOnlyWorkspaceAndLaneDefaultsSaveWithoutExecutingSetup() throws {
+    try write("docs/Makefile", "test:\n\techo docs\n")
+    let result = try WorkspaceDiscovery.discover(root: root)
+    XCTAssertEqual(result.repositories.first?.laneMode, .shared)
+    let task = try XCTUnwrap(result.commands.first)
+    let source = "root = \"\(root.path)\"\n" + (try WorkspaceSetupModel.components(root: root, commands: result.commands,
+      repositories: result.repositories, copyEnvironmentFiles: true, setupTask: task.id))
+    let loaded = try XCTUnwrap(StackDefinitionLoader.load(source, file: root.appendingPathComponent("workspace.toml")).definition)
+    XCTAssertEqual(loaded.laneSettings?.copy, [".env", ".env.local"])
+    XCTAssertEqual(loaded.laneSettings?.setup, "task:" + task.id)
+    var excluded = task; excluded.selected = false
+    XCTAssertThrowsError(try WorkspaceSetupModel.components(root: root, commands: [excluded], setupTask: task.id))
+  }
+
+  func testNestedRepositoriesRequireAnExplicitSharedChoice() throws {
+    try write(".git/HEAD")
+    try write("inner/.git/HEAD")
+    var result = try WorkspaceDiscovery.discover(root: root)
+    XCTAssertThrowsError(try WorkspaceSetupModel.components(root: root, commands: [], repositories: result.repositories))
+    let inner = try XCTUnwrap(result.repositories.firstIndex { $0.path.lastPathComponent == "inner" })
+    result.repositories[inner].laneMode = .shared
+    XCTAssertNoThrow(try WorkspaceSetupModel.components(root: root, commands: [], repositories: result.repositories))
+  }
+
+  func testSelectedPackageInheritsRepositoryManagerAndDependencyBoundary() throws {
+    try write(".git/HEAD")
+    try write("package.json", #"{"packageManager":"pnpm@9.0.0"}"#)
+    try write("apps/web/package.json", #"{"dependencies":{"vite":"*"},"scripts":{"dev":"vite"}}"#)
+    try FileManager.default.createDirectory(at: root.appendingPathComponent("node_modules"), withIntermediateDirectories: true)
+    let web = root.appendingPathComponent("apps/web", isDirectory: true)
+    let command = try XCTUnwrap(WorkspaceDiscovery.discover(root: web).commands.first)
+    XCTAssertTrue(command.command.hasPrefix("pnpm run"))
+    XCTAssertEqual(command.discoveryRoot?.path, root.path)
+    XCTAssertTrue(WorkspaceSetupCheck.hasDependencies("node_modules", directory: web, root: try XCTUnwrap(command.discoveryRoot)))
+  }
+
+  func testUnicodeRepositoryNamesSaveValidUniqueAssociations() throws {
+    try write("项目/.git/HEAD")
+    try write("项目/package.json", #"{"scripts":{"test":"echo tested"}}"#)
+    let scan = try WorkspaceDiscovery.discover(root: root)
+    let source = "root = \"\(root.path)\"\n" + (try WorkspaceSetupModel.components(root: root, commands: scan.commands, repositories: scan.repositories))
+    let loaded = try XCTUnwrap(StackDefinitionLoader.load(source, file: root.appendingPathComponent("workspace.toml")).definition)
+    XCTAssertEqual(loaded.repos.first?.id, "repository")
+    XCTAssertEqual(loaded.tasks.first?.repo, "repository")
+  }
+
+  @MainActor
+  func testChangingCommandFolderRegistersItsRepositoryAndPreservesWorkingDirectory() throws {
+    try write("app/.git/HEAD")
+    try write("app/packages/web/placeholder")
+    let model = WorkspaceSetupModel()
+    model.commands = [service()]
+    let web = root.appendingPathComponent("app/packages/web", isDirectory: true)
+    model.moveCommand("web", to: web)
+    XCTAssertEqual(model.repositories.first?.path, root.appendingPathComponent("app", isDirectory: true))
+    let source = "root = \"\(root.path)\"\n" + (try WorkspaceSetupModel.components(root: root, commands: model.commands, repositories: model.repositories))
+    let loaded = try XCTUnwrap(StackDefinitionLoader.load(source, file: root.appendingPathComponent("workspace.toml")).definition)
+    XCTAssertEqual(loaded.services.first?.directory, web)
+    XCTAssertEqual(loaded.services.first?.repo, "app")
+  }
+
+  func testLaneSummaryIncludesImplicitGitRootsAlongsideSharedFolders() throws {
+    try write("app/.git/HEAD")
+    try write("docs/placeholder")
+    let app = root.appendingPathComponent("app", isDirectory: true)
+    let docs = root.appendingPathComponent("docs", isDirectory: true)
+    var definition = StackTestSupport.simpleDefinition(root: root).stack
+    definition.repos = [.init(id: "docs", path: docs, laneMode: .shared)]
+    definition.services[0].directory = app
+    XCTAssertEqual(WorkspaceSetupModel.laneRepositories(in: definition).map { $0.path.path }, [app.path])
+    definition.services[0].laneMode = .shared
+    XCTAssertTrue(WorkspaceSetupModel.laneRepositories(in: definition).isEmpty)
+    definition.services[0].laneMode = nil
+    definition.services[0].repo = "docs"
+    XCTAssertTrue(WorkspaceSetupModel.laneRepositories(in: definition).isEmpty)
+  }
+
+  func testLaneEnvironmentPreservesValuesAndRefusesInvalidOrDuplicateNames() throws {
+    XCTAssertEqual(try WorkspaceSetupModel.laneEnvironment(" MODE=preview\nTOKEN=a=b\nEMPTY=\n"), ["MODE": "preview", "TOKEN": "a=b", "EMPTY": ""])
+    for text in ["missing-equals", "BAD-NAME=value", "MODE=one\nMODE=two", "=value"] { XCTAssertThrowsError(try WorkspaceSetupModel.laneEnvironment(text)) }
+  }
+
   @MainActor
   func testReviewedSelectionSavesValidDefinitionWithoutExecutingAndRefusesOverwrite() throws {
     try write(".git/HEAD", "ref: refs/heads/main")

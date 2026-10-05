@@ -1,5 +1,7 @@
 # Workspaces: services, tasks, and workflows
 
+A workspace can contain one repository, several independent repositories, regular folders, or a mix. Services and tasks keep their own working folders; Git is optional.
+
 Open **Workspaces…** from the menu bar, or **History → Workspaces → Open Workspaces**. Launchers can use `cinderdeck://workspaces`. This is the new home for the existing Stacks feature.
 
 The compact History panel shows up to three complete workspace cards per page. Use the previous/next buttons for more workspaces, or the arrow keys to move the selection across pages. Service details scroll within each card while Start/Stop and workspace actions stay visible. **Open Workspaces** opens the full workspace window.
@@ -27,9 +29,11 @@ Right-click a workspace and choose **Delete workspace…** to remove its definit
 
 Under **Lanes without a workspace**, right-click a lane and choose **Add to workspace…** to pick its workspace, or **Delete lane…** to remove it. Adding a managed lane requires a workspace using its original repositories and keeps its ID, worktrees, branches, and assigned ports. Standalone lane definitions keep their commands and save their sidebar membership as `workspace = "workspace-id"` in TOML. Stop lane services and runs before changing membership. Unreadable lane records must be repaired before attachment; deleting an unreadable record or standalone entry removes only its saved entry and keeps project files and worktrees.
 
-First launch opens **Get your project running**. The same setup is available from **+** in Workspaces. Choose a local repository and select **Discover project**. Cinderdeck reads manifests without running project scripts, proposes services and test/build tasks, and checks the selected commands against your login-shell tools and live TCP ports.
+First launch opens **Add a workspace**. The same setup is available from **+** in Workspaces. Choose a local repository or folder and select **Discover commands**. Cinderdeck reads manifests without running project scripts, proposes services and test/build tasks, and checks the selected commands against your login-shell tools and live TCP ports.
 
-Review each command, its folder, required tools, and port. You can deselect suggestions or add commands manually. Discovery supports JavaScript package scripts and nested packages, Django/pytest, Cargo, Go, Swift packages, Xcode projects, Make targets, and Docker Compose. Inspection stops at three folder levels or 200 folders and skips generated dependencies and directory symlinks. Unrecognized projects can still become an empty workspace.
+Use **Add folders…** to include repositories or folders from different locations, or select a parent folder to discover the repositories beneath it. Review **Repositories & lane defaults** to choose which Git repositories get separate worktrees and which stay shared. Regular folders stay shared. Nested Git repositories require an explicit shared choice before saving. You can also choose a lane setup task and opt into copying `.env` and `.env.local`, without editing TOML.
+
+Review each command, its folder, required tools, and port. You can deselect suggestions, rename commands, change their working folders, or add commands manually. Discovery supports JavaScript package scripts and nested packages, Django/pytest, Cargo, Go, Swift packages, Xcode projects, Make targets, and Docker Compose. Inspection stops at three folder levels or 200 folders per selected folder and skips generated dependencies and directory symlinks. Unrecognized projects can still become an empty workspace.
 
 **Before starting** explains missing runtimes, missing JavaScript dependencies, conflicting/invalid ports, and environment keys mentioned by sample files. Sample keys are hints and may be optional. Values never appear in the review or saved TOML. Recognized dotenv-loading commands check local environment files; other commands should export required keys in the login shell or explicitly load them. Checks cannot infer every dependency of a custom script. Required tools are editable in the review.
 
@@ -42,6 +46,12 @@ An empty workspace is valid. **Edit workspace → Add project…** adds a long-r
 If you have been using a service for a build or test command, stop it, open **Tasks → Move service to Tasks**, choose the service, and save. This preserves its command, folder, repository association, environment, and required services. It removes the service entry; references from other services/tasks/workflows must be updated first. The file is validated before saving. Task/workflow menus also offer deletion; referenced tasks cannot be deleted until their workflows are updated. Prior run results are retained.
 
 Saving a form does not run any command. If another editor changed the file while a form was open, saving fails with an explanation instead of overwriting those edits.
+
+## Adding a lane
+
+Open **Lanes** for a workspace, choose a new branch or an existing worktree, and review the repositories that will be isolated. A new lane uses the branch across the workspace's isolated Git repositories. Shared repositories and regular folders keep their original files; their services are shared with the original workspace. Workspaces containing only regular folders can run services and tasks, but branch lanes need an isolated Git repository.
+
+Use **More lane options** for extra files to copy and environment overrides for that lane. Enter one relative path or glob per line and one `KEY=value` per line. Workspace copy defaults still apply. Setup and starting services are optional. Adopted worktrees are kept when a lane is removed. See the [lane guide](STACKS.md#parallel-worktree-lanes) for branch selection and cleanup behavior.
 
 ## Existing stacks
 

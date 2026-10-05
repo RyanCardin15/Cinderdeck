@@ -232,7 +232,9 @@ nonisolated enum StackLaneStore {
     definition.services = services
     definition.tasks = source.tasks.map { original in
       var task = original
-      task.directory = remap(original.directory, worktrees: trees) ?? original.directory
+      if original.repo.flatMap(source.repo)?.laneMode != .shared {
+        task.directory = remap(original.directory, worktrees: trees) ?? original.directory
+      }
       if task.repo == nil { task.repo = definition.repos.first { relative(task.directory, to: $0.path) != nil }?.id }
       if original.port != nil { task.port = ports[taskPortKey(original.id)] }
       task.ports = Dictionary(uniqueKeysWithValues: original.ports.keys.compactMap { name in ports[taskPortKey(original.id, name)].map { (name, $0) } })

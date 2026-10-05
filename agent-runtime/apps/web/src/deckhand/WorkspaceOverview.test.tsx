@@ -648,3 +648,64 @@ it("checks a new scope's journal even while retaining a terminal operation", asy
   });
   expect(boundary.mutation).not.toHaveBeenCalled();
 });
+
+it("reviews multiple workspace folders and submits the selected lane launch options", async () => {
+  boundary.search = { workspace: "primary", context: "primary" };
+  const repo = primary.workspace!.repos[0]!;
+  const configured = {
+    ...primary,
+    workspace: {
+      ...primary.workspace!,
+      repos: [
+        repo,
+        { ...repo, id: "api", path: "/fixture/api" },
+        { ...repo, id: "docs", path: "/fixture/docs", branch: "" },
+      ],
+    },
+  };
+  registry.set(nativeAtom, AsyncResult.success({ ...view, resources: [configured, lane, other] }));
+  boundary.mutation.mockResolvedValue({
+    _tag: "Success",
+    value: {
+      operationID: "configured-create",
+      method: "lane.create",
+      state: "failed",
+      result: null,
+    },
+  });
+  await render();
+  await act(async () => button("New lane").click());
+  const folders = container.querySelector('ul[aria-label="Workspace folders for this lane"]')!;
+  expect(folders.textContent).toContain("/fixture/api");
+  expect(folders.textContent).toContain("/fixture/docs");
+  const change = async (id: string, value: string) => {
+    const input = container.querySelector<HTMLInputElement>(`#${id}`)!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  };
+  await change("dh-branch", "feature/suite");
+  await change("dh-lane-from", "origin/main");
+  for (const name of ["Run workspace setup", "Start services after creation"]) {
+    const checkbox = [...container.querySelectorAll("label")]
+      .find((label) => label.textContent?.trim() === name)!
+      .querySelector<HTMLInputElement>("input")!;
+    await act(async () => checkbox.click());
+  }
+  await act(async () => button("Create lane").click());
+  expect(boundary.mutation).toHaveBeenCalledWith(
+    expect.objectContaining({
+      input: expect.objectContaining({
+        method: "lane.create",
+        arguments: {
+          workspace: "primary",
+          branch: "feature/suite",
+          from: "origin/main",
+          setup: true,
+          start: true,
+        },
+      }),
+    }),
+  );
+});

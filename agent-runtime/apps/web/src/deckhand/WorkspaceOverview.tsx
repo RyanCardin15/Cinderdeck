@@ -203,6 +203,9 @@ function ConnectedWorkspace({
     ...defaultWorkspaceFilters,
   }));
   const [branch, setBranch] = useState("");
+  const [laneFrom, setLaneFrom] = useState("");
+  const [laneSetup, setLaneSetup] = useState(false);
+  const [laneStart, setLaneStart] = useState(false);
   const [creating, setCreating] = useState(false);
   const [featureCreating, setFeatureCreating] = useState(false);
   const [featurePending, setFeaturePending] = useState(false);
@@ -526,7 +529,13 @@ function ConnectedWorkspace({
         method,
         arguments:
           method === "lane.create"
-            ? { workspace: target.workspaceID, branch: branch.trim(), start: false, setup: false }
+            ? {
+                workspace: target.workspaceID,
+                branch: branch.trim(),
+                ...(laneFrom.trim() ? { from: laneFrom.trim() } : {}),
+                start: laneStart,
+                setup: laneSetup,
+              }
             : { workspace: target.workspaceID },
       },
     });
@@ -543,6 +552,9 @@ function ConnectedWorkspace({
       if (method === "lane.create") {
         setCreating(false);
         setBranch("");
+        setLaneFrom("");
+        setLaneSetup(false);
+        setLaneStart(false);
       }
     } else {
       const records = await recent({ environmentId, input: {} });
@@ -944,9 +956,49 @@ function ConnectedWorkspace({
               </button>
             </div>
             <p>
-              The new lane gets independent worktrees and service ports. Services start when you
-              choose.
+              Git repositories get separate worktrees and ports. Shared repositories and regular
+              folders keep their original files.
             </p>
+            <details className={styles["dh-revision-fields"]}>
+              <summary>Folders and lane options</summary>
+              <ul aria-label="Workspace folders for this lane">
+                {activeBase.workspace?.repos.map((repo) => (
+                  <li key={repo.id}>
+                    <strong>{repo.id}</strong> · {repo.path}
+                  </li>
+                ))}
+              </ul>
+              <div>
+                <label htmlFor="dh-lane-from">Start new branches from</label>
+                <input
+                  id="dh-lane-from"
+                  maxLength={200}
+                  placeholder="Each repository’s default"
+                  value={laneFrom}
+                  onChange={(event) => setLaneFrom(event.target.value)}
+                />
+              </div>
+              <p>
+                Leave blank to use workspace defaults. A start point must exist in each repository
+                that needs a new branch.
+              </p>
+              <label className={styles["dh-check-field"]}>
+                <input
+                  type="checkbox"
+                  checked={laneSetup}
+                  onChange={(event) => setLaneSetup(event.target.checked)}
+                />
+                Run workspace setup
+              </label>
+              <label className={styles["dh-check-field"]}>
+                <input
+                  type="checkbox"
+                  checked={laneStart}
+                  onChange={(event) => setLaneStart(event.target.checked)}
+                />
+                Start services after creation
+              </label>
+            </details>
           </form>
         ) : null}
         {recoveryError ? (

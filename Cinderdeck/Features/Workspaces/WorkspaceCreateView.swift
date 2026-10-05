@@ -18,16 +18,16 @@ struct WorkspaceSetupView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
-      DeckSheetHeader(icon: "folder.badge.gearshape", title: model.proposal == nil ? "Get your project running" : "Review your workspace",
-        detail: model.proposal == nil ? "Choose a repository. Cinderdeck will find likely services, tests, and build commands." : "Choose what to include and check what needs attention before starting.")
+      DeckSheetHeader(icon: "folder.badge.gearshape", title: model.proposal == nil ? "Add a workspace" : "Review your workspace",
+        detail: model.proposal == nil ? "Bring one repository, several repositories, or regular folders together." : "Choose what to include and check what needs attention before starting.")
       HStack(spacing: 12) {
-        step("1", "Repository", active: model.proposal == nil)
+        step("1", "Folders", active: model.proposal == nil)
         step("2", "Review & check", active: model.proposal != nil)
         Spacer()
       }
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
-          repositoryPicker
+          folderPicker
           if let proposal = model.proposal {
             VStack(alignment: .leading, spacing: 6) {
               DeckSectionLabel(title: "Workspace name")
@@ -35,6 +35,7 @@ struct WorkspaceSetupView: View {
             }
             commandList(.service, title: "Services", detail: "Stay running, such as development servers and databases.")
             commandList(.task, title: "Tasks", detail: "Run once, such as tests and builds. Tasks are saved for you to run later.")
+            laneDefaults
             checks
             VStack(alignment: .leading, spacing: 6) {
               DeckSectionLabel(title: "Discovery notes")
@@ -53,7 +54,7 @@ struct WorkspaceSetupView: View {
       }
       .disabled(model.isBusy)
       if let error = model.error { Text(error).font(.callout).foregroundStyle(.red).textSelection(.enabled).fixedSize(horizontal: false, vertical: true) }
-      if model.isBusy { HStack { ProgressView().controlSize(.small); Text("Inspecting project and checking launch requirements…").font(.caption).foregroundStyle(.secondary) } }
+      if model.isBusy { HStack { ProgressView().controlSize(.small); Text("Inspecting folders and checking launch requirements…").font(.caption).foregroundStyle(.secondary) } }
       if model.proposal != nil && model.isChecked {
         let blockers = model.issues.filter { $0.severity == .blocker }.count
         let warnings = model.issues.filter { $0.severity == .warning }.count
@@ -79,19 +80,75 @@ struct WorkspaceSetupView: View {
     }.foregroundStyle(active ? Color.primary : Color.secondary)
   }
 
-  private var repositoryPicker: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      DeckSectionLabel(title: "Repository folder")
+  private var folderPicker: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      DeckSectionLabel(title: "Workspace folders")
       HStack {
-        TextField("Choose a local repository", text: $model.folder).textFieldStyle(.roundedBorder).accessibilityLabel("Repository folder")
+        TextField("Choose a repository or folder", text: $model.folder).textFieldStyle(.roundedBorder).accessibilityLabel("Workspace folder")
         Button("Choose…") {
-          let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false
-          panel.prompt = "Choose repository"; panel.message = "Select the root of your local project."
-          if panel.runModal() == .OK, let url = panel.url { model.folder = url.path }
-        }.accessibilityLabel("Choose repository")
+          chooseFolders(multiple: false) { paths in if let path = paths.first { model.folder = path } }
+        }.accessibilityLabel("Choose workspace folder")
       }
-      if model.proposal != nil {
-        Text("To inspect another repository, change the folder above.").font(.caption).foregroundStyle(.secondary)
+      ForEach($model.additionalFolders) { $folder in
+        HStack {
+          TextField("Additional repository or folder", text: $folder.path).textFieldStyle(.roundedBorder)
+            .accessibilityLabel("Additional workspace folder")
+          Button { model.additionalFolders.removeAll { $0.id == folder.id } } label: { Image(systemName: "minus.circle") }
+            .buttonStyle(.plain).accessibilityLabel("Remove folder \(folder.path)")
+        }
+      }
+      HStack {
+        Button("Add folders…") {
+          chooseFolders(multiple: true) { model.addFolders($0) }
+        }.disabled(model.additionalFolders.count >= 63)
+        Spacer()
+        if model.proposal != nil {
+          Text("Changing folders requires a new discovery.").font(.caption).foregroundStyle(.secondary)
+        }
+      }
+      Text("Choose a parent folder to find its repositories, or add folders from different locations. Git is optional.")
+        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    }
+  }
+
+  private func chooseFolders(multiple: Bool, selected: ([String]) -> Void) {
+    let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false
+    panel.allowsMultipleSelection = multiple; panel.prompt = multiple ? "Add folders" : "Choose folder"
+    panel.message = "Select repositories or folders for this workspace."
+    if panel.runModal() == .OK { selected(panel.urls.map(\.path)) }
+  }
+
+  private var laneDefaults: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      DeckSectionLabel(title: "Repositories & lane defaults")
+      ForEach($model.repositories) { $repo in
+        HStack {
+          VStack(alignment: .leading, spacing: 3) {
+            Label(repo.id, systemImage: WorkspaceDiscovery.repositoryRoot(containing: repo.path) == nil ? "folder" : "arrow.triangle.branch")
+              .font(.callout.weight(.medium))
+            Text(repo.path.path).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).help(repo.path.path)
+          }
+          Spacer()
+          if WorkspaceDiscovery.repositoryRoot(containing: repo.path) != nil {
+            Picker("Lane behavior for \(repo.id)", selection: $repo.laneMode) {
+              Text("Isolate in each lane").tag(StackRepoLaneMode.worktree)
+              Text("Shared across lanes").tag(StackRepoLaneMode.shared)
+            }.labelsHidden().frame(width: 190)
+          } else {
+            Text("Shared folder").font(.caption).foregroundStyle(.secondary)
+          }
+        }
+      }
+      Text("A lane creates a worktree for each isolated Git repository. Shared repositories and regular folders use their original files. A workspace without Git can still run services and tasks.")
+        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+      if model.repositories.contains(where: { $0.laneMode == .worktree }) {
+        Toggle("Copy .env and .env.local into new lanes", isOn: $model.copyEnvironmentFiles).font(.callout)
+        Picker("Lane setup task", selection: $model.setupTask) {
+          Text("None").tag("")
+          ForEach(model.commands.filter { $0.kind == .task && $0.selected }) { command in Text(command.title).tag(command.id) }
+        }
+        Text("Setup runs before lane services start. Environment files are copied only when selected; their values stay out of this screen.")
+          .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
       }
     }
   }
@@ -113,6 +170,7 @@ struct WorkspaceSetupView: View {
           VStack(alignment: .leading, spacing: 6) {
             Toggle(command.title, isOn: $command.selected).toggleStyle(.checkbox).font(.callout.weight(.medium))
             VStack(alignment: .leading, spacing: 6) {
+              TextField("Name", text: $command.title).textFieldStyle(.roundedBorder).accessibilityLabel("Command name")
               TextField("Command", text: $command.command).textFieldStyle(.roundedBorder)
                 .font(.system(size: 12, design: .monospaced)).accessibilityLabel("Command for \(command.title)")
               HStack {
@@ -125,6 +183,9 @@ struct WorkspaceSetupView: View {
               HStack {
                 Text("Folder").font(.caption).foregroundStyle(.secondary)
                 Text(command.directory.path).font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle).help(command.directory.path)
+                Button("Change…") {
+                  chooseFolders(multiple: false) { paths in if let path = paths.first { model.moveCommand(command.id, to: URL(fileURLWithPath: path, isDirectory: true)) } }
+                }.font(.caption).accessibilityLabel("Change folder for \(command.title)")
                 Spacer()
                 if kind == .service {
                   Text("Port").font(.caption).foregroundStyle(.secondary)
@@ -177,7 +238,7 @@ struct WorkspaceSetupView: View {
       Button(isOnboarding ? "Set up later" : "Cancel") { onCancel() }.disabled(model.isBusy)
       Spacer()
       if model.proposal == nil {
-        Button("Discover project") { model.discover() }.buttonStyle(DeckButtonStyle(prominent: true))
+        Button("Discover commands") { model.discover() }.buttonStyle(DeckButtonStyle(prominent: true))
           .keyboardShortcut(.defaultAction).disabled(model.folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isBusy)
       } else {
         Button("Save workspace") { model.save(start: false, onSaved: onSaved) }

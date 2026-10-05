@@ -652,13 +652,16 @@
   gap: 0.75rem;
   margin-top: 0.5rem;
 }
-.dh-launcher .dh-check-field {
+.dh-launcher .dh-check-field,
+.dh-create .dh-check-field {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
-.dh-launcher .dh-check-field input {
+.dh-launcher .dh-check-field input,
+.dh-create .dh-check-field input {
   width: auto;
+  flex: none;
 }
 
 .dh-launch-review {

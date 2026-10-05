@@ -30,7 +30,7 @@ nonisolated enum WorkspaceSetupCheck {
       if !FileManager.default.fileExists(atPath: command.directory.path) {
         issues.append(.init(id: command.id + "-folder", severity: .blocker, title: "Project folder is missing", detail: command.directory.path))
       }
-      if let dependencyFolder = command.dependencyFolder, !hasDependencies(dependencyFolder, directory: command.directory, root: root) {
+      if let dependencyFolder = command.dependencyFolder, !hasDependencies(dependencyFolder, directory: command.directory, root: command.discoveryRoot ?? root) {
         issues.append(.init(id: command.id + "-dependencies", severity: severity,
           title: "\(command.title) needs dependencies", detail: "Install dependencies in \(command.directory.path) with the project's package manager, then check again."))
       }
@@ -128,13 +128,14 @@ nonisolated enum WorkspaceSetupCheck {
   }
 
   static func hasDependencies(_ name: String, directory: URL, root: URL) -> Bool {
-    var folder = directory
+    var folder = directory.standardizedFileURL.resolvingSymlinksInPath()
+    let root = root.standardizedFileURL.resolvingSymlinksInPath()
     while true {
       var isDirectory: ObjCBool = false
       if FileManager.default.fileExists(atPath: folder.appendingPathComponent(name).path, isDirectory: &isDirectory), isDirectory.boolValue { return true }
       if name == "node_modules", [".pnp.cjs", ".pnp.js"].contains(where: { FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path) }) { return true }
       if name != "node_modules" || folder.standardizedFileURL.path == root.standardizedFileURL.path { return false }
-      let parent = folder.deletingLastPathComponent()
+      let parent = folder.deletingLastPathComponent().standardizedFileURL
       if parent.path == folder.path { return false }
       folder = parent
     }
