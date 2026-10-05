@@ -23,6 +23,32 @@
   color: var(--foreground);
   margin: 4px 0 18px;
 }
+.rail:has(> .titlebar) {
+  padding-top: 0;
+  padding-inline: 16px;
+}
+.rail > .titlebar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: var(--workspace-topbar-height);
+  min-height: var(--workspace-topbar-height);
+  flex-shrink: 0;
+  margin: 0 -16px;
+  max-width: none;
+  background: var(--sidebar);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+/* Every product view leaves space above its content. Keep that top edge
+   draggable across the window as well as above the navigation rail. */
+.titlebar::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  height: 16px;
+  -webkit-app-region: drag;
+}
 .brand svg {
   width: 29px;
   height: 29px;

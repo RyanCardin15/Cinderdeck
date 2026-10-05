@@ -182,7 +182,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
     isDevelopment,
     appVersion: input.appVersion,
   });
-  const displayName = branding.displayName;
+  const displayName = config.nativeHost ? APP_BASE_NAME : branding.displayName;
   const stateDir = resolveDesktopStateDir({
     baseDir,
     isDevelopment,

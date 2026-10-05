@@ -36,6 +36,7 @@ export function ProductNavigation({
   const operationSearch = { ...scope, ...(context ? { workspace: context } : {}) };
   return (
     <aside className={styles.rail} aria-label="Cinderdeck navigation">
+      {window.desktopBridge ? <div className={styles.titlebar} aria-hidden="true" /> : null}
       <Link
         className={styles.brand}
         to="/workspaces"

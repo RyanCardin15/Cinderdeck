@@ -2732,7 +2732,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   const buildConfig: Record<string, unknown> = {
     appId: nativeShellBuild ? "com.ryancardin.cinderdeck.agentshell" : DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
-    artifactName: nativeShellBuild ? "AgentShell-${version}-${arch}.${ext}" : "Deckhand-${version}-${arch}.${ext}",
+    artifactName: nativeShellBuild
+      ? "AgentShell-${version}-${arch}.${ext}"
+      : "Deckhand-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [
       ...DESKTOP_FILE_EXCLUSIONS,
@@ -2784,15 +2786,20 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       icon: "icon.icns",
       category: "public.app-category.developer-tools",
       extendInfo: {
+        ...(nativeShellBuild
+          ? { CFBundleName: "AgentShell", CFBundleDisplayName: "Cinderdeck" }
+          : {}),
         NSScreenCaptureUsageDescription:
           "Deckhand captures the active window when you use the window capture shortcut.",
       },
-      protocols: nativeShellBuild ? [] : [
-        {
-          name: "Deckhand",
-          schemes: ["deckhand", "deckhand-dev"],
-        },
-      ],
+      protocols: nativeShellBuild
+        ? []
+        : [
+            {
+              name: "Deckhand",
+              schemes: ["deckhand", "deckhand-dev"],
+            },
+          ],
       ...(signed ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") } : {}),
       ...(macPasskeySigning
         ? {

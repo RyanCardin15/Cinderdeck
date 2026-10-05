@@ -279,9 +279,20 @@ interface ProviderSettingsTarget {
   readonly instanceId?: ProviderInstanceId;
   readonly scoped?: boolean;
   readonly environmentIds?: readonly EnvironmentId[];
+  readonly embedded?: boolean;
 }
 
 export function ProviderSettingsPanel(target: ProviderSettingsTarget) {
+  if (target.embedded) {
+    return (
+      <div className="@container/providers flex min-w-0 flex-col gap-8">
+        <ProviderSettingsPanelContent
+          key={`${target.environmentId ?? ""}:${target.instanceId ?? ""}`}
+          {...target}
+        />
+      </div>
+    );
+  }
   return (
     <SettingsPageContainer width="wide" className="@container/providers gap-8">
       <ProviderSettingsPanelContent

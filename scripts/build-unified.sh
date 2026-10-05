@@ -201,6 +201,33 @@ ditto "$NATIVE_APP" "$STAGED_APP"
 SHELL_DEST="$STAGED_APP/Contents/Resources/AgentShell.app"
 rm -rf "$SHELL_DEST"
 ditto "$AGENT_SHELL" "$SHELL_DEST"
+# The executable stays an internal implementation detail; macOS presents its
+# running window using the child bundle's name and icon, not the outer app's.
+python3 - "$STAGED_APP" "$SHELL_DEST" <<'PY'
+import pathlib, plistlib, shutil, sys
+native, shell = (pathlib.Path(path) / 'Contents' for path in sys.argv[1:])
+with (native / 'Info.plist').open('rb') as file:
+    native_info = plistlib.load(file)
+with (shell / 'Info.plist').open('rb') as file:
+    shell_info = plistlib.load(file)
+icon_name = native_info.get('CFBundleIconFile', 'AppIcon')
+if pathlib.Path(icon_name).name != icon_name:
+    raise SystemExit('Native app icon must be a resource filename.')
+icon_file = icon_name if icon_name.endswith('.icns') else icon_name + '.icns'
+source = native / 'Resources' / icon_file
+if not source.is_file():
+    raise SystemExit('Native Cinderdeck app icon is missing.')
+(shell / 'Resources').mkdir(exist_ok=True)
+shutil.copy2(source, shell / 'Resources' / icon_file)
+# Electron resolves its helper bundles from CFBundleName. Keep the internal
+# AgentShell name aligned with their executables; brand the visible name only.
+shell_info.update(CFBundleName='AgentShell', CFBundleDisplayName='Cinderdeck',
+                  CFBundleIconFile=icon_file)
+# Use the copied ICNS rather than the runtime's compiled icon catalog.
+shell_info.pop('CFBundleIconName', None)
+with (shell / 'Info.plist').open('wb') as file:
+    plistlib.dump(shell_info, file)
+PY
 validate_app "$STAGED_APP" "$BUNDLE_ID" Cinderdeck
 validate_shell "$SHELL_DEST"
 [[ -d "$STAGED_APP/Contents/Frameworks/Sparkle.framework" ]] || fail "Native Sparkle.framework is missing."

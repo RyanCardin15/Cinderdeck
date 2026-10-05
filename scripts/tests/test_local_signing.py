@@ -61,6 +61,7 @@ elif command == 'xcodebuild':
     for relative in ['Versions/B/XPCServices/Installer.xpc', 'Versions/B/XPCServices/Downloader.xpc', 'Versions/B/Updater.app']:
         (framework / relative).mkdir(parents=True)
     (app / 'Contents/Resources').mkdir()
+    (app / 'Contents/Resources/AppIcon.icns').write_bytes(b'fixture cinderdeck icon')
     (app / 'Contents/MacOS').mkdir()
     executable = app / 'Contents/MacOS/Cinderdeck'
     executable.write_text('#!/bin/sh\n[ -z "$SIGNING_TEST_LAUNCH_FAIL" ]\n')
@@ -145,6 +146,13 @@ class LocalSigningTests(unittest.TestCase):
         for call in signatures:
             self.assertEqual(call[call.index('--sign') + 1], FINGERPRINT)
         self.assertTrue(signatures[-1][-1].endswith('/Cinderdeck.app'))
+        # Locate the final delivery independently of its staging directory.
+        shell = next((self.directory / 'derived data').glob('unified.*/Cinderdeck.app/Contents/Resources/AgentShell.app/Contents'))
+        info = plistlib.loads((shell / 'Info.plist').read_bytes())
+        self.assertEqual(info['CFBundleName'], 'AgentShell')
+        self.assertEqual(info['CFBundleDisplayName'], 'Cinderdeck')
+        self.assertEqual(info['CFBundleExecutable'], 'AgentShell')
+        self.assertEqual((shell / 'Resources' / info['CFBundleIconFile']).read_bytes(), b'fixture cinderdeck icon')
         entitlements = plistlib.loads((self.directory / 'derived data/signed-entitlements.plist').read_bytes())
         self.assertTrue(entitlements['com.apple.security.cs.disable-library-validation'])
         self.assert_no_install_side_effects()

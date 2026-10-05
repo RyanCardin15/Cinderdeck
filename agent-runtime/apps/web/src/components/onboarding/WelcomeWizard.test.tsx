@@ -2,7 +2,13 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ConnectedWorkspaceSelection } from "../../deckhand/connectionPresentation";
-import { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  ProjectId,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  type ServerProvider,
+} from "@t3tools/contracts";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 
 const mocks = vi.hoisted(() => ({
@@ -12,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   toast: vi.fn(),
   projects: [] as Array<{ id: string; environmentId: string; workspaceRoot: string }>,
+  providers: [] as ServerProvider[],
 }));
 vi.mock("../../deckhand/CinderdeckConnectionPanel", () => ({
   CinderdeckConnectionPanel: ({
@@ -62,7 +69,7 @@ vi.mock("../../state/environments", () => {
 });
 vi.mock("../../state/server", () => ({
   serverEnvironment: {
-    providersValueAtom: () => [],
+    providersValueAtom: () => mocks.providers,
     configValueAtom: () => null,
     refreshProviders: "refresh",
   },
@@ -101,6 +108,21 @@ vi.mock("../settings/CodexSetupSection", () => ({
   CodexSetupSection: () => null,
   AddManagedCodexAccountDialog: () => null,
 }));
+vi.mock("../settings/ProviderSettingsPanel", () => ({
+  ProviderSettingsPanel: ({
+    environmentId,
+    instanceId,
+  }: {
+    environmentId: string;
+    instanceId?: string;
+  }) => (
+    <label>
+      CLI binary on {environmentId}
+      {instanceId ? <span>Configuring {instanceId}</span> : null}
+      <input aria-label="CLI binary path" />
+    </label>
+  ),
+}));
 vi.mock("../cloud/CloudEnvironmentConnectList", () => ({
   CloudEnvironmentConnectRows: () => null,
 }));
@@ -128,6 +150,7 @@ beforeEach(() => {
     value: () => [],
   });
   mocks.projects = [{ id: "test-project", environmentId: "test-env", workspaceRoot: "/project" }];
+  mocks.providers = [];
   mocks.complete.mockResolvedValue(undefined);
   mocks.refresh.mockResolvedValue(undefined);
   mocks.importThreads.mockResolvedValue({
@@ -142,6 +165,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  delete window.desktopBridge;
 });
 
 async function click(label: string) {
@@ -238,7 +262,7 @@ it("keeps setup open when saving completion fails and preserves the import warni
 it("completes connected setup for the deliberately chosen workspace without importing projects", async () => {
   const onDone = vi.fn();
   await act(async () => root.render(<WelcomeWizard localAvailable onDone={onDone} />));
-  await click("Connect to Cinderdeck");
+  await click("Use native workspaces");
   await click("Open selected workspace");
   expect(mocks.complete).toHaveBeenCalledOnce();
   expect(onDone).toHaveBeenCalledWith(undefined, {
@@ -255,11 +279,56 @@ it("completes connected setup for the deliberately chosen workspace without impo
 it("retains standalone onboarding after returning from the Cinderdeck path", async () => {
   const onDone = vi.fn();
   await act(async () => root.render(<WelcomeWizard localAvailable onDone={onDone} />));
-  await click("Connect to Cinderdeck");
-  await click("Back to standalone setup");
+  await click("Use native workspaces");
+  await click("Back to code project setup");
   await click("Continue");
   await click("Continue");
   await click("Do not import projects");
   expect(onDone).toHaveBeenCalledWith(undefined);
   expect(mocks.createProject).not.toHaveBeenCalled();
 });
+
+it.each(["Configure CLIs", "Configure"])(
+  "%s during native setup keeps the chosen workspace through completion",
+  async (action) => {
+    mocks.providers = [
+      {
+        instanceId: ProviderInstanceId.make("cursor_work"),
+        driver: ProviderDriverKind.make("cursor"),
+        enabled: true,
+        installed: true,
+        version: "1.0.0",
+        status: "ready",
+        auth: { status: "authenticated" },
+        checkedAt: "2026-10-05T00:00:00.000Z",
+        models: [],
+        slashCommands: [],
+        skills: [],
+      },
+    ];
+    Object.defineProperty(window, "desktopBridge", {
+      configurable: true,
+      value: { isNativeHost: () => true },
+    });
+    const onDone = vi.fn();
+    await act(async () => root.render(<WelcomeWizard localAvailable onDone={onDone} />));
+    await click("Open selected workspace");
+    await click(action);
+    expect(document.querySelector('[aria-label="CLI binary path"]')).not.toBeNull();
+    expect(document.body.textContent).toContain("CLI binary on test-env");
+    if (action === "Configure")
+      expect(document.body.textContent).toContain("Configuring cursor_work");
+    expect(mocks.complete).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
+    await click("Back to agent setup");
+    expect(document.querySelector('[aria-label="CLI binary path"]')).toBeNull();
+    await click("Continue");
+    expect(onDone).toHaveBeenCalledWith(undefined, {
+      environmentId: "test-env",
+      baseWorkspaceID: "chosen-native-workspace",
+      contextID: "chosen-native-workspace",
+      expectedInstallationID: "native-installation",
+      expectedGeneration: 1,
+    });
+  },
+);

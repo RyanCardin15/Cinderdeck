@@ -1,5 +1,4 @@
 import { useAuth } from "@clerk/react";
-import { Link } from "@tanstack/react-router";
 import { useAtomValue } from "@effect/atom-react";
 import type {
   AgentSessionProjectCandidate,
@@ -32,7 +31,7 @@ import {
   MonitorIcon,
   TerminalIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
@@ -90,6 +89,12 @@ import { Dialog } from "../ui/dialog";
 import { toastManager } from "../ui/toast";
 import { cn } from "../../lib/utils";
 import { formatRelativeTime } from "../../timestampFormat";
+
+const OnboardingProviderSettings = lazy(() =>
+  import("../settings/ProviderSettingsPanel").then((module) => ({
+    default: module.ProviderSettingsPanel,
+  })),
+);
 
 /**
  * First-run welcome wizard. Rendered over the workspace at `/welcome` on a
@@ -770,6 +775,9 @@ function ConnectedAgentsStep({
     displayName: string;
     autoStart: boolean;
   } | null>(null);
+  const [configuration, setConfiguration] = useState<{
+    instanceId?: ProviderInstanceId;
+  } | null>(null);
 
   // Re-probe on entry so freshly installed CLIs show up without a manual
   // refresh; harmless when nothing changed (single-flighted per environment).
@@ -805,9 +813,35 @@ function ConnectedAgentsStep({
       },
     );
   }
+  if (configuration !== null) {
+    return (
+      <section aria-label={`Configure CLIs on ${machineLabel}`}>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            setConfiguration(null);
+            void refreshProviders({ environmentId, input: {} });
+          }}
+        >
+          Back to agent setup
+        </Button>
+        <Suspense fallback={<p role="status">Loading CLI configuration…</p>}>
+          <OnboardingProviderSettings
+            environmentId={environmentId}
+            {...configuration}
+            scoped
+            embedded
+          />
+        </Suspense>
+      </section>
+    );
+  }
   return (
     <section>
       <h2 className="mb-2 text-sm font-medium">{machineLabel}</h2>
+      <Button variant="outline" size="sm" onClick={() => setConfiguration({})}>
+        Configure CLIs
+      </Button>
       <div className="space-y-1.5">
         {primaryAgents.map(({ driver, provider, instanceId }) =>
           driver === "codex" && serverConfig !== null ? (
@@ -894,13 +928,13 @@ function ConnectedAgentsStep({
                   {state !== "ready" && summary.detail ? ` · ${summary.detail}` : ""}
                 </p>
               </div>
-              <Link
-                to="/settings/providers"
-                search={{ environmentId, instanceId: provider.instanceId }}
-                className="text-xs text-muted-foreground underline underline-offset-4"
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setConfiguration({ instanceId: provider.instanceId })}
               >
                 Configure
-              </Link>
+              </Button>
             </div>
           );
         })}

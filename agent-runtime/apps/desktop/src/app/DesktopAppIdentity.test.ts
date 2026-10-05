@@ -217,8 +217,8 @@ describe("DesktopAppIdentity", () => {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
         yield* identity.configure;
 
-        assert.deepEqual(calls.setName, ["Deckhand (Alpha)"]);
-        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, "Deckhand (Alpha)");
+        assert.deepEqual(calls.setName, ["Cinderdeck (Alpha)"]);
+        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, "Cinderdeck (Alpha)");
         assert.equal(calls.setAboutPanelOptions[0]?.applicationVersion, "1.2.3");
         assert.equal(calls.setAboutPanelOptions[0]?.version, "0123456789ab");
         // Packaged: the bundle's own icon stands, so a custom one the user
@@ -275,6 +275,17 @@ describe("DesktopAppIdentity", () => {
         environment: { isPackaged: false },
         pngIconPath: Option.some("/icon.png"),
       },
+    );
+  });
+  it.effect("presents the native-owned agent window as Cinderdeck", () => {
+    const calls: ElectronAppCalls = { setAboutPanelOptions: [], setDockIcon: [], setName: [] };
+    return withIdentity(
+      Effect.gen(function* () {
+        yield* (yield* DesktopAppIdentity.DesktopAppIdentity).configure;
+        assert.deepEqual(calls.setName, ["Cinderdeck"]);
+        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, "Cinderdeck");
+      }),
+      { calls, environment: { env: { CINDERDECK_NATIVE_HOST: "1" } } },
     );
   });
 });

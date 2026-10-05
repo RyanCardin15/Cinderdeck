@@ -320,6 +320,7 @@
     "apps/web/src/components/settings/KeybindingsSettings.tsx": "Separate Deckhand environment and product identity from the upstream runtime. Use Cinderdeck in visible product labels only; retain internal identifiers, configuration, storage and authentication behavior.",
     "apps/web/src/components/settings/LocalEnvironmentSetting.tsx": "Separate Deckhand environment and product identity from the upstream runtime. Use Cinderdeck in visible product labels only; retain internal identifiers, configuration, storage and authentication behavior.",
     "apps/web/src/components/settings/NotificationSettings.tsx": "Separate Deckhand environment and product identity from the upstream runtime. Use Cinderdeck in visible product labels only; retain internal identifiers, configuration, storage and authentication behavior.",
+    "apps/web/src/components/settings/ProviderSettingsPanel.tsx": "Embed machine-scoped CLI configuration in onboarding so provider setup preserves the selected native workspace and does not leave the first-run wizard.",
     "apps/web/src/components/settings/SettingsPanels.logic.ts": "App identity and state isolation",
     "apps/web/src/components/settings/SettingsPanels.tsx": "Separate Deckhand environment and product identity from the upstream runtime. Use Cinderdeck in visible product labels only; retain internal identifiers, configuration, storage and authentication behavior.",
     "apps/web/src/components/settings/SettingsScopeSentence.tsx": "Keep external Mac app preferences in viewer Settings and native windows in thread-scoped side-panel tabs; preserve upstream settings and panel behavior.",
@@ -1117,6 +1118,17 @@
         "apps/server/src/deckhand/ExternalDebug.test.ts"
       ],
       "conflictResolution": "Preserve viewer-local toggleable profiles, per-environment/thread panel descriptors, native capture cleanup on disable/close, hidden-view input gating, and the shared authenticated MCP thread namespace. Keep upstream Browser and Settings navigation behavior."
+    },
+    {
+      "owner": "Cinderdeck provider onboarding",
+      "files": [
+        "apps/web/src/components/settings/ProviderSettingsPanel.tsx"
+      ],
+      "tests": [
+        "apps/web/src/components/onboarding/WelcomeWizard.test.tsx",
+        "apps/web/src/components/settings/ProviderSettingsPanel.environment.test.tsx"
+      ],
+      "conflictResolution": "Preserve the optional embedded mode and machine scope while taking upstream provider configuration changes; normal Settings routes retain their existing container."
     }
   ]
 }
