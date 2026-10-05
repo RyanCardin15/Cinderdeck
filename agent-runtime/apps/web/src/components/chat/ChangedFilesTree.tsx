@@ -20,6 +20,7 @@ import { PierreEntryIcon } from "./PierreEntryIcon";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { MiddleTruncate } from "../ui/middle-truncate";
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 
 const EMPTY_DIRECTORY_OVERRIDES: Record<string, boolean> = {};
 
@@ -46,85 +47,94 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
   } = props;
   const summaryStat = useMemo(() => summarizeTurnDiffStats(files), [files]);
   const hasDirectories = files.some((file) => /[/\\]/.test(file.path));
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <div
-      className="@container/changed-files mt-4 rounded-lg bg-secondary dark:bg-input/20"
+      className="@container/changed-files mt-4 overflow-hidden rounded-lg border border-border/60 bg-card"
       data-changed-files-state="tree"
     >
-      <div
-        data-changed-files-header=""
-        className="sticky top-2 z-10 flex items-center justify-between gap-2 rounded-t-lg bg-secondary px-3 py-2 dark:bg-background dark:bg-linear-to-b dark:from-input/20 dark:to-input/20"
-      >
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-foreground">
-          <span>
-            {files.length} changed file{files.length === 1 ? "" : "s"}
-          </span>
-          {hasNonZeroStat(summaryStat) && (
-            <DiffStatLabel
-              additions={summaryStat.additions}
-              deletions={summaryStat.deletions}
-              layout="inline"
-              className="text-xs leading-4"
+      <Collapsible open={expanded} onOpenChange={setExpanded}>
+        <div
+          data-changed-files-header=""
+          className="flex items-center justify-between gap-2 px-2 py-1.5"
+        >
+          <CollapsibleTrigger className="group flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-1 py-1.5 text-left text-xs font-medium text-foreground hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <ChevronRightIcon
+              aria-hidden
+              className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-panel-open:rotate-90 motion-reduce:transition-none"
             />
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {hasDirectories && (
+            <span>
+              {files.length} changed file{files.length === 1 ? "" : "s"}
+            </span>
+            {hasNonZeroStat(summaryStat) && (
+              <DiffStatLabel
+                additions={summaryStat.additions}
+                deletions={summaryStat.deletions}
+                layout="inline"
+                className="text-xs leading-4"
+              />
+            )}
+          </CollapsibleTrigger>
+          <div className="flex shrink-0 items-center gap-1">
+            {hasDirectories && expanded && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon-xs"
+                      variant="ghost-muted"
+                      aria-label={
+                        allDirectoriesExpanded ? "Collapse all folders" : "Expand all folders"
+                      }
+                      data-scroll-anchor-ignore
+                      onClick={onToggleAllDirectories}
+                    />
+                  }
+                >
+                  {allDirectoriesExpanded ? (
+                    <ChevronsDownUpIcon className="size-3" />
+                  ) : (
+                    <ChevronsUpDownIcon className="size-3" />
+                  )}
+                </TooltipTrigger>
+                <TooltipPopup side="top">
+                  {allDirectoriesExpanded ? "Collapse all folders" : "Expand all folders"}
+                </TooltipPopup>
+              </Tooltip>
+            )}
             <Tooltip>
               <TooltipTrigger
                 render={
                   <Button
                     type="button"
-                    size="icon-xs"
+                    size="xs"
                     variant="ghost-muted"
-                    aria-label={
-                      allDirectoriesExpanded ? "Collapse all folders" : "Expand all folders"
-                    }
-                    data-scroll-anchor-ignore
-                    onClick={onToggleAllDirectories}
+                    aria-label="Open diff"
+                    onClick={() => onOpenTurnDiff(runId, files[0]?.path)}
                   />
                 }
               >
-                {allDirectoriesExpanded ? (
-                  <ChevronsDownUpIcon className="size-3" />
-                ) : (
-                  <ChevronsUpDownIcon className="size-3" />
-                )}
+                <FileDiffIcon className="size-3" />
+                <span className="hidden @[24rem]/changed-files:inline">Open diff</span>
               </TooltipTrigger>
-              <TooltipPopup side="top">
-                {allDirectoriesExpanded ? "Collapse all folders" : "Expand all folders"}
-              </TooltipPopup>
+              <TooltipPopup side="top">Open the full diff</TooltipPopup>
             </Tooltip>
-          )}
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="ghost-muted"
-                  aria-label="Open diff"
-                  onClick={() => onOpenTurnDiff(runId, files[0]?.path)}
-                />
-              }
-            >
-              <FileDiffIcon className="size-3" />
-              <span className="hidden @[24rem]/changed-files:inline">Open diff</span>
-            </TooltipTrigger>
-            <TooltipPopup side="top">Open the full diff</TooltipPopup>
-          </Tooltip>
+          </div>
         </div>
-      </div>
-      <ChangedFilesTree
-        key={`${runId}:${allDirectoriesExpanded}`}
-        runId={runId}
-        files={files}
-        allDirectoriesExpanded={allDirectoriesExpanded}
-        resolvedTheme={resolvedTheme}
-        onOpenTurnDiff={onOpenTurnDiff}
-        onFileContextMenu={onFileContextMenu}
-      />
+        <CollapsiblePanel keepMounted animate={false}>
+          <ChangedFilesTree
+            key={`${runId}:${allDirectoriesExpanded}`}
+            runId={runId}
+            files={files}
+            allDirectoriesExpanded={allDirectoriesExpanded}
+            resolvedTheme={resolvedTheme}
+            onOpenTurnDiff={onOpenTurnDiff}
+            onFileContextMenu={onFileContextMenu}
+          />
+        </CollapsiblePanel>
+      </Collapsible>
     </div>
   );
 });

@@ -394,6 +394,7 @@
   gap: 3px;
 }
 .compact .sessionIdentity strong {
+  order: -1;
   font-size: 12px;
 }
 .compact .sessionStatus {
@@ -466,7 +467,7 @@
 .workspaceRoster {
   container-type: inline-size;
   --session-line: var(--border);
-  gap: 18px;
+  gap: 14px;
 }
 .workspaceRoster .rosterHeading h3 {
   font-size: 14px;
@@ -496,7 +497,7 @@
   padding: 7px 10px;
   border-radius: 7px;
   background: var(--card);
-  font-size: 11px;
+  font-size: 12px;
 }
 .workspaceRoster .search {
   position: relative;
@@ -537,9 +538,9 @@
 }
 .workspaceRoster .session {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) minmax(100px, 210px) 16px;
+  grid-template-columns: 32px minmax(0, 1fr) minmax(100px, 210px) 16px;
   gap: 12px;
-  padding: 15px 10px;
+  padding: 12px 10px;
   border: 0;
   border-bottom: 1px solid var(--session-line);
   border-radius: 0;
@@ -568,7 +569,7 @@
 }
 .workspaceRoster .sessionIdentity strong {
   order: -1;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.15px;
   line-height: 1.5;
@@ -690,4 +691,73 @@
     grid-column: 3;
     grid-row: 1;
   }
+}
+
+.sessionGroup {
+  display: block;
+}
+.sessionGroup > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 0;
+  cursor: pointer;
+  list-style: none;
+  color: var(--muted-foreground);
+}
+.sessionGroup > summary::-webkit-details-marker {
+  display: none;
+}
+.sessionGroup > summary > svg {
+  flex: none;
+}
+.sessionGroup[open] > summary > svg {
+  transform: rotate(90deg);
+}
+.sessionGroup > summary h4 {
+  margin: 0;
+}
+.sessionGroup > summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.groupRows {
+  display: grid;
+  gap: 7px;
+}
+.workspaceRoster .groupRows {
+  gap: 0;
+}
+.workspaceRoster .sessionGroup > summary h4 {
+  margin: 0;
+}
+.compact .session {
+  border-color: transparent;
+  background: transparent;
+  border-radius: 7px;
+}
+.compact .session:hover {
+  background: var(--muted);
+}
+.compact .session[aria-current="page"] {
+  border-color: var(--border);
+  background: var(--accent);
+}
+.compact .sessionGroup > summary {
+  font-size: 11px;
+}
+.compact .sessionGroup h4 {
+  font-size: 11px;
+  letter-spacing: 0;
+}
+.compact .provider {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.workspaceRoster .sessionIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
 }

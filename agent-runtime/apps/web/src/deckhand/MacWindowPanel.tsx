@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AppWindowIcon, MaximizeIcon, MinimizeIcon } from "lucide-react";
+import { AppWindowIcon, ChevronRightIcon, MaximizeIcon, MinimizeIcon } from "lucide-react";
 import type { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
 import {
   DEBUG_KEYS,
@@ -237,8 +237,41 @@ export function MacWindowPanel({
       data-expanded={expanded && visible}
     >
       <div className={styles.panelHeader}>
-        <strong>{label}</strong>
-        <span data-state={state}>{state}</span>
+        <div className={styles.windowIdentity}>
+          <strong>{session.target.title || label}</strong>
+          <span>{label}</span>
+        </div>
+        <div className={styles.macPanelToolbar}>
+          <label>
+            <input
+              type="checkbox"
+              checked={live}
+              onChange={(event) => {
+                setLive(event.target.checked);
+                setControls(false);
+                // Request a fresh frame when viewing resumes.
+                imageSequence.current = undefined;
+              }}
+            />
+            Live view
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={controls}
+              disabled={state !== "connected" || !live}
+              onChange={(event) => {
+                setControls(event.target.checked);
+                setError("");
+              }}
+            />
+            Control window
+          </label>
+          {controls ? <button onClick={() => send({ action: "focus" })}>Open on Mac</button> : null}
+        </div>
+        <span className={styles.connectionState} data-state={state}>
+          {state === "connected" ? (live ? "Live" : "Paused") : state}
+        </span>
         <button
           aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
           aria-expanded={expanded}
@@ -246,34 +279,6 @@ export function MacWindowPanel({
         >
           {expanded ? <MinimizeIcon size={15} /> : <MaximizeIcon size={15} />}
         </button>
-      </div>
-      <div className={styles.macPanelToolbar}>
-        <label>
-          <input
-            type="checkbox"
-            checked={live}
-            onChange={(event) => {
-              setLive(event.target.checked);
-              setControls(false);
-              // Request a fresh frame when viewing resumes.
-              imageSequence.current = undefined;
-            }}
-          />
-          Live view
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={controls}
-            disabled={state !== "connected" || !live}
-            onChange={(event) => {
-              setControls(event.target.checked);
-              setError("");
-            }}
-          />
-          Control window
-        </label>
-        {controls ? <button onClick={() => send({ action: "focus" })}>Open on Mac</button> : null}
       </div>
       <div className={styles.macCanvas}>
         {snapshot?.image && live ? (
@@ -378,40 +383,46 @@ export function MacWindowPanel({
           {error}
         </p>
       ) : null}
-      <div className={styles.macTextEntry}>
-        <input
-          aria-label={`Text for ${label}`}
-          value={text}
-          maxLength={4000}
-          disabled={!controls}
-          placeholder={
-            label === "Web Inspector"
-              ? "JavaScript for the Inspector’s console…"
-              : "Text for the selected field…"
-          }
-          onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && text) {
+      {controls ? (
+        <div className={styles.macTextEntry}>
+          <input
+            aria-label={`Text for ${label}`}
+            value={text}
+            maxLength={4000}
+            disabled={!controls}
+            placeholder={
+              label === "Web Inspector"
+                ? "JavaScript for the Inspector’s console…"
+                : "Text for the selected field…"
+            }
+            onChange={(event) => setText(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && text) {
+                send({ action: "type", text });
+                setText("");
+              }
+            }}
+          />
+          <button
+            disabled={!controls || !text}
+            onClick={() => {
               send({ action: "type", text });
               setText("");
-            }
-          }}
-        />
-        <button
-          disabled={!controls || !text}
-          onClick={() => {
-            send({ action: "type", text });
-            setText("");
-          }}
-        >
-          Send text
-        </button>
-        <button disabled={!controls} onClick={() => send({ action: "key", key: "Enter" })}>
-          Return
-        </button>
-      </div>
+            }}
+          >
+            Send text
+          </button>
+          <button disabled={!controls} onClick={() => send({ action: "key", key: "Enter" })}>
+            Return
+          </button>
+        </div>
+      ) : null}
       <details className={styles.actionHistory}>
-        <summary>Action history & diagnostics ({events.length})</summary>
+        <summary>
+          <ChevronRightIcon size={13} aria-hidden />
+          <span>Action history</span>
+          <span className={styles.eventCount}>{events.length}</span>
+        </summary>
         <p>
           Shared with your agent. Verify accepted input against the live view. App console output is
           available in Web Inspector.
@@ -429,11 +440,9 @@ export function MacWindowPanel({
         </ol>
       </details>
       <p className={styles.previewNote}>
-        {session.target.app} · {session.target.title}
-        <br />
         {controls
-          ? "Click the live window, then type or paste. Controls activate this selected window on its Mac. Dragging is not supported."
-          : "Viewing only. Control window activates it on the selected Mac for clicking, typing, pasting, and scrolling."}
+          ? "Click the window to type, paste, or scroll. Input activates it on its Mac."
+          : "Viewing only. Enable Control window to click, type, or scroll on its Mac."}
       </p>
     </section>
   );

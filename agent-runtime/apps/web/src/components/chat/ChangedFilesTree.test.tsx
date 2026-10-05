@@ -5,7 +5,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { ChangedFilesCard, ChangedFilesTree } from "./ChangedFilesTree";
 
 describe("ChangedFilesCard", () => {
-  it("keeps its compact header sticky while preserving singular labels", () => {
+  it("keeps its compact disclosure header while preserving singular labels", () => {
     const markup = renderToStaticMarkup(
       <ChangedFilesCard
         runId={RunId.make("run-1")}

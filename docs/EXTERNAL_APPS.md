@@ -6,6 +6,8 @@ Enable **Excel** in **Settings → External apps**. Open a conversation on the c
 
 Mac Excel uses WebKit inspection. Microsoft's [Mac add-in debugging guide](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/debug-office-add-ins-on-ipad-and-mac) describes enabling it and supported Office installations. The native integration requires macOS 14 or newer, Screen Recording, and Accessibility for optional controls. It mirrors selected windows using public Mac APIs; it does not move Excel into a browser or expose a fake Office runtime.
 
+The panel header identifies the app and its Mac. Connected windows show their document title and Live or Paused status. Application, Inspector, and Both switch the visible capture; each window keeps its own Live view and Control window toggles. Text entry appears when Control window is enabled, and Action history expands for diagnostics.
+
 ## Recording evidence
 
 The harness's window views and Inspector diagnostics are transient. They are not automatically saved as a Cinderdeck recording. Cinderdeck's page-only CDP recorder cannot attach to Mac Excel's WebKit task pane. Do not use a Chromium debug-port recipe for that host.

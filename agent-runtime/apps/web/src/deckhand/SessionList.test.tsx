@@ -52,6 +52,7 @@ vi.mock("../state/threads", () => ({ threadEnvironment: { updateMetadata: {} } }
 vi.mock("../state/use-atom-command", () => ({ useAtomCommand: () => controls.update }));
 vi.mock("../state/environments", () => ({
   useEnvironment: () => ({ connection: { phase: transport.phase } }),
+  usePrimaryEnvironmentId: () => "local",
 }));
 vi.mock("./ExternalSessionList", () => ({ ExternalSessionList: () => null }));
 vi.mock("@tanstack/react-router", () => ({
@@ -110,7 +111,11 @@ const target = (generation: number, offset = 0) => ({
 });
 const resultAtom = (generation = 3, offset = 0) =>
   queries.get(JSON.stringify(target(generation, offset)))!;
-const render = async (generation = 3, presentation: "default" | "workspace" = "default") =>
+const render = async (
+  generation = 3,
+  presentation: "default" | "workspace" = "default",
+  selectedThreadId?: string,
+) =>
   act(async () => {
     root.render(
       <RegistryContext.Provider value={registry}>
@@ -120,6 +125,7 @@ const render = async (generation = 3, presentation: "default" | "workspace" = "d
           workspaceID="lane"
           generation={generation}
           presentation={presentation}
+          {...(selectedThreadId ? { selectedThreadId } : {})}
           providers={[{ instanceId: "codex", displayName: "Configured Codex" }]}
         />
       </RegistryContext.Provider>,
@@ -146,6 +152,35 @@ beforeEach(() => {
   element = document.createElement("div");
   document.body.append(element);
   root = createRoot(element);
+});
+
+it("keeps session navigation available after folding and reopening its status group", async () => {
+  await render(3, "workspace");
+  await act(async () => registry.set(resultAtom(), AsyncResult.success([session])));
+  const group = element.querySelector<HTMLDetailsElement>('details[aria-label="In progress"]')!;
+  const row = group.querySelector("a")!;
+  expect(group.open).toBe(true);
+  group.open = false;
+  transport.phase = "reconnecting";
+  await render(3, "workspace");
+  expect(group.open).toBe(false);
+  group.open = true;
+  expect(group.querySelector("a")).toBe(row);
+  expect(row.textContent).toContain("Current review");
+});
+
+it("folds completed groups but reveals the selected conversation", async () => {
+  await render(3, "workspace");
+  const completed = {
+    ...session,
+    binding: { ...session.binding, execution: "finished_turn" },
+  } as ManagedSessionView;
+  await act(async () => registry.set(resultAtom(), AsyncResult.success([completed])));
+  const group = element.querySelector<HTMLDetailsElement>('details[aria-label="Completed turns"]')!;
+  expect(group.open).toBe(false);
+  await render(3, "workspace", "thread");
+  expect(group.open).toBe(true);
+  expect(group.querySelector('a[aria-current="page"]')?.textContent).toContain("Current review");
 });
 
 const openMenu = async (action: string | null, keyboard = false) => {

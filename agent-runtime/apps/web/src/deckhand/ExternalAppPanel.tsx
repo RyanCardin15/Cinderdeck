@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { AppWindowIcon, RefreshCwIcon, Settings2Icon, UnplugIcon } from "lucide-react";
+import {
+  AppWindowIcon,
+  FileSpreadsheetIcon,
+  MonitorIcon,
+  RefreshCwIcon,
+  Settings2Icon,
+  UnplugIcon,
+} from "lucide-react";
 import type { ScopedThreadRef } from "@cinderdeck/contracts";
 import type { DebugSession, DebugTarget } from "@cinderdeck/contracts/deckhand/externalDebugRpc";
 import { resolveExternalAppProfiles } from "@cinderdeck/contracts/deckhand/externalAppPreferences";
@@ -89,6 +96,7 @@ export function ExternalAppPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [view, setView] = useState<"app" | "inspector" | "split">("app");
+  const AppIcon = profile?.id === "excel" ? FileSpreadsheetIcon : AppWindowIcon;
   const mounted = useRef(true);
   const connectionEpoch = useRef(0);
   useEffect(() => {
@@ -254,8 +262,13 @@ export function ExternalAppPanel({
     }
   }
   const settingsLink = (
-    <Button render={<Link to="/settings/external-apps" />} variant="ghost" size="sm">
-      <Settings2Icon /> App settings
+    <Button
+      render={<Link to="/settings/external-apps" />}
+      variant="ghost"
+      size="icon-sm"
+      aria-label="App settings"
+    >
+      <Settings2Icon />
     </Button>
   );
   if (!profile)
@@ -309,9 +322,37 @@ export function ExternalAppPanel({
       (target.id === inspectorId || matchesExternalApp(target, profile.inspectorFilter)),
   );
   return (
-    <div className={styles.panel}>
+    <div className={styles.panel} data-app={profile.id}>
       <div className={styles.toolbar}>
-        <span className={styles.computer}>{computer}</span>
+        <span className={styles.appMark}>
+          <AppIcon size={17} aria-hidden />
+        </span>
+        <div className={styles.toolbarIdentity}>
+          <strong>{profile.name}</strong>
+          <span className={styles.computer}>
+            <MonitorIcon size={11} aria-hidden /> {computer}
+          </span>
+        </div>
+        {active.length > 1 ? (
+          <div className={styles.viewTabs} role="tablist" aria-label="External app view">
+            {(
+              [
+                ["app", "Application"],
+                ["inspector", "Inspector"],
+                ["split", "Both"],
+              ] as const
+            ).map(([mode, label]) => (
+              <button
+                key={mode}
+                role="tab"
+                aria-selected={view === mode}
+                onClick={() => setView(mode)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : null}
         {settingsLink}
         {active.length ? (
           <Button
@@ -336,26 +377,6 @@ export function ExternalAppPanel({
       ) : null}
       {active.length ? (
         <>
-          {active.length > 1 ? (
-            <div className={styles.viewTabs} role="tablist" aria-label="External app view">
-              {(
-                [
-                  ["app", "Application"],
-                  ["inspector", "Inspector"],
-                  ["split", "Both"],
-                ] as const
-              ).map(([mode, label]) => (
-                <button
-                  key={mode}
-                  role="tab"
-                  aria-selected={view === mode}
-                  onClick={() => setView(mode)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          ) : null}
           <div className={styles.windows} data-view={view}>
             {active.map((session, index) => (
               <div
@@ -389,153 +410,157 @@ export function ExternalAppPanel({
             visible={visible}
           />
           <p className={styles.footnote}>
-            Controls activate the selected window on its Mac. Closing this tab disconnects capture;
-            the app stays open.
+            Closing this tab disconnects capture. {profile.name} stays open on {computer}.
           </p>
         </>
       ) : (
         <div className={styles.setup}>
-          <div className={styles.appHeading}>
-            <AppWindowIcon size={26} />
-            <div>
-              <h2>Connect {profile.name}</h2>
-              <p>Choose its windows on {computer}.</p>
+          <div className={styles.setupCard}>
+            <div className={styles.appHeading}>
+              <span className={styles.setupMark}>
+                <AppIcon size={28} aria-hidden />
+              </span>
+              <div>
+                <h2>Connect {profile.name}</h2>
+                <p>Choose its windows on {computer}.</p>
+              </div>
             </div>
-          </div>
-          <p className={styles.description}>
-            Open the app here or ask your agent to open it. You and the agent share the selected
-            window, screenshots, controls, and action history.
-          </p>
-          {/^[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$/.test(profile.applicationFilter) ? (
-            <Button
-              size="sm"
-              disabled={busy}
-              onClick={() => {
-                void openApp();
-              }}
-            >
-              <AppWindowIcon /> Open {profile.name} on {computer}
-            </Button>
-          ) : null}
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => {
-              void find();
-            }}
-          >
-            <RefreshCwIcon />
-            {busy ? "Connecting…" : "Find windows"}
-          </Button>
-          {targets.length ? (
-            <div className={styles.selectors}>
-              <label>
-                Application window
-                <select
-                  aria-label="Application window"
-                  value={appId}
+            <p className={styles.description}>
+              Bring a window into this conversation to work alongside your agent.
+            </p>
+            <div className={styles.setupActions}>
+              {/^[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$/.test(profile.applicationFilter) ? (
+                <Button
+                  size="sm"
                   disabled={busy}
-                  onChange={(event) => {
-                    setAppId(event.target.value);
-                    if (event.target.value === inspectorId) setInspectorId("");
+                  onClick={() => {
+                    void openApp();
                   }}
                 >
-                  <option value="">Choose a window</option>
-                  {apps.map((target) => (
-                    <option key={target.id} value={target.id}>
-                      {target.app} · {target.title || "Untitled window"}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={styles.showAll}>
-                <input
-                  type="checkbox"
-                  checked={showAll}
-                  onChange={(event) => setShowAll(event.target.checked)}
-                />{" "}
-                Show all Mac windows
-              </label>
-              {profile.includeInspector ? (
+                  <AppWindowIcon /> Open {profile.name} on {computer}
+                </Button>
+              ) : null}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() => {
+                  void find();
+                }}
+              >
+                <RefreshCwIcon />
+                {busy ? "Connecting…" : "Find windows"}
+              </Button>
+            </div>
+            {targets.length ? (
+              <div className={styles.selectors}>
                 <label>
-                  Web Inspector window
+                  Application window
                   <select
-                    aria-label="Web Inspector window"
-                    value={inspectorId}
+                    aria-label="Application window"
+                    value={appId}
                     disabled={busy}
-                    onChange={(event) => setInspectorId(event.target.value)}
+                    onChange={(event) => {
+                      setAppId(event.target.value);
+                      if (event.target.value === inspectorId) setInspectorId("");
+                    }}
                   >
-                    <option value="">Choose Inspector (optional)</option>
-                    {inspectors.map((target) => (
+                    <option value="">Choose a window</option>
+                    {apps.map((target) => (
                       <option key={target.id} value={target.id}>
                         {target.app} · {target.title || "Untitled window"}
                       </option>
                     ))}
                   </select>
                 </label>
-              ) : null}
-              <Button
-                disabled={!appId || busy}
-                onClick={() => {
-                  void connect();
-                }}
-              >
-                Connect selected windows
-              </Button>
-              {!apps.length && !showAll ? (
-                <p className={styles.description}>
-                  No windows match the application filter. Open {profile.name} or show all Mac
-                  windows.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-          {existing.filter(
-            (session) =>
-              !usedElsewhere(session.sessionId) &&
-              matchesExternalApp(session.target, profile.applicationFilter),
-          ).length ? (
-            <div className={styles.recovery}>
-              <h3>Already attached in this session</h3>
-              {existing
-                .filter(
-                  (session) =>
-                    !usedElsewhere(session.sessionId) &&
-                    matchesExternalApp(session.target, profile.applicationFilter),
-                )
-                .map((session) => (
-                  <Button
-                    key={session.sessionId}
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      const candidates = profile.includeInspector
-                        ? existing.filter(
-                            (other) =>
-                              other.sessionId !== session.sessionId &&
-                              !usedElsewhere(other.sessionId) &&
-                              other.target.id.split(":")[1] === session.target.id.split(":")[1] &&
-                              matchesExternalApp(other.target, profile.inspectorFilter),
-                          )
-                        : [];
-                      const inspector = candidates.length === 1 ? candidates[0] : undefined;
-                      useExternalAppSessions.getState().bind({
-                        threadRef,
-                        profileId: profile.id,
-                        sessions: [session, ...(inspector ? [inspector] : [])],
-                      });
-                    }}
-                  >
-                    View {session.target.title}
-                  </Button>
-                ))}
-            </div>
-          ) : null}
-          <p className={styles.footnote}>
-            Viewing requires Screen Recording on {computer}. Your agent can control this window
-            using Accessibility; Control window enables your own mouse and keyboard.
-          </p>
+                <label className={styles.showAll}>
+                  <input
+                    type="checkbox"
+                    checked={showAll}
+                    onChange={(event) => setShowAll(event.target.checked)}
+                  />{" "}
+                  Show all Mac windows
+                </label>
+                {profile.includeInspector ? (
+                  <label>
+                    Web Inspector window
+                    <select
+                      aria-label="Web Inspector window"
+                      value={inspectorId}
+                      disabled={busy}
+                      onChange={(event) => setInspectorId(event.target.value)}
+                    >
+                      <option value="">Choose Inspector (optional)</option>
+                      {inspectors.map((target) => (
+                        <option key={target.id} value={target.id}>
+                          {target.app} · {target.title || "Untitled window"}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                <Button
+                  disabled={!appId || busy}
+                  onClick={() => {
+                    void connect();
+                  }}
+                >
+                  Connect selected windows
+                </Button>
+                {!apps.length && !showAll ? (
+                  <p className={styles.description}>
+                    No windows match the application filter. Open {profile.name} or show all Mac
+                    windows.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            {existing.filter(
+              (session) =>
+                !usedElsewhere(session.sessionId) &&
+                matchesExternalApp(session.target, profile.applicationFilter),
+            ).length ? (
+              <div className={styles.recovery}>
+                <h3>Already attached in this session</h3>
+                {existing
+                  .filter(
+                    (session) =>
+                      !usedElsewhere(session.sessionId) &&
+                      matchesExternalApp(session.target, profile.applicationFilter),
+                  )
+                  .map((session) => (
+                    <Button
+                      key={session.sessionId}
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const candidates = profile.includeInspector
+                          ? existing.filter(
+                              (other) =>
+                                other.sessionId !== session.sessionId &&
+                                !usedElsewhere(other.sessionId) &&
+                                other.target.id.split(":")[1] === session.target.id.split(":")[1] &&
+                                matchesExternalApp(other.target, profile.inspectorFilter),
+                            )
+                          : [];
+                        const inspector = candidates.length === 1 ? candidates[0] : undefined;
+                        useExternalAppSessions.getState().bind({
+                          threadRef,
+                          profileId: profile.id,
+                          sessions: [session, ...(inspector ? [inspector] : [])],
+                        });
+                      }}
+                    >
+                      View {session.target.title}
+                    </Button>
+                  ))}
+              </div>
+            ) : null}
+            <p className={styles.footnote}>
+              Viewing requires Screen Recording on {computer}. Your agent can control this window
+              using Accessibility; Control window enables your own mouse and keyboard.
+            </p>
+          </div>
         </div>
       )}
     </div>

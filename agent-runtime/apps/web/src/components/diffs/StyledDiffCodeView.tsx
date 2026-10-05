@@ -80,8 +80,9 @@ const DIFF_VIEW_UNSAFE_CSS = `${DIFF_SURFACE_THEME_UNSAFE_CSS}
   position: sticky !important;
   top: 0;
   z-index: 4;
-  background-color: var(--code-background) !important;
-  border-bottom-color: transparent !important;
+  background-color: color-mix(in srgb, var(--code-background) 96%, var(--code-foreground)) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--code-foreground) 10%, transparent) !important;
+  cursor: pointer;
   align-items: center !important;
   font-family: var(--font-sans) !important;
   font-size: 12px !important;
@@ -92,10 +93,7 @@ const DIFF_VIEW_UNSAFE_CSS = `${DIFF_SURFACE_THEME_UNSAFE_CSS}
 }
 
 [data-diffs-header]:hover {
-  /* A native scrollbar gutter cannot be painted by descendants. Use an inset edge cue instead
-     of a full-width band that would look accidentally clipped at the gutter. */
-  background-color: var(--code-background) !important;
-  box-shadow: inset 3px 0 color-mix(in srgb, var(--code-foreground) 24%, transparent);
+  background-color: color-mix(in srgb, var(--code-background) 92%, var(--code-foreground)) !important;
 }
 
 :is([data-separator="line-info"], [data-separator="line-info-basic"]) {

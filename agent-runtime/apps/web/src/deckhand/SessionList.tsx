@@ -26,6 +26,14 @@ const connectionLabels: Record<SessionBinding["connection"], string> = {
   unavailable: "Agent not connected",
   stale: "Agent not connected",
 };
+const sessionPurpose = (binding: SessionBinding) =>
+  binding.role === "writer"
+    ? "Implementation"
+    : binding.role === "reviewer"
+      ? "Review"
+      : binding.desiredAccess === "read_only" && binding.capabilities.enforcedReadOnly
+        ? "Analysis · read only"
+        : "Observer";
 type SessionListProps = {
   environmentId: EnvironmentId;
   installationID: string;
@@ -213,20 +221,9 @@ function ScopedSessionList({
       <div className={styles.sessionIdentity}>
         <span className={styles.provider}>
           {agentProviderLabel(session.binding.providerInstanceId, providers)}
+          {` · ${sessionPurpose(session.binding)}${session.archived ? " · Archived" : ""}`}
         </span>
         <strong>{session.title}</strong>
-        <span className={styles.sessionScope}>
-          {contextLabel} ·{" "}
-          {session.binding.role === "writer"
-            ? "Implementation"
-            : session.binding.role === "reviewer"
-              ? "Review"
-              : session.binding.desiredAccess === "read_only" &&
-                  session.binding.capabilities.enforcedReadOnly
-                ? "Analysis · read only"
-                : "Observer"}
-          {session.archived ? " · Archived" : ""}
-        </span>
       </div>
       <span className={styles.sessionStatus}>
         {rowStale
@@ -395,13 +392,25 @@ function ScopedSessionList({
         {groups.map((group) => {
           const rows = filtered.filter((session) => groupFor(session) === group.id);
           return rows.length ? (
-            <section className={styles.group} key={group.id} aria-label={group.label}>
-              <h4>
-                {observation.stale || unavailable ? "Last observed · " : ""}
-                {group.label} <span>{rows.length}</span>
-              </h4>
-              {rows.map((session) => sessionRow(session))}
-            </section>
+            <details
+              className={`${styles.group} ${styles.sessionGroup}`}
+              key={group.id}
+              aria-label={group.label}
+              open={
+                group.id === "attention" ||
+                group.id === "active" ||
+                rows.some((session) => session.binding.threadId === selectedThreadId)
+              }
+            >
+              <summary>
+                <ChevronRightIcon size={13} aria-hidden />
+                <h4>
+                  {observation.stale || unavailable ? "Last observed · " : ""}
+                  {group.label} <span>{rows.length}</span>
+                </h4>
+              </summary>
+              <div className={styles.groupRows}>{rows.map((session) => sessionRow(session))}</div>
+            </details>
           ) : null;
         })}
         {pagingUnavailable ? (
