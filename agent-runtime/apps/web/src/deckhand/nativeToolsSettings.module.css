@@ -14,7 +14,7 @@
   margin-bottom: 18px;
 }
 .settings header > svg {
-  color: var(--dh-accent, #ed7b42);
+  color: var(--dh-accent, var(--primary));
   flex-shrink: 0;
 }
 .settings h2 {
@@ -49,14 +49,14 @@
   font-size: 12px;
 }
 .settings button:hover {
-  border-color: var(--dh-accent, #ed7b42);
+  border-color: var(--dh-accent, var(--primary));
 }
 .settings button:disabled {
   opacity: 0.45;
   cursor: default;
 }
 .settings :is(button, summary):focus-visible {
-  outline: 2px solid var(--dh-accent, #ed7b42);
+  outline: 2px solid var(--dh-accent, var(--primary));
   outline-offset: 3px;
 }
 .categories button > svg:first-child {

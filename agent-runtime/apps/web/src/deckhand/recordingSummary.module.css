@@ -15,7 +15,7 @@
   display: none;
 }
 .summary summary > span {
-  font-size: 10px;
+  font-size: 12px;
   border: 1px solid color-mix(in srgb, var(--foreground) 13%, transparent);
   border-radius: 4px;
   padding: 0 4px;
@@ -55,7 +55,7 @@
   text-decoration: none;
 }
 .popover a:hover {
-  color: #f1874b;
+  color: var(--primary);
 }
 .popover .latest {
   border-top: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
@@ -69,19 +69,19 @@
 .latest strong {
   font-size: 12px;
   display: block;
-  font-weight: 550;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 .latest small {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
   display: block;
   margin-top: 4px;
 }
 .popover .active {
-  color: #f1874b;
+  color: var(--primary);
 }
 .summary :focus-visible {
-  outline: 2px solid #f1874b;
+  outline: 2px solid var(--primary);
   outline-offset: 3px;
 }

@@ -1,6 +1,6 @@
 .shell {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: var(--deck-rail-width) minmax(0, 1fr);
   min-height: 0;
   background: var(--background);
   color: var(--foreground);
@@ -19,17 +19,17 @@
   justify-content: space-between;
   gap: 24px;
   align-items: center;
-  margin-bottom: 35px;
+  margin-bottom: 24px;
 }
 .eyebrow {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
   text-transform: uppercase;
   letter-spacing: 0.15em;
 }
 .header h1 {
-  font-size: 29px;
-  font-weight: 560;
+  font-size: var(--deck-page-title);
+  font-weight: 600;
   letter-spacing: -1px;
   margin: 9px 0;
 }
@@ -43,7 +43,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted-foreground);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -78,14 +78,14 @@
 }
 .sectionHeader h2 {
   font-size: 14px;
-  font-weight: 550;
+  font-weight: 600;
   margin: 0 0 6px;
   display: flex;
   align-items: center;
   gap: 9px;
 }
 .sectionHeader h2 > span:not(.status) {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -103,7 +103,7 @@
   background: var(--card);
   color: var(--foreground);
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   border-radius: 5px;
   padding: 7px 10px;
   cursor: pointer;
@@ -112,8 +112,8 @@
 .section button:hover,
 .receipt button:hover,
 .editor button:hover {
-  background: var(--card);
-  border-color: var(--border);
+  background: color-mix(in srgb, var(--foreground) 6%, var(--card));
+  border-color: color-mix(in srgb, var(--foreground) 22%, var(--border));
 }
 .section button:disabled,
 .receipt button:disabled,
@@ -122,6 +122,7 @@
   cursor: default;
 }
 .actions {
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -130,8 +131,8 @@
   display: flex;
   gap: 6px;
   align-items: center;
-  font-size: 11px;
-  color: #ed7b42;
+  font-size: 12px;
+  color: var(--primary);
   text-decoration: none;
   margin-right: 9px;
 }
@@ -157,15 +158,16 @@
   color: var(--muted-foreground);
 }
 .serviceIcon[data-ready="true"] {
-  color: #36b77c;
-  background: #36b77c10;
-  border-color: #36b77c30;
+  color: var(--deck-success);
+  background: color-mix(in srgb, var(--deck-success) 6.3%, transparent);
+  border-color: color-mix(in srgb, var(--deck-success) 18.8%, transparent);
 }
 .serviceBody {
   min-width: 0;
   flex: 1;
 }
 .serviceTitle {
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -173,18 +175,18 @@
 .serviceTitle h3,
 .definition h3 {
   font-size: 13px;
-  font-weight: 550;
+  font-weight: 600;
   margin: 0;
 }
 .serviceTitle code {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
   border: 1px solid var(--border);
   padding: 2px 4px;
   border-radius: 4px;
 }
 .status {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
   background: var(--card);
   border: 1px solid var(--border);
@@ -194,26 +196,26 @@
 }
 .status[data-state="succeeded"],
 .status[data-state="ready"] {
-  color: #36b77c;
-  background: #36b77c10;
-  border-color: #36b77c30;
+  color: var(--deck-success);
+  background: color-mix(in srgb, var(--deck-success) 6.3%, transparent);
+  border-color: color-mix(in srgb, var(--deck-success) 18.8%, transparent);
 }
 .status[data-state="failed"],
 .status[data-state="interrupted"] {
-  color: #df796a;
-  border-color: #df796a30;
-  background: #df796a10;
+  color: var(--deck-danger);
+  border-color: color-mix(in srgb, var(--deck-danger) 18.8%, transparent);
+  background: color-mix(in srgb, var(--deck-danger) 6.3%, transparent);
 }
 .status[data-state="running"],
 .status[data-state="starting"],
 .status[data-state="queued"] {
-  color: #d89a52;
-  background: #d89a5210;
-  border-color: #d89a5230;
+  color: var(--deck-warning);
+  background: color-mix(in srgb, var(--deck-warning) 6.3%, transparent);
+  border-color: color-mix(in srgb, var(--deck-warning) 18.8%, transparent);
 }
 .serviceBody > p {
   font-family: var(--font-mono, monospace);
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
   margin: 7px 0;
   overflow: hidden;
@@ -224,7 +226,7 @@
   display: flex;
   gap: 15px;
   color: var(--muted-foreground);
-  font-size: 10px;
+  font-size: 12px;
 }
 .meta span {
   overflow: hidden;
@@ -232,7 +234,7 @@
   white-space: nowrap;
 }
 .shared {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
 }
 .lower {
@@ -248,8 +250,8 @@
   gap: 18px;
 }
 .tabs button {
-  background: none !important;
-  border: 0 !important;
+  background: transparent;
+  border: 0;
   padding: 0 0 3px;
   font-size: 13px;
   color: var(--muted-foreground);
@@ -258,7 +260,7 @@
   color: var(--foreground);
 }
 .tabs span {
-  font-size: 10px;
+  font-size: 12px;
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 1px 4px;
@@ -277,7 +279,7 @@
 }
 .definition code {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
   overflow: hidden;
   white-space: nowrap;
@@ -285,13 +287,13 @@
   margin-top: 8px;
 }
 .definition p {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
   margin: 7px 0 0;
   line-height: 1.6;
 }
 .definition span {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
 }
 .history {
@@ -311,25 +313,25 @@
   align-items: center;
 }
 .section .historyRow.selected {
-  background: #20231b;
+  background: color-mix(in srgb, var(--primary) 10%, var(--card));
 }
 .historyRow i,
 .historyRow i[data-state="queued"] {
   width: 6px;
   height: 6px;
-  background: #8a855e;
+  background: var(--deck-warning);
   border-radius: 50%;
   flex-shrink: 0;
 }
 .historyRow i[data-state="succeeded"] {
-  background: #a8bb72;
+  background: var(--deck-success);
 }
 .historyRow i[data-state="failed"],
 .historyRow i[data-state="interrupted"] {
-  background: #bb7565;
+  background: var(--deck-danger);
 }
 .historyRow i[data-state="cancelled"] {
-  background: #828177;
+  background: var(--muted-foreground);
 }
 .historyRow > div:first-of-type {
   flex: 1;
@@ -344,7 +346,7 @@
 }
 .historyRow span,
 .historyRow small {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
 }
 .historyEnd {
@@ -367,10 +369,10 @@
   height: 23px;
   border-radius: 50%;
   border: 1px solid var(--border);
-  color: #ed7b42;
+  color: var(--primary);
 }
 .step > i[data-state="failed"] {
-  color: #d29582;
+  color: var(--deck-danger);
   border-color: #704a3e;
 }
 .step > div {
@@ -381,12 +383,12 @@
   gap: 5px;
 }
 .step strong {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
 }
 .step span {
   color: var(--muted-foreground);
-  font-size: 10px;
+  font-size: 12px;
 }
 .step > div span {
   overflow: hidden;
@@ -395,7 +397,7 @@
   font-family: var(--font-mono, monospace);
 }
 .runDetail {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted-foreground);
   margin: 16px 22px;
 }
@@ -405,7 +407,7 @@
   align-items: center;
   color: var(--muted-foreground);
   padding: 14px 22px;
-  font-size: 10px;
+  font-size: 12px;
 }
 .logHeader span {
   color: var(--muted-foreground);
@@ -418,8 +420,8 @@
   border-top: 1px solid var(--border);
   padding: 17px 22px;
   margin: 0;
-  color: #ed7b42;
-  font-size: 10px;
+  color: var(--primary);
+  font-size: 12px;
   line-height: 1.8;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -432,7 +434,7 @@
   min-height: 124px;
   padding: 25px;
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
   text-align: center;
   line-height: 1.8;
 }
@@ -457,7 +459,7 @@
 }
 .empty a {
   font-size: 12px;
-  color: #ed7b42;
+  color: var(--primary);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -467,10 +469,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  border: 1px solid #d89a5230;
+  border: 1px solid color-mix(in srgb, var(--deck-warning) 18.8%, transparent);
   border-radius: 7px;
-  background: #d89a5210;
-  color: #d89a52;
+  background: color-mix(in srgb, var(--deck-warning) 6.3%, transparent);
+  color: var(--deck-warning);
   padding: 13px 16px;
   margin-bottom: 18px;
   font-size: 12px;
@@ -481,10 +483,10 @@
   gap: 12px;
   padding: 14px 17px;
   border: 1px solid var(--border);
-  background: #d89a5210;
+  background: color-mix(in srgb, var(--deck-warning) 6.3%, transparent);
   border-radius: 8px;
   margin-bottom: 20px;
-  color: #d89a52;
+  color: var(--deck-warning);
 }
 .receipt > div {
   flex: 1;
@@ -494,7 +496,7 @@
   font-weight: 500;
 }
 .receipt p {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
   margin: 5px 0;
 }
@@ -530,7 +532,7 @@
   margin: 0 0 8px;
 }
 .editor header p {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted-foreground);
   margin: 0;
 }
@@ -545,7 +547,7 @@
   color: var(--foreground);
   padding: 18px;
   font-family: var(--font-mono, monospace);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.8;
 }
 .editor footer {
@@ -556,7 +558,7 @@
 }
 .valid {
   padding: 12px;
-  color: #ed7b42;
+  color: var(--primary);
   font-size: 12px;
 }
 .editor .alert {
@@ -564,14 +566,14 @@
   margin: 14px 0 0;
 }
 .editor .alert p {
-  font-size: 11px;
+  font-size: 12px;
   margin: 7px 0;
 }
 .shell button:focus-visible,
 .shell a:focus-visible,
 .shell select:focus-visible,
 .shell textarea:focus-visible {
-  outline: 2px solid #ed7b42;
+  outline: 2px solid var(--primary);
   outline-offset: 3px;
 }
 @media (max-width: 1150px) {
@@ -586,7 +588,7 @@
     padding: 17px;
   }
   .service .actions button {
-    font-size: 10px;
+    font-size: 12px;
     padding: 6px 8px;
   }
   .sectionHeader {
@@ -670,7 +672,7 @@
   flex-direction: column;
   gap: 9px;
   color: var(--muted-foreground);
-  font-size: 10px;
+  font-size: 12px;
   padding: 14px 18px 6px;
 }
 .computer select {
@@ -680,7 +682,7 @@
   border-radius: 5px;
   background: var(--card);
   color: var(--foreground);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 @media (max-width: 700px) {
@@ -698,3 +700,10 @@
     font-size: 26px;
   }
 }
+
+.section button, .receipt button, .alert button, .editor button { min-height: 32px; }
+.tabs button[aria-selected="true"] { box-shadow: 0 2px var(--primary); }
+.header > div { min-width: 0; }
+.header h1, .sectionHeader p, .serviceTitle h3 { overflow-wrap: anywhere; }
+.logs { color: var(--foreground); background: var(--muted); font-size: 12px; }
+.historyRow:hover { background: color-mix(in srgb, var(--foreground) 5%, var(--card)); }

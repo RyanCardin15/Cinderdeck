@@ -56,3 +56,32 @@ html.dark:not([data-theme-id]) [data-app-sidebar] {
   --sidebar-border: #2c343e;
   --sidebar-stage-fade: #10171d;
 }
+
+/* Shared product roles keep operational states legible in both appearances.
+   Brand colors remain owned by the selected theme's primary/ring tokens. */
+:root {
+  --deck-success: #16733d;
+  --deck-warning: #855800;
+  --deck-danger: #b32c40;
+  --deck-info: #176d99;
+  --deck-radius: 8px;
+  --deck-page-title: 28px;
+  --deck-rail-width: 220px;
+}
+:root.dark {
+  --deck-success: #66c88a;
+  --deck-warning: #e9b75c;
+  --deck-danger: #ff7585;
+  --deck-info: #83c5ee;
+}
+@media (prefers-contrast: more) {
+  :root {
+    --border: color-mix(in srgb, var(--foreground) 35%, var(--background));
+  }
+}
+
+@media (max-width: 1100px) {
+  :root {
+    --deck-rail-width: 190px;
+  }
+}

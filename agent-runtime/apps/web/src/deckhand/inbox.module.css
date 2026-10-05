@@ -1,6 +1,6 @@
 .shell {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: var(--deck-rail-width) minmax(0, 1fr);
   height: 100dvh;
   overflow: hidden;
   background: var(--background);
@@ -20,7 +20,7 @@
   color: var(--muted-foreground);
 }
 .main h1 {
-  font-size: 34px;
+  font-size: var(--deck-page-title);
   font-weight: 600;
   letter-spacing: -1.2px;
   margin: 10px 0;
@@ -46,8 +46,8 @@
   border-radius: 6px;
 }
 .filters [aria-pressed="true"] {
-  border-color: #ed7b42;
-  background: color-mix(in srgb, #ed7b42 9%, var(--background));
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 9%, var(--background));
 }
 .list {
   display: grid;
@@ -65,8 +65,8 @@
 }
 .icon {
   padding: 9px;
-  color: #d78b32;
-  border: 1px solid color-mix(in srgb, #ed7b42 22%, var(--border));
+  color: var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
   border-radius: 8px;
 }
 .content {
@@ -75,7 +75,7 @@
 }
 .kind {
   font-size: 11px;
-  color: #bd6d30;
+  color: var(--primary);
 }
 .content h2 {
   font-size: 17px;
@@ -106,7 +106,7 @@
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: #d17137;
+  color: var(--primary);
   text-decoration: none;
 }
 .actions button {
@@ -132,14 +132,14 @@
   line-height: 1.6;
 }
 .alert {
-  border-left: 3px solid #ed7b42;
+  border-left: 3px solid var(--primary);
   padding: 12px;
   color: var(--muted-foreground);
   font-size: 13px;
   margin-block: 16px;
 }
 .shell :focus-visible {
-  outline: 2px solid #ed7b42;
+  outline: 2px solid var(--primary);
   outline-offset: 3px;
 }
 @media (max-width: 850px) {
@@ -211,7 +211,7 @@
   font-size: 12px;
 }
 .filters input {
-  accent-color: #ed7b42;
+  accent-color: var(--primary);
 }
 .item[data-read="true"] .icon {
   color: var(--muted-foreground);

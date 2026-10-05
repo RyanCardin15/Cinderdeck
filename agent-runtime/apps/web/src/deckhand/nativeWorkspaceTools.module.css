@@ -21,17 +21,17 @@
   cursor: pointer;
 }
 .tools button:first-child {
-  border-color: color-mix(in srgb, var(--dh-accent, #ed7b42) 50%, var(--border));
+  border-color: color-mix(in srgb, var(--dh-accent, var(--primary)) 50%, var(--border));
 }
 .tools button:hover {
-  border-color: var(--dh-accent, #ed7b42);
+  border-color: var(--dh-accent, var(--primary));
 }
 .tools button:disabled {
   opacity: 0.45;
   cursor: default;
 }
 .tools button:focus-visible {
-  outline: 2px solid var(--dh-accent, #ed7b42);
+  outline: 2px solid var(--dh-accent, var(--primary));
   outline-offset: 3px;
 }
 .tools svg {
@@ -39,7 +39,7 @@
 }
 .notice {
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.7;
 }
 @media (max-width: 600px) {

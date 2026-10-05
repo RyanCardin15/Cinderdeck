@@ -24,7 +24,12 @@ struct WorkspaceReprosView: View {
   var recordingScope: ReproLogScope { recorder.scope.isOff ? .only([file.id]) : recorder.scope }
 
   private var recordingScopeTitle: String {
-    recordingScope.summary(names: Dictionary(uniqueKeysWithValues: recorder.supervisor.files.map { ($0.id, $0.name) }))
+    let files = recorder.supervisor.files
+    if case .only(let ids) = recordingScope,
+       !files.contains(where: { ids.contains($0.id) }) {
+      return "selected workspaces (currently unavailable)"
+    }
+    return recordingScope.summary(names: Dictionary(uniqueKeysWithValues: files.map { ($0.id, $0.name) }))
   }
 
   private var repros: [ReproSession] {
@@ -102,7 +107,9 @@ struct WorkspaceReprosView: View {
       }
       .fixedSize()
       .disabled(recorder.isCapturing || starting)
-      .help("Record the screen and save logs from \(recordingScopeTitle), stamped with video times")
+      .help(WorkspaceLogOutlook(scope: recordingScope,
+        choices: WorkspaceLogChoice.all(supervisor: recorder.supervisor, runner: runner)).message
+        + " Each log line is stamped with its position in the video.")
       .accessibilityIdentifier("workspace.recordRepro")
     }
   }

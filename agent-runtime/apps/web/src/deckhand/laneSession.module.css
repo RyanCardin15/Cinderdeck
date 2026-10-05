@@ -1,5 +1,5 @@
 .context {
-  --lane-ember: #f38147;
+  --lane-ember: var(--primary);
   --lane-line: color-mix(in srgb, var(--foreground) 12%, transparent);
   container: lane-header / inline-size;
   flex: none;
@@ -79,9 +79,9 @@
   padding: 3px 6px;
 }
 .connection[data-connected="true"] {
-  color: #26bd79;
-  border-color: color-mix(in srgb, #26bd79 50%, transparent);
-  background: color-mix(in srgb, #26bd79 7%, transparent);
+  color: var(--deck-success);
+  border-color: color-mix(in srgb, var(--deck-success) 50%, transparent);
+  background: color-mix(in srgb, var(--deck-success) 7%, transparent);
 }
 .dot {
   height: 7px;
@@ -99,17 +99,17 @@
   align-items: center;
   gap: 7px;
   white-space: nowrap;
-  border: 1px solid #f28a57;
+  border: 1px solid var(--primary);
   border-radius: 7px;
   padding: 6px 10px;
-  background: #f5773c;
-  color: #171b1f;
+  background: var(--primary);
+  color: var(--primary-foreground);
   font-size: 12px;
   font-weight: 650;
   box-shadow: 0 2px 5px #0002;
 }
 .primary:hover {
-  background: #ff965f;
+  background: var(--primary);
 }
 .warning {
   display: flex;
@@ -228,7 +228,7 @@
 }
 .session strong {
   font-size: 12px;
-  font-weight: 550;
+  font-weight: 600;
 }
 .session small {
   display: block;
@@ -248,14 +248,14 @@
 }
 .sessionState[data-state="working"],
 .sessionState[data-state="finished_turn"] {
-  color: #26bd79;
+  color: var(--deck-success);
 }
 .sessionState[data-state="waiting_input"],
 .sessionState[data-state="waiting_approval"] {
-  color: #dba72f;
+  color: var(--deck-warning);
 }
 .sessionState[data-state="failed"] {
-  color: #ee6b64;
+  color: var(--deck-danger);
 }
 .historyNote {
   font-size: 11px;
@@ -426,7 +426,7 @@
 }
 
 .sidebarContext {
-  --lane-ember: #f38147;
+  --lane-ember: var(--primary);
   --lane-line: color-mix(in srgb, var(--foreground) 12%, transparent);
   margin: 8px 0 0;
   padding: 18px 5px 12px;
@@ -639,8 +639,8 @@
   flex-shrink: 0;
 }
 :global(.dark) .sidebarContext {
-  --lane-line: #2c343e;
-  --lane-ember: #ed7b42;
+  --lane-line: var(--border);
+  --lane-ember: var(--primary);
 }
 
 @container lane-header (max-width: 760px) {

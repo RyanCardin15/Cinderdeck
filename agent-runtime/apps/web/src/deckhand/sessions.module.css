@@ -1,7 +1,7 @@
 .roster,
 .launcher,
 .launchPrompt {
-  --session-accent: var(--dh-accent, #ed7b42);
+  --session-accent: var(--primary);
   --session-line: color-mix(in srgb, var(--foreground) 13%, transparent);
   color: var(--foreground);
   min-width: 0;
@@ -56,7 +56,7 @@
   display: grid;
   gap: 5px;
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
 }
 .filters .search {
   flex: 1 1 230px;
@@ -82,7 +82,7 @@
 }
 .scopeNote {
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.7;
   margin: 0;
 }
@@ -113,7 +113,7 @@
   align-items: center;
   gap: 10px;
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.6px;
 }
@@ -156,13 +156,13 @@
 }
 .provider {
   color: var(--session-accent);
-  font-size: 11px;
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 .sessionScope,
 .sessionStatus {
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
 }
 .sessionStatus {
@@ -191,7 +191,7 @@
 .primary {
   border: 1px solid var(--session-accent);
   background: var(--session-accent);
-  color: #191a1c;
+  color: var(--primary-foreground);
   padding: 10px 15px;
   font-size: 12px;
   font-weight: 600;
@@ -266,7 +266,7 @@
 }
 .providerChoice span,
 .savedProvider span {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
 }
 .providerChoice[aria-pressed="true"] {
@@ -349,14 +349,14 @@
   letter-spacing: 0;
 }
 .compact .count {
-  font-size: 11px;
+  font-size: 12px;
   white-space: normal;
 }
 .filterFold > summary {
   width: fit-content;
   cursor: pointer;
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
   padding: 3px 0;
 }
 .filterFold > summary:focus-visible {
@@ -378,7 +378,7 @@
 .compact .filters select {
   min-height: 32px;
   padding: 7px 8px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .compact .scopeNote {
   margin-top: 8px;
@@ -401,12 +401,12 @@
 }
 .compact .notice {
   padding: 8px 10px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .compact .pages {
   flex-wrap: wrap;
 }
 .compact .quiet {
   padding: 6px 8px;
-  font-size: 11px;
+  font-size: 12px;
 }

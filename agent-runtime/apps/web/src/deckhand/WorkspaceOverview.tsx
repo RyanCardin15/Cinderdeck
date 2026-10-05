@@ -32,6 +32,8 @@ import {
   savedWorkspaceMatches,
 } from "./workspaceNavigation";
 import { SessionList } from "./SessionList";
+import { formatDayAwareTimestamp } from "../timestampFormat";
+import { useClientSettings } from "../hooks/useSettings";
 import { WorkspaceFilters } from "./WorkspaceFilters";
 import { LaneLifecycleControls } from "./LaneLifecycleControls";
 import {
@@ -120,6 +122,7 @@ function ConnectedWorkspace({
   environments: ReturnType<typeof useEnvironments>["environments"];
   selectEnvironment: (id: EnvironmentId | null) => void;
 }) {
+  const timestampFormat = useClientSettings((settings) => settings.timestampFormat);
   const search = useSearch({ from: "/_chat/workspaces" });
   const navigate = useNavigate();
   const agentMode = search.tab === "agents";
@@ -1299,6 +1302,7 @@ function ConnectedWorkspace({
               ) : null}
               {!agentMode && view?.hello ? (
                 <SessionList
+                  compact
                   environmentId={environmentId}
                   installationID={view.hello.installationID}
                   workspaceID={selected.workspaceID}
@@ -1367,7 +1371,12 @@ function ConnectedWorkspace({
                 <li key={event.eventID}>
                   <i />
                   <strong>{event.kind.replace("workspace.", "Context ")}</strong>
-                  <span>{event.occurredAt ?? event.observedAt ?? "Time unavailable"}</span>
+                  <span>
+                    {formatDayAwareTimestamp(
+                      event.occurredAt ?? event.observedAt ?? "",
+                      timestampFormat,
+                    ) || "Time unavailable"}
+                  </span>
                 </li>
               ))}
           </ol>

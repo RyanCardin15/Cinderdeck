@@ -17,7 +17,7 @@ enum DeckStyle {
   static let title = Font.system(size: 23, weight: .semibold)
   static let section = Font.system(size: 15, weight: .semibold)
   static let body = Font.system(size: 13)
-  static let caption = Font.system(size: 11)
+  static let caption = Font.system(size: 12)
   static let eyebrow = Font.system(size: 10, weight: .semibold, design: .monospaced)
   static let controlRadius: CGFloat = 8
   static let cardRadius: CGFloat = 12
@@ -139,13 +139,15 @@ struct DeckSearchField: View {
       if !text.isEmpty {
         Button { text = "" } label: {
           Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+            .frame(width: 24, height: 24).contentShape(Rectangle())
         }.buttonStyle(.plain).help("Clear search").accessibilityLabel("Clear search")
       }
     }
     .font(.system(size: 12)).padding(.horizontal, 10).frame(minHeight: 32)
     .background(DeckStyle.inset, in: RoundedRectangle(cornerRadius: DeckStyle.controlRadius))
     .overlay(RoundedRectangle(cornerRadius: DeckStyle.controlRadius)
-      .strokeBorder(focused ? DeckStyle.accent : DeckStyle.border, lineWidth: focused ? 1.5 : 1))
+      .strokeBorder(focused ? DeckStyle.accent : DeckStyle.border, lineWidth: focused ? 1.5 : 1)
+      .allowsHitTesting(false))
   }
 }
 
@@ -172,13 +174,15 @@ private struct DeckButtonBody<Label: View>: View {
     label
       .font(.system(size: compact ? 11 : 12, weight: .semibold))
       .padding(.horizontal, compact ? 9 : 12).padding(.vertical, compact ? 5 : 7)
+      .frame(minHeight: compact ? 28 : 32)
       .foregroundStyle(prominent ? tint : .primary)
       .background(prominent ? tint.opacity(pressed ? 0.12 : hovered ? 0.09 : 0.06)
         : pressed || hovered ? DeckStyle.hover : DeckStyle.surface,
         in: RoundedRectangle(cornerRadius: DeckStyle.controlRadius))
       .background(DeckStyle.surface, in: RoundedRectangle(cornerRadius: DeckStyle.controlRadius))
       .overlay(RoundedRectangle(cornerRadius: DeckStyle.controlRadius)
-        .strokeBorder(prominent ? tint.opacity(0.35) : DeckStyle.border))
+        .strokeBorder(prominent ? tint.opacity(0.35) : DeckStyle.border)
+        .allowsHitTesting(false))
       .contentShape(RoundedRectangle(cornerRadius: DeckStyle.controlRadius))
       .opacity(enabled ? 1 : 0.42)
       .onHover { hovered = $0 }

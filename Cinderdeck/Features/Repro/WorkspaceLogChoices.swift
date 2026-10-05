@@ -58,7 +58,9 @@ struct WorkspaceLogOutlook: Equatable {
       workspaceCount = selected.count
       if selected.isEmpty {
         state = .off
-        message = "No workspaces are selected. The video is saved on its own."
+        message = ids.isEmpty
+          ? "No workspaces are selected. The video is saved on its own."
+          : "The selected workspaces aren't available here. Choose a workspace to attach its logs."
       } else if active.isEmpty {
         state = .waiting
         message = "\(ReproFormat.list(selected.map(\.name))) \(selected.count == 1 ? "isn't" : "aren't") running. The recording is kept in the library, with any logs produced while you record."
@@ -160,8 +162,11 @@ struct WorkspaceLogScopeMenu: View {
     switch recorder.scope {
     case .running: return "Screen recordings save logs from all running workspaces"
     case .off: return "Screen recordings don't save workspace logs"
-    case .only:
+    case .only(let ids):
       if recorder.scope.isOff { return "Screen recordings don't save workspace logs" }
+      if !choices.contains(where: { ids.contains($0.id) }) {
+        return "Selected workspace logs are unavailable"
+      }
       return "Screen recordings save logs from " + recorder.scope.summary(names: Dictionary(uniqueKeysWithValues: choices.map { ($0.id, $0.name) }))
     }
   }

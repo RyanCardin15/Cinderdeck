@@ -102,7 +102,7 @@ it("retains conversation navigation but requires a fresh session value after tra
   transport.phase = "reconnecting";
   await render();
   expect(element.textContent).toContain("Current review");
-  expect(element.textContent).toContain("Last observed · Connection unavailable");
+  expect(element.textContent).toContain("Last observed · Agent not connected");
   expect(element.textContent).not.toContain("Working · Agent connected");
   expect(element.querySelector("a")).not.toBeNull();
   transport.phase = "connected";
@@ -116,7 +116,7 @@ it("clears a departed generation and cannot show its late session response", asy
   await render();
   await act(async () => registry.set(resultAtom(), AsyncResult.success([session])));
   await render(4);
-  expect(element.textContent).toContain("Loading agent sessions");
+  expect(element.textContent).toContain("Loading sessions");
   expect(element.textContent).not.toContain("Current review");
   await act(async () => registry.set(resultAtom(3), AsyncResult.success([session])));
   expect(element.textContent).not.toContain("Current review");
@@ -129,7 +129,7 @@ it("settles initial failures as unavailable and preserves historical rows after 
     registry.set(resultAtom(), AsyncResult.failure(Cause.fail(new Error("refused")))),
   );
   expect(element.textContent).toContain("Session state is unavailable");
-  expect(element.textContent).not.toContain("Loading agent sessions");
+  expect(element.textContent).not.toContain("Loading sessions");
   await act(async () => registry.set(resultAtom(), AsyncResult.success([session])));
   await act(async () =>
     registry.set(
@@ -185,8 +185,8 @@ const clickPage = async (label: string) => {
 it("opens older agents in the exact context and resets paging after a generation change", async () => {
   await render();
   await act(async () => registry.set(resultAtom(), AsyncResult.success(firstPage())));
-  await clickPage("Next agents");
-  expect(element.textContent).toContain("Loading agent sessions");
+  await clickPage("Next sessions");
+  expect(element.textContent).toContain("Loading sessions");
   expect(element.textContent).not.toContain("Saved agent 1");
   const older = { ...session, title: "Original saved reviewer" };
   await act(async () => registry.set(resultAtom(3, 20), AsyncResult.success([older])));
@@ -203,17 +203,17 @@ it("keeps an empty older page recoverable and refuses silently repeated legacy p
   await render();
   const newest = firstPage();
   await act(async () => registry.set(resultAtom(), AsyncResult.success(newest)));
-  await clickPage("Next agents");
+  await clickPage("Next sessions");
   await act(async () => registry.set(resultAtom(3, 20), AsyncResult.success([])));
-  expect(element.textContent).toContain("No older agents on this page");
+  expect(element.textContent).toContain("No older sessions on this page");
   expect(element.textContent).not.toContain("No managed sessions in this context yet");
-  await clickPage("Previous agents");
-  await clickPage("Next agents");
+  await clickPage("Previous sessions");
+  await clickPage("Next sessions");
   await act(async () => registry.set(resultAtom(3, 20), AsyncResult.success([...newest])));
-  expect(element.textContent).toContain("Older-agent paging could not be confirmed");
+  expect(element.textContent).toContain("Older-session paging could not be confirmed");
   expect(element.textContent).not.toContain("Sessions 21–40");
   expect(
-    [...element.querySelectorAll("button")].find((item) => item.textContent === "Next agents")
+    [...element.querySelectorAll("button")].find((item) => item.textContent === "Next sessions")
       ?.disabled,
   ).toBe(true);
 });

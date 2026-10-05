@@ -12,7 +12,7 @@
   padding: 8px;
 }
 .live {
-  color: #eea36d;
+  color: var(--primary);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -24,9 +24,9 @@
   left: 0;
   width: min(330px, 90vw);
   padding: 20px;
-  border: 1px solid #ffffff18;
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: #17191d;
+  background: var(--popover);
   box-shadow: 0 18px 50px #0008;
 }
 .popover h2 {
@@ -36,7 +36,7 @@
 .popover p {
   font-size: 12px;
   line-height: 1.6;
-  color: #a3a5ab;
+  color: var(--muted-foreground);
   margin: 9px 0;
 }
 .target {
@@ -49,10 +49,10 @@
   gap: 6px;
   padding: 7px 10px;
   margin: 8px 6px 0 0;
-  border: 1px solid #ffffff20;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #25272c;
-  color: #f4f1ed;
+  background: var(--secondary);
+  color: var(--foreground);
   font-size: 12px;
   cursor: pointer;
 }
@@ -62,26 +62,26 @@
 }
 .popover button:focus-visible,
 .control summary:focus-visible {
-  outline: 2px solid #efaa77;
+  outline: 2px solid var(--primary);
   outline-offset: 3px;
 }
 .popover a {
   display: block;
   margin-top: 14px;
-  color: #efaa77;
+  color: var(--primary);
   font-size: 12px;
 }
 .popover .error {
-  color: #efa398;
+  color: var(--deck-danger);
 }
 .scope {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #ddd8d1;
+  color: var(--foreground);
   font-size: 12px;
   margin: 12px 0;
 }
 .scope input {
-  accent-color: #edaa78;
+  accent-color: var(--primary);
 }

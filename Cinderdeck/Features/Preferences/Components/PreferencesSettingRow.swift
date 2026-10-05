@@ -15,7 +15,7 @@ struct SettingRow<Content: View>: View {
   @ViewBuilder let content: () -> Content
 
   var body: some View {
-    HStack(spacing: 12) {
+    HStack(alignment: .center, spacing: 12) {
       DeckFeatureIcon(systemName: icon, size: 30, tint: .secondary)
 
       VStack(alignment: .leading, spacing: 4) {
@@ -29,15 +29,15 @@ struct SettingRow<Content: View>: View {
         }
         if let description {
           Text(description)
-            .font(.caption)
+            .font(DeckStyle.caption)
             .foregroundColor(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         }
       }
 
-      Spacer()
-      content()
+      Spacer(minLength: 16)
+      content().fixedSize(horizontal: true, vertical: false)
     }
-    .padding(.vertical, 7)
+    .padding(.vertical, 8)
   }
 }

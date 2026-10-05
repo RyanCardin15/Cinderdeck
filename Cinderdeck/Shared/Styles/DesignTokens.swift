@@ -73,13 +73,14 @@ struct ToolbarButton: View {
           RoundedRectangle(cornerRadius: 6)
             .fill(backgroundColor)
         )
+        .contentShape(RoundedRectangle(cornerRadius: 6))
         .overlay(alignment: .topTrailing) {
           if let selectedBadgeIcon, isSelected {
             Image(systemName: selectedBadgeIcon)
               .font(.system(size: 7, weight: .bold))
               .foregroundColor(highlightColor)
               .frame(width: 12, height: 12)
-              .background(Circle().fill(Color.white))
+              .background(Circle().fill(DeckStyle.surface))
               .offset(x: 3, y: -3)
           }
         }

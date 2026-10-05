@@ -52,91 +52,106 @@ export function WorkspaceFilters(
     props.value.lifecycle !== "all" ||
     props.value.provider !== "all";
   return (
-    <section aria-label="Filter workspace contexts">
-      <div className={`${styles["dh-toolbar"]} ${filterStyles.controls}`}>
-        <label htmlFor={`${id}-search`}>
-          Search
-          <input
-            id={`${id}-search`}
-            type="search"
-            maxLength={200}
-            placeholder="Lane, branch or agent task"
-            value={props.value.search}
-            onChange={(event) => change("search", event.target.value)}
-          />
-        </label>
-        <label htmlFor={`${id}-activity`}>
-          Activity
-          <select
-            id={`${id}-activity`}
-            value={props.value.activity}
-            onChange={(event) =>
-              change("activity", event.target.value as WorkspaceFilterValue["activity"])
-            }
+    <section className={filterStyles.root} aria-label="Filter workspace contexts">
+      <details className={filterStyles.fold}>
+        <summary>
+          Filters &amp; sort
+          {filtering || props.value.sort !== "loaded" ? <span>Active</span> : null}
+        </summary>
+        <div className={`${styles["dh-toolbar"]} ${filterStyles.controls}`}>
+          <label htmlFor={`${id}-search`}>
+            Search
+            <input
+              id={`${id}-search`}
+              type="search"
+              maxLength={200}
+              placeholder="Lane, branch or agent task"
+              value={props.value.search}
+              onChange={(event) => change("search", event.target.value)}
+            />
+          </label>
+          <label htmlFor={`${id}-activity`}>
+            Activity
+            <select
+              id={`${id}-activity`}
+              value={props.value.activity}
+              onChange={(event) =>
+                change("activity", event.target.value as WorkspaceFilterValue["activity"])
+              }
+            >
+              <option value="all">All activity</option>
+              <option value="active">Active agents</option>
+              <option value="attention">Needs attention</option>
+              <option value="quiet">Quiet contexts</option>
+              <option value="history">Historical contributors</option>
+            </select>
+          </label>
+          <label htmlFor={`${id}-lifecycle`}>
+            Lifecycle
+            <select
+              id={`${id}-lifecycle`}
+              value={props.value.lifecycle}
+              onChange={(event) =>
+                change("lifecycle", event.target.value as WorkspaceFilterValue["lifecycle"])
+              }
+            >
+              <option value="all">All lifecycle states</option>
+              <option value="available">Available</option>
+              <option value="unavailable">Unavailable</option>
+              {states.map((state) => (
+                <option key={state} value={`state:${state}`}>
+                  State: {state.replaceAll("_", " ")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label htmlFor={`${id}-provider`}>
+            Provider
+            <select
+              id={`${id}-provider`}
+              value={props.value.provider}
+              onChange={(event) => change("provider", event.target.value)}
+            >
+              <option value="all">All providers</option>
+              {[...providers].map(([instanceId, name]) => (
+                <option key={instanceId} value={instanceId}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label htmlFor={`${id}-sort`}>
+            Sort
+            <select
+              id={`${id}-sort`}
+              value={props.value.sort}
+              onChange={(event) =>
+                change("sort", event.target.value as WorkspaceFilterValue["sort"])
+              }
+            >
+              <option value="loaded">Page order</option>
+              <option value="name">Name</option>
+              <option value="activity">Latest observed activity</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            className={styles["dh-filter"]}
+            disabled={!filtering && props.value.sort === "loaded"}
+            onClick={() => props.onChange({ ...defaultWorkspaceFilters })}
           >
-            <option value="all">All activity</option>
-            <option value="active">Active agents</option>
-            <option value="attention">Needs attention</option>
-            <option value="quiet">Quiet contexts</option>
-            <option value="history">Historical contributors</option>
-          </select>
-        </label>
-        <label htmlFor={`${id}-lifecycle`}>
-          Lifecycle
-          <select
-            id={`${id}-lifecycle`}
-            value={props.value.lifecycle}
-            onChange={(event) =>
-              change("lifecycle", event.target.value as WorkspaceFilterValue["lifecycle"])
-            }
-          >
-            <option value="all">All lifecycle states</option>
-            <option value="available">Available</option>
-            <option value="unavailable">Unavailable</option>
-            {states.map((state) => (
-              <option key={state} value={`state:${state}`}>
-                State: {state.replaceAll("_", " ")}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label htmlFor={`${id}-provider`}>
-          Provider
-          <select
-            id={`${id}-provider`}
-            value={props.value.provider}
-            onChange={(event) => change("provider", event.target.value)}
-          >
-            <option value="all">All providers</option>
-            {[...providers].map(([instanceId, name]) => (
-              <option key={instanceId} value={instanceId}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label htmlFor={`${id}-sort`}>
-          Sort
-          <select
-            id={`${id}-sort`}
-            value={props.value.sort}
-            onChange={(event) => change("sort", event.target.value as WorkspaceFilterValue["sort"])}
-          >
-            <option value="loaded">Page order</option>
-            <option value="name">Name</option>
-            <option value="activity">Latest observed activity</option>
-          </select>
-        </label>
-        <button
-          type="button"
-          className={styles["dh-filter"]}
-          disabled={!filtering && props.value.sort === "loaded"}
-          onClick={() => props.onChange({ ...defaultWorkspaceFilters })}
-        >
-          Clear filters
-        </button>
-      </div>
-      <p role="status" aria-live="polite">
+            Clear filters
+          </button>
+        </div>
+        <p className={styles["dh-nav-note"]}>
+          Search covers this loaded page and the selected context. Other pages and external agents
+          are not searched.
+          {props.agentsUnavailable
+            ? " Agent state is last observed; activity matches cannot be confirmed."
+            : ""}
+        </p>
+      </details>
+      <p className={filterStyles.result} role="status" aria-live="polite">
         {props.loading
           ? "Loading workspace contexts…"
           : props.nativeUnavailable
@@ -147,14 +162,6 @@ export function WorkspaceFilters(
             ? " No loaded contexts match. Clear filters or load another page."
             : " No contexts are loaded on this page."
           : null}
-      </p>
-      <p className={styles["dh-nav-note"]}>
-        Filters cover the contexts loaded on this page and your selected context. Other pages and
-        external agents are not searched. Contexts with no known activity time appear last when
-        sorting by activity.
-        {props.agentsUnavailable
-          ? " Agent state is last observed; activity matches cannot be confirmed."
-          : ""}
       </p>
     </section>
   );

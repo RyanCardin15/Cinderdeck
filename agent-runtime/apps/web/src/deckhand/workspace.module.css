@@ -1,11 +1,11 @@
 .dh-shell {
-  --dh-accent: #ed7b42;
-  --dh-accent-text: #a84413;
+  --dh-accent: var(--primary);
+  --dh-accent-text: var(--primary);
   --dh-bg: var(--background);
   --dh-line: color-mix(in srgb, var(--foreground) 12%, transparent);
   --dh-muted: var(--muted-foreground);
   display: grid;
-  grid-template-columns: 220px minmax(440px, 1fr) 280px;
+  grid-template-columns: var(--deck-rail-width) minmax(0, 1fr) 280px;
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
@@ -15,7 +15,7 @@
   font-size: 14px;
 }
 .dh-shell-agents {
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: var(--deck-rail-width) minmax(0, 1fr);
 }
 .dh-shell button,
 .dh-shell input,
@@ -116,7 +116,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 0 4px 22px;
+  flex-wrap: wrap;
+  padding: 0 0 18px;
 }
 .dh-eyebrow {
   color: var(--dh-muted);
@@ -126,7 +127,7 @@
   gap: 10px;
 }
 .dh-header h1 {
-  font-size: 32px;
+  font-size: var(--deck-page-title);
   line-height: 1.2;
   font-weight: 600;
   letter-spacing: -1px;
@@ -159,11 +160,11 @@
 }
 .dh-accent {
   background: var(--dh-accent);
-  color: #1d1510;
+  color: var(--primary-foreground);
   border-color: transparent;
 }
 .dh-accent:hover:enabled {
-  background: #fa8e56;
+  background: color-mix(in srgb, var(--primary) 90%, var(--foreground));
 }
 .dh-tabs {
   display: flex;
@@ -290,12 +291,12 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #91979f;
+  background: var(--muted-foreground);
   flex-shrink: 0;
 }
 .dh-service-chips i[data-ready="true"],
 .dh-connection[data-connected="true"] i {
-  background: #37bd82;
+  background: var(--deck-success);
 }
 .dh-row-column {
   padding: 18px 14px;
@@ -467,10 +468,10 @@
 }
 @media (max-width: 1100px) {
   .dh-shell {
-    grid-template-columns: 190px minmax(400px, 1fr) 240px;
+    grid-template-columns: var(--deck-rail-width) minmax(0, 1fr) 240px;
   }
   .dh-shell-agents {
-    grid-template-columns: 190px minmax(0, 1fr);
+    grid-template-columns: var(--deck-rail-width) minmax(0, 1fr);
   }
   .dh-lane-row {
     grid-template-columns: 1.4fr 1fr;
@@ -482,27 +483,35 @@
 }
 @media (max-width: 1000px) {
   .dh-shell {
-    grid-template-columns: 180px minmax(0, 1fr);
-    grid-template-rows: auto auto;
+    grid-template-columns: var(--deck-rail-width) minmax(0, 1fr);
+    grid-template-rows: max-content max-content;
     align-content: start;
     overflow: auto;
   }
   .dh-main,
   .dh-inspector {
     overflow: visible;
+    min-height: auto;
   }
   .dh-inspector {
     grid-column: 2;
     border-left: 0;
     border-top: 1px solid var(--dh-line);
   }
-  .dh-nav {
+  .dh-shell > aside:first-child {
     grid-row: 1 / span 2;
+    position: sticky;
+    top: 0;
+    height: 100dvh;
   }
 }
 @media (max-width: 700px) {
   .dh-shell {
     display: block;
+  }
+  .dh-shell > aside:first-child {
+    position: static;
+    height: auto;
   }
   .dh-nav {
     padding: 16px;
@@ -623,7 +632,7 @@
   color: var(--dh-muted, var(--muted-foreground));
 }
 .dh-session-row:hover {
-  border-color: #d7823b;
+  border-color: var(--primary);
 }
 
 .dh-feature-create {
@@ -737,7 +746,7 @@
 }
 .dh-attention-dot,
 .dh-attention-text {
-  color: #d18b22;
+  color: var(--deck-warning);
 }
 .dh-lane-select {
   display: flex;
@@ -788,18 +797,18 @@
 }
 .dh-row-agent [data-execution="working"],
 .dh-row-agent [data-execution="finished_turn"] {
-  color: #23865c;
+  color: var(--deck-success);
 }
 .dh-row-agent [data-execution="waiting_input"],
 .dh-row-agent [data-execution="waiting_approval"] {
-  color: #b5781d;
+  color: var(--deck-warning);
 }
 .dh-row-agent [data-execution="failed"] {
-  color: #cc554d;
+  color: var(--deck-danger);
 }
 :global(.dark) .dh-row-agent [data-execution="working"],
 :global(.dark) .dh-row-agent [data-execution="finished_turn"] {
-  color: #51ce97;
+  color: var(--deck-success);
 }
 .dh-row-agent small,
 .dh-row-pr small {
@@ -816,7 +825,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  color: #3182b8;
+  color: var(--deck-info);
 }
 .dh-pr-status {
   font-size: 10px;
@@ -873,7 +882,7 @@
   color: inherit;
 }
 .dh-row-recording strong {
-  font-weight: 550;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -901,19 +910,6 @@
   border-radius: 6px;
 }
 
-:global(.dark) .dh-shell {
-  --dh-accent-text: #ed7b42;
-  --dh-bg: #11171d;
-  --dh-muted: #adb7c4;
-  --dh-line: #2c343e;
-  background: radial-gradient(ellipse at 55% 0, #1a222b 0, #11171d 65%);
-}
-:global(.dark) .dh-lane-row {
-  background: linear-gradient(115deg, #1b242d, #181f27);
-}
-:global(.dark) .dh-lane-row:hover {
-  background: #202a34;
-}
 .dh-lane-identity {
   padding: 20px;
 }
@@ -953,10 +949,11 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #efb447;
+  background: var(--deck-warning);
 }
 
 .dh-header > div:first-child {
+  flex: 1 1 260px;
   min-width: 0;
 }
 .dh-header h1 {
@@ -1074,4 +1071,30 @@
 }
 .dh-row-agent strong {
   overflow-wrap: anywhere;
+}
+
+.dh-header > .dh-inspector-actions {
+  margin: 0;
+  gap: 8px;
+}
+.dh-inspector .dh-branch {
+  font-size: 13px;
+}
+.dh-inspector > p {
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 0;
+}
+.dh-inspector .dh-session-list p {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.dh-tabs a {
+  flex-shrink: 0;
+}
+.dh-lane-row {
+  background: var(--card);
+}
+.dh-lane-row:hover {
+  background: color-mix(in srgb, var(--foreground) 3%, var(--card));
 }

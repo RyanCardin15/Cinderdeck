@@ -329,7 +329,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     return (
       <PanelAnimationSuppressionProvider value={panelAnimationsSuppressed}>
         <SidebarProvider
-          className="grid! h-dvh! min-h-0! min-w-0! grid-cols-[220px_minmax(0,1fr)]! overflow-hidden! max-[700px]:grid-cols-1! max-[700px]:grid-rows-[auto_minmax(0,1fr)]!"
+          className="grid! h-dvh! min-h-0! min-w-0! grid-cols-[var(--deck-rail-width)_minmax(0,1fr)]! overflow-hidden! max-[700px]:grid-cols-1! max-[700px]:grid-rows-[auto_minmax(0,1fr)]!"
           data-panel-animations={routePanelAnimationsActive ? "true" : "false"}
           defaultOpen
           style={sidebarProviderStyle}
@@ -359,7 +359,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     return (
       <PanelAnimationSuppressionProvider value={panelAnimationsSuppressed}>
         <SidebarProvider
-          className="grid! h-dvh! min-h-0! min-w-0 grid-cols-[220px_230px_minmax(0,1fr)] overflow-hidden max-[1000px]:grid-cols-[185px_205px_minmax(0,1fr)] max-[700px]:grid-cols-1 max-[700px]:grid-rows-[auto_auto_minmax(0,1fr)] max-[700px]:[&>aside:first-of-type]:max-h-[145px]"
+          className="grid! h-dvh! min-h-0! min-w-0 grid-cols-[var(--deck-rail-width)_230px_minmax(0,1fr)] overflow-hidden max-[1000px]:grid-cols-[var(--deck-rail-width)_205px_minmax(0,1fr)] max-[700px]:grid-cols-1 max-[700px]:grid-rows-[auto_auto_minmax(0,1fr)] max-[700px]:[&>aside:first-of-type]:max-h-[145px]"
           defaultOpen
           style={sidebarProviderStyle}
         >

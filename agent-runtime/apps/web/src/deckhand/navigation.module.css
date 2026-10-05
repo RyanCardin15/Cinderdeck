@@ -1,15 +1,15 @@
 .rail {
-  --navigation-accent: #a84413;
+  --navigation-accent: var(--primary);
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--foreground) 20%, transparent) transparent;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
   min-height: 0;
   min-width: 0;
   overflow: auto;
   border-right: 1px solid var(--border);
-  padding: 30px 18px 20px;
+  padding: 32px 16px 16px;
   background: color-mix(in srgb, var(--foreground) 2%, var(--background));
   font-family: var(--font-sans);
 }
@@ -21,7 +21,7 @@
   font-size: 23px;
   letter-spacing: -0.9px;
   color: var(--foreground);
-  margin: 4px 0 18px;
+  margin: 4px 0 12px;
 }
 .rail:has(> .titlebar) {
   padding-top: 0;
@@ -74,7 +74,7 @@
 .links .current {
   color: var(--foreground);
   background: color-mix(in srgb, var(--foreground) 7%, transparent);
-  box-shadow: inset 2px 0 #ed7b42;
+  box-shadow: inset 2px 0 var(--primary);
 }
 .links a:hover,
 .bottom a:hover {
@@ -98,11 +98,11 @@
   height: 7px;
   width: 7px;
   border-radius: 50%;
-  background: #90969f;
+  background: var(--muted-foreground);
   flex-shrink: 0;
 }
 .bottom [data-connected="true"] i {
-  background: #36b77c;
+  background: var(--deck-success);
 }
 .rail :focus-visible {
   outline: 2px solid var(--navigation-accent);
@@ -151,11 +151,6 @@
 .brand strong {
   font-weight: 600;
 }
-:global(.dark) .rail {
-  --navigation-accent: #ed7b42;
-  background: linear-gradient(180deg, #121920, #0f151b);
-  border-color: #2c343e;
-}
 
 .rail > * {
   min-width: 0;
@@ -173,10 +168,21 @@
 .bottom a {
   min-width: 0;
 }
-:global(.dark) .rail {
-  --muted-foreground: #adb7c4;
-}
 
 .tools {
   width: 100%;
+}
+
+.bottom a[aria-current="page"] {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  box-shadow: inset 2px 0 var(--primary);
+}
+.brand {
+  white-space: nowrap;
+}
+.links a,
+.bottom a {
+  font-weight: 500;
+  border-radius: var(--deck-radius);
 }

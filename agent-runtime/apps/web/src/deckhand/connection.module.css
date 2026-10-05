@@ -16,7 +16,7 @@
   font-weight: 650;
 }
 .identity svg {
-  color: #d98552;
+  color: var(--primary);
 }
 .panel p {
   margin: 0;
@@ -80,9 +80,9 @@
 }
 .primary {
   justify-self: end;
-  border-color: #d98552;
-  background: #d98552;
-  color: #201713;
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
   text-decoration: none;
 }
 .panel button:disabled {
@@ -90,7 +90,7 @@
   cursor: default;
 }
 .panel :is(button, select, a, input):focus-visible {
-  outline: 2px solid #d98552;
+  outline: 2px solid var(--primary);
   outline-offset: 3px;
 }
 .facts {
@@ -101,7 +101,7 @@
 }
 .facts dt {
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
   margin-bottom: 4px;
 }
 .facts dd {
@@ -121,14 +121,14 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .capabilities li span:last-child {
   color: var(--muted-foreground);
   margin-left: auto;
 }
 .supported {
-  color: #73a78c;
+  color: var(--deck-success);
 }
 .unsupported {
   color: var(--muted-foreground);
@@ -156,15 +156,15 @@
   cursor: pointer;
 }
 .workspace:has(input:checked) {
-  border-color: #d98552;
-  background: color-mix(in srgb, #d98552 6%, var(--background));
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 6%, var(--background));
 }
 .workspace:has(input:disabled) {
   cursor: default;
   opacity: 0.65;
 }
 .workspace input {
-  accent-color: #d98552;
+  accent-color: var(--primary);
   flex: 0 0 auto;
 }
 .workspace > span:first-of-type {
@@ -178,12 +178,12 @@
 .workspace small {
   display: block;
   margin-top: 4px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted-foreground);
 }
 .workspaceStatus {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted-foreground);
   white-space: nowrap;
 }
@@ -192,15 +192,15 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted-foreground);
 }
 .notice {
   display: grid;
   gap: 5px;
   padding: 12px;
-  border-left: 2px solid #d98552;
-  background: color-mix(in srgb, #d98552 5%, var(--background));
+  border-left: 2px solid var(--primary);
+  background: color-mix(in srgb, var(--primary) 5%, var(--background));
 }
 .notice a,
 .recovery a {
@@ -243,7 +243,7 @@
 }
 .recovery article span,
 .recovery article code {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
   overflow-wrap: anywhere;
 }
