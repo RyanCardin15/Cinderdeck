@@ -11,6 +11,7 @@ MODE="run"
 CONFIGURATION="${CONFIGURATION:-Debug}"
 LOG_LEVEL="${LOG_LEVEL:-default,error,fault}"
 CLEAN=0
+BUILT_APP=""
 QUIET=1
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -42,7 +43,7 @@ usage() {
 ${BOLD}Usage:${NC} $0 [run|--logs|--telemetry|--debug|--verify] [options]
 
 ${BOLD}Modes:${NC}
-  run                 Kill, build, and launch Cinderdeck.app (default)
+  run                 Build and launch the complete Cinderdeck app (default)
   --logs, logs        Launch then stream unified logs for process == "Cinderdeck"
   --telemetry         Launch then stream unified logs for subsystem == "$LOG_SUBSYSTEM"
   --debug, debug      Build then launch the app binary under lldb
@@ -173,68 +174,36 @@ build_products_dir() {
 }
 
 app_bundle_path() {
-  local bundle_name="$APP_NAME"
-  if [[ "$CONFIGURATION" == "Debug" ]]; then
-    bundle_name="$DEBUG_BUNDLE_NAME"
-  fi
-
-  printf "%s/%s.app" "$(build_products_dir)" "$bundle_name"
+  printf "%s" "$BUILT_APP"
 }
 
 app_binary_path() {
   printf "%s/Contents/MacOS/%s" "$(app_bundle_path)" "$APP_NAME"
 }
 
-stop_app() {
-  if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
-    info "Stopping existing $APP_NAME process..."
-    pkill -x "$APP_NAME" >/dev/null 2>&1 || true
-    sleep 0.5
-  fi
-}
-
-run_xcodebuild() {
-  local action="$1"
-  local args=(
-    xcodebuild
-    -project "$PROJECT"
-    -scheme "$SCHEME"
-    -configuration "$CONFIGURATION"
-    -derivedDataPath "$DERIVED_DATA_PATH"
-  )
-
-  if [[ "$QUIET" -eq 1 ]]; then
-    args+=(-quiet)
-  fi
-
-  args+=("$action")
-  "${args[@]}"
-}
-
 build_app() {
-  cd "$ROOT_DIR"
-
+  mkdir -p "$DERIVED_DATA_PATH"
+  DERIVED_DATA_PATH="$(cd "$DERIVED_DATA_PATH" && pwd -P)"
   if [[ "$CLEAN" -eq 1 ]]; then
-    info "Cleaning $SCHEME ($CONFIGURATION)..."
-    run_xcodebuild clean
+    xcodebuild -project "$ROOT_DIR/$PROJECT" -scheme "$SCHEME" -configuration "$CONFIGURATION" \
+      -derivedDataPath "$DERIVED_DATA_PATH/native" clean
   fi
-
-  info "Building $SCHEME ($CONFIGURATION)..."
-  run_xcodebuild build
-
-  local app_bundle
-  app_bundle="$(app_bundle_path)"
-  [[ -d "$app_bundle" ]] || fail "Build finished but app bundle was not found: $app_bundle"
-  [[ -x "$(app_binary_path)" ]] || fail "Built app binary is not executable: $(app_binary_path)"
-
-  success "Build ready: $app_bundle"
+  local delivery
+  delivery=$(mktemp -d "$DERIVED_DATA_PATH/unified.XXXXXX")
+  info "Building Cinderdeck with its included agent harness..."
+  "$ROOT_DIR/scripts/build-unified.sh" --configuration "$CONFIGURATION" \
+    --derived-data "$DERIVED_DATA_PATH/native" --output-dir "$delivery"
+  local bundle_name="$APP_NAME"
+  [[ "$CONFIGURATION" != Debug ]] || bundle_name="$DEBUG_BUNDLE_NAME"
+  BUILT_APP="$delivery/$bundle_name.app"
+  success "Build ready: $BUILT_APP"
 }
 
 open_app() {
   local app_bundle
   app_bundle="$(app_bundle_path)"
   info "Launching $APP_NAME..."
-  /usr/bin/open -n "$app_bundle"
+  /usr/bin/open "$app_bundle"
   success "Launched $APP_NAME"
 }
 
@@ -254,13 +223,6 @@ stream_logs() {
 
   open_app
 
-  cleanup_stream() {
-    printf "\n"
-    info "Stopping $APP_NAME..."
-    pkill -x "$APP_NAME" >/dev/null 2>&1 || true
-    success "App stopped."
-  }
-  trap cleanup_stream INT TERM
 
   info "Streaming logs for predicate: $predicate"
   /usr/bin/log stream --info --debug --style compact --predicate "$predicate"
@@ -277,10 +239,8 @@ main() {
   require_macos
   require_command xcodebuild
   require_command pgrep
-  require_command pkill
 
   cd "$ROOT_DIR"
-  stop_app
   build_app
 
   case "$MODE" in

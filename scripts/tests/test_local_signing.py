@@ -34,19 +34,44 @@ if command == 'security':
         sys.exit(0 if os.environ.get('SIGNING_TEST_INVALID_CERT') else 44)
     else:
         sys.exit('Unexpected keychain mutation')
+elif command == 'node':
+    if args[0] == '-p':
+        print('11.10.0')
+    elif args[0] != '-e':
+        output = pathlib.Path(args[args.index('--output-dir') + 1])
+        shell = output / 'AgentShell.app/Contents'
+        (shell / 'MacOS').mkdir(parents=True)
+        executable = shell / 'MacOS/AgentShell'
+        executable.write_text('#!/bin/sh\nexit 0\n')
+        executable.chmod(0o755)
+        with (shell / 'Info.plist').open('wb') as info:
+            plistlib.dump({'CFBundleIdentifier': 'com.ryancardin.cinderdeck.agentshell', 'CFBundleExecutable': 'AgentShell'}, info)
+elif command == 'npm':
+    pathlib.Path('node_modules').mkdir(exist_ok=True)
+elif command == 'lipo':
+    print('arm64')
+elif command == 'cargo':
+    print('fixture cargo')
 elif command == 'xcodebuild':
     if os.environ.get('SIGNING_TEST_BUILD_FAIL'):
         sys.exit(65)
     derived = pathlib.Path(args[args.index('-derivedDataPath') + 1])
     app = derived / 'Build/Products/Release/Cinderdeck.app'
-    (app / 'Contents/Frameworks/Sparkle.framework').mkdir(parents=True)
+    framework = app / 'Contents/Frameworks/Sparkle.framework'
+    for relative in ['Versions/B/XPCServices/Installer.xpc', 'Versions/B/XPCServices/Downloader.xpc', 'Versions/B/Updater.app']:
+        (framework / relative).mkdir(parents=True)
+    (app / 'Contents/Resources').mkdir()
     (app / 'Contents/MacOS').mkdir()
     executable = app / 'Contents/MacOS/Cinderdeck'
     executable.write_text('#!/bin/sh\n[ -z "$SIGNING_TEST_LAUNCH_FAIL" ]\n')
     executable.chmod(0o755)
     with (app / 'Contents/Info.plist').open('wb') as info:
-        plistlib.dump({'CFBundleIdentifier': os.environ.get('SIGNING_TEST_BUNDLE_ID', 'com.ryancardin.cinderdeck')}, info)
+        plistlib.dump({'CFBundleIdentifier': os.environ.get('SIGNING_TEST_BUNDLE_ID', 'com.ryancardin.cinderdeck'), 'CFBundleExecutable': 'Cinderdeck'}, info)
 elif command == 'codesign':
+    if '--display' in args:
+        sys.exit(0)
+    if '--entitlements' in args and args[-1].endswith('/Cinderdeck.app'):
+        pathlib.Path(os.environ['CINDERDECK_DERIVED_DATA_PATH'], 'signed-entitlements.plist').write_bytes(pathlib.Path(args[args.index('--entitlements') + 1]).read_bytes())
     if '--verify' in args:
         if '-R=anchor apple generic' in args:
             sys.exit(0 if os.environ.get('SIGNING_TEST_APPLE_IDENTITY') else 1)
@@ -69,7 +94,7 @@ class LocalSigningTests(unittest.TestCase):
         self.calls_file = self.directory / 'calls.jsonl'
         self.bin = self.directory / 'bin'
         self.bin.mkdir()
-        for name in ['security', 'xcodebuild', 'codesign', 'tccutil', 'open']:
+        for name in ['security', 'xcodebuild', 'codesign', 'tccutil', 'open', 'node', 'npm', 'cargo', 'lipo']:
             executable = self.bin / name
             executable.write_text(f'#!{sys.executable}\n' + MOCK)
             executable.chmod(0o755)
@@ -78,13 +103,18 @@ class LocalSigningTests(unittest.TestCase):
         # Use a private copy so build-only test artifacts cannot touch the real repo.
         (self.directory / 'scripts').mkdir()
         (self.directory / 'Cinderdeck').mkdir()
-        for name in ['install-local.sh', 'create-signing-cert.sh']:
+        for name in ['install-local.sh', 'create-signing-cert.sh', 'build-unified.sh', 'runtime-build-env.sh']:
             shutil.copy2(ROOT / 'scripts' / name, self.directory / 'scripts' / name)
         shutil.copy2(ROOT / 'Cinderdeck/Cinderdeck.entitlements', self.directory / 'Cinderdeck/Cinderdeck.entitlements')
+        runtime = self.directory / 'agent-runtime'
+        (runtime / 'scripts').mkdir(parents=True)
+        (runtime / 'scripts/build-desktop-artifact.ts').touch()
+        (runtime / 'package.json').write_text('{"packageManager":"pnpm@11.10.0"}')
         self.env = dict(os.environ)
         self.env.update({
             'PATH': str(self.bin) + os.pathsep + os.environ['PATH'],
             'CINDERDECK_SIGNING_KEYCHAIN': str(self.keychain),
+            'CINDERDECK_NODE_BINARY': str(self.bin / 'node'),
             'CINDERDECK_SIGNING_IDENTITY': IDENTITY,
             'CINDERDECK_DERIVED_DATA_PATH': str(self.directory / 'derived data'),
             'SIGNING_TEST_CALLS': str(self.calls_file),
@@ -110,11 +140,12 @@ class LocalSigningTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('Reusing code-signing identity', result.stdout)
         signatures = [call for call in self.calls() if call[0] == 'codesign' and '--sign' in call]
-        self.assertEqual(len(signatures), 6)
+        self.assertGreaterEqual(len(signatures), 6)
+        self.assertTrue(any(call[-1].endswith('/AgentShell.app') for call in signatures))
         for call in signatures:
             self.assertEqual(call[call.index('--sign') + 1], FINGERPRINT)
         self.assertTrue(signatures[-1][-1].endswith('/Cinderdeck.app'))
-        entitlements = plistlib.loads((self.directory / 'derived data/local-entitlements.plist').read_bytes())
+        entitlements = plistlib.loads((self.directory / 'derived data/signed-entitlements.plist').read_bytes())
         self.assertTrue(entitlements['com.apple.security.cs.disable-library-validation'])
         self.assert_no_install_side_effects()
 
@@ -122,7 +153,7 @@ class LocalSigningTests(unittest.TestCase):
         self.env['SIGNING_TEST_APPLE_IDENTITY'] = '1'
         result = self.run_installer()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        entitlements = plistlib.loads((self.directory / 'derived data/local-entitlements.plist').read_bytes())
+        entitlements = plistlib.loads((self.directory / 'derived data/signed-entitlements.plist').read_bytes())
         self.assertNotIn('com.apple.security.cs.disable-library-validation', entitlements)
 
     def test_rejects_ad_hoc_before_build(self):

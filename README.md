@@ -72,6 +72,10 @@ Agents can record exactly one window (`cinderdeck repro windows`, then `--window
 
 Built with SwiftUI and AppKit. Local configuration, local history, no Cinderdeck account. Cloud uploads and custom OCR endpoints are optional and explicitly configured.
 
+## One app, one repository
+
+This repository includes the complete native app and its agent harness in `agent-runtime/`. A normal clone includes both, without submodules or a second checkout. The default build and local installer produce one Cinderdeck app with agents, previews, Workspaces, lanes, pull requests, capture and history. The internal AgentShell ships inside the app and updates with it.
+
 ## Start with your own projects
 
 Build and open the app to set up your first project, or use **Workspaces… → +**. Choose a repository, review detected services and test/build commands, and check missing tools, environment hints, and port conflicts. **Save workspace** keeps the definition for later; **Create & start** rechecks requirements and launches the selected services. The History quick panel remains available with **⌘⇧H**; expand it with **⌘E**. Shortcuts can be customized in Settings.
@@ -137,16 +141,12 @@ Cinderdeck then updates itself. It checks for new versions daily, downloads them
 
 ## Build Cinderdeck
 
-Requires macOS 13 or later and **Xcode 26.2 or later** to build the current Swift source. Open `Cinderdeck.xcodeproj` and select the **Cinderdeck** scheme, or use:
+Requires macOS 13 or later, **Xcode 26.2 or later**, and **Rust/Cargo**. The first build installs the pinned Node toolchain and locked harness dependencies inside your clone. Build and start the complete app with:
 
 ```sh
 git clone https://github.com/RyanCardin15/Cinderdeck.git
 cd Cinderdeck
-xcodebuild -project Cinderdeck.xcodeproj -scheme Cinderdeck \
-  -configuration Debug -destination 'platform=macOS' \
-  -derivedDataPath .build/development \
-  CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build
-open '.build/development/Build/Products/Debug/Cinderdeck Debug.app'
+./scripts/build_and_run.sh
 ```
 
 For a signed app in `/Applications`, testing, and release packaging, see [the build guide](docs/BUILD.md). Cinderdeck starts its own version line at **1.0.0 (200)** and does not use Snapzy’s downloads, Homebrew package, notarization, or update signatures. Debug builds never update themselves; release builds follow Cinderdeck’s signed feed. See [releases](docs/RELEASES.md).

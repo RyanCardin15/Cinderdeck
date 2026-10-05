@@ -6,12 +6,10 @@ The native app launches a private `Contents/Resources/AgentShell.app/Contents/Ma
 
 ## Build and assemble
 
-Use Xcode 26.2 or later, the runtime checkout's installed dependencies, and Node 24.13.1 or later within the Node 24 line. The source checkouts are explicit: this script does not fetch or select a T3 revision.
+Clone the Cinderdeck repository normally. The maintained T3-derived source is included as tracked files under `agent-runtime/`, with full history and licenses. Use Xcode 26.2 or later and Rust/Cargo. The builder installs frozen dependencies and bootstraps the supported Node toolchain inside the clone when needed. It does not fetch a different harness revision.
 
 ```bash
-CINDERDECK_NODE_BINARY=/absolute/path/to/node24 \
-  ./scripts/build-unified.sh \
-  --runtime-source /absolute/path/to/the/runtime-checkout \
+./scripts/build-unified.sh \
   --output-dir /absolute/path/to/a/delivery-directory \
   --configuration Debug --arch arm64
 ```
@@ -22,7 +20,6 @@ To assemble already-built products for manual validation, supply either or both 
 
 ```bash
 ./scripts/build-unified.sh \
-  --runtime-source /absolute/path/to/the/runtime-checkout \
   --output-dir /absolute/path/to/a/fresh-delivery-directory \
   --configuration Debug --arch arm64 \
   --native-app '/absolute/path/to/Cinderdeck Debug.app' \
@@ -31,7 +28,7 @@ To assemble already-built products for manual validation, supply either or both 
 
 The inputs are copied; they are not modified. Missing prebuilt products are built normally. `--arch` accepts `arm64`, `x64`, or `universal`, and supplied products must contain the requested architecture. `--dry-run` validates inputs and prints the plan without building, copying, or signing. Existing output apps are refused. A failed build retains its staging directory and logs for inspection.
 
-This command does not install, launch, replace a live app, reset permissions, create a certificate, or publish an update. It produces one app for manual validation. It does not change the existing `install-local.sh` workflow.
+This command does not install, launch, replace a live app, reset permissions, create a certificate, or publish an update. It produces one app for manual validation. `build_and_run.sh` and `install-local.sh` use this same packager by default. `--runtime-source` is an optional maintainer override, never a prerequisite for a clone.
 
 ## Signing
 
@@ -39,7 +36,6 @@ Debug defaults to ad-hoc signing for disposable manual output. Such builds do no
 
 ```bash
 ./scripts/build-unified.sh \
-  --runtime-source /absolute/path/to/the/runtime-checkout \
   --output-dir /absolute/path/to/a/fresh-release-directory \
   --configuration Release --arch arm64 \
   --signing-identity 'Your Existing Code Signing Identity'
@@ -47,7 +43,7 @@ Debug defaults to ad-hoc signing for disposable manual output. Such builds do no
 
 `CINDERDECK_SIGNING_KEYCHAIN` selects an existing keychain; it defaults to the login keychain. The packager signs nested Mach-O code and bundles inside-out, first AgentShell, then native helpers including Sparkle, then the outer app. It preserves existing helper entitlements, permits Electron's executable memory, and resolves the native entitlement bundle-ID variables for the selected configuration. Local/ad-hoc identities require library-validation exceptions for the internal Electron runtime and native Sparkle loading. Apple-issued signatures retain the declared entitlements without adding that local exception.
 
-The completed bundle and AgentShell receive strict recursive signature checks. Release also requires a certificate-based designated requirement. Signing uses local timestamps (`--timestamp=none`), matching local-build use. This command does not notarize, assess Gatekeeper acceptance, generate a signed Sparkle feed, or validate a public release. Follow the release/signing procedures separately before distribution.
+The completed bundle and AgentShell receive strict recursive signature checks. Release also requires a certificate-based designated requirement. Local signing uses `--timestamp=none`. Distribution sets `CINDERDECK_SIGNING_TIMESTAMP=--timestamp` for Developer ID signatures, including nested runtime code. This command does not notarize, assess Gatekeeper acceptance, generate a signed Sparkle feed, or validate a public release. Follow the release/signing procedures separately before distribution.
 
 ## Runtime and authority boundaries
 
@@ -61,6 +57,26 @@ Native Cinderdeck remains the only owner of workspace/lane service processes, po
 
 ## Maintaining T3 updates
 
-Keep the runtime as its maintained T3-derived checkout. Reuse its adapters, contracts, WebSocket transport, Electron backend supervision, preview implementation, and artifact builder. Native-host and Cinderdeck feature modules contain the product integration; upstream changes still pass through the runtime's existing fork policy and patch audit. The native repository remains authoritative for Cinderdeck identity, permissions, operational resources, and whole-app updates. Updating the runtime alone does not update an installed unified app: rebuild, sign, and validate the complete outer bundle.
+Maintain the T3-derived runtime inside `agent-runtime/`. Reuse its adapters, contracts, WebSocket transport, Electron backend supervision, preview implementation, and artifact builder. Native-host and Cinderdeck feature modules contain the product integration; upstream changes still pass through the runtime's existing fork policy and patch audit. The native repository remains authoritative for Cinderdeck identity, permissions, operational resources, and whole-app updates. Updating the runtime alone does not update an installed unified app: rebuild, sign, and validate the complete outer bundle.
+
+The patch audit runs from the included runtime and compares only its subtree against the preserved upstream baseline:
+
+```sh
+cd agent-runtime
+node scripts/deckhand/upstream-maintenance.mjs audit
+```
+
+For an upstream rehearsal, first extract the runtime history in a disposable worktree. Never merge T3 directly into the native host root:
+
+```sh
+# From the Cinderdeck repository root; choose new branch and worktree paths.
+git subtree split --prefix=agent-runtime -b maintenance/runtime-review
+git worktree add /tmp/cinderdeck-runtime-review maintenance/runtime-review
+# Run the existing rehearsal and acceptance procedure from that runtime worktree.
+# Once reviewed and all required gates pass, import the exact accepted runtime commit:
+git subtree merge --prefix=agent-runtime ACCEPTED_RUNTIME_COMMIT
+```
+
+The rehearsal command refuses to run from the embedded subtree. The old separate runtime repository is retained as historical source; it is not required to build or start Cinderdeck. Rebuild and validate the complete app after importing a runtime update.
 
 Compilation and signature verification do not prove the integrated product. Manually validate one main window, exact workspace/lane navigation, native tool entry points, provider selection and resumed conversations, preview/recording, shared-service ownership, relaunch, and cancellation/graceful quit. The Debug preview harness scopes operational files, capture output and processing, history database/thumbnails, recording metadata/audio and annotation sidecars to `CINDERDECK_STACKS_PREVIEW_ROOT`. Volatile fixture defaults enable saving and history while disabling clipboard copying. They do not redirect every persistent Debug preference write. Keep that distinction explicit when conducting manual checks.

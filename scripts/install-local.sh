@@ -60,46 +60,21 @@ SIGNING_HASH=$(printf '%s\n' "$IDENTITIES" | awk -F '"' -v identity="$SIGNING_ID
 
 mkdir -p "$DERIVED_DATA_PATH"
 DERIVED_DATA_PATH="$(cd "$DERIVED_DATA_PATH" && pwd)"
-APP_PATH="$DERIVED_DATA_PATH/Build/Products/Release/Cinderdeck.app"
+DELIVERY_DIR=$(mktemp -d "$DERIVED_DATA_PATH/unified.XXXXXX")
+APP_PATH="$DELIVERY_DIR/Cinderdeck.app"
 BUILD_LOG="$DERIVED_DATA_PATH/install-local.log"
-echo "Building Release. Log: $BUILD_LOG"
-# Keep the existing Xcode 26.3 performance-inliner workaround from docs/BUILD.md.
-# Sign inside-out below so Sparkle helpers and the app use the same identity.
-if ! xcodebuild -project "$ROOT_DIR/Cinderdeck.xcodeproj" -scheme Cinderdeck \
-  -configuration Release -destination 'platform=macOS' \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
-  CODE_SIGN_IDENTITY= CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
-  'OTHER_SWIFT_FLAGS=$(inherited) -Xllvm -sil-disable-pass=PerfInliner' \
-  build > "$BUILD_LOG" 2>&1; then
+echo "Building complete Cinderdeck Release. Log: $BUILD_LOG"
+if ! CINDERDECK_SIGNING_KEYCHAIN="$KEYCHAIN" "$ROOT_DIR/scripts/build-unified.sh" \
+  --configuration Release --signing-identity "$SIGNING_HASH" \
+  --derived-data "$DERIVED_DATA_PATH/native" --output-dir "$DELIVERY_DIR" > "$BUILD_LOG" 2>&1; then
   tail -60 "$BUILD_LOG" >&2
   fail "Build failed; the installed app and its permissions have not been changed."
 fi
 [[ -d "$APP_PATH" ]] || fail "Built app missing: $APP_PATH"
 ACTUAL_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Contents/Info.plist")
 [[ "$ACTUAL_BUNDLE_ID" == "$BUNDLE_ID" ]] || fail "Unexpected bundle identifier: $ACTUAL_BUNDLE_ID"
-
-sign() {
-  codesign --force --sign "$SIGNING_HASH" --keychain "$KEYCHAIN" \
-    --options runtime --timestamp=none "$@"
-}
-SPARKLE="$APP_PATH/Contents/Frameworks/Sparkle.framework"
-[[ -d "$SPARKLE" ]] || fail "Expected Sparkle.framework is missing."
-sign "$SPARKLE/Versions/B/XPCServices/Installer.xpc"
-sign --preserve-metadata=entitlements "$SPARKLE/Versions/B/XPCServices/Downloader.xpc"
-sign "$SPARKLE/Versions/B/Autoupdate"
-sign "$SPARKLE/Versions/B/Updater.app"
-sign "$SPARKLE"
-# codesign does not expand Xcode variables in entitlements itself.
-ENTITLEMENTS="$DERIVED_DATA_PATH/local-entitlements.plist"
-sed 's/$(PRODUCT_BUNDLE_IDENTIFIER)/com.ryancardin.cinderdeck/g' \
-  "$ROOT_DIR/Cinderdeck/Cinderdeck.entitlements" > "$ENTITLEMENTS"
-# Self-signed certificates have no Apple Team ID. Hardened runtime otherwise
-# refuses to load Sparkle, even when both binaries use the same certificate.
-# Keep library validation enabled for Apple-issued signing identities.
-if ! codesign --verify --strict -R='anchor apple generic' "$SPARKLE" >/dev/null 2>&1; then
-  /usr/libexec/PlistBuddy -c 'Add :com.apple.security.cs.disable-library-validation bool true' "$ENTITLEMENTS"
-fi
-sign --entitlements "$ENTITLEMENTS" "$APP_PATH"
+[[ -x "$APP_PATH/Contents/Resources/AgentShell.app/Contents/MacOS/AgentShell" ]] \
+  || fail "Built app is missing its agent harness."
 
 verify() {
   codesign --verify --deep --strict "$1" || return 1

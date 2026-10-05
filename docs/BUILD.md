@@ -1,18 +1,29 @@
 # Building Cinderdeck
 
-Cinderdeck supports macOS 13 or later. Building the current source requires Xcode 26.2 or later and its command-line tools. Dependencies resolve through Swift Package Manager.
+Cinderdeck supports macOS 13 or later. Building requires Xcode 26.2 or later, its command-line tools, Rust/Cargo, and internet access for the first build. Swift packages and locked harness dependencies are installed automatically. The builder uses Node 24.13.1+ from your PATH, or downloads the pinned Node 24 toolchain into this clone's `.build/toolchains` directory. It uses the harness's pinned pnpm version.
 
 ## Development
 
-Open `Cinderdeck.xcodeproj`, select the **Cinderdeck** scheme, and run. The Debug product is **Cinderdeck Debug.app**, with a separate bundle identifier (`com.ryancardin.cinderdeck.debug`). It does not import your production Snapzy data.
+Clone just this repository, then run from wherever you downloaded it:
 
 ```sh
-xcodebuild -project Cinderdeck.xcodeproj -scheme Cinderdeck \
-  -configuration Debug -destination 'platform=macOS' \
-  -derivedDataPath .build/development \
-  CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build
-open '.build/development/Build/Products/Debug/Cinderdeck Debug.app'
+git clone https://github.com/RyanCardin15/Cinderdeck.git
+cd Cinderdeck
+# If Rust is missing: brew install rust
+./scripts/build_and_run.sh
 ```
+
+This builds and launches one **Cinderdeck Debug.app**, including its agent harness. No sibling checkout, submodule initialization, absolute source path, or separate harness launch is needed. Debug uses `com.ryancardin.cinderdeck.debug` and does not import production Snapzy data. Provider CLIs must still be installed and authenticated to run their agents.
+
+`--logs`, `--telemetry`, `--debug`, `--verify`, `--configuration`, `--derived-data` and `--clean` remain available; see `./scripts/build_and_run.sh --help`. The script prints the complete app path. Each delivery goes into a fresh output directory, while the native build cache is reused. It leaves other running app instances alone.
+
+For an artifact without launching:
+
+```sh
+./scripts/build-unified.sh --output-dir "$PWD/.build/delivery" --configuration Debug
+```
+
+Use a fresh output directory for each delivery. Xcode's direct Run builds the native host only, which is useful for native service tests. Use the whole-app commands above for the complete product. See [unified app details](UNIFIED_APP.md).
 
 ## Signed local installation
 
@@ -27,7 +38,7 @@ Use the local installer for builds you keep in `/Applications`. It creates a per
 ./scripts/install-local.sh
 ```
 
-The script builds Release, signs the app and Sparkle helpers, verifies the signature and certificate-based designated requirement, checks that the executable loads with its headless help command, then replaces `/Applications/Cinderdeck.app`. A previous installation is retained as a verified ZIP archive at the backup path printed by the script. Keeping backups as archives prevents macOS from registering them as extra applications or labeling permission entries “previous.” The build product is unregistered from LaunchServices so the installed copy handles normal launches and links. `--build-only` validates a signed build without installing it; `--no-launch` skips opening the app after installation. macOS may ask you to authorize certificate trust or private-key access during first setup.
+The script builds the complete Release app, signs the embedded harness, app and Sparkle helpers, verifies the signature and certificate-based designated requirement, checks that the executable loads with its headless help command, then replaces `/Applications/Cinderdeck.app`. A previous installation is retained as a verified ZIP archive at the backup path printed by the script. Keeping backups as archives prevents macOS from registering them as extra applications or labeling permission entries “previous.” The build product is unregistered from LaunchServices so the installed copy handles normal launches and links. `--build-only` validates a signed build without installing it; `--no-launch` skips opening the app after installation. macOS may ask you to authorize certificate trust or private-key access during first setup.
 
 If you already use an Apple Development or Developer ID identity, keep it to avoid another identity change:
 
@@ -38,22 +49,15 @@ CINDERDECK_SIGNING_IDENTITY='Apple Development: Your Name (IDENTITY_ID)' \
 
 The override accepts an exact identity name or its SHA-1 fingerprint from `security find-identity -v -p codesigning`. Ad-hoc signing is rejected. See [self-signed certificate setup](SELF_SIGNED_CERT.md) for the one-time repair and certificate lifecycle.
 
-For a manual signed build, select your own Apple Development or Developer ID signing identity. No upstream developer team, certificate, or private key is included.
+For a manual signed artifact without installation, use the same whole-app packager:
 
 ```sh
-export CINDERDECK_SIGNING_IDENTITY='Apple Development: Your Name (IDENTITY_ID)'
-export CINDERDECK_TEAM_ID='YOUR_TEAM_ID'
-xcodebuild -project Cinderdeck.xcodeproj -scheme Cinderdeck \
-  -configuration Release -destination 'platform=macOS' \
-  -derivedDataPath .build/release \
-  CODE_SIGN_IDENTITY="$CINDERDECK_SIGNING_IDENTITY" \
-  CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$CINDERDECK_TEAM_ID" \
-  'OTHER_SWIFT_FLAGS=$(inherited) -Xllvm -sil-disable-pass=PerfInliner' build
+./scripts/build-unified.sh --configuration Release \
+  --output-dir "$PWD/.build/release-delivery" \
+  --signing-identity 'Apple Development: Your Name (IDENTITY_ID)'
 ```
 
-The final flag works around a Swift 6.2.4 / Xcode 26.3 performance-inliner compiler crash inherited from the source baseline. It keeps the Release optimization level; remove it only after verifying a newer compiler no longer needs it.
-
-Quit the running app and back up any existing installation, then copy `.build/release/Build/Products/Release/Cinderdeck.app` to `/Applications`. Keep the same signing identity for subsequent local builds. The new Cinderdeck identity has its own macOS permission grants; see [migration](MIGRATION.md).
+The packager includes the Swift performance-inliner workaround needed by Xcode 26.3. Keep the same signing identity for subsequent local builds; see [migration](MIGRATION.md).
 
 ## Tests
 

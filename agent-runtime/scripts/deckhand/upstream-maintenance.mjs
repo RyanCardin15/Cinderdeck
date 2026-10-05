@@ -36,12 +36,19 @@ export function audit(repository, manifest) {
   if (manifest.schemaVersion !== 2 || !shaPattern.test(manifest.upstreamRevision))
     throw new Error("Invalid patch manifest");
   git(repository, ["cat-file", "-e", `${manifest.upstreamRevision}^{commit}`]);
-  const changed = new Set(
-    [
-      ...git(repository, ["diff", "--name-only", "-z", manifest.upstreamRevision]).split("\0"),
-      ...git(repository, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0"),
-    ].filter(Boolean),
-  );
+  const prefix = git(repository, ["rev-parse", "--show-prefix"]);
+  // A subtree keeps the upstream commits, but its current tree is below the host root.
+  // Compare runtime trees only; native files are outside the runtime patch policy.
+  const paths = prefix
+    ? [
+        ...git(repository, ["diff", "--name-only", "-z", `${manifest.upstreamRevision}^{tree}`, `HEAD:${prefix.replace(/\/$/, "")}`]).split("\0"),
+        ...git(repository, ["diff", "--relative", "--name-only", "-z", "HEAD", "--", "."]).split("\0"),
+      ]
+    : git(repository, ["diff", "--name-only", "-z", manifest.upstreamRevision]).split("\0");
+  const changed = new Set([
+    ...paths,
+    ...git(repository, ["ls-files", "--others", "--exclude-standard", "-z", "--", "."]).split("\0"),
+  ].filter(Boolean));
   for (const path of new Set([...changed, ...Object.keys(manifest.upstreamEdits)])) {
     const policy = patchPolicy(manifest, path);
     for (const test of policy?.tests ?? [])
@@ -57,6 +64,8 @@ export function audit(repository, manifest) {
   };
 }
 export function rehearse({ repository, candidate, source, destination, reportPath }) {
+  if (git(repository, ["rev-parse", "--show-prefix"]))
+    throw new Error("Extract the agent-runtime subtree before rehearsal; see docs/UNIFIED_APP.md in the host repository. Never merge T3 into the native host root.");
   if (!shaPattern.test(candidate) || !shaPattern.test(source))
     throw new Error("Candidate and fork source must be full immutable commit SHAs");
   if (!NodePath.isAbsolute(destination) || NodeFS.existsSync(destination))

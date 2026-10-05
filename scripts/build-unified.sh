@@ -3,11 +3,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RUNTIME_SOURCE=""
+RUNTIME_SOURCE="$ROOT_DIR/agent-runtime"
 OUTPUT_DIR=""
-CONFIGURATION=""
+CONFIGURATION="Debug"
 AGENT_SHELL=""
 NATIVE_APP=""
+NATIVE_DERIVED_DATA="$ROOT_DIR/.build/unified-native"
 ARCH="$(uname -m)"
 [[ "$ARCH" != x86_64 ]] || ARCH=x64
 SIGNING_IDENTITY="${CINDERDECK_SIGNING_IDENTITY:-}"
@@ -20,12 +21,14 @@ COMPLETE=0
 fail() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 usage() {
   cat <<HELP
-Usage: $0 --runtime-source /absolute/runtime-checkout --output-dir /absolute/output \\
+Usage: $0 --output-dir /absolute/output \\
   --configuration Debug|Release [options]
 
 Build and assemble one Cinderdeck app containing Resources/AgentShell.app.
 Does not install, launch, reset permissions, create certificates, or publish.
 
+  --runtime-source /absolute/checkout   Override the included agent-runtime source.
+  --derived-data /absolute/path         Native build cache (default .build/unified-native).
   --agent-shell /absolute/AgentShell.app  Reuse this internal runtime app.
   --native-app /absolute/native.app      Reuse this native build.
   --arch arm64|x64|universal             Default: host architecture.
@@ -45,6 +48,7 @@ require_value() { [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || fail "Missing valu
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --runtime-source) require_value "$@"; RUNTIME_SOURCE=$2; shift ;;
+    --derived-data) require_value "$@"; NATIVE_DERIVED_DATA=$2; shift ;;
     --output-dir) require_value "$@"; OUTPUT_DIR=$2; shift ;;
     --configuration) require_value "$@"; CONFIGURATION=$2; shift ;;
     --agent-shell) require_value "$@"; AGENT_SHELL=$2; shift ;;
@@ -82,7 +86,7 @@ if [[ "$CONFIGURATION" == Debug ]]; then
 else
   APP_NAME="Cinderdeck.app"
   BUNDLE_ID="com.ryancardin.cinderdeck"
-  [[ -n "$SIGNING_IDENTITY" && "$SIGNING_IDENTITY" != - ]] || fail "Release requires an exact existing persistent signing identity."
+  [[ -n "$SIGNING_IDENTITY" && ( "$SIGNING_IDENTITY" != - || "${CINDERDECK_ALLOW_ADHOC_RELEASE:-0}" == 1 ) ]] || fail "Release requires an exact existing persistent signing identity."
 fi
 FINAL_APP="$OUTPUT_DIR/$APP_NAME"
 [[ ! -e "$FINAL_APP" && ! -L "$FINAL_APP" ]] || fail "Output already exists: $FINAL_APP"
@@ -114,13 +118,6 @@ for input_app in "$AGENT_SHELL" "$NATIVE_APP"; do
   case "$OUTPUT_DIR/" in "$input_app/"*) fail "Output must not be inside a prebuilt input app." ;; esac
 done
 
-if [[ -z "$AGENT_SHELL" ]]; then
-  [[ -n "$NODE_BINARY" ]] || NODE_BINARY="$(command -v node || true)"
-  [[ "$NODE_BINARY" == /* && -x "$NODE_BINARY" ]] || fail "Set CINDERDECK_NODE_BINARY to an absolute Node 24.13.1+ executable."
-  "$NODE_BINARY" -e 'const [major, minor, patch] = process.versions.node.split(".").map(Number); if (major !== 24 || minor < 13 || (minor === 13 && patch < 1)) process.exit(1)' \
-    || fail "Runtime builds require Node 24.13.1+ within the supported Node 24 line."
-  [[ -d "$RUNTIME_SOURCE/node_modules" ]] || fail "Install the runtime checkout dependencies before building."
-fi
 
 if [[ "$DRY_RUN" == 1 ]]; then
   printf 'Configuration: %s\nArchitecture: %s\nRuntime checkout: %s\n' "$CONFIGURATION" "$ARCH" "$RUNTIME_SOURCE"
@@ -136,6 +133,13 @@ if [[ "$SIGNING_IDENTITY" != - ]]; then
     { split($1, fields, " "); if ($2 == identity || toupper(fields[2]) == toupper(identity)) print fields[2] }')
   [[ -n "$SIGNING_HASH" && "$SIGNING_HASH" != *$'\n'* && "$SIGNING_HASH" =~ ^[A-Fa-f0-9]{40}$ ]] \
     || fail "Signing identity is unavailable or ambiguous. Use an exact valid certificate name or SHA-1 fingerprint."
+fi
+
+if [[ -z "$AGENT_SHELL" ]]; then
+  command -v cargo >/dev/null 2>&1 || fail "Rust and Cargo are required to build the runtime helpers. Install Rust (for example: brew install rust), then retry."
+  source "$ROOT_DIR/scripts/runtime-build-env.sh"
+  ensure_runtime_node
+  install_runtime_dependencies
 fi
 
 mkdir -p "$OUTPUT_DIR"
@@ -169,7 +173,7 @@ if [[ -z "$NATIVE_APP" ]]; then
   case "$ARCH" in arm64) NATIVE_ARCHS=arm64 ;; x64) NATIVE_ARCHS=x86_64 ;; universal) NATIVE_ARCHS='arm64 x86_64' ;; esac
   printf 'Building native Cinderdeck. Log: %s\n' "$STAGING_DIR/native-build.log"
   if ! xcodebuild -project "$ROOT_DIR/Cinderdeck.xcodeproj" -scheme Cinderdeck \
-    -configuration "$CONFIGURATION" -destination 'platform=macOS' -derivedDataPath "$STAGING_DIR/native" \
+    -configuration "$CONFIGURATION" -destination 'platform=macOS' -derivedDataPath "$NATIVE_DERIVED_DATA" \
     "ARCHS=$NATIVE_ARCHS" ONLY_ACTIVE_ARCH=NO \
     CODE_SIGN_IDENTITY= CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
     'OTHER_SWIFT_FLAGS=$(inherited) -Xllvm -sil-disable-pass=PerfInliner' \
@@ -177,7 +181,7 @@ if [[ -z "$NATIVE_APP" ]]; then
     tail -60 "$STAGING_DIR/native-build.log" >&2
     fail "Native build failed."
   fi
-  NATIVE_APP="$STAGING_DIR/native/Build/Products/$CONFIGURATION/$APP_NAME"
+  NATIVE_APP="$NATIVE_DERIVED_DATA/Build/Products/$CONFIGURATION/$APP_NAME"
   validate_app "$NATIVE_APP" "$BUNDLE_ID" Cinderdeck
 fi
 
@@ -203,7 +207,7 @@ validate_shell "$SHELL_DEST"
 
 APPLE_SIGNING=unknown
 sign() {
-  local args=(--force --sign "$SIGNING_HASH" --options runtime --timestamp=none)
+  local args=(--force --sign "$SIGNING_HASH" --options runtime "${CINDERDECK_SIGNING_TIMESTAMP:---timestamp=none}")
   [[ "$SIGNING_HASH" == - ]] || args+=(--keychain "$KEYCHAIN")
   codesign "${args[@]}" "$@"
   if [[ "$APPLE_SIGNING" == unknown ]]; then

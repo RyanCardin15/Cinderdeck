@@ -1,5 +1,7 @@
 # Deckhand implementation checklist
 
+> Shipping direction updated 2026-10-04: Cinderdeck is one app in one repository. The harness is included under `agent-runtime/` and embedded in the Cinderdeck bundle. Historical instructions below about a separate Deckhand product/repository are superseded by [the unified build and maintenance workflow](UNIFIED_APP.md). Feature acceptance gates remain applicable; standalone harness tooling is for development and upstream maintenance.
+
 Companion to the [full implementation plan](DECKHAND_IMPLEMENTATION_PLAN.md). The checklist tracks full acceptance gates; unchecked items may already contain implemented code with remaining acceptance work. Check an item only after its code, meaningful tests, required documentation and evidence are complete. Record implementation PRs/commits and evidence beside the item as work proceeds.
 
 Phases P0–P11 and acceptance cases A01–A20 refer to the full plan. This is one full-release scope; finishing an early integration slice does not complete it.

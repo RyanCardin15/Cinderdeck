@@ -158,3 +158,24 @@ NodeTest.test("mutable refs and reuse of existing worktrees are rejected before 
     /new absolute path/,
   );
 });
+
+NodeTest.test("nested runtime audit ignores native files but still refuses runtime drift", (t) => {
+  const f = fixture(t);
+  const runtime = NodePath.join(f.repo, "agent-runtime");
+  NodeFS.mkdirSync(runtime);
+  for (const name of ["shared.txt", "proof.txt", "docs"]) {
+    NodeFS.renameSync(NodePath.join(f.repo, name), NodePath.join(runtime, name));
+  }
+  NodeFS.writeFileSync(NodePath.join(f.repo, "native.swift"), "native host");
+  git(f.repo, ["add", "."]);
+  git(f.repo, ["commit", "-qm", "Embed runtime"]);
+  NodeFS.writeFileSync(NodePath.join(f.repo, "native.swift"), "native host edit");
+  NodeFS.writeFileSync(NodePath.join(f.repo, "native-new.swift"), "native host addition");
+  NodeAssert.equal(audit(runtime, f.manifest).changedFiles, 2);
+  NodeFS.writeFileSync(NodePath.join(runtime, "unknown.txt"), "runtime drift");
+  NodeAssert.throws(() => audit(runtime, f.manifest), /Unregistered upstream patch: unknown.txt/);
+  NodeFS.rmSync(NodePath.join(runtime, "unknown.txt"));
+  NodeFS.unlinkSync(NodePath.join(runtime, "proof.txt"));
+  NodeAssert.throws(() => audit(runtime, f.manifest), /Missing focused proof/);
+  NodeAssert.throws(() => rehearse({ repository: runtime }), /Extract the agent-runtime subtree/);
+});

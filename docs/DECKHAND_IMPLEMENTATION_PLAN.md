@@ -1,5 +1,7 @@
 # Deckhand + Cinderdeck: full implementation plan
 
+> Shipping direction updated 2026-10-04: Cinderdeck is one app in one repository. The harness is included under `agent-runtime/` and embedded in the Cinderdeck bundle. Historical instructions below about a separate Deckhand product/repository are superseded by [the unified build and maintenance workflow](UNIFIED_APP.md). Feature acceptance gates remain applicable; standalone harness tooling is for development and upstream maintenance.
+
 Status: implementation plan; no harness integration has been implemented by this document.
 
 Prepared October 2, 2026. This plan covers the complete product represented by the three approved concept screens, including production behavior, persistence, recovery, packaging, and validation. The early integration slice is a milestone, not the final deliverable.
