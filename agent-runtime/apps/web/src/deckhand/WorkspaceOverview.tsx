@@ -32,6 +32,7 @@ import {
   savedWorkspaceMatches,
 } from "./workspaceNavigation";
 import { SessionList } from "./SessionList";
+import { useSessionActions } from "./useSessionActions";
 import { formatDayAwareTimestamp } from "../timestampFormat";
 import { useClientSettings } from "../hooks/useSettings";
 import { WorkspaceFilters } from "./WorkspaceFilters";
@@ -122,6 +123,7 @@ function ConnectedWorkspace({
   environments: ReturnType<typeof useEnvironments>["environments"];
   selectEnvironment: (id: EnvironmentId | null) => void;
 }) {
+  const sessionActions = useSessionActions(environmentId);
   const timestampFormat = useClientSettings((settings) => settings.timestampFormat);
   const search = useSearch({ from: "/_chat/workspaces" });
   const navigate = useNavigate();
@@ -652,6 +654,7 @@ function ConnectedWorkspace({
         </nav>
       </ProductNavigation>
       <main className={styles["dh-main"]} aria-labelledby="dh-title">
+        {sessionActions.renameDialog}
         <header className={styles["dh-header"]}>
           <div>
             <div className={styles["dh-eyebrow"]}>
@@ -1131,6 +1134,7 @@ function ConnectedWorkspace({
                 providers={providers}
                 selected={selected?.workspaceID === resource.workspaceID}
                 select={() => setSelectedID(resource.workspaceID)}
+                showSessionMenu={sessionActions.showMenu}
               />
             ))}
           </section>
@@ -1401,6 +1405,7 @@ function LaneRow({
   providers,
   selected,
   select,
+  showSessionMenu,
 }: {
   environmentId: EnvironmentId;
   resource: Resource;
@@ -1412,6 +1417,7 @@ function LaneRow({
   providers: ReadonlyArray<{ instanceId: string; displayName: string }>;
   selected: boolean;
   select: () => void;
+  showSessionMenu: ReturnType<typeof useSessionActions>["showMenu"];
 }) {
   const sessions = summary?.sessions ?? [];
   const prs = [
@@ -1477,6 +1483,16 @@ function LaneRow({
               to="/$environmentId/$threadId"
               params={buildThreadRouteParams({ environmentId, threadId: session.binding.threadId })}
               className={styles["dh-row-agent"]}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                void showSessionMenu(session, { x: event.clientX, y: event.clientY }, !unavailable);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+                event.preventDefault();
+                const bounds = event.currentTarget.getBoundingClientRect();
+                void showSessionMenu(session, { x: bounds.left, y: bounds.bottom }, !unavailable);
+              }}
             >
               <strong>{session.title}</strong>
               <span

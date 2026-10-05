@@ -10,9 +10,11 @@ import {
 } from "@t3tools/contracts";
 import * as Contracts from "@t3tools/contracts/deckhand";
 import * as Effect from "effect/Effect";
+import * as DateTime from "effect/DateTime";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
@@ -31,6 +33,10 @@ const decodeCheckout = Schema.decodeUnknownEffect(Contracts.CheckoutBinding);
 const decodeFeature = Schema.decodeUnknownEffect(Contracts.Feature);
 const decodeSession = Schema.decodeUnknownEffect(Contracts.SessionBinding);
 const seed = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  yield* sql`CREATE TABLE IF NOT EXISTS orchestration_v2_projection_threads (
+    thread_id TEXT PRIMARY KEY, deleted_at TEXT
+  )`;
   const store = yield* Relationships.Relationships;
   const workspace = yield* decodeWorkspace({
     id: "workspace",
@@ -173,6 +179,61 @@ const source = () => {
   return { state, layer };
 };
 describe("managed session provider projection", () => {
+  it.effect(
+    "removes deleted sessions before pagination and overview counts while keeping archives restorable",
+    () =>
+      Effect.gen(function* () {
+        const f = source();
+        yield* Effect.gen(function* () {
+          yield* seed;
+          const sql = yield* SqlClient.SqlClient;
+          const store = yield* Relationships.Relationships;
+          const original = yield* store.session("session");
+          for (let index = 1; index <= 20; index++) {
+            yield* store.putSession(
+              {
+                ...original,
+                id: Contracts.SessionBindingId.make(`deleted-${index}`),
+                threadId: ThreadId.make(`deleted-thread-${index}`),
+              },
+              null,
+            );
+            yield* sql`INSERT INTO orchestration_v2_projection_threads VALUES (${`deleted-thread-${index}`}, '2026-10-05')`;
+          }
+          f.state.shell = {
+            ...f.state.shell!,
+            archivedAt: DateTime.makeUnsafe("2026-10-05T00:00:00Z"),
+          };
+          const service = yield* ManagedSessions.ManagedSessions;
+          const rows = yield* service.list({ ...scope, limit: 1 });
+          assert.equal(rows.length, 1);
+          assert.equal(rows[0]!.binding.id, original.id);
+          assert.isTrue(rows[0]!.archived);
+          const overview = yield* service.contexts({
+            installationID: scope.installationID,
+            contexts: [{ workspaceID: scope.workspaceID, generation: scope.generation }],
+          });
+          assert.equal(overview[0]!.total, 1);
+          assert.equal(overview[0]!.sessions[0]!.binding.id, original.id);
+          yield* sql`INSERT INTO orchestration_v2_projection_threads VALUES (${threadId}, '2026-10-05')`;
+          assert.deepEqual(yield* service.list(scope), []);
+          const [selected] = yield* service
+            .subscribeThread({
+              ...scope,
+              sessionID: original.id,
+              threadID: original.threadId,
+              checkoutID: original.checkoutId,
+            })
+            .pipe(Stream.take(1), Stream.runCollect);
+          assert.isNull(selected);
+          const empty = yield* service.contexts({
+            installationID: scope.installationID,
+            contexts: [{ workspaceID: scope.workspaceID, generation: scope.generation }],
+          });
+          assert.equal(empty[0]!.total, 0);
+        }).pipe(Effect.provide(f.layer()));
+      }).pipe(Effect.provide(baseLayer)),
+  );
   it.effect(
     "projects the 21st saved agent exactly while retaining a bounded sibling list and refusing mismatched bindings",
     () =>

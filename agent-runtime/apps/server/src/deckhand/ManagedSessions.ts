@@ -215,6 +215,8 @@ const make = Effect.gen(function* () {
       JOIN deckhand_current_checkouts c ON c.origin_id = s.checkout_id
       JOIN deckhand_workspaces w ON w.id = c.workspace_id
       WHERE c.workspace_id = w.id AND w.environment_id = ${input.installationID} AND w.backend = 'cinderdeck'
+        AND NOT EXISTS (SELECT 1 FROM orchestration_v2_projection_threads t
+          WHERE t.thread_id = s.thread_id AND t.deleted_at IS NOT NULL)
         AND json_extract(c.record_json, '$.nativeGeneration') = ${input.generation}
         AND COALESCE(json_extract(c.record_json, '$.laneId'), w.owner_id) = ${input.workspaceID}
       ORDER BY s.rowid DESC LIMIT ${input.limit} OFFSET ${input.offset ?? 0}`;
@@ -246,6 +248,8 @@ const make = Effect.gen(function* () {
         WHERE s.id = ${input.sessionID} AND s.thread_id = ${input.threadID}
           AND s.checkout_id = ${input.checkoutID}
           AND w.environment_id = ${input.installationID} AND w.backend = 'cinderdeck'
+          AND NOT EXISTS (SELECT 1 FROM orchestration_v2_projection_threads t
+            WHERE t.thread_id = s.thread_id AND t.deleted_at IS NOT NULL)
           AND json_extract(c.record_json, '$.nativeGeneration') = ${input.generation}
           AND COALESCE(json_extract(c.record_json, '$.laneId'), w.owner_id) = ${input.workspaceID}
         LIMIT 1`;
@@ -319,6 +323,8 @@ const make = Effect.gen(function* () {
         FROM deckhand_sessions s JOIN deckhand_features f ON f.id = s.feature_id
         JOIN deckhand_current_checkouts c ON c.origin_id = s.checkout_id JOIN deckhand_workspaces w ON w.id = c.workspace_id
         WHERE w.environment_id = ${input.installationID} AND w.backend = 'cinderdeck'
+          AND NOT EXISTS (SELECT 1 FROM orchestration_v2_projection_threads t
+            WHERE t.thread_id = s.thread_id AND t.deleted_at IS NOT NULL)
           AND EXISTS (SELECT 1 FROM json_each(${targets}) t
             WHERE json_extract(t.value, '$.workspaceID') = COALESCE(json_extract(c.record_json, '$.laneId'), w.owner_id)
               AND json_extract(t.value, '$.generation') = json_extract(c.record_json, '$.nativeGeneration'))

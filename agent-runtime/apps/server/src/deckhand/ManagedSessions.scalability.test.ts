@@ -42,6 +42,9 @@ const encodeExternal = Schema.encodeEffect(
 );
 const seed = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+  yield* sql`CREATE TABLE IF NOT EXISTS orchestration_v2_projection_threads (
+    thread_id TEXT PRIMARY KEY, deleted_at TEXT
+  )`;
   const workspaces = yield* decodeWorkspaces(
     Array.from({ length: 100 }, (_, index) => ({
       id: `workspace-${index}`,

@@ -13,6 +13,7 @@ import { useEnvironmentQuery } from "../state/query";
 import { useThreadShell } from "../state/entities";
 import { useAgentObservation } from "./useAgentObservation";
 import { agentExecutionLabel, agentProviderLabel } from "./agentPresentation";
+import { useSessionActions } from "./useSessionActions";
 import styles from "./sessions.module.css";
 const EMPTY_PROVIDERS: ReadonlyArray<{
   readonly instanceId: string;
@@ -54,6 +55,7 @@ function ScopedSessionList({
   showExternal = true,
   compact = false,
 }: SessionListProps) {
+  const { showMenu, renameDialog } = useSessionActions(environmentId);
   const [page, setPage] = useState<{ offset: number; previousIDs: ReadonlyArray<string> }>({
     offset: 0,
     previousIDs: [],
@@ -176,6 +178,20 @@ function ScopedSessionList({
       })}
       aria-current={selectedThreadId === session.binding.threadId ? "page" : undefined}
       className={styles.session}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        void showMenu(
+          session,
+          { x: event.clientX, y: event.clientY },
+          !rowStale && !rowUnavailable,
+        );
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+        event.preventDefault();
+        const bounds = event.currentTarget.getBoundingClientRect();
+        void showMenu(session, { x: bounds.left, y: bounds.bottom }, !rowStale && !rowUnavailable);
+      }}
     >
       <div className={styles.sessionIdentity}>
         <span className={styles.provider}>
@@ -270,6 +286,7 @@ function ScopedSessionList({
   );
   return (
     <>
+      {renameDialog}
       <section
         className={compact ? `${styles.roster} ${styles.compact}` : styles.roster}
         aria-label="Managed agent sessions"

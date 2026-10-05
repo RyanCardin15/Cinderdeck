@@ -94,6 +94,9 @@ vi.mock("./SessionList", () => ({
     <p>Saved sessions for {workspaceID}</p>
   ),
 }));
+vi.mock("./useSessionActions", () => ({
+  useSessionActions: () => ({ showMenu: vi.fn(), renameDialog: null }),
+}));
 vi.mock("./SessionLauncher", () => ({
   SessionLauncher: ({ enabled, creation }: { enabled: boolean; creation?: unknown }) =>
     creation ? null : <button disabled={!enabled}>Launch selected agent</button>,

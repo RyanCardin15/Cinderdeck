@@ -10,12 +10,57 @@ import * as Option from "effect/Option";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 
 const transport = vi.hoisted(() => ({ phase: "connected" }));
+const controls = vi.hoisted(() => ({
+  show: vi.fn(),
+  confirm: vi.fn(),
+  navigate: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn(),
+  archive: vi.fn(),
+  restore: vi.fn(),
+  unread: vi.fn(),
+  pin: vi.fn(),
+  unpin: vi.fn(),
+  shell: { runtime: null, pinnedAt: null as string | null },
+}));
+vi.mock("../localApi", () => ({
+  readLocalApi: () => ({
+    contextMenu: { show: controls.show },
+    dialogs: { confirm: controls.confirm },
+  }),
+}));
+vi.mock("../hooks/useThreadActions", () => ({
+  useThreadActions: () => ({
+    deleteThread: controls.delete,
+    archiveThread: controls.archive,
+    unarchiveThread: controls.restore,
+    markThreadUnread: controls.unread,
+    pinThread: controls.pin,
+    confirmAndUnpinThread: controls.unpin,
+  }),
+}));
+vi.mock("../hooks/useSettings", () => ({
+  useClientSettings: (select: (settings: object) => unknown) =>
+    select({ confirmThreadArchive: true, confirmThreadDelete: true }),
+}));
+vi.mock("../state/entities", () => ({
+  useThreadShell: () => null,
+  readThreadShell: () => controls.shell,
+  readEnvironmentSupportsPinning: () => true,
+}));
+vi.mock("../state/threads", () => ({ threadEnvironment: { updateMetadata: {} } }));
+vi.mock("../state/use-atom-command", () => ({ useAtomCommand: () => controls.update }));
 vi.mock("../state/environments", () => ({
   useEnvironment: () => ({ connection: { phase: transport.phase } }),
 }));
 vi.mock("./ExternalSessionList", () => ({ ExternalSessionList: () => null }));
 vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children }: { children: ReactNode }) => <a href="#conversation">{children}</a>,
+  useNavigate: () => controls.navigate,
+  Link: ({ children, ...props }: { children: ReactNode }) => (
+    <a {...props} href="#conversation">
+      {children}
+    </a>
+  ),
 }));
 const queries = new Map<
   string,
@@ -82,11 +127,105 @@ const render = async (generation = 3) =>
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   transport.phase = "connected";
+  vi.clearAllMocks();
+  controls.show.mockResolvedValue(null);
+  controls.confirm.mockResolvedValue(true);
+  for (const command of [
+    controls.delete,
+    controls.archive,
+    controls.restore,
+    controls.update,
+    controls.pin,
+    controls.unpin,
+  ])
+    command.mockResolvedValue({ _tag: "Success", value: undefined });
+  controls.shell.pinnedAt = null;
   queries.clear();
   registry = AtomRegistry.make({ defaultIdleTTL: 400 });
   element = document.createElement("div");
   document.body.append(element);
   root = createRoot(element);
+});
+
+const openMenu = async (action: string | null, keyboard = false) => {
+  controls.show.mockResolvedValueOnce(action);
+  const row = element.querySelector("a")!;
+  await act(async () =>
+    row.dispatchEvent(
+      keyboard
+        ? new KeyboardEvent("keydown", {
+            bubbles: true,
+            cancelable: true,
+            key: "F10",
+            shiftKey: true,
+          })
+        : new MouseEvent("contextmenu", {
+            bubbles: true,
+            cancelable: true,
+            clientX: 45,
+            clientY: 60,
+          }),
+    ),
+  );
+};
+it("deletes the clicked conversation in its execution environment after confirmation", async () => {
+  await render();
+  await act(async () => registry.set(resultAtom(), AsyncResult.success([session])));
+  await openMenu("delete");
+  expect(controls.confirm).toHaveBeenCalledWith(expect.stringContaining("Current review"), {
+    variant: "destructive",
+  });
+  expect(controls.delete).toHaveBeenCalledWith({ environmentId, threadId: "thread" });
+  expect(controls.navigate).not.toHaveBeenCalled();
+  controls.confirm.mockResolvedValueOnce(false);
+  await openMenu("delete");
+  expect(controls.delete).toHaveBeenCalledTimes(1);
+});
+it("supports keyboard menus, archiving and restoring the same saved session", async () => {
+  await render();
+  await act(async () => registry.set(resultAtom(), AsyncResult.success([session])));
+  await openMenu("archive", true);
+  expect(controls.archive).toHaveBeenCalledWith({ environmentId, threadId: "thread" });
+  await act(async () =>
+    registry.set(resultAtom(), AsyncResult.success([{ ...session, archived: true }])),
+  );
+  await openMenu("unarchive");
+  expect(controls.restore).toHaveBeenCalledWith({ environmentId, threadId: "thread" });
+});
+it("keeps disconnected rows navigable and prevents stale destructive actions", async () => {
+  await render();
+  await act(async () => registry.set(resultAtom(), AsyncResult.success([session])));
+  transport.phase = "reconnecting";
+  await render();
+  await openMenu("delete");
+  expect(controls.delete).not.toHaveBeenCalled();
+  expect(controls.confirm).not.toHaveBeenCalled();
+  await openMenu("open");
+  expect(controls.navigate).toHaveBeenCalledWith(
+    expect.objectContaining({ params: expect.any(Object) }),
+  );
+});
+it("renames without leaving the roster and sends the trimmed title to the exact thread", async () => {
+  await render();
+  await act(async () => registry.set(resultAtom(), AsyncResult.success([session])));
+  await openMenu("rename");
+  const input = document.querySelector<HTMLInputElement>('[role="dialog"] input')!;
+  expect(input.value).toBe("Current review");
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+      input,
+      "  Renamed review  ",
+    );
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () =>
+    input.closest("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+  );
+  expect(controls.update).toHaveBeenCalledWith({
+    environmentId,
+    input: { threadId: "thread", title: "Renamed review" },
+  });
+  expect(controls.navigate).not.toHaveBeenCalled();
 });
 afterEach(async () => {
   await act(async () => root.unmount());
