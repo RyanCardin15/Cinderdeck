@@ -132,6 +132,11 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
     "browser",
     "browser",
   ),
+  deckhand_debug_open: tool(
+    ["Open", "Opening", "Opened", "an external Mac app"],
+    "browser",
+    "browser",
+  ),
   deckhand_debug_attach: tool(
     ["Attach", "Attaching", "Attached", "an external debugger"],
     "browser",

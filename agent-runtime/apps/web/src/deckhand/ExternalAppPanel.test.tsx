@@ -2,13 +2,14 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@cinderdeck/contracts";
-import { scopeThreadRef } from "@cinderdeck/client-runtime/environment";
+import { scopeThreadRef, scopedThreadKey } from "@cinderdeck/client-runtime/environment";
 import type { DebugSession, DebugTarget } from "@cinderdeck/contracts/deckhand/externalDebugRpc";
 import { EXCEL_EXTERNAL_APP } from "@cinderdeck/contracts/deckhand/externalAppPreferences";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 
 type Request = { environmentId: string; input: Record<string, unknown> };
 const mocks = vi.hoisted(() => ({
+  open: vi.fn<(request: Request) => Promise<unknown>>(),
   discover: vi.fn<(request: Request) => Promise<unknown>>(),
   attach: vi.fn<(request: Request) => Promise<unknown>>(),
   sessions: vi.fn<(request: Request) => Promise<unknown>>(),
@@ -20,6 +21,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("./externalDebugState", () => ({
   discoverDebugTargets: "discover",
+  openDebugApp: "open",
   attachDebugTarget: "attach",
   listDebugSessions: "sessions",
   detachDebugSession: "detach",
@@ -27,7 +29,7 @@ vi.mock("./externalDebugState", () => ({
   runDebugCommand: "run",
 }));
 vi.mock("../state/use-atom-command", () => ({
-  useAtomCommand: (name: "discover" | "attach" | "sessions" | "detach" | "read" | "run") =>
+  useAtomCommand: (name: "open" | "discover" | "attach" | "sessions" | "detach" | "read" | "run") =>
     mocks[name],
 }));
 vi.mock("../state/environments", () => ({
@@ -46,8 +48,8 @@ vi.mock("../hooks/useSettings", async () => {
     usePrimarySettingsAvailable: () => true,
     useClearScopedSettings: () => () => {},
     useProjectSettingsOverride: () => undefined,
-    useClientSettings: () =>
-      useSyncExternalStore(
+    useClientSettings: (select?: (settings: typeof mocks.settings) => unknown) => {
+      const settings = useSyncExternalStore(
         (listener) => {
           mocks.listeners.add(listener);
           return () => {
@@ -55,13 +57,17 @@ vi.mock("../hooks/useSettings", async () => {
           };
         },
         () => mocks.settings,
-      ),
+      );
+      return select ? select(settings) : settings;
+    },
     useUpdateClientSettings: () => (patch: typeof mocks.settings) => {
       mocks.settings = { ...mocks.settings, ...patch };
       for (const listener of mocks.listeners) listener();
     },
   };
 });
+import { agentAppBindings, useAgentExternalApps } from "./useAgentExternalApps";
+import { useRightPanelStore } from "../rightPanelStore";
 import { ExternalAppPanel } from "./ExternalAppPanel";
 import { ExternalAppsSettings } from "../components/settings/ExternalAppsSettings";
 import { externalAppBindingKey, useExternalAppSessions } from "./externalAppSessions";
@@ -89,8 +95,9 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   mocks.settings = { externalAppProfiles: [{ ...EXCEL_EXTERNAL_APP, enabled: true }] };
-  for (const key of ["discover", "attach", "sessions", "detach", "read", "run"] as const)
+  for (const key of ["open", "discover", "attach", "sessions", "detach", "read", "run"] as const)
     mocks[key].mockReset();
+  mocks.open.mockResolvedValue(success({ targets: [app], session: session(app) }));
   mocks.discover.mockResolvedValue(success([app, inspector]));
   mocks.sessions.mockResolvedValue(success([]));
   mocks.attach.mockImplementation(async ({ input }) =>
@@ -158,7 +165,7 @@ const tick = () =>
   });
 
 it("reveals configuration only after enabling Excel and supports a custom app", async () => {
-  mocks.settings = { externalAppProfiles: [EXCEL_EXTERNAL_APP] };
+  mocks.settings = { externalAppProfiles: [{ ...EXCEL_EXTERNAL_APP, enabled: false }] };
   await act(async () => root.render(<ExternalAppsSettings />));
   expect(element.querySelector('[aria-label="Application filter for Excel"]')).toBeNull();
   await click("Enable Excel");
@@ -261,7 +268,7 @@ it.each(["disabled", "closed"])("cleans up a late attachment when its app is %s"
   await click("Connect selected windows");
   if (mode === "closed") await act(async () => root.render(<div>Closed</div>));
   else {
-    mocks.settings = { externalAppProfiles: [EXCEL_EXTERNAL_APP] };
+    mocks.settings = { externalAppProfiles: [{ ...EXCEL_EXTERNAL_APP, enabled: false }] };
     await panel();
   }
   await act(async () => resolve(success(session(app))));
@@ -351,9 +358,7 @@ it("gates native input, translates image coordinates, and revokes input when vie
   } as DOMRect);
   const imagePress = (type: "mousedown" | "mouseup") =>
     act(async () =>
-      image.dispatchEvent(
-        new MouseEvent(type, { bubbles: true, clientX: 110, clientY: 120 }),
-      ),
+      image.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX: 110, clientY: 120 })),
     );
   await imagePress("mousedown");
   await imagePress("mouseup");
@@ -420,7 +425,6 @@ it("does not overlap native reads while a frame request is pending", async () =>
   expect(element.querySelector("img")?.getAttribute("src")).toBe("data:image/jpeg;base64,bmV3");
 });
 
-
 it("expands inside the app and collapses when the session panel is hidden", async () => {
   await pick();
   await click("Connect selected windows");
@@ -429,10 +433,165 @@ it("expands inside the app and collapses when the session panel is hidden", asyn
   const expanded = document.body.querySelector('section[data-expanded="true"]');
   expect(expanded).not.toBeNull();
   expect(element.contains(expanded)).toBe(false);
-  const collapse = expanded!.querySelector<HTMLButtonElement>('[aria-label="Collapse Web Inspector"]')!;
+  const collapse = expanded!.querySelector<HTMLButtonElement>(
+    '[aria-label="Collapse Web Inspector"]',
+  )!;
   await act(async () => collapse.click());
   expect(document.body.querySelector('section[data-expanded="true"]')).toBeNull();
   await click("Expand Web Inspector");
   await panel(ref, false);
   expect(document.body.querySelector('section[data-expanded="true"]')).toBeNull();
+});
+
+it("opens Excel from its thread panel and reuses the returned attachment", async () => {
+  await panel();
+  await click("Open Excel on Test Mac");
+  expect(mocks.open).toHaveBeenCalledWith({
+    environmentId: "local",
+    input: { bundleId: "com.microsoft.Excel", threadId: ref.threadId },
+  });
+  expect(mocks.attach).not.toHaveBeenCalled();
+  expect(
+    useExternalAppSessions.getState().bindings[externalAppBindingKey(ref, "excel")]?.sessions,
+  ).toEqual([session(app)]);
+  expect(element.querySelector("img")).not.toBeNull();
+});
+it("requires a deliberate window choice when opening multiple workbooks", async () => {
+  const second = { ...app, id: "mac:10:3", title: "Second workbook" };
+  mocks.open.mockResolvedValue(success({ targets: [app, second], session: null }));
+  await panel();
+  await click("Open Excel on Test Mac");
+  expect(mocks.attach).not.toHaveBeenCalled();
+  expect(element.querySelector<HTMLSelectElement>('[aria-label="Application window"]')?.value).toBe(
+    "",
+  );
+  await change("Application window", second.id);
+  await click("Connect selected windows");
+  expect(mocks.attach).toHaveBeenCalledWith({
+    environmentId: "local",
+    input: { endpoint: "mac://local", targetId: second.id, threadId: ref.threadId },
+  });
+});
+it("retains action history across changed-frame polling without storing typed text", async () => {
+  let sequence = 0;
+  mocks.read.mockImplementation(async () =>
+    success({
+      session: session(app),
+      events:
+        sequence === 0
+          ? [
+              {
+                sequence: 1,
+                at: "2026-10-05T12:00:00Z",
+                kind: "action",
+                level: "info",
+                text: "type accepted",
+              },
+            ]
+          : [],
+      nextSequence: ++sequence,
+      dropped: 0,
+      image: "aGVsbG8=",
+      imageUnavailable: false,
+      callFrames: [],
+    }),
+  );
+  await panel();
+  await click("Open Excel on Test Mac");
+  await tick();
+  expect(element.querySelector('[aria-label="Application action history"]')?.textContent).toContain(
+    "type accepted",
+  );
+});
+
+function AgentSync({ threadRef = ref }: { threadRef?: ScopedThreadRef }) {
+  useAgentExternalApps(threadRef);
+  return <div>Agent session</div>;
+}
+it("shows an agent-attached window beside chat without duplicating capture or reopening a closed tab", async () => {
+  const open = vi.spyOn(useRightPanelStore.getState(), "openProactive");
+  mocks.sessions.mockResolvedValue(success([]));
+  await act(async () => root.render(<AgentSync />));
+  mocks.sessions.mockResolvedValue(success([session(app), session(inspector)]));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1500);
+  });
+  expect(open).toHaveBeenCalledWith(
+    ref,
+    { id: "external-app:excel", kind: "external-app", profileId: "excel", title: "Excel" },
+    expect.any(Number),
+  );
+  expect(
+    useExternalAppSessions.getState().bindings[externalAppBindingKey(ref, "excel")]?.sessions,
+  ).toEqual([session(app), session(inspector)]);
+  expect(mocks.attach).not.toHaveBeenCalled();
+  const calls = open.mock.calls.length;
+  useExternalAppSessions.getState().remove(externalAppBindingKey(ref, "excel"));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(3000);
+  });
+  expect(open).toHaveBeenCalledTimes(calls);
+  open.mockRestore();
+});
+it("groups an Inspector with one workbook and preserves separate workbook tabs", () => {
+  const profiles = [{ ...EXCEL_EXTERNAL_APP, enabled: true }];
+  expect(agentAppBindings(ref, [session(inspector), session(app)], profiles)[0]?.sessions).toEqual([
+    session(app),
+    session(inspector),
+  ]);
+  const second = session({ ...app, id: "mac:10:3", title: "Second workbook" });
+  const groups = agentAppBindings(ref, [session(app), second, session(inspector)], profiles);
+  expect(groups).toHaveLength(3);
+  expect(groups.every((group) => group.sessions.length === 1)).toBe(true);
+  expect(agentAppBindings(other, [session(app)], profiles)[0]?.threadRef).toBe(other);
+  expect(
+    agentAppBindings(ref, [session(app)], [{ ...EXCEL_EXTERNAL_APP, enabled: false }]),
+  ).toEqual([]);
+});
+it("keeps an unknown agent app in its own transient panel", async () => {
+  const custom = session({ ...app, app: "Test host", url: "com.example.fixture" });
+  mocks.sessions.mockResolvedValue(success([custom]));
+  await act(async () => root.render(<AgentSync />));
+  const profileId = `session-${custom.sessionId}`;
+  expect(
+    useExternalAppSessions.getState().bindings[externalAppBindingKey(ref, profileId)]?.sessions,
+  ).toEqual([custom]);
+  await act(async () =>
+    root.render(<ExternalAppPanel threadRef={ref} profileId={profileId} visible />),
+  );
+  expect(element.querySelector("img")).not.toBeNull();
+});
+it("drops late agent discovery when switching conversations", async () => {
+  let finish!: (value: unknown) => void;
+  mocks.sessions.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await act(async () => root.render(<AgentSync />));
+  mocks.sessions.mockResolvedValue(success([]));
+  await act(async () => root.render(<AgentSync threadRef={other} />));
+  await act(async () => finish(success([session(app)])));
+  expect(useExternalAppSessions.getState().bindings).toEqual({});
+});
+
+it("keeps a newer user panel choice when an agent attachment arrives late", async () => {
+  let finish!: (value: unknown) => void;
+  mocks.sessions.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await act(async () => root.render(<AgentSync />));
+  useRightPanelStore.getState().open(ref, "diff");
+  await act(async () => finish(success([session(app)])));
+  // The store retains the user's active diff; capture is recoverable from the app chooser.
+  expect(useRightPanelStore.getState().byThreadKey[scopedThreadKey(ref)]?.activeSurfaceId).toBe(
+    "diff",
+  );
+  expect(
+    useExternalAppSessions.getState().bindings[externalAppBindingKey(ref, "excel")],
+  ).toBeDefined();
 });

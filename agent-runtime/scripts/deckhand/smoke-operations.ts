@@ -1,5 +1,5 @@
-// @effect-diagnostics globalFetchInEffect:off - Isolated wire smoke fixtures use native HTTP/timer APIs and JSON error reports.
-// @effect-diagnostics preferSchemaOverJson:off - Isolated wire smoke fixtures use native HTTP/timer APIs and JSON error reports.
+// @effect-diagnostics globalFetchInEffect:off - Explicit isolated acceptance-test boundary.
+// @effect-diagnostics preferSchemaOverJson:off - Explicit isolated acceptance-test boundary.
 // @effect-diagnostics nodeBuiltinImport:off - This opt-in smoke test owns only its isolated fixture lanes.
 import * as NodeAssert from "node:assert/strict";
 import * as NodeCrypto from "node:crypto";

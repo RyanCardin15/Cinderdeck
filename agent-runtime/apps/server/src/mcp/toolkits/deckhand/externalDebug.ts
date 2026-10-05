@@ -23,7 +23,7 @@ export const ExternalDebugToolkit = Toolkit.make(
     parameters: Schema.Struct({ includeDisconnected: Schema.optionalKey(Schema.Boolean) }),
     success: Schema.Array(C.DebugSession),
     description:
-      "List transient external debugging sessions owned by this calling thread, including disconnected sessions. Use their saved sessionId to continue diagnostics or detach.",
+      "List transient external debugging sessions owned by this calling thread, including disconnected sessions. UI and agent share the same attachments. Use their sessionId to read screenshots/diagnostics and control the app or detach.",
   }).annotate(Tool.Readonly, true),
   Tool.make("deckhand_debug_targets", {
     ...base,
@@ -32,19 +32,26 @@ export const ExternalDebugToolkit = Toolkit.make(
     description:
       "Discover native windows on the selected Mac with endpoint mac://local. For Excel choose its window and its undocked Web Inspector as separate explicit targets. A loopback HTTP endpoint discovers CDP runtimes. Never opens or navigates an app.",
   }).annotate(Tool.Readonly, true),
+  Tool.make("deckhand_debug_open", {
+    ...base,
+    parameters: C.DebugOpen,
+    success: C.DebugOpenResult,
+    description:
+      "Open an installed Mac application by exact bundleId (Excel: com.microsoft.Excel) on this thread's computer. When one window is available, attach it to the calling thread and show it beside chat; multiple windows require deckhand_debug_attach with a chosen targetId. Reuses an existing attachment. Needs Screen Recording; does not open a document or change sign-in. After opening use deckhand_debug_read for screenshots, deckhand_debug_command for input, and read again to verify actual results. Only launch when requested by the user.",
+  }).annotate(Tool.Readonly, false),
   Tool.make("deckhand_debug_attach", {
     ...base,
     parameters: C.DebugAttach,
     success: C.DebugSession,
     description:
-      "Attach to an explicitly chosen existing runtime, preserving Excel/Office/Graph context. Sessions belong to this calling thread. Never launch Excel, replace authentication, or navigate the add-in. Detach when finished.",
+      "Attach to an explicitly chosen existing runtime, preserving Excel/Office/Graph context. Sessions belong to this calling thread. Use deckhand_debug_open to launch an app when requested. Attachment preserves authentication and navigation. Detach when finished.",
   }).annotate(Tool.Readonly, false),
   Tool.make("deckhand_debug_read", {
     ...base,
     parameters: C.DebugRead,
     success: C.DebugSnapshot,
     description:
-      "Read at most 100 diagnostics after a sequence cursor and an optional JPEG image from this calling thread's selected window. Pass imageSequence as afterImage for changed frames only. Native Mac debugging appears in the real Web Inspector image; structured call frames apply to CDP. Headers/cookies/bodies are excluded. Output may contain app data.",
+      "Read at most 100 diagnostics after a sequence cursor and an optional JPEG image from this calling thread's selected window. Pass imageSequence as afterImage for changed frames only. Native Mac debugging appears in the real Web Inspector image; structured call frames apply to CDP. Headers/cookies/bodies are excluded. Includes timestamped native input outcomes; accepted input is not proof of UI success, so verify with a subsequent screenshot. Output may contain app data.",
   }).annotate(Tool.Readonly, true),
   Tool.make("deckhand_debug_command", {
     ...base,
@@ -70,6 +77,7 @@ const actor = (mutation: boolean) =>
     Effect.map(({ scope }) => Service.externalDebugThreadOwner(scope.threadId)),
   );
 export const ExternalDebugStandardToolkit = Toolkit.make(
+  ExternalDebugToolkit.tools.deckhand_debug_open,
   ExternalDebugToolkit.tools.deckhand_debug_targets,
   ExternalDebugToolkit.tools.deckhand_debug_sessions,
   ExternalDebugToolkit.tools.deckhand_debug_attach,
@@ -89,6 +97,11 @@ export const ExternalDebugHandlersLive = ExternalDebugToolkit.toLayer({
     Effect.gen(function* () {
       yield* readCaller();
       return yield* (yield* Service.ExternalDebug).discover(input);
+    }).pipe(Effect.mapError(deckhandFailure)),
+  deckhand_debug_open: (input) =>
+    Effect.gen(function* () {
+      const owner = yield* actor(true);
+      return yield* (yield* Service.ExternalDebug).open(owner, input);
     }).pipe(Effect.mapError(deckhandFailure)),
   deckhand_debug_attach: (input) =>
     Effect.gen(function* () {

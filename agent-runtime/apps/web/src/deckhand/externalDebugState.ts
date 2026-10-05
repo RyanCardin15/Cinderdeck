@@ -25,3 +25,8 @@ export const detachDebugSession = createEnvironmentRpcCommand(connectionAtomRunt
   label: "external-debug:detach",
   tag: EXTERNAL_DEBUG_METHODS.detach,
 });
+
+export const openDebugApp = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "external-debug:open",
+  tag: EXTERNAL_DEBUG_METHODS.open,
+});

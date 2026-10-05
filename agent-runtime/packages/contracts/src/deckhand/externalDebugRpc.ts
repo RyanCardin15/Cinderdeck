@@ -8,6 +8,7 @@ const id = TrimmedNonEmptyString.check(Schema.isMaxLength(240));
 const text = Schema.String.check(Schema.isMaxLength(8192));
 export const EXTERNAL_DEBUG_METHODS = {
   discover: "deckhand.externalDebug.discover",
+  open: "deckhand.externalDebug.open",
   attach: "deckhand.externalDebug.attach",
   sessions: "deckhand.externalDebug.sessions",
   read: "deckhand.externalDebug.read",
@@ -24,6 +25,13 @@ export const DebugTarget = Schema.Struct({
   app: Schema.optionalKey(text),
 });
 export type DebugTarget = typeof DebugTarget.Type;
+export const DebugOpen = Schema.Struct({
+  bundleId: Schema.String.check(
+    Schema.isPattern(/^[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$/),
+    Schema.isMaxLength(240),
+  ),
+});
+export type DebugOpen = typeof DebugOpen.Type;
 export const DebugAttach = Schema.Struct({ ...DebugEndpoint.fields, targetId: id });
 export type DebugAttach = typeof DebugAttach.Type;
 export const DebugIdentity = Schema.Struct({ sessionId: id });
@@ -36,6 +44,11 @@ export const DebugSession = Schema.Struct({
   paused: Schema.Boolean,
 });
 export type DebugSession = typeof DebugSession.Type;
+export const DebugOpenResult = Schema.Struct({
+  targets: Schema.Array(DebugTarget).check(Schema.isMaxLength(200)),
+  session: Schema.NullOr(DebugSession),
+});
+export type DebugOpenResult = typeof DebugOpenResult.Type;
 export const DebugEvent = Schema.Struct({
   sequence: NonNegativeInt,
   at: Schema.String,
@@ -46,6 +59,7 @@ export const DebugEvent = Schema.Struct({
     "navigation",
     "debugger",
     "connection",
+    "action",
   ]),
   level: Schema.Literals(["info", "warning", "error"]),
   text,
@@ -79,7 +93,7 @@ export const DebugSnapshot = Schema.Struct({
 });
 export type DebugSnapshot = typeof DebugSnapshot.Type;
 // A deliberately small command surface. No navigation, cookies, headers, request bodies,
-// process launching or arbitrary CDP method forwarding across the app's authenticated RPC.
+// arbitrary CDP forwarding. App launch is a separate exact bundle-ID operation.
 export const DebugCommand = Schema.Struct({
   ...DebugIdentity.fields,
   action: Schema.Literals([
@@ -138,6 +152,12 @@ export const DebugCommand = Schema.Struct({
       "v",
       "x",
       "z",
+      "n",
+      "o",
+      "s",
+      "w",
+      "f",
+      "p",
     ]),
   ),
   modifiers: Schema.optionalKey(
@@ -168,11 +188,14 @@ export class ExternalDebugError extends Schema.TaggedError<ExternalDebugError>()
       "screen_permission",
       "accessibility_permission",
       "native_unavailable",
+      "app_missing",
     ]),
   },
 ) {
   override get message() {
     const messages: Record<ExternalDebugError["reason"], string> = {
+      app_missing:
+        "This app is not installed on the session Mac. Check its bundle ID or choose an existing window.",
       invalid_endpoint:
         "Use mac://local for windows on the selected Mac, or an explicit loopback HTTP endpoint for a CDP runtime.",
       unavailable:
@@ -184,12 +207,12 @@ export class ExternalDebugError extends Schema.TaggedError<ExternalDebugError>()
       disconnected: "The window or runtime disconnected. Open it again and refresh targets.",
       timeout: "The runtime did not respond before the deadline. It may be paused or unavailable.",
       unsupported: "This runtime does not support that debugging feature.",
-      invalid_command: "This command needs a valid expression, source, or breakpoint location.",
+      invalid_command: "This command needs valid input for the selected window or debugger.",
       too_large: "The runtime response exceeded the debugging size limit.",
       screen_permission:
-        "Allow Screen & System Audio Recording for the harness or its server host in System Settings, then find windows again. No audio is captured.",
+        "Allow Screen & System Audio Recording for Cinderdeck or its server host in System Settings, then find windows again. No audio is captured.",
       accessibility_permission:
-        "Allow Accessibility for the harness or its server host in System Settings to control the selected window. Viewing does not require Accessibility.",
+        "Allow Accessibility for Cinderdeck or its server host in System Settings to control the selected window. Viewing does not require Accessibility.",
       native_unavailable:
         "The Mac window helper is unavailable. Use the Mac desktop build, or build the helper with node scripts/deckhand/build-mac-external-debug.mjs for development. Requires macOS 14 or newer.",
     };
@@ -202,6 +225,11 @@ export const ExternalDebugRpcGroup = RpcGroup.make(
   Rpc.make(EXTERNAL_DEBUG_METHODS.discover, {
     payload: DebugEndpoint,
     success: Schema.Array(DebugTarget),
+    error,
+  }),
+  Rpc.make(EXTERNAL_DEBUG_METHODS.open, {
+    payload: Schema.Struct({ ...DebugOpen.fields, ...threadScope }),
+    success: DebugOpenResult,
     error,
   }),
   Rpc.make(EXTERNAL_DEBUG_METHODS.attach, {

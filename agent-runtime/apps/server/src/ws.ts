@@ -1951,6 +1951,19 @@ const makeWsRpcLayer = (
               () => new ExternalDebugError({ reason: "unavailable" }),
             ),
           ),
+        [EXTERNAL_DEBUG_METHODS.open]: (input) =>
+          observeRpcEffect(
+            EXTERNAL_DEBUG_METHODS.open,
+            withActor(
+              input.threadId ? { type: "thread", threadId: input.threadId } : undefined,
+              (actor) =>
+                externalDebug.open(
+                  input.threadId ? ExternalDebug.externalDebugThreadOwner(input.threadId) : actor,
+                  input,
+                ),
+              () => new ExternalDebugError({ reason: "unavailable" }),
+            ),
+          ),
         [EXTERNAL_DEBUG_METHODS.attach]: (input) =>
           observeRpcEffect(
             EXTERNAL_DEBUG_METHODS.attach,

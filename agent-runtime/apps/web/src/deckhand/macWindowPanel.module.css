@@ -204,3 +204,30 @@
   font-size: 11px;
   width: 70px;
 }
+
+.actionHistory {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+}
+.actionHistory summary {
+  cursor: pointer;
+}
+.actionHistory p {
+  color: var(--muted-foreground);
+}
+.actionHistory ol {
+  max-height: 180px;
+  overflow: auto;
+  padding-left: 18px;
+}
+.actionHistory li {
+  margin: 5px 0;
+  overflow-wrap: anywhere;
+}
+.actionHistory time {
+  color: var(--muted-foreground);
+}
+.actionHistory li[data-level="error"] {
+  color: #c04431;
+}

@@ -132,7 +132,10 @@ interface RightPanelStoreState {
    */
   openProactive: (
     ref: ScopedThreadRef,
-    surface: Extract<RightPanelSurface, { kind: "diff" | "pull-request" | "pull-requests" }>,
+    surface: Extract<
+      RightPanelSurface,
+      { kind: "diff" | "pull-request" | "pull-requests" | "external-app" }
+    >,
     expectedUserActionRevision: number,
   ) => boolean;
   open: (
@@ -614,7 +617,17 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
             return state;
           }
           opened = true;
-          return automaticUpdate(state, threadKey, (current) => upsertSurface(current, surface));
+          return automaticUpdate(state, threadKey, (current) =>
+            upsertSurface(
+              surface.kind === "external-app"
+                ? {
+                    ...current,
+                    surfaces: current.surfaces.filter((entry) => entry.id !== "external-app:new"),
+                  }
+                : current,
+              surface,
+            ),
+          );
         });
         return opened;
       },

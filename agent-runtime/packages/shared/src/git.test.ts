@@ -277,7 +277,7 @@ describe("applyGitStatusStreamEvent", () => {
 });
 
 describe("formatGeneratedBranchName", () => {
-  it.each(["t3code", "cinderdeck/"])("joins static prefix %s with one slash", (prefix) => {
+  it.each(["cinderdeck", "cinderdeck/"])("joins static prefix %s with one slash", (prefix) => {
     expect(
       formatGeneratedBranchName("Add Search", { mode: "static", prefix, instructions: "" }),
     ).toBe("cinderdeck/add-search");

@@ -7,8 +7,12 @@ const decodeSettings = Schema.decodeUnknownSync(ClientSettingsSchema);
 const decodePatch = Schema.decodeUnknownSync(ClientSettingsPatch);
 const encodeSettings = Schema.encodeSync(ClientSettingsSchema);
 
-it("keeps Excel disabled for legacy preferences and persists enabled configuration", () => {
+it("offers Excel by default and preserves an explicit disabled preference", () => {
   expect(decodeSettings({}).externalAppProfiles).toEqual([EXCEL_EXTERNAL_APP]);
+  expect(
+    decodeSettings({ externalAppProfiles: [{ ...EXCEL_EXTERNAL_APP, enabled: false }] })
+      .externalAppProfiles[0]?.enabled,
+  ).toBe(false);
   const patch = {
     externalAppProfiles: [
       { ...EXCEL_EXTERNAL_APP, enabled: true, includeInspector: false, applicationFilter: "Excel" },

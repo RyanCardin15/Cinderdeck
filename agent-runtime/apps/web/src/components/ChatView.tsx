@@ -1,4 +1,5 @@
 import { useChatDefaultsStore } from "../deckhand/chatDefaults";
+import { useAgentExternalApps } from "../deckhand/useAgentExternalApps";
 import { useDisconnectExternalApps } from "../deckhand/externalAppSessions";
 import { LaneSessionContext, useLaneSessionContext } from "../deckhand/LaneSessionContext";
 import { ChatCanvas } from "./chat/ChatCanvas";
@@ -2176,6 +2177,7 @@ export default function ChatView(props: ChatViewProps) {
     () => (activeThread ? scopeThreadRef(activeThread.environmentId, activeThread.id) : null),
     [activeThread],
   );
+  useAgentExternalApps(isServerThread ? activeThreadRef : null);
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
   const laneSessionContext = useLaneSessionContext(isServerThread ? activeThreadRef : null);
   const previewPanelInlineSize = usePreviewPanelInlineSize(undefined, {

@@ -13,7 +13,7 @@ export type ExternalAppProfile = typeof ExternalAppProfile.Type;
 export const EXCEL_EXTERNAL_APP: ExternalAppProfile = {
   id: "excel",
   name: "Excel",
-  enabled: false,
+  enabled: true,
   applicationFilter: "com.microsoft.Excel",
   includeInspector: true,
   inspectorFilter: "Web Inspector",

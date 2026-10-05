@@ -24,12 +24,16 @@ function fixture(native = false) {
   const target = {
     id: "excel-pane",
     title: "Excel add-in",
-    url: "https://localhost:3000/taskpane.html",
+    url: native ? "com.microsoft.Excel" : "https://localhost:3000/taskpane.html",
     type: native ? "mac-window" : "page",
     socketURL: "ws://127.0.0.1:9222/devtools/page/excel-pane",
   };
+  let targets = [target];
   const transport: DebugTransport = {
-    discover: async () => [target],
+    open: async (bundleId) => {
+      calls.push({ method: "Native.open", params: { bundleId } });
+    },
+    discover: async () => targets,
     connect: async (_target, event, disconnected) => {
       emit = event;
       disconnect = disconnected;
@@ -70,6 +74,9 @@ function fixture(native = false) {
       Layer.provide(Layer.succeed(Service.ExternalDebugTransport, transport)),
     ),
     target,
+    targets: (value: typeof targets) => {
+      targets = value;
+    },
   };
 }
 const withService = (
@@ -82,6 +89,82 @@ const withService = (
     }).pipe(Effect.provide(f.layer)),
   );
 describe("external runtime debugging", () => {
+  it.effect("opens an exact app identity and reuses the thread's single attachment", () => {
+    const f = fixture(true);
+    return withService(f, (service) =>
+      Effect.gen(function* () {
+        const opened = yield* service.open("owner", { bundleId: "com.microsoft.Excel" });
+        expect(opened.session?.target.id).toBe(f.target.id);
+        const repeated = yield* service.open("owner", { bundleId: "com.microsoft.Excel" });
+        expect(repeated.session?.sessionId).toBe(opened.session?.sessionId);
+        expect(yield* service.sessions("owner")).toHaveLength(1);
+        expect(yield* service.sessions("other")).toEqual([]);
+        expect(
+          (yield* service.open("other", { bundleId: "com.microsoft.Excel" }).pipe(Effect.result))
+            ._tag,
+        ).toBe("Failure");
+        expect(f.calls.every((call) => call.method === "Native.open")).toBe(true);
+      }),
+    );
+  });
+  it.effect("opens without guessing among multiple workbooks, and rejects executable paths", () => {
+    const f = fixture(true);
+    f.targets([f.target, { ...f.target, id: "second-workbook" }]);
+    return withService(f, (service) =>
+      Effect.gen(function* () {
+        expect(yield* service.open("owner", { bundleId: "com.microsoft.Excel" })).toMatchObject({
+          session: null,
+        });
+        expect(yield* service.sessions("owner")).toEqual([]);
+        const before = f.calls.length;
+        for (const bundleId of [
+          "/Applications/Excel.app",
+          "https://example.test",
+          "com.microsoft.Excel;touch /tmp/test",
+          "Excel",
+        ])
+          expect((yield* service.open("owner", { bundleId }).pipe(Effect.result))._tag).toBe(
+            "Failure",
+          );
+        expect(f.calls).toHaveLength(before);
+      }),
+    );
+  });
+  it.effect("records accepted and failed native actions without copying typed app data", () => {
+    const f = fixture(true);
+    return withService(f, (service) =>
+      Effect.gen(function* () {
+        const session = yield* service.attach("owner", {
+          endpoint: "mac://local",
+          targetId: f.target.id,
+        });
+        yield* service.command("owner", {
+          sessionId: session.sessionId,
+          action: "type",
+          text: "private workbook data",
+        });
+        yield* service.command("owner", {
+          sessionId: session.sessionId,
+          action: "key",
+          key: "n",
+          modifiers: ["meta"],
+        });
+        f.fail("Native.click");
+        yield* service
+          .command("owner", { sessionId: session.sessionId, action: "click", x: 0.2, y: 0.3 })
+          .pipe(Effect.result);
+        const snapshot = yield* service.read("owner", {
+          sessionId: session.sessionId,
+          after: 0,
+          screenshot: false,
+        });
+        expect(
+          snapshot.events.filter((event) => event.kind === "action").map((event) => event.text),
+        ).toEqual(["type accepted", "key accepted (meta+n)", "click failed: unsupported"]);
+        expect(JSON.stringify(snapshot)).not.toContain("private workbook data");
+      }),
+    );
+  });
   it("accepts only an explicit loopback root, without credentials or redirects", () => {
     expect(debugEndpoint("mac://local").href).toBe("mac://local/");
     expect(debugEndpoint("http://localhost:9222").href).toBe("http://127.0.0.1:9222/");

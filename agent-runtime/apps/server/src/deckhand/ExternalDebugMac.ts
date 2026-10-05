@@ -24,6 +24,7 @@ function failure(value: unknown) {
     case "accessibility_permission":
     case "target_missing":
     case "invalid_command":
+    case "app_missing":
       return fail(value);
     default:
       return fail("unavailable");
@@ -181,6 +182,10 @@ async function getBroker() {
   return value;
 }
 export const macWindowTransport: DebugTransport = {
+  open: async (bundleId) => {
+    const connection = await getBroker();
+    await connection.call("Native.open", { bundleId });
+  },
   discover: async () => {
     const connection = await getBroker();
     const value = await connection.call("Native.list");

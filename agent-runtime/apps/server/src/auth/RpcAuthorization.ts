@@ -1,4 +1,7 @@
-import { GITHUB_WORKSPACE_METHOD, type GitHubWorkspaceInput } from "@cinderdeck/contracts/deckhand/gitHubWorkspace";
+import {
+  GITHUB_WORKSPACE_METHOD,
+  type GitHubWorkspaceInput,
+} from "@cinderdeck/contracts/deckhand/gitHubWorkspace";
 import { EXTERNAL_DEBUG_METHODS } from "@cinderdeck/contracts/deckhand/externalDebugRpc";
 import { OWNERSHIP_METHODS } from "@cinderdeck/contracts/deckhand/ownershipRpc";
 import { HISTORY_IMPORT_METHODS } from "@cinderdeck/contracts/deckhand/historyImportRpc";
@@ -41,6 +44,7 @@ export const RPC_REQUIRED_SCOPES = {
   [EXTERNAL_DEBUG_METHODS.discover]: AuthOrchestrationReadScope,
   [EXTERNAL_DEBUG_METHODS.sessions]: AuthOrchestrationReadScope,
   [EXTERNAL_DEBUG_METHODS.read]: AuthOrchestrationReadScope,
+  [EXTERNAL_DEBUG_METHODS.open]: AuthOrchestrationOperateScope,
   [EXTERNAL_DEBUG_METHODS.attach]: AuthOrchestrationOperateScope,
   [EXTERNAL_DEBUG_METHODS.command]: AuthOrchestrationOperateScope,
   [EXTERNAL_DEBUG_METHODS.detach]: AuthOrchestrationOperateScope,
@@ -319,9 +323,11 @@ export const requiredScopeForDeviceList = (input: DeviceListInput): AuthEnvironm
     ? AuthOrchestrationOperateScope
     : AuthOrchestrationReadScope;
 
-
-export function requiredScopeForGitHubWorkspace(input: Pick<GitHubWorkspaceInput, "action">): AuthEnvironmentScope {
+export function requiredScopeForGitHubWorkspace(
+  input: Pick<GitHubWorkspaceInput, "action">,
+): AuthEnvironmentScope {
   if (input.action === "review") return AuthReviewWriteScope;
   return ["select", "upsert", "delete", "reorder", "workspace", "star"].includes(input.action)
-    ? AuthOrchestrationOperateScope : AuthOrchestrationReadScope;
+    ? AuthOrchestrationOperateScope
+    : AuthOrchestrationReadScope;
 }

@@ -49,7 +49,7 @@ describe("parseChangeRequestUrl", () => {
   it("reads a GitLab merge request on any host, nested groups and all", () => {
     expect(
       parseChangeRequestUrl("https://gitlab.com/t3tools/platform/cinderdeck/-/merge_requests/42"),
-    ).toEqual({ host: "gitlab.com", repository: "t3tools/platform/t3code", number: 42 });
+    ).toEqual({ host: "gitlab.com", repository: "t3tools/platform/cinderdeck", number: 42 });
     expect(parseChangeRequestUrl("https://code.acme.test/team/project/-/merge_requests/9")).toEqual(
       { host: "code.acme.test", repository: "team/project", number: 9 },
     );
@@ -63,21 +63,29 @@ describe("parseChangeRequestUrl", () => {
     });
     expect(
       parseChangeRequestUrl("https://dev.azure.com/acme/platform/_git/cinderdeck/pullrequest/17"),
-    ).toEqual({ host: "dev.azure.com", repository: "acme/platform/_git/t3code", number: 17 });
+    ).toEqual({ host: "dev.azure.com", repository: "acme/platform/_git/cinderdeck", number: 17 });
     expect(
-      parseChangeRequestUrl("https://acme.visualstudio.com/platform/_git/cinderdeck/pullrequest/17"),
-    ).toEqual({ host: "acme.visualstudio.com", repository: "platform/_git/t3code", number: 17 });
+      parseChangeRequestUrl(
+        "https://acme.visualstudio.com/platform/_git/cinderdeck/pullrequest/17",
+      ),
+    ).toEqual({
+      host: "acme.visualstudio.com",
+      repository: "platform/_git/cinderdeck",
+      number: 17,
+    });
   });
 
   it("survives trailing segments, a trailing slash and a query string", () => {
-    expect(parseChangeRequestUrl("https://github.com/t3tools/cinderdeck/pull/123/files?w=1")).toEqual({
+    expect(
+      parseChangeRequestUrl("https://github.com/t3tools/cinderdeck/pull/123/files?w=1"),
+    ).toEqual({
       host: "github.com",
-      repository: "t3tools/t3code",
+      repository: "t3tools/cinderdeck",
       number: 123,
     });
     expect(parseChangeRequestUrl("https://github.com/t3tools/cinderdeck/pull/123/")).toEqual({
       host: "github.com",
-      repository: "t3tools/t3code",
+      repository: "t3tools/cinderdeck",
       number: 123,
     });
   });

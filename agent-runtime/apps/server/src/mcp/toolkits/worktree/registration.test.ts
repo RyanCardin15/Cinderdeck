@@ -140,6 +140,7 @@ it.effect("production mcp layer lists worktree tools over http", () =>
         "object",
       );
       for (const name of [
+        "deckhand_debug_open",
         "deckhand_debug_targets",
         "deckhand_debug_sessions",
         "deckhand_debug_attach",

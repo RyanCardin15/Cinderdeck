@@ -5,7 +5,7 @@ import type { ScopedThreadRef } from "@cinderdeck/contracts";
 import type { DebugSession, DebugTarget } from "@cinderdeck/contracts/deckhand/externalDebugRpc";
 import { resolveExternalAppProfiles } from "@cinderdeck/contracts/deckhand/externalAppPreferences";
 import { squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
-import { useClientSettings } from "../hooks/useSettings";
+import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings";
 import { useAtomCommand } from "../state/use-atom-command";
 import { useEnvironments } from "../state/environments";
 import { useRightPanelStore } from "../rightPanelStore";
@@ -16,6 +16,7 @@ import {
   detachDebugSession,
   discoverDebugTargets,
   listDebugSessions,
+  openDebugApp,
 } from "./externalDebugState";
 import {
   externalAppBindingKey,
@@ -45,7 +46,21 @@ export function ExternalAppPanel({
 }) {
   const settings = useClientSettings();
   const profiles = resolveExternalAppProfiles(settings.externalAppProfiles);
-  const profile = profiles.find((entry) => entry.id === profileId);
+  const update = useUpdateClientSettings();
+  const bindingKey = externalAppBindingKey(threadRef, profileId ?? "new");
+  const active = useExternalAppSessions((state) => state.bindings[bindingKey]?.sessions ?? empty);
+  const profile =
+    profiles.find((entry) => entry.id === profileId) ??
+    (profileId?.startsWith("session-") && active[0]
+      ? {
+          id: profileId,
+          name: active[0].target.app || "Mac app",
+          enabled: true,
+          applicationFilter: active[0].target.url,
+          includeInspector: false,
+          inspectorFilter: "Web Inspector",
+        }
+      : undefined);
   const { environments } = useEnvironments();
   const computer =
     environments.find((entry) => entry.environmentId === threadRef.environmentId)?.label ??
@@ -54,9 +69,8 @@ export function ExternalAppPanel({
   const attach = useAtomCommand(attachDebugTarget, { reportFailure: false });
   const detach = useAtomCommand(detachDebugSession, { reportFailure: false });
   const list = useAtomCommand(listDebugSessions, { reportFailure: false });
+  const open = useAtomCommand(openDebugApp, { reportFailure: false });
   const disconnect = useDisconnectExternalApps();
-  const bindingKey = externalAppBindingKey(threadRef, profileId ?? "new");
-  const active = useExternalAppSessions((state) => state.bindings[bindingKey]?.sessions ?? empty);
   const occupied = useExternalAppSessions((state) => state.bindings);
   const usedElsewhere = (sessionId: string, bindings = occupied) =>
     Object.values(bindings).some(
@@ -129,6 +143,44 @@ export function ExternalAppPanel({
       setInspectorId((previous) =>
         result.value.some((target) => target.id === previous) ? previous : "",
       );
+    } catch (cause) {
+      if (mounted.current) setError(failureText(cause));
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  }
+  async function openApp() {
+    if (!profile || busy) return;
+    setBusy(true);
+    setError("");
+    const epoch = connectionEpoch.current;
+    try {
+      const result = await open({
+        environmentId: threadRef.environmentId,
+        input: { bundleId: profile.applicationFilter, threadId: threadRef.threadId },
+      });
+      if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+      if (!mounted.current || connectionEpoch.current !== epoch) {
+        if (result.value.session)
+          await detach({
+            environmentId: threadRef.environmentId,
+            input: { sessionId: result.value.session.sessionId, threadId: threadRef.threadId },
+          });
+        return;
+      }
+      setTargets(result.value.targets);
+      if (result.value.session) {
+        const session = result.value.session;
+        if (usedElsewhere(session.sessionId, useExternalAppSessions.getState().bindings))
+          throw new Error("This window is open in another external app tab.");
+        useExternalAppSessions
+          .getState()
+          .bind({ threadRef, profileId: profile.id, sessions: [session] });
+      } else if (!result.value.targets.length) {
+        setError(
+          "The app opened but has no capturable window yet. Open a test document on its Mac, then choose Find windows.",
+        );
+      }
     } catch (cause) {
       if (mounted.current) setError(failureText(cause));
     } finally {
@@ -212,20 +264,24 @@ export function ExternalAppPanel({
         <h2>External apps</h2>
         <p>Open a Mac app alongside this conversation.</p>
         <div className={styles.appList}>
-          {profiles
-            .filter((entry) => entry.enabled)
-            .map((entry) => (
-              <button
-                key={entry.id}
-                onClick={() =>
-                  useRightPanelStore.getState().openExternalApp(threadRef, entry.id, entry.name)
-                }
-              >
-                <AppWindowIcon size={18} />
-                <span>{entry.name || "Mac app"}</span>
-                <span>Open →</span>
-              </button>
-            ))}
+          {profiles.map((entry) => (
+            <button
+              key={entry.id}
+              onClick={() => {
+                if (!entry.enabled)
+                  update({
+                    externalAppProfiles: profiles.map((profile) =>
+                      profile.id === entry.id ? { ...profile, enabled: true } : profile,
+                    ),
+                  });
+                useRightPanelStore.getState().openExternalApp(threadRef, entry.id, entry.name);
+              }}
+            >
+              <AppWindowIcon size={18} />
+              <span>{entry.name || "Mac app"}</span>
+              <span>{entry.enabled ? "Open →" : "Enable & open →"}</span>
+            </button>
+          ))}
         </div>
         {!profiles.some((entry) => entry.enabled) ? (
           <p>Enable Excel or add a Mac app in Settings to get started.</p>
@@ -341,9 +397,20 @@ export function ExternalAppPanel({
             </div>
           </div>
           <p className={styles.description}>
-            Your app stays in its real Mac host. Its live view and debugger stay beside this
-            conversation.
+            Open the app here or ask your agent to open it. You and the agent share the selected
+            window, screenshots, controls, and action history.
           </p>
+          {/^[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$/.test(profile.applicationFilter) ? (
+            <Button
+              size="sm"
+              disabled={busy}
+              onClick={() => {
+                void openApp();
+              }}
+            >
+              <AppWindowIcon /> Open {profile.name} on {computer}
+            </Button>
+          ) : null}
           <Button
             variant="outline"
             size="sm"
@@ -460,7 +527,8 @@ export function ExternalAppPanel({
             </div>
           ) : null}
           <p className={styles.footnote}>
-            Viewing requires Screen Recording on {computer}. Controls are off until you enable them.
+            Viewing requires Screen Recording on {computer}. Your agent can control this window
+            using Accessibility; Control window enables your own mouse and keyboard.
           </p>
         </div>
       )}

@@ -9,7 +9,7 @@ import ScreenCaptureKit
 // we capture and control explicitly selected native windows rather than connecting
 // to Apple's private remote-inspector Mach service or injecting into Office.
 enum Failure: String, Error {
-  case screen_permission, accessibility_permission, target_missing, invalid_command, unavailable
+  case screen_permission, accessibility_permission, target_missing, invalid_command, unavailable, app_missing
 }
 func emit(_ value: Any) {
   guard JSONSerialization.isValidJSONObject(value),
@@ -312,6 +312,7 @@ final class Frames: NSObject, SCStreamOutput, SCStreamDelegate {
         "Enter": 36, "Tab": 48, "Escape": 53, "Backspace": 51, "Delete": 117, "ArrowLeft": 123,
         "ArrowRight": 124, "ArrowDown": 125, "ArrowUp": 126, "Home": 115, "End": 119, "PageUp": 116,
         "PageDown": 121, "F6": 97, "F7": 98, "F8": 100, "a": 0, "c": 8, "v": 9, "x": 7, "z": 6,
+        "n": 45, "o": 31, "s": 1, "w": 13, "f": 3, "p": 35,
       ]
       guard let key = params["key"] as? String, let code = keys[key] else {
         throw Failure.invalid_command
@@ -351,6 +352,25 @@ final class Frames: NSObject, SCStreamOutput, SCStreamDelegate {
         let targetID = params["targetId"] as? String ?? ""
         let result: [String: Any]
         switch method {
+        case "Native.open":
+          // Resolve installed apps by identity, never arbitrary executable paths or URLs.
+          guard let bundleID = params["bundleId"] as? String, bundleID.utf8.count <= 240,
+            bundleID.range(of: "^[a-zA-Z0-9-]+(\\.[a-zA-Z0-9-]+)+$", options: .regularExpression) != nil
+          else { throw Failure.invalid_command }
+          guard CGPreflightScreenCaptureAccess() else { throw Failure.screen_permission }
+          guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            throw Failure.app_missing
+          }
+          let configuration = NSWorkspace.OpenConfiguration()
+          configuration.createsNewApplicationInstance = false
+          configuration.activates = true
+          _ = try await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+          let deadline = ContinuousClock.now.advanced(by: .seconds(4))
+          while !(try await windows()).contains(where: { $0.owningApplication?.bundleIdentifier == bundleID })
+            && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(200))
+          }
+          result = ["opened": true]
         case "Native.list":
           result = [
             "targets": try await windows().prefix(200).map(row),

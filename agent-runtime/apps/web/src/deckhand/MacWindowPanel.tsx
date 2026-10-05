@@ -4,6 +4,7 @@ import { AppWindowIcon, MaximizeIcon, MinimizeIcon } from "lucide-react";
 import type { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
 import type {
   DebugCommand,
+  DebugEvent,
   DebugSession,
   DebugSnapshot,
 } from "@cinderdeck/contracts/deckhand/externalDebugRpc";
@@ -48,6 +49,8 @@ export function MacWindowPanel({
 }) {
   const read = useAtomCommand(readDebugSession, { reportFailure: false });
   const run = useAtomCommand(runDebugCommand, { reportFailure: false });
+  const [events, setEvents] = useState<readonly DebugEvent[]>([]);
+  const [dropped, setDropped] = useState(0);
   const [snapshot, setSnapshot] = useState<DebugSnapshot | null>(null);
   const [live, setLive] = useState(true),
     [controls, setControls] = useState(false),
@@ -109,6 +112,9 @@ export function MacWindowPanel({
         }
         setError("");
         cursor.current = result.value.nextSequence;
+        if (result.value.events.length)
+          setEvents((previous) => [...previous, ...result.value.events].slice(-200));
+        if (result.value.dropped) setDropped((previous) => previous + result.value.dropped);
         imageSequence.current = result.value.imageSequence;
         setSnapshot((previous) => ({
           ...result.value,
@@ -198,7 +204,11 @@ export function MacWindowPanel({
   }
   const state = error ? "unavailable" : (snapshot?.session.state ?? session.state);
   const content = (
-    <section className={styles.macPanel} data-embedded={compact} data-expanded={expanded && visible}>
+    <section
+      className={styles.macPanel}
+      data-embedded={compact}
+      data-expanded={expanded && visible}
+    >
       <div className={styles.panelHeader}>
         <strong>{label}</strong>
         <span data-state={state}>{state}</span>
@@ -301,7 +311,8 @@ export function MacWindowPanel({
                   "F7",
                   "F8",
                 ].includes(event.key) ||
-                (event.metaKey && ["a", "c", "x", "z"].includes(event.key))
+                (event.metaKey &&
+                  ["a", "c", "x", "z", "n", "o", "s", "w", "f", "p"].includes(event.key))
               ) {
                 event.preventDefault();
                 send({
@@ -375,6 +386,24 @@ export function MacWindowPanel({
           Return
         </button>
       </div>
+      <details className={styles.actionHistory}>
+        <summary>Action history & diagnostics ({events.length})</summary>
+        <p>
+          Shared with your agent. Verify accepted input against the live view. App console output is
+          available in Web Inspector.
+        </p>
+        {dropped ? <p>{dropped} earlier events expired.</p> : null}
+        <ol aria-label={`${label} action history`}>
+          {events.map((event) => (
+            <li key={event.sequence} data-level={event.level}>
+              <time dateTime={event.at}>{event.at.slice(11, 19)} UTC</time>{" "}
+              <span>
+                {event.kind}: {event.text}
+              </span>
+            </li>
+          ))}
+        </ol>
+      </details>
       <p className={styles.previewNote}>
         {session.target.app} · {session.target.title}
         <br />

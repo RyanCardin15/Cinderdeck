@@ -1,6 +1,6 @@
-// @effect-diagnostics globalFetch:off - Isolated wire smoke fixtures use native HTTP/timer APIs and JSON error reports.
-// @effect-diagnostics globalTimers:off - Isolated wire smoke fixtures use native HTTP/timer APIs and JSON error reports.
-// @effect-diagnostics preferSchemaOverJson:off - Isolated wire smoke fixtures use native HTTP/timer APIs and JSON error reports.
+// @effect-diagnostics globalFetch:off - Explicit isolated acceptance-test boundary.
+// @effect-diagnostics globalTimers:off - Explicit isolated acceptance-test boundary.
+// @effect-diagnostics preferSchemaOverJson:off - Explicit isolated acceptance-test boundary.
 // @effect-diagnostics nodeBuiltinImport:off - Explicit isolated native/Git smoke verification.
 import * as Schema from "effect/Schema";
 import * as Rpc from "../../packages/contracts/src/deckhand/rpc.ts";

@@ -40,6 +40,7 @@ type Result<A> = Effect.Effect<A, C.ExternalDebugError>;
 export class ExternalDebug extends Context.Service<
   ExternalDebug,
   {
+    readonly open: (actor: string, input: C.DebugOpen) => Result<C.DebugOpenResult>;
     readonly discover: (input: C.DebugEndpoint) => Result<ReadonlyArray<C.DebugTarget>>;
     readonly attach: (actor: string, input: C.DebugAttach) => Result<C.DebugSession>;
     readonly sessions: (actor: string) => Result<ReadonlyArray<C.DebugSession>>;
@@ -440,8 +441,20 @@ const make = Effect.gen(function* () {
                   : [];
         const params: Record<string, unknown> = {};
         for (const field of fields) if (input[field] !== undefined) params[field] = input[field];
-        const result = await call(`Native.${input.action}`, params);
-        return { text: JSON.stringify(result) };
+        try {
+          const result = await call(`Native.${input.action}`, params);
+          // Keep test evidence without copying typed workbook text into the action log.
+          if (input.action !== "permissions")
+            add(
+              session,
+              "action",
+              `${input.action} accepted${input.action === "key" ? ` (${[...(input.modifiers ?? []), input.key].join("+")})` : ""}`,
+            );
+          return { text: JSON.stringify(result) };
+        } catch (cause) {
+          add(session, "action", `${input.action} failed: ${wrap(cause).reason}`, "error");
+          throw cause;
+        }
       }
       if (nativeActions.has(input.action)) throw fail("unsupported");
       let result: unknown;
@@ -523,7 +536,33 @@ const make = Effect.gen(function* () {
       add(session, "debugger", `${input.action} completed`);
       return { text };
     });
+  const open: ExternalDebug["Service"]["open"] = (actor, input) =>
+    Effect.gen(function* () {
+      if (!Schema.is(C.DebugOpen)(input)) return yield* Effect.fail(fail("invalid_command"));
+      if (!transport.open) return yield* Effect.fail(fail("unsupported"));
+      yield* attempt(() => transport.open!(input.bundleId));
+      const targets = (yield* discover({ endpoint: "mac://local" })).filter(
+        (target) => target.url === input.bundleId,
+      );
+      // Multiple workbooks/windows require an explicit choice; never guess.
+      if (targets.length !== 1) return { targets, session: null };
+      const target = targets[0]!;
+      const existing = [...sessions.values()].find(
+        (session) =>
+          session.actor === actor &&
+          session.view.state === "connected" &&
+          session.view.target.id === target.id &&
+          session.view.target.type === "mac-window",
+      );
+      if (existing) {
+        existing.touched = Date.now();
+        return { targets, session: existing.view };
+      }
+      const session = yield* attach(actor, { endpoint: "mac://local", targetId: target.id });
+      return { targets, session };
+    });
   return ExternalDebug.of({
+    open,
     discover,
     attach,
     read,
@@ -546,6 +585,7 @@ export const layer = Layer.effect(ExternalDebug, make);
 export const layerLive = layer.pipe(
   Layer.provide(
     Layer.succeed(ExternalDebugTransport, {
+      open: (bundleId: string) => macWindowTransport.open!(bundleId),
       discover: (endpoint: string) =>
         endpoint.startsWith("mac:")
           ? macWindowTransport.discover(endpoint)

@@ -110,6 +110,7 @@ export interface DebugPeer {
   close(): void;
 }
 export interface DebugTransport {
+  open?(bundleId: string): Promise<void>;
   discover(endpoint: string): Promise<CDPTarget[]>;
   connect(
     target: CDPTarget,

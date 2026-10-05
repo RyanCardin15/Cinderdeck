@@ -1,3 +1,4 @@
+import { EXTERNAL_DEBUG_METHODS } from "@cinderdeck/contracts/deckhand/externalDebugRpc";
 import { OWNERSHIP_METHODS } from "@cinderdeck/contracts/deckhand/ownershipRpc";
 import {
   AuthReviewWriteScope,
@@ -23,6 +24,21 @@ import {
 } from "./RpcAuthorization.ts";
 
 describe("RPC authorization scopes", () => {
+  it("requires operation authority to launch and control external apps", () => {
+    for (const method of [
+      EXTERNAL_DEBUG_METHODS.open,
+      EXTERNAL_DEBUG_METHODS.attach,
+      EXTERNAL_DEBUG_METHODS.command,
+      EXTERNAL_DEBUG_METHODS.detach,
+    ])
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationOperateScope);
+    for (const method of [
+      EXTERNAL_DEBUG_METHODS.discover,
+      EXTERNAL_DEBUG_METHODS.read,
+      EXTERNAL_DEBUG_METHODS.sessions,
+    ])
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationReadScope);
+  });
   it("requires operation authority for ownership submission and recovery", () => {
     for (const method of [OWNERSHIP_METHODS.submit, OWNERSHIP_METHODS.get])
       expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationOperateScope);
@@ -175,6 +191,8 @@ it("requires review scope for GitHub reviews and operate scope for saved queries
   const { requiredScopeForGitHubWorkspace } = await import("./RpcAuthorization.ts");
   expect(requiredScopeForGitHubWorkspace({ action: "review" })).toBe(AuthReviewWriteScope);
   expect(requiredScopeForGitHubWorkspace({ action: "star" })).toBe(AuthOrchestrationOperateScope);
-  expect(requiredScopeForGitHubWorkspace({ action: "preferences" })).toBe(AuthOrchestrationReadScope);
+  expect(requiredScopeForGitHubWorkspace({ action: "preferences" })).toBe(
+    AuthOrchestrationReadScope,
+  );
   expect(requiredScopeForGitHubWorkspace({ action: "select" })).toBe(AuthOrchestrationOperateScope);
 });
