@@ -423,7 +423,7 @@ it("opens an empty chat in the selected checkout without asking for a task or na
   expect(localStorage.getItem(launchKey)).toBeNull();
 });
 
-it("opens a sidebar lane session once under StrictMode with its exact checkout and remembered folder", async () => {
+it("opens a sidebar lane session once under StrictMode with its first configured folder despite an old folder preference", async () => {
   const lane = {
     ...resource,
     workspaceID: "source--feature",
@@ -455,7 +455,7 @@ it("opens a sidebar lane session once under StrictMode with its exact checkout a
       workspaceID: "source--feature",
       generation: 7,
       revision: "lane-revision",
-      repositoryID: "api",
+      repositoryID: "app",
       deferStart: true,
       objective: "",
     }),
@@ -593,7 +593,12 @@ it("replays the exact saved empty chat after an uncertain transport result", asy
   commands.launch.mockResolvedValueOnce(failure("launch_failed"));
   await render(resource, false);
   await click("+ New chat");
-  const original = commands.launch.mock.calls[0]![0].input;
+  // Recover a request made before the folder selector was removed.
+  const original = { ...commands.launch.mock.calls[0]![0].input, repositoryID: "api" };
+  localStorage.setItem(
+    "deckhand:launch:computer:installation:source:1",
+    JSON.stringify(original),
+  );
   expect(
     JSON.parse(localStorage.getItem("deckhand:launch:computer:installation:source:1")!),
   ).toEqual(original);

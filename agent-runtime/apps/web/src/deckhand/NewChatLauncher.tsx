@@ -17,7 +17,7 @@ import { readProjects } from "../state/entities";
 import { resolveProjectSettings } from "@cinderdeck/shared/projectSettings";
 import { resolveDefaultProviderModelSelection } from "../providerInstances";
 import { useComposerDraftStore } from "../composerDraftStore";
-import { resolveChatModes, useChatDefaultsStore } from "./chatDefaults";
+import { resolveChatModes } from "./chatDefaults";
 import {
   inspectSessionLaunch,
   launchSession,
@@ -73,11 +73,9 @@ export function NewChatLauncher({
       : null,
   );
   const [accepted, setAccepted] = useState<Contracts.ManagedLaunchRecord | null>(null);
-  const rememberedRepo = useChatDefaultsStore((state) => state.repositories[scope]);
   const repos = resource.workspace?.repos ?? [];
-  const [repositoryID, setRepositoryID] = useState(
-    repos.find((repo) => repo.id === rememberedRepo)?.id ?? repos[0]?.id ?? "",
-  );
+  // The first configured folder anchors the chat; the server supplies the entire workspace.
+  const repositoryID = repos[0]?.id ?? "";
   const launch = useAtomCommand(launchSession, { reportFailure: false });
   const inspect = useAtomCommand(inspectSessionLaunch, { reportFailure: false });
   const options = useAtomCommand(sessionLaunchOptions, { reportFailure: false });
@@ -222,7 +220,6 @@ export function NewChatLauncher({
         // open retries the same chat, never allocates a second conversation.
         localStorage.setItem(storageKey, encodeDraft(request));
         setSaved(request);
-        useChatDefaultsStore.getState().rememberRepository(scope, repositoryID);
       }
       const result = await launch({ environmentId, input: request });
       if (result._tag === "Success") handleResult(result.value, true);
@@ -278,21 +275,6 @@ export function NewChatLauncher({
         </div>
       ) : null}
       <div className={styles.chatActions}>
-        {repos.length > 1 ? (
-          <select
-            aria-label="Chat starting folder"
-            title="Starting folder; the chat can access all workspace locations"
-            value={repositoryID}
-            disabled={busy || saved !== null || !enabled}
-            onChange={(event) => setRepositoryID(event.target.value)}
-          >
-            {repos.map((repo) => (
-              <option key={repo.id} value={repo.id}>
-                {repo.id}
-              </option>
-            ))}
-          </select>
-        ) : null}
         <button
           type="button"
           className={styles.primary}
