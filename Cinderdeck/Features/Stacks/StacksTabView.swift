@@ -82,7 +82,7 @@ struct StacksTabView: View {
         Button { viewModel.create() } label: { Label("Create workspace", systemImage: "plus") }
           .buttonStyle(StackPillButtonStyle(kind: .primary(.accentColor)))
           .accessibilityIdentifier("stacks.create")
-        Button { viewModel.agentsSheet = true } label: { Label("Connect agents", systemImage: "sparkles") }
+        Button { AgentAccessNavigation.open { viewModel.agentsSheet = true } } label: { Label("Connect agents", systemImage: "sparkles") }
           .buttonStyle(StackPillButtonStyle())
       }
     }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -112,7 +112,7 @@ struct StacksTabView: View {
           Spacer(minLength: 8)
           StackIconButton(systemName: "arrow.triangle.branch", help: "Parallel lanes", size: 28) { viewModel.lanesSheet = true }
           StackIconButton(systemName: "plus", help: "Create workspace", size: 28) { viewModel.create() }
-          StackIconButton(systemName: "sparkles", help: "Agent access", tint: StackPalette.agent, size: 28) { viewModel.agentsSheet = true }
+          StackIconButton(systemName: "sparkles", help: "Agent access", tint: StackPalette.agent, size: 28) { AgentAccessNavigation.open { viewModel.agentsSheet = true } }
           Button { WorkspaceWindowController.shared.show(workspace: viewModel.selectedStackID) } label: { Label("Open Workspaces", systemImage: "arrow.up.forward.app") }
             .buttonStyle(StackPillButtonStyle(compact: true))
             .help("Open workspace services, tasks, and workflows")
@@ -193,7 +193,7 @@ struct StacksTabView: View {
   }
 
   private var agentStatus: some View {
-    Button { viewModel.agentsSheet = true } label: {
+    Button { AgentAccessNavigation.open { viewModel.agentsSheet = true } } label: {
       HStack(spacing: 7) {
         Circle().fill(control.isServing ? StackPalette.color(phase: .ready) : StackPalette.color(phase: .crashed)).frame(width: 6, height: 6)
         VStack(alignment: .leading, spacing: 1) {

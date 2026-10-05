@@ -1,6 +1,6 @@
 import { OwnershipTransitionPanel } from "../../deckhand/OwnershipTransitionPanel";
 import { CinderdeckConnectionPanel } from "../../deckhand/CinderdeckConnectionPanel";
-import { NativeAgentAccessSettings } from "../../deckhand/NativeToolsSettings";
+import { AgentAccessSettings } from "../../deckhand/AgentAccessSettings";
 import { DeviceHostUpdates } from "../device/DeviceHostUpdates";
 import { DeviceToolVersions } from "../device/DeviceToolVersions";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
@@ -1430,6 +1430,7 @@ function BrowserProfilesSetting({ disabled }: { readonly disabled: boolean }) {
 
 export function IntegrationsSettingsPanel() {
   const { environment } = useSettingsScope();
+  const primaryEnvironment = usePrimaryEnvironment();
   // Client-local preview defaults are editable only where the preview exists.
   const previewDefaultsDisabled = !isElectron;
   const previewDefaults = (
@@ -1455,7 +1456,9 @@ export function IntegrationsSettingsPanel() {
           initialEnvironmentId={environment?.environmentId}
         />
       </SettingsSection>
-      <NativeAgentAccessSettings />
+      <AgentAccessSettings
+        environmentId={environment?.environmentId ?? primaryEnvironment?.environmentId ?? null}
+      />
       <OwnershipTransitionPanel />
       <ProjectDefaultsSettings category="integrations" />
       <SettingsSection id="browser" title="Browser">

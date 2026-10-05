@@ -159,7 +159,7 @@ struct StackActionsMenu: View {
       }
       Divider()
       Button("Show log files") { viewModel.openLogFile(stack: file.id, service: nil) }
-      Button("Agent access…") { viewModel.agentsSheet = true }
+      Button("Agent access…") { AgentAccessNavigation.open { viewModel.agentsSheet = true } }
       Button("Refresh shell environment") { viewModel.refreshEnvironment(file.definition) }
       Divider()
       WorkspaceNavigationMenu(file: file, model: viewModel)

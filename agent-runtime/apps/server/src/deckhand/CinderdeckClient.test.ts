@@ -877,3 +877,63 @@ it.effect(
       assert.include(error.detail, "New commits were pushed");
     }).pipe(Effect.scoped, Effect.provide(TestLayer)),
 );
+
+it.effect(
+  "sets up agent access only on peers that advertise it, bound to the connected installation",
+  () =>
+    Effect.gen(function* () {
+      const requests: Array<{ method: string; params: object }> = [];
+      let capabilities = ["agents.setup"];
+      const status = {
+        cli: { installed: true, path: "/Users/me/.local/bin/cinderdeck" },
+        clients: [
+          {
+            id: "claude",
+            name: "Claude Code",
+            mcpConfigured: false,
+            mcpLocation: "claude mcp add --scope user",
+            skills: { state: "missing", detail: "Installs to ~/.claude/skills" },
+          },
+        ],
+        skills: [{ name: "cinderdeck-parallel-lanes", summary: "Run branches side by side." }],
+        claudeMod: { state: "missing", detail: "Installs to ~/.claude/skills" },
+      };
+      const socketPath = yield* peer((request) => {
+        if (request.method === "integration.hello")
+          return { id: request.id, result: { ...hello, capabilities } };
+        requests.push({ method: request.method, params: request.params });
+        return request.method === "integration.agents.status"
+          ? { id: request.id, result: status }
+          : { id: request.id, result: { ok: true, detail: "registered", status } };
+      });
+      const client = yield* CinderdeckClient.CinderdeckClient;
+      const connection = yield* client.connect(socketPath, { channel: "development" });
+
+      const read = yield* client.agentAccess(connection, { action: "status" });
+      assert.equal(read.status.clients[0]?.name, "Claude Code");
+      const applied = yield* client.agentAccess(connection, {
+        action: "mcp",
+        agent: "claude",
+        instructions: true,
+      });
+      assert.equal(applied.detail, "registered");
+      assert.deepEqual(requests, [
+        { method: "integration.agents.status", params: { installationID: "installation" } },
+        {
+          method: "integration.agents.apply",
+          params: {
+            installationID: "installation",
+            action: "mcp",
+            agent: "claude",
+            instructions: true,
+          },
+        },
+      ]);
+
+      capabilities = [];
+      const older = yield* client.connect(socketPath, { channel: "development" });
+      const refused = yield* client.agentAccess(older, { action: "status" }).pipe(Effect.flip);
+      assert.equal(refused.reason, "unsupported_capability");
+      assert.equal(requests.length, 2);
+    }).pipe(Effect.scoped, Effect.provide(TestLayer)),
+);

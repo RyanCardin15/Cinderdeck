@@ -57,6 +57,11 @@ const ICON_PATHS: Record<string, ReadonlyArray<{ tag: string; attrs: Record<stri
     { tag: "line", attrs: { x1: "10", x2: "8", y1: "3", y2: "21" } },
     { tag: "line", attrs: { x1: "16", x2: "14", y1: "3", y2: "21" } },
   ],
+  terminal: [
+    { tag: "path", attrs: { d: "m7 11 2-2-2-2" } },
+    { tag: "path", attrs: { d: "M11 13h4" } },
+    { tag: "rect", attrs: { width: "18", height: "18", x: "3", y: "3", rx: "2", ry: "2" } },
+  ],
   "mail-open": [
     {
       tag: "path",

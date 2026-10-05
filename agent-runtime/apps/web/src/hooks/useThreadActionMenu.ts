@@ -41,6 +41,7 @@ import { useCopyToClipboard } from "./useCopyToClipboard";
 import { useNewThreadHandler } from "./useHandleNewThread";
 import { useClientSettings } from "./useSettings";
 import { useThreadActions } from "./useThreadActions";
+import { useThreadSessionTerminal } from "./useThreadSessionTerminal";
 
 function failureToast(title: string, error: unknown) {
   toastManager.add(
@@ -98,6 +99,7 @@ export function useThreadActionMenu(input: {
     reportFailure: false,
   });
   const handleNewThread = useNewThreadHandler();
+  const threadSessionTerminal = useThreadSessionTerminal();
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
@@ -151,6 +153,8 @@ export function useThreadActionMenu(input: {
           canSnoozeNow: canSnooze(thread, { now: now.toISOString() }),
           isRegeneratingTitle,
           isRunning: !threadRuntimeCanArchive(thread.runtime),
+          canOpenSessionTerminal:
+            thread.activeProviderThreadId !== null && threadSessionTerminal.canOpen(threadRef),
           supports,
           snoozePresets,
         });
@@ -271,6 +275,12 @@ export function useThreadActionMenu(input: {
           case "copy-thread-id":
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
             return;
+          case "open-session-terminal":
+            await threadSessionTerminal.openInTerminal(threadRef);
+            return;
+          case "copy-resume-command":
+            await threadSessionTerminal.copyResumeCommand(threadRef);
+            return;
           case "archive": {
             if (confirmThreadArchive) {
               const confirmed = await settlePromise(() =>
@@ -345,6 +355,7 @@ export function useThreadActionMenu(input: {
       settleThread,
       snoozeThread,
       threadRef,
+      threadSessionTerminal,
       timestampFormat,
       unsettleThread,
       unsnoozeThread,

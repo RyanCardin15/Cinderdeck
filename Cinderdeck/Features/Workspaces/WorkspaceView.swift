@@ -186,7 +186,7 @@ struct WorkspaceView: View {
         Button { model.edit(file) } label: { Image(systemName: "slider.horizontal.3") }
           .help(file.lane == nil ? "Edit workspace" : "Edit source workspace")
           .accessibilityLabel(file.lane == nil ? "Edit workspace" : "Edit source workspace")
-        Button { model.agentsSheet = true } label: { Image(systemName: "sparkles") }
+        Button { AgentAccessNavigation.open { model.agentsSheet = true } } label: { Image(systemName: "sparkles") }
           .help("Connect agents and CLI").accessibilityLabel("Connect agents and CLI")
       }.buttonStyle(DeckButtonStyle())
     }.padding(.bottom, 4)

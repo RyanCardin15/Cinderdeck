@@ -54,7 +54,7 @@ struct StackSettingsView: View {
       HStack {
         Text("Let Cursor, Codex and Claude Code manage workspaces through MCP or the cinderdeck CLI.").font(.caption).foregroundColor(.secondary)
         Spacer()
-        Button("Agent access…") { managesAgents = true }
+        Button("Agent access…") { AgentAccessNavigation.open { managesAgents = true } }
       }
     }
     Section("Workspace logs in screen recordings") {

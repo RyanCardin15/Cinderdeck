@@ -3,6 +3,8 @@ import {
   GitHubWorkspaceInput,
   GitHubWorkspaceResult,
 } from "./gitHubWorkspace.ts";
+export * from "./agentAccess.ts";
+import { AGENT_ACCESS_METHOD, AgentAccessInput, AgentAccessResult } from "./agentAccess.ts";
 import { OwnershipRpcGroup } from "./ownershipRpc.ts";
 import { HistoryImportsRpcGroup } from "./historyImportRpc.ts";
 import { OwnedPreviewRpcGroup } from "./ownedPreviewRpc.ts";
@@ -330,6 +332,11 @@ export const DeckhandRpcGroup = RpcGroup.make(
   Rpc.make(GITHUB_WORKSPACE_METHOD, {
     payload: GitHubWorkspaceInput,
     success: GitHubWorkspaceResult,
+    error: ErrorSchema,
+  }),
+  Rpc.make(AGENT_ACCESS_METHOD, {
+    payload: AgentAccessInput,
+    success: AgentAccessResult,
     error: ErrorSchema,
   }),
   Rpc.make(LINKED_WORK_METHODS.publish, {

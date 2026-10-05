@@ -228,6 +228,9 @@ import {
   TerminalRestartInput,
   TerminalSessionSnapshot,
   TerminalWriteInput,
+  ThreadSessionTerminalError,
+  ThreadSessionTerminalInput,
+  ThreadSessionTerminalResult,
 } from "./terminal.ts";
 import {
   DiscoveredLocalServerList,
@@ -407,6 +410,7 @@ export const WS_METHODS = {
   terminalClear: "terminal.clear",
   terminalRestart: "terminal.restart",
   terminalClose: "terminal.close",
+  terminalOpenThreadSession: "terminal.openThreadSession",
 
   // Preview methods
   previewOpen: "preview.open",
@@ -1337,6 +1341,12 @@ const WsTerminalOpenRpc = Rpc.make(WS_METHODS.terminalOpen, {
   error: Schema.Union([TerminalError, EnvironmentAuthorizationError]),
 });
 
+const WsTerminalOpenThreadSessionRpc = Rpc.make(WS_METHODS.terminalOpenThreadSession, {
+  payload: ThreadSessionTerminalInput,
+  success: ThreadSessionTerminalResult,
+  error: Schema.Union([ThreadSessionTerminalError, EnvironmentAuthorizationError]),
+});
+
 const WsTerminalAttachRpc = Rpc.make(WS_METHODS.terminalAttach, {
   payload: TerminalAttachInput,
   success: TerminalAttachStreamEvent,
@@ -1818,6 +1828,7 @@ export const UpstreamWsRpcGroup = RpcGroup.make(
   WsTerminalClearRpc,
   WsTerminalRestartRpc,
   WsTerminalCloseRpc,
+  WsTerminalOpenThreadSessionRpc,
   WsSubscribeTerminalEventsRpc,
   WsSubscribeTerminalMetadataRpc,
   WsPreviewOpenRpc,
