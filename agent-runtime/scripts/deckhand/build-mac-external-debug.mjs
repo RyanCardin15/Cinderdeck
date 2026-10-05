@@ -11,12 +11,10 @@ const output = NodePath.resolve(
 if (NodeOS.type() !== "Darwin") throw new Error("Build the macOS helper on a Mac.");
 NodeFS.mkdirSync(NodePath.dirname(output), { recursive: true });
 const source = NodePath.resolve(root, "native/mac-external-debug/main.swift");
-const paths = [];
-try {
-  for (const arch of ["arm64", "x86_64"]) {
-    const path = `${output}.${arch}`;
-    paths.push(path);
-    NodeChildProcess.execFileSync(
+const paths = ["arm64", "x86_64"].map((arch) => `${output}.${arch}`);
+const compile = (arch, path) =>
+  new Promise((resolve, reject) => {
+    const child = NodeChildProcess.spawn(
       "/usr/bin/xcrun",
       [
         "swiftc",
@@ -32,7 +30,18 @@ try {
       ],
       { stdio: "inherit" },
     );
-  }
+    child.on("error", reject);
+    child.on("exit", (code, signal) =>
+      code === 0 ? resolve() : reject(new Error(`swiftc ${arch} failed (${signal ?? code}).`)),
+    );
+  });
+try {
+  // Both slices compile at once; neither depends on the other.
+  const results = await Promise.allSettled(
+    ["arm64", "x86_64"].map((arch, index) => compile(arch, paths[index])),
+  );
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure) throw failure.reason;
   NodeChildProcess.execFileSync("/usr/bin/lipo", ["-create", ...paths, "-output", output], {
     stdio: "inherit",
   });
