@@ -24,7 +24,7 @@ struct WorkspaceLinkedWorkView: View {
       if rows.isEmpty {
         VStack(alignment: .leading, spacing: 8) {
           Text("A place for the work behind this workspace").font(.title3.weight(.semibold))
-          Text("Open this workspace in Deckhand and start a connected conversation. Its session, committed heads, and linked artifacts will appear here.")
+          Text("Open this workspace in Cinderdeck and start a connected conversation. Its session, committed heads, and linked artifacts will appear here.")
             .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading).background(DeckStyle.hover, in: RoundedRectangle(cornerRadius: 12))
       } else {
@@ -66,16 +66,16 @@ struct WorkspaceLinkedWorkView: View {
         Label(current ? work.execution.replacingOccurrences(of: "_", with: " ").capitalized : "Last observed",
           systemImage: current && work.execution == "working" ? "circle.fill" : "clock")
           .font(.caption).foregroundStyle(current ? DeckStyle.accent : Color.secondary)
-        Button("Open in Deckhand") {
+        Button("Open in Cinderdeck") {
           guard let url = work.deckhandURL(development: development), NSWorkspace.shared.open(url) else {
-            error = "Deckhand could not be opened. Install the selected app or launch it once to register its link handler."; return
+            error = "Cinderdeck could not be opened. Open the selected Cinderdeck build and try again."; return
           }
         }.buttonStyle(.borderedProminent)
       }
       HStack(spacing: 12) {
         Text(record.observedAt, style: .relative).font(.caption).foregroundStyle(.secondary)
         Text("Generation \(work.generation)").font(.caption.monospaced()).foregroundStyle(.secondary)
-        if !current { Text("Refresh the conversation in Deckhand for current state.").font(.caption).foregroundStyle(.secondary) }
+        if !current { Text("Refresh the conversation in Cinderdeck for current state.").font(.caption).foregroundStyle(.secondary) }
       }
       ForEach(work.repositories, id: \.repositoryID) { repo in
         HStack { Image(systemName: "arrow.triangle.branch"); Text(repo.repositoryID); Spacer(); Text(repo.head.map { String($0.prefix(12)) } ?? "Head unavailable").monospaced() }
@@ -128,16 +128,16 @@ struct NativeLinkedWorkSection: View {
               Text("Last observed ").font(.caption).foregroundStyle(.secondary)
               Text(record.observedAt, style: .relative).font(.caption).foregroundStyle(.secondary)
               Spacer()
-              Button("Open in Deckhand") {
+              Button("Open in Cinderdeck") {
                 guard let url = record.publication.deckhandURL(development: development), NSWorkspace.shared.open(url) else {
-                  error = "Deckhand could not be opened. Launch the selected app once to register its links."; return
+                  error = "Cinderdeck could not be opened. Open the selected Cinderdeck build and try again."; return
                 }
               }.buttonStyle(DeckButtonStyle(compact: true))
             }
           }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
             .background(DeckStyle.inset, in: RoundedRectangle(cornerRadius: DeckStyle.cardRadius))
         }
-        Text("Saved links preserve the original lane. Deckhand checks its current identity when opened.")
+        Text("Saved links preserve the original lane. Cinderdeck checks its current identity when opened.")
           .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
       }
     }

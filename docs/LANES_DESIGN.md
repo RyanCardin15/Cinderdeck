@@ -23,7 +23,7 @@ The most important problems:
 | 3 | A lane can't be refreshed. Its definition is a snapshot, lane edits are refused, and "recreate" means removing it, which runs into #2 | Every source edit (new service, env change) leaves existing lanes stale | High |
 | 4 | A branch that exists only on the remote gets a **new** local branch created from `HEAD` | "Open PR #33 in a lane" gives you an unrelated branch with the PR's name | High |
 | 5 | There is no way to share part of a workspace. Every repo is worktreed and every service is copied; a non-Git `cwd` makes creation fail | You can't share Postgres/Redis/Docker or an unchanged backend. Four lanes run four copies of everything | High |
-| 6 | Existing worktrees can't be adopted. A branch that is already checked out elsewhere is rejected | Agents that create their own worktrees (Claude Code, Codex, Cursor, Conductor, T3) can't run their branch as a lane | High |
+| 6 | Existing worktrees can't be adopted. A branch that is already checked out elsewhere is rejected | Agents that create their own worktrees (Claude Code, Codex, Cursor, Conductor) can't run their branch as a lane | High |
 | 7 | Only one lane operation can run at a time across all workspaces, and extra requests are **rejected**, not queued | Starting four agents at once: three `create_lane` calls fail with "try again" | High |
 | 8 | Worktree folders are named `repo-1`, `repo-2` and sit inside the definitions folder | Docker Compose project names collide, the folders are hard to recognise in editors, and worktrees can end up inside a synced dotfiles folder or a source repo | Medium |
 | 9 | Each service gets exactly one port, and ports are assigned even to services that don't have one | Vite HMR, debuggers, and gRPC with HTTP are unsupported. Workers get a `PORT` and a meaningless link | Medium |
@@ -127,7 +127,7 @@ same branch if there is one, and the backend's base checkout otherwise.
 is already checked out.
 
 **S6. Worktrees made by other tools can't be adopted.** Claude Code desktop, Codex, Cursor background agents,
-Conductor, and T3/Deckhand all create worktrees. `lane create` rejects the branch because it's
+and Conductor all create worktrees. `lane create` rejects the branch because it's
 checked out, so an agent working in its own worktree can't get isolated ports for that
 worktree. [DECKHAND_DESIGN.md](DECKHAND_DESIGN.md) already assumes `lane.adopt` and `lane.release`.
 

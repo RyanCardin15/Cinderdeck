@@ -76,7 +76,15 @@ function tool(
   return { displayName, labels, icon, summaryAction };
 }
 
-const T3_MCP_SERVER_ALIASES = new Set(["t3-code", "t3_code", "t3code", "deckhand"]);
+const T3_MCP_SERVER_ALIASES = new Set([
+  "cinderdeck",
+  "cinderdeck-code",
+  "cinderdeck_code",
+  "t3-code",
+  "t3_code",
+  "t3code",
+  "deckhand",
+]);
 
 // Cards, activity rows, summaries, and provider identity recovery share this inventory.
 const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
@@ -174,7 +182,7 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
     ["Read", "Reading", "Read", "External sessions"],
     "worktree-status",
   ),
-  deckhand_context: tool(["Read", "Reading", "Read", "Deckhand lane context"], "worktree-status"),
+  deckhand_context: tool(["Read", "Reading", "Read", "Cinderdeck lane context"], "worktree-status"),
   deckhand_context_pull_requests: tool(
     ["Read", "Reading", "Read", "lane pull requests"],
     "list-prs",
@@ -433,6 +441,7 @@ function normalizeT3McpToolLabel(value: string): string {
  */
 function resolveT3McpToolName(value: string): string | null {
   const label = normalizeT3McpToolLabel(value);
+  if (Object.hasOwn(T3_MCP_TOOLS, label)) return label;
   const mcpMatch = /^mcp__(?<server>.+?)__(?<tool>.+)$/i.exec(label);
   if (mcpMatch?.groups) {
     const { server, tool } = mcpMatch.groups;
@@ -444,12 +453,13 @@ function resolveT3McpToolName(value: string): string | null {
   }
 
   const namespaceMatch =
-    /^(?<server>t3-code|t3_code|t3code|deckhand)(?:[.:/]|\s*·\s*)(?<tool>.+)$/i.exec(label);
+    /^(?<server>cinderdeck(?:[-_]code)?|t3-code|t3_code|t3code|deckhand)(?:[.:/]|\s*·\s*)(?<tool>.+)$/i.exec(label);
   if (namespaceMatch?.groups) {
     return namespaceMatch.groups.tool ?? null;
   }
 
-  const prefixed = /^(?:mcp[-_]{1,2})?t3[-_ ]?code(?:__|[-_.:/ ])(?<tool>.+)$/i.exec(label);
+  const prefixed =
+    /^(?:mcp[-_]{1,2})?(?:cinderdeck(?:[-_ ]code)?|deckhand|t3[-_ ]?code)(?:__|[-_.:/ ])(?<tool>.+)$/i.exec(label);
   const candidate = prefixed?.groups?.tool ?? label;
   return Object.hasOwn(T3_MCP_TOOLS, candidate) ? candidate : null;
 }

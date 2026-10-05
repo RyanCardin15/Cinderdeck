@@ -886,7 +886,7 @@ export function ServicesRuns({
                 </span>
               </h2>
               <p>
-                {/^Deckhand\s*·\s*dh-admin:[^\s]+(?:\s+in\s+.+)?$/.test(selected.actor)
+                {/^(?:Deckhand|Cinderdeck)\s*·\s*dh-admin:[^\s]+(?:\s+in\s+.+)?$/.test(selected.actor)
                   ? "Cinderdeck workspace controls"
                   : selected.actor.replace(/^Deckhand(?=\s|$)/, "Cinderdeck")}{" "}
                 · {elapsed(selected.duration)}

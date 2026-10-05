@@ -23,7 +23,7 @@ import {
 } from "./versionSkew";
 
 const MISMATCH_HINT =
-  "Version mismatch. Try syncing the client and server to the same Deckhand version.";
+  "Version mismatch. Try syncing the client and server to the same Cinderdeck version.";
 
 describe("versionSkew", () => {
   beforeEach(() => {

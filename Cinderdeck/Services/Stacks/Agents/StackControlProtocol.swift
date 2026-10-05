@@ -22,9 +22,15 @@ nonisolated struct StackActor: Codable, Equatable, Hashable, Sendable {
   var key: String { kind == .user ? "user" : name.lowercased() + "#" + (session ?? "") }
   var label: String {
     guard isAgent else { return "You" }
-    var text = name
+    // Display historical app branding without changing persisted actor identity.
+    let appNames: Set<String> = ["deckhand", "t3", "t3 code"]
+    let displayName = appNames.contains(name.lowercased()) ? "Cinderdeck" : name
+    var text = displayName
     if let session, !session.isEmpty { text += " · " + session }
-    if let host, host.caseInsensitiveCompare(name) != .orderedSame { text += " in " + host }
+    if let host {
+      let displayHost = appNames.contains(host.lowercased()) ? "Cinderdeck" : host
+      if displayHost.caseInsensitiveCompare(displayName) != .orderedSame { text += " in " + displayHost }
+    }
     return text
   }
 }

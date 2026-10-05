@@ -210,7 +210,7 @@ export function HistoryArchiveBrowser({
             <input
               value={path}
               onChange={(event) => setPath(event.target.value)}
-              placeholder="/absolute/path/to/.t3/userdata/statev2.sqlite"
+              placeholder="/absolute/path/to/userdata/statev2.sqlite"
               autoComplete="off"
               spellCheck={false}
             />

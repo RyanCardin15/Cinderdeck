@@ -25,6 +25,12 @@ final class StackControlTests: XCTestCase {
     XCTAssertNotEqual(codex.key, StackActor(kind: .agent, name: "Codex").key)
     XCTAssertEqual(StackActor.user.label, "You")
     XCTAssertTrue(StackClaim(stackID: "x", holder: codex, since: Date(), expiresAt: Date().addingTimeInterval(-1)).isExpired)
+    for name in ["Deckhand", "T3", "T3 Code", "Cinderdeck"] {
+      let actor = StackActor(kind: .agent, name: name, session: "saved", host: "Deckhand")
+      XCTAssertEqual(actor.label, "Cinderdeck · saved")
+      XCTAssertEqual(actor.key, name.lowercased() + "#saved", "Display branding must retain ownership keys")
+    }
+    XCTAssertEqual(StackActor(kind: .agent, name: "Codex", host: "Deckhand").label, "Codex in Cinderdeck")
   }
 
   func testCLIOptionParsing() {

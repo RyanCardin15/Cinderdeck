@@ -10,6 +10,30 @@ import XCTest
       repositories: [.init(repositoryID: "frontend", head: String(repeating: "a", count: 40))],
       pullRequests: [.init(url: "https://github.com/example/repo/pull/1", host: "github.com", repository: "example/repo", number: 1)], recordingIDs: [])
   }
+  func testPublicationAcceptsCurrentAndLegacyRuntimeActorsWithoutRelaxingIdentityChecks() async throws {
+    let root = try StackTestSupport.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let suite = "cinderdeck-linked-work-\(UUID())"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(root.path, forKey: PreferencesKeys.stacksDirectory)
+    let supervisor = StackSupervisor(store: nil, defaults: defaults, logRoot: root.appendingPathComponent("logs"))
+    let control = StackControlService(supervisor: supervisor, integrationDirectory: root.appendingPathComponent("integration"))
+    let params = JSONValue.object(["installationID": .string("installation"), "publication": try JSONValue(encoding: publication())])
+    for (name, session, expected) in [
+      ("Cinderdeck", "runtime", "installation_changed"),
+      ("Deckhand", "runtime", "installation_changed"),
+      ("Other app", "runtime", "wrong_actor"),
+      ("Cinderdeck", nil, "wrong_actor"),
+    ] as [(String, String?, String)] {
+      do {
+        _ = try await control.handleIntegrationLinkedWork("integration.linked-work.publish", params: params, actor: StackActor(kind: .agent, name: name, session: session))
+        XCTFail("Expected \(expected)")
+      } catch {
+        XCTAssertEqual((error as? StackControlError)?.code, expected)
+      }
+    }
+  }
   func testInspectorAssociationsRequireExactHostedPRAndRecordingIdentity() throws {
     var work = publication()
     let recording = UUID()

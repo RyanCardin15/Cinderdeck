@@ -7,6 +7,8 @@ describe("resolveT3McpToolPresentation", () => {
     for (const tool of T3_MCP_TOOL_NAMES) {
       const presentation = resolveT3McpToolPresentation(tool);
       for (const prefix of [
+        "mcp__cinderdeck__",
+        "cinderdeck.",
         "mcp__t3-code__",
         "mcp__t3_code__",
         "mcp__t3code__",
@@ -101,5 +103,6 @@ describe("resolveT3McpToolPresentation", () => {
   it("keeps unknown MCP tools on the generic renderer path", () => {
     expect(resolveT3McpToolPresentation("mcp__github__search_issues")).toBeNull();
     expect(resolveT3McpToolPresentation("t3-code.not_a_real_tool")).toBeNull();
+    expect(resolveT3McpToolPresentation("cinderdeck.not_a_real_tool")).toBeNull();
   });
 });

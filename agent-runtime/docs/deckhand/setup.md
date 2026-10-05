@@ -1,10 +1,10 @@
 # Set up Deckhand
 
-Deckhand keeps its data and desktop profile separate from T3. Install the Deckhand build, open it, and choose a computer. For connected work, start Cinderdeck on that execution computer, then choose **Connect to Cinderdeck** during setup or **Settings → Integrations → Cinderdeck**. Inspect the reported installation and workspace before opening it. For a remote computer, this connects to that computer’s Cinderdeck; it does not use the browser viewer’s local app.
+Cinderdeck keeps its data and desktop profile separate from T3. Install the Cinderdeck build, open it, and choose a computer. For connected work, start Cinderdeck on that execution computer, then choose **Connect to Cinderdeck** during setup or **Settings → Integrations → Cinderdeck**. Inspect the reported installation and workspace before opening it. For a remote computer, this connects to that computer’s Cinderdeck; it does not use the browser viewer’s local app.
 
-Sign in to your selected provider in **Settings → Providers**. Deckhand uses the provider’s existing CLI and authentication flow. Provider credentials stay on the execution host. Choose a configured account and model before starting work. Cinderdeck owns workspace services and lanes; Deckhand owns conversations and feature context.
+Sign in to your selected provider in **Settings → Providers**. Cinderdeck uses the provider’s existing CLI and authentication flow. Provider credentials stay on the execution host. Choose a configured account and model before starting work. Cinderdeck owns workspace services and lanes; Cinderdeck owns conversations and feature context.
 
-The default runtime store is `~/.deckhand/userdata`. The macOS desktop profile is `~/Library/Application Support/deckhand-v2`. `DECKHAND_HOME` selects another runtime root; `DECKHAND_PROFILE_ROOT` separately selects the parent of the desktop profile. Setting only one does not isolate the other. Deckhand ignores `T3CODE_HOME` and does not automatically import T3 credentials or databases.
+The default runtime store is `~/.deckhand/userdata`. The macOS desktop profile is `~/Library/Application Support/deckhand-v2`. `DECKHAND_HOME` selects another runtime root; `DECKHAND_PROFILE_ROOT` separately selects the parent of the desktop profile. Setting only one does not isolate the other. Cinderdeck ignores `T3CODE_HOME` and does not automatically import previous credentials or databases.
 
 ## Browse GitHub pull requests
 
@@ -29,9 +29,9 @@ The report lists exactly what it includes and excludes. It includes Deckhand/ups
 
 For service failures, inspect the actual run and named steps in **Services & runs**. For video evidence, deliberately select the recording and prepare its evidence bundle. These are separate content-bearing actions and are not included in a structural diagnostics report.
 
-## Import previous T3 conversations
+## Import previous conversations
 
-In **Settings → Storage**, choose the execution computer and copy its T3 V2 database from its real absolute path. Administrator access is required for both importing and reading history. Deckhand takes a consistent read-only SQLite backup even while T3 is running, checks migration versions 55/56, and publishes a separate history archive with a schema report and snapshot fingerprint. It preserves original thread/message IDs and full message text. The source T3 store and current Deckhand threads are unchanged.
+In **Settings → Storage**, choose the execution computer and copy its previous V2 database from its real absolute path. Administrator access is required for both importing and reading history. Cinderdeck takes a consistent read-only SQLite backup even while the source runtime is running, checks migration versions 55/56, and publishes a separate history archive with a schema report and snapshot fingerprint. It preserves original thread/message IDs and full message text. The source store and current Cinderdeck threads are unchanged.
 
 Read historical conversations in the same panel. Long messages continue through **Read more**. Attachment metadata is retained, but attachment files, credentials, settings, pending tasks and provider runtime are not imported. Provider continuation is unavailable; start new work through the ordinary agent flow. An unsupported schema or interrupted copy produces a report instead of partial usable history. Removing an imported archive retains its report and leaves the source untouched.
 

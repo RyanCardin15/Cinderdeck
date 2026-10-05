@@ -35,7 +35,7 @@ const CliRuntimeLayer = Layer.mergeAll(
 );
 
 const connectPublicConfigMissingMessage =
-  "T3 Connect commands are unavailable: this build is missing T3 Connect public configuration.";
+  "Remote connections commands are unavailable: this build is missing Remote connections public configuration.";
 
 class ConnectPublicConfigMissingError extends CliError.UserError {
   override get message() {
@@ -46,12 +46,12 @@ class ConnectPublicConfigMissingError extends CliError.UserError {
 const connectUnavailableCommand = Command.make("connect", {
   command: Argument.String("command").pipe(Argument.variadic),
 }).pipe(
-  Command.withDescription("T3 Connect is unavailable in builds without public configuration."),
+  Command.withDescription("Remote connections is unavailable in builds without public configuration."),
   Command.unlisted,
   Command.withHandler(() =>
     Effect.fail(
       new CliError.ShowHelp({
-        commandPath: ["deckhand", "connect"],
+        commandPath: ["cinderdeck-agent", "connect"],
         errors: [new ConnectPublicConfigMissingError({ cause: connectPublicConfigMissingMessage })],
       }),
     ),
@@ -59,7 +59,7 @@ const connectUnavailableCommand = Command.make("connect", {
 );
 
 export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
-  Command.make("deckhand", { ...sharedServerCommandFlags }).pipe(
+  Command.make("cinderdeck-agent", { ...sharedServerCommandFlags }).pipe(
     Command.withDescription("Run the Cinderdeck agent backend."),
     Command.withHandler((flags) => runServerCommand(flags)),
     Command.withSubcommands([

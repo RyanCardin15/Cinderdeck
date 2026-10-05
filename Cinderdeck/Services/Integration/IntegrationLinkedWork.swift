@@ -153,7 +153,7 @@ extension StackControlService {
       let object = params.objectValue, Set(object.keys) == allowed else { throw StackControlError.invalid("Pass an exact linked-work context") }
     let journal = try integrationStore()
     if method == "integration.linked-work.publish" {
-      guard actor.name.lowercased() == "deckhand", actor.session != nil else { throw StackControlError(code: "wrong_actor", message: "An authenticated Deckhand projection is required") }
+      guard ["cinderdeck", "deckhand"].contains(actor.name.lowercased()), actor.session != nil else { throw StackControlError(code: "wrong_actor", message: "An authenticated Cinderdeck projection is required") }
       let publication = try StackControlCoding.decoder().decode(IntegrationLinkedWorkPublication.self, from: StackControlCoding.encoder().encode(params["publication"]!))
       try publication.validated()
       guard params["installationID"]?.stringValue == publication.installationID, publication.installationID == journal.installationID, publication.executionHostID.lowercased() == journal.executionHostID.lowercased() else { throw StackControlError(code: "installation_changed", message: "Reconnect to this execution host and installation") }

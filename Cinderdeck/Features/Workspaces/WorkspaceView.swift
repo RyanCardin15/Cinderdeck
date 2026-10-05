@@ -23,7 +23,7 @@ enum WorkspaceSection: String, CaseIterable {
     case .workflows: return "Run tasks and service actions in order. A failed step stops the workflow."
     case .laneMap: return "Follow lanes to their services and running tasks. Select a block to highlight its connections."
     case .runs: return "Inspect progress and results. Completed runs stay available after relaunch."
-    case .linkedWork: return "Deckhand sessions linked to this workspace, with their last observed state and review artifacts."
+    case .linkedWork: return "Cinderdeck conversations linked to this workspace, with their last observed state and review artifacts."
     case .recordings: return "Screen recordings saved with this workspace's logs. Every log line is stamped with its position in the video."
     }
   }

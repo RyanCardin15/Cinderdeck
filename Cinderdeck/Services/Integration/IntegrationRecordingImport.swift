@@ -193,7 +193,7 @@ extension StackControlService {
       }
       receipt.hostStartedAt = Date()
       try savePreviewImport(receipt, actor: actor)
-      let request = ReproRequest(id: receipt.recordingID, title: title, origin: .workspace, actor: actor, workspaces: Set(scopes), capture: "Deckhand preview", note: "Preview target identity is associated only; generic callers cannot attest what the video depicts.", buildProof: receipt.buildProof)
+      let request = ReproRequest(id: receipt.recordingID, title: title, origin: .workspace, actor: actor, workspaces: Set(scopes), capture: "Cinderdeck preview", note: "Preview target identity is associated only; generic callers cannot attest what the video depicts.", buildProof: receipt.buildProof)
       recorder.beginBrowser(request, at: receipt.hostStartedAt)
       guard recorder.activeSessionID == receipt.recordingID else { throw StackControlError(code: "unknown_outcome", message: "Inspect the import receipt before starting another capture") }
       receipt.state = "capturing"

@@ -84,7 +84,7 @@ describe("ServerUpdateAction", () => {
     expect(testState.toast).toHaveBeenCalledWith({
       type: "success",
       title: "Test server updated",
-      description: "Reconnected on t3@0.0.31.",
+      description: "Reconnected on Cinderdeck 0.0.31.",
     });
   });
 
@@ -130,6 +130,19 @@ describe("ServerUpdateAction", () => {
     );
 
     expect(markup).toContain("Update the desktop app on that machine to update this server.");
+    expect(markup).not.toContain("<button");
+  });
+
+  it("guides manual hosts through the whole-app update without an upstream installer", () => {
+    const markup = renderToStaticMarkup(
+      <ServerUpdateAction
+        environmentId={"env-test" as EnvironmentId}
+        serverLabel="Test server"
+        selfUpdate={null}
+        targetVersion="0.0.31"
+      />,
+    );
+    expect(markup).toContain("Install Cinderdeck 0.0.31 on the execution computer, then reconnect.");
     expect(markup).not.toContain("<button");
   });
 
