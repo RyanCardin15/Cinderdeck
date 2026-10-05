@@ -52,6 +52,7 @@ cinderdeck lane adopt shop review/pr-123 --path "$PWD" --env FEATURE_X=1
 ```
 
 - `create` makes the worktrees, copies the files listed in `[lanes] copy` (such as `.env`), runs `[lanes] setup` (such as `npm ci`), then starts the services and waits until they are ready. Pass `--no-start` to prepare first, or `--no-setup` to skip setup.
+- For independent repository revisions, repeat `--repo-from app=<commit> --repo-from api=origin/main` (MCP `repositoryRefs: {app: "<commit>", api: "origin/main"}`). Each selected branch must be new. Cinderdeck resolves the references to commits before creating anything, refuses conflicting aliases and leaves unselected repositories on their normal defaults. Never pass a commit from one repository as the global `--from` for another.
 - `adopt` does not run setup unless you pass `--setup`. Other repositories of the workspace get worktrees on the same branch.
 - An optional adopted lane name changes its address, not its Git branch. Other repositories use the adopted worktree's actual branch. Use **Existing worktree** in the Lanes panel for the same flow; its Open menu targets the actual repositories.
 - A detached HEAD needs an explicit name (for example `review/pr-123`). If other repositories need worktrees too, they use that name as their branch. `--from`, `--env` and `--copy` also work with adoption (MCP `from`, `env`, `copy`); copying only touches newly created worktrees of other repositories, leaving the adopted folder alone.

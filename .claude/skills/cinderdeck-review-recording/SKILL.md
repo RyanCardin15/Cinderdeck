@@ -31,7 +31,7 @@ Check these fields, in order:
 - `summary`: distinct errors with their first video time, crashes, failed checks, and failed steps.
 - `markers`: the actions and checks, with `t` in video seconds. `outcome: fail` marks are the claimed failures.
 - `runs`: task and workflow runs with their status.
-- The Git branch, commit, and uncommitted files of each workspace when recording started. Use them to know which code was running.
+- The Git branch, commit, and uncommitted files of each workspace when recording started. Use them as captured source provenance; they do not prove which build was served.
 - `capture` (which window, display, or browser page was recorded) and `workspaceNames` (whose logs are included). A scope of "workspace logs off" still allows marks, agent-added lines, and automatic browser/network logs for headless/CDP captures.
 
 ## 3. Look at the moments that matter
@@ -67,7 +67,7 @@ The recording holds only what was printed while it ran. For output from before o
 
 Give the user:
 1. **What happened**: the first failure, with its video time (`0:42.180`), what the frame shows, and the log lines that explain it.
-2. **Likely cause**, tied to evidence: source file and line from stack traces, the failing request, or the service that crashed. Also note the Git branch and commit, and any uncommitted files, that were running.
+2. **Likely cause**, tied to evidence: source file and line from stack traces, the failing request, or the service that crashed. Also note the captured Git branch, commit and uncommitted files as source context. Report served-build proof separately; missing or incomplete proof stays unknown.
 3. **Where to look**: the `.log` path, and `cinderdeck repro open <id>` if they want the video with synced logs in Cinderdeck's editor (`open_repro`).
 
 If the user wants to share it:
@@ -85,3 +85,22 @@ Only delete a recording when the user asks, using the exact full id: `cinderdeck
 - A marker's time is when it was added. Agents mark just *before* an action, so the change appears shortly after the marker.
 
 For headless/CDP recordings, `browser` and `network` sources are collected automatically. A browser disconnect preserves available evidence and adds a failed recording check. Only the selected page is recorded; do not assume a popup or another tab appears in the video. Use the same frame, log, editor, and export tools as for screen recordings.
+
+## Deckhand managed agent context
+
+Inside a Deckhand-managed agent terminal, use the provider-scoped Deckhand tools to preserve that conversation's saved lane and native installation identity. `deckhand integration tools` prints the current input schemas. The same MCP tool names work directly when the provider exposes the injected server.
+
+```sh
+deckhand integration call deckhand_context '{}'
+deckhand integration call deckhand_recordings '{}'
+deckhand integration call deckhand_recording '{"recordingID":"<recording-id>"}'
+deckhand integration call deckhand_recording_logs '{"recordingID":"<recording-id>","around":12}'
+deckhand integration call deckhand_evidence_prepare '{"recordingID":"<recording-id>","operationKey":"<original-key>"}'
+deckhand integration call deckhand_evidence_get '{"recordingID":"<recording-id>","preparationID":"<receipt-id>"}'
+```
+
+These commands require the agent terminal's injected endpoint and credential environment variables. Do not print or copy credentials into prompts or arguments. Unavailable saved context is a refusal, not permission to select another workspace. Preparation is an explicit local write; retain its original operation key after interruption. Ready bundle assets include real video, frames, logs and provenance with SHA256 hashes. Keep video by default.
+
+`deckhand_evidence_read` reads one ready asset in base64 chunks of at most 64 KiB, scoped to the same provider session that prepared it. Reconstruct bytes and verify the complete SHA256 before consuming an asset. A preparation receipt, chunk read or composer draft does not prove provider attachment acceptance. Review the actual supported attachments in the PR Verification draft before sending.
+
+Treat a matching capture-time commit as source provenance. It does not prove the served build revision. Dirty/incomplete snapshots, missing build stamps and legacy records remain explicitly unknown or stale; do not call them exact verification. Look at actual saved frames before describing recorded UI state.
