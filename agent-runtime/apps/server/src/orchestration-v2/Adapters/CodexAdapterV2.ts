@@ -1,3 +1,4 @@
+import { withCodexManagedPolicy } from "../../provider/CodexManagedPolicy.ts";
 import { revertCodexThread } from "../../provider/CodexThreadRevert.ts";
 import { historyResponseItems } from "../ContextHandoffBudget.ts";
 import { forceCodexReadOnlyPolicy, isCodexReadOnlyPolicy } from "../CodexReadOnlyPolicy.ts";
@@ -1596,7 +1597,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                     }),
                 ),
               );
-        const client = yield* clientFactory.open({
+        const nativeClient = yield* clientFactory.open({
           instanceId: adapterOptions.instanceId,
           threadId: input.threadId,
           providerSessionId: input.providerSessionId,
@@ -1604,6 +1605,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
           settings: resolvedRuntime?.config ?? adapterOptions.settings,
           environment: resolvedRuntime?.environment ?? adapterOptions.environment,
         });
+        const client = withCodexManagedPolicy(nativeClient);
         const additionalContextByThread = yield* Ref.make(
           new Map<
             string,
@@ -4505,6 +4507,8 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
 
         yield* client.handleServerRequest("item/commandExecution/requestApproval", (payload) =>
           Effect.gen(function* () {
+            // Managed observers remain non-escalating when the organization requires approvals.
+            if (readOnlySession) return { decision: "decline" as const };
             const context = yield* awaitActiveTurn(payload.turnId);
             if (context === undefined) {
               return yield* toProtocolError(
@@ -4568,6 +4572,8 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
 
         yield* client.handleServerRequest("item/fileChange/requestApproval", (payload) =>
           Effect.gen(function* () {
+            // Managed observers remain non-escalating when the organization requires approvals.
+            if (readOnlySession) return { decision: "decline" as const };
             const context = yield* awaitActiveTurn(payload.turnId);
             if (context === undefined) {
               return yield* toProtocolError(
@@ -4628,6 +4634,8 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
 
         yield* client.handleServerRequest("item/permissions/requestApproval", (payload) =>
           Effect.gen(function* () {
+            // Managed observers remain non-escalating when the organization requires approvals.
+            if (readOnlySession) return { permissions: {}, scope: "turn" as const };
             const context = yield* awaitActiveTurn(payload.turnId);
             if (context === undefined) {
               return yield* toProtocolError(
@@ -4772,6 +4780,9 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
 
         yield* client.handleServerRequest("execCommandApproval", (payload) =>
           Effect.gen(function* () {
+            // Managed observers remain non-escalating when the organization requires approvals.
+            if (readOnlySession)
+              return { decision: approvalDecisionToLegacyReviewDecision("decline") };
             const context = yield* findActiveTurnByNativeThreadId(payload.conversationId);
             if (context === undefined) {
               return yield* toProtocolError(
@@ -4833,6 +4844,9 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
 
         yield* client.handleServerRequest("applyPatchApproval", (payload) =>
           Effect.gen(function* () {
+            // Managed observers remain non-escalating when the organization requires approvals.
+            if (readOnlySession)
+              return { decision: approvalDecisionToLegacyReviewDecision("decline") };
             const context = yield* findActiveTurnByNativeThreadId(payload.conversationId);
             if (context === undefined) {
               return yield* toProtocolError(

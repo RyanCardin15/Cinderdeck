@@ -1,3 +1,4 @@
+import { readClaudeManagedPolicy, claudeRuntimeModeAdjustments } from "../ClaudeManagedPolicy.ts";
 import {
   type ClaudeSettings,
   type ModelCapabilities,
@@ -226,6 +227,7 @@ function nonEmptyProbeString(value: string): string | undefined {
 }
 
 type ClaudeCapabilitiesProbe = {
+  readonly bypassDisabled?: boolean;
   readonly email: string | undefined;
   readonly subscriptionType: string | undefined;
   readonly tokenSource: string | undefined;
@@ -337,6 +339,10 @@ const probeClaudeCapabilities = (
   const abort = new AbortController();
   return Effect.gen(function* () {
     const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, environment);
+    const bypassDisabled = yield* readClaudeManagedPolicy({
+      ...(cwd ? { cwd } : {}),
+      environment: claudeEnvironment,
+    });
     const executablePath = yield* resolveClaudeSdkExecutablePath(
       claudeSettings.binaryPath,
       claudeEnvironment,
@@ -357,11 +363,11 @@ const probeClaudeCapabilities = (
         }),
       });
       const init = await q.initializationResult();
-      return { q, init };
+      return { q, init, bypassDisabled };
     });
   }).pipe(
     Effect.timeout(CAPABILITIES_PROBE_TIMEOUT_MS),
-    Effect.flatMap(({ q, init }) =>
+    Effect.flatMap(({ q, init, bypassDisabled }) =>
       Effect.gen(function* () {
         // Usage has its own deadline so a slow optional request cannot discard initialization.
         const usageResult = yield* Effect.tryPromise(() =>
@@ -382,6 +388,7 @@ const probeClaudeCapabilities = (
             }
           | undefined;
         return {
+          bypassDisabled,
           email: account?.email,
           subscriptionType: account?.subscriptionType,
           tokenSource: account?.tokenSource,
@@ -579,7 +586,10 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
       ? yield* resolveResetCredits(parsedVersion)
       : undefined;
   return buildServerProvider({
-    presentation: CLAUDE_PRESENTATION,
+    presentation: {
+      ...CLAUDE_PRESENTATION,
+      runtimeModeAdjustments: claudeRuntimeModeAdjustments(capabilities.bypassDisabled === true),
+    },
     enabled: claudeSettings.enabled,
     checkedAt,
     models,

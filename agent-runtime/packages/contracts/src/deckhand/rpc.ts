@@ -286,6 +286,15 @@ export const ContextPullRequestsPage = Schema.Struct({
 });
 export type ContextPullRequestsPage = typeof ContextPullRequestsPage.Type;
 export const ManagedLaunchOption = Schema.Struct({
+  runtimeModeAdjustments: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        mode: Schema.String,
+        description: Schema.String,
+        source: Schema.optional(Schema.Literals(["organization", "provider"])),
+      }),
+    ),
+  ),
   supportsReadOnly: Schema.optional(Schema.Boolean),
   instanceId: ProviderInstanceId,
   label: Schema.String,

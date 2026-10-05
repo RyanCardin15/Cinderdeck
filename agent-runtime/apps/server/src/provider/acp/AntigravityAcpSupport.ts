@@ -24,6 +24,7 @@ import {
 } from "../antigravityAuthSupport.ts";
 import * as AcpSessionRuntime from "./AcpSessionRuntime.ts";
 import { normalizeAntigravitySessionUpdate } from "./AntigravityProtocol.ts";
+import { withAntigravityPermissionPolicy } from "./AntigravityPermissionPolicy.ts";
 
 export interface AntigravityAcpRuntimeInput extends Omit<
   AcpSessionRuntime.AcpSessionRuntimeOptions,
@@ -87,7 +88,9 @@ export const makeAntigravityAcpRuntime = Effect.fn("makeAntigravityAcpRuntime")(
       ),
     ),
   );
-  return yield* Effect.service(AcpSessionRuntime.AcpSessionRuntime).pipe(Effect.provide(context));
+  return withAntigravityPermissionPolicy(
+    yield* Effect.service(AcpSessionRuntime.AcpSessionRuntime).pipe(Effect.provide(context)),
+  );
 });
 
 export function antigravityPermissionMode(runtimeMode: RuntimeMode): string {

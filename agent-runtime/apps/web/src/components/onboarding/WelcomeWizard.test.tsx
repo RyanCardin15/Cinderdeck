@@ -288,14 +288,18 @@ it("retains standalone onboarding after returning from the Cinderdeck path", asy
   expect(mocks.createProject).not.toHaveBeenCalled();
 });
 
-it.each(["Configure CLIs", "Configure"])(
-  "%s during native setup keeps the chosen workspace through completion",
-  async (action) => {
+it.each([
+  ["Configure CLIs", "cursor", true],
+  ["Configure", "cursor", true],
+  ["Configure", "antigravity", false],
+] as const)(
+  "%s for %s during native setup keeps the chosen workspace through completion",
+  async (action, driver, enabled) => {
     mocks.providers = [
       {
-        instanceId: ProviderInstanceId.make("cursor_work"),
-        driver: ProviderDriverKind.make("cursor"),
-        enabled: true,
+        instanceId: ProviderInstanceId.make(`${driver}_work`),
+        driver: ProviderDriverKind.make(driver),
+        enabled,
         installed: true,
         version: "1.0.0",
         status: "ready",
@@ -317,7 +321,7 @@ it.each(["Configure CLIs", "Configure"])(
     expect(document.querySelector('[aria-label="CLI binary path"]')).not.toBeNull();
     expect(document.body.textContent).toContain("CLI binary on test-env");
     if (action === "Configure")
-      expect(document.body.textContent).toContain("Configuring cursor_work");
+      expect(document.body.textContent).toContain(`Configuring ${driver}_work`);
     expect(mocks.complete).not.toHaveBeenCalled();
     expect(onDone).not.toHaveBeenCalled();
     await click("Back to agent setup");

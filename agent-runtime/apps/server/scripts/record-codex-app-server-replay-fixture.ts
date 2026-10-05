@@ -1,3 +1,4 @@
+import { withCodexManagedPolicy } from "../src/provider/CodexManagedPolicy.ts";
 import * as NodeOS from "node:os";
 
 import { CODEX_THREAD_CONFIG } from "../src/orchestration-v2/Adapters/CodexAdapterV2.ts";
@@ -1354,7 +1355,7 @@ function runReplaySession({
     const runningCommandProcessIds = new Map<string, Map<string, string>>();
 
     const initializeClient = Effect.gen(function* () {
-      const client = yield* CodexClient.CodexAppServerClient;
+      const client = withCodexManagedPolicy(yield* CodexClient.CodexAppServerClient);
 
       yield* installReplayHandlers({
         client,

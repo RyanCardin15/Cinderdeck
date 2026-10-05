@@ -19,6 +19,8 @@ import type * as EffectAcpErrors from "effect-acp/errors";
 import type * as EffectAcpSchema from "effect-acp/compat";
 
 import type { AcpSessionRuntimeStartResult } from "../acp/AcpSessionRuntime.ts";
+import { antigravityRuntimeModeAdjustments } from "../acp/AntigravityPermissionPolicy.ts";
+import { parseSessionModeState } from "../acp/AcpRuntimeModel.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import {
   makeManualOnlyProviderMaintenanceCapabilities,
@@ -286,6 +288,9 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
           },
           checkedAt: updatedAt,
           models: buildAntigravityModelsFromSession(started.sessionSetupResult),
+          runtimeModeAdjustments: antigravityRuntimeModeAdjustments(
+            parseSessionModeState(started.sessionSetupResult),
+          ),
           supportsTextGeneration,
           ...(cwd
             ? {
@@ -309,9 +314,19 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
     configOptions: ReadonlyArray<EffectAcpSchema.SessionConfigOption>,
   ) {
     const models = buildAntigravityModelsFromSession({ configOptions });
+    const modes = parseSessionModeState({ configOptions });
     yield* SubscriptionRef.update(metadata, (state) => {
       if (state.draft.auth.status !== "authenticated") return state;
-      return { ...state, draft: { ...state.draft, models } };
+      return {
+        ...state,
+        draft: {
+          ...state.draft,
+          models,
+          ...(modes === undefined
+            ? {}
+            : { runtimeModeAdjustments: antigravityRuntimeModeAdjustments(modes) }),
+        },
+      };
     });
   });
 
@@ -366,6 +381,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
             slashCommands: [],
             skills: [],
             workspaceSnapshots: [],
+            runtimeModeAdjustments: [],
             supportsTextGeneration: false,
           },
         }) satisfies AntigravityProviderState,

@@ -65,7 +65,59 @@ function causeMessage(cause: unknown): string | undefined {
   return message;
 }
 
-function stringField(value: unknown, key: "message" | "code"): string | undefined {
+/** Policy failures remain actionable even when a caller supplies a generic startup message. */
+function policyRejectionMessage(cause: unknown): string | undefined {
+  const seen = new Set<unknown>();
+  const pending: Array<{ value: unknown; depth: number }> = [{ value: cause, depth: 0 }];
+  for (let visited = 0; pending.length > 0 && visited < 64; visited++) {
+    const entry = pending.shift()!;
+    const value = entry.value;
+    if (entry.depth >= 16 || value == null || seen.has(value)) continue;
+    seen.add(value);
+    try {
+      if (Cause.isCause(value)) {
+        pending.push({ value: Cause.squash(value), depth: entry.depth + 1 });
+        continue;
+      }
+      const details =
+        typeof value === "string"
+          ? [value]
+          : [
+              stringField(value, "message"),
+              stringField(value, "errorMessage"),
+              stringField(value, "detail"),
+            ];
+      for (const detail of details) {
+        if (
+          detail &&
+          /(?:organization|enterprise|managed|admin(?:istrator)?|requirements?\.toml|allowed[_ ]?(?:approval|sandbox)|(?:approval|sandbox|permission|policy).{0,100}(?:not allowed|not permitted|invalid|disallowed|denied|disabled|restricted|allowed values|requirement|reject)|(?:not allowed|not permitted|invalid|disallowed|denied|disabled|restricted|allowed values).{0,100}(?:approval|sandbox|permission|policy))/iu.test(
+            detail,
+          )
+        ) {
+          return detail;
+        }
+      }
+      // Native JSON-RPC, SDK, and ACP errors use different envelopes. Only
+      // inspect error fields, never arbitrary payloads such as prompts or env.
+      if (typeof value === "object") {
+        const nested = Array.isArray(value)
+          ? value.slice(0, 8)
+          : ["cause", "error", "data", "errors"].map(
+              (key) => (value as Record<string, unknown>)[key],
+            );
+        pending.push(...nested.map((value) => ({ value, depth: entry.depth + 1 })));
+      }
+    } catch {
+      // A hostile accessor must not mask a reason in another error envelope.
+    }
+  }
+  return undefined;
+}
+
+function stringField(
+  value: unknown,
+  key: "message" | "code" | "errorMessage" | "detail",
+): string | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   try {
     const candidate = (value as Record<string, unknown>)[key];
@@ -142,7 +194,11 @@ export function makeProviderFailure(input: {
   readonly retryable?: boolean | null;
   readonly resetAt?: string | null;
 }): OrchestrationV2ProviderFailure {
-  const rawMessage = input.message ?? causeMessage(input.cause) ?? DEFAULT_PROVIDER_FAILURE_MESSAGE;
+  const rawMessage =
+    policyRejectionMessage(input.cause) ??
+    input.message ??
+    causeMessage(input.cause) ??
+    DEFAULT_PROVIDER_FAILURE_MESSAGE;
   const message = boundedText(rawMessage, MAX_PROVIDER_FAILURE_MESSAGE_LENGTH);
   const rawCode = input.code ?? stringField(input.cause, "code") ?? null;
   const code =

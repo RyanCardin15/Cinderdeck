@@ -714,9 +714,30 @@ function SessionSetupLauncher({
                   )
                 }
               >
-                <option value="approval-required">Ask for approval</option>
-                <option value="full-access">Full access</option>
+                <option value="approval-required">
+                  Ask for approval
+                  {provider?.runtimeModeAdjustments?.some(
+                    (entry) => entry.mode === "approval-required",
+                  )
+                    ? ` (${provider.runtimeModeAdjustments.find((entry) => entry.mode === "approval-required")?.source === "provider" ? "provider" : "organization"} policy)`
+                    : ""}
+                </option>
+                <option value="full-access">
+                  Full access
+                  {provider?.runtimeModeAdjustments?.some((entry) => entry.mode === "full-access")
+                    ? ` (${provider.runtimeModeAdjustments.find((entry) => entry.mode === "full-access")?.source === "provider" ? "provider" : "organization"} policy)`
+                    : ""}
+                </option>
               </select>
+              {provider?.runtimeModeAdjustments?.find((entry) => entry.mode === runtimeMode)
+                ?.description ? (
+                <p>
+                  {
+                    provider.runtimeModeAdjustments.find((entry) => entry.mode === runtimeMode)
+                      ?.description
+                  }
+                </p>
+              ) : null}
             </>
           ) : null}
           <label htmlFor={`${id}-title`}>{isCreation ? "Feature title" : "Agent task"}</label>

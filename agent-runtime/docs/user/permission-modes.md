@@ -18,6 +18,13 @@ and modes you choose in a draft keep their permissions.
 Approve or reject requests in the conversation to let the agent continue. Permission modes do
 not prevent the agent from asking questions about the task.
 
+Organization policy can adjust these modes. The picker marks affected modes with
+**organization policy** and explains the effective access. Codex checks allowed approval and
+sandbox settings; Claude checks whether permission bypass is disabled. Read-only sessions stay
+read-only. If a provider rejects a request because of policy, the conversation shows its reason.
+Antigravity uses the permission modes advertised by its session and marks adjustments as
+**provider policy**. Other providers enforce their own policy settings; policy discovery varies by CLI.
+
 ## Provider differences
 
 Providers enforce permissions differently. Some read-only actions can proceed in **Supervised**.
@@ -33,6 +40,9 @@ ACP Registry agents run their own tools in their own mode; T3 Code answers their
 by the permission mode. See [ACP Registry permissions](./providers-acp.md#permissions-and-terminals).
 
 Antigravity can still send native approval requests in **Full access**. It only offers remembered
-approvals for actions that support them.
+approvals for actions that support them. If full access is unavailable, it uses an advertised
+mode that asks for more approval. Settings shows these restrictions after sign-in or a model
+refresh. Configure Antigravity from onboarding or **Settings → Providers**; select the target
+environment and choose Google account, Gemini Enterprise, API key, or Agent Platform authentication.
 
 See the [provider guides](./install.md#providers) for setup and provider-specific limits.

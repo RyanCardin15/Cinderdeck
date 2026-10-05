@@ -51,6 +51,7 @@ import {
   resolveOnboardingProviderInstallCommand,
   resolveOnboardingProviderLoginCommand,
   selectOnboardingProvidersByDriver,
+  selectAdditionalOnboardingProviders,
 } from "../../onboarding/providerReadiness.logic";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { newProjectId, randomUUID } from "../../lib/utils";
@@ -786,11 +787,7 @@ function ConnectedAgentsStep({
   }, [environmentId, refreshProviders]);
 
   const byDriver = useMemo(() => selectOnboardingProvidersByDriver(providers), [providers]);
-  const additionalProviders =
-    providers?.filter(
-      (provider) =>
-        (provider.driver === "cursor" && provider.enabled) || provider.driver === "acpRegistry",
-    ) ?? [];
+  const additionalProviders = selectAdditionalOnboardingProviders(providers);
 
   const primaryAgents = PRIMARY_AGENT_DRIVERS.flatMap((driver) => {
     const instances =

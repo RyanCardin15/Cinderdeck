@@ -1,3 +1,8 @@
+import {
+  readCodexRequirements,
+  codexRuntimeModeAdjustments,
+  type CodexRequirements,
+} from "../CodexManagedPolicy.ts";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -71,6 +76,7 @@ const CODEX_PRESENTATION = {
 } as const;
 
 export interface CodexAppServerProviderSnapshot {
+  readonly requirements?: CodexRequirements;
   readonly account: CodexSchema.V2GetAccountResponse;
   readonly rateLimits?: CodexRateLimitsProbe;
   readonly version: string | undefined;
@@ -428,9 +434,11 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
   const versionMatch = initialize.userAgent.match(/\/([^\s]+)/);
   const version = versionMatch ? versionMatch[1] : undefined;
 
+  const requirements = yield* readCodexRequirements(client);
   const accountResponse = yield* client.request("account/read", {});
   if (!accountResponse.account && accountResponse.requiresOpenaiAuth) {
     return {
+      requirements,
       account: accountResponse,
       version,
       models: appendCustomCodexModels([], input.customModels ?? []),
@@ -471,6 +479,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
   );
 
   return {
+    requirements,
     account: accountResponse,
     ...(rateLimits ? { rateLimits } : {}),
     version,
@@ -684,7 +693,10 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
           });
 
   return buildServerProvider({
-    presentation: CODEX_PRESENTATION,
+    presentation: {
+      ...CODEX_PRESENTATION,
+      runtimeModeAdjustments: codexRuntimeModeAdjustments(snapshot.requirements ?? null),
+    },
     enabled: codexSettings.enabled,
     checkedAt,
     models: snapshot.models,

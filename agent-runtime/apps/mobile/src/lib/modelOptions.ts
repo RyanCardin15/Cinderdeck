@@ -3,6 +3,7 @@ import type {
   ModelCapabilities,
   ModelSelection,
   RuntimeMode,
+  ServerProvider,
   ServerConfig as T3ServerConfig,
 } from "@t3tools/contracts";
 import {
@@ -18,6 +19,7 @@ export type ModelOption = {
   readonly providerLabel: string;
   readonly providerDriver: string;
   readonly supportedRuntimeModes?: ReadonlyArray<RuntimeMode>;
+  readonly runtimeModeAdjustments?: ServerProvider["runtimeModeAdjustments"];
   readonly providerIconUrl?: string | undefined;
   readonly isDefault: boolean;
   readonly isLegacy: boolean;
@@ -186,6 +188,9 @@ export function buildModelOptions(
         ...(provider.supportedRuntimeModes === undefined
           ? {}
           : { supportedRuntimeModes: provider.supportedRuntimeModes }),
+        ...(provider.runtimeModeAdjustments === undefined
+          ? {}
+          : { runtimeModeAdjustments: provider.runtimeModeAdjustments }),
         ...(provider.iconUrl ? { providerIconUrl: provider.iconUrl } : {}),
         isDefault: model.isDefault === true,
         isLegacy: model.isLegacy === true,

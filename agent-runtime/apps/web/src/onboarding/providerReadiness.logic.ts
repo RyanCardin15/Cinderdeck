@@ -53,6 +53,18 @@ const PROVIDER_STATE_PRIORITY = {
   ready: 5,
 } as const;
 
+/** Antigravity setup is available even before the optional provider is enabled. */
+export function selectAdditionalOnboardingProviders(
+  providers: ReadonlyArray<ServerProvider> | null | undefined,
+) {
+  return (providers ?? []).filter(
+    (provider) =>
+      provider.driver === "antigravity" ||
+      provider.driver === "acpRegistry" ||
+      (provider.driver === "cursor" && provider.enabled),
+  );
+}
+
 /** Select the most usable configured instance for each provider driver. */
 export function selectOnboardingProvidersByDriver(
   providers: ReadonlyArray<ServerProvider> | null | undefined,

@@ -89,6 +89,25 @@ describe("AntigravityAdapterV2 flavor", () => {
     assert.isTrue(flavor.supportsCompaction);
   });
 
+  it("honors native approval requests even when the saved mode requests full access", () => {
+    const policy = ProviderAdapterV2RuntimePolicy.make({
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      cwd: "/workspace",
+    });
+    const request = permissionRequest("execute_1", [
+      { optionId: "allow", name: "Allow", kind: "allow_once" },
+    ]);
+    assert.equal(flavor.permissionDisposition?.(policy, request), "ask");
+    assert.equal(
+      flavor.permissionDisposition?.(
+        { ...policy, approvalPolicy: "never", sandboxPolicy: { type: "readOnly" } },
+        { ...request, toolCall: { ...request.toolCall, kind: "edit" } },
+      ),
+      "deny",
+    );
+  });
+
   it("routes interaction_* permission requests to the question card", () => {
     const question = flavor.extractPermissionQuestion?.(
       permissionRequest("interaction_1", [
@@ -266,6 +285,16 @@ describe("AntigravityAdapterV2 client file system", () => {
       assert.isFalse(yield* fileSystem.exists(plantedTarget));
       // A new file under an in-workspace directory link to outside is denied.
       yield* fileSystem.symlink(outside, path.join(workspace, "linked-dir"));
+      const nestedLinkedWrite = yield* writeTextFile(
+        {
+          sessionId: "mock-session-1",
+          path: path.join(workspace, "linked-dir", "missing", "nested.txt"),
+          content: "planted",
+        },
+        context("fs/write_text_file"),
+      ).pipe(Effect.exit);
+      assert.isTrue(Exit.isFailure(nestedLinkedWrite));
+      assert.isFalse(yield* fileSystem.exists(path.join(outside, "missing")));
       const linkedDirWrite = yield* writeTextFile(
         {
           sessionId: "mock-session-1",

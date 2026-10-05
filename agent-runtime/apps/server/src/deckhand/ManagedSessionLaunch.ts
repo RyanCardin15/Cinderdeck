@@ -131,6 +131,9 @@ const make = Effect.gen(function* () {
       snapshots
         .filter((provider) => provider.enabled)
         .map((provider) => ({
+          ...(provider.runtimeModeAdjustments === undefined
+            ? {}
+            : { runtimeModeAdjustments: provider.runtimeModeAdjustments }),
           supportsReadOnly: provider.driver === "codex",
           instanceId: provider.instanceId,
           label: provider.displayName ?? provider.instanceId,

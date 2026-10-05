@@ -1,3 +1,8 @@
+import type * as CodexSchema from "effect-codex-app-server/schema";
+import { makeProviderFailure } from "../orchestration-v2/ProviderFailure.ts";
+import { generateManagedCodexText } from "./CodexManagedTextGeneration.ts";
+import { withCodexAppServerClient } from "../provider/Layers/CodexProvider.ts";
+import { readCodexRequirements, constrainCodexParams } from "../provider/CodexManagedPolicy.ts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -39,6 +44,7 @@ import { codexModelFamily, getModelSelectionStringOptionValue } from "@t3tools/s
 import { getCodexServiceTierOptionValue } from "../codexModelOptions.ts";
 
 const CODEX_TIMEOUT_MS = 180_000;
+const decodeOutputSchema = Schema.decodeUnknownEffect(Schema.Record(Schema.String, Schema.Json));
 const encodeJsonString = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 /**
  * Build a Codex text-generation closure bound to a specific `CodexSettings`
@@ -222,6 +228,58 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
         getModelSelectionStringOptionValue(modelSelection, "reasoningEffort") ??
         DEFAULT_TEXT_GENERATION_REASONING_EFFORT;
       const serviceTier = resolved ? undefined : getCodexServiceTierOptionValue(modelSelection);
+      // Helpers must remain read-only even when an organization requires approvals.
+      const generated = yield* Effect.scoped(
+        Effect.gen(function* () {
+          const { client } = yield* withCodexAppServerClient({
+            binaryPath: effectiveConfig.binaryPath || "codex",
+            homePath: effectiveConfig.homePath,
+            launchArgs,
+            cwd,
+            environment: effectiveEnvironment,
+          });
+          const requirements = yield* readCodexRequirements(client);
+          const helperPolicy = yield* Effect.try({
+            try: () =>
+              constrainCodexParams(
+                {
+                  approvalPolicy: "never" as CodexSchema.V2TurnStartParams__AskForApproval,
+                  sandbox: "read-only",
+                },
+                requirements,
+              ),
+            catch: (cause) =>
+              new TextGenerationError({
+                operation,
+                detail: makeProviderFailure({ cause }).message,
+                cause,
+              }),
+          });
+          if (helperPolicy.approvalPolicy === "never") return false;
+          const text = yield* generateManagedCodexText({
+            client,
+            approvalPolicy: helperPolicy.approvalPolicy,
+            cwd,
+            model,
+            prompt,
+            imagePaths,
+            outputSchema: yield* decodeOutputSchema(toJsonSchemaObject(outputSchemaJson)),
+            effort: reasoningEffort,
+          });
+          yield* fileSystem.writeFileString(outputPath, text);
+          return true;
+        }),
+      ).pipe(
+        Effect.mapError(
+          (cause) =>
+            new TextGenerationError({
+              operation,
+              detail: makeProviderFailure({ cause }).message,
+              cause,
+            }),
+        ),
+      );
+      if (generated) return;
       const spawnCommand = yield* resolveSpawnCommand(
         effectiveConfig.binaryPath || "codex",
         [

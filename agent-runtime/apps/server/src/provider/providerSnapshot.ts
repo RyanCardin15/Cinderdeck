@@ -67,6 +67,7 @@ export interface ServerProviderPresentation {
   readonly showInteractionModeToggle?: boolean;
   readonly reportsContextWindow?: boolean;
   readonly supportedRuntimeModes?: ReadonlyArray<RuntimeMode>;
+  readonly runtimeModeAdjustments?: ServerProvider["runtimeModeAdjustments"];
   readonly requiresNewThreadForModelChange?: boolean;
   readonly supportsConversationRollback?: boolean;
 }
@@ -234,6 +235,9 @@ export function buildServerProvider(input: {
     ...(typeof input.presentation.requiresNewThreadForModelChange === "boolean"
       ? { requiresNewThreadForModelChange: input.presentation.requiresNewThreadForModelChange }
       : {}),
+    ...(input.presentation.runtimeModeAdjustments === undefined
+      ? {}
+      : { runtimeModeAdjustments: input.presentation.runtimeModeAdjustments }),
     enabled: input.enabled,
     installed: input.probe.installed,
     version: input.probe.version,

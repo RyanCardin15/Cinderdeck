@@ -207,3 +207,73 @@ it.effect("keys terminal failure items by provider turn across retries and fallb
     assert.equal(firstAttempt.ordinal, 101);
   }).pipe(Effect.provide(IdAllocator.layer)),
 );
+
+it.each([
+  "codex",
+  "claudeAgent",
+  "cursor",
+  "grok",
+  "opencode",
+  "antigravity",
+  "pi",
+  "acpRegistry",
+] as const)("preserves %s managed policy rejection reasons through startup wrappers", (driver) => {
+  const failure = makeProviderFailure({
+    cause: new ProviderAdapterTurnStartError({
+      driver: ProviderDriverKind.make(driver),
+      threadId: ThreadId.make("policy-thread"),
+      runId: RunId.make("policy-run"),
+      providerThreadId: ProviderThreadId.make("policy-thread"),
+      cause: {
+        cause: new Error(
+          "Organization policy disallows bypass permissions. Allowed approval policies: on-request, untrusted. token=secret-value",
+        ),
+      },
+    }),
+  });
+  assert.include(failure.message, "Organization policy disallows bypass permissions");
+  assert.include(failure.message, "on-request, untrusted");
+  assert.notInclude(failure.message, "secret-value");
+});
+
+it.each([
+  { error: { data: { message: "Organization policy disallows this model. token=secret-value" } } },
+  {
+    message: "Request failed",
+    detail: "Organization policy disallows this model. token=secret-value",
+  },
+  {
+    errors: [
+      { message: "Request failed" },
+      { errorMessage: "Organization policy disallows this model. token=secret-value" },
+    ],
+  },
+])("unwraps native policy rejection envelopes", (cause) => {
+  const failure = makeProviderFailure({ cause, message: "Provider could not start." });
+  assert.equal(failure.message, "Organization policy disallows this model. token=[REDACTED]");
+});
+
+it("bounds cyclic native errors and ignores non-error payloads", () => {
+  const cause: Record<string, unknown> = { prompt: "Organization policy disallows this model." };
+  cause.error = cause;
+  assert.equal(makeProviderFailure({ cause }).message, "Provider turn failed.");
+});
+
+it("shows native invalid approval policy errors without requiring organization wording", () => {
+  const failure = makeProviderFailure({
+    cause: {
+      cause: new Error(
+        "Invalid value 'never' for approval_policy. Allowed values: on-request, untrusted",
+      ),
+    },
+  });
+  assert.include(failure.message, "Allowed values: on-request, untrusted");
+});
+
+it("preserves policy reasons during run preparation even with a generic caller message", () => {
+  const failure = makeProviderFailure({
+    message: "Run preparation failed.",
+    cause: new Error("Managed policy disallows the requested sandbox mode."),
+  });
+  assert.equal(failure.message, "Managed policy disallows the requested sandbox mode.");
+});

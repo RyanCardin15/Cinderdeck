@@ -722,6 +722,15 @@ export function EnvironmentProviderSettings({
       refreshingRef.current = false;
       setIsRefreshingProviders(false);
       if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add({
+          type: "error",
+          title: "Could not refresh providers",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Check the provider configuration and try again.",
+        });
         console.warn("Failed to refresh providers", {
           operation: "refresh-providers",
           environmentId,

@@ -1,3 +1,4 @@
+import * as CodexErrors from "effect-codex-app-server/errors";
 import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -48,6 +49,12 @@ export function withCodexReplayChildMetadata(
   readMetadata: (threadId: string) => Effect.Effect<unknown> = (threadId) =>
     Effect.succeed({ thread: { id: threadId }, model: null }),
 ): CodexClient.CodexAppServerClient["Service"] {
+  const hasRecordedRequirements = transcript.entries.some(
+    (entry) =>
+      entry.type === "expect_outbound" &&
+      Predicate.isObject(entry.frame) &&
+      entry.frame.method === "configRequirements/read",
+  );
   const childThreadIds = new Set(
     transcript.entries.flatMap((entry) => {
       if (entry.type !== "emit_inbound" || !Predicate.isObject(entry.frame)) return [];
@@ -64,6 +71,15 @@ export function withCodexReplayChildMetadata(
   );
   return {
     ...client,
+    request: (method, params) =>
+      method === "configRequirements/read" && !hasRecordedRequirements
+        ? Effect.fail(
+            new CodexErrors.CodexAppServerRequestError({
+              code: -32601,
+              errorMessage: "Legacy replay has no requirements method",
+            }),
+          )
+        : client.request(method, params),
     raw: {
       ...client.raw,
       request: (method, params) =>

@@ -17,6 +17,7 @@ import * as EffectAcpErrors from "effect-acp/errors";
 import type { ServerConfig } from "../../config.ts";
 import type { AntigravityAuth } from "../../provider/AntigravityAuth.ts";
 import type * as AcpSessionRuntime from "../../provider/acp/AcpSessionRuntime.ts";
+import { acpPermissionDisposition } from "../../provider/acp/AcpClientPolicy.ts";
 import {
   antigravityPermissionMode,
   applyAntigravityAcpModelSelection,
@@ -183,6 +184,10 @@ export function makeAntigravityAcpAdapterFlavor(
         });
       }),
     sessionModeForPolicy: (policy) => antigravityPermissionMode(policy.runtimeMode),
+    // The native mode already decides which actions can skip approval. An
+    // explicit request can reflect enterprise restrictions, even in yolo.
+    permissionDisposition: (policy, request) =>
+      acpPermissionDisposition(policy, request) === "deny" ? "deny" : "ask",
     clientFileSystem: {
       readTextFile: (request, cwd) =>
         readAntigravityClientTextFile({

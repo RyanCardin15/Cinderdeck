@@ -400,8 +400,21 @@ function ThreadSettingsSessionProvider(
       null,
     [isApplied, pendingModel, props.providerGroups],
   );
-  const runtimeModeChoices = runtimeModeChoicesForSupportedModes(
-    displayedModel?.supportedRuntimeModes,
+  const runtimeModeChoices = useMemo(
+    () =>
+      runtimeModeChoicesForSupportedModes(displayedModel?.supportedRuntimeModes).map((choice) => {
+        const adjustment = displayedModel?.runtimeModeAdjustments?.find(
+          (entry) => entry.mode === choice.mode,
+        );
+        return adjustment
+          ? {
+              ...choice,
+              label: `${choice.label} (${adjustment.source === "provider" ? "provider" : "organization"} policy)`,
+              description: adjustment.description,
+            }
+          : choice;
+      }),
+    [displayedModel?.supportedRuntimeModes, displayedModel?.runtimeModeAdjustments],
   );
   const compatibleRuntimeMode = compatibleRuntimeModeForChoices(
     props.runtimeMode,

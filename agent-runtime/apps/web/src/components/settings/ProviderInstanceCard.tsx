@@ -1083,6 +1083,25 @@ export function ProviderInstanceCard({
         />
       </SettingsSection>
 
+      {liveProvider?.runtimeModeAdjustments?.length ? (
+        <SettingsSection title="Access policy">
+          {liveProvider.runtimeModeAdjustments.map((adjustment) => (
+            <SettingsRow
+              key={adjustment.mode}
+              title={
+                {
+                  "approval-required": "Supervised",
+                  "auto-accept-edits": "Auto-accept edits",
+                  auto: "Auto",
+                  "full-access": "Full access",
+                }[adjustment.mode]
+              }
+              description={adjustment.description}
+            />
+          ))}
+        </SettingsSection>
+      ) : null}
+
       {setup || environmentFields.length > 0 ? (
         <SettingsSection title="Setup">
           {setup}

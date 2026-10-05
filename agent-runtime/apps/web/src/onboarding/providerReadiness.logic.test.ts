@@ -11,6 +11,7 @@ import {
   resolveOnboardingProviderInstallCommand,
   resolveOnboardingProviderLoginCommand,
   selectOnboardingProvidersByDriver,
+  selectAdditionalOnboardingProviders,
 } from "./providerReadiness.logic";
 
 const readyCodex: ServerProvider = {
@@ -26,6 +27,32 @@ const readyCodex: ServerProvider = {
   slashCommands: [],
   skills: [],
 };
+
+describe("additional onboarding providers", () => {
+  it("offers disabled Antigravity instances for configuration without adding other optional CLIs", () => {
+    const providers = [
+      "antigravity",
+      "antigravity",
+      "cursor",
+      "acpRegistry",
+      "grok",
+      "opencode",
+      "pi",
+    ].map((driver, index) => ({
+      ...readyCodex,
+      driver: ProviderDriverKind.make(driver),
+      instanceId: ProviderInstanceId.make(`${driver}_${index}`),
+      enabled: false,
+    }));
+    expect(
+      selectAdditionalOnboardingProviders(providers).map((provider) => provider.instanceId),
+    ).toEqual(["antigravity_0", "antigravity_1", "acpRegistry_3"]);
+    expect(selectAdditionalOnboardingProviders([{ ...providers[2]!, enabled: true }])).toHaveLength(
+      1,
+    );
+    expect(selectAdditionalOnboardingProviders(undefined)).toEqual([]);
+  });
+});
 
 describe("getOnboardingProviderState", () => {
   it("treats an enabled Codex provider with ready status and unknown authentication as ready", () => {

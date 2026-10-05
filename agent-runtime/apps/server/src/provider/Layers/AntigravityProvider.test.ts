@@ -217,6 +217,45 @@ describe("Antigravity model catalog", () => {
 });
 
 it.layer(testLayer)("Antigravity provider snapshots", (it) => {
+  it.effect("refreshes native permission restrictions and clears them on sign-out", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const harness = yield* makeHarness({ enabled: false });
+        const modeConfig = {
+          id: "mode",
+          name: "Permissions",
+          category: "mode",
+          type: "select",
+          currentValue: "default",
+          options: [{ value: "default", name: "Ask" }],
+        } satisfies EffectAcpSchema.SessionConfigOption;
+        yield* harness.provider.onSessionStarted({
+          ...started,
+          sessionSetupResult: {
+            ...started.sessionSetupResult,
+            configOptions: [modelConfig, modeConfig],
+          },
+        });
+        expect(
+          (yield* harness.provider.snapshot.getSnapshot).runtimeModeAdjustments?.map(
+            (entry) => entry.mode,
+          ),
+        ).toEqual(["auto-accept-edits", "full-access"]);
+        yield* harness.provider.onConfigOptionsUpdated([
+          modelConfig,
+          {
+            ...modeConfig,
+            options: ["default", "auto_edit", "yolo"].map((value) => ({ value, name: value })),
+          },
+        ]);
+        expect((yield* harness.provider.snapshot.getSnapshot).runtimeModeAdjustments).toEqual([]);
+        yield* harness.provider.onConfigOptionsUpdated([modelConfig, modeConfig]);
+        yield* harness.provider.onSignedOut;
+        expect((yield* harness.provider.snapshot.getSnapshot).runtimeModeAdjustments).toEqual([]);
+      }),
+    ),
+  );
+
   it.effect("does not probe or run helper safety checks while disabled", () =>
     Effect.scoped(
       Effect.gen(function* () {

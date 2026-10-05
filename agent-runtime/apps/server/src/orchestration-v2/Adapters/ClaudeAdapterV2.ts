@@ -1,3 +1,8 @@
+import { ChildProcessSpawner } from "effect/unstable/process";
+import {
+  readClaudeManagedPolicy,
+  constrainClaudeOptions,
+} from "../../provider/ClaudeManagedPolicy.ts";
 import * as NodeCrypto from "node:crypto";
 
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
@@ -583,10 +588,13 @@ export function makeClaudeAgentSdkProtocolLogger(input: {
 export const claudeAgentSdkQueryRunnerLiveLayer: Layer.Layer<
   ClaudeAgentSdkQueryRunner,
   never,
-  Crypto.Crypto | ProviderEventLoggers.ProviderEventLoggers
+  | Crypto.Crypto
+  | ProviderEventLoggers.ProviderEventLoggers
+  | ChildProcessSpawner.ChildProcessSpawner
 > = Layer.effect(
   ClaudeAgentSdkQueryRunner,
   Effect.gen(function* () {
+    const policySpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const crypto = yield* Crypto.Crypto;
     const { native: nativeEventLogger } = yield* ProviderEventLoggers.ProviderEventLoggers;
 
@@ -611,11 +619,18 @@ export const claudeAgentSdkQueryRunnerLiveLayer: Layer.Layer<
           ),
           Stream.toAsyncIterable,
         );
+        const bypassDisabled = yield* readClaudeManagedPolicy({
+          ...(input.options.cwd === undefined ? {} : { cwd: input.options.cwd }),
+          ...(input.options.env === undefined ? {} : { environment: input.options.env }),
+        }).pipe(
+          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, policySpawner),
+          Effect.mapError((cause) => queryRunnerError(cause, "managed-policy")),
+        );
         const queryRuntime = yield* Effect.try({
           try: () =>
             query({
               prompt,
-              options: input.options,
+              options: constrainClaudeOptions(input.options, bypassDisabled),
             }),
           catch: (cause) => queryRunnerError(cause, "query"),
         });

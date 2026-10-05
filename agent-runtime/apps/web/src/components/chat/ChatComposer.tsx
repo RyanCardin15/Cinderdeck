@@ -2130,10 +2130,23 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const selectedProvider: ProviderDriverKind =
     selectedProviderEntry?.driverKind ?? requestedDriverKind;
   const supportedRuntimeModes = selectedProviderEntry?.snapshot.supportedRuntimeModes;
-  const compatibleRuntimeModeOptions =
-    supportedRuntimeModes && supportedRuntimeModes.length > 0
-      ? runtimeModeOptions.filter((option) => supportedRuntimeModes.includes(option.mode))
-      : runtimeModeOptions;
+  const runtimeModeAdjustments = selectedProviderEntry?.snapshot.runtimeModeAdjustments;
+  const compatibleRuntimeModeOptions = useMemo(() => {
+    const available =
+      supportedRuntimeModes && supportedRuntimeModes.length > 0
+        ? runtimeModeOptions.filter((option) => supportedRuntimeModes.includes(option.mode))
+        : runtimeModeOptions;
+    return available.map((option) => {
+      const adjustment = runtimeModeAdjustments?.find((entry) => entry.mode === option.mode);
+      return adjustment
+        ? {
+            ...option,
+            label: `${option.label} (${adjustment.source === "provider" ? "provider" : "organization"} policy)`,
+            description: adjustment.description,
+          }
+        : option;
+    });
+  }, [supportedRuntimeModes, runtimeModeAdjustments]);
   // Older threads can contain a mode their current provider no longer offers.
   // Display the provider's first supported mode, which is also its safe legacy
   // fallback, without mutating persisted state until the user makes a choice.

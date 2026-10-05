@@ -264,7 +264,10 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
                     onPress={() => {
                       if (disabled) return;
                       void run("refresh", async () => {
-                        const result = await refreshProviders({ environmentId, input: {} });
+                        const result = await refreshProviders({
+                          environmentId,
+                          input: { refreshModels: true },
+                        });
                         if (AsyncResult.isFailure(result)) throw squashAtomCommandFailure(result);
                         setNotice("Provider status refreshed.");
                       });
@@ -289,6 +292,15 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
                               ? ` · Latest ${provider.versionAdvisory.latestVersion}`
                               : ""}
                           </Text>
+                          {provider.runtimeModeAdjustments?.map((adjustment) => (
+                            <Text
+                              key={adjustment.mode}
+                              selectable
+                              className="text-sm text-foreground-muted"
+                            >
+                              {adjustment.description}
+                            </Text>
+                          ))}
                           {provider.updateState && provider.updateState.status !== "idle" ? (
                             <Text
                               selectable
