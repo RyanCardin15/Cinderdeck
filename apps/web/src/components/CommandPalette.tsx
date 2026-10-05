@@ -2217,6 +2217,22 @@ function OpenCommandPaletteDialog(props: {
 
   actionItems.push({
     kind: "action",
+    value: "action:external-apps",
+    searchTerms: ["external", "excel", "add-in", "mac", "debugger", "attach"],
+    title: "Debug an external app",
+    icon: <MonitorIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      const threadRef = activeDraftThread
+        ? scopeThreadRef(activeDraftThread.environmentId, activeDraftThread.threadId)
+        : referenceThreadRef;
+      if (threadRef && pathname !== "/pull-requests")
+        useRightPanelStore.getState().openExternalApp(threadRef, null);
+      else await navigate({ to: "/settings/external-apps" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
     value: "action:usage",
     searchTerms: ["usage", "use", "tokens", "cost", "spend", "limits", "stats", "analytics"],
     title: "Open usage",

@@ -1,3 +1,11 @@
+import {
+  ExternalDebugToolkit,
+  ExternalDebugStandardToolkit,
+  ExternalDebugHandlersLive,
+} from "./toolkits/deckhand/externalDebug.ts";
+import * as ExternalDebugService from "../deckhand/ExternalDebug.ts";
+import { externalDebugMcpResult } from "../deckhand/ExternalDebugMcpResult.ts";
+import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as NodeCrypto from "node:crypto";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -568,6 +576,7 @@ const registerImageTool = <T extends Tool.Any, E, R>(
   >,
   operation: string,
   failureText: string,
+  formatResult?: (value: unknown) => McpSchema.CallToolResult,
 ) =>
   Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
@@ -599,6 +608,7 @@ const registerImageTool = <T extends Tool.Any, E, R>(
             Effect.matchCauseEffect({
               onFailure: imageToolFailure(tool.name, operation, failureText),
               onSuccess: ({ encodedResult }) => {
+                if (formatResult) return Effect.succeed(formatResult(encodedResult));
                 const { screenshot, ...rest } = encodedResult as ImageToolResult;
                 const includeImage =
                   (payload as { readonly includeImage?: boolean } | undefined)?.includeImage !==
@@ -650,6 +660,29 @@ const registerDeviceScreenshot = Effect.fn("McpHttpServer.registerDeviceScreensh
     "Device screenshot failed.",
   );
 });
+
+const registerExternalDebugRead = Effect.fn("McpHttpServer.registerExternalDebugRead")(
+  function* () {
+    const service = yield* ExternalDebugService.ExternalDebug;
+    const threads = yield* ThreadManagementService.ThreadManagementService;
+    const built = yield* ExternalDebugToolkit;
+    yield* registerImageTool(
+      ExternalDebugToolkit.tools.deckhand_debug_read,
+      (payload) =>
+        built
+          .handle("deckhand_debug_read", payload)
+          .pipe(Stream.unwrap, Stream.run(Sink.last()), Effect.flatMap(Effect.fromOption)),
+      (effect) =>
+        effect.pipe(
+          Effect.provideService(ExternalDebugService.ExternalDebug, service),
+          Effect.provideService(ThreadManagementService.ThreadManagementService, threads),
+        ),
+      "read",
+      "External app read failed. Reconnect to the selected window.",
+      externalDebugMcpResult,
+    );
+  },
+);
 
 const PreviewStandardToolkitRegistrationLive = McpServer.toolkit(PreviewStandardToolkit).pipe(
   Layer.provide(PreviewStandardToolkitHandlersLive),
@@ -777,6 +810,10 @@ const ManagedMcpTransportLive = ManagedToolRegistrationLive.pipe(
 );
 
 export const layer = Layer.mergeAll(
+  Layer.mergeAll(
+    McpServer.toolkit(ExternalDebugStandardToolkit),
+    Layer.effectDiscard(registerExternalDebugRead()),
+  ).pipe(Layer.provide(ExternalDebugHandlersLive)),
   DeckhandToolkitRegistrationLive,
   PreviewToolkitRegistrationLive,
   OrchestratorToolkitRegistrationLive,

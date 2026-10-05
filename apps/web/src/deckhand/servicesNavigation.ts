@@ -1,4 +1,24 @@
-import { validateWorkspaceSearch } from "./workspaceNavigation";
+import type { EnvironmentId } from "@t3tools/contracts";
+import type { IntegrationView } from "@t3tools/contracts/deckhand/rpc";
+import { validateWorkspaceSearch, type WorkspaceSearch } from "./workspaceNavigation";
+
+export function servicesWorkspaceSearch(
+  environment: EnvironmentId,
+  search: WorkspaceSearch,
+  selected: IntegrationView["resources"][number] | undefined,
+  installationID: string | undefined,
+): WorkspaceSearch {
+  const context = search.workspace ?? selected?.workspaceID;
+  if (!context) return { environment };
+  const installation = search.expectedInstallationID ?? installationID;
+  const generation = search.expectedGeneration ?? selected?.generation;
+  return {
+    environment,
+    ...(context ? { workspace: selected?.workspace?.lane?.sourceStackID ?? context, context } : {}),
+    ...(installation ? { expectedInstallationID: installation } : {}),
+    ...(generation ? { expectedGeneration: generation } : {}),
+  };
+}
 export function validateServicesSearch(value: Record<string, unknown>) {
   const { context: _context, ...search } = validateWorkspaceSearch(value);
   if (

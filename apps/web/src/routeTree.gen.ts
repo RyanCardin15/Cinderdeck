@@ -26,6 +26,7 @@ import { Route as SettingsOpenSourceLicensesRouteImport } from './routes/setting
 import { Route as SettingsKeybindingsRouteImport } from './routes/settings.keybindings'
 import { Route as SettingsIntegrationsRouteImport } from './routes/settings.integrations'
 import { Route as SettingsGeneralRouteImport } from './routes/settings.general'
+import { Route as SettingsExternalAppsRouteImport } from './routes/settings.external-apps'
 import { Route as SettingsDiagnosticsRouteImport } from './routes/settings.diagnostics'
 import { Route as SettingsConnectionsRouteImport } from './routes/settings.connections'
 import { Route as SettingsArchivedRouteImport } from './routes/settings.archived'
@@ -37,6 +38,7 @@ import { Route as ChatRecordingsRouteImport } from './routes/_chat.recordings'
 import { Route as ChatPullRequestsRouteImport } from './routes/_chat.pull-requests'
 import { Route as ChatLinkedWorkRouteImport } from './routes/_chat.linked-work'
 import { Route as ChatInboxRouteImport } from './routes/_chat.inbox'
+import { Route as ChatExternalAppsRouteImport } from './routes/_chat.external-apps'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
 
@@ -125,6 +127,11 @@ const SettingsGeneralRoute = SettingsGeneralRouteImport.update({
   path: '/general',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsExternalAppsRoute = SettingsExternalAppsRouteImport.update({
+  id: '/external-apps',
+  path: '/external-apps',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsDiagnosticsRoute = SettingsDiagnosticsRouteImport.update({
   id: '/diagnostics',
   path: '/diagnostics',
@@ -180,6 +187,11 @@ const ChatInboxRoute = ChatInboxRouteImport.update({
   path: '/inbox',
   getParentRoute: () => ChatRoute,
 } as any)
+const ChatExternalAppsRoute = ChatExternalAppsRouteImport.update({
+  id: '/external-apps',
+  path: '/external-apps',
+  getParentRoute: () => ChatRoute,
+} as any)
 const ChatDraftDraftIdRoute = ChatDraftDraftIdRouteImport.update({
   id: '/draft/$draftId',
   path: '/draft/$draftId',
@@ -199,6 +211,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRouteWithChildren
   '/usage': typeof UsageRoute
   '/welcome': typeof WelcomeRoute
+  '/external-apps': typeof ChatExternalAppsRoute
   '/inbox': typeof ChatInboxRoute
   '/linked-work': typeof ChatLinkedWorkRoute
   '/pull-requests': typeof ChatPullRequestsRoute
@@ -210,6 +223,7 @@ export interface FileRoutesByFullPath {
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
+  '/settings/external-apps': typeof SettingsExternalAppsRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
@@ -229,6 +243,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRouteWithChildren
   '/usage': typeof UsageRoute
   '/welcome': typeof WelcomeRoute
+  '/external-apps': typeof ChatExternalAppsRoute
   '/inbox': typeof ChatInboxRoute
   '/linked-work': typeof ChatLinkedWorkRoute
   '/pull-requests': typeof ChatPullRequestsRoute
@@ -240,6 +255,7 @@ export interface FileRoutesByTo {
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
+  '/settings/external-apps': typeof SettingsExternalAppsRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
@@ -262,6 +278,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRouteWithChildren
   '/usage': typeof UsageRoute
   '/welcome': typeof WelcomeRoute
+  '/_chat/external-apps': typeof ChatExternalAppsRoute
   '/_chat/inbox': typeof ChatInboxRoute
   '/_chat/linked-work': typeof ChatLinkedWorkRoute
   '/_chat/pull-requests': typeof ChatPullRequestsRoute
@@ -273,6 +290,7 @@ export interface FileRoutesById {
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
+  '/settings/external-apps': typeof SettingsExternalAppsRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
@@ -296,6 +314,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/usage'
     | '/welcome'
+    | '/external-apps'
     | '/inbox'
     | '/linked-work'
     | '/pull-requests'
@@ -307,6 +326,7 @@ export interface FileRouteTypes {
     | '/settings/archived'
     | '/settings/connections'
     | '/settings/diagnostics'
+    | '/settings/external-apps'
     | '/settings/general'
     | '/settings/integrations'
     | '/settings/keybindings'
@@ -326,6 +346,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/usage'
     | '/welcome'
+    | '/external-apps'
     | '/inbox'
     | '/linked-work'
     | '/pull-requests'
@@ -337,6 +358,7 @@ export interface FileRouteTypes {
     | '/settings/archived'
     | '/settings/connections'
     | '/settings/diagnostics'
+    | '/settings/external-apps'
     | '/settings/general'
     | '/settings/integrations'
     | '/settings/keybindings'
@@ -358,6 +380,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/usage'
     | '/welcome'
+    | '/_chat/external-apps'
     | '/_chat/inbox'
     | '/_chat/linked-work'
     | '/_chat/pull-requests'
@@ -369,6 +392,7 @@ export interface FileRouteTypes {
     | '/settings/archived'
     | '/settings/connections'
     | '/settings/diagnostics'
+    | '/settings/external-apps'
     | '/settings/general'
     | '/settings/integrations'
     | '/settings/keybindings'
@@ -515,6 +539,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsGeneralRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/external-apps': {
+      id: '/settings/external-apps'
+      path: '/external-apps'
+      fullPath: '/settings/external-apps'
+      preLoaderRoute: typeof SettingsExternalAppsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/diagnostics': {
       id: '/settings/diagnostics'
       path: '/diagnostics'
@@ -592,6 +623,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatInboxRouteImport
       parentRoute: typeof ChatRoute
     }
+    '/_chat/external-apps': {
+      id: '/_chat/external-apps'
+      path: '/external-apps'
+      fullPath: '/external-apps'
+      preLoaderRoute: typeof ChatExternalAppsRouteImport
+      parentRoute: typeof ChatRoute
+    }
     '/_chat/draft/$draftId': {
       id: '/_chat/draft/$draftId'
       path: '/draft/$draftId'
@@ -610,6 +648,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface ChatRouteChildren {
+  ChatExternalAppsRoute: typeof ChatExternalAppsRoute
   ChatInboxRoute: typeof ChatInboxRoute
   ChatLinkedWorkRoute: typeof ChatLinkedWorkRoute
   ChatPullRequestsRoute: typeof ChatPullRequestsRoute
@@ -622,6 +661,7 @@ interface ChatRouteChildren {
 }
 
 const ChatRouteChildren: ChatRouteChildren = {
+  ChatExternalAppsRoute: ChatExternalAppsRoute,
   ChatInboxRoute: ChatInboxRoute,
   ChatLinkedWorkRoute: ChatLinkedWorkRoute,
   ChatPullRequestsRoute: ChatPullRequestsRoute,
@@ -640,6 +680,7 @@ interface SettingsRouteChildren {
   SettingsArchivedRoute: typeof SettingsArchivedRoute
   SettingsConnectionsRoute: typeof SettingsConnectionsRoute
   SettingsDiagnosticsRoute: typeof SettingsDiagnosticsRoute
+  SettingsExternalAppsRoute: typeof SettingsExternalAppsRoute
   SettingsGeneralRoute: typeof SettingsGeneralRoute
   SettingsIntegrationsRoute: typeof SettingsIntegrationsRoute
   SettingsKeybindingsRoute: typeof SettingsKeybindingsRoute
@@ -657,6 +698,7 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsArchivedRoute: SettingsArchivedRoute,
   SettingsConnectionsRoute: SettingsConnectionsRoute,
   SettingsDiagnosticsRoute: SettingsDiagnosticsRoute,
+  SettingsExternalAppsRoute: SettingsExternalAppsRoute,
   SettingsGeneralRoute: SettingsGeneralRoute,
   SettingsIntegrationsRoute: SettingsIntegrationsRoute,
   SettingsKeybindingsRoute: SettingsKeybindingsRoute,

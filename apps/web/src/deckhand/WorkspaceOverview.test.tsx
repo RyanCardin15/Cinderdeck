@@ -240,6 +240,59 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
+it("shows the selected workspace page count instead of unrelated catalog contexts", async () => {
+  boundary.search = { workspace: "other", context: "other" };
+  registry.set(
+    nativeAtom,
+    AsyncResult.success({
+      ...view,
+      workspaceContexts: {
+        workspaceID: "other",
+        resources: [other],
+        total: 1,
+        laneCount: 0,
+        offset: 0,
+        nextOffset: null,
+      },
+    }),
+  );
+  await render();
+  const footer = container.querySelector('nav[aria-label="Selected workspace context pages"]');
+  expect(footer?.textContent).toContain("Workspace contexts 1–1 of 1");
+  expect(container.textContent).not.toContain("Contexts 1–3 of 3");
+  expect(footer?.querySelectorAll("button:disabled")).toHaveLength(2);
+});
+
+it("keeps scoped and catalog paging independent for a workspace with off-page lanes", async () => {
+  boundary.search = { workspace: "primary", context: "lane" };
+  registry.set(
+    nativeAtom,
+    AsyncResult.success({
+      ...view,
+      total: 500,
+      nextOffset: 48,
+      workspaceContexts: {
+        workspaceID: "primary",
+        resources: [primary, lane],
+        total: 61,
+        laneCount: 60,
+        offset: 0,
+        nextOffset: 50,
+      },
+    }),
+  );
+  await render();
+  expect(
+    container.querySelector('nav[aria-label="Selected workspace context pages"]')?.textContent,
+  ).toContain("Workspace contexts 1–2 of 61");
+  expect(container.querySelector("footer")?.textContent).toContain(
+    "All workspace contexts 1–3 of 500",
+  );
+  expect(button("Next contexts").disabled).toBe(false);
+  await act(async () => button("Next contexts").click());
+  expect(boundary.mutation).not.toHaveBeenCalled();
+});
+
 it("selects Primary checkout by default despite existing lanes and opens its pinned Agents view", async () => {
   await render();
   expect(container.querySelector('aside[aria-label="Selected context"] h2')?.textContent).toBe(
@@ -311,9 +364,12 @@ it("preserves Agents while changing workspace and checkout, with selected-lane s
   expect(
     container.querySelector('section[aria-label="Agents in selected context"]')?.textContent,
   ).toContain("Saved sessions for other");
-  expect(container.textContent).toContain("No services in this context");
-  expect(button("Start services").disabled).toBe(true);
-  expect(button("Stop services").disabled).toBe(true);
+  expect(container.querySelector('aside[aria-label="Selected context"]')).toBeNull();
+  expect(
+    [...container.querySelectorAll("button")].some(
+      (item) => item.textContent === "Start services" || item.textContent === "Stop services",
+    ),
+  ).toBe(false);
   expect(button("Launch selected agent").disabled).toBe(false);
   expect(boundary.mutation).not.toHaveBeenCalled();
 });
@@ -350,9 +406,7 @@ it("refuses a replaced saved lane without retargeting its agent or service actio
   expect(container.querySelector('[role="alert"]')?.textContent).toContain(
     "earlier lane or Cinderdeck installation",
   );
-  expect(container.querySelector('aside[aria-label="Selected context"] h2')?.textContent).toBe(
-    "Choose a context",
-  );
+  expect(container.querySelector('aside[aria-label="Selected context"]')).toBeNull();
   expect(container.textContent).not.toContain("Saved sessions for lane");
   expect(
     [...container.querySelectorAll("button")].some(

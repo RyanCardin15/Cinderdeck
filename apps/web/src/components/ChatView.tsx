@@ -1,3 +1,4 @@
+import { useDisconnectExternalApps } from "../deckhand/externalAppSessions";
 import { LaneSessionContext, useLaneSessionContext } from "../deckhand/LaneSessionContext";
 import { ChatCanvas } from "./chat/ChatCanvas";
 import { usageLimitRecoveryBannerItem } from "./chat/UsageLimitRecoveryBanner";
@@ -673,6 +674,9 @@ const PreviewPanel = lazy(() =>
 const DiffPanel = lazy(() => import("./DiffPanel"));
 const selectAutoShowFloatingPreview = (settings: { browserAutoShowFloatingPreview: boolean }) =>
   settings.browserAutoShowFloatingPreview;
+const ExternalAppPanel = lazy(() =>
+  import("../deckhand/ExternalAppPanel").then((module) => ({ default: module.ExternalAppPanel })),
+);
 const DevicePanel = lazy(() =>
   import("./device/DevicePanel").then((module) => ({ default: module.DevicePanel })),
 );
@@ -5061,6 +5065,10 @@ export default function ChatView(props: ChatViewProps) {
     activeThreadRef?.environmentId ?? null,
   );
   const [deviceSetupThread, setDeviceSetupThread] = useState<ScopedThreadRef | null>(null);
+  const disconnectExternalApps = useDisconnectExternalApps();
+  const addExternalAppSurface = useCallback(() => {
+    if (activeThreadRef) useRightPanelStore.getState().openExternalApp(activeThreadRef, null);
+  }, [activeThreadRef]);
   const addDeviceSurface = useCallback(() => {
     if (!activeThreadRef) return;
     if (!deviceState.onboardingCompleted || deviceState.hostStatus === "disabled") {
@@ -5603,6 +5611,14 @@ export default function ChatView(props: ChatViewProps) {
     (surfaces: readonly RightPanelSurface[]) => {
       if (!activeThreadRef) return;
       for (const surface of surfaces) {
+        if (surface.kind === "external-app" && surface.profileId) {
+          void disconnectExternalApps(
+            (binding) =>
+              binding.threadRef.environmentId === activeThreadRef.environmentId &&
+              binding.threadRef.threadId === activeThreadRef.threadId &&
+              binding.profileId === surface.profileId,
+          );
+        }
         if (surface.kind === "preview" && surface.resourceId) {
           void closePreviewSession({
             closePreview,
@@ -5625,6 +5641,7 @@ export default function ChatView(props: ChatViewProps) {
     [
       activeThreadRef,
       activePreviewState.sessions,
+      disconnectExternalApps,
       closePreview,
       closeTerminalMutation,
       storeCloseTerminal,
@@ -10367,6 +10384,15 @@ export default function ChatView(props: ChatViewProps) {
       />
     ) : renderedRightPanelSurface?.kind === "pull-requests" && activeThreadRef ? (
       <ThreadPullRequestsPanel threadRef={activeThreadRef} />
+    ) : renderedRightPanelSurface?.kind === "external-app" ? (
+      <Suspense fallback={null}>
+        <ExternalAppPanel
+          key={`${routeThreadKey}:${renderedRightPanelSurface.id}`}
+          threadRef={activeThreadRef}
+          profileId={renderedRightPanelSurface.profileId}
+          visible={rightPanelOpen}
+        />
+      </Suspense>
     ) : renderedRightPanelSurface?.kind === "device" ? (
       <Suspense fallback={null}>
         <DevicePanel
@@ -11278,6 +11304,7 @@ export default function ChatView(props: ChatViewProps) {
             onAddPullRequest={addPullRequestSurface}
             onAddPullRequests={addPullRequestsSurface}
             onAddDevice={addDeviceSurface}
+            onAddExternalApp={addExternalAppSurface}
             browserAvailable={isPreviewSupportedInRuntime()}
             terminalAvailable={activeProject !== null}
             diffAvailable={isServerThread && isGitRepo}
@@ -11333,6 +11360,7 @@ export default function ChatView(props: ChatViewProps) {
               onAddPullRequest={addPullRequestSurface}
               onAddPullRequests={addPullRequestsSurface}
               onAddDevice={addDeviceSurface}
+              onAddExternalApp={addExternalAppSurface}
               browserAvailable={isPreviewSupportedInRuntime()}
               terminalAvailable={activeProject !== null}
               diffAvailable={isServerThread && isGitRepo}

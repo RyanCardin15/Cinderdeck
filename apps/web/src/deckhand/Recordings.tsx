@@ -138,6 +138,7 @@ function RecordingWorkspace({ environmentId }: { environmentId: EnvironmentId })
     <div className={styles.shell}>
       <ProductNavigation
         current="recordings"
+        workspaceSearch={returnSearch}
         connection={{
           label: connected ? "Cinderdeck connected" : "Cinderdeck unavailable",
           connected,

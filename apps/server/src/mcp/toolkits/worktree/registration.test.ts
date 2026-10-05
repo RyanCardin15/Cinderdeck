@@ -1,4 +1,5 @@
 import * as DeckhandExternal from "../../../deckhand/ExternalSessions.ts";
+import * as ExternalDebug from "../../../deckhand/ExternalDebug.ts";
 import * as DeckhandContext from "../../../deckhand/ThreadContext.ts";
 import * as DeckhandRuns from "../../../deckhand/Runs.ts";
 import * as DeckhandRecordings from "../../../deckhand/Recordings.ts";
@@ -36,6 +37,7 @@ const StubServicesLive = Layer.mergeAll(
   Layer.mock(DeckhandRecordings.Recordings)({}),
   Layer.mock(DeckhandHub.IntegrationHub)({}),
   Layer.mock(DeckhandExternal.ExternalSessions)({}),
+  Layer.mock(ExternalDebug.ExternalDebug)({}),
   Layer.mock(Orchestrator.OrchestratorV2)({}),
   Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
   Layer.mock(DeviceService.DeviceService)({}),
@@ -133,6 +135,18 @@ it.effect("production mcp layer lists worktree tools over http", () =>
       // than replacing them.
       expect(toolNames).toContain("preview_status");
       expect(toolNames).toContain("delegate_task");
+      expect(tools.filter((tool) => tool.name === "deckhand_debug_read")).toHaveLength(1);
+      expect(tools.find((tool) => tool.name === "deckhand_debug_read")?.inputSchema.type).toBe(
+        "object",
+      );
+      for (const name of [
+        "deckhand_debug_targets",
+        "deckhand_debug_sessions",
+        "deckhand_debug_attach",
+        "deckhand_debug_command",
+        "deckhand_debug_detach",
+      ])
+        expect(toolNames).toContain(name);
       for (const name of [
         "deckhand_external_session_register",
         "deckhand_external_session_heartbeat",

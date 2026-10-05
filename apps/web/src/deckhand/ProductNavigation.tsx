@@ -32,6 +32,8 @@ export function ProductNavigation({
   connection?: { label: string; connected: boolean };
   workspaceSearch?: WorkspaceSearch;
 }) {
+  const { context, tab: _tab, ...scope } = workspaceSearch ?? {};
+  const operationSearch = { ...scope, ...(context ? { workspace: context } : {}) };
   return (
     <aside className={styles.rail} aria-label="Cinderdeck navigation">
       <Link
@@ -80,6 +82,7 @@ export function ProductNavigation({
         </Link>
         <Link
           to="/services"
+          search={operationSearch}
           className={current === "services" ? styles.current : ""}
           aria-current={current === "services" ? "page" : undefined}
         >
@@ -88,6 +91,7 @@ export function ProductNavigation({
         </Link>
         <Link
           to="/recordings"
+          search={operationSearch}
           className={current === "recordings" ? styles.current : ""}
           aria-current={current === "recordings" ? "page" : undefined}
         >

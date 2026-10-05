@@ -43,7 +43,9 @@
     "./deckhand/verificationAttemptsRpc": "./src/deckhand/verificationAttemptsRpc.ts",
     "./deckhand/ownedPreviewRpc": "./src/deckhand/ownedPreviewRpc.ts",
     "./deckhand/historyImportRpc": "./src/deckhand/historyImportRpc.ts",
-    "./deckhand/ownershipRpc": "./src/deckhand/ownershipRpc.ts"
+    "./deckhand/ownershipRpc": "./src/deckhand/ownershipRpc.ts",
+    "./deckhand/externalDebugRpc": "./src/deckhand/externalDebugRpc.ts",
+    "./deckhand/externalAppPreferences": "./src/deckhand/externalAppPreferences.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

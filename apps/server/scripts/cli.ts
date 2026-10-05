@@ -11,6 +11,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import { DEVELOPMENT_ICON_OVERRIDES } from "../../../scripts/lib/brand-assets.ts";
 import { findEsmImportsOfExternalPackages } from "../../../scripts/lib/cli-executable-imports.ts";
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import {
   ServerCliCommandExitError,
@@ -87,6 +88,19 @@ const buildCmd = Command.make(
           shell: false,
         }),
       );
+
+      if ((yield* HostProcessPlatform) === "darwin") {
+        yield* runCommand(
+          ChildProcess.make(
+            process.execPath,
+            [
+              path.join(repoRoot, "scripts/deckhand/build-mac-external-debug.mjs"),
+              path.join(serverDir, "dist/native/deckhand-mac-external-debug"),
+            ],
+            { cwd: repoRoot, stdout: "inherit", stderr: "inherit", shell: false },
+          ),
+        );
+      }
 
       const webDist = path.join(repoRoot, "apps/web/dist");
       const clientTarget = path.join(serverDir, "dist/client");

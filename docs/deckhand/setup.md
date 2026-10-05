@@ -48,3 +48,7 @@ Each archive read is bounded; use the returned continuation offsets. Provider MC
 In **Settings → Integrations → Worktree ownership**, choose the execution computer and an existing worktree conversation. Preview adoption into a base workspace, or release an existing lane while keeping its files. The preview lists affected conversations and any running-work or reservation blockers. Stop that work first, then confirm the ownership change. Single Git worktrees are supported; multi-repository transitions and projects without a separate worktree are unavailable.
 
 Conversations retain their original IDs and history. Pending or uncertain changes block checkout actions; open the saved receipt to recover the same operation. Disconnecting Cinderdeck never releases a lane. Adoption starts no provider, service or setup task, and release keeps the worktree files. An older Cinderdeck without managed-adoption support must be updated before adoption.
+
+## Debug an application hosted by Excel
+
+Enable **Excel** in **Settings → External apps**, then open **External app → Excel** in a conversation’s right panel to view and control the selected Mac Excel window and its real WebKit Inspector together. Excel retains the workbook APIs and sign-in. See [External app debugging](external-apps.md) for Mac permissions, Inspector setup, and another Mac’s connection.

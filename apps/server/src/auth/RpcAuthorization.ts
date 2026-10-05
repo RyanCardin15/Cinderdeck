@@ -1,3 +1,4 @@
+import { EXTERNAL_DEBUG_METHODS } from "@t3tools/contracts/deckhand/externalDebugRpc";
 import { OWNERSHIP_METHODS } from "@t3tools/contracts/deckhand/ownershipRpc";
 import { HISTORY_IMPORT_METHODS } from "@t3tools/contracts/deckhand/historyImportRpc";
 import { OWNED_PREVIEW_METHODS } from "@t3tools/contracts/deckhand/ownedPreviewRpc";
@@ -35,6 +36,12 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * runtime failure.
  */
 export const RPC_REQUIRED_SCOPES = {
+  [EXTERNAL_DEBUG_METHODS.discover]: AuthOrchestrationReadScope,
+  [EXTERNAL_DEBUG_METHODS.sessions]: AuthOrchestrationReadScope,
+  [EXTERNAL_DEBUG_METHODS.read]: AuthOrchestrationReadScope,
+  [EXTERNAL_DEBUG_METHODS.attach]: AuthOrchestrationOperateScope,
+  [EXTERNAL_DEBUG_METHODS.command]: AuthOrchestrationOperateScope,
+  [EXTERNAL_DEBUG_METHODS.detach]: AuthOrchestrationOperateScope,
   [OWNERSHIP_METHODS.preview]: AuthOrchestrationReadScope,
   [OWNERSHIP_METHODS.get]: AuthOrchestrationOperateScope,
   [OWNERSHIP_METHODS.list]: AuthOrchestrationReadScope,

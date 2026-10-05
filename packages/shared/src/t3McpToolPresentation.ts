@@ -80,6 +80,70 @@ const T3_MCP_SERVER_ALIASES = new Set(["t3-code", "t3_code", "t3code", "deckhand
 
 // Cards, activity rows, summaries, and provider identity recovery share this inventory.
 const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
+  deckhand_verification_scenarios: tool(
+    ["List", "Listing", "Listed", "verification scenarios"],
+    "task-status",
+  ),
+  deckhand_verification_scenario_save: tool(
+    ["Save", "Saving", "Saved", "a verification scenario"],
+    "environment-update",
+  ),
+  deckhand_verification_scenario_remove: tool(
+    ["Remove", "Removing", "Removed", "a verification scenario"],
+    "environment-update",
+  ),
+  deckhand_run_detail: tool(["Read", "Reading", "Read", "run details"], "task-status"),
+  deckhand_run_failures: tool(["Read", "Reading", "Read", "run failures"], "task-status"),
+  deckhand_verification_attempt_preview: tool(
+    ["Preview", "Previewing", "Previewed", "a verification attempt"],
+    "task-status",
+  ),
+  deckhand_verification_attempt_start: tool(
+    ["Start", "Starting", "Started", "a verification attempt"],
+    "task-status",
+  ),
+  deckhand_verification_attempt_get: tool(
+    ["Read", "Reading", "Read", "a verification attempt"],
+    "task-status",
+  ),
+  deckhand_verification_attempt_list: tool(
+    ["List", "Listing", "Listed", "verification attempts"],
+    "task-status",
+  ),
+  deckhand_verification_attempt_advance: tool(
+    ["Advance", "Advancing", "Advanced", "a verification attempt"],
+    "task-status",
+  ),
+  deckhand_debug_targets: tool(
+    ["Find", "Finding", "Found", "external app runtimes"],
+    "browser",
+    "browser",
+  ),
+  deckhand_debug_sessions: tool(
+    ["List", "Listing", "Listed", "external debug sessions"],
+    "browser",
+    "browser",
+  ),
+  deckhand_debug_attach: tool(
+    ["Attach", "Attaching", "Attached", "an external debugger"],
+    "browser",
+    "browser",
+  ),
+  deckhand_debug_read: tool(
+    ["Read", "Reading", "Read", "external app diagnostics"],
+    "browser",
+    "browser",
+  ),
+  deckhand_debug_command: tool(
+    ["Debug", "Debugging", "Debugged", "an external app"],
+    "browser",
+    "browser",
+  ),
+  deckhand_debug_detach: tool(
+    ["Disconnect", "Disconnecting", "Disconnected", "an external debugger"],
+    "browser",
+    "browser",
+  ),
   deckhand_evidence_read: tool(["Read", "Reading", "Read", "evidence bytes"], "attachment-prepare"),
   deckhand_recording_windows: tool(
     ["List", "Listing", "Listed", "capture windows"],

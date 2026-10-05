@@ -1062,3 +1062,72 @@ describe("rightPanelStore", () => {
     ).toEqual(["terminal:term-1", "browser:tab-b", "browser:tab-c"]);
   });
 });
+
+describe("external app surfaces", () => {
+  it("replaces the chooser, reuses app tabs, and preserves browser tabs in each thread", () => {
+    const store = useRightPanelStore.getState();
+    store.openBrowser(refA, "browser-test");
+    store.open(refA, "external-app");
+    store.openExternalApp(refA, "excel", "Excel");
+    store.openExternalApp(refA, "excel", "Excel");
+    store.openExternalApp(refB, "notes", "Notes");
+    const a = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+    expect(a.surfaces.map((s) => s.kind)).toEqual(["preview", "external-app"]);
+    expect(a.activeSurfaceId).toBe("external-app:excel");
+    store.closeSurface(refA, "external-app:excel");
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).surfaces.map(
+        (s) => s.kind,
+      ),
+    ).toEqual(["preview"]);
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refB).activeSurfaceId,
+    ).toBe("external-app:notes");
+  });
+  it("persists panel choices independently and rejects malformed app profiles on reload", () => {
+    const store = useRightPanelStore.getState();
+    store.open(refA, "files");
+    store.openExternalApp(refA, "excel", "Excel");
+    const data = JSON.parse(
+      JSON.stringify({ byThreadKey: useRightPanelStore.getState().byThreadKey }),
+    );
+    for (const value of Object.values(data.byThreadKey) as { surfaces: unknown[] }[])
+      value.surfaces.push({
+        id: "external-app:bad",
+        kind: "external-app",
+        profileId: "../../bad",
+        title: "Bad",
+      });
+    useRightPanelStore.setState(migratePersistedRightPanelState(data));
+    const a = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+    expect(a.surfaces).toEqual([
+      { id: "files", kind: "files" },
+      { id: "external-app:excel", kind: "external-app", profileId: "excel", title: "Excel" },
+    ]);
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refB).surfaces,
+    ).toEqual([]);
+  });
+});
+
+it("removes a deleted app's tabs across conversations while preserving other surfaces", () => {
+  const store = useRightPanelStore.getState();
+  store.openBrowser(refA, "test-browser");
+  store.openExternalApp(refA, "custom", "Custom app");
+  store.openExternalApp(refB, "custom", "Custom app");
+  store.openExternalApp(refB, "excel", "Excel");
+  store.removeExternalAppProfile("custom");
+  expect(
+    selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).surfaces.map(
+      (s) => s.kind,
+    ),
+  ).toEqual(["preview"]);
+  expect(
+    selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).activeSurfaceId,
+  ).toBe("browser:test-browser");
+  expect(
+    selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refB).surfaces,
+  ).toEqual([
+    { id: "external-app:excel", kind: "external-app", profileId: "excel", title: "Excel" },
+  ]);
+});

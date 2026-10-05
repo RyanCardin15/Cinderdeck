@@ -313,6 +313,7 @@ const signMacArchiveContents = Effect.fn("signMacArchiveContents")(function* (in
         entry.endsWith(".node") ||
         entry.endsWith(".dylib") ||
         entry.endsWith("spawn-helper") ||
+        entry.endsWith("deckhand-mac-external-debug") ||
         entry.endsWith("t3-resource-monitor"),
     )
     .map((entry) => path.join(input.contentDir, entry));
@@ -348,7 +349,7 @@ const signMacArchiveContents = Effect.fn("signMacArchiveContents")(function* (in
   // so notarize a zip of the binary and rely on the online ticket lookup.
   const notarizeZip = path.join(path.dirname(input.executablePath), ".notarize-t3.zip");
   yield* runCommand(
-    ChildProcess.make("ditto", ["-c", "-k", "--keepParent", input.executablePath, notarizeZip]),
+    ChildProcess.make("ditto", ["-c", "-k", "--keepParent", input.contentDir, notarizeZip]),
     "ditto (notarization zip)",
   );
   yield* runCommand(
@@ -509,6 +510,16 @@ const buildCliArchive = Effect.fn("buildCliArchive")(function* (input: {
   yield* fs.copyFile(builtExecutable, path.join(contentDir, executableName));
   yield* stageWebClient(webClient, path.join(contentDir, "client"));
   yield* fs.copy(resourceMonitorDir, path.join(contentDir, "resource-monitor"));
+  if (input.platform === "mac") {
+    const nativeHelper = path.join(serverDir, "dist/native/deckhand-mac-external-debug");
+    yield* requireInput(
+      nativeHelper,
+      "Build the Mac server bundle on macOS to include the window helper.",
+    );
+    yield* fs.makeDirectory(path.join(contentDir, "native"), { recursive: true });
+    yield* fs.copyFile(nativeHelper, path.join(contentDir, "native/deckhand-mac-external-debug"));
+    yield* fs.chmod(path.join(contentDir, "native/deckhand-mac-external-debug"), 0o755);
+  }
   yield* stageRuntimeExternals({
     repoRoot,
     stageDir: contentDir,

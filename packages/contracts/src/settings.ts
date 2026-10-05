@@ -1,4 +1,5 @@
 import { SshDeviceHostConfigs } from "./device.ts";
+import { ExternalAppProfiles, EXCEL_EXTERNAL_APP } from "./deckhand/externalAppPreferences.ts";
 import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
@@ -352,6 +353,9 @@ export const ClientSettingsSchema = Schema.Struct({
    */
   browserProfiles: Schema.Array(BrowserProfile).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  externalAppProfiles: ExternalAppProfiles.pipe(
+    Schema.withDecodingDefault(Effect.succeed([EXCEL_EXTERNAL_APP])),
   ),
   /** Profile new tabs open under. Falls back to Default if it no longer exists. */
   browserDefaultProfileId: BrowserProfileId.pipe(
@@ -1721,6 +1725,7 @@ export const ClientSettingsPatch = Schema.Struct({
   browserLinkTarget: Schema.optionalKey(BrowserLinkTarget),
   browserAutoShowFloatingPreview: Schema.optionalKey(Schema.Boolean),
   browserProfiles: Schema.optionalKey(Schema.Array(BrowserProfile)),
+  externalAppProfiles: Schema.optionalKey(ExternalAppProfiles),
   browserDefaultProfileId: Schema.optionalKey(BrowserProfileId),
   confirmQuit: Schema.optionalKey(QuitConfirmationMode),
   confirmThreadArchive: Schema.optionalKey(Schema.Boolean),

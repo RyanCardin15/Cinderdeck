@@ -26,6 +26,7 @@ import { ProjectToolkit } from "./project/tools.ts";
 import { AttachmentToolkit } from "./attachment/tools.ts";
 import * as AttachmentHandlers from "./attachment/handlers.ts";
 import { ThreadToolkit } from "./thread/tools.ts";
+import { ExternalDebugToolkit } from "./deckhand/externalDebug.ts";
 import { DeckhandToolkit } from "./deckhand/tools.ts";
 import { WorktreeToolkit } from "./worktree/tools.ts";
 import { DeviceToolkit } from "./device/tools.ts";
@@ -51,6 +52,7 @@ it("publishes unique tool names with reference-free object-root inputs", () => {
     PreviewControlsToolkit,
     DeviceToolkit,
     PullRequestsToolkit,
+    ExternalDebugToolkit,
     DeckhandToolkit,
   ]) {
     for (const tool of Object.values(toolkit.tools)) {

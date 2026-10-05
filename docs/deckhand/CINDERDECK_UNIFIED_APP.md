@@ -60,6 +60,12 @@ A process shared with another conversation is not stopped by this action. The UI
 
 Interrupt and ordinary provider detachment have different semantics. Interrupt stops a turn while retaining the agent session. A detached multi-thread Codex process can remain alive for other conversations or idle cleanup, so detachment alone must not be described as checkout release. The final packaged manual check must confirm the direct action releases the exact task-owned writer while preserving its transcript and files; no new unit suite was added for this UI seam.
 
+## External apps in a conversation
+
+Enable Excel or add a Mac app in **Settings → External apps**. Its settings appear after enabling it. In a conversation, choose **External app** from the right panel, select the enabled profile, and attach the application and optional undocked WebKit Inspector windows on that conversation's computer. Both surfaces use the Cinderdeck theme and retain the conversation's Workspace/Lane context. Expand opens a larger view inside the app window, avoiding a separate macOS fullscreen Space that obstructs native-window activation.
+
+The native helper is included and unpacked in AgentShell's packaged resources. Native controls remain explicit per window and captures stop when the panel is hidden. Microsoft Graph and Office APIs keep running in Excel; this integration mirrors and controls the actual host rather than recreating it. See [External apps](external-apps.md) for Mac requirements and setup. Actual Excel/OAuth and another-Mac acceptance still require the intended add-in and target machine.
+
 ## Organizing agents
 
 Select a Workspace, then its Primary checkout or a feature Lane. The Agents view shows sessions for that exact context; global Overview and Agents navigation retain the selected computer, workspace, lane and saved identity pins. Start a session by choosing its repository, provider account, model and purpose. Provider readiness and sign-in requirements stay visible rather than silently selecting another provider.

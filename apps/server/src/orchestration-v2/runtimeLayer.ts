@@ -6,6 +6,7 @@ import * as OwnedPreviewCapture from "../deckhand/OwnedPreviewCapture.ts";
 import * as OwnedPreviewAttestations from "../deckhand/OwnedPreviewAttestations.ts";
 import * as VerificationAttempts from "../deckhand/VerificationAttempts.ts";
 import * as Builds from "../deckhand/Builds.ts";
+import * as ExternalDebug from "../deckhand/ExternalDebug.ts";
 import * as ExternalSessions from "../deckhand/ExternalSessions.ts";
 import * as Attention from "../deckhand/Attention.ts";
 import * as Verification from "../deckhand/Verification.ts";
@@ -458,6 +459,7 @@ const ownedPreviewCaptureProvided = OwnedPreviewCapture.layer.pipe(
   ),
 );
 export const OrchestrationV2ProductionLayerLive = Layer.mergeAll(
+  ExternalDebug.layerLive,
   ActorAccess.layer,
   HistoryImports.layer,
   currentCheckoutProvided,

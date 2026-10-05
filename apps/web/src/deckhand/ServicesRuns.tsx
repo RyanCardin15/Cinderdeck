@@ -41,7 +41,8 @@ import { useAtomCommand } from "../state/use-atom-command";
 import { ProductNavigation } from "./ProductNavigation";
 import { workspaceView, submitOperation, inspectOperation, recentOperations } from "./state";
 import { listRuns, getRun, runLogs, runDefinition, validateRunDefinition } from "./runState";
-import { savedWorkspaceMatches } from "./workspaceNavigation";
+import { overviewResources, savedWorkspaceMatches } from "./workspaceNavigation";
+import { servicesWorkspaceSearch } from "./servicesNavigation";
 import styles from "./services.module.css";
 const activeStatuses = new Set(["queued", "running", "cancelling"]);
 const elapsed = (duration: number) =>
@@ -105,9 +106,18 @@ function ServicesWorkspace({
 }) {
   const search = useSearch({ from: "/_chat/services" });
   const navigate = useNavigate();
-  const result = useAtomValue(workspaceView({ environmentId, input: { offset: 0, limit: 100 } }));
+  const result = useAtomValue(
+    workspaceView({
+      environmentId,
+      input: {
+        offset: 0,
+        limit: 100,
+        ...(search.workspace ? { selectedContextID: search.workspace } : {}),
+      },
+    }),
+  );
   const view = Option.getOrNull(AsyncResult.value(result));
-  const resources = view?.resources.filter((resource) => resource.available) ?? [];
+  const resources = overviewResources(view).filter((resource) => resource.available);
   const selected = search.workspace
     ? resources.find((resource) => resource.workspaceID === search.workspace)
     : resources[0];
@@ -121,6 +131,12 @@ function ServicesWorkspace({
     <div className={styles.shell}>
       <ProductNavigation
         current="services"
+        workspaceSearch={servicesWorkspaceSearch(
+          environmentId,
+          search,
+          selected,
+          view?.hello?.installationID,
+        )}
         connection={{
           label: connected ? "Cinderdeck connected" : "Cinderdeck unavailable",
           connected,

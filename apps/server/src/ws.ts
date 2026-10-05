@@ -6,6 +6,11 @@ import {
   HISTORY_IMPORT_METHODS,
   HistoryImportError,
 } from "@t3tools/contracts/deckhand/historyImportRpc";
+import * as ExternalDebug from "./deckhand/ExternalDebug.ts";
+import {
+  EXTERNAL_DEBUG_METHODS,
+  ExternalDebugError,
+} from "@t3tools/contracts/deckhand/externalDebugRpc";
 import * as OwnedPreviewCapture from "./deckhand/OwnedPreviewCapture.ts";
 import {
   OWNED_PREVIEW_METHODS,
@@ -1163,6 +1168,7 @@ const makeWsRpcLayer = (
       const verificationAttempts = yield* VerificationAttempts.VerificationAttempts;
       const attention = yield* Attention.Attention;
       const externalSessions = yield* ExternalSessions.ExternalSessions;
+      const externalDebug = yield* ExternalDebug.ExternalDebug;
       const deckhandThreadContext = yield* DeckhandThreadContext.ThreadContext;
       const managedLaunch = yield* ManagedSessionLaunch.ManagedSessionLaunch;
       const reviewerLaunch = yield* ReviewerLaunch.ReviewerLaunch;
@@ -1927,6 +1933,72 @@ const makeWsRpcLayer = (
           observeRpcEffect(HISTORY_IMPORT_METHODS.messages, historyImports.messages(input)),
         [HISTORY_IMPORT_METHODS.messageText]: (input) =>
           observeRpcEffect(HISTORY_IMPORT_METHODS.messageText, historyImports.messageText(input)),
+        [EXTERNAL_DEBUG_METHODS.discover]: (input) =>
+          observeRpcEffect(EXTERNAL_DEBUG_METHODS.discover, externalDebug.discover(input)),
+        [EXTERNAL_DEBUG_METHODS.sessions]: (input) =>
+          observeRpcEffect(
+            EXTERNAL_DEBUG_METHODS.sessions,
+            withActor(
+              input.threadId ? { type: "thread", threadId: input.threadId } : undefined,
+              (actor) =>
+                externalDebug.sessions(
+                  input.threadId ? ExternalDebug.externalDebugThreadOwner(input.threadId) : actor,
+                ),
+              () => new ExternalDebugError({ reason: "unavailable" }),
+            ),
+          ),
+        [EXTERNAL_DEBUG_METHODS.attach]: (input) =>
+          observeRpcEffect(
+            EXTERNAL_DEBUG_METHODS.attach,
+            withActor(
+              input.threadId ? { type: "thread", threadId: input.threadId } : undefined,
+              (actor) =>
+                externalDebug.attach(
+                  input.threadId ? ExternalDebug.externalDebugThreadOwner(input.threadId) : actor,
+                  input,
+                ),
+              () => new ExternalDebugError({ reason: "unavailable" }),
+            ),
+          ),
+        [EXTERNAL_DEBUG_METHODS.read]: (input) =>
+          observeRpcEffect(
+            EXTERNAL_DEBUG_METHODS.read,
+            withActor(
+              input.threadId ? { type: "thread", threadId: input.threadId } : undefined,
+              (actor) =>
+                externalDebug.read(
+                  input.threadId ? ExternalDebug.externalDebugThreadOwner(input.threadId) : actor,
+                  input,
+                ),
+              () => new ExternalDebugError({ reason: "unavailable" }),
+            ),
+          ),
+        [EXTERNAL_DEBUG_METHODS.command]: (input) =>
+          observeRpcEffect(
+            EXTERNAL_DEBUG_METHODS.command,
+            withActor(
+              input.threadId ? { type: "thread", threadId: input.threadId } : undefined,
+              (actor) =>
+                externalDebug.command(
+                  input.threadId ? ExternalDebug.externalDebugThreadOwner(input.threadId) : actor,
+                  input,
+                ),
+              () => new ExternalDebugError({ reason: "unavailable" }),
+            ),
+          ),
+        [EXTERNAL_DEBUG_METHODS.detach]: (input) =>
+          observeRpcEffect(
+            EXTERNAL_DEBUG_METHODS.detach,
+            withActor(
+              input.threadId ? { type: "thread", threadId: input.threadId } : undefined,
+              (actor) =>
+                externalDebug.detach(
+                  input.threadId ? ExternalDebug.externalDebugThreadOwner(input.threadId) : actor,
+                  input,
+                ),
+              () => new ExternalDebugError({ reason: "unavailable" }),
+            ),
+          ),
         [OWNED_PREVIEW_METHODS.intent]: (input) =>
           observeRpcEffect(
             OWNED_PREVIEW_METHODS.intent,

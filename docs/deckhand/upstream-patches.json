@@ -13,7 +13,8 @@
     "docs/deckhand/",
     "scripts/deckhand/",
     ".github/workflows/deckhand",
-    "assets/deckhand/"
+    "assets/deckhand/",
+    "native/mac-external-debug/"
   ],
   "upstreamEdits": {
     ".github/workflows/cursor-hygiene-webhook.yml": "Retain upstream workflow history while preventing T3 publishing, account, deployment and webhook actions in the Deckhand fork.",
@@ -102,7 +103,7 @@
     "apps/desktop/vite.config.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/server/integration/transferBudgetV2.integration.test.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/server/package.json": "App identity and state isolation",
-    "apps/server/scripts/cli.ts": "Retain upstream build commands but remove publishing to T3 npm package names from the Deckhand build CLI.",
+    "apps/server/scripts/cli.ts": "Retain upstream build commands, remove publishing to T3 npm package names, and bundle the universal signed Mac window helper in server builds.",
     "apps/server/scripts/evaluate-thread-titles.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/server/src/auth/RpcAuthorization.test.ts": "Verify managed-session reads and launch mutations use the existing authenticated environment scope boundary.",
     "apps/server/src/auth/RpcAuthorization.ts": "Require existing read or operate scopes for each Deckhand integration method.",
@@ -148,9 +149,11 @@
     "apps/server/src/mcp/DeckhandMcpAccess.test.ts": "Expose provider-scoped Deckhand lane/services/recording/evidence tools through existing authenticated MCP transport and shared domain validation; retain upstream toolkit behavior.",
     "apps/server/src/mcp/DeckhandMcpAccess.ts": "Expose provider-scoped Deckhand lane/services/recording/evidence tools through existing authenticated MCP transport and shared domain validation; retain upstream toolkit behavior.",
     "apps/server/src/mcp/ManagedMcpToolPolicy.ts": "Enforce centrally declared MCP mutation permissions for the saved observer/read-only session, including provider helpers, while preserving existing authentication and context authority.",
-    "apps/server/src/mcp/McpHttpServer.ts": "Expose provider-scoped Deckhand lane/services/recording/evidence tools through existing authenticated MCP transport and shared domain validation; retain upstream toolkit behavior. Refuse mutation-declared tools for authoritative observer/read-only bindings before handler effects.",
+    "apps/server/src/mcp/McpHttpServer.ts": "Expose provider-scoped Deckhand lane/services/recording/evidence tools through existing authenticated MCP transport and shared domain validation; retain upstream toolkit behavior.",
     "apps/server/src/mcp/McpProviderSession.ts": "Use the Deckhand provider-facing MCP namespace and matching prompt hints while preserving wire tool IDs, authenticated transport, historical T3 origins and per-thread ownership guards.",
     "apps/server/src/mcp/toolkits/core.test.ts": "Expose provider-scoped Deckhand lane/services/recording/evidence tools through existing authenticated MCP transport and shared domain validation; retain upstream toolkit behavior.",
+    "apps/server/src/mcp/toolkits/deckhand/externalDebug.test.ts": "Validate MCP object schemas for every external debugging tool so adding native Mac debugging cannot prevent server startup.",
+    "apps/server/src/mcp/toolkits/deckhand/externalDebug.ts": "Expose bounded host-preserving external runtime debugging through the existing authenticated thread-scoped MCP transport.",
     "apps/server/src/mcp/toolkits/deckhand/handlers.test.ts": "Verify provider-bound Deckhand MCP service delegation, run details/failures, verification-attempt lifecycle and reported external-session ownership without duplicating sockets or exposing source-process controls.",
     "apps/server/src/mcp/toolkits/deckhand/handlers.ts": "Expose provider-scoped reported external-session registration, heartbeat and archive/restore through existing authenticated MCP/CLI and shared domain validation; keep registrant claims separate from managed thread/process authority.",
     "apps/server/src/mcp/toolkits/deckhand/tools.ts": "Expose provider-scoped reported external-session registration, heartbeat and archive/restore through existing authenticated MCP/CLI and shared domain validation; keep registrant claims separate from managed thread/process authority.",
@@ -273,9 +276,10 @@
     "apps/web/src/commandPaletteBus.ts": "App identity and state isolation",
     "apps/web/src/components/AppSidebarLayout.tsx": "Use a route-scoped Deckhand product rail for pull-request review and bypass legacy thread rails only for dedicated product routes; preserve standalone/chat/settings sidebar state, project projection retention and history keyboard shortcuts. Retain the connected workspace shell during cached query failures, explicitly fence freshness, and preserve the static native-host responsive layout.",
     "apps/web/src/components/ChatView.logic.ts": "App identity and state isolation",
-    "apps/web/src/components/ChatView.tsx": "Retain Deckhand lane/session context and ready-service preview discovery around upstream chat/composer/preview rendering, with separate local storage and product identity. The unified change names Cinderdeck only in the visible unavailable-environment message.",
+    "apps/web/src/components/ChatView.tsx": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/web/src/components/CommandPalette.logic.test.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
-    "apps/web/src/components/RightPanelTabs.tsx": "Preserve upstream right-panel behavior and compatibility identifiers while naming Cinderdeck in the visible desktop-preview availability help.",
+    "apps/web/src/components/CommandPalette.tsx": "Expose existing-runtime debugging from the command palette alongside product navigation.",
+    "apps/web/src/components/RightPanelTabs.tsx": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/web/src/components/ServerUpdateAction.tsx": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/web/src/components/Sidebar.logic.test.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/web/src/components/Sidebar.tsx": "App identity and state isolation",
@@ -311,12 +315,15 @@
     "apps/web/src/components/settings/ChatGptWelcomeCoordinator.tsx": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/web/src/components/settings/CodexSetupSection.tsx": "Preserve Codex installation/authentication flow, URLs and saved configuration; use Cinderdeck only in displayed managed-install, sign-in-return and selection help.",
     "apps/web/src/components/settings/ConnectionsSettings.tsx": "Separate Deckhand environment and product identity from the upstream runtime. Use Cinderdeck in visible product labels only; retain internal identifiers, configuration, storage and authentication behavior.",
+    "apps/web/src/components/settings/ExternalAppsSettings.tsx": "Keep external Mac app preferences in viewer Settings and native windows in thread-scoped side-panel tabs; preserve upstream settings and panel behavior.",
     "apps/web/src/components/settings/IntegrationsSettings.tsx": "Expose explicit Cinderdeck onboarding and searchable connection settings through shared verified Hub inventory and durable operation receipts; preserve standalone provider/import flows and navigate only to the deliberately chosen execution computer/workspace. Use Cinderdeck in visible product labels only; retain internal identifiers, configuration, storage and authentication behavior.",
     "apps/web/src/components/settings/KeybindingsSettings.tsx": "Separate Deckhand environment and product identity from the upstream runtime. Use Cinderdeck in visible product labels only; retain internal identifiers, configuration, storage and authentication behavior.",
     "apps/web/src/components/settings/LocalEnvironmentSetting.tsx": "Separate Deckhand environment and product identity from the upstream runtime. Use Cinderdeck in visible product labels only; retain internal identifiers, configuration, storage and authentication behavior.",
     "apps/web/src/components/settings/NotificationSettings.tsx": "Separate Deckhand environment and product identity from the upstream runtime. Use Cinderdeck in visible product labels only; retain internal identifiers, configuration, storage and authentication behavior.",
     "apps/web/src/components/settings/SettingsPanels.logic.ts": "App identity and state isolation",
     "apps/web/src/components/settings/SettingsPanels.tsx": "Separate Deckhand environment and product identity from the upstream runtime. Use Cinderdeck in visible product labels only; retain internal identifiers, configuration, storage and authentication behavior.",
+    "apps/web/src/components/settings/SettingsScopeSentence.tsx": "Keep external Mac app preferences in viewer Settings and native windows in thread-scoped side-panel tabs; preserve upstream settings and panel behavior.",
+    "apps/web/src/components/settings/SettingsSidebarNav.tsx": "Keep external Mac app preferences in viewer Settings and native windows in thread-scoped side-panel tabs; preserve upstream settings and panel behavior.",
     "apps/web/src/components/settings/SnapShotSettings.logic.test.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/web/src/components/settings/SnapShotSettings.tsx": "Separate Deckhand environment and product identity from the upstream runtime. Use Cinderdeck in visible product labels only; retain internal identifiers, configuration, storage and authentication behavior.",
     "apps/web/src/components/settings/SnapShotSetupDialog.tsx": "Separate Deckhand environment and product identity from the upstream runtime.",
@@ -365,8 +372,10 @@
     "apps/web/src/promptStashStore.ts": "App identity and state isolation",
     "apps/web/src/providerUpdateDismissal.ts": "App identity and state isolation",
     "apps/web/src/remoteOpen.ts": "App identity and state isolation",
+    "apps/web/src/rightPanelStore.test.ts": "Keep external Mac app preferences in viewer Settings and native windows in thread-scoped side-panel tabs; preserve upstream settings and panel behavior.",
     "apps/web/src/rightPanelStore.ts": "App identity and state isolation",
     "apps/web/src/routeTree.gen.ts": "Generated router registration for the Deckhand workspace route.",
+    "apps/web/src/routes/_chat.external-apps.tsx": "Register the shared web/desktop External apps debugging workspace without moving hosted add-ins out of Excel.",
     "apps/web/src/routes/_chat.inbox.tsx": "Expose persisted Deckhand attention state through the existing chat router.",
     "apps/web/src/routes/_chat.index.tsx": "Preserve standalone draft landing while directing native-host startup to the unified Cinderdeck workspace screen before automatic draft navigation can select an unrelated conversation.",
     "apps/web/src/routes/_chat.linked-work.tsx": "Expose native Cinderdeck linked-work discovery and preview using a dedicated Deckhand route.",
@@ -375,6 +384,7 @@
     "apps/web/src/routes/_chat.services.tsx": "Expose Cinderdeck-owned services, finite runs and scoped execution-computer selection in the existing client router.",
     "apps/web/src/routes/_chat.tsx": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/web/src/routes/_chat.workspaces.tsx": "Expose Deckhand workspace navigation and preserve selected context in URL state.",
+    "apps/web/src/routes/settings.external-apps.tsx": "Keep external Mac app preferences in viewer Settings and native windows in thread-scoped side-panel tabs; preserve upstream settings and panel behavior.",
     "apps/web/src/routes/welcome.tsx": "Expose explicit Cinderdeck onboarding and searchable connection settings through shared verified Hub inventory and durable operation receipts; preserve standalone provider/import flows and navigate only to the deliberately chosen execution computer/workspace.",
     "apps/web/src/terminalUiStateStore.ts": "App identity and state isolation",
     "apps/web/src/themeBoot.test.ts": "App identity and state isolation",
@@ -395,6 +405,7 @@
     "packages/contracts/src/ipc.ts": "Add the Deckhand Preview runtime stage label used by the shared desktop identity contract without changing existing IPC behavior.",
     "packages/contracts/src/rpc.test.ts": "Verify additive managed-agent paging defaults and the bounded offset schema while retaining upstream RPC compatibility assertions.",
     "packages/contracts/src/rpc.ts": "Merge Deckhand domain RPCs into the maintained upstream wire catalog while exporting the upstream base for bounded per-domain server handler inference.",
+    "packages/contracts/src/settings.ts": "Keep external Mac app preferences in viewer Settings and native windows in thread-scoped side-panel tabs; preserve upstream settings and panel behavior.",
     "packages/shared/src/cliRelease.ts": "App identity and state isolation",
     "packages/shared/src/codexAuthHandoff.ts": "App identity and state isolation",
     "packages/shared/src/devHome.test.ts": "App identity and state isolation",
@@ -411,9 +422,9 @@
     "packages/shared/src/shell.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "packages/shared/src/t3McpToolPresentation.test.ts": "App identity and state isolation",
     "packages/shared/src/t3McpToolPresentation.ts": "Expose provider-scoped reported external-session registration, heartbeat and archive/restore through existing authenticated MCP/CLI and shared domain validation; keep registrant claims separate from managed thread/process authority.",
-    "scripts/build-cli-archive.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
+    "scripts/build-cli-archive.ts": "Keep independent Deckhand runtime archives and include, sign and notarize the bundled Mac window helper alongside the server.",
     "scripts/build-desktop-artifact.test.ts": "Verify Deckhand artifact names, upstream LICENSE staging and actual application-bundle copying with relocatable framework symlinks; reject metadata-only success.",
-    "scripts/build-desktop-artifact.ts": "Produce independently named Deckhand desktop artifacts, explicitly stage the retained upstream MIT LICENSE, and copy real app bundles with relocatable framework symlinks; debug metadata alone does not count as an artifact. Native-shell mode packages a private AgentShell with no independent URL registration; the native Cinderdeck bundle owns installation and updates.",
+    "scripts/build-desktop-artifact.ts": "Produce independently named Deckhand desktop artifacts, explicitly stage the retained upstream MIT LICENSE, and copy real app bundles with relocatable framework symlinks; debug metadata alone does not count as an artifact. Unpack the bundled Mac window helper from asar for native execution.",
     "scripts/dev-runner.test.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "scripts/dev-runner.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "scripts/install.test.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
@@ -1049,6 +1060,63 @@
         "docs/deckhand/CINDERDECK_UNIFIED_APP.md"
       ],
       "conflictResolution": "Keep persisted observer/read_only intent separate from approval-required runtime mode. Force Codex sandbox readOnly with approval never on thread and turn paths, retain exact checkout identity checks, and skip local/native writer admission only for enforced observers. Centrally deny mutation-declared MCP tools for the authoritative observer and inherited provider-child context. Unsupported adapters must refuse before launch effects. Repeat the documented actual denied-write and concurrent writer/observer checks; do not infer enforcement from labels or prompts."
+    },
+    {
+      "owner": "Deckhand external application debugging",
+      "files": [
+        "apps/web/src/routes/_chat.external-apps.tsx"
+      ],
+      "conflictResolution": "Keep the thin external debugger integration; preserve upstream navigation and transport behavior.",
+      "tests": [
+        "apps/web/src/deckhand/ExternalAppPanel.test.tsx",
+        "apps/server/src/deckhand/ExternalDebug.test.ts",
+        "apps/server/src/deckhand/ExternalDebugCDP.test.ts",
+        "apps/server/src/auth/RpcAuthorization.test.ts"
+      ]
+    },
+    {
+      "owner": "Deckhand external application debugging",
+      "files": [
+        "apps/web/src/components/CommandPalette.tsx"
+      ],
+      "conflictResolution": "Keep the thin external debugger integration; preserve upstream navigation and transport behavior.",
+      "tests": [
+        "apps/server/src/deckhand/ExternalDebug.test.ts",
+        "apps/server/src/deckhand/ExternalDebugCDP.test.ts",
+        "apps/server/src/auth/RpcAuthorization.test.ts"
+      ]
+    },
+    {
+      "owner": "Deckhand external application debugging",
+      "files": [
+        "apps/server/src/mcp/toolkits/deckhand/externalDebug.ts",
+        "apps/server/src/mcp/toolkits/deckhand/externalDebug.test.ts"
+      ],
+      "conflictResolution": "Keep the thin external debugger integration; preserve upstream navigation and transport behavior.",
+      "tests": [
+        "apps/server/src/mcp/toolkits/deckhand/externalDebug.test.ts",
+        "apps/server/src/deckhand/ExternalDebug.test.ts",
+        "apps/server/src/deckhand/ExternalDebugCDP.test.ts",
+        "apps/server/src/auth/RpcAuthorization.test.ts"
+      ]
+    },
+    {
+      "owner": "Deckhand external app session surfaces",
+      "files": [
+        "apps/web/src/components/settings/ExternalAppsSettings.tsx",
+        "apps/web/src/components/settings/SettingsScopeSentence.tsx",
+        "apps/web/src/components/settings/SettingsSidebarNav.tsx",
+        "apps/web/src/routes/settings.external-apps.tsx",
+        "packages/contracts/src/settings.ts",
+        "apps/web/src/rightPanelStore.test.ts"
+      ],
+      "tests": [
+        "apps/web/src/deckhand/ExternalAppPanel.test.tsx",
+        "apps/web/src/rightPanelStore.test.ts",
+        "packages/contracts/src/deckhand/externalAppPreferences.test.ts",
+        "apps/server/src/deckhand/ExternalDebug.test.ts"
+      ],
+      "conflictResolution": "Preserve viewer-local toggleable profiles, per-environment/thread panel descriptors, native capture cleanup on disable/close, hidden-view input gating, and the shared authenticated MCP thread namespace. Keep upstream Browser and Settings navigation behavior."
     }
   ]
 }

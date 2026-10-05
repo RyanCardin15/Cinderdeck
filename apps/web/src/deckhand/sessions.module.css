@@ -208,6 +208,7 @@
   cursor: not-allowed;
 }
 .launcher {
+  container-type: inline-size;
   padding: 22px !important;
   border: 1px solid var(--session-line);
   border-radius: 10px;
@@ -274,6 +275,22 @@
 }
 .providerChoice:hover {
   border-color: var(--session-accent);
+}
+@container (max-width: 420px) {
+  .form fieldset {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+  }
+  .form fieldset > label,
+  .form fieldset > span {
+    padding-top: 7px;
+  }
+  .providerChoices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .formHeading {
+    flex-wrap: wrap;
+  }
 }
 .roster :focus-visible,
 .launcher :focus-visible,

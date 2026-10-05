@@ -48,6 +48,7 @@ export {
   ThreadContextView,
 } from "./threadContextRpc.ts";
 import { RecordingRpcGroup } from "./recordingsRpc.ts";
+import { ExternalDebugRpcGroup } from "./externalDebugRpc.ts";
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
@@ -441,6 +442,7 @@ export const DeckhandRpcGroup = RpcGroup.make(
   .merge(RunsRpcGroup)
   .merge(VerificationRpcGroup)
   .merge(AttentionRpcGroup)
+  .merge(ExternalDebugRpcGroup)
   .merge(ExternalSessionRpcGroup)
   .merge(VerificationAttemptRpcGroup)
   .merge(OwnedPreviewRpcGroup)

@@ -26,6 +26,7 @@ const RIGHT_PANEL_KINDS = [
   "file",
   "preview",
   "device",
+  "external-app",
   "terminal",
   "pull-request",
   "pull-requests",
@@ -43,6 +44,7 @@ export type RightPanelSurface =
   | { id: `browser:${string}`; kind: "preview"; resourceId: string }
   | { id: "browser:new"; kind: "preview"; resourceId: null }
   | { id: "device" | `device:${string}`; kind: "device"; target?: DeviceTabTarget; title?: string }
+  | { id: `external-app:${string}`; kind: "external-app"; profileId: string | null; title: string }
   | {
       id: `terminal:${string}`;
       kind: "terminal";
@@ -92,7 +94,7 @@ const RIGHT_PANEL_STORAGE_KEY = "deckhand:right-panel-state:v2";
 // v11 stops persisting the pull-request list's shared panel, so a restart opens the page fresh.
 // v12 adds the device surface.
 // v14 removes the agents surface; lineage lives in the thread title bar.
-const RIGHT_PANEL_STORAGE_VERSION = 14;
+const RIGHT_PANEL_STORAGE_VERSION = 15;
 
 /** A fixed workspace-level ref: each PR surface carries its own real environment. */
 export const PULL_REQUESTS_PANEL_REF = scopeThreadRef(
@@ -138,6 +140,8 @@ interface RightPanelStoreState {
     kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request">,
   ) => void;
   openDevice: (ref: ScopedThreadRef, target: DeviceTabTarget, automatic?: boolean) => void;
+  openExternalApp: (ref: ScopedThreadRef, profileId: string | null, title?: string) => void;
+  removeExternalAppProfile: (profileId: string) => void;
   renameDevice: (ref: ScopedThreadRef, surfaceId: string, title: string) => void;
   openBrowser: (ref: ScopedThreadRef, tabId: string | null) => void;
   openFile: (ref: ScopedThreadRef, relativePath: string, line?: number) => void;
@@ -208,6 +212,8 @@ const singletonSurface = (
       return { id: "pull-requests", kind };
     case "device":
       return { id: "device", kind };
+    case "external-app":
+      return { id: "external-app:new", kind, profileId: null, title: "External apps" };
   }
 };
 
@@ -439,6 +445,22 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                     // Removed surfaces: plans render inline, agents in thread lineage.
                     const kind = (surface as { kind?: string }).kind;
                     if (kind === "plan" || kind === "agents") return [];
+                    if (surface.kind === "external-app") {
+                      if (
+                        (surface.profileId !== null &&
+                          (typeof surface.profileId !== "string" ||
+                            !/^[a-zA-Z0-9-]{1,80}$/.test(surface.profileId))) ||
+                        typeof surface.title !== "string"
+                      )
+                        return [];
+                      return [
+                        {
+                          ...surface,
+                          id: `external-app:${surface.profileId ?? "new"}`,
+                          title: surface.title.slice(0, 120),
+                        },
+                      ];
+                    }
                     if (surface.kind === "file") {
                       const revealLine =
                         typeof surface.revealLine === "number" &&
@@ -606,6 +628,50 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
             return upsertSurface(current, singletonSurface(kind));
           }),
         ),
+      openExternalApp: (ref, profileId, title = "External apps") =>
+        set((state) =>
+          userAction(state, scopedThreadKey(ref), (current) =>
+            upsertSurface(
+              {
+                ...current,
+                surfaces:
+                  profileId === null
+                    ? current.surfaces
+                    : current.surfaces.filter((surface) => surface.id !== "external-app:new"),
+              },
+              { id: `external-app:${profileId ?? "new"}`, kind: "external-app", profileId, title },
+            ),
+          ),
+        ),
+      removeExternalAppProfile: (profileId) =>
+        set((state) => {
+          const next = { ...state };
+          let changed = false;
+          for (const [threadKey, panel] of Object.entries(state.byThreadKey)) {
+            const id = panel.surfaces.find(
+              (surface) => surface.kind === "external-app" && surface.profileId === profileId,
+            )?.id;
+            if (!id) continue;
+            changed = true;
+            Object.assign(
+              next,
+              userAction(next, threadKey, (current) => {
+                const index = current.surfaces.findIndex((surface) => surface.id === id);
+                const surfaces = current.surfaces.filter((surface) => surface.id !== id);
+                return {
+                  ...current,
+                  surfaces,
+                  isOpen: current.isOpen && surfaces.length > 0,
+                  activeSurfaceId:
+                    current.activeSurfaceId === id
+                      ? (surfaces[Math.min(index, surfaces.length - 1)]?.id ?? null)
+                      : current.activeSurfaceId,
+                };
+              }),
+            );
+          }
+          return changed ? next : state;
+        }),
       openDevice: (ref, target, automatic = false) =>
         set((state) =>
           (automatic ? automaticUpdate : userAction)(state, scopedThreadKey(ref), (current) => {

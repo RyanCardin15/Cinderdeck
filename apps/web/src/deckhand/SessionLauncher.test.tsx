@@ -112,6 +112,7 @@ const onPending = vi.fn();
 beforeEach(() => {
   vi.resetAllMocks();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  HTMLElement.prototype.scrollIntoView = vi.fn();
   localStorage.clear();
   commands.options.mockResolvedValue(
     success([
@@ -158,6 +159,14 @@ async function click(label: string) {
   await act(async () => button(label).click());
 }
 async function change(label: string, value: string) {
+  if (label === "Provider account") {
+    const control = [...container.querySelectorAll<HTMLButtonElement>("button[aria-label]")].find(
+      (item) => item.getAttribute("aria-label")?.endsWith(` · ${value}`),
+    );
+    expect(control).toBeDefined();
+    await act(async () => control!.click());
+    return;
+  }
   const item = [...container.querySelectorAll("label")].find(
     (element) => element.textContent?.trim() === label,
   );
@@ -215,8 +224,8 @@ it("restores a saved request after a changed generation and keeps inspection rea
   save();
   await render({ ...resource, generation: 9, revision: "new-revision" }, true, false);
   expect(
-    [...container.querySelectorAll("input")].some((input) => input.value === "Saved feature"),
-  ).toBe(true);
+    container.querySelector('section[aria-label="Saved feature request"] h3')?.textContent,
+  ).toBe("Saved feature");
   expect(commands.create).not.toHaveBeenCalled();
   await click("Check result");
   expect(commands.inspectCreation).toHaveBeenCalledWith({
@@ -225,6 +234,7 @@ it("restores a saved request after a changed generation and keeps inspection rea
   });
   expect(commands.create).not.toHaveBeenCalled();
   expect(commands.navigate).not.toHaveBeenCalled();
+  await render({ ...resource, generation: 9, revision: "new-revision" }, true, true);
   await click("Continue saved request");
   expect(commands.create).toHaveBeenCalledWith({ environmentId, input: request });
   expect(JSON.parse(localStorage.getItem(storageKey)!)).toEqual(request);
@@ -342,13 +352,14 @@ it("launches an agent task in the selected existing context without native lane 
     return success(acceptedLaunch);
   });
   await render(resource, false);
+  await click("＋ New session");
   expect(container.textContent).not.toContain("Feature title");
   expect(container.textContent).not.toContain("Objective");
   await change("Provider account", "codex");
   await change("Model", "gpt-test");
   await change("Agent task", "Investigate payment retries");
   await change("Instructions", "Inspect the retry flow and propose a focused fix.");
-  await click("Launch agent");
+  await click("Start session");
   expect(commands.launch).toHaveBeenCalledTimes(1);
   expect(commands.create).not.toHaveBeenCalled();
   expect(commands.navigate).toHaveBeenCalledWith({

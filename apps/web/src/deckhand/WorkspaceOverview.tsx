@@ -1080,7 +1080,9 @@ function ConnectedWorkspace({
             ))}
           </section>
         )}
-        {view?.workspaceContexts && view.workspaceContexts.total > 50 ? (
+        {!agentMode &&
+        view?.workspaceContexts &&
+        view.workspaceContexts.workspaceID === activeBase?.workspaceID ? (
           <nav className={styles["dh-page-footer"]} aria-label="Selected workspace context pages">
             <span>
               Workspace contexts {view.workspaceContexts.offset + 1}–
@@ -1141,10 +1143,10 @@ function ConnectedWorkspace({
             </button>
           </div>
         ) : null}
-        {!agentMode && view ? (
+        {!agentMode && view && (!activeBase || view.nextOffset !== null || offset > 0) ? (
           <footer className={styles["dh-page-footer"]}>
             <span>
-              Contexts {view.total ? offset + 1 : 0}–
+              {activeBase ? "All workspace contexts" : "Contexts"} {view.total ? offset + 1 : 0}–
               {Math.min(offset + view.resources.length, view.total)} of {view.total}
             </span>
             <button
@@ -1161,6 +1163,13 @@ function ConnectedWorkspace({
             >
               Next
             </button>
+          </footer>
+        ) : null}
+        {!agentMode &&
+        activeBase &&
+        view?.workspaceContexts?.workspaceID !== activeBase.workspaceID ? (
+          <footer className={styles["dh-page-footer"]}>
+            <span>{contexts.length} loaded contexts in this workspace</span>
           </footer>
         ) : null}
       </main>

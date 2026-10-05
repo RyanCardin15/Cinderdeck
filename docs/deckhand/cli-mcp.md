@@ -66,3 +66,24 @@ A generic native window cannot prove that its video depicts the declared service
 ## Before and after comparisons
 
 `deckhand_verification_scenarios({reference})` lists the calling feature’s saved comparisons with immutable recording IDs and manifest hashes. `deckhand_verification_scenario_save({reference,scenarioID,title,baselineArtifactID,followupArtifactID})` links two distinct, chronological recordings already associated with that same feature. Exact retries preserve the original pair; a changed pair requires a new scenario identity. `deckhand_verification_scenario_remove({reference,scenarioID})` removes only the comparison association, preserving both recordings. Mutations require current provider ownership; none writes to the hosting provider. Comparison preserves failed, stale, dirty and unknown evidence rather than inferring that the depicted build matches a PR.
+
+## External application debugging
+
+The `deckhand_debug_*` tools attach to selected native Mac windows with `mac://local`, independently of a Cinderdeck lane. Sessions belong to the calling thread and can be recovered with `deckhand_debug_sessions`. Session side-panel attachments share the calling thread’s namespace, so its agent can inspect the same selected windows. Other threads cannot read, control, or detach them. Legacy RPC callers that omit threadId retain separate signed-in actor sessions.
+
+```sh
+deckhand integration call deckhand_debug_targets '{"endpoint":"mac://local"}'
+deckhand integration call deckhand_debug_attach '{"endpoint":"mac://local","targetId":"mac:<pid>:<window-id>"}'
+deckhand integration call deckhand_debug_read '{"sessionId":"<session>","after":0,"screenshot":true}'
+deckhand integration call deckhand_debug_command '{"sessionId":"<session>","action":"permissions"}'
+deckhand integration call deckhand_debug_command '{"sessionId":"<session>","action":"click","x":0.4,"y":0.5}'
+deckhand integration call deckhand_debug_detach '{"sessionId":"<session>"}'
+```
+
+Native commands are `permissions`, `focus`, `click`, `scroll`, `type`, and `key`. Click/scroll coordinates are normalized to the full captured window, including its title bar. Controls activate that window on its Mac and require Accessibility; viewing requires Screen Recording. Discover and select the application's actual WebKit Inspector to use its console and debugger. Native Mac sessions do not implement structured `evaluate`, `sources`, or stepping commands; send text and keys to the real Inspector instead. Do not claim Office API or OAuth success from a window title or a simulated fixture.
+
+MCP reads deliver screenshots as JPEG image blocks, keeping base64 out of text and metadata. The CLI JSON fallback and web RPC retain the encoded image field; prefer `screenshot:false` in CLI diagnostics.
+
+Advance `after` using `nextSequence`; each read holds at most 100 events. Pass the returned `imageSequence` as `afterImage` to receive image data only when it changes. `image:null` with the same sequence and `imageUnavailable:false` means the last image is unchanged; discard it on disconnection or unavailable status. Always detach when finished. Debugger previews are transient diagnostics, separate from saved recordings and build evidence.
+
+An explicit loopback HTTP endpoint selects the separate CDP adapter for a Chromium runtime. CDP supports `sources`, `source`, `evaluate`, breakpoints, and pause/resume/stepping. Expressions execute in the live app and can change its data. See [Mac external app setup](external-apps.md).
