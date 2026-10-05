@@ -103,16 +103,16 @@ export function ProductNavigation({
       {children}
       <div className={styles.bottom}>
         <NativeToolsMenu className={styles.tools} />
+        <Link to="/settings" aria-current={current === "settings" ? "page" : undefined}>
+          <SettingsIcon size={17} />
+          Settings
+        </Link>
         {connection ? (
           <p data-connected={connection.connected}>
             <i />
             {connection.label}
           </p>
         ) : null}
-        <Link to="/settings" aria-current={current === "settings" ? "page" : undefined}>
-          <SettingsIcon size={17} />
-          Settings
-        </Link>
       </div>
     </aside>
   );
