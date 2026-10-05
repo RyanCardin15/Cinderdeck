@@ -300,7 +300,7 @@ fi
 sign --entitlements "$NATIVE_ENTITLEMENTS" "$STAGED_APP"
 codesign --verify --deep --strict "$SHELL_DEST"
 codesign --verify --deep --strict "$STAGED_APP"
-if [[ "$CONFIGURATION" == Release ]]; then
+if [[ "$CONFIGURATION" == Release && "$SIGNING_HASH" != - ]]; then
   requirement=$(codesign -dr - "$STAGED_APP" 2>&1 | sed -n 's/^designated => //p')
   [[ -n "$requirement" && "$requirement" != *cdhash* && ( "$requirement" == *certificate* || "$requirement" == *anchor* ) ]] \
     || fail "Release must retain a certificate-based designated requirement."

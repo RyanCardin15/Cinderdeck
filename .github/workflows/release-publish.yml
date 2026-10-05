@@ -70,6 +70,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       # A release that cannot verify its own updates would strand every copy installed from it,
       # so check the signing key before building anything.
@@ -227,7 +229,7 @@ jobs:
           CINDERDECK_SIGNING_KEYCHAIN="$RUNNER_TEMP/app-signing.keychain-db" \
           CINDERDECK_SIGNING_TIMESTAMP="$TIMESTAMP_FLAG" \
           CINDERDECK_ALLOW_ADHOC_RELEASE="$(if [ "$ALLOW_ADHOC_RELEASE" = true ]; then echo 1; else echo 0; fi)" \
-            ./scripts/build-unified.sh --configuration Release --native-app "$PWD/$APP_PATH" \
+            ./scripts/build-unified.sh --configuration Release --arch universal --native-app "$PWD/$APP_PATH" \
               --signing-identity "$SIGN_IDENTITY" --output-dir "$PWD/build/unified"
           rm -rf "$APP_PATH"
           mv build/unified/Cinderdeck.app "$APP_PATH"

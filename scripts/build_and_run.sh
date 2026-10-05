@@ -211,7 +211,11 @@ verify_app() {
   open_app
   sleep 2
 
-  if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
+  local pid found=0
+  for pid in $(pgrep -x "$APP_NAME" || true); do
+    if [[ "$(ps -p "$pid" -o comm=)" == "$(app_binary_path)" ]]; then found=1; break; fi
+  done
+  if [[ "$found" == 1 ]]; then
     success "$APP_NAME is running."
   else
     fail "$APP_NAME did not stay running after launch."
