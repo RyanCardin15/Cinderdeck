@@ -12,7 +12,7 @@ export const NATIVE_HOST_READY_CHANNEL = "cinderdeck:native-host-ready";
 export const NATIVE_TOOL_CHANNEL = "cinderdeck:native-tool";
 export const NATIVE_HOST_INFO_CHANNEL = "cinderdeck:native-host-info";
 const MAX_LINE_BYTES = 16 * 1024;
-const surfaces = new Set(["workspace", "lane-map", "workspace-setup", "workspace-editor", "execution-map", "history", "preferences", "capture", "recording", "annotate", "updates"]);
+const surfaces = new Set(["workspace", "lane-map", "workspace-setup", "workspace-editor", "execution-map", "agent-access", "history", "preferences", "capture", "recording", "annotate", "updates"]);
 let parentRequestedQuit = false;
 
 export function delegateQuitToNative(event: Electron.Event): boolean {
@@ -31,6 +31,7 @@ function identifier(value: unknown): value is string {
 function toolRequest(value: unknown): value is NativeToolRequest {
   return record(value) && typeof value.surface === "string" && surfaces.has(value.surface) &&
     Object.keys(value).every(key => ["surface", "mode", "workspaceID"].includes(key)) &&
+    (value.surface !== "agent-access" || (value.mode === undefined && value.workspaceID === undefined)) &&
     (value.workspaceID === undefined || identifier(value.workspaceID)) &&
     (value.mode === undefined || identifier(value.mode));
 }

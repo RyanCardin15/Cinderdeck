@@ -57,6 +57,8 @@ Agents can also record headless Chromium: `cinderdeck repro start --headless htt
 
 Agents can record exactly one window (`cinderdeck repro windows`, then `--window-id`), record with or without workspace logs (`--no-logs`), and add browser console output to the log (`cinderdeck repro append`). The [`cinderdeck-record-session`](skills/cinderdeck-record-session/SKILL.md) and [`cinderdeck-review-recording`](skills/cinderdeck-review-recording/SKILL.md) skills teach Claude Code, Codex, Cursor, and VS Code Copilot how to do this. Install them for each agent from **Agent access**, or with `cinderdeck skills install --all`. Agents also pick them up automatically in a clone of this repository.
 
+In the agent harness, open **Settings → Integrations → MCP & skills → Set up MCP & skills** to reach Agent access. Harness sessions receive authenticated MCP tools automatically; Agent access installs the bundled skills and registers MCP for external clients. For a remote execution computer, run `cinderdeck setup --all --skills` on that computer. Restart the agent after installation; providers with custom homes need skills in their configured home.
+
 [Read the recordings guide](docs/REPROS.md).
 
 ## A place for the whole project

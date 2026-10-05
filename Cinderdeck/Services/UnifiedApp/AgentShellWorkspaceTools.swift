@@ -46,6 +46,12 @@ final class AgentShellWorkspaceTools: NSWindowController, NSWindowDelegate {
     } else { file = nil }
 
     switch request.surface {
+    case "agent-access":
+      guard request.workspaceID == nil, request.mode == nil else { throw StackControlError.invalid("Agent access does not accept a workspace or mode") }
+      window.title = "Agent access — Cinderdeck"
+      presentedRequest = request
+      activate()
+      model.agentsSheet = true
     case "workspace-setup":
       guard request.workspaceID == nil, request.mode == nil else { throw StackControlError.invalid("Workspace setup does not accept a workspace or mode") }
       window.title = "Project setup — Cinderdeck"

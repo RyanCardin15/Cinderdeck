@@ -642,6 +642,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "cinderdeck-agent-access",
+    title: "MCP & skills",
+    to: "/settings/integrations",
+    searchTerms: [
+      "agent access setup install update recording review lanes codex claude cursor copilot server tools",
+    ],
+  },
+  {
     id: "agent-browser-access",
     title: "Agent browser access",
     to: "/settings/integrations",

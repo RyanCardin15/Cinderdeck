@@ -1,5 +1,6 @@
 import { OwnershipTransitionPanel } from "../../deckhand/OwnershipTransitionPanel";
 import { CinderdeckConnectionPanel } from "../../deckhand/CinderdeckConnectionPanel";
+import { NativeAgentAccessSettings } from "../../deckhand/NativeToolsSettings";
 import { DeviceHostUpdates } from "../device/DeviceHostUpdates";
 import { DeviceToolVersions } from "../device/DeviceToolVersions";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
@@ -1454,6 +1455,7 @@ export function IntegrationsSettingsPanel() {
           initialEnvironmentId={environment?.environmentId}
         />
       </SettingsSection>
+      <NativeAgentAccessSettings />
       <OwnershipTransitionPanel />
       <ProjectDefaultsSettings category="integrations" />
       <SettingsSection id="browser" title="Browser">

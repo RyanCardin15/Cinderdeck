@@ -282,3 +282,65 @@ export function NativeToolsSettings() {
     </section>
   );
 }
+
+/** Installation belongs to the native owner; opening this panel writes no configuration. */
+export function NativeAgentAccessSettings() {
+  const tools = useNativeTools();
+  return (
+    <section
+      id="cinderdeck-agent-access"
+      className={styles.settings}
+      aria-labelledby="agent-access-heading"
+    >
+      <header>
+        <div>
+          <h2 id="agent-access-heading">MCP & skills</h2>
+          <p>
+            Harness sessions receive authenticated MCP tools automatically. Connected workspace
+            tools need an available Cinderdeck connection and a linked lane.
+          </p>
+        </div>
+      </header>
+      <p>
+        Install Cinderdeck’s lane, recording and recording review skills for your provider. The
+        installer shows missing and outdated skills and preserves copies you manage yourself.
+      </p>
+      <div className={styles.updates}>
+        <div>
+          <strong>Agent access{tools.host ? " on this Mac" : " on the execution computer"}</strong>
+          <p>
+            Set up skills for Codex, Claude Code or Cursor, and register the MCP server for external
+            clients, including VS Code Copilot.
+          </p>
+        </div>
+        {tools.host ? (
+          <button
+            type="button"
+            disabled={!tools.available || tools.pending}
+            onClick={() => void tools.request({ surface: "agent-access" })}
+          >
+            Set up MCP & skills
+            <ArrowUpRightIcon size={14} aria-hidden />
+          </button>
+        ) : null}
+      </div>
+      {tools.host && !tools.available ? (
+        <p role="status">
+          The native connection is unavailable. Reopen Cinderdeck to access the installer.
+        </p>
+      ) : null}
+      {!tools.host ? (
+        <p>
+          Open Agent access in Cinderdeck on the execution computer, or run{" "}
+          <code>cinderdeck setup --all --skills</code> there. Check installed skills with{" "}
+          <code>cinderdeck skills list</code>.
+        </p>
+      ) : null}
+      <p>
+        Installation uses the provider’s standard folders. If you configured a custom provider home,
+        install the skills in that home. Use Restart agent session in the command palette after
+        changing skills or MCP configuration.
+      </p>
+    </section>
+  );
+}
