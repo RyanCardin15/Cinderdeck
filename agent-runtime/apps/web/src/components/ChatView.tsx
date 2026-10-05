@@ -10618,9 +10618,24 @@ export default function ChatView(props: ChatViewProps) {
               },
             );
           }}
-          onOpenDiff={addDiffSurface}
-          onOpenTerminal={addTerminalSurface}
-          onOpenSource={addFilesSurface}
+          panelMenu={{
+            onAddBrowser: () => createBrowserSurface(),
+            onAddBrowserInProfile: createBrowserSurface,
+            onAddTerminal: addTerminalSurface,
+            onAddDiff: addDiffSurface,
+            onAddFiles: addFilesSurface,
+            onAddPullRequest: addPullRequestSurface,
+            onAddPullRequests: addPullRequestsSurface,
+            onAddDevice: addDeviceSurface,
+            onAddExternalApp: addExternalAppSurface,
+            browserAvailable: isPreviewSupportedInRuntime(),
+            terminalAvailable: activeProject !== null,
+            diffAvailable: isServerThread && isGitRepo,
+            filesAvailable: activeProject !== null,
+            pullRequestAvailable: pullRequestSurfaceAvailable,
+            pullRequestsAvailable: pullRequestsSurfaceAvailable,
+            deviceAvailable: activeThreadRef !== null,
+          }}
           onOpenPullRequests={addPullRequestsSurface}
           pullRequestsAvailable={pullRequestsSurfaceAvailable}
           pullRequestCount={visiblePullRequestCount}

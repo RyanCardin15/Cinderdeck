@@ -41,6 +41,7 @@ vi.mock("./PreviewCaptureControl", () => ({ PreviewCaptureControl: () => null })
 vi.mock("./ManagedSessionControl", () => ({ ManagedSessionControl: () => null }));
 vi.mock("./ReviewerLauncher", () => ({ ReviewerLauncher: () => null }));
 vi.mock("./LinkedWorkContext", () => ({ LinkedWorkContext: () => null }));
+vi.mock("../components/RightPanelTabs", () => ({ AddPanelMenu: () => null }));
 import { LaneSessionContext } from "./LaneSessionContext";
 import { ConnectedLaneSidebar } from "./ConnectedLaneSidebar";
 const context = Schema.decodeSync(ThreadContextView)({
@@ -110,6 +111,23 @@ const threadRef = {
   threadId: ThreadId.make("thread"),
 };
 const noAction = () => {};
+const panelMenu = {
+  onAddBrowser: noAction,
+  onAddBrowserInProfile: noAction,
+  onAddTerminal: noAction,
+  onAddDiff: noAction,
+  onAddFiles: noAction,
+  onAddPullRequest: noAction,
+  onAddPullRequests: noAction,
+  onAddDevice: noAction,
+  browserAvailable: false,
+  terminalAvailable: false,
+  diffAvailable: false,
+  filesAvailable: false,
+  pullRequestAvailable: false,
+  pullRequestsAvailable: false,
+  deviceAvailable: false,
+};
 it.each(["lane", "primary"] as const)(
   "all %s context returns pin the original execution computer and native generation",
   (kind) => {
@@ -138,9 +156,7 @@ it.each(["lane", "primary"] as const)(
         stale={false}
         previewAvailable={false}
         onOpenPreview={noAction}
-        onOpenDiff={noAction}
-        onOpenTerminal={noAction}
-        onOpenSource={noAction}
+        panelMenu={panelMenu}
         onOpenPullRequests={noAction}
         pullRequestsAvailable={false}
         pullRequestCount={0}
@@ -198,9 +214,7 @@ it("retains scoped conversation links while downgrading disconnected agent obser
       stale={false}
       previewAvailable={false}
       onOpenPreview={noAction}
-      onOpenDiff={noAction}
-      onOpenTerminal={noAction}
-      onOpenSource={noAction}
+      panelMenu={panelMenu}
       onOpenPullRequests={noAction}
       pullRequestsAvailable={false}
       pullRequestCount={0}

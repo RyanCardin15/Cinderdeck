@@ -804,51 +804,30 @@ function PullRequestSurfaceIcon({
   return <presentation.Icon className={cn("size-3 shrink-0", presentation.toneClassName)} />;
 }
 
-export function RightPanelTabs(props: RightPanelTabsProps) {
-  const ownsDesktopTitleBar = isElectron && props.mode === "inline";
+export type AddPanelMenuProps = Pick<
+  RightPanelTabsProps,
+  | "onAddBrowser"
+  | "onAddBrowserInProfile"
+  | "onAddTerminal"
+  | "onAddDiff"
+  | "onAddFiles"
+  | "onAddPullRequest"
+  | "onAddPullRequests"
+  | "onAddDevice"
+  | "onAddExternalApp"
+  | "browserAvailable"
+  | "terminalAvailable"
+  | "diffAvailable"
+  | "filesAvailable"
+  | "pullRequestAvailable"
+  | "pullRequestsAvailable"
+  | "deviceAvailable"
+>;
+
+/** Shared launcher for the session context bar and the right-panel tabs. */
+export function AddPanelMenu(props: AddPanelMenuProps) {
   const browserProfiles = useBrowserDefaults().profiles;
-  const externalAppProfiles = useClientSettings((settings) => settings.externalAppProfiles);
-  const { resolvedTheme } = useTheme();
-  const tabListRef = useRef<HTMLDivElement>(null);
-  const [renamingDevice, setRenamingDevice] = useState<string | null>(null);
   const [addSurfaceMenuOpen, setAddSurfaceMenuOpen] = useState(false);
-  const [tabScrollState, setTabScrollState] = useState({
-    hasOverflow: false,
-    canScrollLeft: false,
-    canScrollRight: false,
-  });
-
-  const updateTabScrollState = useCallback(() => {
-    const viewport = tabScrollViewport(tabListRef.current);
-    if (!viewport) return;
-
-    const hasOverflow = viewport.scrollWidth - viewport.clientWidth > TAB_SCROLL_EDGE_TOLERANCE;
-    const canScrollLeft = hasOverflow && viewport.scrollLeft > TAB_SCROLL_EDGE_TOLERANCE;
-    const canScrollRight =
-      hasOverflow &&
-      viewport.scrollLeft + viewport.clientWidth < viewport.scrollWidth - TAB_SCROLL_EDGE_TOLERANCE;
-    setTabScrollState((current) => {
-      if (
-        current.hasOverflow === hasOverflow &&
-        current.canScrollLeft === canScrollLeft &&
-        current.canScrollRight === canScrollRight
-      ) {
-        return current;
-      }
-      return { hasOverflow, canScrollLeft, canScrollRight };
-    });
-  }, []);
-
-  const scrollTabs = useCallback((direction: -1 | 1) => {
-    const viewport = tabScrollViewport(tabListRef.current);
-    if (!viewport) return;
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    viewport.scrollBy({
-      left: direction * Math.max(120, viewport.clientWidth * 0.75),
-      behavior: reduceMotion ? "auto" : "smooth",
-    });
-  }, []);
-
   const addSurfaceActions = [
     {
       label: "External app",
@@ -924,6 +903,134 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
     setAddSurfaceMenuOpen(false);
     action.onClick();
   };
+
+  return (
+    <Menu open={addSurfaceMenuOpen} onOpenChange={setAddSurfaceMenuOpen}>
+      <MenuTrigger
+        render={
+          <Button
+            aria-label="Add panel surface"
+            className="shrink-0"
+            size="icon-xs"
+            variant="ghost-muted"
+          />
+        }
+      >
+        <Plus className="size-3.5" />
+      </MenuTrigger>
+      <MenuPopup
+        align="start"
+        side="bottom"
+        sideOffset={6}
+        onKeyDownCapture={handleAddSurfaceMenuKeyDown}
+      >
+        {addSurfaceActions.map((action) => {
+          const Icon = action.icon;
+          // Browser collapses into one row: clicking the trigger opens
+          // the default profile (the common case stays one click),
+          // while hover or arrow reveals the profiles. The choice
+          // lives at open time because a tab's profile is fixed then —
+          // Electron only honours a partition before attach.
+          if (action.label === "Browser" && action.available) {
+            return (
+              <MenuSub key={action.label}>
+                <MenuSubTrigger
+                  className="[&>svg:last-child]:ms-0"
+                  aria-keyshortcuts={action.shortcut}
+                  onClick={(event) => {
+                    const pointerType =
+                      "pointerType" in event.nativeEvent &&
+                      typeof event.nativeEvent.pointerType === "string"
+                        ? event.nativeEvent.pointerType
+                        : undefined;
+                    // Touch has no hover path to the profile choices:
+                    // its first tap opens the submenu, then a profile
+                    // is selected there. Mouse click keeps the common
+                    // default-profile action at one click.
+                    if (!shouldOpenDefaultBrowserProfileFromMenuClick(pointerType)) return;
+                    setAddSurfaceMenuOpen(false);
+                    action.onClick();
+                  }}
+                >
+                  <Icon />
+                  {action.label}
+                  <MenuShortcut>{action.shortcut}</MenuShortcut>
+                </MenuSubTrigger>
+                {/* Profile names can run to 48 characters; keep the submenu compact. */}
+                <MenuSubPopup className="max-w-56">
+                  {browserProfiles.map((profile) => (
+                    <MenuItem
+                      key={profile.id}
+                      onClick={() => props.onAddBrowserInProfile(profile.id)}
+                    >
+                      <span className="min-w-0 truncate">{profile.name}</span>
+                    </MenuItem>
+                  ))}
+                </MenuSubPopup>
+              </MenuSub>
+            );
+          }
+          return (
+            <SurfaceMenuItem
+              key={action.label}
+              available={action.available}
+              disabledReason={action.disabledReason}
+              shortcut={action.shortcut}
+              onClick={action.onClick}
+            >
+              <Icon />
+              {action.label}
+            </SurfaceMenuItem>
+          );
+        })}
+      </MenuPopup>
+    </Menu>
+  );
+}
+
+export function RightPanelTabs(props: RightPanelTabsProps) {
+  const ownsDesktopTitleBar = isElectron && props.mode === "inline";
+  const browserProfiles = useBrowserDefaults().profiles;
+  const externalAppProfiles = useClientSettings((settings) => settings.externalAppProfiles);
+  const { resolvedTheme } = useTheme();
+  const tabListRef = useRef<HTMLDivElement>(null);
+  const [renamingDevice, setRenamingDevice] = useState<string | null>(null);
+  const [tabScrollState, setTabScrollState] = useState({
+    hasOverflow: false,
+    canScrollLeft: false,
+    canScrollRight: false,
+  });
+
+  const updateTabScrollState = useCallback(() => {
+    const viewport = tabScrollViewport(tabListRef.current);
+    if (!viewport) return;
+
+    const hasOverflow = viewport.scrollWidth - viewport.clientWidth > TAB_SCROLL_EDGE_TOLERANCE;
+    const canScrollLeft = hasOverflow && viewport.scrollLeft > TAB_SCROLL_EDGE_TOLERANCE;
+    const canScrollRight =
+      hasOverflow &&
+      viewport.scrollLeft + viewport.clientWidth < viewport.scrollWidth - TAB_SCROLL_EDGE_TOLERANCE;
+    setTabScrollState((current) => {
+      if (
+        current.hasOverflow === hasOverflow &&
+        current.canScrollLeft === canScrollLeft &&
+        current.canScrollRight === canScrollRight
+      ) {
+        return current;
+      }
+      return { hasOverflow, canScrollLeft, canScrollRight };
+    });
+  }, []);
+
+  const scrollTabs = useCallback((direction: -1 | 1) => {
+    const viewport = tabScrollViewport(tabListRef.current);
+    if (!viewport) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    viewport.scrollBy({
+      left: direction * Math.max(120, viewport.clientWidth * 0.75),
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
+  }, []);
 
   const handleTabContextMenu = useCallback(
     async (event: ReactMouseEvent, surface: RightPanelSurface) => {
@@ -1244,93 +1351,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                 </div>
               );
             })}
-            {props.surfaces.length > 0 ? (
-              <Menu open={addSurfaceMenuOpen} onOpenChange={setAddSurfaceMenuOpen}>
-                <MenuTrigger
-                  render={
-                    <Button
-                      aria-label="Add panel surface"
-                      className="shrink-0"
-                      size="icon-xs"
-                      variant="ghost-muted"
-                    />
-                  }
-                >
-                  <Plus className="size-3.5" />
-                </MenuTrigger>
-                <MenuPopup
-                  align="start"
-                  side="bottom"
-                  sideOffset={6}
-                  onKeyDownCapture={handleAddSurfaceMenuKeyDown}
-                >
-                  {addSurfaceActions.map((action) => {
-                    const Icon = action.icon;
-                    // Browser collapses into one row: clicking the trigger opens
-                    // the default profile (the common case stays one click),
-                    // while hover or arrow reveals the profiles. The choice
-                    // lives at open time because a tab's profile is fixed then —
-                    // Electron only honours a partition before attach.
-                    if (action.label === "Browser" && action.available) {
-                      return (
-                        <MenuSub key={action.label}>
-                          <MenuSubTrigger
-                            className="[&>svg:last-child]:ms-0"
-                            aria-keyshortcuts={action.shortcut}
-                            onClick={(event) => {
-                              const pointerType =
-                                "pointerType" in event.nativeEvent &&
-                                typeof event.nativeEvent.pointerType === "string"
-                                  ? event.nativeEvent.pointerType
-                                  : undefined;
-                              // Touch has no hover path to the profile choices:
-                              // its first tap opens the submenu, then a profile
-                              // is selected there. Mouse click keeps the common
-                              // default-profile action at one click.
-                              if (!shouldOpenDefaultBrowserProfileFromMenuClick(pointerType))
-                                return;
-                              setAddSurfaceMenuOpen(false);
-                              action.onClick();
-                            }}
-                          >
-                            <Icon />
-                            {action.label}
-                            <MenuShortcut>{action.shortcut}</MenuShortcut>
-                          </MenuSubTrigger>
-                          {/*
-                            Capped and truncated: profile names are user-supplied
-                            and run to 48 characters, which would otherwise widen
-                            the popup to fit-content and wrap.
-                          */}
-                          <MenuSubPopup className="max-w-56">
-                            {browserProfiles.map((profile) => (
-                              <MenuItem
-                                key={profile.id}
-                                onClick={() => props.onAddBrowserInProfile(profile.id)}
-                              >
-                                <span className="min-w-0 truncate">{profile.name}</span>
-                              </MenuItem>
-                            ))}
-                          </MenuSubPopup>
-                        </MenuSub>
-                      );
-                    }
-                    return (
-                      <SurfaceMenuItem
-                        key={action.label}
-                        available={action.available}
-                        disabledReason={action.disabledReason}
-                        shortcut={action.shortcut}
-                        onClick={action.onClick}
-                      >
-                        <Icon />
-                        {action.label}
-                      </SurfaceMenuItem>
-                    );
-                  })}
-                </MenuPopup>
-              </Menu>
-            ) : null}
+            {props.surfaces.length > 0 ? <AddPanelMenu {...props} /> : null}
           </div>
         </ScrollArea>
         {tabScrollState.hasOverflow ? (
