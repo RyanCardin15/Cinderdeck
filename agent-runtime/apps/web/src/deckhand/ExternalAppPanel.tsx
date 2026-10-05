@@ -11,6 +11,7 @@ import { useEnvironments } from "../state/environments";
 import { useRightPanelStore } from "../rightPanelStore";
 import { Button } from "../components/ui/button";
 import { MacWindowPanel } from "./MacWindowPanel";
+import { ExcelPerformancePanel } from "./ExcelPerformancePanel";
 import {
   attachDebugTarget,
   detachDebugSession,
@@ -382,6 +383,11 @@ export function ExternalAppPanel({
               </div>
             ))}
           </div>
+          <ExcelPerformancePanel
+            environmentId={threadRef.environmentId}
+            threadId={threadRef.threadId}
+            visible={visible}
+          />
           <p className={styles.footnote}>
             Controls activate the selected window on its Mac. Closing this tab disconnects capture;
             the app stays open.

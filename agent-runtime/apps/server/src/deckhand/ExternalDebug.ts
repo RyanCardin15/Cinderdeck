@@ -28,10 +28,28 @@ import {
   type DebugTransport,
 } from "./ExternalDebugCDP.ts";
 import { macWindowTransport } from "./ExternalDebugMac.ts";
+import * as NodePath from "node:path";
+import * as Option from "effect/Option";
+import * as P from "@cinderdeck/contracts/deckhand/excelPerformance";
+import { ServerConfig } from "../config.ts";
+import { ProbeHub } from "./ExcelProbe.ts";
+import { detectProbeSetup } from "./ExcelProbeSetup.ts";
+import {
+  BenchmarkStore,
+  compareReports,
+  listing,
+  runBenchmark,
+  type BenchmarkDeps,
+} from "./ExcelBenchmark.ts";
 
 // UI panels and authenticated MCP callers share this thread namespace.
 export const externalDebugThreadOwner = (threadId: string) => `external-debug:thread:${threadId}`;
 
+// Probe listener port and benchmark report directory; tests use an ephemeral port.
+export class ExcelPerformanceOptions extends Context.Service<
+  ExcelPerformanceOptions,
+  { readonly probePort: number; readonly reportsDirectory: string | null }
+>()("@cinderdeck/server/deckhand/ExternalDebug/ExcelPerformanceOptions") {}
 export class ExternalDebugTransport extends Context.Service<
   ExternalDebugTransport,
   DebugTransport
@@ -47,6 +65,8 @@ export class ExternalDebug extends Context.Service<
     readonly read: (actor: string, input: C.DebugRead) => Result<C.DebugSnapshot>;
     readonly command: (actor: string, input: C.DebugCommand) => Result<C.DebugCommandResult>;
     readonly detach: (actor: string, input: C.DebugIdentity) => Result<void>;
+    readonly probe: (actor: string, input: P.ProbeRequest) => Result<P.ProbeResult>;
+    readonly benchmark: (actor: string, input: P.BenchmarkRequest) => Result<P.BenchmarkResult>;
   }
 >()("@cinderdeck/server/deckhand/ExternalDebug") {}
 
@@ -65,6 +85,10 @@ type Session = {
   imageSequence: number;
   framePending: Promise<void> | null;
   imageUnavailable: boolean;
+  // Native helper frame sequence of the cached image; unchanged frames are not resent.
+  nativeSequence: number;
+  // After input, the next read waits briefly for a frame newer than this.
+  awaitFrameAfter: number | undefined;
   requests: Map<string, { url: string; method: string; status: number; started: number }>;
 };
 const fail = (reason: C.ExternalDebugError["reason"]) => new C.ExternalDebugError({ reason });
@@ -89,8 +113,45 @@ const remoteText = (raw: unknown) => {
   }
   return string(value.description) || string(value.type);
 };
+// Native window actions and the inputs each forwards to the Mac helper.
+const nativeFields: Partial<Record<C.DebugCommand["action"], ReadonlyArray<keyof C.DebugCommand>>> =
+  {
+    click: ["x", "y", "ref", "button", "clickCount", "modifiers"],
+    move: ["x", "y", "ref"],
+    drag: ["x", "y", "toX", "toY", "modifiers"],
+    scroll: ["x", "y", "deltaX", "deltaY"],
+    type: ["text"],
+    key: ["key", "modifiers"],
+    press: ["ref"],
+    snapshot: ["ref"],
+    focus: [],
+    permissions: [],
+  };
+type Run = {
+  actor: string;
+  sessionId: string;
+  cancelled: boolean;
+  report: P.BenchmarkReport;
+  done: Promise<void>;
+};
 const make = Effect.gen(function* () {
   const transport = yield* ExternalDebugTransport;
+  const configured = yield* Effect.serviceOption(ExcelPerformanceOptions);
+  const serverConfig = yield* Effect.serviceOption(ServerConfig);
+  const envPort = Number(process.env.CINDERDECK_EXCEL_PROBE_PORT);
+  const options = Option.getOrElse(configured, () => ({
+    probePort:
+      Number.isInteger(envPort) && envPort > 0 && envPort < 65536
+        ? envPort
+        : P.EXCEL_PROBE_DEFAULT_PORT,
+    reportsDirectory: Option.match(serverConfig, {
+      onNone: () => null,
+      onSome: (config) => NodePath.join(config.stateDir, "excel-benchmarks"),
+    }),
+  }));
+  const hub = new ProbeHub(options.probePort);
+  const store = new BenchmarkStore(options.reportsDirectory);
+  const runs = new Map<string, Run>();
   const sessions = new Map<string, Session>();
   const reservations = new Map<string, string>();
   const add = (
@@ -243,11 +304,15 @@ const make = Effect.gen(function* () {
         sessions.delete(id);
         void close(session);
       }
+    hub.expire(60 * 60_000);
   }, 60_000);
   sweep.unref();
   yield* Effect.addFinalizer(() =>
     Effect.promise(async () => {
       clearInterval(sweep);
+      for (const run of runs.values()) run.cancelled = true;
+      await Promise.all([...runs.values()].map((run) => run.done));
+      hub.close();
       await Promise.all([...sessions.values()].map(close));
       sessions.clear();
     }),
@@ -314,6 +379,8 @@ const make = Effect.gen(function* () {
           frameAt: 0,
           framePending: null,
           imageUnavailable: false,
+          nativeSequence: 0,
+          awaitFrameAfter: undefined,
         };
         const current = session;
         const peer = await transport.connect(
@@ -379,18 +446,29 @@ const make = Effect.gen(function* () {
           session.framePending = (async () => {
             session.frameAt = Date.now();
             try {
-              const value = await peerFor(session).call("Page.captureScreenshot", {
-                format: "jpeg",
-                quality: 55,
-                fromSurface: true,
-                captureBeyondViewport: false,
-              });
-              const image = string(value.data);
-              if (!image || image.length > 700000 || !/^[A-Za-z0-9+/=]+$/.test(image))
-                throw fail("too_large");
-              if (session.view.state === "connected") {
-                if (image !== session.image) session.imageSequence += 1;
-                session.image = image;
+              const native = session.view.target.type === "mac-window";
+              const after = session.awaitFrameAfter;
+              session.awaitFrameAfter = undefined;
+              const value = native
+                ? await peerFor(session).call("Native.frame", {
+                    ...(session.image ? { known: session.nativeSequence } : {}),
+                    ...(after === undefined ? {} : { after, waitMs: 600 }),
+                  })
+                : await peerFor(session).call("Page.captureScreenshot", {
+                    format: "jpeg",
+                    quality: 55,
+                    fromSurface: true,
+                    captureBeyondViewport: false,
+                  });
+              if (native) session.nativeSequence = number(value.sequence);
+              if (!(native && value.unchanged === true && session.image)) {
+                const image = string(value.data);
+                if (!image || image.length > 700000 || !/^[A-Za-z0-9+/=]+$/.test(image))
+                  throw fail("too_large");
+                if (session.view.state === "connected") {
+                  if (image !== session.image) session.imageSequence += 1;
+                  session.image = image;
+                }
               }
               session.imageUnavailable = false;
             } catch (cause) {
@@ -421,42 +499,68 @@ const make = Effect.gen(function* () {
         callFrames: session.frames,
       };
     });
+  // Native window actions, shared by debug commands and benchmark steps.
+  const native = async (session: Session, input: C.DebugCommand) => {
+    const call = (method: string, params?: Record<string, unknown>) =>
+      peerFor(session).call(method, params);
+    const fields = nativeFields[input.action];
+    if (!fields) throw fail("unsupported");
+    const params: Record<string, unknown> = {};
+    for (const field of fields) if (input[field] !== undefined) params[field] = input[field];
+    const has = (...keys: ReadonlyArray<keyof C.DebugCommand>) =>
+      keys.every((key) => input[key] !== undefined);
+    if (
+      ((input.action === "click" || input.action === "move") && !has("ref") && !has("x", "y")) ||
+      (input.action === "scroll" && !has("x", "y")) ||
+      (input.action === "drag" && !has("x", "y", "toX", "toY")) ||
+      (input.action === "press" && !has("ref")) ||
+      (input.action === "type" && !input.text) ||
+      (input.action === "key" && !has("key"))
+    )
+      throw fail("invalid_command");
+    const observing = input.action === "snapshot" || input.action === "permissions";
+    try {
+      const result = await call(`Native.${input.action}`, params);
+      if (input.action === "snapshot" && string(result.text).length > 240000)
+        throw fail("too_large");
+      if (!observing) {
+        // The next screenshot waits for the repaint this input causes.
+        session.awaitFrameAfter = session.nativeSequence;
+        session.frameAt = 0;
+        // Keep test evidence without copying typed workbook text into the action log.
+        add(
+          session,
+          "action",
+          `${input.action} accepted${input.action === "key" ? ` (${[...(input.modifiers ?? []), input.key].join("+")})` : input.ref ? ` (${input.ref})` : ""}`,
+        );
+      }
+      return result;
+    } catch (cause) {
+      add(session, "action", `${input.action} failed: ${wrap(cause).reason}`, "error");
+      throw cause;
+    }
+  };
   const command: ExternalDebug["Service"]["command"] = (actor, input) =>
     attempt(async () => {
       const session = get(actor, input.sessionId),
         peer = peerFor(session);
       const call = (method: string, params?: Record<string, unknown>) => peer.call(method, params);
-      const nativeActions = new Set(["click", "type", "key", "scroll", "focus", "permissions"]);
       if (session.view.target.type === "mac-window") {
-        if (!nativeActions.has(input.action)) throw fail("unsupported");
-        const fields: ReadonlyArray<keyof C.DebugCommand> =
-          input.action === "click"
-            ? ["x", "y", "button", "clickCount", "modifiers"]
-            : input.action === "scroll"
-              ? ["x", "y", "deltaX", "deltaY"]
-              : input.action === "type"
-                ? ["text"]
-                : input.action === "key"
-                  ? ["key", "modifiers"]
-                  : [];
-        const params: Record<string, unknown> = {};
-        for (const field of fields) if (input[field] !== undefined) params[field] = input[field];
-        try {
-          const result = await call(`Native.${input.action}`, params);
-          // Keep test evidence without copying typed workbook text into the action log.
-          if (input.action !== "permissions")
-            add(
-              session,
-              "action",
-              `${input.action} accepted${input.action === "key" ? ` (${[...(input.modifiers ?? []), input.key].join("+")})` : ""}`,
-            );
-          return { text: JSON.stringify(result) };
-        } catch (cause) {
-          add(session, "action", `${input.action} failed: ${wrap(cause).reason}`, "error");
-          throw cause;
-        }
+        // A running benchmark owns this window's input; observation stays available.
+        if (
+          [...runs.values()].some(
+            (run) => run.sessionId === session.view.sessionId && run.report.state === "running",
+          ) &&
+          input.action !== "snapshot" &&
+          input.action !== "permissions"
+        )
+          throw fail("busy");
+        const result = await native(session, input);
+        return {
+          text: input.action === "snapshot" ? string(result.text) : JSON.stringify(result),
+        };
       }
-      if (nativeActions.has(input.action)) throw fail("unsupported");
+      if (input.action in nativeFields) throw fail("unsupported");
       let result: unknown;
       switch (input.action) {
         case "evaluate": {
@@ -561,7 +665,245 @@ const make = Effect.gen(function* () {
       const session = yield* attach(actor, { endpoint: "mac://local", targetId: target.id });
       return { targets, session };
     });
+  const probeStatus = (actor: string) => hub.status(actor);
+  const probe: ExternalDebug["Service"]["probe"] = (actor, input) =>
+    attempt(async () => {
+      let setup: P.ProbeSetup | null = null;
+      switch (input.action) {
+        case "setup":
+          if (!input.projectRoot) throw fail("invalid_command");
+          setup = await detectProbeSetup(input.projectRoot, options.probePort);
+          break;
+        case "arm": {
+          await hub.ensureListening();
+          hub.arm(actor);
+          // A page polls every one to ten seconds; wait for one to report in.
+          const deadline = Date.now() + (input.waitForClientMs ?? 12_000);
+          while (!hub.activity().clients && Date.now() < deadline)
+            await new Promise((resolve) => setTimeout(resolve, 200));
+          break;
+        }
+        case "disarm":
+          hub.disarm(actor);
+          break;
+        case "reset":
+          hub.reset(actor);
+          break;
+        case "status":
+          // Listening lets an installed probe report itself before anything is armed.
+          await hub.ensureListening().catch(() => undefined);
+          break;
+        case "read":
+          break;
+      }
+      return {
+        status: probeStatus(actor),
+        events:
+          input.action === "read"
+            ? hub.read(actor, input.after ?? 0, input.limit ?? 200, input.kinds)
+            : [],
+        setup,
+      };
+    });
+  const reports = async (actor: string) =>
+    (await store.list()).filter((report) =>
+      [...runs.values()].every((run) => run.report.id !== report.id || run.actor === actor),
+    );
+  const visible = (report: P.BenchmarkReport | null, includeSamples: boolean | undefined) =>
+    report && !includeSamples ? { ...report, samples: [] } : report;
+  const benchmark: ExternalDebug["Service"]["benchmark"] = (actor, input) =>
+    attempt(async () => {
+      if (input.action === "list")
+        return { report: null, reports: (await reports(actor)).map(listing) };
+      if (input.action !== "start") {
+        if (!input.runId) throw fail("invalid_command");
+        const run = runs.get(input.runId);
+        if (run && run.actor !== actor) throw fail("session_missing");
+        if (run && input.action === "cancel") run.cancelled = true;
+        if (run && input.waitMs)
+          await Promise.race([
+            run.done,
+            new Promise((resolve) => setTimeout(resolve, input.waitMs)),
+          ]);
+        const report = run?.report ?? (await store.get(input.runId));
+        if (!report) throw fail("session_missing");
+        return { report: visible(report, input.includeSamples), reports: [] };
+      }
+      if (!input.sessionId || !input.steps?.length) throw fail("invalid_command");
+      const session = get(actor, input.sessionId);
+      peerFor(session);
+      if (session.view.target.type !== "mac-window") throw fail("unsupported");
+      if (
+        [...runs.values()].some(
+          (run) => run.sessionId === session.view.sessionId && run.report.state === "running",
+        )
+      )
+        throw fail("busy");
+      const baseline = input.baselineId ? await store.get(input.baselineId) : null;
+      if (input.baselineId && !baseline) throw fail("invalid_command");
+      const warnings: string[] = [];
+      await hub.ensureListening().catch(() => {
+        warnings.push(
+          hub.status(actor).unavailable ??
+            "The probe listener is unavailable; Office.js and network metrics are missing.",
+        );
+      });
+      const wasArmed = hub.isArmed(actor);
+      hub.arm(actor);
+      // Give an installed probe a moment to switch from idle polling to streaming.
+      const deadline = Date.now() + 3000;
+      while (!hub.activity().clients && Date.now() < deadline)
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      if (!hub.activity().clients)
+        warnings.push(
+          "No add-in probe is connected, so Office.js, network, mark/measure and console metrics are missing. Use deckhand_excel_probe setup to install the development hook, then reload the add-in.",
+        );
+      let paint = true,
+        processes = 0;
+      try {
+        const enabled = await peerFor(session).call("Native.benchmark", { enabled: true });
+        processes = number(enabled.processes);
+        if (enabled.grouped === false)
+          warnings.push(
+            "CPU and memory cover only the app process; its WebKit processes could not be grouped.",
+          );
+      } catch {
+        paint = false;
+        warnings.push(
+          "Repaint timing and CPU/memory sampling are unavailable for this window; durations use add-in activity only.",
+        );
+      }
+      const plan = {
+        iterations: input.iterations ?? 5,
+        warmup: input.warmup ?? 1,
+        setup: input.setup ?? [],
+        steps: input.steps,
+        region: input.region ?? null,
+        settleMs: input.settleMs ?? 600,
+        timeoutMs: input.timeoutMs ?? 20_000,
+        paint,
+      };
+      const id = `bench-${NodeCrypto.randomUUID()}`;
+      const report: P.BenchmarkReport = {
+        id,
+        name: input.name?.trim() || `${session.view.target.app || "Excel"} benchmark`,
+        state: "running",
+        createdAt: new Date().toISOString(),
+        finishedAt: null,
+        progress: { iteration: 0, iterations: plan.warmup + plan.iterations, step: "" },
+        target: { app: session.view.target.app ?? "", title: session.view.target.title },
+        clients: hub.connectedClients().slice(0, 20),
+        iterations: plan.iterations,
+        warmup: plan.warmup,
+        region: plan.region,
+        paintMeasured: paint,
+        processesMeasured: processes,
+        steps: [],
+        samples: [],
+        warnings,
+        error: null,
+        comparison: null,
+      };
+      const run: Run = {
+        actor,
+        sessionId: session.view.sessionId,
+        cancelled: false,
+        report,
+        done: Promise.resolve(),
+      };
+      const deps: BenchmarkDeps = {
+        now: () => Date.now(),
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+        act: async (step) => {
+          const {
+            label: _label,
+            waitMs: _wait,
+            until: _until,
+            settleMs: _settle,
+            timeoutMs: _timeout,
+            action,
+            ...fields
+          } = step;
+          // Long runs keep their window session from idle expiry.
+          session.touched = Date.now();
+          if (action === "wait") return Date.now();
+          const result = await native(session, {
+            sessionId: session.view.sessionId,
+            action,
+            ...fields,
+          });
+          return number(result.at) || Date.now();
+        },
+        timeline: async (since) => {
+          const value = await peerFor(session).call("Native.timeline", { since });
+          return {
+            changes: array(value.changes).map((raw) => {
+              const change = record(raw);
+              return {
+                t: number(change.t),
+                area: number(change.area),
+                rects: array(change.rects).map((rect) => array(rect).map(number)),
+              };
+            }),
+            samples: array(value.samples).map((raw) => {
+              const sample = record(raw);
+              return {
+                t: number(sample.t),
+                cpu: number(sample.cpu),
+                memory: number(sample.memory),
+                processes: number(sample.processes),
+              };
+            }),
+          };
+        },
+        probeEvents: (from, to) => hub.events(actor, from, to),
+        probeActivity: () => hub.activity(),
+        probeClients: () => hub.connectedClients(),
+        cancelled: () => run.cancelled || session.view.state !== "connected",
+        progress: (iteration, step) => {
+          run.report = {
+            ...run.report,
+            progress: { ...run.report.progress, iteration, step },
+          };
+        },
+      };
+      runs.set(id, run);
+      store.put(report);
+      add(
+        session,
+        "action",
+        `benchmark started (${plan.iterations} iterations, ${plan.steps.length} steps)`,
+      );
+      run.done = runBenchmark(deps, plan, report, (next) => {
+        run.report = next;
+      })
+        .then(async (finished) => {
+          run.report = baseline
+            ? { ...finished, comparison: compareReports(finished.steps, baseline) }
+            : finished;
+          await store.save(run.report).catch(() => {
+            run.report = {
+              ...run.report,
+              warnings: [
+                ...run.report.warnings,
+                "The report could not be saved for later comparison.",
+              ],
+            };
+          });
+          add(session, "action", `benchmark ${run.report.state}`);
+        })
+        .finally(async () => {
+          if (!wasArmed) hub.disarm(actor);
+          if (session.view.state === "connected")
+            await session.peer?.call("Native.benchmark", { enabled: false }).catch(() => undefined);
+        });
+      if (input.waitMs)
+        await Promise.race([run.done, new Promise((resolve) => setTimeout(resolve, input.waitMs))]);
+      return { report: visible(run.report, input.includeSamples), reports: [] };
+    });
   return ExternalDebug.of({
+    probe,
+    benchmark,
     open,
     discover,
     attach,
@@ -576,6 +918,11 @@ const make = Effect.gen(function* () {
         const session = sessions.get(input.sessionId);
         if (!session) return;
         if (session.actor !== actor) throw fail("session_missing");
+        for (const run of runs.values())
+          if (run.sessionId === input.sessionId) {
+            run.cancelled = true;
+            await run.done;
+          }
         await close(session);
         sessions.delete(input.sessionId);
       }),

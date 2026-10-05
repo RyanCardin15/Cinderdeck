@@ -3,6 +3,15 @@ import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { EnvironmentAuthorizationError } from "../auth.ts";
 import { NonNegativeInt, TrimmedNonEmptyString, ThreadId } from "../baseSchemas.ts";
+import { NativeInputFields } from "./externalDebugInput.ts";
+import {
+  BenchmarkRequest,
+  BenchmarkResult,
+  ProbeRequest,
+  ProbeResult,
+} from "./excelPerformance.ts";
+
+export { DEBUG_KEYS, type DebugKey } from "./externalDebugInput.ts";
 
 const id = TrimmedNonEmptyString.check(Schema.isMaxLength(240));
 const text = Schema.String.check(Schema.isMaxLength(8192));
@@ -14,6 +23,8 @@ export const EXTERNAL_DEBUG_METHODS = {
   read: "deckhand.externalDebug.read",
   command: "deckhand.externalDebug.command",
   detach: "deckhand.externalDebug.detach",
+  probe: "deckhand.externalDebug.probe",
+  benchmark: "deckhand.externalDebug.benchmark",
 } as const;
 export const DebugEndpoint = Schema.Struct({ endpoint: id });
 export type DebugEndpoint = typeof DebugEndpoint.Type;
@@ -115,6 +126,10 @@ export const DebugCommand = Schema.Struct({
     "scroll",
     "focus",
     "permissions",
+    "snapshot",
+    "press",
+    "drag",
+    "move",
   ]),
   expression: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(16000))),
   contextId: Schema.optionalKey(NonNegativeInt),
@@ -124,47 +139,7 @@ export const DebugCommand = Schema.Struct({
   line: Schema.optionalKey(NonNegativeInt),
   breakpointId: Schema.optionalKey(id),
   pauseOnExceptions: Schema.optionalKey(Schema.Literals(["none", "uncaught", "all"])),
-  x: Schema.optionalKey(Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1 }))),
-  y: Schema.optionalKey(Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1 }))),
-  button: Schema.optionalKey(Schema.Literals(["left", "right"])),
-  clickCount: Schema.optionalKey(Schema.Literals([1, 2])),
-  text: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(4000))),
-  key: Schema.optionalKey(
-    Schema.Literals([
-      "Enter",
-      "Tab",
-      "Escape",
-      "Backspace",
-      "Delete",
-      "ArrowLeft",
-      "ArrowRight",
-      "ArrowDown",
-      "ArrowUp",
-      "Home",
-      "End",
-      "PageUp",
-      "PageDown",
-      "F6",
-      "F7",
-      "F8",
-      "a",
-      "c",
-      "v",
-      "x",
-      "z",
-      "n",
-      "o",
-      "s",
-      "w",
-      "f",
-      "p",
-    ]),
-  ),
-  modifiers: Schema.optionalKey(
-    Schema.Array(Schema.Literals(["meta", "alt", "shift", "control"])).check(Schema.isMaxLength(4)),
-  ),
-  deltaX: Schema.optionalKey(Schema.Int.check(Schema.isBetween({ minimum: -1200, maximum: 1200 }))),
-  deltaY: Schema.optionalKey(Schema.Int.check(Schema.isBetween({ minimum: -1200, maximum: 1200 }))),
+  ...NativeInputFields,
 });
 export type DebugCommand = typeof DebugCommand.Type;
 export const DebugCommandResult = Schema.Struct({
@@ -255,6 +230,16 @@ export const ExternalDebugRpcGroup = RpcGroup.make(
   Rpc.make(EXTERNAL_DEBUG_METHODS.detach, {
     payload: Schema.Struct({ ...DebugIdentity.fields, ...threadScope }),
     success: Schema.Void,
+    error,
+  }),
+  Rpc.make(EXTERNAL_DEBUG_METHODS.probe, {
+    payload: Schema.Struct({ ...ProbeRequest.fields, ...threadScope }),
+    success: ProbeResult,
+    error,
+  }),
+  Rpc.make(EXTERNAL_DEBUG_METHODS.benchmark, {
+    payload: Schema.Struct({ ...BenchmarkRequest.fields, ...threadScope }),
+    success: BenchmarkResult,
     error,
   }),
 );

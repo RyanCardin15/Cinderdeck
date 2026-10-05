@@ -50,6 +50,8 @@ export const RPC_REQUIRED_SCOPES = {
   [EXTERNAL_DEBUG_METHODS.attach]: AuthOrchestrationOperateScope,
   [EXTERNAL_DEBUG_METHODS.command]: AuthOrchestrationOperateScope,
   [EXTERNAL_DEBUG_METHODS.detach]: AuthOrchestrationOperateScope,
+  [EXTERNAL_DEBUG_METHODS.probe]: AuthOrchestrationOperateScope,
+  [EXTERNAL_DEBUG_METHODS.benchmark]: AuthOrchestrationOperateScope,
   [OWNERSHIP_METHODS.preview]: AuthOrchestrationReadScope,
   [OWNERSHIP_METHODS.get]: AuthOrchestrationOperateScope,
   [OWNERSHIP_METHODS.list]: AuthOrchestrationReadScope,

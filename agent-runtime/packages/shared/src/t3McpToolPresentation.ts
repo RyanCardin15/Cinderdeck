@@ -152,6 +152,16 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
     "browser",
     "browser",
   ),
+  deckhand_excel_probe: tool(
+    ["Inspect", "Inspecting", "Inspected", "add-in telemetry"],
+    "browser",
+    "browser",
+  ),
+  deckhand_excel_benchmark: tool(
+    ["Benchmark", "Benchmarking", "Benchmarked", "Excel interactions"],
+    "browser",
+    "browser",
+  ),
   deckhand_debug_detach: tool(
     ["Disconnect", "Disconnecting", "Disconnected", "an external debugger"],
     "browser",
