@@ -23,3 +23,7 @@ Cinderdeck/Config/Secrets.xcconfig
 
 *.profraw
 **/xcuserdata/
+
+# Generated app packages, local test evidence, and browser automation state
+/output/
+/.playwright-mcp/

@@ -1,0 +1,19 @@
+# Debug Mac apps in the agent harness
+
+The unified Cinderdeck app's **External app** session panel shows a selected native Mac application and its actual WebKit Inspector side by side. An Excel add-in continues running inside Excel, where its workbook APIs and Microsoft sign-in belong. The implementation is integrated into [CinderdeckAgentRuntime](../../CinderdeckAgentRuntime/apps/web/src/deckhand/ExternalAppPanel.tsx), the runtime embedded by the unified Cinderdeck build. Its [Mac setup guide](../../CinderdeckAgentRuntime/docs/deckhand/external-apps.md) explains permissions and connecting another Mac. The Cinderdeck theme, Workspace and Lane navigation remain part of the same app.
+
+Enable **Excel** in **Settings → External apps**. Open a conversation on the computer running Excel, choose **External app → Excel** in its right panel, find its windows, and select the Excel and optional undocked Inspector windows. Other Mac apps can be added in Settings. Switching conversations keeps attachments separate; closing the tab or disabling the app ends capture. Enable **Control window** separately for each panel to use the real Inspector's Console, Network, Sources, breakpoints, and stepping. Expand a panel for readable source text. Controls bring the selected window to the front on its Mac; a viewer on another Mac stays independent. Disconnecting leaves the native application and Inspector open. A paused Inspector remains paused until resumed there.
+
+Mac Excel uses WebKit inspection. Microsoft's [Mac add-in debugging guide](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/debug-office-add-ins-on-ipad-and-mac) describes enabling it and supported Office installations. The native integration requires macOS 14 or newer, Screen Recording, and Accessibility for optional controls. It mirrors selected windows using public Mac APIs; it does not move Excel into a browser or expose a fake Office runtime.
+
+## Recording evidence
+
+The harness's window views and Inspector diagnostics are transient. They are not automatically saved as a Cinderdeck recording. Cinderdeck's page-only CDP recorder cannot attach to Mac Excel's WebKit task pane. Do not use a Chromium debug-port recipe for that host.
+
+For a separate Mac Chromium application that already exposes CDP, the CLI/MCP CDP adapter provides structured diagnostics. Cinderdeck's existing [CDP recorder](REPROS.md#headless-browser-recordings) remains available for those targets, with its documented page-only capture limits.
+
+## Validation
+
+The packaged unified app was tested with an isolated Workspace, a real read-only Codex conversation, Settings persistence across restart, and native window input through the session panel. See the [unified app validation report](../output/cinderdeck-external-apps-unified-2026-10-04/VALIDATION.md) and [combined session screenshot](../output/cinderdeck-external-apps-unified-2026-10-04/session-app.png). The generated preview is separate from the installed application.
+
+Earlier standalone evidence: The Settings and conversation-panel flow was exercised using an actual AppKit/WKWebView application and its actual WebKit Inspector: toggle persistence, custom profiles, paired capture, native click/text input, console evaluation, surface switching, disconnect/reconnect, and Inspector expansion. See the [session UI validation report](../output/external-app-session-ux-2026-10-04/VALIDATION.md) and [captured session panel](../output/external-app-session-ux-2026-10-04/session-app.jpg). The [earlier debugging validation](../output/external-app-debugging-2026-10-04/VALIDATION.md) also covers JavaScript pause, stepping, and paused-local evaluation. Office APIs in this fixture are explicitly simulated. Actual Excel, Microsoft Graph OAuth, and another Mac remain acceptance gates requiring the user's add-in and target Mac. These earlier checks used the standalone source/dev build. The installed desktop application has not been replaced.

@@ -27,7 +27,7 @@ Use the local installer for builds you keep in `/Applications`. It creates a per
 ./scripts/install-local.sh
 ```
 
-The script builds Release, signs the app and Sparkle helpers, verifies the signature and certificate-based designated requirement, checks that the executable loads with its headless help command, then replaces `/Applications/Cinderdeck.app`. A previous installation is retained at the backup path printed by the script. `--build-only` validates a signed build without installing it; `--no-launch` skips opening the app after installation. macOS may ask you to authorize certificate trust or private-key access during first setup.
+The script builds Release, signs the app and Sparkle helpers, verifies the signature and certificate-based designated requirement, checks that the executable loads with its headless help command, then replaces `/Applications/Cinderdeck.app`. A previous installation is retained as a verified ZIP archive at the backup path printed by the script. Keeping backups as archives prevents macOS from registering them as extra applications or labeling permission entries “previous.” The build product is unregistered from LaunchServices so the installed copy handles normal launches and links. `--build-only` validates a signed build without installing it; `--no-launch` skips opening the app after installation. macOS may ask you to authorize certificate trust or private-key access during first setup.
 
 If you already use an Apple Development or Developer ID identity, keep it to avoid another identity change:
 

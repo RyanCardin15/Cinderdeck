@@ -8,6 +8,7 @@ SIGNING_IDENTITY="${CINDERDECK_SIGNING_IDENTITY:-Cinderdeck Local Development}"
 KEYCHAIN="${CINDERDECK_SIGNING_KEYCHAIN:-$HOME/Library/Keychains/login.keychain-db}"
 INSTALL_PATH="/Applications/Cinderdeck.app"
 BUNDLE_ID="com.ryancardin.cinderdeck"
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 RESET_PERMISSIONS=0
 BUILD_ONLY=0
 LAUNCH=1
@@ -120,6 +121,9 @@ if ! "$APP_PATH/Contents/MacOS/Cinderdeck" services help > "$DERIVED_DATA_PATH/l
   fail "Signed app could not launch; the installed app and its permissions have not been changed."
 fi
 if [[ "$BUILD_ONLY" == 1 ]]; then
+  # Xcode registers its product with LaunchServices. A build artifact must not
+  # compete with the installed app for deep links or permission-panel labels.
+  "$LSREGISTER" -u "$APP_PATH" >/dev/null 2>&1 || true
   echo "Signed app ready: $APP_PATH"
   exit 0
 fi
@@ -128,6 +132,7 @@ fi
 # Roll back a failed replacement; keep the prior installation as a local backup.
 cleanup() {
   if [[ -n "$STAGING_DIR" && -d "$STAGING_DIR" ]]; then
+    "$LSREGISTER" -u "$STAGING_DIR/Cinderdeck.app" >/dev/null 2>&1 || true
     if [[ -d "$STAGING_DIR/previous.app" ]]; then
       if [[ ! -e "$INSTALL_PATH" ]]; then
         if ! mv "$STAGING_DIR/previous.app" "$INSTALL_PATH"; then
@@ -135,7 +140,21 @@ cleanup() {
           return
         fi
       else
-        echo "Previous installation retained at $STAGING_DIR/previous.app"
+        # A live previous.app bundle is rediscovered by LaunchServices and can
+        # make System Settings label Cinderdeck's permission entry "previous".
+        # Keep a recoverable archive instead, deleting the bundle only after
+        # the archive has passed an integrity check.
+        local backup="$STAGING_DIR/previous.app.zip"
+        if ditto -c -k --sequesterRsrc --keepParent "$STAGING_DIR/previous.app" "$backup" \
+          && /usr/bin/unzip -tq "$backup" >/dev/null; then
+          "$LSREGISTER" -u "$STAGING_DIR/previous.app" >/dev/null 2>&1 || true
+          rm -rf "$STAGING_DIR/previous.app"
+          echo "Previous installation archived at $backup"
+        else
+          echo "Could not archive the previous installation; it is retained at $STAGING_DIR/previous.app" >&2
+        fi
+        "$LSREGISTER" -u "$APP_PATH" >/dev/null 2>&1 || true
+        "$LSREGISTER" -f "$INSTALL_PATH" >/dev/null 2>&1 || true
         return
       fi
     fi
@@ -167,6 +186,8 @@ if ! verify "$INSTALL_PATH" >/dev/null; then
   fail "Installed signature verification failed; restoring the previous installation."
 fi
 echo "Installed $INSTALL_PATH"
+"$LSREGISTER" -u "$APP_PATH" >/dev/null 2>&1 || true
+"$LSREGISTER" -f "$INSTALL_PATH" >/dev/null 2>&1 || true
 
 if [[ "$RESET_PERMISSIONS" == 1 ]]; then
   tccutil reset ScreenCapture "$BUNDLE_ID"

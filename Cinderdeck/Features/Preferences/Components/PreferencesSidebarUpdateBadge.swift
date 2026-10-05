@@ -75,19 +75,10 @@ struct PreferencesSidebarUpdateBadge: View {
               channelBadge
             }
 
-            HStack(spacing: 4) {
-              Text(appVersion)
-                .font(.system(size: 10.5))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-
-              if hasPendingUpdate {
-                Image(systemName: "arrow.down.circle.fill")
-                  .font(.system(size: 10))
-                  .foregroundStyle(Color.accentColor)
-                  .accessibilityHidden(true)
-              }
-            }
+            Text(appVersion)
+              .font(.system(size: 10.5))
+              .foregroundStyle(.secondary)
+              .lineLimit(1)
           }
         }
         .padding(.horizontal, 10)
@@ -147,16 +138,26 @@ struct PreferencesSidebarUpdateBadge: View {
     }
   }
 
+  @ViewBuilder
   private var channelBadge: some View {
-    Text(isBeta ? "BETA" : "STABLE")
-      .font(.system(size: 9.5, weight: .bold))
-      .padding(.horizontal, 5)
-      .padding(.vertical, 1.5)
-      .foregroundStyle(isBeta ? Color.orange : Color.secondary)
-      .background(
-        Capsule()
-          .fill(isBeta ? Color.orange.opacity(0.18) : Color.secondary.opacity(0.12))
-      )
+    if hasPendingUpdate {
+      Image(systemName: "arrow.down")
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundStyle(.white)
+        .frame(width: 22, height: 22)
+        .background(Color.blue, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .accessibilityLabel(Text(helpText))
+    } else {
+      Text(isBeta ? "BETA" : "STABLE")
+        .font(.system(size: 9.5, weight: .bold))
+        .padding(.horizontal, 5)
+        .padding(.vertical, 1.5)
+        .foregroundStyle(isBeta ? Color.orange : Color.secondary)
+        .background(
+          Capsule()
+            .fill(isBeta ? Color.orange.opacity(0.18) : Color.secondary.opacity(0.12))
+        )
+    }
   }
 
   /// Opens About, where update progress and actions live, and checks unless an update is already known.

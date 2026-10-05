@@ -32,7 +32,7 @@ flowchart TD
 ### Entry points
 
 - **Preferences → About** and **Preferences → General → Updates** show `PreferencesSoftwareUpdateView`: the current status with **Check for Updates**, **Download & Install** (or **View Release** for informational updates), **Cancel** during a check or download, **Restart to Update** once downloaded, **Quit and Install** if quitting was cancelled mid-install, and **Try Again** after a failure. General also has the automatic check/download toggles (downloads are disabled while checks are off) and Last Checked.
-- The Preferences sidebar badge shows an arrow when an update is waiting; clicking it opens About and checks if nothing is pending.
+- The Preferences sidebar replaces the Stable/Beta badge with a white download arrow on a blue background when an update is available or ready to install; clicking it opens About and checks if nothing is pending.
 - The menu bar's **Check for Updates…** item (hideable in Preferences → Menu Bar) becomes **Update Available (v…)…** (opens Sparkle's update window) or **Restart to Update** (installs now).
 - Scheduled alerts: Sparkle shows its alert when it can come to the front (near launch) or for critical updates; otherwise the menu bar item and Preferences serve as the reminder, since an alert would open behind other apps (`supportsGentleScheduledUpdateReminders`).
 - Silently downloaded updates: `willInstallUpdateOnQuit` hands over Sparkle's immediate-install handler, which **Restart to Update** calls; critical updates stay with Sparkle so it can present them. Quitting can be cancelled by Cinderdeck's running-work prompt (`StackQuitCoordinator`); the update still installs at the next quit.
@@ -72,7 +72,6 @@ flowchart TD
 - `CrashReportService.presentAlert()` (`Cinderdeck/Features/CrashReport/CrashReportService.swift`): builds the archive, shows an informational alert with a draggable zip accessory (`CrashReportAccessoryView`), Submit opens `https://github.com/RyanCardin15/Cinderdeck/issues/new?template=bug_report.yml`.
 - Archive contents: `README.txt` (generated summary) + `diagnostic-logs/cinderdeck_*.txt` for every retained log; older archives in the temp folder are cleaned up on each build. `ZipArchiveWriter` is a local dependency-free zip implementation.
 - Entry points:
-  - Settings → About → **Report a Problem** (full alert + bundle).
   - Settings → General → Help → **Report Issue** (opens the bug-report page directly, no bundle).
   - Status bar: `AppStatusBarController.reportProblemAction` calls `CrashReportService.presentAlert()` but is **not wired into `buildMenu()`** — see Unresolved questions.
 - Privacy: the zip is never sent automatically; the user attaches it manually on the report page.

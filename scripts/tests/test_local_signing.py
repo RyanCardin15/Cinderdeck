@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 IDENTITY = "Cinderdeck Local Development"
@@ -191,6 +192,43 @@ class LocalSigningTests(unittest.TestCase):
         self.env['SIGNING_TEST_REQUIREMENT'] = 'cdhash H"0123456789abcdef"'
         self.assertNotEqual(self.run_installer().returncode, 0)
         self.assert_no_install_side_effects()
+
+    def run_cleanup(self, *, installed=True, archive_failure=False):
+        staging = self.directory / 'staging'
+        previous = staging / 'previous.app'
+        previous.mkdir(parents=True)
+        (previous / 'saved-binary').write_bytes(b'previous installation')
+        destination = self.directory / 'Cinderdeck.app'
+        if installed:
+            destination.mkdir()
+            (destination / 'new-binary').write_bytes(b'new installation')
+        script = (ROOT / 'scripts/install-local.sh').read_text()
+        cleanup = script[script.index('cleanup() {'):script.index('trap cleanup EXIT')]
+        env = dict(os.environ, STAGING_DIR=str(staging), INSTALL_PATH=str(destination),
+                   APP_PATH=str(self.directory / 'build.app'), LSREGISTER='/usr/bin/true')
+        prefix = 'ditto() { return 1; }\n' if archive_failure else ''
+        result = subprocess.run(['bash', '-c', 'set -euo pipefail\n' + prefix + cleanup + '\ncleanup'],
+                                env=env, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return staging, destination
+
+    def test_successful_install_keeps_archive_instead_of_registered_app_backup(self):
+        staging, destination = self.run_cleanup()
+        self.assertFalse((staging / 'previous.app').exists())
+        with zipfile.ZipFile(staging / 'previous.app.zip') as archive:
+            self.assertIsNone(archive.testzip())
+            self.assertEqual(archive.read('previous.app/saved-binary'), b'previous installation')
+        self.assertEqual((destination / 'new-binary').read_bytes(), b'new installation')
+
+    def test_archive_failure_preserves_previous_installation(self):
+        staging, destination = self.run_cleanup(archive_failure=True)
+        self.assertEqual((staging / 'previous.app/saved-binary').read_bytes(), b'previous installation')
+        self.assertEqual((destination / 'new-binary').read_bytes(), b'new installation')
+
+    def test_failed_replacement_restores_previous_installation(self):
+        staging, destination = self.run_cleanup(installed=False)
+        self.assertEqual((destination / 'saved-binary').read_bytes(), b'previous installation')
+        self.assertFalse(staging.exists())
 
 
 if __name__ == '__main__':
