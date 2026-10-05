@@ -9,6 +9,8 @@ final class Delegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, W
   var window: NSWindow!
   var web: WKWebView!
   let receipt = CommandLine.arguments[1]
+  // Optional page URL: a simulated add-in dev server for the performance probe test.
+  let page = CommandLine.arguments.dropFirst(2).first.flatMap(URL.init(string:))
   func record(_ value: [String: Any]) {
     if let data = try? JSONSerialization.data(withJSONObject: value) {
       try? data.write(to: URL(fileURLWithPath: receipt), options: .atomic)
@@ -49,6 +51,23 @@ final class Delegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, W
     window.contentView = web
     window.makeKeyAndOrderFront(nil)
     NSApp.activate(ignoringOtherApps: true)
+    if let page {
+      web.load(URLRequest(url: page))
+      // Test-only control channel: "click <element id>" lines from the test runner.
+      DispatchQueue.global().async {
+        while let line = readLine() {
+          let parts = line.split(separator: " ", maxSplits: 1)
+          guard parts.count == 2, parts[0] == "click",
+            parts[1].range(of: "^[a-zA-Z0-9-]+$", options: .regularExpression) != nil
+          else { continue }
+          let id = String(parts[1])
+          DispatchQueue.main.async {
+            self.web.evaluateJavaScript("document.getElementById('\(id)').click()")
+          }
+        }
+      }
+      return
+    }
     web.loadHTMLString(
       """
       <!doctype html><html><head><meta charset="utf-8"><title>Mac add-in fixture</title><style>
@@ -69,6 +88,10 @@ final class Delegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, W
       """, baseURL: URL(string: "https://fixture.invalid"))
   }
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    if page != nil {
+      record(["ready": true, "pid": ProcessInfo.processInfo.processIdentifier])
+      return
+    }
     // Test-only SPI opens the fixture's own Inspector so the unattended test
     // need not navigate a user's Safari preferences or change Excel settings.
     let selector = NSSelectorFromString("_inspector")

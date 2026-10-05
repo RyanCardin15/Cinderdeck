@@ -146,6 +146,8 @@ it.effect("production mcp layer lists worktree tools over http", () =>
         "deckhand_debug_attach",
         "deckhand_debug_command",
         "deckhand_debug_detach",
+        "deckhand_excel_probe",
+        "deckhand_excel_benchmark",
       ])
         expect(toolNames).toContain(name);
       for (const name of [

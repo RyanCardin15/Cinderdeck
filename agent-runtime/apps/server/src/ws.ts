@@ -2016,6 +2016,32 @@ const makeWsRpcLayer = (
               () => new ExternalDebugError({ reason: "unavailable" }),
             ),
           ),
+        [EXTERNAL_DEBUG_METHODS.probe]: (input) =>
+          observeRpcEffect(
+            EXTERNAL_DEBUG_METHODS.probe,
+            withActor(
+              input.threadId ? { type: "thread", threadId: input.threadId } : undefined,
+              (actor) =>
+                externalDebug.probe(
+                  input.threadId ? ExternalDebug.externalDebugThreadOwner(input.threadId) : actor,
+                  input,
+                ),
+              () => new ExternalDebugError({ reason: "unavailable" }),
+            ),
+          ),
+        [EXTERNAL_DEBUG_METHODS.benchmark]: (input) =>
+          observeRpcEffect(
+            EXTERNAL_DEBUG_METHODS.benchmark,
+            withActor(
+              input.threadId ? { type: "thread", threadId: input.threadId } : undefined,
+              (actor) =>
+                externalDebug.benchmark(
+                  input.threadId ? ExternalDebug.externalDebugThreadOwner(input.threadId) : actor,
+                  input,
+                ),
+              () => new ExternalDebugError({ reason: "unavailable" }),
+            ),
+          ),
         [OWNED_PREVIEW_METHODS.intent]: (input) =>
           observeRpcEffect(
             OWNED_PREVIEW_METHODS.intent,

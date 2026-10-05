@@ -30,3 +30,11 @@ export const openDebugApp = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "external-debug:open",
   tag: EXTERNAL_DEBUG_METHODS.open,
 });
+export const excelProbe = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "external-debug:probe",
+  tag: EXTERNAL_DEBUG_METHODS.probe,
+});
+export const excelBenchmark = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "external-debug:benchmark",
+  tag: EXTERNAL_DEBUG_METHODS.benchmark,
+});
