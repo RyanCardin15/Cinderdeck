@@ -1,3 +1,4 @@
+import native from "./nativeWorkspace.module.css";
 import { useAtomValue } from "@effect/atom-react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
@@ -8,7 +9,7 @@ import {
   MonitorIcon,
   PauseIcon,
   PlayIcon,
-  PlusIcon,
+  CircleDotIcon,
   RefreshCwIcon,
   SquareIcon,
   CheckIcon,
@@ -135,7 +136,7 @@ function RecordingWorkspace({ environmentId }: { environmentId: EnvironmentId })
       : {}),
   };
   return (
-    <div className={styles.shell}>
+    <div className={`${styles.shell} ${native.workspace}`}>
       <ProductNavigation
         current="recordings"
         workspaceSearch={returnSearch}
@@ -292,6 +293,11 @@ export function Recordings({
   const baseUrl = useEnvironmentHttpBaseUrl(environmentId);
   const [items, setItems] = useState<ReadonlyArray<Recording>>([]);
   const [selectedID, select] = useState(initialRecordingID ?? "");
+  const [previousInitialID, setPreviousInitialID] = useState(initialRecordingID);
+  if (previousInitialID !== initialRecordingID) {
+    setPreviousInitialID(initialRecordingID);
+    select(initialRecordingID ?? "");
+  }
   const [selected, setSelected] = useState<Recording | null>(null);
   const [logView, setLogs] = useState<RecordingLogs | null>(null);
   const [mediaRevision, setMediaRevision] = useState(0);
@@ -528,6 +534,7 @@ export function Recordings({
       setPendingStart(null);
       setCreating(false);
       select(result.value.id);
+      onSelectRecording?.(result.value.id);
       setSelected(result.value);
       await reload();
     } else
@@ -585,6 +592,9 @@ export function Recordings({
   return (
     <section className={styles.root} aria-label="Recording library">
       <div className={styles.toolbar}>
+        <span className={styles.recordingCount}>
+          {items.length} {items.length === 1 ? "recording" : "recordings"}
+        </span>
         <div className={styles.filters}>
           {["all", "active", "passed", "failed"].map((value) => (
             <button
@@ -620,7 +630,7 @@ export function Recordings({
             disabled={!nativeActionsEnabled || busy || active}
             onClick={() => void openCreate()}
           >
-            <PlusIcon size={15} /> Record verification
+            <CircleDotIcon size={15} /> Record with Logs
           </button>
         </div>
       </div>
@@ -739,7 +749,7 @@ export function Recordings({
       ) : !items.length ? (
         <div className={styles.empty}>
           <ClapperboardIcon size={36} />
-          <h2>Your evidence starts here</h2>
+          <h2>Recordings with logs</h2>
           <p>
             Record a real application window with synchronized workspace logs, then review the
             result alongside captured repository revisions.
@@ -755,6 +765,53 @@ export function Recordings({
         </div>
       ) : (
         <div className={styles.layout}>
+          <aside className={styles.libraryPane} aria-label="Recordings">
+            <section className={styles.card}>
+              <h3>
+                Recordings <span>{visible.length}</span>
+              </h3>
+              <div className={styles.library}>
+                {visible.length ? (
+                  visible.map((item) => (
+                    <button
+                      type="button"
+                      key={item.id}
+                      aria-pressed={selected?.id === item.id}
+                      onClick={() => {
+                        select(item.id);
+                        onSelectRecording?.(item.id);
+                      }}
+                    >
+                      <span className={styles.thumbnail}>
+                        <RecordingThumbnail
+                          environmentId={environmentId}
+                          context={context}
+                          recordingID={item.id}
+                          playable={item.playable}
+                          title={item.title}
+                        />
+                      </span>
+                      <span>
+                        <strong>{item.title}</strong>
+                        <small>
+                          {time(item.duration)} · {item.state}
+                        </small>
+                        <em data-outcome={item.checkOutcome}>
+                          {item.checkOutcome === "unverified"
+                            ? "No recorded checks"
+                            : item.checkOutcome === "passed"
+                              ? "Checks passed"
+                              : "Checks failed"}
+                        </em>
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <p>No recordings match this filter.</p>
+                )}
+              </div>
+            </section>
+          </aside>
           <div className={styles.viewer}>
             {selected ? (
               <>
@@ -953,52 +1010,8 @@ export function Recordings({
               <div className={styles.empty}>Select a recording to review it.</div>
             )}
           </div>
-          <aside className={styles.inspector}>
-            <section className={styles.card}>
-              <h3>
-                Recordings <span>{visible.length}</span>
-              </h3>
-              <div className={styles.library}>
-                {visible.length ? (
-                  visible.map((item) => (
-                    <button
-                      type="button"
-                      key={item.id}
-                      aria-pressed={selected?.id === item.id}
-                      onClick={() => {
-                        select(item.id);
-                        onSelectRecording?.(item.id);
-                      }}
-                    >
-                      <span className={styles.thumbnail}>
-                        <RecordingThumbnail
-                          environmentId={environmentId}
-                          context={context}
-                          recordingID={item.id}
-                          playable={item.playable}
-                          title={item.title}
-                        />
-                      </span>
-                      <span>
-                        <strong>{item.title}</strong>
-                        <small>
-                          {time(item.duration)} · {item.state}
-                        </small>
-                        <em data-outcome={item.checkOutcome}>
-                          {item.checkOutcome === "unverified"
-                            ? "No recorded checks"
-                            : item.checkOutcome === "passed"
-                              ? "Checks passed"
-                              : "Checks failed"}
-                        </em>
-                      </span>
-                    </button>
-                  ))
-                ) : (
-                  <p>No recordings match this filter.</p>
-                )}
-              </div>
-            </section>
+          <details className={styles.inspector}>
+            <summary>Captured context and recorded checks</summary>
             {selected ? (
               <>
                 <section className={styles.card}>
@@ -1080,7 +1093,7 @@ export function Recordings({
                 </section>
               </>
             ) : null}
-          </aside>
+          </details>
         </div>
       )}
     </section>

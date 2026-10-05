@@ -1,3 +1,4 @@
+import type { WorkspaceSearch } from "./workspaceNavigation";
 import { Link } from "@tanstack/react-router";
 import { FilmIcon, ChevronRightIcon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -13,10 +14,12 @@ export function RecordingContextSummary({
   environmentId,
   context,
   enabled = true,
+  workspaceSearch,
 }: {
   environmentId: EnvironmentId;
   context: RecordingContext;
   enabled?: boolean;
+  workspaceSearch?: WorkspaceSearch;
 }) {
   const overview = useAtomCommand(recordingOverview, { reportFailure: false });
   const [value, setValue] = useState<RecordingContextOverview | null>(null);
@@ -79,12 +82,16 @@ export function RecordingContextSummary({
             {value.latest ? (
               <Link
                 className={styles.latest}
-                to="/recordings"
-                search={{
-                  environment: environmentId,
-                  workspace: context.workspaceID,
-                  recording: value.latest.id,
-                }}
+                to={workspaceSearch ? "/workspaces" : "/recordings"}
+                search={
+                  workspaceSearch
+                    ? { ...workspaceSearch, tab: "recordings", recording: value.latest.id }
+                    : {
+                        environment: environmentId,
+                        workspace: context.workspaceID,
+                        recording: value.latest.id,
+                      }
+                }
               >
                 <FilmIcon size={23} />
                 <span>
@@ -105,8 +112,12 @@ export function RecordingContextSummary({
           </>
         )}
         <Link
-          to="/recordings"
-          search={{ environment: environmentId, workspace: context.workspaceID }}
+          to={workspaceSearch ? "/workspaces" : "/recordings"}
+          search={
+            workspaceSearch
+              ? { ...workspaceSearch, tab: "recordings" }
+              : { environment: environmentId, workspace: context.workspaceID }
+          }
         >
           Open recording library <ChevronRightIcon size={14} />
         </Link>

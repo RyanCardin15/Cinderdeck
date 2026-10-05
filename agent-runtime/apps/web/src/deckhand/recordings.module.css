@@ -715,3 +715,124 @@ button.stop {
   outline: 2px solid var(--recording-accent);
   outline-offset: 3px;
 }
+
+/* Native recordings: library on the left, video and timestamped logs on the right. */
+.toolbar {
+  margin-bottom: 12px;
+  gap: 10px;
+}
+.recordingCount {
+  color: var(--quiet);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.filters {
+  margin-right: auto;
+  gap: 2px;
+  padding: 2px;
+  background: var(--muted);
+  border-radius: 8px;
+}
+.filters button {
+  padding: 5px 9px;
+  min-height: 28px;
+  font-size: 11px;
+}
+.filters button[aria-pressed="true"] {
+  background: var(--card);
+  box-shadow: 0 1px 3px #0002;
+}
+.actions button,
+.empty button,
+.create button {
+  min-height: 32px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: var(--card);
+}
+.actions .accent,
+.empty .accent {
+  background: color-mix(in srgb, var(--primary) 6%, var(--card));
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 35%, transparent);
+}
+.layout {
+  grid-template-columns: minmax(210px, 250px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.libraryPane {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  min-width: 0;
+}
+.libraryPane > .card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.libraryPane .card h3 {
+  display: none;
+}
+.library {
+  max-height: calc(100dvh - 290px);
+  gap: 6px;
+}
+.library > button {
+  border-radius: 8px;
+  padding: 10px;
+}
+.library > button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--primary) 30%, transparent);
+  background: var(--accent);
+}
+.viewer {
+  grid-column: 2;
+  grid-row: 1;
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--card);
+}
+.inspector {
+  grid-column: 2;
+  grid-row: 2;
+  display: block;
+  min-width: 0;
+}
+.inspector > summary {
+  font-size: 12px;
+  color: var(--quiet);
+  padding: 8px 0;
+  cursor: pointer;
+}
+.inspector > .card {
+  margin-top: 10px;
+  background: var(--card);
+  border-radius: 12px;
+}
+.inspector:not(:has(section)) {
+  display: none;
+}
+.recordingHeader h2 {
+  font-size: 15px;
+  letter-spacing: 0;
+}
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .libraryPane,
+  .viewer,
+  .inspector {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .library {
+    max-height: 240px;
+  }
+  .toolbar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+}

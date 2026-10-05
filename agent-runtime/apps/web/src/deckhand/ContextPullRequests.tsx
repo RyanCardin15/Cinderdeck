@@ -25,7 +25,12 @@ import {
   type ConnectedPullRequestSearch,
 } from "./contextPullRequestScope";
 import styles from "./contextPullRequests.module.css";
-export function ContextPullRequests({ scope }: { scope: ConnectedPullRequestSearch }) {
+type ContextPullRequestsProps = {
+  scope: ConnectedPullRequestSearch;
+  embedded?: boolean | undefined;
+  onNavigate?: ((scope: ConnectedPullRequestSearch) => void) | undefined;
+};
+export function ContextPullRequests({ scope, embedded, onNavigate }: ContextPullRequestsProps) {
   const key = JSON.stringify([
     scope.environmentId,
     scope.deckhandWorkspace,
@@ -33,13 +38,30 @@ export function ContextPullRequests({ scope }: { scope: ConnectedPullRequestSear
     scope.deckhandInstallationID,
     scope.deckhandGeneration,
   ]);
-  return <ScopedContextPullRequests key={key} scope={scope} />;
+  return (
+    <ScopedContextPullRequests
+      key={key}
+      scope={scope}
+      embedded={embedded}
+      onNavigate={onNavigate}
+    />
+  );
 }
-function ScopedContextPullRequests({ scope }: { scope: ConnectedPullRequestSearch }) {
+function ScopedContextPullRequests({
+  scope,
+  embedded = false,
+  onNavigate,
+}: ContextPullRequestsProps) {
   const offset = scope.deckhandOffset ?? 0;
-  const navigate = useNavigate({ from: "/pull-requests" });
+  const navigate = useNavigate();
   const go = (nextOffset: number, item?: ContextPullRequest) =>
-    void navigate({ search: contextPullRequestNavigation(scope, nextOffset, item), replace: true });
+    onNavigate
+      ? onNavigate(contextPullRequestNavigation(scope, nextOffset, item))
+      : void navigate({
+          to: "/pull-requests",
+          search: contextPullRequestNavigation(scope, nextOffset, item),
+          replace: true,
+        });
   const environment = useEnvironment(scope.environmentId);
   const nativeResult = useAtomValue(
     workspaceView({
@@ -102,13 +124,16 @@ function ScopedContextPullRequests({ scope }: { scope: ConnectedPullRequestSearc
   );
   const selectedCurrent = state === "ready" ? contextPullRequestSelection(scope, items) : null;
   const label = resource?.workspace?.lane?.name ?? "Primary checkout";
+  const Container = embedded ? "div" : SidebarInset;
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden">
-      <div className={styles.page}>
+    <Container className={embedded ? styles.embedded : "h-dvh min-h-0 overflow-hidden"}>
+      <div className={`${styles.page} ${embedded ? styles.embeddedPage : ""}`}>
         <header className={styles.header}>
-          <Link to="/workspaces" search={contextPullRequestReturn(scope)}>
-            ← Back to {scope.deckhandTab === "agents" ? "agents" : "workspace"}
-          </Link>
+          {!embedded ? (
+            <Link to="/workspaces" search={contextPullRequestReturn(scope)}>
+              ← Back to {scope.deckhandTab === "agents" ? "agents" : "workspace"}
+            </Link>
+          ) : null}
           <div>
             <span>
               {resource?.workspace?.name ?? "Saved workspace"} · {label}
@@ -261,6 +286,6 @@ function ScopedContextPullRequests({ scope }: { scope: ConnectedPullRequestSearc
           </div>
         )}
       </div>
-    </SidebarInset>
+    </Container>
   );
 }

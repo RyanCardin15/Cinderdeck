@@ -128,6 +128,11 @@ const page: ContextPullRequestsPage = {
   nextOffset: 50,
 };
 let currentScope: ConnectedPullRequestSearch = scope;
+let embedded = false;
+const embeddedNavigation = vi.fn(async (next: ConnectedPullRequestSearch) => {
+  currentScope = next;
+  await render();
+});
 let root: Root;
 let element: HTMLDivElement;
 let registry: AtomRegistry.AtomRegistry;
@@ -135,7 +140,11 @@ const render = () =>
   act(async () =>
     root.render(
       <RegistryContext.Provider value={registry}>
-        <ContextPullRequests scope={{ ...currentScope }} />
+        <ContextPullRequests
+          scope={{ ...currentScope }}
+          embedded={embedded}
+          {...(embedded ? { onNavigate: embeddedNavigation } : {})}
+        />
       </RegistryContext.Provider>,
     ),
   );
@@ -153,6 +162,8 @@ beforeEach(() => {
   transport.phase = "connected";
   transport.targets = [];
   currentScope = scope;
+  embedded = false;
+  embeddedNavigation.mockClear();
   transport.navigate.mockReset();
   transport.navigate.mockImplementation(async ({ search }) => {
     currentScope = search as ConnectedPullRequestSearch;
@@ -267,4 +278,28 @@ it("reports a replaced native generation explicitly and refuses cached metadata 
   expect(element.textContent).toContain("Saved context changed");
   expect(element.querySelector("[data-detail]")).toBeNull();
   expect(transport.targets).toEqual([]);
+});
+
+it("opens and pages pull request details inside the workspace without navigating to the global page", async () => {
+  embedded = true;
+  await ready();
+  expect(element.querySelector("a")).toBeNull();
+  await choose();
+  expect(element.querySelector("[data-detail]")?.textContent).toContain('"projectId":"api"');
+  expect(embeddedNavigation).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      selectedHost: "github.com",
+      repository: "owner/app",
+      number: 1,
+      deckhandContext: "lane",
+      deckhandGeneration: 7,
+    }),
+  );
+  const next = [...element.querySelectorAll("button")].find(
+    (button) => button.textContent === "Next",
+  )!;
+  await act(async () => next.click());
+  expect(pages.has(50)).toBe(true);
+  expect(element.querySelector("[data-detail]")).toBeNull();
+  expect(transport.navigate).not.toHaveBeenCalled();
 });

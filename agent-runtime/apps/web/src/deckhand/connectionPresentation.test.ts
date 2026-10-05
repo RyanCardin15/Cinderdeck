@@ -67,6 +67,7 @@ it("routes primary and lane contexts under their real base with saved identity p
   const environmentId = EnvironmentId.make("computer");
   const primaryDestination = connectedWorkspaceDestination(environmentId, "installation", primary)!;
   expect(connectedWorkspaceSearch(primaryDestination)).toEqual({
+    tab: "services",
     environment: "computer",
     workspace: "payment",
     context: "payment",
@@ -75,6 +76,7 @@ it("routes primary and lane contexts under their real base with saved identity p
   });
   const laneDestination = connectedWorkspaceDestination(environmentId, "installation", lane)!;
   expect(connectedWorkspaceSearch(laneDestination)).toEqual({
+    tab: "services",
     environment: "computer",
     workspace: "payment",
     context: "lane-api",

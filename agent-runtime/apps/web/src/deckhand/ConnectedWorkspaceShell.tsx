@@ -6,7 +6,6 @@ import * as Option from "effect/Option";
 import type { ReactNode } from "react";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import type { ThreadContextView } from "@t3tools/contracts/deckhand/rpc";
-import { LayersIcon, ServerIcon, FilmIcon, MessagesSquareIcon } from "lucide-react";
 import { ProductNavigation } from "./ProductNavigation";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { workspaceView } from "./state";
@@ -16,6 +15,8 @@ import { useAgentObservation } from "./useAgentObservation";
 import { environmentServerConfigsAtom } from "../state/server";
 import { deriveProviderInstanceEntries } from "../providerInstances";
 import styles from "./connectedShell.module.css";
+import native from "./nativeWorkspace.module.css";
+import { WorkspaceSections } from "./WorkspaceSections";
 
 /** Shares the operational navigator around the existing single ChatView. */
 export function ConnectedWorkspaceShell({
@@ -83,8 +84,9 @@ export function ConnectedWorkspaceShell({
     context.native?.workspace?.lane?.name ??
     (context.checkout.laneId ? context.feature.title : "Primary");
   return (
-    <div className={styles.shell}>
+    <div className={`${styles.shell} ${native.workspace}`}>
       <ProductNavigation
+        workspaceMode
         current="conversations"
         workspaceSearch={search}
         connection={{
@@ -117,44 +119,7 @@ export function ConnectedWorkspaceShell({
             <span> / </span>
             <strong>{current}</strong>
           </div>
-          <nav aria-label="Views for selected context">
-            <Link to="/workspaces" search={{ ...search, tab: "overview" }}>
-              <LayersIcon size={14} />
-              Overview
-            </Link>
-            <Link to="/workspaces" search={search} aria-current="page">
-              <MessagesSquareIcon size={14} />
-              Agents
-            </Link>
-            <Link
-              to="/services"
-              search={{
-                environment: threadRef.environmentId,
-                workspace: contextID,
-                expectedInstallationID: context.workspace.environmentId,
-                ...(context.checkout.nativeGeneration
-                  ? { expectedGeneration: context.checkout.nativeGeneration }
-                  : {}),
-              }}
-            >
-              <ServerIcon size={14} />
-              Services & runs
-            </Link>
-            <Link
-              to="/recordings"
-              search={{
-                environment: threadRef.environmentId,
-                workspace: contextID,
-                expectedInstallationID: context.workspace.environmentId,
-                ...(context.checkout.nativeGeneration
-                  ? { expectedGeneration: context.checkout.nativeGeneration }
-                  : {}),
-              }}
-            >
-              <FilmIcon size={14} />
-              Recordings
-            </Link>
-          </nav>
+          <WorkspaceSections search={search} />
         </header>
         <div className={styles.body}>
           <aside className={styles.sessions} aria-label="Sessions in selected context">

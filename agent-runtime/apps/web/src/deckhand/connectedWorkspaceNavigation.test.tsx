@@ -38,6 +38,7 @@ vi.mock("./useAgentObservation", () => ({
 vi.mock("./state", () => ({ threadContextView: () => null }));
 vi.mock("./RecordingContextSummary", () => ({ RecordingContextSummary: () => null }));
 vi.mock("./PreviewCaptureControl", () => ({ PreviewCaptureControl: () => null }));
+vi.mock("./ManagedSessionControl", () => ({ ManagedSessionControl: () => null }));
 vi.mock("./ReviewerLauncher", () => ({ ReviewerLauncher: () => null }));
 vi.mock("./LinkedWorkContext", () => ({ LinkedWorkContext: () => null }));
 import { LaneSessionContext } from "./LaneSessionContext";
@@ -152,23 +153,25 @@ it.each(["lane", "primary"] as const)(
       />,
     );
     const returns = observed.links.filter((link) => link.to === "/workspaces");
-    expect(returns).toHaveLength(6);
+    expect(returns).toHaveLength(3);
     const expected = connectedWorkspaceSearch(threadRef.environmentId, current);
     for (const link of returns) {
-      expect(link.search).toEqual({ ...expected, ...(link.search?.tab ? { tab: "agents" } : {}) });
+      expect(link.search).toEqual({
+        ...expected,
+        ...(link.search?.tab ? { tab: link.search.tab } : {}),
+      });
       const saved = validateWorkspaceSearch(link.search ?? {});
       expect(savedWorkspaceMatches(saved, "native-installation", 7)).toBe(true);
       expect(savedWorkspaceMatches(saved, "native-installation", 8)).toBe(false);
       expect(savedWorkspaceMatches(saved, "replacement-installation", 7)).toBe(false);
     }
     expect(returns.filter((link) => link.search?.tab === "agents")).toHaveLength(1);
-    expect(header).toContain(kind === "lane" ? "Lane · review-lane" : "Primary checkout");
+    expect(header).toContain("Manage services in workspace");
+    expect(returns.filter((link) => link.search?.tab === "services")).toHaveLength(1);
     expect(sidebar).toContain(kind === "lane" ? "Lane · review-lane" : "Primary checkout");
     expect(sidebar).toContain("Implement retries");
     expect(sidebar).toContain("Codex · Work");
     expect(sidebar).toContain("Needs approval");
-    expect(header).toContain("Implement retries");
-    expect(header).toContain("Follow-up 1");
   },
 );
 
@@ -204,7 +207,7 @@ it("retains scoped conversation links while downgrading disconnected agent obser
     />,
   );
   const sidebar = renderToStaticMarkup(<ConnectedLaneSidebar threadRef={threadRef} />);
-  expect(header).toContain("State unavailable");
+  expect(header).toContain("Current service state is unavailable");
   expect(header).toContain("Saved conversation context");
   expect(header).toContain("Last observed");
   expect(sidebar).toContain("Last observed");

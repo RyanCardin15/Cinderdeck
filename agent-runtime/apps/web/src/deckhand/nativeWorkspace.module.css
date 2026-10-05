@@ -1,0 +1,176 @@
+/* Palette and sizing match Cinderdeck/Shared/Styles/DeckStyle.swift. */
+.workspace {
+  --background: #f3f4f6;
+  --sidebar: #eceef1;
+  --card: #fff;
+  --card-foreground: #1c1c1e;
+  --popover: #fff;
+  --popover-foreground: #1c1c1e;
+  --foreground: #1c1c1e;
+  --muted: #eceff3;
+  --muted-foreground: #6b6d72;
+  --accent: rgb(185 65 12 / 10%);
+  --accent-foreground: #b9410c;
+  --primary: #b9410c;
+  --dh-accent: var(--primary);
+  --dh-accent-text: var(--primary);
+  --primary-foreground: #fff;
+  --ring: #b9410c;
+  --border: rgb(0 0 0 / 11%);
+  --input: var(--border);
+  --deck-success: #16733d;
+  --deck-warning: #946000;
+  --deck-danger: #ba3245;
+  --deck-page-title: 23px;
+  --deck-rail-width: 225px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+:global(.dark) .workspace {
+  --background: #16191f;
+  --sidebar: #12151a;
+  --card: #20252d;
+  --card-foreground: #f2f2f7;
+  --popover: #20252d;
+  --popover-foreground: #f2f2f7;
+  --foreground: #f2f2f7;
+  --muted: #171b22;
+  --muted-foreground: #a3a5ac;
+  --accent: rgb(255 144 84 / 10%);
+  --accent-foreground: #ff9054;
+  --primary: #ff9054;
+  --ring: #ff9054;
+  --border: rgb(255 255 255 / 11%);
+  --deck-success: #66c88a;
+  --deck-warning: #e9b75c;
+  --deck-danger: #ff7585;
+}
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.heading > div {
+  min-width: 0;
+}
+.featureIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  color: var(--primary);
+  background: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, transparent);
+  border-radius: 11px;
+}
+.path {
+  font: 11px var(--font-mono, monospace);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  max-width: 60ch;
+}
+.lanesMenu {
+  position: relative;
+}
+.lanesMenu summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.lanesMenu summary::-webkit-details-marker {
+  display: none;
+}
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--popover);
+  box-shadow: 0 8px 24px #0002;
+}
+.menu a {
+  padding: 8px 12px;
+  color: var(--foreground);
+  text-decoration: none;
+  font-size: 12px;
+}
+.menu a:hover,
+.lanesMenu summary:hover {
+  background: var(--muted);
+}
+.sections {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--card);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.sections a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 9px 10px;
+  min-height: 32px;
+  color: var(--muted-foreground);
+  text-decoration: none;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.sections a[aria-current="page"] {
+  color: var(--primary);
+  background: var(--accent);
+  font-weight: 600;
+}
+.sections a:hover {
+  background: var(--muted);
+}
+.sections a[aria-current="page"]:hover {
+  background: var(--accent);
+}
+.workspace :focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+@media (prefers-contrast: more) {
+  .workspace {
+    --border: color-mix(in srgb, var(--foreground) 32%, transparent);
+  }
+}
+@media (max-width: 700px) {
+  .workspace {
+    --deck-rail-width: 190px;
+  }
+  .path {
+    max-width: 35ch;
+  }
+}

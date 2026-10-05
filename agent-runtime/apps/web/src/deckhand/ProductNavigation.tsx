@@ -19,6 +19,7 @@ export function ProductNavigation({
   children,
   connection,
   workspaceSearch,
+  workspaceMode = false,
 }: {
   current:
     | "workspaces"
@@ -31,9 +32,72 @@ export function ProductNavigation({
   children?: ReactNode;
   connection?: { label: string; connected: boolean };
   workspaceSearch?: WorkspaceSearch;
+  workspaceMode?: boolean;
 }) {
-  const { context, tab: _tab, ...scope } = workspaceSearch ?? {};
-  const operationSearch = { ...scope, ...(context ? { workspace: context } : {}) };
+  const scoped = Boolean(workspaceSearch?.workspace || workspaceSearch?.context);
+  const links = (
+    <nav className={styles.links}>
+      <Link
+        to="/workspaces"
+        search={{ ...workspaceSearch, tab: "overview" }}
+        className={current === "workspaces" ? styles.current : ""}
+        aria-current={current === "workspaces" ? "page" : undefined}
+      >
+        <LayersIcon size={18} />
+        Overview
+      </Link>
+      <Link
+        to="/inbox"
+        className={current === "inbox" ? styles.current : ""}
+        aria-current={current === "inbox" ? "page" : undefined}
+      >
+        <InboxIcon size={18} />
+        Inbox
+      </Link>
+      <Link
+        to="/workspaces"
+        search={{ ...workspaceSearch, tab: "agents" }}
+        className={current === "conversations" ? styles.current : ""}
+        aria-current={current === "conversations" ? "page" : undefined}
+      >
+        <MessagesSquareIcon size={18} />
+        Agents
+      </Link>
+      <Link
+        to="/pull-requests"
+        search={{
+          involvement: "all",
+          state: "open",
+          ...(workspaceSearch?.environment
+            ? { environmentId: EnvironmentId.make(workspaceSearch.environment) }
+            : {}),
+        }}
+        className={current === "pull-requests" ? styles.current : ""}
+        aria-current={current === "pull-requests" ? "page" : undefined}
+      >
+        <PullRequestGlyph.pullRequest size={18} />
+        Pull requests
+      </Link>
+      <Link
+        to={scoped ? "/workspaces" : "/services"}
+        search={scoped ? { ...workspaceSearch, tab: "services" } : (workspaceSearch ?? {})}
+        className={current === "services" ? styles.current : ""}
+        aria-current={current === "services" ? "page" : undefined}
+      >
+        <ServerIcon size={18} />
+        Services & runs
+      </Link>
+      <Link
+        to={scoped ? "/workspaces" : "/recordings"}
+        search={scoped ? { ...workspaceSearch, tab: "recordings" } : (workspaceSearch ?? {})}
+        className={current === "recordings" ? styles.current : ""}
+        aria-current={current === "recordings" ? "page" : undefined}
+      >
+        <FilmIcon size={18} />
+        Recordings
+      </Link>
+    </nav>
+  );
   return (
     <aside className={styles.rail} aria-label="Cinderdeck navigation">
       {window.desktopBridge ? <div className={styles.titlebar} aria-hidden="true" /> : null}
@@ -43,65 +107,20 @@ export function ProductNavigation({
         search={{ ...workspaceSearch, tab: "overview" }}
       >
         <CinderdeckMark aria-hidden="true" />
-        <strong>Cinderdeck</strong>
+        <span>
+          <strong>Cinderdeck</strong>
+          {workspaceMode ? <small>Workspaces</small> : null}
+        </span>
       </Link>
-      <nav className={styles.links}>
-        <Link
-          to="/workspaces"
-          search={{ ...workspaceSearch, tab: "overview" }}
-          className={current === "workspaces" ? styles.current : ""}
-          aria-current={current === "workspaces" ? "page" : undefined}
-        >
-          <LayersIcon size={18} />
-          Overview
-        </Link>
-        <Link
-          to="/inbox"
-          className={current === "inbox" ? styles.current : ""}
-          aria-current={current === "inbox" ? "page" : undefined}
-        >
-          <InboxIcon size={18} />
-          Inbox
-        </Link>
-        <Link
-          to="/workspaces"
-          search={{ ...workspaceSearch, tab: "agents" }}
-          className={current === "conversations" ? styles.current : ""}
-          aria-current={current === "conversations" ? "page" : undefined}
-        >
-          <MessagesSquareIcon size={18} />
-          Agents
-        </Link>
-        <Link
-          to="/pull-requests"
-          search={{ involvement: "all", state: "open", ...(workspaceSearch?.environment ? { environmentId: EnvironmentId.make(workspaceSearch.environment) } : {}) }}
-          className={current === "pull-requests" ? styles.current : ""}
-          aria-current={current === "pull-requests" ? "page" : undefined}
-        >
-          <PullRequestGlyph.pullRequest size={18} />
-          Pull requests
-        </Link>
-        <Link
-          to="/services"
-          search={operationSearch}
-          className={current === "services" ? styles.current : ""}
-          aria-current={current === "services" ? "page" : undefined}
-        >
-          <ServerIcon size={18} />
-          Services & runs
-        </Link>
-        <Link
-          to="/recordings"
-          search={operationSearch}
-          className={current === "recordings" ? styles.current : ""}
-          aria-current={current === "recordings" ? "page" : undefined}
-        >
-          <FilmIcon size={18} />
-          Recordings
-        </Link>
-      </nav>
+      {!workspaceMode ? links : null}
       {children}
       <div className={styles.bottom}>
+        {workspaceMode ? (
+          <details className={styles.allViews}>
+            <summary>All views</summary>
+            {links}
+          </details>
+        ) : null}
         <NativeToolsMenu className={styles.tools} />
         <Link to="/settings" aria-current={current === "settings" ? "page" : undefined}>
           <SettingsIcon size={17} />

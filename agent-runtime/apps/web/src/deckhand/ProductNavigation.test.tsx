@@ -56,26 +56,12 @@ it("keeps workspace tools scoped while pull requests open the shared GitHub brow
     for (const [label, to, search] of [
       ["Agents", "/workspaces", { ...scope, tab: "agents" }],
       ["Overview", "/workspaces", { ...scope, tab: "overview" }],
-      ["Pull requests", "/pull-requests", { involvement: "all", state: "open", environmentId: "remote" }],
+      ["Services & runs", "/workspaces", { ...scope, tab: "services" }],
+      ["Recordings", "/workspaces", { ...scope, tab: "recordings" }],
       [
-        "Services & runs",
-        "/services",
-        {
-          environment: "remote",
-          workspace: "lane",
-          expectedGeneration: 7,
-          expectedInstallationID: "original",
-        },
-      ],
-      [
-        "Recordings",
-        "/recordings",
-        {
-          environment: "remote",
-          workspace: "lane",
-          expectedGeneration: 7,
-          expectedInstallationID: "original",
-        },
+        "Pull requests",
+        "/pull-requests",
+        { involvement: "all", state: "open", environmentId: "remote" },
       ],
     ] as const) {
       const link = [...container.querySelectorAll("a")].find((item) => item.textContent === label)!;

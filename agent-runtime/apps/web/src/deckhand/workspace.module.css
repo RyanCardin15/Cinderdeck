@@ -1098,3 +1098,57 @@
 .dh-lane-row:hover {
   background: color-mix(in srgb, var(--foreground) 3%, var(--card));
 }
+
+/* Compact workspace chrome follows the native workspace header. */
+.dh-main {
+  padding: 24px;
+}
+.dh-header {
+  padding-bottom: 20px;
+  flex-wrap: nowrap;
+}
+.dh-header h1 {
+  font-size: 23px;
+  letter-spacing: 0;
+  margin: 5px 0;
+}
+.dh-eyebrow {
+  font: 600 10px var(--font-mono, monospace);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.dh-button {
+  min-height: 32px;
+  border-radius: 8px;
+  background: var(--card);
+  padding: 7px 12px;
+  font-size: 12px;
+}
+.dh-accent {
+  background: color-mix(in srgb, var(--primary) 6%, var(--card));
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 35%, transparent);
+}
+.dh-toolbar {
+  padding: 0 0 16px;
+  font-size: 12px;
+}
+.dh-toolbar select {
+  padding: 5px 8px;
+  min-height: 28px;
+  background: var(--card);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.dh-header > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 700px) {
+  .dh-header {
+    flex-wrap: wrap;
+  }
+  .dh-main {
+    padding: 16px;
+  }
+}

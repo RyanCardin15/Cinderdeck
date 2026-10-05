@@ -186,3 +186,52 @@
   font-weight: 500;
   border-radius: var(--deck-radius);
 }
+
+.rail {
+  background: var(--sidebar);
+  padding: 20px 16px 16px;
+  gap: 14px;
+}
+.brand {
+  font-size: 15px;
+  letter-spacing: 0;
+  gap: 10px;
+  margin: 4px 0 0;
+}
+.brand > svg {
+  width: 30px;
+  height: 30px;
+  padding: 5px;
+  border-radius: 8px;
+  background: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, transparent);
+}
+.brand small {
+  display: block;
+  font: 600 10px var(--font-mono, monospace);
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 3px;
+}
+.allViews {
+  margin-bottom: 8px;
+}
+.allViews > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 12px;
+}
+.allViews .links {
+  margin-top: 8px;
+}
+.links a,
+.bottom a {
+  padding: 7px 9px;
+  font-size: 12px;
+  min-height: 32px;
+}

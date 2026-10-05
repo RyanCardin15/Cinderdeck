@@ -76,6 +76,9 @@ final class AgentShellWorkspaceTools: NSWindowController, NSWindowDelegate {
       presentedRequest = request
       activate()
       if request.mode == nil { model.edit(file) }
+    case "workspace-terminal":
+      guard let file, request.mode == nil else { throw StackControlError.invalid("Workspace terminal requires an exact workspace and no mode") }
+      model.showLogs(stack: file.id, service: nil)
     case "execution-map":
       guard let file, request.mode == nil else { throw StackControlError.invalid("Execution map requires an exact workspace and no mode") }
       model.select(file.id)

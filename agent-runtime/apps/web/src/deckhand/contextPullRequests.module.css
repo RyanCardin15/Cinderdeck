@@ -132,3 +132,60 @@
     padding: 20px;
   }
 }
+
+.embedded {
+  min-width: 0;
+}
+.embeddedPage {
+  height: auto;
+  min-height: 480px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+/* Embedded workspace panels follow the native section hierarchy. */
+.embeddedPage {
+  background: var(--card);
+}
+.embeddedPage .header {
+  padding: 12px;
+}
+.embeddedPage .header span {
+  display: none;
+}
+.embeddedPage .header h1 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+.embeddedPage .header p {
+  font-size: 12px;
+  margin-top: 4px;
+}
+.embeddedPage .body {
+  grid-template-columns: minmax(220px, 250px) minmax(0, 1fr);
+}
+.embeddedPage .list {
+  padding: 12px;
+}
+.embeddedPage .row {
+  padding: 10px;
+  border-radius: 8px;
+  gap: 5px;
+}
+.embeddedPage .row strong {
+  font-size: 12px;
+}
+.embeddedPage .message {
+  padding: 16px;
+  font-size: 12px;
+}
+.embeddedPage .message h2 {
+  font-size: 15px;
+}
+@media (max-width: 700px) {
+  .embeddedPage .body {
+    display: flex;
+    flex-direction: column;
+  }
+}

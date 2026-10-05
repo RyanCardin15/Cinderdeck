@@ -101,6 +101,21 @@ vi.mock("./SessionLauncher", () => ({
   SessionLauncher: ({ enabled, creation }: { enabled: boolean; creation?: unknown }) =>
     creation ? null : <button disabled={!enabled}>Launch selected agent</button>,
 }));
+vi.mock("./ServicesRuns", () => ({
+  ServicesRuns: ({ context }: { context: { workspaceID: string } }) => (
+    <p>services for {context.workspaceID}</p>
+  ),
+}));
+vi.mock("./Recordings", () => ({
+  Recordings: ({ context }: { context: { workspaceID: string } }) => (
+    <p>recordings for {context.workspaceID}</p>
+  ),
+}));
+vi.mock("./ContextPullRequests", () => ({
+  ContextPullRequests: ({ scope }: { scope: { deckhandContext: string } }) => (
+    <p>pull-requests for {scope.deckhandContext}</p>
+  ),
+}));
 import { WorkspaceOverview } from "./WorkspaceOverview";
 
 const resource = (id: string, source?: string): IntegrationView["resources"][number] => ({
@@ -160,7 +175,6 @@ const view: IntegrationView = {
       "operations.lane.create.repositoryRefs",
       "operations.lane.create.managedWriter",
       "operations.receipts.wait",
-      "checkout.reservations",
     ],
     maximumFrameBytes: 4194304,
     maximumPageSize: 100,
@@ -340,15 +354,28 @@ it("preserves Agents while changing workspace and checkout, with selected-lane s
   expect(
     container.querySelector('section[aria-label="Agents in selected context"]')?.textContent,
   ).toContain("Saved sessions for lane");
-  for (const name of ["Services", "Recordings"]) {
+  for (const name of ["Services", "Tasks", "Workflows", "Runs", "Recordings", "Pull requests"]) {
     const url = await follow(name);
-    expect(url.pathname).toBe(`/${name.toLowerCase()}`);
+    expect(url.pathname).toBe("/workspaces");
     expect(Object.fromEntries(url.searchParams)).toEqual({
       environment: "computer",
-      workspace: "lane",
+      workspace: "primary",
+      context: "lane",
+      tab: name === "Pull requests" ? "pull-requests" : name.toLowerCase(),
       expectedGeneration: "7",
       expectedInstallationID: "installation",
     });
+    await render();
+    expect(
+      container.querySelector('section[aria-label$="in selected context"]')?.textContent,
+    ).toContain("for lane");
+    expect(container.querySelector('nav[aria-label="Workspaces and lanes"]')).not.toBeNull();
+    expect(container.querySelector('aside[aria-label="Selected context"]')).toBeNull();
+    await changeSelect("Context", "primary");
+    await render();
+    expect(
+      container.querySelector('section[aria-label$="in selected context"]')?.textContent,
+    ).toContain("for primary");
     boundary.search = {
       environment: "computer",
       workspace: "primary",
@@ -505,16 +532,19 @@ it("opens the selected lane's pull requests with original pins and a scoped retu
   };
   await render();
   const url = await follow("Pull requests");
+  expect(url.pathname).toBe("/workspaces");
   expect(Object.fromEntries(url.searchParams)).toEqual({
-    involvement: "all",
-    state: "all",
-    environmentId: "computer",
-    deckhandWorkspace: "primary",
-    deckhandContext: "lane",
-    deckhandInstallationID: "installation",
-    deckhandGeneration: "7",
-    deckhandTab: "agents",
+    environment: "computer",
+    workspace: "primary",
+    context: "lane",
+    expectedInstallationID: "installation",
+    expectedGeneration: "7",
+    tab: "pull-requests",
   });
+  await render();
+  expect(
+    container.querySelector('section[aria-label$="in selected context"]')?.textContent,
+  ).toContain("pull-requests for lane");
 });
 it("keeps a replaced lane's original PR scope instead of linking its replacement", async () => {
   boundary.search = {
@@ -527,9 +557,15 @@ it("keeps a replaced lane's original PR scope instead of linking its replacement
   };
   await render();
   const url = await follow("Pull requests");
-  expect(url.searchParams.get("deckhandGeneration")).toBe("6");
-  expect(url.searchParams.get("deckhandInstallationID")).toBe("installation");
-  expect(url.searchParams.get("deckhandContext")).toBe("lane");
+  expect(url.searchParams.get("expectedGeneration")).toBe("6");
+  expect(url.searchParams.get("expectedInstallationID")).toBe("installation");
+  expect(url.searchParams.get("context")).toBe("lane");
+  await render();
+  expect(container.textContent).toContain("Selected context unavailable");
+  expect(
+    container.querySelector('section[aria-label="Pull requests in selected context"]'),
+  ).toBeNull();
+  expect(boundary.mutation).not.toHaveBeenCalled();
 });
 
 it.each(["missing", "lane"])(
@@ -711,4 +747,17 @@ it("reviews multiple workspace folders and submits the selected lane launch opti
       }),
     }),
   );
+});
+
+it("resolves a native lane entry to its owning workspace before opening its tool", async () => {
+  boundary.search = { environment: "computer", context: "lane", tab: "services" };
+  registry.set(nativeAtom, AsyncResult.success({ ...view, resources: [other, primary, lane] }));
+  await render();
+  const workspaceSelector = [...container.querySelectorAll("label")]
+    .find((label) => label.textContent?.startsWith("Workspace"))
+    ?.querySelector("select");
+  expect(workspaceSelector?.value).toBe("primary");
+  expect(
+    container.querySelector('section[aria-label="Services in selected context"]')?.textContent,
+  ).toContain("services for lane");
 });

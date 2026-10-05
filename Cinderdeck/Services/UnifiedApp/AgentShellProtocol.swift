@@ -12,7 +12,7 @@ nonisolated struct AgentShellUIRequest: Decodable, Equatable, Sendable {
   let mode: String?
   let workspaceID: String?
 
-  static let surfaces: Set<String> = ["workspace", "lane-map", "history", "preferences", "capture", "recording", "annotate", "updates", "workspace-setup", "workspace-editor", "execution-map", "agent-access"]
+  static let surfaces: Set<String> = ["workspace", "lane-map", "history", "preferences", "capture", "recording", "annotate", "updates", "workspace-setup", "workspace-editor", "workspace-terminal", "execution-map", "agent-access"]
   static let workspaceEditorModes: Set<String> = ["services", "tasks", "workflows"]
   static let captureModes: Set<String> = ["region", "window", "fullscreen", "scrolling", "ocr"]
 
@@ -24,6 +24,7 @@ nonisolated struct AgentShellUIRequest: Decodable, Equatable, Sendable {
     }
     let request = try JSONDecoder().decode(Self.self, from: data)
     guard surfaces.contains(request.surface),
+      request.surface != "workspace-terminal" || (request.workspaceID != nil && request.mode == nil),
       request.surface != "agent-access" || (request.mode == nil && request.workspaceID == nil),
       request.mode.map({ !$0.isEmpty && $0.utf8.count <= 80 && !$0.contains(where: { $0.isNewline || $0.isASCII && $0.asciiValue! < 32 }) }) ?? true,
       request.workspaceID.map({ !$0.isEmpty && $0.utf8.count <= 512 && !$0.contains(where: { $0.isNewline || $0.isASCII && $0.asciiValue! < 32 }) }) ?? true else {

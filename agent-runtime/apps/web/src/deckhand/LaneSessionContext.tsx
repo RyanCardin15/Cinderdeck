@@ -175,7 +175,7 @@ export function LaneSessionContext({
                   integrated preview.
                 </p>
               ) : null}
-              <Link to="/workspaces" search={workspaceSearch}>
+              <Link to="/workspaces" search={{ ...workspaceSearch, tab: "services" }}>
                 Manage services in workspace
                 <ChevronRightIcon aria-hidden size={13} />
               </Link>
@@ -183,6 +183,7 @@ export function LaneSessionContext({
           </details>
           {context.checkout.nativeGeneration ? (
             <PreviewCaptureControl
+              workspaceSearch={workspaceSearch}
               key={`${threadRef.environmentId}:${context.session.id}`}
               threadRef={threadRef}
               sessionID={context.session.id}
@@ -196,6 +197,7 @@ export function LaneSessionContext({
           ) : null}
           {context.checkout.nativeGeneration ? (
             <RecordingContextSummary
+              workspaceSearch={workspaceSearch}
               environmentId={threadRef.environmentId}
               context={{
                 installationID: context.workspace.environmentId,

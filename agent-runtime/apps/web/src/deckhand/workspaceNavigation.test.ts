@@ -197,3 +197,39 @@ describe("selected workspace scoped pages", () => {
     expect(overviewWorkspaceContexts(null, "primary")).toEqual([]);
   });
 });
+
+it("restores scoped tools and selected evidence from saved workspace URLs", () => {
+  for (const tab of ["services", "recordings", "pull-requests"]) {
+    const search = validateWorkspaceSearch({
+      environment: "remote",
+      workspace: "primary",
+      context: "lane",
+      expectedInstallationID: "original",
+      expectedGeneration: "7",
+      tab,
+      recording: "video",
+      run: "run",
+      prHost: "github.com",
+      prRepository: "owner/repo",
+      prNumber: "3",
+      prOffset: "50",
+    });
+    expect(search).toMatchObject({
+      tab,
+      context: "lane",
+      recording: "video",
+      run: "run",
+      prNumber: 3,
+      prOffset: 50,
+    });
+    expect(savedWorkspaceMatches(search, "original", 7)).toBe(true);
+    expect(savedWorkspaceMatches(search, "original", 8)).toBe(false);
+  }
+  for (const raw of [
+    { prHost: "github.com" },
+    { prOffset: -1 },
+    { prNumber: "3x" },
+    { prNumber: 0 },
+  ])
+    expect(() => validateWorkspaceSearch(raw)).toThrow();
+});

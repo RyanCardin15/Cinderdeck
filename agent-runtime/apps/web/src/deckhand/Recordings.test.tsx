@@ -221,7 +221,7 @@ it("keeps loaded evidence and original navigation pins when its current lane is 
   expect(container.querySelector("video")?.getAttribute("src")).toBe(
     "http://127.0.0.1:3773/media/saved",
   );
-  expect(button("Record verification").disabled).toBe(true);
+  expect(button("Record with Logs").disabled).toBe(true);
   const input = container.querySelector<HTMLInputElement>('[aria-label="Check label"]')!;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
@@ -232,7 +232,7 @@ it("keeps loaded evidence and original navigation pins when its current lane is 
   });
   expect(button("Pass").disabled).toBe(true);
   await act(async () => {
-    button("Record verification").click();
+    button("Record with Logs").click();
     button("Pass").click();
   });
   expect(boundary.windows).not.toHaveBeenCalled();

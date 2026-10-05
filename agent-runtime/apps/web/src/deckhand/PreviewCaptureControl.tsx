@@ -1,3 +1,4 @@
+import type { WorkspaceSearch } from "./workspaceNavigation";
 import { Link } from "@tanstack/react-router";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import type {
@@ -51,11 +52,13 @@ export function PreviewCaptureControl({
   sessionID,
   context,
   enabled,
+  workspaceSearch,
 }: {
   threadRef: ScopedThreadRef;
   sessionID: string;
   context: RecordingContext;
   enabled: boolean;
+  workspaceSearch?: WorkspaceSearch;
 }) {
   const preview = useThreadPreviewState(threadRef);
   const storageKey = `deckhand:preview-import:${threadRef.environmentId}:${sessionID}`;
@@ -373,12 +376,20 @@ export function PreviewCaptureControl({
         {pending?.receipt?.state === "ready" ? (
           <>
             <Link
-              to="/recordings"
-              search={{
-                environment: threadRef.environmentId,
-                workspace: pending.request.workspaceID,
-                recording: pending.receipt.recordingID,
-              }}
+              to={workspaceSearch ? "/workspaces" : "/recordings"}
+              search={
+                workspaceSearch
+                  ? {
+                      ...workspaceSearch,
+                      tab: "recordings",
+                      recording: pending.receipt.recordingID,
+                    }
+                  : {
+                      environment: threadRef.environmentId,
+                      workspace: pending.request.workspaceID,
+                      recording: pending.receipt.recordingID,
+                    }
+              }
             >
               Review imported video
             </Link>

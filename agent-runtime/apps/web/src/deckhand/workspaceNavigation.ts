@@ -4,7 +4,22 @@ export type WorkspaceSearch = {
   workspace?: string;
   context?: string;
   environment?: string;
-  tab?: "agents" | "overview" | "lane-map";
+  tab?:
+    | "agents"
+    | "overview"
+    | "lane-map"
+    | "services"
+    | "tasks"
+    | "workflows"
+    | "runs"
+    | "pull-requests"
+    | "recordings";
+  recording?: string;
+  run?: string;
+  prHost?: string;
+  prRepository?: string;
+  prNumber?: number;
+  prOffset?: number;
   expectedGeneration?: number;
   expectedInstallationID?: string;
 };
@@ -32,13 +47,51 @@ export function connectedWorkspaceSearch(
 export function validateWorkspaceSearch(value: Record<string, unknown>): WorkspaceSearch {
   const search: WorkspaceSearch = {};
   if (value.tab !== undefined) {
-    if (value.tab !== "agents" && value.tab !== "overview" && value.tab !== "lane-map")
+    if (
+      ![
+        "agents",
+        "overview",
+        "lane-map",
+        "services",
+        "tasks",
+        "workflows",
+        "runs",
+        "pull-requests",
+        "recordings",
+      ].includes(value.tab as string)
+    )
       throw new Error("This workspace link has an invalid view.");
-    search.tab = value.tab;
+    search.tab = value.tab as NonNullable<WorkspaceSearch["tab"]>;
   }
-  for (const key of ["environment", "workspace", "context"] as const) {
+  for (const key of ["environment", "workspace", "context", "recording", "run"] as const) {
     if (typeof value[key] === "string" && value[key].length <= 160) search[key] = value[key];
   }
+  for (const key of ["prOffset", "prNumber"] as const) {
+    if (value[key] === undefined) continue;
+    const raw = value[key];
+    const number = typeof raw === "string" && /^\d+$/.test(raw) ? Number(raw) : raw;
+    if (
+      typeof number !== "number" ||
+      !Number.isSafeInteger(number) ||
+      number < (key === "prOffset" ? 0 : 1)
+    )
+      throw new Error("This workspace link has an invalid pull request selection.");
+    search[key] = number;
+  }
+  for (const key of ["prHost", "prRepository"] as const) {
+    if (value[key] === undefined) continue;
+    const raw = value[key];
+    if (typeof raw !== "string" || !raw.trim() || raw.length > (key === "prHost" ? 253 : 1000))
+      throw new Error("This workspace link has an invalid pull request selection.");
+    search[key] = raw;
+  }
+  if (
+    (search.prHost !== undefined ||
+      search.prRepository !== undefined ||
+      search.prNumber !== undefined) &&
+    (!search.prHost || !search.prRepository || search.prNumber === undefined)
+  )
+    throw new Error("This workspace link is missing its pull request identity.");
   if (value.expectedGeneration !== undefined) {
     const raw = value.expectedGeneration;
     const generation = typeof raw === "string" && /^[1-9]\d*$/.test(raw) ? Number(raw) : raw;

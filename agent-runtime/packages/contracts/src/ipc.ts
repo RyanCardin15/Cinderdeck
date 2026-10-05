@@ -1127,7 +1127,20 @@ export interface NativeHostRoute {
   readonly section?: string;
 }
 export interface NativeToolRequest {
-  readonly surface: "workspace" | "lane-map" | "workspace-setup" | "workspace-editor" | "execution-map" | "agent-access" | "history" | "preferences" | "capture" | "recording" | "annotate" | "updates";
+  readonly surface:
+    | "workspace"
+    | "lane-map"
+    | "workspace-setup"
+    | "workspace-editor"
+    | "workspace-terminal"
+    | "execution-map"
+    | "agent-access"
+    | "history"
+    | "preferences"
+    | "capture"
+    | "recording"
+    | "annotate"
+    | "updates";
   readonly mode?: string;
   readonly workspaceID?: string;
 }

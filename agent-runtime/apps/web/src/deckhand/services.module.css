@@ -701,9 +701,246 @@
   }
 }
 
-.section button, .receipt button, .alert button, .editor button { min-height: 32px; }
-.tabs button[aria-selected="true"] { box-shadow: 0 2px var(--primary); }
-.header > div { min-width: 0; }
-.header h1, .sectionHeader p, .serviceTitle h3 { overflow-wrap: anywhere; }
-.logs { color: var(--foreground); background: var(--muted); font-size: 12px; }
-.historyRow:hover { background: color-mix(in srgb, var(--foreground) 5%, var(--card)); }
+.section button,
+.receipt button,
+.alert button,
+.editor button {
+  min-height: 32px;
+}
+.tabs button[aria-selected="true"] {
+  box-shadow: 0 2px var(--primary);
+}
+.header > div {
+  min-width: 0;
+}
+.header h1,
+.sectionHeader p,
+.serviceTitle h3 {
+  overflow-wrap: anywhere;
+}
+.logs {
+  color: var(--foreground);
+  background: var(--muted);
+  font-size: 12px;
+}
+.historyRow:hover {
+  background: color-mix(in srgb, var(--foreground) 5%, var(--card));
+}
+
+/* The harness uses the native workspace's separate compact sections. */
+.operational {
+  min-width: 0;
+  font-size: 13px;
+}
+.operational[data-panel="runs"] {
+  display: grid;
+  grid-template-columns: minmax(160px, 190px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.operational[data-panel="runs"] > .lower {
+  display: contents;
+}
+.operational[data-panel="runs"] > .alert,
+.operational[data-panel="runs"] > .receipt {
+  grid-column: 1 / -1;
+}
+.operational[data-panel="runs"] .historySection {
+  grid-column: 1;
+}
+.operational[data-panel="runs"] .runDetailPanel {
+  grid-column: 2;
+}
+.section {
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+.servicesSection {
+  border: 0;
+  background: transparent;
+  overflow: visible;
+}
+.sectionHeader {
+  min-height: 48px;
+  padding: 12px;
+  gap: 10px;
+}
+.servicesSection > .sectionHeader {
+  padding: 0 0 12px;
+  border: 0;
+}
+.sectionHeader h2 {
+  font-size: 15px;
+  margin-bottom: 5px;
+}
+.section button,
+.receipt button,
+.alert button,
+.editor button {
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  min-height: 32px;
+  padding: 7px 12px;
+}
+.serviceList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+  padding: 2px;
+}
+.service,
+.service:last-child {
+  display: block;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  min-height: 104px;
+}
+.serviceTitle {
+  gap: 6px;
+}
+.serviceTitle h3 {
+  font-size: 12.5px;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.serviceTitle > .actions {
+  margin-left: auto;
+  gap: 1px;
+  flex-wrap: nowrap;
+}
+.service .actions button {
+  min-height: 22px;
+  width: 22px;
+  padding: 3px;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+}
+.service .actions button[aria-label^="Start"] {
+  color: var(--deck-success);
+}
+.serviceTitle > .status {
+  font-size: 10.5px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.serviceTitle code {
+  font-size: 10px;
+  padding: 2px 5px;
+}
+.serviceDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted-foreground);
+  flex-shrink: 0;
+}
+.serviceDot[data-ready="true"] {
+  background: var(--deck-success);
+}
+.serviceDot[data-phase="starting"],
+.serviceDot[data-phase="waiting"],
+.serviceDot[data-phase="unhealthy"] {
+  background: var(--deck-warning);
+}
+.serviceDot[data-phase="crashed"] {
+  background: var(--deck-danger);
+}
+.serviceBody > p {
+  font-size: 10px;
+  margin: 7px 0;
+}
+.meta {
+  font-size: 10px;
+  gap: 5px;
+  flex-direction: column;
+}
+.definition {
+  padding: 12px;
+}
+.history {
+  max-height: none;
+}
+.section .historyRow {
+  flex-wrap: wrap;
+  padding: 10px;
+  border-radius: 8px;
+  border: 0;
+  gap: 6px;
+}
+.historySection {
+  padding: 4px;
+  background: transparent;
+  border: 0;
+}
+.historySection > .sectionHeader {
+  padding: 4px 6px 10px;
+}
+.historyRow.selected {
+  background: var(--accent);
+}
+.historyRow strong {
+  font-weight: 600;
+}
+.operational[data-panel="tasks"] .lower,
+.operational[data-panel="workflows"] .lower {
+  display: block;
+}
+@media (max-width: 700px) {
+  .operational[data-panel="runs"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .operational[data-panel="runs"] .runDetailPanel {
+    grid-column: 1;
+  }
+  .service .actions {
+    margin-left: auto;
+  }
+  .serviceList {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.serviceFacts {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 7px 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.repositories {
+  margin-top: 14px;
+}
+.repository {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.repository > div {
+  flex: 1;
+  min-width: 0;
+}
+.repository p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  margin-top: 3px;
+}
+.repository > span {
+  color: var(--deck-success);
+}
+.repository > span[data-dirty="true"] {
+  color: var(--deck-warning);
+}

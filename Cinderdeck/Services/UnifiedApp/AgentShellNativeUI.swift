@@ -14,7 +14,7 @@ enum AgentShellNativeUI {
       throw StackControlError(code: "resource_missing", message: "The requested workspace is unavailable")
     }
     switch request.surface {
-    case "workspace-setup", "workspace-editor", "execution-map", "agent-access":
+    case "workspace-setup", "workspace-editor", "workspace-terminal", "execution-map", "agent-access":
       try AgentShellWorkspaceTools.shared.open(request)
     case "workspace", "lane-map":
       guard request.mode == nil else { throw StackControlError.invalid("This surface does not accept a mode") }

@@ -118,6 +118,7 @@ export function connectedWorkspaceDestination(
 
 export function connectedWorkspaceSearch(selection: ConnectedWorkspaceSelection): WorkspaceSearch {
   return {
+    tab: "services",
     environment: selection.environmentId,
     workspace: selection.baseWorkspaceID,
     context: selection.contextID,

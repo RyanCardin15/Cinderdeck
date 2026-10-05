@@ -1,3 +1,5 @@
+import { NativeWorkspaceTools } from "./NativeWorkspaceTools";
+import native from "./nativeWorkspace.module.css";
 import { useAtomValue } from "@effect/atom-react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
@@ -21,6 +23,7 @@ import {
   IntegrationOperationInput,
   type IntegrationOperationMethod,
   type IntegrationOperationReceipt,
+  type IntegrationRepository,
 } from "@t3tools/contracts/deckhand/integration";
 import type {
   DefinitionValidation,
@@ -41,7 +44,11 @@ import { useAtomCommand } from "../state/use-atom-command";
 import { ProductNavigation } from "./ProductNavigation";
 import { workspaceView, submitOperation, inspectOperation, recentOperations } from "./state";
 import { listRuns, getRun, runLogs, runDefinition, validateRunDefinition } from "./runState";
-import { overviewResources, savedWorkspaceMatches } from "./workspaceNavigation";
+import {
+  overviewResources,
+  savedWorkspaceMatches,
+  type WorkspaceSearch,
+} from "./workspaceNavigation";
 import { servicesWorkspaceSearch } from "./servicesNavigation";
 import styles from "./services.module.css";
 const activeStatuses = new Set(["queued", "running", "cancelling"]);
@@ -82,7 +89,7 @@ export function ServicesRunsPage() {
   return environmentId ? (
     <ServicesWorkspace environmentId={environmentId} computerSelector={computerSelector} />
   ) : (
-    <div className={styles.shell}>
+    <div className={`${styles.shell} ${native.workspace}`}>
       <ProductNavigation current="services">{computerSelector}</ProductNavigation>
       <main className={styles.empty}>
         <ServerIcon />
@@ -128,7 +135,7 @@ function ServicesWorkspace({
     selected?.generation,
   );
   return (
-    <div className={styles.shell}>
+    <div className={`${styles.shell} ${native.workspace}`}>
       <ProductNavigation
         current="services"
         workspaceSearch={servicesWorkspaceSearch(
@@ -230,10 +237,18 @@ export function ServicesRuns({
   environmentId,
   context,
   initialRunID,
+  workspaceSearch,
+  onSelectRun,
+  panel = "all",
+  repositories,
 }: {
   environmentId: EnvironmentId;
   context: RunContext;
   initialRunID?: string;
+  workspaceSearch?: WorkspaceSearch;
+  onSelectRun?: (run: string) => void;
+  panel?: "all" | "services" | "tasks" | "workflows" | "runs";
+  repositories?: ReadonlyArray<typeof IntegrationRepository.Type> | undefined;
 }) {
   const scope = useMemo(
     () => ({
@@ -328,13 +343,14 @@ export function ServicesRuns({
     return () => window.clearInterval(timer);
   }, [reload]);
   const active = overview?.runs.some((run) => activeStatuses.has(run.status)) ?? false;
-  const selectedRunID = selectedID || overview?.runs[0]?.id;
+  const selectedRunID =
+    panel === "all" || panel === "runs" ? selectedID || overview?.runs[0]?.id : undefined;
   const stepOffset = stepOffsets[stepOffsets.length - 1] ?? 0;
   useEffect(() => {
     setStepOffsets([0]);
   }, [selectedRunID]);
   useEffect(() => {
-    if (initialRunID) setSelectedID(initialRunID);
+    setSelectedID(initialRunID ?? "");
   }, [initialRunID]);
   const selectedSummary = overview?.runs.find((run) => run.id === selectedRunID);
   const selected =
@@ -558,8 +574,9 @@ export function ServicesRuns({
     }
   };
   const disabled = busy || pending !== null;
+  const definitionTab = panel === "tasks" || panel === "workflows" ? panel : tab;
   return (
-    <>
+    <div className={styles.operational} data-panel={panel}>
       {error || overview?.storageError ? (
         <div className={styles.alert} role="alert">
           <span>{error ?? overview?.storageError}</span>
@@ -595,272 +612,339 @@ export function ServicesRuns({
           </button>
         </div>
       ) : null}
-      <section className={styles.section} aria-labelledby="service-heading">
-        <div className={styles.sectionHeader}>
-          <div>
-            <h2 id="service-heading">
-              Services <span>{overview?.services.length ?? "—"}</span>
+      {panel === "all" || panel === "services" ? (
+        <section
+          className={`${styles.section} ${styles.servicesSection}`}
+          aria-labelledby="service-heading"
+        >
+          <div className={styles.sectionHeader}>
+            <div>
+              <h2 id="service-heading">
+                Services <span>{overview?.services.length ?? "—"}</span>
+              </h2>
+              <p>Keep APIs, databases, and development servers running together.</p>
+            </div>
+            <div className={styles.actions}>
+              <button
+                type="button"
+                disabled={disabled || !overview?.services.some((service) => !service.sharedFrom)}
+                onClick={() => {
+                  void operate("services.start", { wait: true, timeout: 120 });
+                }}
+              >
+                <PlayIcon size={14} />
+                Start services
+              </button>
+              <button
+                type="button"
+                disabled={
+                  disabled || active || !overview?.services.some((service) => !service.sharedFrom)
+                }
+                onClick={() => {
+                  void operate("services.stop", {});
+                }}
+              >
+                <SquareIcon size={13} />
+                Stop
+              </button>
+              <button
+                type="button"
+                disabled={
+                  disabled || active || !overview?.services.some((service) => !service.sharedFrom)
+                }
+                onClick={() => void operate("services.restart", { wait: true, timeout: 120 })}
+              >
+                <RefreshCwIcon size={14} /> Restart
+              </button>
+              <NativeWorkspaceTools
+                workspaceID={context.workspaceID}
+                enabled={!disabled}
+                terminal
+              />
+            </div>
+          </div>
+          {loading ? (
+            <div className={styles.emptySmall}>Loading workspace services…</div>
+          ) : overview?.services.length ? (
+            <div className={styles.serviceList}>
+              {overview.services.map((service) => (
+                <article key={service.id} className={styles.service}>
+                  <div className={styles.serviceBody}>
+                    <div className={styles.serviceTitle}>
+                      <i
+                        className={styles.serviceDot}
+                        data-phase={service.phase}
+                        data-ready={service.ready}
+                        aria-hidden="true"
+                      />
+                      <h3>{service.id}</h3>
+                      <div className={styles.actions}>
+                        {service.sharedFrom ? (
+                          <span className={styles.shared}>Shared service</span>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              aria-label={`Start ${service.id}`}
+                              disabled={disabled || service.ready}
+                              onClick={() => {
+                                void operate("services.start", {
+                                  services: [service.id],
+                                  wait: true,
+                                  timeout: 120,
+                                });
+                              }}
+                            >
+                              <PlayIcon size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Restart ${service.id}`}
+                              disabled={disabled || active}
+                              onClick={() => {
+                                void operate("services.restart", {
+                                  services: [service.id],
+                                  wait: true,
+                                  timeout: 120,
+                                });
+                              }}
+                            >
+                              <RefreshCwIcon size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Stop ${service.id}`}
+                              disabled={disabled || active}
+                              onClick={() => {
+                                void operate("services.stop", { services: [service.id] });
+                              }}
+                            >
+                              <SquareIcon size={14} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className={styles.serviceFacts}>
+                      <span
+                        className={styles.status}
+                        data-state={service.ready ? "succeeded" : service.phase}
+                      >
+                        {service.status}
+                      </span>
+                      {service.port ? <code>:{service.port}</code> : null}
+                    </div>
+                    <p>
+                      {service.detail ??
+                        (service.sharedFrom
+                          ? `Shared from ${service.sharedFrom}`
+                          : (service.command ?? "No command"))}
+                    </p>
+                    <div className={styles.meta}>
+                      {service.dependencies.length ? (
+                        <span>Depends on {service.dependencies.join(", ")}</span>
+                      ) : (
+                        <span>No dependencies</span>
+                      )}
+                      {service.directory ? (
+                        <span aria-label={service.directory}>{service.directory}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className={styles.emptySmall}>
+              This workspace has no long-running services. Add them in the workspace definition.
+            </div>
+          )}
+        </section>
+      ) : null}
+      {panel === "services" && repositories?.length ? (
+        <section
+          className={`${styles.section} ${styles.repositories}`}
+          aria-labelledby="repositories-heading"
+        >
+          <div className={styles.sectionHeader}>
+            <h2 id="repositories-heading">
+              Repositories <span>{repositories.length}</span>
             </h2>
-            <p>Readiness comes from Cinderdeck’s health checks.</p>
           </div>
-          <div className={styles.actions}>
-            <button
-              type="button"
-              disabled={disabled || !overview?.services.some((service) => !service.sharedFrom)}
-              onClick={() => {
-                void operate("services.start", { wait: true, timeout: 120 });
-              }}
-            >
-              <PlayIcon size={14} />
-              Start all
-            </button>
-            <button
-              type="button"
-              disabled={
-                disabled || active || !overview?.services.some((service) => !service.sharedFrom)
-              }
-              onClick={() => {
-                void operate("services.stop", {});
-              }}
-            >
-              <SquareIcon size={13} />
-              Stop all
-            </button>
-          </div>
-        </div>
-        {loading ? (
-          <div className={styles.emptySmall}>Loading workspace services…</div>
-        ) : overview?.services.length ? (
-          <div className={styles.serviceList}>
-            {overview.services.map((service) => (
-              <article key={service.id} className={styles.service}>
-                <div className={styles.serviceIcon} data-ready={service.ready}>
-                  <ServerIcon size={19} />
-                </div>
-                <div className={styles.serviceBody}>
-                  <div className={styles.serviceTitle}>
-                    <h3>{service.id}</h3>
-                    <span
-                      className={styles.status}
-                      data-state={service.ready ? "succeeded" : service.phase}
+          {repositories.map((repo) => (
+            <article key={repo.id} className={styles.repository}>
+              <div>
+                <strong>{repo.id}</strong>
+                <p>{repo.path}</p>
+              </div>
+              <code>{repo.branch || "No branch"}</code>
+              <span data-dirty={repo.dirty}>
+                {repo.changedFiles ? `${repo.changedFiles} changed files` : "Clean"}
+              </span>
+            </article>
+          ))}
+        </section>
+      ) : null}
+      {panel !== "services" ? (
+        <div className={styles.lower}>
+          {panel !== "runs" ? (
+            <section className={styles.section}>
+              <div className={styles.sectionHeader}>
+                {panel === "all" ? (
+                  <div className={styles.tabs} role="tablist" aria-label="Run definitions">
+                    <button
+                      role="tab"
+                      aria-selected={tab === "tasks"}
+                      onClick={() => setTab("tasks")}
                     >
-                      {service.status}
-                    </span>
-                    {service.port ? <code>:{service.port}</code> : null}
+                      Tasks <span>{overview?.tasks.length ?? 0}</span>
+                    </button>
+                    <button
+                      role="tab"
+                      aria-selected={tab === "workflows"}
+                      onClick={() => setTab("workflows")}
+                    >
+                      Workflows <span>{overview?.workflows.length ?? 0}</span>
+                    </button>
                   </div>
-                  <p>
-                    {service.detail ??
-                      (service.sharedFrom
-                        ? `Shared from ${service.sharedFrom}`
-                        : (service.command ?? "No command"))}
-                  </p>
-                  <div className={styles.meta}>
-                    {service.dependencies.length ? (
-                      <span>Depends on {service.dependencies.join(", ")}</span>
-                    ) : (
-                      <span>No dependencies</span>
-                    )}
-                    {service.directory ? (
-                      <span aria-label={service.directory}>{service.directory}</span>
-                    ) : null}
-                  </div>
-                </div>
-                <div className={styles.actions}>
-                  {service.sharedFrom ? (
-                    <span className={styles.shared}>Shared service</span>
-                  ) : (
-                    <>
+                ) : (
+                  <h2>{panel === "workflows" ? "Workflows" : "Tasks"}</h2>
+                )}
+                <button
+                  type="button"
+                  className={styles.edit}
+                  disabled={disabled}
+                  onClick={() => {
+                    void openEditor();
+                  }}
+                >
+                  <FileCodeIcon size={14} />
+                  Edit definition
+                </button>
+              </div>
+              {definitionTab === "tasks"
+                ? overview?.tasks.map((task) => (
+                    <article className={styles.definition} key={task.id}>
+                      <div>
+                        <h3>{task.name}</h3>
+                        <code>{task.command}</code>
+                        <p>
+                          {task.requiresServices.length
+                            ? `Requires ${task.requiresServices.join(", ")} · `
+                            : ""}
+                          {task.timeout}s timeout
+                        </p>
+                      </div>
                       <button
                         type="button"
-                        aria-label={`Start ${service.id}`}
-                        disabled={disabled || service.ready}
+                        disabled={disabled || active}
                         onClick={() => {
-                          void operate("services.start", {
-                            services: [service.id],
-                            wait: true,
-                            timeout: 120,
+                          void operate("runs.start", { kind: "task", definitionID: task.id });
+                        }}
+                      >
+                        <PlayIcon size={14} />
+                        Run
+                      </button>
+                    </article>
+                  ))
+                : overview?.workflows.map((workflow) => (
+                    <article className={styles.definition} key={workflow.id}>
+                      <div>
+                        <h3>{workflow.name}</h3>
+                        <p>{workflow.steps.join(" → ")}</p>
+                        <span>
+                          {workflow.cleanupServices
+                            ? "Stops services started by this run"
+                            : "Keeps services running"}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={disabled || active}
+                        onClick={() => {
+                          void operate("runs.start", {
+                            kind: "workflow",
+                            definitionID: workflow.id,
                           });
                         }}
                       >
                         <PlayIcon size={14} />
-                        Start
+                        Run
                       </button>
-                      <button
-                        type="button"
-                        aria-label={`Restart ${service.id}`}
-                        disabled={disabled || active}
-                        onClick={() => {
-                          void operate("services.restart", {
-                            services: [service.id],
-                            wait: true,
-                            timeout: 120,
-                          });
-                        }}
-                      >
-                        <RefreshCwIcon size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Stop ${service.id}`}
-                        disabled={disabled || active}
-                        onClick={() => {
-                          void operate("services.stop", { services: [service.id] });
-                        }}
-                      >
-                        <SquareIcon size={14} />
-                      </button>
-                    </>
-                  )}
+                    </article>
+                  ))}
+              {!loading &&
+              !(definitionTab === "tasks" ? overview?.tasks.length : overview?.workflows.length) ? (
+                <div className={styles.emptySmall}>
+                  No {definitionTab} defined yet. Define finite commands and workflow steps in this
+                  workspace.
                 </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className={styles.emptySmall}>
-            This workspace has no long-running services. Add them in the workspace definition.
-          </div>
-        )}
-      </section>
-      <div className={styles.lower}>
-        <section className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <div className={styles.tabs} role="tablist" aria-label="Run definitions">
-              <button role="tab" aria-selected={tab === "tasks"} onClick={() => setTab("tasks")}>
-                Tasks <span>{overview?.tasks.length ?? 0}</span>
-              </button>
-              <button
-                role="tab"
-                aria-selected={tab === "workflows"}
-                onClick={() => setTab("workflows")}
-              >
-                Workflows <span>{overview?.workflows.length ?? 0}</span>
-              </button>
-            </div>
-            <button
-              type="button"
-              className={styles.edit}
-              disabled={disabled}
-              onClick={() => {
-                void openEditor();
-              }}
-            >
-              <FileCodeIcon size={14} />
-              Edit definition
-            </button>
-          </div>
-          {tab === "tasks"
-            ? overview?.tasks.map((task) => (
-                <article className={styles.definition} key={task.id}>
-                  <div>
-                    <h3>{task.name}</h3>
-                    <code>{task.command}</code>
-                    <p>
-                      {task.requiresServices.length
-                        ? `Requires ${task.requiresServices.join(", ")} · `
-                        : ""}
-                      {task.timeout}s timeout
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={disabled || active}
-                    onClick={() => {
-                      void operate("runs.start", { kind: "task", definitionID: task.id });
-                    }}
-                  >
-                    <PlayIcon size={14} />
-                    Run
-                  </button>
-                </article>
-              ))
-            : overview?.workflows.map((workflow) => (
-                <article className={styles.definition} key={workflow.id}>
-                  <div>
-                    <h3>{workflow.name}</h3>
-                    <p>{workflow.steps.join(" → ")}</p>
-                    <span>
-                      {workflow.cleanupServices
-                        ? "Stops services started by this run"
-                        : "Keeps services running"}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={disabled || active}
-                    onClick={() => {
-                      void operate("runs.start", { kind: "workflow", definitionID: workflow.id });
-                    }}
-                  >
-                    <PlayIcon size={14} />
-                    Run
-                  </button>
-                </article>
-              ))}
-          {!loading && !(tab === "tasks" ? overview?.tasks.length : overview?.workflows.length) ? (
-            <div className={styles.emptySmall}>
-              No {tab} defined yet. Define finite commands and workflow steps in this workspace.
-            </div>
+              ) : null}
+            </section>
           ) : null}
-        </section>
-        <section className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <div>
-              <h2>
-                Run history <span>{overview?.runs.length ?? 0}</span>
-              </h2>
-              <p>Exit codes and results from the execution computer.</p>
-              {overview && overview.retainedRunCount === undefined ? (
-                <p role="status">
-                  Legacy Cinderdeck history: the retained total and omitted run count are unknown.
-                  Update Cinderdeck for complete saved-run access.
-                </p>
-              ) : null}
-              {overview?.runsTruncated ? (
-                <p role="status">
-                  Showing {overview.runs.length}
-                  {overview.retainedRunCount === undefined
-                    ? ""
-                    : ` of ${overview.retainedRunCount}`}{" "}
-                  retained runs. Saved run links still load their exact run.
-                </p>
-              ) : null}
-            </div>
-            <ActivityIcon size={16} />
-          </div>
-          <div className={styles.history}>
-            {overview?.runs.map((run) => (
-              <button
-                type="button"
-                className={`${styles.historyRow} ${selected?.id === run.id ? styles.selected : ""}`}
-                onClick={() => {
-                  setLogView([]);
-                  setStepOffsets([0]);
-                  setSelectedID(run.id);
-                }}
-                key={run.id}
-              >
-                <i data-state={run.status} />
+          {panel === "all" || panel === "runs" ? (
+            <section className={`${styles.section} ${styles.historySection}`}>
+              <div className={styles.sectionHeader}>
                 <div>
-                  <strong>{run.name}</strong>
-                  <span>
-                    {run.kind} · {new Date(run.createdAt).toLocaleString()}
-                  </span>
+                  <h2>
+                    Runs <span>{overview?.runs.length ?? 0}</span>
+                  </h2>
+                  <p>Exit codes and results from the execution computer.</p>
+                  {overview && overview.retainedRunCount === undefined ? (
+                    <p role="status">
+                      Legacy Cinderdeck history: the retained total and omitted run count are
+                      unknown. Update Cinderdeck for complete saved-run access.
+                    </p>
+                  ) : null}
+                  {overview?.runsTruncated ? (
+                    <p role="status">
+                      Showing {overview.runs.length}
+                      {overview.retainedRunCount === undefined
+                        ? ""
+                        : ` of ${overview.retainedRunCount}`}{" "}
+                      retained runs. Saved run links still load their exact run.
+                    </p>
+                  ) : null}
                 </div>
-                <div className={styles.historyEnd}>
-                  <span>{run.status}</span>
-                  <small>{elapsed(run.duration)}</small>
+                <ActivityIcon size={16} />
+              </div>
+              <div className={styles.history}>
+                {overview?.runs.map((run) => (
+                  <button
+                    type="button"
+                    className={`${styles.historyRow} ${selected?.id === run.id ? styles.selected : ""}`}
+                    onClick={() => {
+                      setLogView([]);
+                      setStepOffsets([0]);
+                      setSelectedID(run.id);
+                      onSelectRun?.(run.id);
+                    }}
+                    key={run.id}
+                  >
+                    <i data-state={run.status} />
+                    <div>
+                      <strong>{run.name}</strong>
+                      <span>
+                        {run.kind} · {new Date(run.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className={styles.historyEnd}>
+                      <span>{run.status}</span>
+                      <small>{elapsed(run.duration)}</small>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {!loading && !overview?.runs.length ? (
+                <div className={styles.emptySmall}>
+                  <ClockIcon size={20} />
+                  Your first run will appear here.
                 </div>
-              </button>
-            ))}
-          </div>
-          {!loading && !overview?.runs.length ? (
-            <div className={styles.emptySmall}>
-              <ClockIcon size={20} />
-              Your first run will appear here.
-            </div>
+              ) : null}
+            </section>
           ) : null}
-        </section>
-      </div>
+        </div>
+      ) : null}
       {detailLoading && !selected ? <p role="status">Loading saved run details…</p> : null}
       {detailError ? (
         <div className={styles.alert} role="alert">
@@ -876,7 +960,7 @@ export function ServicesRuns({
         </div>
       ) : null}
       {selected ? (
-        <section className={styles.section}>
+        <section className={`${styles.section} ${styles.runDetailPanel}`}>
           <div className={styles.sectionHeader}>
             <div>
               <h2>
@@ -886,7 +970,9 @@ export function ServicesRuns({
                 </span>
               </h2>
               <p>
-                {/^(?:Deckhand|Cinderdeck)\s*·\s*dh-admin:[^\s]+(?:\s+in\s+.+)?$/.test(selected.actor)
+                {/^(?:Deckhand|Cinderdeck)\s*·\s*dh-admin:[^\s]+(?:\s+in\s+.+)?$/.test(
+                  selected.actor,
+                )
                   ? "Cinderdeck workspace controls"
                   : selected.actor.replace(/^Deckhand(?=\s|$)/, "Cinderdeck")}{" "}
                 · {elapsed(selected.duration)}
@@ -894,8 +980,12 @@ export function ServicesRuns({
             </div>
             <div className={styles.actions}>
               <Link
-                to="/recordings"
-                search={{ workspace: context.workspaceID, environment: environmentId }}
+                to={workspaceSearch ? "/workspaces" : "/recordings"}
+                search={
+                  workspaceSearch
+                    ? { ...workspaceSearch, tab: "recordings" }
+                    : { workspace: context.workspaceID, environment: environmentId }
+                }
               >
                 Record verification <ArrowRightIcon size={13} />
               </Link>
@@ -1087,6 +1177,6 @@ export function ServicesRuns({
           </footer>
         </dialog>
       ) : null}
-    </>
+    </div>
   );
 }

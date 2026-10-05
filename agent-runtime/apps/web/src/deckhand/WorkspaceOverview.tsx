@@ -16,7 +16,7 @@ import * as Option from "effect/Option";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import { runtime } from "../lib/runtime";
-import { connectedPullRequestSearch } from "./contextPullRequestScope";
+import { WorkspaceContextViews } from "./WorkspaceContextViews";
 import { AsyncResult } from "effect/unstable/reactivity";
 import type { EnvironmentId } from "@t3tools/contracts";
 import type { IntegrationView, ManagedContextView } from "@t3tools/contracts/deckhand/rpc";
@@ -62,6 +62,8 @@ import type { RecordingContextOverview } from "@t3tools/contracts/deckhand/recor
 import { recordingOverview } from "./recordingState";
 import { RecordingThumbnail } from "./RecordingThumbnail";
 import styles from "./workspace.module.css";
+import native from "./nativeWorkspace.module.css";
+import { WorkspaceSections } from "./WorkspaceSections";
 
 type Resource = IntegrationView["resources"][number];
 const label = (state: IntegrationView["state"]) =>
@@ -129,6 +131,13 @@ function ConnectedWorkspace({
   const navigate = useNavigate();
   const agentMode = search.tab === "agents";
   const mapMode = search.tab === "lane-map";
+  const contextMode =
+    search.tab === "tasks" ||
+    search.tab === "workflows" ||
+    search.tab === "runs" ||
+    search.tab === "services" ||
+    search.tab === "pull-requests" ||
+    search.tab === "recordings";
   const selectedBaseRef = useRef<string | null>(search.workspace ?? null);
   const mountedRef = useRef(true);
   const selectionVersionRef = useRef(
@@ -291,8 +300,13 @@ function ConnectedWorkspace({
         item.workspaceID === resource.workspaceID && item.generation === resource.generation,
     );
   const bases = resources.filter((resource) => !resource.workspace?.lane && resource.available);
-  const activeBase = workspaceID
-    ? bases.find((resource) => resource.workspaceID === workspaceID)
+  const requestedContext = resources.find((resource) => resource.workspaceID === selectedID);
+  const requestedBaseID =
+    workspaceID ??
+    requestedContext?.workspace?.lane?.sourceStackID ??
+    requestedContext?.workspaceID;
+  const activeBase = requestedBaseID
+    ? bases.find((resource) => resource.workspaceID === requestedBaseID)
     : bases[0];
   useEffect(() => {
     selectedBaseRef.current = activeBase?.workspaceID ?? null;
@@ -302,7 +316,6 @@ function ConnectedWorkspace({
     : workspaceID
       ? []
       : resources;
-  const lanes = contexts.filter((resource) => resource.workspace?.lane);
   const filterOptions = {
     nativeUnavailable: !nativeCurrent,
     agentsUnavailable,
@@ -430,29 +443,9 @@ function ConnectedWorkspace({
         }
       : {}),
   };
-  const contextLinkSearch = {
-    environment: environmentId,
-    ...(selected || selectedID || activeBase
-      ? { workspace: selected?.workspaceID ?? selectedID ?? activeBase!.workspaceID }
-      : {}),
-    ...(search.expectedGeneration !== undefined
-      ? { expectedGeneration: search.expectedGeneration }
-      : selected
-        ? { expectedGeneration: selected.generation }
-        : {}),
-    ...(search.expectedInstallationID
-      ? { expectedInstallationID: search.expectedInstallationID }
-      : view?.hello
-        ? { expectedInstallationID: view.hello.installationID }
-        : {}),
-  };
   const selectedName = selected?.workspace?.lane
     ? `Lane · ${selected.workspace.lane.name}`
     : "Primary checkout";
-  const managedTotal = contexts.reduce(
-    (sum, resource) => sum + (summaryFor(resource)?.total ?? 0),
-    0,
-  );
   const canCreateFeature = [
     "operations.lane.create",
     "operations.lane.create.repositoryRefs",
@@ -580,15 +573,21 @@ function ConnectedWorkspace({
     }
   };
   return (
-    <div className={`${styles["dh-shell"]} ${agentMode ? styles["dh-shell-agents"] : ""}`}>
+    <div
+      className={`${native.workspace} ${styles["dh-shell"]} ${agentMode || contextMode ? styles["dh-shell-agents"] : ""}`}
+    >
       <ProductNavigation
-        current={agentMode ? "conversations" : "workspaces"}
-        workspaceSearch={{
-          ...search,
-          environment: environmentId,
-          ...(activeBase ? { workspace: activeBase.workspaceID } : {}),
-          ...(selected ? { context: selected.workspaceID } : {}),
-        }}
+        current={
+          agentMode
+            ? "conversations"
+            : contextMode
+              ? search.tab === "tasks" || search.tab === "workflows" || search.tab === "runs"
+                ? "services"
+                : (search.tab as "services" | "pull-requests" | "recordings")
+              : "workspaces"
+        }
+        workspaceMode
+        workspaceSearch={tabSearch}
         connection={{
           label: connectionLabel,
           connected: nativeCurrent,
@@ -632,148 +631,85 @@ function ConnectedWorkspace({
       <main className={styles["dh-main"]} aria-labelledby="dh-title">
         {sessionActions.renameDialog}
         <header className={styles["dh-header"]}>
-          <div>
-            <div className={styles["dh-eyebrow"]}>
-              Workspaces <span>/</span> {activeBase?.workspace?.name ?? "This computer"}
+          <div className={native.heading}>
+            <span className={native.featureIcon} aria-hidden="true">
+              {selected?.workspace?.lane ? (
+                <GitBranchIcon size={20} />
+              ) : (
+                <FolderGit2Icon size={20} />
+              )}
+            </span>
+            <div>
+              <div className={styles["dh-eyebrow"]}>
+                {selected?.workspace?.lane ? "Worktree lane" : "Workspace"}
+              </div>
+              <h1 id="dh-title">
+                {selected?.workspace?.lane?.name ??
+                  selected?.workspace?.name ??
+                  activeBase?.workspace?.name ??
+                  "Workspaces"}
+              </h1>
+              <p className={native.path}>
+                {selected?.workspace?.repos[0]?.path ??
+                  activeBase?.workspace?.file ??
+                  "Choose a workspace"}
+              </p>
             </div>
-            <h1 id="dh-title">{activeBase?.workspace?.name ?? "Workspaces"}</h1>
-            <p>
-              {view?.workspaceContexts &&
-              view.workspaceContexts.workspaceID === activeBase?.workspaceID
-                ? view.workspaceContexts.laneCount
-                : lanes.length}{" "}
-              lanes <span>·</span>{" "}
-              {summaries
-                ? `${managedTotal} managed ${managedTotal === 1 ? "agent" : "agents"}${agentsUnavailable ? " · last observed" : ""}` +
-                  (view?.workspaceContexts &&
-                  view.workspaceContexts.total > view.workspaceContexts.resources.length
-                    ? " on this page"
-                    : "")
-                : agentsUnavailable
-                  ? "Agents unavailable"
-                  : "Loading agents…"}
-              {summaries ? (
-                <>
-                  <span> · </span>
-                  {contexts.some(
-                    (resource) =>
-                      !summaryFor(resource)?.externalSessions ||
-                      summaryFor(resource)?.externalSessions?.unavailable,
-                  )
-                    ? "External registrations unavailable"
-                    : `${contexts.reduce((sum, resource) => sum + (summaryFor(resource)?.externalSessions?.activeCount ?? 0), 0)} reported external${agentsUnavailable ? " · last observed" : ""}`}
-                </>
-              ) : null}
-            </p>
           </div>
           <div className={styles["dh-inspector-actions"]}>
-            <button
-              ref={newFeatureButton}
-              className={`${styles["dh-button"]} ${styles["dh-accent"]}`}
-              disabled={
-                !enabled ||
-                !activeBase ||
-                !actionable(activeBase) ||
-                featurePending ||
-                !canCreateFeature
-              }
-              onClick={() => {
-                setCreating(false);
-                setFeatureCreating(true);
-              }}
-            >
-              <PlusIcon size={17} />
-              New feature
-            </button>
-            <NativeWorkspaceTools enabled={nativeCurrent} />
-            <button
-              className={styles["dh-button"]}
-              disabled={
-                !enabled ||
-                featurePending ||
-                featureCreating ||
-                !activeBase ||
-                !actionable(activeBase) ||
-                !view?.hello?.capabilities.includes("operations.lane.create")
-              }
-              onClick={() => setCreating(true)}
-            >
-              <PlusIcon size={17} />
-              New lane
-            </button>
+            <details className={native.lanesMenu}>
+              <summary>
+                <GitBranchIcon size={14} /> Lanes
+              </summary>
+              <div className={native.menu}>
+                <button
+                  ref={newFeatureButton}
+                  className={`${styles["dh-button"]} ${styles["dh-accent"]}`}
+                  disabled={
+                    !enabled ||
+                    !activeBase ||
+                    !actionable(activeBase) ||
+                    featurePending ||
+                    !canCreateFeature
+                  }
+                  onClick={() => {
+                    setCreating(false);
+                    setFeatureCreating(true);
+                  }}
+                >
+                  <PlusIcon size={17} />
+                  New feature
+                </button>
+                <button
+                  className={styles["dh-button"]}
+                  disabled={
+                    !enabled ||
+                    featurePending ||
+                    featureCreating ||
+                    !activeBase ||
+                    !actionable(activeBase) ||
+                    !view?.hello?.capabilities.includes("operations.lane.create")
+                  }
+                  onClick={() => setCreating(true)}
+                >
+                  <PlusIcon size={17} />
+                  New lane
+                </button>
+                <Link to="/workspaces" search={{ ...tabSearch, tab: "lane-map" }}>
+                  Lane map
+                </Link>
+              </div>
+            </details>
+            <NativeWorkspaceTools
+              enabled={nativeCurrent}
+              workspaceID={selected?.workspaceID}
+              sourceWorkspaceID={activeBase?.workspaceID}
+              showSetup={false}
+              header
+            />
           </div>
         </header>
-        <div className={styles["dh-tabs"]}>
-          <Link
-            to="/workspaces"
-            search={{ ...tabSearch, tab: "overview" }}
-            aria-current={!agentMode && !mapMode ? "page" : undefined}
-            className={!agentMode && !mapMode ? styles["dh-tab-current"] : undefined}
-          >
-            Overview
-          </Link>
-          <Link
-            to="/workspaces"
-            search={{ ...tabSearch, tab: "agents" }}
-            aria-current={agentMode ? "page" : undefined}
-            className={agentMode ? styles["dh-tab-current"] : undefined}
-          >
-            Agents
-          </Link>
-          <Link
-            to="/workspaces"
-            search={{ ...tabSearch, tab: "lane-map" }}
-            aria-current={mapMode ? "page" : undefined}
-            className={mapMode ? styles["dh-tab-current"] : undefined}
-          >
-            Lane map
-          </Link>
-          <Link
-            to="/pull-requests"
-            search={
-              selected && view?.hello
-                ? connectedPullRequestSearch(
-                    environmentId,
-                    {
-                      workspaceID:
-                        activeBase?.workspaceID ??
-                        selected.workspace?.lane?.sourceStackID ??
-                        selected.workspaceID,
-                      contextID: selected.workspaceID,
-                      installationID: view.hello.installationID,
-                      generation: selected.generation,
-                    },
-                    agentMode ? "agents" : "overview",
-                  )
-                : {
-                    involvement: "all",
-                    state: "all",
-                    environmentId,
-                    ...(search.context || search.workspace
-                      ? {
-                          deckhandWorkspace: search.workspace ?? search.context,
-                          deckhandContext: search.context ?? search.workspace,
-                          ...(search.expectedGeneration !== undefined
-                            ? { deckhandGeneration: search.expectedGeneration }
-                            : {}),
-                          ...(search.expectedInstallationID
-                            ? { deckhandInstallationID: search.expectedInstallationID }
-                            : {}),
-                          deckhandTab: agentMode ? ("agents" as const) : ("overview" as const),
-                        }
-                      : {}),
-                  }
-            }
-          >
-            Pull requests
-          </Link>
-          <Link to="/recordings" search={contextLinkSearch}>
-            Recordings
-          </Link>
-          <Link to="/services" search={contextLinkSearch}>
-            Services
-          </Link>
-        </div>
+        <WorkspaceSections search={tabSearch} />
         <div className={styles["dh-toolbar"]}>
           <label>
             Workspace{" "}
@@ -797,7 +733,7 @@ function ConnectedWorkspace({
               ))}
             </select>
           </label>
-          {agentMode ? (
+          {agentMode || contextMode ? (
             <label>
               Context{" "}
               <select
@@ -827,7 +763,7 @@ function ConnectedWorkspace({
             <RefreshCwIcon size={16} />
           </button>
         </div>
-        {!agentMode ? (
+        {!agentMode && !contextMode ? (
           <WorkspaceFilters
             value={filters}
             onChange={setFilters}
@@ -1045,7 +981,16 @@ function ConnectedWorkspace({
             Agent relationships could not be refreshed. Saved details may be out of date.
           </p>
         ) : null}
-        {mapMode && view?.hello ? (
+        {contextMode ? (
+          <WorkspaceContextViews
+            environmentId={environmentId}
+            search={tabSearch}
+            selected={selected}
+            installationID={view?.hello?.installationID}
+            resources={resources}
+            current={nativeCurrent && !savedContextChanged}
+          />
+        ) : mapMode && view?.hello ? (
           <WorkspaceLaneMap
             environmentId={environmentId}
             installationID={view.hello.installationID}
@@ -1116,6 +1061,7 @@ function ConnectedWorkspace({
           </section>
         )}
         {!agentMode &&
+        !contextMode &&
         view?.workspaceContexts &&
         view.workspaceContexts.workspaceID === activeBase?.workspaceID ? (
           <nav className={styles["dh-page-footer"]} aria-label="Selected workspace context pages">
@@ -1153,13 +1099,14 @@ function ConnectedWorkspace({
             </button>
           </nav>
         ) : null}
-        {!agentMode && view?.state === "connected" && !resources.length ? (
+        {!agentMode && !contextMode && view?.state === "connected" && !resources.length ? (
           <div className={styles["dh-empty"]}>
             <FolderGit2Icon size={28} />
             <h2>No workspaces yet</h2>
             <p>Add a workspace in Cinderdeck to manage its lanes and services here.</p>
           </div>
         ) : !agentMode &&
+          !contextMode &&
           view?.state === "connected" &&
           activeBase &&
           resources.length &&
@@ -1178,7 +1125,10 @@ function ConnectedWorkspace({
             </button>
           </div>
         ) : null}
-        {!agentMode && view && (!activeBase || view.nextOffset !== null || offset > 0) ? (
+        {!agentMode &&
+        !contextMode &&
+        view &&
+        (!activeBase || view.nextOffset !== null || offset > 0) ? (
           <footer className={styles["dh-page-footer"]}>
             <span>
               {activeBase ? "All workspace contexts" : "Contexts"} {view.total ? offset + 1 : 0}–
@@ -1201,6 +1151,7 @@ function ConnectedWorkspace({
           </footer>
         ) : null}
         {!agentMode &&
+        !contextMode &&
         activeBase &&
         view?.workspaceContexts?.workspaceID !== activeBase.workspaceID ? (
           <footer className={styles["dh-page-footer"]}>
@@ -1208,7 +1159,7 @@ function ConnectedWorkspace({
           </footer>
         ) : null}
       </main>
-      {!agentMode ? (
+      {!agentMode && !contextMode ? (
         <aside className={styles["dh-inspector"]} aria-label="Selected context">
           <span className={styles["dh-eyebrow"]}>Selected context</span>
           <h2>
@@ -1280,7 +1231,7 @@ function ConnectedWorkspace({
                   onPending={setLifecyclePending}
                 />
               ) : null}
-              {!agentMode && view?.hello ? (
+              {!agentMode && !contextMode && view?.hello ? (
                 <SessionList
                   compact
                   environmentId={environmentId}
@@ -1290,7 +1241,7 @@ function ConnectedWorkspace({
                   providers={providers}
                 />
               ) : null}
-              {!agentMode && view?.hello ? (
+              {!agentMode && !contextMode && view?.hello ? (
                 <details className={styles["dh-add-agent"]}>
                   <summary>Add an agent</summary>
                   <SessionLauncher
@@ -1514,11 +1465,22 @@ function LaneRow({
       <div className={styles["dh-row-column"]}>
         <span className={styles["dh-column-label"]}>Pull requests</span>
         {prs.map((pr) => (
-          <a
+          <Link
             key={`${pr.host}/${pr.repository}/${pr.number}`}
-            href={pr.url}
-            target="_blank"
-            rel="noreferrer"
+            to="/workspaces"
+            search={{
+              environment: environmentId,
+              workspace: resource.workspace?.lane?.sourceStackID ?? resource.workspaceID,
+              context: resource.workspaceID,
+              tab: "pull-requests",
+              expectedGeneration: resource.generation,
+              ...(recordingInstallationID
+                ? { expectedInstallationID: recordingInstallationID }
+                : {}),
+              prHost: pr.host,
+              prRepository: pr.repository,
+              prNumber: pr.number,
+            }}
             className={styles["dh-row-pr"]}
           >
             <strong>
@@ -1531,7 +1493,7 @@ function LaneRow({
             {pr.snapshot ? (
               <small>Cached {new Date(pr.snapshot.syncedAt).toLocaleString()}</small>
             ) : null}
-          </a>
+          </Link>
         ))}
         {!prs.length ? (
           <p>
@@ -1550,10 +1512,12 @@ function LaneRow({
         ) : recording.latest ? (
           <Link
             className={styles["dh-row-recording"]}
-            to="/recordings"
+            to="/workspaces"
             search={{
+              tab: "recordings",
+              context: resource.workspaceID,
               environment: environmentId,
-              workspace: resource.workspaceID,
+              workspace: resource.workspace?.lane?.sourceStackID ?? resource.workspaceID,
               recording: recording.latest.id,
               expectedGeneration: resource.generation,
               ...(recordingInstallationID
@@ -1594,10 +1558,12 @@ function LaneRow({
         )}
         <Link
           className={styles["dh-text-button"]}
-          to="/services"
+          to="/workspaces"
           search={{
+            tab: "services",
+            context: resource.workspaceID,
             environment: environmentId,
-            workspace: resource.workspaceID,
+            workspace: resource.workspace?.lane?.sourceStackID ?? resource.workspaceID,
             expectedGeneration: resource.generation,
             ...(recordingInstallationID ? { expectedInstallationID: recordingInstallationID } : {}),
           }}
