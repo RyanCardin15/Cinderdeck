@@ -61,7 +61,6 @@ const receipt: C.BuildReceipt = {
     { operationKey: "immutable-prepare", action: "prepare", state: "accepted" },
     { operationKey: "original-launch", action: "launch", state: "unknown" },
   ],
-  reservationState: "uncertain",
 };
 const provide = (request: RecordingTransport.RecordingTransport["Service"]["request"]) =>
   Builds.layer.pipe(
@@ -78,7 +77,6 @@ describe("Declared build receipts", () => {
       const service = yield* Builds.Builds;
       const value = yield* service.prepare("owner", input);
       assert.strictEqual(value.state, "unknown");
-      assert.strictEqual(value.reservationState, "uncertain");
       assert.strictEqual(value.checks[0]!.buildMatched, false);
       assert.strictEqual(value.operations[1]!.state, "unknown");
     });

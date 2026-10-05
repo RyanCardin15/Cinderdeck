@@ -48,9 +48,6 @@ struct WorkspaceView: View {
       VStack(alignment: .leading, spacing: 16) {
         if let file = model.selectedFile {
           workspaceHeader(file)
-          if let claim = model.claim(file.id) {
-            StackAgentLeaseView(claim: claim) { model.releaseClaim(file.id) }
-          }
           sectionNavigation
           if section != .laneMap {
             Text(section.explanation).foregroundStyle(.secondary).font(DeckStyle.body)
@@ -270,11 +267,6 @@ struct WorkspaceView: View {
           }
           VStack(alignment: .leading, spacing: 4) {
             Text(isWorkspace ? file.name : file.lane?.name ?? file.name).fontWeight(.semibold).lineLimit(2)
-            if let claim = model.claim(file.id) {
-              Label(claim.holder.name, systemImage: "lock.fill")
-                .font(.caption).foregroundColor(StackPalette.agent).lineLimit(1)
-                .help("Agent lease held by \(claim.holder.label)")
-            }
             if !isWorkspace {
               Text(WorkspaceLaneGraph.branchSummary(file, statuses: model.repoStatuses))
                 .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -304,10 +296,6 @@ struct WorkspaceView: View {
       WorkspaceReferenceCopyButton(file: file, model: model)
       Divider()
       Button("Show lane map") { model.select(file.id); section = .laneMap }
-      if model.claim(file.id) != nil {
-        Button("Cancel agent lease…") { model.releaseClaim(file.id) }
-          .accessibilityIdentifier("workspace.cancelLease.\(file.id)")
-      }
       StackLaneAttachmentMenu(file: file, model: model)
       StackLaneDeletionMenu(file: file, model: model)
       if isWorkspace {

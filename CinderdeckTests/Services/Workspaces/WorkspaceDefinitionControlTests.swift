@@ -19,7 +19,7 @@ final class WorkspaceDefinitionControlTests: XCTestCase {
     runner = WorkspaceRunner(supervisor: supervisor, store: .init(directory: root.appendingPathComponent("runs")),
       environment: { _ in ProcessInfo.processInfo.environment })
     await runner.recover()
-    control = StackControlService(supervisor: supervisor, runner: runner, claimsFile: root.appendingPathComponent("claims.json"))
+    control = StackControlService(supervisor: supervisor, runner: runner)
   }
 
   override func tearDown() async throws {
@@ -98,20 +98,13 @@ final class WorkspaceDefinitionControlTests: XCTestCase {
     XCTAssertNotNil(supervisor.definition("shop"))
   }
 
-  func testWorkspaceRemovalAndEditsHonorClaimsBusyRunsAndExternalReferences() async throws {
+  func testWorkspaceRemovalAndEditsProtectBusyRunsAndExternalReferences() async throws {
     _ = try await call("workspace.create", ["name": .string("Shop"), "folder": .string(root.path)])
     _ = try await call("workspace.service.save", ["workspace": .string("shop"), "service": .string("api"), "cmd": .string("sleep 300")])
-    let other = StackActor(kind: .agent, name: "Other")
-    _ = try await call("claim", ["workspace": .string("shop")], as: other)
-    for method in ["workspace.save", "workspace.delete"] {
-      do { _ = try await call(method, ["workspace": .string("shop"), "name": .string("Renamed")]); XCTFail("Claimed") }
-      catch { XCTAssertEqual((error as? StackControlError)?.code, "claimed") }
-    }
-    control.release(stack: "shop")
     _ = try await call("workspace.task.save", ["workspace": .string("shop"), "task": .string("wait"), "cmd": .string("sleep 300")])
     let run = try await call("workspace.task.run", ["workspace": .string("shop"), "task": .string("wait")]).decode(WorkspaceRun.self)
     for method in ["workspace.save", "workspace.delete"] {
-      do { _ = try await call(method, ["workspace": .string("shop"), "name": .string("Renamed"), "force": .bool(true)]); XCTFail("Busy") }
+      do { _ = try await call(method, ["workspace": .string("shop"), "name": .string("Renamed")]); XCTFail("Busy") }
       catch { XCTAssertEqual((error as? StackControlError)?.code, "busy") }
     }
     _ = try await call("workspace.run.cancel", ["run": .string(run.id.uuidString)])
@@ -174,16 +167,13 @@ final class WorkspaceDefinitionControlTests: XCTestCase {
     XCTAssertFalse(try source("my-shop").contains("[tasks.test]"))
   }
 
-  func testServiceMovesToTasksAndClaimsProtectEdits() async throws {
+  func testServiceMovesToTasksAcrossAgents() async throws {
     try FileManager.default.createDirectory(at: supervisor.definitionsDirectory, withIntermediateDirectories: true)
     try "name = \"Demo\"\nroot = \"\(root.path)\"\n\n# keep me\n[services.build]\ncmd = \"make\"\nenv.CI = \"1\"\n"
       .write(to: supervisor.definitionsDirectory.appendingPathComponent("demo.toml"), atomically: true, encoding: .utf8)
     await supervisor.reloadDefinitions()
     let other = StackActor(kind: .agent, name: "Other Agent")
-    _ = try await call("claim", ["workspace": .string("demo")], as: other)
-    do { _ = try await call("workspace.task.save", ["workspace": .string("demo"), "task": .string("build"), "from_service": .string("build")]); XCTFail("Claimed") }
-    catch { XCTAssertEqual((error as? StackControlError)?.code, "claimed") }
-    _ = try await call("workspace.task.save", ["workspace": .string("demo"), "task": .string("build"), "from_service": .string("build"), "force": .bool(true)])
+    _ = try await call("workspace.task.save", ["workspace": .string("demo"), "task": .string("build"), "from_service": .string("build")], as: other)
     let definition = try XCTUnwrap(supervisor.definition("demo"))
     XCTAssertNil(definition.service("build"))
     XCTAssertEqual(definition.task("build")?.command, "make")

@@ -4,9 +4,9 @@ import Foundation
 /// from a shell with the same arguments, validation, and timeout.
 nonisolated enum AgentToolCLI {
   static func runLaneEdit(_ arguments: [String]) -> Int32 {
-    if arguments.contains("--help") { print("cinderdeck lane edit <lane> [--name <name>] [--env KEY=VALUE ... | --clear-env] [--force]"); return 0 }
+    if arguments.contains("--help") { print("cinderdeck lane edit <lane> [--name <name>] [--env KEY=VALUE ... | --clear-env]"); return 0 }
     do {
-      let options = try parse(arguments, valued: ["name", "env", "as", "session"], flags: ["clear-env", "force", "json"], repeated: ["env"])
+      let options = try parse(arguments, valued: ["name", "env", "as", "session"], flags: ["clear-env", "json"], repeated: ["env"])
       let request = try laneEditRequest(options)
       let connection = try StackCLI.connect(StackCLI.clientInfo(options))
       print(try connection.call(request.0, request.1, timeout: request.2).prettyString())
@@ -18,7 +18,6 @@ nonisolated enum AgentToolCLI {
     guard options.positionals.count == 1 else { throw StackControlError.invalid("Use lane edit <lane> --name <name> / --env KEY=VALUE / --clear-env") }
     var params: [String: JSONValue] = ["workspace": .string(options.positionals[0])]
     if let name = options["name"] { params["name"] = .string(name) }
-    if options.has("force") { params["force"] = .bool(true) }
     guard !options.has("clear-env") || options["env"] == nil else { throw StackControlError.invalid("Use --env or --clear-env, not both") }
     if let pairs = options.lists["env"] {
       var environment: [String: JSONValue] = [:]
@@ -105,7 +104,7 @@ nonisolated enum AgentToolCLI {
     let error = error as? StackControlError ?? .init(code: "failed", message: error.localizedDescription)
     let output: JSONValue = .object(["error": .object(["code": .string(error.code), "message": .string(error.message)])])
     FileHandle.standardError.write(Data((output.prettyString() + "\n").utf8))
-    return error.code == "claimed" ? 3 : 1
+    return 1
   }
 
   static let usage = """

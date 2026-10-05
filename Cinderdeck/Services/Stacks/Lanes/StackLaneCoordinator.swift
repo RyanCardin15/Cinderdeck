@@ -21,10 +21,8 @@ final class StackLaneCoordinator {
   }
 
   /// Creates (or adopts) a lane, then runs its setup when the workspace defines one.
-  func create(stack id: String, request: StackLaneRequest, actor: StackActor, setup: Bool = true,
-    onCreated: (StackDefinitionFile) throws -> Void = { _ in }) async throws -> Creation {
+  func create(stack id: String, request: StackLaneRequest, actor: StackActor, setup: Bool = true) async throws -> Creation {
     let created = try await supervisor.createLane(stack: id, request: request, actor: actor)
-    try onCreated(created.file)
     var result = Creation(file: created.file, warnings: created.warnings)
     if let reference = created.file.definition?.laneSettings?.setup {
       if setup { result.setup = await runSetup(created.file.id, actor: actor, operationID: request.integrationOperationID) }
@@ -84,8 +82,7 @@ final class StackLaneCoordinator {
 
   /// Removes lanes whose branches were merged or whose upstream branch was deleted
   /// (and, with `missing`, lanes whose worktrees are gone). Dirty lanes are reported, not removed.
-  func prune(source: String?, missing: Bool, dryRun: Bool, discardIgnored: Bool, actor: StackActor,
-    skip: (String) -> String? = { _ in nil }) async -> [PruneEntry] {
+  func prune(source: String?, missing: Bool, dryRun: Bool, discardIgnored: Bool, actor: StackActor) async -> [PruneEntry] {
     let lanes = supervisor.files.filter { file in
       guard let lane = file.lane else { return false }
       return source == nil || lane.sourceStackID == source
@@ -102,7 +99,6 @@ final class StackLaneCoordinator {
       else if missing && worktreeMissing { reason = "worktree missing" }
       else { continue }
       var entry = PruneEntry(lane: file.id, reference: lane.reference, reason: reason, action: dryRun ? "would remove" : "removed")
-      if let blocked = skip(file.id) { entry.action = "skipped"; entry.detail = blocked; entries.append(entry); continue }
       if !dryRun {
         do { _ = try await remove(file.id, actor: actor, options: .init(discardIgnored: discardIgnored)) }
         catch { entry.action = "kept"; entry.detail = error.localizedDescription }

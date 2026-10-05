@@ -244,7 +244,6 @@ export const layer = Layer.effect(
           if (
             !attempt.receipt?.launch ||
             attempt.receipt.state !== "running" ||
-            attempt.receipt.reservationState !== "held" ||
             attempt.currentHead !== attempt.preview.head
           )
             return yield* fail("launched_current_build_required");
@@ -325,7 +324,7 @@ export const layer = Layer.effect(
           if (
             current.currentHead !== value.attempt.preview.head ||
             current.receipt?.id !== value.attempt.receipt?.id ||
-            current.receipt?.reservationState !== "held"
+            current.receipt?.state !== "running"
           )
             return yield* fail("stale_attempt");
           const boundSession = yield* relationships.session(value.sessionID);

@@ -141,18 +141,14 @@ it("reloads an uncertain request without launching and continues the exact origi
   await click("Continue saved review");
   expect(commands.launch.mock.calls[0]![0].input).toEqual(original);
 });
-it("retains one queued request, stops only its exact writer, and allows safe cancellation", async () => {
+it("retains one queued request without stopping its writer and allows cancellation", async () => {
   const waiting = {
-    state: "waiting_writer",
-    detail: "Waiting for the writer process to release its reservation.",
+    state: "queued",
+    detail: "Review scheduled.",
     creation: null,
   };
   commands.launch.mockResolvedValue({ _tag: "Success", value: waiting });
   commands.inspectQueue.mockResolvedValue({ _tag: "Success", value: waiting });
-  commands.stop.mockResolvedValue({
-    _tag: "Success",
-    value: { state: "released", detail: "Writer stopped; transcript preserved." },
-  });
   commands.cancel.mockResolvedValue({
     _tag: "Success",
     value: { ...waiting, state: "cancelled", detail: "Review cancelled." },
@@ -161,12 +157,8 @@ it("retains one queued request, stops only its exact writer, and allows safe can
   await click("Inspect committed revision");
   await click("Schedule reviewer");
   expect(container.textContent).not.toContain("Start another review");
-  await click("Stop writer and release review");
-  expect(commands.stop).toHaveBeenCalledWith({
-    environmentId: "host",
-    input: { threadId: "writer", providerSessionId: "provider-writer" },
-  });
-  expect(container.textContent).toContain("transcript preserved");
+  expect(commands.stop).not.toHaveBeenCalled();
+  expect(container.textContent).not.toContain("Stop writer");
   await click("Cancel scheduled review");
   expect(commands.cancel.mock.calls[0]![0].input.operationKey).toBe("review-operation");
   await click("Start another review");
@@ -204,7 +196,7 @@ it("does not migrate a saved direct review into a second queued creation", async
       state: "failed",
       laneID: null,
       launch: null,
-      receipt: { state: "failed", result: null, error: { code: "checkout_reserved" } },
+      receipt: { state: "failed", result: null, error: { code: "invalid_params" } },
     },
   });
   await render();

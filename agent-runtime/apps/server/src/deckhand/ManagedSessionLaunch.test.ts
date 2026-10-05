@@ -33,8 +33,6 @@ import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexA
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as CheckoutIdentity from "./CheckoutIdentity.ts";
 import * as IntegrationHub from "./IntegrationHub.ts";
-import * as WriterReservations from "./WriterReservations.ts";
-import * as NativeWriterReservations from "./NativeWriterReservations.ts";
 import * as WorkspaceBackend from "./WorkspaceBackend.ts";
 import * as ManagedCheckoutGuard from "./ManagedCheckoutGuard.ts";
 import * as ManagedSessionLaunch from "./ManagedSessionLaunch.ts";
@@ -83,12 +81,7 @@ const hello = Schema.decodeUnknownSync(Integration.IntegrationHello)({
   maximumFrameBytes: 4194304,
   maximumPageSize: 100,
   maximumWaitMs: 25000,
-  capabilities: [
-    "checkout.reservations",
-    "operations.lane.create.repositoryRefs",
-    "operations.receipts.wait",
-    "operations.lane.create.managedWriter",
-  ],
+  capabilities: ["operations.lane.create.repositoryRefs", "operations.receipts.wait"],
 });
 const provider = Schema.decodeSync(ServerProvider)({
   instanceId,
@@ -104,13 +97,7 @@ const provider = Schema.decodeSync(ServerProvider)({
 });
 const serviceLayer = ManagedSessionLaunch.layer.pipe(
   Layer.provideMerge(Relationships.layer),
-  Layer.provideMerge(
-    WorkspaceBackend.layer.pipe(
-      Layer.provide(CheckoutIdentity.layer),
-      Layer.provide(WriterReservations.layer),
-      Layer.provide(NativeWriterReservations.layer),
-    ),
-  ),
+  Layer.provideMerge(WorkspaceBackend.layer.pipe(Layer.provide(CheckoutIdentity.layer))),
   Layer.provideMerge(CheckoutIdentity.layer),
 );
 const baseLayer = Layer.mergeAll(
@@ -121,6 +108,9 @@ const fixture = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const fs = yield* FileSystem.FileSystem;
   const runner = yield* ProcessRunner.ProcessRunner;
+  const identities = yield* CheckoutIdentity.CheckoutIdentity.pipe(
+    Effect.provide(CheckoutIdentity.layer),
+  );
   const root = yield* fs.makeTempDirectoryScoped({ prefix: "dh-launch-" });
   const source = `${root}/source`;
   const lane = `${root}/lane`;
@@ -141,6 +131,8 @@ const fixture = Effect.gen(function* () {
     "Fixture",
   ]);
   yield* git(source, ["worktree", "add", "-b", "lane", lane]);
+  const sourceIdentity = yield* identities.resolve(source);
+  const laneIdentity = yield* identities.resolve(lane);
   const resource = (id: string) => ({
     workspaceID: id,
     generation: id === "lane" ? 7 : 2,
@@ -169,6 +161,9 @@ const fixture = Effect.gen(function* () {
         {
           id: "frontend",
           path: id === "lane" ? lane : source,
+          physicalID: (id === "lane" ? laneIdentity : sourceIdentity).physicalId,
+          repositoryPhysicalID: (id === "lane" ? laneIdentity : sourceIdentity)
+            .repositoryPhysicalId,
           branch: id === "lane" ? "lane" : "main",
           dirty: false,
           changedFiles: 0,
@@ -231,7 +226,7 @@ const fixture = Effect.gen(function* () {
     const hub = Layer.mock(IntegrationHub.IntegrationHub)({
       resource: (id) => {
         const item = resources.get(id);
-        if (item && mode === "stale_target" && id === "created" && ++targetReads > 1)
+        if (item && mode === "stale_target" && id === "created" && ++targetReads > 2)
           item.revision = "changed";
         return item
           ? Effect.succeed({ hello, resource: item })
@@ -289,8 +284,13 @@ const fixture = Effect.gen(function* () {
           const resource = structuredClone(resources.get("lane")!);
           resource.workspaceID = "created";
           resource.workspace.id = "created";
+          const identity = yield* identities.resolve(created);
+          resource.workspace.lane!.name = String(request.arguments.branch);
           resource.workspace.lane!.directory = created;
+          resource.workspace.repos[0]!.physicalID = identity.physicalId;
+          resource.workspace.repos[0]!.repositoryPhysicalID = identity.repositoryPhysicalId;
           resource.workspace.repos[0]!.path = created;
+          resource.workspace.repos[0]!.branch = String(request.arguments.branch);
           resources.set("created", resource);
           const receipt = yield* decodeReceipt({
             id: "native-operation",
@@ -303,7 +303,9 @@ const fixture = Effect.gen(function* () {
             createdAt: "now",
             updatedAt: "now",
             result: {
-              ...(mode === "unknown_outcome" ? {} : { createdWorkspaceID: "created" }),
+              ...(mode === "unknown_outcome"
+                ? {}
+                : { createdWorkspaceID: "created", workspace: resource.workspace }),
               ...(mode === "native_shape"
                 ? { workspace: resource.workspace }
                 : { creationReady: mode === "ready" || mode === "stale_target" }),
@@ -351,7 +353,7 @@ const creationInput = (key = "create-one") =>
   });
 
 describe("connected lane and session creation", () => {
-  it.effect.each(["ready", "native_shape"] as const)(
+  it.live.each(["ready", "native_shape"] as const)(
     "commits intent before Git, launches returned checkout, and replays requests (%s)",
     (mode) =>
       Effect.gen(function* () {
@@ -427,7 +429,7 @@ describe("connected lane and session creation", () => {
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 
-  it.effect.each(["setup_failed", "unknown_outcome"] as const)(
+  it.live.each(["setup_failed", "unknown_outcome"] as const)(
     "retains the native lane after %s without launching or recreating it",
     (mode) =>
       Effect.gen(function* () {
@@ -475,7 +477,7 @@ describe("connected lane and session creation", () => {
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 
-  it.effect(
+  it.live(
     "refuses stale review and unavailable providers before persisting intent or creating a lane",
     () =>
       Effect.gen(function* () {
@@ -514,7 +516,7 @@ describe("connected lane and session creation", () => {
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 
-  it.effect(
+  it.live(
     "rolls back the feature and workspace if operation intent cannot commit, before any native effect",
     () =>
       Effect.gen(function* () {
@@ -547,7 +549,7 @@ describe("connected lane and session creation", () => {
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 
-  it.effect(
+  it.live(
     "retains a prepared feature after transport loss and resumes it after service restart",
     () =>
       Effect.gen(function* () {
@@ -610,7 +612,7 @@ describe("connected lane and session creation", () => {
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 
-  it.effect(
+  it.live(
     "upgrades an unlaunched legacy request before native effects while lookup remains read-only",
     () =>
       Effect.gen(function* () {
@@ -648,7 +650,7 @@ describe("connected lane and session creation", () => {
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 
-  it.effect(
+  it.live(
     "preserves an accepted version-7 creation and feature after upgrade with its source unavailable",
     () =>
       Effect.gen(function* () {
@@ -719,7 +721,7 @@ describe("connected lane and session creation", () => {
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 
-  it.effect("reserves the feature in an existing canonical workspace binding", () =>
+  it.live("reserves the feature in an existing canonical workspace binding", () =>
     Effect.gen(function* () {
       const f = yield* fixture;
       const native = f.nativeCreation();
@@ -758,7 +760,7 @@ describe("connected lane and session creation", () => {
     }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 
-  it.effect(
+  it.live(
     "keeps a new feature separate from an unrelated earlier launch with a colliding derived key",
     () =>
       Effect.gen(function* () {
@@ -795,7 +797,7 @@ describe("connected lane and session creation", () => {
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 
-  it.effect(
+  it.live(
     "reconciles a delayed receipt without provider effects, then explicitly retries the saved launch",
     () =>
       Effect.gen(function* () {
@@ -842,7 +844,7 @@ describe("connected lane and session creation", () => {
 });
 
 describe("saved launch context review", () => {
-  it.effect(
+  it.live(
     "repairs a stale resolved creation before any thread exists while retaining its original feature and lane",
     () =>
       Effect.gen(function* () {
@@ -891,7 +893,7 @@ describe("saved launch context review", () => {
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 
-  it.effect(
+  it.live(
     "requires explicit fresh review, preserves immutable intent and thread through restart, and rejects changed heads",
     () =>
       Effect.gen(function* () {
@@ -1001,7 +1003,7 @@ describe("saved launch context review", () => {
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 
-  it.effect(
+  it.live(
     "refuses to retarget an existing saved conversation to another physical checkout or generation",
     () =>
       Effect.gen(function* () {
@@ -1032,58 +1034,54 @@ describe("saved launch context review", () => {
 });
 
 describe("managed lane session launch", () => {
-  it.effect(
-    "opens an idle bound chat with no initial message and replays its durable receipt",
-    () =>
-      Effect.gen(function* () {
-        const f = yield* fixture;
-        const calls: ThreadLaunchService.ThreadLaunchInput[] = [];
-        const external = f.external((request) => {
-          calls.push(request);
-          return Effect.succeed(accepted(request));
+  it.live("opens an idle bound chat with no initial message and replays its durable receipt", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture;
+      const calls: ThreadLaunchService.ThreadLaunchInput[] = [];
+      const external = f.external((request) => {
+        calls.push(request);
+        return Effect.succeed(accepted(request));
+      });
+      yield* Effect.gen(function* () {
+        const launcher = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+        const request = decodeInput({
+          ...input("empty-chat"),
+          title: "New chat",
+          objective: "",
+          deferStart: true,
+          interactionMode: "plan",
+          modelSelection: {
+            instanceId,
+            model: "fixture-model",
+            options: [{ id: "reasoning_effort", value: "high" }],
+          },
         });
-        yield* Effect.gen(function* () {
-          const launcher = yield* ManagedSessionLaunch.ManagedSessionLaunch;
-          const request = decodeInput({
-            ...input("empty-chat"),
-            title: "New chat",
-            objective: "",
-            deferStart: true,
-            interactionMode: "plan",
-            modelSelection: {
-              instanceId,
-              model: "fixture-model",
-              options: [{ id: "reasoning_effort", value: "high" }],
-            },
-          });
-          const one = yield* launcher.launch("actor", request);
-          const two = yield* launcher.launch("actor", request);
-          assert.deepEqual(one, two);
-          assert.equal(calls.length, 1);
-          assert.equal(calls[0]!.initialMessage, undefined);
-          assert.equal(calls[0]!.deferPreparation, true);
-          assert.equal(calls[0]!.interactionMode, "plan");
-          assert.deepEqual(calls[0]!.modelSelection, request.modelSelection);
-          const relationships = yield* Relationships.Relationships;
-          const session = yield* relationships.session(one.sessionId);
-          assert.equal(session.execution, "idle");
-          assert.equal(session.connection, "unavailable");
-          const sql = yield* SqlClient.SqlClient;
-          assert.equal((yield* sql`SELECT id FROM deckhand_writer_requests`).length, 0);
-          assert.equal((yield* sql`SELECT id FROM deckhand_native_writer_intents`).length, 0);
-          assert.equal(session.providerSessionId, null);
-          assert.equal((yield* relationships.feature(session.featureId)).objective, "");
-          assert.equal((yield* relationships.checkout(session.checkoutId)).laneId, "lane");
-          const rejected = yield* launcher
-            .launch("actor", { ...request, operationKey: "no-message", deferStart: false })
-            .pipe(Effect.flip);
-          assert.equal(rejected.reason, "stale_context");
-          assert.equal(calls.length, 1);
-        }).pipe(Effect.provide(serviceLayer.pipe(Layer.provide(external))));
-      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+        const one = yield* launcher.launch("actor", request);
+        const two = yield* launcher.launch("actor", request);
+        assert.deepEqual(one, two);
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0]!.initialMessage, undefined);
+        assert.equal(calls[0]!.deferPreparation, true);
+        assert.equal(calls[0]!.interactionMode, "plan");
+        assert.deepEqual(calls[0]!.modelSelection, request.modelSelection);
+        const relationships = yield* Relationships.Relationships;
+        const session = yield* relationships.session(one.sessionId);
+        assert.equal(session.execution, "idle");
+        assert.equal(session.connection, "unavailable");
+        const sql = yield* SqlClient.SqlClient;
+        assert.equal(session.providerSessionId, null);
+        assert.equal((yield* relationships.feature(session.featureId)).objective, "");
+        assert.equal((yield* relationships.checkout(session.checkoutId)).laneId, "lane");
+        const rejected = yield* launcher
+          .launch("actor", { ...request, operationKey: "no-message", deferStart: false })
+          .pipe(Effect.flip);
+        assert.equal(rejected.reason, "stale_context");
+        assert.equal(calls.length, 1);
+      }).pipe(Effect.provide(serviceLayer.pipe(Layer.provide(external))));
+    }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 
-  it.effect(
+  it.live(
     "persists scoped bindings before intake, uses the existing lane, and replays concurrent retries",
     () =>
       Effect.gen(function* () {
@@ -1117,7 +1115,7 @@ describe("managed lane session launch", () => {
             assert.equal((yield* store.feature(session.featureId)).objective, input().objective);
             const guard = yield* ManagedCheckoutGuard.ManagedCheckoutGuard;
             const context = yield* guard.resolve(request.threadId!, f.lane);
-            assert.equal(context?.native?.workspaceID, "lane");
+            assert.equal(context?.cwd, yield* f.fs.realPath(f.lane));
             return accepted(request);
           }).pipe(
             Effect.provide(
@@ -1166,7 +1164,7 @@ describe("managed lane session launch", () => {
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 
-  it.effect(
+  it.live(
     "reuses a prior workspace ownership tuple and serializes distinct launches without duplicating it",
     () =>
       Effect.gen(function* () {
@@ -1207,7 +1205,7 @@ describe("managed lane session launch", () => {
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 
-  it.effect("retains the feature and same thread across intake failure and service restart", () =>
+  it.live("retains the feature and same thread across intake failure and service restart", () =>
     Effect.gen(function* () {
       const f = yield* fixture;
       const attempts: ThreadLaunchService.ThreadLaunchInput[] = [];
@@ -1251,7 +1249,7 @@ describe("managed lane session launch", () => {
     }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 
-  it.effect(
+  it.live(
     "refuses stale generations, missing repositories, and replaced worktrees before intake",
     () =>
       Effect.gen(function* () {
@@ -1293,7 +1291,7 @@ describe("managed lane session launch", () => {
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 
-  it.effect(
+  it.live(
     "recovers an interrupted intake with its saved IDs and never leaves a partial binding transaction",
     () =>
       Effect.gen(function* () {
@@ -1337,7 +1335,7 @@ describe("managed lane session launch", () => {
 });
 
 describe("isolated reviewer scheduling", () => {
-  it.effect.each([false, true])(
+  it.live.each([false, true])(
     "pins reviewed commits, reuses the original feature, and preserves its primary checkout (adopted=%s)",
     (adopted) =>
       Effect.gen(function* () {
@@ -1473,7 +1471,7 @@ describe("isolated reviewer scheduling", () => {
         assert.equal(launches, 2);
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
-  it.effect.each(["dirty", "head_changed"] as const)(
+  it.live.each(["dirty", "head_changed"] as const)(
     "refuses %s source changes before native creation",
     (mode) =>
       Effect.gen(function* () {
@@ -1547,8 +1545,8 @@ describe("durable reviewer scheduling", () => {
     runtimeMode: "approval-required" as const,
     objective: "Inspect correctness",
   });
-  it.effect(
-    "persists an immutable review, waits for the writer, then creates exactly one pinned lane",
+  it.live(
+    "persists an immutable review and creates one pinned lane while its writer remains active",
     () =>
       Effect.gen(function* () {
         const f = yield* fixture;
@@ -1560,11 +1558,10 @@ describe("durable reviewer scheduling", () => {
           const writer = yield* managed.launch("actor", input("writer"));
           const preview = yield* queue.preview({ threadId: writer.threadId! });
           const request = queuedInput(preview);
-          yield* sql`INSERT INTO deckhand_native_writer_intents(id,owner_id,installation_id,state,control_json) VALUES('fixture-writer',${writer.threadId},'installation','held','{}')`;
           const waiting = yield* queue.schedule("actor", request);
-          assert.equal(waiting.state, "waiting_writer");
-          assert.equal(waiting.attempts, 0);
-          assert.equal(native.creations(), 0);
+          assert.equal(waiting.state, "accepted");
+          assert.equal(waiting.attempts, 1);
+          assert.equal(native.creations(), 1);
           assert.equal(
             (yield* queue.schedule("other", request).pipe(Effect.flip)).reason,
             "wrong_actor",
@@ -1577,7 +1574,6 @@ describe("durable reviewer scheduling", () => {
           const original = (yield* sql<{
             original_input_json: string;
           }>`SELECT original_input_json FROM deckhand_reviewer_queue`)[0]!.original_input_json;
-          yield* sql`UPDATE deckhand_native_writer_intents SET state='released' WHERE id='fixture-writer'`;
           const ready = yield* queue.schedule("actor", request);
           assert.equal(ready.state, "accepted");
           assert.equal(ready.attempts, 1);
@@ -1604,7 +1600,7 @@ describe("durable reviewer scheduling", () => {
         }).pipe(Effect.provide(queueLayer(f, native)));
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
-  it.effect("refuses dirty queued source before effects and safely cancels waiting work", () =>
+  it.live("refuses dirty queued source before effects and safely cancels waiting work", () =>
     Effect.gen(function* () {
       const f = yield* fixture;
       const native = f.nativeCreation();
@@ -1614,16 +1610,7 @@ describe("durable reviewer scheduling", () => {
         const sql = yield* SqlClient.SqlClient;
         const writer = yield* managed.launch("actor", input("writer"));
         const preview = yield* queue.preview({ threadId: writer.threadId! });
-        yield* sql`INSERT INTO deckhand_native_writer_intents(id,owner_id,installation_id,state,control_json) VALUES('fixture-writer',${writer.threadId},'installation','held','{}')`;
-        yield* queue.schedule("actor", queuedInput(preview, "cancelled"));
-        assert.equal(
-          (yield* queue.cancelScheduled("actor", { operationKey: "cancelled" })).state,
-          "cancelled",
-        );
-        yield* queue.schedule("actor", queuedInput(preview));
         yield* f.fs.writeFileString(`${f.lane}/uncommitted.txt`, "pending");
-        yield* sql`UPDATE deckhand_native_writer_intents SET state='released' WHERE id='fixture-writer'`;
-        assert.equal((yield* queue.schedule("actor", queuedInput(preview))).state, "needs_refresh");
         assert.equal(native.creations(), 0);
         assert.equal(
           (yield* queue.schedule("actor", queuedInput(preview, "dirty-new")).pipe(Effect.flip))
@@ -1638,7 +1625,7 @@ describe("durable reviewer scheduling", () => {
       }).pipe(Effect.provide(queueLayer(f, native)));
     }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
-  it.effect("preserves uncertain native outcomes on one durable attempt key", () =>
+  it.live("preserves uncertain native outcomes on one durable attempt key", () =>
     Effect.gen(function* () {
       const f = yield* fixture;
       const native = f.nativeCreation("unknown_outcome");

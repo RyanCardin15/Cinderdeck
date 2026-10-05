@@ -27,8 +27,4 @@ enum WorkspaceBuildScope {
         && $0.artifactSHA256 == artifact.sha256 && $0.servedArtifactSHA256 == artifact.sha256 && $0.sourceUnchanged && $0.processMatched && $0.stampMatched
     }
   }
-  static func lease(_ receipt: WorkspaceBuildReceipt, supervisor: StackSupervisor) throws {
-    _ = try supervisor.checkoutReservations().borrowWriter(receipt.lease.id, actorKey: receipt.actorKey, token: receipt.lease.token,
-      workspaceID: receipt.request.workspaceID, generation: receipt.request.generation, physicalIDs: receipt.request.expectedRepositories.map(\.checkoutPhysicalID))
-  }
 }

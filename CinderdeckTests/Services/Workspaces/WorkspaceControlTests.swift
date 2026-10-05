@@ -73,7 +73,7 @@ final class WorkspaceControlTests: XCTestCase {
   }
 
   @MainActor
-  func testAgentCanDiscoverRunInspectAndCancelWithClaimsEnforced() async throws {
+  func testAgentCanDiscoverRunInspectAndCancelAcrossAgents() async throws {
     let root = try StackTestSupport.temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }
     let defaults = UserDefaults(suiteName: "WorkspaceControl-\(UUID())")!
@@ -83,24 +83,18 @@ final class WorkspaceControlTests: XCTestCase {
     await runner.recover()
     try "[tasks.wait]\ncmd = \"echo hello; sleep 300\"\n[workflows.verify]\nsteps = [\"task:wait\"]\n".write(to: root.appendingPathComponent("demo.toml"), atomically: true, encoding: .utf8)
     await supervisor.reloadDefinitions()
-    let control = StackControlService(supervisor: supervisor, runner: runner, claimsFile: root.appendingPathComponent("claims.json"))
+    let control = StackControlService(supervisor: supervisor, runner: runner)
     let actor = StackActor(kind: .agent, name: "Test Agent", session: "unit")
     let other = StackActor(kind: .agent, name: "Other Agent")
     let listed = try await control.handle("workspace.list", params: .object([:]), actor: actor)
     XCTAssertEqual(listed.arrayValue?.first?["tasks"]?.stringsValue, ["wait"])
-    _ = try await control.handle("claim", params: .object(["workspace": .string("demo")]), actor: actor)
     let params: JSONValue = .object(["workspace": .string("demo"), "task": .string("wait")])
-    do { _ = try await control.handle("workspace.task.run", params: params, actor: other); XCTFail("Expected claim refusal") }
-    catch { XCTAssertEqual((error as? StackControlError)?.code, "claimed") }
     let started = try await control.handle("workspace.task.run", params: params, actor: actor).decode(WorkspaceRun.self)
     XCTAssertEqual(started.actor, actor)
     let query: JSONValue = .object(["run": .string(started.id.uuidString)])
-    do { _ = try await control.handle("workspace.run.cancel", params: query, actor: other); XCTFail("Expected claim refusal") }
-    catch { XCTAssertEqual((error as? StackControlError)?.code, "claimed") }
-    _ = try await control.handle("workspace.run.cancel", params: query, actor: actor)
+    _ = try await control.handle("workspace.run.cancel", params: query, actor: other)
     let result = try await control.handle("workspace.run.get", params: query, actor: actor).decode(WorkspaceRun.self)
     XCTAssertEqual(result.status, .cancelled)
-    control.release(stack: "demo")
     await runner.cancelAll()
     await supervisor.shutdownMonitoring()
   }

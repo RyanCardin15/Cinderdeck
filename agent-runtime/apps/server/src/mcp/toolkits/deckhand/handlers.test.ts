@@ -1,5 +1,8 @@
 import * as Verification from "../../../deckhand/Verification.ts";
-import type { VerificationOverview, Evidence } from "@cinderdeck/contracts/deckhand/verificationRpc";
+import type {
+  VerificationOverview,
+  Evidence,
+} from "@cinderdeck/contracts/deckhand/verificationRpc";
 import { assert, describe, it } from "@effect/vitest";
 import {
   EnvironmentId,
@@ -40,7 +43,7 @@ const invocation: Invocation.McpInvocationScope = {
 };
 const failure = new OrchestratorMcpFailure({
   code: "invalid_request",
-  message: "The active calling writer cannot lend its reservation.",
+  message: "The selected build source changed.",
 });
 const reference = Schema.decodeUnknownSync(V.AttemptPreviewInput.fields.reference)({
   projectId: "project",
@@ -160,11 +163,11 @@ describe("Bounded Cinderdeck agent integration tools", () => {
             Layer.mock(Attempts.VerificationAttempts)({
               preview: (actor, input, bound) => {
                 calls.push({ actor, input, bound });
-                return Effect.fail(new V.AttemptError({ reason: "checkout_reserved" }));
+                return Effect.fail(new V.AttemptError({ reason: "source_changed" }));
               },
               advance: (actor, input, bound) => {
                 calls.push({ actor, input, bound });
-                return Effect.fail(new V.AttemptError({ reason: "checkout_reserved" }));
+                return Effect.fail(new V.AttemptError({ reason: "source_changed" }));
               },
             }),
             Layer.succeed(Invocation.McpInvocationContext, invocation),

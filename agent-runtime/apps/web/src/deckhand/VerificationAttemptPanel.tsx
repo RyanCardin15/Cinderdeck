@@ -224,9 +224,7 @@ function ScopedVerificationAttemptPanel({
   const mayStartAnother =
     attempt?.phase === "cancelled" ||
     attempt?.phase === "completed" ||
-    (attempt?.phase === "failed" &&
-      receipt?.reservationState === "released" &&
-      !attempt.pendingAction);
+    (attempt?.phase === "failed" && !attempt.pendingAction);
   const terminal = attempt?.phase === "completed" || attempt?.phase === "cancelled";
   const blocked =
     busy ||
@@ -283,7 +281,7 @@ function ScopedVerificationAttemptPanel({
           </div>
           <p className={styles.hint}>
             Select a clean feature checkout above. Its configured build and required checks run
-            under a reservation until you finish or cancel.
+            using its current source, which is checked again after execution.
           </p>
           {preview ? (
             <div className={styles.preview}>
@@ -352,10 +350,6 @@ function ScopedVerificationAttemptPanel({
                 <dt>Artifact</dt>
                 <dd>{receipt.artifact?.sha256.slice(0, 16) ?? "No captured artifact"}</dd>
               </div>
-              <div>
-                <dt>Checkout reservation</dt>
-                <dd>{receipt.reservationState}</dd>
-              </div>
               {receipt.checks.map((check) => (
                 <div key={check.taskID}>
                   <dt>{check.taskID}</dt>
@@ -388,16 +382,14 @@ function ScopedVerificationAttemptPanel({
             <button disabled={busy || terminal || !receipt} onClick={() => void run("cancel")}>
               {attempt.pendingAction === "cancel" || attempt.pendingAction === "finalize"
                 ? "Retry cancellation after stopping owned processes"
-                : "Cancel and release"}
+                : "Cancel build"}
             </button>
           </div>
           {receipt ? (
             <OwnedPreviewCaptureControl
               environmentId={environmentId}
               attemptOperationKey={attempt.operationKey}
-              enabled={
-                !blocked && receipt.state === "running" && receipt.reservationState === "held"
-              }
+              enabled={!blocked && receipt.state === "running"}
               onRecording={saveOwnedRecording}
             />
           ) : null}

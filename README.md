@@ -31,7 +31,7 @@ A web app, an API in another repository, a worker, a local database: bring whate
 
 ## Services, tasks, and workflows
 
-Tasks, workflows and Git changes respect a managed Deckhand writer's physical checkout reservation, including workspace aliases. Use a separate lane while another session owns the checkout. Finishing an agent turn keeps ownership until its process stops; interrupted or unconfirmed shutdowns keep the checkout reserved for recovery.
+Agents can use the same workspace, lane, or checkout without claims or reservations. Use separate branches when independent edits need separate files.
 
 Open **Workspaces…** from the menu bar. A workspace contains **Services** that keep running, **Tasks** that finish with a result, and **Workflows** that coordinate both. Run tests, builds, or migrations; inspect each step's logs and exit status; cancel a run; and keep completed results across relaunches. Agents use the same controls through the CLI and MCP.
 
@@ -67,7 +67,7 @@ In the agent harness, open **Settings → Integrations → MCP & skills → Set 
 - **See what is running.** Service status, listening ports, process ownership, live logs, crash output, and activity live together. Start, stop, or restart individual services or an entire stack.
 - **Work across repositories.** Inspect branches and changes, fetch or pull, and switch branches with explicit stash/carry choices.
 - **Record with logs.** Screen recordings save a `.log` file next to the video with your workspaces' output, stamped with video times. You choose which workspaces, or record a plain video. [Recordings with logs](docs/REPROS.md).
-- **Give agents the same controls.** The `cinderdeck` CLI and local MCP server work with Codex, Cursor, Claude Code, VS Code Copilot, and other clients. **Agent access** adds the MCP server and the bundled agent skills to each one. Agent identity and advisory claims make ownership visible.
+- **Give agents the same controls.** The `cinderdeck` CLI and local MCP server work with Codex, Cursor, Claude Code, VS Code Copilot, and other clients. **Agent access** adds the MCP server and the bundled agent skills to each one.
 - **Organize your GitHub work.** Browse repositories, sync GitHub stars, filter pull requests, save custom views, inspect changes, and submit reviews in a native PRs workspace. [Explore pull requests](docs/PULL_REQUESTS.md).
 - **Keep useful context nearby.** Local text clipboard history, capture history, and search sit alongside your stacks.
 - **Capture what you are building.** Screenshots, scrolling capture, screen recording, annotation, OCR, and video editing remain available from the Snapzy foundation.

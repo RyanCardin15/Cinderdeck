@@ -582,30 +582,6 @@ describe("same-host Cinderdeck bridge", () => {
         assert.equal((yield* client.submit(connection, input)).state, "succeeded");
         assert.equal(submissions, 1);
         assert.deepEqual(receivedArguments, input.arguments);
-        const managed = { ...input, arguments: { ...input.arguments, managedWriter: true } };
-        assert.equal(
-          (yield* client.submit(connection, managed).pipe(Effect.flip)).reason,
-          "unsupported_capability",
-        );
-        assert.equal(submissions, 1);
-        capabilities.push("operations.lane.create.managedWriter");
-        const upgraded = yield* client.connect(socketPath, {
-          channel: "development",
-          clientID: "actor",
-        });
-        assert.equal(
-          (yield* client
-            .submit(upgraded, {
-              ...managed,
-              arguments: { ...managed.arguments, managedWriter: "true" },
-            })
-            .pipe(Effect.flip)).reason,
-          "invalid_request",
-        );
-        assert.equal(submissions, 1);
-        assert.equal((yield* client.submit(upgraded, managed)).state, "succeeded");
-        assert.equal(submissions, 2);
-        assert.deepEqual(receivedArguments, managed.arguments);
       }).pipe(Effect.scoped, Effect.provide(TestLayer)),
   );
   it.effect(
@@ -798,40 +774,106 @@ describe("same-host Cinderdeck bridge", () => {
   );
 });
 
-it.effect("browses saved GitHub queries without a workspace catalog and refuses mismatched account replies", () => Effect.gen(function* () {
-  let foreign = false;
-  const methods: string[] = [];
-  const filters = { repository: null, organization: null, state: "open", role: "anyone", sort: "updated", text: "label:bug", label: "", advanced: true };
-  const socketPath = yield* peer((request) => {
-    methods.push(request.method);
-    if (request.method === "integration.hello") return { id: request.id, result: { ...hello, capabilities: ["github.workspace"] } };
-    return { id: request.id, result: { kind: "preferences", preferences: {
-      account: foreign ? "another-account" : "reviewer", hostname: "github.com", selectedViewID: "bugs", filters,
-      query: "is:pr involves:reviewer label:bug sort:updated-desc", views: [{ id: "bugs", name: "Bug reviews", builtIn: false, filters, query: "label:bug" }],
-    } } };
-  });
-  const client = yield* CinderdeckClient.CinderdeckClient;
-  const connection = yield* client.connect(socketPath, { channel: "development" });
-  const result = yield* client.github(connection, { action: "preferences" });
-  assert.equal(result.kind, "preferences");
-  if (result.kind === "preferences") assert.equal(result.preferences.views[0]?.name, "Bug reviews");
-  assert.deepEqual(methods, ["integration.hello", "prs.browser"]);
-  foreign = true;
-  const refused = yield* client.github(connection, { action: "select", account: "reviewer", hostname: "github.com", id: "bugs" }).pipe(Effect.flip);
-  assert.equal(refused.reason, "invalid_response");
-}).pipe(Effect.scoped, Effect.provide(TestLayer)));
+it.effect(
+  "browses saved GitHub queries without a workspace catalog and refuses mismatched account replies",
+  () =>
+    Effect.gen(function* () {
+      let foreign = false;
+      const methods: string[] = [];
+      const filters = {
+        repository: null,
+        organization: null,
+        state: "open",
+        role: "anyone",
+        sort: "updated",
+        text: "label:bug",
+        label: "",
+        advanced: true,
+      };
+      const socketPath = yield* peer((request) => {
+        methods.push(request.method);
+        if (request.method === "integration.hello")
+          return { id: request.id, result: { ...hello, capabilities: ["github.workspace"] } };
+        return {
+          id: request.id,
+          result: {
+            kind: "preferences",
+            preferences: {
+              account: foreign ? "another-account" : "reviewer",
+              hostname: "github.com",
+              selectedViewID: "bugs",
+              filters,
+              query: "is:pr involves:reviewer label:bug sort:updated-desc",
+              views: [
+                { id: "bugs", name: "Bug reviews", builtIn: false, filters, query: "label:bug" },
+              ],
+            },
+          },
+        };
+      });
+      const client = yield* CinderdeckClient.CinderdeckClient;
+      const connection = yield* client.connect(socketPath, { channel: "development" });
+      const result = yield* client.github(connection, { action: "preferences" });
+      assert.equal(result.kind, "preferences");
+      if (result.kind === "preferences")
+        assert.equal(result.preferences.views[0]?.name, "Bug reviews");
+      assert.deepEqual(methods, ["integration.hello", "prs.browser"]);
+      foreign = true;
+      const refused = yield* client
+        .github(connection, {
+          action: "select",
+          account: "reviewer",
+          hostname: "github.com",
+          id: "bugs",
+        })
+        .pipe(Effect.flip);
+      assert.equal(refused.reason, "invalid_response");
+    }).pipe(Effect.scoped, Effect.provide(TestLayer)),
+);
 
-it.effect("accepts terminal GitHub pages with omitted Swift cursors and preserves review refusal messages", () => Effect.gen(function* () {
-  const socketPath = yield* peer((request) => {
-    if (request.method === "integration.hello") return { id: request.id, result: { ...hello, capabilities: ["github.workspace"] } };
-    const params = request.params as { action: string };
-    if (params.action === "organizations") return { id: request.id, result: { kind: "organizations", account: "reviewer", hostname: "github.com", page: { nodes: [{ login: "team" }], pageInfo: { hasNextPage: false } } } };
-    return { id: request.id, error: { code: "failed", message: "New commits were pushed. Refresh and review the latest changes before submitting." } };
-  });
-  const client = yield* CinderdeckClient.CinderdeckClient;
-  const connection = yield* client.connect(socketPath, { channel: "development" });
-  const result = yield* client.github(connection, { action: "organizations", account: "reviewer", hostname: "github.com" });
-  assert.equal(result.kind, "organizations");
-  const error = yield* client.github(connection, { action: "detail", account: "reviewer", hostname: "github.com", id: "PR-7" }).pipe(Effect.flip);
-  assert.include(error.detail, "New commits were pushed");
-}).pipe(Effect.scoped, Effect.provide(TestLayer)));
+it.effect(
+  "accepts terminal GitHub pages with omitted Swift cursors and preserves review refusal messages",
+  () =>
+    Effect.gen(function* () {
+      const socketPath = yield* peer((request) => {
+        if (request.method === "integration.hello")
+          return { id: request.id, result: { ...hello, capabilities: ["github.workspace"] } };
+        const params = request.params as { action: string };
+        if (params.action === "organizations")
+          return {
+            id: request.id,
+            result: {
+              kind: "organizations",
+              account: "reviewer",
+              hostname: "github.com",
+              page: { nodes: [{ login: "team" }], pageInfo: { hasNextPage: false } },
+            },
+          };
+        return {
+          id: request.id,
+          error: {
+            code: "failed",
+            message:
+              "New commits were pushed. Refresh and review the latest changes before submitting.",
+          },
+        };
+      });
+      const client = yield* CinderdeckClient.CinderdeckClient;
+      const connection = yield* client.connect(socketPath, { channel: "development" });
+      const result = yield* client.github(connection, {
+        action: "organizations",
+        account: "reviewer",
+        hostname: "github.com",
+      });
+      assert.equal(result.kind, "organizations");
+      const error = yield* client
+        .github(connection, {
+          action: "detail",
+          account: "reviewer",
+          hostname: "github.com",
+          id: "PR-7",
+        })
+        .pipe(Effect.flip);
+      assert.include(error.detail, "New commits were pushed");
+    }).pipe(Effect.scoped, Effect.provide(TestLayer)),
+);

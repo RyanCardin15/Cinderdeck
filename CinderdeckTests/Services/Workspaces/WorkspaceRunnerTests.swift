@@ -39,24 +39,14 @@ final class WorkspaceRunnerTests: XCTestCase {
     XCTAssertFalse(result.status.isActive, "Run did not finish: \(result)")
     return result
   }
-  func testTaskWithoutRepoEntriesUsesItsRealPhysicalCheckoutBarrier() async throws {
+  func testTaskWithoutRepoEntriesRunsInItsPhysicalCheckout() async throws {
     _ = try await StackLaneStore.git(["init", "-b", "main"], at: root)
     _ = try await StackLaneStore.git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--allow-empty", "-m", "fixture"], at: root)
     try await load("[tasks.write]\ncmd = \"touch ownership-marker\"\n")
     XCTAssertTrue(try XCTUnwrap(supervisor.definition("test")).repos.isEmpty)
-    let physical = try XCTUnwrap(PhysicalCheckoutIdentity.resolve(root))
-    let reservations = try supervisor.checkoutReservations(), token = String(repeating: "a", count: 64)
-    _ = try reservations.begin(id: "writer", ownerID: "external", workspaceID: "alias", kind: "writer", physicalIDs: [physical.physicalID], actorKey: "external", token: token)
-    XCTAssertThrowsError(try runner.submit(workspace: "test", kind: .task, definitionID: "write")) {
-      XCTAssertEqual(($0 as? StackControlError)?.code, "checkout_reserved")
-    }
-    XCTAssertTrue(runner.runs.isEmpty)
-    XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("ownership-marker").path))
-    _ = try reservations.releaseWriter("writer", actorKey: "external", token: token)
     let finished = try await runner.runAndWait(workspace: "test", reference: "task:write", actor: .user)
     XCTAssertEqual(finished.status, .succeeded)
     XCTAssertTrue(FileManager.default.fileExists(atPath: root.appendingPathComponent("ownership-marker").path))
-    XCTAssertTrue(try reservations.list().isEmpty)
   }
   func testShortTaskSucceedsWithExitCodeAndFinalOutputAndSurvivesReload() async throws {
     try await load("[tasks.test]\ncmd = \"printf finished\"\n")

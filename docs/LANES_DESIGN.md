@@ -44,12 +44,12 @@ policy, and derive each lane from the current source definition instead of a fro
   - rewrites folders, `port`, and localhost readiness checks
   - writes a full `StackDefinition` snapshot to `lane.json`
 - `StackLaunchDefinition.environment` ([StackDefinition.swift:123](../Cinderdeck/Services/Stacks/Models/StackDefinition.swift:123)) adds `CINDERDECK_LANE`, `CINDERDECK_SOURCE_STACK`, `CINDERDECK_PORT_<SVC>` for every service, and `PORT`. These values override the shell, the TOML, and secrets. The base checkout gets none of them.
-- The lane then behaves like any other workspace: same supervisor, logs, claims, and runs, keyed by `<source>--lane-<uuid>` and addressable as `<source>/<branch>`.
+- The lane then behaves like any other workspace: same supervisor, logs, and runs, keyed by `<source>--lane-<uuid>` and addressable as `<source>/<branch>`.
 - Removal ([StackLaneStore.swift:226](../Cinderdeck/Services/Stacks/Lanes/StackLaneStore.swift:226)) requires `git status --porcelain --untracked-files=all --ignored` to be empty, then runs `git worktree remove`.
 
 What already works well and should stay: the journal is written before any Git change, rollback on
 failure never deletes user files, port reservations persist across restarts, a lane can be addressed
-as `<source>/<branch>`, claims and actor attribution apply, and the tests use throwaway repos.
+as `<source>/<branch>`, actor attribution applies, and the tests use throwaway repos.
 
 ## 3. Findings
 

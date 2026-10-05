@@ -7,10 +7,9 @@ nonisolated enum StackAgentGuide {
   Cinderdeck runs the user's local development environment. A workspace groups Services (long-running: APIs, frontends, \
   databases, emulators), Tasks (commands that finish with an exit status), and Workflows (ordered task, start, and stop steps). \
   What you start appears in the user's Cinderdeck window, attributed to you.
-  Services: list_workspaces → claim_workspace while you depend on one → start_services (waits until ready and returns crash \
-  output) → read_service_logs to debug → release_workspace when done. Prefer this over running dev servers in your own terminal, \
-  and call list_ports before starting one yourself. Never stop, restart, or switch branches in a workspace someone else claimed \
-  without asking the user. Claims expire; renew yours while you work.
+  Services: list_workspaces → start_services (waits until ready and returns crash output) → read_service_logs to debug. \
+  Prefer this over running dev servers in your own terminal, and call list_ports before starting one yourself. \
+  Workspaces and lanes are available to all agents. Agent identity attributes actions without reserving a checkout.
   Tasks and workflows: run_workspace_task and run_workspace_workflow return a run id immediately. wait_for_workspace_run \
   returns the result with the failing step's output; workspace_run_status and workspace_run_logs read progress. A wait that \
   ends first is not a failure: wait again, never start the run again. cancel_workspace_run stops a run.
@@ -18,11 +17,11 @@ nonisolated enum StackAgentGuide {
   edit a workspace's TOML file with validation; nothing starts on save. workspace_definition returns complete source and its \
   revision; save_workspace patches name/folder or replaces source with that revision to change any setting (repos, lane defaults, \
   shell, environment and components). Stop the workspace and its lanes first. delete_workspace removes only its definition, \
-  keeping project files and saved runs; remove/release lanes first. Claims, active work and dependent references are protected. \
+  keeping project files and saved runs; remove/release lanes first. Active work and dependent references are protected. \
   CLI agents: cinderdeck tools lists this same catalog; cinderdeck call <tool-name> --arguments '<json>' or --file <args.json> \
   invokes any operation with the same schema. cinderdeck workspace --help lists common shortcuts.
   Parallel branches: create_lane makes an isolated Git worktree copy of a workspace on a branch (tracking a remote-only branch), \
-  claims it before [lanes] setup and starts it on unique ports, leaving the original running. Already in \
+  runs [lanes] setup and starts it on unique ports, leaving the original running. Already in \
   your own worktree? adopt_lane runs it as a lane without moving it, with setup off by default. Pass name for a detached HEAD \
   and env for lane-only feature flags. Use its stable id or <workspace>/<name> with every tool. \
   update_lane changes a stopped lane's name or environment overrides ({} clears); ids, branches, folders, slug and ports stay. \
@@ -101,7 +100,6 @@ nonisolated enum StackAgentGuide {
       - `restart <workspace> [service]`, `stop <workspace> [service…]`
       - `logs <workspace> [service] -n 200 [--grep regex] [-f]`
       - `ports` — who owns each listening port (Cinderdeck service, or which app/terminal started it)
-      - `claim <workspace> --note "running e2e" --ttl 30` / `release <workspace>` while you depend on a workspace
       - `switch <workspace> <branch> [--repo id] [--stash|--carry]`, `git <workspace>`, `branches <workspace>`
     - Parallel work: `\(command) lane create <workspace> <branch> [--from origin/main]` creates, sets up and starts a worktree lane
       - `--repo-from <repo>=<ref>` pins a new branch in that repository; repeat for independent repositories. Other repos keep their defaults. Existing local branches or conflicting aliases are refused before creation
@@ -114,7 +112,7 @@ nonisolated enum StackAgentGuide {
     - Live state without any call: `\(StackControlPaths.state.path)`; log files: `~/Library/Logs/Cinderdeck/Stacks/<workspace>/<service>.log`
     - Definitions are TOML files in `~/.config/cinderdeck/stacks/`. Edit them with the MCP `save_workspace_*` tools, or by hand and \
       validate with `\(command) services validate <file>`.
-    - Respect claims held by other agents. Do not kill processes you did not start without asking the user.
+    - Do not kill processes you did not start without asking the user.
 
     ## Tasks and workflows
 

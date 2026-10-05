@@ -10,7 +10,7 @@ export class DeckhandStoreVersionError extends Schema.TaggedError<DeckhandStoreV
     return "This Cinderdeck store requires a newer application. Restore a compatible binary or store backup.";
   }
 }
-export const VERSION = 16;
+export const VERSION = 17;
 /** Separate migration ledger prevents a new upstream migration number from colliding with fork state. */
 export const migrate = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -237,6 +237,13 @@ export const migrate = Effect.gen(function* () {
           SELECT c.id AS origin_id,e.id,e.workspace_id,e.revision,e.record_json
           FROM deckhand_checkouts c LEFT JOIN deckhand_checkout_ownership a ON a.original_checkout_id=c.id
           JOIN deckhand_checkouts e ON e.id=COALESCE(a.target_checkout_id,c.id)`;
+      }
+      if (found < 17) {
+        yield* sql`UPDATE deckhand_reviewer_queue SET state='queued',
+          record_json=json_set(record_json,'$.state','queued','$.detail',NULL) WHERE state='waiting_writer'`;
+        yield* sql`DROP TABLE IF EXISTS deckhand_writer_scope`;
+        yield* sql`DROP TABLE IF EXISTS deckhand_writer_requests`;
+        yield* sql`DROP TABLE IF EXISTS deckhand_native_writer_intents`;
       }
       yield* sql`INSERT INTO deckhand_schema(version) VALUES (${VERSION})`;
     }),

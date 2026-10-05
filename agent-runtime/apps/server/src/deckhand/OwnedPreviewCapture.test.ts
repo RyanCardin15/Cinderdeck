@@ -115,7 +115,6 @@ const receipt = (): B.BuildReceipt => ({
     { operationKey: key("launch"), action: "launch", state: "accepted" },
     { operationKey: key("checks"), action: "checks", state: "accepted" },
   ],
-  reservationState: "held",
 });
 const observation = (phase: "start" | "end" | "check"): B.BuildObservation => ({
   receiptID: "receipt",

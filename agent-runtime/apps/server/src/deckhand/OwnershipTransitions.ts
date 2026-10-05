@@ -14,7 +14,6 @@ import * as CurrentCheckout from "./CurrentCheckout.ts";
 import * as Relationships from "./Relationships.ts";
 import * as CheckoutIdentity from "./CheckoutIdentity.ts";
 import * as IntegrationHub from "./IntegrationHub.ts";
-import * as WriterReservations from "./WriterReservations.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import { makeKeyedSerialExecutor } from "../orchestration-v2/KeyedSerialExecutor.ts";
 export class OwnershipTransitions extends Context.Service<
@@ -63,7 +62,6 @@ export const layer = Layer.effect(
     const identity = yield* CheckoutIdentity.CheckoutIdentity;
     const fs = yield* FileSystem.FileSystem;
     const hub = yield* IntegrationHub.IntegrationHub;
-    const writers = yield* WriterReservations.WriterReservations;
     const projections = yield* ProjectionStore.ProjectionStoreV2;
     const locks = yield* makeKeyedSerialExecutor<string>();
     const now = Effect.map(DateTime.now, DateTime.formatIso);
@@ -171,13 +169,6 @@ export const layer = Layer.effect(
         const found = affected.filter((item): item is OrchestrationV2ThreadShell => item !== null);
         if (!found.some((item) => item.id === input.threadId)) return yield* fail("stale_context");
         const blockers: string[] = [];
-        if (
-          input.direction === "adopt" &&
-          !selected.hello.capabilities.includes("operations.lane.adopt.managedWriter")
-        )
-          blockers.push(
-            "This Cinderdeck version cannot transfer an adopted lane to managed writer admission. Update Cinderdeck first.",
-          );
         for (const item of found) {
           if (!quiescent(item))
             blockers.push(`Stop work in ${item.title || item.id} before changing ownership.`);
@@ -187,15 +178,6 @@ export const layer = Layer.effect(
           )
             return yield* fail("stale_context");
         }
-        const held = yield* writers.inspect;
-        if (held.some((item) => item.physicalIds.includes(physical.physicalId)))
-          blockers.push(
-            "A provider or checkout mutation still holds this checkout. Stop it and wait for reservation release.",
-          );
-        const native =
-          yield* sql`SELECT id FROM deckhand_native_writer_intents WHERE state <> 'released' AND EXISTS(SELECT 1 FROM json_each(control_json,'$.repos') WHERE value=${workspace.repos[0]!.id}) AND installation_id=${input.installationID} AND json_extract(control_json,'$.workspaceID')=${input.workspaceID}`;
-        if (native.length)
-          blockers.push("Native writer ownership still requires release or recovery.");
         if (
           input.direction === "release" &&
           workspace.services.some(
@@ -562,9 +544,6 @@ export const layer = Layer.effect(
                 if ((yield* encodePreview(fresh)) !== (yield* encodePreview(input.preview)))
                   return yield* fail("stale_context");
                 if (fresh.blockers.length) return yield* fail("busy");
-                yield* writers
-                  .tryAcquire({ ownerId: id, physicalIds: [fresh.checkout.physicalId] })
-                  .pipe(Effect.mapError(() => fail("busy")));
                 const createdAt = yield* now;
                 const record: C.OwnershipRecord = {
                   id,
@@ -603,7 +582,6 @@ export const layer = Layer.effect(
                             ...(input.laneName ? { name: input.laneName } : {}),
                             start: false,
                             setup: false,
-                            managedWriter: true,
                           }
                         : { workspace: input.workspaceID, force: false, delete_logs: false },
                   })

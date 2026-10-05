@@ -95,7 +95,6 @@ export const CINDERDECK_CAPABILITIES = [
   { key: "operations.services", label: "Service controls" },
   { key: "runs.library", label: "Tasks and workflows" },
   { key: "recordings.library", label: "Recording library" },
-  { key: "checkout.reservations", label: "Writer coordination" },
 ] as const;
 
 export function connectedWorkspaceDestination(

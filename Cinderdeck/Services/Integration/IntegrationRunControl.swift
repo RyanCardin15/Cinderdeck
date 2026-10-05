@@ -172,7 +172,7 @@ extension StackControlService {
     try validateRunOperation(method, params)
     guard let operationID else { throw StackControlError(code: "durable_operation_required", message: "Submit this mutation through the integration operation journal") }
     let file = try workspaceFile(params)
-    try checkClaim(file.id, actor: actor, force: false)
+
     if method == "definition.apply" {
       guard file.lane == nil else { throw StackControlError(code: "generated_definition", message: "Edit the original workspace definition in Cinderdeck; lane definitions are generated") }
       guard workspaceRunner.activeRun(file.id) == nil, supervisor.states[file.id]?.operation == nil,
@@ -196,7 +196,7 @@ extension StackControlService {
     let projection = try await journal.snapshot(workspaceID: file.id, offset: 0, limit: 1)
     guard let resource = projection.resources.first, resource.available, intent.installationID == journal.installationID, intent.workspaceID == file.id, intent.generation == resource.generation, intent.revision == resource.revision else { throw StackControlError(code: "stale_binding", message: "The accepted workspace identity or revision changed") }
     let authority = WorkspaceRunAuthority(installationID: journal.installationID, workspaceID: file.id, generation: resource.generation)
-    try checkClaim(file.id, actor: actor, force: false)
+
     if method == "runs.start" {
       let run = try workspaceRunner.submit(workspace: file.id, kind: WorkspaceRunKind(rawValue: params["kind"]!.stringValue!)!, definitionID: params["definitionID"]!.stringValue!, actor: actor, integrationOperationID: operationID, integrationAuthority: authority)
       return .object(["run": runValue(run, actor: actor)])

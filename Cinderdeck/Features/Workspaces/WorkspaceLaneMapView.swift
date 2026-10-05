@@ -42,9 +42,6 @@ struct WorkspaceLaneMapView: View {
               }
             }.buttonStyle(.bordered).tint(selection == lane.id ? tint(lane.workspaceID, lanes: lanes) : .secondary)
               .contextMenu {
-                if model.claim(lane.workspaceID) != nil {
-                  Button("Cancel agent lease…") { model.releaseClaim(lane.workspaceID) }
-                }
                 if let file = model.files.first(where: { $0.id == lane.workspaceID }) { StackLaneDeletionMenu(file: file, model: model) }
               }
           }

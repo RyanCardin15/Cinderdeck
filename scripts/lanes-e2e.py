@@ -148,8 +148,9 @@ cmd = "pwd"
                     assert Path(payload["cwd"]).resolve() == Path(service["cwd"]).resolve()
                     assert payload["url"] == service["url"], payload
                     if stack.get("lane"): assert int(payload["api"]) == service["port"]
-                denied = cli("services", "stop", "shop/agent/codex-1", actor="Claude Code", expected=3)
-                assert denied["error"]["code"] == "claimed"
+                shared = cli("services", "start", "shop/agent/codex-1", actor="Claude Code")
+                assert shared["workspace"]["services"][0]["pid"] == first["services"][0]["pid"]
+                assert all("claim" not in stack for stack in lanes)
                 assert git("branch", "--show-current") == "main"
                 run = cli("workspace", "workflow", "shop/agent/codex-1", "verify")
                 for _ in range(100):
@@ -173,7 +174,7 @@ cmd = "pwd"
                 borrowed = cli("lane", "create", "review", "agent/own", "--no-start")["workspace"]
                 assert borrowed["laneStatus"]["adopted"], borrowed
                 assert all(not tree["managed"] for tree in borrowed["laneStatus"]["worktrees"]), borrowed
-                print("PASS: CLI and MCP created five running environments, including concurrent requests, with separate ports, worktrees and claims.", flush=True)
+                print("PASS: CLI and MCP created five running environments, including concurrent requests, with separate ports and worktrees, with shared agent access.", flush=True)
                 print("PASS: a workflow reached its own lane server; an occupied-branch switch preserved the source process.", flush=True)
                 if args.inspect:
                     print(f"Preview PID {app.pid}; fixture {root}", flush=True)

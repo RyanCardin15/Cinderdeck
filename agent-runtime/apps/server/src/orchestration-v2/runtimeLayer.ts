@@ -75,8 +75,6 @@ import * as ManagedSessionLaunch from "../deckhand/ManagedSessionLaunch.ts";
 import * as WorkspaceBackend from "../deckhand/WorkspaceBackend.ts";
 import * as ManagedProviderAdapters from "../deckhand/ManagedProviderAdapters.ts";
 import * as ManagedCheckoutGuard from "../deckhand/ManagedCheckoutGuard.ts";
-import * as NativeWriterReservations from "../deckhand/NativeWriterReservations.ts";
-import * as WriterReservations from "../deckhand/WriterReservations.ts";
 import * as CheckoutIdentity from "../deckhand/CheckoutIdentity.ts";
 import * as Relationships from "../deckhand/Relationships.ts";
 import * as IntegrationHub from "../deckhand/IntegrationHub.ts";
@@ -159,8 +157,6 @@ const managedCheckoutGuardProvided = ManagedCheckoutGuard.layer.pipe(
 const providerAdapterRegistryProvided = ManagedProviderAdapters.layer.pipe(
   Layer.provide(providerAdapterRegistryLayerFromProviderInstances),
   Layer.provide(managedCheckoutGuardProvided),
-  Layer.provide(WriterReservations.layer),
-  Layer.provide(NativeWriterReservations.layer.pipe(Layer.provide(IntegrationHub.layerLive))),
 );
 const providerSwitchServiceProvided = providerSwitchServiceLayer.pipe(
   Layer.provide(providerAdapterRegistryProvided),
@@ -424,7 +420,6 @@ const ownershipTransitionsProvided = OwnershipTransitions.layer.pipe(
       currentCheckoutProvided,
       Relationships.layer,
       IntegrationHub.layerLive,
-      WriterReservations.layer,
       CheckoutIdentity.layer.pipe(Layer.provide(ProcessRunner.layer)),
       projectionStoreLayer,
     ),

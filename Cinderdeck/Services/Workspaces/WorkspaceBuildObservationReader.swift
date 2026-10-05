@@ -7,10 +7,9 @@ enum WorkspaceBuildObservationReader {
     var observation = WorkspaceBuildObservation(receiptID: receipt.id, workspaceID: receipt.request.workspaceID, serviceID: receipt.request.serviceID, phase: phase)
     observation.artifactSHA256 = receipt.artifact?.sha256
     do {
-      try WorkspaceBuildScope.lease(receipt, supervisor: supervisor)
       guard definition.fingerprint == receipt.request.expectedDefinitionHash, let artifact = receipt.artifact, let launch = receipt.launch, let nonce = receipt.launchNonce,
         let service = definition.service(receipt.request.serviceID), service.buildAdapter == receipt.adapter, let port = service.port,
-        supervisor.runtime(definition.id, service.id).process == launch.process, launch.process.matchesLiveProcess else { throw StackControlError(code: "build_unknown", message: "Declared build, held lease, definition or original service birth is unavailable") }
+        supervisor.runtime(definition.id, service.id).process == launch.process, launch.process.matchesLiveProcess else { throw StackControlError(code: "build_unknown", message: "Declared build, definition or original service birth is unavailable") }
       let (_, selection) = try WorkspaceBuildScope.select(definition, serviceID: service.id)
       let before = await WorkspaceRunProvenance.capture(selection, environment: ProcessInfo.processInfo.environment)
       guard WorkspaceBuildScope.matches(receipt.request, before), WorkspaceRunProvenance.assess(start: receipt.repositoriesAtEnd, end: before, scopeComplete: selection.complete) == "complete" else { throw StackControlError(code: "source_changed", message: "Source no longer matches the newly produced artifact receipt") }
@@ -31,7 +30,6 @@ enum WorkspaceBuildObservationReader {
       guard WorkspaceBuildScope.matches(receipt.request, after), WorkspaceRunProvenance.assess(start: before, end: after, scopeComplete: selection.complete) == "complete" else { throw StackControlError(code: "source_changed", message: "Source changed while reading declared build evidence") }
       guard supervisor.runtime(definition.id, service.id).process == launch.process, launch.process.matchesLiveProcess,
         let finalOwners = try await PortInspector.conflict(on: port)?.owners, finalOwners == owners else { throw StackControlError(code: "stamp_changed", message: "Service birth or port owner changed during observation") }
-      try WorkspaceBuildScope.lease(receipt, supervisor: supervisor)
       observation.sourceUnchanged = true; observation.processMatched = true; observation.state = "matched"
       observation.detail = "Declared artifact bytes and build stamp matched this build and service launch; application behavior is not covered by this claim."
     } catch {

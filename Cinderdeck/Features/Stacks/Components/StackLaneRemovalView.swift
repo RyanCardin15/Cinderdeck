@@ -99,7 +99,7 @@ struct StackLaneRemovalView: View {
           return
         }
         let report = try await StackControlService.shared.lanes.remove(request.id, actor: .user, options: options)
-        StackControlService.shared.release(stack: request.id)
+
         removed = true
         warnings = report.unpushed.sorted { $0.key < $1.key }.map {
           "\($0.key) has \($0.value) commit\($0.value == 1 ? "" : "s") on no remote. The branch was kept."

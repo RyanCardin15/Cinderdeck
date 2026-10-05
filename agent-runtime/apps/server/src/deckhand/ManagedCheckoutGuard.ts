@@ -1,5 +1,4 @@
 import * as Contracts from "@cinderdeck/contracts/deckhand";
-import type { IntegrationWriterReservationInput } from "@cinderdeck/contracts/deckhand/integration";
 import type { ThreadId } from "@cinderdeck/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -34,9 +33,7 @@ export class ManagedCheckoutError extends Schema.TaggedError<ManagedCheckoutErro
 export interface ManagedContext {
   readonly cwd: string;
   readonly physicalId: string;
-  readonly writerScope: ReadonlyArray<string>;
   readonly access?: "read_only" | "write";
-  readonly native?: Omit<IntegrationWriterReservationInput, "id" | "token" | "ownerID">;
 }
 const decodeSession = Schema.decodeEffect(Schema.fromJsonString(Contracts.SessionBinding));
 const isCheckoutError = Schema.is(ManagedCheckoutError);
@@ -95,7 +92,7 @@ const make = Effect.gen(function* () {
         if (binding !== null) return yield* fail("missing");
         if (checkout.failure.operation !== "not_git") return yield* fail("unavailable");
         // Existing non-Git projects retain upstream behavior. They cannot acquire
-        // a Git checkout reservation or masquerade as a connected checkout.
+        // a connected checkout identity.
         return null;
       }
       yield* assertOwnership(checkout.success.physicalId);
@@ -106,7 +103,6 @@ const make = Effect.gen(function* () {
         return {
           cwd: checkout.success.root,
           physicalId: checkout.success.physicalId,
-          writerScope: [checkout.success.physicalId],
         };
       }
       const target = yield* currentCheckout(binding.checkoutId);
@@ -136,7 +132,6 @@ const make = Effect.gen(function* () {
       const physical = yield* Effect.forEach(wanted, (repo) => identity.resolve(repo.root));
       if (physical.some((repo, index) => repo.physicalId !== wanted[index]?.physicalId))
         return yield* fail("wrong_checkout");
-      let nativeScope: ManagedContext["native"];
       if (target.backend === "cinderdeck") {
         if (target.nativeGeneration === undefined) return yield* fail("stale_binding");
         const native = yield* hub
@@ -161,24 +156,11 @@ const make = Effect.gen(function* () {
         );
         if (physical.some((repo) => !actual.some((item) => item.physicalId === repo.physicalId)))
           return yield* fail("wrong_checkout");
-        nativeScope = {
-          installationID: native.hello.installationID,
-          workspaceID: native.resource.workspaceID,
-          generation: native.resource.generation,
-          revision: native.resource.revision,
-          repos: (native.resource.workspace?.repos ?? [])
-            .filter((_, index) =>
-              binding.repositoryScope?.includes(actual[index]?.physicalId ?? ""),
-            )
-            .map((repo) => repo.id),
-        };
       }
       return {
         cwd: checkout.success.root,
         physicalId: checkout.success.physicalId,
-        writerScope: binding.repositoryScope,
-        access: readOnly ? "read_only" as const : "write" as const,
-        ...(nativeScope ? { native: nativeScope } : {}),
+        access: readOnly ? ("read_only" as const) : ("write" as const),
       };
     }).pipe(Effect.mapError(storage(threadId)));
   return ManagedCheckoutGuard.of({ connected, resolve });

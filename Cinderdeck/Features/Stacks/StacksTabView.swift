@@ -169,9 +169,6 @@ struct StacksTabView: View {
           StackStatusDot(label: file.definition == nil ? "Degraded" : state.label)
           Text(file.name).font(.system(size: 12, weight: .semibold)).lineLimit(1)
           Spacer(minLength: 0)
-          if viewModel.claim(file.id) != nil {
-            Image(systemName: "lock.fill").font(.system(size: 9, weight: .bold)).foregroundColor(StackPalette.agent)
-          }
         }
         HStack(spacing: 3) {
           ForEach(services.prefix(8)) { service in
@@ -201,7 +198,7 @@ struct StacksTabView: View {
         Circle().fill(control.isServing ? StackPalette.color(phase: .ready) : StackPalette.color(phase: .crashed)).frame(width: 6, height: 6)
         VStack(alignment: .leading, spacing: 1) {
           Text("Agent access").font(.system(size: 11, weight: .semibold))
-          Text(control.isServing ? "\(control.claims.values.filter { !$0.isExpired }.count) active claims · MCP & CLI" : "Control socket unavailable")
+          Text(control.isServing ? "MCP & CLI connected" : "Control socket unavailable")
             .font(.system(size: 9.5)).foregroundColor(.secondary).lineLimit(1)
         }
         Spacer(minLength: 0)

@@ -14,7 +14,7 @@ type Props = {
   enabled: boolean;
 };
 
-/** The existing source-stop action confirms process death and reservation release. */
+/** The existing source-stop action confirms that the provider process stopped. */
 export function ManagedSessionControl(props: Props) {
   if (props.context.session.role !== "writer") return null;
   const { context, threadRef } = props;
@@ -77,7 +77,7 @@ function WriterSessionControl({ threadRef, context, enabled }: Props) {
   const label = busy
     ? "Stopping agent…"
     : currentOutcome === "released"
-      ? "Checkout released"
+      ? "Agent stopped"
       : "Stop agent";
   const stopAgent = async () => {
     if (disabled || !providerSessionId) return;
@@ -103,16 +103,16 @@ function WriterSessionControl({ threadRef, context, enabled }: Props) {
       if (result.value.state === "released") setReleaseSequence(context.session.lastSequence);
       setMessage(
         result.value.state === "released"
-          ? "Agent stopped and checkout released. Your conversation and lane files are kept. Your next message can start another agent session."
+          ? "Agent stopped. Your conversation and lane files are kept. Your next message can start another agent session."
           : result.value.state === "shared_session"
-            ? "This agent process is shared with other conversations and was not stopped. Its checkout is still reserved."
-            : "The agent’s stop or checkout release could not be confirmed. Its reservation may still be held.",
+            ? "This agent process is shared with other conversations and was not stopped."
+            : "The agent’s stop could not be confirmed.",
       );
     } catch {
       if (lifetime.current) {
         setOutcome("unknown_outcome");
         setMessage(
-          "The stop response was lost. Checkout release is unconfirmed; no second stop was sent.",
+          "The stop response was lost. The agent stop is unconfirmed; no second stop was sent.",
         );
       }
     } finally {
@@ -138,14 +138,12 @@ function WriterSessionControl({ threadRef, context, enabled }: Props) {
         <TooltipPopup>
           {!ownThread
             ? "Stop the agent from its parent conversation."
-            : "Stops this agent and releases its checkout. Conversation and files are kept."}
+            : "Stops this agent. Conversation and files are kept."}
         </TooltipPopup>
       </Tooltip>
       {message && !resumed ? (
         <details className={styles.result} open>
-          <summary>
-            {outcome === "released" ? "Agent stopped" : "Checkout release not confirmed"}
-          </summary>
+          <summary>{outcome === "released" ? "Agent stopped" : "Agent stop not confirmed"}</summary>
           <p id={`${id}-result`} role="status">
             {message}
           </p>

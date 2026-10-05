@@ -13,9 +13,6 @@ final class StackControlTests: XCTestCase {
     XCTAssertEqual(value["csv"]?.stringsValue, ["x", "y"])
     let encoded = String(decoding: try StackControlCoding.encoder().encode(value), as: UTF8.self)
     XCTAssertTrue(encoded.contains(#""n":3"#), encoded)
-    let claim = StackClaim(stackID: "demo", holder: StackActor(kind: .agent, name: "Codex", session: "e2e"), note: "tests",
-      since: Date(timeIntervalSince1970: 1_000), expiresAt: Date(timeIntervalSince1970: 2_000))
-    XCTAssertEqual(try JSONValue(encoding: claim).decode(StackClaim.self), claim)
   }
 
   func testActorKeysAndLabels() {
@@ -24,7 +21,6 @@ final class StackControlTests: XCTestCase {
     XCTAssertEqual(codex.key, StackActor(kind: .agent, name: "codex", session: "e2e").key)
     XCTAssertNotEqual(codex.key, StackActor(kind: .agent, name: "Codex").key)
     XCTAssertEqual(StackActor.user.label, "You")
-    XCTAssertTrue(StackClaim(stackID: "x", holder: codex, since: Date(), expiresAt: Date().addingTimeInterval(-1)).isExpired)
     for name in ["Deckhand", "T3", "T3 Code", "Cinderdeck"] {
       let actor = StackActor(kind: .agent, name: name, session: "saved", host: "Deckhand")
       XCTAssertEqual(actor.label, "Cinderdeck · saved")
@@ -86,7 +82,7 @@ final class StackControlTests: XCTestCase {
     let server = StackControlSocketServer(path: path) { data, peer in
       let request = try? StackControlCoding.decoder().decode(StackControlRequest.self, from: data)
       var response = StackControlResponse(id: request?.id ?? 0)
-      if request?.method == "fail" { response.error = StackControlError(code: "claimed", message: "nope") }
+      if request?.method == "fail" { response.error = StackControlError(code: "busy", message: "nope") }
       else { response.result = .object(["method": .string(request?.method ?? ""), "peer": .number(Double(peer)),
         "client": .string(request?.client?.name ?? "")]) }
       return (try? StackControlCoding.encoder().encode(response)) ?? Data()
@@ -105,7 +101,7 @@ final class StackControlTests: XCTestCase {
     let second = try connection.call("again", timeout: 5)
     XCTAssertEqual(second["method"]?.stringValue, "again")
     XCTAssertThrowsError(try connection.call("fail", timeout: 5)) { error in
-      XCTAssertEqual((error as? StackControlError)?.code, "claimed")
+      XCTAssertEqual((error as? StackControlError)?.code, "busy")
     }
     let other = StackControlSocketServer(path: path) { _, _ in Data() }
     XCTAssertThrowsError(try other.start(), "A second server must not steal a live socket")

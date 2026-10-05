@@ -14,7 +14,7 @@ Open **Settings → Source Control → GitHub account** to configure GitHub on t
 
 Use **Check connection** to refresh native discovery, installation identity, protocol and capabilities. A changed installation, missing workspace or stale generation requires a deliberate current-workspace selection. Inspect the saved operation using **Check status** after a lost reply; reuse its original operation key. Restarting or creating replacement work is not evidence that the earlier operation failed.
 
-A provider can retain checkout ownership between turns. Use **Stop writer and release** for that specific conversation before running a conflicting native build or review. The transcript and lane remain available. Shared or uncertain ownership is refused until it can be reconciled safely.
+Agents can share a checkout without claims or writer reservations. Stop an agent when you want to end its provider process; its transcript and lane remain available.
 
 ## Prepare a local support report
 

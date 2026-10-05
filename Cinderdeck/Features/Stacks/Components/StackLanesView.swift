@@ -210,12 +210,6 @@ struct StackLanesView: View {
           }
         }.font(.caption).opacity(0.7).help("Runs in the original checkout; every lane uses the same instance.")
       }
-      if let claim = viewModel.claim(file.id) {
-        StackClaimChip(claim: claim)
-        Button("Cancel agent lease…") { viewModel.releaseClaim(file.id) }
-          .buttonStyle(.link).font(.caption)
-          .accessibilityIdentifier("workspace.cancelLease.\(file.id)")
-      }
       HStack {
         if hasServices {
           Button(state.isActive ? "Stop" : "Start") { viewModel.toggle(file.id) }
@@ -253,9 +247,6 @@ struct StackLanesView: View {
     }
     .padding(14).frame(width: 260, alignment: .topLeading).stackSurface(cornerRadius: 12)
     .contextMenu {
-      if viewModel.claim(file.id) != nil {
-        Button("Cancel agent lease…") { viewModel.releaseClaim(file.id) }
-      }
       if file.lane != nil {
         Button("Delete lane…", role: .destructive) { removal = .init(file: file) }
           .disabled(working || viewModel.isBusy(file.id))

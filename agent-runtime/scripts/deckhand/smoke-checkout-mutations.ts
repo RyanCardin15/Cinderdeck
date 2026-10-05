@@ -11,7 +11,6 @@ import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as CinderdeckClient from "../../apps/server/src/deckhand/CinderdeckClient.ts";
 import * as CheckoutIdentity from "../../apps/server/src/deckhand/CheckoutIdentity.ts";
 import * as GitMutationPolicy from "../../apps/server/src/deckhand/GitMutationPolicy.ts";
@@ -105,7 +104,6 @@ const result = await Effect.runPromise(
     const identities = yield* CheckoutIdentity.CheckoutIdentity;
     const runner = yield* ProcessRunner.ProcessRunner;
     const fs = yield* FileSystem.FileSystem;
-    const sql = yield* SqlClient.SqlClient;
     const policy = yield* GitMutationPolicy.GitMutationPolicy;
     NodeAssert.equal(policy.managed, true);
     const driver = yield* GitVcsDriver.makeVcsDriverShape();
@@ -188,19 +186,6 @@ const result = await Effect.runPromise(
       shared.contexts.length > exact.contexts.length,
       "Linked native lanes must be included in shared-ref ownership",
     );
-    const control = {
-      id: NodeCrypto.randomUUID(),
-      token: NodeCrypto.randomBytes(32).toString("hex"),
-      installationID: peer.hello.installationID,
-    };
-    const writer = {
-      ...control,
-      ownerID: "resident-smoke",
-      workspaceID: resource.workspaceID,
-      generation: resource.generation,
-      revision: resource.revision,
-      repos: [repo.id],
-    };
     const branch = `deckhand-mutation-probe/${NodeCrypto.randomUUID()}`;
     const command = {
       operation: "deckhand.ownership.smoke",
@@ -209,28 +194,6 @@ const result = await Effect.runPromise(
     };
     const rpcBranch = branch + "-rpc";
     let rpcCreated = false;
-    yield* client.reserveWriter(peer, writer);
-    try {
-      const blocked = yield* driver.execute(command).pipe(Effect.flip);
-      NodeAssert.match(blocked.message, /active or uncertain writer/);
-      NodeAssert.equal(
-        (yield* driver.execute({ ...command, args: ["branch", "--list", branch] })).stdout,
-        "",
-      );
-      const blockedRpc = yield* Effect.promise(() =>
-        rpc("vcs.createRef", { cwd: checkout.root, refName: rpcBranch, switchRef: false }),
-      );
-      rpcCreated = blockedRpc._tag === "Success";
-      NodeAssert.equal(
-        blockedRpc._tag,
-        "Failure",
-        "The per-connection production Git driver must retain the ownership policy",
-      );
-      NodeAssert.match(JSON.stringify(blockedRpc), /active or uncertain writer/);
-    } finally {
-      NodeAssert.equal((yield* client.releaseWriter(peer, control)).state, "released");
-      if (rpcCreated) yield* driver.execute({ ...command, args: ["branch", "-D", rpcBranch] });
-    }
     try {
       const allowedRpc = yield* Effect.promise(() =>
         rpc("vcs.createRef", { cwd: checkout.root, refName: rpcBranch, switchRef: false }),
@@ -239,7 +202,7 @@ const result = await Effect.runPromise(
       NodeAssert.equal(
         allowedRpc._tag,
         "Success",
-        "An authenticated production Git request must work after release",
+        "An authenticated production Git request must work without a claim",
       );
     } finally {
       if (rpcCreated) yield* driver.execute({ ...command, args: ["branch", "-D", rpcBranch] });
@@ -255,34 +218,17 @@ const result = await Effect.runPromise(
     } finally {
       if (created) yield* driver.execute({ ...command, args: ["branch", "-D", branch] });
     }
-    let refusedNative = false;
     yield* policy.restore(
       checkout.root,
       Effect.gen(function* () {
-        const blocked = yield* runner.run({
+        const task = yield* runner.run({
           command: nativeBinary,
           args: ["workspace", "task", "payment", "ownership_probe", "--wait", "--json"],
           env: { CINDERDECK_STACKS_SOCKET: socketPath },
           timeout: 15000,
         });
-        NodeAssert.notEqual(blocked.code, 0);
-        NodeAssert.match(blocked.stdout + blocked.stderr, /checkout_reserved/);
-        refusedNative = true;
+        NodeAssert.equal(task.code, 0, task.stderr);
       }),
-    );
-    const allowed = yield* runner.run({
-      command: nativeBinary,
-      args: ["workspace", "task", "payment", "ownership_probe", "--wait", "--json"],
-      env: { CINDERDECK_STACKS_SOCKET: socketPath },
-      timeout: 15000,
-    });
-    NodeAssert.equal(allowed.code, 0, allowed.stderr);
-    const remaining =
-      yield* sql`SELECT id FROM deckhand_native_writer_intents WHERE state <> 'released'`;
-    NodeAssert.equal(remaining.length, 0);
-    NodeAssert.equal(
-      (yield* sql`SELECT id FROM deckhand_writer_requests WHERE state <> 'released'`).length,
-      0,
     );
     NodeAssert.equal(
       (yield* driver.execute({ ...command, args: ["branch", "--list", branch] })).stdout,
@@ -298,13 +244,10 @@ const result = await Effect.runPromise(
       nativeResidentRefusedGit: true,
       authenticatedBackendInventory: true,
       authenticatedBackendRefusedStaleCreate: true,
-      authenticatedProductionRpcRefusedGit: true,
-      authenticatedProductionRpcAllowedAfterRelease: true,
-      branchAllowedAfterRelease: true,
+      authenticatedProductionRpcAllowedWithoutClaim: true,
+      branchAllowedWithoutClaim: true,
       probeBranchRemoved: true,
-      nativeTaskRefusedDuringFileReservation: refusedNative,
-      nativeTaskAllowedAfterRelease: true,
-      unreleasedDeckhandClaims: remaining.length,
+      nativeTaskAllowedDuringFileMutation: true,
     };
   }).pipe(Effect.scoped, Effect.provide(layer)),
 );

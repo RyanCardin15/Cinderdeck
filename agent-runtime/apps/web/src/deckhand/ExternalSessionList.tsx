@@ -124,7 +124,7 @@ function ScopedExternalSessionList({
               . These do not grant Cinderdeck controls or enforce read-only execution.
             </p>
           </details>
-          <span>No transcript, stop/resume, approvals or writer reservation.</span>
+          <span>No transcript, stop/resume or approvals.</span>
         </article>
       ))}
       {sessions?.length === 20 ? <p>Showing the 20 newest registrations in this context.</p> : null}

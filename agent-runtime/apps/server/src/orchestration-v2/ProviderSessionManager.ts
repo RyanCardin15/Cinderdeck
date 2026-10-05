@@ -1886,7 +1886,7 @@ export const layerWithOptions = (
               scopeDecision: (value) => {
                 decision = value;
               },
-              detail: "The sole writer session was stopped to release its repository reservation.",
+              detail: "The provider session stopped; its conversations remain saved.",
             }).pipe(
               Effect.map(() => decision),
               Effect.mapError(

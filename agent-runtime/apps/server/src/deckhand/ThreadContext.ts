@@ -66,7 +66,7 @@ const make = Effect.gen(function* () {
       return { session, checkout, workspace, feature };
     });
   // Provider-owned helpers have no independent managed binding. Follow only their
-  // saved display lineage; launch, MCP and writer admission retain exact lookups.
+  // saved display lineage; launch and MCP retain exact lookups.
   const loadDisplayContext = (requestedThreadId: ThreadId) =>
     Effect.gen(function* () {
       const direct = yield* load(requestedThreadId);

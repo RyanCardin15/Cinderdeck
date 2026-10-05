@@ -119,24 +119,6 @@ struct StackAgentsSheet: View {
         }
       }
 
-      if control.claims.values.contains(where: { !$0.isExpired }) {
-        section("Active agent leases") {
-          ForEach(control.claims.values.filter { !$0.isExpired }.sorted { $0.stackID < $1.stackID }, id: \.stackID) { claim in
-            HStack(spacing: 8) {
-              StackClaimChip(claim: claim)
-              Text(claim.stackID).font(.system(size: 11, weight: .medium))
-              Spacer()
-              Text("until " + DateFormatter.localizedString(from: claim.expiresAt, dateStyle: .none, timeStyle: .short))
-                .font(.system(size: 11)).foregroundColor(.secondary)
-              Button("Cancel lease") {
-                do { try control.cancelAgentLease(claim) }
-                catch { self.error = error.localizedDescription }
-              }.buttonStyle(StackPillButtonStyle(compact: true))
-            }
-          }
-        }
-      }
-
     }
   }
 

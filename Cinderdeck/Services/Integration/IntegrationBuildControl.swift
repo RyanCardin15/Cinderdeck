@@ -5,7 +5,6 @@ import Foundation
 extension StackControlService {
   private func buildSelection(_ definition: StackDefinition, serviceID: String) throws -> (WorkspaceBuildAdapterDefinition, WorkspaceRunProvenance.Selection) { try WorkspaceBuildScope.select(definition, serviceID: serviceID) }
   private func buildSourcesMatch(_ input: WorkspaceBuildPrepareInput, _ sources: [WorkspaceRunRepositorySnapshot]) -> Bool { WorkspaceBuildScope.matches(input, sources) }
-  private func buildLease(_ receipt: WorkspaceBuildReceipt) throws { try WorkspaceBuildScope.lease(receipt, supervisor: supervisor) }
   func handleIntegrationBuild(_ method: String, params: JSONValue, actor: StackActor) async throws -> JSONValue {
     let common: Set<String> = ["installationID", "workspaceID", "generation"]
     let allowed: Set<String>
@@ -44,7 +43,7 @@ extension StackControlService {
       let (adapter, _) = try buildSelection(definition, serviceID: input.serviceID)
       guard definition.fingerprint == input.expectedDefinitionHash, WorkspaceRunProvenance.digest(definition.task(adapter.buildTaskID)!) == input.expectedWorkflowHash,
         input.requiredTaskIDs == adapter.requiredTaskIDs else { throw StackControlError(code: "stale_revision", message: "The reviewed build or check definition changed") }
-      try checkClaim(file.id, actor: actor, force: false)
+
       let (receipt, created) = try store.begin(input, adapter: adapter, actor: actor)
       if created { Task { [weak self] in await self?.executeDeclaredBuild(receipt.id, definition: definition) } }
       return receipt.value
@@ -57,7 +56,7 @@ extension StackControlService {
       guard let id = params["receiptID"]?.stringValue, UUID(uuidString: id) != nil, method != "integration.build.get" || params["operationKey"] == nil else { throw StackControlError.invalid("Inspect exactly one saved build identity") }
       receipt = try store.get(id, actor: actor, authority: authority)
     }
-    if method == "integration.build.get" { return try store.reconcileReservation(receipt.id, reservations: supervisor.checkoutReservations()).value }
+    if method == "integration.build.get" { return receipt.value }
     if method == "integration.build.observe" {
       guard let phase = params["phase"]?.stringValue, ["start", "end", "check"].contains(phase) else { throw StackControlError.invalid("Choose an observation endpoint") }
       let observation = await declaredBuildObservation(receipt, definition: definition, phase: phase)
@@ -65,7 +64,7 @@ extension StackControlService {
       return observation.value
     }
     guard let key = params["operationKey"]?.stringValue else { throw StackControlError.invalid("Save a durable build action key before effects") }
-    try checkClaim(file.id, actor: actor, force: false)
+
     let actionKind: String
     if method == "integration.build.finish" {
       guard let cancel = params["cancel"]?.boolValue else { throw StackControlError.invalid("Choose finish or cancel explicitly") }
@@ -82,16 +81,14 @@ extension StackControlService {
       }
       return (store.current(receipt.id) ?? receipt).value
     }
-    try buildLease(receipt)
-    guard definition.fingerprint == receipt.request.expectedDefinitionHash else { throw StackControlError(code: "stale_revision", message: "Build definition changed while its lease was held") }
+    guard definition.fingerprint == receipt.request.expectedDefinitionHash else { throw StackControlError(code: "stale_revision", message: "Build definition changed after preparation") }
     if method == "integration.build.launch" {
       guard receipt.state == "ready", receipt.artifact != nil, supervisor.runtime(workspaceID, receipt.request.serviceID).process == nil,
         !supervisor.runtime(workspaceID, receipt.request.serviceID).phase.isActive else { throw StackControlError(code: "busy", message: "Launch requires a prepared artifact and stopped declared service") }
       let (_, launchSelection) = try buildSelection(definition, serviceID: receipt.request.serviceID)
       let launchSources = await WorkspaceRunProvenance.capture(launchSelection, environment: ProcessInfo.processInfo.environment)
       guard !store.isFinishing(receipt.id), store.current(receipt.id)?.state == "ready", buildSourcesMatch(receipt.request, launchSources), supervisor.definition(workspaceID)?.fingerprint == definition.fingerprint else { throw StackControlError(code: "source_changed", message: "Pinned source changed before declared launch") }
-      try buildLease(receipt)
-      let launchServices = definition.serviceDependencies([receipt.request.serviceID])
+        let launchServices = definition.serviceDependencies([receipt.request.serviceID])
       guard launchServices.allSatisfy({ definition.service($0) != nil && supervisor.runtime(workspaceID, $0).process == nil && !supervisor.runtime(workspaceID, $0).phase.isActive }) else { throw StackControlError(code: "busy", message: "Declared launch requires its exact local dependencies stopped; existing services remain owned by their original caller") }
       if try store.action(receipt.id, key: key, kind: "launch") {
         try store.update(receipt.id) { $0.state = "launching"; $0.launchServices = launchServices.sorted(); $0.launchNonce = UUID().uuidString + UUID().uuidString }
@@ -117,22 +114,16 @@ extension StackControlService {
   private func executeDeclaredBuild(_ id: String, definition: StackDefinition) async {
     let store = supervisor.buildArtifacts
     guard let receipt = store.current(id), receipt.state == "preparing", !store.isFinishing(id) else { return }
-    var admitted = false
     do {
       let (_, selection) = try buildSelection(definition, serviceID: receipt.request.serviceID)
-      let scope = try selection.repositories.compactMap { try PhysicalCheckoutIdentity.resolve($0.path)?.physicalID }
-      _ = try supervisor.checkoutReservations().begin(id: receipt.lease.id, ownerID: "Declared verification " + id, workspaceID: definition.id,
-        generation: receipt.request.generation, kind: "writer", physicalIDs: scope, actorKey: receipt.actorKey, token: receipt.lease.token)
-      admitted = true
-      try store.update(id) { $0.reservationState = "held" }
       let start = await WorkspaceRunProvenance.capture(selection, environment: ProcessInfo.processInfo.environment)
       guard buildSourcesMatch(receipt.request, start), supervisor.definition(definition.id)?.fingerprint == definition.fingerprint else { throw StackControlError(code: "stale_revision", message: "The clean pinned physical repository tuple changed before build admission") }
       try Task.checkCancellation()
       guard !store.isFinishing(id), store.current(id)?.state == "preparing" else { throw CancellationError() }
-      try buildLease(receipt); try store.prepareOutput(id)
+      try store.prepareOutput(id)
       let run = try workspaceRunner.submit(workspace: definition.id, kind: .task, definitionID: receipt.adapter.buildTaskID, actor: receipt.actor,
         environment: ["CINDERDECK_BUILD_OUTPUT_DIR": store.output(id).path, "CINDERDECK_BUILD_ID": id],
-        integrationOperationID: "build:" + id, integrationAuthority: receipt.request.authority, verificationLease: receipt.lease)
+        integrationOperationID: "build:" + id, integrationAuthority: receipt.request.authority, buildReceiptID: receipt.id)
       try store.update(id) { $0.repositoriesAtStart = start; $0.buildRunID = run.id; $0.actionStates[receipt.request.operationKey] = "accepted" }
       while workspaceRunner.run(run.id)?.status.isActive == true { try await Task.sleep(nanoseconds: 100_000_000) }
       try Task.checkCancellation()
@@ -149,7 +140,6 @@ extension StackControlService {
       guard !store.isFinishing(id) else { return }
       try? store.update(id) {
         $0.state = "failed"; $0.detail = error.localizedDescription; $0.actionStates[receipt.request.operationKey] = $0.buildRunID == nil ? "failed" : "accepted"
-        if !admitted { $0.reservationState = "released" }
       }
     }
   }
@@ -160,9 +150,8 @@ extension StackControlService {
       for taskID in receipt.adapter.requiredTaskIDs {
         try Task.checkCancellation()
         guard !store.isFinishing(id), store.current(id)?.state == "checking" else { throw CancellationError() }
-        try buildLease(receipt)
-        let run = try workspaceRunner.submit(workspace: definition.id, kind: .task, definitionID: taskID, actor: receipt.actor,
-          integrationOperationID: "build-check:" + id + ":" + taskID, integrationAuthority: receipt.request.authority, verificationLease: receipt.lease)
+            let run = try workspaceRunner.submit(workspace: definition.id, kind: .task, definitionID: taskID, actor: receipt.actor,
+          integrationOperationID: "build-check:" + id + ":" + taskID, integrationAuthority: receipt.request.authority, buildReceiptID: receipt.id)
         try store.update(id) { $0.checks.append(.init(taskID: taskID, runID: run.id, status: run.status)); $0.actionStates[key] = "accepted" }
         while workspaceRunner.run(run.id)?.status.isActive == true { try await Task.sleep(nanoseconds: 100_000_000) }
         guard let result = workspaceRunner.run(run.id) else { throw StackControlError.notFound("Saved check run is unavailable") }
@@ -220,16 +209,8 @@ extension StackControlService {
           guard groupStopped(process) else { throw StackControlError(code: "unknown_outcome", message: "An owned command process group is not proven stopped") }
         }
       }
-      let reservations = try supervisor.checkoutReservations()
-      if try reservations.existingWriter(receipt.lease.id, actorKey: receipt.actorKey, token: receipt.lease.token) != nil {
-        _ = try reservations.releaseWriter(receipt.lease.id, actorKey: receipt.actorKey, token: receipt.lease.token)
-      } else {
-        guard ["pending", "released"].contains(latest.reservationState), latest.buildRunID == nil, latest.launch == nil, ownedServices.isEmpty else {
-          throw StackControlError(code: "unknown_outcome", message: "The original build lease is missing; its effects cannot be proven released")
-        }
-      }
       try store.update(id) {
-        $0.reservationState = "released"; $0.state = cancel ? "cancelled" : "finalized"
+        $0.state = cancel ? "cancelled" : "finalized"
         for pending in $0.actionStates.keys where $0.actionStates[pending] == "pending" { $0.actionStates[pending] = "failed" }
         $0.actionStates[key] = "accepted"
       }

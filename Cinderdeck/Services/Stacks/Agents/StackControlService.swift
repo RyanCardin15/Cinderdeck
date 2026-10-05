@@ -3,19 +3,17 @@ import Darwin
 import Foundation
 
 /// Serves the workspace control API to agents and the `cinderdeck` CLI, keeps
-/// `state.json` current, and tracks advisory claims.
+/// `state.json` current.
 @MainActor
 final class StackControlService: ObservableObject {
   static let shared = StackControlService(supervisor: .shared, runner: .shared)
 
-  @Published private(set) var claims: [String: StackClaim] = [:]
   @Published private(set) var serverError: String?
   @Published private(set) var isServing = false
   let supervisor: StackSupervisor
   private var server: StackControlSocketServer?
   private var subscriptions = Set<AnyCancellable>()
   private var started = false
-  private let claimsFile: URL
   private let prViews: PRViewControlService
   private lazy var prBrowser = PRBrowserControlService(views: prViews)
   let workspaceRunner: WorkspaceRunner
@@ -26,9 +24,8 @@ final class StackControlService: ObservableObject {
   var integrationProjectionRevision: UInt64 = 0
   let integrationDirectory: URL
 
-  init(supervisor: StackSupervisor, prViews: PRViewControlService? = nil, runner: WorkspaceRunner? = nil, claimsFile: URL = StackControlPaths.claims, integrationDirectory: URL? = nil) {
+  init(supervisor: StackSupervisor, prViews: PRViewControlService? = nil, runner: WorkspaceRunner? = nil, integrationDirectory: URL? = nil) {
     self.supervisor = supervisor
-    self.claimsFile = claimsFile
     self.integrationDirectory = integrationDirectory ?? supervisor.logDirectory.appendingPathComponent("Integration", isDirectory: true)
     self.workspaceRunner = runner ?? WorkspaceRunner(supervisor: supervisor, store: .init(directory: supervisor.logDirectory.appendingPathComponent("Runs")))
     self.lanes = StackLaneCoordinator(supervisor: supervisor, runner: self.workspaceRunner)
@@ -40,7 +37,6 @@ final class StackControlService: ObservableObject {
   func start() {
     guard !started else { return }
     started = true
-    loadClaims()
     let server = StackControlSocketServer(path: StackControlPaths.socket.path) { [weak self] data, peer in
       guard let self else { return Data() }
       return await self.respond(to: data, peer: peer)
@@ -54,18 +50,14 @@ final class StackControlService: ObservableObject {
       serverError = error.localizedDescription
       DiagnosticLogger.shared.log(.warning, .system, "Control socket unavailable: \(error.localizedDescription)")
     }
-    Publishers.Merge4(
+    Publishers.Merge3(
       supervisor.$states.map { _ in () },
       supervisor.$files.map { _ in () },
-      supervisor.gitMonitor.$statuses.map { _ in () },
-      $claims.map { _ in () }
+      supervisor.gitMonitor.$statuses.map { _ in () }
     )
     .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
     .sink { [weak self] _ in self?.writeState() }
     .store(in: &subscriptions)
-    Timer.publish(every: 30, on: .main, in: .common).autoconnect()
-      .sink { [weak self] _ in self?.pruneClaims() }
-      .store(in: &subscriptions)
     writeState()
   }
 
@@ -75,56 +67,6 @@ final class StackControlService: ObservableObject {
     isServing = false
     subscriptions.removeAll()
     writeState(appRunning: false)
-  }
-
-  // MARK: Claims
-
-  func release(stack id: String) {
-    claims[id] = nil
-    saveClaims()
-  }
-
-  /// Cancel the lease the user saw, without canceling a replacement acquired
-  /// while the confirmation was open. Renewals of that same lease are allowed.
-  func cancelAgentLease(_ expected: StackClaim) throws {
-    guard let current = claims[expected.stackID], !current.isExpired else { return }
-    guard current.holder.key == expected.holder.key, current.since == expected.since else {
-      throw StackControlError(code: "claim_changed", message: "The agent lease changed. Review the current holder and cancel again.")
-    }
-    release(stack: expected.stackID)
-  }
-
-  private func pruneClaims() {
-    let expired = claims.filter { $0.value.isExpired }.map(\.key)
-    guard !expired.isEmpty else { return }
-    expired.forEach { claims[$0] = nil }
-    saveClaims()
-  }
-
-  private func loadClaims() {
-    guard let data = try? Data(contentsOf: claimsFile),
-      let values = try? StackControlCoding.decoder().decode([StackClaim].self, from: data) else { return }
-    claims = Dictionary(values.filter { !$0.isExpired }.map { ($0.stackID, $0) }, uniquingKeysWith: { $1 })
-  }
-
-  private func saveClaims() {
-    do {
-      try FileManager.default.createDirectory(at: claimsFile.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-      let data = try StackControlCoding.encoder(pretty: true).encode(Array(claims.values).sorted { $0.stackID < $1.stackID })
-      try data.write(to: claimsFile, options: .atomic)
-    } catch {
-      DiagnosticLogger.shared.log(.warning, .system, "Could not save stack claims: \(error.localizedDescription)")
-    }
-  }
-
-  /// Throws when another agent holds an unexpired claim and `force` is false.
-  func checkClaim(_ id: String, actor: StackActor, force: Bool) throws {
-    guard let claim = claims[id], !claim.isExpired, claim.holder.key != actor.key, !force else { return }
-    let name = supervisor.definition(id)?.name ?? id
-    let until = DateFormatter.localizedString(from: claim.expiresAt, dateStyle: .none, timeStyle: .short)
-    let note: String = claim.note.map { " (\"" + $0 + "\")" } ?? ""
-    throw StackControlError(code: "claimed",
-      message: "\(name) is claimed by \(claim.holder.label)\(note) until \(until). Coordinate with that agent or the user, or pass force=true to override.")
   }
 
   // MARK: Snapshots
@@ -149,7 +91,6 @@ final class StackControlService: ObservableObject {
       id: file.id, name: file.name, file: file.file.path, state: state.label, operation: state.operation,
       definitionChanged: supervisor.definitionChanged(file.id),
       issues: file.issues.map { "\($0.severity.rawValue): \($0.message)" },
-      claim: claims[file.id].flatMap { $0.isExpired ? nil : $0 },
       services: services.map { service in
         let runtime = state.services[service.id] ?? .init()
         let port = service.port ?? { if case .port(let port) = service.readiness { return port }; return nil }()
@@ -266,18 +207,18 @@ final class StackControlService: ObservableObject {
     case "lane.update": return try await updateLane(params, actor: actor)
     case "lane.remove", "lane.release":
       let file = try laneFile(params)
-      try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
+
       let options = StackLaneRemovalOptions(discardIgnored: params["discard_ignored"]?.boolValue == true,
         keepWorktrees: method == "lane.release", deleteLogs: params["delete_logs"]?.boolValue == true,
         forceTeardown: params["force_teardown"]?.boolValue == true)
       let report = try await lanes.remove(file.id, actor: actor, options: options)
-      release(stack: file.id)
+
       var result: [String: JSONValue] = [method == "lane.release" ? "released" : "removed": .string(file.id)]
       if let encoded = try? JSONValue(encoding: report) { result["report"] = encoded }
       return .object(result)
     case "lane.setup":
       let file = try laneFile(params)
-      try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
+
       try requireIdle(file)
       guard file.definition?.laneSettings?.setup != nil else {
         throw StackControlError.invalid("\(file.lane?.sourceStackID ?? file.id) has no [lanes] setup. Add setup = \"task:<id>\" or \"workflow:<id>\".")
@@ -287,7 +228,7 @@ final class StackControlService: ObservableObject {
       return .object(["setup": (try? JSONValue(encoding: state)) ?? .null, "workspace": (try? JSONValue(encoding: stackSnapshot(refreshed))) ?? .null])
     case "lane.unpin":
       let file = try laneFile(params)
-      try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
+
       try await supervisor.unpinLane(file.id, actor: actor)
       let refreshed = supervisor.files.first { $0.id == file.id } ?? file
       return .object(["workspace": (try? JSONValue(encoding: stackSnapshot(refreshed))) ?? .null])
@@ -298,11 +239,7 @@ final class StackControlService: ObservableObject {
     case "lane.prune":
       let source = try params["workspace"].map { _ in try workspaceFile(params) }
       let entries = await lanes.prune(source: source.map { $0.lane?.sourceStackID ?? $0.id }, missing: params["missing"]?.boolValue == true,
-        dryRun: params["dry_run"]?.boolValue == true, discardIgnored: params["discard_ignored"]?.boolValue == true, actor: actor) { [weak self] id in
-        guard let self, params["force"]?.boolValue != true else { return nil }
-        do { try self.checkClaim(id, actor: actor, force: false); return nil } catch { return error.localizedDescription }
-      }
-      for entry in entries where entry.action == "removed" { release(stack: entry.lane) }
+        dryRun: params["dry_run"]?.boolValue == true, discardIgnored: params["discard_ignored"]?.boolValue == true, actor: actor)
       return try JSONValue(encoding: entries)
     case "logs": return try await logs(params)
     case "events":
@@ -324,14 +261,6 @@ final class StackControlService: ObservableObject {
     case "git.branches": return try await branches(params)
     case "git.switch": return try await switchBranch(params, actor: actor)
     case "git.fetch", "git.pull": return try await fetchOrPull(params, pull: method == "git.pull", actor: actor)
-    case "claim": return try claim(params, actor: actor)
-    case "release":
-      let file = try workspaceFile(params)
-      if let claim = claims[file.id], !claim.isExpired, claim.holder.key != actor.key, params["force"]?.boolValue != true {
-        throw StackControlError(code: "claimed", message: "\(file.name) is claimed by \(claim.holder.label). Pass force=true to release someone else's claim.")
-      }
-      release(stack: file.id)
-      return .object(["released": .string(file.id)])
     case "validate": return try validate(params)
     case "reload":
       await supervisor.reloadDefinitions()
@@ -374,13 +303,6 @@ final class StackControlService: ObservableObject {
   }
 
   private func createLane(_ params: JSONValue, adopt: Bool, actor: StackActor, operationID: String? = nil) async throws -> JSONValue {
-    let managedWriter: Bool
-    if let value = params["managedWriter"] {
-      guard case .bool(let selected) = value, !selected || operationID != nil else {
-        throw StackControlError.invalid("Managed writer handoff requires durable lane creation or adoption")
-      }
-      managedWriter = selected
-    } else { managedWriter = false }
     let source = try workspaceFile(params)
     guard source.lane == nil else { throw StackControlError.invalid("Create lanes from the original workspace, not from lane \(source.name).") }
     var request = StackLaneRequest(branch: params["branch"]?.stringValue ?? params["name"]?.stringValue ?? "")
@@ -410,17 +332,10 @@ final class StackControlService: ObservableObject {
     }
     request.copy = params["copy"]?.stringsValue ?? []
     try requireIdle(source)
-    // Cloning a claimed source does not change it or use its service ports.
     let created: StackLaneCoordinator.Creation
     do {
       created = try await lanes.create(stack: source.id, request: request, actor: actor,
-        setup: params["setup"]?.boolValue ?? !adopt) { file in
-        // Durable session creation uses physical writer admission next. An advisory
-        // claim held by the request actor would block the distinct provider thread actor.
-        if !managedWriter {
-          _ = try self.claim(.object(["workspace": .string(file.id), "note": .string("Worktree lane " + (file.lane?.name ?? ""))]), actor: actor)
-        }
-      }
+        setup: params["setup"]?.boolValue ?? !adopt)
     } catch let refusal as StackLaneStore.StartRevisionRefusal {
       throw StackControlError.invalid(refusal.message)
     }
@@ -495,7 +410,7 @@ final class StackControlService: ObservableObject {
     guard file.definition != nil else {
       throw StackControlError(code: "invalid_definition", message: "\(file.name) has errors: " + file.issues.map(\.message).joined(separator: "; "))
     }
-    try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
+
     try requireIdle(file)
     let selected = try services(params, in: file)
     let supervisor = supervisor
@@ -505,7 +420,7 @@ final class StackControlService: ObservableObject {
 
   private func stop(_ params: JSONValue, actor: StackActor) async throws -> JSONValue {
     let file = try workspaceFile(params)
-    try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
+
     let selected = try services(params, in: file)
     let dependents = self.supervisor.dependents(of: file.id, services: selected)
     if !dependents.isEmpty, params["force"]?.boolValue != true {
@@ -523,7 +438,7 @@ final class StackControlService: ObservableObject {
     guard file.definition != nil else {
       throw StackControlError(code: "invalid_definition", message: "\(file.name) has errors: " + file.issues.map(\.message).joined(separator: "; "))
     }
-    try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
+
     try requireIdle(file)
     let selected = try services(params, in: file)
     guard selected == nil || selected!.count == 1 else { throw StackControlError.invalid("Restart one service at a time, or omit service to restart the workspace") }
@@ -675,7 +590,7 @@ final class StackControlService: ObservableObject {
     guard let target = params["branch"]?.stringValue?.trimmingCharacters(in: .whitespaces), !target.isEmpty else {
       throw StackControlError.invalid("Pass branch")
     }
-    try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
+
     try requireIdle(file)
     let strategy: GitDirtyStrategy
     switch params["dirty"]?.stringValue ?? "fail" {
@@ -739,7 +654,7 @@ final class StackControlService: ObservableObject {
     guard let stack = file.definition else { throw StackControlError(code: "invalid_definition", message: "\(file.name) has errors") }
     let git = supervisor.gitMonitor.git
     var done: [String] = []
-    if pull { try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true); try requireIdle(file) }
+    if pull { try requireIdle(file) }
     for repo in try repos(params, in: stack) {
       if pull {
         try await supervisor.performGitChange(stack: file.id, repos: [repo.id], eventKind: "pulled", eventDetail: repo.id, actor: actor) {
@@ -756,19 +671,7 @@ final class StackControlService: ObservableObject {
       "repos": (try? JSONValue(encoding: stackSnapshot(refreshed).repos)) ?? .null])
   }
 
-  // MARK: Claims and definitions
-
-  private func claim(_ params: JSONValue, actor: StackActor) throws -> JSONValue {
-    let file = try workspaceFile(params)
-    try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
-    let minutes = min(max(params["ttlMinutes"]?.doubleValue ?? params["ttl"]?.doubleValue ?? 30, 1), 480)
-    let existing = claims[file.id].flatMap { $0.holder.key == actor.key && !$0.isExpired ? $0 : nil }
-    let claim = StackClaim(stackID: file.id, holder: actor, note: params["note"]?.stringValue.map { String($0.prefix(140)) } ?? existing?.note,
-      since: existing?.since ?? Date(), expiresAt: Date().addingTimeInterval(minutes * 60))
-    claims[file.id] = claim
-    saveClaims()
-    return try JSONValue(encoding: claim)
-  }
+  // MARK: Definitions
 
   private func validate(_ params: JSONValue) throws -> JSONValue {
     let source: String

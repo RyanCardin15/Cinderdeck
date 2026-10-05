@@ -412,9 +412,9 @@ describe("Cinderdeck schema migration", () => {
         // A v1 store has the same relationship tables but no feature paging index.
         yield* sql`DROP INDEX deckhand_sessions_feature_page`;
         yield* sql`DROP TABLE deckhand_integrations`;
-        yield* sql`DROP TABLE deckhand_writer_scope`;
-        yield* sql`DROP TABLE deckhand_writer_requests`;
-        yield* sql`DROP TABLE deckhand_native_writer_intents`;
+        yield* sql`DROP TABLE IF EXISTS deckhand_writer_scope`;
+        yield* sql`DROP TABLE IF EXISTS deckhand_writer_requests`;
+        yield* sql`DROP TABLE IF EXISTS deckhand_native_writer_intents`;
         yield* sql`DROP TABLE deckhand_managed_launches`;
         yield* sql`DROP TABLE deckhand_managed_creations`;
         yield* sql`DROP TABLE deckhand_launch_reviews`;
@@ -454,6 +454,52 @@ describe("Cinderdeck schema migration", () => {
         assert.equal(provenance[0]?.record_json, '{"commit":"a"}');
       }).pipe(Effect.provide(SqlLayer)),
   );
+  it.effect(
+    "retires legacy checkout claims and resumes reviews without changing their saved intent",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* Migrations.migrate;
+        yield* sql`DELETE FROM deckhand_schema WHERE version=17`;
+        yield* sql`INSERT OR IGNORE INTO deckhand_schema VALUES (16)`;
+        // Old held and uncertain ownership must both disappear on upgrade.
+        yield* sql`CREATE TABLE deckhand_writer_scope (state TEXT)`;
+        yield* sql`INSERT INTO deckhand_writer_scope VALUES ('held'),('uncertain')`;
+        yield* sql`CREATE TABLE deckhand_writer_requests (state TEXT)`;
+        yield* sql`INSERT INTO deckhand_writer_requests VALUES ('held')`;
+        yield* sql`CREATE TABLE deckhand_native_writer_intents (state TEXT)`;
+        yield* sql`INSERT INTO deckhand_native_writer_intents VALUES ('uncertain')`;
+        yield* sql`CREATE TABLE upstream_history (id TEXT, transcript TEXT)`;
+        yield* sql`INSERT INTO upstream_history VALUES ('thread','preserved')`;
+        yield* sql`INSERT INTO deckhand_reviewer_queue VALUES ('review','actor','{"revision":"saved"}',
+        'waiting_writer','now','{"state":"waiting_writer","detail":"Checkout reserved","operationKey":"review"}')`;
+        yield* Migrations.migrate;
+        const retired = yield* sql`SELECT name FROM sqlite_master WHERE name IN
+        ('deckhand_writer_scope','deckhand_writer_requests','deckhand_native_writer_intents')`;
+        assert.equal(retired.length, 0);
+        const review = (yield* sql<{
+          state: string;
+          original_input_json: string;
+          record_json: string;
+        }>`SELECT state,original_input_json,record_json FROM deckhand_reviewer_queue`)[0]!;
+        assert.equal(review.state, "queued");
+        assert.deepEqual(
+          yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))(review.record_json),
+          {
+            state: "queued",
+            detail: null,
+            operationKey: "review",
+          },
+        );
+        assert.equal(review.original_input_json, '{"revision":"saved"}');
+        assert.equal(
+          (yield* sql<{ transcript: string }>`SELECT transcript FROM upstream_history`)[0]!
+            .transcript,
+          "preserved",
+        );
+        yield* Migrations.migrate;
+      }).pipe(Effect.provide(SqlLayer)),
+  );
   it.effect("rolls back an interrupted migration and can retry without losing upstream data", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
@@ -471,7 +517,7 @@ describe("Cinderdeck schema migration", () => {
           .transcript,
         "preserved",
       );
-      yield* sql`DROP TABLE deckhand_writer_requests`;
+      yield* sql`DROP TABLE IF EXISTS deckhand_writer_requests`;
       yield* Migrations.migrate;
       assert.equal(
         (yield* sql<{ version: number }>`SELECT MAX(version) AS version FROM deckhand_schema`)[0]!

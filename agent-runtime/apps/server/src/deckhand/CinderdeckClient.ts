@@ -43,7 +43,10 @@ interface ExpectedIdentity {
 export class CinderdeckClient extends Context.Service<
   CinderdeckClient,
   {
-    readonly github: (connection: Connection, input: GitHubWorkspace.GitHubWorkspaceInput) => Effect.Effect<GitHubWorkspace.GitHubWorkspaceResult, BridgeError>;
+    readonly github: (
+      connection: Connection,
+      input: GitHubWorkspace.GitHubWorkspaceInput,
+    ) => Effect.Effect<GitHubWorkspace.GitHubWorkspaceResult, BridgeError>;
     readonly connect: (
       socketPath: string,
       expected: ExpectedIdentity,
@@ -52,18 +55,6 @@ export class CinderdeckClient extends Context.Service<
       connection: Connection,
       input: Contracts.IntegrationCheckoutLookupInput,
     ) => Effect.Effect<Contracts.IntegrationCheckoutLookup, BridgeError>;
-    readonly reserveWriter: (
-      connection: Connection,
-      input: Contracts.IntegrationWriterReservationInput,
-    ) => Effect.Effect<Contracts.IntegrationCheckoutReservation, BridgeError>;
-    readonly reservation: (
-      connection: Connection,
-      input: Contracts.IntegrationReservationControl,
-    ) => Effect.Effect<Contracts.IntegrationCheckoutReservation, BridgeError>;
-    readonly releaseWriter: (
-      connection: Connection,
-      input: Contracts.IntegrationReservationControl,
-    ) => Effect.Effect<Contracts.IntegrationCheckoutReservation, BridgeError>;
     readonly submit: (
       connection: Connection,
       input: Contracts.IntegrationOperationInput,
@@ -100,8 +91,6 @@ const decodeCheckoutLookupInput = Schema.decodeUnknownEffect(
   Contracts.IntegrationCheckoutLookupInput,
 );
 const decodeCheckoutLookup = Schema.decodeUnknownEffect(Contracts.IntegrationCheckoutLookup);
-const decodeWriterInput = Schema.decodeUnknownEffect(Contracts.IntegrationWriterReservationInput);
-const decodeWriterControl = Schema.decodeUnknownEffect(Contracts.IntegrationReservationControl);
 const isBridgeError = Schema.is(BridgeError);
 const MAX_FRAME = 4 * 1024 * 1024;
 const make = Effect.gen(function* () {
@@ -205,7 +194,8 @@ const make = Effect.gen(function* () {
                         reason: "peer_rejected",
                         code: typeof reply.error.code === "string" ? reply.error.code : "unknown",
                         ...(method === "prs.browser" && typeof reply.error.message === "string"
-                          ? { detail: reply.error.message.slice(0, 1600) } : {}),
+                          ? { detail: reply.error.message.slice(0, 1600) }
+                          : {}),
                       }),
                     );
                   }
@@ -391,18 +381,6 @@ const make = Effect.gen(function* () {
                 )
               : Effect.void,
           ),
-          Effect.andThen(() =>
-            validated.method === "lane.create" &&
-            Object.hasOwn(validated.arguments, "managedWriter")
-              ? requiredCapability(connection, "operations.lane.create.managedWriter").pipe(
-                  Effect.andThen(() =>
-                    typeof validated.arguments.managedWriter === "boolean"
-                      ? Effect.void
-                      : Effect.fail(new BridgeError({ reason: "invalid_request" })),
-                  ),
-                )
-              : Effect.void,
-          ),
           Effect.andThen(
             encodeJson(validated.arguments).pipe(
               Effect.mapError((cause) => new BridgeError({ reason: "invalid_request", cause })),
@@ -476,79 +454,41 @@ const make = Effect.gen(function* () {
         isBridgeError(cause) ? cause : new BridgeError({ reason: "invalid_response", cause }),
       ),
     );
-  const writerRequest = (
-    connection: Connection,
-    method: "acquire" | "get" | "release",
-    input: Contracts.IntegrationReservationControl | Contracts.IntegrationWriterReservationInput,
-  ) =>
-    requiredCapability(connection, "checkout.reservations").pipe(
-      Effect.andThen(() =>
-        (method === "acquire" ? decodeWriterInput(input) : decodeWriterControl(input)).pipe(
-          Effect.mapError(() => new BridgeError({ reason: "invalid_request" })),
+  return CinderdeckClient.of({
+    github: (connection, input) =>
+      requiredCapability(connection, "github.workspace").pipe(
+        Effect.andThen(decodeGitHubInput(input)),
+        Effect.flatMap((validated) =>
+          request(connection.socketPath, "prs.browser", validated, 150000, connection.clientID),
+        ),
+        Effect.flatMap(decodeGitHubResult),
+        Effect.flatMap((result) => {
+          const viewAction = [
+            "preferences",
+            "select",
+            "delete",
+            "upsert",
+            "workspace",
+            "reorder",
+          ].includes(input.action);
+          const resultIdentity = result.kind === "preferences" ? result.preferences : result;
+          return (viewAction ? result.kind === "preferences" : result.kind === input.action) &&
+            (!("account" in input) ||
+              (input.account.toLowerCase() === resultIdentity.account.toLowerCase() &&
+                input.hostname === resultIdentity.hostname))
+            ? Effect.succeed(result)
+            : Effect.fail(new BridgeError({ reason: "invalid_response" }));
+        }),
+        Effect.mapError((cause) =>
+          isBridgeError(cause) ? cause : new BridgeError({ reason: "invalid_response", cause }),
         ),
       ),
-      Effect.flatMap((validated) =>
-        connection.clientID !== undefined &&
-        boundedString(connection.clientID, 60) &&
-        validated.installationID === connection.hello.installationID &&
-        (!("repos" in input) || new Set(input.repos).size === input.repos.length)
-          ? request(
-              connection.socketPath,
-              `integration.reservation.${method}`,
-              validated,
-              5000,
-              connection.clientID,
-            )
-          : Effect.fail(new BridgeError({ reason: "invalid_request" })),
-      ),
-      Effect.flatMap(Schema.decodeUnknownEffect(Contracts.IntegrationCheckoutReservation)),
-      Effect.flatMap((record) =>
-        record.id === input.id &&
-        record.kind === "writer" &&
-        (!("ownerID" in input) ||
-          (record.ownerID === input.ownerID &&
-            record.workspaceID === input.workspaceID &&
-            record.generation === input.generation)) &&
-        (method !== "release" || record.state === "released")
-          ? Effect.succeed(record)
-          : Effect.fail(new BridgeError({ reason: "invalid_response" })),
-      ),
-      // Validation causes may contain a scoped secret: expose only the bounded error.
-      Effect.mapError((cause) =>
-        isBridgeError(cause)
-          ? new BridgeError({ reason: cause.reason, ...(cause.code ? { code: cause.code } : {}) })
-          : new BridgeError({ reason: "invalid_response" }),
-      ),
-    );
-  const reserveWriter: CinderdeckClient["Service"]["reserveWriter"] = (connection, input) =>
-    writerRequest(connection, "acquire", input);
-  const reservation: CinderdeckClient["Service"]["reservation"] = (connection, input) =>
-    writerRequest(connection, "get", input);
-  const releaseWriter: CinderdeckClient["Service"]["releaseWriter"] = (connection, input) =>
-    writerRequest(connection, "release", input);
-  return CinderdeckClient.of({
-    github: (connection, input) => requiredCapability(connection, "github.workspace").pipe(
-      Effect.andThen(decodeGitHubInput(input)),
-      Effect.flatMap((validated) => request(connection.socketPath, "prs.browser", validated, 150000, connection.clientID)),
-      Effect.flatMap(decodeGitHubResult),
-      Effect.flatMap((result) => {
-        const viewAction = ["preferences", "select", "delete", "upsert", "workspace", "reorder"].includes(input.action);
-        const resultIdentity = result.kind === "preferences" ? result.preferences : result;
-        return (viewAction ? result.kind === "preferences" : result.kind === input.action) &&
-          (!("account" in input) || (input.account.toLowerCase() === resultIdentity.account.toLowerCase() && input.hostname === resultIdentity.hostname))
-          ? Effect.succeed(result) : Effect.fail(new BridgeError({ reason: "invalid_response" }));
-      }),
-      Effect.mapError((cause) => isBridgeError(cause) ? cause : new BridgeError({ reason: "invalid_response", cause })),
-    ),
     connect,
     checkoutContexts,
     snapshot,
     events,
     submit,
     operation,
-    reserveWriter,
-    reservation,
-    releaseWriter,
   });
 });
 export const layer = Layer.effect(CinderdeckClient, make);

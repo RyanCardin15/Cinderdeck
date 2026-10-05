@@ -11,7 +11,7 @@ extension StackControlService {
     if Self.workspaceDefinitionMethods.contains(method) { return try await handleWorkspaceDefinition(method, params: params, actor: actor) }
     let runner = workspaceRunner
     if method == "workspace.list" {
-      // detail: true adds each workspace's service, repo, claim and lane status.
+      // detail: true adds each workspace's service, repo and lane status.
       let detail = params["detail"]?.boolValue == true
       return .array(try supervisor.files.map { file in
         var object: [String: JSONValue] = ["id": .string(file.id), "name": .string(file.name),
@@ -49,7 +49,7 @@ extension StackControlService {
       }
       switch method {
       case "workspace.run.cancel":
-        try checkClaim(run.workspaceID, actor: actor, force: params["force"]?.boolValue == true)
+
         try await runner.cancel(id)
       case "workspace.run.logs":
         var step: UUID?
@@ -85,7 +85,7 @@ extension StackControlService {
     case "workspace.get":
       return try workspaceDetails(file)
     case "workspace.task.run", "workspace.workflow.run":
-      try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
+
       let kind: WorkspaceRunKind = method == "workspace.task.run" ? .task : .workflow
       guard let name = params[kind.rawValue]?.stringValue else { throw StackControlError.invalid("Pass the configured \(kind.rawValue) id") }
       await runner.recover()

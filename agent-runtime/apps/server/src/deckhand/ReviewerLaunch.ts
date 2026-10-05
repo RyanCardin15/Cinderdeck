@@ -56,9 +56,6 @@ const decodeQueueInput = Schema.decodeEffect(Schema.fromJsonString(Queue.Reviewe
 const encodeQueueRecord = Schema.encodeEffect(Schema.fromJsonString(Queue.ReviewerQueueRecord));
 const decodeQueueRecord = Schema.decodeEffect(Schema.fromJsonString(Queue.ReviewerQueueRecord));
 const encodePreview = Schema.encodeEffect(Schema.fromJsonString(Queue.ReviewerLaunchPreview));
-const encodeRepositoryKeys = Schema.encodeEffect(
-  Schema.fromJsonString(Schema.Array(Schema.String)),
-);
 const isManagedError = Schema.is(ManagedSessionLaunch.ManagedLaunchError);
 const make = Effect.gen(function* () {
   yield* Migrations.migrate;
@@ -138,20 +135,6 @@ const make = Effect.gen(function* () {
       yield* sql`UPDATE deckhand_reviewer_queue SET state=${next.state},updated_at=${updatedAt},record_json=${encoded} WHERE operation_key=${record.operationKey}`;
       return next;
     });
-  const waitingForWriter = (input: Queue.ReviewerLaunchInput) =>
-    Effect.gen(function* () {
-      const keys = yield* encodeRepositoryKeys(
-        input.preview.reviewerContext.repositories.map((repo) => repo.repositoryPhysicalId),
-      );
-      // Shared Git refs follow canonical repository identity across workspace aliases.
-      const held = yield* sql`SELECT n.id FROM deckhand_native_writer_intents n
-      JOIN deckhand_sessions s ON s.thread_id=n.owner_id
-      JOIN deckhand_checkouts c ON c.id=s.checkout_id
-      JOIN json_each(c.record_json,'$.repositories') repo
-      JOIN json_each(${keys}) pin ON pin.value=json_extract(repo.value,'$.repositoryPhysicalId')
-      WHERE n.installation_id=${input.preview.installationID} AND n.state IN ('pending','held','uncertain') LIMIT 1`;
-      return held.length > 0;
-    });
   const validateQueuedSource = (input: Queue.ReviewerLaunchInput) =>
     Effect.gen(function* () {
       const selected = input.preview.reviewerContext.repositories.find(
@@ -192,19 +175,7 @@ const make = Effect.gen(function* () {
           if (["accepted", "needs_refresh", "failed", "cancelled"].includes(record.state))
             return record;
           const wasUncertain = record.state === "unknown_outcome";
-          if (
-            !wasUncertain &&
-            record.state !== "starting" &&
-            (yield* waitingForWriter(saved.input))
-          ) {
-            return yield* saveQueue({
-              ...record,
-              state: "waiting_writer",
-              detail:
-                "Waiting for an agent process to release shared repository metadata. No reviewer lane has been created.",
-            });
-          }
-          if (!record.attemptKey || record.state === "waiting_writer") {
+          if (!record.attemptKey) {
             const validation = yield* validateQueuedSource(saved.input).pipe(Effect.result);
             if (validation._tag === "Failure")
               return yield* saveQueue({
@@ -255,21 +226,6 @@ const make = Effect.gen(function* () {
             });
           }
           const creation = result.success;
-          const refused =
-            creation.state === "failed" &&
-            creation.laneID === null &&
-            creation.launch === null &&
-            creation.receipt?.state === "failed" &&
-            creation.receipt.result == null &&
-            creation.receipt.error?.code === "checkout_reserved";
-          if (refused)
-            return yield* saveQueue({
-              ...record,
-              state: "waiting_writer",
-              creation: briefCreation(creation),
-              detail:
-                "Repository admission is still held by an agent process. This attempt was definitively refused before creation; scheduling will retry after release.",
-            });
           const state: Queue.ReviewerQueueRecord["state"] =
             creation.state === "accepted"
               ? "accepted"
@@ -349,7 +305,7 @@ const make = Effect.gen(function* () {
         Effect.gen(function* () {
           const saved = yield* readQueue(actorID, input.operationKey);
           if (saved.record.state === "cancelled") return saved.record;
-          if (!["queued", "waiting_writer", "needs_refresh"].includes(saved.record.state))
+          if (!["queued", "needs_refresh"].includes(saved.record.state))
             return yield* queueError(input.operationKey, "not_retryable");
           return yield* saveQueue({
             ...saved.record,
@@ -392,20 +348,16 @@ const make = Effect.gen(function* () {
           detail:
             "This provider process is shared with other conversations. It was not stopped; release the shared process from its owning conversations first.",
         };
-      const held =
-        yield* sql`SELECT id FROM deckhand_native_writer_intents WHERE owner_id=${input.threadId} AND state IN ('pending','held','uncertain') LIMIT 1`;
-      if (closed?._tag === "Failure" || !closed || held.length)
+      if (closed?._tag === "Failure" || !closed)
         return {
           threadId: input.threadId,
           state: "unknown_outcome" as const,
-          detail:
-            "The process or reservation release could not be confirmed. The queue remains blocked; no reviewer checkout was admitted.",
+          detail: "The provider process could not be confirmed stopped.",
         };
       return {
         threadId: input.threadId,
         state: "released" as const,
-        detail:
-          "The writer process stopped and its repository reservation was released. The lane and transcript are preserved; queued review will continue automatically once all repository reservations are clear.",
+        detail: "The provider process stopped. The lane and transcript are preserved.",
       };
     }).pipe(Effect.mapError(normalize(input.threadId)));
   const worker = Effect.gen(function* () {
@@ -414,7 +366,7 @@ const make = Effect.gen(function* () {
         const rows = yield* sql<{
           operation_key: string;
           actor_id: string;
-        }>`SELECT operation_key,actor_id FROM deckhand_reviewer_queue WHERE state IN ('queued','waiting_writer','starting') ORDER BY updated_at LIMIT 8`;
+        }>`SELECT operation_key,actor_id FROM deckhand_reviewer_queue WHERE state IN ('queued','starting') ORDER BY updated_at LIMIT 8`;
         yield* Effect.forEach(
           rows,
           (row) =>

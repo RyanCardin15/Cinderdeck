@@ -249,7 +249,7 @@ final class AgentShellController: ObservableObject {
       if !child.isRunning { break }
       let alert = NSAlert()
       alert.messageText = "Agent sessions are still closing"
-      alert.informativeText = "Wait for the agent runtime to finish shutting down, or keep Cinderdeck open to inspect it. Writer ownership is not released by force."
+      alert.informativeText = "Wait for the agent runtime to finish shutting down, or keep Cinderdeck open to inspect it."
       alert.addButton(withTitle: "Keep waiting"); alert.addButton(withTitle: "Keep Cinderdeck open")
       if alert.runModal() != .alertFirstButtonReturn { return false }
     }

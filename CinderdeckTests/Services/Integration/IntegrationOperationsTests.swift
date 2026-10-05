@@ -124,7 +124,7 @@ final class IntegrationOperationsTests: XCTestCase {
     let defaults = UserDefaults(suiteName: "deckhand-op-control-\(UUID())")!
     defaults.set(root.path, forKey: PreferencesKeys.stacksDirectory)
     let supervisor = StackSupervisor(store: nil, defaults: defaults, logRoot: root.appendingPathComponent("logs"))
-    let control = StackControlService(supervisor: supervisor, claimsFile: root.appendingPathComponent("claims.json"), integrationDirectory: root.appendingPathComponent("integration"))
+    let control = StackControlService(supervisor: supervisor, integrationDirectory: root.appendingPathComponent("integration"))
     let actor = StackActor(kind: .agent, name: "Deckhand", session: "server")
     var object = try JSONValue(encoding: input()).objectValue!
     object["installationID"] = .string(try control.integrationStore().installationID)
@@ -158,13 +158,13 @@ final class IntegrationOperationsTests: XCTestCase {
     let defaults = UserDefaults(suiteName: "deckhand-lifecycle-types-\(UUID())")!
     defaults.set(root.path, forKey: PreferencesKeys.stacksDirectory)
     let supervisor = StackSupervisor(store: nil, defaults: defaults, logRoot: root.appendingPathComponent("logs"))
-    let control = StackControlService(supervisor: supervisor, claimsFile: root.appendingPathComponent("claims.json"), integrationDirectory: root.appendingPathComponent("integration"))
+    let control = StackControlService(supervisor: supervisor, integrationDirectory: root.appendingPathComponent("integration"))
     let installation = try control.integrationStore().installationID
     let cases: [(String, [String: JSONValue], String)] = [
       ("lane.create", ["branch": .string("branch"), "managedWriter": .string("true")], "invalid_params"),
-      ("lane.create", ["branch": .string("branch"), "managedWriter": .bool(true)], "resource_missing"),
+      ("lane.create", ["branch": .string("branch"), "managedWriter": .bool(true)], "invalid_params"),
       ("lane.adopt", ["path": .string("/fixture"), "managedWriter": .string("true")], "invalid_params"),
-      ("lane.adopt", ["path": .string("/fixture"), "managedWriter": .bool(true), "setup": .bool(false), "start": .bool(false)], "resource_missing"),
+      ("lane.adopt", ["path": .string("/fixture"), "managedWriter": .bool(true), "setup": .bool(false), "start": .bool(false)], "invalid_params"),
       ("lane.adopt", ["path": .string("relative")], "invalid_params"),
       ("lane.adopt", ["path": .string("/fixture\nother")], "invalid_params"),
       ("lane.adopt", ["path": .string("/fixture"), "setup": .string("false")], "invalid_params"),
@@ -176,7 +176,7 @@ final class IntegrationOperationsTests: XCTestCase {
       ("lane.release", ["discard_ignored": .bool(true)], "invalid_params"),
       ("lane.release", ["force_teardown": .bool(true)], "invalid_params"),
       ("lane.adopt", ["path": .string("/fixture"), "setup": .bool(false)], "resource_missing"),
-      ("lane.setup", ["force": .bool(false)], "resource_missing"),
+      ("lane.setup", ["force": .bool(false)], "invalid_params"),
       ("lane.remove", ["force_teardown": .bool(false)], "resource_missing"),
       ("lane.release", ["delete_logs": .bool(false)], "resource_missing"),
     ]

@@ -131,7 +131,6 @@ const attempt = (
     checks: [],
     observations: [],
     operations: [],
-    reservationState: phase === "completed" ? "released" : "held",
   },
   recordingID: null,
   recordingProof: null,

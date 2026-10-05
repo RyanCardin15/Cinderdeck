@@ -34,7 +34,6 @@ nonisolated enum CinderdeckMCPServer {
   // MARK: Shared arguments
 
   private static let workspace = property("string", "Workspace id or name, or a lane id or <workspace>/<name> (see list_workspaces)")
-  private static let force = property("boolean", "Override another agent's claim. Only with the user's approval.")
   private static let wait = property("boolean", "Wait until services are ready (default true)")
   private static let waitTimeout = property("number", "Seconds to wait (default 180, max 900)")
   private static let runID = property("string", "Run UUID returned when the task or workflow started")
@@ -71,9 +70,9 @@ nonisolated enum CinderdeckMCPServer {
   private static let workspaceTools: [Tool] = [
     tool("list_workspaces", "List workspaces", .read,
       "Every workspace with its services, tasks, workflows and active run. Start here. Use detail=false for a compact inventory, then workspace_details for the workspace you need.",
-      ["detail": property("boolean", "Include service status, URLs, PIDs, claims, lanes and Git state (default true; false returns a compact inventory)")]),
+      ["detail": property("boolean", "Include service status, URLs, PIDs, lanes and Git state (default true; false returns a compact inventory)")]),
     tool("workspace_details", "Workspace details", .read,
-      "One workspace in full: services (phase, pid, port, url, owner, log file, command, cwd), repos, claim, task and workflow definitions, and its 20 most recent runs.",
+      "One workspace in full: services (phase, pid, port, url, owner, log file, command, cwd), repos, task and workflow definitions, and its 20 most recent runs.",
       ["workspace": workspace], required: ["workspace"]),
     tool("open_workspace", "Show a workspace to the user", .additive,
       "Open Cinderdeck's Workspaces window on a workspace and section so the user can look. Brings Cinderdeck to the front: use it only when the user wants to see something.",
@@ -85,16 +84,17 @@ nonisolated enum CinderdeckMCPServer {
     tool("start_services", "Start services", .additive,
       "Start a workspace's services, or only some, in dependency order. Waits until they are ready and returns the last output of any that crashed.",
       ["workspace": workspace, "services": property("array", "Only these services (and nothing else)", items: "string"),
-        "wait": wait, "timeout": waitTimeout, "force": force], required: ["workspace"], idempotent: true),
+        "wait": wait, "timeout": waitTimeout], required: ["workspace"], idempotent: true),
     tool("stop_services", "Stop services", .destructive,
       "Stop a workspace's services, or only some, in reverse dependency order. Stops whole process groups. Refuses (in_use) when running lanes or other workspaces use them, unless force=true.",
       ["workspace": workspace, "services": property("array", "Only these services", items: "string"),
-        "wait": property("boolean", "Wait until they have stopped (default true)"), "timeout": waitTimeout, "force": force],
+        "force": property("boolean", "Stop even when running workspaces depend on these services"),
+        "wait": property("boolean", "Wait until they have stopped (default true)"), "timeout": waitTimeout],
       required: ["workspace"], idempotent: true),
     tool("restart_services", "Restart services", .destructive,
       "Restart every service in a workspace, or one service. Waits for readiness and returns the last output of any that crashed.",
       ["workspace": workspace, "service": property("string", "Restart just this service"),
-        "dependents": property("boolean", "Also restart services that depend on it"), "wait": wait, "timeout": waitTimeout, "force": force],
+        "dependents": property("boolean", "Also restart services that depend on it"), "wait": wait, "timeout": waitTimeout],
       required: ["workspace"]),
     tool("read_service_logs", "Read service logs", .read,
       "Recent service output with ANSI codes removed. Pass the returned cursor as after to read only new lines.",
@@ -111,22 +111,15 @@ nonisolated enum CinderdeckMCPServer {
     tool("stop_port_process", "Stop a stray port process", .destructive,
       "Stop a non-Cinderdeck process listening on a port, such as a dev server left in another terminal. Requires the pid from list_ports. Ask the user first if you did not start it.",
       ["port": property("number", "Port"), "pid": property("number", "Process ID from list_ports")], required: ["port", "pid"]),
-    tool("claim_workspace", "Claim a workspace", .additive,
-      "Take an advisory claim on a workspace while you depend on it (tests, debugging, a lane you work in). Other agents must ask before changing it. Call again to renew.",
-      ["workspace": workspace, "note": property("string", "What you are doing, shown to the user"),
-        "ttl_minutes": property("number", "Default 30, max 480"), "force": force], required: ["workspace"], idempotent: true),
-    tool("release_workspace", "Release an agent lease", .additive,
-      "Cancel the advisory lease on a workspace or lane using its checkout ID. Services, task runs, worktrees and files stay in place. Use force to override another holder; agents can claim it again.",
-      ["workspace": workspace, "force": force], required: ["workspace"], idempotent: true),
   ]
 
   private static let runTools: [Tool] = [
     tool("run_workspace_task", "Run a task", .destructive,
       "Run a configured task once, after its required services are ready. Returns a durable run id immediately; follow it with wait_for_workspace_run. Never start it again just because a wait ended. No automatic retries.",
-      ["workspace": workspace, "task": property("string", "Configured task id"), "force": force], required: ["workspace", "task"]),
+      ["workspace": workspace, "task": property("string", "Configured task id")], required: ["workspace", "task"]),
     tool("run_workspace_workflow", "Run a workflow", .destructive,
       "Run a configured workflow's task and service steps in order. A failure skips later steps; optional cleanup stops only services this run started. Returns a durable run id immediately.",
-      ["workspace": workspace, "workflow": property("string", "Configured workflow id"), "force": force], required: ["workspace", "workflow"]),
+      ["workspace": workspace, "workflow": property("string", "Configured workflow id")], required: ["workspace", "workflow"]),
     tool("wait_for_workspace_run", "Wait for a run", .read,
       "Wait for a task or workflow run to finish. Returns its status, step results, exit codes, and, when it failed, the failing step's last output. finished=false means the wait ended first: wait again, never start the run again.",
       ["run": runID, "timeout": property("number", "Seconds to wait (default 600, max 3600)")], required: ["run"]),
@@ -141,7 +134,7 @@ nonisolated enum CinderdeckMCPServer {
       ["workspace": workspace, "limit": property("number", "Default 20, max 200")]),
     tool("cancel_workspace_run", "Cancel a run", .destructive,
       "Cancel a task or workflow run, stop its process group, and skip remaining steps. Services running before the workflow keep running unless it already ran an explicit stop step.",
-      ["run": runID, "force": force], required: ["run"]),
+      ["run": runID], required: ["run"]),
   ]
 
   private static let definitionTools: [Tool] = [
@@ -149,15 +142,15 @@ nonisolated enum CinderdeckMCPServer {
       "Read the complete authored TOML and its revision, including repos, lane defaults, environment and every component setting. Also works for invalid definitions so they can be repaired. Does not read Keychain secret values. Read before save_workspace.",
       ["workspace": workspace], required: ["workspace"]),
     tool("save_workspace", "Edit a workspace", .destructive,
-      "Rename a workspace or change its project folder, preserving all other settings. Or replace the complete TOML source with revision from workspace_definition to edit any setting, repo, lane defaults or components. Refuses stale revisions and new broken references. Stop services and runs in this workspace and its lanes first; honors their claims. Keeps the workspace id and nothing starts.",
+      "Rename a workspace or change its project folder, preserving all other settings. Or replace the complete TOML source with revision from workspace_definition to edit any setting, repo, lane defaults or components. Refuses stale revisions and new broken references. Stop services and runs in this workspace and its lanes first. Keeps the workspace id and nothing starts.",
       ["workspace": workspace, "name": property("string", "New display name; workspace id stays the same"),
         "folder": property("string", "New project folder, absolute or ~/…; relative repo and command folders follow it"),
         "source": property("string", "Complete TOML; mutually exclusive with name/folder. Requires revision"),
-        "revision": property("string", "Revision returned by workspace_definition; refuses if the file changed"), "force": force],
+        "revision": property("string", "Revision returned by workspace_definition; refuses if the file changed")],
       required: ["workspace"], idempotent: true),
     tool("delete_workspace", "Remove a workspace", .destructive,
-      "Remove only the workspace definition. Keeps project folders, Git branches, service logs and run history. Refuses active services/runs, remaining lanes, dependent workspace references and another agent's claim. Remove or release lanes first. Never removes a lane or project directory.",
-      ["workspace": workspace, "revision": property("string", "Optional revision from workspace_definition to refuse a changed definition"), "force": force],
+      "Remove only the workspace definition. Keeps project folders, Git branches, service logs and run history. Refuses active services/runs, remaining lanes, dependent workspace references. Remove or release lanes first. Never removes a lane or project directory.",
+      ["workspace": workspace, "revision": property("string", "Optional revision from workspace_definition to refuse a changed definition")],
       required: ["workspace"]),
     tool("create_workspace", "Create a workspace", .additive,
       "Create an empty workspace for a project folder. Then add services, tasks, and workflows with the save_workspace_* tools. Nothing starts.",
@@ -177,7 +170,7 @@ nonisolated enum CinderdeckMCPServer {
         "ports": .object(["type": .string("object"), "additionalProperties": .object(["type": .string("number")]),
           "description": .string("Extra named ports, e.g. {\"hmr\": 24678}; replaces the existing set. Lanes assign their own values.")]),
         "lane": property("string", "In worktree lanes: isolate (own copy, default), shared (use the original checkout's), or off; \"\" resets", values: ["isolate", "shared", "off", ""]),
-        "force": force],
+        ],
       required: ["workspace", "service"], idempotent: true),
     tool("save_workspace_task", "Save a task", .destructive,
       "Add a task (a command that finishes, such as tests, a build, or a migration) to a workspace, or change one. Omitted settings keep their values. from_service moves a stopped service to Tasks, keeping its command, folder, repo, and environment.",
@@ -185,18 +178,18 @@ nonisolated enum CinderdeckMCPServer {
         "cmd": property("string", "Shell command. Required for a new task unless from_service is set"), "cwd": cwd, "repo": repo,
         "requires_services": property("array", "Services that must be ready before the task starts", items: "string"),
         "timeout": property("number", "Seconds before the task is stopped (default 600, max 3600)"), "env": environment,
-        "from_service": property("string", "Convert this stopped service into the task and remove the service"), "force": force],
+        "from_service": property("string", "Convert this stopped service into the task and remove the service")],
       required: ["workspace", "task"], idempotent: true),
     tool("save_workspace_workflow", "Save a workflow", .destructive,
       "Add a workflow to a workspace, or change one. Steps run in order: task:<id>, start:<service>, or stop:<service>; up to 100.",
       ["workspace": workspace, "workflow": property("string", "Workflow id (letters, numbers, hyphens, underscores)"), "name": property("string", "Display name (default: the id)"),
         "steps": property("array", "Ordered steps, e.g. [\"task:lint\", \"start:api\", \"task:test\"]. Required for a new workflow", items: "string"),
-        "cleanup_services": property("boolean", "Stop services this run started when it ends (default false)"), "force": force],
+        "cleanup_services": property("boolean", "Stop services this run started when it ends (default false)")],
       required: ["workspace", "workflow"], idempotent: true),
     tool("delete_workspace_item", "Delete a service, task, or workflow", .destructive,
       "Remove a service, task, or workflow from a workspace's definition. Refuses while something still references it, and a service must be stopped. Saved run results are kept.",
       ["workspace": workspace, "kind": property("string", "What to delete", values: ["service", "task", "workflow"]),
-        "id": property("string", "Id of the service, task, or workflow"), "force": force],
+        "id": property("string", "Id of the service, task, or workflow")],
       required: ["workspace", "kind", "id"]),
     tool("workspace_guide", "Workspace file guide", .read,
       "Where workspace TOML files, logs, and live state live, plus a definition template and format rules. Use before editing a definition file by hand."),
@@ -215,17 +208,17 @@ nonisolated enum CinderdeckMCPServer {
       "Check out a branch in one repo, or in every repo of a workspace that has it. Stops affected running services first and restarts them after. For parallel work, prefer create_lane.",
       ["workspace": workspace, "branch": property("string", "Branch name, or origin/name for a remote branch"),
         "repo": property("string", "Only this repo; omit for all repos that have the branch"),
-        "dirty": property("string", "What to do with uncommitted changes (default fail)", values: ["fail", "stash", "carry"]), "force": force],
+        "dirty": property("string", "What to do with uncommitted changes (default fail)", values: ["fail", "stash", "carry"])],
       required: ["workspace", "branch"]),
     tool("pull_repos", "Pull repos", .destructive,
       "Fast-forward pull a workspace's repos (or one repo), restarting affected services. fetch=true only fetches.",
-      ["workspace": workspace, "repo": property("string", "One repo id"), "fetch": property("boolean", "Fetch only; do not pull"), "force": force],
+      ["workspace": workspace, "repo": property("string", "One repo id"), "fetch": property("boolean", "Fetch only; do not pull")],
       required: ["workspace"]),
     tool("list_lanes", "List lanes", .read,
       "Original checkouts and their parallel worktree lanes: ports and URLs, owner, folders, service state, setup status, shared services, and whether each lane's branch was merged or its upstream deleted.",
       ["workspace": workspace]),
     tool("create_lane", "Create a lane", .additive,
-      "Create an isolated Git worktree copy of a workspace on a branch, claim it for you, run its [lanes] setup, and start its services on unique ports. The source keeps running. A branch that only exists on the remote is tracked; a new branch starts at from (default each repo's HEAD). Values written as {{port.<service>}} / {{url.<service>}} resolve to this lane's ports; services marked shared use the original checkout's instance. start=false creates without starting. If the branch is already checked out in your own worktree, use adopt_lane.",
+      "Create an isolated Git worktree copy of a workspace on a branch, run its [lanes] setup, and start its services on unique ports. The source keeps running. A branch that only exists on the remote is tracked; a new branch starts at from (default each repo's HEAD). Values written as {{port.<service>}} / {{url.<service>}} resolve to this lane's ports; services marked shared use the original checkout's instance. start=false creates without starting. If the branch is already checked out in your own worktree, use adopt_lane.",
       ["workspace": workspace, "branch": property("string", "Existing (local or remote) or new branch, also the lane name, e.g. agent/codex-1"),
         "from": property("string", "Start point for a new branch, e.g. origin/main (default: [lanes] from, else HEAD)"),
         "repositoryRefs": .object(["type": .string("object"), "maxProperties": .number(64), "propertyNames": .object(["type": .string("string"), "minLength": .number(1), "maxLength": .number(160)]),
@@ -249,30 +242,30 @@ nonisolated enum CinderdeckMCPServer {
       "The ports, URLs and variables a lane (or original checkout) gives its services: CINDERDECK_PORT_*, CINDERDECK_URL_*, lane values and definition env. Pass service to include its PORT and own environment. Without service, returns workspace-wide values. Use them when you run tests or curl from your own shell. Secrets are omitted.",
       ["workspace": workspace, "service": property("string", "A service or task, for its PORT and own env")], required: ["workspace"]),
     tool("update_lane", "Edit a lane", .destructive,
-      "Rename a stopped lane or replace its environment overrides ({} clears them). Omitted fields are kept. Stable lane id, Git branches, folders, slug and assigned ports stay the same. Refuses active services/runs, pinned lanes and another agent's claim. Edit the source workspace for shared component definitions and [lanes] defaults. Nothing starts.",
-      ["workspace": workspace, "name": property("string", "New lane name; changes its workspace/name reference, not its Git branch"), "env": environment, "force": force],
+      "Rename a stopped lane or replace its environment overrides ({} clears them). Omitted fields are kept. Stable lane id, Git branches, folders, slug and assigned ports stay the same. Refuses active services/runs, pinned lanes. Edit the source workspace for shared component definitions and [lanes] defaults. Nothing starts.",
+      ["workspace": workspace, "name": property("string", "New lane name; changes its workspace/name reference, not its Git branch"), "env": environment],
       required: ["workspace"], idempotent: true),
     tool("run_lane_setup", "Run lane setup", .additive,
       "Run the workspace's [lanes] setup task or workflow in a lane again, e.g. after it failed, and wait for it.",
-      ["workspace": property("string", "Lane id or <workspace>/<name>"), "force": force], required: ["workspace"]),
+      ["workspace": property("string", "Lane id or <workspace>/<name>")], required: ["workspace"]),
     tool("remove_lane", "Remove a lane", .destructive,
-      "Check local changes and running dependents, stop a lane, run its [lanes] teardown, and remove its worktrees. Refuses in_use when another running lane/workspace uses its services. Respects claims and protects tracked/untracked changes. Ignored files, changed copies and copied directories block removal unless discard_ignored=true; ask the user before discarding. Keeps Git branches and adopted worktrees. Never removes the original checkout.",
-      ["workspace": property("string", "Lane id or <workspace>/<name> from list_lanes"), "force": force,
+      "Check local changes and running dependents, stop a lane, run its [lanes] teardown, and remove its worktrees. Refuses in_use when another running lane/workspace uses its services. Protects tracked/untracked changes. Ignored files, changed copies and copied directories block removal unless discard_ignored=true; ask the user before discarding. Keeps Git branches and adopted worktrees. Never removes the original checkout.",
+      ["workspace": property("string", "Lane id or <workspace>/<name> from list_lanes"),
         "discard_ignored": property("boolean", "Also delete ignored files, changed copies and copied directories; tracked changes stay protected"),
         "force_teardown": property("boolean", "Remove even if teardown fails"),
         "delete_logs": property("boolean", "Also delete the lane's service logs")], required: ["workspace"]),
     tool("release_lane", "Release a lane", .destructive,
       "Stop a lane and forget it, keeping every worktree on disk and relinquishing ownership so other lanes cannot delete them later. Refuses in_use while running dependents use its services. Use for worktrees you keep working in.",
-      ["workspace": property("string", "Lane id or <workspace>/<name>"), "force": force,
+      ["workspace": property("string", "Lane id or <workspace>/<name>"),
         "delete_logs": property("boolean", "Also delete the lane's service logs")], required: ["workspace"]),
     tool("prune_lanes", "Prune merged lanes", .destructive,
-      "Remove lanes whose branches were merged into the default remote branch or whose upstream branch was deleted. Lanes with changes, or claimed by others, are kept and reported. dry_run lists them first.",
+      "Remove lanes whose branches were merged into the default remote branch or whose upstream branch was deleted. Lanes with changes, are kept and reported. dry_run lists them first.",
       ["workspace": workspace, "dry_run": property("boolean", "Only list what would be removed"),
         "missing": property("boolean", "Also remove lanes whose worktrees are missing"),
-        "discard_ignored": property("boolean", "Also delete ignored files"), "force": force]),
+        "discard_ignored": property("boolean", "Also delete ignored files")]),
     tool("unpin_lane", "Unpin a lane", .additive,
       "Make a lane created by an older Cinderdeck follow its source workspace definition instead of its saved copy.",
-      ["workspace": property("string", "Lane id or <workspace>/<name>"), "force": force], required: ["workspace"]),
+      ["workspace": property("string", "Lane id or <workspace>/<name>")], required: ["workspace"]),
   ]
 
   private static let prTools: [Tool] = [
@@ -315,7 +308,7 @@ nonisolated enum CinderdeckMCPServer {
         "display": property("string", "\"main\" (default) or a 1-based display number"),
         "max_seconds": property("number", "Stop automatically after this many seconds (default 300, max 3600)"),
         "system_audio": property("boolean", "Also record system audio (default false)"),
-        "note": property("string", "Optional first marker, e.g. the steps you are about to perform"), "force": force]),
+        "note": property("string", "Optional first marker, e.g. the steps you are about to perform")]),
     tool("repro_browser", "Inspect or control the recorded browser", .additive,
       "Inspect the active browser repro: returns page text, controls, and a live screenshot. Pass url to navigate, or expression to run JavaScript in the recorded page (promises are awaited, 10s limit). Navigation/actions create markers. Use mark_repro for descriptive steps and pass/fail checks. This controls only the selected recorded page. Console, exceptions, and failed requests are captured automatically.",
       ["url": property("string", "Navigate to this http/https URL or about:blank"),
@@ -563,10 +556,6 @@ nonisolated enum CinderdeckMCPServer {
       if params.removeValue(forKey: "external_only")?.boolValue == true { params["external"] = .bool(true) }
       return ("ports", params, 30)
     case "stop_port_process": return ("port.kill", params, 30)
-    case "claim_workspace":
-      if let ttl = params.removeValue(forKey: "ttl_minutes") { params["ttlMinutes"] = ttl }
-      return ("claim", params, 30)
-    case "release_workspace": return ("release", params, 30)
     case "git_status": return ("git.status", params, 90)
     case "list_branches": return ("git.branches", params, 90)
     case "switch_branch": return ("git.switch", params, 300)
@@ -720,10 +709,6 @@ nonisolated enum CinderdeckMCPServer {
       if !status.shared.isEmpty { summary["sharedServices"] = .array(status.shared.map(JSONValue.string)) }
       summary["worktrees"] = .array(status.worktrees.map { .string($0.path.path + ($0.managed ? "" : " (adopted)")) })
       object["laneStatus"] = .object(summary)
-    }
-    if let claim = workspace.claim {
-      object["claim"] = .object(["by": .string(claim.holder.label), "note": .string(claim.note ?? ""),
-        "until": .string(ISO8601DateFormatter().string(from: claim.expiresAt))])
     }
     if !workspace.issues.isEmpty { object["issues"] = .array(workspace.issues.map { JSONValue.string($0) }) }
     if !workspace.repos.isEmpty {

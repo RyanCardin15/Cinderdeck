@@ -79,7 +79,6 @@ export const ExternalSessionView = Schema.Struct({
     interrupt: Schema.Literal(false),
     resume: Schema.Literal(false),
     approvals: Schema.Literal(false),
-    writerReservation: Schema.Literal(false),
   }),
 });
 export type ExternalSessionView = typeof ExternalSessionView.Type;

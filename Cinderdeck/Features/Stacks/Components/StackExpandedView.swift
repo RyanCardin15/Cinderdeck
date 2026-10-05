@@ -32,7 +32,6 @@ struct StackExpandedView: View {
         HStack(spacing: 6) {
           StackStateBadge(label: file.definition == nil ? "Degraded" : state.label, since: state.isActive ? state.startedAt : nil)
           if let operation = state.operation { StackChip(systemImage: "hourglass", text: operation + "…", tint: .orange) }
-          if showsWorkspaceName, let claim = viewModel.claim(file.id) { StackClaimChip(claim: claim) { viewModel.releaseClaim(file.id) } }
           Text(file.lane == nil ? file.file.lastPathComponent : "Lane snapshot")
             .font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary.opacity(0.8)).lineLimit(1)
             .onTapGesture { if file.lane == nil { viewModel.openInEditor(file) } }

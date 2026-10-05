@@ -47,10 +47,10 @@ nonisolated enum CinderdeckMigration {
     try copyMissing(from: source, to: destination,
                     excluding: ["snapzy.db", "snapzy.db-wal", "snapzy.db-shm", "Agent", "Stacks", "Stacks-Debug", ".snapzy-import-completed"])
     // Live sockets cannot be copied. The new server regenerates its state
-    // snapshot; persisted advisory claims remain useful across the rename.
+    // snapshot. Retired agent ownership files are excluded.
     try copyMissing(from: source.appendingPathComponent("Stacks"),
                     to: destination.appendingPathComponent("Stacks"),
-                    excluding: ["control.sock", "state.json"])
+                    excluding: ["control.sock", "state.json", "claims.json", "checkout-reservations.sqlite", "checkout-reservations.sqlite-wal", "checkout-reservations.sqlite-shm"])
     let oldConfig = home.appendingPathComponent(".config/snapzy")
     let newConfig = home.appendingPathComponent(".config/cinderdeck")
     let newConfigFile = newConfig.appendingPathComponent("config.toml")
@@ -156,7 +156,7 @@ nonisolated enum CinderdeckMigration {
       // Skip any other transient sockets/devices/FIFOs in imported folders.
       guard values.isDirectory == true || values.isSymbolicLink == true || values.isRegularFile == true else { continue }
       if values.isDirectory == true && values.isSymbolicLink != true {
-        try copyMissing(from: item, to: target)
+        try copyMissing(from: item, to: target, excluding: excluding)
       } else if !fm.fileExists(atPath: target.path) {
         try fm.copyItem(at: item, to: target)
       }

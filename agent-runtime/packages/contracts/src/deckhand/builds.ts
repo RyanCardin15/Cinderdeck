@@ -111,7 +111,6 @@ export const BuildReceipt = Schema.Struct({
       state: Schema.Literals(["pending", "accepted", "failed", "unknown"]),
     }),
   ).check(Schema.isMaxLength(8)),
-  reservationState: Schema.Literals(["pending", "held", "uncertain", "released"]),
 });
 export type BuildReceipt = typeof BuildReceipt.Type;
 export class BuildError extends Schema.TaggedError<BuildError>()("BuildError", {

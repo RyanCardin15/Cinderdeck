@@ -1,7 +1,7 @@
 import Darwin
 import Foundation
 
-// MARK: - Actors and claims
+// MARK: - Actors
 
 /// Who performed a stack action. Agents are identified from the calling
 /// process tree (for example "Cursor" or "Codex") plus any name they supply.
@@ -18,7 +18,7 @@ nonisolated struct StackActor: Codable, Equatable, Hashable, Sendable {
 
   static let user = StackActor(kind: .user, name: "You")
   var isAgent: Bool { kind == .agent }
-  /// Identity used for claims: the same agent name and session is the same holder.
+  /// Identity used for attributing agent operations.
   var key: String { kind == .user ? "user" : name.lowercased() + "#" + (session ?? "") }
   var label: String {
     guard isAgent else { return "You" }
@@ -33,17 +33,6 @@ nonisolated struct StackActor: Codable, Equatable, Hashable, Sendable {
     }
     return text
   }
-}
-
-/// An advisory lease. While a stack is claimed, other agents must pass
-/// `force` to change it. The Cinderdeck UI is never blocked.
-nonisolated struct StackClaim: Codable, Equatable, Sendable {
-  let stackID: String
-  var holder: StackActor
-  var note: String?
-  var since: Date
-  var expiresAt: Date
-  var isExpired: Bool { expiresAt <= Date() }
 }
 
 // MARK: - Wire format (newline-delimited JSON over a Unix socket)
@@ -143,7 +132,6 @@ nonisolated struct StackSnapshot: Codable, Sendable {
   let operation: String?
   let definitionChanged: Bool
   let issues: [String]
-  let claim: StackClaim?
   let services: [StackServiceSnapshot]
   let repos: [StackRepoSnapshot]
   var lane: StackLaneInfo?
@@ -205,7 +193,6 @@ nonisolated enum StackControlPaths {
   }
 
   static var state: URL { directory.appendingPathComponent("state.json") }
-  static var claims: URL { directory.appendingPathComponent("claims.json") }
 
   static func ensureDirectory() throws {
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,

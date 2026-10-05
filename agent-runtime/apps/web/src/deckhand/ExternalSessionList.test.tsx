@@ -87,7 +87,6 @@ const reported = Schema.decodeSync(C.ExternalSessionView)({
     interrupt: false,
     resume: false,
     approvals: false,
-    writerReservation: false,
   },
 });
 let root: Root;
@@ -123,7 +122,7 @@ const render = async (generation = 3) =>
       </RegistryContext.Provider>,
     ),
   );
-it("shows stale external claims without managed navigation or controls", async () => {
+it("shows stale external reports without managed navigation or controls", async () => {
   commands.list.mockResolvedValue({ _tag: "Success", value: [reported] });
   await render();
   expect(element.textContent).toContain("Last reported: Working");

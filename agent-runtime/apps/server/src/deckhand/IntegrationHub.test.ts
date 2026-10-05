@@ -744,9 +744,8 @@ describe("Cinderdeck integration hub", () => {
         yield* Migrations.migrate;
         let polls = 0;
         let activePolls = 0;
-        let releases = 0;
         let installationID = hello.installationID;
-        const control = { id: "writer", installationID, token: "b".repeat(64) };
+
         let resolvePollStarted: () => void = () => {};
         let resolvePollClosed: () => void = () => {};
         const pollStarted = new Promise<void>((resolve) => {
@@ -761,7 +760,7 @@ describe("Cinderdeck integration hub", () => {
               result: {
                 ...hello,
                 installationID,
-                capabilities: [...hello.capabilities, "checkout.reservations"],
+                capabilities: hello.capabilities,
               },
             };
           if (request.method === "integration.snapshot")
@@ -787,23 +786,9 @@ describe("Cinderdeck integration hub", () => {
             socket.on("end", () => socket.end());
             return null;
           }
-          assert.equal(request.client?.session, "actor");
-          if (request.method === "integration.reservation.release") {
-            releases++;
-            assert.deepEqual(request.params, control);
-            return {
-              result: {
-                id: control.id,
-                ownerID: "actor",
-                workspaceID: "one",
-                generation: 1,
-                kind: "writer",
-                state: "released",
-                physicalIDs: ["a".repeat(64)],
-                createdAt: "2026-10-03T00:00:00Z",
-              },
-            };
-          }
+          if (request.method !== "integration.snapshot")
+            assert.equal(request.client?.session, "actor");
+
           return {
             result: {
               ...receipt,
@@ -828,8 +813,6 @@ describe("Cinderdeck integration hub", () => {
           yield* Effect.promise(() => pollClosed);
           assert.equal(activePolls, 0);
           assert.equal((yield* hub.overview({ offset: 0, limit: 1 })).state, "reconnecting");
-          assert.equal((yield* hub.releaseWriter("actor", control)).state, "released");
-          assert.equal(releases, 1);
           assert.equal(polls, 1);
           // A fresh actor-bound mutation still works after the last viewer closes.
           const afterView = yield* hub.submit("actor", {
@@ -839,8 +822,6 @@ describe("Cinderdeck integration hub", () => {
           assert.equal(afterView.operationKey, "after-view");
           assert.equal(polls, 1);
           installationID = "replacement";
-          yield* hub.releaseWriter("actor", control).pipe(Effect.flip);
-          assert.equal(releases, 1);
           assert.equal(
             (yield* hub.submit("actor", { ...operation, operationKey: "other" }).pipe(Effect.flip))
               .reason,
@@ -888,7 +869,8 @@ describe("Cinderdeck integration hub", () => {
             return null;
           }
           assert.equal(request.method, "integration.operation.get");
-          assert.equal(request.client?.session, "actor");
+          if (request.method !== "integration.snapshot")
+            assert.equal(request.client?.session, "actor");
           if ((request.params as { waitMs?: number }).waitMs !== undefined)
             assert.equal((request.params as { waitMs: number }).waitMs, 100);
           return { result: receipt };

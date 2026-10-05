@@ -25,51 +25,6 @@ final class StackSupervisor: ObservableObject {
   private var watchedDirectory: URL?
   private var bootstrapped = false
   lazy var buildArtifacts = WorkspaceBuildStore(directory: logDirectory.appendingPathComponent("Integration/BuildArtifacts"))
-  private var physicalReservations: CheckoutReservations?
-  func checkoutReservations() throws -> CheckoutReservations {
-    if let physicalReservations { return physicalReservations }
-    let created = try CheckoutReservations(directory: logDirectory.appendingPathComponent("Integration", isDirectory: true))
-    physicalReservations = created
-    return created
-  }
-  private func checkoutPaths(_ definition: StackDefinition, repos: Set<String>? = nil) -> [URL] {
-    if let repos { return definition.repos.filter { repos.contains($0.id) }.map(\.path) }
-    return [definition.root] + definition.repos.map(\.path) + definition.tasks.map(\.directory) + definition.services.map(\.directory)
-  }
-  private func checkoutScope(_ definition: StackDefinition, repos: Set<String>? = nil) throws -> [String] {
-    try Array(Set(checkoutPaths(definition, repos: repos).compactMap { try PhysicalCheckoutIdentity.resolve($0)?.physicalID })).sorted()
-  }
-  func reserveCheckoutMutation(_ definition: StackDefinition, id: String, kind: String, actor: StackActor,
-    repos: Set<String>? = nil) throws -> CheckoutReservation {
-    return try checkoutReservations().begin(id: id, ownerID: kind == "run" ? id : actor.label,
-      workspaceID: definition.id, kind: kind, physicalIDs: checkoutScope(definition, repos: repos), actorKey: actor.key)
-  }
-  private var laneLifecycleReservations: [String: String] = [:]
-  func borrowLaneLifecycle(_ definition: StackDefinition, actor: StackActor) throws -> String? {
-    guard let id = laneLifecycleReservations[definition.id] else { return nil }
-    let scope = try checkoutScope(definition)
-    _ = try checkoutReservations().borrowLifecycle(id, workspaceID: definition.id, actorKey: actor.key, physicalIDs: scope)
-    return id
-  }
-  func reserveRepositoryMutation(paths: [URL], workspaceID: String, actor: StackActor, kind: String) async throws -> String {
-    let scope = try await PhysicalCheckoutIdentity.repositoryScope(paths)
-    let id = kind + ":" + UUID().uuidString
-    _ = try checkoutReservations().begin(id: id, ownerID: actor.label, workspaceID: workspaceID,
-      kind: kind, physicalIDs: scope, actorKey: actor.key)
-    do {
-      // Inventory can race another creator before admission. Re-read while held;
-      // a newly registered worktree never expands an already admitted scope.
-      guard try await PhysicalCheckoutIdentity.repositoryScope(paths) == scope else {
-        throw StackControlError(code: "stale_revision", message: "Repository worktrees changed during lifecycle admission. Refresh and retry.")
-      }
-      try Task.checkCancellation()
-      return id
-    } catch { releaseCheckoutMutation(id); throw error }
-  }
-  func releaseCheckoutMutation(_ id: String) {
-    do { try checkoutReservations().releaseNative(id) }
-    catch { errorMessage = "Checkout ownership could not be released: \(error.localizedDescription)" }
-  }
   private var epochs: [String: Int] = [:]
   private var processes: [String: any ProcessLaunching] = [:]
   private var logs: [String: LogBuffer] = [:]
@@ -304,10 +259,8 @@ final class StackSupervisor: ObservableObject {
       let process = makeProcess()
       let url = logRoot.appendingPathComponent(id).appendingPathComponent(service + ".log")
       let buildOwner = try buildArtifacts.launchOwner(launch)
-      if let buildOwner { try WorkspaceBuildScope.lease(buildOwner, supervisor: self) }
       let build = try await buildArtifacts.launchContext(launch)
       guard current() else { return }
-      if let buildOwner { try WorkspaceBuildScope.lease(buildOwner, supervisor: self) }
       var launchEnvironment = launch.environment(shell: shellEnvironment, secrets: values)
       if let build, let nonce = build.launchNonce, let artifact = build.artifact {
         launchEnvironment["CINDERDECK_BUILD_ID"] = build.id
@@ -609,13 +562,6 @@ final class StackSupervisor: ObservableObject {
     let creation: StackLaneStore.Creation
     do {
       guard states[id]?.operation == nil, let source = definition(id) else { throw StackError.message("This stack needs a valid definition and must finish its current operation") }
-      var paths = source.repos.filter { $0.laneMode == .worktree }.map(\.path)
-      paths += source.services.filter { $0.laneMode != .off && $0.laneMode != .shared &&
-        $0.repo.flatMap(source.repo)?.laneMode != .shared }.map(\.directory)
-      paths += source.tasks.filter { $0.repo.flatMap(source.repo)?.laneMode != .shared }.map(\.directory)
-      if let adopted = request.adoptPath { paths.append(adopted) }
-      let reservationID = try await reserveRepositoryMutation(paths: paths, workspaceID: id, actor: actor, kind: "lifecycle")
-      defer { releaseCheckoutMutation(reservationID) }
       guard definition(id) == source else { throw StackControlError(code: "stale_revision", message: "The source workspace changed before lane creation.") }
       creation = try await StackLaneStore.create(source: source, request: request, owner: actor,
         directory: lanesDirectory, worktreeRoot: worktreeRoot, occupiedPorts: occupiedPorts())
@@ -655,19 +601,6 @@ final class StackSupervisor: ObservableObject {
     try checkLaneDependents(id)
     removingLanes.insert(id)
     defer { removingLanes.remove(id) }
-    var paths = record.worktrees.flatMap { [$0.source] + (FileManager.default.fileExists(atPath: $0.path.path) ? [$0.path] : []) }
-    if let definition = definition(id) { paths += checkoutPaths(definition).filter { FileManager.default.fileExists(atPath: $0.path) } }
-    let reservationID = try await reserveRepositoryMutation(paths: paths, workspaceID: id, actor: actor, kind: "lifecycle")
-    laneLifecycleReservations[id] = reservationID
-    defer {
-      laneLifecycleReservations[id] = nil
-      // Teardown cancellation may fail to stop its process. Its borrowed parent
-      // must remain held/uncertain, including after the lane operation returns.
-      if activeWorkspaceRun?(id) == true {
-        do { try checkoutReservations().uncertainNative(reservationID) }
-        catch { errorMessage = "Lifecycle ownership requires recovery: \(error.localizedDescription)" }
-      } else { releaseCheckoutMutation(reservationID) }
-    }
     // Refuse before stopping anything when removal would lose work.
     _ = try await StackLaneStore.check(record, others: try StackLaneStore.records(in: lanesDirectory), options: options)
     await stop(stack: id, actor: actor)
@@ -791,9 +724,6 @@ final class StackSupervisor: ObservableObject {
   func performGitChange(stack id: String, repos: Set<String>, eventKind: String = "branchSwitched",
     eventDetail: String? = nil, actor: StackActor? = nil, action: () async throws -> Void) async throws {
     guard let stack = definition(id) else { throw StackError.message("This stack needs a valid definition") }
-    let reservationID = try await reserveRepositoryMutation(paths: stack.repos.filter { repos.contains($0.id) }.map(\.path),
-      workspaceID: id, actor: actor ?? .user, kind: "git")
-    defer { releaseCheckoutMutation(reservationID) }
     guard definition(id) == stack else { throw StackControlError(code: "stale_revision", message: "The workspace changed before its Git operation.") }
     let paths = Set(stack.repos.filter { repos.contains($0.id) }.map { $0.path.resolvingSymlinksInPath().standardizedFileURL.path })
     // A folder may be shared by several stacks, even under different repo names.

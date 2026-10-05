@@ -43,7 +43,7 @@ nonisolated struct IntegrationHello: Encodable, Sendable {
   let executionHostID: String
   let channel: String
   let runtimeEpoch: String
-  let capabilities = ["github.workspace", "projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.create.managedWriter", "operations.lane.adopt", "operations.lane.adopt.managedWriter", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.reservations", "checkout.contexts", "recordings.library", "runs.library", "runs.detail", "runs.failures", "builds.declared", "linked-work.projection"]
+  let capabilities = ["github.workspace", "projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.adopt", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.contexts", "recordings.library", "runs.library", "runs.detail", "runs.failures", "builds.declared", "linked-work.projection"]
   let maximumFrameBytes = StackControlSocketServer.maximumFrameBytes
   let maximumPageSize = 500
   let maximumWaitMs = 25_000
@@ -77,7 +77,6 @@ extension StackControlService {
     if method == "integration.checkout.contexts" { return try await lookupCheckoutContexts(params) }
     if method.hasPrefix("integration.runs.") { return try await handleIntegrationRuns(method, params: params, actor: actor) }
     if method.hasPrefix("integration.recording.") { return try await handleIntegrationRecording(method, params: params, actor: actor) }
-    if method.hasPrefix("integration.reservation.") { return try await handleCheckoutReservation(method, params: params, actor: actor) }
     if method == "integration.operation.submit" { return try await submitIntegrationOperation(params, actor: actor) }
     if method == "integration.operation.get" { return try await getIntegrationOperation(params, actor: actor) }
     let allowed: Set<String>
@@ -150,9 +149,6 @@ extension StackControlService {
     }
     // Durable ownership outlives the definition that originally declared it.
     // Include the caller's attested Git worktree inventory even with no live alias.
-    if try supervisor.checkoutReservations().isReserved(physicalIDs: input.physicalIDs) {
-      throw StackControlError(code: "checkout_reserved", message: "A checkout in this mutation scope has an active or uncertain owner.")
-    }
     let candidates = try supervisor.files.compactMap { file -> (String, [String], [String])? in
       guard let definition = file.definition else { return nil }
       var repos: [String] = [], physicalIDs: [String] = []
@@ -180,76 +176,6 @@ extension StackControlService {
     return try JSONValue(encoding: IntegrationCheckoutLookup(installationID: journal.installationID,
       runtimeEpoch: journal.runtimeEpoch, contexts: contexts))
   }
-  private func handleCheckoutReservation(_ method: String, params: JSONValue, actor: StackActor) async throws -> JSONValue {
-    let allowed: Set<String>
-    switch method {
-    case "integration.reservation.acquire": allowed = ["id", "token", "installationID", "ownerID", "workspaceID", "generation", "revision", "repos"]
-    case "integration.reservation.get", "integration.reservation.release": allowed = ["id", "token", "installationID"]
-    case "integration.reservation.list": allowed = ["installationID", "offset", "limit"]
-    default: throw StackControlError(code: "unknown_method", message: "Unsupported reservation operation")
-    }
-    guard let object = params.objectValue, Set(object.keys).isSubset(of: allowed),
-      let installationID = params["installationID"]?.stringValue,
-      installationID == (try integrationStore()).installationID else {
-      throw StackControlError(code: "installation_changed", message: "Reservation arguments or installation identity changed.")
-    }
-    let reservations = try supervisor.checkoutReservations()
-    if method == "integration.reservation.list" {
-      let input: IntegrationReservationPage = try decodeIntegration(params)
-      return try JSONValue(encoding: reservations.list(offset: input.offset ?? 0, limit: input.limit ?? 100))
-    }
-    guard let id = params["id"]?.stringValue, !id.isEmpty, id.utf8.count <= 160,
-      let token = params["token"]?.stringValue, token.count == 64,
-      token.allSatisfy({ "0123456789abcdef".contains($0) }) else {
-      throw StackControlError.invalid("Reservation identity and scoped control token are required")
-    }
-    if method == "integration.reservation.get" {
-      return try JSONValue(encoding: reservations.get(id, actorKey: actor.key, token: token))
-    }
-    if method == "integration.reservation.release" {
-      return try JSONValue(encoding: reservations.releaseWriter(id, actorKey: actor.key, token: token))
-    }
-    let input: IntegrationWriterReservationInput = try decodeIntegration(params)
-    guard (1...64).contains(input.repos.count), Set(input.repos).count == input.repos.count,
-      input.repos.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 160 }),
-      input.generation > 0, !input.ownerID.isEmpty, input.ownerID.utf8.count <= 160,
-      !input.workspaceID.isEmpty, input.workspaceID.utf8.count <= 160,
-      !input.revision.isEmpty, input.revision.utf8.count <= 64 else {
-      throw StackControlError.invalid("Writer reservations require exact workspace generation, revision and repository scope")
-    }
-    let journal = try integrationStore()
-    try await journal.reconcile(snapshot().workspaces, sourceRevision: integrationRevision())
-    let snapshot = try await journal.snapshot(workspaceID: input.workspaceID, limit: 1)
-    guard let resource = snapshot.resources.first, resource.available,
-      resource.generation == input.generation, resource.revision == input.revision,
-      let file = supervisor.files.first(where: { $0.id == input.workspaceID }), let definition = file.definition else {
-      throw StackControlError(code: "stale_revision", message: "The checkout changed. Refresh its context before writer admission.")
-    }
-    guard !supervisor.isBootstrapping, !supervisor.isRemovingLane(file.id), supervisor.states[file.id]?.operation == nil,
-      workspaceRunner.activeRun(file.id) == nil else {
-      throw StackControlError(code: "busy", message: "Finish the native run or checkout operation before starting a writer.")
-    }
-    let repos = definition.repos.filter { input.repos.contains($0.id) }
-    guard repos.count == input.repos.count else { throw StackControlError.notFound("A selected repository is no longer in this checkout") }
-    let scope = try repos.map { repo -> String in
-      guard let identity = try PhysicalCheckoutIdentity.resolve(repo.path) else {
-        throw StackControlError(code: "unsupported_checkout", message: "Managed writers need an identifiable Git checkout.")
-      }
-      return identity.physicalID
-    }
-    try checkClaim(file.id, actor: actor, force: false)
-    // Existing advisory workspace claims must also respect physical aliases.
-    for claimed in supervisor.files where claimed.id != file.id && claims[claimed.id]?.isExpired == false {
-      let shared = try claimed.definition?.repos.contains { repo in
-        try PhysicalCheckoutIdentity.resolve(repo.path).map { scope.contains($0.physicalID) } ?? false
-      } ?? false
-      if shared { try checkClaim(claimed.id, actor: actor, force: false) }
-    }
-    // No await between final scope/preflight and durable admission. Native
-    // submit/Git use this same transactional barrier on the main actor.
-    return try JSONValue(encoding: reservations.begin(id: id, ownerID: input.ownerID, workspaceID: input.workspaceID,
-      generation: input.generation, kind: "writer", physicalIDs: scope, actorKey: actor.key, token: token))
-  }
   private func operationStore() throws -> IntegrationOperations {
     if let integrationOperations { return integrationOperations }
     let created = try IntegrationOperations(directory: integrationDirectory)
@@ -271,23 +197,23 @@ extension StackControlService {
     }
     let allowed: Set<String>
     if input.method == "lane.create" {
-      allowed = ["workspace", "branch", "from", "repositoryRefs", "managedWriter", "start", "setup"]
+      allowed = ["workspace", "branch", "from", "repositoryRefs", "start", "setup"]
       let decoded: IntegrationLaneOperation = try decodeIntegration(input.arguments)
       guard decoded.repositoryRefs.map({ $0.count <= 64 && $0.allSatisfy({ bounded($0.key, 160) && bounded($0.value, 200) && !$0.value.hasPrefix("-") && !$0.value.contains("\0") && !$0.value.contains("\n") && !$0.value.contains("\r") }) }) ?? true else {
         throw StackControlError.invalid("Invalid repository start revisions")
       }
       guard bounded(decoded.branch, 200), decoded.from.map({ bounded($0, 200) }) ?? true else { throw StackControlError.invalid("Invalid lane branch or source") }
     } else if input.method == "lane.adopt" {
-      allowed = ["workspace", "path", "name", "from", "managedWriter", "start", "setup"]
+      allowed = ["workspace", "path", "name", "from", "start", "setup"]
       let decoded: IntegrationLaneAdoption = try decodeIntegration(input.arguments)
       guard bounded(decoded.path, 4096), decoded.path.hasPrefix("/"), !decoded.path.contains("\0"), !decoded.path.contains("\n"),
         decoded.name.map({ bounded($0, 200) }) ?? true,
         decoded.from.map({ bounded($0, 200) }) ?? true else { throw StackControlError.invalid("Adoption requires an absolute worktree path and bounded name/source") }
     } else if input.method == "lane.setup" {
-      allowed = ["workspace", "force"]
+      allowed = ["workspace"]
       let _: IntegrationLaneSetup = try decodeIntegration(input.arguments)
     } else if ["lane.remove", "lane.release"].contains(input.method) {
-      allowed = input.method == "lane.release" ? ["workspace", "force", "delete_logs"] : ["workspace", "force", "discard_ignored", "delete_logs", "force_teardown"]
+      allowed = input.method == "lane.release" ? ["workspace", "delete_logs"] : ["workspace", "discard_ignored", "delete_logs", "force_teardown"]
       let _: IntegrationLaneRemoval = try decodeIntegration(input.arguments)
     } else if ["services.start", "services.stop", "services.restart"].contains(input.method) {
       allowed = ["workspace", "services", "force", "wait", "timeout"]
@@ -338,7 +264,7 @@ extension StackControlService {
           _ = try await operations.transition(key: input.operationKey, actor: actor, state: "succeeded", result: result)
         } catch {
           let failure = (error as? StackControlError) ?? StackControlError(code: "failed", message: error.localizedDescription)
-          let refusedBeforeEffects: Set<String> = ["invalid_params", "not_found", "claimed", "busy", "stale_revision", "resource_missing", "unsupported_capability", "checkout_reserved"]
+          let refusedBeforeEffects: Set<String> = ["invalid_params", "not_found", "busy", "stale_revision", "resource_missing", "unsupported_capability"]
           let state = effectsStarted && (resultReturned || !refusedBeforeEffects.contains(failure.code)) ? "unknown_outcome" : "failed"
           do { _ = try await operations.transition(key: input.operationKey, actor: actor, state: state, error: failure) }
           catch { DiagnosticLogger.shared.log(.warning, .system, "Integration operation outcome could not be saved") }
@@ -399,28 +325,11 @@ extension StackControlService {
     catch { throw StackControlError.invalid("Integration argument types do not match the protocol") }
   }
 }
-nonisolated private struct IntegrationWriterReservationInput: Decodable {
-  let id: String
-  let token: String
-  let installationID: String
-  let ownerID: String
-  let workspaceID: String
-  let generation: Int
-  let revision: String
-  let repos: [String]
-}
-nonisolated private struct IntegrationReservationPage: Decodable {
-  let installationID: String
-  let offset: Int?
-  let limit: Int?
-}
-
 nonisolated private struct IntegrationLaneOperation: Decodable {
   let workspace: String
   let branch: String
   let from: String?
   let repositoryRefs: [String: String]?
-  let managedWriter: Bool?
   let start: Bool?
   let setup: Bool?
 }
@@ -435,7 +344,6 @@ nonisolated private struct IntegrationServiceOperation: Decodable {
 nonisolated private struct IntegrationLaneAdoption: Decodable {
   let workspace: String
   let path: String
-  let managedWriter: Bool?
   let name: String?
   let from: String?
   let start: Bool?
@@ -443,11 +351,9 @@ nonisolated private struct IntegrationLaneAdoption: Decodable {
 }
 nonisolated private struct IntegrationLaneSetup: Decodable {
   let workspace: String
-  let force: Bool?
 }
 nonisolated private struct IntegrationLaneRemoval: Decodable {
   let workspace: String
-  let force: Bool?
   let discard_ignored: Bool?
   let delete_logs: Bool?
   let force_teardown: Bool?

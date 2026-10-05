@@ -51,9 +51,6 @@ struct StackCompactCardView: View {
   }
 
   @ViewBuilder private var notices: some View {
-    if let claim = viewModel.claim(file.id) {
-      StackClaimChip(claim: claim) { viewModel.releaseClaim(file.id) }
-    }
     if !file.issues.isEmpty {
       Label(file.issues.map(\.message).joined(separator: " · "), systemImage: file.definition == nil ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
         .font(.system(size: 10, weight: .medium)).lineLimit(2)
@@ -162,9 +159,6 @@ struct StackActionsMenu: View {
       }
       Divider()
       Button("Show log files") { viewModel.openLogFile(stack: file.id, service: nil) }
-      if viewModel.claim(file.id) != nil {
-        Button("Cancel agent lease…") { viewModel.releaseClaim(file.id) }
-      }
       Button("Agent access…") { viewModel.agentsSheet = true }
       Button("Refresh shell environment") { viewModel.refreshEnvironment(file.definition) }
       Divider()

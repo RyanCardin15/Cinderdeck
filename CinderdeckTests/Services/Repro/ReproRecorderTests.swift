@@ -30,7 +30,7 @@ final class ReproRecorderTests: XCTestCase {
     runner = WorkspaceRunner(supervisor: supervisor, store: WorkspaceRunStore(directory: root.appendingPathComponent("runs")),
       secrets: FixedSecrets(), environment: { _ in ProcessInfo.processInfo.environment })
     await runner.recover()
-    let control = StackControlService(supervisor: supervisor, runner: runner, claimsFile: root.appendingPathComponent("claims.json"))
+    let control = StackControlService(supervisor: supervisor, runner: runner)
     events = PassthroughSubject()
     store = ReproStore(directory: root.appendingPathComponent("repros"))
     recorder = ReproRecorder(supervisor: supervisor, runner: runner, store: store, events: events.eraseToAnyPublisher(),

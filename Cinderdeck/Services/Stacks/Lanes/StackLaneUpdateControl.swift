@@ -6,7 +6,7 @@ extension StackControlService {
     guard file.lane != nil else { throw StackControlError.invalid("Select a lane from list_lanes") }
     guard params["name"] != nil || params["env"] != nil else { throw StackControlError.invalid("Pass name or env to update") }
     try await supervisor.withDefinitionLock(workspace: file.id) {
-      try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
+
       try requireStoppedForDefinition(file.id)
       guard var record = try StackLaneStore.record(id: file.id, in: supervisor.lanesDirectory) else { throw StackControlError.notFound("Lane no longer exists") }
       guard !record.info.pinned else { throw StackControlError(code: "lane", message: "Unpin this lane before editing its settings") }

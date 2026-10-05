@@ -451,9 +451,7 @@ function ConnectedWorkspace({
   const canCreateFeature = [
     "operations.lane.create",
     "operations.lane.create.repositoryRefs",
-    "operations.lane.create.managedWriter",
     "operations.receipts.wait",
-    "checkout.reservations",
   ].every((capability) => view?.hello?.capabilities.includes(capability));
   const reconcile = useCallback(async () => {
     if (!operation) return;

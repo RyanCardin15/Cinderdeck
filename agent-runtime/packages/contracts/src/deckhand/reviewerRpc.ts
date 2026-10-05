@@ -54,7 +54,6 @@ export const ReviewerQueueRecord = Schema.Struct({
   operationKey: identifier,
   state: Schema.Literals([
     "queued",
-    "waiting_writer",
     "starting",
     "accepted",
     "needs_refresh",

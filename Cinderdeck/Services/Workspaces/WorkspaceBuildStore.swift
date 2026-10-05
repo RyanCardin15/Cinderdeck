@@ -15,9 +15,8 @@ final class WorkspaceBuildStore {
         let bytes = try WorkspaceBuildArtifactFiles.read(root: self.directory, name: "receipts.json")
         receipts = try StackControlCoding.decoder().decode([WorkspaceBuildReceipt].self, from: bytes)
         guard receipts.count <= 32, receipts.allSatisfy({ UUID(uuidString: $0.id) != nil }) else { throw StackControlError.invalid("Build receipt inventory exceeds its bound") }
-        for index in receipts.indices where receipts[index].reservationState != "released" {
+        for index in receipts.indices where !["finalized", "cancelled", "failed"].contains(receipts[index].state) {
           receipts[index].state = "unknown"
-          if receipts[index].reservationState != "pending" { receipts[index].reservationState = "uncertain" }
           for key in receipts[index].actionStates.keys where receipts[index].actionStates[key] == "pending" { receipts[index].actionStates[key] = "unknown" }
           receipts[index].detail = "Native execution was interrupted; inspect owned processes before explicit cancellation. No effects are replayed."
         }
@@ -55,10 +54,9 @@ final class WorkspaceBuildStore {
       return (old, false)
     }
     try pruneFinished()
-    guard receipts.filter({ $0.reservationState != "released" }).count < 16 else { throw StackControlError(code: "capacity", message: "Resolve existing build attempts before preparing more") }
+    guard receipts.filter({ !["finalized", "cancelled", "failed"].contains($0.state) }).count < 16 else { throw StackControlError(code: "capacity", message: "Resolve existing build attempts before preparing more") }
     let id = UUID().uuidString
-    let lease = WorkspaceBuildLease(id: "verification:" + id, token: PhysicalCheckoutIdentity.digest(UUID().uuidString + UUID().uuidString))
-    var receipt = WorkspaceBuildReceipt(id: id, request: input, adapter: adapter, actorKey: actor.key, actor: actor, lease: lease)
+    var receipt = WorkspaceBuildReceipt(id: id, request: input, adapter: adapter, actorKey: actor.key, actor: actor)
     receipt.actions[input.operationKey] = "prepare"; receipt.actionStates[input.operationKey] = "pending"
     receipts.insert(receipt, at: 0)
     do { try save() } catch { receipts.removeAll { $0.id == id }; throw error }
@@ -135,24 +133,12 @@ final class WorkspaceBuildStore {
   func isFinishing(_ id: String) -> Bool { current(id)?.actions.values.contains(where: { $0 == "finish" || $0 == "finish:cancel" }) == true }
   func retainsRun(_ run: WorkspaceRun) -> Bool {
     receipts.contains { receipt in
-      receipt.reservationState != "released" && run.actor.key == receipt.actorKey && run.integrationAuthority == receipt.request.authority
+      !["finalized", "cancelled", "failed"].contains(receipt.state) && run.actor.key == receipt.actorKey && run.integrationAuthority == receipt.request.authority
         && (run.integrationOperationID == "build:" + receipt.id || run.integrationOperationID?.hasPrefix("build-check:" + receipt.id + ":") == true)
     }
   }
-  func reconcileReservation(_ id: String, reservations: CheckoutReservations) throws -> WorkspaceBuildReceipt {
-    guard let receipt = current(id) else { throw StackControlError.notFound("Build receipt is unavailable") }
-    let lease = try reservations.existingWriter(receipt.lease.id, actorKey: receipt.actorKey, token: receipt.lease.token)
-    let actual = lease?.state ?? (receipt.reservationState == "pending" || receipt.reservationState == "released" ? receipt.reservationState : "uncertain")
-    if actual != receipt.reservationState || (actual == "uncertain" && receipt.state != "unknown") {
-      try update(id) {
-        $0.reservationState = actual
-        if actual == "uncertain" { $0.state = "unknown"; $0.detail = "Native lease ownership is uncertain. Inspect and explicitly cancel owned processes before a fresh attempt." }
-      }
-    }
-    return current(id) ?? receipt
-  }
   func pruneFinished() throws {
-    let terminal = receipts.filter { $0.reservationState == "released" }
+    let terminal = receipts.filter { ["finalized", "cancelled", "failed"].contains($0.state) }
     let removed = Set(terminal.dropFirst(16).map(\.id))
     guard !removed.isEmpty else { return }
     receipts.removeAll { removed.contains($0.id) }; try save()

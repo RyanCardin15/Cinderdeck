@@ -96,7 +96,7 @@ nonisolated enum StackCLI {
       return 0
     } catch let error as StackControlError {
       emitError(error.message, code: error.code, options)
-      return error.code == "claimed" ? 3 : 1
+      return 1
     } catch {
       emitError(error.localizedDescription, code: "failed", options)
       return 1
@@ -185,7 +185,6 @@ nonisolated enum StackCLI {
       if let workspace = arguments.first { params["workspace"] = .string(workspace) }
       else if required { throw StackControlError.invalid("Usage: cinderdeck services \(command) <workspace> …") }
     }
-    if options.has("force") { params["force"] = .bool(true) }
     let waitTimeout = Double(options["timeout"] ?? "") ?? 180
     switch command {
     case "lane", "lanes":
@@ -212,6 +211,7 @@ nonisolated enum StackCLI {
       params["wait"] = .bool(!options.has("no-wait"))
       params["timeout"] = .number(waitTimeout)
       if options.has("dependents") { params["dependents"] = .bool(true) }
+      if method == "services.stop", options.has("force") { params["force"] = .bool(true) }
       if !options.json && !options.has("no-wait") {
         FileHandle.standardError.write(Data((paint("… ", .dim) + "\(command) \(arguments.joined(separator: " "))\n").utf8))
       }
@@ -287,18 +287,6 @@ nonisolated enum StackCLI {
       if let repo = options["repo"] ?? arguments.dropFirst().first { params["repo"] = .string(repo) }
       let result = try connection.call(command == "pull" ? "git.pull" : "git.fetch", params, timeout: 300)
       if options.json { printJSON(result) } else { printRepos(try (result["repos"] ?? .array([])).decode([StackRepoSnapshot].self)) }
-    case "claim":
-      try workspaceParam()
-      if let note = options["note"] ?? (arguments.count > 1 ? arguments.dropFirst().joined(separator: " ") : nil) { params["note"] = .string(note) }
-      if let ttl = options["ttl"].flatMap(Double.init) { params["ttlMinutes"] = .number(ttl) }
-      let result = try connection.call("claim", params)
-      if options.json { printJSON(result); return }
-      let claim = try result.decode(StackClaim.self)
-      print("Claimed \(claim.stackID) as \(claim.holder.label) until \(timeString(claim.expiresAt)).")
-    case "release":
-      try workspaceParam()
-      let result = try connection.call("release", params)
-      if options.json { printJSON(result) } else { print("Released \(result["released"]?.stringValue ?? "workspace").") }
     case "events", "activity":
       try workspaceParam()
       if let limit = options["limit"] ?? options["lines"] { params["limit"] = .number(Double(limit) ?? 40) }
@@ -350,7 +338,6 @@ nonisolated enum StackCLI {
     if options.has("help") || command == "help" { print(usage); return }
     let args = Array(arguments.dropFirst())
     var params: [String: JSONValue] = [:]
-    if options.has("force") { params["force"] = .bool(true) }
     switch command {
     case "list", "ls", "status":
       if let source = args.first { params["workspace"] = .string(source) }
@@ -544,11 +531,6 @@ nonisolated enum StackCLI {
       if let started { header += paint("  up " + age(started), .dim) }
       if let operation = stack.operation { header += paint("  " + operation + "…", .yellow) }
       print(header)
-      if let claim = stack.claim {
-        let note: String = claim.note.map { " — " + $0 } ?? ""
-        let until: String = paint("  until " + timeString(claim.expiresAt), .dim)
-        print("  " + paint("⚑ claimed by " + claim.holder.label, .cyan) + note + until)
-      }
       for issue in stack.issues { print("  " + paint(issue, .yellow)) }
       if let status = stack.laneStatus {
         var line = "  " + paint("lane", .dim) + " " + status.directory
@@ -638,8 +620,6 @@ nonisolated enum StackCLI {
     cinderdeck services branches <workspace> [repo]
     cinderdeck services switch <workspace> <branch>   --repo <id>  --stash | --carry
     cinderdeck services fetch|pull <workspace> [repo]
-    cinderdeck services claim <workspace> [note]      --ttl <minutes> (default 30); advisory lock
-    cinderdeck services release <workspace-or-lane>  Cancel its agent lease; --force overrides another holder
     cinderdeck services events <workspace>            Recent activity and who caused it
     cinderdeck services validate <file.toml>          Check a workspace definition
     cinderdeck services reload | where | ping
@@ -682,7 +662,7 @@ nonisolated enum StackCLI {
 
   OPTIONS
     --json          Machine-readable output        --no-wait     Don't wait for readiness
-    --timeout <s>   Wait limit (default 180)       --force       Override another agent's claim
+    --timeout <s>   Wait limit (default 180)
     --as <name>     Name to show as the actor      --session <id> Distinguish parallel agents
   """
 }

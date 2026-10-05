@@ -41,7 +41,7 @@ extension StackControlService {
           throw StackControlError.invalid("Pass workspace with task or workflow")
         }
         let file = try workspaceFile(.object(["workspace": .string(workspaceName)]))
-        try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
+
         let kind: WorkspaceRunKind = task != nil ? .task : .workflow
         let (session, run) = try await controller.startRun(options, workspace: file.id, kind: kind, definitionID: task ?? workflow ?? "",
           actor: actor, runner: workspaceRunner)

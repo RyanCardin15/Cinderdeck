@@ -1,11 +1,11 @@
 ---
 name: cinderdeck-parallel-lanes
-description: Run a branch of a project side by side with the original checkout using Cinderdeck worktree lanes, each with its own Git worktree, ports, environment, logs, and claim. Use when asked to work on a branch in parallel, run several agents on one project at once, test a pull request branch without disturbing the running app, run the app from your own worktree (Claude Code, Codex, Cursor, Conductor), or make a workspace definition work in lanes (ports, .env files, shared databases, setup and cleanup).
+description: Run a branch of a project side by side with the original checkout using Cinderdeck worktree lanes, each with its own Git worktree, ports, environment, and logs. Use when asked to work on a branch in parallel, run several agents on one project at once, test a pull request branch without disturbing the running app, run the app from your own worktree (Claude Code, Codex, Cursor, Conductor), or make a workspace definition work in lanes (ports, .env files, shared databases, setup and cleanup).
 ---
 
 # Run branches in parallel with Cinderdeck lanes
 
-A lane runs a Cinderdeck workspace from another checkout. Each independent repository gets a Git worktree, with separate service ports, logs, and a claim in your name. The original checkout keeps running. Address a lane by its stable ID or `<workspace>/<name>` with every command. Its name defaults to its Git branch; renaming the lane leaves the branch unchanged.
+A lane runs a Cinderdeck workspace from another checkout. Each independent repository gets a Git worktree, with separate service ports, and logs. The original checkout keeps running. Address a lane by its stable ID or `<workspace>/<name>` with every command. Its name defaults to its Git branch; renaming the lane leaves the branch unchanged.
 
 Use the `cinderdeck` CLI. If the `cinderdeck` MCP server is connected, the tools map one to one:
 
@@ -39,7 +39,7 @@ git worktree list                  # is the branch already checked out somewhere
 | A lane for your branch already exists | use its returned ID or name: `services status shop/<name>` |
 | The user wants the original checkout switched | not a lane: `services switch` (it stops and restarts their services) |
 
-Never switch branches in, stop, or remove a lane or workspace that another agent has claimed unless the user tells you to.
+Agents can use any lane or checkout without claiming it. Use distinct branches when independent edits need separate files.
 
 ## 2. Create or adopt
 
@@ -95,9 +95,9 @@ cinderdeck lane release shop/agent/own                # an adopted lane: forget 
 - `ignored_files`: the worktree has `node_modules`, build output, or a changed `.env`. The error lists them with sizes. **Ask the user** before passing `--discard-ignored` (MCP `discard_ignored: true`).
 - `teardown_failed`: the lane is kept. Read the run's output and fix it; use `--force-teardown` only if the user agrees.
 - `in_use` when stopping the original checkout: running lanes use its shared services. Stop those lanes first, or pass `--force` with the user's approval.
-- `in_use` when removing or releasing a lane: another workspace or lane uses its services. Stop those dependents first; `--force` only overrides the claim for removal.
+- `in_use` when removing or releasing a lane: another workspace or lane uses its services. Stop those dependents first.
 - `cinderdeck lane prune --dry-run` lists lanes whose branch was merged or whose upstream branch was deleted. Show the list to the user before running `lane prune`.
-- Release your claim when you are done with a lane you keep: `cinderdeck services release shop/<name>`. `lane release --delete-logs` (MCP `release_lane` with `delete_logs: true`) also removes saved service logs while keeping worktrees.
+- `lane release --delete-logs` (MCP `release_lane` with `delete_logs: true`) also removes saved service logs while keeping worktrees.
 
 ## 5. Make a workspace work in lanes
 
@@ -155,4 +155,4 @@ Ask the user before changing their workspace file, and say what each change does
 - [ ] Used the lane's URLs and `lane env`, never the original checkout's ports
 - [ ] Setup succeeded and services are ready (`problems`, port warnings, and setup status checked)
 - [ ] Work committed or pushed before removal; asked before `--discard-ignored`, `--force`, or `prune`
-- [ ] Removed, released, or stopped the lane, and released the claim when done
+- [ ] Removed, released, or stopped the lane when done

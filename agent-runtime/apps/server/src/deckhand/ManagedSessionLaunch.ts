@@ -234,8 +234,7 @@ const make = Effect.gen(function* () {
           context.issues.length ||
           !context.repos.length ||
           context.repos.length > 64 ||
-          new Set(context.repos.map((repo) => repo.id)).size !== context.repos.length ||
-          !snapshot.hello.capabilities.includes("checkout.reservations")
+          new Set(context.repos.map((repo) => repo.id)).size !== context.repos.length
         )
           return yield* error(key, "stale_context");
         const selected = context.repos.find((repo) => repo.id === input.repositoryID);
@@ -858,9 +857,7 @@ const make = Effect.gen(function* () {
             workspace.issues.length ||
             !workspace.repos.some((repo) => repo.id === input.repositoryID) ||
             !source.hello.capabilities.includes("operations.lane.create.repositoryRefs") ||
-            !source.hello.capabilities.includes("operations.lane.create.managedWriter") ||
-            !source.hello.capabilities.includes("operations.receipts.wait") ||
-            !source.hello.capabilities.includes("checkout.reservations")
+            !source.hello.capabilities.includes("operations.receipts.wait")
           )
             return yield* error(key, "stale_context");
           if (input.reviewerContext) {
@@ -962,7 +959,6 @@ const make = Effect.gen(function* () {
               workspace: input.workspaceID,
               branch: input.branch,
               repositoryRefs: input.repositoryRefs,
-              managedWriter: true,
               setup: input.setup,
               start: input.start,
             },

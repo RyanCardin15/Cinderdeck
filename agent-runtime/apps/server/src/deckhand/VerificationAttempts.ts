@@ -546,7 +546,7 @@ const make = Effect.gen(function* () {
             buildAndChecksMatch: false,
             verdict: "incomplete",
             currentHead: fresh.head,
-            detail: "Preparing the declared build in the reserved checkout.",
+            detail: "Preparing the declared build in the selected checkout.",
           };
           const encoded = yield* encode(value);
           yield* sql`INSERT INTO deckhand_verification_attempts(operation_key,actor_id,pr_key,original_json,record_json) VALUES(${input.operationKey},${actor},${prKey(input.preview.reference)},${originalJSON},${encoded})`;
@@ -600,8 +600,6 @@ const make = Effect.gen(function* () {
             if (head.head !== value.preview.head && input.action !== "finalize")
               return yield* fail("pr_head_changed");
             value = { ...value, currentHead: head.head };
-            if (nativeReceipt.reservationState !== "held")
-              return yield* fail("reservation_not_held");
           }
           if (
             (input.action === "launch" || input.action === "checks") &&

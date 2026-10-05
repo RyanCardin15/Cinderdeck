@@ -248,7 +248,7 @@ const make = Effect.gen(function* () {
           effect.pipe(
             Effect.provideService(Authorized, [...authorized, authority]),
             // A child can inherit FiberRefs and outlive this effect. Its inherited
-            // authority must expire before the backend releases physical ownership.
+            // authority must expire when the operation ends.
             Effect.onExit(() =>
               Effect.sync(() => {
                 active = false;
@@ -264,11 +264,9 @@ const make = Effect.gen(function* () {
                 command: "git",
                 cwd: input.cwd,
                 detail:
-                  error.reason === "busy"
-                    ? "This checkout has an active or uncertain writer. Stop its session before changing Git or restoring files."
-                    : error.reason === "native_lifecycle"
-                      ? "Manage this checkout's worktrees through its Cinderdeck workspace."
-                      : "Checkout ownership could not be verified. Refresh its workspace connection before changing Git or restoring files.",
+                  error.reason === "native_lifecycle"
+                    ? "Manage this checkout's worktrees through its Cinderdeck workspace."
+                    : "Checkout ownership could not be verified. Refresh its workspace connection before changing Git or restoring files.",
               }),
             ),
           ),
@@ -305,9 +303,7 @@ const make = Effect.gen(function* () {
                   command: "git",
                   cwd,
                   detail:
-                    error.reason === "busy"
-                      ? "The new worktree has another writer. Its files were kept; stop that session before completing setup or removing it."
-                      : "Ownership of the new worktree could not be verified. Its files were kept for recovery.",
+                    "Identity of the new worktree could not be verified. Its files were kept for recovery.",
                 }),
               ),
             ),

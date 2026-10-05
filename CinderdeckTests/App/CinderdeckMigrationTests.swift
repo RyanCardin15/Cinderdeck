@@ -4,7 +4,7 @@ import XCTest
 @testable import Cinderdeck
 
 final class CinderdeckMigrationTests: XCTestCase {
-  func testLiveAgentSocketIsExcludedWhileClaimsArePreserved() throws {
+  func testLiveAgentSocketIsExcludedAndRetiredClaimsAreExcluded() throws {
     let home = URL(fileURLWithPath: "/tmp/cdm-\(UUID().uuidString.prefix(8))")
     let domain = "CinderdeckMigrationTests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: domain)!
@@ -15,11 +15,17 @@ final class CinderdeckMigrationTests: XCTestCase {
     defer { server.stop() }
     try Data("{\"legacy\":true}".utf8).write(to: old.appendingPathComponent("state.json"))
     try Data("[]".utf8).write(to: old.appendingPathComponent("claims.json"))
+    let integration = old.appendingPathComponent("Integration")
+    try FileManager.default.createDirectory(at: integration, withIntermediateDirectories: true)
+    try Data("legacy ownership".utf8).write(to: integration.appendingPathComponent("checkout-reservations.sqlite"))
+    try Data("journal".utf8).write(to: integration.appendingPathComponent("operations.sqlite"))
     try CinderdeckMigration.runIfNeeded(home: home, defaults: defaults, legacyPreferences: [:])
     let imported = home.appendingPathComponent("Library/Application Support/Cinderdeck/Stacks")
     XCTAssertFalse(FileManager.default.fileExists(atPath: imported.appendingPathComponent("control.sock").path))
     XCTAssertFalse(FileManager.default.fileExists(atPath: imported.appendingPathComponent("state.json").path))
-    XCTAssertEqual(try Data(contentsOf: imported.appendingPathComponent("claims.json")), Data("[]".utf8))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: imported.appendingPathComponent("claims.json").path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: imported.appendingPathComponent("Integration/checkout-reservations.sqlite").path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: imported.appendingPathComponent("Integration/operations.sqlite").path))
     XCTAssertTrue(FileManager.default.fileExists(atPath: old.appendingPathComponent("control.sock").path))
   }
 

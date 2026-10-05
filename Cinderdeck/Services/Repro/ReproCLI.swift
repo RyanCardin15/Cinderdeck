@@ -244,7 +244,7 @@ nonisolated enum ReproCLI {
     } catch {
       let error = error as? StackControlError ?? .init(code: "failed", message: error.localizedDescription)
       FileHandle.standardError.write(Data((JSONValue.object(["error": .object(["code": .string(error.code), "message": .string(error.message)])]).prettyString() + "\n").utf8))
-      return error.code == "claimed" ? 3 : 1
+      return 1
     }
   }
 

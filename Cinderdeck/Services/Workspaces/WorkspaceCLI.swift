@@ -30,19 +30,19 @@ nonisolated enum WorkspaceCLI {
   static func parse(_ arguments: [String]) throws -> StackCLI.Options {
     let parsed = try AgentToolCLI.parse(arguments,
       valued: ["as", "session", "name", "folder", "id", "revision", "file", "data", "section", "timeout", "limit", "lines", "step"],
-      flags: ["json", "force", "wait"])
+      flags: ["json", "wait"])
     let command = parsed.positionals.first ?? "list"
     var valued: Set<String> = ["as", "session"]
     var flags: Set<String> = ["json"]
     switch command {
     case "create": valued.formUnion(["name", "folder", "id"])
-    case "edit": valued.formUnion(["name", "folder", "revision"]); flags.insert("force")
-    case "save": valued.formUnion(["file", "revision"]); flags.insert("force")
-    case "remove", "delete": valued.insert("revision"); flags.insert("force")
-    case "save-service", "save-task", "save-workflow": valued.formUnion(["data", "file"]); flags.insert("force")
-    case "delete-item", "cancel": flags.insert("force")
+    case "edit": valued.formUnion(["name", "folder", "revision"])
+    case "save": valued.formUnion(["file", "revision"])
+    case "remove", "delete": valued.insert("revision")
+    case "save-service", "save-task", "save-workflow": valued.formUnion(["data", "file"])
+    case "delete-item", "cancel": break
     case "open": valued.insert("section")
-    case "task", "workflow": valued.insert("timeout"); flags.formUnion(["wait", "force"])
+    case "task", "workflow": valued.insert("timeout"); flags.formUnion(["wait"])
     case "wait": valued.insert("timeout")
     case "runs": valued.insert("limit")
     case "logs": valued.formUnion(["lines", "step"])
@@ -67,7 +67,6 @@ nonisolated enum WorkspaceCLI {
         params[key] = .number(Double(value))
       }
     }
-    if options.has("force") { params["force"] = .bool(true) }
     if let timeout = options["timeout"], Double(timeout).map({ $0.isFinite && $0 >= 1 && $0 <= 3600 }) != true {
       throw StackControlError.invalid("--timeout must be a number from 1 to 3600 seconds")
     }
@@ -92,7 +91,7 @@ nonisolated enum WorkspaceCLI {
       let kind = String(command.dropFirst(5))
       try count(3...3, "\(command) <workspace> <id> --data '<json>' (or --file <args.json>)")
       let data = try AgentToolCLI.object(options)
-      guard data["workspace"] == nil, data[kind] == nil, data["force"] == nil else { throw StackControlError.invalid("Set workspace and component id with positionals, and force with --force") }
+      guard data["workspace"] == nil, data[kind] == nil else { throw StackControlError.invalid("Set workspace and component id with positionals") }
       params.merge(data) { _, new in new }
       params["workspace"] = .string(args[1]); params[kind] = .string(args[2])
       tool = "save_workspace_" + kind
@@ -152,7 +151,7 @@ nonisolated enum WorkspaceCLI {
 
   Add --wait to task/workflow to wait for completion (exit 0 for success, 1 otherwise).
   --timeout <seconds> limits waiting only (default 600); expiry does not cancel the run.
-  --as <agent> / --session <id> identify the caller. --force overrides an advisory claim.
+  --as <agent> / --session <id> identify the caller.
   All output is JSON. Use cinderdeck tools <tool-name> for component JSON fields.
   Full saves and removal require stopped services/runs; removal keeps projects and run history. cinderdeck services manages long-running services.
   Definitions remain in ~/.config/cinderdeck/stacks/*.toml; see docs/WORKSPACES.md.

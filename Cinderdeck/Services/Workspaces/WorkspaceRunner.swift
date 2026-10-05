@@ -64,18 +64,12 @@ final class WorkspaceRunner: ObservableObject {
           $0.steps[i].finishedAt = failure == nil ? Date() : nil
         }
       }
-      if failure == nil { supervisor.releaseCheckoutMutation("run:" + saved.id.uuidString) }
-    }
-    // A crash after persisting a terminal result but before releasing ownership
-    // also has a durable stop proof. Do not release a cancelling/active run.
-    for saved in runs where !saved.status.isActive {
-      supervisor.releaseCheckoutMutation("run:" + saved.id.uuidString)
     }
   }
 
   @discardableResult
   func submit(workspace id: String, kind: WorkspaceRunKind, definitionID: String, actor: StackActor = .user,
-    environment: [String: String] = [:], laneLifecycle: Bool = false, integrationOperationID: String? = nil, rerunOfID: UUID? = nil, integrationAuthority: WorkspaceRunAuthority? = nil, verificationLease: WorkspaceBuildLease? = nil) throws -> WorkspaceRun {
+    environment: [String: String] = [:], laneLifecycle: Bool = false, integrationOperationID: String? = nil, rerunOfID: UUID? = nil, integrationAuthority: WorkspaceRunAuthority? = nil, buildReceiptID: String? = nil) throws -> WorkspaceRun {
     guard recovered && !recovering else { throw StackError.message("Run recovery is still in progress") }
     if let storageError { throw StackError.message(storageError) }
     guard activeRun(id) == nil else { throw StackError.message("A task or workflow is already running in this workspace") }
@@ -106,23 +100,9 @@ final class WorkspaceRunner: ObservableObject {
     run.integrationAuthority = integrationAuthority
     let workflowHash = kind == .workflow ? workspace.workflow(definitionID).map(WorkspaceRunProvenance.digest) : workspace.task(definitionID).map(WorkspaceRunProvenance.digest)
     run.sourceProvenance = WorkspaceRunSourceProvenance(schemaVersion: 1, definitionHash: workspace.fingerprint, workflowHash: workflowHash ?? WorkspaceRunProvenance.digest(references))
-    let reservationID = "run:" + run.id.uuidString
-    if let verificationLease {
-      guard let authority = integrationAuthority else { throw StackControlError.invalid("Verification task authority is missing") }
-      let selection = WorkspaceRunProvenance.select(workspace, references: references)
-      guard selection.complete else { throw StackControlError(code: "unsupported_checkout", message: "Verification task source scope is incomplete") }
-      let scope = try selection.repositories.compactMap { try PhysicalCheckoutIdentity.resolve($0.path)?.physicalID }
-      _ = try supervisor.checkoutReservations().borrowWriter(verificationLease.id, actorKey: actor.key, token: verificationLease.token,
-        workspaceID: id, generation: authority.generation, physicalIDs: scope)
-      run.borrowedCheckoutReservationID = verificationLease.id
-      run.buildReceiptID = String(verificationLease.id.dropFirst("verification:".count))
-    } else { run.borrowedCheckoutReservationID = laneLifecycle ? try supervisor.borrowLaneLifecycle(workspace, actor: actor) : nil }
-    if run.borrowedCheckoutReservationID == nil {
-      _ = try supervisor.reserveCheckoutMutation(workspace, id: reservationID, kind: "run", actor: actor)
-    }
-    // Persist before launching anything. Corrupt/unwritable history never silently loses ownership.
-    do { try store.save([run] + runs) }
-    catch { supervisor.releaseCheckoutMutation(reservationID); throw error }
+    run.buildReceiptID = buildReceiptID
+    // Persist before launching anything.
+    try store.save([run] + runs)
     runs.insert(run, at: 0)
     runEnvironment[run.id] = environment
     workers[run.id] = Task { [weak self] in
@@ -161,7 +141,6 @@ final class WorkspaceRunner: ObservableObject {
       processes[id] = nil
       if run.cleanupServices { await cleanup(id) }
       change(id) { $0.status = .cancelled; $0.finishedAt = Date(); $0.detail = "Cancelled" }
-      supervisor.releaseCheckoutMutation("run:" + id.uuidString)
     }
   }
   func cancelAll() async {
@@ -241,7 +220,6 @@ final class WorkspaceRunner: ObservableObject {
       else if $0.sourceProvenance?.state == "changed" { $0.sourceProvenance?.detail = "Repository identity, HEAD, or included source inputs changed during this run." }
       $0.status = outcome; $0.detail = detail; $0.finishedAt = outcome.isActive ? nil : Date()
     }
-    if !outcome.isActive { supervisor.releaseCheckoutMutation("run:" + id.uuidString) }
     workers[id] = nil
     prune()
   }

@@ -12,8 +12,8 @@ extension StackControlService {
       guard let source = navigation.workspaces.first(where: { $0.id == workspace })?.definition else {
         throw StackError.message("Choose an available workspace with a valid definition.")
       }
-      try checkClaim(id, actor: actor, force: false)
-      try checkClaim(workspace, actor: actor, force: false)
+
+
       try requireStoppedForDefinition(id)
       if var record = try StackLaneStore.record(id: id, in: supervisor.lanesDirectory) {
         let others = try StackLaneStore.records(in: supervisor.lanesDirectory)
@@ -68,7 +68,7 @@ extension StackControlService {
         params: .object(["workspace": .string(id), "revision": .string(revision), "lane_entry": .bool(true)]), actor: actor)
     } else {
       try await supervisor.withDefinitionLock(workspace: id) {
-        try checkClaim(id, actor: actor, force: false)
+
         try requireStoppedForDefinition(id)
         guard file.file.standardizedFileURL == StackLaneStore.manifest(id: id, in: supervisor.lanesDirectory).standardizedFileURL,
           (try? StackLaneStore.record(id: id, in: supervisor.lanesDirectory)) == nil else {
@@ -76,7 +76,7 @@ extension StackControlService {
         }
         try FileManager.default.removeItem(at: file.file)
       }
-      release(stack: id)
+
     }
   }
 }

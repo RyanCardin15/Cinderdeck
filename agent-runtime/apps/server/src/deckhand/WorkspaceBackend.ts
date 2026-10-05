@@ -1,9 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - UUIDs identify durable finite checkout owners.
-import * as NodeCrypto from "node:crypto";
-import * as Exit from "effect/Exit";
-import * as Scope from "effect/Scope";
-import * as NativeWriterReservations from "./NativeWriterReservations.ts";
-import * as WriterReservations from "./WriterReservations.ts";
 import * as Contracts from "@cinderdeck/contracts/deckhand";
 import * as Integration from "@cinderdeck/contracts/deckhand/integration";
 import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
@@ -24,7 +18,6 @@ export class CheckoutMutationError extends Schema.TaggedError<CheckoutMutationEr
   "CheckoutMutationError",
   {
     reason: Schema.Literals([
-      "busy",
       "unavailable",
       "stale_binding",
       "native_lifecycle",
@@ -54,13 +47,12 @@ type LaneLifecycle = (
   actorID: string,
   input: Omit<Integration.IntegrationOperationInput, "method">,
 ) => Effect.Effect<Integration.IntegrationOperationReceipt, Rpc.DeckhandRpcError>;
-interface MutationLease {
-  readonly ownerId: string;
+interface MutationContextScope {
   readonly repositoryPhysicalId: string;
   readonly standaloneLifecycle: boolean;
   active: boolean;
 }
-const ActiveMutation = Context.Reference<MutationLease | null>(
+const ActiveMutation = Context.Reference<MutationContextScope | null>(
   "t3/deckhand/ActiveCheckoutMutation",
   { defaultValue: () => null },
 );
@@ -72,7 +64,7 @@ export class WorkspaceBackend extends Context.Service<
     readonly inspect: (
       input: MutationInput,
     ) => Effect.Effect<MutationContext | null, CheckoutMutationError>;
-    readonly reserve: <A, E, R>(
+    readonly withCheckout: <A, E, R>(
       input: MutationInput,
       effect: Effect.Effect<A, E, R>,
     ) => Effect.Effect<A, E | CheckoutMutationError, R>;
@@ -104,8 +96,6 @@ const make = Effect.gen(function* () {
   const identities = yield* CheckoutIdentity.CheckoutIdentity;
   const runner = yield* ProcessRunner.ProcessRunner;
   const hub = yield* IntegrationHub.IntegrationHub;
-  const writers = yield* WriterReservations.WriterReservations;
-  const native = yield* NativeWriterReservations.NativeWriterReservations;
   const retainsNativePath = (cwd: string) =>
     Effect.gen(function* () {
       const within = (parent: string) =>
@@ -247,8 +237,6 @@ const make = Effect.gen(function* () {
         })
         .pipe(Effect.result);
       if (lookup._tag === "Failure") {
-        if (lookup.failure.code === "checkout_reserved")
-          return yield* new CheckoutMutationError({ reason: "busy" });
         if (
           known.some((item) => item.binding.backend === "cinderdeck") ||
           lookup.failure.reason !== "unavailable"
@@ -333,13 +321,11 @@ const make = Effect.gen(function* () {
         isMutationError(cause) ? cause : new CheckoutMutationError({ reason: "storage" }),
       ),
     );
-  const reserve: WorkspaceBackend["Service"]["reserve"] = (input, effect) =>
+  const withCheckout: WorkspaceBackend["Service"]["withCheckout"] = (input, effect) =>
     Effect.gen(function* () {
       const resolved = yield* inspect(input);
       if (resolved === null) return yield* effect;
-      const ownerId = `mutation:${NodeCrypto.randomUUID()}`;
-      const lease: MutationLease = {
-        ownerId,
+      const context: MutationContextScope = {
         repositoryPhysicalId: resolved.current.repositoryPhysicalId,
         standaloneLifecycle:
           !!input.worktreeLifecycle &&
@@ -347,139 +333,42 @@ const make = Effect.gen(function* () {
           resolved.contexts.length === 0,
         active: true,
       };
-      const ownershipScope = yield* Scope.make();
-      const processScope = yield* Scope.make();
-      let started = false;
-      let confirmedStopped = false;
-      let releaseUncertain = false;
-      return yield* Effect.gen(function* () {
-        yield* writers.tryAcquire({ ownerId, physicalIds: resolved.physicalIDs }).pipe(
-          Effect.provideService(Scope.Scope, ownershipScope),
-          Effect.mapError(
-            (error) =>
-              new CheckoutMutationError({ reason: error.reason === "busy" ? "busy" : "storage" }),
-          ),
-        );
-        // Revalidate after local admission; aliases and native generations may change
-        // while resolving the initial request. Admit new checkout identities only through
-        // includeCheckout after their creation; initial scope drift is a refusal.
-        const fresh = yield* inspect(input);
-        if (
-          fresh === null ||
-          fresh.current.physicalId !== resolved.current.physicalId ||
-          fresh.physicalIDs.length !== resolved.physicalIDs.length ||
-          fresh.physicalIDs.some((id) => !resolved.physicalIDs.includes(id))
-        )
-          return yield* new CheckoutMutationError({ reason: "stale_binding" });
-        const reserved = new Set<string>();
-        let index = 0;
-        for (const context of fresh.contexts) {
-          const selected = context.repos.filter((_, i) => !reserved.has(context.physicalIDs[i]!));
-          if (!selected.length) continue;
-          const scope = context.physicalIDs.filter((_, i) => selected.includes(context.repos[i]!));
-          yield* Effect.uninterruptible(
-            Effect.gen(function* () {
-              const lease = yield* native
-                .acquire(`${ownerId}:${index++}`, {
-                  cwd: fresh.current.root,
-                  physicalId: fresh.current.physicalId,
-                  writerScope: [...new Set(scope)],
-                  native: {
-                    installationID: fresh.installationID!,
-                    workspaceID: context.workspaceID,
-                    generation: context.generation,
-                    revision: context.revision,
-                    repos: selected,
-                  },
-                })
-                .pipe(
-                  Effect.tapError((error) =>
-                    error.reason === "uncertain" || error.reason === "storage"
-                      ? writers.uncertain(ownerId).pipe(Effect.orDie)
-                      : Effect.void,
-                  ),
-                  Effect.mapError(
-                    (error) =>
-                      new CheckoutMutationError({
-                        reason: error.reason === "refused" ? "busy" : "uncertain",
-                      }),
-                  ),
-                );
-              if (lease !== null)
-                yield* Scope.addFinalizer(
-                  ownershipScope,
-                  Effect.suspend(() =>
-                    started && !confirmedStopped
-                      ? Effect.void
-                      : native.release(lease).pipe(
-                          Effect.catch(() =>
-                            Effect.gen(function* () {
-                              releaseUncertain = true;
-                              yield* writers.uncertain(ownerId).pipe(Effect.orDie);
-                            }),
-                          ),
-                        ),
-                  ),
-                );
-              for (const id of scope) reserved.add(id);
-            }),
-          );
-        }
-        started = true;
-        return yield* effect.pipe(
-          Effect.provideService(Scope.Scope, processScope),
-          Effect.provideService(ActiveMutation, lease),
-        );
-      }).pipe(
-        Effect.onExit((exit) =>
-          Effect.gen(function* () {
-            lease.active = false;
-            const closed = yield* Scope.close(processScope, exit).pipe(Effect.exit);
-            confirmedStopped = Exit.isSuccess(closed);
-            if (!confirmedStopped) yield* writers.uncertain(ownerId).pipe(Effect.orDie);
-            yield* Scope.close(ownershipScope, exit);
-            if (Exit.isFailure(closed)) return yield* Effect.failCause(closed.cause);
-            if (releaseUncertain) return yield* new CheckoutMutationError({ reason: "uncertain" });
+      return yield* effect.pipe(
+        Effect.provideService(ActiveMutation, context),
+        Effect.ensuring(
+          Effect.sync(() => {
+            context.active = false;
           }),
         ),
       );
     });
   const includeCheckout: WorkspaceBackend["Service"]["includeCheckout"] = (cwd, effect) =>
     Effect.gen(function* () {
-      const lease = yield* ActiveMutation;
-      if (!lease?.active || !lease.standaloneLifecycle)
+      const context = yield* ActiveMutation;
+      if (!context?.active || !context.standaloneLifecycle)
         return yield* new CheckoutMutationError({ reason: "native_lifecycle" });
       const target = yield* inspect({ cwd, sharedRefs: false });
       if (
         !target ||
         target.backend !== "standalone" ||
         target.contexts.length ||
-        target.current.repositoryPhysicalId !== lease.repositoryPhysicalId
+        target.current.repositoryPhysicalId !== context.repositoryPhysicalId
       )
         return yield* new CheckoutMutationError({ reason: "stale_binding" });
-      yield* writers
-        .extend({ ownerId: lease.ownerId, physicalIds: [target.current.physicalId] })
-        .pipe(
-          Effect.mapError(
-            (error) =>
-              new CheckoutMutationError({ reason: error.reason === "busy" ? "busy" : "storage" }),
-          ),
-        );
       const fresh = yield* identities
         .resolve(cwd)
         .pipe(Effect.mapError(() => new CheckoutMutationError({ reason: "stale_binding" })));
       if (
         fresh.physicalId !== target.current.physicalId ||
-        fresh.repositoryPhysicalId !== lease.repositoryPhysicalId
+        fresh.repositoryPhysicalId !== context.repositoryPhysicalId
       ) {
-        yield* writers.uncertain(lease.ownerId).pipe(Effect.orDie);
         return yield* new CheckoutMutationError({ reason: "stale_binding" });
       }
       return yield* effect;
     });
   return WorkspaceBackend.of({
     inspect,
-    reserve,
+    withCheckout,
     includeCheckout,
     inventory: hub.overview,
     context: hub.resource,
@@ -495,8 +384,6 @@ const make = Effect.gen(function* () {
 export const layer = Layer.effect(WorkspaceBackend, make);
 export const layerLive = layer.pipe(
   Layer.provide(CheckoutIdentity.layer.pipe(Layer.provide(ProcessRunner.layer))),
-  Layer.provide(WriterReservations.layer),
-  Layer.provide(NativeWriterReservations.layer.pipe(Layer.provide(IntegrationHub.layerLive))),
   Layer.provide(IntegrationHub.layerLive),
   Layer.provide(ProcessRunner.layer),
 );

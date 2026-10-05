@@ -105,7 +105,6 @@ do_e2e() {
   sleep 1.5
   run services ports --external
   run services ports 47811
-  run services claim demo "running e2e tests" --as Codex --session e2e --ttl 10
   run services restart demo worker --as Cursor
   run services restart demo worker --as Codex --session e2e
   run services switch demo feature/demo --as Codex --session e2e
@@ -124,7 +123,6 @@ do_e2e() {
     | "$BIN" mcp >> "$log" 2>&1
   echo "[exit $?]" >> "$log"
   cp "$FIX/Agent/state.json" "$OUT/state.json" 2>/dev/null
-  run services release demo --as Codex --session e2e
   run services status
   echo 0 > "$OUT/e2e.status"
   echo "[e2e] done — app left running for inspection (pkill -f '$BIN' to quit)"

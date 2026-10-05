@@ -21,7 +21,6 @@ import * as Ownership from "./OwnershipTransitions.ts";
 import * as Relationships from "./Relationships.ts";
 import * as Identity from "./CheckoutIdentity.ts";
 import * as Hub from "./IntegrationHub.ts";
-import * as Writers from "./WriterReservations.ts";
 import * as Projections from "../orchestration-v2/ProjectionStore.ts";
 const threadId = ThreadId.make("thread");
 const intent: C.OwnershipIntent = {
@@ -81,7 +80,7 @@ const hello: I.IntegrationHello = {
   executionHostID: "host",
   channel: "development",
   runtimeEpoch: "epoch",
-  capabilities: ["projection.snapshot", "operations.lane.adopt.managedWriter"],
+  capabilities: ["projection.snapshot", "operations.lane.adopt"],
   maximumFrameBytes: 65536,
   maximumPageSize: 100,
   maximumWaitMs: 30000,
@@ -169,10 +168,9 @@ const fixture = () => {
   const sql = NodeSqliteClient.layer({ filename: ":memory:" });
   const relationships = Relationships.layer.pipe(Layer.provideMerge(sql));
   const current = Current.layer.pipe(Layer.provideMerge(relationships));
-  const writers = Writers.layer.pipe(Layer.provideMerge(sql));
   const shared = Layer.mergeAll(
     current,
-    writers,
+    sql,
     FileSystem.layerNoop({
       realPath: (path) =>
         path === state.keptPath && path !== physical.root
@@ -226,6 +224,7 @@ const fixture = () => {
           observedAt: "now",
           error: null,
           resources: [resource(false), ...(state.native ? [resource(true)] : [])],
+          selectedResources: state.native ? [resource(true)] : [],
           activity: [],
           total: state.native ? 2 : 1,
           nextOffset: null,
@@ -285,7 +284,10 @@ const fixture = () => {
     Layer.provideMerge(
       Layer.mergeAll(
         owned,
-        Layer.mock(ManagedSessions.ManagedSessions)({ subscribe: () => Stream.make([]) }),
+        Layer.mock(ManagedSessions.ManagedSessions)({
+          subscribe: () => Stream.make([]),
+          subscribeThread: () => Stream.make(null),
+        }),
       ),
     ),
   );

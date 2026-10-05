@@ -167,7 +167,7 @@ extension StackControlService {
       receipt.buildReceiptID = buildID; receipt.attemptOperationKey = attemptKey
       try savePreviewImport(receipt, actor: actor)
       // Keep the original session requirement and actor/context authorization. A build
-      // adds stricter native ownership/lease proof; it never attests the browser target.
+      // adds stricter native build/process proof; it never attests the browser target.
       do {
         if let buildID {
           let authority = WorkspaceRunAuthority(installationID: installationID, workspaceID: workspaceID, generation: generation)
@@ -259,7 +259,7 @@ extension StackControlService {
             observation = await declaredBuildObservation(build, definition: definition, phase: "end")
             try supervisor.buildArtifacts.update(build.id) { if $0.observations.count < 64 { $0.observations.append(observation) } }
           } catch {
-            // Stopping remains available after lease/source/process loss; proof is unknown.
+            // Stopping remains available after source/process loss; proof is unknown.
             observation.detail = error.localizedDescription
           }
           receipt.buildProof?.end = observation

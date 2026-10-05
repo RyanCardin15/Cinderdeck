@@ -37,9 +37,6 @@ struct WorkspaceLaneMapInspector: View {
           }
         }
       }.controlSize(.small)
-      if node.isLane, let claim = model.claim(node.workspaceID) {
-        StackAgentLeaseView(claim: claim) { model.releaseClaim(node.workspaceID) }
-      }
       if let warning = node.warning {
         Label(warning, systemImage: "exclamationmark.triangle.fill")
           .font(.system(size: 11)).foregroundColor(.orange).lineLimit(2).help(warning).textSelection(.enabled)

@@ -13,7 +13,6 @@ nonisolated struct WorkspaceBuildPrepareInput: Codable, Equatable, Sendable {
   let expectedDefinitionHash: String; let expectedWorkflowHash: String; let expectedRepositories: [WorkspaceBuildExpectedRepository]; let requiredTaskIDs: [String]
   var authority: WorkspaceRunAuthority { .init(installationID: installationID, workspaceID: workspaceID, generation: generation) }
 }
-nonisolated struct WorkspaceBuildLease: Codable, Equatable, Sendable { let id: String; let token: String }
 nonisolated struct WorkspaceBuildArtifact: Codable, Equatable, Sendable { let name: String; let sha256: String; let size: Int }
 nonisolated struct WorkspaceBuildLaunch: Codable, Equatable, Sendable { let process: StackProcessIdentity; let nonceHash: String; let startedAt: Date }
 nonisolated struct WorkspaceBuildCheck: Codable, Equatable, Sendable {
@@ -42,12 +41,12 @@ nonisolated struct WorkspaceBuildObservation: Codable, Equatable, Sendable {
 }
 nonisolated struct WorkspaceBuildReceipt: Codable, Equatable, Sendable {
   let id: String; let request: WorkspaceBuildPrepareInput; let adapter: WorkspaceBuildAdapterDefinition
-  let actorKey: String; let actor: StackActor; let lease: WorkspaceBuildLease
+  let actorKey: String; let actor: StackActor
   var state = "preparing"; var createdAt = Date(); var updatedAt = Date(); var detail: String?
   var buildRunID: UUID?; var repositoriesAtStart: [WorkspaceRunRepositorySnapshot] = []; var repositoriesAtEnd: [WorkspaceRunRepositorySnapshot] = []
   var launchServices: [String]?; var ownedLaunchServices: [String: StackProcessIdentity]?
   var artifact: WorkspaceBuildArtifact?; var launch: WorkspaceBuildLaunch?; var launchNonce: String?
-  var checks: [WorkspaceBuildCheck] = []; var observations: [WorkspaceBuildObservation] = []; var reservationState = "pending"
+  var checks: [WorkspaceBuildCheck] = []; var observations: [WorkspaceBuildObservation] = []
   var actions: [String: String] = [:]
   var actionStates: [String: String] = [:]
   var value: JSONValue {
@@ -68,7 +67,6 @@ nonisolated struct WorkspaceBuildReceipt: Codable, Equatable, Sendable {
     value["launch"] = launch.flatMap { try? JSONValue(encoding: $0) } ?? .null
     value["checks"] = .array(checks.map(\.value))
     value["observations"] = .array(observations.map(\.value))
-    value["reservationState"] = .string(reservationState)
     let operations: [JSONValue] = actions.keys.sorted().map { key in
       let action = actions[key] == "finish:cancel" ? "finish" : actions[key]!
       return .object(["operationKey": .string(key), "action": .string(action), "state": .string(actionStates[key] ?? "pending")])

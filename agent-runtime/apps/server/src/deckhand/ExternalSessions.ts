@@ -93,7 +93,6 @@ const make = Effect.gen(function* () {
       interrupt: false,
       resume: false,
       approvals: false,
-      writerReservation: false,
     },
   });
   const nativeContext = (input: typeof C.ExternalSessionContext.Type | C.ExternalSessionList) =>
@@ -110,7 +109,7 @@ const make = Effect.gen(function* () {
     });
   // Refresh owns the Hub lock and writes its snapshot through this same SQL
   // connection. Never await it while holding a registry transaction: an event
-  // refresh (including writer release) would otherwise wait on our SQL lock.
+  // refresh would otherwise wait on our SQL lock.
   const currentNativeContext = (input: typeof C.ExternalSessionContext.Type) =>
     Effect.gen(function* () {
       const native = yield* hub.currentResources([input.workspaceID]);

@@ -116,7 +116,6 @@ const receipt = (): B.BuildReceipt => ({
     { operationKey: key("launch"), action: "launch", state: "accepted" },
     { operationKey: key("checks"), action: "checks", state: "accepted" },
   ],
-  reservationState: "held",
 });
 const observation = (phase: "start" | "end"): B.BuildObservation => ({
   receiptID: "receipt",
@@ -262,7 +261,6 @@ const setup = (state: {
               state.receipt = {
                 ...state.receipt,
                 state: input.cancel ? "cancelled" : "finalized",
-                reservationState: "released",
                 operations: [
                   ...state.receipt.operations,
                   { operationKey: input.operationKey, action: "finish", state: "accepted" },
@@ -448,7 +446,7 @@ describe("Durable pinned verification attempts", () => {
           cancellationKey: "manual-cleanup-2",
         });
         assert.equal(cancelled.phase, "cancelled");
-        assert.equal(cancelled.receipt?.reservationState, "released");
+        assert.equal(cancelled.receipt?.state, "cancelled");
         assert.equal(state.writes, 1);
       }).pipe(Effect.provide(setup(state)));
     },

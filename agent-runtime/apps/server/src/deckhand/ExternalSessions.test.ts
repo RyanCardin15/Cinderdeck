@@ -194,11 +194,9 @@ describe("ExternalSessions", () => {
         interrupt: false,
         resume: false,
         approvals: false,
-        writerReservation: false,
-      });
+        });
       const sql = yield* SqlClient.SqlClient;
       assert.equal((yield* sql`SELECT id FROM deckhand_sessions`).length, 0);
-      assert.equal((yield* sql`SELECT id FROM deckhand_writer_requests`).length, 0);
       assert.deepEqual(
         (yield* service.list(listInput)).map((row) => row.id),
         [created.id],

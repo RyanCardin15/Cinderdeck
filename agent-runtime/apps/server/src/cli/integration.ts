@@ -33,7 +33,7 @@ const call = Command.make("call", {
   argumentsJson: Argument.String("arguments-json"),
 }).pipe(
   Command.withDescription(
-    "Call a Cinderdeck tool using this agent terminal's injected T3_ACP_MCP_ENDPOINT and T3_ACP_MCP_AUTHORIZATION. Explicit mutation tool calls may change local services/runs, prepare evidence, register reported external sessions, or run a pinned verification build/check/capture attempt. An active writer can refuse verification reservation; uncertain actions must be inspected, never replayed. Never put credentials in arguments.",
+    "Call a Cinderdeck tool using this agent terminal's injected T3_ACP_MCP_ENDPOINT and T3_ACP_MCP_AUTHORIZATION. Explicit mutation tool calls may change local services/runs, prepare evidence, register reported external sessions, or run a pinned verification build/check/capture attempt. Other agents may use the checkout during verification; uncertain actions must be inspected, never replayed. Never put credentials in arguments.",
   ),
   Command.withHandler(({ tool, argumentsJson }) =>
     Object.hasOwn(DeckhandToolkit.tools, tool)

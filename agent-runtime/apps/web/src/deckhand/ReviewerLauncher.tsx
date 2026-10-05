@@ -14,7 +14,6 @@ import {
   scheduleReviewer,
   inspectReviewerQueue,
   cancelReviewerQueue,
-  stopReviewerSource,
   sessionLaunchOptions,
   inspectSessionCreation,
 } from "./state";
@@ -35,7 +34,6 @@ function errorMessage(cause: Cause.Cause<unknown>) {
 export function ReviewerLauncher({
   threadRef,
   enabled,
-  providerSessionId,
 }: {
   threadRef: ScopedThreadRef;
   enabled: boolean;
@@ -76,18 +74,10 @@ export function ReviewerLauncher({
   );
   const [record, setRecord] = useState<Rpc.ManagedCreateRecord | null>(null);
   const [missing, setMissing] = useState(false);
-  const refusedBeforeEffects =
-    record?.state === "failed" &&
-    record.laneID === null &&
-    record.launch === null &&
-    record.receipt?.state === "failed" &&
-    record.receipt.result == null &&
-    record.receipt.error?.code === "checkout_reserved";
   const inspectSource = useAtomCommand(previewReviewer, { reportFailure: false });
   const launch = useAtomCommand(scheduleReviewer, { reportFailure: false });
   const inspectQueue = useAtomCommand(inspectReviewerQueue, { reportFailure: false });
   const cancelQueue = useAtomCommand(cancelReviewerQueue, { reportFailure: false });
-  const stopWriter = useAtomCommand(stopReviewerSource, { reportFailure: false });
   const options = useAtomCommand(sessionLaunchOptions, { reportFailure: false });
   const inspect = useAtomCommand(inspectSessionCreation, { reportFailure: false });
   useEffect(() => {
@@ -152,11 +142,7 @@ export function ReviewerLauncher({
     setBusy(false);
     if (result._tag === "Success") {
       setRecord(result.value);
-      setMessage(
-        result.value.state === "failed" && result.value.receipt?.error?.code === "checkout_reserved"
-          ? "Review scheduling is blocked while the writer reserves the repository. Finish or release the writer, then inspect the latest committed revision and start a new review."
-          : `Saved review: ${result.value.state.replaceAll("_", " ")}`,
-      );
+      setMessage(`Saved review: ${result.value.state.replaceAll("_", " ")}`);
     } else {
       const error = Cause.squash(result.cause);
       setMissing(isRpcError(error) && error.reason === "missing");
@@ -212,7 +198,7 @@ export function ReviewerLauncher({
     if (
       !missing &&
       record?.state !== "accepted" &&
-      !refusedBeforeEffects &&
+      record?.state !== "failed" &&
       !["accepted", "cancelled", "needs_refresh"].includes(queue?.state ?? "")
     )
       return;
@@ -267,30 +253,14 @@ export function ReviewerLauncher({
       setMessage(result.value.detail ?? "Review cancelled.");
     } else setMessage(errorMessage(result.cause));
   };
-  const stop = async () => {
-    if (!providerSessionId) return;
-    setBusy(true);
-    const result = await stopWriter({
-      environmentId: threadRef.environmentId,
-      input: {
-        threadId: threadRef.threadId,
-        providerSessionId: ProviderSessionId.make(providerSessionId),
-      },
-    });
-    setBusy(false);
-    if (result._tag === "Success") setMessage(result.value.detail);
-    else setMessage(errorMessage(result.cause));
-  };
   return (
     <details className={styles.reviewer}>
       <summary>Schedule isolated review</summary>
       <div className={styles.reviewerForm}>
         <h2>Review this feature</h2>
         <p>
-          The reviewer gets a separate lane pinned to every repository’s committed head. Scheduling
-          waits for the writer’s process to release its repository reservation, even after a turn
-          finishes. Stop the writer below to release it while preserving its lane and transcript.
-          Uncommitted source changes must be resolved first.
+          The reviewer gets a separate lane pinned to every repository’s committed head. Uncommitted
+          source changes must be resolved first.
         </p>
         {saved && !queueMode ? (
           <p role="status">
@@ -376,7 +346,6 @@ export function ReviewerLauncher({
                 !objective.trim() ||
                 initial.error ||
                 record?.state === "accepted" ||
-                refusedBeforeEffects ||
                 (Boolean(saved) && !queueMode) ||
                 ["accepted", "cancelled", "needs_refresh", "failed"].includes(queue?.state ?? "")
               }
@@ -391,12 +360,7 @@ export function ReviewerLauncher({
             Check saved result
           </button>
         ) : null}
-        {queue?.state === "waiting_writer" && providerSessionId ? (
-          <button type="button" disabled={busy || !enabled} onClick={() => void stop()}>
-            Stop writer and release review
-          </button>
-        ) : null}
-        {queue && ["queued", "waiting_writer", "needs_refresh"].includes(queue.state) ? (
+        {queue && ["queued", "needs_refresh"].includes(queue.state) ? (
           <button type="button" disabled={busy || !enabled} onClick={() => void cancel()}>
             Cancel scheduled review
           </button>
@@ -426,7 +390,7 @@ export function ReviewerLauncher({
         {saved &&
         (missing ||
           record?.state === "accepted" ||
-          refusedBeforeEffects ||
+          record?.state === "failed" ||
           ["accepted", "cancelled", "needs_refresh"].includes(queue?.state ?? "")) ? (
           <button type="button" disabled={busy} onClick={reset}>
             Start another review

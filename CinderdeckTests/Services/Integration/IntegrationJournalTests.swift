@@ -6,7 +6,7 @@ import GRDB
 final class IntegrationJournalTests: XCTestCase {
   private func workspace(_ name: String = "Demo", id: String = "demo") -> StackSnapshot {
     StackSnapshot(id: id, name: name, file: "/fixture/\(id).toml", state: "Stopped", operation: nil,
-      definitionChanged: false, issues: [], claim: nil, services: [], repos: [], lane: nil)
+      definitionChanged: false, issues: [], services: [], repos: [], lane: nil)
   }
   func testSelectedRefreshPreservesUnrelatedRowsAndDefeatsOlderFullPublication() async throws {
     let root = try StackTestSupport.temporaryDirectory()
@@ -151,13 +151,13 @@ final class IntegrationJournalTests: XCTestCase {
     let defaults = UserDefaults(suiteName: "deckhand-control-\(UUID())")!
     defaults.set(root.path, forKey: PreferencesKeys.stacksDirectory)
     let supervisor = StackSupervisor(store: nil, defaults: defaults, logRoot: root.appendingPathComponent("logs"))
-    let control = StackControlService(supervisor: supervisor, claimsFile: root.appendingPathComponent("claims.json"), integrationDirectory: root.appendingPathComponent("integration"))
+    let control = StackControlService(supervisor: supervisor, integrationDirectory: root.appendingPathComponent("integration"))
     let actor = StackActor(kind: .agent, name: "Deckhand", session: "unit")
     let hello = try await control.handle("integration.hello", params: .object(["protocolVersions": .array([.number(1)])]), actor: actor)
     XCTAssertEqual(hello["protocolVersion"], .number(1))
     let capabilities = try XCTUnwrap(hello["capabilities"]?.stringsValue)
     XCTAssertEqual(Set(capabilities).count, capabilities.count, "Capabilities must be unique")
-    let required: Set<String> = ["projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.create.managedWriter", "operations.lane.adopt", "operations.lane.adopt.managedWriter", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.reservations", "checkout.contexts"]
+    let required: Set<String> = ["projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.adopt", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.contexts"]
     XCTAssertTrue(required.isSubset(of: Set(capabilities)), "Additive capabilities must retain the supported consumer contract")
     for (params, expected) in [
       (JSONValue.object(["protocolVersions": .array([.number(2)])]), "unsupported_version"),

@@ -23,6 +23,17 @@ final class CinderdeckMCPServerTests: XCTestCase {
     }
   }
 
+  func testAgentClaimToolsAndOverridesAreRemoved() throws {
+    let names = Set(CinderdeckMCPServer.toolDescriptions.compactMap { $0["name"]?.stringValue })
+    XCTAssertFalse(names.contains("claim_workspace"))
+    XCTAssertFalse(names.contains("release_workspace"))
+    for name in ["claim_workspace", "release_workspace"] {
+      XCTAssertThrowsError(try AgentToolCLI.request(name: name, arguments: ["workspace": .string("shop")]))
+    }
+    XCTAssertThrowsError(try CinderdeckMCPServer.validate("run_lane_setup", ["workspace": .string("shop/lane"), "force": .bool(true)]))
+    XCTAssertNoThrow(try CinderdeckMCPServer.validate("stop_services", ["workspace": .string("shop"), "force": .bool(true)]))
+  }
+
   func testArgumentsPassThroughToTheControlAPI() throws {
     let arguments: [String: JSONValue] = ["workspace": .string("shop"), "services": .array([.string("api")]), "timeout": .number(60)]
     let start = try CinderdeckMCPServer.request(for: "start_services", arguments)
@@ -31,8 +42,6 @@ final class CinderdeckMCPServerTests: XCTestCase {
     XCTAssertEqual(start.2, 90)
     // Stopping waits as long as the app does, so a slow stop is not reported as a lost answer.
     XCTAssertEqual(try CinderdeckMCPServer.request(for: "stop_services", ["workspace": .string("shop")]).2, 210)
-    let claim = try CinderdeckMCPServer.request(for: "claim_workspace", ["workspace": .string("shop"), "ttl_minutes": .number(10)])
-    XCTAssertEqual(JSONValue.object(claim.1), .object(["workspace": .string("shop"), "ttlMinutes": .number(10)]))
     let ports = try CinderdeckMCPServer.request(for: "list_ports", ["external_only": .bool(true)])
     XCTAssertEqual(JSONValue.object(ports.1), .object(["external": .bool(true)]))
     XCTAssertEqual(try CinderdeckMCPServer.request(for: "list_workspaces", [:]).1["detail"], .bool(true))
@@ -137,7 +146,7 @@ final class CinderdeckMCPServerTests: XCTestCase {
 
   func testWorkspaceListIsCompact() throws {
     let snapshot = StackSnapshot(id: "shop", name: "Shop", file: "/tmp/shop.toml", state: "Running", operation: nil, definitionChanged: true,
-      issues: [], claim: nil, services: [StackServiceSnapshot(name: "api", phase: "ready", status: "Ready", ready: true, pid: 42, pgid: 42, port: 3000,
+      issues: [], services: [StackServiceSnapshot(name: "api", phase: "ready", status: "Ready", ready: true, pid: 42, pgid: 42, port: 3000,
         url: "http://localhost:3000", startedAt: nil, restarts: 0, detail: nil, owner: nil, repo: nil, branch: "main", cwd: "/tmp",
         command: "npm run dev", dependsOn: [], autostart: true, logFile: "/tmp/api.log")], repos: [])
     let listed: JSONValue = .array([.object(["id": .string("shop"), "name": .string("Shop"), "tasks": .array([.string("test")]),

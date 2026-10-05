@@ -17,7 +17,7 @@ local checkout.
 | Remove shared worktrees with copied configuration | Cleanup metadata follows every borrower until the last lane is removed. |
 | Remove copied files and links | Unchanged individual copies and links are cleaned up even when untracked. Changed copies, replaced links, and directory copies require explicit discard. Tracked changes remain protected. |
 | Remove a lane with teardown | Local changes and running dependents are checked first, services stop before teardown, and removal reserves the lane while teardown runs. A failed teardown leaves the stopped lane available for repair. |
-| Create while setup runs | The new lane is claimed before setup starts. |
+| Create while setup runs | Setup follows lane creation, with no agent ownership restriction. |
 | Agent control coverage | MCP adoption accepts `env`, `from` and `copy`, matching the lane CLI; release accepts `delete_logs`. The lane skill and help cover detached worktrees, name/environment edits, actual repository folders and service-specific exports. |
 
 ## Verification
@@ -26,7 +26,7 @@ local checkout.
   original implementation, reproducing ownership, cleanup, branch-selection, and
   teardown problems.
 - The final Debug build passed **93 tests with zero failures**, including **48
-  lane tests**. The other suites cover workspace runs, claims/control, MCP,
+  lane tests**. The other suites cover workspace runs, agent control, MCP,
   navigation, definition editing, and bundled agent skills.
 - The agent coverage follow-up passed **15 focused MCP and bundled-skill tests**,
   including a new regression for adoption/release argument parity and invalid
@@ -34,7 +34,7 @@ local checkout.
   catalog and initialization guidance.
 - `scripts/lanes-e2e.py --inspect` passed against the final Debug app, its control
   socket, CLI, MCP, throwaway Git repositories, and real HTTP services. Five
-  environments ran with distinct ports/worktrees/claims, including simultaneous
+  environments ran with distinct ports/worktrees, including simultaneous
   creation requests. A workflow reached its own lane server. Setup copied
   configuration, teardown verified stopped services, and cleanup preserved the
   source and sibling processes and Git branches. An adopted worktree shared by

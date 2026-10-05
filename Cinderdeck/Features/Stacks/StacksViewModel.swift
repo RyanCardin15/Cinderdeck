@@ -40,7 +40,6 @@ final class StacksViewModel: ObservableObject {
   @Published var editor: StackEditorContext?
   @Published private(set) var isConfirming = false
   @Published private(set) var busyRepos = Set<URL>()
-  @Published private(set) var claims: [String: StackClaim] = [:]
   @Published var agentsSheet = false
   /// Set to open the Workspaces window on a section, e.g. Recordings.
   @Published var requestedSection: WorkspaceSection?
@@ -71,7 +70,6 @@ final class StacksViewModel: ObservableObject {
     supervisor.$states.removeDuplicates().assign(to: &$states)
     supervisor.gitMonitor.$statuses.assign(to: &$repoStatuses)
     supervisor.$errorMessage.compactMap { $0 }.sink { [weak self] in self?.error = $0 }.store(in: &subscriptions)
-    StackControlService.shared.$claims.assign(to: &$claims)
     let manager = HistoryFloatingManager.shared
     Publishers.CombineLatest3(manager.$panelIsVisible, manager.$selectedSection, manager.$presentationMode)
       .debounce(for: .milliseconds(20), scheduler: RunLoop.main)
@@ -96,15 +94,6 @@ final class StacksViewModel: ObservableObject {
     return services.sorted { $0.id < $1.id }
   }
   var hasAuxiliaryUI: Bool { branchPicker != nil || stackBranchPicker || editor != nil || isConfirming || agentsSheet || lanesSheet || laneRemoval != nil || laneAttachment != nil }
-  func claim(_ stack: String) -> StackClaim? { claims[stack].flatMap { $0.isExpired ? nil : $0 } }
-  func releaseClaim(_ stack: String) {
-    let name = files.first { $0.id == stack }?.name ?? stack
-    guard let claim = claim(stack), confirm(title: "Cancel \(claim.holder.name)'s lease?",
-      message: "\(claim.holder.label) holds the agent lease for \(name)\(claim.note.map { " (" + $0 + ")" } ?? ""). Canceling lets other agents change it. Services and task runs keep running, and worktree files stay in place. The agent can claim it again.",
-      buttons: ["Cancel lease", "Keep lease"]) == 0 else { return }
-    do { try StackControlService.shared.cancelAgentLease(claim) }
-    catch { self.error = error.localizedDescription }
-  }
   func selectService(_ service: String?) {
     selectedServiceID = service
   }

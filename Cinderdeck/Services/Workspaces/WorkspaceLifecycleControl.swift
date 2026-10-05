@@ -16,7 +16,7 @@ extension StackControlService {
           throw StackError.message("This lane changed. Close the confirmation and try again.")
         }
       }
-      try checkClaim(file.id, actor: actor, force: params["force"]?.boolValue == true)
+
       try requireStoppedForDefinition(file.id)
       let original = try String(contentsOf: file.file, encoding: .utf8)
       if let revision = params["revision"]?.stringValue, revision != WorkspaceDefinitionWriter.revision(original) {
@@ -29,7 +29,7 @@ extension StackControlService {
           + (records.map { $0.info.reference } + children.map(\.name)).joined(separator: ", "))
       }
       for lane in records {
-        try checkClaim(lane.id, actor: actor, force: params["force"]?.boolValue == true)
+
         try requireStoppedForDefinition(lane.id)
       }
       let replacement: String?
@@ -62,7 +62,7 @@ extension StackControlService {
           throw StackControlError(code: "stale_definition", message: "Workspace changed before removal. Read it again.")
         }
         try FileManager.default.removeItem(at: file.file)
-        release(stack: file.id)
+
       }
     }
     if deleted { return .object(["removed": .string(file.id), "file": .string(file.file.path)]) }

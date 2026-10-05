@@ -55,20 +55,7 @@ final class WorkspaceBuildAdapterTests: XCTestCase {
     XCTAssertThrowsError(try restarted.get(receipt.id, actor: actor, authority: .init(installationID: "installation", workspaceID: "lane", generation: 4)))
     let publicBytes = try JSONEncoder().encode(recovered.value)
     let publicText = String(decoding: publicBytes, as: UTF8.self)
-    XCTAssertFalse(publicText.contains(receipt.lease.token)); XCTAssertFalse(publicText.contains("actorKey"))
-  }
-  func testWriterBorrowingCannotExpandScopeChangeGenerationOrReleaseTheParent() async throws {
-    let root = try StackTestSupport.temporaryDirectory()
-    defer { try? FileManager.default.removeItem(at: root) }
-    let reservations = try CheckoutReservations(directory: root)
-    let token = String(repeating: "b", count: 64), other = String(repeating: "c", count: 64)
-    _ = try reservations.begin(id: "attempt", ownerID: "Verifier", workspaceID: "lane", generation: 3, kind: "writer", physicalIDs: [digest], actorKey: "actor", token: token)
-    XCTAssertEqual(try reservations.borrowWriter("attempt", actorKey: "actor", token: token, workspaceID: "lane", generation: 3, physicalIDs: [digest]).state, "held")
-    XCTAssertThrowsError(try reservations.borrowWriter("attempt", actorKey: "other", token: token, workspaceID: "lane", generation: 3, physicalIDs: [digest]))
-    XCTAssertThrowsError(try reservations.borrowWriter("attempt", actorKey: "actor", token: token, workspaceID: "lane", generation: 4, physicalIDs: [digest]))
-    XCTAssertThrowsError(try reservations.borrowWriter("attempt", actorKey: "actor", token: token, workspaceID: "lane", generation: 3, physicalIDs: [digest, other]))
-    XCTAssertThrowsError(try reservations.releaseNative("attempt"))
-    XCTAssertEqual(try reservations.get("attempt", actorKey: "actor", token: token).state, "held")
+    XCTAssertFalse(publicText.contains("actorKey"))
   }
   func testLoopbackPathsAndFreshSourceTupleCannotInventBuildProof() throws {
     for path in ["http://example.invalid/stamp", "//evil/stamp", "/../stamp", "/stamp?url=evil", "/stamp#other"] { XCTAssertFalse(WorkspaceBuildHTTP.validPath(path)) }
@@ -92,7 +79,7 @@ final class WorkspaceBuildAdapterTests: XCTestCase {
   }
   func testRequiredChecksNeedActualMatchedArtifactStampAndProcessAtBothEndpoints() async throws {
     let actor = StackActor(kind: .agent, name: "Deckhand", session: "owner")
-    var receipt = WorkspaceBuildReceipt(id: UUID().uuidString, request: input(), adapter: adapter, actorKey: actor.key, actor: actor, lease: .init(id: "lease", token: digest))
+    var receipt = WorkspaceBuildReceipt(id: UUID().uuidString, request: input(), adapter: adapter, actorKey: actor.key, actor: actor)
     receipt.artifact = .init(name: "web.js", sha256: digest, size: 10)
     var start = WorkspaceBuildObservation(receiptID: receipt.id, workspaceID: "lane", serviceID: "web", phase: "start")
     start.state = "matched"; start.artifactSHA256 = digest; start.servedArtifactSHA256 = digest; start.sourceUnchanged = true; start.processMatched = true; start.stampMatched = true
@@ -109,19 +96,16 @@ final class WorkspaceBuildAdapterTests: XCTestCase {
     XCTAssertFalse(WorkspaceBuildScope.observationsMatch([start, end], receipt: receipt))
   }
 
-  func testRestartReconcilesHeldLeaseAndExplicitCancellationRetryWithoutReplayingEffects() async throws {
+  func testRestartPreservesInterruptedBuildAndExplicitCancellationRetryWithoutReplayingEffects() async throws {
     let root = try StackTestSupport.temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }
     let actor = StackActor(kind: .agent, name: "Deckhand", session: "owner")
     let receipts = WorkspaceBuildStore(directory: root.appendingPathComponent("builds"))
     let (receipt, _) = try receipts.begin(input(), adapter: adapter, actor: actor)
-    let reservations = try CheckoutReservations(directory: root.appendingPathComponent("leases"))
-    _ = try reservations.begin(id: receipt.lease.id, ownerID: "Verifier", workspaceID: "lane", generation: 3, kind: "writer", physicalIDs: [digest], actorKey: actor.key, token: receipt.lease.token)
-    try receipts.update(receipt.id) { $0.state = "running"; $0.reservationState = "held"; $0.actionStates["prepare"] = "accepted"; $0.ownedLaunchServices = ["api": .init(pid: 12, pgid: 12, startTime: 1)] }
-    let restartedLeases = try CheckoutReservations(directory: root.appendingPathComponent("leases"))
+    try receipts.update(receipt.id) { $0.state = "running"; $0.actionStates["prepare"] = "accepted"; $0.ownedLaunchServices = ["api": .init(pid: 12, pgid: 12, startTime: 1)] }
     let restarted = WorkspaceBuildStore(directory: root.appendingPathComponent("builds"))
-    let recovered = try restarted.reconcileReservation(receipt.id, reservations: restartedLeases)
-    XCTAssertEqual(recovered.state, "unknown"); XCTAssertEqual(recovered.reservationState, "uncertain")
+    let recovered = try XCTUnwrap(restarted.current(receipt.id))
+    XCTAssertEqual(recovered.state, "unknown")
     XCTAssertEqual(recovered.ownedLaunchServices?["api"]?.pid, 12)
     XCTAssertTrue(try restarted.action(receipt.id, key: "cancel-1", kind: "finish:cancel"))
     XCTAssertThrowsError(try restarted.action(receipt.id, key: "cancel-pending", kind: "finish:cancel"))
@@ -129,11 +113,10 @@ final class WorkspaceBuildAdapterTests: XCTestCase {
     XCTAssertFalse(try restarted.action(receipt.id, key: "cancel-1", kind: "finish:cancel"))
     XCTAssertTrue(try restarted.action(receipt.id, key: "explicit-cancel-2", kind: "finish:cancel"))
     XCTAssertTrue(restarted.isFinishing(receipt.id))
-    XCTAssertThrowsError(try restartedLeases.borrowWriter(receipt.lease.id, actorKey: actor.key, token: receipt.lease.token, workspaceID: "lane", generation: 3, physicalIDs: [digest]))
     XCTAssertFalse(String(decoding: try JSONEncoder().encode(recovered.value), as: UTF8.self).contains("ownedLaunchServices"))
     let (pending, _) = try restarted.begin(input(key: "not-admitted"), adapter: adapter, actor: actor)
     let fresh = WorkspaceBuildStore(directory: root.appendingPathComponent("builds"))
-    XCTAssertEqual(try fresh.reconcileReservation(pending.id, reservations: restartedLeases).reservationState, "pending")
+    XCTAssertEqual(fresh.current(pending.id)?.state, "unknown")
   }
 
   func testReleasedNoEffectFailuresStayWithinDurableReceiptRetention() async throws {
@@ -143,7 +126,7 @@ final class WorkspaceBuildAdapterTests: XCTestCase {
     let store = WorkspaceBuildStore(directory: root)
     for index in 0..<40 {
       let (receipt, _) = try store.begin(input(key: "refused-\(index)"), adapter: adapter, actor: actor)
-      try store.update(receipt.id) { $0.state = "failed"; $0.reservationState = "released"; $0.actionStates[$0.request.operationKey] = "failed" }
+      try store.update(receipt.id) { $0.state = "failed"; $0.actionStates[$0.request.operationKey] = "failed" }
     }
     let restarted = WorkspaceBuildStore(directory: root)
     XCTAssertEqual(try restarted.get(operationKey: "refused-39", actor: actor, authority: input().authority).state, "failed")
