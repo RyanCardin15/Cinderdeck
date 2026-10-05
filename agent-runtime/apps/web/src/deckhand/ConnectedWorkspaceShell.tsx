@@ -1,3 +1,4 @@
+import { SessionLauncher } from "./SessionLauncher";
 import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import { AsyncResult } from "effect/unstable/reactivity";
@@ -71,6 +72,11 @@ export function ConnectedWorkspaceShell({
   const config = useAtomValue(environmentServerConfigsAtom);
   const providers = deriveProviderInstanceEntries(
     config.get(threadRef.environmentId)?.providers ?? [],
+  );
+  const currentResource = resources.find(
+    (resource) =>
+      resource.workspaceID === contextID &&
+      resource.generation === context.checkout.nativeGeneration,
   );
   const search = connectedWorkspaceSearch(threadRef.environmentId, context, "agents");
   const current =
@@ -177,9 +183,25 @@ export function ConnectedWorkspaceShell({
               selectedThreadId={threadRef.threadId}
               showExternal={false}
             />
-            <Link className={styles.newSession} to="/workspaces" search={search}>
-              + New session
-            </Link>
+            {currentResource ? (
+              <SessionLauncher
+                key={`chat:${threadRef.environmentId}:${context.workspace.environmentId}:${contextID}:${currentResource.generation}`}
+                compact
+                environmentId={threadRef.environmentId}
+                installationID={context.workspace.environmentId}
+                resource={currentResource}
+                enabled={
+                  connected &&
+                  currentResource.available &&
+                  !currentResource.workspace?.definitionChanged &&
+                  !currentResource.workspace?.issues.length
+                }
+              />
+            ) : (
+              <Link className={styles.newSession} to="/workspaces" search={search}>
+                New chat
+              </Link>
+            )}
           </aside>
           <div className={styles.conversation}>{children}</div>
         </div>

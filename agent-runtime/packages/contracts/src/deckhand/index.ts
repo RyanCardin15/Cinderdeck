@@ -78,7 +78,10 @@ export const Feature = Schema.Struct({
   id: FeatureId,
   workspaceId: WorkspaceBindingId,
   title: TrimmedNonEmptyString.check(Schema.isMaxLength(200)),
-  objective: TrimmedNonEmptyString.check(Schema.isMaxLength(16000)),
+  objective: Schema.Union([
+    TrimmedNonEmptyString.check(Schema.isMaxLength(16000)),
+    Schema.Literal(""),
+  ]),
   status: Schema.Literals(["active", "completed", "archived"]),
   revision: PositiveInt,
   createdAt: Schema.String,

@@ -1,3 +1,4 @@
+import { ChatDefaultsSettings } from "../../deckhand/ChatDefaultsSettings";
 import {
   DEFAULT_SERVER_SETTINGS,
   type ModelSelection,
@@ -139,13 +140,13 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
       description={
         isProjectScope
           ? "Model for new threads in this project."
-          : "Default model for new threads. Projects can override it."
+          : "Default provider, model and reasoning for new chats. Automatic remembers your last selection. Projects can override it."
       }
       status={
         unavailable || mixedModel || modelSource === "project"
           ? undefined
           : settings.defaultModelSelection === null
-            ? "Automatic"
+            ? "Automatic · remember last"
             : undefined
       }
       resetAction={
@@ -333,6 +334,9 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
               </Select>
             }
           />
+          {representative ? (
+            <ChatDefaultsSettings environmentId={representative.environmentId} />
+          ) : null}
           {workspaceRow}
           <SettingsRow
             serverScoped

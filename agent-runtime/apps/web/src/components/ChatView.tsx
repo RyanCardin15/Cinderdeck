@@ -1,3 +1,4 @@
+import { useChatDefaultsStore } from "../deckhand/chatDefaults";
 import { useDisconnectExternalApps } from "../deckhand/externalAppSessions";
 import { LaneSessionContext, useLaneSessionContext } from "../deckhand/LaneSessionContext";
 import { ChatCanvas } from "./chat/ChatCanvas";
@@ -4965,6 +4966,7 @@ export default function ChatView(props: ChatViewProps) {
     (mode: RuntimeMode) => {
       if (mode === runtimeMode) return;
       setComposerDraftRuntimeMode(composerDraftTarget, mode);
+      useChatDefaultsStore.getState().rememberModes(environmentId, { runtimeMode: mode });
       if (isLocalDraftThread) {
         setDraftThreadContext(composerDraftTarget, { runtimeMode: mode });
       }
@@ -4976,6 +4978,7 @@ export default function ChatView(props: ChatViewProps) {
       scheduleComposerFocus,
       composerDraftTarget,
       setComposerDraftRuntimeMode,
+      environmentId,
       setDraftThreadContext,
     ],
   );
@@ -4985,6 +4988,7 @@ export default function ChatView(props: ChatViewProps) {
       if (mode === "plan" && !interactionModeEnabled) return;
       if (mode === interactionMode) return;
       setComposerDraftInteractionMode(composerDraftTarget, mode);
+      useChatDefaultsStore.getState().rememberModes(environmentId, { interactionMode: mode });
       if (isLocalDraftThread) {
         setDraftThreadContext(composerDraftTarget, { interactionMode: mode });
       }
@@ -4997,6 +5001,7 @@ export default function ChatView(props: ChatViewProps) {
       scheduleComposerFocus,
       composerDraftTarget,
       setComposerDraftInteractionMode,
+      environmentId,
       setDraftThreadContext,
     ],
   );

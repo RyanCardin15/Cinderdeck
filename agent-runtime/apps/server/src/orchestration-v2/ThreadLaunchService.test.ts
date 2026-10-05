@@ -271,6 +271,33 @@ function waitUntil<E, R>(predicate: () => Effect.Effect<boolean, E, R>): Effect.
   });
 }
 
+it.effect("opening an empty existing-checkout chat skips setup and creates no run or message", () =>
+  Effect.gen(function* () {
+    const harness = makeHarness();
+    yield* Effect.gen(function* () {
+      const service = yield* ThreadLaunch.ThreadLaunchService;
+      const request = {
+        ...launchInput({
+          command: "empty-chat",
+          thread: "empty-chat",
+          workspace: { type: "existing_worktree", worktreePath: "/repo", branch: "main" },
+        }),
+        deferPreparation: true,
+      };
+      const result = yield* service.launch(request);
+      assert.equal(result.projection.messages.length, 0);
+      assert.equal(result.projection.runs.length, 0);
+      assert.equal(result.projection.providerSessions.length, 0);
+      assert.equal(result.projection.thread.worktreePath, "/repo");
+      assert.equal(harness.runSetup.mock.calls.length, 0);
+      assert.equal(harness.createWorktree.mock.calls.length, 0);
+      const replay = yield* service.launch(request);
+      assert.equal(replay.threadId, result.threadId);
+      assert.equal(harness.runSetup.mock.calls.length, 0);
+    }).pipe(Effect.provide(harness.layer));
+  }).pipe(Effect.scoped),
+);
+
 it.effect.each(
   (["new", "existing"] as const).flatMap((target) =>
     (["user", "agent"] as const).map((createdBy) => ({ target, createdBy })),

@@ -276,7 +276,7 @@
     "apps/web/src/commandPaletteBus.ts": "App identity and state isolation",
     "apps/web/src/components/AppSidebarLayout.tsx": "Use a route-scoped Deckhand product rail for pull-request review and bypass legacy thread rails only for dedicated product routes; preserve standalone/chat/settings sidebar state, project projection retention and history keyboard shortcuts. Retain the connected workspace shell during cached query failures, explicitly fence freshness, and preserve the static native-host responsive layout.",
     "apps/web/src/components/ChatView.logic.ts": "App identity and state isolation",
-    "apps/web/src/components/ChatView.tsx": "Separate Deckhand environment and product identity from the upstream runtime.",
+    "apps/web/src/components/ChatView.tsx": "Separate Deckhand environment and product identity from the upstream runtime. Remember explicit permissions and Plan or Agent picks for new managed chats on the same machine.",
     "apps/web/src/components/CommandPalette.logic.test.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "apps/web/src/components/CommandPalette.tsx": "Expose existing-runtime debugging from the command palette alongside product navigation.",
     "apps/web/src/components/RightPanelTabs.tsx": "Separate Deckhand environment and product identity from the upstream runtime.",
@@ -438,7 +438,10 @@
     "scripts/mock-update-server.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "scripts/setup-worktree.ts": "Separate Deckhand environment and product identity from the upstream runtime.",
     "scripts/smoke-cli-archive.ts": "App identity and state isolation",
-    "third-party-licenses.config.json": "Include explicit upstream T3 MIT attribution in the shipped license presentation while retaining dependency notices."
+    "third-party-licenses.config.json": "Include explicit upstream T3 MIT attribution in the shipped license presentation while retaining dependency notices.",
+    "apps/server/src/orchestration-v2/ThreadLaunchService.ts": "Open empty managed chats in existing checkouts without a provider turn or setup side effects; expose configured defaults and remembered composer modes.",
+    "apps/server/src/orchestration-v2/ThreadLaunchService.test.ts": "Open empty managed chats in existing checkouts without a provider turn or setup side effects; expose configured defaults and remembered composer modes.",
+    "apps/web/src/components/settings/ProjectDefaultsSettings.tsx": "Open empty managed chats in existing checkouts without a provider turn or setup side effects; expose configured defaults and remembered composer modes."
   },
   "policies": [
     {
@@ -1129,6 +1132,22 @@
         "apps/web/src/components/settings/ProviderSettingsPanel.environment.test.tsx"
       ],
       "conflictResolution": "Preserve the optional embedded mode and machine scope while taking upstream provider configuration changes; normal Settings routes retain their existing container."
+    },
+    {
+      "owner": "Empty managed chats",
+      "files": [
+        "apps/server/src/orchestration-v2/ThreadLaunchService.ts",
+        "apps/server/src/orchestration-v2/ThreadLaunchService.test.ts",
+        "apps/web/src/components/ChatView.tsx",
+        "apps/web/src/components/settings/ProjectDefaultsSettings.tsx"
+      ],
+      "tests": [
+        "apps/server/src/deckhand/ManagedSessionLaunch.test.ts",
+        "apps/server/src/orchestration-v2/ThreadLaunchService.test.ts",
+        "apps/web/src/deckhand/SessionLauncher.test.tsx",
+        "apps/web/src/deckhand/chatDefaults.test.ts"
+      ],
+      "conflictResolution": "Keep ordinary launches unchanged. Empty managed chats retain immutable checkout bindings and recovery keys, with no initial message, provider session, writer reservation or setup execution. Reuse upstream composer controls, model and reasoning memory, and Settings defaults."
     }
   ]
 }

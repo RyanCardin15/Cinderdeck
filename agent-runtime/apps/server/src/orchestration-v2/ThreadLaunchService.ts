@@ -78,6 +78,8 @@ export interface ThreadLaunchInput {
   readonly interactionMode: ProviderInteractionMode;
   readonly workspaceStrategy: ThreadLaunchWorkspaceStrategy;
   readonly initialMessage?: ThreadLaunchInitialMessage;
+  /** Open an empty chat in an existing checkout without running setup scripts. */
+  readonly deferPreparation?: boolean;
   readonly importedNativeThread?: {
     readonly ref: {
       readonly driver: ProviderDriverKind;
@@ -801,7 +803,14 @@ const make = Effect.gen(function* () {
                 branch: workspaceStrategy.branch,
               }
             : workspaceStrategy;
-        if (shouldSchedule) {
+        if (
+          shouldSchedule &&
+          !(
+            input.deferPreparation &&
+            runId === null &&
+            workspaceStrategy.type === "existing_worktree"
+          )
+        ) {
           const ownsPreparation = yield* reservePreparation(input.commandId);
           if (ownsPreparation) {
             yield* Effect.gen(function* () {

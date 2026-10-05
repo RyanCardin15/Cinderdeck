@@ -1,3 +1,4 @@
+import { NewChatLauncher, type NewChatLauncherProps } from "./NewChatLauncher";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { EnvironmentId } from "@t3tools/contracts";
@@ -56,7 +57,36 @@ const reasonLabel = (reason: string | undefined) =>
     missing: "No saved launch was found. You can retry this same request.",
   })[reason ?? ""] ??
   "The launch result could not be confirmed. Check its result before starting another launch.";
-export function SessionLauncher({
+export function SessionLauncher(
+  props: NewChatLauncherProps & {
+    creation?: {
+      visible: boolean;
+      onClose: () => void;
+      onResume?: () => void;
+      onLane: (id: string) => void;
+      onPending: (pending: boolean) => void;
+    };
+  },
+) {
+  const [legacy, setLegacy] = useState(() => {
+    try {
+      const value = localStorage.getItem(
+        `deckhand:launch:${props.environmentId}:${props.installationID}:${props.resource.workspaceID}:${props.resource.generation}`,
+      );
+      return value !== null && !decodeDraft(value).deferStart;
+    } catch {
+      return false;
+    }
+  });
+  return props.creation || legacy ? (
+    <SessionSetupLauncher {...props} onRecovered={() => setLegacy(false)} />
+  ) : (
+    <NewChatLauncher {...props} />
+  );
+}
+
+function SessionSetupLauncher({
+  onRecovered,
   environmentId,
   installationID,
   resource,
@@ -67,6 +97,7 @@ export function SessionLauncher({
   installationID: string;
   resource: Resource;
   enabled: boolean;
+  onRecovered?: () => void;
   creation?: {
     visible: boolean;
     onClose: () => void;
@@ -182,6 +213,7 @@ export function SessionLauncher({
   }, [onPending, busy, saved, record?.state]);
   const provider = choices.find((choice) => choice.instanceId === instanceId);
   const open = (value: Contracts.ManagedLaunchRecord) => {
+    if (!isCreation) onRecovered?.();
     void navigate({
       to: "/$environmentId/$threadId",
       params: buildThreadRouteParams({ environmentId, threadId: value.threadId }),
@@ -787,6 +819,7 @@ export function SessionLauncher({
               disabled={busy || !enabled}
               onClick={() => {
                 if (!clearSaved()) return;
+                onRecovered?.();
                 setInstanceId("");
                 setModel("");
                 setTitle("");

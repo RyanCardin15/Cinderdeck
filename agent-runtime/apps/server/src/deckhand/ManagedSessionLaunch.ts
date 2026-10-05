@@ -151,6 +151,10 @@ const make = Effect.gen(function* () {
   );
   const validateAccess = (input: Rpc.ManagedLaunchInput) =>
     Effect.gen(function* () {
+      if (!input.deferStart && !input.objective.trim())
+        return yield* error(input.operationKey, "stale_context");
+      if (input.deferStart && input.reviewerContext)
+        return yield* error(input.operationKey, "unsupported_access");
       if (input.reviewerContext && input.access !== undefined)
         return yield* error(input.operationKey, "unsupported_access");
       if (input.access !== "read_only") return;
@@ -502,8 +506,8 @@ const make = Effect.gen(function* () {
                           : input.access === "read_only"
                             ? "read_only"
                             : "write",
-                        execution: "queued",
-                        connection: "connected",
+                        execution: input.deferStart ? "idle" : "queued",
+                        connection: input.deferStart ? "unavailable" : "connected",
                         lastSequence: 0,
                         capabilities: {
                           managed: true,
@@ -547,13 +551,16 @@ const make = Effect.gen(function* () {
                 title: input.title,
                 modelSelection: input.modelSelection,
                 runtimeMode: input.runtimeMode,
-                interactionMode: "default",
+                interactionMode: input.interactionMode ?? "default",
+                ...(input.deferStart ? { deferPreparation: true } : {}),
                 workspaceStrategy: {
                   type: "existing_worktree",
                   worktreePath: cwd.root,
                   ...(cwd.branch ? { branch: cwd.branch } : {}),
                 },
-                initialMessage: { text: input.objective, attachments: [] },
+                ...(input.deferStart
+                  ? {}
+                  : { initialMessage: { text: input.objective, attachments: [] } }),
                 createdBy: "user",
                 creationSource: "web",
               })
@@ -976,6 +983,9 @@ const make = Effect.gen(function* () {
             objective: input.objective,
             modelSelection: input.modelSelection,
             runtimeMode: input.runtimeMode,
+            ...(input.interactionMode === undefined
+              ? {}
+              : { interactionMode: input.interactionMode }),
             ...(input.access === undefined ? {} : { access: input.access }),
             ...(input.reviewerContext ? { reviewerContext: input.reviewerContext } : {}),
           };

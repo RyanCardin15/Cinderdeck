@@ -1033,6 +1033,57 @@ describe("saved launch context review", () => {
 
 describe("managed lane session launch", () => {
   it.effect(
+    "opens an idle bound chat with no initial message and replays its durable receipt",
+    () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const calls: ThreadLaunchService.ThreadLaunchInput[] = [];
+        const external = f.external((request) => {
+          calls.push(request);
+          return Effect.succeed(accepted(request));
+        });
+        yield* Effect.gen(function* () {
+          const launcher = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          const request = decodeInput({
+            ...input("empty-chat"),
+            title: "New chat",
+            objective: "",
+            deferStart: true,
+            interactionMode: "plan",
+            modelSelection: {
+              instanceId,
+              model: "fixture-model",
+              options: [{ id: "reasoning_effort", value: "high" }],
+            },
+          });
+          const one = yield* launcher.launch("actor", request);
+          const two = yield* launcher.launch("actor", request);
+          assert.deepEqual(one, two);
+          assert.equal(calls.length, 1);
+          assert.equal(calls[0]!.initialMessage, undefined);
+          assert.equal(calls[0]!.deferPreparation, true);
+          assert.equal(calls[0]!.interactionMode, "plan");
+          assert.deepEqual(calls[0]!.modelSelection, request.modelSelection);
+          const relationships = yield* Relationships.Relationships;
+          const session = yield* relationships.session(one.sessionId);
+          assert.equal(session.execution, "idle");
+          assert.equal(session.connection, "unavailable");
+          const sql = yield* SqlClient.SqlClient;
+          assert.equal((yield* sql`SELECT id FROM deckhand_writer_requests`).length, 0);
+          assert.equal((yield* sql`SELECT id FROM deckhand_native_writer_intents`).length, 0);
+          assert.equal(session.providerSessionId, null);
+          assert.equal((yield* relationships.feature(session.featureId)).objective, "");
+          assert.equal((yield* relationships.checkout(session.checkoutId)).laneId, "lane");
+          const rejected = yield* launcher
+            .launch("actor", { ...request, operationKey: "no-message", deferStart: false })
+            .pipe(Effect.flip);
+          assert.equal(rejected.reason, "stale_context");
+          assert.equal(calls.length, 1);
+        }).pipe(Effect.provide(serviceLayer.pipe(Layer.provide(external))));
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+
+  it.effect(
     "persists scoped bindings before intake, uses the existing lane, and replays concurrent retries",
     () =>
       Effect.gen(function* () {

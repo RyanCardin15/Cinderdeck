@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { EnvironmentId } from "@t3tools/contracts";
+import { DEFAULT_SERVER_SETTINGS, EnvironmentId, ProviderInstanceId } from "@t3tools/contracts";
 import * as Contracts from "@t3tools/contracts/deckhand/rpc";
 import * as Schema from "effect/Schema";
 import * as Cause from "effect/Cause";
@@ -16,6 +16,9 @@ const commands = vi.hoisted(() => ({
   navigate: vi.fn(),
   previewReview: vi.fn(),
   confirmReview: vi.fn(),
+  defaultModel: null as import("@t3tools/contracts").ModelSelection | null,
+  planEnabled: false,
+  nextOperation: 0,
 }));
 vi.mock("./state", () => ({
   createSession: "create",
@@ -29,9 +32,49 @@ vi.mock("./state", () => ({
 vi.mock("../state/use-atom-command", () => ({
   useAtomCommand: (command: keyof typeof commands) => commands[command],
 }));
-vi.mock("@tanstack/react-router", () => ({ useNavigate: () => commands.navigate }));
-vi.mock("../lib/runtime", () => ({ runtime: { runPromise: async () => "new-operation" } }));
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => commands.navigate,
+  Link: ({ children }: { children: import("react").ReactNode }) => <a>{children}</a>,
+}));
+vi.mock("../hooks/useSettings", () => ({
+  useEnvironmentSettings: () => ({
+    ...DEFAULT_SERVER_SETTINGS,
+    defaultModelSelection: commands.defaultModel,
+    planModeEnabled: commands.planEnabled,
+  }),
+}));
+vi.mock("../state/server", () => ({ environmentServerConfigsAtom: "config" }));
+vi.mock("@effect/atom-react", () => ({
+  useAtomValue: () =>
+    new Map([
+      [
+        "computer",
+        {
+          providers: [
+            {
+              instanceId: "codex",
+              driver: "codex",
+              enabled: true,
+              installed: true,
+              status: "ready",
+              models: [{ slug: "gpt-test", name: "Test model", isDefault: true }],
+              auth: { status: "authenticated" },
+            },
+          ],
+        },
+      ],
+    ]),
+}));
+vi.mock("../state/entities", () => ({ readProjects: () => [] }));
+vi.mock("../lib/runtime", () => ({
+  runtime: {
+    runPromise: async () =>
+      ++commands.nextOperation === 1 ? "new-operation" : `new-operation-${commands.nextOperation}`,
+  },
+}));
 import { SessionLauncher } from "./SessionLauncher";
+import { useChatDefaultsStore } from "./chatDefaults";
+import { useComposerDraftStore } from "../composerDraftStore";
 const decodeReview = Schema.decodeSync(Contracts.ManagedLaunchReview);
 
 const environmentId = EnvironmentId.make("computer");
@@ -114,9 +157,23 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   HTMLElement.prototype.scrollIntoView = vi.fn();
   localStorage.clear();
+  commands.defaultModel = null;
+  commands.planEnabled = false;
+  commands.nextOperation = 0;
+  useChatDefaultsStore.setState({ preferences: {}, lastModes: {}, repositories: {} });
+  useComposerDraftStore.setState({
+    stickyActiveProvider: null,
+    stickyModelSelectionByProvider: {},
+    stickyOptionsByModelByProvider: {},
+  });
   commands.options.mockResolvedValue(
     success([
-      { instanceId: "codex", label: "Codex", models: [{ id: "gpt-test", label: "Test model" }] },
+      {
+        instanceId: "codex",
+        label: "Codex",
+        supportsReadOnly: true,
+        models: [{ id: "gpt-test", label: "Test model" }],
+      },
     ]),
   );
   commands.create.mockResolvedValue(success(creationRecord("unknown_outcome")));
@@ -332,7 +389,7 @@ it("refuses transport dispatch when storage is corrupt or cannot save the new op
   expect(container.textContent).toContain("could not be saved or sent");
 });
 
-it("launches an agent task in the selected existing context without native lane creation", async () => {
+it("opens an empty chat in the selected checkout without asking for a task or native creation", async () => {
   const launchKey = "deckhand:launch:computer:installation:source:1";
   commands.launch.mockImplementation(async ({ input }) => {
     expect(JSON.parse(localStorage.getItem(launchKey)!)).toEqual(input);
@@ -343,23 +400,20 @@ it("launches an agent task in the selected existing context without native lane 
       generation: 1,
       revision: "reviewed-revision",
       repositoryID: "app",
-      title: "Investigate payment retries",
-      objective: "Inspect the retry flow and propose a focused fix.",
+      title: "New chat",
+      objective: "",
+      deferStart: true,
       modelSelection: { instanceId: "codex", model: "gpt-test" },
-      runtimeMode: "approval-required",
+      runtimeMode: DEFAULT_SERVER_SETTINGS.defaultRuntimeMode,
+      interactionMode: "default",
     });
     expect(input).not.toHaveProperty("branch");
     return success(acceptedLaunch);
   });
   await render(resource, false);
-  await click("＋ New session");
-  expect(container.textContent).not.toContain("Feature title");
-  expect(container.textContent).not.toContain("Objective");
-  await change("Provider account", "codex");
-  await change("Model", "gpt-test");
-  await change("Agent task", "Investigate payment retries");
-  await change("Instructions", "Inspect the retry flow and propose a focused fix.");
-  await click("Start session");
+  expect(container.querySelector("textarea")).toBeNull();
+  expect(container.textContent).not.toContain("Agent task");
+  await click("+ New chat");
   expect(commands.launch).toHaveBeenCalledTimes(1);
   expect(commands.create).not.toHaveBeenCalled();
   expect(commands.navigate).toHaveBeenCalledWith({
@@ -443,4 +497,122 @@ it("shows a fresh context for explicit confirmation and retries only the immutab
   expect(JSON.parse(localStorage.getItem(storageKey)!)).toEqual(request);
   await click("Continue saved request");
   expect(commands.create).toHaveBeenCalledWith({ environmentId, input: request });
+});
+
+it("remembers the provider, model and reasoning without requiring launcher fields", async () => {
+  const remembered = {
+    instanceId: ProviderInstanceId.make("codex"),
+    model: "gpt-test",
+    options: [{ id: "reasoning_effort", value: "high" }],
+  };
+  useComposerDraftStore.getState().setStickyModelSelection(remembered);
+  useChatDefaultsStore.getState().rememberModes(environmentId, { runtimeMode: "full-access" });
+  await render(resource, false);
+  await click("+ New chat");
+  expect(commands.launch.mock.calls[0]![0].input).toMatchObject({
+    modelSelection: remembered,
+    runtimeMode: "full-access",
+  });
+});
+
+it("replays the exact saved empty chat after an uncertain transport result", async () => {
+  commands.launch.mockResolvedValueOnce(failure("launch_failed"));
+  await render(resource, false);
+  await click("+ New chat");
+  const original = commands.launch.mock.calls[0]![0].input;
+  expect(
+    JSON.parse(localStorage.getItem("deckhand:launch:computer:installation:source:1")!),
+  ).toEqual(original);
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await render(resource, false);
+  await click("Retry saved chat");
+  expect(commands.launch.mock.calls[1]![0].input).toEqual(original);
+  expect(commands.navigate).toHaveBeenCalledTimes(1);
+});
+
+it("blocks a fresh chat when storage cannot save its recovery key", async () => {
+  await render(resource, false);
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new Error("Storage full");
+  });
+  await click("+ New chat");
+  expect(commands.launch).not.toHaveBeenCalled();
+});
+
+it("uses a pinned model and reasoning instead of remembered model options", async () => {
+  useComposerDraftStore.getState().setStickyModelSelection({
+    instanceId: ProviderInstanceId.make("codex"),
+    model: "old-model",
+    options: [{ id: "reasoning_effort", value: "low" }],
+  });
+  commands.defaultModel = {
+    instanceId: ProviderInstanceId.make("codex"),
+    model: "gpt-test",
+    options: [{ id: "reasoning_effort", value: "high" }],
+  };
+  await render(resource, false);
+  await click("+ New chat");
+  expect(commands.launch.mock.calls[0]![0].input.modelSelection).toEqual(commands.defaultModel);
+});
+
+it("keeps read-only analysis available as an optional chat action", async () => {
+  await render(resource, false);
+  await click("Open read-only analysis chat");
+  expect(commands.launch.mock.calls[0]![0].input).toMatchObject({
+    access: "read_only",
+    deferStart: true,
+    objective: "",
+  });
+});
+
+it("can open another chat after navigation without reopening the previous conversation", async () => {
+  await render(resource, false);
+  await click("+ New chat");
+  await click("+ New chat");
+  expect(commands.launch).toHaveBeenCalledTimes(2);
+  expect(commands.launch.mock.calls[0]![0].input.operationKey).not.toBe(
+    commands.launch.mock.calls[1]![0].input.operationKey,
+  );
+});
+
+it("uses fixed Plan and permission defaults when mode memory is disabled", async () => {
+  commands.planEnabled = true;
+  useChatDefaultsStore
+    .getState()
+    .rememberModes(environmentId, { runtimeMode: "approval-required", interactionMode: "default" });
+  useChatDefaultsStore
+    .getState()
+    .setPreferences(environmentId, { rememberModes: false, interactionMode: "plan" });
+  await render(resource, false);
+  await click("+ New chat");
+  expect(commands.launch.mock.calls[0]![0].input).toMatchObject({
+    runtimeMode: DEFAULT_SERVER_SETTINGS.defaultRuntimeMode,
+    interactionMode: "plan",
+  });
+});
+
+it("checking an interrupted chat opens its accepted result only on request", async () => {
+  commands.launch.mockResolvedValueOnce(failure("launch_failed"));
+  commands.inspectLaunch.mockResolvedValue(success(acceptedLaunch));
+  await render(resource, false);
+  await click("+ New chat");
+  await click("Check result");
+  expect(commands.navigate).not.toHaveBeenCalled();
+  await click("Open chat");
+  expect(commands.navigate).toHaveBeenCalledTimes(1);
+  expect(commands.launch).toHaveBeenCalledTimes(1);
+});
+
+it("confirms a missing recovery result before permitting another new chat", async () => {
+  commands.launch.mockResolvedValueOnce(failure("stale_context"));
+  commands.inspectLaunch.mockResolvedValue(failure("missing"));
+  await render(resource, false);
+  await click("+ New chat");
+  await click("Check result");
+  expect(localStorage.getItem("deckhand:launch:computer:installation:source:1")).toBeNull();
+  await click("+ New chat");
+  expect(commands.launch.mock.calls[1]![0].input.operationKey).not.toBe(
+    commands.launch.mock.calls[0]![0].input.operationKey,
+  );
 });

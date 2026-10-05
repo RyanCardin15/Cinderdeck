@@ -36,6 +36,12 @@ Model choices come from the actual provider catalogue. ACP's **Default** placeho
 
 Current official startup interfaces are [Cursor `agent acp`](https://prod.cursor.com/docs/cli/acp) and [Copilot `copilot --acp --stdio`](https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server). Authentication may need user interaction. Do not open login flows or send model prompts as a side effect of installing or listing providers.
 
+## Open a chat
+
+In a workspace's **Agents** tab, **New chat** opens an empty conversation in the selected checkout. Choose the provider, model, reasoning effort, permissions and Plan or Agent mode in the composer, then send your first message. Opening the chat does not start an agent or run setup scripts. In a workspace with several repositories, the optional repository picker remembers the last selection for that workspace.
+
+**Settings → General → New threads** controls defaults. A pinned model includes its provider and reasoning options; **Automatic** remembers your last provider, model and reasoning choice. **Remember chat modes** remembers permissions and Plan or Agent mode on this device for the selected machine. Turn it off to use the configured permissions and default chat mode. **Chat options → Open read-only analysis chat** retains enforced Codex analysis. An interrupted open keeps its saved request: check its result or retry it to recover the same conversation.
+
 ## Session purpose and checkout access
 
 **Code changes** uses the existing writer admission and reserves the exact selected repository checkout. **Read-only analysis** is available only for Codex: the saved session is an `observer` with `read_only` access, and its provider policy forces the actual Codex sandbox to read-only with approvals disabled. Every thread start, resume, fork and turn retains that policy. Analysis keeps the same native installation, checkout and physical repository validation but takes neither the local nor native writer reservation; multiple observers can inspect Primary while a writer owns its code changes.

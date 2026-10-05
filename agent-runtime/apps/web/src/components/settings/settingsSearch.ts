@@ -188,6 +188,18 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["new thread project provider reasoning effort"],
   },
   {
+    id: "chat-mode-memory",
+    title: "Remember chat modes",
+    to: "/settings/general",
+    searchTerms: ["agents new chat session defaults last used permissions plan agent mode"],
+  },
+  {
+    id: "default-chat-mode",
+    title: "Default chat mode",
+    to: "/settings/general",
+    searchTerms: ["agents new chat session plan agent defaults"],
+  },
+  {
     id: "default-permissions",
     title: "Permissions",
     to: "/settings/general",

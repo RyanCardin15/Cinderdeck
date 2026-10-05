@@ -56,7 +56,7 @@ import { SessionBinding, FeatureId, WorkspaceBindingId, PhysicalCheckout } from 
 import { ProviderInstanceId } from "../providerInstance.ts";
 import { ModelSelection } from "../modelSelection.ts";
 import { ThreadPullRequestLink } from "../threadPullRequest.ts";
-import { RuntimeMode } from "../providerPolicy.ts";
+import { RuntimeMode, ProviderInteractionMode } from "../providerPolicy.ts";
 import { EnvironmentAuthorizationError } from "../auth.ts";
 import {
   ThreadId,
@@ -166,7 +166,13 @@ export const ManagedLaunchInput = Schema.Struct({
   revision: launchIdentifier,
   repositoryID: launchIdentifier,
   title: TrimmedNonEmptyString.check(Schema.isMaxLength(200)),
-  objective: TrimmedNonEmptyString.check(Schema.isMaxLength(16000)),
+  objective: Schema.Union([
+    TrimmedNonEmptyString.check(Schema.isMaxLength(16000)),
+    Schema.Literal(""),
+  ]),
+  // Empty chats bind their checkout without dispatching an initial turn.
+  deferStart: Schema.optionalKey(Schema.Boolean),
+  interactionMode: Schema.optionalKey(ProviderInteractionMode),
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
   access: Schema.optionalKey(Schema.Literals(["read_only", "write"])),
@@ -185,6 +191,9 @@ export const ManagedLaunchRecord = Schema.Struct({
 export type ManagedLaunchRecord = typeof ManagedLaunchRecord.Type;
 export const ManagedCreateInput = Schema.Struct({
   ...ManagedLaunchInput.fields,
+  // Native lane creation keeps its explicit objective-and-launch flow.
+  deferStart: Schema.optionalKey(Schema.Literal(false)),
+  objective: TrimmedNonEmptyString.check(Schema.isMaxLength(16000)),
   branch: Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(200)),
   repositoryRefs: IntegrationRepositoryStartRefs,
   setup: Schema.Boolean,
