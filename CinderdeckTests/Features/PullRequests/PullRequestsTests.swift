@@ -482,6 +482,54 @@ final class PullRequestsTests: XCTestCase {
     XCTAssertEqual(model.repositoryGroups.map(\.owner), ["team"])
   }
 
+
+  func testHarnessUsesExistingSavedQueriesAndPersistsBackToNativeStore() async throws {
+    let store = PRViewStore(defaults: temporaryDefaults())
+    let filters = PRFilters(repository: "team/project", role: .review, text: "label:bug author:@me", advanced: true)
+    try store.upsert(account: "reviewer", view: .init(id: "bugs", name: "Bug reviews", filters: filters), select: true)
+    let views = PRViewControlService(store: store, currentHost: { "github.com" }, viewer: { _ in "reviewer" })
+    let service = PRMockService()
+    let browser = PRBrowserControlService(views: views, currentHost: { "github.com" }, service: { _ in service })
+    let loaded = try await browser.handle(params: .object(["action": .string("preferences")]))
+    XCTAssertEqual(loaded.objectValue?["preferences"]?.objectValue?["selectedViewID"], .string("bugs"))
+    XCTAssertTrue(loaded.objectValue?["preferences"]?.objectValue?["query"]?.stringValue?.contains("label:bug author:reviewer") == true)
+    let changed = PRFilters(organization: "team", state: .merged)
+    _ = try await browser.handle(params: .object(["action": .string("workspace"), "hostname": .string("github.com"), "account": .string("reviewer"), "id": .string("bugs"), "filters": PRViewAPI.encode(changed)]))
+    XCTAssertEqual(try store.load(account: "reviewer").filters, changed)
+    XCTAssertEqual(try store.load(account: "reviewer").customViews.first?.filters, filters)
+    XCTAssertTrue(try store.load(account: "someone-else").customViews.isEmpty)
+  }
+
+  func testHarnessBrowsesOrganizationsAndSearchesWithoutAnyWorkspace() async throws {
+    let service = PRMockService(); service.organizationPagination = true
+    let browser = PRBrowserControlService(currentHost: { "github.com" }, service: { _ in service })
+    let identity: [String: JSONValue] = ["hostname": .string("github.com"), "account": .string("reviewer")]
+    var params = identity; params["action"] = .string("repositories"); params["organization"] = .string("team")
+    let first = try await browser.handle(params: .object(params))
+    XCTAssertEqual(first.objectValue?["page"]?.objectValue?["pageInfo"]?.objectValue?["endCursor"], .string("next"))
+    params["after"] = .string("next")
+    _ = try await browser.handle(params: .object(params))
+    XCTAssertEqual(service.organizationCursors.compactMap { $0 }, ["next"])
+    params = identity; params["action"] = .string("search"); params["filters"] = PRViewAPI.encode(PRFilters(organization: "team", role: .review))
+    let result = try await browser.handle(params: .object(params))
+    XCTAssertEqual(service.searchQueries, ["is:pr org:team review-requested:reviewer is:open sort:updated-desc"])
+    XCTAssertEqual(result.objectValue?["requests"]?.arrayValue?.first?.objectValue?["number"], .number(7))
+    XCTAssertNotNil(result.objectValue?["requests"]?.arrayValue?.first?.objectValue?["updatedAt"]?.stringValue)
+  }
+
+  func testHarnessRefusesChangedAccountBeforeSearchingOrStarring() async throws {
+    let service = PRMockService(); service.account = "different-account"
+    let browser = PRBrowserControlService(currentHost: { "github.com" }, service: { _ in service })
+    do {
+      _ = try await browser.handle(params: .object(["action": .string("search"), "hostname": .string("github.com"), "account": .string("reviewer"), "filters": PRViewAPI.encode(PRFilters())]))
+      XCTFail("Must refuse the old account")
+    } catch let error as StackControlError { XCTAssertEqual(error.code, "account_changed") }
+    XCTAssertTrue(service.searchQueries.isEmpty)
+    service.account = "reviewer"
+    _ = try await browser.handle(params: .object(["action": .string("star"), "hostname": .string("github.com"), "account": .string("reviewer"), "repository": try JSONValue(encoding: PRFixtures.repository), "starred": .bool(true)]))
+    XCTAssertEqual(service.starCalls, [true])
+  }
+
   private func eventually(_ condition: () -> Bool, file: StaticString = #filePath, line: UInt = #line) async throws {
     let deadline = Date().addingTimeInterval(3)
     while !condition(), Date() < deadline { try await Task.sleep(nanoseconds: 10_000_000) }
@@ -528,6 +576,7 @@ private final class PRMockService: GitHubPRServing {
   }
   var account = "reviewer"
   var failStar = false
+  var starCalls: [Bool] = []
   var failViewer = false
   var paginate = false
   func viewer() async throws -> String {
@@ -558,6 +607,7 @@ private final class PRMockService: GitHubPRServing {
   }
   func files(repository: String, number: Int, page: Int) async throws -> [PullRequestFile] { [] }
   func star(repository: GitHubRepository, starred: Bool) async throws {
+    starCalls.append(starred)
     if failStar { throw GitHubPRError.message("No permission") }
   }
   func review(request: PullRequest, detail: PullRequestDetail, login: String, event: PRReviewEvent, body: String) async throws {}

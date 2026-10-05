@@ -1,5 +1,6 @@
 import { OWNERSHIP_METHODS } from "@t3tools/contracts/deckhand/ownershipRpc";
 import {
+  AuthReviewWriteScope,
   AuthAccessReadScope,
   AuthAccessWriteScope,
   AuthStandardClientScopes,
@@ -168,4 +169,12 @@ it("requires operate permission for tool updates even alongside a read-only chec
     AuthOrchestrationOperateScope,
   );
   expect(requiredScopeForDeviceList({ updateTool: "hub" })).toBe(AuthOrchestrationOperateScope);
+});
+
+it("requires review scope for GitHub reviews and operate scope for saved queries and stars", async () => {
+  const { requiredScopeForGitHubWorkspace } = await import("./RpcAuthorization.ts");
+  expect(requiredScopeForGitHubWorkspace({ action: "review" })).toBe(AuthReviewWriteScope);
+  expect(requiredScopeForGitHubWorkspace({ action: "star" })).toBe(AuthOrchestrationOperateScope);
+  expect(requiredScopeForGitHubWorkspace({ action: "preferences" })).toBe(AuthOrchestrationReadScope);
+  expect(requiredScopeForGitHubWorkspace({ action: "select" })).toBe(AuthOrchestrationOperateScope);
 });

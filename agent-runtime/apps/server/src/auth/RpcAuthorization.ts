@@ -1,3 +1,4 @@
+import { GITHUB_WORKSPACE_METHOD, type GitHubWorkspaceInput } from "@t3tools/contracts/deckhand/gitHubWorkspace";
 import { EXTERNAL_DEBUG_METHODS } from "@t3tools/contracts/deckhand/externalDebugRpc";
 import { OWNERSHIP_METHODS } from "@t3tools/contracts/deckhand/ownershipRpc";
 import { HISTORY_IMPORT_METHODS } from "@t3tools/contracts/deckhand/historyImportRpc";
@@ -36,6 +37,7 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * runtime failure.
  */
 export const RPC_REQUIRED_SCOPES = {
+  [GITHUB_WORKSPACE_METHOD]: AuthOrchestrationReadScope,
   [EXTERNAL_DEBUG_METHODS.discover]: AuthOrchestrationReadScope,
   [EXTERNAL_DEBUG_METHODS.sessions]: AuthOrchestrationReadScope,
   [EXTERNAL_DEBUG_METHODS.read]: AuthOrchestrationReadScope,
@@ -316,3 +318,10 @@ export const requiredScopeForDeviceList = (input: DeviceListInput): AuthEnvironm
   input.retryHostId || input.updateTool
     ? AuthOrchestrationOperateScope
     : AuthOrchestrationReadScope;
+
+
+export function requiredScopeForGitHubWorkspace(input: Pick<GitHubWorkspaceInput, "action">): AuthEnvironmentScope {
+  if (input.action === "review") return AuthReviewWriteScope;
+  return ["select", "upsert", "delete", "reorder", "workspace", "star"].includes(input.action)
+    ? AuthOrchestrationOperateScope : AuthOrchestrationReadScope;
+}

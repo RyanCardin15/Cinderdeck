@@ -6,6 +6,10 @@ Sign in to your selected provider in **Settings → Providers**. Deckhand uses t
 
 The default runtime store is `~/.deckhand/userdata`. The macOS desktop profile is `~/Library/Application Support/deckhand-v2`. `DECKHAND_HOME` selects another runtime root; `DECKHAND_PROFILE_ROOT` separately selects the parent of the desktop profile. Setting only one does not isolate the other. Deckhand ignores `T3CODE_HOME` and does not automatically import T3 credentials or databases.
 
+## Browse GitHub pull requests
+
+Open **Settings → Source Control → GitHub account** to configure GitHub on the execution computer. **Pull requests** uses that account directly; you do not need to preload a workspace. Your existing Cinderdeck saved queries and selected view carry over. Choose **My work**, an organization, or a repository, and use GitHub stars as favorites. Saved-view edits are shared with the original Cinderdeck pull request browser.
+
 ## Troubleshoot a connection
 
 Use **Check connection** to refresh native discovery, installation identity, protocol and capabilities. A changed installation, missing workspace or stale generation requires a deliberate current-workspace selection. Inspect the saved operation using **Check status** after a lost reply; reuse its original operation key. Restarting or creating replacement work is not evidence that the earlier operation failed.

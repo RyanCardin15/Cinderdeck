@@ -20,6 +20,7 @@ final class PRViewControlService {
     case "prs.views.list": allowed = ["hostname", "account"]
     case "prs.views.upsert": allowed = ["hostname", "account", "id", "name", "filters", "select"]
     case "prs.views.select", "prs.views.delete": allowed = ["hostname", "account", "id"]
+    case "prs.views.workspace": allowed = ["hostname", "account", "filters", "id"]
     case "prs.views.reorder": allowed = ["hostname", "account", "ids"]
     default: throw StackControlError(code: "unknown_method", message: "Unknown method \(method)")
     }
@@ -52,6 +53,9 @@ final class PRViewControlService {
         select = flag
       } else { select = false }
       try store.upsert(account: account, hostname: hostname, view: .init(id: id, name: name, filters: filters), select: select)
+    case "prs.views.workspace":
+      let filters = try PRViewAPI.patch(object["filters"], onto: store.load(account: account, hostname: hostname).filters)
+      try store.saveWorkspace(account: account, hostname: hostname, filters: filters, selectedViewID: Self.string("id", in: object, required: true)!)
     case "prs.views.select": try store.select(account: account, hostname: hostname, id: Self.string("id", in: object, required: true)!)
     case "prs.views.delete": try store.delete(account: account, hostname: hostname, id: Self.string("id", in: object, required: true)!)
     case "prs.views.reorder":
@@ -134,5 +138,101 @@ nonisolated enum PRViewAPI {
       }
     }
     return filters
+  }
+}
+
+
+/// Account-wide PR browsing for the harness. The native window, CLI and harness
+/// share PRViewStore and GitHubPRService; no checkout is needed to browse GitHub.
+@MainActor
+final class PRBrowserControlService {
+  private let views: PRViewControlService
+  private let currentHost: () -> String
+  private let service: @MainActor (String) -> any GitHubPRServing
+  init(views: PRViewControlService? = nil, currentHost: @escaping () -> String = { GitHubHost.current },
+    service: (@MainActor (String) -> any GitHubPRServing)? = nil) {
+    self.views = views ?? PRViewControlService()
+    self.currentHost = currentHost
+    self.service = service ?? { GitHubPRService(hostname: $0) }
+  }
+
+  func handle(params: JSONValue) async throws -> JSONValue {
+    guard var fields = params.objectValue, let action = fields.removeValue(forKey: "action")?.stringValue else {
+      throw StackControlError.invalid("Pass a PR browser action")
+    }
+    let viewMethods = ["preferences": "list", "select": "select", "upsert": "upsert", "delete": "delete", "reorder": "reorder", "workspace": "workspace"]
+    if let method = viewMethods[action] {
+      if action != "preferences", fields["hostname"]?.stringValue != currentHost() {
+        throw StackControlError(code: "host_changed", message: "The selected GitHub server changed. Reconnect before continuing.")
+      }
+      let value = try await views.handle("prs.views." + method, params: .object(fields))
+      return .object(["kind": .string("preferences"), "preferences": value])
+    }
+    let allowed: Set<String>
+    switch action {
+    case "repositories": allowed = ["organization", "after"]
+    case "organizations": allowed = ["after"]
+    case "search": allowed = ["filters", "after"]
+    case "detail": allowed = ["id"]
+    case "files": allowed = ["repository", "number", "page"]
+    case "star": allowed = ["repository", "starred"]
+    case "review": allowed = ["request", "detail", "event", "body"]
+    default: throw StackControlError.invalid("Unknown PR browser action")
+    }
+    guard Set(fields.keys).isSubset(of: allowed.union(["account", "hostname"])),
+      let account = fields["account"]?.stringValue, !account.isEmpty,
+      let hostname = fields["hostname"]?.stringValue, hostname == currentHost(), GitHubHost.normalized(hostname) == hostname else {
+      throw StackControlError(code: "account_changed", message: "Reconnect to the current GitHub account before continuing.")
+    }
+    let github = service(hostname)
+    guard try await github.viewer().caseInsensitiveCompare(account) == .orderedSame, hostname == currentHost() else {
+      throw StackControlError(code: "account_changed", message: "Your GitHub connection changed. Reconnect before continuing.")
+    }
+    func decode<T: Decodable>(_ key: String, as: T.Type) throws -> T {
+      guard let value = fields[key] else { throw StackControlError.invalid("Missing \(key)") }
+      return try GitHubPRService.decoder().decode(T.self, from: JSONEncoder().encode(value))
+    }
+    func string(_ key: String) throws -> String {
+      let value = try decode(key, as: String.self)
+      guard !value.isEmpty, value.utf8.count <= 4096 else { throw StackControlError.invalid("Invalid \(key)") }
+      return value
+    }
+    var output: [String: JSONValue] = ["kind": .string(action), "account": .string(account), "hostname": .string(hostname)]
+    let after: String?
+    if let value = fields["after"], value != .null { after = try string("after") } else { after = nil }
+    switch action {
+    case "repositories":
+      let page: GitHubConnection<GitHubRepository>
+      if let value = fields["organization"], value != .null {
+        let organization = try string("organization")
+        guard GitHubPRService.validRepository("\(organization)/repo") else { throw StackControlError.invalid("Invalid organization") }
+        page = try await github.repositories(organization: organization, after: after)
+      } else { page = try await github.repositories(after: after) }
+      output["page"] = try JSONValue(encoding: page)
+    case "organizations": output["page"] = try JSONValue(encoding: await github.organizations(after: after))
+    case "search":
+      let filters = try PRViewAPI.patch(fields["filters"], onto: PRFilters())
+      let page = try await github.search(filters.query(login: account), after: after)
+      output["requests"] = try JSONValue(encoding: page.requests)
+      output["count"] = .number(Double(page.count))
+      output["pageInfo"] = try JSONValue(encoding: page.pageInfo)
+    case "detail": output["detail"] = try JSONValue(encoding: await github.detail(id: string("id")))
+    case "files": output["files"] = try JSONValue(encoding: await github.files(repository: string("repository"), number: decode("number", as: Int.self), page: decode("page", as: Int.self)))
+    case "star":
+      let repository = try decode("repository", as: GitHubRepository.self)
+      guard GitHubPRService.validRepository(repository.nameWithOwner) else { throw StackControlError.invalid("Invalid repository") }
+      let starred = try decode("starred", as: Bool.self)
+      try await github.star(repository: repository, starred: starred)
+      output["repositoryID"] = .string(repository.id); output["starred"] = .bool(starred)
+    case "review":
+      try await github.review(request: decode("request", as: PullRequest.self), detail: decode("detail", as: PullRequestDetail.self), login: account,
+        event: decode("event", as: PRReviewEvent.self), body: decode("body", as: String.self))
+      output["submitted"] = .bool(true)
+    default: break
+    }
+    guard hostname == currentHost(), try await github.viewer().caseInsensitiveCompare(account) == .orderedSame else {
+      throw StackControlError(code: "account_changed", message: "Your GitHub account changed. Reconnect to see its pull requests.")
+    }
+    return .object(output)
   }
 }

@@ -37,7 +37,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
-it("keeps a lane and its authority pins through global Agents, Overview, Services and Recordings links", async () => {
+it("keeps workspace tools scoped while pull requests open the shared GitHub browser", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const container = document.createElement("div");
   document.body.append(container);
@@ -56,6 +56,7 @@ it("keeps a lane and its authority pins through global Agents, Overview, Service
     for (const [label, to, search] of [
       ["Agents", "/workspaces", { ...scope, tab: "agents" }],
       ["Overview", "/workspaces", { ...scope, tab: "overview" }],
+      ["Pull requests", "/pull-requests", { involvement: "all", state: "open", environmentId: "remote" }],
       [
         "Services & runs",
         "/services",

@@ -1,3 +1,4 @@
+import { EnvironmentId } from "@t3tools/contracts";
 import { PullRequestGlyph } from "../components/pullRequest/pullRequestIcons";
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
@@ -9,7 +10,6 @@ import {
   FilmIcon,
   SettingsIcon,
 } from "lucide-react";
-import { readPullRequestListPreferences } from "../components/pullRequest/pullRequestListPreferences";
 import { CinderdeckMark } from "./CinderdeckMark";
 import { NativeToolsMenu } from "./NativeToolsSettings";
 import styles from "./navigation.module.css";
@@ -74,7 +74,7 @@ export function ProductNavigation({
         </Link>
         <Link
           to="/pull-requests"
-          search={readPullRequestListPreferences()}
+          search={{ involvement: "all", state: "open", ...(workspaceSearch?.environment ? { environmentId: EnvironmentId.make(workspaceSearch.environment) } : {}) }}
           className={current === "pull-requests" ? styles.current : ""}
           aria-current={current === "pull-requests" ? "page" : undefined}
         >

@@ -1,7 +1,7 @@
 import { SettingsGroup } from "./SettingsGroup";
 import { Spinner } from "~/components/ui/spinner";
 import { NotificationSettings } from "./NotificationSettings";
-import { NativeToolsSettings } from "../../deckhand/NativeToolsSettings";
+import { NativeToolsSettings, NativeGitHubAccountSettings } from "../../deckhand/NativeToolsSettings";
 import { ArchiveIcon, ArchiveX, CheckIcon, ChevronRightIcon, SettingsIcon } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { CSSProperties, ReactNode } from "react";
@@ -2248,6 +2248,7 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <NativeGitHubAccountSettings />
       <NativeToolsSettings />
       <ProjectDefaultsSettings category="general" />
       <SettingsSection id="organization" title="Organization">

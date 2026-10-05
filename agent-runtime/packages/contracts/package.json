@@ -45,7 +45,8 @@
     "./deckhand/historyImportRpc": "./src/deckhand/historyImportRpc.ts",
     "./deckhand/ownershipRpc": "./src/deckhand/ownershipRpc.ts",
     "./deckhand/externalDebugRpc": "./src/deckhand/externalDebugRpc.ts",
-    "./deckhand/externalAppPreferences": "./src/deckhand/externalAppPreferences.ts"
+    "./deckhand/externalAppPreferences": "./src/deckhand/externalAppPreferences.ts",
+    "./deckhand/gitHubWorkspace": "./src/deckhand/gitHubWorkspace.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

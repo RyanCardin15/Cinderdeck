@@ -1,3 +1,8 @@
+import {
+  GITHUB_WORKSPACE_METHOD,
+  GitHubWorkspaceInput,
+  GitHubWorkspaceResult,
+} from "./gitHubWorkspace.ts";
 import { OwnershipRpcGroup } from "./ownershipRpc.ts";
 import { HistoryImportsRpcGroup } from "./historyImportRpc.ts";
 import { OwnedPreviewRpcGroup } from "./ownedPreviewRpc.ts";
@@ -322,6 +327,11 @@ export const ManagedLaunchReview = Schema.Struct({
 export type ManagedLaunchReview = typeof ManagedLaunchReview.Type;
 const ErrorSchema = Schema.Union([DeckhandRpcError, EnvironmentAuthorizationError]);
 export const DeckhandRpcGroup = RpcGroup.make(
+  Rpc.make(GITHUB_WORKSPACE_METHOD, {
+    payload: GitHubWorkspaceInput,
+    success: GitHubWorkspaceResult,
+    error: ErrorSchema,
+  }),
   Rpc.make(LINKED_WORK_METHODS.publish, {
     payload: LinkedWorkPublishInput,
     success: LinkedWorkRecord,

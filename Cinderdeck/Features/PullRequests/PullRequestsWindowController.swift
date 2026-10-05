@@ -19,6 +19,7 @@ final class PullRequestsWindowController: NSWindowController {
   }
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
   func show() {
+    if AgentShellController.shared.show(section: "pull-requests") { return }
     showWindow(nil)
     window?.makeKeyAndOrderFront(nil)
     NSApp.activate(ignoringOtherApps: true)

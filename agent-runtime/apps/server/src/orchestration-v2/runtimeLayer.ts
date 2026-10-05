@@ -1,3 +1,4 @@
+import * as GitHubWorkspace from "../deckhand/GitHubWorkspace.ts";
 import * as ActorAccess from "../deckhand/ActorAccess.ts";
 import * as CurrentCheckout from "../deckhand/CurrentCheckout.ts";
 import * as OwnershipTransitions from "../deckhand/OwnershipTransitions.ts";
@@ -526,5 +527,6 @@ export const OrchestrationV2ProductionLayerLive = Layer.mergeAll(
   // Export the same memoized native integration services to route registration.
   // The WebSocket and managed contexts must share one connection/cache lifetime.
   Layer.provideMerge(IntegrationHub.layerLive),
+  Layer.provideMerge(GitHubWorkspace.layerLive),
   Layer.provideMerge(WorkspaceBackend.layerLive),
 );

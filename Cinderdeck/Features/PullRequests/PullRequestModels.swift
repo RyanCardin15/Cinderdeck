@@ -199,7 +199,7 @@ nonisolated struct PRSavedView: Codable, Identifiable, Equatable, Sendable {
   var isBuiltIn: Bool { Self.defaults.contains { $0.id == id } }
 }
 
-nonisolated enum PRReviewEvent: String, CaseIterable, Identifiable, Sendable {
+nonisolated enum PRReviewEvent: String, Codable, CaseIterable, Identifiable, Sendable {
   case approve = "APPROVE", requestChanges = "REQUEST_CHANGES", comment = "COMMENT"
   var id: String { rawValue }
   var title: String {

@@ -1,3 +1,4 @@
+import { GitHubPullRequests } from "../deckhand/GitHubPullRequests";
 import { ContextPullRequests } from "../deckhand/ContextPullRequests";
 import {
   validateConnectedPullRequestSearch,
@@ -362,7 +363,8 @@ function PullRequestsRouteView() {
   const search = Route.useSearch();
   if (search.deckhandContext !== undefined)
     return <ContextPullRequests scope={search as ConnectedPullRequestSearch} />;
-  return <GlobalPullRequestsRouteView />;
+  if (search.number !== undefined || search.projectId !== undefined) return <GlobalPullRequestsRouteView />;
+  return <GitHubPullRequests environmentId={search.environmentId} />;
 }
 function GlobalPullRequestsRouteView() {
   const [detailFocus, setDetailFocus] = useState<PullRequestDetailFocus>(null);

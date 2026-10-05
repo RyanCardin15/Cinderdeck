@@ -231,6 +231,11 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   // Seeds server-side visited tracking from this browser's localStorage the
   useThreadVisitedMigration();
   const pathname = useLocation({ select: (location) => location.pathname });
+  const standalonePullRequests = useLocation({ select: (location) => {
+    if (location.pathname !== "/pull-requests" && location.pathname !== "/pull-requests/") return false;
+    const params = new URLSearchParams(location.searchStr);
+    return !["projectId", "number", "deckhandContext"].some((key) => params.has(key));
+  } });
   const panelAnimationsSuppressed = usePanelNavigationSuppression(pathname);
   const routePanelAnimationsActive = panelAnimationsActive && !panelAnimationsSuppressed;
   const connectedThreadRef = useParams({
@@ -325,7 +330,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  if (pathname === "/pull-requests" || pathname === "/pull-requests/")
+  if (!standalonePullRequests && (pathname === "/pull-requests" || pathname === "/pull-requests/"))
     return (
       <PanelAnimationSuppressionProvider value={panelAnimationsSuppressed}>
         <SidebarProvider
@@ -344,7 +349,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       </PanelAnimationSuppressionProvider>
     );
 
-  if (["/workspaces", "/inbox", "/services", "/recordings", "/linked-work"].includes(pathname))
+  if (standalonePullRequests || ["/workspaces", "/inbox", "/services", "/recordings", "/linked-work"].includes(pathname))
     return (
       <>
         <NativeHostNavigation />

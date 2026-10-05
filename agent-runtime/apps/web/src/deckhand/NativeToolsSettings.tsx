@@ -1,3 +1,4 @@
+import { PullRequestGlyph } from "../components/pullRequest/pullRequestIcons";
 import { useRef, useState } from "react";
 import type { NativeToolRequest } from "@t3tools/contracts";
 import {
@@ -12,6 +13,7 @@ import {
   PencilLineIcon,
   ScanTextIcon,
   VideoIcon,
+  SettingsIcon,
 } from "lucide-react";
 import {
   Menu,
@@ -208,7 +210,6 @@ const morePreferences = [
   { mode: "menuBar", title: "Menu bar" },
   { mode: "quickAccess", title: "Quick access" },
   { mode: "cloud", title: "Cloud sync" },
-  { mode: "github", title: "GitHub" },
   { mode: "advanced", title: "Advanced" },
   { mode: "about", title: "About Cinderdeck" },
 ] as const;
@@ -343,4 +344,24 @@ export function NativeAgentAccessSettings() {
       </p>
     </section>
   );
+}
+
+
+export function NativeGitHubSettingsButton({ iconOnly = false }: { iconOnly?: boolean }) {
+  const tools = useNativeTools();
+  if (!tools.host) return <a href="/settings/source-control" aria-label="GitHub account settings">{iconOnly ? <SettingsIcon size={14} /> : "GitHub account settings"}</a>;
+  return <button type="button" aria-label="GitHub account settings"
+    disabled={!tools.available || tools.pending} onClick={() => void tools.request({ surface: "preferences", mode: "github" })}>
+    <SettingsIcon size={14} />{iconOnly ? null : "Configure GitHub account"}
+  </button>;
+}
+export function NativeGitHubAccountSettings() {
+  const tools = useNativeTools();
+  return <section className={styles.settings} aria-labelledby="github-account-heading"><header><div>
+    <h2 id="github-account-heading">GitHub account</h2>
+    <p>Use one connection for your repositories, organization selectors, favorites and saved pull request queries.</p>
+  </div><PullRequestGlyph.pullRequest size={22} aria-hidden /></header>
+  <div className={styles.updates}><div><strong>Connect your account</strong><p>Your existing Cinderdeck saved views appear automatically. You can browse GitHub without loading a workspace.</p></div>
+  {tools.host ? <NativeGitHubSettingsButton /> : <p>Open Settings → GitHub in Cinderdeck on the execution computer to configure its account.</p>}</div>
+  {tools.host && !tools.available ? <p role="status">The native connection is unavailable.</p> : null}</section>;
 }

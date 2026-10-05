@@ -17,6 +17,8 @@ export function NativeHostNavigation() {
       void navigate({ to: "/services", search: { environment, ...(target.workspaceID ? { workspace: target.workspaceID } : {}) } });
     } else if ((target.section ?? "").toLowerCase() === "recordings") {
       void navigate({ to: "/recordings", search: { environment, ...(target.workspaceID ? { workspace: target.workspaceID } : {}) } });
+    } else if (target.section === "pull-requests") {
+      void navigate({ to: "/pull-requests", search: { involvement: "all", state: "open", environmentId: environment } });
     } else {
       void navigate({ to: "/workspaces", search: { environment,
         ...(target.workspaceID ? { context: target.workspaceID } : {}),

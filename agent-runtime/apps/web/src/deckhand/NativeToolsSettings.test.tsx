@@ -9,7 +9,7 @@ import { NativeAgentAccessSettings } from "./NativeToolsSettings";
 
 let container: HTMLDivElement;
 let root: Root;
-function setBridge(value: Pick<NonNullable<Window["desktopBridge"]>, "isNativeHost" | "openNativeTool">) {
+function setBridge(value: Partial<Pick<NonNullable<Window["desktopBridge"]>, "isNativeHost" | "openNativeTool">>) {
   Object.defineProperty(window, "desktopBridge", { configurable: true, value });
 }
 beforeEach(() => {

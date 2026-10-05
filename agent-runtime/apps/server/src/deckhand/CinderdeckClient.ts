@@ -1,3 +1,4 @@
+import * as GitHubWorkspace from "@t3tools/contracts/deckhand/gitHubWorkspace";
 // @effect-diagnostics nodeBuiltinImport:off - This adapter owns the same-host Unix transport.
 import * as NodeNet from "node:net";
 import * as NodeOS from "node:os";
@@ -21,6 +22,7 @@ export class BridgeError extends Schema.TaggedError<BridgeError>()("BridgeError"
     "stale_binding",
   ]),
   code: Schema.optional(Schema.String),
+  detail: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(1600))),
   cause: Schema.optional(Schema.Defect()),
 }) {
   override get message() {
@@ -41,6 +43,7 @@ interface ExpectedIdentity {
 export class CinderdeckClient extends Context.Service<
   CinderdeckClient,
   {
+    readonly github: (connection: Connection, input: GitHubWorkspace.GitHubWorkspaceInput) => Effect.Effect<GitHubWorkspace.GitHubWorkspaceResult, BridgeError>;
     readonly connect: (
       socketPath: string,
       expected: ExpectedIdentity,
@@ -90,6 +93,8 @@ export class CinderdeckClient extends Context.Service<
   }
 >()("t3/deckhand/CinderdeckClient") {}
 
+const decodeGitHubInput = Schema.decodeUnknownEffect(GitHubWorkspace.GitHubWorkspaceInput);
+const decodeGitHubResult = Schema.decodeUnknownEffect(GitHubWorkspace.GitHubWorkspaceResult);
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 const decodeCheckoutLookupInput = Schema.decodeUnknownEffect(
   Contracts.IntegrationCheckoutLookupInput,
@@ -178,7 +183,7 @@ const make = Effect.gen(function* () {
                   ) as {
                     id?: unknown;
                     result?: unknown;
-                    error?: { code?: unknown };
+                    error?: { code?: unknown; message?: unknown };
                   };
                   if (
                     reply === null ||
@@ -199,6 +204,8 @@ const make = Effect.gen(function* () {
                       new BridgeError({
                         reason: "peer_rejected",
                         code: typeof reply.error.code === "string" ? reply.error.code : "unknown",
+                        ...(method === "prs.browser" && typeof reply.error.message === "string"
+                          ? { detail: reply.error.message.slice(0, 1600) } : {}),
                       }),
                     );
                   }
@@ -520,6 +527,19 @@ const make = Effect.gen(function* () {
   const releaseWriter: CinderdeckClient["Service"]["releaseWriter"] = (connection, input) =>
     writerRequest(connection, "release", input);
   return CinderdeckClient.of({
+    github: (connection, input) => requiredCapability(connection, "github.workspace").pipe(
+      Effect.andThen(decodeGitHubInput(input)),
+      Effect.flatMap((validated) => request(connection.socketPath, "prs.browser", validated, 150000, connection.clientID)),
+      Effect.flatMap(decodeGitHubResult),
+      Effect.flatMap((result) => {
+        const viewAction = ["preferences", "select", "delete", "upsert", "workspace", "reorder"].includes(input.action);
+        const resultIdentity = result.kind === "preferences" ? result.preferences : result;
+        return (viewAction ? result.kind === "preferences" : result.kind === input.action) &&
+          (!("account" in input) || (input.account.toLowerCase() === resultIdentity.account.toLowerCase() && input.hostname === resultIdentity.hostname))
+          ? Effect.succeed(result) : Effect.fail(new BridgeError({ reason: "invalid_response" }));
+      }),
+      Effect.mapError((cause) => isBridgeError(cause) ? cause : new BridgeError({ reason: "invalid_response", cause })),
+    ),
     connect,
     checkoutContexts,
     snapshot,

@@ -17,6 +17,7 @@ final class StackControlService: ObservableObject {
   private var started = false
   private let claimsFile: URL
   private let prViews: PRViewControlService
+  private lazy var prBrowser = PRBrowserControlService(views: prViews)
   let workspaceRunner: WorkspaceRunner
   let lanes: StackLaneCoordinator
   var integrationOperations: IntegrationOperations?
@@ -236,6 +237,7 @@ final class StackControlService: ObservableObject {
     if method.hasPrefix("integration.ui.") { return try handleUnifiedUI(method, params: params, actor: actor) }
     if method.hasPrefix("integration.") { return try await handleIntegration(method, params: params, actor: actor) }
     if method.hasPrefix("workspace.") { return try await handleWorkspace(method, params: params, actor: actor) }
+    if method == "prs.browser" { return try await prBrowser.handle(params: params) }
     if method.hasPrefix("prs.views.") { return try await prViews.handle(method, params: params) }
     if method.hasPrefix("repro.") { return try await handleRepro(method, params: params, actor: actor) }
     switch method {

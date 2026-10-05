@@ -441,7 +441,8 @@
     "third-party-licenses.config.json": "Include explicit upstream T3 MIT attribution in the shipped license presentation while retaining dependency notices.",
     "apps/server/src/orchestration-v2/ThreadLaunchService.ts": "Open empty managed chats in existing checkouts without a provider turn or setup side effects; expose configured defaults and remembered composer modes.",
     "apps/server/src/orchestration-v2/ThreadLaunchService.test.ts": "Open empty managed chats in existing checkouts without a provider turn or setup side effects; expose configured defaults and remembered composer modes.",
-    "apps/web/src/components/settings/ProjectDefaultsSettings.tsx": "Open empty managed chats in existing checkouts without a provider turn or setup side effects; expose configured defaults and remembered composer modes."
+    "apps/web/src/components/settings/ProjectDefaultsSettings.tsx": "Open empty managed chats in existing checkouts without a provider turn or setup side effects; expose configured defaults and remembered composer modes.",
+    "apps/web/src/components/settings/SourceControlSettings.tsx": "Expose the shared native GitHub account configuration in source control settings."
   },
   "policies": [
     {
