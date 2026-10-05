@@ -29,22 +29,26 @@ nonisolated enum StackCommandRunner {
       defer { close(errFD) }
       var actions: posix_spawn_file_actions_t?
       var attr: posix_spawnattr_t?
-      posix_spawn_file_actions_init(&actions)
-      posix_spawnattr_init(&attr)
-      defer { posix_spawn_file_actions_destroy(&actions); posix_spawnattr_destroy(&attr) }
-      posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0)
-      posix_spawn_file_actions_adddup2(&actions, outFD, STDOUT_FILENO)
-      posix_spawn_file_actions_adddup2(&actions, errFD, STDERR_FILENO)
-      if let directory { posix_spawn_file_actions_addchdir_np(&actions, directory.path) }
-      posix_spawnattr_setpgroup(&attr, 0)
+      func checked(_ result: Int32, _ operation: String) throws {
+        guard result == 0 else { throw StackError.message("\(operation): \(String(cString: strerror(result)))") }
+      }
+      try checked(posix_spawn_file_actions_init(&actions), "Initialize command file actions")
+      defer { posix_spawn_file_actions_destroy(&actions) }
+      try checked(posix_spawnattr_init(&attr), "Initialize command attributes")
+      defer { posix_spawnattr_destroy(&attr) }
+      try checked(posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0), "Redirect command input")
+      try checked(posix_spawn_file_actions_adddup2(&actions, outFD, STDOUT_FILENO), "Redirect command output")
+      try checked(posix_spawn_file_actions_adddup2(&actions, errFD, STDERR_FILENO), "Redirect command error output")
+      if let directory { try checked(posix_spawn_file_actions_addchdir_np(&actions, directory.path), "Set command directory") }
+      try checked(posix_spawnattr_setpgroup(&attr, 0), "Set command process group")
       // GUI/test hosts may ignore or block signals. Commands need normal shell
       // semantics, including a truthful signal exit status and working SIGPIPE.
       var mask = sigset_t(), defaults = sigset_t()
       sigemptyset(&mask); sigemptyset(&defaults)
       for signal in [SIGINT, SIGTERM, SIGHUP, SIGPIPE, SIGQUIT] { sigaddset(&defaults, signal) }
-      posix_spawnattr_setsigmask(&attr, &mask)
-      posix_spawnattr_setsigdefault(&attr, &defaults)
-      posix_spawnattr_setflags(&attr, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF))
+      try checked(posix_spawnattr_setsigmask(&attr, &mask), "Set command signal mask")
+      try checked(posix_spawnattr_setsigdefault(&attr, &defaults), "Set command default signals")
+      try checked(posix_spawnattr_setflags(&attr, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF)), "Set command spawn flags")
       let args = ([executable] + arguments).map { value in value.withCString { strdup($0) } }
       let vars = environment.map { strdup("\($0.key)=\($0.value)") }
       defer { args.forEach { free($0) }; vars.forEach { free($0) } }

@@ -15,6 +15,8 @@ nonisolated struct StackLaneInfo: Codable, Equatable, Sendable {
   var environment: [String: String] = [:]
   /// Start point for branches this lane created.
   var from: String?
+  /// Explicit repository start commits, pinned before lane creation.
+  var repositoryRefs: [String: String] = [:]
   /// Set with `[lanes] hosts = true`: `<slug>.<workspace>.localhost`.
   var host: String?
   /// A lane created before lanes followed their source keeps its saved definition until unpinned.
@@ -56,7 +58,7 @@ nonisolated struct StackLaneInfo: Codable, Equatable, Sendable {
 
 extension StackLaneInfo {
   nonisolated enum CodingKeys: String, CodingKey {
-    case sourceStackID, name, owner, createdAt, directory, ports, slug, environment, from, host, pinned, adopted
+    case sourceStackID, name, owner, createdAt, directory, ports, slug, environment, from, repositoryRefs, host, pinned, adopted
   }
   nonisolated init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -69,6 +71,7 @@ extension StackLaneInfo {
     slug = try c.decodeIfPresent(String.self, forKey: .slug)
     environment = try c.decodeIfPresent([String: String].self, forKey: .environment) ?? [:]
     from = try c.decodeIfPresent(String.self, forKey: .from)
+    repositoryRefs = try c.decodeIfPresent([String: String].self, forKey: .repositoryRefs) ?? [:]
     host = try c.decodeIfPresent(String.self, forKey: .host)
     pinned = try c.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
     adopted = try c.decodeIfPresent(Bool.self, forKey: .adopted) ?? false
@@ -114,6 +117,8 @@ nonisolated struct StackLaneSetupState: Codable, Equatable, Sendable {
   var runID: UUID?
   var detail: String?
   var updatedAt = Date()
+  /// Durable integration operation whose setup state this is, when supplied.
+  var integrationOperationID: String?
 }
 
 /// `lane.json`. Version 2 stores an overlay on the source definition; version 1
@@ -127,13 +132,14 @@ nonisolated struct StackLaneRecord: Codable, Sendable {
   /// The saved definition of a pinned lane.
   var definition: StackDefinition?
   var copied: [StackLaneCopiedFile] = []
+  var integrationOperationID: String?
   var version = 2
 
   init(id: String, info: StackLaneInfo, worktrees: [StackLaneWorktree], ready: Bool? = nil) {
     self.id = id; self.info = info; self.worktrees = worktrees; self.ready = ready
   }
 
-  enum CodingKeys: String, CodingKey { case id, info, worktrees, ready, setup, definition, copied, version }
+  enum CodingKeys: String, CodingKey { case id, info, worktrees, ready, setup, definition, copied, version, integrationOperationID }
   init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
     worktrees = try c.decode([StackLaneWorktree].self, forKey: .worktrees)
@@ -141,6 +147,7 @@ nonisolated struct StackLaneRecord: Codable, Sendable {
     setup = try c.decodeIfPresent(StackLaneSetupState.self, forKey: .setup)
     definition = try c.decodeIfPresent(StackDefinition.self, forKey: .definition)
     copied = try c.decodeIfPresent([StackLaneCopiedFile].self, forKey: .copied) ?? []
+    integrationOperationID = try c.decodeIfPresent(String.self, forKey: .integrationOperationID)
     version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
     if let info = try c.decodeIfPresent(StackLaneInfo.self, forKey: .info) {
       self.info = info
@@ -158,8 +165,11 @@ nonisolated struct StackLaneRecord: Codable, Sendable {
 
 /// What to create: a branch, where to start it, and per-lane choices.
 nonisolated struct StackLaneRequest: Sendable {
+  var integrationOperationID: String?
   var branch: String
   var from: String?
+  /// Repository IDs whose new branch must start at this exact revision.
+  var repositoryRefs: [String: String] = [:]
   var environment: [String: String] = [:]
   var copy: [String] = []
   /// Adopt an existing worktree instead of creating one for its repository.

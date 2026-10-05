@@ -95,6 +95,8 @@ nonisolated struct StackServiceSnapshot: Codable, Sendable {
   var bindWarning: String? = nil
   /// "isolate" (runs here), or where a shared/linked service actually runs.
   var sharedFrom: String? = nil
+  /// Actual owner service name; the local alias may differ. Paired with sharedFrom.
+  var sharedServiceID: String? = nil
 }
 
 /// Lane details beyond StackLaneInfo: setup, Git state and worktrees.
@@ -113,6 +115,8 @@ nonisolated struct StackLaneStatusSnapshot: Codable, Sendable {
 }
 
 nonisolated struct StackRepoSnapshot: Codable, Sendable {
+  var physicalID: String? = nil
+  var repositoryPhysicalID: String? = nil
   let id: String
   let path: String
   let branch: String

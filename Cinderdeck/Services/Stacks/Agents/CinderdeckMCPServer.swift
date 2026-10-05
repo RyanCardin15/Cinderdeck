@@ -228,6 +228,9 @@ nonisolated enum CinderdeckMCPServer {
       "Create an isolated Git worktree copy of a workspace on a branch, claim it for you, run its [lanes] setup, and start its services on unique ports. The source keeps running. A branch that only exists on the remote is tracked; a new branch starts at from (default each repo's HEAD). Values written as {{port.<service>}} / {{url.<service>}} resolve to this lane's ports; services marked shared use the original checkout's instance. start=false creates without starting. If the branch is already checked out in your own worktree, use adopt_lane.",
       ["workspace": workspace, "branch": property("string", "Existing (local or remote) or new branch, also the lane name, e.g. agent/codex-1"),
         "from": property("string", "Start point for a new branch, e.g. origin/main (default: [lanes] from, else HEAD)"),
+        "repositoryRefs": .object(["type": .string("object"), "maxProperties": .number(64), "propertyNames": .object(["type": .string("string"), "minLength": .number(1), "maxLength": .number(160)]),
+          "additionalProperties": .object(["type": .string("string"), "minLength": .number(1), "maxLength": .number(200), "pattern": .string("^(?!-)(?![\\s\\S]*[\\u0000\\n\\r])[\\s\\S]+$")]),
+          "description": .string("Repository ID to start revision for a new branch, e.g. {app: commitSHA}. Each selected branch must be new; revisions are pinned before effects and override from only for that repository. Other repositories keep their defaults.")]),
         "env": laneEnvironment,
         "copy": property("array", "Extra untracked files to copy from each original checkout, e.g. [\".env.local\"]", items: "string"),
         "setup": property("boolean", "Run the workspace's [lanes] setup before starting (default true)"),
@@ -472,12 +475,21 @@ nonisolated enum CinderdeckMCPServer {
     if let allowed = schema["enum"]?.arrayValue, !allowed.contains(value) {
       throw StackControlError.invalid("Invalid \(path); allowed values: " + allowed.map { $0.compactString() }.joined(separator: ", "))
     }
+    if case .string(let text) = value {
+      if let minimum = schema["minLength"]?.intValue, text.count < minimum { throw StackControlError.invalid("\(path) must contain at least \(minimum) characters") }
+      if let maximum = schema["maxLength"]?.intValue, text.count > maximum { throw StackControlError.invalid("\(path) must contain at most \(maximum) characters") }
+      if let pattern = schema["pattern"]?.stringValue, text.range(of: pattern, options: .regularExpression) == nil {
+        throw StackControlError.invalid("Invalid \(path)")
+      }
+    }
     if case .array(let values) = value, let item = schema["items"] {
       for (index, value) in values.enumerated() { try validateValue(value, schema: item, path: "\(path)[\(index)]") }
     }
     if case .object(let values) = value {
+      if let maximum = schema["maxProperties"]?.intValue, values.count > maximum { throw StackControlError.invalid("\(path) must contain at most \(maximum) properties") }
       let properties = schema["properties"]?.objectValue ?? [:]
       for (key, value) in values {
+        if let names = schema["propertyNames"] { try validateValue(.string(key), schema: names, path: path + ".key") }
         if let child = properties[key] ?? schema["additionalProperties"].flatMap({ $0.objectValue == nil ? nil : $0 }) {
           try validateValue(value, schema: child, path: path + "." + key)
         } else if schema["additionalProperties"] == .bool(false) { throw StackControlError.invalid("Unknown argument \(path).\(key)") }

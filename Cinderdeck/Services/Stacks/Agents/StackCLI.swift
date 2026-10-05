@@ -44,8 +44,8 @@ nonisolated enum StackCLI {
     subscript(name: String) -> String? { values[name] }
   }
 
-  private static let valueFlags: Set<String> = ["timeout", "lines", "n", "grep", "note", "ttl", "repo", "as", "session", "port", "pid", "dir", "dirty", "limit", "from", "path", "name", "env", "copy"]
-  private static let listFlags: Set<String> = ["env", "copy"]
+  private static let valueFlags: Set<String> = ["timeout", "lines", "n", "grep", "note", "ttl", "repo", "as", "session", "port", "pid", "dir", "dirty", "limit", "from", "repo-from", "path", "name", "env", "copy"]
+  private static let listFlags: Set<String> = ["env", "copy", "repo-from"]
 
   static func parse(_ arguments: [String]) -> Options {
     var options = Options()
@@ -365,12 +365,21 @@ nonisolated enum StackCLI {
         if args.count == 2 { params["name"] = .string(args[1]) }
         params["setup"] = .bool(options.has("setup"))
       } else {
-        guard args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane create <workspace> <branch> [--from <ref>] [--env KEY=VALUE] [--copy <pattern>] [--no-setup] [--no-start] [--no-wait]") }
+        guard args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane create <workspace> <branch> [--from <ref>] [--repo-from <repo>=<ref>] [--env KEY=VALUE] [--copy <pattern>] [--no-setup] [--no-start] [--no-wait]") }
         params["branch"] = .string(args[1])
         params["setup"] = .bool(!options.has("no-setup"))
       }
       params["workspace"] = .string(args[0])
       if let from = options["from"] { params["from"] = .string(from) }
+      var repositoryRefs: [String: JSONValue] = [:]
+      for pair in options.lists["repo-from"] ?? [] {
+        guard !adopting, let equals = pair.firstIndex(of: "="), equals != pair.startIndex,
+          pair.index(after: equals) != pair.endIndex else { throw StackControlError.invalid("--repo-from takes <repo>=<ref> for lane creation") }
+        let id = String(pair[..<equals]), ref = String(pair[pair.index(after: equals)...])
+        guard repositoryRefs[id] == nil else { throw StackControlError.invalid("Duplicate --repo-from for \(id)") }
+        repositoryRefs[id] = .string(ref)
+      }
+      if !repositoryRefs.isEmpty { params["repositoryRefs"] = .object(repositoryRefs) }
       var environment: [String: JSONValue] = [:]
       for pair in options.lists["env"] ?? [] {
         guard let equals = pair.firstIndex(of: "="), equals != pair.startIndex else { throw StackControlError.invalid("--env takes KEY=VALUE (\(pair))") }
@@ -640,7 +649,7 @@ nonisolated enum StackCLI {
     cinderdeck services agent-help                    Instructions to paste into AGENTS.md
 
   WORKTREE LANES
-    cinderdeck lane create <workspace> <branch>       Create, set up and start an isolated worktree lane
+    cinderdeck lane create <workspace> <branch>       Create, set up and start an isolated worktree lane (--repo-from <repo>=<ref> pins a repository start)
       --from <ref>  --env KEY=VALUE  --copy <glob>    Start point, lane-only variables, extra files to copy
       --no-setup  --no-start                          Skip [lanes] setup, or create without starting
     cinderdeck lane adopt <workspace> [name]          Use an existing worktree (--path, default: here)

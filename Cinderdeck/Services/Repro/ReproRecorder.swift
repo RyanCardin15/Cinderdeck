@@ -1,6 +1,7 @@
 import AVFoundation
 import Combine
 import Foundation
+import CryptoKit
 
 extension ReproLogScope {
   static func load(from defaults: UserDefaults) -> ReproLogScope {
@@ -24,6 +25,7 @@ struct ReproRequest: Sendable {
   var workspaces: Set<String>?
   var capture: String?
   var note: String?
+  var buildProof: WorkspaceBuildCaptureProof?
   var requestedAt = Date()
 }
 
@@ -279,6 +281,11 @@ final class ReproRecorder: ObservableObject {
     lastFirstFrame = nil
     var session = ReproSession(id: incoming.id, title: incoming.title ?? "", origin: incoming.origin, createdAt: date, actor: incoming.actor)
     session.capture = incoming.capture
+    session.buildProof = incoming.buildProof
+    if let proof = session.buildProof, date.timeIntervalSince(proof.start.observedAt) > 10 {
+      session.buildProof?.start.state = "unknown"
+      session.buildProof?.start.detail = "Capture began too long after its build observation; the earlier stamp cannot prove this capture boundary."
+    }
     session.selectedWorkspaceIDs = incoming.workspaces?.sorted()
     session.scope = incoming.workspaces == nil ? "all running workspaces"
       : incoming.workspaces?.isEmpty == true ? "workspace logs off"
@@ -460,6 +467,24 @@ final class ReproRecorder: ObservableObject {
       if updated != live { live = updated }
     }
     if Date().timeIntervalSince(lastSave) > 5 { save() }
+  }
+
+  /// Persists native import identity, without asserting which UI target was captured.
+  func setImportedMedia(_ media: IntegrationPreviewMediaIdentity, id: UUID) throws {
+    guard session?.id == id, session?.importedMedia == nil else {
+      throw StackControlError(code: "recording_changed", message: "The imported recording is unavailable or already finalized")
+    }
+    session?.importedMedia = media
+    save()
+  }
+
+  func setImportedBuildEnd(_ observation: WorkspaceBuildObservation, id: UUID) throws {
+    guard session?.id == id, let proof = session?.buildProof, proof.end == nil,
+      observation.receiptID == proof.receiptID else {
+      throw StackControlError(code: "recording_changed", message: "The build-bound imported capture changed")
+    }
+    session?.buildProof?.end = observation
+    save()
   }
 
   private func save() {
@@ -680,6 +705,9 @@ final class ReproRecorder: ObservableObject {
       runStatus[run.id] = run.status
       if let index = session?.runs.firstIndex(where: { $0.id == run.id }) {
         session?.runs[index].status = run.status.rawValue
+        session?.runs[index].sourceProvenance = run.sourceProvenance
+        session?.runs[index].buildReceiptID = run.buildReceiptID
+        session?.runs[index].buildObservations = run.buildObservations
         if !run.status.isActive {
           session?.runs[index].finishedAt = clock?.position(at: run.finishedAt ?? date).t
           session?.runs[index].failedStep = run.steps.first { $0.status == .failed }?.title
@@ -713,7 +741,14 @@ final class ReproRecorder: ObservableObject {
         var state = ReproRepoState(id: repo.id, path: repo.path.path, branch: status?.branchLabel ?? "unknown",
           head: status.flatMap { $0.oid.isEmpty ? nil : $0.oid }, upstream: status?.upstream, ahead: status?.ahead ?? 0, behind: status?.behind ?? 0)
         let git = await Self.gitDetails(repo: repo, workspace: workspace, store: store, id: id)
-        if state.head == nil { state.head = git.head }
+        state.head = git.head
+        state.canonicalRepositoryKeys = git.keys
+        state.repositoryPhysicalId = git.physicalID
+        state.startSnapshotComplete = git.complete
+        state.snapshotComplete = false
+        state.capturedAt = git.capturedAt
+        state.diffHash = git.diffHash
+        state.sourceFingerprint = git.sourceFingerprint
         state.changedFiles = git.changed
         state.diffFile = git.diffFile
         state.diffTruncated = git.truncated ? true : nil
@@ -732,20 +767,59 @@ final class ReproRecorder: ObservableObject {
 
   /// HEAD, changed paths, and the uncommitted diff (capped at 2 MB).
   private nonisolated static func gitDetails(repo: RepoDefinition, workspace: String, store: ReproStore, id: UUID) async
-    -> (head: String?, changed: [String], diffFile: String?, truncated: Bool) {
-    guard FileManager.default.fileExists(atPath: repo.path.appendingPathComponent(".git").path) else { return (nil, [], nil, false) }
+    -> (head: String?, changed: [String], diffFile: String?, truncated: Bool, keys: [String], physicalID: String?, complete: Bool, capturedAt: Date, diffHash: String?, sourceFingerprint: ReproSourceFingerprintSnapshot?) {
+    guard FileManager.default.fileExists(atPath: repo.path.appendingPathComponent(".git").path) else { return (nil, [], nil, false, [], nil, false, Date(), nil, nil) }
     var environment = (try? await ShellEnvironmentResolver.shared.resolve()) ?? ProcessInfo.processInfo.environment
     environment["GIT_TERMINAL_PROMPT"] = "0"; environment["GIT_OPTIONAL_LOCKS"] = "0"; environment["LC_ALL"] = "C"
     func git(_ arguments: [String]) async -> String? {
       guard let result = try? await StackCommandRunner.run("/usr/bin/git", ["-c", "color.ui=false"] + arguments,
-        directory: repo.path, environment: environment, timeout: 20), result.status == 0 else { return nil }
-      return result.text
+        directory: repo.path, environment: environment, timeout: 20), result.status == 0, result.output.count < 8 * 1024 * 1024 else { return nil }
+      return String(data: result.output, encoding: .utf8)
     }
+    let capturedAt = Date()
     let head = await git(["rev-parse", "HEAD"])?.trimmingCharacters(in: .whitespacesAndNewlines)
-    let changed = (await git(["status", "--porcelain=v1", "--untracked-files=normal"]) ?? "")
-      .split(separator: "\n").map { String($0.dropFirst(3)) }.filter { !$0.isEmpty }
-    guard !changed.isEmpty, var diff = await git(["diff", "HEAD", "--no-ext-diff", "--no-color"]), !diff.isEmpty else {
-      return (head, Array(changed.prefix(500)), nil, false)
+    let status = await git(["status", "--porcelain=v1", "--untracked-files=all", "-z"])
+    let changed = status.flatMap(ReproSourceFingerprint.statusPaths) ?? []
+    let remotes = await git(["remote", "-v"])
+    let keys = Array(Set((remotes ?? "").split(separator: "\n").compactMap { line -> String? in
+      let fields = line.split(whereSeparator: { $0.isWhitespace })
+      guard fields.count >= 3, fields[2] == "(fetch)" else { return nil }
+      let raw = String(fields[1])
+      var host: String?, path: String?
+      if let url = URL(string: raw), let value = url.host {
+        host = value; path = url.path
+        if let port = url.port, !((url.scheme == "https" && port == 443) || (url.scheme == "http" && port == 80)) { host = "\(value):\(port)" }
+      }
+      else if !raw.contains("://"), let colon = raw.firstIndex(of: ":") {
+        host = String(raw[..<colon].split(separator: "@").last ?? "")
+        path = String(raw[raw.index(after: colon)...])
+      }
+      guard let host, var path, !host.isEmpty else { return nil }
+      path = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+      if path.hasSuffix(".git") { path.removeLast(4) }
+      return "\(host.lowercased())/\(path.lowercased())"
+    })).sorted()
+    var physicalID: String?
+    if let common = await git(["rev-parse", "--path-format=absolute", "--git-common-dir"]),
+       let attrs = try? FileManager.default.attributesOfItem(atPath: common.trimmingCharacters(in: .whitespacesAndNewlines)),
+       let device = attrs[.systemNumber] as? NSNumber, let inode = attrs[.systemFileNumber] as? NSNumber {
+      physicalID = SHA256.hash(data: Data("\(device.uint64Value):\(inode.uint64Value)".utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+    let sourceBefore = await Self.captureSourceFingerprint(root: repo.path, git: git)
+    let rawDiff = changed.isEmpty ? "" : await git(["diff", "HEAD", "--no-ext-diff", "--no-color", "--no-textconv"])
+    let afterHead = await git(["rev-parse", "HEAD"])?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let afterStatus = await git(["status", "--porcelain=v1", "--untracked-files=all", "-z"])
+    let sourceAfter = await Self.captureSourceFingerprint(root: repo.path, git: git)
+    let finalHead = await git(["rev-parse", "HEAD"])?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let finalStatus = await git(["status", "--porcelain=v1", "--untracked-files=all", "-z"])
+    // Completeness describes included source inputs at capture endpoints, never a served build.
+    let complete = head != nil && status != nil && remotes != nil && physicalID != nil && rawDiff != nil
+      && head == afterHead && status == afterStatus && head == finalHead && status == finalStatus && changed.count <= 500
+      && status.flatMap(ReproSourceFingerprint.statusPaths) != nil
+      && sourceBefore.state == "complete" && sourceAfter.state == "complete" && sourceBefore.hash == sourceAfter.hash
+    let hash = rawDiff.map { SHA256.hash(data: Data($0.utf8)).map { String(format: "%02x", $0) }.joined() }
+    guard var diff = rawDiff, !diff.isEmpty else {
+      return (head, Array(changed.prefix(500)), nil, false, keys, physicalID, complete, capturedAt, hash, sourceBefore)
     }
     let limit = 2 * 1024 * 1024
     let truncated = diff.utf8.count > limit
@@ -755,8 +829,55 @@ final class ReproRecorder: ObservableObject {
     do {
       try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
       try diff.write(to: folder.appendingPathComponent(name), atomically: true, encoding: .utf8)
-      return (head, Array(changed.prefix(500)), "git/\(name)", truncated)
-    } catch { return (head, Array(changed.prefix(500)), nil, false) }
+      return (head, Array(changed.prefix(500)), "git/\(name)", truncated, keys, physicalID, complete && !truncated, capturedAt, hash, sourceBefore)
+    } catch { return (head, Array(changed.prefix(500)), nil, truncated, keys, physicalID, false, capturedAt, hash, sourceBefore) }
+  }
+
+  /// Recheck the captured inputs at stop; a missing or changed source downgrades provenance.
+  nonisolated static func captureSourceFingerprint(root: URL, git: ([String]) async -> String?) async -> ReproSourceFingerprintSnapshot {
+    let tracked = await git(["diff", "--name-only", "-z", "--no-renames", "HEAD", "--"])
+    let staged = await git(["diff", "--cached", "--name-only", "-z", "--no-renames", "HEAD", "--"])
+    let indexDiff = await git(["diff", "--cached", "HEAD", "--binary", "--no-ext-diff", "--no-color", "--no-textconv"])
+    let untracked = await git(["ls-files", "--others", "--exclude-standard", "-z"])
+    let trackedPaths = tracked.flatMap(ReproSourceFingerprint.paths)
+    let stagedPaths = staged.flatMap(ReproSourceFingerprint.paths)
+    let untrackedPaths = untracked.flatMap(ReproSourceFingerprint.paths)
+    let indexFingerprint = indexDiff.map { SHA256.hash(data: Data($0.utf8)).map { String(format: "%02x", $0) }.joined() }
+    return await Task.detached(priority: .utility) {
+      ReproSourceFingerprint.capture(root: root, tracked: (trackedPaths ?? []) + (stagedPaths ?? []), untracked: untrackedPaths ?? [], listingsComplete: trackedPaths != nil && stagedPaths != nil && indexFingerprint != nil && untrackedPaths != nil, indexFingerprint: indexFingerprint)
+    }.value
+  }
+
+  private nonisolated static func sourceUnchanged(_ repo: ReproRepoState) async -> (unchanged: Bool, fingerprint: ReproSourceFingerprintSnapshot?, head: String?) {
+    var environment = (try? await ShellEnvironmentResolver.shared.resolve()) ?? ProcessInfo.processInfo.environment
+    environment["GIT_TERMINAL_PROMPT"] = "0"; environment["GIT_OPTIONAL_LOCKS"] = "0"; environment["LC_ALL"] = "C"
+    let root = URL(fileURLWithPath: repo.path)
+    func git(_ args: [String]) async -> String? {
+      guard let result = try? await StackCommandRunner.run("/usr/bin/git", ["-c", "color.ui=false"] + args,
+        directory: root, environment: environment, timeout: 20), result.status == 0, result.output.count < 8 * 1024 * 1024 else { return nil }
+      return String(data: result.output, encoding: .utf8)
+    }
+    let head = await git(["rev-parse", "HEAD"])?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let status = await git(["status", "--porcelain=v1", "--untracked-files=all", "-z"])
+    let sourceBefore = await Self.captureSourceFingerprint(root: root, git: git)
+    let changed = status.flatMap(ReproSourceFingerprint.statusPaths)
+    let diff = changed?.isEmpty == true ? "" : await git(["diff", "HEAD", "--no-ext-diff", "--no-color", "--no-textconv"])
+    var physicalID: String?
+    if let common = await git(["rev-parse", "--path-format=absolute", "--git-common-dir"]),
+      let attrs = try? FileManager.default.attributesOfItem(atPath: common.trimmingCharacters(in: .whitespacesAndNewlines)),
+      let device = attrs[.systemNumber] as? NSNumber, let inode = attrs[.systemFileNumber] as? NSNumber {
+      physicalID = SHA256.hash(data: Data("\(device.uint64Value):\(inode.uint64Value)".utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+    let sourceAfter = await Self.captureSourceFingerprint(root: root, git: git)
+    let finalHead = await git(["rev-parse", "HEAD"])?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let finalStatus = await git(["status", "--porcelain=v1", "--untracked-files=all", "-z"])
+    let hash = diff.map { SHA256.hash(data: Data($0.utf8)).map { String(format: "%02x", $0) }.joined() }
+    let unchanged = repo.startSnapshotComplete == true && repo.sourceFingerprint?.state == "complete"
+      && head != nil && head == repo.head && physicalID != nil && physicalID == repo.repositoryPhysicalId
+      && changed == repo.changedFiles && status != nil && hash != nil && hash == repo.diffHash
+      && sourceBefore.state == "complete" && sourceAfter.state == "complete" && sourceBefore.hash == sourceAfter.hash
+      && sourceBefore.hash == repo.sourceFingerprint?.hash && finalHead == head && finalStatus == status
+    return (unchanged, sourceAfter, finalHead)
   }
 
   // MARK: Finishing
@@ -792,6 +913,25 @@ final class ReproRecorder: ObservableObject {
       videoDuration = seconds
     }
     await settleCapture()
+    if let captured = self.session, captured.id == id {
+      for workspaceIndex in captured.workspaces.indices {
+        for repoIndex in captured.workspaces[workspaceIndex].repos.indices {
+          let repo = captured.workspaces[workspaceIndex].repos[repoIndex]
+          let endSource = await Self.sourceUnchanged(repo)
+          guard self.session?.id == id else { return }
+          self.session?.workspaces[workspaceIndex].repos[repoIndex].snapshotComplete = endSource.unchanged
+          self.session?.workspaces[workspaceIndex].repos[repoIndex].endSourceFingerprint = endSource.fingerprint
+          self.session?.workspaces[workspaceIndex].repos[repoIndex].endHead = endSource.head
+        }
+      }
+    }
+    if let proof = self.session?.buildProof, proof.end == nil, let receipt = supervisor.buildArtifacts.current(proof.receiptID),
+      receipt.actorKey == self.session?.actor.key, receipt.artifact?.sha256 == proof.artifactSHA256, receipt.launch?.nonceHash == proof.launchNonceHash,
+      let definition = supervisor.definition(receipt.request.workspaceID) {
+      let observation = await WorkspaceBuildObservationReader.observe(receipt, definition: definition, supervisor: supervisor, phase: "end")
+      if self.session?.id == id { self.session?.buildProof?.end = observation }
+      try? supervisor.buildArtifacts.update(receipt.id) { if $0.observations.count < 64 { $0.observations.append(observation) } }
+    }
     guard var session = self.session, let clock = self.clock else { reset(); finishing.remove(id); resume(id, with: nil); return }
     reset()
     session.clock = clock

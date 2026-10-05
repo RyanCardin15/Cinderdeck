@@ -19,10 +19,16 @@ final class StackControlService: ObservableObject {
   private let prViews: PRViewControlService
   let workspaceRunner: WorkspaceRunner
   let lanes: StackLaneCoordinator
+  var integrationOperations: IntegrationOperations?
+  var integrationJournal: IntegrationJournal?
+  lazy var linkedWork = IntegrationLinkedWorkStore(directory: integrationDirectory.appendingPathComponent("LinkedWork", isDirectory: true))
+  var integrationProjectionRevision: UInt64 = 0
+  let integrationDirectory: URL
 
-  init(supervisor: StackSupervisor, prViews: PRViewControlService? = nil, runner: WorkspaceRunner? = nil, claimsFile: URL = StackControlPaths.claims) {
+  init(supervisor: StackSupervisor, prViews: PRViewControlService? = nil, runner: WorkspaceRunner? = nil, claimsFile: URL = StackControlPaths.claims, integrationDirectory: URL? = nil) {
     self.supervisor = supervisor
     self.claimsFile = claimsFile
+    self.integrationDirectory = integrationDirectory ?? supervisor.logDirectory.appendingPathComponent("Integration", isDirectory: true)
     self.workspaceRunner = runner ?? WorkspaceRunner(supervisor: supervisor, store: .init(directory: supervisor.logDirectory.appendingPathComponent("Runs")))
     self.lanes = StackLaneCoordinator(supervisor: supervisor, runner: self.workspaceRunner)
     self.prViews = prViews ?? PRViewControlService()
@@ -164,11 +170,13 @@ final class StackControlService: ObservableObject {
           url: link.port.map { "http://\(link.host):\($0)" }, startedAt: runtime.startedAt, restarts: runtime.restartCount,
           detail: runtime.detail, owner: runtime.owner, repo: nil, branch: nil, cwd: nil, command: nil, dependsOn: [],
           autostart: false, logFile: supervisor.logURL(stack: link.stack, service: link.service).path,
-          ports: link.ports.isEmpty ? nil : link.ports, sharedFrom: link.stack)
+          ports: link.ports.isEmpty ? nil : link.ports, sharedFrom: link.stack, sharedServiceID: link.service)
       },
       repos: repos.map { repo in
         let status = supervisor.gitMonitor.statuses[repo.path] ?? GitRepoStatus(branch: "Loading…")
-        return StackRepoSnapshot(id: repo.id, path: repo.path.path, branch: status.branchLabel, dirty: status.isDirty,
+        let checkout = try? PhysicalCheckoutIdentity.resolve(repo.path)
+        return StackRepoSnapshot(physicalID: checkout?.physicalID,
+          repositoryPhysicalID: try? checkout?.repositoryPhysicalID(), id: repo.id, path: repo.path.path, branch: status.branchLabel, dirty: status.isDirty,
           changedFiles: status.changedFiles, ahead: status.ahead, behind: status.behind, upstream: status.upstream,
           operation: status.operation, error: status.error)
       }, lane: file.lane)
@@ -185,6 +193,7 @@ final class StackControlService: ObservableObject {
   }
 
   private func writeState(appRunning: Bool = true) {
+    publishIntegrationProjection()
     do {
       try StackControlPaths.ensureDirectory()
       let data = try StackControlCoding.encoder(pretty: true).encode(snapshot(appRunning: appRunning))
@@ -223,7 +232,9 @@ final class StackControlService: ObservableObject {
       host: description.host, pid: peer > 0 ? peer : nil, tty: description.tty, cwd: client?.cwd)
   }
 
-  func handle(_ method: String, params: JSONValue, actor: StackActor) async throws -> JSONValue {
+  func handle(_ method: String, params: JSONValue, actor: StackActor, operationID: String? = nil) async throws -> JSONValue {
+    if method.hasPrefix("integration.ui.") { return try handleUnifiedUI(method, params: params, actor: actor) }
+    if method.hasPrefix("integration.") { return try await handleIntegration(method, params: params, actor: actor) }
     if method.hasPrefix("workspace.") { return try await handleWorkspace(method, params: params, actor: actor) }
     if method.hasPrefix("prs.views.") { return try await prViews.handle(method, params: params) }
     if method.hasPrefix("repro.") { return try await handleRepro(method, params: params, actor: actor) }
@@ -239,6 +250,7 @@ final class StackControlService: ObservableObject {
     case "services.status":
       let file = try workspaceFile(params)
       return try JSONValue(encoding: stackSnapshot(file))
+    case "runs.start", "runs.cancel", "runs.rerun", "definition.apply": return try await handleRunOperation(method, params: params, actor: actor, operationID: operationID)
     case "services.start": return try await start(params, actor: actor)
     case "services.stop": return try await stop(params, actor: actor)
     case "services.restart": return try await restart(params, actor: actor)
@@ -248,7 +260,7 @@ final class StackControlService: ObservableObject {
       let files = supervisor.files.filter { sourceID == nil || $0.id == sourceID || $0.lane?.sourceStackID == sourceID }
       await supervisor.refreshLaneGitStates(files.filter { $0.lane != nil }.map(\.id))
       return try JSONValue(encoding: files.map { stackSnapshot($0) })
-    case "lane.create", "lane.adopt": return try await createLane(params, adopt: method == "lane.adopt", actor: actor)
+    case "lane.create", "lane.adopt": return try await createLane(params, adopt: method == "lane.adopt", actor: actor, operationID: operationID)
     case "lane.update": return try await updateLane(params, actor: actor)
     case "lane.remove", "lane.release":
       let file = try laneFile(params)
@@ -268,7 +280,7 @@ final class StackControlService: ObservableObject {
       guard file.definition?.laneSettings?.setup != nil else {
         throw StackControlError.invalid("\(file.lane?.sourceStackID ?? file.id) has no [lanes] setup. Add setup = \"task:<id>\" or \"workflow:<id>\".")
       }
-      let state = await lanes.runSetup(file.id, actor: actor)
+      let state = await lanes.runSetup(file.id, actor: actor, operationID: operationID)
       let refreshed = supervisor.files.first { $0.id == file.id } ?? file
       return .object(["setup": (try? JSONValue(encoding: state)) ?? .null, "workspace": (try? JSONValue(encoding: stackSnapshot(refreshed))) ?? .null])
     case "lane.unpin":
@@ -359,16 +371,33 @@ final class StackControlService: ObservableObject {
     return file
   }
 
-  private func createLane(_ params: JSONValue, adopt: Bool, actor: StackActor) async throws -> JSONValue {
+  private func createLane(_ params: JSONValue, adopt: Bool, actor: StackActor, operationID: String? = nil) async throws -> JSONValue {
+    let managedWriter: Bool
+    if let value = params["managedWriter"] {
+      guard case .bool(let selected) = value, !selected || operationID != nil else {
+        throw StackControlError.invalid("Managed writer handoff requires durable lane creation or adoption")
+      }
+      managedWriter = selected
+    } else { managedWriter = false }
     let source = try workspaceFile(params)
     guard source.lane == nil else { throw StackControlError.invalid("Create lanes from the original workspace, not from lane \(source.name).") }
     var request = StackLaneRequest(branch: params["branch"]?.stringValue ?? params["name"]?.stringValue ?? "")
+    request.integrationOperationID = operationID
     if adopt {
       let path = params["path"]?.stringValue ?? actor.cwd
       guard let path, !path.isEmpty else { throw StackControlError.invalid("Pass path: the worktree to adopt") }
       request.adoptPath = URL(fileURLWithPath: (path as NSString).expandingTildeInPath).standardizedFileURL
     } else if request.branch.isEmpty {
       throw StackControlError.invalid("Pass a branch name for the new lane.")
+    }
+    if let refs = params["repositoryRefs"] {
+      guard !adopt, let values = refs.objectValue, values.count <= 64 else {
+        throw StackControlError.invalid("repositoryRefs must map repository IDs to start revisions for lane creation")
+      }
+      for (id, value) in values {
+        guard let ref = value.stringValue else { throw StackControlError.invalid("repositoryRefs.\(id) must be a string") }
+        request.repositoryRefs[id] = ref
+      }
     }
     request.from = params["from"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
     if let values = params["env"]?.objectValue {
@@ -380,9 +409,18 @@ final class StackControlService: ObservableObject {
     request.copy = params["copy"]?.stringsValue ?? []
     try requireIdle(source)
     // Cloning a claimed source does not change it or use its service ports.
-    let created = try await lanes.create(stack: source.id, request: request, actor: actor,
-      setup: params["setup"]?.boolValue ?? !adopt) { file in
-      _ = try self.claim(.object(["workspace": .string(file.id), "note": .string("Worktree lane " + (file.lane?.name ?? ""))]), actor: actor)
+    let created: StackLaneCoordinator.Creation
+    do {
+      created = try await lanes.create(stack: source.id, request: request, actor: actor,
+        setup: params["setup"]?.boolValue ?? !adopt) { file in
+        // Durable session creation uses physical writer admission next. An advisory
+        // claim held by the request actor would block the distinct provider thread actor.
+        if !managedWriter {
+          _ = try self.claim(.object(["workspace": .string(file.id), "note": .string("Worktree lane " + (file.lane?.name ?? ""))]), actor: actor)
+        }
+      }
+    } catch let refusal as StackLaneStore.StartRevisionRefusal {
+      throw StackControlError.invalid(refusal.message)
     }
     let file = created.file
     var extra: [String: JSONValue] = [:]

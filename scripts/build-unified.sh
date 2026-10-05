@@ -1,0 +1,309 @@
+#!/usr/bin/env bash
+# Assemble a single native Cinderdeck app; never install, launch, or create certificates.
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+RUNTIME_SOURCE=""
+OUTPUT_DIR=""
+CONFIGURATION=""
+AGENT_SHELL=""
+NATIVE_APP=""
+ARCH="$(uname -m)"
+[[ "$ARCH" != x86_64 ]] || ARCH=x64
+SIGNING_IDENTITY="${CINDERDECK_SIGNING_IDENTITY:-}"
+KEYCHAIN="${CINDERDECK_SIGNING_KEYCHAIN:-$HOME/Library/Keychains/login.keychain-db}"
+NODE_BINARY="${CINDERDECK_NODE_BINARY:-}"
+DRY_RUN=0
+STAGING_DIR=""
+COMPLETE=0
+
+fail() { printf 'Error: %s\n' "$*" >&2; exit 1; }
+usage() {
+  cat <<HELP
+Usage: $0 --runtime-source /absolute/runtime-checkout --output-dir /absolute/output \\
+  --configuration Debug|Release [options]
+
+Build and assemble one Cinderdeck app containing Resources/AgentShell.app.
+Does not install, launch, reset permissions, create certificates, or publish.
+
+  --agent-shell /absolute/AgentShell.app  Reuse this internal runtime app.
+  --native-app /absolute/native.app      Reuse this native build.
+  --arch arm64|x64|universal             Default: host architecture.
+  --signing-identity NAME|SHA1           Exact existing certificate identity.
+                                         Release requires it; Debug defaults to ad-hoc.
+  --dry-run                             Validate inputs and print the build plan only.
+
+Environment:
+  CINDERDECK_NODE_BINARY       Absolute Node 24.13.1+ executable for runtime builds.
+  CINDERDECK_SIGNING_IDENTITY  Same as --signing-identity; no automatic identity creation.
+  CINDERDECK_SIGNING_KEYCHAIN  Existing signing keychain; default login.keychain-db.
+
+Existing output apps are never replaced. Debug ad-hoc output is for manual checks.
+HELP
+}
+require_value() { [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || fail "Missing value for $1"; }
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --runtime-source) require_value "$@"; RUNTIME_SOURCE=$2; shift ;;
+    --output-dir) require_value "$@"; OUTPUT_DIR=$2; shift ;;
+    --configuration) require_value "$@"; CONFIGURATION=$2; shift ;;
+    --agent-shell) require_value "$@"; AGENT_SHELL=$2; shift ;;
+    --native-app) require_value "$@"; NATIVE_APP=$2; shift ;;
+    --arch) require_value "$@"; ARCH=$2; shift ;;
+    --signing-identity) require_value "$@"; SIGNING_IDENTITY=$2; shift ;;
+    --dry-run) DRY_RUN=1 ;;
+    --help|-h) usage; exit 0 ;;
+    *) fail "Unknown option: $1" ;;
+  esac
+  shift
+done
+[[ "$(uname -s)" == Darwin ]] || fail "This command requires macOS."
+[[ "$CONFIGURATION" == Debug || "$CONFIGURATION" == Release ]] || fail "Pass --configuration Debug or Release."
+[[ "$ARCH" == arm64 || "$ARCH" == x64 || "$ARCH" == universal ]] || fail "Unsupported architecture: $ARCH"
+[[ "$RUNTIME_SOURCE" == /* && -d "$RUNTIME_SOURCE" ]] || fail "Pass an absolute existing --runtime-source checkout."
+RUNTIME_SOURCE="$(cd "$RUNTIME_SOURCE" && pwd -P)"
+[[ -f "$RUNTIME_SOURCE/scripts/build-desktop-artifact.ts" ]] || fail "Runtime checkout lacks its desktop artifact builder."
+[[ "$OUTPUT_DIR" == /* && "$OUTPUT_DIR" != / ]] || fail "Pass a non-root absolute --output-dir."
+# Resolve '..' and existing symlink ancestors before refusing installed application locations.
+OUTPUT_DIR="$(python3 - "$OUTPUT_DIR" <<'PY'
+import os, sys
+print(os.path.realpath(sys.argv[1]))
+PY
+)"
+[[ "$OUTPUT_DIR" != / ]] || fail "Output must not resolve to the filesystem root."
+case "$OUTPUT_DIR/" in
+  /Applications/*|/System/Applications/*|/System/Volumes/Data/Applications/*|"$HOME/Applications/"*) fail "Use a delivery directory, not an Applications installation location." ;;
+esac
+
+if [[ "$CONFIGURATION" == Debug ]]; then
+  APP_NAME="Cinderdeck Debug.app"
+  BUNDLE_ID="com.ryancardin.cinderdeck.debug"
+  [[ -n "$SIGNING_IDENTITY" ]] || SIGNING_IDENTITY=-
+else
+  APP_NAME="Cinderdeck.app"
+  BUNDLE_ID="com.ryancardin.cinderdeck"
+  [[ -n "$SIGNING_IDENTITY" && "$SIGNING_IDENTITY" != - ]] || fail "Release requires an exact existing persistent signing identity."
+fi
+FINAL_APP="$OUTPUT_DIR/$APP_NAME"
+[[ ! -e "$FINAL_APP" && ! -L "$FINAL_APP" ]] || fail "Output already exists: $FINAL_APP"
+
+validate_app() {
+  local app=$1 expected_id=$2 expected_executable=$3
+  [[ "$app" == /* && -d "$app/Contents" && ! -L "$app/Contents" ]] || fail "Expected an absolute app bundle: $app"
+  local identifier executable
+  identifier=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")
+  executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
+  [[ "$identifier" == "$expected_id" ]] || fail "Unexpected bundle ID '$identifier' in $app"
+  [[ "$executable" == "$expected_executable" && -x "$app/Contents/MacOS/$executable" ]] || fail "Unexpected or missing executable in $app"
+}
+validate_shell() {
+  validate_app "$1" com.ryancardin.cinderdeck.agentshell AgentShell
+  python3 - "$1/Contents/Info.plist" <<'PY'
+import plistlib, sys
+with open(sys.argv[1], 'rb') as file:
+    data = plistlib.load(file)
+if data.get('CFBundleURLTypes'):
+    raise SystemExit('Internal AgentShell must not register URL schemes; native Cinderdeck owns them.')
+PY
+}
+[[ -z "$AGENT_SHELL" ]] || validate_shell "$AGENT_SHELL"
+[[ -z "$NATIVE_APP" ]] || validate_app "$NATIVE_APP" "$BUNDLE_ID" Cinderdeck
+for input_app in "$AGENT_SHELL" "$NATIVE_APP"; do
+  [[ -n "$input_app" ]] || continue
+  input_app="$(cd "$input_app" && pwd -P)"
+  case "$OUTPUT_DIR/" in "$input_app/"*) fail "Output must not be inside a prebuilt input app." ;; esac
+done
+
+if [[ -z "$AGENT_SHELL" ]]; then
+  [[ -n "$NODE_BINARY" ]] || NODE_BINARY="$(command -v node || true)"
+  [[ "$NODE_BINARY" == /* && -x "$NODE_BINARY" ]] || fail "Set CINDERDECK_NODE_BINARY to an absolute Node 24.13.1+ executable."
+  "$NODE_BINARY" -e 'const [major, minor, patch] = process.versions.node.split(".").map(Number); if (major !== 24 || minor < 13 || (minor === 13 && patch < 1)) process.exit(1)' \
+    || fail "Runtime builds require Node 24.13.1+ within the supported Node 24 line."
+  [[ -d "$RUNTIME_SOURCE/node_modules" ]] || fail "Install the runtime checkout dependencies before building."
+fi
+
+if [[ "$DRY_RUN" == 1 ]]; then
+  printf 'Configuration: %s\nArchitecture: %s\nRuntime checkout: %s\n' "$CONFIGURATION" "$ARCH" "$RUNTIME_SOURCE"
+  printf 'AgentShell: %s\nNative app: %s\nSigning identity: %s\nOutput: %s\n' \
+    "${AGENT_SHELL:-build from runtime source}" "${NATIVE_APP:-build with Xcode}" "$SIGNING_IDENTITY" "$FINAL_APP"
+  exit 0
+fi
+
+SIGNING_HASH="$SIGNING_IDENTITY"
+if [[ "$SIGNING_IDENTITY" != - ]]; then
+  IDENTITIES=$(security find-identity -v -p codesigning "$KEYCHAIN")
+  SIGNING_HASH=$(printf '%s\n' "$IDENTITIES" | awk -F '"' -v identity="$SIGNING_IDENTITY" '
+    { split($1, fields, " "); if ($2 == identity || toupper(fields[2]) == toupper(identity)) print fields[2] }')
+  [[ -n "$SIGNING_HASH" && "$SIGNING_HASH" != *$'\n'* && "$SIGNING_HASH" =~ ^[A-Fa-f0-9]{40}$ ]] \
+    || fail "Signing identity is unavailable or ambiguous. Use an exact valid certificate name or SHA-1 fingerprint."
+fi
+
+mkdir -p "$OUTPUT_DIR"
+STAGING_DIR=$(mktemp -d "$OUTPUT_DIR/.unified-build.XXXXXX")
+cleanup() {
+  if [[ "$COMPLETE" == 1 && -n "$STAGING_DIR" ]]; then rm -rf "$STAGING_DIR"; fi
+  if [[ "$COMPLETE" == 0 && -n "$STAGING_DIR" ]]; then printf 'Build staging and logs retained: %s\n' "$STAGING_DIR" >&2; fi
+}
+trap cleanup EXIT
+
+if [[ -z "$AGENT_SHELL" ]]; then
+  RUNTIME_OUTPUT="$STAGING_DIR/runtime"
+  printf 'Building internal AgentShell. Log: %s\n' "$STAGING_DIR/runtime-build.log"
+  if ! (cd "$RUNTIME_SOURCE" && \
+    PATH="$(dirname "$NODE_BINARY"):$RUNTIME_SOURCE/node_modules/.bin:$PATH" \
+    CINDERDECK_NATIVE_SHELL_BUILD=1 DECKHAND_DESKTOP_SIGNED=false \
+    "$NODE_BINARY" scripts/build-desktop-artifact.ts --platform mac --target dir --arch "$ARCH" --output-dir "$RUNTIME_OUTPUT" \
+    > "$STAGING_DIR/runtime-build.log" 2>&1); then
+    tail -60 "$STAGING_DIR/runtime-build.log" >&2
+    fail "Internal runtime build failed."
+  fi
+  while IFS= read -r -d '' app; do
+    [[ -z "$AGENT_SHELL" ]] || fail "Runtime builder produced multiple AgentShell apps."
+    AGENT_SHELL=$app
+  done < <(find "$RUNTIME_OUTPUT" -type d -name AgentShell.app -prune -print0)
+  [[ -n "$AGENT_SHELL" ]] || fail "Runtime builder did not produce AgentShell.app."
+  validate_shell "$AGENT_SHELL"
+fi
+
+if [[ -z "$NATIVE_APP" ]]; then
+  case "$ARCH" in arm64) NATIVE_ARCHS=arm64 ;; x64) NATIVE_ARCHS=x86_64 ;; universal) NATIVE_ARCHS='arm64 x86_64' ;; esac
+  printf 'Building native Cinderdeck. Log: %s\n' "$STAGING_DIR/native-build.log"
+  if ! xcodebuild -project "$ROOT_DIR/Cinderdeck.xcodeproj" -scheme Cinderdeck \
+    -configuration "$CONFIGURATION" -destination 'platform=macOS' -derivedDataPath "$STAGING_DIR/native" \
+    "ARCHS=$NATIVE_ARCHS" ONLY_ACTIVE_ARCH=NO \
+    CODE_SIGN_IDENTITY= CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+    'OTHER_SWIFT_FLAGS=$(inherited) -Xllvm -sil-disable-pass=PerfInliner' \
+    build > "$STAGING_DIR/native-build.log" 2>&1; then
+    tail -60 "$STAGING_DIR/native-build.log" >&2
+    fail "Native build failed."
+  fi
+  NATIVE_APP="$STAGING_DIR/native/Build/Products/$CONFIGURATION/$APP_NAME"
+  validate_app "$NATIVE_APP" "$BUNDLE_ID" Cinderdeck
+fi
+
+# Check the selected/prebuilt products agree with the requested architecture.
+for app_binary in "$NATIVE_APP/Contents/MacOS/Cinderdeck" "$AGENT_SHELL/Contents/MacOS/AgentShell"; do
+  binary_archs=$(lipo -archs "$app_binary")
+  case "$ARCH" in
+    arm64) [[ " $binary_archs " == *' arm64 '* ]] || fail "Missing arm64 in $app_binary" ;;
+    x64) [[ " $binary_archs " == *' x86_64 '* ]] || fail "Missing x86_64 in $app_binary" ;;
+    universal) [[ " $binary_archs " == *' arm64 '* && " $binary_archs " == *' x86_64 '* ]] || fail "Expected a universal product: $app_binary" ;;
+  esac
+done
+
+STAGED_APP="$STAGING_DIR/$APP_NAME"
+ditto "$NATIVE_APP" "$STAGED_APP"
+[[ -d "$STAGED_APP/Contents/Resources" && ! -L "$STAGED_APP/Contents/Resources" ]] || fail "Native Resources must be a real directory."
+SHELL_DEST="$STAGED_APP/Contents/Resources/AgentShell.app"
+rm -rf "$SHELL_DEST"
+ditto "$AGENT_SHELL" "$SHELL_DEST"
+validate_app "$STAGED_APP" "$BUNDLE_ID" Cinderdeck
+validate_shell "$SHELL_DEST"
+[[ -d "$STAGED_APP/Contents/Frameworks/Sparkle.framework" ]] || fail "Native Sparkle.framework is missing."
+
+APPLE_SIGNING=unknown
+sign() {
+  local args=(--force --sign "$SIGNING_HASH" --options runtime --timestamp=none)
+  [[ "$SIGNING_HASH" == - ]] || args+=(--keychain "$KEYCHAIN")
+  codesign "${args[@]}" "$@"
+  if [[ "$APPLE_SIGNING" == unknown ]]; then
+    local argument target=""
+    for argument in "$@"; do target=$argument; done
+    if codesign --verify --strict -R='anchor apple generic' "$target" >/dev/null 2>&1; then
+      APPLE_SIGNING=apple
+    else
+      APPLE_SIGNING=local
+    fi
+  fi
+}
+sign_item() {
+  local item=$1 electron_app=${2:-0} entitlements
+  entitlements=$(mktemp "$STAGING_DIR/entitlements.XXXXXX")
+  # Keep the entitlements already assigned to helpers/frameworks/native modules.
+  codesign --display --entitlements :- "$item" > "$entitlements" 2>/dev/null || true
+  if [[ "$electron_app" == 1 ]]; then
+    python3 - "$entitlements" "$APPLE_SIGNING" <<'PY'
+import plistlib, sys
+path = sys.argv[1]
+try:
+    with open(path, 'rb') as file: data = plistlib.load(file)
+except (OSError, ValueError, plistlib.InvalidFileException):
+    data = {}
+# V8's executable memory remains permitted when the outer packager applies hardened runtime.
+data['com.apple.security.cs.allow-jit'] = True
+data['com.apple.security.cs.allow-unsigned-executable-memory'] = True
+if sys.argv[2] != 'apple':
+    data['com.apple.security.cs.disable-library-validation'] = True
+with open(path, 'wb') as file: plistlib.dump(data, file)
+PY
+  fi
+  if [[ -s "$entitlements" ]]; then
+    plutil -lint "$entitlements" >/dev/null || fail "Could not preserve entitlements for $item"
+    sign --entitlements "$entitlements" "$item"
+  else
+    sign "$item"
+  fi
+}
+sign_tree() {
+  local tree=$1 skip=${2:-} electron_tree=${3:-0} item description
+  # -depth visits children before enclosing bundles. Never follow framework symlinks.
+  while IFS= read -r -d '' item; do
+    [[ "$item" != "$STAGED_APP" ]] || continue
+    if [[ -n "$skip" ]]; then case "$item" in "$skip"|"$skip"/*) continue ;; esac; fi
+    if [[ -f "$item" && ! -L "$item" ]]; then
+      description=$(file -b "$item")
+      [[ "$description" != *Mach-O* ]] || sign_item "$item"
+    elif [[ -d "$item" && ! -L "$item" ]]; then
+      case "$item" in
+        *.app) sign_item "$item" "$electron_tree" ;;
+        *.framework|*.xpc) sign_item "$item" ;;
+        *.bundle)
+          # SwiftPM resource-only bundles are sealed by their enclosing app.
+          if /usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$item/Contents/Info.plist" >/dev/null 2>&1 || \
+            /usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$item/Info.plist" >/dev/null 2>&1; then
+            sign_item "$item"
+          fi
+          ;;
+      esac
+    fi
+  done < <(find "$tree" -depth -print0)
+}
+printf 'Signing internal runtime, native helpers, then outer application.\n'
+sign_tree "$SHELL_DEST" "" 1
+sign_tree "$STAGED_APP" "$SHELL_DEST"
+
+# The source contains Xcode variables; resolve them for this actual native bundle ID.
+NATIVE_ENTITLEMENTS="$STAGING_DIR/native-entitlements.plist"
+EXISTING_NATIVE_ENTITLEMENTS="$STAGING_DIR/existing-native-entitlements.plist"
+codesign --display --entitlements :- "$STAGED_APP" > "$EXISTING_NATIVE_ENTITLEMENTS" 2>/dev/null || true
+python3 - "$ROOT_DIR/Cinderdeck/Cinderdeck.entitlements" "$EXISTING_NATIVE_ENTITLEMENTS" "$NATIVE_ENTITLEMENTS" "$BUNDLE_ID" <<'PY'
+import plistlib, sys
+source, old, destination, bundle_id = sys.argv[1:]
+try:
+    with open(old, 'rb') as file: data = plistlib.load(file)
+except (OSError, ValueError, plistlib.InvalidFileException):
+    data = {}
+with open(source, 'rb') as file:
+    declared = plistlib.loads(file.read().replace(b'$(PRODUCT_BUNDLE_IDENTIFIER)', bundle_id.encode()))
+data.update(declared)
+with open(destination, 'wb') as file: plistlib.dump(data, file)
+PY
+# Self-signed/ad-hoc builds have no Apple Team ID: preserve local Sparkle loading.
+if ! codesign --verify --strict -R='anchor apple generic' "$STAGED_APP/Contents/Frameworks/Sparkle.framework" >/dev/null 2>&1; then
+  /usr/libexec/PlistBuddy -c 'Delete :com.apple.security.cs.disable-library-validation' "$NATIVE_ENTITLEMENTS" >/dev/null 2>&1 || true
+  /usr/libexec/PlistBuddy -c 'Add :com.apple.security.cs.disable-library-validation bool true' "$NATIVE_ENTITLEMENTS"
+fi
+sign --entitlements "$NATIVE_ENTITLEMENTS" "$STAGED_APP"
+codesign --verify --deep --strict "$SHELL_DEST"
+codesign --verify --deep --strict "$STAGED_APP"
+if [[ "$CONFIGURATION" == Release ]]; then
+  requirement=$(codesign -dr - "$STAGED_APP" 2>&1 | sed -n 's/^designated => //p')
+  [[ -n "$requirement" && "$requirement" != *cdhash* && ( "$requirement" == *certificate* || "$requirement" == *anchor* ) ]] \
+    || fail "Release must retain a certificate-based designated requirement."
+fi
+[[ ! -e "$FINAL_APP" && ! -L "$FINAL_APP" ]] || fail "Output appeared during the build; refusing to replace it."
+mv -n "$STAGED_APP" "$FINAL_APP"
+[[ ! -e "$STAGED_APP" ]] || fail "Output already exists; staged app was not moved."
+COMPLETE=1
+printf 'Unified app ready for manual validation: %s\n' "$FINAL_APP"
+printf 'Native identity: %s; AgentShell remains an internal child, not a second install.\n' "$BUNDLE_ID"

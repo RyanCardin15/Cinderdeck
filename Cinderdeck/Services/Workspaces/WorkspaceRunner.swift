@@ -55,6 +55,8 @@ final class WorkspaceRunner: ObservableObject {
       change(saved.id) {
         $0.status = failure == nil ? .interrupted : .cancelling
         $0.finishedAt = failure == nil ? Date() : nil
+        $0.sourceProvenance?.state = "unknown"
+        $0.sourceProvenance?.detail = "The run was interrupted. No historical end source snapshot can be reconstructed."
         $0.detail = failure.map { "Recovery could not stop a command: \($0). Cancel this run to retry." }
           ?? "Cinderdeck closed during this run. The command was stopped; rerun explicitly."
         for i in $0.steps.indices where $0.steps[i].status.isActive {
@@ -62,12 +64,18 @@ final class WorkspaceRunner: ObservableObject {
           $0.steps[i].finishedAt = failure == nil ? Date() : nil
         }
       }
+      if failure == nil { supervisor.releaseCheckoutMutation("run:" + saved.id.uuidString) }
+    }
+    // A crash after persisting a terminal result but before releasing ownership
+    // also has a durable stop proof. Do not release a cancelling/active run.
+    for saved in runs where !saved.status.isActive {
+      supervisor.releaseCheckoutMutation("run:" + saved.id.uuidString)
     }
   }
 
   @discardableResult
   func submit(workspace id: String, kind: WorkspaceRunKind, definitionID: String, actor: StackActor = .user,
-    environment: [String: String] = [:], laneLifecycle: Bool = false) throws -> WorkspaceRun {
+    environment: [String: String] = [:], laneLifecycle: Bool = false, integrationOperationID: String? = nil, rerunOfID: UUID? = nil, integrationAuthority: WorkspaceRunAuthority? = nil, verificationLease: WorkspaceBuildLease? = nil) throws -> WorkspaceRun {
     guard recovered && !recovering else { throw StackError.message("Run recovery is still in progress") }
     if let storageError { throw StackError.message(storageError) }
     guard activeRun(id) == nil else { throw StackError.message("A task or workflow is already running in this workspace") }
@@ -85,13 +93,36 @@ final class WorkspaceRunner: ObservableObject {
     let steps = references.map { reference -> WorkspaceRunStep in
       let parts = reference.split(separator: ":").map(String.init)
       let task = parts.first == "task" ? workspace.task(parts.last ?? "") : nil
-      return WorkspaceRunStep(reference: reference, title: task?.name ?? reference.replacingOccurrences(of: ":", with: " "),
+      let service = task == nil ? workspace.service(parts.last ?? "") : nil
+      var step = WorkspaceRunStep(reference: reference, title: task?.name ?? reference.replacingOccurrences(of: ":", with: " "),
         command: task?.command, directory: task?.directory.path)
+      if let task { step.definitionHash = WorkspaceRunProvenance.digest(task) }
+      else if let service { step.definitionHash = WorkspaceRunProvenance.digest(service) }
+      return step
     }
-    let run = WorkspaceRun(workspaceID: id, workspaceName: workspace.name, definitionID: definitionID,
+    var run = WorkspaceRun(integrationOperationID: integrationOperationID, workspaceID: id, workspaceName: workspace.name, definitionID: definitionID,
       name: name, kind: kind, actor: actor, steps: steps, cleanupServices: cleanupServices)
+    run.rerunOfID = rerunOfID
+    run.integrationAuthority = integrationAuthority
+    let workflowHash = kind == .workflow ? workspace.workflow(definitionID).map(WorkspaceRunProvenance.digest) : workspace.task(definitionID).map(WorkspaceRunProvenance.digest)
+    run.sourceProvenance = WorkspaceRunSourceProvenance(schemaVersion: 1, definitionHash: workspace.fingerprint, workflowHash: workflowHash ?? WorkspaceRunProvenance.digest(references))
+    let reservationID = "run:" + run.id.uuidString
+    if let verificationLease {
+      guard let authority = integrationAuthority else { throw StackControlError.invalid("Verification task authority is missing") }
+      let selection = WorkspaceRunProvenance.select(workspace, references: references)
+      guard selection.complete else { throw StackControlError(code: "unsupported_checkout", message: "Verification task source scope is incomplete") }
+      let scope = try selection.repositories.compactMap { try PhysicalCheckoutIdentity.resolve($0.path)?.physicalID }
+      _ = try supervisor.checkoutReservations().borrowWriter(verificationLease.id, actorKey: actor.key, token: verificationLease.token,
+        workspaceID: id, generation: authority.generation, physicalIDs: scope)
+      run.borrowedCheckoutReservationID = verificationLease.id
+      run.buildReceiptID = String(verificationLease.id.dropFirst("verification:".count))
+    } else { run.borrowedCheckoutReservationID = laneLifecycle ? try supervisor.borrowLaneLifecycle(workspace, actor: actor) : nil }
+    if run.borrowedCheckoutReservationID == nil {
+      _ = try supervisor.reserveCheckoutMutation(workspace, id: reservationID, kind: "run", actor: actor)
+    }
     // Persist before launching anything. Corrupt/unwritable history never silently loses ownership.
-    try store.save([run] + runs)
+    do { try store.save([run] + runs) }
+    catch { supervisor.releaseCheckoutMutation(reservationID); throw error }
     runs.insert(run, at: 0)
     runEnvironment[run.id] = environment
     workers[run.id] = Task { [weak self] in
@@ -130,6 +161,7 @@ final class WorkspaceRunner: ObservableObject {
       processes[id] = nil
       if run.cleanupServices { await cleanup(id) }
       change(id) { $0.status = .cancelled; $0.finishedAt = Date(); $0.detail = "Cancelled" }
+      supervisor.releaseCheckoutMutation("run:" + id.uuidString)
     }
   }
   func cancelAll() async {
@@ -140,7 +172,20 @@ final class WorkspaceRunner: ObservableObject {
     var outcome: WorkspaceRunStatus = .succeeded
     var detail: String?
     change(id) { $0.status = .running }
-    if let initial = run(id) {
+    let sourceScope = WorkspaceRunProvenance.select(workspace, references: run(id)?.steps.map(\.reference) ?? [])
+    let gitEnvironment = (try? await environment(workspace.shell)) ?? ProcessInfo.processInfo.environment
+    let sourcesAtStart = await WorkspaceRunProvenance.capture(sourceScope, environment: gitEnvironment)
+    if let buildID = run(id)?.buildReceiptID, let receipt = supervisor.buildArtifacts.current(buildID) {
+      let observation = await WorkspaceBuildObservationReader.observe(receipt, definition: workspace, supervisor: supervisor, phase: "start")
+      change(id) { $0.buildObservations = [observation] }
+    }
+    change(id) {
+      $0.sourceProvenance?.capturedAt = Date()
+      $0.sourceProvenance?.repositoriesAtStart = sourcesAtStart
+      $0.sourceProvenance?.detail = sourceScope.complete ? nil : "Some referenced source or shared-service scopes could not be identified; build provenance remains unknown."
+    }
+    if let error = storageError { outcome = .failed; detail = error }
+    if storageError == nil, let initial = run(id) {
       for index in initial.steps.indices {
         do {
           try Task.checkCancellation()
@@ -183,7 +228,20 @@ final class WorkspaceRunner: ObservableObject {
       do { try await process.stop(signal: SIGTERM, timeout: 2); processes[id] = nil }
       catch { outcome = .cancelling; detail = "Could not stop the command. Cancel to retry: \(error.localizedDescription)" }
     }
-    change(id) { $0.status = outcome; $0.detail = detail; $0.finishedAt = outcome.isActive ? nil : Date() }
+    let sourcesAtEnd = await WorkspaceRunProvenance.capture(sourceScope, environment: gitEnvironment)
+    if let buildID = run(id)?.buildReceiptID, let receipt = supervisor.buildArtifacts.current(buildID) {
+      let observation = await WorkspaceBuildObservationReader.observe(receipt, definition: workspace, supervisor: supervisor, phase: "end")
+      change(id) { $0.buildObservations?.append(observation) }
+    }
+    change(id) {
+      $0.sourceProvenance?.repositoriesAtEnd = sourcesAtEnd
+      $0.sourceProvenance?.finishedAt = outcome.isActive ? nil : Date()
+      $0.sourceProvenance?.state = outcome.isActive ? "unknown" : WorkspaceRunProvenance.assess(start: sourcesAtStart, end: sourcesAtEnd, scopeComplete: sourceScope.complete)
+      if $0.sourceProvenance?.state == "unknown" { $0.sourceProvenance?.detail = "Source observations are incomplete or the run remains active; served build identity is unknown." }
+      else if $0.sourceProvenance?.state == "changed" { $0.sourceProvenance?.detail = "Repository identity, HEAD, or included source inputs changed during this run." }
+      $0.status = outcome; $0.detail = detail; $0.finishedAt = outcome.isActive ? nil : Date()
+    }
+    if !outcome.isActive { supervisor.releaseCheckoutMutation("run:" + id.uuidString) }
     workers[id] = nil
     prune()
   }
@@ -237,11 +295,20 @@ final class WorkspaceRunner: ObservableObject {
     if let port = task.port { env["CINDERDECK_TASK_PORT"] = String(port) }
     for (name, port) in task.ports { env["CINDERDECK_TASK_PORT_" + StackLaneInfo.variableName(name)] = String(port) }
     guard let step = run(runID)?.steps[stepIndex] else { throw CancellationError() }
+    let sourceScope = WorkspaceRunProvenance.select(workspace, references: ["task:" + task.id])
+    let sourcesAtStart = await WorkspaceRunProvenance.capture(sourceScope, environment: shell)
+    change(runID) {
+      $0.steps[stepIndex].repositoriesAtStart = sourcesAtStart
+      $0.steps[stepIndex].sourceScopeComplete = sourceScope.complete
+      $0.steps[stepIndex].environmentKeys = Array(env.keys.sorted().prefix(512))
+    }
+    if let storageError { throw StackError.message(storageError) }
+    try Task.checkCancellation()
     let process = ServiceProcess()
     processes[runID] = process
     let url = store.logURL(runID, step.id)
     let identity = try await process.launch(launch, environment: env, logURL: url)
-    change(runID) { $0.steps[stepIndex].process = identity }
+    change(runID) { $0.steps[stepIndex].process = identity; $0.steps[stepIndex].executionProcess = identity }
     if let storageError { try await process.stop(signal: SIGTERM, timeout: 2); throw StackError.message(storageError) }
     if Task.isCancelled { try await process.stop(signal: SIGTERM, timeout: 2); throw CancellationError() }
     let buffer = LogBuffer(service: task.id)
@@ -264,7 +331,11 @@ final class WorkspaceRunner: ObservableObject {
     await buffer.close()
     stepOutputFinishing?(runID, step.id, buffer)
     buffers[step.id] = nil
-    change(runID) { $0.steps[stepIndex].exitCode = result.code; $0.steps[stepIndex].process = nil }
+    let sourcesAtEnd = await WorkspaceRunProvenance.capture(sourceScope, environment: shell)
+    change(runID) {
+      $0.steps[stepIndex].exitCode = result.code; $0.steps[stepIndex].process = nil
+      $0.steps[stepIndex].repositoriesAtEnd = sourcesAtEnd
+    }
     try Task.checkCancellation()
     if timedOut { throw StackError.message("Task exceeded its \(task.timeout)-second timeout") }
     guard result.code == 0 else { throw StackError.message("Task exited with status \(result.code.map(String.init) ?? "unknown")") }
@@ -323,10 +394,11 @@ final class WorkspaceRunner: ObservableObject {
   private func change(_ id: UUID, _ mutation: (inout WorkspaceRun) -> Void) {
     guard let i = runs.firstIndex(where: { $0.id == id }) else { return }
     mutation(&runs[i])
+    if !runs[i].status.isActive { runs[i].outcomeHash = WorkspaceRunOutcome.digest(runs[i]) }
     do { try store.save(runs) } catch { storageError = "Could not save run history: \(error.localizedDescription)" }
   }
   private func prune() {
-    let completed = runs.filter { !$0.status.isActive }
+    let completed = runs.filter { !$0.status.isActive && !supervisor.buildArtifacts.retainsRun($0) }
     let removed = completed.dropFirst(100)
     guard !removed.isEmpty else { return }
     let ids = Set(removed.map(\.id))

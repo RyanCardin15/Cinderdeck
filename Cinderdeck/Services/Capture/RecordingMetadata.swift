@@ -343,13 +343,20 @@ enum RecordingMetadataStore {
     layout: StoreLayout,
     createIfNeeded: Bool
   ) throws -> StoreLocation? {
-    guard let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-    else {
-      return nil
-    }
-
-    let baseURL = appSupportURL
-      .appendingPathComponent(appSupportFolderName, isDirectory: true)
+    let baseURL: URL
+    #if DEBUG
+      if let path = ProcessInfo.processInfo.environment["CINDERDECK_STACKS_PREVIEW_ROOT"], path.hasPrefix("/") {
+        // Both current and legacy metadata layouts stay in the fixture, including
+        // their audio assets and migration/cleanup paths.
+        baseURL = URL(fileURLWithPath: path, isDirectory: true)
+      } else {
+        guard let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        baseURL = appSupportURL.appendingPathComponent(appSupportFolderName, isDirectory: true)
+      }
+    #else
+      guard let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+      baseURL = appSupportURL.appendingPathComponent(appSupportFolderName, isDirectory: true)
+    #endif
 
     let rootURL = layout.pathComponents.reduce(baseURL) { partial, component in
       partial.appendingPathComponent(component, isDirectory: true)

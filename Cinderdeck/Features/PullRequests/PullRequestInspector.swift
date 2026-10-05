@@ -84,6 +84,7 @@ struct PullRequestInspector: View {
       if !request.labels.nodes.isEmpty {
         Text(request.labels.nodes.map(\.name).joined(separator: "  ·  ")).font(.system(size: 11, weight: .medium)).foregroundStyle(Color.accentColor)
       }
+      NativeLinkedWorkSection(target: .pullRequest(request.url))
       DeckSectionLabel(title: "Description")
       PRMarkdown(text: detail.body.isEmpty ? "No description provided." : detail.body)
       Button("View checks and full conversation on GitHub") { PROpenURL.open(request.url) }.buttonStyle(.link).font(.callout)

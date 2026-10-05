@@ -103,3 +103,79 @@ Remaining limits: none, or explicit unresolved release blocker
 ```
 
 Do not check a parent phase complete while any required item is unfinished. App compilation, generated mockups and reported agent success are insufficient evidence for a completed connected workflow.
+
+## Foundation checkpoint — 2026-10-03
+
+DH-001: permanent full-history fork, pinned upstream revision, runtime/dependency versions, frozen install, clean upstream build and actual isolated standalone web/Electron launches. Deckhand commit `5189cd544d`. Evidence and remaining limits: [foundation validation](DECKHAND_FOUNDATION_EVIDENCE.md).
+
+DH-002–DH-009 contain partial foundation work. They remain unchecked because branding/distribution assets, complete contracts/registration, discovery/reconnect, all mutation reconciliations and the full acceptance gates remain open. No parent phase is complete.
+
+Additional Deckhand commits: `3c9ba03da0` (launcher lifecycle) and `b7f3cd3100` (session persistence and physical binding guards). Native integration commit: `d47ab9c1`. Relationship tests/typecheck/lint/build and two captured-PID launcher shutdown checks passed; [foundation validation](DECKHAND_FOUNDATION_EVIDENCE.md) records the scope. All additional DH items remain unchecked.
+
+## Connected workspace checkpoint — 2026-10-03
+
+Deckhand commit `2ea01a3a34`: authenticated same-host discovery, a persisted shared projection, durable actor-bound operation intents and the first real workspace overview now provide partial DH-005–DH-010 and DH-016–DH-018 implementation. Real web controls created a three-repository lane and started/stopped its two isolated services; Electron connected to the same catalog and passed a light-mode/Settings-return walkthrough. Thirty-seven focused tests and scoped typechecks/build passed. [Validation and remaining gaps](DECKHAND_FOUNDATION_EVIDENCE.md#connected-workspace-checkpoint--2026-10-03) distinguish this checkpoint from the still-open full gates. No additional item is checked complete.
+
+## Managed checkout admission checkpoint — 2026-10-03
+
+Deckhand commit `7c4990036a` adds explicit repository scope, separate native checkout generation, physical writer queues and provider admission checks. A shared provider process can hold independent thread/checkouts without treating its first cwd as every thread's cwd. Seventy-six focused tests, server typecheck, changed-module lint, desktop build and patch-boundary verification passed. Real Codex resumed its existing disposable fixture thread after restart; its thread-scoped reservation was held during residency and released after normal provider/server shutdown. [Validation and limits](DECKHAND_FOUNDATION_EVIDENCE.md#managed-checkout-admission-checkpoint--2026-10-03) record this as partial P2–P5 progress. Full native ownership/preflight, launch/registration UI, queued-state projection, recovery controls and the rest of P0–P11 remain required. No additional item or phase is complete.
+
+## Native checkout reservation checkpoint — 2026-10-03
+
+Deckhand implementation: `ca2b242a93`. Native implementation is included with this checkpoint in the isolated `codex/deckhand-integration` checkout.
+
+Native finite runs and central Git changes now share a durable physical barrier with managed Deckhand providers. Deckhand persists native intent before transport, reconciles lost replies, verifies held ownership before managed calls and releases only after actual process shutdown. Eighty-seven focused Deckhand tests and 25 native tests passed; a real resumed Codex fixture held the same lease in both stores, blocked native admission after turn completion, and released both leases on confirmed shutdown. [Validation and remaining work](DECKHAND_FOUNDATION_EVIDENCE.md#native-checkout-reservation-checkpoint--2026-10-03) record the offline fixture binding separately from the still-unimplemented managed lane launch UI. Native lifecycle delegation/coverage, remaining mutation routes, ownership recovery/override controls, queue/status projections and the complete release scope remain open. This is progress in P2–P5; only DH-001 remains checked.
+
+
+## Managed lane launch and live sessions checkpoint — 2026-10-03
+
+Deckhand commit `7b26fac1d8` adds durable managed launch into an explicit existing lane repository, exact-request recovery, saved feature/session/thread attribution and bounded live control projections in the context inspector. Seventy-nine focused tests, four scoped typechecks, lint, server/web builds and patch-boundary verification passed. Real Codex launched from the UI and resumed the same conversation after both isolated apps restarted. A live catalog-teardown shutdown defect was found and fixed; two repeated normal shutdowns released native and local ownership, and native admission changed from refused while resident to successful after release. [Evidence and remaining gates](DECKHAND_FOUNDATION_EVIDENCE.md#managed-lane-launch-and-live-sessions-checkpoint--2026-10-03) distinguish the exact isolated recovery repair from still-required product recovery controls. DH-019–DH-021 remain partial, and only DH-001 is checked complete.
+
+## Git and file mutation ownership checkpoint — 2026-10-03
+
+Deckhand `245c058b49` and native `9dfd4b6f` coordinate both Git drivers and checkpoint restoration with physical local/native ownership. Shared refs include actual unbound linked worktrees; native held claims survive definition removal. Coordinated rollback refuses ownership before rewinding the conversation or files. Two hundred eleven focused Deckhand tests and 28 native tests passed, along with scoped typechecks/lint/build and the patch audit. An authenticated production RPC and actual native task verified refusal while held and success after release, with no remaining claims/listeners. [Evidence and required remaining work](DECKHAND_FOUNDATION_EVIDENCE.md#git-and-file-mutation-ownership-checkpoint--2026-10-03) record incomplete backend lifecycle delegation, multistep workflow admission and resident-provider rollback handoff. DH-011–DH-014 remain partial; only DH-001 is checked complete.
+
+## Workspace backend selection checkpoint — 2026-10-03
+
+Deckhand `826631a044` routes mutation inspection, authenticated inventory/connected creation and managed launch context lookup through the common WorkspaceBackend. Missing Git metadata retains native ownership; standalone/native transfer remains explicit, and shared refs preserve separately owned worktrees. Three hundred twelve focused tests, server typecheck/build, scoped lint and the patch audit passed. Real authenticated native inventory, stale creation refusal, held-owner Git refusal and scoped release were verified with all test processes stopped. [Evidence and remaining lifecycle work](DECKHAND_FOUNDATION_EVIDENCE.md#workspace-backend-selection-checkpoint--2026-10-03) distinguish this partial interface from complete backend lifecycle delegation and native lane lifecycle reservations. DH-011–DH-014 remain open; only DH-001 is checked.
+
+### Native lane lifecycle ownership evidence (partial DH-011–DH-014)
+
+Native `3d4a72fb`; 88 focused native tests plus fresh real-app Unix-socket lifecycle verification passed. Physical writer conflicts, borrowed teardown attribution, unstopped process retention, task-only checkouts and missing registered cleanup are covered. Evidence and remaining interface/concurrency/recovery work are recorded in `DECKHAND_FOUNDATION_EVIDENCE.md`; these items remain unchecked.
+
+### Connected lifecycle delegation evidence (partial DH-009/DH-011)
+
+Deckhand `06ae9a939c` and native `bbfc9463` add connected adopt/setup/release/remove beside create, precise capability gates, strict native inputs, final context preflight, setup attribution and conservative interrupted lifecycle inspection. Ninety-one native tests, 35 focused Deckhand tests, affected typechecks/build/patch audit and real authenticated production RPC lifecycle verification passed. See `DECKHAND_FOUNDATION_EVIDENCE.md` for evidence and remaining standalone/surface/concurrency/recovery gates. These full items remain unchecked.
+
+
+### Standalone worktree lifecycle evidence (partial DH-011–DH-014)
+
+Deckhand `f66b5985ca` makes WorkspaceBackend own finite admission and keeps standalone worktree creation/removal/pruning under one lifecycle reservation. New checkout identities are included before configuration; collisions preserve files/other owners, missing registrations retain writer barriers, and inherited authorization expires with its operation. The final 197 focused tests, server typecheck/build, scoped lint/patch audit and fresh authenticated standalone/native lifecycle verification passed with zero remaining claims or listeners. [Evidence and remaining boundaries](DECKHAND_FOUNDATION_EVIDENCE.md#standalone-worktree-lifecycle-ownership-checkpoint--2026-10-03) retain future-target admission, higher-level workflow atomicity, connected surface delegation and transition/recovery gates. Only DH-001 remains checked complete.
+
+
+### Repository-specific lane start evidence (partial DH-011/DH-012/DH-041)
+
+Deckhand `b25cf17f98` and native `bc4dcc43` pin explicit starts by repository ID before creation effects, retain defaults for other repositories, expose repeatable CLI `--repo-from` and bounded MCP `repositoryRefs`, and reject unsupported peers or invalid inputs with definitive refusal handling. Forty-one focused Deckhand tests, 88 native tests, affected typechecks/build/lint/patch audit and fresh authenticated RPC plus real CLI/MCP verification passed. All test apps/listeners stopped and both reservation stores had zero active claims. [Evidence and remaining lifecycle boundaries](DECKHAND_FOUNDATION_EVIDENCE.md#repository-specific-lane-starts-checkpoint--2026-10-03) retain upstream automatic delegation, future target admission, multistep atomicity and the full release gates. No additional checklist item is complete.
+
+
+### Bounded receipt wait evidence (partial DH-006/DH-009/DH-011)
+
+Deckhand `7c65c9e785` and native `cb282ac6` provide capability-gated bounded receipt observation through WorkspaceBackend and authenticated RPC, retaining actor/key identity and conservative timeout/restart outcomes. Thirty-seven focused Deckhand tests, 13 native tests, scoped typechecks/build/lint/patch audit and a real FIFO-blocked setup wait with concurrent commands passed. Both test apps/listeners stopped with zero active claims. [Evidence and remaining connected routing work](DECKHAND_FOUNDATION_EVIDENCE.md#bounded-operation-receipt-waits-checkpoint--2026-10-03) retain automatic creation/removal delegation, frontend consumption, transport shutdown/performance and the full release matrix. No additional full checklist item is complete.
+
+
+### Connected creation API checkpoint — 2026-10-03
+
+- Combined creation persists the original request before native effects, waits on the same native operation and launches in the returned existing checkout. Read-only lookup does not launch; uncertain/setup/provider failures retain recoverable lane identity. Deckhand `bcc548cebb`, native `1ff39bf1`.
+- Explicit durable managed-writer handoff avoids a creator advisory claim blocking the provider thread; legacy creation claims and physical removal guards are verified.
+- Fifty focused Deckhand tests and thirteen native tests passed. Authenticated real Codex 0.160.0 verification proved exact checkout, approval state, one lane/thread after retry and server restart, and zero remaining writer claims after shutdown. See the foundation evidence checkpoint and `output/deckhand-session-create-2026-10-03/live-verification.json`.
+- New client creation controls, pre-creation feature/context reservations, stale resolved-launch recovery and the complete remaining acceptance scope are still open. No additional checklist item is complete.
+
+
+### Connected feature creation controls evidence (partial DH-016/DH-019)
+
+Deckhand `7ab81390df` exposes New feature in the shared web/desktop Workspaces client, with new branch, repository-specific start revisions, provider/model/access choices, setup and service-start controls. The existing lane-only and existing-checkout launch paths remain available. Creation stores the complete request before dispatch, restores its original identity across reload/native generation changes, and offers read-only Check result, exact-request continuation and retained-lane review. An uncertain result cannot be edited into another creation; a stale refusal requires confirmation that no intent exists before editing. Nine focused React DOM behavioral tests, client typecheck, production client build, scoped lint and the 356-file patch audit passed. Browser use is awaiting the human permission explicitly required by Deckhand AGENTS.md. The separate mobile client, feature/context reservation before native creation, stale resolved-launch recovery and the complete creation/lifecycle acceptance gates remain open. Only DH-001 is complete.
+
+
+### Pre-creation feature/context intent evidence (partial DH-005/DH-019)
+
+Deckhand `6c06930c83` atomically persists the feature, canonical workspace binding and bounded intended repository set together with the original creation request before native Git/setup effects. The returned checkout launch reuses that feature. Failed setup/transport and explicit restart recovery retain it; unrelated launch-key collisions cannot attach another conversation. Version-8 migration adds an indexed unique launch-key lookup while preserving version-7 accepted receipts without requiring a live source. Forty-five focused server tests and nine client behavior tests, server/contracts/web typechecks, scoped lint, production server bundle, whitespace and the 356-file patch audit passed. Fresh authenticated production/native verification confirmed one feature/lane/thread, real Codex cwd/approval state, restart replay and zero remaining active claims/listeners. Feature/context intent is durable; future physical target admission, stale resolved-launch repair, independent client/browser gates and the full release matrix remain open. Only DH-001 is complete.

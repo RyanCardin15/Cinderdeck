@@ -27,7 +27,7 @@ final class StackLaneCoordinator {
     try onCreated(created.file)
     var result = Creation(file: created.file, warnings: created.warnings)
     if let reference = created.file.definition?.laneSettings?.setup {
-      if setup { result.setup = await runSetup(created.file.id, actor: actor) }
+      if setup { result.setup = await runSetup(created.file.id, actor: actor, operationID: request.integrationOperationID) }
       else {
         let skipped = StackLaneSetupState(status: .skipped, reference: reference, detail: "Skipped at creation. Run it with lane setup.")
         supervisor.setLaneSetup(created.file.id, skipped)
@@ -40,9 +40,9 @@ final class StackLaneCoordinator {
 
   /// Runs `[lanes] setup` in the lane as a normal workspace run and records the outcome.
   @discardableResult
-  func runSetup(_ id: String, actor: StackActor) async -> StackLaneSetupState? {
+  func runSetup(_ id: String, actor: StackActor, operationID: String? = nil) async -> StackLaneSetupState? {
     guard let reference = supervisor.definition(id)?.laneSettings?.setup else { return nil }
-    supervisor.setLaneSetup(id, .init(status: .running, reference: reference))
+    supervisor.setLaneSetup(id, .init(status: .running, reference: reference, integrationOperationID: operationID))
     var state: StackLaneSetupState
     do {
       let run = try await runner.runAndWait(workspace: id, reference: reference, actor: actor)
@@ -52,6 +52,7 @@ final class StackLaneCoordinator {
     } catch {
       state = .init(status: .failed, reference: reference, detail: error.localizedDescription)
     }
+    state.integrationOperationID = operationID
     supervisor.setLaneSetup(id, state)
     return state
   }

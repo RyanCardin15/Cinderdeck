@@ -1,12 +1,17 @@
 import Foundation
 
 actor GitService {
+  typealias Execute = @Sendable ([String], URL, [String: String]) async throws -> StackCommandResult
   static let shared = GitService()
+  private let execute: Execute
   private var repositories: [URL: GitRepositoryCommands] = [:]
+  init(execute: @escaping Execute = { arguments, path, environment in
+    try await StackCommandRunner.run("/usr/bin/git", arguments, directory: path, environment: environment, timeout: 60)
+  }) { self.execute = execute }
   private func repository(_ path: URL) -> GitRepositoryCommands {
     let key = path.standardizedFileURL.resolvingSymlinksInPath()
     if let worker = repositories[key] { return worker }
-    let worker = GitRepositoryCommands(path: key)
+    let worker = GitRepositoryCommands(path: key, execute: execute)
     repositories[key] = worker
     return worker
   }
@@ -32,9 +37,10 @@ actor GitService {
 /// transactions, including status/stash/checkout, not just individual spawns.
 private actor GitRepositoryCommands {
   let path: URL
+  let execute: GitService.Execute
   private var busy = false
   private var waiters: [CheckedContinuation<Void, Never>] = []
-  init(path: URL) { self.path = path }
+  init(path: URL, execute: @escaping GitService.Execute) { self.path = path; self.execute = execute }
   private func acquire() async {
     if !busy { busy = true; return }
     await withCheckedContinuation { waiters.append($0) }
@@ -49,8 +55,7 @@ private actor GitRepositoryCommands {
     env["GIT_OPTIONAL_LOCKS"] = "0"
     env["LC_ALL"] = "C"
     for attempt in 0...1 {
-      let result = try await StackCommandRunner.run("/usr/bin/git", ["-c", "color.ui=false"] + args,
-        directory: path, environment: env, timeout: 60)
+      let result = try await execute(["-c", "color.ui=false"] + args, path, env)
       if result.status == 0 { return result.text }
       if attempt == 0, result.errorText.contains("index.lock") {
         try await Task.sleep(nanoseconds: 500_000_000); continue
@@ -65,6 +70,7 @@ private actor GitRepositoryCommands {
   private func readDirectories() async throws -> [URL] {
     let directories = try await command(["rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"])
       .split(separator: "\n").map { StackDefinitionLoader.resolve(String($0), relativeTo: path) }
+    guard !directories.isEmpty else { throw StackError.message("Git returned no repository directories") }
     knownDirectories = directories
     return directories
   }
@@ -72,6 +78,12 @@ private actor GitRepositoryCommands {
     let output: String
     do { output = try await command(["status", "--porcelain=v2", "--branch", "-z"]) }
     catch { knownDirectories = nil; throw error }
+    let headers = output.components(separatedBy: "\0").flatMap { $0.components(separatedBy: "\n") }
+    guard headers.contains(where: { $0.hasPrefix("# branch.head ") && $0.count > 14 }),
+      headers.contains(where: { $0.hasPrefix("# branch.oid ") && $0.count > 13 }) else {
+      knownDirectories = nil
+      throw StackError.message("Git returned no readable branch/head status; repository state is unavailable")
+    }
     let directories: [URL]
     if let knownDirectories { directories = knownDirectories } else { directories = try await readDirectories() }
     var operation: String?

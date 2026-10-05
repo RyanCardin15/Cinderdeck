@@ -42,6 +42,21 @@ final class CinderdeckMCPServerTests: XCTestCase {
     XCTAssertEqual(try CinderdeckMCPServer.request(for: "pull_repos", ["workspace": .string("shop"), "fetch": .bool(true)]).0, "git.fetch")
   }
 
+  func testRepositoryStartRefsValidateBeforeTheAppAndPassThroughWithoutRewriting() throws {
+    let valid: [String: JSONValue] = ["workspace": .string("shop"), "branch": .string("fresh"), "repositoryRefs": .object(["app": .string("origin/main"), "api": .string(String(repeating: "a", count: 40))]), "start": .bool(false)]
+    XCTAssertNoThrow(try CinderdeckMCPServer.validate("create_lane", valid))
+    let request = try CinderdeckMCPServer.request(for: "create_lane", valid)
+    XCTAssertEqual(request.0, "lane.create"); XCTAssertEqual(request.1["repositoryRefs"], valid["repositoryRefs"])
+    let many = Dictionary(uniqueKeysWithValues: (0..<65).map { ("repo-\($0)", JSONValue.string("HEAD")) })
+    for refs in [JSONValue.array([]), .object(["app": .number(1)]), .object(["app": .string("")]), .object(["app": .string("main\n")]), .object(["app": .string("-main")]), .object(["app": .string(String(repeating: "x", count: 201))]), .object(many)] {
+      var arguments = valid; arguments["repositoryRefs"] = refs
+      XCTAssertThrowsError(try CinderdeckMCPServer.validate("create_lane", arguments))
+    }
+    var adoption = valid; adoption["path"] = .string("/fixture")
+    adoption.removeValue(forKey: "branch"); adoption.removeValue(forKey: "start")
+    XCTAssertThrowsError(try CinderdeckMCPServer.validate("adopt_lane", adoption))
+  }
+
   func testArgumentsAreValidatedBeforeReachingTheApp() {
     XCTAssertThrowsError(try CinderdeckMCPServer.validate("start_services", ["workspace": .string("shop"), "service": .string("api")])) { error in
       XCTAssertTrue((error as? StackControlError)?.message.contains("Unknown argument service") == true, "\(error)")

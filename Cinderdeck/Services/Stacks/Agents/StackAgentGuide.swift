@@ -104,6 +104,7 @@ nonisolated enum StackAgentGuide {
       - `claim <workspace> --note "running e2e" --ttl 30` / `release <workspace>` while you depend on a workspace
       - `switch <workspace> <branch> [--repo id] [--stash|--carry]`, `git <workspace>`, `branches <workspace>`
     - Parallel work: `\(command) lane create <workspace> <branch> [--from origin/main]` creates, sets up and starts a worktree lane
+      - `--repo-from <repo>=<ref>` pins a new branch in that repository; repeat for independent repositories. Other repos keep their defaults. Existing local branches or conflicting aliases are refused before creation
       - Already in your own worktree: `\(command) lane adopt <workspace> [name] --env FEATURE_X=1` runs it as a lane; setup is off unless `--setup`, and a detached HEAD requires a name. Cinderdeck never deletes the adopted folder
       - `\(command) lane list [workspace]` / `\(command) lane remove <lane>` (branches are kept; `--discard-ignored` also deletes ignored files, changed copies and copied directories — ask first)
       - Use the stable lane ID or `<workspace>/<name>` with every command; the name defaults to the branch

@@ -2,13 +2,28 @@ import AppKit
 
 @MainActor
 enum StackQuitCoordinator {
-  static func shouldTerminate(_ application: NSApplication) -> NSApplication.TerminateReply {
+  private static var terminationInProgress = false
+
+  static func shouldTerminate(_ application: NSApplication,
+    beforeTermination: (@MainActor () async -> Bool)? = nil) -> NSApplication.TerminateReply {
+    guard !terminationInProgress else { return .terminateLater }
     let supervisor = StackSupervisor.shared
     let runner = WorkspaceRunner.shared
-    guard supervisor.hasRunningServices || runner.hasActiveRuns else { return .terminateNow }
+    guard supervisor.hasRunningServices || runner.hasActiveRuns else {
+      guard let beforeTermination else { return .terminateNow }
+      terminationInProgress = true
+      Task {
+        let mayTerminate = await beforeTermination()
+        terminationInProgress = false
+        application.reply(toApplicationShouldTerminate: mayTerminate)
+      }
+      return .terminateLater
+    }
+    terminationInProgress = true
     let defaults = UserDefaults.standard
     let behavior = defaults.string(forKey: PreferencesKeys.stacksQuitBehavior) ?? "ask"
     Task {
+      defer { terminationInProgress = false }
       var choice = runner.hasActiveRuns ? "ask" : behavior
       if choice != "stop" && choice != "leave" {
         let alert = NSAlert()
@@ -45,7 +60,8 @@ enum StackQuitCoordinator {
       } else {
         await supervisor.prepareToLeaveRunning()
       }
-      application.reply(toApplicationShouldTerminate: true)
+      let mayTerminate = await beforeTermination?() ?? true
+      application.reply(toApplicationShouldTerminate: mayTerminate)
     }
     return .terminateLater
   }

@@ -52,6 +52,13 @@ final class HistoryThumbnailGenerator {
   }
 
   private static func defaultThumbnailsDirectory() -> URL {
+    #if DEBUG
+      // Fixture history must not create, reuse or clear the user's thumbnail cache.
+      if let path = ProcessInfo.processInfo.environment["CINDERDECK_STACKS_PREVIEW_ROOT"], path.hasPrefix("/") {
+        return URL(fileURLWithPath: path, isDirectory: true)
+          .appendingPathComponent("HistoryThumbnails", isDirectory: true)
+      }
+    #endif
     let appSupport = FileManager.default.urls(
       for: .applicationSupportDirectory, in: .userDomainMask
     ).first!

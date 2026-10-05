@@ -3,6 +3,14 @@ import Foundation
 import XCTest
 @testable import Cinderdeck
 
+private actor GitStatusReadCounts {
+  private var counts: [String: Int] = [:]
+  private func key(_ path: URL) -> String { path.standardizedFileURL.resolvingSymlinksInPath().path }
+  func record(_ path: URL) { counts[key(path), default: 0] += 1 }
+  func reset() { counts.removeAll() }
+  func count(_ path: URL) -> Int { counts[key(path), default: 0] }
+}
+
 @MainActor
 final class GitServiceIntegrationTests: XCTestCase {
   private var root: URL!
@@ -85,6 +93,101 @@ final class GitServiceIntegrationTests: XCTestCase {
     let after = try await git.status(at: clone)
     XCTAssertEqual(after.oid, status.oid)
   }
+  func testManyLinkedCheckoutsShareWatcherDescriptorsAndKeepCommandOutputsReadable() async throws {
+    let before = descriptorCount()
+    var worktrees: [URL] = []
+    for index in 0..<16 {
+      let path = root.appendingPathComponent("bounded-worktree-\(index)")
+      _ = try await run(["worktree", "add", "-b", "bounded-\(index)", path.path], at: clone)
+      worktrees.append(path)
+    }
+    let monitor = GitStatusMonitor(git: git)
+    defer { monitor.stop() }
+    monitor.configure(worktrees.enumerated().map { .init(id: "repo-\($0.offset)", path: $0.element) })
+    for _ in 0..<100 where monitor.statuses.count < worktrees.count {
+      try await Task.sleep(nanoseconds: 50_000_000)
+    }
+    XCTAssertEqual(monitor.statuses.count, worktrees.count)
+    try await Task.sleep(nanoseconds: 200_000_000)
+    // A per-checkout FSEvents stream opens the same ancestry repeatedly and exceeds
+    // this bound even with only sixteen linked roots. One shared common root does not.
+    XCTAssertLessThan(descriptorCount() - before, 80)
+    for (index, path) in worktrees.enumerated() {
+      XCTAssertEqual(monitor.statuses[path]?.branch, "bounded-\(index)")
+      XCTAssertFalse(monitor.statuses[path]?.oid.isEmpty ?? true)
+    }
+    let result = try await StackCommandRunner.run("/bin/sh", ["-c", "printf exact-output; printf exact-error >&2"])
+    XCTAssertEqual(result.status, 0)
+    XCTAssertEqual(result.text, "exact-output")
+    XCTAssertEqual(result.errorText, "exact-error")
+    _ = try await run(["switch", "-c", "actual-external-change"], at: worktrees[7])
+    for _ in 0..<80 where monitor.statuses[worktrees[7]]?.branch != "actual-external-change" {
+      try await Task.sleep(nanoseconds: 50_000_000)
+    }
+    XCTAssertEqual(monitor.statuses[worktrees[7]]?.branch, "actual-external-change")
+    XCTAssertEqual(monitor.statuses[worktrees[0]]?.branch, "bounded-0")
+    monitor.configure([])
+    try await monitor.refreshAll()
+    XCTAssertTrue(monitor.statuses.isEmpty)
+  }
+
+  func testSharedGitEventsRefreshTheirOwnersAndDroppedEventsRescanUnrelatedRepository() async throws {
+    let linked = root.appendingPathComponent("event-linked")
+    _ = try await run(["worktree", "add", "-b", "event-linked", linked.path], at: clone)
+    let reads = GitStatusReadCounts()
+    let observedGit = GitService(execute: { args, path, environment in
+      if args.contains("status") { await reads.record(path) }
+      return try await StackCommandRunner.run("/usr/bin/git", args, directory: path, environment: environment, timeout: 60)
+    })
+    let monitor = GitStatusMonitor(git: observedGit)
+    defer { monitor.stop() }
+    monitor.configure([.init(id: "original", path: clone), .init(id: "linked", path: linked), .init(id: "unrelated", path: seed)])
+    for _ in 0..<100 where monitor.statuses.count < 3 { try await Task.sleep(nanoseconds: 50_000_000) }
+    XCTAssertEqual(monitor.statuses.count, 3)
+    // Let discovery's initial FSEvents catch-up drain before measuring routing.
+    try await Task.sleep(nanoseconds: 1_000_000_000)
+    await reads.reset()
+    _ = try await run(["branch", "shared-event-reference"], at: linked)
+    let directories = try await observedGit.gitDirectories(at: linked)
+    let expectedCommon = clone.appendingPathComponent(".git").standardizedFileURL.resolvingSymlinksInPath().path
+    let common = try XCTUnwrap(directories.first { $0.standardizedFileURL.resolvingSymlinksInPath().path == expectedCommon })
+    let changedRef = common.appendingPathComponent("refs/heads/shared-event-reference").path
+    let eventAlias = changedRef.hasPrefix("/private/var/") ? String(changedRef.dropFirst("/private".count)) : changedRef
+    monitor.receiveFilesystemChanges([eventAlias])
+    for _ in 0..<100 {
+      if await reads.count(clone) > 0, await reads.count(linked) > 0 { break }
+      try await Task.sleep(nanoseconds: 50_000_000)
+    }
+    let originalReads = await reads.count(clone)
+    let linkedReads = await reads.count(linked)
+    let unrelatedReads = await reads.count(seed)
+    XCTAssertGreaterThan(originalReads, 0)
+    XCTAssertGreaterThan(linkedReads, 0)
+    XCTAssertEqual(unrelatedReads, 0, "A common Git ref must not spawn a status read in an unrelated repository")
+    await reads.reset()
+    monitor.receiveFilesystemChanges([])
+    for _ in 0..<100 {
+      if await reads.count(seed) > 0 { break }
+      try await Task.sleep(nanoseconds: 50_000_000)
+    }
+    let rescanReads = await reads.count(seed)
+    XCTAssertGreaterThan(rescanReads, 0, "Dropped kernel events require an actual status read for every repository")
+    XCTAssertEqual(monitor.statuses[seed]?.branch, "main")
+  }
+
+  func testEmptySuccessfulGitStatusIsUnavailableRatherThanClean() async throws {
+    let unreadable = GitService(execute: { args, path, environment in
+      if args.contains("status") { return .init(status: 0, output: Data(), error: Data()) }
+      return try await StackCommandRunner.run("/usr/bin/git", args, directory: path, environment: environment, timeout: 60)
+    })
+    do { _ = try await unreadable.status(at: clone); XCTFail("Empty output cannot prove a clean repository") }
+    catch { XCTAssertTrue(error.localizedDescription.contains("repository state is unavailable")) }
+  }
+
+  private func descriptorCount() -> Int {
+    (0..<min(Int(sysconf(_SC_OPEN_MAX)), 20_000)).filter { fcntl(Int32($0), F_GETFD) >= 0 }.count
+  }
+
   func testWorktreeDirectoriesAndExternalBranchWatcher() async throws {
     let worktree = root.appendingPathComponent("worktree")
     _ = try await run(["worktree", "add", "-b", "linked", worktree.path], at: clone)
