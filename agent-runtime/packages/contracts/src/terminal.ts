@@ -379,3 +379,59 @@ export const TerminalError = Schema.Union([
   TerminalResizeError,
 ]);
 export type TerminalError = typeof TerminalError.Type;
+
+/**
+ * Resume a thread's native provider session (Claude Code, Codex) in a terminal
+ * outside Cinderdeck. A live session is forked where the provider can, so the
+ * terminal never writes into the transcript the running agent owns.
+ */
+export const ThreadSessionTerminalInput = Schema.Struct({
+  threadId: TrimmedNonEmptyStringSchema,
+  /** False only builds the command, for copying; the default opens a terminal. */
+  launch: Schema.optional(Schema.Boolean),
+});
+export type ThreadSessionTerminalInput = typeof ThreadSessionTerminalInput.Type;
+
+export const ThreadSessionTerminalMode = Schema.Literals(["resume", "fork"]);
+export type ThreadSessionTerminalMode = typeof ThreadSessionTerminalMode.Type;
+
+export const ThreadSessionTerminalResult = Schema.Struct({
+  /** Shell command that resumes the session; carries no secret environment values. */
+  command: Schema.String,
+  mode: ThreadSessionTerminalMode,
+  launched: Schema.Boolean,
+});
+export type ThreadSessionTerminalResult = typeof ThreadSessionTerminalResult.Type;
+
+export const ThreadSessionTerminalFailureReason = Schema.Literals([
+  "thread-unavailable",
+  "no-native-session",
+  "unsupported-provider",
+  "unsupported-platform",
+  "launch-failed",
+]);
+export type ThreadSessionTerminalFailureReason = typeof ThreadSessionTerminalFailureReason.Type;
+
+export class ThreadSessionTerminalError extends Schema.TaggedError<ThreadSessionTerminalError>()(
+  "ThreadSessionTerminalError",
+  {
+    threadId: Schema.String,
+    reason: ThreadSessionTerminalFailureReason,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {
+  override get message() {
+    switch (this.reason) {
+      case "thread-unavailable":
+        return "This thread or its project could not be read.";
+      case "no-native-session":
+        return "This thread has no provider session to resume yet. Send a message first.";
+      case "unsupported-provider":
+        return "Only Claude Code and Codex sessions can be opened in a terminal.";
+      case "unsupported-platform":
+        return "Opening a session in a terminal is only available on macOS.";
+      case "launch-failed":
+        return "Could not open a terminal for this session.";
+    }
+  }
+}

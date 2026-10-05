@@ -91,6 +91,10 @@ export function createTerminalEnvironmentAtoms<R, E>(
       scheduler: lifecycleScheduler,
       concurrency: lifecycleConcurrency,
     }),
+    openThreadSession: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:terminal:open-thread-session",
+      tag: WS_METHODS.terminalOpenThreadSession,
+    }),
   };
 }
 

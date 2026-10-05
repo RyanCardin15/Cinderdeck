@@ -14,6 +14,8 @@ struct StackAgentsSheet: View {
   @State private var skills = StackAgentSkills.skills()
   @State private var skillStates: [String: [StackAgentSkills.State]] = [:]
   @State private var skillNotes: [String: String] = [:]
+  @State private var modState = StackClaudeMod.state()
+  @State private var modNote: String?
 
   private var command: String { StackCLI.preferredCommandPath() }
 
@@ -119,6 +121,22 @@ struct StackAgentsSheet: View {
         }
       }
 
+      if let modState {
+        section("Claude Code mod") {
+          HStack(spacing: 8) {
+            Image(systemName: modState == .missing ? "square.dashed" : "checkmark.circle.fill")
+              .foregroundColor(modState == .missing ? .secondary : StackPalette.color(phase: .ready))
+            Text(modNote ?? StackAgentSkills.describe(modState)).font(.system(size: 11)).foregroundColor(.secondary).lineLimit(2).textSelection(.enabled)
+            Spacer()
+            Button(modAction(modState)) { installMod() }
+              .buttonStyle(StackPillButtonStyle(compact: true))
+              .disabled(modAction(modState) == "Added")
+          }
+          Text("A status line, a /cinderdeck pane with service restarts and logs, and alerts when a service fails. Loads in new Claude Code sessions.")
+            .font(.system(size: 11)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+      }
+
     }
   }
 
@@ -152,6 +170,20 @@ struct StackAgentsSheet: View {
     }.first.map { $0.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~") } ?? ""
     let detail = yours == total ? "Yours, in \(location)" : "Up to date in \(location)"
     return SkillStatus(text: detail, icon: "checkmark.circle.fill", color: StackPalette.color(phase: .ready), action: "Added")
+  }
+
+  private func modAction(_ state: StackAgentSkills.State) -> String {
+    switch state {
+    case .missing: return "Add"
+    case .outdated: return "Update"
+    default: return "Added"
+    }
+  }
+
+  private func installMod() {
+    do { modNote = try StackClaudeMod.install(); error = nil }
+    catch { self.error = "Claude Code mod: \(error.localizedDescription)" }
+    modState = StackClaudeMod.state()
   }
 
   private func refreshSkills() {

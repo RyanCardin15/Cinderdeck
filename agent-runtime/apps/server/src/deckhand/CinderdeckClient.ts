@@ -1,4 +1,5 @@
 import * as GitHubWorkspace from "@cinderdeck/contracts/deckhand/gitHubWorkspace";
+import * as AgentAccess from "@cinderdeck/contracts/deckhand/rpc";
 // @effect-diagnostics nodeBuiltinImport:off - This adapter owns the same-host Unix transport.
 import * as NodeNet from "node:net";
 import * as NodeOS from "node:os";
@@ -47,6 +48,10 @@ export class CinderdeckClient extends Context.Service<
       connection: Connection,
       input: GitHubWorkspace.GitHubWorkspaceInput,
     ) => Effect.Effect<GitHubWorkspace.GitHubWorkspaceResult, BridgeError>;
+    readonly agentAccess: (
+      connection: Connection,
+      input: AgentAccess.AgentAccessInput,
+    ) => Effect.Effect<AgentAccess.AgentAccessResult, BridgeError>;
     readonly connect: (
       socketPath: string,
       expected: ExpectedIdentity,
@@ -86,6 +91,9 @@ export class CinderdeckClient extends Context.Service<
 
 const decodeGitHubInput = Schema.decodeUnknownEffect(GitHubWorkspace.GitHubWorkspaceInput);
 const decodeGitHubResult = Schema.decodeUnknownEffect(GitHubWorkspace.GitHubWorkspaceResult);
+const decodeAgentAccessInput = Schema.decodeUnknownEffect(AgentAccess.AgentAccessInput);
+const decodeAgentAccessStatus = Schema.decodeUnknownEffect(AgentAccess.AgentAccessStatus);
+const decodeAgentAccessResult = Schema.decodeUnknownEffect(AgentAccess.AgentAccessResult);
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 const decodeCheckoutLookupInput = Schema.decodeUnknownEffect(
   Contracts.IntegrationCheckoutLookupInput,
@@ -479,6 +487,34 @@ const make = Effect.gen(function* () {
             ? Effect.succeed(result)
             : Effect.fail(new BridgeError({ reason: "invalid_response" }));
         }),
+        Effect.mapError((cause) =>
+          isBridgeError(cause) ? cause : new BridgeError({ reason: "invalid_response", cause }),
+        ),
+      ),
+    agentAccess: (connection, input) =>
+      requiredCapability(connection, "agents.setup").pipe(
+        Effect.andThen(decodeAgentAccessInput(input)),
+        Effect.flatMap((validated) =>
+          validated.action === "status"
+            ? request(
+                connection.socketPath,
+                "integration.agents.status",
+                { installationID: connection.hello.installationID },
+                10000,
+                connection.clientID,
+              ).pipe(
+                Effect.flatMap(decodeAgentAccessStatus),
+                Effect.map((status) => ({ ok: true, detail: "", status })),
+              )
+            : request(
+                connection.socketPath,
+                "integration.agents.apply",
+                { installationID: connection.hello.installationID, ...validated },
+                // Registering with Claude Code runs its CLI.
+                60000,
+                connection.clientID,
+              ).pipe(Effect.flatMap(decodeAgentAccessResult)),
+        ),
         Effect.mapError((cause) =>
           isBridgeError(cause) ? cause : new BridgeError({ reason: "invalid_response", cause }),
         ),

@@ -141,7 +141,7 @@ final class AgentShellController: ObservableObject {
           throw StackControlError(code: "resource_missing", message: "The requested workspace is unavailable")
         }
       }
-      let sections: Set<String> = ["overview", "agents", "pull-requests", "services", "tasks", "workflows", "lane-map", "runs", "recordings"]
+      let sections: Set<String> = ["overview", "agents", "pull-requests", "services", "tasks", "workflows", "lane-map", "runs", "recordings", AgentAccessNavigation.section]
       guard section.map({ sections.contains($0) }) ?? true else { throw StackControlError.invalid("Unknown workspace section") }
       pendingRoute = AgentShellMessage(type: "route", workspaceID: workspaceID, section: section)
       // Deep links can arrive while the native supervisor is still bootstrapping.

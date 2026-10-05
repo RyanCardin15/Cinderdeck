@@ -25,6 +25,14 @@ nonisolated enum StackAgentSetup {
         catch { print(StackCLI.paint("• ", .yellow) + "\(agent.name) skills: " + error.localizedDescription) }
       }
     }
+    if options.has("mod") {
+      if targets.contains("claude") {
+        do { print(StackCLI.paint("✓ ", .green) + "Claude Code mod: " + (try StackClaudeMod.install())) }
+        catch { print(StackCLI.paint("• ", .yellow) + "Claude Code mod: " + error.localizedDescription) }
+      } else {
+        print(StackCLI.paint("• ", .yellow) + "Claude Code mod: add --claude (or no agent flags) to install it")
+      }
+    }
     if !options.has("instructions") {
       print(StackCLI.paint("Tip: add --instructions to also write usage notes into ~/.codex/AGENTS.md and ~/.claude/CLAUDE.md.", .dim))
     }

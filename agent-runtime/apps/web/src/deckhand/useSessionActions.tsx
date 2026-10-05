@@ -6,6 +6,7 @@ import { settlePromise, squashAtomCommandFailure } from "@cinderdeck/client-runt
 import { threadRuntimeCanArchive } from "@cinderdeck/client-runtime/state/models";
 import { useThreadActions } from "../hooks/useThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
+import { useThreadSessionTerminal } from "../hooks/useThreadSessionTerminal";
 import { readLocalApi } from "../localApi";
 import { readThreadShell, readEnvironmentSupportsPinning } from "../state/entities";
 import { threadEnvironment } from "../state/threads";
@@ -30,6 +31,8 @@ type Action =
   | "pin"
   | "unpin"
   | "copy-id"
+  | "open-terminal"
+  | "copy-resume-command"
   | "archive"
   | "unarchive"
   | "delete";
@@ -39,6 +42,7 @@ export function useSessionActions(environmentId: EnvironmentId) {
   const titleInputId = useId();
   const navigate = useNavigate();
   const actions = useThreadActions();
+  const sessionTerminal = useThreadSessionTerminal();
   const updateMetadata = useAtomCommand(threadEnvironment.updateMetadata, { reportFailure: false });
   const confirmArchive = useClientSettings((settings) => settings.confirmThreadArchive);
   const confirmDelete = useClientSettings((settings) => settings.confirmThreadDelete);
@@ -69,6 +73,8 @@ export function useSessionActions(environmentId: EnvironmentId) {
     const threadRef = { environmentId, threadId: ThreadId.make(session.binding.threadId) };
     const shell = readThreadShell(threadRef);
     const canArchive = enabled && !!shell && threadRuntimeCanArchive(shell.runtime);
+    const canOpenTerminal =
+      !!shell && shell.activeProviderThreadId !== null && sessionTerminal.canOpen(threadRef);
     const items: ContextMenuItem<Action>[] = [
       { id: "open", label: "Open session" },
       { id: "rename", label: "Rename session", icon: "pencil", disabled: !enabled },
@@ -83,7 +89,25 @@ export function useSessionActions(environmentId: EnvironmentId) {
             },
           ]
         : []),
-      { id: "copy-id", label: "Copy session ID", icon: "hash", separatorBefore: true },
+      ...(canOpenTerminal
+        ? [
+            {
+              id: "open-terminal" as const,
+              label: "Open in terminal",
+              icon: "terminal",
+              separatorBefore: true,
+            },
+          ]
+        : []),
+      {
+        id: "copy-id",
+        label: "Copy session ID",
+        icon: "hash",
+        separatorBefore: !canOpenTerminal,
+      },
+      ...(canOpenTerminal
+        ? [{ id: "copy-resume-command" as const, label: "Copy resume command", icon: "terminal" }]
+        : []),
       session.archived
         ? { id: "unarchive", label: "Restore session", icon: "archive", disabled: !enabled }
         : { id: "archive", label: "Archive session", icon: "archive", disabled: !canArchive },
@@ -105,6 +129,14 @@ export function useSessionActions(environmentId: EnvironmentId) {
           to: "/$environmentId/$threadId",
           params: buildThreadRouteParams(threadRef),
         });
+        return;
+      }
+      if (selected === "open-terminal") {
+        await sessionTerminal.openInTerminal(threadRef);
+        return;
+      }
+      if (selected === "copy-resume-command") {
+        await sessionTerminal.copyResumeCommand(threadRef);
         return;
       }
       if (selected === "copy-id") {

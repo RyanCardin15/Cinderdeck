@@ -23,10 +23,12 @@ export type ThreadActionMenuId =
   | "rename"
   | "regenerate-title"
   | "mark-unread"
+  | "open-session-terminal"
   | "copy"
   | "copy-path"
   | "copy-branch"
   | "copy-thread-id"
+  | "copy-resume-command"
   | "archive"
   | "delete";
 
@@ -59,6 +61,8 @@ export interface ThreadActionMenuState {
     readonly titleRegeneration: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
+  /** Whether the thread's provider session can be opened in the user's terminal app (local environment). */
+  readonly canOpenSessionTerminal?: boolean;
 }
 
 /**
@@ -163,17 +167,30 @@ export function buildThreadActionMenuItems(
           },
         ]
       : []),
+    ...(state.canOpenSessionTerminal
+      ? [
+          {
+            id: "open-session-terminal" as const,
+            label: "Open session in terminal",
+            icon: "terminal",
+            separatorBefore: true,
+          },
+        ]
+      : []),
     {
       id: "copy",
       label: "Copy",
       icon: "copy",
-      separatorBefore: true,
+      separatorBefore: !state.canOpenSessionTerminal,
       children: [
         { id: "copy-path", label: "Path", icon: "folder" },
         ...(state.branch
           ? [{ id: "copy-branch" as const, label: "Branch", icon: "git-branch" }]
           : []),
         { id: "copy-thread-id", label: "Thread ID", icon: "hash" },
+        ...(state.canOpenSessionTerminal
+          ? [{ id: "copy-resume-command" as const, label: "Resume command", icon: "terminal" }]
+          : []),
       ],
     },
     { id: "project-settings", label: "Project settings", icon: "settings" },

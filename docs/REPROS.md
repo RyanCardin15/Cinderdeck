@@ -134,7 +134,7 @@ Two skills teach Claude Code, Codex, Cursor, VS Code Copilot, and other agents t
 | [`cinderdeck-record-session`](../skills/cinderdeck-record-session/SKILL.md) | Record a browser or app session: pick the window, a new window, an automation browser, or a display; choose workspace logs or none; mark each action; add browser console output; review the result. Includes headless Chromium launch, CDP attach, browser controls, and task integration. |
 | [`cinderdeck-review-recording`](../skills/cinderdeck-review-recording/SKILL.md) | Investigate a recording, yours or the user's: verdict, frames at errors and marks, logs around a moment, and an export. |
 
-To install them for your agents, open **Agent access** and click **Add** next to each agent under **Agent skills**, or run `cinderdeck skills install --all`. The skills ship inside the app, and **Update** appears when a new version changes them.
+To install them for your agents, open **Settings → Integrations → MCP & skills** and choose **Install skills** for each agent, or run `cinderdeck skills install --all`. The skills ship inside the app, and **Update** appears when a new version changes them.
 
 In a clone of this repository, agents find them automatically: Claude Code reads `.claude/skills/`, Codex reads `.agents/skills/`, and Cursor and VS Code Copilot read both. To use the repository version everywhere instead, link it into your user skills folders:
 

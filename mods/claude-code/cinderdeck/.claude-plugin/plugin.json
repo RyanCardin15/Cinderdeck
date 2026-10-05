@@ -1,0 +1,7 @@
+{
+  "name": "cinderdeck",
+  "version": "0.1.0",
+  "description": "Live Cinderdeck workspace status, service controls and logs inside Claude Code",
+  "author": { "name": "Cinderdeck" },
+  "types": "./types/index.d.ts"
+}
