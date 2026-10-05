@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width" /><title>
+    Deckhand payment fixture
+  </title>
+  <style>
+    body {
+      font: 18px system-ui;
+      background: #1d1a18;
+      color: #faf6f0;
+      max-width: 40rem;
+      margin: 5rem auto;
+      padding: 1rem;
+    }
+    button {
+      font: inherit;
+      background: #f27d47;
+      border: 0;
+      border-radius: 0.5rem;
+      padding: 0.8rem;
+      color: #21140d;
+    }
+    p {
+      line-height: 1.5;
+    }
+  </style>
+  <h1>Payment retry</h1>
+  <p>
+    This deterministic test declines the first payment. After the repair, retrying completes it.
+  </p>
+  <button id="pay">Submit payment</button>
+  <button id="retry" hidden>Retry payment</button>
+  <p id="result" role="status">Ready</p>
+  <p id="revision"></p>
+  <script type="module">
+    const stamp = await fetch("/stamp").then((r) => r.json());
+    document.querySelector("#revision").textContent =
+      "Served build: " + stamp.sourceHash.slice(0, 12);
+    async function payment(retry) {
+      const r = await fetch("/api/payment?retry=" + (retry ? "1" : "0"));
+      const data = await r.json();
+      document.querySelector("#result").textContent =
+        data.result === "paid" ? "Payment complete" : "Payment declined. Retry available.";
+      document.querySelector("#retry").hidden = data.result === "paid";
+    }
+    document.querySelector("#pay").onclick = () => payment(false);
+    document.querySelector("#retry").onclick = () => payment(true);
+  </script>
+</html>

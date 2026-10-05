@@ -1,0 +1,11 @@
+# Verify an owned browser preview
+
+Full preview verification requires a current pinned PR attempt, its declared native build adapter and required checks, an existing connected conversation in that exact checkout, and the local Deckhand desktop browser. Open the launched service in that conversation’s preview, then choose it under **Record the owned browser preview** in the attempt.
+
+Starting capture reloads the selected preview with cache and service workers bypassed. Deckhand checks the actual loaded response bytes against the declared artifact SHA, pins that Chromium target, main frame and fresh document, and encodes its CDP frames in a separate application-owned window. Navigating, reloading, replacing the target or losing its renderer/debugger during capture makes the full proof incomplete. A declared artifact that the page does not load, or whose response body cannot be observed, cannot receive this proof.
+
+**Stop and save** records the native build’s end observation before upload. Cinderdeck retains the source and normalized video digests; Deckhand binds those bytes to the saved attempt and browser target through its private Main-to-backend channel. Selecting the saved recording for finalization also rechecks its current file bytes. Changed, missing or unsafe media cannot retain an exact result. Source, required checks, process birth, served artifact and current PR head must still match.
+
+**Recover recording** reads the saved operation. It does not repeat a capture or uncertain native write. Keep the same operation after a lost response. If the desktop process is lost before it submits its proof, the ordinary recording can remain useful while target verification stays unknown. Generic native-window captures, renderer-uploaded videos and remote browser previews retain their recorded facts without an owned-target claim.
+
+The observed artifact response is bounded to 32 MiB and encoded input to 256 MiB. Main’s private capture credential is independent of renderer administration and pairing credentials, is sent to the backend only through its bootstrap file descriptor, and is never returned through desktop bootstrap IPC. Native import continues to require a real persisted session in the exact saved checkout.

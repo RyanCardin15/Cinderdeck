@@ -1,0 +1,49 @@
+.control {
+  position: relative;
+  flex: none;
+}
+.control button.stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--foreground);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.control button.stop:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--foreground) 14%, transparent);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.control button.stop:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.result {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 30;
+  width: min(330px, calc(100vw - 36px));
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: 8px;
+  color: var(--foreground);
+  background: var(--background);
+  box-shadow: 0 8px 24px #0002;
+  font-size: 12px;
+  white-space: normal;
+}
+.result summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.result p {
+  margin: 8px 0 0;
+  line-height: 1.5;
+}

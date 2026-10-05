@@ -1,0 +1,87 @@
+.summary {
+  position: relative;
+}
+.summary summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.summary summary::-webkit-details-marker {
+  display: none;
+}
+.summary summary > span {
+  font-size: 10px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 13%, transparent);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-left: 2px;
+}
+.popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 285px;
+  max-width: 350px;
+  padding: 17px;
+  background: var(--background);
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: 8px;
+  box-shadow: 0 15px 35px #0003;
+  z-index: 35;
+}
+.popover h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 11px;
+}
+.popover p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+  margin: 8px 0;
+}
+.popover a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--foreground);
+  font-size: 12px;
+  padding: 10px 0;
+  text-decoration: none;
+}
+.popover a:hover {
+  color: #f1874b;
+}
+.popover .latest {
+  border-top: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+  margin: 10px 0;
+}
+.latest > span {
+  flex: 1;
+  min-width: 0;
+}
+.latest strong {
+  font-size: 12px;
+  display: block;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.latest small {
+  font-size: 10px;
+  color: var(--muted-foreground);
+  display: block;
+  margin-top: 4px;
+}
+.popover .active {
+  color: #f1874b;
+}
+.summary :focus-visible {
+  outline: 2px solid #f1874b;
+  outline-offset: 3px;
+}

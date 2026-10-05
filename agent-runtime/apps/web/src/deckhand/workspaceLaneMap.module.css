@@ -1,0 +1,392 @@
+.map {
+  --map-accent: var(--dh-accent, #ed7b42);
+  --map-line: color-mix(in srgb, var(--foreground) 14%, transparent);
+  color: var(--foreground);
+  min-width: 0;
+  border: 1px solid var(--map-line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--background);
+}
+.header {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px;
+  background: color-mix(in srgb, var(--foreground) 3%, var(--background));
+}
+.eyebrow {
+  font:
+    10px ui-monospace,
+    monospace;
+  letter-spacing: 1px;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+}
+.header h3 {
+  margin: 6px 0 0;
+  font-size: 24px;
+  letter-spacing: -0.7px;
+}
+.metrics {
+  display: flex;
+  gap: 22px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.metrics span {
+  display: grid;
+  gap: 4px;
+}
+.metrics strong {
+  font-size: 24px;
+  color: var(--map-accent);
+  font-weight: 500;
+}
+.toolbar {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 22px;
+  border-block: 1px solid var(--map-line);
+}
+.toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  min-height: 34px;
+}
+.toolbar .find {
+  flex: 1 1 220px;
+  display: grid;
+  gap: 5px;
+  font-size: 11px;
+}
+.find input {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 12px;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--map-line);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+}
+.map button,
+.map select {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, var(--background));
+  border: 1px solid var(--map-line);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.map button:hover {
+  border-color: var(--map-accent);
+}
+.map button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.map :is(button, input, select):focus-visible {
+  outline: 2px solid var(--map-accent);
+  outline-offset: 3px;
+}
+.map input[type="checkbox"] {
+  accent-color: var(--map-accent);
+}
+.toolbar output {
+  color: var(--muted-foreground);
+  width: 38px;
+  font:
+    11px ui-monospace,
+    monospace;
+  text-align: center;
+}
+.checkouts,
+.results {
+  display: flex;
+  gap: 8px;
+  overflow: auto;
+  padding: 12px 22px;
+}
+.checkouts button {
+  white-space: nowrap;
+}
+.map button[aria-pressed="true"] {
+  border-color: var(--map-accent);
+  background: color-mix(in srgb, var(--map-accent) 10%, var(--background));
+}
+.results {
+  border-bottom: 1px solid var(--map-line);
+}
+.results button {
+  flex-shrink: 0;
+  display: grid;
+  text-align: left;
+  gap: 4px;
+  max-width: 250px;
+}
+.results small {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.results p {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.viewport {
+  overflow: auto;
+  height: 540px;
+  max-height: 65vh;
+  min-height: 280px;
+  scrollbar-color: color-mix(in srgb, var(--foreground) 23%, transparent) var(--background);
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--foreground) 9%, transparent) 0.7px,
+    transparent 0.7px
+  );
+  background-size: 18px 18px;
+}
+.viewport:focus-visible {
+  outline: 2px solid var(--map-accent);
+  outline-offset: -3px;
+}
+.surface {
+  position: relative;
+}
+.canvas {
+  position: absolute;
+  inset: 0 auto auto 0;
+  transform-origin: top left;
+}
+.band {
+  position: absolute;
+  border: 1px solid var(--map-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--foreground) 2%, var(--background));
+}
+.band > span {
+  position: absolute;
+  left: 16px;
+  top: 13px;
+  font:
+    10px ui-monospace,
+    monospace;
+  letter-spacing: 0.8px;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+}
+.sharedBand {
+  background: color-mix(in srgb, #69aea4 4%, var(--background));
+  border-color: color-mix(in srgb, #69aea4 27%, transparent);
+}
+.edges {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.edges marker {
+  fill: var(--muted-foreground);
+}
+.edge {
+  fill: none;
+  stroke: color-mix(in srgb, var(--foreground) 40%, transparent);
+  stroke-width: 1.25;
+}
+.uses {
+  stroke: #69aea4;
+  stroke-dasharray: 5 4;
+}
+.fork {
+  stroke: var(--map-accent);
+  stroke-dasharray: 2 5;
+}
+.map .node {
+  position: absolute;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 5px;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--foreground) 5%, var(--background));
+  box-shadow: 0 3px 12px #0001;
+  border-radius: 8px;
+}
+.node strong {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.node .kind {
+  font:
+    9px ui-monospace,
+    monospace;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.subtitle {
+  font:
+    11px ui-monospace,
+    monospace;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.status {
+  font-size: 10px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.map .checkout {
+  border-color: color-mix(in srgb, var(--map-accent) 45%, transparent);
+}
+.map .sharedNode {
+  border-color: color-mix(in srgb, #69aea4 45%, transparent);
+  background: color-mix(in srgb, #69aea4 7%, var(--background));
+}
+.map .selected {
+  border-color: var(--map-accent);
+}
+.dimmed {
+  opacity: 0.38;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 12px 22px;
+  border-block: 1px solid var(--map-line);
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.legend span:last-child {
+  margin-left: auto;
+}
+.inspector {
+  padding: 22px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 0.7fr);
+  gap: 26px;
+  background: color-mix(in srgb, var(--foreground) 3%, var(--background));
+}
+.inspector h4 {
+  margin: 8px 0;
+  font-size: 19px;
+  letter-spacing: -0.4px;
+}
+.inspector p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted-foreground);
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+.detail {
+  white-space: pre-wrap;
+}
+.inspector a {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--map-accent);
+}
+.connections {
+  border-left: 1px solid var(--map-line);
+  padding-left: 22px;
+}
+.traceControls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.connections > button {
+  display: flex;
+  width: 100%;
+  text-align: left;
+  gap: 10px;
+  align-items: center;
+  border: none;
+  background: none;
+  padding: 8px 0;
+}
+.connections > button span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  min-width: 66px;
+}
+.connections > button strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.connections > button small {
+  color: var(--muted-foreground);
+  margin-left: auto;
+  font-size: 10px;
+}
+.note {
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--muted-foreground);
+  padding: 14px 22px;
+  margin: 0;
+  border-top: 1px solid var(--map-line);
+}
+@media (max-width: 800px) {
+  .header {
+    align-items: flex-start;
+  }
+  .inspector {
+    grid-template-columns: 1fr;
+  }
+  .connections {
+    border-left: 0;
+    border-top: 1px solid var(--map-line);
+    padding: 16px 0 0;
+  }
+  .header,
+  .toolbar,
+  .checkouts,
+  .results,
+  .inspector,
+  .note,
+  .legend {
+    padding-inline: 16px;
+  }
+  .viewport {
+    height: 420px;
+  }
+}
+@media (max-width: 500px) {
+  .metrics {
+    gap: 12px;
+  }
+  .header h3 {
+    font-size: 21px;
+  }
+  .metrics strong {
+    font-size: 21px;
+  }
+  .metrics span {
+    font-size: 10px;
+  }
+  .legend {
+    gap: 10px;
+  }
+}

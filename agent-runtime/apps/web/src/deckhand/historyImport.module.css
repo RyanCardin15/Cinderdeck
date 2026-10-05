@@ -1,0 +1,187 @@
+.panel {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px;
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  color: var(--foreground);
+  font-size: 14px;
+}
+.panel h2,
+.panel h3,
+.panel p {
+  margin: 0;
+}
+.panel h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+.panel p,
+.panel small {
+  line-height: 1.55;
+  color: var(--muted-foreground);
+}
+.field {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.field input,
+.field select {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--background);
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--foreground);
+}
+.panel button {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--secondary);
+  padding: 8px 12px;
+  text-align: left;
+  color: var(--foreground);
+  font-size: 12px;
+}
+.panel button:hover:not(:disabled),
+.panel button[aria-pressed="true"] {
+  border-color: var(--primary);
+  background: var(--accent);
+}
+.panel button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.panel button:focus-visible,
+.field input:focus-visible,
+.field select:focus-visible,
+.panel summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.copy {
+  display: grid;
+  gap: 10px;
+}
+.copy > button {
+  justify-self: start;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.archiveList,
+.threadList {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.archiveList button,
+.threadList > button {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.archiveList span,
+.threadList span,
+.hint {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.pager {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.report {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  background: var(--muted);
+  border-radius: 9px;
+  min-width: 0;
+}
+.report dl {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+.report dl > div {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 12px;
+}
+.report dt {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.report dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.report code {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  padding: 6px 0;
+}
+.history {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 18px;
+  min-width: 0;
+}
+.messages {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+}
+.message {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.message header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.message time {
+  color: var(--muted-foreground);
+}
+.message pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+}
+.notice {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+@media (max-width: 720px) {
+  .panel {
+    padding: 16px;
+  }
+  .history {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .report dl > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
+  .message header {
+    flex-wrap: wrap;
+  }
+}

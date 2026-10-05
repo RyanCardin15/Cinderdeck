@@ -1,0 +1,61 @@
+{
+  "name": "@t3tools/contracts",
+  "version": "0.0.45",
+  "private": true,
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./settings": {
+      "types": "./src/settings.ts",
+      "import": "./src/settings.ts"
+    },
+    "./relay": {
+      "types": "./src/relay.ts",
+      "import": "./src/relay.ts"
+    },
+    "./deckhand": {
+      "types": "./src/deckhand/index.ts",
+      "import": "./src/deckhand/index.ts"
+    },
+    "./deckhand/integration": {
+      "types": "./src/deckhand/integration.ts",
+      "import": "./src/deckhand/integration.ts"
+    },
+    "./deckhand/rpc": "./src/deckhand/rpc.ts",
+    "./deckhand/recordingsRpc": "./src/deckhand/recordingsRpc.ts",
+    "./deckhand/runsRpc": "./src/deckhand/runsRpc.ts",
+    "./deckhand/builds": "./src/deckhand/builds.ts",
+    "./deckhand/linkedWorkRpc": "./src/deckhand/linkedWorkRpc.ts",
+    "./deckhand/reviewerRpc": "./src/deckhand/reviewerRpc.ts",
+    "./deckhand/verificationRpc": "./src/deckhand/verificationRpc.ts",
+    "./deckhand/threadContextRpc": "./src/deckhand/threadContextRpc.ts",
+    "./deckhand/attentionRpc": {
+      "types": "./src/deckhand/attentionRpc.ts",
+      "import": "./src/deckhand/attentionRpc.ts"
+    },
+    "./deckhand/externalSessionsRpc": "./src/deckhand/externalSessionsRpc.ts",
+    "./deckhand/verificationAttemptsRpc": "./src/deckhand/verificationAttemptsRpc.ts",
+    "./deckhand/ownedPreviewRpc": "./src/deckhand/ownedPreviewRpc.ts",
+    "./deckhand/historyImportRpc": "./src/deckhand/historyImportRpc.ts",
+    "./deckhand/ownershipRpc": "./src/deckhand/ownershipRpc.ts",
+    "./deckhand/externalDebugRpc": "./src/deckhand/externalDebugRpc.ts",
+    "./deckhand/externalAppPreferences": "./src/deckhand/externalAppPreferences.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vp test run --config ../../vite.config.ts --dir ."
+  },
+  "dependencies": {
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
