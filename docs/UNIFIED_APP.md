@@ -14,7 +14,9 @@ Clone the Cinderdeck repository normally. The maintained agent runtime source is
   --configuration Debug --arch arm64
 ```
 
-The command runs the runtime's existing desktop artifact builder with `CINDERDECK_NATIVE_SHELL_BUILD=1`, targeting an unpacked macOS app. Node's directory and the runtime's `node_modules/.bin` lead that build's `PATH`. It builds native Cinderdeck with the documented Xcode performance-inliner workaround, copies both products into a fresh staging directory, and verifies the executable and bundle identifiers before signing.
+The command runs the runtime's existing desktop artifact builder with `CINDERDECK_NATIVE_SHELL_BUILD=1`, targeting an unpacked macOS app. Node's directory and the runtime's `node_modules/.bin` lead that build's `PATH`. It builds native Cinderdeck at the same time, with the documented Xcode performance-inliner workaround and without an index store, then copies both products into a fresh staging directory and verifies the executable and bundle identifiers before signing.
+
+Debug builds keep the three most recently used AgentShell builds in `.build/agent-shell-cache`. A build is reused only when everything that shapes it is unchanged: the runtime checkout's Git-visible files and ignored `.env` files, the Node, Rust and Swift toolchains, the architecture, the `DECKHAND_`, `VITE_`, `EXPO_PUBLIC_`, `CSC_`, `APPLE_`, `APP_VERSION` and `NODE_OPTIONS` environment, the build scripts, and the commit and dirty state embedded for About. A native-only change therefore skips the runtime build. A new commit rebuilds the runtime once. Release builds always rebuild it. Pass `--no-runtime-cache` or set `CINDERDECK_RUNTIME_CACHE=0` to force a rebuild.
 
 To assemble already-built products for manual validation, supply either or both prebuilt apps:
 
