@@ -199,9 +199,14 @@ final class AgentShellController: ObservableObject {
     if line == Data("CINDERDECK_AGENT_SHELL_QUIT_REQUEST".utf8) {
       guard !stopping, !quitRequested else { return }
       quitRequested = true
-      NSApp.terminate(nil)
-      // A cancelled native quit must allow a subsequent explicit Quit request.
-      quitRequested = false
+      // terminateLater enters AppKit's nested event loop. Calling it inside the
+      // stdout MainActor task keeps that task active and blocks the asynchronous
+      // shutdown task that must reply. Start termination from the AppKit queue.
+      DispatchQueue.main.async { [weak self] in
+        NSApp.terminate(nil)
+        // A cancelled native quit must allow a subsequent explicit Quit request.
+        self?.quitRequested = false
+      }
       return
     }
     let prefix = Data("CINDERDECK_AGENT_SHELL_UI_REQUEST ".utf8)
