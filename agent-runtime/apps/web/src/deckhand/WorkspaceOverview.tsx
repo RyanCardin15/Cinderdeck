@@ -19,9 +19,9 @@ import * as Effect from "effect/Effect";
 import { runtime } from "../lib/runtime";
 import { WorkspaceContextViews } from "./WorkspaceContextViews";
 import { AsyncResult } from "effect/unstable/reactivity";
-import type { EnvironmentId } from "@t3tools/contracts";
-import type { IntegrationView, ManagedContextView } from "@t3tools/contracts/deckhand/rpc";
-import type { IntegrationOperationReceipt } from "@t3tools/contracts/deckhand/integration";
+import type { EnvironmentId } from "@cinderdeck/contracts";
+import type { IntegrationView, ManagedContextView } from "@cinderdeck/contracts/deckhand/rpc";
+import type { IntegrationOperationReceipt } from "@cinderdeck/contracts/deckhand/integration";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { useAtomCommand } from "../state/use-atom-command";
 import { buildThreadRouteParams } from "../threadRoutes";
@@ -59,7 +59,7 @@ import {
   inspectOperation,
   recentOperations,
 } from "./state";
-import type { RecordingContextOverview } from "@t3tools/contracts/deckhand/recordingsRpc";
+import type { RecordingContextOverview } from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import { recordingOverview } from "./recordingState";
 import { RecordingThumbnail } from "./RecordingThumbnail";
 import styles from "./workspace.module.css";

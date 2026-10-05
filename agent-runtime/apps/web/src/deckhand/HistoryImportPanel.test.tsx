@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { EnvironmentId } from "@t3tools/contracts";
-import type * as C from "@t3tools/contracts/deckhand/historyImportRpc";
+import { EnvironmentId } from "@cinderdeck/contracts";
+import type * as C from "@cinderdeck/contracts/deckhand/historyImportRpc";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 const commands = vi.hoisted(() => ({
   copy: vi.fn(),
@@ -13,7 +13,7 @@ const commands = vi.hoisted(() => ({
   text: vi.fn(),
   remove: vi.fn(),
 }));
-vi.mock("@t3tools/client-runtime/state/runtime", () => ({
+vi.mock("@cinderdeck/client-runtime/state/runtime", () => ({
   createEnvironmentRpcCommand: (_: unknown, { tag }: { tag: string }) => tag,
 }));
 vi.mock("../connection/runtime", () => ({ connectionAtomRuntime: {} }));
@@ -155,15 +155,15 @@ it("copies only after explicit action on the selected computer and shows failed 
       sourceSchemaVersion: 57,
       threads: 0,
       messages: 0,
-      detail: "This T3 schema is not supported.",
+      detail: "This Cinderdeck schema is not supported.",
     },
   });
-  await act(async () => button("Copy T3 history").click());
+  await act(async () => button("Copy Cinderdeck history").click());
   expect(commands.copy).toHaveBeenCalledWith({
     environmentId: "chosen-computer",
     input: { operationKey: "explicit-copy-key", sourceDatabasePath: "/owned/t3/statev2.sqlite" },
   });
-  expect(element.textContent).toContain("This T3 schema is not supported.");
+  expect(element.textContent).toContain("This Cinderdeck schema is not supported.");
   expect(commands.threads).not.toHaveBeenCalled();
   expect(element.textContent).not.toContain("Earlier review");
 });

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { deriveThreadCheckpointSummaries } from "@t3tools/client-runtime/state/thread-checkpoints";
-import type { OrchestrationV2ThreadProjection } from "@t3tools/contracts";
+import { deriveThreadCheckpointSummaries } from "@cinderdeck/client-runtime/state/thread-checkpoints";
+import type { OrchestrationV2ThreadProjection } from "@cinderdeck/contracts";
 import { inferCheckpointTurnCountByRunId } from "../session-logic";
 import type { TurnDiffSummary } from "../types";
 

@@ -80,7 +80,7 @@ describe("client telemetry metadata", () => {
         desktopBridge: { getClientPlatform: () => "darwin" },
       }),
     ).toEqual({
-      label: "Deckhand Desktop",
+      label: "Cinderdeck Desktop",
       deviceType: "desktop",
       os: "macOS",
       surface: "desktop",

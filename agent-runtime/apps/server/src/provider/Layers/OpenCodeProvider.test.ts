@@ -13,7 +13,7 @@ import * as TestClock from "effect/testing/TestClock";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { beforeEach } from "vite-plus/test";
 
-import { OpenCodeSettings } from "@t3tools/contracts";
+import { OpenCodeSettings } from "@cinderdeck/contracts";
 import * as ServerConfig from "../../config.ts";
 import * as OpenCodeRuntime from "../opencodeRuntime.ts";
 import * as OpenCodeServerOwner from "../OpenCodeServerOwner.ts";
@@ -866,7 +866,7 @@ it("lists an OpenCode 2 directory's skills by id and its commands after /compact
   NodeAssert.deepEqual(
     openCode2CommandsToServerProviderSlashCommands([
       ...scanned.commands,
-      { name: "compact", description: "a workspace command named like T3's own" },
+      { name: "compact", description: "a workspace command named like Cinderdeck's own" },
     ]).map((command) => command.name),
     ["compact", "init", "review", "hello"],
   );

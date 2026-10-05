@@ -17,9 +17,9 @@ const environmentLayer = DesktopEnvironment.layer({
   platform: "darwin",
   processArch: "arm64",
   appVersion: "1.2.3",
-  appPath: "/Applications/T3 Code.app/Contents/Resources/app.asar",
+  appPath: "/Applications/Cinderdeck.app/Contents/Resources/app.asar",
   isPackaged: true,
-  resourcesPath: "/Applications/T3 Code.app/Contents/Resources",
+  resourcesPath: "/Applications/Cinderdeck.app/Contents/Resources",
   runningUnderArm64Translation: false,
 }).pipe(
   Layer.provide(
@@ -50,7 +50,7 @@ describe("DesktopAssets", () => {
         ),
       );
       const fileSystemLayer = FileSystem.layerNoop({
-        exists: (path) => Effect.succeed(String(path).includes("/assets/deckhand/dev/")),
+        exists: (path) => Effect.succeed(String(path).includes("/assets/cinderdeck/dev/")),
       });
       const assets = yield* DesktopAssets.DesktopAssets.pipe(
         Effect.provide(
@@ -62,8 +62,8 @@ describe("DesktopAssets", () => {
 
       const icons = yield* assets.iconPaths;
 
-      assert.match(Option.getOrThrow(icons.ico), /assets\/deckhand\/dev\/windows\.ico$/);
-      assert.match(Option.getOrThrow(icons.png), /assets\/deckhand\/dev\/universal-1024\.png$/);
+      assert.match(Option.getOrThrow(icons.ico), /assets\/cinderdeck\/dev\/windows\.ico$/);
+      assert.match(Option.getOrThrow(icons.png), /assets\/cinderdeck\/dev\/universal-1024\.png$/);
       assert.isTrue(Option.isNone(icons.icns));
     }),
   );

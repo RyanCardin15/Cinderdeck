@@ -9,11 +9,11 @@ import * as Fiber from "effect/Fiber";
 import * as Stream from "effect/Stream";
 
 /**
- * Stdio-to-HTTP bridge for T3's MCP endpoint.
+ * Stdio-to-HTTP bridge for Cinderdeck's MCP endpoint.
  *
  * ACP agents must support stdio MCP servers, while optional http/sse support
  * is unevenly implemented. `t3 acp-mcp-bridge` runs as the stdio MCP server an
- * ACP agent spawns and forwards each JSON-RPC line to T3's authenticated
+ * ACP agent spawns and forwards each JSON-RPC line to Cinderdeck's authenticated
  * streamable-HTTP endpoint: single JSON responses and SSE streams are written
  * back as newline-delimited JSON-RPC, notification acknowledgements (202/204)
  * produce no output, and the `mcp-session-id` / negotiated protocol version
@@ -161,7 +161,7 @@ export function callAcpMcpTool(
         if (!response.ok) {
           yield* discardResponseBody(response);
           return yield* Effect.fail(
-            new AcpMcpBridgeError(`T3 Code MCP endpoint responded with HTTP ${response.status}.`),
+            new AcpMcpBridgeError(`Cinderdeck MCP endpoint responded with HTTP ${response.status}.`),
           );
         }
         const payloads = yield* Stream.runCollect(responsePayloads(response));
@@ -185,7 +185,7 @@ export function callAcpMcpTool(
     const initializeResponse = initialized.find((entry) => asEnvelope(entry)?.id === initializeId);
     if (initializeResponse === undefined || asEnvelope(initializeResponse)?.error !== undefined) {
       return yield* Effect.fail(
-        new AcpMcpBridgeError("T3 Code MCP endpoint rejected initialization."),
+        new AcpMcpBridgeError("Cinderdeck MCP endpoint rejected initialization."),
       );
     }
     yield* send({ jsonrpc: "2.0", method: "notifications/initialized" });
@@ -202,7 +202,7 @@ export function callAcpMcpTool(
     if (envelope === null || envelope.error !== undefined) {
       return yield* Effect.fail(
         new AcpMcpBridgeError(
-          `T3 Code MCP tool call failed${envelope?.error === undefined ? "." : `: ${JSON.stringify(envelope.error)}`}`,
+          `Cinderdeck MCP tool call failed${envelope?.error === undefined ? "." : `: ${JSON.stringify(envelope.error)}`}`,
         ),
       );
     }
@@ -266,7 +266,7 @@ export function runAcpMcpStdioBridge(options: AcpMcpStdioBridgeOptions): Effect.
           if (envelope.id !== undefined) {
             yield* respondWithError(
               envelope.id,
-              `T3 Code MCP endpoint responded with HTTP ${response.status}.`,
+              `Cinderdeck MCP endpoint responded with HTTP ${response.status}.`,
             );
           }
           return yield* discardResponseBody(response);
@@ -278,7 +278,7 @@ export function runAcpMcpStdioBridge(options: AcpMcpStdioBridgeOptions): Effect.
           const error = Cause.squash(cause);
           return respondWithError(
             envelope.id,
-            `T3 Code MCP bridge request failed: ${error instanceof Error ? error.message : String(error)}`,
+            `Cinderdeck MCP bridge request failed: ${error instanceof Error ? error.message : String(error)}`,
           );
         }),
       );

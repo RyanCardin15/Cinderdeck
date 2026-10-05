@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { EnvironmentId } from "@t3tools/contracts";
-import type { ManagedSessionView } from "@t3tools/contracts/deckhand/rpc";
+import { EnvironmentId } from "@cinderdeck/contracts";
+import type { ManagedSessionView } from "@cinderdeck/contracts/deckhand/rpc";
 import { RegistryContext } from "@effect/atom-react";
 import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
 import * as Cause from "effect/Cause";

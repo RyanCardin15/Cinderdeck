@@ -26,8 +26,8 @@ import * as EffectAcpClient from "effect-acp/client";
 import * as EffectAcpErrors from "effect-acp/errors";
 import type * as EffectAcpSchema from "effect-acp/compat";
 import type * as EffectAcpProtocol from "effect-acp/protocol";
-import { resolveSpawnCommand } from "@t3tools/shared/shell";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { resolveSpawnCommand } from "@cinderdeck/shared/shell";
+import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
 
 import { signalProcessGroup } from "../../process/processGroup.ts";
 import { appendAcpStderrTail, sanitizeAcpStderrExcerpt } from "./AcpStderr.ts";
@@ -939,7 +939,7 @@ export function terminatePosixOwnedProcessTree(input: {
     discover(table);
     const byPid = new Map(table.map((entry) => [entry.pid, entry]));
     const current = input.controller.identity(process.pid);
-    if (current === undefined) throw fail("Cannot identify the current T3 process group");
+    if (current === undefined) throw fail("Cannot identify the current Cinderdeck process group");
     const ledgerByPid = new Map(
       [...ledger.values()].map((process) => [process.pid, process] as const),
     );
@@ -1328,7 +1328,7 @@ export class AcpSessionRuntime extends Context.Service<
       payload: unknown,
     ) => Effect.Effect<void, EffectAcpErrors.AcpError>;
   }
->()("t3/provider/acp/AcpSessionRuntime") {
+>()("@cinderdeck/server/provider/acp/AcpSessionRuntime") {
   static layer(
     options: AcpSessionRuntimeOptions,
   ): Layer.Layer<

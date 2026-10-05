@@ -14,7 +14,7 @@
  *
  * @module usageScanCache
  */
-import type { UsageProviderKind } from "@t3tools/contracts";
+import type { UsageProviderKind } from "@cinderdeck/contracts";
 
 import { GUARD_LENGTH, type TranscriptParsePosition } from "./usageTranscriptReader.ts";
 import type { CodexScanState, UsageRecord, UsageSpeed } from "./usageTranscripts.ts";

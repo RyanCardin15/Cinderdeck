@@ -1,5 +1,5 @@
-import type { ScopedThreadRef } from "@t3tools/contracts";
-import { isWindowsAbsolutePath, normalizeProjectPathForComparison } from "@t3tools/shared/path";
+import type { ScopedThreadRef } from "@cinderdeck/contracts";
+import { isWindowsAbsolutePath, normalizeProjectPathForComparison } from "@cinderdeck/shared/path";
 
 import { useRightPanelStore } from "./rightPanelStore";
 import { resolvePathLinkTarget } from "./terminal-links";

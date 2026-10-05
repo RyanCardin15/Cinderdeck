@@ -4,7 +4,7 @@ import {
   AcpRegistrySettings,
   ProviderInstanceId,
   type ProviderAuthState,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";

@@ -185,7 +185,7 @@ effectIt.effect("project icon overrides accept Lucide icons, colors, and emoji",
 
 effectIt.effect("project monograms validate text and palette colors", () =>
   Effect.gen(function* () {
-    for (const text of ["A", "T3", "É", "文書", "कि", "किखि", "e\u0301"]) {
+    for (const text of ["A", "Cinderdeck", "É", "文書", "कि", "किखि", "e\u0301"]) {
       assert.deepEqual(yield* decodeUpdateIcon({ kind: "monogram", color: "violet", text }), {
         kind: "monogram",
         text,
@@ -197,7 +197,7 @@ effectIt.effect("project monograms validate text and palette colors", () =>
       { kind: "monogram", text: "\u0301", color: "blue" },
       { kind: "monogram", text: "A B", color: "blue" },
       { kind: "monogram", text: "🚀", color: "blue" },
-      { kind: "monogram", text: "T3", color: "ultraviolet" },
+      { kind: "monogram", text: "Cinderdeck", color: "ultraviolet" },
     ]) {
       assert.strictEqual((yield* Effect.exit(decodeUpdateIcon(projectIcon)))._tag, "Failure");
     }
@@ -230,7 +230,7 @@ const decodeNightlyIcon = Schema.decodeUnknownEffect(
 effectIt.effect("sends monograms as fallback icons that old and nightly clients can decode", () =>
   Effect.gen(function* () {
     const fallback = { kind: "lucide", name: "folder-code", color: "violet" } as const;
-    for (const text of ["T3", "क्ष्म", "e\u0301"]) {
+    for (const text of ["Cinderdeck", "क्ष्म", "e\u0301"]) {
       const monogram = { kind: "monogram", text, color: "violet" } as const;
       const wire = yield* encodeProjectIcon(monogram);
       assert.deepEqual(wire, { ...fallback, monogramText: text });

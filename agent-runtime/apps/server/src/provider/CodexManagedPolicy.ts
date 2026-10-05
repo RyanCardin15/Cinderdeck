@@ -1,4 +1,4 @@
-import type { RuntimeMode, ServerProvider } from "@t3tools/contracts";
+import type { RuntimeMode, ServerProvider } from "@cinderdeck/contracts";
 import type * as CodexClient from "effect-codex-app-server/client";
 import * as CodexErrors from "effect-codex-app-server/errors";
 import type * as CodexSchema from "effect-codex-app-server/schema";

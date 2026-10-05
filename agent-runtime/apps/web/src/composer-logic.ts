@@ -1,9 +1,9 @@
-import type { ClientSettings } from "@t3tools/contracts/settings";
-import type { AssistantCitation, ResolvedKeybindingsConfig } from "@t3tools/contracts";
+import type { ClientSettings } from "@cinderdeck/contracts/settings";
+import type { AssistantCitation, ResolvedKeybindingsConfig } from "@cinderdeck/contracts";
 import {
   serializeAssistantCitation,
   withAssistantCitationComment,
-} from "@t3tools/shared/assistantCitations";
+} from "@cinderdeck/shared/assistantCitations";
 import {
   splitPromptIntoComposerSegments,
   type ComposerPromptSegment,

@@ -1,15 +1,15 @@
 import type { WorkspaceSearch } from "./workspaceNavigation";
 import { Link } from "@tanstack/react-router";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import type { ScopedThreadRef } from "@cinderdeck/contracts";
 import type {
   PreviewImportBegin,
   PreviewImportReceipt,
   RecordingContext,
-} from "@t3tools/contracts/deckhand/recordingsRpc";
+} from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import {
   PreviewImportBegin as BeginSchema,
   PreviewImportReceipt as ReceiptSchema,
-} from "@t3tools/contracts/deckhand/recordingsRpc";
+} from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";

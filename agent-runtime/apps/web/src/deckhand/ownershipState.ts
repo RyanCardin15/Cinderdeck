@@ -1,5 +1,5 @@
-import { OWNERSHIP_METHODS } from "@t3tools/contracts/deckhand/ownershipRpc";
-import { createEnvironmentRpcCommand } from "@t3tools/client-runtime/state/runtime";
+import { OWNERSHIP_METHODS } from "@cinderdeck/contracts/deckhand/ownershipRpc";
+import { createEnvironmentRpcCommand } from "@cinderdeck/client-runtime/state/runtime";
 import { connectionAtomRuntime } from "../connection/runtime";
 export const ownershipPreview = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "deckhand:ownership-preview",

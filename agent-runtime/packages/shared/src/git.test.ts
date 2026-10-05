@@ -1,4 +1,4 @@
-import type { VcsStatusRemoteResult, VcsStatusResult } from "@t3tools/contracts";
+import type { VcsStatusRemoteResult, VcsStatusResult } from "@cinderdeck/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -277,10 +277,10 @@ describe("applyGitStatusStreamEvent", () => {
 });
 
 describe("formatGeneratedBranchName", () => {
-  it.each(["t3code", "t3code/"])("joins static prefix %s with one slash", (prefix) => {
+  it.each(["t3code", "cinderdeck/"])("joins static prefix %s with one slash", (prefix) => {
     expect(
       formatGeneratedBranchName("Add Search", { mode: "static", prefix, instructions: "" }),
-    ).toBe("t3code/add-search");
+    ).toBe("cinderdeck/add-search");
   });
   it("supports an empty prefix and preserves user prefix casing", () => {
     expect(

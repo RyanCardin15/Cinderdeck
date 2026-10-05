@@ -1,4 +1,4 @@
-import { sourceControlRepositorySelector } from "@t3tools/shared/sourceControl";
+import { sourceControlRepositorySelector } from "@cinderdeck/shared/sourceControl";
 import {
   type CommandId,
   pullRequestHostOf,
@@ -6,8 +6,8 @@ import {
   type OrchestrationProjectShell,
   type SourceControlProviderKind,
   type ThreadId,
-} from "@t3tools/contracts";
-import { parseChangeRequestUrl } from "@t3tools/shared/changeRequestUrl";
+} from "@cinderdeck/contracts";
+import { parseChangeRequestUrl } from "@cinderdeck/shared/changeRequestUrl";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";

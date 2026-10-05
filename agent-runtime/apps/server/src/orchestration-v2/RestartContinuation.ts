@@ -1,4 +1,4 @@
-import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
+import { resolveProjectSettings } from "@cinderdeck/shared/projectSettings";
 import {
   CommandId,
   MessageId,
@@ -6,7 +6,7 @@ import {
   type ProviderThreadId,
   type RunId,
   type ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Effect from "effect/Effect";
 import type { ProjectionRuntimeRecoveryState } from "./ProjectionStore.ts";
 

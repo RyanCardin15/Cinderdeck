@@ -4,14 +4,14 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { HostProcessPlatform, HostProcessArchitecture } from "@t3tools/shared/hostProcess";
+import { HostProcessPlatform, HostProcessArchitecture } from "@cinderdeck/shared/hostProcess";
 import {
   collectLocalDiagnostics,
   diagnosticConfiguration,
   publicProviderVersion,
 } from "./LocalDiagnostics.ts";
 const encodeReport = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
-describe("Local Deckhand diagnostics", () => {
+describe("Local Cinderdeck diagnostics", () => {
   it.effect(
     "reports store presence without opening malformed databases or exposing stored secrets, logs, paths or environment values",
     () =>

@@ -15,7 +15,7 @@ import * as Fiber from "effect/Fiber";
 import * as Semaphore from "effect/Semaphore";
 import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
-import * as C from "@t3tools/contracts/deckhand/historyImportRpc";
+import * as C from "@cinderdeck/contracts/deckhand/historyImportRpc";
 import * as ServerConfig from "../config.ts";
 const MAX_BYTES = 2 * 1024 * 1024 * 1024;
 const exclusions = [
@@ -139,7 +139,7 @@ async function copyHistory(
       if (!table || typeof table.sql !== "string" || /^CREATE\s+VIRTUAL/i.test(table.sql))
         throw failure(
           "unsupported_schema",
-          "Only the supported T3 V2 history schema can be copied.",
+          "Only the supported Cinderdeck V2 history schema can be copied.",
         );
     }
     const version = Number(
@@ -153,7 +153,7 @@ async function copyHistory(
     if (![55, 56].includes(version))
       throw failure(
         "unsupported_schema",
-        "This T3 schema is not supported. History import currently supports V2 migrations 55 and 56.",
+        "This Cinderdeck schema is not supported. History import currently supports V2 migrations 55 and 56.",
       );
     const required = {
       orchestration_v2_projection_threads: [
@@ -188,7 +188,7 @@ async function copyHistory(
     if (ledger?.name !== "OrchestrationV2")
       throw failure(
         "unsupported_schema",
-        "The source migration history diverges from the supported T3 schema.",
+        "The source migration history diverges from the supported Cinderdeck schema.",
       );
     archive = new NodeSqlite.DatabaseSync(archivePath);
     await NodeFSP.chmod(archivePath, 0o600);
@@ -333,7 +333,7 @@ async function copyHistory(
       finishedAt: DateTime.formatIso(DateTime.nowUnsafe()),
       detail: isHistoryError(error)
         ? error.reason
-        : "The history could not be copied. The source and current Deckhand history were not changed.",
+        : "The history could not be copied. The source and current Cinderdeck history were not changed.",
     };
     await writeJSON(NodePath.join(directory, "report.json"), {
       ...report,
@@ -381,17 +381,17 @@ export class HistoryImports extends Context.Service<
       input: C.HistoryIdentity,
     ) => Effect.Effect<C.HistoryImportReport, C.HistoryImportError>;
   }
->()("t3/deckhand/HistoryImports") {}
+>()("@cinderdeck/server/deckhand/HistoryImports") {}
 class HistoryArchiveLocation extends Context.Service<
   HistoryArchiveLocation,
   { readonly baseDir: string; readonly stateDir: string; readonly dbPath: string }
->()("t3/deckhand/HistoryImports/HistoryArchiveLocation") {}
+>()("@cinderdeck/server/deckhand/HistoryImports/HistoryArchiveLocation") {}
 const make = Effect.gen(function* () {
   const config = yield* HistoryArchiveLocation;
   const scope = yield* Scope.Scope;
   if (owns(NodePath.resolve(config.baseDir), NodePath.join(NodeOS.homedir(), ".t3")))
     return yield* Effect.fail(
-      failure("unsafe_path", "History imports require a separate Deckhand store."),
+      failure("unsafe_path", "History imports require a separate Cinderdeck store."),
     );
   yield* Effect.promise(() => NodeFSP.mkdir(config.stateDir, { recursive: true, mode: 0o700 }));
   const root = NodePath.join(
@@ -402,7 +402,7 @@ const make = Effect.gen(function* () {
   const rootStat = yield* Effect.promise(() => NodeFSP.lstat(root));
   if (rootStat.isSymbolicLink() || (yield* Effect.promise(() => NodeFSP.realpath(root))) !== root)
     return yield* Effect.fail(
-      failure("unsafe_path", "The history import directory must be owned by this Deckhand store."),
+      failure("unsafe_path", "The history import directory must be owned by this Cinderdeck store."),
     );
   const epoch = NodeCrypto.randomUUID();
   const jobs = new Map<string, Fiber.Fiber<C.HistoryImportReport, C.HistoryImportError>>();
@@ -471,7 +471,7 @@ const make = Effect.gen(function* () {
           )
             throw failure(
               "unsafe_path",
-              "Choose a separate T3 database within the supported 2 GiB limit.",
+              "Choose a separate Cinderdeck database within the supported 2 GiB limit.",
             );
           const importID = NodeCrypto.createHash("sha256")
             .update(actor + "\0" + input.operationKey)
@@ -676,7 +676,7 @@ const make = Effect.gen(function* () {
           ...report,
           state: "removed",
           detail:
-            "Imported archive removed. The source T3 history and current Deckhand threads were not changed.",
+            "Imported archive removed. The source Cinderdeck history and current Cinderdeck threads were not changed.",
         };
         await writeJSON(NodePath.join(directory, "report.json"), {
           ...removed,

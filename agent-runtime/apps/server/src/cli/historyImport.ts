@@ -4,7 +4,7 @@ import * as Config from "effect/Config";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { Argument, Command, Flag } from "effect/unstable/cli";
-import * as C from "@t3tools/contracts/deckhand/historyImportRpc";
+import * as C from "@cinderdeck/contracts/deckhand/historyImportRpc";
 import * as HistoryImports from "../deckhand/HistoryImports.ts";
 import { resolveBaseDir } from "../os-jank.ts";
 import { baseDirFlag } from "./config.ts";
@@ -24,7 +24,7 @@ const copy = Command.make("copy", {
   baseDir: baseDirFlag,
   source: Flag.String("source").pipe(
     Flag.withDescription(
-      "Real absolute path to the T3 V2 SQLite database. Opened read-only; never copied as a live file.",
+      "Real absolute path to the Cinderdeck V2 SQLite database. Opened read-only; never copied as a live file.",
     ),
   ),
   operationKey: Flag.String("operation-key").pipe(
@@ -34,7 +34,7 @@ const copy = Command.make("copy", {
   ),
 }).pipe(
   Command.withDescription(
-    "Copy supported T3 V2 thread/message history into an isolated Deckhand archive. No credentials, pending work, provider continuation or attachment files are imported.",
+    "Copy supported Cinderdeck V2 thread/message history into an isolated Cinderdeck archive. No credentials, pending work, provider continuation or attachment files are imported.",
   ),
   Command.withHandler(({ baseDir, source, operationKey }) =>
     withArchive(
@@ -76,7 +76,7 @@ const remove = Command.make("remove", {
   importID: Argument.String("import-id"),
 }).pipe(
   Command.withDescription(
-    "Remove only the imported archive while retaining its report; original T3 and current Deckhand threads stay unchanged.",
+    "Remove only the imported archive while retaining its report; original Cinderdeck and current Cinderdeck threads stay unchanged.",
   ),
   Command.withHandler(({ baseDir, importID }) =>
     withArchive(
@@ -150,7 +150,7 @@ const text = Command.make("text", {
 );
 export const historyImportCommand = Command.make("history-import").pipe(
   Command.withDescription(
-    "Explicit read-only T3 history copy and schema report. Archived conversations preserve original IDs but cannot resume provider sessions.",
+    "Explicit read-only Cinderdeck history copy and schema report. Archived conversations preserve original IDs but cannot resume provider sessions.",
   ),
   Command.withSubcommands([copy, list, threads, messages, text, remove]),
 );

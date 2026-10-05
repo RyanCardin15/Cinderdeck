@@ -1,10 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { EnvironmentPresentation } from "@t3tools/client-runtime/connection";
+import type { EnvironmentPresentation } from "@cinderdeck/client-runtime/connection";
 import {
   createEnvironmentPresentationAtoms,
   createEnvironmentSummaryAtoms,
-} from "@t3tools/client-runtime/state/presentation";
-import type { EnvironmentId } from "@t3tools/contracts";
+} from "@cinderdeck/client-runtime/state/presentation";
+import type { EnvironmentId } from "@cinderdeck/contracts";
 import { Atom } from "effect/unstable/reactivity";
 
 import { environmentCatalog } from "../connection/catalog";

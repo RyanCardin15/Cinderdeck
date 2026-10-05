@@ -83,7 +83,7 @@ describe("DesktopEarlyElectronStartup", () => {
     assert.deepEqual(options, {
       isDevelopment: true,
       linuxWmClass: "deckhand-dev",
-      linuxDesktopEntryName: "com.cardinlabs.Deckhand.Development.desktop",
+      linuxDesktopEntryName: "com.cardinlabs.Cinderdeck.Development.desktop",
       passwordStore: "gnome-libsecret",
     });
   });

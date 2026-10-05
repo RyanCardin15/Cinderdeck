@@ -11,11 +11,11 @@ import {
   type CursorSettings,
   type ModelSelection,
   type ProviderSetupError,
-} from "@t3tools/contracts";
-import { formatGeneratedBranchName, sanitizeFeatureBranchName } from "@t3tools/shared/git";
-import { extractJsonObject } from "@t3tools/shared/schemaJson";
+} from "@cinderdeck/contracts";
+import { formatGeneratedBranchName, sanitizeFeatureBranchName } from "@cinderdeck/shared/git";
+import { extractJsonObject } from "@cinderdeck/shared/schemaJson";
 
-import { TextGenerationError } from "@t3tools/contracts";
+import { TextGenerationError } from "@cinderdeck/contracts";
 import * as TextGeneration from "./TextGeneration.ts";
 import {
   buildBranchNamePrompt,
@@ -87,7 +87,7 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
       if (!cursorSettings.enabled) {
         return yield* new TextGenerationError({
           operation,
-          detail: "Cursor is disabled in T3 Code settings.",
+          detail: "Cursor is disabled in Cinderdeck settings.",
         });
       }
 

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import type * as C from "@t3tools/contracts/deckhand/ownershipRpc";
+import { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
+import type * as C from "@cinderdeck/contracts/deckhand/ownershipRpc";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 const commands = vi.hoisted(() => ({
   preview: vi.fn(),

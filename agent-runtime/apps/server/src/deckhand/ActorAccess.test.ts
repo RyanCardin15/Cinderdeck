@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { AuthAdministrativeScopes, AuthSessionId, EnvironmentId } from "@t3tools/contracts";
+import { AuthAdministrativeScopes, AuthSessionId, EnvironmentId } from "@cinderdeck/contracts";
 import type { AuthenticatedSession } from "../auth/EnvironmentAuth.ts";
 import * as AuthSessions from "../persistence/AuthSessions.ts";
 import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
@@ -83,7 +83,7 @@ const fixture = (environmentID = "environment") =>
     ),
   );
 
-describe("Deckhand owner actor recovery", () => {
+describe("Cinderdeck owner actor recovery", () => {
   it.effect(
     "recovers a real revoked singleton desktop grant without rewriting durable/native identity",
     () =>

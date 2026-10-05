@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { ThreadId, TurnItemId, type OrchestrationV2TurnItem } from "@t3tools/contracts";
+import { ThreadId, TurnItemId, type OrchestrationV2TurnItem } from "@cinderdeck/contracts";
 import * as DateTime from "effect/DateTime";
-import { T3_MCP_TOOL_NAMES } from "@t3tools/shared/t3McpToolPresentation";
+import { T3_MCP_TOOL_NAMES } from "@cinderdeck/shared/t3McpToolPresentation";
 
 import {
   commandDetailRepeatsCommand,
@@ -269,7 +269,7 @@ describe("summarizeToolGroup", () => {
 });
 
 describe("resolveWorkEntryToolPresentation", () => {
-  it("presents and summarizes every T3 tool using the same structured identity", () => {
+  it("presents and summarizes every Cinderdeck tool using the same structured identity", () => {
     for (const tool of T3_MCP_TOOL_NAMES) {
       const entry: WorkLogPresentationEntry = {
         id: tool,
@@ -279,13 +279,13 @@ describe("resolveWorkEntryToolPresentation", () => {
         toolData: { server: "t3-code", tool },
         toolLifecycleStatus: "completed",
         itemType: "dynamic_tool",
-        toolSource: { key: "t3-code", name: "T3 Code", kind: "integration" },
+        toolSource: { key: "t3-code", name: "Cinderdeck", kind: "integration" },
       };
       const presentation = resolveWorkEntryToolPresentation(entry);
       expect(presentation, tool).not.toBeNull();
       expect(presentation?.displayName, tool).not.toContain(tool);
       const summary = summarizeToolGroup([entry]);
-      expect(summary.summary, tool).not.toMatch(/Used (?:1 tool|T3 Code integration)/);
+      expect(summary.summary, tool).not.toMatch(/Used (?:1 tool|Cinderdeck integration)/);
       expect(summary.hasFailure, tool).toBe(false);
       const failed = { ...entry, toolLifecycleStatus: "failed" as const };
       expect(resolveWorkEntryToolPresentation(failed)?.displayName, tool).toMatch(/^Failed to /);
@@ -308,12 +308,12 @@ describe("resolveWorkEntryToolPresentation", () => {
     ["t3_thread_send_attachments", "Sending attachments", "Sent attachments"],
     ["run_scheduled_task_now", "Running a scheduled task", "Requested a run of a scheduled task"],
   ])("labels %s through its lifecycle", (tool, running, completed) => {
-    expect(resolveWorkEntryToolPresentation({ label: `T3-code.${tool}` })?.displayName).toBe(
+    expect(resolveWorkEntryToolPresentation({ label: `Cinderdeck-code.${tool}` })?.displayName).toBe(
       running,
     );
     expect(
       resolveWorkEntryToolPresentation({
-        label: `T3-code.${tool}`,
+        label: `Cinderdeck-code.${tool}`,
         toolLifecycleStatus: "completed",
       })?.displayName,
     ).toBe(completed);
@@ -341,7 +341,7 @@ describe("resolveWorkEntryToolPresentation", () => {
     });
     const failed = {
       ...entry,
-      toolData: { toolName: "T3-code.t3_project_clone", rawOutput: { isError: true } },
+      toolData: { toolName: "Cinderdeck-code.t3_project_clone", rawOutput: { isError: true } },
     };
     expect(summarizeToolGroup([entry, failed])).toEqual({
       summary: "Cloned 1 repository",
@@ -349,7 +349,7 @@ describe("resolveWorkEntryToolPresentation", () => {
     });
   });
 
-  it("does not summarize a foreign structured identity as T3 work", () => {
+  it("does not summarize a foreign structured identity as Cinderdeck work", () => {
     const entry: WorkLogPresentationEntry = {
       id: "foreign",
       createdAt: "2026-09-19T00:00:00.000Z",
@@ -366,7 +366,7 @@ describe("resolveWorkEntryToolPresentation", () => {
       id: "clone",
       createdAt: "2026-09-19T00:00:00.000Z",
       tone: "tool",
-      label: "T3-code.t3_project_clone",
+      label: "Cinderdeck-code.t3_project_clone",
       toolLifecycleStatus: "inProgress",
       itemType: "dynamic_tool",
       toolData: { output: { isError: true } },
@@ -378,7 +378,7 @@ describe("resolveWorkEntryToolPresentation", () => {
     expect(workEntryIndicatesToolSuccess(entry)).toBe(false);
     const childFailure = {
       ...entry,
-      label: "T3-code.task_status",
+      label: "Cinderdeck-code.task_status",
       toolLifecycleStatus: "completed" as const,
       toolData: { output: { taskId: "child", status: "failed", summary: "command not found" } },
     };
@@ -389,7 +389,7 @@ describe("resolveWorkEntryToolPresentation", () => {
     "mcp__t3-code__preview_click",
     "mcp__t3_code__preview_click",
     "mcp__t3code__preview_click",
-    "T3-code.preview_click",
+    "Cinderdeck-code.preview_click",
     "t3-code · preview_click completed",
     "t3_code/preview_click",
     "preview_click",
@@ -433,14 +433,14 @@ describe("resolveWorkEntryToolPresentation", () => {
   ] as const)("describes the tool's own %s state", (toolLifecycleStatus, displayName) => {
     expect(
       resolveWorkEntryToolPresentation({
-        label: "T3-code.preview_click",
+        label: "Cinderdeck-code.preview_click",
         toolLifecycleStatus: toolLifecycleStatus as WorkLogToolLifecycleStatus,
       }),
     ).toEqual({ displayName, icon: "browser" });
   });
 
   it("uses the summary's state only when the provider omitted a lifecycle status", () => {
-    const entry = { label: "T3-code.preview_click" };
+    const entry = { label: "Cinderdeck-code.preview_click" };
     expect(resolveWorkEntryToolPresentation(entry, "inProgress")?.displayName).toBe(
       "Clicking in the preview browser",
     );
@@ -474,8 +474,8 @@ describe("resolveWorkEntryToolPresentation", () => {
       "Stopping recording the preview browser",
       "Stopped recording the preview browser",
     ],
-    ["t3_thread_read", "Reading a T3 thread", "Read a T3 thread"],
-    ["t3_thread_send", "Sending to a T3 thread", "Sent to a T3 thread"],
+    ["t3_thread_read", "Reading a Cinderdeck thread", "Read a Cinderdeck thread"],
+    ["t3_thread_send", "Sending to a Cinderdeck thread", "Sent to a Cinderdeck thread"],
     [
       "t3_worktree_handoff",
       "Handing off thread to a git worktree",
@@ -492,7 +492,7 @@ describe("resolveWorkEntryToolPresentation", () => {
     ).toBe(completed);
   });
 
-  it("keeps T3 branding for non-browser tools and falls back to the original tool label", () => {
+  it("keeps Cinderdeck branding for non-browser tools and falls back to the original tool label", () => {
     expect(
       resolveWorkEntryToolPresentation({
         label: "mcp__t3_code__task_status",
@@ -822,8 +822,8 @@ describe("pull request tool presentation", () => {
   it.each([
     "mcp__t3-code__link_pull_request",
     "mcp__t3_code__link_pull_request",
-    "T3-code · link_pull_request",
-    "t3code/link_pull_request",
+    "Cinderdeck-code · link_pull_request",
+    "cinderdeck/link_pull_request",
     "link_pull_request",
   ])("recognizes the native linking tool: %s", (label) => {
     const entry: WorkLogPresentationEntry = {
@@ -878,20 +878,20 @@ describe("pull request tool presentation", () => {
     const link: WorkLogPresentationEntry = {
       id: "link",
       createdAt: "2026-09-10T00:00:00.000Z",
-      label: "T3-code · link_pull_request",
+      label: "Cinderdeck-code · link_pull_request",
       tone: "tool",
       itemType: "dynamic_tool",
       toolLifecycleStatus: "completed",
-      toolSource: { key: "t3-code", name: "T3 Code", kind: "integration" },
+      toolSource: { key: "t3-code", name: "Cinderdeck", kind: "integration" },
     };
     const list: WorkLogPresentationEntry = {
       ...link,
-      label: "T3-code · list_thread_pull_requests",
+      label: "Cinderdeck-code · list_thread_pull_requests",
     };
     expect(summarizeToolGroup([link, link, list]).summary).toBe(
       "Linked 2 pull requests and checked linked pull requests",
     );
-    expect(summarizeToolGroup([{ ...link, label: "T3-code · unlink_pull_request" }]).summary).toBe(
+    expect(summarizeToolGroup([{ ...link, label: "Cinderdeck-code · unlink_pull_request" }]).summary).toBe(
       "Unlinked 1 pull request",
     );
     expect(toolGroupSummaryKind([link, link, list])).toBe("pull-request");
@@ -949,7 +949,7 @@ describe("device group summaries", () => {
     expect(workEntryViewedImagePath(entry)).toBe("/workspace/device.png");
   });
 
-  it("does not classify another server's tools as T3 device controls", () => {
+  it("does not classify another server's tools as Cinderdeck device controls", () => {
     expect(
       summarizeToolGroup([
         {

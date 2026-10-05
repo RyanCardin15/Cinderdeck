@@ -7,7 +7,7 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
-import * as C from "@t3tools/contracts/deckhand/externalDebugRpc";
+import * as C from "@cinderdeck/contracts/deckhand/externalDebugRpc";
 import {
   array,
   record,

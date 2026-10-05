@@ -1,9 +1,9 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { ThreadId, type EnvironmentId, type ContextMenuItem } from "@t3tools/contracts";
-import type { ManagedSessionView } from "@t3tools/contracts/deckhand/rpc";
-import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
+import { ThreadId, type EnvironmentId, type ContextMenuItem } from "@cinderdeck/contracts";
+import type { ManagedSessionView } from "@cinderdeck/contracts/deckhand/rpc";
+import { settlePromise, squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
+import { threadRuntimeCanArchive } from "@cinderdeck/client-runtime/state/models";
 import { useThreadActions } from "../hooks/useThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
 import { readLocalApi } from "../localApi";

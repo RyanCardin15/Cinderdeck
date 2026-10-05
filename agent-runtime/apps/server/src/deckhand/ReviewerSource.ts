@@ -1,4 +1,4 @@
-import * as Rpc from "@t3tools/contracts/deckhand/rpc";
+import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
 import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";

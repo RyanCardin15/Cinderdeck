@@ -45,7 +45,7 @@ describe("Codex MCP elicitation approvals", () => {
     });
   });
 
-  it("uses the injected Deckhand server name in app approvals while preserving native choices", () => {
+  it("uses the injected Cinderdeck server name in app approvals while preserving native choices", () => {
     const { _meta, ...bareRequest } = request;
     const approval = describeMcpElicitation({
       ...bareRequest,

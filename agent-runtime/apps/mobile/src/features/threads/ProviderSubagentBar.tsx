@@ -1,8 +1,8 @@
 import {
   formatProviderSubagentStatus,
   type ProviderSubagentStatus,
-} from "@t3tools/client-runtime/state/thread-execution";
-import { isOrchestrationV2WorkActive } from "@t3tools/contracts";
+} from "@cinderdeck/client-runtime/state/thread-execution";
+import { isOrchestrationV2WorkActive } from "@cinderdeck/contracts";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 

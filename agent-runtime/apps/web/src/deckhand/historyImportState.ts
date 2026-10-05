@@ -1,5 +1,5 @@
-import { HISTORY_IMPORT_METHODS } from "@t3tools/contracts/deckhand/historyImportRpc";
-import { createEnvironmentRpcCommand } from "@t3tools/client-runtime/state/runtime";
+import { HISTORY_IMPORT_METHODS } from "@cinderdeck/contracts/deckhand/historyImportRpc";
+import { createEnvironmentRpcCommand } from "@cinderdeck/client-runtime/state/runtime";
 import { connectionAtomRuntime } from "../connection/runtime";
 export const importHistory = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "deckhand:history-import",

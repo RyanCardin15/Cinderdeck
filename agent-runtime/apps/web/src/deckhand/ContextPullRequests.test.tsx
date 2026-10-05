@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, ThreadId } from "@cinderdeck/contracts";
 import type {
   ContextPullRequestsPage,
   IntegrationView,
   ContextPullRequest,
-} from "@t3tools/contracts/deckhand/rpc";
+} from "@cinderdeck/contracts/deckhand/rpc";
 import { RegistryContext } from "@effect/atom-react";
 import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
 import * as Cause from "effect/Cause";

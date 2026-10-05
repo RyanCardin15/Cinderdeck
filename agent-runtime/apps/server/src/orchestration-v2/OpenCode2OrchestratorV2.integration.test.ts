@@ -17,7 +17,7 @@ import {
   type ProviderReplayEntry,
   type RuntimeMode,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as FileSystem from "effect/FileSystem";
@@ -72,7 +72,7 @@ const event = (type: string, data: Record<string, unknown>): ProviderReplayEntry
 const labelled = (entry: ProviderReplayEntry, label: string): ProviderReplayEntry =>
   entry.type === "runtime_exit" ? entry : { ...entry, label };
 /**
- * T3's own rules after a mode's: every thread's T3 MCP server is denied, and
+ * Cinderdeck's own rules after a mode's: every thread's Cinderdeck MCP server is denied, and
  * then this thread's own is allowed again (last match wins).
  */
 const mcpRules = (name: string) => [
@@ -104,7 +104,7 @@ const agentInfo = (id: string, description: string, permissions: ReadonlyArray<u
   hidden: false,
   permissions,
 });
-/** `/api/agent` trimmed to the two agents a T3 session runs. */
+/** `/api/agent` trimmed to the two agents a Cinderdeck session runs. */
 const agentList = (directory: string) => ({
   location: { directory },
   data: [
@@ -163,7 +163,7 @@ const sessionInfo = (directory: string, permissions: ReadonlyArray<unknown>) => 
     permissions,
   },
 });
-/** T3's instructions entry, written before a thread's first prompt and whenever it changes. */
+/** Cinderdeck's instructions entry, written before a thread's first prompt and whenever it changes. */
 const instructionsWritten: ReadonlyArray<ProviderReplayEntry> = [
   out("session.instructions.entry.put", { sessionID: SESSION, key: "t3-code", value: "<any>" }),
   reply("session.instructions.entry.put", null),
@@ -430,7 +430,7 @@ describe("OpenCode 2 through the orchestrator", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("gives a session made with older rules T3's rules before its next prompt", () =>
+  it.effect("gives a session made with older rules Cinderdeck's rules before its next prompt", () =>
     Effect.gen(function* () {
       const name = "opencode2-resume-rules";
       const before = yield* checkpointWorkspace(`${name}-before`);
@@ -662,7 +662,7 @@ describe("OpenCode 2 through the orchestrator", () => {
         recorded.metadata?.["forkedNativeSessionId"],
       );
       // The fork keeps the first turn and drops the second: the model answers
-      // from the first alone, and T3 shows the inherited turn but not the other.
+      // from the first alone, and Cinderdeck shows the inherited turn but not the other.
       assert.deepEqual(
         forked.runs.map((run) => run.status),
         ["completed"],
@@ -761,7 +761,7 @@ describe("OpenCode 2 through the orchestrator", () => {
   /**
    * The recorded background run (`opencode2_background`): the parent's turn
    * ends while its subagent runs, then the subagent's report wakes the parent
-   * and T3 opens a continuation run for that follow-up. `reconnect` replaces
+   * and Cinderdeck opens a continuation run for that follow-up. `reconnect` replaces
    * the recording from `cut` on with a stream drop, a restarted stream and
    * what the server answers then.
    */

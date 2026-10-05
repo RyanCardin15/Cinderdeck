@@ -1,10 +1,10 @@
 import deckhandShellStyles from "../../deckhand/pullRequestsShell.module.css";
-import { parseChangeRequestUrl } from "@t3tools/shared/changeRequestUrl";
+import { parseChangeRequestUrl } from "@cinderdeck/shared/changeRequestUrl";
 import { useAtomValue } from "@effect/atom-react";
 import { usePullRequestStack } from "~/state/usePullRequestStack";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
-import { scopedThreadKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { scopedThreadKey, scopeProjectRef } from "@cinderdeck/client-runtime/environment";
+import { squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
 import {
   type EnvironmentId,
   DEFAULT_SERVER_SETTINGS,
@@ -15,8 +15,8 @@ import {
   type PullRequestRef,
   resolveEnvironmentMachineKind,
   type ScopedThreadRef,
-} from "@t3tools/contracts";
-import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
+} from "@cinderdeck/contracts";
+import { resolveProjectSettings } from "@cinderdeck/shared/projectSettings";
 import {
   ArrowDownUpIcon,
   ArrowLeftIcon,

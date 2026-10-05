@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { EnvironmentId } from "@t3tools/contracts";
-import type { IntegrationView } from "@t3tools/contracts/deckhand/rpc";
-import type { Recording } from "@t3tools/contracts/deckhand/recordingsRpc";
+import { EnvironmentId } from "@cinderdeck/contracts";
+import type { IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
+import type { Recording } from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
 import { RegistryContext } from "@effect/atom-react";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";

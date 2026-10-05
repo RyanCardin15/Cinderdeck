@@ -6,9 +6,9 @@ import {
   ProviderSessionId,
   type RuntimeMode,
   ThreadId,
-} from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { resolveSelfInvocation } from "@t3tools/shared/nodeRuntime";
+} from "@cinderdeck/contracts";
+import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
+import { resolveSelfInvocation } from "@cinderdeck/shared/nodeRuntime";
 import * as EffectAcpErrors from "effect-acp/errors";
 import { xAiRateLimitedErrorCode } from "../../provider/acp/XAiAcpExtension.ts";
 import { assert, describe, it } from "@effect/vitest";
@@ -291,7 +291,7 @@ describe("Grok permission prompts", () => {
   } as unknown as GrokAdapterV2Options).permissionDisposition;
 
   // grok_auto_blocked_command replays Auto end to end. When an explicit policy
-  // launches Grok asking instead, T3's policy still answers its prompts.
+  // launches Grok asking instead, Cinderdeck's policy still answers its prompts.
   it("leaves Auto prompts to the user unless an explicit policy launched Grok asking", () => {
     assert.equal(
       disposition?.(runtimePolicy({ runtimeMode: "auto" }), permissionRequest("read")),

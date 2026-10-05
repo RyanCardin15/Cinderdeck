@@ -5,8 +5,8 @@ import {
   type ScopedThreadRef,
   type PullRequestDetailView,
   type ThreadPullRequestLink,
-} from "@t3tools/contracts";
-import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
+} from "@cinderdeck/contracts";
+import { DEFAULT_CLIENT_SETTINGS } from "@cinderdeck/contracts/settings";
 import { act, type ReactNode, type ReactElement, type ComponentProps } from "react";
 import { create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -408,7 +408,7 @@ describe.each([
   });
 });
 
-describe("Deckhand verification layout seam", () => {
+describe("Cinderdeck verification layout seam", () => {
   it("notifies the page of real tab changes and preserves summary/code access", async () => {
     const changed = vi.fn();
     await act(async () => {

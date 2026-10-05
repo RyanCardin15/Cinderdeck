@@ -1,4 +1,4 @@
-import type { EnvironmentId, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import type { EnvironmentId, ProviderInteractionMode, RuntimeMode } from "@cinderdeck/contracts";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 

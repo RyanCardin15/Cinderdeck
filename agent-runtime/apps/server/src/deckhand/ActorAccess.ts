@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - Environment-scoped owner identity has a bounded deterministic digest.
 import * as NodeCrypto from "node:crypto";
-import { AuthAdministrativeScopes, AuthEnvironmentScopes } from "@t3tools/contracts";
+import { AuthAdministrativeScopes, AuthEnvironmentScopes } from "@cinderdeck/contracts";
 import type { AuthenticatedSession } from "../auth/EnvironmentAuth.ts";
 import { ServerEnvironmentIdentity } from "../environment/ServerEnvironment.ts";
 import * as Context from "effect/Context";
@@ -46,7 +46,7 @@ export class ActorAccess extends Context.Service<
     ) => Result<string>;
     readonly aliases: (session: AuthenticatedSession) => Result<readonly string[]>;
   }
->()("t3/deckhand/ActorAccess") {}
+>()("@cinderdeck/server/deckhand/ActorAccess") {}
 
 const decodeScopes = Schema.decodeUnknownEffect(Schema.fromJsonString(AuthEnvironmentScopes));
 const isAccessError = Schema.is(ActorAccessError);

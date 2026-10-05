@@ -18,7 +18,7 @@ import type {
   UsageDay,
   UsageResolution,
   UsageTokenTotals,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 
 import { addTotals, EMPTY_TOTALS, type UsageRecord } from "./usageTranscripts.ts";
 import { cacheSavingsUsd, priceUsage, type RateTable } from "./usagePricing.ts";

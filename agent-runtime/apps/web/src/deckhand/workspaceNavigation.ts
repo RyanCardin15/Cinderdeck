@@ -1,5 +1,5 @@
-import type { EnvironmentId } from "@t3tools/contracts";
-import type { IntegrationView, ThreadContextView } from "@t3tools/contracts/deckhand/rpc";
+import type { EnvironmentId } from "@cinderdeck/contracts";
+import type { IntegrationView, ThreadContextView } from "@cinderdeck/contracts/deckhand/rpc";
 export type WorkspaceSearch = {
   workspace?: string;
   context?: string;

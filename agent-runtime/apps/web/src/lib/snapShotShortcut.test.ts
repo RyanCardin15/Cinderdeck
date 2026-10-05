@@ -103,7 +103,7 @@ describe("window capture shortcut labels", () => {
 });
 
 describe("window capture keybinding conflicts", () => {
-  it("finds an effective Deckhand keybinding on the current platform", () => {
+  it("finds an effective Cinderdeck keybinding on the current platform", () => {
     expect(
       snapShotKeybindingConflict(
         {

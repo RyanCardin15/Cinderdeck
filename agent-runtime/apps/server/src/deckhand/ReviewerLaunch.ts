@@ -2,13 +2,13 @@ import * as ProviderSessionManager from "../orchestration-v2/ProviderSessionMana
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 // @effect-diagnostics nodeBuiltinImport:off - deterministic private lane names preserve retry identity.
 import * as NodeCrypto from "node:crypto";
-import * as Queue from "@t3tools/contracts/deckhand/reviewerRpc";
+import * as Queue from "@cinderdeck/contracts/deckhand/reviewerRpc";
 import * as Scope from "effect/Scope";
 import * as DateTime from "effect/DateTime";
 import * as Migrations from "./Migrations.ts";
 import { makeKeyedSerialExecutor } from "../orchestration-v2/KeyedSerialExecutor.ts";
-import * as Rpc from "@t3tools/contracts/deckhand/rpc";
-import * as Contracts from "@t3tools/contracts/deckhand";
+import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
+import * as Contracts from "@cinderdeck/contracts/deckhand";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -48,7 +48,7 @@ export class ReviewerLaunch extends Context.Service<
       input: Rpc.ReviewerLaunchInput,
     ) => Effect.Effect<Rpc.ManagedCreateRecord, ManagedSessionLaunch.ManagedLaunchError>;
   }
->()("t3/deckhand/ReviewerLaunch") {}
+>()("@cinderdeck/server/deckhand/ReviewerLaunch") {}
 const isSourceError = Schema.is(ReviewerSourceError);
 const decodeSession = Schema.decodeUnknownEffect(Schema.fromJsonString(Contracts.SessionBinding));
 const encodeQueueInput = Schema.encodeEffect(Schema.fromJsonString(Queue.ReviewerLaunchInput));

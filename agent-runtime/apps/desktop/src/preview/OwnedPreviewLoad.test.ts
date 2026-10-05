@@ -1,7 +1,7 @@
 import * as NodeEvents from "node:events";
 import * as NodeCrypto from "node:crypto";
 import type { WebContents } from "electron";
-import type { OwnedPreviewTarget } from "@t3tools/contracts/deckhand/ownedPreviewRpc";
+import type { OwnedPreviewTarget } from "@cinderdeck/contracts/deckhand/ownedPreviewRpc";
 import { describe, expect, it } from "vite-plus/test";
 import { artifactURL, reloadOwnedPreview } from "./OwnedPreviewLoad.ts";
 const body = "<!doctype html><p>actual declared build</p>";

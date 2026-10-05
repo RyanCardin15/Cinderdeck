@@ -1,13 +1,13 @@
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { deriveThreadQueueWorkflowState } from "@t3tools/client-runtime/state/thread-workflows";
-import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
+import { scopeThreadRef } from "@cinderdeck/client-runtime/environment";
+import { deriveThreadQueueWorkflowState } from "@cinderdeck/client-runtime/state/thread-workflows";
+import { replaceComposerContextReferences } from "@cinderdeck/shared/composerContextReferences";
 import type {
   ChatAttachment as ContractChatAttachment,
   EnvironmentId,
   MessageId,
   RunId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   Clock3Icon,
   CornerUpRightIcon,

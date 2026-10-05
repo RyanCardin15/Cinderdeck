@@ -44,11 +44,11 @@ describe("resolveGrokAcpBaseModelId", () => {
 });
 
 describe("grokAcpSpawnArgs", () => {
-  it("inherits the Grok CLI config when no T3 runtime mode is set", () => {
+  it("inherits the Grok CLI config when no Cinderdeck runtime mode is set", () => {
     expect(grokAcpSpawnArgs()).toEqual(["agent", "stdio"]);
   });
 
-  it("forces Grok to ask when T3 is Supervised", () => {
+  it("forces Grok to ask when Cinderdeck is Supervised", () => {
     expect(grokAcpSpawnArgs("approval-required")).toEqual([
       "--permission-mode",
       "default",
@@ -73,7 +73,7 @@ describe("grokAcpSpawnArgs", () => {
 });
 
 describe("buildGrokAcpSpawnInput", () => {
-  it("passes the Deckhand referrer through Grok OAuth env", () => {
+  it("passes the Cinderdeck referrer through Grok OAuth env", () => {
     const spawn = buildGrokAcpSpawnInput({ binaryPath: "/usr/local/bin/grok" }, "/tmp/project", {
       XAI_API_KEY: "secret",
       GROK_OAUTH2_REFERRER: "other-client",

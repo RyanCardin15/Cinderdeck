@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ProviderSessionId, type ScopedThreadRef } from "@t3tools/contracts";
-import * as Rpc from "@t3tools/contracts/deckhand/rpc";
+import { ProviderSessionId, type ScopedThreadRef } from "@cinderdeck/contracts";
+import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
 import * as Schema from "effect/Schema";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";

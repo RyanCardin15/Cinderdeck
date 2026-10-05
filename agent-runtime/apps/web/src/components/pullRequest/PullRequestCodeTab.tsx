@@ -9,7 +9,7 @@ import type {
   PullRequestReviewPosition,
   PullRequestReviewThread,
   PullRequestThreadCommentsResult,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   ChevronDownIcon,
   ChevronRightIcon,

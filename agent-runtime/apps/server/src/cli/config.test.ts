@@ -15,10 +15,10 @@ import * as Schema from "effect/Schema";
 import {
   DesktopBackendBootstrap,
   type DesktopBackendBootstrap as DesktopBackendBootstrapValue,
-} from "@t3tools/contracts";
-import * as NetService from "@t3tools/shared/Net";
-import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
-import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
+} from "@cinderdeck/contracts";
+import * as NetService from "@cinderdeck/shared/Net";
+import { DEFAULT_SIGNAL_EXPORT } from "@cinderdeck/shared/observability";
+import * as OtelEnvironment from "@cinderdeck/shared/otelEnvironment";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { deriveServerPaths } from "../config.ts";
 import { resolveServerConfig } from "./config.ts";
@@ -1068,7 +1068,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
         );
 
         // DECKHAND_OTLP_TRACES_URL wins over the OTEL variable for the same
-        // signal, and keeps Deckhand's own headers since Deckhand still owns it.
+        // signal, and keeps Cinderdeck's own headers since Cinderdeck still owns it.
         expect(resolved.otlpTracesUrl).toBe("http://t3:4318/v1/traces");
         expect(resolved.otlpTracesExport.headers).toEqual({ "x-key": "secret" });
         // Metrics named no DECKHAND_OTLP_METRICS_URL, so the OTEL endpoint wins
@@ -1079,7 +1079,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
           protocol: "http/protobuf",
           headers: { "x-key": "otel" },
         });
-        // Logs named no T3 or OTEL endpoint and a blank bootstrap value, so
+        // Logs named no Cinderdeck or OTEL endpoint and a blank bootstrap value, so
         // Settings answers, and logs keep the shared headers since no OTEL
         // endpoint claimed them.
         expect(resolved.otlpLogsUrl).toBe("http://settings:4318/v1/logs");
@@ -1136,7 +1136,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
         // DECKHAND_OTLP_TRACES_URL still wins outright.
         expect(resolved.otlpTracesUrl).toBe("http://t3:4318/v1/traces");
         // The OTEL endpoint claimed metrics and logs, so neither the bootstrap
-        // envelope nor Settings receives them with Deckhand's headers.
+        // envelope nor Settings receives them with Cinderdeck's headers.
         expect(resolved.otlpMetricsUrl).toBeUndefined();
         expect(resolved.otlpLogsUrl).toBeUndefined();
       }),

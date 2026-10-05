@@ -3,7 +3,7 @@ import {
   ProviderInstanceId,
   type AcpRegistrySettings,
   type ServerSettings,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 
 const ACP_REGISTRY = ProviderDriverKind.make("acpRegistry");
 

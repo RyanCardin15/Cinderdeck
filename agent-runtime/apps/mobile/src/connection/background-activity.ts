@@ -1,11 +1,11 @@
-import { EnvironmentRegistry } from "@t3tools/client-runtime/connection";
-import { EnvironmentRpcSubscriptionObserver, request } from "@t3tools/client-runtime/rpc";
+import { EnvironmentRegistry } from "@cinderdeck/client-runtime/connection";
+import { EnvironmentRpcSubscriptionObserver, request } from "@cinderdeck/client-runtime/rpc";
 import {
   type BackgroundScope,
   type ClientActivityReportInput,
   type EnvironmentId,
   WS_METHODS,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";

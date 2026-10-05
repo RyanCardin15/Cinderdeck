@@ -2,7 +2,7 @@ import type {
   EnvironmentId,
   ResourceTelemetryHistoryInput,
   ResourceTelemetrySnapshot,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Cause from "effect/Cause";
 import { useCallback } from "react";
 

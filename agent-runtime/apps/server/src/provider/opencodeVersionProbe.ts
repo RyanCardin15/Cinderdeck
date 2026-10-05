@@ -1,5 +1,5 @@
 /** Detects whether an OpenCode instance runs 1.x or 2.x, so the driver can pick its runtime. */
-import { parseSemver } from "@t3tools/shared/semver";
+import { parseSemver } from "@cinderdeck/shared/semver";
 import * as Cache from "effect/Cache";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -86,7 +86,7 @@ const probeOpenCodeBinary = Effect.fn("probeOpenCodeBinary")(function* (
   if (result) return result;
   return yield* new OpenCodeRuntime.OpenCodeRuntimeError({
     operation: "probeOpenCodeBinary",
-    detail: `Unable to determine OpenCode version from \`opencode --version\` output. Deckhand requires OpenCode v${OpenCodeRuntime.MINIMUM_OPENCODE_VERSION} or newer.`,
+    detail: `Unable to determine OpenCode version from \`opencode --version\` output. Cinderdeck requires OpenCode v${OpenCodeRuntime.MINIMUM_OPENCODE_VERSION} or newer.`,
   });
 });
 
@@ -158,7 +158,7 @@ const probeOpenCodeServer = Effect.fn("probeOpenCodeServer")(function* (
   }
   return yield* new OpenCodeRuntime.OpenCodeRuntimeError({
     operation: "probeOpenCodeServer",
-    detail: `The server did not identify itself as OpenCode. Deckhand requires OpenCode v${OpenCodeRuntime.MINIMUM_OPENCODE_VERSION} or newer.`,
+    detail: `The server did not identify itself as OpenCode. Cinderdeck requires OpenCode v${OpenCodeRuntime.MINIMUM_OPENCODE_VERSION} or newer.`,
   });
 });
 

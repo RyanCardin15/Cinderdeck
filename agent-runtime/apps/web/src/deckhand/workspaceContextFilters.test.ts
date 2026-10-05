@@ -1,11 +1,11 @@
 import { expect, it } from "vite-plus/test";
 import * as Schema from "effect/Schema";
-import { SessionBinding } from "@t3tools/contracts/deckhand";
+import { SessionBinding } from "@cinderdeck/contracts/deckhand";
 import type {
   IntegrationView,
   ManagedContextView,
   ManagedSessionView,
-} from "@t3tools/contracts/deckhand/rpc";
+} from "@cinderdeck/contracts/deckhand/rpc";
 import {
   defaultWorkspaceFilters,
   selectWorkspaceContexts,

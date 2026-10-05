@@ -1,7 +1,7 @@
 import * as NodeOS from "node:os";
-import type { CursorSettings, ServerProviderUsageWindow } from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { CURSOR_USAGE_WINDOWS } from "@t3tools/shared/usageLimits";
+import type { CursorSettings, ServerProviderUsageWindow } from "@cinderdeck/contracts";
+import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
+import { CURSOR_USAGE_WINDOWS } from "@cinderdeck/shared/usageLimits";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -93,7 +93,7 @@ export const readCursorUsageLimits = Effect.fn("readCursorUsageLimits")(function
         return makeUnavailableUsageLimits({
           checkedAt,
           reason: "unsupported",
-          message: "Enable Cursor account usage in Deckhand to read its Keychain login.",
+          message: "Enable Cursor account usage in Cinderdeck to read its Keychain login.",
         });
       }
       if (endpoint !== DEFAULT_CURSOR_API_ENDPOINT) {

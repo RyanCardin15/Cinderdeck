@@ -1,6 +1,6 @@
-import { type ThreadId, type OrchestrationV2ThreadShell } from "@t3tools/contracts";
-import * as Contracts from "@t3tools/contracts/deckhand";
-import * as Rpc from "@t3tools/contracts/deckhand/rpc";
+import { type ThreadId, type OrchestrationV2ThreadShell } from "@cinderdeck/contracts";
+import * as Contracts from "@cinderdeck/contracts/deckhand";
+import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -62,7 +62,7 @@ export class ManagedSessions extends Context.Service<
       input: Rpc.ManagedSessionsInput,
     ) => Stream.Stream<ReadonlyArray<Rpc.ManagedSessionView>, ManagedSessionsError>;
   }
->()("t3/deckhand/ManagedSessions") {}
+>()("@cinderdeck/server/deckhand/ManagedSessions") {}
 
 const isManagedSessionsError = Schema.is(ManagedSessionsError);
 const isSessionsInput = Schema.is(Rpc.ManagedSessionsInput);

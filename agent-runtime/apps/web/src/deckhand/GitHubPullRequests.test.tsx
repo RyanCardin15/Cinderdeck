@@ -7,7 +7,7 @@ import type {
   GitHubWorkspaceInput,
   GitHubWorkspacePreferences,
   GitHubWorkspaceResult,
-} from "@t3tools/contracts/deckhand/gitHubWorkspace";
+} from "@cinderdeck/contracts/deckhand/gitHubWorkspace";
 const boundary = vi.hoisted(() => ({
   command: vi.fn(),
   phase: "connected" as "connected" | "connecting",

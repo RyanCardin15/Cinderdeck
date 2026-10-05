@@ -8,7 +8,7 @@
 // @effect-diagnostics nodeBuiltinImport:off
 // @effect-diagnostics preferSchemaOverJson:off
 // Native CDP boundary: transient bounded state, deadlines, and scoped resource cleanup.
-import * as C from "@t3tools/contracts/deckhand/externalDebugRpc";
+import * as C from "@cinderdeck/contracts/deckhand/externalDebugRpc";
 
 export const record = (value: unknown): Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)

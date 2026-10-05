@@ -1,7 +1,7 @@
-import { type ServerProviderSkill, type ServerProviderSlashCommand } from "@t3tools/contracts";
+import { type ServerProviderSkill, type ServerProviderSlashCommand } from "@cinderdeck/contracts";
 import * as Predicate from "effect/Predicate";
 
-// Pi RPC get_commands omits TUI builtins. Advertise /compact so T3 can map it to RPC compact.
+// Pi RPC get_commands omits TUI builtins. Advertise /compact so Cinderdeck can map it to RPC compact.
 export const PI_COMPACT_SLASH_COMMAND: ServerProviderSlashCommand = {
   name: "compact",
   description: "Summarize the conversation and reduce context usage",
@@ -42,7 +42,7 @@ function normalizePiSkillScope(scope: string | undefined): string | undefined {
   return scope;
 }
 
-/** Maps Pi's `get_commands` payload to T3's shared command and skill surfaces. */
+/** Maps Pi's `get_commands` payload to Cinderdeck's shared command and skill surfaces. */
 export function parsePiDiscoveredCommands(data: unknown): PiDiscoveredCommands {
   const commands = recordField(data, "commands");
   if (!Array.isArray(commands)) return { slashCommands: [], skills: [] };
@@ -92,7 +92,7 @@ export function parsePiDiscoveredCommands(data: unknown): PiDiscoveredCommands {
 }
 
 /**
- * Pi expands skills only through leading `/skill:name` commands. T3 stores
+ * Pi expands skills only through leading `/skill:name` commands. Cinderdeck stores
  * skill chips as `$name`, so hoist every known `$skill` to that native
  * command position while preserving the rest of the user's prompt.
  */

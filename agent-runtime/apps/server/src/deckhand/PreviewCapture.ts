@@ -1,4 +1,4 @@
-import * as C from "@t3tools/contracts/deckhand/recordingsRpc";
+import * as C from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -30,7 +30,7 @@ export class PreviewCapture extends Context.Service<
       input: C.PreviewImportControl,
     ) => Effect.Effect<C.PreviewImportReceipt, C.RecordingError>;
   }
->()("t3/deckhand/PreviewCapture") {}
+>()("@cinderdeck/server/deckhand/PreviewCapture") {}
 const isError = Schema.is(C.RecordingError);
 export const layer = Layer.effect(
   PreviewCapture,

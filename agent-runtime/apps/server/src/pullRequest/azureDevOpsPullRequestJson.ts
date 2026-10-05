@@ -8,9 +8,9 @@ import type {
   PullRequestMergeMethod,
   PullRequestMergeability,
   PullRequestState,
-} from "@t3tools/contracts";
-import { TrimmedNonEmptyString } from "@t3tools/contracts";
-import { decodeJsonResult } from "@t3tools/shared/schemaJson";
+} from "@cinderdeck/contracts";
+import { TrimmedNonEmptyString } from "@cinderdeck/contracts";
+import { decodeJsonResult } from "@cinderdeck/shared/schemaJson";
 
 import { azureDevOpsPullRequestWebUrl } from "../sourceControl/azureDevOpsPullRequests.ts";
 

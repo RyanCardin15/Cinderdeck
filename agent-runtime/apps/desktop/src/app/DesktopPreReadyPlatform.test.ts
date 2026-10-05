@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -93,13 +93,13 @@ describe("DesktopPreReadyPlatform", () => {
     let desktopEntry = previousEntry;
     let iconInstalled = false;
     copyFileSyncMock.mockImplementation((_source: string, destination: string) => {
-      iconInstalled = destination === "/xdg/icons/com.cardinlabs.Deckhand.desktop.png";
+      iconInstalled = destination === "/xdg/icons/com.cardinlabs.Cinderdeck.desktop.png";
     });
     setDesktopNameMock.mockImplementation((name: string) => {
       desktopName = name;
     });
     writeFileSyncMock.mockImplementation((path: string, contents: string) => {
-      if (path === "/xdg/applications/com.cardinlabs.Deckhand.desktop") desktopEntry = contents;
+      if (path === "/xdg/applications/com.cardinlabs.Cinderdeck.desktop") desktopEntry = contents;
     });
 
     return Effect.scoped(
@@ -115,13 +115,13 @@ describe("DesktopPreReadyPlatform", () => {
           ),
         );
         const identity = yield* Effect.promise(() => portalIdentity);
-        assert.equal(identity.desktopName, "com.cardinlabs.Deckhand.desktop");
+        assert.equal(identity.desktopName, "com.cardinlabs.Cinderdeck.desktop");
         assert.include(identity.desktopEntry ?? "", 'Exec="/Applications/current.AppImage" %U');
-        assert.include(identity.desktopEntry ?? "", "Name=Deckhand (Alpha)");
+        assert.include(identity.desktopEntry ?? "", "Name=Cinderdeck (Alpha)");
         assert.include(identity.desktopEntry ?? "", "MimeType=x-scheme-handler/deckhand;");
         assert.include(
           identity.desktopEntry ?? "",
-          "Icon=/xdg/icons/com.cardinlabs.Deckhand.desktop.png",
+          "Icon=/xdg/icons/com.cardinlabs.Cinderdeck.desktop.png",
         );
         assert.isTrue(identity.iconInstalled);
       }),
@@ -159,7 +159,7 @@ describe("DesktopPreReadyPlatform", () => {
     () =>
       Effect.gen(function* () {
         class ClerkShaped extends Context.Service<ClerkShaped, { readonly ready: true }>()(
-          "@t3tools/desktop/app/DesktopPreReadyPlatform.test/ClerkShaped",
+          "@cinderdeck/desktop/app/DesktopPreReadyPlatform.test/ClerkShaped",
         ) {}
 
         const events: Array<string> = [];

@@ -27,3 +27,10 @@ Cinderdeck/Config/Secrets.xcconfig
 # Generated app packages, local test evidence, and browser automation state
 /output/
 /.playwright-mcp/
+
+# Python tooling caches
+__pycache__/
+*.py[cod]
+
+# Local pnpm content store
+.pnpm-store/

@@ -11,7 +11,7 @@ import {
   ProviderSessionId,
   ThreadId,
   type ProviderReplayTranscript,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -112,7 +112,7 @@ const operationOf = (
     if (method === "DELETE" && rest === "/revert") return { type: "session.revert.clear", input };
     const inbox = /^\/inbox\/([^/]+)$/.exec(rest);
     if (method === "DELETE" && inbox !== null) {
-      // T3's steer ids carry `:`, which the path encodes.
+      // Cinderdeck's steer ids carry `:`, which the path encodes.
       const inboxID = decodeURIComponent(inbox[1] ?? "");
       return { type: "session.inbox.cancel", input: { ...input, inboxID } };
     }
@@ -312,7 +312,7 @@ export const openCode2ReplayRuntime = (
         instanceId: ProviderInstanceId.make("opencode"),
         model: "opencode/big-pickle",
       },
-      // Opened where the adapter tests' threads run, as T3 opens a session for its first thread.
+      // Opened where the adapter tests' threads run, as Cinderdeck opens a session for its first thread.
       runtimePolicy: {
         runtimeMode: "full-access",
         interactionMode: "default",

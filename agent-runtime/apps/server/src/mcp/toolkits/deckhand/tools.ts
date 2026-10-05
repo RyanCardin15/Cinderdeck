@@ -1,18 +1,18 @@
-import * as Comparison from "@t3tools/contracts/deckhand/verificationRpc";
+import * as Comparison from "@cinderdeck/contracts/deckhand/verificationRpc";
 import * as Verification from "../../../deckhand/Verification.ts";
-import { OrchestratorMcpFailure } from "@t3tools/contracts";
-import * as R from "@t3tools/contracts/deckhand/recordingsRpc";
-import * as V from "@t3tools/contracts/deckhand/verificationAttemptsRpc";
+import { OrchestratorMcpFailure } from "@cinderdeck/contracts";
+import * as R from "@cinderdeck/contracts/deckhand/recordingsRpc";
+import * as V from "@cinderdeck/contracts/deckhand/verificationAttemptsRpc";
 import * as Attempts from "../../../deckhand/VerificationAttempts.ts";
-import * as U from "@t3tools/contracts/deckhand/runsRpc";
-import * as X from "@t3tools/contracts/deckhand/externalSessionsRpc";
+import * as U from "@cinderdeck/contracts/deckhand/runsRpc";
+import * as X from "@cinderdeck/contracts/deckhand/externalSessionsRpc";
 import * as External from "../../../deckhand/ExternalSessions.ts";
-import * as I from "@t3tools/contracts/deckhand/integration";
+import * as I from "@cinderdeck/contracts/deckhand/integration";
 import {
   ThreadContextView,
   ContextPullRequestsInput,
   ContextPullRequestsPage,
-} from "@t3tools/contracts/deckhand/rpc";
+} from "@cinderdeck/contracts/deckhand/rpc";
 import * as ManagedSessions from "../../../deckhand/ManagedSessions.ts";
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/unstable/ai";
@@ -72,7 +72,7 @@ export const DeckhandToolkit = Toolkit.make(
     ...base,
     dependencies: [...base.dependencies, External.ExternalSessions],
     description:
-      "Register a reported external session in this calling thread's exact feature/checkout/repository scope. Requires active provider ownership, immutable provider/session identity, and durable operationKey. Visibility only: never grants Stop, transcript, resume, approvals, or a writer reservation. Heartbeat every60seconds; lease 120 seconds.",
+      "Register a reported external session in this calling thread's exact feature/checkout/repository scope. Requires active provider ownership, immutable provider/session identity, and durable operationKey. Visibility only: never grants Stop, transcript, resume, approvals. Heartbeat every60seconds; lease 120 seconds.",
     parameters: Schema.Struct({
       operationKey: X.ExternalSessionRegister.fields.operationKey,
       providerName: X.ExternalSessionRegister.fields.providerName,
@@ -119,7 +119,7 @@ export const DeckhandToolkit = Toolkit.make(
     ...base,
     dependencies: [...base.dependencies, External.ExternalSessions],
     description:
-      "List up to 50 reported external sessions for this exact calling lane. Reported capabilities and execution are registrant claims, not provider-authenticated provenance. A stale lease means last seen, never finished.",
+      "List up to 50 reported external sessions for this exact calling lane. Reported capabilities and execution are registrant reports, not provider-authenticated provenance. A stale lease means last seen, never finished.",
     parameters: Schema.Struct({
       limit: X.ExternalSessionList.fields.limit,
       includeArchived: X.ExternalSessionList.fields.includeArchived,
@@ -258,7 +258,7 @@ export const DeckhandToolkit = Toolkit.make(
     ...base,
     dependencies: [...base.dependencies, Attempts.VerificationAttempts],
     description:
-      "Explicitly persist and start a pinned declared build using the original operationKey and preview. Only the caller's exact bound feature/checkout is accepted. Active provider writer ownership may correctly refuse the native reservation; no writer token is borrowed. Inspect receipt.phase/detail/reservationState honestly. Never replace an uncertain key. No hosting writes.",
+      "Explicitly persist and start a pinned declared build using the original operationKey and preview. Only the caller's exact bound feature/checkout is accepted. The checkout stays available to other agents. Inspect receipt.phase/detail honestly. Never replace an uncertain key. No hosting writes.",
     parameters: V.AttemptStart,
     success: V.VerificationAttempt,
   })

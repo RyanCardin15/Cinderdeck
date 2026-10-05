@@ -1,6 +1,6 @@
-import { scopedThreadKey } from "@t3tools/client-runtime/environment";
-import type { ScopedThreadRef } from "@t3tools/contracts";
-import type { DebugSession } from "@t3tools/contracts/deckhand/externalDebugRpc";
+import { scopedThreadKey } from "@cinderdeck/client-runtime/environment";
+import type { ScopedThreadRef } from "@cinderdeck/contracts";
+import type { DebugSession } from "@cinderdeck/contracts/deckhand/externalDebugRpc";
 import { create } from "zustand";
 import { useCallback } from "react";
 import { useAtomCommand } from "../state/use-atom-command";

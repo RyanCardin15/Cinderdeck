@@ -1,8 +1,8 @@
 // @effect-diagnostics nodeBuiltinImport:off - Opaque expiring media grants and native binary chunks.
 import * as NodeCrypto from "node:crypto";
-import * as C from "@t3tools/contracts/deckhand/recordingsRpc";
+import * as C from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import * as Context from "effect/Context";
-import { AuthSessionId, AuthOrchestrationReadScope } from "@t3tools/contracts";
+import { AuthSessionId, AuthOrchestrationReadScope } from "@cinderdeck/contracts";
 import * as AuthSessions from "../persistence/AuthSessions.ts";
 import * as Option from "effect/Option";
 import * as DateTime from "effect/DateTime";
@@ -107,7 +107,7 @@ export class Recordings extends Context.Service<
       length: number,
     ) => Effect.Effect<Uint8Array, C.RecordingError>;
   }
->()("t3/deckhand/Recordings") {}
+>()("@cinderdeck/server/deckhand/Recordings") {}
 const ThumbnailMetadata = Schema.Struct({
   ...Chunk.fields,
   thumbnailID: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),

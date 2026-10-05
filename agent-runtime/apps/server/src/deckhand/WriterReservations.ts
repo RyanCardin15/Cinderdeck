@@ -49,7 +49,7 @@ export class WriterReservations extends Context.Service<
     readonly changes: Stream.Stream<ReadonlyArray<WriterRequest>, WriterReservationError>;
     readonly uncertain: (ownerId: string) => Effect.Effect<void, WriterReservationError>;
   }
->()("t3/deckhand/WriterReservations") {}
+>()("@cinderdeck/server/deckhand/WriterReservations") {}
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;

@@ -1,12 +1,12 @@
 import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@cinderdeck/contracts";
 import type {
   AttentionItem,
   AttentionListInput,
   AttentionPage,
-} from "@t3tools/contracts/deckhand/attentionRpc";
+} from "@cinderdeck/contracts/deckhand/attentionRpc";
 import {
   ArrowRightIcon,
   InboxIcon,

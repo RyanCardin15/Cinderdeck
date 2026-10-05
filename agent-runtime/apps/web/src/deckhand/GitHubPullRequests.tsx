@@ -2,12 +2,12 @@ import { PullRequestGlyph } from "../components/pullRequest/pullRequestIcons";
 import { randomUUID } from "../lib/utils";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@cinderdeck/contracts";
 import type {
   GitHubWorkspaceFilters,
   GitHubWorkspaceRepository,
   GitHubWorkspaceRequest,
-} from "@t3tools/contracts/deckhand/gitHubWorkspace";
+} from "@cinderdeck/contracts/deckhand/gitHubWorkspace";
 import {
   BookIcon,
   LockIcon,

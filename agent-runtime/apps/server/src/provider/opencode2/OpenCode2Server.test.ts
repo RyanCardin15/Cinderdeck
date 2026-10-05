@@ -4,7 +4,7 @@ import {
   HostProcessEnvironment,
   HostProcessExecutablePath,
   HostProcessPlatform,
-} from "@t3tools/shared/hostProcess";
+} from "@cinderdeck/shared/hostProcess";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
@@ -176,7 +176,7 @@ describe("OpenCode2Server passwords", () => {
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
-  it("hands the spawned server only the T3 password", () => {
+  it("hands the spawned server only the Cinderdeck password", () => {
     const password = Redacted.make("t3-generated");
     const environment = OpenCode2Server.serverEnvironment(
       { PATH: "/bin", OPENCODE_SERVER_PASSWORD: "ambient", OPENCODE_PASSWORD: "ambient" },
@@ -188,7 +188,7 @@ describe("OpenCode2Server passwords", () => {
 
 // Serves /api/info only with the password from OPENCODE_PASSWORD, like 2.x, and
 // prints the 2.x banner (plus the generated-password line 2.x prints when no
-// password is set, which T3 must never need).
+// password is set, which Cinderdeck must never need).
 const FAKE_SERVER = `import { createServer } from "node:http";
 const expected = "Basic " + Buffer.from("opencode:" + process.env.OPENCODE_PASSWORD).toString("base64");
 const server = createServer((request, response) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { BUILT_IN_THEMES } from "@t3tools/shared/themePalettes";
+import { BUILT_IN_THEMES } from "@cinderdeck/shared/themePalettes";
 
 import {
   applyThemeColorPreview,
@@ -397,7 +397,7 @@ describe("theme files", () => {
     });
   });
 
-  it("keeps the T3 Chat palette faithful and readable", () => {
+  it("keeps the Cinderdeck Chat palette faithful and readable", () => {
     expectThemeColors(T3_CHAT_THEME.colors, {
       canvas: "#fdf7fd",
       chrome: "#fdf7fd",
@@ -1004,7 +1004,7 @@ describe("stored theme preferences", () => {
     }
   });
 
-  it("resolves the legacy t3-chat-dark preference to dark T3 Chat", () => {
+  it("resolves the legacy t3-chat-dark preference to dark Cinderdeck Chat", () => {
     expect(getThemeDefinition("t3-chat-dark")).toBe(T3_CHAT_THEME);
     expect(getThemePreferenceMode("t3-chat-dark")).toBe("dark");
     expect(resolveThemeAppearance("t3-chat-dark", true, false)).toBe("dark");

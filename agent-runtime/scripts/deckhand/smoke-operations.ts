@@ -1,15 +1,19 @@
+// @effect-diagnostics globalFetchInEffect:off - Isolated wire smoke fixtures use native HTTP/timer APIs and JSON error reports.
+// @effect-diagnostics preferSchemaOverJson:off - Isolated wire smoke fixtures use native HTTP/timer APIs and JSON error reports.
 // @effect-diagnostics nodeBuiltinImport:off - This opt-in smoke test owns only its isolated fixture lanes.
 import * as NodeAssert from "node:assert/strict";
 import * as NodeCrypto from "node:crypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import * as Layer from "effect/Layer";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
-import type * as Contracts from "@t3tools/contracts/deckhand/integration";
+import type * as Contracts from "@cinderdeck/contracts/deckhand/integration";
 import * as CinderdeckClient from "../../apps/server/src/deckhand/CinderdeckClient.ts";
 import * as CheckoutIdentity from "../../apps/server/src/deckhand/CheckoutIdentity.ts";
 import * as ProcessRunner from "../../apps/server/src/processRunner.ts";
+const decodeStamp = Schema.decodeUnknownSync(Schema.Struct({ sourceHash: Schema.String, commit: Schema.String }));
 const socketPath = process.argv[2];
 if (!socketPath?.startsWith("/")) throw new Error("Pass an isolated Cinderdeck socket path.");
 const TestLayer = Layer.mergeAll(CinderdeckClient.layer, CheckoutIdentity.layer).pipe(
@@ -112,13 +116,14 @@ const result = await Effect.runPromise(
         const running = (yield* client.snapshot(connection, { workspaceID: id })).resources[0]
           ?.workspace;
         NodeAssert.ok(running?.services.every((service) => service.ready));
+        NodeAssert.ok(running);
         const web = running.services.find((service) => service.name === "web")!;
         const api = running.services.find((service) => service.name === "api")!;
         const responses = yield* Effect.promise(async () => {
           const first = await fetch(web.url + "/api/payment?retry=0");
           const retry = await fetch(web.url + "/api/payment?retry=1");
-          const frontendStamp = await fetch(web.url + "/stamp").then((response) => response.json());
-          const apiStamp = await fetch(api.url + "/stamp").then((response) => response.json());
+          const frontendStamp = await fetch(web.url + "/stamp").then((response) => response.json()).then(decodeStamp);
+          const apiStamp = await fetch(api.url + "/stamp").then((response) => response.json()).then(decodeStamp);
           NodeAssert.equal(first.status, 402);
           NodeAssert.equal(retry.status, 402, "The unrepaired scenario must fail consistently");
           return { first: first.status, retry: retry.status, frontendStamp, apiStamp };

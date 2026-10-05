@@ -1,4 +1,4 @@
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -16,7 +16,7 @@ type ProcessIdentity = typeof ProcessIdentity.Type;
 
 const OpenCodeServerEntry = Schema.Struct({
   version: Schema.Literal(1),
-  /** The spawned group. Its id is the pid T3 spawned, which also names the entry file. */
+  /** The spawned group. Its id is the pid Cinderdeck spawned, which also names the entry file. */
   pgid: Schema.Int,
   /**
    * A group member seen at spawn: the spawned process, or a process it left in
@@ -30,7 +30,7 @@ const OpenCodeServerEntry = Schema.Struct({
   port: Schema.Int,
   /** Entries copied along with a state directory are dropped, never acted on. */
   stateDir: Schema.String,
-  /** The T3 server that spawned it. Entries of a live owner are never touched. */
+  /** The Cinderdeck server that spawned it. Entries of a live owner are never touched. */
   owner: ProcessIdentity,
 });
 type OpenCodeServerEntry = typeof OpenCodeServerEntry.Type;
@@ -39,8 +39,8 @@ const decodeEntry = Schema.decodeUnknownOption(OpenCodeServerEntryJson);
 const encodeEntry = Schema.encodeEffect(OpenCodeServerEntryJson);
 
 /**
- * Local `opencode serve` processes run in their own process group so T3 can
- * stop the whole group, which also means they outlive a T3 server that is
+ * Local `opencode serve` processes run in their own process group so Cinderdeck can
+ * stop the whole group, which also means they outlive a Cinderdeck server that is
  * SIGKILLed or crashes. Each spawn is recorded under the state directory and
  * removed on a graceful stop; the next server start stops whatever a dead
  * server left behind.
@@ -56,7 +56,7 @@ export class OpenCodeServerLedger extends Context.Service<
       readonly args: ReadonlyArray<string>;
     }) => Effect.Effect<Effect.Effect<void>>;
   }
->()("t3/provider/OpenCodeServerLedger") {}
+>()("@cinderdeck/server/provider/OpenCodeServerLedger") {}
 
 const ENTRY_DIRECTORY = "opencode-servers";
 const ENTRY_FILE = /^\d+\.json$/;
@@ -108,7 +108,7 @@ const groupExists = (pgid: number) => {
 };
 
 /**
- * Builds a ledger for one state directory. `ownerPid` is the T3 server that
+ * Builds a ledger for one state directory. `ownerPid` is the Cinderdeck server that
  * owns the servers it tracks; it defaults to this process.
  */
 export const make = Effect.fn("OpenCodeServerLedger.make")(function* (input: {
@@ -276,7 +276,7 @@ export const make = Effect.fn("OpenCodeServerLedger.make")(function* (input: {
       ) {
         return;
       }
-      yield* Effect.logInfo("Stopping an OpenCode server left by a previous Deckhand server", {
+      yield* Effect.logInfo("Stopping an OpenCode server left by a previous Cinderdeck server", {
         pid: entry.pgid,
         port: entry.port,
       });
@@ -302,7 +302,7 @@ export const make = Effect.fn("OpenCodeServerLedger.make")(function* (input: {
       ),
     );
 
-  /** Stops recorded servers whose owning T3 server is gone and drops stale entries. */
+  /** Stops recorded servers whose owning Cinderdeck server is gone and drops stale entries. */
   const reapOrphans = Effect.gen(function* () {
     const names = yield* fs.readDirectory(directory).pipe(Effect.orElseSucceed(() => []));
     yield* Effect.forEach(

@@ -1,6 +1,6 @@
-import { EXTERNAL_SESSION_METHODS } from "@t3tools/contracts/deckhand/externalSessionsRpc";
-import type { EnvironmentId } from "@t3tools/contracts";
-import { createEnvironmentRpcQueryAtomFamily } from "@t3tools/client-runtime/state/runtime";
+import { EXTERNAL_SESSION_METHODS } from "@cinderdeck/contracts/deckhand/externalSessionsRpc";
+import type { EnvironmentId } from "@cinderdeck/contracts";
+import { createEnvironmentRpcQueryAtomFamily } from "@cinderdeck/client-runtime/state/runtime";
 import { useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/unstable/reactivity";

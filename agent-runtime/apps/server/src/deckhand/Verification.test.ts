@@ -3,10 +3,10 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
-import { PullRequestDetail, PullRequestRef } from "@t3tools/contracts";
-import * as C from "@t3tools/contracts/deckhand";
-import * as R from "@t3tools/contracts/deckhand/recordingsRpc";
+import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
+import { PullRequestDetail, PullRequestRef } from "@cinderdeck/contracts";
+import * as C from "@cinderdeck/contracts/deckhand";
+import * as R from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import * as V from "./Verification.ts";
 import * as Relationships from "./Relationships.ts";
 import * as Recordings from "./Recordings.ts";
@@ -114,7 +114,7 @@ const recording = Schema.decodeUnknownSync(R.Recording)({
   state: "ready",
   createdAt: "2026-10-03T00:00:00Z",
   duration: 10,
-  actor: "Deckhand",
+  actor: "Cinderdeck",
   capture: "Browser",
   primaryWorkspaceID: "lane",
   capturedWorkspaceIDs: ["lane"],

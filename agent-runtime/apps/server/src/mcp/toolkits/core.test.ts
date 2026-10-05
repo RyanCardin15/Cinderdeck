@@ -6,7 +6,7 @@ import {
   EnvironmentId,
   ProviderInstanceId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -35,7 +35,7 @@ import {
   resolveT3McpToolDefinition,
   resolveT3McpToolPresentation,
   resolveT3McpToolSummaryAction,
-} from "@t3tools/shared/t3McpToolPresentation";
+} from "@cinderdeck/shared/t3McpToolPresentation";
 
 const decodeMcpAttachmentInput = Schema.decodeUnknownEffect(McpAttachmentInput);
 
@@ -69,7 +69,7 @@ it("publishes unique tool names with reference-free object-root inputs", () => {
         definition?.labels.every((label) => label.trim().length > 0),
         tool.name,
       ).toBe(true);
-      for (const name of [tool.name, `mcp__t3-code__${tool.name}`, `T3-code.${tool.name}`]) {
+      for (const name of [tool.name, `mcp__t3-code__${tool.name}`, `Cinderdeck-code.${tool.name}`]) {
         expect(resolveT3McpToolPresentation(name)?.logo, name).toBe("t3-code");
         expect(resolveT3McpToolSummaryAction(name), name).not.toBeNull();
       }

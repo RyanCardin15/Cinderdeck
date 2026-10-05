@@ -1,5 +1,5 @@
-import { ATTENTION_METHODS } from "@t3tools/contracts/deckhand/attentionRpc";
-import { createEnvironmentRpcCommand } from "@t3tools/client-runtime/state/runtime";
+import { ATTENTION_METHODS } from "@cinderdeck/contracts/deckhand/attentionRpc";
+import { createEnvironmentRpcCommand } from "@cinderdeck/client-runtime/state/runtime";
 import { connectionAtomRuntime } from "../connection/runtime";
 export const attentionList = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "deckhand:attention-list",

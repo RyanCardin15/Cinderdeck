@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AppWindowIcon, MaximizeIcon, MinimizeIcon } from "lucide-react";
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
 import type {
   DebugCommand,
   DebugSession,
   DebugSnapshot,
-} from "@t3tools/contracts/deckhand/externalDebugRpc";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+} from "@cinderdeck/contracts/deckhand/externalDebugRpc";
+import { squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
 import { useAtomCommand } from "../state/use-atom-command";
 import { readDebugSession, runDebugCommand } from "./externalDebugState";
 import styles from "./macWindowPanel.module.css";

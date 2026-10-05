@@ -4,7 +4,7 @@ import * as NodeCrypto from "node:crypto";
 import type {
   OwnedPreviewBinding,
   OwnedPreviewTarget,
-} from "@t3tools/contracts/deckhand/ownedPreviewRpc";
+} from "@cinderdeck/contracts/deckhand/ownedPreviewRpc";
 import type { WebContents } from "electron";
 
 export const artifactURL = (binding: OwnedPreviewBinding): string => {

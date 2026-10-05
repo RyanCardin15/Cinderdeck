@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import type { EnvironmentId } from "@t3tools/contracts";
-import type { IntegrationView, ManagedContextView } from "@t3tools/contracts/deckhand/rpc";
+import type { EnvironmentId } from "@cinderdeck/contracts";
+import type { IntegrationView, ManagedContextView } from "@cinderdeck/contracts/deckhand/rpc";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { agentExecutionLabel, agentProviderLabel } from "./agentPresentation";
 import styles from "./workspaceLaneMap.module.css";

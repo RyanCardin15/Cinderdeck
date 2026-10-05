@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, expect, it } from "vite-plus/test";
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId } from "@cinderdeck/contracts";
 import { resolveChatModes, useChatDefaultsStore } from "./chatDefaults";
 const machine = EnvironmentId.make("machine");
 beforeEach(() => {

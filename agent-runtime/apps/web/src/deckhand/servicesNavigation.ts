@@ -1,5 +1,5 @@
-import type { EnvironmentId } from "@t3tools/contracts";
-import type { IntegrationView } from "@t3tools/contracts/deckhand/rpc";
+import type { EnvironmentId } from "@cinderdeck/contracts";
+import type { IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
 import { validateWorkspaceSearch, type WorkspaceSearch } from "./workspaceNavigation";
 
 export function servicesWorkspaceSearch(

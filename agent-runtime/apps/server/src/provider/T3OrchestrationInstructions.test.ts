@@ -7,10 +7,10 @@ import {
   t3OrchestrationSystemPrompt,
 } from "./T3OrchestrationInstructions.ts";
 
-describe("T3 orchestration provider instructions", () => {
+describe("Cinderdeck orchestration provider instructions", () => {
   it("distinguishes delegated subagents from ordinary top-level threads", () => {
     assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "Use `delegate_task`");
-    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "ordinary top-level T3 conversations");
+    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "ordinary top-level Cinderdeck conversations");
     assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "Never use them merely");
     assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "cross-provider");
     assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "call `delegate_task` again");
@@ -20,7 +20,7 @@ describe("T3 orchestration provider instructions", () => {
     );
   });
 
-  it("names the injected Deckhand MCP server consistently for lazy direct calls without renaming wire tool IDs", () => {
+  it("names the injected Cinderdeck MCP server consistently for lazy direct calls without renaming wire tool IDs", () => {
     assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "The `deckhand` MCP server");
     assert.include(
       T3_CODE_ORCHESTRATION_INSTRUCTIONS,
@@ -55,7 +55,7 @@ describe("T3 orchestration provider instructions", () => {
     );
   });
 
-  it("only exposes the system prompt when the T3 MCP server is attached", () => {
+  it("only exposes the system prompt when the Cinderdeck MCP server is attached", () => {
     assert.equal(t3OrchestrationSystemPrompt(false), undefined);
     assert.equal(t3OrchestrationSystemPrompt(true), T3_CODE_ORCHESTRATION_INSTRUCTIONS);
   });
@@ -66,9 +66,9 @@ describe("T3 orchestration provider instructions", () => {
       state: { interactionMode: "default", hasT3Mcp: true },
     });
 
-    assert.include(injected, "Deckhand interaction mode: Default");
-    assert.include(injected, "Deckhand collaborative browser");
-    assert.include(injected, "Deckhand orchestration");
+    assert.include(injected, "Cinderdeck interaction mode: Default");
+    assert.include(injected, "Cinderdeck collaborative browser");
+    assert.include(injected, "Cinderdeck orchestration");
     assert.include(injected, "<user_request>\nInspect the repository.\n</user_request>");
   });
 
@@ -86,14 +86,14 @@ describe("T3 orchestration provider instructions", () => {
         state: { ...defaultState, interactionMode: "plan" },
         previousState: defaultState,
       }),
-      "Deckhand interaction mode: Plan",
+      "Cinderdeck interaction mode: Plan",
     );
     const withoutMcp = t3AcpPromptWithInstructions({
       prompt,
       state: { interactionMode: "default", hasT3Mcp: false },
     });
-    assert.include(withoutMcp, "Deckhand interaction mode: Default");
-    assert.notInclude(withoutMcp, "Deckhand collaborative browser");
-    assert.notInclude(withoutMcp, "Deckhand orchestration");
+    assert.include(withoutMcp, "Cinderdeck interaction mode: Default");
+    assert.notInclude(withoutMcp, "Cinderdeck collaborative browser");
+    assert.notInclude(withoutMcp, "Cinderdeck orchestration");
   });
 });

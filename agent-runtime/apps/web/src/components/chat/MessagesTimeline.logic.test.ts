@@ -1,4 +1,4 @@
-import { ThreadId, type WorktreeSetupSnapshot } from "@t3tools/contracts";
+import { ThreadId, type WorktreeSetupSnapshot } from "@cinderdeck/contracts";
 import {
   CheckpointRef,
   NodeId,
@@ -6,7 +6,7 @@ import {
   TurnItemId,
   RuntimeRequestId,
   type OrchestrationV2ProjectedTurnItem,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as DateTime from "effect/DateTime";
 import {
   deriveTimelineEntriesFromVisibleTurnItems,
@@ -17,7 +17,7 @@ import {
 import { makeStreamingTimelineFixture } from "../../test-fixtures";
 import type { TurnDiffSummary } from "../../types";
 import { describe, expect, it } from "vite-plus/test";
-import { MessageId, RunId } from "@t3tools/contracts";
+import { MessageId, RunId } from "@cinderdeck/contracts";
 import {
   computeStableMessagesTimelineRows,
   computeMessageDurationStart,
@@ -136,7 +136,7 @@ describe("work entry labels", () => {
   ] as const)("uses the same friendly %s label in both views", (toolLifecycleStatus, label) => {
     const browserEntry = {
       ...entry,
-      toolTitle: "T3-code.preview_click",
+      toolTitle: "Cinderdeck-code.preview_click",
       detail: '{"ok":true}',
       toolLifecycleStatus,
     };
@@ -147,7 +147,7 @@ describe("work entry labels", () => {
   });
 
   it("uses the active summary state for legacy tools without a lifecycle status", () => {
-    const browserEntry = { ...entry, toolTitle: "T3-code.preview_click" };
+    const browserEntry = { ...entry, toolTitle: "Cinderdeck-code.preview_click" };
     expect(liveWorkEntryLabel(browserEntry, undefined, true)).toBe(
       "Clicking in the preview browser",
     );
@@ -159,7 +159,7 @@ describe("work entry labels", () => {
   it("keeps the latest live activity in the present tense after the call completes", () => {
     const browserEntry = {
       ...entry,
-      toolTitle: "T3-code.preview_click",
+      toolTitle: "Cinderdeck-code.preview_click",
       toolLifecycleStatus: "completed" as const,
     };
     expect(liveWorkEntryLabel(browserEntry, undefined, true)).toBe(
@@ -735,7 +735,7 @@ describe("deriveMessagesTimelineRows", () => {
         id: TurnItemId.make("list"),
         status: "completed",
         title: "Custom provider title",
-        toolName: "T3-code.t3_project_list",
+        toolName: "Cinderdeck-code.t3_project_list",
         input: {},
         output: { projects: [] },
       },
@@ -3425,21 +3425,21 @@ describe("computeStableMessagesTimelineRows", () => {
 });
 
 describe("resolveTimelineToolPresentation", () => {
-  it("pretty prints Claude and Cursor T3 MCP tool names", () => {
+  it("pretty prints Claude and Cursor Cinderdeck MCP tool names", () => {
     expect(resolveTimelineToolPresentation("mcp__t3-code__t3_thread_read")).toEqual({
-      displayName: "Read a T3 thread",
+      displayName: "Read a Cinderdeck thread",
       logo: "t3-code",
     });
   });
 
-  it("pretty prints Codex T3 MCP tool names", () => {
+  it("pretty prints Codex Cinderdeck MCP tool names", () => {
     expect(resolveTimelineToolPresentation("t3-code.create_threads")).toEqual({
-      displayName: "Create T3 threads",
+      displayName: "Create Cinderdeck threads",
       logo: "t3-code",
     });
   });
 
-  it("pretty prints bare T3 MCP toolkit names", () => {
+  it("pretty prints bare Cinderdeck MCP toolkit names", () => {
     expect(resolveTimelineToolPresentation("list_scheduled_tasks")).toEqual({
       displayName: "List scheduled tasks",
       logo: "t3-code",

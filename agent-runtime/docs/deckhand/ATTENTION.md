@@ -1,6 +1,6 @@
 # Attention inbox
 
-Deckhand stores a bounded observation of each authoritative cause separately from each authenticated actor's preferences. Reading, marking unread, snoozing and waking an item do not answer an approval, finish an agent turn, rerun a task or declare a review complete. The inbox has no completion mutation.
+Cinderdeck stores a bounded observation of each authoritative cause separately from each authenticated actor's preferences. Reading, marking unread, snoozing and waking an item do not answer an approval, finish an agent turn, rerun a task or declare a review complete. The inbox has no completion mutation.
 
 `deckhand.attention.list` accepts up to 100 thread IDs and 16 exact native contexts as refresh hints. The server checks the corresponding projection, native run store, connection state and the actor's latest 100 reviewer queue records. It returns at most 100 causes per page, with actual totals and offsets. The UI rotates larger source inventories in batches every 15 seconds and refreshes when attention semantics change; ordinary transcript updates do not trigger another full source refresh.
 

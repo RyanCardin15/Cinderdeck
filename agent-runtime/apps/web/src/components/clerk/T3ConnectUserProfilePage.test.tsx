@@ -1,5 +1,5 @@
-import type { EnvironmentId } from "@t3tools/contracts";
-import type { RelayClientEnvironmentRecord } from "@t3tools/contracts/relay";
+import type { EnvironmentId } from "@cinderdeck/contracts";
+import type { RelayClientEnvironmentRecord } from "@cinderdeck/contracts/relay";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -34,7 +34,7 @@ function renderRow({
   );
 }
 
-describe("T3 Connect environment row", () => {
+describe("Remote connections environment row", () => {
   it("keeps deregistration confirmation inline and collapsed by default", () => {
     const markup = renderRow();
 

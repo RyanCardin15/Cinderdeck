@@ -2,8 +2,8 @@ import { act } from "react";
 import { create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import * as Schema from "effect/Schema";
-import { EnvironmentId, PullRequestRef } from "@t3tools/contracts";
-import { VerificationOverview } from "@t3tools/contracts/deckhand/verificationRpc";
+import { EnvironmentId, PullRequestRef } from "@cinderdeck/contracts";
+import { VerificationOverview } from "@cinderdeck/contracts/deckhand/verificationRpc";
 import { RecordingScenarioComparison } from "./RecordingScenarioComparison";
 const commands = vi.hoisted(() => ({ save: vi.fn(), remove: vi.fn(), media: vi.fn() }));
 vi.mock("./verificationState", () => ({
@@ -45,7 +45,7 @@ const view = Schema.decodeUnknownSync(VerificationOverview)({
       state: "ready",
       createdAt: `2026-10-03T00:0${index}:00Z`,
       duration: 10,
-      actor: "Deckhand",
+      actor: "Cinderdeck",
       capture: "Window",
       primaryWorkspaceID: "lane",
       capturedWorkspaceIDs: ["lane"],

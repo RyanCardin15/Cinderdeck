@@ -1,5 +1,5 @@
 import * as Option from "effect/Option";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import type { EnvironmentThreadShell } from "@cinderdeck/client-runtime/state/shell";
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
   type AssetCreateUrlInput,
@@ -24,22 +24,22 @@ import {
   type ThreadLinkedPullRequest,
   type RunId,
   type WorktreeSetupSnapshot,
-} from "@t3tools/contracts";
-import { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
+} from "@cinderdeck/contracts";
+import { worktreeSetupAgentStarted } from "@cinderdeck/client-runtime/worktree-setup";
 import * as DateTime from "effect/DateTime";
-import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
-import { resolveAssetUrl } from "@t3tools/client-runtime/state/assets";
+import { parseScopedThreadKey } from "@cinderdeck/client-runtime/environment";
+import { resolveAssetUrl } from "@cinderdeck/client-runtime/state/assets";
 import {
   squashAtomCommandFailure,
   type AtomCommandResult,
-} from "@t3tools/client-runtime/state/runtime";
-import { videoMimeType } from "@t3tools/shared/video";
+} from "@cinderdeck/client-runtime/state/runtime";
+import { videoMimeType } from "@cinderdeck/shared/video";
 import {
   appendCodexArtifactTemplateUsePrompt,
   codexArtifactTemplateUsePrompt,
   type CodexArtifactTemplate,
-} from "@t3tools/client-runtime/codex-artifact-templates";
-import { presentThreadShell } from "@t3tools/client-runtime/state/shell";
+} from "@cinderdeck/client-runtime/codex-artifact-templates";
+import { presentThreadShell } from "@cinderdeck/client-runtime/state/shell";
 import {
   type ChatMessage,
   isImageAttachment,
@@ -262,7 +262,7 @@ export function shouldReleaseTimelineAnchorForToolActivity(input: {
 export {
   findRecordedWorktreeSetup,
   resolveVisibleWorktreeSetup,
-} from "@t3tools/client-runtime/worktree-setup";
+} from "@cinderdeck/client-runtime/worktree-setup";
 
 /** Keep setup visible across local dispatch, durable preparation, and the live stream. */
 export function resolveWorktreeSetupProgress(input: {

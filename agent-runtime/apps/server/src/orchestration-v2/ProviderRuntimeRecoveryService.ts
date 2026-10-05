@@ -1,4 +1,4 @@
-import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
+import { resolveProjectSettings } from "@cinderdeck/shared/projectSettings";
 import {
   CommandId,
   type OrchestrationV2DomainEvent,
@@ -6,7 +6,7 @@ import {
   type OrchestrationV2RestartCancelledBackgroundWork,
   type OrchestrationV2ThreadProjection,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -63,7 +63,7 @@ export class ProviderRuntimeRecoveryService extends Context.Service<
     readonly prepareForShutdown: Effect.Effect<void, ProviderRuntimeRecoveryError>;
     readonly recover: Effect.Effect<ProviderRuntimeRecoverySummary, ProviderRuntimeRecoveryError>;
   }
->()("t3/orchestration-v2/ProviderRuntimeRecoveryService") {}
+>()("@cinderdeck/server/orchestration-v2/ProviderRuntimeRecoveryService") {}
 
 function nonterminalRuns(projection: ProjectionStore.ProjectionRuntimeRecoveryState) {
   return projection.runs.filter((run) => {

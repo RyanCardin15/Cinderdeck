@@ -1,6 +1,6 @@
-import * as Contracts from "@t3tools/contracts/deckhand";
-import type { IntegrationWriterReservationInput } from "@t3tools/contracts/deckhand/integration";
-import type { ThreadId } from "@t3tools/contracts";
+import * as Contracts from "@cinderdeck/contracts/deckhand";
+import type { IntegrationWriterReservationInput } from "@cinderdeck/contracts/deckhand/integration";
+import type { ThreadId } from "@cinderdeck/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -49,7 +49,7 @@ export class ManagedCheckoutGuard extends Context.Service<
       cwd: string | null,
     ) => Effect.Effect<ManagedContext | null, ManagedCheckoutError>;
   }
->()("t3/deckhand/ManagedCheckoutGuard") {}
+>()("@cinderdeck/server/deckhand/ManagedCheckoutGuard") {}
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   yield* Migrations.migrate;

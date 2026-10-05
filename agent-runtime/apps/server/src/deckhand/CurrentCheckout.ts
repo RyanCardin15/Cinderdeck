@@ -1,5 +1,5 @@
-import type { ThreadId } from "@t3tools/contracts";
-import * as C from "@t3tools/contracts/deckhand";
+import type { ThreadId } from "@cinderdeck/contracts";
+import * as C from "@cinderdeck/contracts/deckhand";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -30,7 +30,7 @@ export class CurrentCheckout extends Context.Service<
     readonly changes: Stream.Stream<number>;
     readonly invalidate: Effect.Effect<void>;
   }
->()("t3/deckhand/CurrentCheckout") {}
+>()("@cinderdeck/server/deckhand/CurrentCheckout") {}
 const decode = Schema.decodeUnknownEffect(Schema.fromJsonString(C.SessionBinding));
 const isError = Schema.is(CurrentCheckoutError);
 const normalize = (cause: unknown) =>

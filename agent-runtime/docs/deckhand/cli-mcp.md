@@ -1,6 +1,6 @@
-# Deckhand integration tools
+# Cinderdeck integration tools
 
-A managed agent can inspect its lane through either MCP or the same authenticated terminal fallback. Both use Deckhand's domain services and the calling provider session's saved context. They never select a different workspace when that context becomes unavailable.
+A managed agent can inspect its lane through either MCP or the same authenticated terminal fallback. Both use Cinderdeck's domain services and the calling provider session's saved context. They never select a different workspace when that context becomes unavailable.
 
 ```sh
 deckhand integration tools
@@ -10,7 +10,7 @@ deckhand integration call deckhand_recordings '{}'
 deckhand integration call deckhand_recording_logs '{"recordingID":"<recording-id>","around":12}'
 ```
 
-`tools` prints names, descriptions and input JSON schemas. `call` needs the running agent terminal's injected `T3_ACP_MCP_ENDPOINT` and `T3_ACP_MCP_AUTHORIZATION`. These transport compatibility names remain stable across T3 updates. Credentials stay in the environment; never copy them into prompts or command arguments. This command is currently provider scoped; a regular shell without an issued provider credential cannot use it.
+`tools` prints names, descriptions and input JSON schemas. `call` needs the running agent terminal's injected `T3_ACP_MCP_ENDPOINT` and `T3_ACP_MCP_AUTHORIZATION`. These transport compatibility names remain stable across runtime updates. Credentials stay in the environment; never copy them into prompts or command arguments. This command is currently provider scoped; a regular shell without an issued provider credential cannot use it.
 
 Read tools cover lane context, native services/readiness, task and workflow definitions, recent runs, run output, scoped PR associations, recordings, markers, capture provenance and synchronized logs. `deckhand_context_pull_requests({offset?,limit?})` reads one page of the calling agent’s current managed workspace/lane PR associations, including historical contributors. Offset defaults to 0 (0–10000); limit defaults to 20 (1–50). Follow `nextOffset`; `total` counts that exact context. Installation, generation, workspace and project cannot be selected by the caller. An unavailable current context is refused rather than replaced. This read does not refresh hosting status or write to a PR. Recording IDs and run IDs are explicit; there is no implicit latest-recording selection.
 
@@ -28,7 +28,7 @@ Source snapshots, dirty state and clock quality remain explicit. A matching capt
 
 ## Reported external sessions
 
-External registration is visibility only. It creates an `external:<UUID>` record, never a managed thread, transcript, process handle, approval queue, or writer reservation. Provider name, session ID, execution and capabilities are registrant claims; a declared reviewer/read-only role does not enforce process permissions. The calling authenticated provider actor owns its reports. MCP/CLI derive installation, checkout, feature and repository scope from the current managed context; requests cannot select another lane. The direct environment RPC validates explicit identities against the same domain service.
+External registration is visibility only. It creates an `external:<UUID>` record, never a managed thread, transcript, process handle, approval queue,. Provider name, session ID, execution and capabilities are registrant reports; a declared reviewer/read-only role does not enforce process permissions. The calling authenticated provider actor owns its reports. MCP/CLI derive installation, checkout, feature and repository scope from the current managed context; requests cannot select another lane. The direct environment RPC validates explicit identities against the same domain service.
 
 Use `deckhand_external_session_register` with an original operation key, provider name/session ID, title, role, reported execution and capability list. Then use `deckhand_external_session_heartbeat` roughly every 60 seconds with the current `lastSequence` as `expectedSequence` and a higher `sequence`. An exact retry is safe and does not extend the original 120-second lease. Expiry means connection lost/last seen, never finished execution.
 
@@ -55,7 +55,7 @@ deckhand integration call deckhand_run_failures '{}'
 
 `deckhand_verification_attempt_preview({reference,serviceID})` reads a fresh authoritative PR head and validates the current calling feature/checkout, canonical repositories, physical identities, native installation/generation, clean source and declared build/check definitions. It does not start a build. `reference` uses the shared PR reference schema; `serviceID` is the configured service name.
 
-Pass that exact preview and an original durable `operationKey` to `deckhand_verification_attempt_start`. Starting persists immutable intent before acquiring a separate native reservation or running the named build. The provider's existing writer token is never borrowed. An agent currently owning the checkout may receive a failed receipt explaining `checkout_reserved`; finish/stop that writer deliberately through the product before preparing a new attempt. A failed receipt is not a started or verified build. Inspect `phase`, `detail`, and the native `reservationState`.
+Pass that exact preview and an original durable `operationKey` to `deckhand_verification_attempt_start`. Starting persists immutable intent before running the named build. Other agents can continue using the same checkout; source snapshots detect changes during the build. A failed receipt is not a started or verified build. Inspect `phase`, `detail`,.
 
 Use `deckhand_verification_attempt_get({operationKey})` for one saved attempt or `deckhand_verification_attempt_list({reference})` for up to 30 compact summaries with actual build/check run IDs. List phases are last observed; get reconciles native durable state. The calling provider actor and exact feature/checkout/installation/generation must still match. No input can choose another lane.
 
@@ -72,6 +72,7 @@ A generic native window cannot prove that its video depicts the declared service
 The `deckhand_debug_*` tools attach to selected native Mac windows with `mac://local`, independently of a Cinderdeck lane. Sessions belong to the calling thread and can be recovered with `deckhand_debug_sessions`. Session side-panel attachments share the calling thread’s namespace, so its agent can inspect the same selected windows. Other threads cannot read, control, or detach them. Legacy RPC callers that omit threadId retain separate signed-in actor sessions.
 
 ```sh
+deckhand integration call deckhand_debug_open '{"bundleId":"com.microsoft.Excel"}'
 deckhand integration call deckhand_debug_targets '{"endpoint":"mac://local"}'
 deckhand integration call deckhand_debug_attach '{"endpoint":"mac://local","targetId":"mac:<pid>:<window-id>"}'
 deckhand integration call deckhand_debug_read '{"sessionId":"<session>","after":0,"screenshot":true}'
@@ -79,6 +80,8 @@ deckhand integration call deckhand_debug_command '{"sessionId":"<session>","acti
 deckhand integration call deckhand_debug_command '{"sessionId":"<session>","action":"click","x":0.4,"y":0.5}'
 deckhand integration call deckhand_debug_detach '{"sessionId":"<session>"}'
 ```
+
+`deckhand_debug_open` opens an installed application by exact bundle ID on the thread’s Mac and attaches a single available window, reusing the thread’s existing connection. Several windows require an explicit target choice. Agent attachments appear beside chat. Launch only within the user’s request; use an isolated test document for checks. Native input events record accepted/failed dispatch without typed contents. Always read a subsequent screenshot or actual app logs to verify behavior.
 
 Native commands are `permissions`, `focus`, `click`, `scroll`, `type`, and `key`. Click/scroll coordinates are normalized to the full captured window, including its title bar. Controls activate that window on its Mac and require Accessibility; viewing requires Screen Recording. Discover and select the application's actual WebKit Inspector to use its console and debugger. Native Mac sessions do not implement structured `evaluate`, `sources`, or stepping commands; send text and keys to the real Inspector instead. Do not claim Office API or OAuth success from a window title or a simulated fixture.
 

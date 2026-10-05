@@ -1,4 +1,4 @@
-import * as C from "@t3tools/contracts/deckhand/ownedPreviewRpc";
+import * as C from "@cinderdeck/contracts/deckhand/ownedPreviewRpc";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";

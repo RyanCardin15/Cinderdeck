@@ -1,15 +1,15 @@
-import type { EnvironmentId, PullRequestRef } from "@t3tools/contracts";
-import type { VerificationContext } from "@t3tools/contracts/deckhand/verificationRpc";
+import type { EnvironmentId, PullRequestRef } from "@cinderdeck/contracts";
+import type { VerificationContext } from "@cinderdeck/contracts/deckhand/verificationRpc";
 import type {
   AttemptPreview,
   VerificationAttempt,
   AttemptAdvance,
   AttemptSummary,
-} from "@t3tools/contracts/deckhand/verificationAttemptsRpc";
+} from "@cinderdeck/contracts/deckhand/verificationAttemptsRpc";
 import {
   AttemptError,
   toAttemptSummary,
-} from "@t3tools/contracts/deckhand/verificationAttemptsRpc";
+} from "@cinderdeck/contracts/deckhand/verificationAttemptsRpc";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
@@ -26,7 +26,7 @@ import {
   pendingAttemptView,
   needsAttemptObservation,
 } from "./verificationAttemptState";
-import type { RecordingContext } from "@t3tools/contracts/deckhand/recordingsRpc";
+import type { RecordingContext } from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import styles from "./verificationAttempt.module.css";
 import { OwnedPreviewCaptureControl } from "./OwnedPreviewCaptureControl";
 const isAttemptError = Schema.is(AttemptError);

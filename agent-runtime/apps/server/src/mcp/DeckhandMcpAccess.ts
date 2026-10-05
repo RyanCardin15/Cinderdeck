@@ -1,6 +1,6 @@
-import { OrchestratorMcpFailure } from "@t3tools/contracts";
-import type { RunContext } from "@t3tools/contracts/deckhand/runsRpc";
-import type { ThreadContextView } from "@t3tools/contracts/deckhand/rpc";
+import { OrchestratorMcpFailure } from "@cinderdeck/contracts";
+import type { RunContext } from "@cinderdeck/contracts/deckhand/runsRpc";
+import type { ThreadContextView } from "@cinderdeck/contracts/deckhand/rpc";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -24,8 +24,8 @@ export const deckhandFailure = (error: unknown) =>
           "reason" in error &&
           typeof error.reason === "string" &&
           /^[a-z_]{1,80}$/.test(error.reason)
-            ? `Deckhand ${error.reason}.`
-            : "The Deckhand operation could not be completed.",
+            ? `Cinderdeck ${error.reason}.`
+            : "The Cinderdeck operation could not be completed.",
       });
 export class DeckhandMcpAccess extends Context.Service<
   DeckhandMcpAccess,
@@ -40,7 +40,7 @@ export class DeckhandMcpAccess extends Context.Service<
       Invocation.McpInvocationContext
     >;
   }
->()("t3/mcp/DeckhandMcpAccess") {}
+>()("@cinderdeck/server/mcp/DeckhandMcpAccess") {}
 export const layer = Layer.effect(
   DeckhandMcpAccess,
   Effect.gen(function* () {
@@ -62,7 +62,7 @@ export const layer = Layer.effect(
             return yield* new OrchestratorMcpFailure({
               code: "invalid_request",
               message:
-                "This thread has no available managed Cinderdeck lane. Reconnect or bind a lane in Deckhand.",
+                "This thread has no available managed Cinderdeck lane. Reconnect or bind a lane in Cinderdeck.",
             });
           return {
             actor: `mcp:${scope.providerSessionId}`,

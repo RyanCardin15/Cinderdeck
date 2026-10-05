@@ -5,7 +5,7 @@ import {
   MessageId,
   RunId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   act,
   createRef,
@@ -2167,7 +2167,7 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("Received 1 update and ran 1 command");
   });
 
-  it("renders T3 MCP dynamic tools with the product logo and pretty name", async () => {
+  it("renders Cinderdeck MCP dynamic tools with the product logo and pretty name", async () => {
     activityTestState.expanded = true;
     const { MessagesTimeline } = await import("./MessagesTimeline");
     const item = {
@@ -2236,9 +2236,9 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    // The T3 wordmark replaces the generic tool icon for T3 MCP calls.
+    // The Cinderdeck wordmark replaces the generic tool icon for Cinderdeck MCP calls.
     expect(markup).toContain('viewBox="15.5309 37 94.3941 56.96"');
-    expect(markup).toContain("Read a T3 thread");
+    expect(markup).toContain("Read a Cinderdeck thread");
     expect(markup).not.toContain("mcp__t3-code__t3_thread_read");
   });
 
@@ -2271,7 +2271,7 @@ describe("MessagesTimeline", () => {
               tone: "tool",
               itemType: "file_change",
               toolLifecycleStatus: "completed",
-              changedFiles: ["C:/Users/mike/dev-stuff/t3code/apps/web/src/session-logic.ts"],
+              changedFiles: ["C:/Users/mike/dev-stuff/cinderdeck/apps/web/src/session-logic.ts"],
             },
           },
         ]}
@@ -2279,8 +2279,8 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain("t3code/apps/web/src/session-logic.ts");
-    expect(markup).not.toContain("C:/Users/mike/dev-stuff/t3code/apps/web/src/session-logic.ts");
+    expect(markup).toContain("cinderdeck/apps/web/src/session-logic.ts");
+    expect(markup).not.toContain("C:/Users/mike/dev-stuff/cinderdeck/apps/web/src/session-logic.ts");
   });
 
   it("renders review comment contexts as structured cards instead of raw tags", () => {

@@ -1,10 +1,13 @@
+// @effect-diagnostics globalFetch:off - Isolated wire smoke fixtures use native HTTP/timer APIs and JSON error reports.
+// @effect-diagnostics globalTimers:off - Isolated wire smoke fixtures use native HTTP/timer APIs and JSON error reports.
+// @effect-diagnostics preferSchemaOverJson:off - Isolated wire smoke fixtures use native HTTP/timer APIs and JSON error reports.
 // @effect-diagnostics nodeBuiltinImport:off - Explicit isolated native/Git smoke verification.
 import * as Schema from "effect/Schema";
 import * as Rpc from "../../packages/contracts/src/deckhand/rpc.ts";
 import * as NodeAssert from "node:assert/strict";
 import * as NodeCrypto from "node:crypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -25,7 +28,7 @@ if (
   !database?.includes("/.deckhand/")
 )
   throw new Error(
-    "Pass only the isolated fixture socket, native binary and Deckhand smoke database.",
+    "Pass only the isolated fixture socket, native binary and Cinderdeck smoke database.",
   );
 const serverUrl = process.env.DECKHAND_SMOKE_SERVER_URL;
 const bootstrap = process.env.DECKHAND_SMOKE_BOOTSTRAP;
@@ -114,6 +117,7 @@ const result = await Effect.runPromise(
     NodeAssert.ok(
       resource?.available && resource.workspace?.file.includes("/.deckhand/cinderdeck-smoke/"),
     );
+    NodeAssert.ok(resource.workspace);
     const repo = resource.workspace.repos.find((repo) => repo.id === "frontend");
     NodeAssert.ok(repo);
     const checkout = yield* identities.resolve(repo.path);

@@ -16,7 +16,7 @@ import {
   cliArchiveTarCommand,
   cliReleaseDownloadBaseUrl,
   parseChecksums,
-} from "@t3tools/shared/cliRelease";
+} from "@cinderdeck/shared/cliRelease";
 
 import * as ProcessRunner from "../processRunner.ts";
 
@@ -26,7 +26,7 @@ import * as ProcessRunner from "../processRunner.ts";
  * web client, and the native packages beside it. The boot service points its
  * unit or launch agent at the executable, and server self-update installs the
  * target version here before switching over. The runtime never depends on a
- * Node or npm on the machine; the only npm involvement in T3 Code is the `t3`
+ * Node or npm on the machine; the only npm involvement in Cinderdeck is the `t3`
  * package for people who prefer `npx t3` or `npm install -g t3`, and even a
  * CLI installed that way pins an archive when it sets up the service.
  */
@@ -269,7 +269,7 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
 ) {
   if (!input.releaseBaseUrl?.trim()) {
     return yield* new PinnedRuntimeInstallError({
-      step: "selecting a Deckhand release feed (no Deckhand feed is configured)",
+      step: "selecting a Cinderdeck release feed (no Cinderdeck feed is configured)",
     });
   }
   const { fs } = input;

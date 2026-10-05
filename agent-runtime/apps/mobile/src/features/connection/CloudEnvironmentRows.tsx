@@ -4,13 +4,13 @@ import { SymbolView } from "../../components/AppSymbol";
 import {
   connectionStatusText,
   type EnvironmentConnectionPhase,
-} from "@t3tools/client-runtime/connection";
+} from "@cinderdeck/client-runtime/connection";
 import {
   type EnvironmentId,
   type EnvironmentMachineKind,
   type ExecutionEnvironmentDescriptor,
   resolveEnvironmentMachineKind,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, type TextLayoutEvent, View } from "react-native";
@@ -36,15 +36,15 @@ interface CloudEnvironmentRowsProps {
   readonly showcaseAvailableEnvironments?: ReadonlyArray<RelayEnvironmentView>;
   readonly showcaseSignedIn?: boolean;
   /**
-   * Hide the "T3 Connect" section title when the host provides its own header.
+   * Hide the "Remote connections" section title when the host provides its own header.
    */
   readonly showHeader?: boolean;
 }
 
 /**
- * "T3 Connect" section: every environment published to the signed-in account,
+ * "Remote connections" section: every environment published to the signed-in account,
  * with connect switches, availability status, and loading/error
- * states. Shared between the Settings environments screen and the T3 Connect
+ * states. Shared between the Settings environments screen and the Remote connections
  * onboarding sheet.
  *
  * Already-connected relay environments render even without cloud config or a
@@ -114,7 +114,7 @@ function CloudEnvironmentRowsContent(
     <View collapsable={false} className={cn("gap-3", showHeader && "mt-5")}>
       {showHeader ? (
         <View className="px-1">
-          <Text className="text-sm font-t3-bold uppercase text-foreground-muted">T3 Connect</Text>
+          <Text className="text-sm font-t3-bold uppercase text-foreground-muted">Remote connections</Text>
         </View>
       ) : null}
 
@@ -171,7 +171,7 @@ function CloudEnvironmentRowsContent(
       !controller.relayDiscovery.isRefreshing ? (
         <View collapsable={false} className="gap-3 rounded-[24px] bg-grouped-card p-5">
           <Text className="text-base font-t3-bold text-foreground">
-            Could not load T3 Connect environments
+            Could not load Remote connections environments
           </Text>
           <Text className="text-sm text-foreground-muted">{controller.relayDiscovery.error}</Text>
           {controller.relayDiscovery.errorTraceId ? (
@@ -193,7 +193,7 @@ function CloudEnvironmentRowsContent(
 }
 
 /**
- * A saved T3 Connect environment. The switch turns it on or off; off keeps the
+ * A saved Remote connections environment. The switch turns it on or off; off keeps the
  * registration and cache but drops the connection and hides its errors.
  * Long-press removes it from this device.
  */

@@ -1,10 +1,10 @@
-import { scopeProjectRef } from "@t3tools/client-runtime/environment";
-import { getNewProjectGitHubRepository } from "@t3tools/client-runtime/operations/projects";
+import { scopeProjectRef } from "@cinderdeck/client-runtime/environment";
+import { getNewProjectGitHubRepository } from "@cinderdeck/client-runtime/operations/projects";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentId } from "@t3tools/contracts";
+} from "@cinderdeck/client-runtime/state/runtime";
+import type { EnvironmentId } from "@cinderdeck/contracts";
 import { useCallback } from "react";
 
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
@@ -97,7 +97,7 @@ export function useNewProject() {
       }
 
       const { projectId, workspaceRoot, commitError } = result.value;
-      // The folder sits in Deckhand's data directory, so always say where.
+      // The folder sits in Cinderdeck's data directory, so always say where.
       toastManager.add(
         stackedThreadToast(
           commitError === undefined

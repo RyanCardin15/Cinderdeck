@@ -1,5 +1,5 @@
-import { EnvironmentId } from "@t3tools/contracts";
-import type { IntegrationView } from "@t3tools/contracts/deckhand/rpc";
+import { EnvironmentId } from "@cinderdeck/contracts";
+import type { IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
 import { expect, it } from "vite-plus/test";
 import {
   canChooseConnectedWorkspace,

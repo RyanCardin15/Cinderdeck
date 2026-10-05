@@ -102,7 +102,7 @@ export class DeckhandRpcError extends Schema.TaggedError<DeckhandRpcError>()("De
   code: Schema.optionalKey(Schema.String),
 }) {
   override get message() {
-    return `Deckhand integration ${this.reason}.`;
+    return `Cinderdeck integration ${this.reason}.`;
   }
 }
 export const OverviewPageInput = Schema.Struct({

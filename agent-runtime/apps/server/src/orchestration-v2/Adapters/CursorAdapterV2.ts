@@ -8,8 +8,8 @@ import type {
   SettingSource,
   ToolCall,
 } from "@cursor/sdk";
-import { formatReadToolLabel, formatSearchToolLabel } from "@t3tools/shared/toolActivity";
-import { HostProcessEnvironment } from "@t3tools/shared/hostProcess";
+import { formatReadToolLabel, formatSearchToolLabel } from "@cinderdeck/shared/toolActivity";
+import { HostProcessEnvironment } from "@cinderdeck/shared/hostProcess";
 import {
   CursorSettings,
   isOrchestrationV2WorkActive,
@@ -29,7 +29,7 @@ import {
   type OrchestrationV2TurnItem,
   type ProviderInstanceId,
   type ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -291,7 +291,7 @@ function nativeThreadId(providerThread: OrchestrationV2ProviderThread): string {
  * plugins. The SDK loads none of them when `settingSources` is omitted.
  * Sandbox policy files are read either way, and hooks can only deny or ask
  * (which local SDK runs reject), so these layers do not loosen the sandbox or
- * approval mode T3 sets.
+ * approval mode Cinderdeck sets.
  */
 const CURSOR_AGENT_SETTING_SOURCES = [
   "project",
@@ -311,7 +311,7 @@ export function makeCursorAgentOptions(input: {
   const mcpServers = cursorMcpServers(input.threadId);
   return {
     model: cursorSdkModelSelection(input.modelSelection),
-    name: `T3 Code ${input.threadId}`,
+    name: `Cinderdeck ${input.threadId}`,
     mode: input.runtimePolicy.interactionMode === "plan" ? "plan" : "agent",
     ...(input.apiKey === undefined ? {} : { apiKey: input.apiKey }),
     local: {

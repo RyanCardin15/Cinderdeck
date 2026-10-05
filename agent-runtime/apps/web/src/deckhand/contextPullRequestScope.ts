@@ -1,9 +1,9 @@
-import type { EnvironmentId, PullRequestListInput, PullRequestRef } from "@t3tools/contracts";
+import type { EnvironmentId, PullRequestListInput, PullRequestRef } from "@cinderdeck/contracts";
 import type {
   ContextPullRequest,
   ContextPullRequestsPage,
   IntegrationView,
-} from "@t3tools/contracts/deckhand/rpc";
+} from "@cinderdeck/contracts/deckhand/rpc";
 import type { WorkspaceSearch } from "./workspaceNavigation";
 import { overviewResources } from "./workspaceNavigation";
 export type ConnectedPullRequestSearch = {

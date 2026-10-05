@@ -7,25 +7,25 @@ import {
   type ToolActivityIcon,
   type OrchestrationV2TurnItem,
   type ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   resolveT3McpToolDefinition,
   type T3McpToolDefinition,
   type T3McpToolSummaryAction,
-} from "@t3tools/shared/t3McpToolPresentation";
-import { classifyMarkdownImageSource } from "@t3tools/client-runtime/markdown-images";
-import { resolveMediaSource } from "@t3tools/client-runtime/media-source";
-import { parseChangeRequestUrl } from "@t3tools/shared/changeRequestUrl";
-import { isWorkspaceImagePreviewPath } from "@t3tools/shared/filePreview";
-import { formatTokens } from "@t3tools/shared/usageFormat";
-import { classifyToolActivity } from "@t3tools/shared/toolActivity";
-import { toolOutputIndicatesFailure } from "@t3tools/shared/toolOutput";
+} from "@cinderdeck/shared/t3McpToolPresentation";
+import { classifyMarkdownImageSource } from "@cinderdeck/client-runtime/markdown-images";
+import { resolveMediaSource } from "@cinderdeck/client-runtime/media-source";
+import { parseChangeRequestUrl } from "@cinderdeck/shared/changeRequestUrl";
+import { isWorkspaceImagePreviewPath } from "@cinderdeck/shared/filePreview";
+import { formatTokens } from "@cinderdeck/shared/usageFormat";
+import { classifyToolActivity } from "@cinderdeck/shared/toolActivity";
+import { toolOutputIndicatesFailure } from "@cinderdeck/shared/toolOutput";
 
 import {
   summarizeT3ToolCalls,
   t3ToolResultIndicatesFailure,
   type T3ToolSummaryCall,
-} from "@t3tools/client-runtime/t3ToolSummary";
+} from "@cinderdeck/client-runtime/t3ToolSummary";
 
 export type WorkLogToolLifecycleStatus = RuntimeItemStatus | "stopped" | "idle";
 
@@ -60,7 +60,7 @@ export function contextCompactionLabel(
 }
 
 export interface WorkLogPresentationEntry {
-  readonly questionAnswer?: import("@t3tools/contracts").UserInputAttachmentAnswerPayload;
+  readonly questionAnswer?: import("@cinderdeck/contracts").UserInputAttachmentAnswerPayload;
   readonly id: string;
   readonly createdAt: string;
   readonly label: string;

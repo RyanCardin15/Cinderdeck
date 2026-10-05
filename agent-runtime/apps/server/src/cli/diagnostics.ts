@@ -1,5 +1,5 @@
 import * as Config from "effect/Config";
-import { HostProcessEnvironment } from "@t3tools/shared/hostProcess";
+import { HostProcessEnvironment } from "@cinderdeck/shared/hostProcess";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -30,7 +30,7 @@ export const diagnosticsCommand = Command.make("diagnostics", {
   ),
 }).pipe(
   Command.withDescription(
-    "Inspect Deckhand identity and configuration without reading credentials, databases, transcripts or logs. Offline structural report; not a connection or compatibility test.",
+    "Inspect Cinderdeck identity and configuration without reading credentials, databases, transcripts or logs. Offline structural report; not a connection or compatibility test.",
   ),
   Command.withHandler(({ baseDir, output, providerVersions }) =>
     Effect.gen(function* () {
@@ -52,7 +52,7 @@ export const diagnosticsCommand = Command.make("diagnostics", {
           .writeFileString(output.value, json, { flag: "wx", mode: 0o600 })
           .pipe(Effect.mapError((cause) => new DiagnosticExportError({ cause })));
         yield* Console.log(
-          "Saved local Deckhand diagnostics. Review the listed included/excluded scopes before sharing.",
+          "Saved local Cinderdeck diagnostics. Review the listed included/excluded scopes before sharing.",
         );
       } else yield* Console.log(json);
     }),

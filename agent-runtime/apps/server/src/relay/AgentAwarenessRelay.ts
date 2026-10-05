@@ -5,21 +5,21 @@ import type {
   OrchestrationV2TurnItem,
   Project,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   RelayApi,
   type RelayAgentActivityPublishProofPayload,
   type RelayAgentActivityState,
-} from "@t3tools/contracts/relay";
-import { projectThreadAwarenessV2 } from "@t3tools/shared/agentAwareness";
-import { turnItemUpdateCanEndBackgroundWork } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
-import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
-import { withRelayClientTracing } from "@t3tools/shared/relayTracing";
+} from "@cinderdeck/contracts/relay";
+import { projectThreadAwarenessV2 } from "@cinderdeck/shared/agentAwareness";
+import { turnItemUpdateCanEndBackgroundWork } from "@cinderdeck/shared/orchestrationV2PendingBackgroundWork";
+import { makeDrainableWorker } from "@cinderdeck/shared/DrainableWorker";
+import { withRelayClientTracing } from "@cinderdeck/shared/relayTracing";
 import {
   normalizeRelayIssuer,
   RELAY_ACTIVITY_PUBLISH_TYP,
   signRelayJwt,
-} from "@t3tools/shared/relayJwt";
+} from "@cinderdeck/shared/relayJwt";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -60,7 +60,7 @@ export class AgentAwarenessRelay extends Context.Service<
     readonly requestCatchUp: () => Effect.Effect<void>;
     readonly start: () => Effect.Effect<void, never, Scope.Scope>;
   }
->()("t3/relay/AgentAwarenessRelay") {}
+>()("@cinderdeck/server/relay/AgentAwarenessRelay") {}
 
 function eventThreadId(event: OrchestrationV2DomainEvent): ThreadId {
   return event.threadId;
@@ -807,7 +807,7 @@ export const make = Effect.gen(function* () {
           yield* Effect.logInfo("Cinderdeck agent activity sharing is idle.");
           break;
         case "disabled":
-          yield* Effect.logInfo("agent activity publishing disabled by T3 Connect configuration");
+          yield* Effect.logInfo("agent activity publishing disabled by Remote connections configuration");
           break;
         case "enabled":
           yield* Effect.logInfo("agent activity publishing enabled", {

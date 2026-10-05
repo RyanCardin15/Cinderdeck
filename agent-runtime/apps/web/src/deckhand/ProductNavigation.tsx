@@ -1,4 +1,4 @@
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId } from "@cinderdeck/contracts";
 import { PullRequestGlyph } from "../components/pullRequest/pullRequestIcons";
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";

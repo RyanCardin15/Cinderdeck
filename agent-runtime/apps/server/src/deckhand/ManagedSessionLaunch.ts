@@ -1,8 +1,8 @@
 // @effect-diagnostics nodeBuiltinImport:off - UUIDs and hashes identify durable launch intents.
 import * as NodeCrypto from "node:crypto";
-import { CommandId, ProjectId, ThreadId } from "@t3tools/contracts";
-import * as Contracts from "@t3tools/contracts/deckhand";
-import * as Rpc from "@t3tools/contracts/deckhand/rpc";
+import { CommandId, ProjectId, ThreadId } from "@cinderdeck/contracts";
+import * as Contracts from "@cinderdeck/contracts/deckhand";
+import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -73,7 +73,7 @@ export class ManagedSessionLaunch extends Context.Service<
     ) => Effect.Effect<Rpc.ManagedLaunchReview, ManagedLaunchError>;
     readonly options: Effect.Effect<ReadonlyArray<typeof Rpc.ManagedLaunchOption.Type>>;
   }
->()("t3/deckhand/ManagedSessionLaunch") {}
+>()("@cinderdeck/server/deckhand/ManagedSessionLaunch") {}
 
 const encodeInput = Schema.encodeEffect(Schema.fromJsonString(Rpc.ManagedLaunchInput));
 const encodeRecord = Schema.encodeEffect(Schema.fromJsonString(Rpc.ManagedLaunchRecord));

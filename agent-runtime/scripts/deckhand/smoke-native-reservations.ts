@@ -29,6 +29,7 @@ const result = await Effect.runPromise(
     NodeAssert.ok(
       resource?.available && resource.workspace?.file.includes("/.deckhand/cinderdeck-smoke/"),
     );
+    NodeAssert.ok(resource.workspace);
     const repo = resource.workspace.repos.find((repo) => repo.id === "frontend");
     NodeAssert.ok(repo);
     const checkout = yield* identity.resolve(repo.path);

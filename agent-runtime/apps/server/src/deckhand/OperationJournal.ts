@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - A deterministic digest binds a durable operation key to its original input.
 import * as NodeCrypto from "node:crypto";
-import * as Contracts from "@t3tools/contracts/deckhand/integration";
-import * as Rpc from "@t3tools/contracts/deckhand/rpc";
+import * as Contracts from "@cinderdeck/contracts/deckhand/integration";
+import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -30,7 +30,7 @@ export class OperationJournal extends Context.Service<
       installationID: string,
     ) => Result<ReadonlyArray<Rpc.OperationRecord>>;
   }
->()("t3/deckhand/OperationJournal") {}
+>()("@cinderdeck/server/deckhand/OperationJournal") {}
 const encodeRecord = Schema.encodeEffect(Schema.fromJsonString(Rpc.OperationRecord));
 const decodeRecord = Schema.decodeUnknownEffect(Schema.fromJsonString(Rpc.OperationRecord));
 const encodeInput = Schema.encodeEffect(Schema.fromJsonString(Contracts.IntegrationOperationInput));

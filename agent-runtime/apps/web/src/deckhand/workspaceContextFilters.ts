@@ -1,4 +1,4 @@
-import type { IntegrationView, ManagedContextView } from "@t3tools/contracts/deckhand/rpc";
+import type { IntegrationView, ManagedContextView } from "@cinderdeck/contracts/deckhand/rpc";
 
 export type WorkspaceResource = IntegrationView["resources"][number];
 export type WorkspaceFilterValue = {

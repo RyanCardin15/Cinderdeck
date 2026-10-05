@@ -3,8 +3,8 @@ import {
   EnvironmentId,
   type RelayClientInstallProgressEvent,
   WS_METHODS,
-} from "@t3tools/contracts";
-import { RelayWebClientId } from "@t3tools/contracts/relay";
+} from "@cinderdeck/contracts";
+import { RelayWebClientId } from "@cinderdeck/contracts/relay";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -18,11 +18,11 @@ import {
   type PreparedConnection,
   PrimaryConnectionTarget,
   EnvironmentSupervisor,
-} from "@t3tools/client-runtime/connection";
-import { type RpcSession } from "@t3tools/client-runtime/rpc";
-import { EnvironmentRegistry } from "@t3tools/client-runtime/connection";
-import { ManagedRelay } from "@t3tools/client-runtime/relay";
-import { remoteHttpClientLayer } from "@t3tools/client-runtime/rpc";
+} from "@cinderdeck/client-runtime/connection";
+import { type RpcSession } from "@cinderdeck/client-runtime/rpc";
+import { EnvironmentRegistry } from "@cinderdeck/client-runtime/connection";
+import { ManagedRelay } from "@cinderdeck/client-runtime/relay";
+import { remoteHttpClientLayer } from "@cinderdeck/client-runtime/rpc";
 import { __resetDesktopPrimaryAuthForTests } from "../environments/primary/desktopAuth";
 
 import {

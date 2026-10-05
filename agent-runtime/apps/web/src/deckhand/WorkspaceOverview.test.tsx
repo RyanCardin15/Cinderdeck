@@ -2,8 +2,8 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { RegistryContext } from "@effect/atom-react";
-import { EnvironmentId } from "@t3tools/contracts";
-import type { IntegrationView, ManagedContextView } from "@t3tools/contracts/deckhand/rpc";
+import { EnvironmentId } from "@cinderdeck/contracts";
+import type { IntegrationView, ManagedContextView } from "@cinderdeck/contracts/deckhand/rpc";
 import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
 import * as Cause from "effect/Cause";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";

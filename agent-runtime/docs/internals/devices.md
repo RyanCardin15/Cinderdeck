@@ -3,13 +3,13 @@
 The environment server owns simulators and emulators the way it owns
 terminals: discovery, streaming, and agent access all run there, and every
 client reaches them through the environment connection. This is what makes the
-Device panel work over Tailscale and T3 Connect, including when an SSH host runs the devices.
+Device panel work over Tailscale and Remote connections, including when an SSH host runs the devices.
 
 ## Two external tools, one seam
 
 [expo-device-hub](../../apps/server/src/device/LocalDeviceHost.ts) streams and
 [agent-device](../../apps/server/src/device/AgentDeviceShim.ts) drives. Each is
-npm-installed at a pinned version into the T3 home after its matching Device
+npm-installed at a pinned version into the Cinderdeck home after its matching Device
 panel consent step. Manual setup installs and starts only expo-device-hub;
 agent-device remains absent and stopped until agent access is granted. Both run
 with the server's Node; `npx` would make the first `device_open` after a reboot
@@ -43,7 +43,7 @@ the Vite proxy must forward WebSocket upgrades for `/api`, not only `/ws`.
 
 serve-sim's preview drives its Tools panel by sending shell commands over that
 same exec channel. Proxying it, even allowlisted, would hand any environment
-session arbitrary command execution on the host, so T3 does not. The
+session arbitrary command execution on the host, so Cinderdeck does not. The
 [`device.action`](../../apps/server/src/device/DeviceActions.ts) RPC runs the
 underlying `simctl`, `adb`, and serve-sim helper binaries itself through
 `DeviceHostReady.run`, one typed action per control, and returns the settings
@@ -55,7 +55,7 @@ screenshot capture and stream tuning.
 
 The `device_*` toolkit is deliberately four tools: list, open, screenshot, and
 close. Driving happens through the `agent-device` CLI, which has the semantic
-snapshot model agents need and stays current with its own releases. T3 prepends
+snapshot model agents need and stays current with its own releases. Cinderdeck prepends
 a shim directory to the provider's PATH. The CLI installs on the environment
 server even when that server cannot run simulators. Hosts start on demand.
 
@@ -77,7 +77,7 @@ is a few lines that point at the tools and prefer them over raw `simctl` and
 The hub vendors two streaming servers with different wire formats. iOS video is
 an HTTP body of AVCC envelopes decoded with WebCodecs, with input on a separate
 binary WebSocket; Android multiplexes SEMU-framed H.264 and JSON gestures over
-one WebSocket. [`deviceStream.ts`](../../apps/web/src/components/device/deviceStream.ts)
+one WebSocket. [`DeviceStreamView.tsx`](../../apps/web/src/components/device/DeviceStreamView.tsx)
 speaks both so one panel covers both platforms.
 
 Simulators encode H.264 High 5.1. Hardware decoders on some machines and all

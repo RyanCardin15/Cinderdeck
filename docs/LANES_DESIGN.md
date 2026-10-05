@@ -129,7 +129,7 @@ is already checked out.
 **S6. Worktrees made by other tools can't be adopted.** Claude Code desktop, Codex, Cursor background agents,
 and Conductor all create worktrees. `lane create` rejects the branch because it's
 checked out, so an agent working in its own worktree can't get isolated ports for that
-worktree. [DECKHAND_DESIGN.md](DECKHAND_DESIGN.md) already assumes `lane.adopt` and `lane.release`.
+worktree. [UNIFIED_APP.md](UNIFIED_APP.md) already assumes `lane.adopt` and `lane.release`.
 
 **S7. Nested repos and submodules.** Nested repos are rejected. Submodules aren't initialized in
 new worktrees, so the lane is missing their content.

@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - Stable source identity digests.
 import * as NodeCrypto from "node:crypto";
-import * as C from "@t3tools/contracts/deckhand/attentionRpc";
+import * as C from "@cinderdeck/contracts/deckhand/attentionRpc";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";

@@ -1,13 +1,13 @@
-import { LINKED_WORK_METHODS } from "@t3tools/contracts/deckhand/linkedWorkRpc";
+import { LINKED_WORK_METHODS } from "@cinderdeck/contracts/deckhand/linkedWorkRpc";
 import {
   DECKHAND_METHODS,
   THREAD_CONTEXT_METHOD,
   REVIEWER_METHODS,
-} from "@t3tools/contracts/deckhand/rpc";
+} from "@cinderdeck/contracts/deckhand/rpc";
 import {
   createEnvironmentRpcSubscriptionAtomFamily,
   createEnvironmentRpcCommand,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@cinderdeck/client-runtime/state/runtime";
 import { connectionAtomRuntime } from "../connection/runtime";
 export const workspaceView = createEnvironmentRpcSubscriptionAtomFamily(connectionAtomRuntime, {
   label: "deckhand:workspaces",

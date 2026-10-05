@@ -1,6 +1,6 @@
 import { PullRequestGlyph } from "../components/pullRequest/pullRequestIcons";
 import { useRef, useState } from "react";
-import type { NativeToolRequest } from "@t3tools/contracts";
+import type { NativeToolRequest } from "@cinderdeck/contracts";
 import {
   ArrowUpRightIcon,
   CameraIcon,

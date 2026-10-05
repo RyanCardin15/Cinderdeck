@@ -2,9 +2,9 @@ import {
   connectLoopbackRedirectUri,
   CONNECT_OAUTH_SCOPES,
   DEFAULT_HOSTED_APP_URL,
-} from "@t3tools/shared/connectAuth";
-import { clerkFrontendApiUrlFromPublishableKey } from "@t3tools/shared/relayAuth";
-import { normalizeSecureRelayUrl } from "@t3tools/shared/relayUrl";
+} from "@cinderdeck/shared/connectAuth";
+import { clerkFrontendApiUrlFromPublishableKey } from "@cinderdeck/shared/relayAuth";
+import { normalizeSecureRelayUrl } from "@cinderdeck/shared/relayUrl";
 import * as Config from "effect/Config";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
@@ -211,5 +211,5 @@ export function makeCloudCliOAuthConfig({
 
 export const cloudCliOAuthConfig = makeCloudCliOAuthConfig();
 
-// Deckhand ships direct authenticated connections; no inherited hosted account or relay.
+// Cinderdeck ships direct authenticated connections; no inherited hosted account or relay.
 export const hasCloudPublicConfig = false;

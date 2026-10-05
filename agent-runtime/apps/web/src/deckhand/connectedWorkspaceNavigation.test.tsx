@@ -1,9 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { SessionBindingId } from "@t3tools/contracts/deckhand";
+import { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
+import { SessionBindingId } from "@cinderdeck/contracts/deckhand";
 import * as Schema from "effect/Schema";
-import { ThreadContextView } from "@t3tools/contracts/deckhand/rpc";
+import { ThreadContextView } from "@cinderdeck/contracts/deckhand/rpc";
 import { expect, it, vi } from "vite-plus/test";
 import {
   connectedWorkspaceSearch,

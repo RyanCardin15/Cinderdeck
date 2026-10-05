@@ -5,11 +5,11 @@ import type {
   RuntimeMode,
   ServerProvider,
   ServerConfig as T3ServerConfig,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   buildExplicitProviderOptionSelectionsFromDescriptors,
   getProviderOptionDescriptors,
-} from "@t3tools/shared/model";
+} from "@cinderdeck/shared/model";
 
 export type ModelOption = {
   readonly key: string;

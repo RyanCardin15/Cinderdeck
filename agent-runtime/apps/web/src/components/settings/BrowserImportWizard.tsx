@@ -1,7 +1,7 @@
 import { PermissionChecklist, PermissionContinueButton } from "../permissions/PermissionChecklist";
 import { usePermissionStatus } from "../permissions/usePermissionStatus";
-import type { BrowserImportSource } from "@t3tools/contracts";
-import { BROWSER_IMPORT_FAILURE_COPY } from "@t3tools/contracts";
+import type { BrowserImportSource } from "@cinderdeck/contracts";
+import { BROWSER_IMPORT_FAILURE_COPY } from "@cinderdeck/contracts";
 import { ArrowDownIcon, ArrowRightIcon, CheckIcon, HardDriveIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -285,9 +285,9 @@ function FullDiskAccessStep({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Let Deckhand read {source.name}&rsquo;s cookies</DialogTitle>
+        <DialogTitle>Let Cinderdeck read {source.name}&rsquo;s cookies</DialogTitle>
         <DialogDescription>
-          To import cookies from {source.name}, Deckhand needs Full Disk Access. Turn it on in
+          To import cookies from {source.name}, Cinderdeck needs Full Disk Access. Turn it on in
           System Settings, then come back to finish the import — you can revoke it again once the
           import is done.
         </DialogDescription>
@@ -319,8 +319,8 @@ function FullDiskAccessStep({
         {!permission.isReady(["fullDiskAccess"]) ? (
           <p className="mt-3 text-xs text-muted-foreground">
             {stillRequired
-              ? "Access is still required. Quit and reopen Deckhand if you just allowed it, then retry the import."
-              : "If access doesn't update after you allow it, quit and reopen Deckhand, then retry the import."}
+              ? "Access is still required. Quit and reopen Cinderdeck if you just allowed it, then retry the import."
+              : "If access doesn't update after you allow it, quit and reopen Cinderdeck, then retry the import."}
           </p>
         ) : null}
       </DialogPanel>

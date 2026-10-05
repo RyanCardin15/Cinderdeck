@@ -1,9 +1,9 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
 import type {
   IntegrationOperationInput,
   IntegrationOperationReceipt,
-} from "@t3tools/contracts/deckhand/integration";
+} from "@cinderdeck/contracts/deckhand/integration";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -33,7 +33,7 @@ const receipt = (key: string): IntegrationOperationReceipt => ({
 const TestLayer = OperationJournal.layer.pipe(
   Layer.provideMerge(NodeSqliteClient.layer({ filename: ":memory:" })),
 );
-describe("Deckhand durable operation intents", () => {
+describe("Cinderdeck durable operation intents", () => {
   it.effect("reopens a file-backed intent and treats reordered arguments as the same claim", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

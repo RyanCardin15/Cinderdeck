@@ -18,9 +18,9 @@ import {
   type OrchestrationV2RunAttempt,
   type OrchestrationV2ProjectedTurnItem,
   type OrchestrationV2TurnItem,
-} from "@t3tools/contracts";
-import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
-import { summarizeToolGroup } from "@t3tools/client-runtime/work-log/presentation";
+} from "@cinderdeck/contracts";
+import { resolveUserMessagePresentation } from "@cinderdeck/client-runtime/user-message";
+import { summarizeToolGroup } from "@cinderdeck/client-runtime/work-log/presentation";
 import * as DateTime from "effect/DateTime";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -1317,7 +1317,7 @@ describe("buildThreadFeed", () => {
     expect(activity?.workEntry.viewedImagePath).toBe("/workspace/reference.png");
   });
 
-  it("pretty prints T3 MCP dynamic tool activities and attaches the product logo", () => {
+  it("pretty prints Cinderdeck MCP dynamic tool activities and attaches the product logo", () => {
     const toolItem: OrchestrationV2TurnItem = {
       ...base("item-t3-tool", "2026-06-20T00:00:04.000Z", 3),
       type: "dynamic_tool",
@@ -1329,9 +1329,9 @@ describe("buildThreadFeed", () => {
     const feed = buildThreadFeed([projected(toolItem, 0)]);
     const activity = feed[0]?.type === "activity-group" ? feed[0].activities[0] : null;
 
-    expect(activity?.summary).toBe("Read a T3 thread");
+    expect(activity?.summary).toBe("Read a Cinderdeck thread");
     expect(activity?.logo).toBe("t3-code");
-    expect(activity?.getCopyText().split("\n")[0]).toBe("Read a T3 thread");
+    expect(activity?.getCopyText().split("\n")[0]).toBe("Read a Cinderdeck thread");
   });
 
   it("uses the CUA action title in the mobile feed", () => {
@@ -1346,7 +1346,7 @@ describe("buildThreadFeed", () => {
     expect(activity?.summary).toBe("Inspect Saga music screen");
   });
 
-  it("uses canonical T3 orchestration summaries in compact work groups", () => {
+  it("uses canonical Cinderdeck orchestration summaries in compact work groups", () => {
     const rows = [
       projected(command("2026-06-20T00:00:01.000Z"), 0),
       ...["mcp__t3-code__t3_thread_send", "t3_code.t3_thread_send", "t3_thread_send"].map(
@@ -1394,7 +1394,7 @@ describe("buildThreadFeed", () => {
         ...base("list", "2026-09-19T00:00:01.000Z", 1),
         type: "dynamic_tool",
         title: "Custom provider title",
-        toolName: "T3-code.t3_project_list",
+        toolName: "Cinderdeck-code.t3_project_list",
         input: {},
         output: { projects: [] },
       },

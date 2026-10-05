@@ -3,7 +3,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as Option from "effect/Option";
-import type { ContextPullRequest } from "@t3tools/contracts/deckhand/rpc";
+import type { ContextPullRequest } from "@cinderdeck/contracts/deckhand/rpc";
 import { SidebarInset } from "../components/ui/sidebar";
 import { Button } from "../components/ui/button";
 import { PullRequestDetailPanel } from "../components/pullRequest/PullRequestDetailPanel";

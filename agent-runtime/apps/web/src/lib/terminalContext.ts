@@ -1,5 +1,5 @@
-import type { ThreadId } from "@t3tools/contracts";
-import { formatComposerContextReference } from "@t3tools/shared/composerContextReferences";
+import type { ThreadId } from "@cinderdeck/contracts";
+import { formatComposerContextReference } from "@cinderdeck/shared/composerContextReferences";
 import { toKindScopedComposerContextId } from "./composerContextReferences";
 
 export interface TerminalContextSelection {

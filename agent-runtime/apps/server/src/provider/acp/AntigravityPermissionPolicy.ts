@@ -1,4 +1,4 @@
-import type { RuntimeMode, ServerProvider } from "@t3tools/contracts";
+import type { RuntimeMode, ServerProvider } from "@cinderdeck/contracts";
 import * as Effect from "effect/Effect";
 import * as AcpErrors from "effect-acp/errors";
 

@@ -1,8 +1,8 @@
 // @effect-diagnostics nodeBuiltinImport:off - Stable hashes bind private operation keys to receipts.
 import * as NodeCrypto from "node:crypto";
-import { ThreadId, type OrchestrationV2ThreadShell } from "@t3tools/contracts";
-import * as C from "@t3tools/contracts/deckhand/ownershipRpc";
-import * as B from "@t3tools/contracts/deckhand";
+import { ThreadId, type OrchestrationV2ThreadShell } from "@cinderdeck/contracts";
+import * as C from "@cinderdeck/contracts/deckhand/ownershipRpc";
+import * as B from "@cinderdeck/contracts/deckhand";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -37,7 +37,7 @@ export class OwnershipTransitions extends Context.Service<
       input: typeof C.OwnershipList.Type,
     ) => Effect.Effect<typeof C.OwnershipPage.Type, C.OwnershipError>;
   }
->()("t3/deckhand/OwnershipTransitions") {}
+>()("@cinderdeck/server/deckhand/OwnershipTransitions") {}
 const decode = Schema.decodeUnknownEffect(Schema.fromJsonString(C.OwnershipRecord));
 const encode = Schema.encodeEffect(Schema.fromJsonString(C.OwnershipRecord));
 const encodePreview = Schema.encodeEffect(Schema.fromJsonString(C.OwnershipPreview));
@@ -141,7 +141,7 @@ export const layer = Layer.effect(
           if (target.environmentId !== input.installationID) return yield* fail("stale_context");
         }
         // Include every current upstream conversation at this exact worktree, including
-        // threads created before Deckhand bindings existed. No transcript is loaded.
+        // threads created before Cinderdeck bindings existed. No transcript is loaded.
         const pathRows = yield* sql<{
           path: string;
         }>`SELECT DISTINCT json_extract(payload_json,'$.worktreePath') AS path FROM orchestration_v2_projection_threads WHERE json_extract(payload_json,'$.worktreePath') IS NOT NULL AND json_extract(payload_json,'$.deletedAt') IS NULL LIMIT 1001`;

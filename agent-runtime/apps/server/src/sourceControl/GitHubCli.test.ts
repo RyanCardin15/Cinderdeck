@@ -10,7 +10,7 @@ import * as PlatformError from "effect/PlatformError";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import { ChildProcessSpawner } from "effect/unstable/process";
-import { VcsProcessExitError, VcsProcessSpawnError } from "@t3tools/contracts";
+import { VcsProcessExitError, VcsProcessSpawnError } from "@cinderdeck/contracts";
 
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as GitHubCli from "./GitHubCli.ts";
@@ -748,7 +748,7 @@ describe("GitHubCli.layer", () => {
                 title: "Codex turn mapping",
                 url: "https://github.com/pingdotgg/codething-mvp/pull/2829",
                 baseRefName: "main",
-                headRefName: "t3code/codex-turn-mapping",
+                headRefName: "cinderdeck/codex-turn-mapping",
                 state: "OPEN",
                 mergedAt: null,
                 isCrossRepository: false,
@@ -769,7 +769,7 @@ describe("GitHubCli.layer", () => {
       const gh = yield* GitHubCli.GitHubCli;
       const result = yield* gh.listOpenPullRequests({
         cwd: "/repo",
-        headSelector: "t3code/codex-turn-mapping",
+        headSelector: "cinderdeck/codex-turn-mapping",
       });
 
       assert.deepStrictEqual(result, [
@@ -778,7 +778,7 @@ describe("GitHubCli.layer", () => {
           title: "Codex turn mapping",
           url: "https://github.com/pingdotgg/codething-mvp/pull/2829",
           baseRefName: "main",
-          headRefName: "t3code/codex-turn-mapping",
+          headRefName: "cinderdeck/codex-turn-mapping",
           state: "open",
           closedAt: null,
           mergedAt: null,

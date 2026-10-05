@@ -3,11 +3,11 @@ import {
   ThreadId,
   OrchestrationV2ThreadShell,
   OrchestrationV2PlanArtifact,
-} from "@t3tools/contracts";
-import * as C from "@t3tools/contracts/deckhand/attentionRpc";
-import * as Q from "@t3tools/contracts/deckhand/reviewerRpc";
-import type { RunsOverview, RunFailures } from "@t3tools/contracts/deckhand/runsRpc";
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+} from "@cinderdeck/contracts";
+import * as C from "@cinderdeck/contracts/deckhand/attentionRpc";
+import * as Q from "@cinderdeck/contracts/deckhand/reviewerRpc";
+import type { RunsOverview, RunFailures } from "@cinderdeck/contracts/deckhand/runsRpc";
+import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as FileSystem from "effect/FileSystem";
 import * as Effect from "effect/Effect";
@@ -147,7 +147,7 @@ const change = (
   action,
   ...(snoozedUntil ? { snoozedUntil } : {}),
 });
-describe("Deckhand authoritative attention", () => {
+describe("Cinderdeck authoritative attention", () => {
   it.effect("read preferences reopen durably without copying the conversation", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

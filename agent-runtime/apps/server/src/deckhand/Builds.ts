@@ -1,4 +1,4 @@
-import * as C from "@t3tools/contracts/deckhand/builds";
+import * as C from "@cinderdeck/contracts/deckhand/builds";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -36,7 +36,7 @@ export class Builds extends Context.Service<
       input: C.BuildFinishInput,
     ) => Effect.Effect<C.BuildReceipt, C.BuildError>;
   }
->()("t3/deckhand/Builds") {}
+>()("@cinderdeck/server/deckhand/Builds") {}
 export const layer = Layer.effect(
   Builds,
   Effect.gen(function* () {

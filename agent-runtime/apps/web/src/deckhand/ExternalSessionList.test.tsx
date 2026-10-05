@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { EnvironmentId } from "@t3tools/contracts";
-import * as C from "@t3tools/contracts/deckhand/externalSessionsRpc";
+import { EnvironmentId } from "@cinderdeck/contracts";
+import * as C from "@cinderdeck/contracts/deckhand/externalSessionsRpc";
 import * as Schema from "effect/Schema";
 import { RegistryContext } from "@effect/atom-react";
 import { AtomRegistry } from "effect/unstable/reactivity";
@@ -22,10 +22,10 @@ const transport = vi.hoisted(() => ({ phase: "connected" }));
 vi.mock("../state/environments", () => ({
   useEnvironment: () => ({ connection: { phase: transport.phase } }),
 }));
-vi.mock("@t3tools/client-runtime/state/runtime", async () => {
+vi.mock("@cinderdeck/client-runtime/state/runtime", async () => {
   const { Atom } = await import("effect/unstable/reactivity");
   const Effect = await import("effect/Effect");
-  const C = await import("@t3tools/contracts/deckhand/externalSessionsRpc");
+  const C = await import("@cinderdeck/contracts/deckhand/externalSessionsRpc");
   const queries = new Map();
   commands.clear = () => queries.clear();
   return {
@@ -135,7 +135,7 @@ it("shows stale external claims without managed navigation or controls", async (
   expect(element.textContent).toContain(
     "Their status comes from that app; open it to control them.",
   );
-  expect(element.textContent).toContain("do not grant Deckhand controls");
+  expect(element.textContent).toContain("do not grant Cinderdeck controls");
   expect(element.querySelectorAll("button,a")).toHaveLength(0);
   expect(commands.list.mock.calls[0]?.[0]).toEqual({
     environmentId: "computer",

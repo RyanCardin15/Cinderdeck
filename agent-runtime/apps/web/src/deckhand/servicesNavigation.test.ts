@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { servicesWorkspaceSearch, validateServicesSearch } from "./servicesNavigation";
-import { EnvironmentId } from "@t3tools/contracts";
-import type { IntegrationView } from "@t3tools/contracts/deckhand/rpc";
+import { EnvironmentId } from "@cinderdeck/contracts";
+import type { IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
 import { savedWorkspaceMatches } from "./workspaceNavigation";
 describe("saved run navigation", () => {
   it("preserves the exact computer, workspace, run and authority pins", () => {

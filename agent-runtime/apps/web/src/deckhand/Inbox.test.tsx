@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import type { AttentionItem, AttentionPage } from "@t3tools/contracts/deckhand/attentionRpc";
+import { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
+import type { AttentionItem, AttentionPage } from "@cinderdeck/contracts/deckhand/attentionRpc";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { beforeEach, afterEach, expect, it, vi } from "vite-plus/test";
 const mocks = vi.hoisted(() => ({
@@ -26,7 +26,7 @@ vi.mock("../state/environments", () => ({
     ],
   }),
 }));
-vi.mock("./ProductNavigation", () => ({ ProductNavigation: () => <nav>Deckhand</nav> }));
+vi.mock("./ProductNavigation", () => ({ ProductNavigation: () => <nav>Cinderdeck</nav> }));
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => AsyncResult.initial() }));
 vi.mock("./state", () => ({ workspaceView: () => null }));
 vi.mock("./attentionState", () => ({ attentionList: "list", attentionChange: "change" }));

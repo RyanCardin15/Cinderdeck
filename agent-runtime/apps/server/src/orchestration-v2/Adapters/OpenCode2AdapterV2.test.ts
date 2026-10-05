@@ -21,7 +21,7 @@ import {
   type OrchestrationV2ProviderThread,
   type OrchestrationV2ProviderTurn,
   type ProviderReplayEntry,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -73,7 +73,7 @@ const event = (type: string, data: Record<string, unknown>): ProviderReplayEntry
 });
 const durable = { durable: { aggregateID: SESSION, seq: 1, version: 1 } };
 
-/** The rules T3 gives every session it runs, with only this thread's own Deckhand MCP server allowed. */
+/** The rules Cinderdeck gives every session it runs, with only this thread's own Cinderdeck MCP server allowed. */
 const mcpRules = [
   { action: "t3-code-*", resource: "*", effect: "deny" },
   { action: "deckhand-*", resource: "*", effect: "deny" },
@@ -115,7 +115,7 @@ const modelCatalog = {
   ],
 };
 
-/** The prompt id the recorded answer carries; a replay maps it to the one T3 chose. */
+/** The prompt id the recorded answer carries; a replay maps it to the one Cinderdeck chose. */
 const PROMPT_ID = "msg_0eb735d41001NJee1EvVePJAK5";
 const promptAccepted = replyData("session.prompt", {
   id: PROMPT_ID,
@@ -135,7 +135,7 @@ const noOpenRequests: ReadonlyArray<ProviderReplayEntry> = [
 ];
 
 /**
- * A thread's first turn writes T3's instructions entry before it starts; the
+ * A thread's first turn writes Cinderdeck's instructions entry before it starts; the
  * adapter only rewrites it when it changes, so later turns do not.
  */
 const withInstructions = (
@@ -155,7 +155,7 @@ const withInstructions = (
         "skill.list",
       ].includes(String(entry.frame.type)),
   );
-  // T3's MCP server is added before the entry that describes it.
+  // Cinderdeck's MCP server is added before the entry that describes it.
   const after = entries.findIndex(
     (entry, index) =>
       index < first &&
@@ -774,7 +774,7 @@ describe("OpenCode2 adapter", () => {
         reply("agent.list", agentList),
         out("session.update", { sessionID: SESSION, permissions: supervisedRules }),
         reply("session.update", null),
-        // A subagent's session may use its thread's T3 MCP server.
+        // A subagent's session may use its thread's Cinderdeck MCP server.
         out("session.update", {
           sessionID: CHILD,
           permissions: [...supervisedRules.slice(0, 3), ...mcpRules],
@@ -975,7 +975,7 @@ describe("OpenCode2 adapter", () => {
         reply("session.interrupt", { interrupted: true }),
         event("session.execution.interrupted", { sessionID: MIDDLE }),
         // Later OpenCode runs the thread's own session by itself: a follow-up
-        // T3 offers a turn for, which marks that everything above was handled.
+        // Cinderdeck offers a turn for, which marks that everything above was handled.
         event("session.execution.started", { sessionID: SESSION }),
       ]).pipe(
         Effect.provideService(ProviderContinuationRequests.ProviderContinuationRequests, {
@@ -1143,7 +1143,7 @@ describe("OpenCode2 adapter", () => {
         reply("session.interrupt", { interrupted: true }),
         event("session.execution.interrupted", { sessionID: MIDDLE }),
         // Later OpenCode runs the thread's own session by itself: a follow-up
-        // T3 offers a turn for, which marks that everything above was handled.
+        // Cinderdeck offers a turn for, which marks that everything above was handled.
         event("session.execution.started", { sessionID: SESSION }),
       ]).pipe(
         Effect.provideService(ProviderContinuationRequests.ProviderContinuationRequests, {
@@ -1534,7 +1534,7 @@ describe("OpenCode2 adapter", () => {
         ...opening,
         out("session.get", { sessionID: SESSION }),
         // An earlier build allowed its legacy MCP server and a different thread.
-        // Resuming keeps only the current thread's Deckhand MCP grant.
+        // Resuming keeps only the current thread's Cinderdeck MCP grant.
         replyData(
           "session.get",
           sessionInfo({
@@ -1602,7 +1602,7 @@ describe("OpenCode2 adapter", () => {
       }).pipe(Effect.scoped),
   );
 
-  it.effect("breaks the thread and forgets it when the session was deleted outside T3", () =>
+  it.effect("breaks the thread and forgets it when the session was deleted outside Cinderdeck", () =>
     Effect.gen(function* () {
       const { runtime, thread } = yield* resumed([
         out("session.prompt", { sessionID: SESSION, text: "<any>" }),
@@ -1654,9 +1654,9 @@ describe("OpenCode2 adapter", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("stops the requests a session still waits on when a restarted T3 loads it", () =>
+  it.effect("stops the requests a session still waits on when a restarted Cinderdeck loads it", () =>
     Effect.gen(function* () {
-      // T3 restarted while the server kept waiting on an ask T3 no longer shows.
+      // Cinderdeck restarted while the server kept waiting on an ask Cinderdeck no longer shows.
       const runtime = yield* openCode2ReplayRuntimeWithInstructions(
         [
           ...opening,
@@ -1733,7 +1733,7 @@ describe("OpenCode2 adapter", () => {
       assert.equal(ended?.status, "failed");
       assert.equal(
         ended?.status === "failed" ? ended.failure.message : undefined,
-        "OpenCode is waiting on a request T3 Code couldn't answer.",
+        "OpenCode is waiting on a request Cinderdeck couldn't answer.",
       );
     }).pipe(Effect.scoped),
   );
@@ -1768,12 +1768,12 @@ describe("OpenCode2 adapter", () => {
       yield* runtime.startTurn(turnInput(thread, bigPickle, "approval-required"));
       const request = yield* Fiber.join(requested);
       yield* runtime.respondToRuntimeRequest({ requestId: request!.id, decision: "accept" });
-      // Not "waiting on a request T3 Code couldn't answer": nothing waits on it.
+      // Not "waiting on a request Cinderdeck couldn't answer": nothing waits on it.
       assert.equal((yield* Fiber.join(terminal))?.status, "completed");
     }).pipe(Effect.scoped),
   );
 
-  it.effect("declines a form T3 cannot show with the reason, instead of leaving it open", () =>
+  it.effect("declines a form Cinderdeck cannot show with the reason, instead of leaving it open", () =>
     Effect.gen(function* () {
       const { runtime, thread } = yield* resumed([
         out("session.prompt", { sessionID: SESSION, text: "<any>" }),
@@ -1899,7 +1899,7 @@ describe("OpenCode2 adapter", () => {
             permissions: [
               ...supervisedRules.slice(0, 3),
               { action: "shell", resource: "echo *", effect: "allow" },
-              // A subagent's session may use its thread's T3 MCP server.
+              // A subagent's session may use its thread's Cinderdeck MCP server.
               ...mcpRules,
             ],
           }),
@@ -1964,7 +1964,7 @@ describe("OpenCode2 adapter", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("stops the subagent whose form T3 cannot show or decline", () =>
+  it.effect("stops the subagent whose form Cinderdeck cannot show or decline", () =>
     Effect.gen(function* () {
       const linkForm = {
         id: "frm_0eb79ab35001fkvFECSh3wYNVD",
@@ -2664,7 +2664,7 @@ describe("OpenCode2 adapter", () => {
   );
 
   it.effect(
-    "registers Deckhand's MCP server for the thread alone and removes it when the thread unloads",
+    "registers Cinderdeck's MCP server for the thread alone and removes it when the thread unloads",
     () =>
       Effect.gen(function* () {
         McpProviderSession.setMcpProviderSession({
@@ -2960,7 +2960,7 @@ describe("OpenCode2 adapter", () => {
         }),
         // Uncleared, OpenCode would commit the stage on the next prompt. The
         // clear wakes the session into an empty execution of its own, with no
-        // turn of T3's running: it is no subagent's follow-up.
+        // turn of Cinderdeck's running: it is no subagent's follow-up.
         out("session.revert.clear", { sessionID: SESSION }),
         reply("session.revert.clear", null),
         event("session.revert.cleared", { sessionID: SESSION }),
@@ -3008,7 +3008,7 @@ describe("OpenCode2 adapter", () => {
 
   it.effect("prompts under ids no other session on the server can hold", () =>
     Effect.gen(function* () {
-      // Two T3 databases on one external server repeat thread ids and run
+      // Two Cinderdeck databases on one external server repeat thread ids and run
       // ordinals, so their turns can share an attempt id and their steers a
       // message id. OpenCode refuses a prompt id another session already
       // holds with 409 ConflictError; the replay refuses a client id it
@@ -3397,7 +3397,7 @@ describe("OpenCode2 adapter", () => {
     Effect.gen(function* () {
       const first = `msg_t3_turn_${SESSION}:attempt:first`;
       const second = `msg_t3_turn_${SESSION}:attempt:second`;
-      // A runtime that never loaded the session, as after a T3 restart
+      // A runtime that never loaded the session, as after a Cinderdeck restart
       // against a server that kept running.
       const runtime = yield* openCode2ReplayRuntime([
         ...opening,
@@ -3592,7 +3592,7 @@ describe("OpenCode2 adapter", () => {
       const { runtime, thread } = yield* resumed([
         out("session.fork", { sessionID: SESSION }),
         replyData("session.fork", sessionInfo({ id: FORK })),
-        // The fork's T3 MCP server is the target thread's.
+        // The fork's Cinderdeck MCP server is the target thread's.
         out("session.update", {
           sessionID: FORK,
           permissions: [
@@ -3786,7 +3786,7 @@ describe("OpenCode2 adapter", () => {
             delivery: "steer",
           },
         }),
-        // OpenCode starts the follow-up on its own; T3 holds it for its turn.
+        // OpenCode starts the follow-up on its own; Cinderdeck holds it for its turn.
         event("session.execution.started", { sessionID: SESSION }),
         event("session.inbox.delivered", { sessionID: SESSION, inboxID: "msg_report" }),
         // The user steers into the follow-up turn; its execution reads the steer.

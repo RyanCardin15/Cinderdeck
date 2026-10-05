@@ -31,7 +31,7 @@ export class DesktopUserDataInitializationError extends Schema.TaggedError<Deskt
   }
 }
 
-/** Select Electron's profile independently of the server's T3 home. */
+/** Select Electron's profile independently of the server's Cinderdeck home. */
 export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPath")(
   function* (input: {
     readonly appDataDirectory: string;
@@ -41,8 +41,8 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const names = input.isDevelopment
-      ? { current: "deckhand-dev", legacy: "Deckhand (Dev)" }
-      : { current: "deckhand-v2", legacy: "Deckhand (Alpha)" };
+      ? { current: "deckhand-dev", legacy: "Cinderdeck (Dev)" }
+      : { current: "deckhand-v2", legacy: "Cinderdeck (Alpha)" };
     const destinationPath = path.join(input.appDataDirectory, names.current);
     const legacyPath = path.join(input.appDataDirectory, names.legacy);
     const inspect = (resourcePath: string) =>

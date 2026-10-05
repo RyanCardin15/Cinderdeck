@@ -1,8 +1,8 @@
 // @effect-diagnostics nodeBuiltinImport:off - immutable operation identities and local proof digests.
 import * as NodeCrypto from "node:crypto";
-import * as C from "@t3tools/contracts/deckhand/verificationAttemptsRpc";
-import * as B from "@t3tools/contracts/deckhand/builds";
-import * as R from "@t3tools/contracts/deckhand/recordingsRpc";
+import * as C from "@cinderdeck/contracts/deckhand/verificationAttemptsRpc";
+import * as B from "@cinderdeck/contracts/deckhand/builds";
+import * as R from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -19,7 +19,7 @@ import * as CheckoutIdentity from "./CheckoutIdentity.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import * as Migrations from "./Migrations.ts";
 import * as OwnedPreviewAttestations from "./OwnedPreviewAttestations.ts";
-import type { OwnedPreviewProof } from "@t3tools/contracts/deckhand/ownedPreviewRpc";
+import type { OwnedPreviewProof } from "@cinderdeck/contracts/deckhand/ownedPreviewRpc";
 import { resolveReviewerSource } from "./ReviewerSource.ts";
 import { makeKeyedSerialExecutor } from "../orchestration-v2/KeyedSerialExecutor.ts";
 const hash = (value: string) => NodeCrypto.createHash("sha256").update(value).digest("hex");
@@ -65,7 +65,7 @@ export class VerificationAttempts extends Context.Service<
       bound?: BoundScope,
     ) => Effect.Effect<C.VerificationAttempt, C.AttemptError>;
   }
->()("t3/deckhand/VerificationAttempts") {}
+>()("@cinderdeck/server/deckhand/VerificationAttempts") {}
 // Native describe owns the complete service/task dependency graph. A checkout may
 // also contain unrelated repositories; admit only the described, physically bound subset.
 export function pinBuildRepositories(

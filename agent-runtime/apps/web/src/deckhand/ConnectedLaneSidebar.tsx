@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import type { ScopedThreadRef } from "@cinderdeck/contracts";
 import { ChevronLeftIcon, GitBranchIcon, MessageSquareIcon } from "lucide-react";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { useLaneSessionContext } from "./LaneSessionContext";

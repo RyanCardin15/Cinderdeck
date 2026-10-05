@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { IntegrationView } from "@t3tools/contracts/deckhand/rpc";
+import type { IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
 import {
   overviewPageSelection,
   overviewResources,

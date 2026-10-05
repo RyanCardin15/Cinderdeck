@@ -1,5 +1,5 @@
 import { useId } from "react";
-import type { ManagedContextView } from "@t3tools/contracts/deckhand/rpc";
+import type { ManagedContextView } from "@cinderdeck/contracts/deckhand/rpc";
 import {
   defaultWorkspaceFilters,
   selectWorkspaceContexts,

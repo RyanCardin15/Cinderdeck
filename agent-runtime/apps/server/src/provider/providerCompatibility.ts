@@ -4,8 +4,8 @@ import {
   type ProviderDriverKind,
   type ServerProvider,
   type ServerProviderCompatibilityAdvisory,
-} from "@t3tools/contracts";
-import { satisfiesSemverRange } from "@t3tools/shared/semver";
+} from "@cinderdeck/contracts";
+import { satisfiesSemverRange } from "@cinderdeck/shared/semver";
 import * as Schema from "effect/Schema";
 import packageJson from "../../package.json" with { type: "json" };
 
@@ -82,11 +82,11 @@ export function resolveProviderCompatibility(
       : "unknown";
   const message =
     status === "broken"
-      ? "This provider version is known to be incompatible with this Deckhand release."
+      ? "This provider version is known to be incompatible with this Cinderdeck release."
       : status === "unsupported"
-        ? "This provider version is outside the supported range for this Deckhand release."
+        ? "This provider version is outside the supported range for this Cinderdeck release."
         : status === "graceful"
-          ? "This provider version has limited compatibility with this Deckhand release."
+          ? "This provider version has limited compatibility with this Cinderdeck release."
           : null;
   const recommendedVersion = policy.recommendedVersion ?? null;
   const recommendedRange = policy.recommendedRange ?? null;

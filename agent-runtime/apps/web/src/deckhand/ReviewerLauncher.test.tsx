@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import * as Rpc from "@t3tools/contracts/deckhand/rpc";
+import { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
+import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
 import * as Schema from "effect/Schema";
 import * as Cause from "effect/Cause";
 import { beforeEach, afterEach, expect, it, vi } from "vite-plus/test";

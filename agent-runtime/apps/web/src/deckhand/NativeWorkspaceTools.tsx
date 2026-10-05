@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import type { NativeToolRequest } from "@t3tools/contracts";
+import type { NativeToolRequest } from "@cinderdeck/contracts";
 import {
   FolderPlusIcon,
   PencilLineIcon,

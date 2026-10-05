@@ -15,6 +15,7 @@ provided independently. The original author does not endorse this fork.
 
 The embedded agent runtime in agent-runtime/ is derived from T3 Code:
 https://github.com/pingdotgg/t3code
-Its original history, MIT license (agent-runtime/LICENSE), notices and
-third-party licenses are retained. That subtree retains its own license terms.
+Its MIT license (agent-runtime/LICENSE), copyright notices and third-party
+licenses are retained. The runtime is maintained as part of Cinderdeck and
+retains its original license terms.
 Cinderdeck-specific agent runtime contributions use those same MIT terms.

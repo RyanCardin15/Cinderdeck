@@ -1,8 +1,8 @@
-import * as GitHubWorkspace from "@t3tools/contracts/deckhand/gitHubWorkspace";
+import * as GitHubWorkspace from "@cinderdeck/contracts/deckhand/gitHubWorkspace";
 // @effect-diagnostics nodeBuiltinImport:off - This adapter owns the same-host Unix transport.
 import * as NodeNet from "node:net";
 import * as NodeOS from "node:os";
-import * as Contracts from "@t3tools/contracts/deckhand/integration";
+import * as Contracts from "@cinderdeck/contracts/deckhand/integration";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -91,7 +91,7 @@ export class CinderdeckClient extends Context.Service<
       },
     ) => Effect.Effect<Contracts.IntegrationEvents, BridgeError>;
   }
->()("t3/deckhand/CinderdeckClient") {}
+>()("@cinderdeck/server/deckhand/CinderdeckClient") {}
 
 const decodeGitHubInput = Schema.decodeUnknownEffect(GitHubWorkspace.GitHubWorkspaceInput);
 const decodeGitHubResult = Schema.decodeUnknownEffect(GitHubWorkspace.GitHubWorkspaceResult);
@@ -134,7 +134,7 @@ const make = Effect.gen(function* () {
           id: 1,
           method,
           params,
-          client: { name: "Deckhand", ...(clientID ? { session: clientID } : {}) },
+          client: { name: "Cinderdeck", ...(clientID ? { session: clientID } : {}) },
         }).pipe(
           Effect.map((frame) => frame + "\n"),
           Effect.mapError((cause) => new BridgeError({ reason: "invalid_request", cause })),

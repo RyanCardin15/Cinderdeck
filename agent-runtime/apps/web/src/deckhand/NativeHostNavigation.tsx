@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import type { NativeHostRoute } from "@t3tools/contracts";
+import type { NativeHostRoute } from "@cinderdeck/contracts";
 import type { WorkspaceSearch } from "./workspaceNavigation";
 import { usePrimaryEnvironmentId } from "../state/environments";
 

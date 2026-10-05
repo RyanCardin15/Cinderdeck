@@ -1,6 +1,6 @@
 import * as ProcessRunner from "../processRunner.ts";
-import * as Contracts from "@t3tools/contracts/deckhand/integration";
-import * as Rpc from "@t3tools/contracts/deckhand/rpc";
+import * as Contracts from "@cinderdeck/contracts/deckhand/integration";
+import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
 import * as DateTime from "effect/DateTime";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
@@ -81,7 +81,7 @@ export class IntegrationHub extends Context.Service<
       waitMs?: number,
     ) => Effect.Effect<Contracts.IntegrationOperationReceipt, Rpc.DeckhandRpcError>;
   }
->()("t3/deckhand/IntegrationHub") {}
+>()("@cinderdeck/server/deckhand/IntegrationHub") {}
 const encodeView = Schema.encodeEffect(Schema.fromJsonString(Rpc.IntegrationView));
 const decodeView = Schema.decodeUnknownEffect(Schema.fromJsonString(Rpc.IntegrationView));
 const isBridgeError = Schema.is(CinderdeckClient.BridgeError);

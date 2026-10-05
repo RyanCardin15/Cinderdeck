@@ -1,4 +1,4 @@
-import { ProjectId, type ThreadPullRequestLink, type VcsStatusResult } from "@t3tools/contracts";
+import { ProjectId, type ThreadPullRequestLink, type VcsStatusResult } from "@cinderdeck/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -10,7 +10,7 @@ import {
 const pullRequest: NonNullable<VcsStatusResult["pr"]> = {
   number: 3774,
   title: "Desktop-style pull request indicator",
-  url: "https://github.com/t3tools/t3code/pull/3774",
+  url: "https://github.com/t3tools/cinderdeck/pull/3774",
   baseRef: "main",
   headRef: "codex/desktop-style-pr-indicator",
   state: "merged",
@@ -56,7 +56,7 @@ function linkedPr(
     host: "github.com",
     repository: "t3tools/t3code",
     number,
-    url: `https://github.com/t3tools/t3code/pull/${number}`,
+    url: `https://github.com/t3tools/cinderdeck/pull/${number}`,
     source: "manual",
     linkedAt: "2026-09-08T00:00:00.000Z",
     stack: null,
@@ -160,9 +160,9 @@ describe("resolveThreadPrSource compatibility", () => {
     projectId: ProjectId.make("project"),
     repository: "t3tools/t3code",
     number: 1,
-    url: "https://github.com/t3tools/t3code/pull/1",
+    url: "https://github.com/t3tools/cinderdeck/pull/1",
   };
-  const branchRef = { ...legacyRef, number: 2, url: "https://github.com/t3tools/t3code/pull/2" };
+  const branchRef = { ...legacyRef, number: 2, url: "https://github.com/t3tools/cinderdeck/pull/2" };
 
   it("polls the legacy reference when only the older linking capability exists", () => {
     expect(

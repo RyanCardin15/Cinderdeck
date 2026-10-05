@@ -1,12 +1,12 @@
-import * as NetService from "@t3tools/shared/Net";
+import * as NetService from "@cinderdeck/shared/Net";
 import {
   OtlpHeadersFromString,
   OtlpProtocol,
   type SignalExport,
-} from "@t3tools/shared/observability";
-import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
-import { parsePersistedServerObservabilitySettings } from "@t3tools/shared/serverSettings";
-import { DesktopBackendBootstrap, PortSchema } from "@t3tools/contracts";
+} from "@cinderdeck/shared/observability";
+import * as OtelEnvironment from "@cinderdeck/shared/otelEnvironment";
+import { parsePersistedServerObservabilitySettings } from "@cinderdeck/shared/serverSettings";
+import { DesktopBackendBootstrap, PortSchema } from "@cinderdeck/contracts";
 import * as Config from "effect/Config";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -39,7 +39,7 @@ const hostFlag = Flag.String("host").pipe(
 );
 export const baseDirFlag = Flag.String("base-dir").pipe(
   Flag.withDescription(
-    "Explicit Deckhand data directory; runtime state is stored under userdata (equivalent to DECKHAND_HOME).",
+    "Explicit Cinderdeck data directory; runtime state is stored under userdata (equivalent to DECKHAND_HOME).",
   ),
   Flag.optional,
 );
@@ -396,7 +396,7 @@ export const resolveServerConfig = (
 
     const otel = yield* OtelEnvironment.load;
 
-    // Deckhand's own OTLP variables name no signal, so the one answer they give
+    // Cinderdeck's own OTLP variables name no signal, so the one answer they give
     // is the answer for all three.
     const signalExport: SignalExport = {
       protocol: env.otlpProtocol,

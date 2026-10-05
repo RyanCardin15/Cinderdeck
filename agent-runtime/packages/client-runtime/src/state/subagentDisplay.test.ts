@@ -1,4 +1,4 @@
-import type { OrchestrationV2TurnItemStatus } from "@t3tools/contracts";
+import type { OrchestrationV2TurnItemStatus } from "@cinderdeck/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import { subagentGroupSummary } from "./subagentDisplay.js";
 

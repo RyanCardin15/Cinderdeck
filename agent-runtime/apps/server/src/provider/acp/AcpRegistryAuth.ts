@@ -3,7 +3,7 @@ import {
   type AcpRegistrySettings,
   type ProviderAuthMethod,
   type ProviderInstanceId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";

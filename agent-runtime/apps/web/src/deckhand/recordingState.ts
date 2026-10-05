@@ -1,5 +1,5 @@
-import { RECORDING_METHODS } from "@t3tools/contracts/deckhand/recordingsRpc";
-import { createEnvironmentRpcCommand } from "@t3tools/client-runtime/state/runtime";
+import { RECORDING_METHODS } from "@cinderdeck/contracts/deckhand/recordingsRpc";
+import { createEnvironmentRpcCommand } from "@cinderdeck/client-runtime/state/runtime";
 import { connectionAtomRuntime } from "../connection/runtime";
 export const listRecordings = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "deckhand:recording-list",

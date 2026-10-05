@@ -1,8 +1,8 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Recording from "@t3tools/contracts/deckhand/recordingsRpc";
-import * as C from "@t3tools/contracts/deckhand/runsRpc";
+import * as Recording from "@cinderdeck/contracts/deckhand/recordingsRpc";
+import * as C from "@cinderdeck/contracts/deckhand/runsRpc";
 import * as RecordingTransport from "./RecordingTransport.ts";
 import * as Runs from "./Runs.ts";
 const context: C.RunContext = {
@@ -39,7 +39,7 @@ const overview: C.RunsOverview = {
       definitionID: "verify",
       kind: "task",
       status: "failed",
-      actor: "Deckhand",
+      actor: "Cinderdeck",
       createdAt: "2026-10-04T00:00:00Z",
       finishedAt: "2026-10-04T00:00:01Z",
       duration: 1,

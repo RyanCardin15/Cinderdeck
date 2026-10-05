@@ -10,8 +10,8 @@ import {
   pullRequestCandidateUrlFromReferenceAutolink,
   shouldOpenPullRequestExternally,
 } from "./openPullRequestLink";
-import { ProjectId, type RepositoryIdentity } from "@t3tools/contracts";
-import { normalizeGitRemoteUrl } from "@t3tools/shared/git";
+import { ProjectId, type RepositoryIdentity } from "@cinderdeck/contracts";
+import { normalizeGitRemoteUrl } from "@cinderdeck/shared/git";
 
 function repositoryIdentity(
   provider: string,
@@ -245,7 +245,7 @@ describe("parseChangeRequestUrl", () => {
 
   it("reads a GitLab merge request, nested groups and all", () => {
     expect(
-      parseChangeRequestUrl("https://gitlab.com/t3tools/platform/t3code/-/merge_requests/42"),
+      parseChangeRequestUrl("https://gitlab.com/t3tools/platform/cinderdeck/-/merge_requests/42"),
     ).toEqual({
       host: "gitlab.com",
       repository: "t3tools/platform/t3code",
@@ -273,14 +273,14 @@ describe("parseChangeRequestUrl", () => {
 
   it("reads both Azure DevOps URL forms, keeping `_git` in the repository path", () => {
     expect(
-      parseChangeRequestUrl("https://dev.azure.com/acme/platform/_git/t3code/pullrequest/17"),
+      parseChangeRequestUrl("https://dev.azure.com/acme/platform/_git/cinderdeck/pullrequest/17"),
     ).toEqual({
       host: "dev.azure.com",
       repository: "acme/platform/_git/t3code",
       number: 17,
     });
     expect(
-      parseChangeRequestUrl("https://acme.visualstudio.com/platform/_git/t3code/pullrequest/17"),
+      parseChangeRequestUrl("https://acme.visualstudio.com/platform/_git/cinderdeck/pullrequest/17"),
     ).toEqual({
       host: "acme.visualstudio.com",
       repository: "platform/_git/t3code",
@@ -289,7 +289,7 @@ describe("parseChangeRequestUrl", () => {
   });
 
   it("survives trailing segments, a trailing slash and a query string", () => {
-    expect(parseChangeRequestUrl("https://github.com/t3tools/t3code/pull/123/files?w=1")).toEqual({
+    expect(parseChangeRequestUrl("https://github.com/t3tools/cinderdeck/pull/123/files?w=1")).toEqual({
       host: "github.com",
       repository: "t3tools/t3code",
       number: 123,
@@ -300,7 +300,7 @@ describe("parseChangeRequestUrl", () => {
     expect(
       parseChangeRequestUrl("https://bitbucket.org/team/repo/pull-requests/5/commits"),
     ).toEqual({ host: "bitbucket.org", repository: "team/repo", number: 5 });
-    expect(parseChangeRequestUrl("https://github.com/t3tools/t3code/pull/123/")).toEqual({
+    expect(parseChangeRequestUrl("https://github.com/t3tools/cinderdeck/pull/123/")).toEqual({
       host: "github.com",
       repository: "t3tools/t3code",
       number: 123,
@@ -309,18 +309,18 @@ describe("parseChangeRequestUrl", () => {
 
   it("claims nothing it cannot be sure of, so the link goes to the browser", () => {
     for (const link of [
-      "https://github.com/t3tools/t3code/issues/123",
-      "https://github.com/t3tools/t3code/commit/0a1b2c3",
+      "https://github.com/t3tools/cinderdeck/issues/123",
+      "https://github.com/t3tools/cinderdeck/commit/0a1b2c3",
       "https://github.com/t3tools/t3code",
-      "https://github.com/t3tools/t3code/pull/abc",
-      "https://gitlab.com/t3tools/t3code/-/snippets/12",
-      "https://gitlab.com/t3tools/t3code/-/issues/12",
+      "https://github.com/t3tools/cinderdeck/pull/abc",
+      "https://gitlab.com/t3tools/cinderdeck/-/snippets/12",
+      "https://gitlab.com/t3tools/cinderdeck/-/issues/12",
       // A path shape that means nothing off its own host.
       "https://blog.example.test/2026/updates/pull/3",
       // A lookalike is deliberately not fought here: `github.com.evil.test` reads as a GitHub
       // Enterprise install and there is no way to tell it from one. It is `findProjectForChange
       // Request` that refuses it, because no project in the workspace is checked out from it.
-      "javascript:alert(1)//github.com/t3tools/t3code/pull/1",
+      "javascript:alert(1)//github.com/t3tools/cinderdeck/pull/1",
       "not a url",
     ]) {
       expect(parseChangeRequestUrl(link), link).toBeNull();

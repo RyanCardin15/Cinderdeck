@@ -49,7 +49,7 @@ describe("Self invocation", () => {
 describe("Node runtime selection", () => {
   it.effect("keeps the current Node or Electron runtime without requiring Node on PATH", () =>
     Effect.gen(function* () {
-      for (const executable of ["/runtime/node", "/Applications/T3 Code.app/Electron"]) {
+      for (const executable of ["/runtime/node", "/Applications/Cinderdeck.app/Electron"]) {
         expect(
           yield* resolveNodeExecutable("Local device support", { PATH: "" }).pipe(
             Effect.provideService(HostProcessExecutablePath, executable),
@@ -60,7 +60,7 @@ describe("Node runtime selection", () => {
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("uses installed Node instead of the standalone T3 executable", () =>
+  it.effect("uses installed Node instead of the standalone Cinderdeck executable", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       expect(

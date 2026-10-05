@@ -1,5 +1,5 @@
-import type { EnvironmentMachineKind } from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import type { EnvironmentMachineKind } from "@cinderdeck/contracts";
+import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 

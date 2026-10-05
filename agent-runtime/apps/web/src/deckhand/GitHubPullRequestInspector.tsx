@@ -8,7 +8,7 @@ import type {
   GitHubWorkspaceInput,
   GitHubWorkspaceRequest,
   GitHubWorkspaceResult,
-} from "@t3tools/contracts/deckhand/gitHubWorkspace";
+} from "@cinderdeck/contracts/deckhand/gitHubWorkspace";
 import {
   Dialog,
   DialogPopup,

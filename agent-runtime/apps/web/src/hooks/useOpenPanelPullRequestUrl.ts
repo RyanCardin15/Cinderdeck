@@ -1,5 +1,5 @@
-import { scopeProjectRef } from "@t3tools/client-runtime/environment";
-import { EnvironmentId, ProjectId, type ScopedThreadRef } from "@t3tools/contracts";
+import { scopeProjectRef } from "@cinderdeck/client-runtime/environment";
+import { EnvironmentId, ProjectId, type ScopedThreadRef } from "@cinderdeck/contracts";
 import { useMemo } from "react";
 
 import {

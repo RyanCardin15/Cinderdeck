@@ -7,7 +7,7 @@ export class DeckhandStoreVersionError extends Schema.TaggedError<DeckhandStoreV
   { found: Schema.Int, supported: Schema.Int },
 ) {
   override get message() {
-    return "This Deckhand store requires a newer application. Restore a compatible binary or store backup.";
+    return "This Cinderdeck store requires a newer application. Restore a compatible binary or store backup.";
   }
 }
 export const VERSION = 16;

@@ -18,13 +18,13 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@cinderdeck/contracts";
 import {
   IntegrationOperationInput,
   type IntegrationOperationMethod,
   type IntegrationOperationReceipt,
   type IntegrationRepository,
-} from "@t3tools/contracts/deckhand/integration";
+} from "@cinderdeck/contracts/deckhand/integration";
 import type {
   DefinitionValidation,
   RunContext,
@@ -32,7 +32,7 @@ import type {
   RunDetail,
   RunLogs,
   RunsOverview,
-} from "@t3tools/contracts/deckhand/runsRpc";
+} from "@cinderdeck/contracts/deckhand/runsRpc";
 import * as Option from "effect/Option";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";

@@ -18,7 +18,7 @@ describe("buildCodexDeveloperInstructions", () => {
       buildCodexDeveloperInstructions("default"),
       /^<collaboration_mode># Collaboration Mode: Default/,
     );
-    NodeAssert.match(instructions, /Deckhand/);
+    NodeAssert.match(instructions, /Cinderdeck/);
     NodeAssert.match(instructions, /Codex harness/);
     NodeAssert.match(instructions, /as gpt-5\.3-codex with high reasoning effort/);
   });
@@ -70,7 +70,7 @@ describe("buildCodexDeveloperInstructions", () => {
   });
 });
 
-describe("T3 browser developer instructions", () => {
+describe("Cinderdeck browser developer instructions", () => {
   const runtime = { model: "gpt-5.3-codex", reasoningEffort: "high" };
 
   it("prefers the product-native preview tools in both collaboration modes", () => {
@@ -88,7 +88,7 @@ describe("T3 browser developer instructions", () => {
       const instructions = toolInstructions(runtime, false);
       NodeAssert.doesNotMatch(instructions, /preview_status/);
       NodeAssert.doesNotMatch(instructions, /preview_open/);
-      NodeAssert.doesNotMatch(instructions, /Deckhand collaborative browser/);
+      NodeAssert.doesNotMatch(instructions, /Cinderdeck collaborative browser/);
       // Steering away from other browser automation must go with the tools;
       // keeping it would leave the model talked out of its only option.
       NodeAssert.doesNotMatch(instructions, /Do not switch to global browser skills/);
@@ -98,7 +98,7 @@ describe("T3 browser developer instructions", () => {
     }
   });
 
-  it("keeps advertised server names and lazy tool prefixes aligned with Deckhand injection", () => {
+  it("keeps advertised server names and lazy tool prefixes aligned with Cinderdeck injection", () => {
     const context = buildCodexAdditionalContext(runtime, { browser: true, device: true });
     const text = Object.values(context)
       .map((item) => item.value)

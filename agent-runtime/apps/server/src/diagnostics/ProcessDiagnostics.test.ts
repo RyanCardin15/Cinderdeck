@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import type {
   DesktopHostTelemetrySnapshot,
   ResourceMonitorSnapshotEvent,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -277,7 +277,7 @@ describe("ProcessDiagnostics", () => {
         pid: 4_242,
         signal: "SIGKILL",
         signaled: false,
-        message: Option.some("Process 4242 is not a signalable T3 backend descendant."),
+        message: Option.some("Process 4242 is not a signalable Cinderdeck backend descendant."),
       });
 
       const diagnostics = yield* Effect.service(ProcessDiagnostics.ProcessDiagnostics).pipe(

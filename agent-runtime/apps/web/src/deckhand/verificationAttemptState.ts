@@ -1,11 +1,11 @@
 import {
   ATTEMPT_METHODS,
   type VerificationAttempt,
-} from "@t3tools/contracts/deckhand/verificationAttemptsRpc";
+} from "@cinderdeck/contracts/deckhand/verificationAttemptsRpc";
 import {
   createEnvironmentRpcCommand,
   createEnvironmentRpcQueryAtomFamily,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@cinderdeck/client-runtime/state/runtime";
 import { Atom } from "effect/unstable/reactivity";
 import { connectionAtomRuntime } from "../connection/runtime";
 export const previewAttempt = createEnvironmentRpcCommand(connectionAtomRuntime, {

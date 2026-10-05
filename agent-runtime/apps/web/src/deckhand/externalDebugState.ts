@@ -1,5 +1,5 @@
-import { EXTERNAL_DEBUG_METHODS } from "@t3tools/contracts/deckhand/externalDebugRpc";
-import { createEnvironmentRpcCommand } from "@t3tools/client-runtime/state/runtime";
+import { EXTERNAL_DEBUG_METHODS } from "@cinderdeck/contracts/deckhand/externalDebugRpc";
+import { createEnvironmentRpcCommand } from "@cinderdeck/client-runtime/state/runtime";
 import { connectionAtomRuntime } from "../connection/runtime";
 export const discoverDebugTargets = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "external-debug:discover",

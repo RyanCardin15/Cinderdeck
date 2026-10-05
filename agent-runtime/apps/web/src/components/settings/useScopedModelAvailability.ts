@@ -1,4 +1,4 @@
-import type { ProviderInstanceId, UnifiedSettings } from "@t3tools/contracts";
+import type { ProviderInstanceId, UnifiedSettings } from "@cinderdeck/contracts";
 import { useCallback } from "react";
 
 import { getCustomModelOptionsByInstance } from "../../modelSelection";

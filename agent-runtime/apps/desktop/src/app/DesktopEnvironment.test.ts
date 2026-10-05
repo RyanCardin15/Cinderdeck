@@ -14,9 +14,9 @@ const defaultInput = {
   platform: "darwin",
   processArch: "arm64",
   appVersion: "0.0.22",
-  appPath: "/Applications/Deckhand.app/Contents/Resources/app.asar",
+  appPath: "/Applications/Cinderdeck.app/Contents/Resources/app.asar",
   isPackaged: false,
-  resourcesPath: "/Applications/Deckhand.app/Contents/Resources",
+  resourcesPath: "/Applications/Cinderdeck.app/Contents/Resources",
   runningUnderArm64Translation: false,
 } satisfies DesktopEnvironment.MakeDesktopEnvironmentInput;
 
@@ -45,9 +45,9 @@ describe("DesktopEnvironment", () => {
       assert.deepEqual(
         DesktopEnvironment.resolveDesktopAppBranding({ isDevelopment: false, appVersion }),
         {
-          baseName: "Deckhand",
+          baseName: "Cinderdeck",
           stageLabel: "Preview",
-          displayName: "Deckhand (Preview)",
+          displayName: "Cinderdeck (Preview)",
         },
       );
     }
@@ -103,11 +103,11 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.serverRoot, "/repo");
       assert.equal(environment.backendEntryPath, "/repo/apps/server/dist/bin.mjs");
       assert.equal(environment.backendCwd, "/repo");
-      assert.equal(environment.appUserModelId, "com.cardinlabs.deckhand.dev");
+      assert.equal(environment.appUserModelId, "com.ryancardin.cinderdeck.agentshell.dev");
       assert.equal(environment.linuxWmClass, "deckhand-dev");
       assert.equal(
         environment.linuxDesktopEntryName,
-        "com.cardinlabs.Deckhand.Development.desktop",
+        "com.cardinlabs.Cinderdeck.Development.desktop",
       );
       assert.deepEqual(
         Option.map(environment.devServerUrl, (url) => url.href),
@@ -180,7 +180,7 @@ describe("DesktopEnvironment", () => {
         resourcesPath: "/tmp/.mount_deckhand/resources",
       });
 
-      assert.equal(environment.linuxDesktopEntryName, "com.cardinlabs.Deckhand.desktop");
+      assert.equal(environment.linuxDesktopEntryName, "com.cardinlabs.Cinderdeck.desktop");
     }),
   );
 
@@ -202,12 +202,12 @@ describe("DesktopEnvironment", () => {
       const environment = yield* makeEnvironment(
         {},
         {
-          DECKHAND_DESKTOP_APP_USER_MODEL_ID: " com.cardinlabs.deckhand.dev.local ",
+          DECKHAND_DESKTOP_APP_USER_MODEL_ID: " com.ryancardin.cinderdeck.agentshell.dev.local ",
           VITE_DEV_SERVER_URL: "http://localhost:5173",
         },
       );
 
-      assert.equal(environment.appUserModelId, "com.cardinlabs.deckhand.dev.local");
+      assert.equal(environment.appUserModelId, "com.ryancardin.cinderdeck.agentshell.dev.local");
     }),
   );
 

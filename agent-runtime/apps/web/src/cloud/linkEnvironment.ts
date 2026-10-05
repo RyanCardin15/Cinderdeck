@@ -14,15 +14,15 @@ import {
   EnvironmentHttpUnauthorizedError,
   EnvironmentId,
   WS_METHODS,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   type RelayEnvironmentLinkResponse,
   type RelayManagedEndpointProviderKind,
-} from "@t3tools/contracts/relay";
-import { EnvironmentRegistry } from "@t3tools/client-runtime/connection";
-import { request, runStream } from "@t3tools/client-runtime/rpc";
-import { makeEnvironmentHttpApiClient } from "@t3tools/client-runtime/rpc";
-import { ManagedRelay, relayProtectedErrorMessage } from "@t3tools/client-runtime/relay";
+} from "@cinderdeck/contracts/relay";
+import { EnvironmentRegistry } from "@cinderdeck/client-runtime/connection";
+import { request, runStream } from "@cinderdeck/client-runtime/rpc";
+import { makeEnvironmentHttpApiClient } from "@cinderdeck/client-runtime/rpc";
+import { ManagedRelay, relayProtectedErrorMessage } from "@cinderdeck/client-runtime/relay";
 
 import { primaryEnvironmentHttpLayer } from "../environments/primary/httpLayer";
 import { resolveCloudPublicConfig } from "./publicConfig";
@@ -248,7 +248,7 @@ export function unlinkPrimaryEnvironmentFromCloud(input: {
 
 // "publish_only" links the environment to the relay for agent-activity
 // publishing alone: no managed tunnel is provisioned, so it can be toggled
-// independently of T3 Connect while clients reach the environment out of band.
+// independently of Remote connections while clients reach the environment out of band.
 export type CloudLinkMode = "managed" | "publish_only";
 
 const PUBLISH_ONLY_PROVIDER_KIND = "manual" satisfies RelayManagedEndpointProviderKind;

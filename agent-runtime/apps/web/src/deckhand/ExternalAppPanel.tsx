@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { AppWindowIcon, RefreshCwIcon, Settings2Icon, UnplugIcon } from "lucide-react";
-import type { ScopedThreadRef } from "@t3tools/contracts";
-import type { DebugSession, DebugTarget } from "@t3tools/contracts/deckhand/externalDebugRpc";
-import { resolveExternalAppProfiles } from "@t3tools/contracts/deckhand/externalAppPreferences";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import type { ScopedThreadRef } from "@cinderdeck/contracts";
+import type { DebugSession, DebugTarget } from "@cinderdeck/contracts/deckhand/externalDebugRpc";
+import { resolveExternalAppProfiles } from "@cinderdeck/contracts/deckhand/externalAppPreferences";
+import { squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
 import { useClientSettings } from "../hooks/useSettings";
 import { useAtomCommand } from "../state/use-atom-command";
 import { useEnvironments } from "../state/environments";

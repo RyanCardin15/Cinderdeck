@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - SHA-256 identifies local files; Git/process I/O uses services.
 import * as NodeCrypto from "node:crypto";
-import type { PhysicalCheckout } from "@t3tools/contracts/deckhand";
+import type { PhysicalCheckout } from "@cinderdeck/contracts/deckhand";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -52,7 +52,7 @@ export class CheckoutIdentity extends Context.Service<
       root: string,
     ) => Effect.Effect<PhysicalCheckout | null, CheckoutIdentityError>;
   }
->()("t3/deckhand/CheckoutIdentity") {}
+>()("@cinderdeck/server/deckhand/CheckoutIdentity") {}
 
 const isIdentityError = Schema.is(CheckoutIdentityError);
 const make = Effect.gen(function* () {

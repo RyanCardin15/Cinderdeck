@@ -6,9 +6,9 @@ To start an agent in a primary checkout or existing lane, choose the repository 
 
 Agent sessions keeps the newest 20 conversations for the selected context. Open one to continue its work or inspect its saved history. A finished turn means the agent has answered; it does not mark the feature complete. Connection state is shown separately, so a saved result can remain available while its provider is stopped.
 
-If a launch reply is lost, use Check result or Retry saved launch. Deckhand keeps that launch request and its conversation identity across a page reload. Change the request only after Deckhand confirms it was refused or failed. Selecting another workspace does not move an existing conversation.
+If a launch reply is lost, use Check result or Retry saved launch. Cinderdeck keeps that launch request and its conversation identity across a page reload. Change the request only after Cinderdeck confirms it was refused or failed. Selecting another workspace does not move an existing conversation.
 
-A managed provider retains checkout ownership while its process is resident, including between turns. Native tasks that write that checkout may be refused until the provider stops. **Stop writer and release** stops that exact provider session and preserves its conversation and lane. It refuses shared sessions or uncertain process outcomes; native ownership is released only after the owner is proved stopped. Scheduling a reviewer waits durably for that release. If ownership cannot be confirmed after a crash, Deckhand keeps it uncertain and never takes it over automatically.
+A managed provider retains checkout ownership while its process is resident, including between turns. Native tasks that write that checkout may be refused until the provider stops. **Stop writer and release** stops that exact provider session and preserves its conversation and lane. It refuses shared sessions or uncertain process outcomes; native ownership is released only after the owner is proved stopped. Scheduling a reviewer waits durably for that release. If ownership cannot be confirmed after a crash, Cinderdeck keeps it uncertain and never takes it over automatically.
 
 Native lane lifecycle API clients submit `lane.create`, `lane.adopt`, `lane.setup`, `lane.release` and `lane.remove` through the shared workspace backend and durable operation journal. Each method requires its own advertised native capability. Requests carry the reviewed installation, workspace generation/revision and a stable operation key; use the same key to inspect a lost reply. A resource that changes before dispatch is refused before effects. Workspaces exposes setup and removal in the selected lane inspector. Standalone Git worktree operations keep their existing reservation and cleanup guards.
 
@@ -32,7 +32,7 @@ A saved feature creation reappears when you return to its workspace, including a
 
 New feature saves the feature and its intended workspace/repositories before asking Cinderdeck to create anything. A setup failure keeps that feature together with the lane and saved request. The returned creation receipt exposes `contextIntent`; the actual checkout and session are bound only after native creation is confirmed. Provider writer ownership is acquired against the actual paths after native creation.
 
-Managed agent terminals can use [Deckhand CLI and MCP integration tools](cli-mcp.md) to inspect their saved lane, services, runs, recordings and evidence with the same domain validation as the UI.
+Managed agent terminals can use [Cinderdeck CLI and MCP integration tools](cli-mcp.md) to inspect their saved lane, services, runs, recordings and evidence with the same domain validation as the UI.
 
 If an evidence asset download fails from an older preparation, PR Verification offers Prepare a new bundle after that preparation is terminal. This explicitly saves a fresh operation key and keeps the previous immutable preparation receipt and error visible. Check preparation continues the current key; it never silently replaces an uncertain export.
 

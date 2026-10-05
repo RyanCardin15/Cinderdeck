@@ -1,12 +1,12 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
-import { AcpRegistrySettings } from "@t3tools/contracts";
+import { AcpRegistrySettings } from "@cinderdeck/contracts";
 import {
   HostProcessArchitecture,
   HostProcessEnvironment,
   HostProcessPlatform,
-} from "@t3tools/shared/hostProcess";
-import { SpawnExecutableResolution } from "@t3tools/shared/shell";
+} from "@cinderdeck/shared/hostProcess";
+import { SpawnExecutableResolution } from "@cinderdeck/shared/shell";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -309,7 +309,7 @@ describe("AcpRegistrySupport", () => {
     );
   });
 
-  it.effect("installs into T3 home a package and launches its exposed command", () => {
+  it.effect("installs into Cinderdeck home a package and launches its exposed command", () => {
     const agent = makeAgent({
       npx: { package: "@example/acp@V1.2.3", args: ["--stdio"] },
     });
@@ -387,7 +387,7 @@ describe("AcpRegistrySupport", () => {
     );
   });
 
-  it.effect("installs into T3 home a uv tool and launches its exposed command", () => {
+  it.effect("installs into Cinderdeck home a uv tool and launches its exposed command", () => {
     const agent = makeAgent({
       uvx: { package: "fast-agent-acp==V0.10.1", args: ["--acp"] },
     });
@@ -967,7 +967,7 @@ describe("AcpRegistrySupport", () => {
     );
   });
 
-  it.effect("installs into T3 home package recipes during preparation", () => {
+  it.effect("installs into Cinderdeck home package recipes during preparation", () => {
     const agent = makeAgent({ npx: { package: "@example/acp@1.2.3", args: ["--stdio"] } });
     const requests: string[] = [];
 
@@ -1233,7 +1233,7 @@ describe("AcpRegistrySupport", () => {
     );
   });
 
-  it.effect("uninstalls only the T3-managed binary tree and is idempotent", () => {
+  it.effect("uninstalls only the Cinderdeck-managed binary tree and is idempotent", () => {
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const cacheDir = yield* fileSystem.makeTempDirectoryScoped({

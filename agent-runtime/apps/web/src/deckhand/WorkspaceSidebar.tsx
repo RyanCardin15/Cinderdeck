@@ -27,8 +27,8 @@ import {
   StarIcon,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import type { EnvironmentId } from "@t3tools/contracts";
-import type { IntegrationView } from "@t3tools/contracts/deckhand/rpc";
+import type { EnvironmentId } from "@cinderdeck/contracts";
+import type { IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
 import { workspaceView } from "./state";
 import { overviewWorkspaceContexts, type WorkspaceSearch } from "./workspaceNavigation";
 import {

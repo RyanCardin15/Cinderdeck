@@ -1,11 +1,11 @@
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import type { EnvironmentThreadShell } from "@cinderdeck/client-runtime/state/shell";
 import {
   EnvironmentId,
   ProjectId,
   ProviderInstanceId,
   ThreadId,
   type ServerConfig,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

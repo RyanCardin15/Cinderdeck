@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - Scoped control nonces are generated on the owning server.
 import * as NodeCrypto from "node:crypto";
-import * as Contracts from "@t3tools/contracts/deckhand/integration";
+import * as Contracts from "@cinderdeck/contracts/deckhand/integration";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -34,7 +34,7 @@ export class NativeWriterReservations extends Context.Service<
       context: ManagedContext,
     ) => Effect.Effect<void, NativeWriterError>;
   }
->()("t3/deckhand/NativeWriterReservations") {}
+>()("@cinderdeck/server/deckhand/NativeWriterReservations") {}
 
 const isNativeWriterError = Schema.is(NativeWriterError);
 const encode = Schema.encodeEffect(

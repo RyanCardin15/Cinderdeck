@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
-import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, ThreadId } from "@cinderdeck/contracts";
 import type {
   ContextPullRequest,
   ContextPullRequestsPage,
   IntegrationView,
-} from "@t3tools/contracts/deckhand/rpc";
+} from "@cinderdeck/contracts/deckhand/rpc";
 import {
   connectedPullRequestSearch,
   contextPullRequestNavigation,

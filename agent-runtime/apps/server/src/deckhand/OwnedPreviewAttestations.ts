@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - constant-time credential and immutable recording digest comparisons.
 import * as NodeCrypto from "node:crypto";
-import * as C from "@t3tools/contracts/deckhand/ownedPreviewRpc";
-import type * as R from "@t3tools/contracts/deckhand/recordingsRpc";
+import * as C from "@cinderdeck/contracts/deckhand/ownedPreviewRpc";
+import type * as R from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -78,7 +78,7 @@ export class OwnedPreviewAttestations extends Context.Service<
       recordingID: string,
     ) => Effect.Effect<C.OwnedPreviewProof | null, C.OwnedPreviewError>;
   }
->()("t3/deckhand/OwnedPreviewAttestations") {}
+>()("@cinderdeck/server/deckhand/OwnedPreviewAttestations") {}
 export const layer = Layer.effect(
   OwnedPreviewAttestations,
   Effect.gen(function* () {

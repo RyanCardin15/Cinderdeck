@@ -1,5 +1,5 @@
-import { modelSelectionsEqual } from "@t3tools/shared/model";
-import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
+import { modelSelectionsEqual } from "@cinderdeck/shared/model";
+import { projectComposerContextForProvider } from "@cinderdeck/shared/composerContextReferences";
 import {
   CommandId,
   type OrchestrationV2DomainEvent,
@@ -10,7 +10,7 @@ import {
   type OrchestrationV2TurnItem,
   RunId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Context from "effect/Context";
 import * as ManagedCheckoutGuard from "../deckhand/ManagedCheckoutGuard.ts";
 import * as Cause from "effect/Cause";
@@ -80,7 +80,7 @@ export interface ProviderTurnStartServiceV2Shape {
 export class ProviderTurnStartServiceV2 extends Context.Service<
   ProviderTurnStartServiceV2,
   ProviderTurnStartServiceV2Shape
->()("t3/orchestration-v2/ProviderTurnStartService/ProviderTurnStartServiceV2") {}
+>()("@cinderdeck/server/orchestration-v2/ProviderTurnStartService/ProviderTurnStartServiceV2") {}
 
 export const layer: Layer.Layer<
   ProviderTurnStartServiceV2,

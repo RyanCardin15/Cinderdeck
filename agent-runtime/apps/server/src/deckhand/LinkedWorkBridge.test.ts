@@ -1,10 +1,10 @@
-import { DeckhandRpcError } from "@t3tools/contracts/deckhand/rpc";
+import { DeckhandRpcError } from "@cinderdeck/contracts/deckhand/rpc";
 import { assert, describe, it } from "@effect/vitest";
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import * as C from "@t3tools/contracts/deckhand";
-import * as Linked from "@t3tools/contracts/deckhand/linkedWorkRpc";
-import * as Native from "@t3tools/contracts/deckhand/integration";
+import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
+import { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
+import * as C from "@cinderdeck/contracts/deckhand";
+import * as Linked from "@cinderdeck/contracts/deckhand/linkedWorkRpc";
+import * as Native from "@cinderdeck/contracts/deckhand/integration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";

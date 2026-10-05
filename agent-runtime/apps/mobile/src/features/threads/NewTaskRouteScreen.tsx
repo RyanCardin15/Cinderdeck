@@ -7,9 +7,9 @@ import {
   type StaticScreenProps,
 } from "@react-navigation/native";
 import { SymbolView } from "../../components/AppSymbol";
-import { canCreateProjectInEnvironment } from "@t3tools/client-runtime/operations/projects";
-import { isScratchProject } from "@t3tools/client-runtime/state/projects";
-import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
+import { canCreateProjectInEnvironment } from "@cinderdeck/client-runtime/operations/projects";
+import { isScratchProject } from "@cinderdeck/client-runtime/state/projects";
+import type { EnvironmentProject } from "@cinderdeck/client-runtime/state/shell";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useEffect, useRef, useState } from "react";

@@ -6,7 +6,7 @@ import {
   ServerProviderResetCredits,
   ServerProviderUsageWindow,
   UsageProviderKind,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import {
   elapsedShare,
@@ -15,7 +15,7 @@ import {
   type LimitPace,
   paceOf,
   remainingPercent,
-} from "@t3tools/shared/usageLimits";
+} from "@cinderdeck/shared/usageLimits";
 import { GaugeIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react";
 import { Fragment, type ReactNode, useState } from "react";
 

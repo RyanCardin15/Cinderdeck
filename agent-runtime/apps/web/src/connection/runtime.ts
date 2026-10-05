@@ -1,10 +1,10 @@
-import { Connection } from "@t3tools/client-runtime/connection";
-import { ShellSnapshotLoader } from "@t3tools/client-runtime/state/shell";
+import { Connection } from "@cinderdeck/client-runtime/connection";
+import { ShellSnapshotLoader } from "@cinderdeck/client-runtime/state/shell";
 import {
   boundedThreadSnapshotLoaderLayer,
   ThreadHistoryController,
-} from "@t3tools/client-runtime/state/threads";
-import { PullRequestDiffLoader } from "@t3tools/client-runtime/state/pull-requests";
+} from "@cinderdeck/client-runtime/state/threads";
+import { PullRequestDiffLoader } from "@cinderdeck/client-runtime/state/pull-requests";
 import * as Layer from "effect/Layer";
 import { Atom } from "effect/unstable/reactivity";
 

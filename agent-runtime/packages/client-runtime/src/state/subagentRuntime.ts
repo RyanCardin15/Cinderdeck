@@ -3,8 +3,8 @@
  * web agent rows render.
  */
 import * as DateTime from "effect/DateTime";
-import type { OrchestrationV2Subagent } from "@t3tools/contracts";
-import { isOrchestrationV2WorkActive } from "@t3tools/contracts";
+import type { OrchestrationV2Subagent } from "@cinderdeck/contracts";
+import { isOrchestrationV2WorkActive } from "@cinderdeck/contracts";
 
 export type RuntimeSubagentStatus =
   | "pending"

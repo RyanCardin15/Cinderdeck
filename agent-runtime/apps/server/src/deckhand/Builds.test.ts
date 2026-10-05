@@ -1,8 +1,8 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as C from "@t3tools/contracts/deckhand/builds";
-import * as Recording from "@t3tools/contracts/deckhand/recordingsRpc";
+import * as C from "@cinderdeck/contracts/deckhand/builds";
+import * as Recording from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import * as Builds from "./Builds.ts";
 import * as RecordingTransport from "./RecordingTransport.ts";
 const sha = "a".repeat(64);

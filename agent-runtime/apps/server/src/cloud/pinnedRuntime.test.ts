@@ -63,7 +63,7 @@ const extractingRunner = (fs: FileSystem.FileSystem, path: Path.Path, commands: 
   });
 
 it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
-  it.effect("refuses an unconfigured Deckhand feed before downloads or runtime writes", () =>
+  it.effect("refuses an unconfigured Cinderdeck feed before downloads or runtime writes", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -85,7 +85,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       if (failure._tag !== "PinnedRuntimeInstallError") {
         return yield* Effect.die("Expected an unconfigured-feed install refusal");
       }
-      assert.include(failure.step, "no Deckhand feed is configured");
+      assert.include(failure.step, "no Cinderdeck feed is configured");
       assert.deepEqual(requests, []);
       assert.deepEqual(commands, []);
       assert.equal(yield* fs.exists(path.join(baseDir, "runtime")), false);

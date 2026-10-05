@@ -1,4 +1,4 @@
-import type { DesktopUpdateChannel } from "@t3tools/contracts";
+import type { DesktopUpdateChannel } from "@cinderdeck/contracts";
 
 const NIGHTLY_VERSION_PATTERN = /^[^-+]+-nightly\.\d{8}\.\d+$/;
 const PREVIEW_VERSION_PATTERN = /^[^-+]+-(?:preview\.\d{8}\.\d+|pr\.\d+(?:\.[A-Za-z0-9-]+)*)$/;

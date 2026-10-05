@@ -9,12 +9,12 @@ import {
   ProviderThreadId,
   ThreadId,
   type OrchestrationV2ThreadProjection,
-} from "@t3tools/contracts";
-import * as Contracts from "@t3tools/contracts/deckhand/integration";
-import * as Bindings from "@t3tools/contracts/deckhand";
+} from "@cinderdeck/contracts";
+import * as Contracts from "@cinderdeck/contracts/deckhand/integration";
+import * as Bindings from "@cinderdeck/contracts/deckhand";
 import * as Schema from "effect/Schema";
-import * as Rpc from "@t3tools/contracts/deckhand/rpc";
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
+import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Deferred from "effect/Deferred";

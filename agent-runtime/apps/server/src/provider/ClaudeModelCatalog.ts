@@ -4,15 +4,15 @@ import {
   type ModelSelection,
   ProviderDriverKind,
   type ServerProviderModel,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Option from "effect/Option";
 import {
   getModelSelectionStringOptionValue,
   getProviderOptionCurrentValue,
   getProviderOptionDescriptors,
   readCustomModelEntries,
-} from "@t3tools/shared/model";
-import { compareSemverVersions } from "@t3tools/shared/semver";
+} from "@cinderdeck/shared/model";
+import { compareSemverVersions } from "@cinderdeck/shared/semver";
 
 import {
   type ClaudeCodeCompatibility,

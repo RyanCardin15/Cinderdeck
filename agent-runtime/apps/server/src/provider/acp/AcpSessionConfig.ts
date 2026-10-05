@@ -1,10 +1,10 @@
-import type { ProviderOptionChoice, ProviderOptionDescriptor } from "@t3tools/contracts";
+import type { ProviderOptionChoice, ProviderOptionDescriptor } from "@cinderdeck/contracts";
 import type * as EffectAcpSchema from "effect-acp/compat";
 
 import type { AcpSessionModeState } from "./AcpRuntimeModel.ts";
 
 /**
- * Maps ACP session configuration and session modes onto T3's provider option
+ * Maps ACP session configuration and session modes onto Cinderdeck's provider option
  * descriptors so the existing model-options UI can drive them.
  *
  * Model selection stays on the dedicated model picker: `category: "model"`
@@ -69,7 +69,7 @@ export function acpProviderOptionDescriptors(input: {
 
   for (const option of input.configOptions ?? []) {
     // "model" options surface as the model list; "collaboration_mode" options
-    // are driven by T3's own plan/build interaction mode in the ACP adapter.
+    // are driven by Cinderdeck's own plan/build interaction mode in the ACP adapter.
     if (option.category === "model" || option.category === "collaboration_mode") {
       continue;
     }

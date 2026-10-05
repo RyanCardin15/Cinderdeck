@@ -34,7 +34,7 @@ export class DesktopAssets extends Context.Service<
       fileName: string,
     ) => Effect.Effect<Option.Option<string>, DesktopAssetProbeError>;
   }
->()("@t3tools/desktop/app/DesktopAssets") {}
+>()("@cinderdeck/desktop/app/DesktopAssets") {}
 
 const resolveResourcePath = Effect.fn("desktop.assets.resolveResourcePath")(function* (
   fileName: string,
@@ -87,7 +87,7 @@ function resolveSourceTreeIconPath(
       : environment.platform === "darwin"
         ? fileNames.macPng
         : fileNames.universalPng;
-  return environment.path.join(environment.rootDir, "assets", "deckhand", brand, fileName);
+  return environment.path.join(environment.rootDir, "assets", "cinderdeck", brand, fileName);
 }
 
 const resolveIconPath = Effect.fn("desktop.assets.resolveIconPath")(function* (

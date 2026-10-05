@@ -1,5 +1,5 @@
-import { StoredOrchestrationShellSnapshot } from "@t3tools/client-runtime/platform";
-import { OrchestrationV2ThreadShellJson } from "@t3tools/contracts";
+import { StoredOrchestrationShellSnapshot } from "@cinderdeck/client-runtime/platform";
+import { OrchestrationV2ThreadShellJson } from "@cinderdeck/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 

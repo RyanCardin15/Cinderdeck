@@ -24,7 +24,7 @@ import {
   ScheduledTaskId,
   type ServerProvider,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as DateTime from "effect/DateTime";
@@ -1131,7 +1131,7 @@ it.effect("names the worktree itself when the client provides no branch", () =>
   }),
 );
 
-it.effect("renames a temporary t3code/<hash> branch off the provisioning critical path", () =>
+it.effect("renames a temporary cinderdeck/<hash> branch off the provisioning critical path", () =>
   Effect.gen(function* () {
     const branchNameStarted = yield* Deferred.make<void>();
     const allowBranchName = yield* Deferred.make<void>();
@@ -1154,11 +1154,11 @@ it.effect("renames a temporary t3code/<hash> branch off the provisioning critica
           command: "command:launch:temp-branch",
           thread: "thread:launch:temp-branch",
           message: "Build the feature",
-          workspace: { type: "worktree", baseRef: "main", branch: "t3code/abcd1234" },
+          workspace: { type: "worktree", baseRef: "main", branch: "cinderdeck/abcd1234" },
         }),
       );
       yield* Deferred.await(branchNameStarted);
-      assert.equal(harness.createWorktree.mock.calls[0]?.[0]?.newRefName, "t3code/abcd1234");
+      assert.equal(harness.createWorktree.mock.calls[0]?.[0]?.newRefName, "cinderdeck/abcd1234");
       yield* waitUntil(() =>
         threads
           .getThreadProjection(launched.threadId)
@@ -1166,7 +1166,7 @@ it.effect("renames a temporary t3code/<hash> branch off the provisioning critica
       );
       assert.equal(
         (yield* threads.getThreadProjection(launched.threadId)).thread.branch,
-        "t3code/abcd1234",
+        "cinderdeck/abcd1234",
       );
       yield* Deferred.succeed(allowBranchName, undefined);
       yield* waitUntil(() =>
@@ -1176,7 +1176,7 @@ it.effect("renames a temporary t3code/<hash> branch off the provisioning critica
       );
       assert.deepEqual(harness.renameBranch.mock.calls[0]?.[0], {
         cwd: "/repo-worktrees/temp",
-        oldBranch: "t3code/abcd1234",
+        oldBranch: "cinderdeck/abcd1234",
         newBranch: "generated-branch",
       });
     }).pipe(Effect.provide(harness.layer));
@@ -1220,11 +1220,11 @@ it.effect("keeps the temporary branch when branch generation fails", () =>
           command: "command:launch:branch-fallback",
           thread: "thread:launch:branch-fallback",
           message: "Build the feature",
-          workspace: { type: "worktree", baseRef: "main", branch: "t3code/abcd1234" },
+          workspace: { type: "worktree", baseRef: "main", branch: "cinderdeck/abcd1234" },
         }),
       );
       yield* waitUntil(() => Effect.sync(() => harness.generateBranchName.mock.calls.length === 1));
-      assert.equal(harness.createWorktree.mock.calls[0]?.[0]?.newRefName, "t3code/abcd1234");
+      assert.equal(harness.createWorktree.mock.calls[0]?.[0]?.newRefName, "cinderdeck/abcd1234");
       yield* waitUntil(() =>
         threads
           .getThreadProjection(launched.threadId)
@@ -1233,7 +1233,7 @@ it.effect("keeps the temporary branch when branch generation fails", () =>
       assert.equal(harness.renameBranch.mock.calls.length, 0);
       assert.equal(
         (yield* threads.getThreadProjection(launched.threadId)).thread.branch,
-        "t3code/abcd1234",
+        "cinderdeck/abcd1234",
       );
     }).pipe(Effect.provide(harness.layer));
   }),
@@ -1253,7 +1253,7 @@ it.effect("renames a temporary branch on an existing worktree to a generated nam
           workspace: {
             type: "existing_worktree",
             worktreePath: "/repo-worktrees/t3code-abcd1234",
-            branch: "t3code/abcd1234",
+            branch: "cinderdeck/abcd1234",
           },
         }),
       );
@@ -1264,7 +1264,7 @@ it.effect("renames a temporary branch on an existing worktree to a generated nam
       );
       assert.deepEqual(harness.renameBranch.mock.calls[0]?.[0], {
         cwd: "/repo-worktrees/t3code-abcd1234",
-        oldBranch: "t3code/abcd1234",
+        oldBranch: "cinderdeck/abcd1234",
         newBranch: "generated-branch",
       });
     }).pipe(Effect.provide(harness.layer));

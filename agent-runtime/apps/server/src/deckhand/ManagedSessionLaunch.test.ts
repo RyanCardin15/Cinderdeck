@@ -5,7 +5,7 @@ import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as NodeCrypto from "node:crypto";
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
 import {
   ProjectId,
   ThreadId,
@@ -13,10 +13,10 @@ import {
   ProviderInstanceId,
   type Project,
   ServerProvider,
-} from "@t3tools/contracts";
-import * as Contracts from "@t3tools/contracts/deckhand";
-import * as Rpc from "@t3tools/contracts/deckhand/rpc";
-import * as Integration from "@t3tools/contracts/deckhand/integration";
+} from "@cinderdeck/contracts";
+import * as Contracts from "@cinderdeck/contracts/deckhand";
+import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
+import * as Integration from "@cinderdeck/contracts/deckhand/integration";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";

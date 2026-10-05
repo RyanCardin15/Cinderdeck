@@ -1,11 +1,11 @@
 // @effect-diagnostics nodeBuiltinImport:off - A bounded hash prevents native actor-name truncation collisions.
 import * as NodeCrypto from "node:crypto";
-import * as C from "@t3tools/contracts/deckhand/linkedWorkRpc";
+import * as C from "@cinderdeck/contracts/deckhand/linkedWorkRpc";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Scope from "effect/Scope";
-import { ThreadId } from "@t3tools/contracts";
+import { ThreadId } from "@cinderdeck/contracts";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
@@ -27,7 +27,7 @@ export class LinkedWorkBridge extends Context.Service<
       input: C.LinkedWorkTarget,
     ) => Effect.Effect<C.LinkedWorkResolution, C.LinkedWorkError>;
   }
->()("t3/deckhand/LinkedWorkBridge") {}
+>()("@cinderdeck/server/deckhand/LinkedWorkBridge") {}
 const isError = Schema.is(C.LinkedWorkError);
 const decodePublication = Schema.decodeUnknownEffect(C.LinkedWorkPublication);
 const decodeRecord = Schema.decodeUnknownEffect(C.LinkedWorkRecord);

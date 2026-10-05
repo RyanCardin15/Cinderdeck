@@ -1,9 +1,9 @@
 import { ChildProcess } from "effect/unstable/process";
 import { spawnAndCollect } from "./providerSnapshot.ts";
 import * as NodeURL from "node:url";
-import { HostProcessIsExecutable } from "@t3tools/shared/hostProcess";
+import { HostProcessIsExecutable } from "@cinderdeck/shared/hostProcess";
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
-import type { ServerProvider } from "@t3tools/contracts";
+import type { ServerProvider } from "@cinderdeck/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 

@@ -1,4 +1,4 @@
-import { presentThreadShell } from "@t3tools/client-runtime/state/models";
+import { presentThreadShell } from "@cinderdeck/client-runtime/state/models";
 import * as DateTime from "effect/DateTime";
 import { deriveActiveWorkStartedAt } from "../session-logic.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -59,9 +59,9 @@ import {
   type SidebarSection,
   resolveSidebarDropVerb,
 } from "./Sidebar.logic";
-import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
-import { sortSettledThreads } from "@t3tools/client-runtime/state/thread-sort";
-import { EnvironmentId, ProjectId, ProviderInstanceId, RunId, ThreadId } from "@t3tools/contracts";
+import { threadSearchMatchKey } from "@cinderdeck/client-runtime/state/thread-search";
+import { sortSettledThreads } from "@cinderdeck/client-runtime/state/thread-sort";
+import { EnvironmentId, ProjectId, ProviderInstanceId, RunId, ThreadId } from "@cinderdeck/contracts";
 
 import {
   DEFAULT_INTERACTION_MODE,
@@ -78,16 +78,16 @@ describe("resolveSidebarRowAccessibility", () => {
     {
       title: "Can you audit the UI?",
       statusLabel: "Working",
-      projectDisplayName: "Deckhand",
+      projectDisplayName: "Cinderdeck",
       isActive: true,
-      expected: { label: "Can you audit the UI?, Working, Deckhand", current: "page" },
+      expected: { label: "Can you audit the UI?, Working, Cinderdeck", current: "page" },
     },
     {
       title: "The audit is done",
       statusLabel: null,
-      projectDisplayName: "Deckhand",
+      projectDisplayName: "Cinderdeck",
       isActive: false,
-      expected: { label: "The audit is done, Deckhand", current: undefined },
+      expected: { label: "The audit is done, Cinderdeck", current: undefined },
     },
     {
       title: "Untitled task",

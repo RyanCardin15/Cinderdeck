@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import type { EnvironmentId, ModelSelection } from "@t3tools/contracts";
-import * as Contracts from "@t3tools/contracts/deckhand/rpc";
+import type { EnvironmentId, ModelSelection } from "@cinderdeck/contracts";
+import * as Contracts from "@cinderdeck/contracts/deckhand/rpc";
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
 import * as Crypto from "effect/Crypto";
@@ -14,7 +14,7 @@ import { useAtomCommand } from "../state/use-atom-command";
 import { environmentServerConfigsAtom } from "../state/server";
 import { useEnvironmentSettings } from "../hooks/useSettings";
 import { readProjects } from "../state/entities";
-import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
+import { resolveProjectSettings } from "@cinderdeck/shared/projectSettings";
 import { resolveDefaultProviderModelSelection } from "../providerInstances";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { resolveChatModes, useChatDefaultsStore } from "./chatDefaults";

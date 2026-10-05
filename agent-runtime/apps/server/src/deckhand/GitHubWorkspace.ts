@@ -1,8 +1,8 @@
 import type {
   GitHubWorkspaceInput,
   GitHubWorkspaceResult,
-} from "@t3tools/contracts/deckhand/gitHubWorkspace";
-import { DeckhandRpcError } from "@t3tools/contracts/deckhand/rpc";
+} from "@cinderdeck/contracts/deckhand/gitHubWorkspace";
+import { DeckhandRpcError } from "@cinderdeck/contracts/deckhand/rpc";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -17,7 +17,7 @@ export class GitHubWorkspace extends Context.Service<
       input: GitHubWorkspaceInput,
     ) => Effect.Effect<GitHubWorkspaceResult, DeckhandRpcError>;
   }
->()("t3/deckhand/GitHubWorkspace") {}
+>()("@cinderdeck/server/deckhand/GitHubWorkspace") {}
 const make = Effect.gen(function* () {
   const discovery = yield* IntegrationDiscovery.IntegrationDiscovery;
   const client = yield* CinderdeckClient.CinderdeckClient;

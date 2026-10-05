@@ -2,8 +2,8 @@ import {
   isProviderNativeSubagentThread,
   OrchestratorMcpFailure,
   type ThreadId,
-} from "@t3tools/contracts";
-import * as Contracts from "@t3tools/contracts/deckhand";
+} from "@cinderdeck/contracts";
+import * as Contracts from "@cinderdeck/contracts/deckhand";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -37,7 +37,7 @@ export class ManagedMcpToolPolicy extends Context.Service<
       readonly payload: unknown;
     }) => Effect.Effect<void, OrchestratorMcpFailure, Invocation.McpInvocationContext>;
   }
->()("t3/mcp/ManagedMcpToolPolicy") {}
+>()("@cinderdeck/server/mcp/ManagedMcpToolPolicy") {}
 
 const make = Effect.gen(function* () {
   // Registration and observation do not need a store. Any mutation without

@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from "react";
 import {
   resolveOfficialAcpRegistryIconUrl,
   officialAcpRegistryIconUrlForAgentId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 
 import { cn } from "../../lib/utils";
 import { ACPRegistryIcon } from "../Icons";

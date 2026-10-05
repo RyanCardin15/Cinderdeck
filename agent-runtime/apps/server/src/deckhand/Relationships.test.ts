@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as Contracts from "@t3tools/contracts/deckhand";
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import * as Contracts from "@cinderdeck/contracts/deckhand";
+import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -94,7 +94,7 @@ const checkout = (
     ],
     revision: 1,
   });
-describe("Deckhand relationship persistence", () => {
+describe("Cinderdeck relationship persistence", () => {
   it.effect("reopens durable session bindings without copying upstream transcripts", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -384,7 +384,7 @@ describe("Deckhand relationship persistence", () => {
       }).pipe(Effect.provide(TestLayer)),
   );
 });
-describe("Deckhand schema migration", () => {
+describe("Cinderdeck schema migration", () => {
   it.effect(
     "is replayable, preserves existing tables, protects captured provenance, and refuses a newer store",
     () =>

@@ -1,6 +1,6 @@
 import { DownloadIcon } from "lucide-react";
 import { useSyncExternalStore } from "react";
-import type { RelayClientInstallProgressStage } from "@t3tools/contracts";
+import type { RelayClientInstallProgressStage } from "@cinderdeck/contracts";
 
 import {
   completeRelayClientInstallDialogClose,
@@ -69,8 +69,8 @@ export function RelayClientInstallDialog() {
           </DialogTitle>
           <DialogDescription>
             {isInstalling
-              ? "Deckhand is preparing this environment for secure access through T3 Connect."
-              : "Deckhand needs the relay client to make this environment available through T3 Connect."}
+              ? "Cinderdeck is preparing this environment for secure access through Remote connections."
+              : "Cinderdeck needs the relay client to make this environment available through Remote connections."}
           </DialogDescription>
         </DialogHeader>
         <DialogPanel scrollFade={false}>
@@ -91,14 +91,14 @@ export function RelayClientInstallDialog() {
                 value={activeStepIndex + 1}
               />
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Keep Deckhand open while the relay client is installed.
+                Keep Cinderdeck open while the relay client is installed.
               </p>
             </div>
           ) : (
             <div className="rounded-xl border border-border/70 bg-muted/35 p-3">
               <p className="text-sm font-medium text-foreground">Managed relay client</p>
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                Deckhand will download and install version{" "}
+                Cinderdeck will download and install version{" "}
                 {view.status === "confirming" ? view.version : ""} locally.
               </p>
             </div>

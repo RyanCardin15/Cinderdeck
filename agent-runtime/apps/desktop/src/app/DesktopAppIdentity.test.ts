@@ -22,9 +22,9 @@ const defaultEnvironmentInput = {
   platform: "darwin",
   processArch: "arm64",
   appVersion: "1.2.3",
-  appPath: "/Applications/Deckhand.app/Contents/Resources/app.asar",
+  appPath: "/Applications/Cinderdeck.app/Contents/Resources/app.asar",
   isPackaged: true,
-  resourcesPath: "/Applications/Deckhand.app/Contents/Resources",
+  resourcesPath: "/Applications/Cinderdeck.app/Contents/Resources",
   runningUnderArm64Translation: false,
 } satisfies DesktopEnvironment.MakeDesktopEnvironmentInput;
 
@@ -41,7 +41,7 @@ interface ElectronAppCalls {
 const makeElectronAppLayer = (calls: ElectronAppCalls) =>
   Layer.succeed(ElectronApp.ElectronApp, {
     metadata: Effect.die("unexpected metadata read"),
-    name: Effect.succeed("Deckhand"),
+    name: Effect.succeed("Cinderdeck"),
     systemLocale: Effect.succeed("en-US"),
     whenReady: Effect.void,
     quit: Effect.void,
@@ -132,7 +132,7 @@ const withIdentity = <A, E, R>(
               input.legacyPathProbeError
                 ? Effect.fail(input.legacyPathProbeError)
                 : Effect.succeed(
-                    input.legacyPathExists === true && /Deckhand \((Alpha|Dev)\)/.test(path),
+                    input.legacyPathExists === true && /Cinderdeck \((Alpha|Dev)\)/.test(path),
                   ),
             readFileString: () =>
               Effect.succeed(input.packageJson ?? '{"deckhandCommitHash":"abcdef1234567890"}'),
@@ -165,7 +165,7 @@ describe("DesktopAppIdentity", () => {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
         assert.equal(
           yield* identity.resolveUserDataPath,
-          "/Users/alice/Library/Application Support/Deckhand (Dev)",
+          "/Users/alice/Library/Application Support/Cinderdeck (Dev)",
         );
       }),
       {
@@ -176,7 +176,7 @@ describe("DesktopAppIdentity", () => {
   );
 
   it.effect("preserves failures while inspecting the legacy userData path", () => {
-    const legacyPath = "/Users/alice/Library/Application Support/Deckhand (Dev)";
+    const legacyPath = "/Users/alice/Library/Application Support/Cinderdeck (Dev)";
     const cause = PlatformError.systemError({
       _tag: "PermissionDenied",
       module: "FileSystem",

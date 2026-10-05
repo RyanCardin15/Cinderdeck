@@ -6,8 +6,8 @@ import type {
   ServerProviderAuth,
   ServerProviderModel,
   ServerProviderState,
-} from "@t3tools/contracts";
-import { createModelCapabilities } from "@t3tools/shared/model";
+} from "@cinderdeck/contracts";
+import { createModelCapabilities } from "@cinderdeck/shared/model";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -52,7 +52,7 @@ export function buildInitialCursorProviderSnapshot(
           version: null,
           status: "warning",
           auth: { status: "unknown" },
-          message: "Cursor is disabled in Deckhand settings.",
+          message: "Cursor is disabled in Cinderdeck settings.",
         },
       });
     }
@@ -265,7 +265,7 @@ export const checkCursorProviderStatus = Effect.fn("checkCursorProviderStatus")(
         version: null,
         status: "warning",
         auth: { status: "unknown" },
-        message: "Cursor is disabled in Deckhand settings.",
+        message: "Cursor is disabled in Cinderdeck settings.",
       },
     });
   }

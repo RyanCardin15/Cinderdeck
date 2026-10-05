@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { EnvironmentId } from "@t3tools/contracts";
-import type { IntegrationView, OperationRecord } from "@t3tools/contracts/deckhand/rpc";
+import { EnvironmentId } from "@cinderdeck/contracts";
+import type { IntegrationView, OperationRecord } from "@cinderdeck/contracts/deckhand/rpc";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 

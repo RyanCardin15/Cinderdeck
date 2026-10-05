@@ -3,7 +3,7 @@ import { AppWindowIcon, CopyIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import {
   resolveExternalAppProfiles,
   type ExternalAppProfile,
-} from "@t3tools/contracts/deckhand/externalAppPreferences";
+} from "@cinderdeck/contracts/deckhand/externalAppPreferences";
 import { useClientSettings, useUpdateClientSettings } from "../../hooks/useSettings";
 import { useDisconnectExternalApps } from "../../deckhand/externalAppSessions";
 import { randomUUID } from "../../lib/utils";
@@ -83,7 +83,7 @@ export function ExternalAppsSettings() {
                 id={`external-app-${profile.id}`}
                 description={
                   profile.id === "excel"
-                    ? "Inspect your add-in in its real Excel workbook and WebKit runtime."
+                    ? "Let your agent test Excel in its real window, with an optional add-in Inspector."
                     : "View a native Mac window and its optional debugger."
                 }
                 control={
@@ -157,7 +157,7 @@ export function ExternalAppsSettings() {
                   {profile.id === "excel" ? (
                     <div className="space-y-3 px-3 py-4 sm:px-4">
                       <p className="text-sm">
-                        Enable Excel inspection once on the Mac running Excel.
+                        Optional: enable Web Inspector for Excel add-in debugging.
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Save your workbook and quit Excel before running this command. Reopen the

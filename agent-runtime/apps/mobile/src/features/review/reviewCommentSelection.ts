@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
+import { replaceComposerContextReferences } from "@cinderdeck/shared/composerContextReferences";
 
 import type { ReviewRenderableLineRow } from "./reviewModel";
 

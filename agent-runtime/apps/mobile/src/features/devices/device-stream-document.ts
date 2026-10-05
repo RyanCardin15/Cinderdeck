@@ -1,5 +1,5 @@
-import type { DeviceHubAccess } from "@t3tools/client-runtime/device/hub-access";
-import type { DevicePlatform } from "@t3tools/contracts";
+import type { DeviceHubAccess } from "@cinderdeck/client-runtime/device/hub-access";
+import type { DevicePlatform } from "@cinderdeck/contracts";
 
 export interface DeviceStreamConfiguration {
   readonly access: DeviceHubAccess;

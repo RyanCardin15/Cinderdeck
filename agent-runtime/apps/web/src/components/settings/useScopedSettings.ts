@@ -3,7 +3,7 @@ import {
   type ProjectScopedServerSettingKey,
   type ServerSettings,
   type UnifiedSettings,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { useCallback, useMemo } from "react";
 
 import {

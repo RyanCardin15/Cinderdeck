@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
-import * as Bindings from "@t3tools/contracts/deckhand";
-import * as C from "@t3tools/contracts/deckhand/recordingsRpc";
+import * as Bindings from "@cinderdeck/contracts/deckhand";
+import * as C from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";

@@ -1,4 +1,4 @@
-import type { MessageId, OrchestrationV2ThreadProjection } from "@t3tools/contracts";
+import type { MessageId, OrchestrationV2ThreadProjection } from "@cinderdeck/contracts";
 
 /**
  * A persisted steer without an acceptance receipt can be retried as a continuation.

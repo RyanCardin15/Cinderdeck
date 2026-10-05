@@ -1,17 +1,17 @@
 import * as Verification from "../../../deckhand/Verification.ts";
-import type { VerificationOverview, Evidence } from "@t3tools/contracts/deckhand/verificationRpc";
+import type { VerificationOverview, Evidence } from "@cinderdeck/contracts/deckhand/verificationRpc";
 import { assert, describe, it } from "@effect/vitest";
 import {
   EnvironmentId,
   ThreadId,
   ProviderInstanceId,
   OrchestratorMcpFailure,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   ContextPullRequestsPage,
   type ContextPullRequestsInput,
   type ThreadContextView,
-} from "@t3tools/contracts/deckhand/rpc";
+} from "@cinderdeck/contracts/deckhand/rpc";
 import * as ManagedSessions from "../../../deckhand/ManagedSessions.ts";
 import * as Hub from "../../../deckhand/IntegrationHub.ts";
 import * as Stream from "effect/Stream";
@@ -23,8 +23,8 @@ import * as Access from "../../DeckhandMcpAccess.ts";
 import * as Invocation from "../../McpInvocationContext.ts";
 import * as Runs from "../../../deckhand/Runs.ts";
 import * as Attempts from "../../../deckhand/VerificationAttempts.ts";
-import * as U from "@t3tools/contracts/deckhand/runsRpc";
-import * as V from "@t3tools/contracts/deckhand/verificationAttemptsRpc";
+import * as U from "@cinderdeck/contracts/deckhand/runsRpc";
+import * as V from "@cinderdeck/contracts/deckhand/verificationAttemptsRpc";
 const context = { installationID: "native", workspaceID: "lane", generation: 7 };
 const view = {
   feature: { id: "feature" },
@@ -47,7 +47,7 @@ const reference = Schema.decodeUnknownSync(V.AttemptPreviewInput.fields.referenc
   repository: "cardin/app",
   number: 7,
 });
-describe("Bounded Deckhand agent integration tools", () => {
+describe("Bounded Cinderdeck agent integration tools", () => {
   it.effect(
     "run detail derives native authority from trusted access and keeps actual step pagination",
     () => {

@@ -1,8 +1,8 @@
 // @effect-diagnostics nodeBuiltinImport:off - Main exclusively owns encoder output and loopback private requests.
 import * as NodeFSP from "node:fs/promises";
 import * as NodeCrypto from "node:crypto";
-import * as C from "@t3tools/contracts/deckhand/ownedPreviewRpc";
-import { PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
+import * as C from "@cinderdeck/contracts/deckhand/ownedPreviewRpc";
+import { PRIMARY_LOCAL_ENVIRONMENT_ID } from "@cinderdeck/contracts";
 import { webContents } from "electron";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -39,7 +39,7 @@ export class OwnedPreviewCapture extends Context.Service<
     ) => Effect.Effect<C.OwnedPreviewStatus, C.OwnedPreviewError>;
     readonly stop: (captureKey: string) => Effect.Effect<C.OwnedPreviewStatus, C.OwnedPreviewError>;
   }
->()("@t3tools/desktop/preview/OwnedPreviewCapture") {}
+>()("@cinderdeck/desktop/preview/OwnedPreviewCapture") {}
 export const layer = Layer.effect(
   OwnedPreviewCapture,
   Effect.gen(function* () {

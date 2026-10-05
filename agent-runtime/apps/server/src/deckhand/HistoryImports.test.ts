@@ -51,7 +51,7 @@ const withStore = <A, E, R>(root: string, effect: Effect.Effect<A, E, R>) =>
       ),
     ),
   );
-describe("Explicit read-only T3 history archive", () => {
+describe("Explicit read-only Cinderdeck history archive", () => {
   it.effect(
     "copies a consistent active WAL snapshot, preserves full Unicode history and excludes credentials/pending work",
     () =>

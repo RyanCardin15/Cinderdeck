@@ -146,7 +146,7 @@ function ChatRouteGlobalShortcuts() {
             stackedThreadToast({
               type: "info",
               title: "Preview is desktop-only",
-              description: "Open Deckhand in the desktop app to use the in-app preview.",
+              description: "Open Cinderdeck in the desktop app to use the in-app preview.",
             }),
           );
           return;

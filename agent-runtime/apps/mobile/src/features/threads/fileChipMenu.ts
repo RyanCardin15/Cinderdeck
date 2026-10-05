@@ -1,8 +1,8 @@
-import { fileBasename } from "@t3tools/client-runtime/markdown-links";
-import type { ThreadId } from "@t3tools/contracts";
-import { resolveMarkdownLinkPresentation } from "@t3tools/mobile-markdown-text/links";
-import type { MarkdownFileContextMenu } from "@t3tools/mobile-markdown-text/types";
-import { hostPreviewMimeTypeFromExtension } from "@t3tools/shared/filePreview";
+import { fileBasename } from "@cinderdeck/client-runtime/markdown-links";
+import type { ThreadId } from "@cinderdeck/contracts";
+import { resolveMarkdownLinkPresentation } from "@cinderdeck/mobile-markdown-text/links";
+import type { MarkdownFileContextMenu } from "@cinderdeck/mobile-markdown-text/types";
+import { hostPreviewMimeTypeFromExtension } from "@cinderdeck/shared/filePreview";
 
 import {
   isAbsolutePath,

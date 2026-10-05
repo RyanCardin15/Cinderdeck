@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@cinderdeck/contracts";
 import { useEnvironment } from "../state/environments";
 
 /** Cached rows stay historical until the reconnected transport delivers a new value. */

@@ -1,52 +1,52 @@
 import * as GitHubWorkspace from "./deckhand/GitHubWorkspace.ts";
-import { GITHUB_WORKSPACE_METHOD } from "@t3tools/contracts/deckhand/gitHubWorkspace";
+import { GITHUB_WORKSPACE_METHOD } from "@cinderdeck/contracts/deckhand/gitHubWorkspace";
 import * as ActorAccess from "./deckhand/ActorAccess.ts";
 import * as OwnershipTransitions from "./deckhand/OwnershipTransitions.ts";
-import { OWNERSHIP_METHODS, OwnershipError } from "@t3tools/contracts/deckhand/ownershipRpc";
+import { OWNERSHIP_METHODS, OwnershipError } from "@cinderdeck/contracts/deckhand/ownershipRpc";
 import * as HistoryImports from "./deckhand/HistoryImports.ts";
 import {
   HISTORY_IMPORT_METHODS,
   HistoryImportError,
-} from "@t3tools/contracts/deckhand/historyImportRpc";
+} from "@cinderdeck/contracts/deckhand/historyImportRpc";
 import * as ExternalDebug from "./deckhand/ExternalDebug.ts";
 import {
   EXTERNAL_DEBUG_METHODS,
   ExternalDebugError,
-} from "@t3tools/contracts/deckhand/externalDebugRpc";
+} from "@cinderdeck/contracts/deckhand/externalDebugRpc";
 import * as OwnedPreviewCapture from "./deckhand/OwnedPreviewCapture.ts";
 import {
   OWNED_PREVIEW_METHODS,
   OwnedPreviewError,
-} from "@t3tools/contracts/deckhand/ownedPreviewRpc";
+} from "@cinderdeck/contracts/deckhand/ownedPreviewRpc";
 import * as VerificationAttempts from "./deckhand/VerificationAttempts.ts";
-import { ATTEMPT_METHODS, AttemptError } from "@t3tools/contracts/deckhand/verificationAttemptsRpc";
+import { ATTEMPT_METHODS, AttemptError } from "@cinderdeck/contracts/deckhand/verificationAttemptsRpc";
 import * as ExternalSessions from "./deckhand/ExternalSessions.ts";
 import {
   EXTERNAL_SESSION_METHODS,
   ExternalSessionError,
-} from "@t3tools/contracts/deckhand/externalSessionsRpc";
+} from "@cinderdeck/contracts/deckhand/externalSessionsRpc";
 import * as Attention from "./deckhand/Attention.ts";
-import { ATTENTION_METHODS, AttentionError } from "@t3tools/contracts/deckhand/attentionRpc";
+import { ATTENTION_METHODS, AttentionError } from "@cinderdeck/contracts/deckhand/attentionRpc";
 import * as Verification from "./deckhand/Verification.ts";
 import {
   VERIFICATION_METHODS,
   VerificationError,
-} from "@t3tools/contracts/deckhand/verificationRpc";
+} from "@cinderdeck/contracts/deckhand/verificationRpc";
 import * as LinkedWorkBridge from "./deckhand/LinkedWorkBridge.ts";
-import { LINKED_WORK_METHODS, LinkedWorkError } from "@t3tools/contracts/deckhand/linkedWorkRpc";
+import { LINKED_WORK_METHODS, LinkedWorkError } from "@cinderdeck/contracts/deckhand/linkedWorkRpc";
 import * as PreviewCapture from "./deckhand/PreviewCapture.ts";
-import { RUN_METHODS, RunsError } from "@t3tools/contracts/deckhand/runsRpc";
+import { RUN_METHODS, RunsError } from "@cinderdeck/contracts/deckhand/runsRpc";
 import * as DeckhandRuns from "./deckhand/Runs.ts";
 import * as ReviewerLaunch from "./deckhand/ReviewerLaunch.ts";
-import * as DeckhandRpc from "@t3tools/contracts/deckhand/rpc";
-import { RECORDING_METHODS, RecordingError } from "@t3tools/contracts/deckhand/recordingsRpc";
+import * as DeckhandRpc from "@cinderdeck/contracts/deckhand/rpc";
+import { RECORDING_METHODS, RecordingError } from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import * as DeckhandRecordings from "./deckhand/Recordings.ts";
 import * as DeckhandThreadContext from "./deckhand/ThreadContext.ts";
 import * as ManagedSessions from "./deckhand/ManagedSessions.ts";
 import * as ManagedSessionLaunch from "./deckhand/ManagedSessionLaunch.ts";
 import * as IntegrationHub from "./deckhand/IntegrationHub.ts";
 import * as WorkspaceBackend from "./deckhand/WorkspaceBackend.ts";
-import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
+import { OrchestrationDispatchCommandError } from "@cinderdeck/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as NodeCrypto from "node:crypto";
@@ -143,8 +143,8 @@ import {
   WS_METHODS,
   WsRpcGroup,
   UpstreamWsRpcGroup,
-} from "@t3tools/contracts";
-import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
+} from "@cinderdeck/contracts";
+import { resolveServerBackgroundActivitySettings } from "@cinderdeck/shared/backgroundActivitySettings";
 import {
   HttpRouter,
   HttpServerRequest,
@@ -278,11 +278,11 @@ import * as VcsProjectConfig from "./vcs/VcsProjectConfig.ts";
 import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
-import * as RelayClient from "@t3tools/shared/relayClient";
+import * as RelayClient from "@cinderdeck/shared/relayClient";
 import {
   sameUsageLimitCommandCoverage,
   withUsageLimitsCommands,
-} from "@t3tools/shared/usageLimits";
+} from "@cinderdeck/shared/usageLimits";
 import * as AgentSessionScanner from "./project/AgentSessionScanner.ts";
 import * as AgentSessionImporter from "./project/AgentSessionImporter.ts";
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
@@ -1500,7 +1500,7 @@ const makeWsRpcLayer = (
               if (racedImport !== null) return { threadId, imported: false } as const;
               return yield* new AcpRegistryOperationError({
                 reason: "session_import_failed",
-                message: "Could not create a T3 thread for the ACP session.",
+                message: "Could not create a Cinderdeck thread for the ACP session.",
                 cause: launched.failure,
               });
             }
@@ -1541,7 +1541,7 @@ const makeWsRpcLayer = (
             if (importedThread !== null) {
               return yield* new AcpRegistryOperationError({
                 reason: "session_delete_failed",
-                message: "Delete the imported T3 thread before deleting its native ACP session.",
+                message: "Delete the imported Cinderdeck thread before deleting its native ACP session.",
               });
             }
             yield* manager.deleteSession({
@@ -3331,7 +3331,7 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             WS_METHODS.serverRefreshProviders,
             Effect.gen(function* () {
-              // Only explicit catalog refreshes bypass T3's caches. Workspace
+              // Only explicit catalog refreshes bypass Cinderdeck's caches. Workspace
               // discovery and background status checks retain their timers.
               if (input.refreshModels) {
                 yield* modelManifest.forceRefresh;

@@ -1,4 +1,4 @@
-import { GitCommandError } from "@t3tools/contracts";
+import { GitCommandError } from "@cinderdeck/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -41,7 +41,7 @@ interface Policy {
     effect: Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E, R>;
 }
-// The upstream drivers remain reusable without a Deckhand database. The server
+// The upstream drivers remain reusable without a Cinderdeck database. The server
 // installs layerLive before constructing either driver or per-connection layers.
 export class GitMutationPolicy extends Context.Reference<Policy>("t3/deckhand/GitMutationPolicy", {
   defaultValue: () => ({

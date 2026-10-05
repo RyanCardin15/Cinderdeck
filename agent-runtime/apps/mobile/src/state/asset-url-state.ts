@@ -1,5 +1,5 @@
-import type { EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
-import type { AssetUrlState as SharedAssetUrlState } from "@t3tools/client-runtime/state/assets";
+import type { EnvironmentConnectionPhase } from "@cinderdeck/client-runtime/connection";
+import type { AssetUrlState as SharedAssetUrlState } from "@cinderdeck/client-runtime/state/assets";
 
 export type AssetUrlFailureReason = "disconnected" | "failed";
 

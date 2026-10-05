@@ -1,6 +1,6 @@
-import type { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ProviderInstanceId, ThreadId } from "@cinderdeck/contracts";
 
-/** Model-facing name of Deckhand’s app-owned MCP server; transport and tool IDs stay stable. */
+/** Model-facing name of Cinderdeck’s app-owned MCP server; transport and tool IDs stay stable. */
 export const APP_MCP_SERVER_NAME = "deckhand";
 
 export interface McpProviderSessionConfig {

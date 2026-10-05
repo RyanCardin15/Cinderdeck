@@ -18,9 +18,9 @@ import {
   TrimmedNonEmptyString,
   type SourceControlRepositoryVisibility,
   type VcsError,
-} from "@t3tools/contracts";
-import { normalizeGitRemoteUrl } from "@t3tools/shared/git";
-import { decodeJsonResult } from "@t3tools/shared/schemaJson";
+} from "@cinderdeck/contracts";
+import { normalizeGitRemoteUrl } from "@cinderdeck/shared/git";
+import { decodeJsonResult } from "@cinderdeck/shared/schemaJson";
 
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as GitHubGraphQlBudget from "./githubGraphQlBudget.ts";
@@ -357,7 +357,7 @@ export class GitHubCli extends Context.Service<
       readonly force?: boolean;
     }) => Effect.Effect<void, GitHubCliError>;
   }
->()("t3/sourceControl/GitHubCli") {}
+>()("@cinderdeck/server/sourceControl/GitHubCli") {}
 
 const RawGitHubRepositoryCloneUrlsSchema = Schema.Struct({
   nameWithOwner: TrimmedNonEmptyString,

@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - Stable intent/report hashes and unguessable external IDs never grant process authority.
 import * as NodeCrypto from "node:crypto";
-import * as C from "@t3tools/contracts/deckhand/externalSessionsRpc";
+import * as C from "@cinderdeck/contracts/deckhand/externalSessionsRpc";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -35,7 +35,7 @@ export class ExternalSessions extends Context.Service<
       input: C.ExternalSessionList,
     ) => Effect.Effect<ReadonlyArray<C.ExternalSessionView>, C.ExternalSessionError>;
   }
->()("t3/deckhand/ExternalSessions") {}
+>()("@cinderdeck/server/deckhand/ExternalSessions") {}
 const fail = (reason: C.ExternalSessionError["reason"]) => new C.ExternalSessionError({ reason });
 const isError = Schema.is(C.ExternalSessionError);
 const wrap = (error: unknown) => (isError(error) ? error : fail("storage"));

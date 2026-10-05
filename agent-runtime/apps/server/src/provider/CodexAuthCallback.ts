@@ -1,8 +1,8 @@
-import { ProviderSetupError, type CodexAuthCallbackInput } from "@t3tools/contracts";
-import { receiveCodexAuthCallback } from "@t3tools/shared/codexAuthCallback";
-import { codexAuthorizationRequest } from "@t3tools/shared/codexAuthHandoff";
-import { providerAuthReturnUrl } from "@t3tools/shared/providerAuthReturnUrl";
-import { isLoopbackHost } from "@t3tools/shared/preview";
+import { ProviderSetupError, type CodexAuthCallbackInput } from "@cinderdeck/contracts";
+import { receiveCodexAuthCallback } from "@cinderdeck/shared/codexAuthCallback";
+import { codexAuthorizationRequest } from "@cinderdeck/shared/codexAuthHandoff";
+import { providerAuthReturnUrl } from "@cinderdeck/shared/providerAuthReturnUrl";
+import { isLoopbackHost } from "@cinderdeck/shared/preview";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -24,7 +24,7 @@ export function subscribeCodexAuthCallback(input: CodexAuthCallbackInput) {
           codexAuthorizationRequest(input.authorizationUrl);
           const destination = providerAuthReturnUrl(input.returnUrl);
           if (!destination || !isLoopbackHost(new URL(destination).hostname))
-            throw new Error("The local sign-in receiver needs a local Deckhand return address.");
+            throw new Error("The local sign-in receiver needs a local Cinderdeck return address.");
           return destination;
         },
         catch: failure,

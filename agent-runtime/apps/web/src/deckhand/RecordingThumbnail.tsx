@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FilmIcon } from "lucide-react";
-import type { EnvironmentId } from "@t3tools/contracts";
-import type { RecordingContext } from "@t3tools/contracts/deckhand/recordingsRpc";
+import type { EnvironmentId } from "@cinderdeck/contracts";
+import type { RecordingContext } from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import { useEnvironmentHttpBaseUrl } from "../state/environments";
 import { useAtomCommand } from "../state/use-atom-command";
 import { recordingThumbnail } from "./recordingState";

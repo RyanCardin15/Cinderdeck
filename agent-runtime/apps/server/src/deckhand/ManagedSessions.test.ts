@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
 import {
   ProviderInstanceId,
   ProviderSessionId,
@@ -7,8 +7,8 @@ import {
   ThreadId,
   type OrchestrationV2ThreadShell,
   type OrchestrationV2StoredEvent,
-} from "@t3tools/contracts";
-import * as Contracts from "@t3tools/contracts/deckhand";
+} from "@cinderdeck/contracts";
+import * as Contracts from "@cinderdeck/contracts/deckhand";
 import * as Effect from "effect/Effect";
 import * as DateTime from "effect/DateTime";
 import * as Layer from "effect/Layer";

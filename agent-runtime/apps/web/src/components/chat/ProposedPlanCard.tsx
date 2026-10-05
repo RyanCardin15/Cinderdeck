@@ -2,8 +2,8 @@ import { memo, useState, useId } from "react";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
+} from "@cinderdeck/client-runtime/state/runtime";
+import type { EnvironmentId, ScopedThreadRef } from "@cinderdeck/contracts";
 import {
   buildCollapsedProposedPlanPreviewMarkdown,
   buildProposedPlanMarkdownFilename,

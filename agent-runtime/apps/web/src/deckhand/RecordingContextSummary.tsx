@@ -2,11 +2,11 @@ import type { WorkspaceSearch } from "./workspaceNavigation";
 import { Link } from "@tanstack/react-router";
 import { FilmIcon, ChevronRightIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@cinderdeck/contracts";
 import type {
   RecordingContext,
   RecordingContextOverview,
-} from "@t3tools/contracts/deckhand/recordingsRpc";
+} from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import { useAtomCommand } from "../state/use-atom-command";
 import { recordingOverview } from "./recordingState";
 import styles from "./recordingSummary.module.css";

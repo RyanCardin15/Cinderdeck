@@ -1,4 +1,4 @@
-import type { RecordingContext } from "@t3tools/contracts/deckhand/recordingsRpc";
+import type { RecordingContext } from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import { validateWorkspaceSearch } from "./workspaceNavigation";
 
 export function validateRecordingsSearch(value: Record<string, unknown>) {

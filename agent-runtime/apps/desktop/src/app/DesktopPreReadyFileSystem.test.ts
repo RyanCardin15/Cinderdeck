@@ -1,6 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
@@ -22,8 +22,8 @@ it.layer(NodeServices.layer)("DesktopPreReadyFileSystem", (it) => {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-pre-ready-fs-" });
-      yield* fileSystem.makeDirectory(path.join(root, "Deckhand (Alpha)"));
-      yield* fileSystem.writeFileString(path.join(root, "Deckhand (Alpha)", "Local State"), "keys");
+      yield* fileSystem.makeDirectory(path.join(root, "Cinderdeck (Alpha)"));
+      yield* fileSystem.writeFileString(path.join(root, "Cinderdeck (Alpha)", "Local State"), "keys");
 
       const userData = yield* resolveWindowsUserData(root);
 

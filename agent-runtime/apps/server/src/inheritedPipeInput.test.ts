@@ -9,7 +9,7 @@ import { it } from "@effect/vitest";
 import { expect } from "vite-plus/test";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
 import { openInheritedPipeInput } from "./inheritedPipeInput.ts";
 
 const platform = HostProcessPlatform.defaultValue();

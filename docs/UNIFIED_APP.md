@@ -1,12 +1,12 @@
 # Building the unified Cinderdeck app
 
-Cinderdeck is one installed macOS application. The native app retains its identity, capture permissions, preferences, global shortcuts, menu/status bar, workspace services, control socket, and Sparkle updater. Its main workspace window is the T3-derived React agent shell, with the existing Chromium preview and recording runtime. Native capture, annotation, history, and preference tools remain available through that shell.
+Cinderdeck is one installed macOS application. The native app retains its identity, capture permissions, preferences, global shortcuts, menu/status bar, workspace services, control socket, and Sparkle updater. Its main workspace window is the Cinderdeck React agent shell, with the existing Chromium preview and recording runtime. Native capture, annotation, history, and preference tools remain available through that shell.
 
 The native app launches a private `Contents/Resources/AgentShell.app/Contents/MacOS/AgentShell` child. This bundle is shipped inside Cinderdeck; it is not a second product to install. Its identifier is `com.ryancardin.cinderdeck.agentshell`, while the outer app remains `com.ryancardin.cinderdeck` (`com.ryancardin.cinderdeck.debug` for Debug). The internal bundle does not register URL schemes. Native Cinderdeck owns updates for the entire bundle; AgentShell's independent updater is disabled in native-host mode.
 
 ## Build and assemble
 
-Clone the Cinderdeck repository normally. The maintained T3-derived source is included as tracked files under `agent-runtime/`, with full history and licenses. Use Xcode 26.2 or later and Rust/Cargo. The builder installs frozen dependencies and bootstraps the supported Node toolchain inside the clone when needed. It does not fetch a different harness revision.
+Clone the Cinderdeck repository normally. The maintained agent runtime source is included as tracked files under `agent-runtime/`, with full history and licenses. Use Xcode 26.2 or later and Rust/Cargo. The builder installs frozen dependencies and bootstraps the supported Node toolchain inside the clone when needed. It does not fetch a different harness revision.
 
 ```bash
 ./scripts/build-unified.sh \
@@ -55,32 +55,12 @@ Native-tool requests can open workspace/lane-map, history, preferences, capture,
 
 The embedded workspace keeps Services, Tasks, Workflows, Lane map, Runs, Recordings, Agents, and Pull requests in its own section bar, retaining the selected workspace or lane. Workspace entry points open Services by default. Global tools remain available under All views. The workspace header and operational panels use the native workspace palette and compact controls. The `workspace-terminal` native-tool surface requires an exact workspace or lane ID and no mode; it opens the existing native service-log terminal without accepting a command.
 
-The embedded workspace keeps Services, Tasks, Workflows, Lane map, Runs, Recordings, Agents, and Pull requests in its own section bar, retaining the selected workspace or lane. Workspace entry points open Services by default. Global tools remain available under All views. The workspace header and operational panels use the native workspace palette and compact controls. The `workspace-terminal` native-tool surface requires an exact workspace or lane ID and no mode; it opens the existing native service-log terminal without accepting a command.
-
 Native Cinderdeck remains the only owner of workspace/lane service processes, ports, operational logs, runs, and native recordings. The agent runtime owns its threads, provider sessions, chat, diffs, and Chromium preview lifecycle. Shared-service aliases carry their actual owner workspace and optional canonical service target; a lane does not acquire a separate owner merely because it displays a shared service. Checkout writer admission coordinates agent activity, but is not operating-system isolation. Local provider sessions still require installed, authenticated CLIs and their advertised capabilities. This packaging command does not sign in providers, grant third-party access, or prove their live behavior.
 
-## Maintaining T3 updates
+## Maintaining the app
 
-Maintain the agent runtime inside `agent-runtime/`. Reuse its adapters, contracts, WebSocket transport, Electron backend supervision, preview implementation, and artifact builder. Native-host and Cinderdeck feature modules contain the product integration; upstream changes still pass through the runtime's existing fork policy and patch audit. The native repository remains authoritative for Cinderdeck identity, permissions, operational resources, and whole-app updates. Updating the runtime alone does not update an installed unified app: rebuild, sign, and validate the complete outer bundle.
+The runtime in `agent-runtime/` is owned and maintained as part of Cinderdeck. Workspace packages use `@cinderdeck/*`; AgentShell is a private child bundle with no independent release feed. There is no upstream subtree update, patch allowlist, vendor website, or relay deployment in this repository. Preserve the original MIT license and copyright notices for incorporated source.
 
-The patch audit runs from the included runtime and compares only its subtree against the preserved upstream baseline:
-
-```sh
-cd agent-runtime
-node scripts/deckhand/upstream-maintenance.mjs audit
-```
-
-For an upstream rehearsal, first extract the runtime history in a disposable worktree. Never merge T3 directly into the native host root:
-
-```sh
-# From the Cinderdeck repository root; choose new branch and worktree paths.
-git subtree split --prefix=agent-runtime -b maintenance/runtime-review
-git worktree add /tmp/cinderdeck-runtime-review maintenance/runtime-review
-# Run the existing rehearsal and acceptance procedure from that runtime worktree.
-# Once reviewed and all required gates pass, import the exact accepted runtime commit:
-git subtree merge --prefix=agent-runtime ACCEPTED_RUNTIME_COMMIT
-```
-
-The rehearsal command refuses to run from the embedded subtree. The old separate runtime repository is retained as historical source; it is not required to build or start Cinderdeck. Rebuild and validate the complete app after importing a runtime update.
+Update the runtime and native host together, then rebuild, sign, and validate the complete outer app. Provider protocol identifiers, internal `deckhand` module paths, and persisted storage keys remain compatibility details; renaming product labels does not justify moving user databases.
 
 Compilation and signature verification do not prove the integrated product. Manually validate one main window, exact workspace/lane navigation, native tool entry points, provider selection and resumed conversations, preview/recording, shared-service ownership, relaunch, and cancellation/graceful quit. The Debug preview harness scopes operational files, capture output and processing, history database/thumbnails, recording metadata/audio and annotation sidecars to `CINDERDECK_STACKS_PREVIEW_ROOT`. Volatile fixture defaults enable saving and history while disabling clipboard copying. They do not redirect every persistent Debug preference write. Keep that distinction explicit when conducting manual checks.

@@ -1,8 +1,8 @@
 import { ConnectionTraceId } from "./ConnectionTraceId";
 import { SymbolView } from "../../components/AppSymbol";
-import { connectionStatusText } from "@t3tools/client-runtime/connection";
-import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
-import { type EnvironmentId, resolveEnvironmentMachineKind } from "@t3tools/contracts";
+import { connectionStatusText } from "@cinderdeck/client-runtime/connection";
+import type { AtomCommandResult } from "@cinderdeck/client-runtime/state/runtime";
+import { type EnvironmentId, resolveEnvironmentMachineKind } from "@cinderdeck/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
@@ -156,7 +156,7 @@ export function ConnectionEnvironmentRow(props: {
         >
           {props.environment.isRelayManaged ? (
             <Text className="text-sm text-foreground-muted">
-              Managed by T3 Connect. Tunnel details update automatically.
+              Managed by Remote connections. Tunnel details update automatically.
             </Text>
           ) : (
             <>

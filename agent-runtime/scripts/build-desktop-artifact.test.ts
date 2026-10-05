@@ -52,6 +52,7 @@ import {
   resolveBuildOptions,
   resolveDesktopBuildIconAssets,
   resolveDesktopProductName,
+  privateShellBuildError,
   resolveDesktopUpdateChannel,
   resolveDesktopWebAssetBrand,
   resolveResourceMonitorRustTargets,
@@ -93,8 +94,8 @@ import {
   wslRuntimeArchiveStem,
 } from "./build-desktop-artifact.ts";
 import { BRAND_ASSET_PATHS } from "./lib/brand-assets.ts";
-import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { symlinksSupported } from "@t3tools/shared/testing/symlinks";
+import { HostProcessArchitecture, HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
+import { symlinksSupported } from "@cinderdeck/shared/testing/symlinks";
 
 // A minimal stand-in for the Linux CLI release archive: one top-level
 // directory named after the archive stem holding the executable, the web
@@ -264,11 +265,19 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.equal(resolveDesktopUpdateChannel("0.0.17"), "latest");
   });
 
-  it("switches desktop packaging product names to nightly for nightly builds", () => {
-    assert.equal(resolveDesktopProductName("0.0.17"), "Deckhand (Alpha)");
-    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "Deckhand (Nightly)");
-    assert.equal(resolveDesktopProductName("0.0.17-preview.20261003.3"), "Deckhand (Preview)");
-    assert.equal(resolveDesktopProductName("0.0.17-pr.42.1"), "Deckhand (Preview)");
+  it("allows only the private macOS directory bundle", () => {
+    assert.equal(privateShellBuildError({ platform: "mac", target: "dir" }), undefined);
+    for (const platform of ["linux", "win"] as const) {
+      assert.match(privateShellBuildError({ platform, target: "dir" })!, /build-unified/);
+    }
+    assert.match(privateShellBuildError({ platform: "mac", target: "dmg" })!, /build-unified/);
+  });
+
+  it("keeps every private child bundle named AgentShell", () => {
+    assert.equal(resolveDesktopProductName("0.0.17"), "AgentShell");
+    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "AgentShell");
+    assert.equal(resolveDesktopProductName("0.0.17-preview.20261003.3"), "AgentShell");
+    assert.equal(resolveDesktopProductName("0.0.17-pr.42.1"), "AgentShell");
   });
 
   it("switches desktop packaging icons to the nightly artwork for nightly versions", () => {
@@ -331,7 +340,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }),
   );
 
-  it.effect("refuses an explicit T3 update repository for Deckhand artifacts", () =>
+  it.effect("refuses an explicit T3 update repository for Cinderdeck artifacts", () =>
     Effect.gen(function* () {
       const publish = yield* resolveGitHubPublishConfig("latest");
       assert.isUndefined(publish);
@@ -399,14 +408,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
       assert.notProperty(preview, "publish");
       assert.notProperty(previewChannel, "publish");
-      assert.deepStrictEqual(release.publish, [
-        {
-          provider: "github",
-          owner: "cardinlabs",
-          repo: "deckhand-fixture",
-          releaseType: "release",
-        },
-      ]);
+      assert.notProperty(release, "publish");
     }).pipe(
       Effect.provide(
         ConfigProvider.layer(
@@ -427,8 +429,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           "@crowecawcaw/xa11y": "0.13.0",
           "@effect/platform-node": "catalog:",
           "@napi-rs/keyring": "^1.3.0",
-          "@t3tools/contracts": "workspace:*",
-          "@t3tools/shared": "workspace:*",
+          "@cinderdeck/contracts": "workspace:*",
+          "@cinderdeck/shared": "workspace:*",
           "dbus-next": "0.10.2",
           effect: "catalog:",
           electron: "41.5.0",
@@ -707,7 +709,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "**/*.map",
       ]);
       assert.deepStrictEqual(mac.dmg, {
-        title: "Deckhand (Alpha) 1.2.3 Installer",
+        title: "AgentShell 1.2.3 Installer",
         background: "dmg/dmg-background-latest.png",
         window: { width: 640, height: 432 },
         contents: [
@@ -722,7 +724,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       // Linux must register the renderer schemes so the generated .desktop
       // entry advertises MimeType=x-scheme-handler/t3code; for OAuth deep links.
       assert.deepStrictEqual((linux.linux as Record<string, unknown>).protocols, [
-        { name: "Deckhand", schemes: ["deckhand", "deckhand-dev"] },
+        { name: "Cinderdeck", schemes: ["deckhand", "deckhand-dev"] },
       ]);
       assert.deepStrictEqual(mac.files, [...DESKTOP_FILE_EXCLUSIONS, ...MAC_FILE_EXCLUSIONS]);
       assert.deepStrictEqual(linux.files, [...DESKTOP_FILE_EXCLUSIONS, ...LINUX_FILE_EXCLUSIONS]);
@@ -1909,7 +1911,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     });
 
     assert.deepStrictEqual(configuration, {
-      appId: "com.cardinlabs.deckhand",
+      appId: "com.ryancardin.cinderdeck.agentshell",
       teamId: "ABC1234567",
       rpDomains: ["example.clerk.accounts.dev"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
@@ -1929,7 +1931,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "clerk.example.com",
       "example.clerk.accounts.dev",
     ]);
-    assert.include(entitlements, "<string>ABC1234567.com.cardinlabs.deckhand</string>");
+    assert.include(entitlements, "<string>ABC1234567.com.ryancardin.cinderdeck.agentshell</string>");
     assert.include(entitlements, "<string>webcredentials:clerk.example.com</string>");
     assert.include(entitlements, "<string>webcredentials:example.clerk.accounts.dev</string>");
     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
@@ -2016,7 +2018,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.notInclude(error.message, secret);
   });
 
-  it.effect("adds passkey entitlements and both renderer protocols to signed macOS builds", () =>
+  it.effect("retains helper entitlements without registering a second macOS product", () =>
     Effect.gen(function* () {
       const config = yield* createBuildConfig("mac", "dmg", "1.2.3", true, false, undefined, {
         entitlementsPath: "/tmp/entitlements.mac.plist",
@@ -2024,14 +2026,12 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       });
 
       const mac = config.mac as Record<string, unknown>;
-      assert.equal(config.appId, "com.cardinlabs.deckhand");
-      assert.equal(config.artifactName, "Deckhand-${version}-${arch}.${ext}");
+      assert.equal(config.appId, "com.ryancardin.cinderdeck.agentshell");
+      assert.equal(config.artifactName, "AgentShell-${version}-${arch}.${ext}");
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
       assert.match(String(mac.sign), /[\\/]scripts[\\/]sign-macos\.ts$/);
-      assert.deepStrictEqual(mac.protocols, [
-        { name: "Deckhand", schemes: ["deckhand", "deckhand-dev"] },
-      ]);
+      assert.deepStrictEqual(mac.protocols, []);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
@@ -2462,7 +2462,7 @@ it.effect.skipIf(!symlinksSupported)(
       const framework = path.join(
         source,
         "mac-arm64",
-        "Deckhand.app",
+        "Cinderdeck.app",
         "Contents",
         "Frameworks",
         "Example.framework",
@@ -2478,7 +2478,7 @@ it.effect.skipIf(!symlinksSupported)(
       const copied = path.join(
         output,
         "mac-arm64",
-        "Deckhand.app",
+        "Cinderdeck.app",
         "Contents",
         "Frameworks",
         "Example.framework",

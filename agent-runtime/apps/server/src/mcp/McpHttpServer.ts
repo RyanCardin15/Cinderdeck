@@ -21,7 +21,7 @@ import * as Stream from "effect/Stream";
 import type * as Types from "effect/Types";
 import { McpProtocol, McpSchema, McpServer, Tool } from "effect/unstable/ai";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
-import { PreviewAutomationError } from "@t3tools/contracts";
+import { PreviewAutomationError } from "@cinderdeck/contracts";
 
 import { DeckhandToolkit } from "./toolkits/deckhand/tools.ts";
 import { DeckhandToolkitHandlersLive } from "./toolkits/deckhand/handlers.ts";
@@ -799,7 +799,7 @@ const ManagedToolRegistrationLive = Layer.effect(
 ).pipe(Layer.provide(ManagedMcpToolPolicy.layer));
 
 const McpTransportLive = McpServer.layerHttp({
-  name: "Deckhand",
+  name: "Cinderdeck",
   version: packageJson.version,
   path: "/mcp",
   protocols: [McpProtocol.v2025_06_18],

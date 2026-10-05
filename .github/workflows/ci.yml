@@ -11,6 +11,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  runtime:
+    runs-on: macos-15
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: agent-runtime
+    env:
+      VP_GIT_HOOKS: '0'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.13.1'
+      - name: Install locked runtime dependencies
+        run: npm exec --yes --package=pnpm@11.10.0 -- pnpm install --frozen-lockfile
+      - name: Check runtime and companion types
+        run: node_modules/.bin/vp run -r --concurrency-limit 2 typecheck
+      - name: Verify Cinderdeck branding and product boundaries
+        run: |
+          python3 ../scripts/check-repository.py
+          node scripts/export-brand-icons.mjs --check
+      - name: Verify packaging and native integration
+        run: >-
+          node_modules/.bin/vp test run
+          scripts/build-desktop-artifact.test.ts
+          scripts/lib/brand-assets.test.ts
+          scripts/lib/public-config.test.ts
+          scripts/deckhand/distribution.test.ts
+          packages/shared/src/providerAuthReturnUrl.test.ts
+          packages/shared/src/cliRelease.test.ts
+          apps/server/src/deckhand/LocalDiagnostics.test.ts
+          apps/server/src/deckhand/CinderdeckClient.test.ts
+          apps/desktop/src/app/DesktopAssets.test.ts
+          apps/desktop/src/app/DesktopEnvironment.test.ts
+          apps/web/src/components/desktopUpdate.logic.test.ts
+          apps/web/src/deckhand/ProductNavigation.test.tsx
+          apps/web/src/deckhand/connectedWorkspaceNavigation.test.tsx
+          apps/mobile/src/features/settings/lib/legal-document-url.test.ts
+
   build:
     runs-on: macos-15
     timeout-minutes: 60
@@ -34,10 +73,8 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Verify runtime maintenance guard
-        run: |
-          node --test agent-runtime/scripts/deckhand/upstream-maintenance.test.mjs
-          (cd agent-runtime && node scripts/deckhand/upstream-maintenance.mjs audit)
+      - name: Verify single-product repository
+        run: python3 scripts/check-repository.py
 
       - name: Verify localization catalogs
         run: |

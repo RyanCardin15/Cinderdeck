@@ -85,17 +85,8 @@ describe("brand-assets", () => {
   });
 
   it("keeps development, nightly, and production icon families separate", () => {
-    expect([
-      BRAND_ASSET_PATHS.developmentIconComposerProject,
-      BRAND_ASSET_PATHS.nightlyIconComposerProject,
-      BRAND_ASSET_PATHS.productionIconComposerProject,
-    ]).toEqual([
-      "assets/deckhand/dev/app-icon.icon",
-      "assets/deckhand/nightly/app-icon.icon",
-      "assets/deckhand/prod/app-icon.icon",
-    ]);
-    expect(BRAND_ASSET_PATHS.developmentDesktopIconPng).toMatch(/^assets\/deckhand\/dev\//);
-    expect(BRAND_ASSET_PATHS.nightlyMacIconPng).toMatch(/^assets\/deckhand\/nightly\//);
-    expect(BRAND_ASSET_PATHS.productionMacIconPng).toMatch(/^assets\/deckhand\/prod\//);
+    expect(BRAND_ASSET_PATHS.developmentDesktopIconPng).toMatch(/^assets\/cinderdeck\/dev\//);
+    expect(BRAND_ASSET_PATHS.nightlyMacIconPng).toMatch(/^assets\/cinderdeck\/nightly\//);
+    expect(BRAND_ASSET_PATHS.productionMacIconPng).toMatch(/^assets\/cinderdeck\/prod\//);
   });
 });

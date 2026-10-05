@@ -1,6 +1,6 @@
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@cinderdeck/contracts";
 import type { WorkspaceSearch } from "./workspaceNavigation";
-import type { IntegrationView, OperationRecord } from "@t3tools/contracts/deckhand/rpc";
+import type { IntegrationView, OperationRecord } from "@cinderdeck/contracts/deckhand/rpc";
 
 export interface ConnectedWorkspaceSelection {
   readonly environmentId: EnvironmentId;

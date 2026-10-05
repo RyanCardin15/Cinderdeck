@@ -1,4 +1,4 @@
-/* Default Deckhand colors use the upstream semantic roles. A saved or previewed
+/* Default Cinderdeck colors use the upstream semantic roles. A saved or previewed
    theme owns its palette through data-theme-id and takes precedence unchanged. */
 html:not([data-theme-id]) {
   --primary: #a84413;

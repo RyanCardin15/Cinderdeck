@@ -9,13 +9,13 @@ import {
   DesktopAppActivationResponse,
   type DesktopAppActivationPlatform,
   type DesktopAppActivationRequest,
-} from "@t3tools/contracts";
-import { resolveDesktopAppControlAddress } from "@t3tools/shared/desktopAppControl";
+} from "@cinderdeck/contracts";
+import { resolveDesktopAppControlAddress } from "@cinderdeck/shared/desktopAppControl";
 import {
   HostProcessPlatform,
   HostProcessUserId,
   HostProcessWorkingDirectory,
-} from "@t3tools/shared/hostProcess";
+} from "@cinderdeck/shared/hostProcess";
 import * as Config from "effect/Config";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
@@ -59,7 +59,7 @@ export class DesktopAppUnreachableError extends Schema.TaggedError<DesktopAppUnr
   },
 ) {
   override get message(): string {
-    return "Could not reach the Deckhand desktop app. Start or update the desktop app on this machine, then run `t3 app` again. A running Deckhand server is not enough.";
+    return "Could not reach the Cinderdeck desktop app. Start or update the desktop app on this machine, then run `t3 app` again. A running Cinderdeck server is not enough.";
   }
 }
 
@@ -73,7 +73,7 @@ export class DesktopAppRequestFailedError extends Schema.TaggedError<DesktopAppR
   },
 ) {
   override get message(): string {
-    return `Deckhand could not open ${this.workspaceRoot} (${this.code}).`;
+    return `Cinderdeck could not open ${this.workspaceRoot} (${this.code}).`;
   }
 }
 
@@ -246,7 +246,7 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
     });
   }
 
-  yield* Console.log(`Opened ${workspaceRoot} in Deckhand.`);
+  yield* Console.log(`Opened ${workspaceRoot} in Cinderdeck.`);
 });
 
 export const appCommand = Command.make("app", {
@@ -256,6 +256,6 @@ export const appCommand = Command.make("app", {
     Argument.optional,
   ),
 }).pipe(
-  Command.withDescription("Open a project in the running Deckhand desktop app."),
+  Command.withDescription("Open a project in the running Cinderdeck desktop app."),
   Command.withHandler(runAppCommand),
 );

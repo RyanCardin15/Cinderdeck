@@ -4,8 +4,8 @@ import {
   ThreadId,
   ProviderInstanceId,
   type OrchestrationV2ThreadShell,
-} from "@t3tools/contracts";
-import type { ThreadContextView } from "@t3tools/contracts/deckhand/rpc";
+} from "@cinderdeck/contracts";
+import type { ThreadContextView } from "@cinderdeck/contracts/deckhand/rpc";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";

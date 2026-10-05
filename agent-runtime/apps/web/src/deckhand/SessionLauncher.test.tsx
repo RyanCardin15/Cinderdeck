@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { DEFAULT_SERVER_SETTINGS, EnvironmentId, ProviderInstanceId } from "@t3tools/contracts";
-import * as Contracts from "@t3tools/contracts/deckhand/rpc";
+import { DEFAULT_SERVER_SETTINGS, EnvironmentId, ProviderInstanceId } from "@cinderdeck/contracts";
+import * as Contracts from "@cinderdeck/contracts/deckhand/rpc";
 import * as Schema from "effect/Schema";
 import * as Cause from "effect/Cause";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
@@ -16,7 +16,7 @@ const commands = vi.hoisted(() => ({
   navigate: vi.fn(),
   previewReview: vi.fn(),
   confirmReview: vi.fn(),
-  defaultModel: null as import("@t3tools/contracts").ModelSelection | null,
+  defaultModel: null as import("@cinderdeck/contracts").ModelSelection | null,
   planEnabled: false,
   nextOperation: 0,
 }));

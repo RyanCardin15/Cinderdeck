@@ -1,5 +1,5 @@
-import { EnvironmentId } from "@t3tools/contracts";
-import type { RelayClientEnvironmentRecord } from "@t3tools/contracts/relay";
+import { EnvironmentId } from "@cinderdeck/contracts";
+import type { RelayClientEnvironmentRecord } from "@cinderdeck/contracts/relay";
 import { describe, expect, it } from "vite-plus/test";
 import type { ConnectedEnvironmentSummary } from "../../state/remote-runtime-types";
 import { relayManagedEnvironmentIds, splitEnvironmentSections } from "./environmentSections";
@@ -47,7 +47,7 @@ describe("relayManagedEnvironmentIds", () => {
 });
 
 describe("mobile environment settings sections", () => {
-  it("keeps saved relay-managed connections under T3 Connect", () => {
+  it("keeps saved relay-managed connections under Remote connections", () => {
     const local = connectedEnvironment({
       environmentId: "environment-local",
       isRelayManaged: false,

@@ -24,7 +24,7 @@ import {
   ProviderTurnId,
   RunId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Effect from "effect/Effect";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -2612,7 +2612,7 @@ it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
         commandId: CommandId.make("restart-failed-continuation"),
         threadId,
         messageId: MessageId.make("restart-failed-continuation"),
-        text: "Note: the T3 server restarted.",
+        text: "Note: the Cinderdeck server restarted.",
         attachments: [],
         modelSelection,
         dispatchMode: { type: "start_immediately" },

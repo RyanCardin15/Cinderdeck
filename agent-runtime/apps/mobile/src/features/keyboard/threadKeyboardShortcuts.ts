@@ -1,5 +1,5 @@
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import { THREAD_JUMP_KEYBINDING_COMMANDS } from "@t3tools/contracts";
+import type { EnvironmentThreadShell } from "@cinderdeck/client-runtime/state/shell";
+import { THREAD_JUMP_KEYBINDING_COMMANDS } from "@cinderdeck/contracts";
 import { useCallback } from "react";
 
 import type { ThreadListV2ListItem } from "../threads/threadListV2";

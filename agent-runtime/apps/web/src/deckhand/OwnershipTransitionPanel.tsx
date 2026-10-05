@@ -1,7 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useRef, useState } from "react";
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import type * as C from "@t3tools/contracts/deckhand/ownershipRpc";
+import type { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
+import type * as C from "@cinderdeck/contracts/deckhand/ownershipRpc";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as Option from "effect/Option";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";

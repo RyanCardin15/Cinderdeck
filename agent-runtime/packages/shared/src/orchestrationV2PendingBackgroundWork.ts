@@ -4,8 +4,8 @@ import type {
   OrchestrationV2Run,
   OrchestrationV2TurnItem,
   ThreadId,
-} from "@t3tools/contracts";
-import { isOrchestrationV2WorkActive } from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
+import { isOrchestrationV2WorkActive } from "@cinderdeck/contracts";
 
 const BACKGROUND_TURN_ITEM_TYPES = new Set<OrchestrationV2TurnItem["type"]>([
   "command_execution",

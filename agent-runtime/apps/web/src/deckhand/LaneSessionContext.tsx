@@ -5,8 +5,8 @@ import { ReviewerLauncher } from "./ReviewerLauncher";
 import { ManagedSessionControl } from "./ManagedSessionControl";
 import { PullRequestGlyph } from "../components/pullRequest/pullRequestIcons";
 import { Link } from "@tanstack/react-router";
-import type { ScopedThreadRef } from "@t3tools/contracts";
-import type { ThreadContextView } from "@t3tools/contracts/deckhand/rpc";
+import type { ScopedThreadRef } from "@cinderdeck/contracts";
+import type { ThreadContextView } from "@cinderdeck/contracts/deckhand/rpc";
 import {
   ArrowUpRightIcon,
   CircleAlertIcon,

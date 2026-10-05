@@ -1,7 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
-import { ProviderInstanceId, ProviderSessionId, ThreadId } from "@t3tools/contracts";
-import { resolveSelfInvocation } from "@t3tools/shared/nodeRuntime";
+import { ProviderInstanceId, ProviderSessionId, ThreadId } from "@cinderdeck/contracts";
+import { resolveSelfInvocation } from "@cinderdeck/shared/nodeRuntime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Crypto from "effect/Crypto";
@@ -150,7 +150,7 @@ describe("AcpRegistryAdapterV2", () => {
     });
 
     // A scripted ACP v1 agent: initialize, session/new answered with `setup`,
-    // then the frames T3 must send (and the agent's answers) to apply the
+    // then the frames Cinderdeck must send (and the agent's answers) to apply the
     // user's stored pick from the agent's mode picker.
     const openWithStoredModePick = Effect.fn("openWithStoredModePick")(function* (input: {
       readonly setup: unknown;

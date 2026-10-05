@@ -4,8 +4,8 @@ import {
   ProjectId,
   ProviderInstanceId,
   ThreadId,
-} from "@t3tools/contracts";
-import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
+} from "@cinderdeck/contracts";
+import { serializeAssistantCitation } from "@cinderdeck/shared/assistantCitations";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

@@ -4,4 +4,4 @@ export {
   sortThreads,
   toSortableTimestamp,
   type ThreadSortInput,
-} from "@t3tools/client-runtime/state/thread-sort";
+} from "@cinderdeck/client-runtime/state/thread-sort";

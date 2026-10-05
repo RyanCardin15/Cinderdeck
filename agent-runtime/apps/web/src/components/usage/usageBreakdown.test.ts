@@ -1,4 +1,4 @@
-import type { ModelTotals } from "@t3tools/shared/usageMerge";
+import type { ModelTotals } from "@cinderdeck/shared/usageMerge";
 import { describe, expect, it } from "vite-plus/test";
 
 import { cacheHitRate, costPerMillionTokens, sortModelsByTokens } from "./usageBreakdown";

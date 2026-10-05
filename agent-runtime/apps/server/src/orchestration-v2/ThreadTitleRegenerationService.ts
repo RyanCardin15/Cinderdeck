@@ -1,11 +1,11 @@
-import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
+import { resolveProjectSettings } from "@cinderdeck/shared/projectSettings";
 import {
   CommandId,
   type ChatAttachment,
   type MessageId,
   type ServerSettingsError,
   type ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -36,7 +36,7 @@ export class ThreadTitleRegenerationService extends Context.Service<
       OrchestratorV2Error | ProjectStore.ProjectStoreV2Error | ServerSettingsError
     >;
   }
->()("t3/orchestration-v2/ThreadTitleRegenerationService") {}
+>()("@cinderdeck/server/orchestration-v2/ThreadTitleRegenerationService") {}
 
 const make = Effect.gen(function* () {
   const threads = yield* ThreadManagementService.ThreadManagementService;

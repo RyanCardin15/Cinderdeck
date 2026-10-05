@@ -2,6 +2,8 @@
 
 Workspaces now groups **Services, Tasks, Workflows, and Runs** in a dedicated window. Existing Stacks definitions and service controls remain compatible. See [WORKSPACES.md](WORKSPACES.md) for the task/workflow model, editors, lifecycle, and agent API.
 
+Cinderdeck ships as one native macOS app with a private AgentShell child. `agent-runtime/` contains its agent backend, React UI, Electron preview shell, shared contracts, and mobile companion. See [UNIFIED_APP.md](UNIFIED_APP.md) for complete-app builds and ownership boundaries. The runtime is maintained directly; there is no standalone T3 release or upstream subtree maintenance process.
+
 This doc mirrors the current Cinderdeck codebase and runtime ownership. Keep it in sync with source, not with intended architecture.
 
 Workspace performance: `StackCommandRunner` waits on kernel process-exit notifications with cancellation and deadline cleanup. `LogBuffer` uses a heap merge with a bounded reverse traversal for recent output; `StackSupervisor` moves large merges off the main actor. `StackLogFilter` retains search matches only for current line IDs. `StacksViewModel` rebuilds its indexed `WorkspaceNavigation` snapshot when definitions change, and the execution map draws static connections separately from animated activity. Agent inventory supports `list_workspaces(detail: false)`. Measurements and verification are in [PERFORMANCE.md](PERFORMANCE.md).

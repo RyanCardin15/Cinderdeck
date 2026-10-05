@@ -4,7 +4,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import * as Contracts from "@t3tools/contracts/deckhand/recordingsRpc";
+import * as Contracts from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import * as IntegrationDiscovery from "./IntegrationDiscovery.ts";
 import * as CinderdeckClient from "./CinderdeckClient.ts";
 export class RecordingTransport extends Context.Service<
@@ -16,7 +16,7 @@ export class RecordingTransport extends Context.Service<
       params: { readonly installationID: string } & Record<string, unknown>,
     ) => Effect.Effect<unknown, Contracts.RecordingError>;
   }
->()("t3/deckhand/RecordingTransport") {}
+>()("@cinderdeck/server/deckhand/RecordingTransport") {}
 const isRecordingError = Schema.is(Contracts.RecordingError);
 export const layer = Layer.effect(
   RecordingTransport,
@@ -83,7 +83,7 @@ export const layer = Layer.effect(
                     id: 1,
                     method,
                     params,
-                    client: { name: "Deckhand", session: actorID },
+                    client: { name: "Cinderdeck", session: actorID },
                   }) + "\n",
                 ),
               );

@@ -1,7 +1,7 @@
 import {
   formatFilePathPosition,
   splitFilePathPosition,
-} from "@t3tools/client-runtime/markdown-links";
+} from "@cinderdeck/client-runtime/markdown-links";
 
 import { isMacPlatform } from "./lib/utils";
 

@@ -3,11 +3,11 @@ import {
   EnvironmentHttpApi,
   type RelayClientInstallProgressEvent,
   type RelayClientInstallProgressStage,
-} from "@t3tools/contracts";
-import { RelayOkResponse } from "@t3tools/contracts/relay";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import * as RelayClient from "@t3tools/shared/relayClient";
-import { withRelayClientTracing } from "@t3tools/shared/relayTracing";
+} from "@cinderdeck/contracts";
+import { RelayOkResponse } from "@cinderdeck/contracts/relay";
+import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
+import * as RelayClient from "@cinderdeck/shared/relayClient";
+import { withRelayClientTracing } from "@cinderdeck/shared/relayTracing";
 import * as Cause from "effect/Cause";
 import * as Config from "effect/Config";
 import * as Console from "effect/Console";
@@ -192,7 +192,7 @@ function formatCloudStatus(status: CloudCliStatus, options?: { readonly json?: b
     : !status.desired
       ? "Run the agent runtime’s `connect link` command to enable Remote connections."
       : !status.linked
-        ? "Start T3 to provision the environment link and launch its managed tunnel."
+        ? "Start Cinderdeck to provision the environment link and launch its managed tunnel."
         : undefined;
 
   return [
@@ -214,7 +214,7 @@ const CLOUD_CLI_LIVE_SERVER_TIMEOUT = Duration.seconds(5);
 const confirmRelayClientInstall = (version: string) =>
   Prompt.run(
     Prompt.Confirm({
-      message: `The T3 relay client is required for Remote connections. Download and install version ${version}?`,
+      message: `The Cinderdeck relay client is required for Remote connections. Download and install version ${version}?`,
       initial: false,
     }),
   );
@@ -637,13 +637,13 @@ const connectPublishCommand = Command.make("publish", {
         // link is pending at all.
         if (yield* CliState.readCliDesiredCloudLink) {
           yield* Console.log(
-            "A Remote connections link is already pending. Start T3 to finish provisioning it; publishing starts once it links.",
+            "A Remote connections link is already pending. Start Cinderdeck to finish provisioning it; publishing starts once it links.",
           );
           return;
         }
         yield* CliState.setCliDesiredCloudLink(true, "publish_only");
         yield* Console.log(
-          "Restart T3 to finish authorizing this environment to publish (no managed tunnel is created).",
+          "Restart Cinderdeck to finish authorizing this environment to publish (no managed tunnel is created).",
         );
       }),
     ),

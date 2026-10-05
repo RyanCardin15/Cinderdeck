@@ -1,5 +1,5 @@
-import type { AssetResource, ChatFileAttachment, EnvironmentId } from "@t3tools/contracts";
-import { videoMimeType } from "@t3tools/shared/video";
+import type { AssetResource, ChatFileAttachment, EnvironmentId } from "@cinderdeck/contracts";
+import { videoMimeType } from "@cinderdeck/shared/video";
 
 import type { DraftComposerFileAttachment } from "./composerImages";
 import type { MediaActionsSource } from "./mediaActions";

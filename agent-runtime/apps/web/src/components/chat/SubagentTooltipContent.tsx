@@ -3,9 +3,9 @@ import type {
   OrchestrationProjectShell,
   ServerProvider,
   ProviderDriverKind,
-} from "@t3tools/contracts";
-import { fileBasename } from "@t3tools/client-runtime/markdown-links";
-import { formatModelSlugName, resolveSelectableModel } from "@t3tools/shared/model";
+} from "@cinderdeck/contracts";
+import { fileBasename } from "@cinderdeck/client-runtime/markdown-links";
+import { formatModelSlugName, resolveSelectableModel } from "@cinderdeck/shared/model";
 import { getTriggerDisplayModelName } from "./providerIconUtils";
 import type { ReactNode } from "react";
 import {

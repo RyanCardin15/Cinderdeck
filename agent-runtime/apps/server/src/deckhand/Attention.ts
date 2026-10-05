@@ -1,7 +1,7 @@
-import { type ThreadId } from "@t3tools/contracts";
-import * as C from "@t3tools/contracts/deckhand/attentionRpc";
-import * as Queue from "@t3tools/contracts/deckhand/reviewerRpc";
-import type { RunContext } from "@t3tools/contracts/deckhand/runsRpc";
+import { type ThreadId } from "@cinderdeck/contracts";
+import * as C from "@cinderdeck/contracts/deckhand/attentionRpc";
+import * as Queue from "@cinderdeck/contracts/deckhand/reviewerRpc";
+import type { RunContext } from "@cinderdeck/contracts/deckhand/runsRpc";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -25,7 +25,7 @@ export class Attention extends Context.Service<
       input: C.AttentionChange,
     ) => Effect.Effect<C.AttentionItem, C.AttentionError>;
   }
->()("t3/deckhand/Attention") {}
+>()("@cinderdeck/server/deckhand/Attention") {}
 const Preference = Schema.Struct({
   read: Schema.Boolean,
   snoozedUntil: Schema.NullOr(Schema.String),

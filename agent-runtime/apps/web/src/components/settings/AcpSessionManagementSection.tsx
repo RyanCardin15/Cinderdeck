@@ -5,12 +5,12 @@ import type {
   ProjectId,
   ProviderInstanceId,
   ServerProvider,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
   type AtomCommandResult,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@cinderdeck/client-runtime/state/runtime";
 import { useState } from "react";
 
 import { ensureLocalApi } from "../../localApi";
@@ -287,7 +287,7 @@ export function AcpSessionManagementSection(props: {
     <div className="grid gap-3">
       <SettingsRow
         title="Native sessions"
-        description="Resume agent-owned conversations as T3 threads."
+        description="Resume agent-owned conversations as Cinderdeck threads."
         status={
           canList && props.projects.length === 0
             ? "Add a project before importing sessions."

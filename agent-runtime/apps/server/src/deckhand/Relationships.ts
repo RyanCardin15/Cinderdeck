@@ -1,4 +1,4 @@
-import * as Contracts from "@t3tools/contracts/deckhand";
+import * as Contracts from "@cinderdeck/contracts/deckhand";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -63,7 +63,7 @@ export class Relationships extends Context.Service<
       readonly limit: number;
     }) => Result<ReadonlyArray<Contracts.SessionBinding>>;
   }
->()("t3/deckhand/Relationships") {}
+>()("@cinderdeck/server/deckhand/Relationships") {}
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { EnvironmentId } from "@t3tools/contracts";
-import * as C from "@t3tools/contracts/deckhand/verificationAttemptsRpc";
+import { EnvironmentId } from "@cinderdeck/contracts";
+import * as C from "@cinderdeck/contracts/deckhand/verificationAttemptsRpc";
 import * as Schema from "effect/Schema";
 import * as Cause from "effect/Cause";
 import { RegistryContext } from "@effect/atom-react";
@@ -17,7 +17,7 @@ const commands = vi.hoisted(() => ({
   read: vi.fn<(target: object, signal: AbortSignal) => Promise<C.VerificationAttempt>>(),
   clear: () => {},
 }));
-vi.mock("@t3tools/client-runtime/state/runtime", async () => {
+vi.mock("@cinderdeck/client-runtime/state/runtime", async () => {
   const { Atom } = await import("effect/unstable/reactivity");
   const Effect = await import("effect/Effect");
   const queries = new Map();

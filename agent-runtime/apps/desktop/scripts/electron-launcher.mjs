@@ -1,4 +1,4 @@
-// This file mostly exists because we want dev mode to say "Deckhand (Dev)" instead of "electron"
+// This file mostly exists because we want dev mode to say "Cinderdeck (Dev)" instead of "electron"
 
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
@@ -15,20 +15,21 @@ const repoRoot = NodePath.resolve(desktopDir, "..", "..");
 const devBundleIdSuffix = NodePath.basename(repoRoot)
   .toLowerCase()
   .replaceAll(/[^a-z0-9]+/g, "");
-const APP_DISPLAY_NAME = isDevelopment ? "Deckhand (Dev)" : "Deckhand (Alpha)";
+const APP_DISPLAY_NAME = isDevelopment ? "Cinderdeck (Dev)" : "Cinderdeck (Alpha)";
 const APP_BUNDLE_ID = isDevelopment
-  ? `com.cardinlabs.deckhand.dev.${devBundleIdSuffix || "local"}`
-  : "com.cardinlabs.deckhand";
-const APP_PROTOCOL_SCHEMES = isDevelopment ? ["deckhand-dev"] : ["deckhand"];
-const LAUNCHER_VERSION = 19;
+  ? `com.ryancardin.cinderdeck.agentshell.dev.${devBundleIdSuffix || "local"}`
+  : "com.ryancardin.cinderdeck.agentshell";
+const APP_PROTOCOL_SCHEMES = [];
+const LAUNCHER_VERSION = 20;
 const developmentMacIconPngPath = NodePath.join(
   repoRoot,
   "assets",
+  "cinderdeck",
   "dev",
-  "blueprint-macos-1024.png",
+  "macos-1024.png",
 );
-const productionMacIconPngPath = NodePath.join(repoRoot, "assets", "prod", "black-macos-1024.png");
-// oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone launcher script has no Effect runtime.
+const productionMacIconPngPath = NodePath.join(repoRoot, "assets", "cinderdeck", "prod", "macos-1024.png");
+// oxlint-disable-next-line cinderdeck/no-global-process-runtime -- Standalone launcher script has no Effect runtime.
 const hostPlatform = NodeOS.platform();
 
 function setPlistString(plistPath, key, value) {
@@ -270,8 +271,8 @@ export function resolveMacBundleInfoPlistStrings(executableName) {
     CFBundleExecutable: executableName,
     CFBundleIconFile: "icon.icns",
     NSScreenCaptureUsageDescription:
-      "Deckhand captures the active window when you use the snapshot shortcut.",
-    NSDocumentsFolderUsageDescription: "Deckhand reads project files you open in the desktop app.",
+      "Cinderdeck captures the active window when you use the snapshot shortcut.",
+    NSDocumentsFolderUsageDescription: "Cinderdeck reads project files you open in the desktop app.",
   };
 }
 
@@ -280,12 +281,7 @@ function patchMainBundleInfoPlist(appBundlePath, iconPath, executableName) {
   for (const [key, value] of Object.entries(resolveMacBundleInfoPlistStrings(executableName))) {
     setPlistString(infoPlistPath, key, value);
   }
-  setPlistJson(infoPlistPath, "CFBundleURLTypes", [
-    {
-      CFBundleURLName: APP_BUNDLE_ID,
-      CFBundleURLSchemes: APP_PROTOCOL_SCHEMES,
-    },
-  ]);
+  setPlistJson(infoPlistPath, "CFBundleURLTypes", []);
 
   const resourcesDir = NodePath.join(appBundlePath, "Contents", "Resources");
   NodeFS.copyFileSync(iconPath, NodePath.join(resourcesDir, "icon.icns"));
@@ -402,7 +398,7 @@ function buildMacLauncher(electronBinaryPath) {
   if (isDevelopment) {
     // Keep Electron's native executable inside the branded bundle. Launching the
     // node_modules copy makes macOS associate the process (and Dock label) with
-    // Electron.app even though this bundle's Info.plist has the Deckhand name.
+    // Electron.app even though this bundle's Info.plist has the Cinderdeck name.
     // Its conventional executable name also keeps Electron's default-app runtime
     // in development mode instead of making app.isPackaged report true.
     writeDevelopmentEnvironmentScript();

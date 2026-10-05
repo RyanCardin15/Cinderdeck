@@ -4,9 +4,9 @@ import * as Exit from "effect/Exit";
 import * as Scope from "effect/Scope";
 import * as NativeWriterReservations from "./NativeWriterReservations.ts";
 import * as WriterReservations from "./WriterReservations.ts";
-import * as Contracts from "@t3tools/contracts/deckhand";
-import * as Integration from "@t3tools/contracts/deckhand/integration";
-import * as Rpc from "@t3tools/contracts/deckhand/rpc";
+import * as Contracts from "@cinderdeck/contracts/deckhand";
+import * as Integration from "@cinderdeck/contracts/deckhand/integration";
+import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -90,7 +90,7 @@ export class WorkspaceBackend extends Context.Service<
     readonly submit: IntegrationHub.IntegrationHub["Service"]["submit"];
     readonly operation: IntegrationHub.IntegrationHub["Service"]["operation"];
   }
->()("t3/deckhand/WorkspaceBackend") {}
+>()("@cinderdeck/server/deckhand/WorkspaceBackend") {}
 const decodeCheckout = Schema.decodeUnknownEffect(Schema.fromJsonString(Contracts.CheckoutBinding));
 const decodeWorkspace = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Contracts.WorkspaceBinding),
@@ -185,7 +185,7 @@ const make = Effect.gen(function* () {
       const physicalIDs = new Set([current.physicalId]);
       if (input.sharedRefs) {
         // Git refs/config are shared even with worktrees that have never been bound
-        // to a Deckhand thread. Inventory Git itself rather than just our catalog.
+        // to a Cinderdeck thread. Inventory Git itself rather than just our catalog.
         const inventory = yield* runner.run({
           command: "git",
           args: ["-C", current.root, "worktree", "list", "--porcelain", "-z"],

@@ -16,20 +16,20 @@ import {
   XIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@cinderdeck/contracts";
 import type {
   Recording,
   RecordingContext,
   RecordingLogs,
   RecordingStart,
   RecordingWindow,
-} from "@t3tools/contracts/deckhand/recordingsRpc";
+} from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import * as Option from "effect/Option";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import { runtime } from "../lib/runtime";
 import * as Schema from "effect/Schema";
-import { RecordingStart as RecordingStartSchema } from "@t3tools/contracts/deckhand/recordingsRpc";
+import { RecordingStart as RecordingStartSchema } from "@cinderdeck/contracts/deckhand/recordingsRpc";
 import { ProductNavigation } from "./ProductNavigation";
 import { AsyncResult } from "effect/unstable/reactivity";
 import {

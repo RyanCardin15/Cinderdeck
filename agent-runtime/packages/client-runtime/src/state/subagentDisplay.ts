@@ -1,4 +1,4 @@
-import type { OrchestrationV2TurnItemStatus } from "@t3tools/contracts";
+import type { OrchestrationV2TurnItemStatus } from "@cinderdeck/contracts";
 
 /** Summarizes one adjacent group, without changing its member identities or order. */
 export function subagentGroupSummary(

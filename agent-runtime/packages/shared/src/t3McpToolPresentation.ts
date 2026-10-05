@@ -264,14 +264,14 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
     ["Delete", "Deleting", "Requested deletion of", "a scheduled task"],
     "schedule-delete",
   ),
-  create_threads: tool(["Create", "Creating", "Created", "T3 threads"], "thread-create"),
-  t3_thread_start: tool(["Start", "Starting", "Started", "a T3 thread"], "thread-create"),
-  t3_thread_list: tool(["List", "Listing", "Listed", "T3 threads"], "thread-list"),
-  t3_thread_read: tool(["Read", "Reading", "Read", "a T3 thread"], "thread-read"),
-  t3_thread_send: tool(["Send", "Sending", "Sent", "to a T3 thread"], "thread-send"),
-  t3_thread_wait: tool(["Wait", "Waiting", "Waited", "for a T3 thread"], "thread-wait"),
+  create_threads: tool(["Create", "Creating", "Created", "Cinderdeck threads"], "thread-create"),
+  t3_thread_start: tool(["Start", "Starting", "Started", "a Cinderdeck thread"], "thread-create"),
+  t3_thread_list: tool(["List", "Listing", "Listed", "Cinderdeck threads"], "thread-list"),
+  t3_thread_read: tool(["Read", "Reading", "Read", "a Cinderdeck thread"], "thread-read"),
+  t3_thread_send: tool(["Send", "Sending", "Sent", "to a Cinderdeck thread"], "thread-send"),
+  t3_thread_wait: tool(["Wait", "Waiting", "Waited", "for a Cinderdeck thread"], "thread-wait"),
   t3_thread_interrupt: tool(
-    ["Interrupt", "Interrupting", "Requested an interrupt of", "a T3 thread"],
+    ["Interrupt", "Interrupting", "Requested an interrupt of", "a Cinderdeck thread"],
     "thread-interrupt",
   ),
   t3_worktree_handoff: tool(
@@ -392,7 +392,7 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
   t3_thread_search: tool(["Search", "Searching", "Searched", "thread content"], "thread-search"),
   t3_thread_transfers: tool(["Read", "Reading", "Read", "thread transfers"], "thread-transfers"),
   t3_thread_organize: tool(["Organize", "Organizing", "Organized", "a thread"], "thread-organize"),
-  t3_thread_update: tool(["Update", "Updating", "Updated", "T3 thread metadata"], "thread-update"),
+  t3_thread_update: tool(["Update", "Updating", "Updated", "Cinderdeck thread metadata"], "thread-update"),
   t3_worktree_list: tool(["List", "Listing", "Listed", "workspace branches"], "worktree-list"),
   t3_preview_list: tool(["List", "Listing", "Listed", "preview tabs"], "browser", "browser"),
   t3_preview_close: tool(["Close", "Closing", "Closed", "a preview tab"], "browser", "browser"),
@@ -423,7 +423,7 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
 };
 
 /**
- * The T3 orchestration tool inventory, used to gate loose name matching on
+ * The Cinderdeck orchestration tool inventory, used to gate loose name matching on
  * both the server (ACP MCP identity recovery) and the client (logo branding).
  */
 export const T3_MCP_TOOL_NAMES: ReadonlySet<string> = new Set(Object.keys(T3_MCP_TOOLS));
@@ -433,7 +433,7 @@ function normalizeT3McpToolLabel(value: string): string {
 }
 
 /**
- * ACP agents disagree on how the injected T3 server prefixes its tools:
+ * ACP agents disagree on how the injected Cinderdeck server prefixes its tools:
  * `mcp__t3-code__x` (Claude/Cursor), `t3-code.x` (Codex), plus single
  * underscore, colon, slash, dash, and space separators seen from registry
  * agents. The prefix match is deliberately loose because the display-name

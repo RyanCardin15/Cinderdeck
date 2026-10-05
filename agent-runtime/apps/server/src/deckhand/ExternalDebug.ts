@@ -13,7 +13,7 @@ import * as Schema from "effect/Schema";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as C from "@t3tools/contracts/deckhand/externalDebugRpc";
+import * as C from "@cinderdeck/contracts/deckhand/externalDebugRpc";
 import {
   array,
   debugEndpoint,
@@ -35,7 +35,7 @@ export const externalDebugThreadOwner = (threadId: string) => `external-debug:th
 export class ExternalDebugTransport extends Context.Service<
   ExternalDebugTransport,
   DebugTransport
->()("t3/deckhand/ExternalDebug/ExternalDebugTransport") {}
+>()("@cinderdeck/server/deckhand/ExternalDebug/ExternalDebugTransport") {}
 type Result<A> = Effect.Effect<A, C.ExternalDebugError>;
 export class ExternalDebug extends Context.Service<
   ExternalDebug,
@@ -47,7 +47,7 @@ export class ExternalDebug extends Context.Service<
     readonly command: (actor: string, input: C.DebugCommand) => Result<C.DebugCommandResult>;
     readonly detach: (actor: string, input: C.DebugIdentity) => Result<void>;
   }
->()("t3/deckhand/ExternalDebug") {}
+>()("@cinderdeck/server/deckhand/ExternalDebug") {}
 
 type Session = {
   actor: string;

@@ -4,7 +4,7 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import * as C from "@t3tools/contracts/deckhand/externalDebugRpc";
+import * as C from "@cinderdeck/contracts/deckhand/externalDebugRpc";
 import * as Service from "./ExternalDebug.ts";
 import {
   debugEndpoint,

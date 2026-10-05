@@ -7,7 +7,7 @@
  * AGENTS.md / SYSTEM.md context, settings.json, custom models, and auth all
  * load exactly as they do in the `pi` TUI. Sessions are stored by Pi itself
  * (default `~/.pi/agent/sessions/`), and the session file path is the durable
- * `nativeThreadRef`, so a thread started in T3 can be resumed from the TUI
+ * `nativeThreadRef`, so a thread started in Cinderdeck can be resumed from the TUI
  * and vice versa.
  *
  * Turn lifecycle: `agent_settled` is the only terminal signal. `agent_end`
@@ -21,10 +21,10 @@
  * `select`/`input`/`editor` → user_input_request); answers travel back as
  * `extension_ui_response`. `notify` becomes a completed activity item.
  * Terminal-only decoration such as status, widget, title, and editor-text
- * updates has no matching T3 surface and is ignored.
+ * updates has no matching Cinderdeck surface and is ignored.
  */
-import { HostProcessEnvironment } from "@t3tools/shared/hostProcess";
-import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
+import { HostProcessEnvironment } from "@cinderdeck/shared/hostProcess";
+import { getModelSelectionStringOptionValue } from "@cinderdeck/shared/model";
 import {
   defaultInstanceIdForDriver,
   PiSettings,
@@ -45,7 +45,7 @@ import {
   type ProviderApprovalDecision,
   type ProviderInstanceId,
   type OrchestrationV2ProviderTurnTokenUsage,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
@@ -111,7 +111,7 @@ const PI_REQUEST_TIMEOUT_MS = 15_000;
 const PI_SESSION_TIMEOUT_MS = 60_000;
 const PI_SKILL_DISCOVERY_TIMEOUT_MS = 4_000;
 const PI_UNSOLICITED_ACTIVITY_ERROR =
-  "Pi started agent work outside an active T3 turn. The session was stopped to prevent invisible tool execution.";
+  "Pi started agent work outside an active Cinderdeck turn. The session was stopped to prevent invisible tool execution.";
 const SETTLE_PROBE_MAX_ATTEMPTS = 3;
 const SETTLE_PROBE_RETRY_DELAY = Duration.millis(100);
 
@@ -161,7 +161,7 @@ const PiProviderCapabilitiesV2 = {
     supportsDynamicToolCallbacks: false,
   },
   approvals: {
-    // Pi exposes a blocking tool_call extension hook. The T3 bridge uses it
+    // Pi exposes a blocking tool_call extension hook. The Cinderdeck bridge uses it
     // for supervised and auto-accept modes and forwards its confirmations
     // through the same extension UI protocol as user-installed extensions.
     supportsCommandApproval: true,
@@ -180,7 +180,7 @@ const PiProviderCapabilitiesV2 = {
     planDeltasHaveItemIds: false,
   },
   subagents: {
-    // T3 delegation uses the shared MCP `delegate_task` path. Installed Pi
+    // Cinderdeck delegation uses the shared MCP `delegate_task` path. Installed Pi
     // subagent extensions are observed best-effort, but their official tool
     // runs children with --no-session and exposes no resumable child id.
     supportsSubagents: true,
@@ -196,7 +196,7 @@ const PiProviderCapabilitiesV2 = {
     acceptsSyntheticUserContext: true,
     canGenerateSummaries: false,
     canConsumeHandoffSummaries: true,
-    // T3 delivers both full and delta handoffs through Pi's normal user-message
+    // Cinderdeck delivers both full and delta handoffs through Pi's normal user-message
     // input, so neither strategy depends on a Pi-specific context hook.
     supportsDeltaHandoff: true,
     supportsFullThreadHandoff: true,
@@ -348,7 +348,7 @@ interface PendingPiPrompt {
 }
 
 /**
- * The T3 bridge confirms tool calls as `Allow <tool>?`. Edits surface as
+ * The Cinderdeck bridge confirms tool calls as `Allow <tool>?`. Edits surface as
  * file-change approvals so clients render them like other providers' edits;
  * every other confirmation, including ones from user extensions, is a command.
  */
@@ -475,7 +475,7 @@ export function makePiAdapterV2(
       // Keep that intent beyond turn finalization so the later stdout close is
       // not mistaken for an unexpected transport failure.
       let stopRequested = false;
-      // Pi extensions can trigger an agent turn after the owning T3 turn has
+      // Pi extensions can trigger an agent turn after the owning Cinderdeck turn has
       // settled. Until orchestration has a first-class provider-initiated run,
       // stop that runtime before it can execute tools without a timeline owner.
       let unsolicitedActivityDetected = false;
@@ -1021,7 +1021,7 @@ export function makePiAdapterV2(
       /**
        * Observe the result shape from Pi's official example subagent extension.
        * The extension runs children with --no-session, so these entries are
-       * visible in T3's shared subagent UI without inventing a child thread.
+       * visible in Cinderdeck's shared subagent UI without inventing a child thread.
        * Unknown or changed result shapes stay ordinary dynamic tool output.
        */
       const emitSubagentTasks = Effect.fnUntraced(function* (
@@ -1198,7 +1198,7 @@ export function makePiAdapterV2(
           method !== "input" &&
           method !== "editor"
         ) {
-          // Terminal decoration has no matching T3 surface.
+          // Terminal decoration has no matching Cinderdeck surface.
           yield* Effect.logDebug("Ignoring pi extension UI update.", { method });
           return;
         }
@@ -2293,7 +2293,7 @@ export function makePiAdapterV2(
             // Resolved before the turn is installed: a failure here (an
             // unreadable attachment) must not leave `activeTurn` set, which
             // would reject every later turn as already active.
-            // Orchestration instructions reach pi through the T3 MCP
+            // Orchestration instructions reach pi through the Cinderdeck MCP
             // extension's before_agent_start system-prompt hook, never by
             // wrapping the user text: a wrapped first message would no
             // longer start with "/" and slash commands would stop expanding.

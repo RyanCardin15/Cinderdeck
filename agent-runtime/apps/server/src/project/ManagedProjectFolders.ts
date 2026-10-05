@@ -1,5 +1,5 @@
 /**
- * ManagedProjectFolders - the project folders T3 Code makes for the user under
+ * ManagedProjectFolders - the project folders Cinderdeck makes for the user under
  * its data dir, rather than ones the user picks:
  *
  * - `<baseDir>/scratch`: the Scratch project ("No project"), with a folder of
@@ -9,8 +9,8 @@
  *
  * @module ManagedProjectFolders
  */
-import { CommandId, ProjectId, type ThreadId } from "@t3tools/contracts";
-import { newProjectFolderName } from "@t3tools/shared/path";
+import { CommandId, ProjectId, type ThreadId } from "@cinderdeck/contracts";
+import { newProjectFolderName } from "@cinderdeck/shared/path";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -126,7 +126,7 @@ export class ManagedProjectFolders extends Context.Service<
       NamedProjectError
     >;
   }
->()("t3/project/ManagedProjectFolders") {}
+>()("@cinderdeck/server/project/ManagedProjectFolders") {}
 
 // Only [a-z0-9] reaches a folder name, so it stays one path segment, and the
 // words are capped so a pasted blob cannot outgrow a file name.
@@ -202,7 +202,7 @@ function namedProjectReadme(name: string): string {
     "",
     `# ${name}`,
     "",
-    "Created in [T3 Code](https://t3.codes).",
+    "Created in [Cinderdeck](https://github.com/RyanCardin15/Cinderdeck).",
     "",
   ].join("\n");
 }

@@ -1,5 +1,5 @@
-import * as C from "@t3tools/contracts/deckhand/externalDebugRpc";
-import { OrchestratorMcpFailure } from "@t3tools/contracts";
+import * as C from "@cinderdeck/contracts/deckhand/externalDebugRpc";
+import { OrchestratorMcpFailure } from "@cinderdeck/contracts";
 import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";
 import { Tool, Toolkit } from "effect/unstable/ai";

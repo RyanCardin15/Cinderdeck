@@ -1,8 +1,8 @@
 // @effect-diagnostics nodeBuiltinImport:off - opaque local capture capabilities.
 import * as NodeCrypto from "node:crypto";
-import * as C from "@t3tools/contracts/deckhand/ownedPreviewRpc";
-import * as R from "@t3tools/contracts/deckhand/recordingsRpc";
-import * as A from "@t3tools/contracts/deckhand/verificationAttemptsRpc";
+import * as C from "@cinderdeck/contracts/deckhand/ownedPreviewRpc";
+import * as R from "@cinderdeck/contracts/deckhand/recordingsRpc";
+import * as A from "@cinderdeck/contracts/deckhand/verificationAttemptsRpc";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -88,7 +88,7 @@ export class OwnedPreviewCapture extends Context.Service<
       input: typeof C.OwnedPreviewPrivateIdentity.Type,
     ) => Effect.Effect<C.OwnedPreviewStatus, C.OwnedPreviewError>;
   }
->()("t3/deckhand/OwnedPreviewCapture") {}
+>()("@cinderdeck/server/deckhand/OwnedPreviewCapture") {}
 export const layer = Layer.effect(
   OwnedPreviewCapture,
   Effect.gen(function* () {

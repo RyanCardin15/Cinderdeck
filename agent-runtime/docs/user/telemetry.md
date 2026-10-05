@@ -1,11 +1,7 @@
 # Product usage data
 
-The T3 Code server sends product usage events to PostHog, associated with a hashed account or
-installation identifier. Events include the provider, model, reasoning effort, permission mode,
-turn result, duration, and main-agent token totals when available.
+Cinderdeck builds have no inherited telemetry destination or cloud account. Runtime product telemetry is disabled by default, and packaging clears the former product’s analytics and relay configuration.
 
-Events do not include prompts, responses, file contents, authentication tokens, conversation IDs,
-raw provider events, or child-agent output. Child-agent token use is excluded from the totals.
+The optional analytics service can record provider, model, reasoning effort, permission mode, turn result, duration and main-agent token totals when deliberately configured by a maintainer. It excludes prompts, responses, file contents, credentials, conversation IDs, raw provider events and child-agent output. `DECKHAND_TELEMETRY_ENABLED=false` disables that service in a development runtime.
 
-To disable collection, set `T3CODE_TELEMETRY_ENABLED=false` in the server's environment before
-starting it. This stops product events from being recorded or sent.
+Local diagnostic logs remain available for troubleshooting. Review a diagnostics report before sharing it; nothing is uploaded automatically.

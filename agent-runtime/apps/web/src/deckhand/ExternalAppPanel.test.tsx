@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { DebugSession, DebugTarget } from "@t3tools/contracts/deckhand/externalDebugRpc";
-import { EXCEL_EXTERNAL_APP } from "@t3tools/contracts/deckhand/externalAppPreferences";
+import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@cinderdeck/contracts";
+import { scopeThreadRef } from "@cinderdeck/client-runtime/environment";
+import type { DebugSession, DebugTarget } from "@cinderdeck/contracts/deckhand/externalDebugRpc";
+import { EXCEL_EXTERNAL_APP } from "@cinderdeck/contracts/deckhand/externalAppPreferences";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 
 type Request = { environmentId: string; input: Record<string, unknown> };
@@ -33,8 +33,8 @@ vi.mock("../state/use-atom-command", () => ({
 vi.mock("../state/environments", () => ({
   useEnvironments: () => ({ environments: [{ environmentId: "local", label: "Test Mac" }] }),
 }));
-vi.mock("@t3tools/client-runtime/state/runtime", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@t3tools/client-runtime/state/runtime")>()),
+vi.mock("@cinderdeck/client-runtime/state/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@cinderdeck/client-runtime/state/runtime")>()),
   squashAtomCommandFailure: (failure: { cause: unknown }) => failure.cause,
 }));
 vi.mock("@tanstack/react-router", () => ({

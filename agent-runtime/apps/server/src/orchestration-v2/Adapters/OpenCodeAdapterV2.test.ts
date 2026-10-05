@@ -16,7 +16,7 @@ import {
   ThreadId,
   type OrchestrationV2ProviderThread,
   type OrchestrationV2ProviderTurn,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Effect from "effect/Effect";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
@@ -33,7 +33,7 @@ import * as TestClock from "effect/testing/TestClock";
 
 import * as ServerConfig from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId } from "@cinderdeck/contracts";
 import type { EventNdjsonLogger } from "../../provider/Layers/EventNdjsonLogger.ts";
 import type { OpenCodeRuntimeShape } from "../../provider/opencodeRuntime.ts";
 import * as IdAllocator from "../IdAllocator.ts";
@@ -246,7 +246,7 @@ const makeOpenCodeRuntimeHarness = Effect.fn("makeOpenCodeRuntimeHarness")(funct
 
 describe("OpenCodeAdapterV2", () => {
   it.effect.each([false, true])(
-    "exposes the Deckhand MCP identity only on an owned OpenCode server (external=%s)",
+    "exposes the Cinderdeck MCP identity only on an owned OpenCode server (external=%s)",
     (external) =>
       Effect.gen(function* () {
         const suffix = `mcp-identity-${external}`;

@@ -2,7 +2,7 @@ import { sha256 } from "@noble/hashes/sha2";
 import {
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 export type EvidenceAsset = {
   readonly id: string;
   readonly name: string;

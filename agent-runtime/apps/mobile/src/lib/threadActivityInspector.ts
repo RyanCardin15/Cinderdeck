@@ -1,7 +1,7 @@
-import type { V2ItemSupport } from "@t3tools/client-runtime/state/item-support";
-import { toolItemForDisplay } from "@t3tools/client-runtime/work-log/presentation";
-import type { ThreadId } from "@t3tools/contracts";
-import { formatDuration } from "@t3tools/shared/orchestrationTiming";
+import type { V2ItemSupport } from "@cinderdeck/client-runtime/state/item-support";
+import { toolItemForDisplay } from "@cinderdeck/client-runtime/work-log/presentation";
+import type { ThreadId } from "@cinderdeck/contracts";
+import { formatDuration } from "@cinderdeck/shared/orchestrationTiming";
 import * as DateTime from "effect/DateTime";
 
 import type { ThreadFeedActivity } from "./threadActivity";

@@ -1,4 +1,4 @@
-import type { CheckoutBinding, SessionBinding } from "@t3tools/contracts/deckhand";
+import type { CheckoutBinding, SessionBinding } from "@cinderdeck/contracts/deckhand";
 const executionLabels: Record<SessionBinding["execution"], string> = {
   queued: "Queued",
   starting: "Starting",

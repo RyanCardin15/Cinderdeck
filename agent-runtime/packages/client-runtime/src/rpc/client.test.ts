@@ -1,4 +1,4 @@
-import { DECKHAND_METHODS, type ContextPullRequestsPage } from "@t3tools/contracts/deckhand/rpc";
+import { DECKHAND_METHODS, type ContextPullRequestsPage } from "@cinderdeck/contracts/deckhand/rpc";
 import {
   DEFAULT_SERVER_SETTINGS,
   EnvironmentAuthorizationError,
@@ -10,7 +10,7 @@ import {
   type ServerConfigStreamEvent,
   type ServerLifecycleStreamEvent,
   WS_METHODS,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";

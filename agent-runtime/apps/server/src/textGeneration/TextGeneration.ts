@@ -6,8 +6,8 @@ import type {
   ChatAttachment,
   ModelSelection,
   ProviderInstanceId,
-} from "@t3tools/contracts";
-import { TextGenerationError } from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
+import { TextGenerationError } from "@cinderdeck/contracts";
 
 import * as ProviderInstanceRegistry from "../provider/Services/ProviderInstanceRegistry.ts";
 import type { ProviderInstance } from "../provider/ProviderDriver.ts";
@@ -113,7 +113,7 @@ export class TextGeneration extends Context.Service<
       input: ThreadTitleGenerationInput,
     ) => Effect.Effect<ThreadTitleGenerationResult, TextGenerationError>;
   }
->()("t3/textGeneration/TextGeneration") {}
+>()("@cinderdeck/server/textGeneration/TextGeneration") {}
 
 type TextGenerationOp =
   | "generateCommitMessage"

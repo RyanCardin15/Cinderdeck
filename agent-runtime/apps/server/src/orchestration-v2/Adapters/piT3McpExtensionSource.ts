@@ -1,6 +1,6 @@
 import { APP_MCP_SERVER_NAME } from "../../mcp/McpProviderSession.ts";
 /**
- * Source for the T3-owned Pi extension that consumes T3's HTTP MCP server.
+ * Source for the Cinderdeck-owned Pi extension that consumes Cinderdeck's HTTP MCP server.
  *
  * Pi core has no MCP client. This file is TypeScript that Pi itself loads via
  * `--extension`. It is written to a cache path at session open so packaged
@@ -231,7 +231,7 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
     if (changed) return replacement;
   });
 
-  // Pi deliberately leaves permission policy to extensions. T3's injected
+  // Pi deliberately leaves permission policy to extensions. Cinderdeck's injected
   // bridge uses Pi's public blocking tool hook so the shared runtime modes
   // keep their normal meaning without replacing or shadowing Pi's runtime.
   pi.on("tool_call", async (event, ctx) => {
@@ -245,7 +245,7 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
       toolInputSummary(event.input),
     );
     if (!approved) {
-      return { block: true, reason: \`\${event.toolName} was declined in Deckhand.\` };
+      return { block: true, reason: \`\${event.toolName} was declined in Cinderdeck.\` };
     }
   });
 
@@ -254,7 +254,7 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
   if (endpoint === undefined || token === undefined) {
     pi.on("session_start", async (_event, ctx) => {
       ctx.ui.notify(
-        "Deckhand MCP unavailable: T3_MCP_URL or T3_MCP_BEARER_TOKEN is missing.",
+        "Cinderdeck MCP unavailable: T3_MCP_URL or T3_MCP_BEARER_TOKEN is missing.",
         "warning",
       );
     });
@@ -280,7 +280,7 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
           description,
           promptSnippet: description.split("\\n")[0] ?? name,
           promptGuidelines: [
-            \`Use \${registeredName} from the \${MCP_SERVER_NAME} MCP server when the user asks for T3 orchestration that this tool covers.\`,
+            \`Use \${registeredName} from the \${MCP_SERVER_NAME} MCP server when the user asks for Cinderdeck orchestration that this tool covers.\`,
           ],
           parameters: jsonSchemaToTypebox(tool.inputSchema),
           async execute(_toolCallId, params, signal) {
@@ -317,7 +317,7 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
       await ensureStarted();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      ctx.ui.notify(\`Deckhand MCP unavailable: \${message}\`, "warning");
+      ctx.ui.notify(\`Cinderdeck MCP unavailable: \${message}\`, "warning");
     }
   });
 

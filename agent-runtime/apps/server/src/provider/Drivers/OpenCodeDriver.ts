@@ -12,7 +12,7 @@
  *
  * @module provider/Drivers/OpenCodeDriver
  */
-import { OpenCodeSettings, ProviderDriverKind } from "@t3tools/contracts";
+import { OpenCodeSettings, ProviderDriverKind } from "@cinderdeck/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -89,7 +89,7 @@ function isOpenCodeNativeCommandPath(commandPath: string): boolean {
 
 /**
  * OpenCode 1.x ships as `opencode-ai` and 2.x as `@opencode/cli`. An install is
- * only ever updated within its own package: T3 never moves a 1.x install onto
+ * only ever updated within its own package: Cinderdeck never moves a 1.x install onto
  * 2.x or back, since 2.x converts the shared database in place.
  */
 export const openCodeUpdateFor = (generation: ProbedOpenCode["generation"]) =>

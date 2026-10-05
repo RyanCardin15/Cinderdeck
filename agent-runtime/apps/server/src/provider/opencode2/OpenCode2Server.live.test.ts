@@ -30,7 +30,7 @@ import * as OpenCode2Server from "./OpenCode2Server.ts";
 
 const binaryPath = process.env.OPENCODE2_BIN;
 
-// A negative pid probes the whole process group, which T3 stops as one unit.
+// A negative pid probes the whole process group, which Cinderdeck stops as one unit.
 const isAlive = (pid: number) => {
   try {
     process.kill(pid, 0);
@@ -43,7 +43,7 @@ const isAlive = (pid: number) => {
 /**
  * Stops a server the test spawned itself: SIGTERM, then SIGKILL if it is still
  * alive after five seconds. Keyed on the PID captured at spawn, never on a
- * pattern. Servers T3 spawns are stopped by T3, through the instance scope.
+ * pattern. Servers Cinderdeck spawns are stopped by Cinderdeck, through the instance scope.
  */
 const stopByPid = (pid: number) =>
   Effect.gen(function* () {
@@ -112,7 +112,7 @@ describe.runIf(binaryPath !== undefined)("OpenCode2Server live", () => {
           XDG_DATA_HOME: path.join(root, "data"),
           XDG_STATE_HOME: path.join(root, "state"),
           XDG_CACHE_HOME: path.join(root, "cache"),
-          // Ignored: the T3 password is the only one the server sees.
+          // Ignored: the Cinderdeck password is the only one the server sees.
           OPENCODE_SERVER_PASSWORD: "ambient-password",
         };
 

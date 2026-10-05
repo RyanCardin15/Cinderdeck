@@ -1,10 +1,10 @@
 import { assert, describe, it } from "@effect/vitest";
-import { OrchestrationV2ThreadShell, ThreadId } from "@t3tools/contracts";
-import * as B from "@t3tools/contracts/deckhand";
-import * as C from "@t3tools/contracts/deckhand/ownershipRpc";
-import * as I from "@t3tools/contracts/deckhand/integration";
-import * as Rpc from "@t3tools/contracts/deckhand/rpc";
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import { OrchestrationV2ThreadShell, ThreadId } from "@cinderdeck/contracts";
+import * as B from "@cinderdeck/contracts/deckhand";
+import * as C from "@cinderdeck/contracts/deckhand/ownershipRpc";
+import * as I from "@cinderdeck/contracts/deckhand/integration";
+import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
+import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Stream from "effect/Stream";

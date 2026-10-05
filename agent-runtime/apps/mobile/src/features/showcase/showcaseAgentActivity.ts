@@ -1,7 +1,7 @@
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/shell";
+} from "@cinderdeck/client-runtime/state/shell";
 
 import type {
   AgentActivityPhase,
@@ -74,7 +74,7 @@ export function buildShowcaseAgentActivity(
     });
   }
   return {
-    title: "T3 Code",
+    title: "Cinderdeck",
     subtitle: "Agent work in progress",
     activeCount: rows.filter((row) => ACTIVE_PHASES.has(row.phase)).length,
     updatedAt: new Date(now).toISOString(),

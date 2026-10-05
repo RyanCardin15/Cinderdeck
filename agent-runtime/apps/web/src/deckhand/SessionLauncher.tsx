@@ -1,8 +1,8 @@
 import { NewChatLauncher, type NewChatLauncherProps } from "./NewChatLauncher";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import type { EnvironmentId } from "@t3tools/contracts";
-import * as Contracts from "@t3tools/contracts/deckhand/rpc";
+import type { EnvironmentId } from "@cinderdeck/contracts";
+import * as Contracts from "@cinderdeck/contracts/deckhand/rpc";
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
 import * as Crypto from "effect/Crypto";

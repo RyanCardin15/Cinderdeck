@@ -1,9 +1,9 @@
 import { isElectron } from "~/env";
 import { isMacPlatform, isWindowsPlatform, normalizeSearchText } from "~/lib/utils";
-import { STATIC_KEYBINDING_COMMANDS, type KeybindingCommand } from "@t3tools/contracts";
-import type { EnvironmentId } from "@t3tools/contracts";
-import type { EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
-import { DEFAULT_KEYBINDINGS } from "@t3tools/shared/keybindings";
+import { STATIC_KEYBINDING_COMMANDS, type KeybindingCommand } from "@cinderdeck/contracts";
+import type { EnvironmentId } from "@cinderdeck/contracts";
+import type { EnvironmentConnectionPhase } from "@cinderdeck/client-runtime/connection";
+import { DEFAULT_KEYBINDINGS } from "@cinderdeck/shared/keybindings";
 import { commandLabel } from "./KeybindingsSettings.logic";
 import {
   validateSettingsScopeSearch,
@@ -145,7 +145,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "storage-history-import",
-    title: "Import T3 history",
+    title: "Import Cinderdeck history",
     to: "/settings/storage",
     targetId: "storage-history-import",
     searchTerms: ["previous conversations archive import t3 history database snapshot migration"],
@@ -883,7 +883,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "t3-connect",
     localEnvironmentOnly: true,
-    title: "T3 Connect",
+    title: "Remote connections",
     to: "/settings/connections",
     targetId: "connections-environment",
     searchTerms: ["managed tunnel cloud other devices remote"],

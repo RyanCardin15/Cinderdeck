@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { withoutUpstreamServices } from "../lib/deckhand-distribution.ts";
 
-describe("Deckhand build isolation", () => {
+describe("Cinderdeck build isolation", () => {
   it("removes inherited cloud and telemetry configuration without changing provider credentials or dev routing", () => {
     const inherited = {
       T3CODE_CLERK_PUBLISHABLE_KEY: "legacy-vendor-account",
@@ -11,6 +11,7 @@ describe("Deckhand build isolation", () => {
       DECKHAND_RELAY_URL: "https://vendor.invalid",
       VITE_DECKHAND_RELAY_URL: "https://vendor.invalid",
       EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "vendor-account",
+      EXPO_PUBLIC_OTLP_TRACES_TOKEN: "vendor-token",
       DECKHAND_RELAY_CLIENT_OTLP_TRACES_TOKEN: "vendor-token",
       DECKHAND_HOME: "/isolated/deckhand",
       OPENAI_API_KEY: "provider-key",
@@ -24,6 +25,7 @@ describe("Deckhand build isolation", () => {
     expect(result.DECKHAND_RELAY_URL).toBe("");
     expect(result.VITE_DECKHAND_RELAY_URL).toBe("");
     expect(result.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY).toBe("");
+    expect(result.EXPO_PUBLIC_OTLP_TRACES_TOKEN).toBe("");
     expect(result.DECKHAND_RELAY_CLIENT_OTLP_TRACES_TOKEN).toBe("");
     expect(result.DECKHAND_HOME).toBe("/isolated/deckhand");
     expect(result.OPENAI_API_KEY).toBe("provider-key");

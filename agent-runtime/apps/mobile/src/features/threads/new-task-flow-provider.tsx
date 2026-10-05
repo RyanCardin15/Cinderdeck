@@ -8,7 +8,7 @@ import type {
   ProviderOptionSelection,
   RuntimeMode,
   ServerProvider,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -17,10 +17,10 @@ import {
   MessageId,
   T3_PROJECT_FILE_NAME,
   ThreadId,
-} from "@t3tools/contracts";
-import { sanitizeNewRefName } from "@t3tools/shared/git";
-import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
-import { parseT3ProjectFile } from "@t3tools/shared/t3ProjectFile";
+} from "@cinderdeck/contracts";
+import { sanitizeNewRefName } from "@cinderdeck/shared/git";
+import { resolveProjectSettings } from "@cinderdeck/shared/projectSettings";
+import { parseT3ProjectFile } from "@cinderdeck/shared/t3ProjectFile";
 import * as Arr from "effect/Array";
 import { pipe } from "effect/Function";
 
@@ -89,10 +89,10 @@ import {
   useRemoteConnectionStatus,
   useSavedRemoteConnections,
 } from "../../state/use-remote-environment-registry";
-import { canCreateProjectInEnvironment } from "@t3tools/client-runtime/operations/projects";
-import { isScratchProject } from "@t3tools/client-runtime/state/projects";
-import { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import { type VcsRef } from "@t3tools/client-runtime/state/vcs";
+import { canCreateProjectInEnvironment } from "@cinderdeck/client-runtime/operations/projects";
+import { isScratchProject } from "@cinderdeck/client-runtime/state/projects";
+import { EnvironmentProject } from "@cinderdeck/client-runtime/state/shell";
+import { type VcsRef } from "@cinderdeck/client-runtime/state/vcs";
 import {
   buildHomeProjectScopes,
   sortHomeProjectScopes,

@@ -13,10 +13,10 @@ import {
   type DirectoryRecord,
 } from "@electron/asar";
 
-import { fromYaml } from "@t3tools/shared/schemaYaml";
-import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { clerkFrontendApiHostnameFromPublishableKey } from "@t3tools/shared/relayAuth";
-import { resolveSpawnCommand } from "@t3tools/shared/shell";
+import { fromYaml } from "@cinderdeck/shared/schemaYaml";
+import { HostProcessArchitecture, HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
+import { clerkFrontendApiHostnameFromPublishableKey } from "@cinderdeck/shared/relayAuth";
+import { resolveSpawnCommand } from "@cinderdeck/shared/shell";
 import rootPackageJson from "../package.json" with { type: "json" };
 import desktopPackageJson from "../apps/desktop/package.json" with { type: "json" };
 import gnomeCaptureBundle from "../apps/desktop/gnome-extension/bundle.json" with { type: "json" };
@@ -54,10 +54,10 @@ import { Command, Flag } from "effect/unstable/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
-const DESKTOP_APP_ID = "com.cardinlabs.deckhand";
+const DESKTOP_APP_ID = "com.ryancardin.cinderdeck.agentshell";
 // The native Cinderdeck bundle owns installation, URL registration and updates.
-// Keep the upstream packaging pipeline for its private Chromium agent window.
-const nativeShellBuild = process.env.CINDERDECK_NATIVE_SHELL_BUILD === "1";
+// Package only its private Chromium agent window.
+const nativeShellBuild = true;
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -1002,7 +1002,7 @@ export const DESKTOP_FILE_EXCLUSIONS = [
   "!**/node_modules/@cursor/sdk-*/**/*",
   "!apps/desktop/prod-resources/cursor-sdk",
   "!apps/desktop/prod-resources/cursor-sdk/**/*",
-  // T3 Code always passes the user's installed Claude executable to the SDK,
+  // Cinderdeck always passes the user's installed Claude executable to the SDK,
   // so the SDK's optional platform packages (each a ~200MB bundled executable)
   // are dead weight. The trailing dash keeps the SDK's own JS package.
   "!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**/*",
@@ -1114,7 +1114,7 @@ export const WSL_RUNTIME_ARCHIVE_HASH_EXTRA_RESOURCE = {
 } as const;
 
 // The WSL runtime is the Linux CLI release archive (t3-<version>-linux-<arch>
-// .tar.gz, built by scripts/build-cli-archive.ts) copied in verbatim, so WSL
+// .tar.gz) copied in verbatim, so the legacy WSL layout remains readable. WSL
 // runs the exact bytes a Linux user downloads. This one predicate decides both
 // whether the archive is staged and whether the packaging config ships it:
 // listing an extraResource whose source was never written fails electron-builder.
@@ -2704,10 +2704,10 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 
 export function resolveDesktopProductName(version: string): string {
   if (nativeShellBuild) return "AgentShell";
-  if (isDesktopPreviewVersion(version)) return "Deckhand (Preview)";
+  if (isDesktopPreviewVersion(version)) return "Cinderdeck (Preview)";
   return resolveDesktopUpdateChannel(version) === "nightly"
-    ? "Deckhand (Nightly)"
-    : (desktopPackageJson.productName ?? "Deckhand");
+    ? "Cinderdeck (Nightly)"
+    : (desktopPackageJson.productName ?? "Cinderdeck");
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -2734,7 +2734,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     productName: resolveDesktopProductName(version),
     artifactName: nativeShellBuild
       ? "AgentShell-${version}-${arch}.${ext}"
-      : "Deckhand-${version}-${arch}.${ext}",
+      : "Cinderdeck-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [
       ...DESKTOP_FILE_EXCLUSIONS,
@@ -2764,7 +2764,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     ],
   };
   const updateChannel = resolveDesktopUpdateChannel(version);
-  if (!isDesktopPreviewVersion(version)) {
+  if (!nativeShellBuild && !isDesktopPreviewVersion(version)) {
     const publishConfig = yield* resolveGitHubPublishConfig(updateChannel);
     if (publishConfig) {
       buildConfig.publish = [publishConfig];
@@ -2790,13 +2790,13 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
           ? { CFBundleName: "AgentShell", CFBundleDisplayName: "Cinderdeck" }
           : {}),
         NSScreenCaptureUsageDescription:
-          "Deckhand captures the active window when you use the window capture shortcut.",
+          "Cinderdeck captures the active window when you use the window capture shortcut.",
       },
       protocols: nativeShellBuild
         ? []
         : [
             {
-              name: "Deckhand",
+              name: "Cinderdeck",
               schemes: ["deckhand", "deckhand-dev"],
             },
           ],
@@ -2847,10 +2847,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       maintainer: "Cardin Labs",
       // electron-builder turns these into MimeType=x-scheme-handler/<scheme>;
       // in the .desktop entry (Exec already gets %U), so browsers can hand
-      // t3code:// OAuth callbacks to the app.
+      // cinderdeck-companion:// OAuth callbacks to the app.
       protocols: [
         {
-          name: "Deckhand",
+          name: "Cinderdeck",
           schemes: ["deckhand", "deckhand-dev"],
         },
       ],
@@ -2953,7 +2953,7 @@ export const stageWslRuntimeArchive = Effect.fn("stageWslRuntimeArchive")(functi
   );
 });
 
-// Mirrors cliArchiveStem in scripts/build-cli-archive.ts (which imports from
+// Legacy archive layout retained for imported WSL payloads (based on
 // this module, so it cannot be imported here). WSL runs the same CPU arch as
 // the Windows host.
 export const wslRuntimeArchiveStem = (version: string, arch: typeof BuildArch.Type): string =>
@@ -3447,9 +3447,24 @@ export const validateWindowsPackagedPayload = Effect.fn(
   return { packagedAppDir, fileCount, unpackedFiles } as const;
 });
 
+export class PrivateShellBuildError extends Schema.TaggedError<PrivateShellBuildError>()(
+  "PrivateShellBuildError",
+  { detail: Schema.String },
+) {
+  override get message(): string { return this.detail; }
+}
+
+export function privateShellBuildError(options: Pick<ResolvedBuildOptions, "platform" | "target">): string | undefined {
+  return options.platform === "mac" && options.target === "dir"
+    ? undefined
+    : "Build AgentShell with --platform mac --target dir; package the complete app with scripts/build-unified.sh.";
+}
+
 const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   options: ResolvedBuildOptions,
 ) {
+  const productError = privateShellBuildError(options);
+  if (productError) return yield* new PrivateShellBuildError({ detail: productError });
   const repoRoot = yield* RepoRoot;
   const path = yield* Path.Path;
   const fs = yield* FileSystem.FileSystem;
@@ -3546,7 +3561,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     const spawnCommand = yield* resolveSpawnCommand("vp", [
       "run",
       "--filter",
-      "@t3tools/desktop",
+      "@cinderdeck/desktop",
       "build",
     ]);
     yield* runCommand(
@@ -3777,7 +3792,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     deckhandSourceDirty: sourceDirty,
     private: true,
     packageManager: rootPackageJson.packageManager,
-    description: nativeShellBuild ? "Cinderdeck internal agent window" : "Deckhand desktop build",
+    description: nativeShellBuild ? "Cinderdeck internal agent window" : "Cinderdeck desktop build",
     // Required by the .deb control file.
     homepage: "https://cardinlabs.com",
     author: "Cardin Labs",
@@ -3921,7 +3936,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const builderArgs = [
     "exec",
     "--filter",
-    "@t3tools/desktop",
+    "@cinderdeck/desktop",
     "--",
     "electron-builder",
     "--projectDir",
@@ -3939,7 +3954,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       shell: builderCommand.shell,
     }),
     {
-      label: `vp exec --filter @t3tools/desktop -- electron-builder --projectDir ${stageAppDir} ${platformConfig.cliFlag} --${options.arch} --publish never`,
+      label: `vp exec --filter @cinderdeck/desktop -- electron-builder --projectDir ${stageAppDir} ${platformConfig.cliFlag} --${options.arch} --publish never`,
       verbose: options.verbose,
     },
   );
@@ -4005,7 +4020,7 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
   ),
   target: Flag.String("target").pipe(
     Flag.withDescription(
-      "Artifact target, for example dmg/AppImage/nsis (env: DECKHAND_DESKTOP_TARGET).",
+      "Private bundle target: dir (env: DECKHAND_DESKTOP_TARGET).",
     ),
     Flag.optional,
   ),
@@ -4061,7 +4076,7 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
     Flag.optional,
   ),
 }).pipe(
-  Command.withDescription("Build a desktop artifact for T3 Code."),
+  Command.withDescription("Build the private Cinderdeck AgentShell bundle."),
   Command.withHandler((input) => Effect.flatMap(resolveBuildOptions(input), buildDesktopArtifact)),
 );
 

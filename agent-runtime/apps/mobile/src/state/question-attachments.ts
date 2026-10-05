@@ -1,4 +1,4 @@
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
 import { Atom } from "effect/unstable/reactivity";
 import { appAtomRegistry } from "./atom-registry";
 

@@ -1,4 +1,4 @@
-import { tokenizeCliArgs } from "@t3tools/shared/cliArgs";
+import { tokenizeCliArgs } from "@cinderdeck/shared/cliArgs";
 
 const DECKHAND_CODEX_LAUNCH_ARGS_ENV = "DECKHAND_CODEX_LAUNCH_ARGS";
 

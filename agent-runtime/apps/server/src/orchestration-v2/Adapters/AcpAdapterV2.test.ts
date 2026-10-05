@@ -26,9 +26,9 @@ import {
   RunId,
   ThreadId,
   type OrchestrationV2ProviderThread,
-} from "@t3tools/contracts";
-import { HostProcessIsExecutable, HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { resolveSelfInvocation } from "@t3tools/shared/nodeRuntime";
+} from "@cinderdeck/contracts";
+import { HostProcessIsExecutable, HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
+import { resolveSelfInvocation } from "@cinderdeck/shared/nodeRuntime";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
@@ -771,7 +771,7 @@ describe("AcpAdapterV2", () => {
 
       const mcpServer = runtimeInput?.mcpServers[0];
       if (mcpServer === undefined || !("command" in mcpServer)) {
-        return yield* Effect.die("ACP runtime must receive the Deckhand stdio MCP server");
+        return yield* Effect.die("ACP runtime must receive the Cinderdeck stdio MCP server");
       }
       assert.equal(mcpServer.name, "deckhand");
       assert.deepEqual(runtimeInput?.acpMcpServers, [
@@ -880,9 +880,9 @@ describe("AcpAdapterV2", () => {
       assert.isTrue(command.prompt.startsWith("/compact"));
       assert.notInclude(command.prompt, "<t3_code_instructions>");
       const firstDefault = yield* runTurn(1, defaultPolicy, "First default request.");
-      assert.include(firstDefault.prompt, "T3 Code interaction mode: Default");
-      assert.include(firstDefault.prompt, "T3 Code collaborative browser");
-      assert.include(firstDefault.prompt, "T3 Code orchestration");
+      assert.include(firstDefault.prompt, "Cinderdeck interaction mode: Default");
+      assert.include(firstDefault.prompt, "Cinderdeck collaborative browser");
+      assert.include(firstDefault.prompt, "Cinderdeck orchestration");
       assert.notInclude(
         firstDefault.methods,
         "session/set_config_option",
@@ -895,18 +895,18 @@ describe("AcpAdapterV2", () => {
 
       const planPolicy = policy("plan");
       const firstPlan = yield* runTurn(3, planPolicy, "Plan this change.");
-      assert.include(firstPlan.prompt, "T3 Code interaction mode: Plan");
+      assert.include(firstPlan.prompt, "Cinderdeck interaction mode: Plan");
       assert.include(firstPlan.methods, "session/set_config_option");
       assert.include(
         (yield* runTurn(4, planPolicy, "Continue planning.")).prompt,
         "Continue planning.",
       );
       const restoredBuild = yield* runTurn(5, defaultPolicy, "Implement the change.");
-      assert.include(restoredBuild.prompt, "T3 Code interaction mode: Default");
+      assert.include(restoredBuild.prompt, "Cinderdeck interaction mode: Default");
       assert.include(
         restoredBuild.methods,
         "session/set_config_option",
-        "Build should restore the native mode that T3 temporarily replaced for Plan",
+        "Build should restore the native mode that Cinderdeck temporarily replaced for Plan",
       );
     }).pipe(Effect.provide(testLayer), Effect.scoped),
   );

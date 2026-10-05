@@ -1,10 +1,10 @@
-import type { EnvironmentId, PullRequestRef } from "@t3tools/contracts";
+import type { EnvironmentId, PullRequestRef } from "@cinderdeck/contracts";
 import type {
   Evidence,
   VerificationOverview,
   VerificationScenario,
   VerificationScenarioSave,
-} from "@t3tools/contracts/deckhand/verificationRpc";
+} from "@cinderdeck/contracts/deckhand/verificationRpc";
 import { useEffect, useRef, useState } from "react";
 import * as Cause from "effect/Cause";
 import { useAtomCommand } from "../state/use-atom-command";

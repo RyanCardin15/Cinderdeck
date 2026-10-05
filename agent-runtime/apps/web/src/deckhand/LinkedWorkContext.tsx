@@ -2,9 +2,9 @@ import { Tooltip, TooltipTrigger, TooltipPopup } from "../components/ui/tooltip"
 import { isElectron } from "../env";
 import { useEnvironments } from "../state/environments";
 import { useEffect, useState } from "react";
-import type { ScopedThreadRef } from "@t3tools/contracts";
-import type { ThreadContextView } from "@t3tools/contracts/deckhand/rpc";
-import { linkedWorkNativeURL } from "@t3tools/contracts/deckhand/linkedWorkRpc";
+import type { ScopedThreadRef } from "@cinderdeck/contracts";
+import type { ThreadContextView } from "@cinderdeck/contracts/deckhand/rpc";
+import { linkedWorkNativeURL } from "@cinderdeck/contracts/deckhand/linkedWorkRpc";
 import { useAtomCommand } from "../state/use-atom-command";
 import { publishLinkedWork } from "./state";
 /** A bounded heartbeat expires honestly in Cinderdeck if this client or native connection stops. */

@@ -1,17 +1,17 @@
-import { GITHUB_WORKSPACE_METHOD, type GitHubWorkspaceInput } from "@t3tools/contracts/deckhand/gitHubWorkspace";
-import { EXTERNAL_DEBUG_METHODS } from "@t3tools/contracts/deckhand/externalDebugRpc";
-import { OWNERSHIP_METHODS } from "@t3tools/contracts/deckhand/ownershipRpc";
-import { HISTORY_IMPORT_METHODS } from "@t3tools/contracts/deckhand/historyImportRpc";
-import { OWNED_PREVIEW_METHODS } from "@t3tools/contracts/deckhand/ownedPreviewRpc";
-import { ATTEMPT_METHODS } from "@t3tools/contracts/deckhand/verificationAttemptsRpc";
-import { EXTERNAL_SESSION_METHODS } from "@t3tools/contracts/deckhand/externalSessionsRpc";
-import { ATTENTION_METHODS } from "@t3tools/contracts/deckhand/attentionRpc";
-import { LINKED_WORK_METHODS } from "@t3tools/contracts/deckhand/linkedWorkRpc";
-import { VERIFICATION_METHODS } from "@t3tools/contracts/deckhand/verificationRpc";
-import { RUN_METHODS } from "@t3tools/contracts/deckhand/runsRpc";
-import { REVIEWER_METHODS } from "@t3tools/contracts/deckhand/rpc";
-import { RECORDING_METHODS } from "@t3tools/contracts/deckhand/recordingsRpc";
-import { DECKHAND_METHODS, THREAD_CONTEXT_METHOD } from "@t3tools/contracts/deckhand/rpc";
+import { GITHUB_WORKSPACE_METHOD, type GitHubWorkspaceInput } from "@cinderdeck/contracts/deckhand/gitHubWorkspace";
+import { EXTERNAL_DEBUG_METHODS } from "@cinderdeck/contracts/deckhand/externalDebugRpc";
+import { OWNERSHIP_METHODS } from "@cinderdeck/contracts/deckhand/ownershipRpc";
+import { HISTORY_IMPORT_METHODS } from "@cinderdeck/contracts/deckhand/historyImportRpc";
+import { OWNED_PREVIEW_METHODS } from "@cinderdeck/contracts/deckhand/ownedPreviewRpc";
+import { ATTEMPT_METHODS } from "@cinderdeck/contracts/deckhand/verificationAttemptsRpc";
+import { EXTERNAL_SESSION_METHODS } from "@cinderdeck/contracts/deckhand/externalSessionsRpc";
+import { ATTENTION_METHODS } from "@cinderdeck/contracts/deckhand/attentionRpc";
+import { LINKED_WORK_METHODS } from "@cinderdeck/contracts/deckhand/linkedWorkRpc";
+import { VERIFICATION_METHODS } from "@cinderdeck/contracts/deckhand/verificationRpc";
+import { RUN_METHODS } from "@cinderdeck/contracts/deckhand/runsRpc";
+import { REVIEWER_METHODS } from "@cinderdeck/contracts/deckhand/rpc";
+import { RECORDING_METHODS } from "@cinderdeck/contracts/deckhand/recordingsRpc";
+import { DECKHAND_METHODS, THREAD_CONTEXT_METHOD } from "@cinderdeck/contracts/deckhand/rpc";
 import {
   type DeviceListInput,
   AuthAccessReadScope,
@@ -26,7 +26,7 @@ import {
   type AuthEnvironmentScope,
   WS_METHODS,
   WsRpcGroup,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import type * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 
 type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];

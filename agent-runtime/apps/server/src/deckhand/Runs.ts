@@ -1,4 +1,4 @@
-import * as C from "@t3tools/contracts/deckhand/runsRpc";
+import * as C from "@cinderdeck/contracts/deckhand/runsRpc";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -26,7 +26,7 @@ export class Runs extends Context.Service<
       input: C.ValidateDefinition,
     ) => Effect.Effect<C.DefinitionValidation, C.RunsError>;
   }
->()("t3/deckhand/Runs") {}
+>()("@cinderdeck/server/deckhand/Runs") {}
 export const layer = Layer.effect(
   Runs,
   Effect.gen(function* () {

@@ -1,5 +1,5 @@
-import type { ConnectionTarget } from "@t3tools/client-runtime/connection";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { ConnectionTarget } from "@cinderdeck/client-runtime/connection";
+import type { EnvironmentId } from "@cinderdeck/contracts";
 
 interface OnboardingEnvironment {
   readonly environmentId: EnvironmentId;

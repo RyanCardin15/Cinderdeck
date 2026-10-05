@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { AuthAccessReadScope, AuthAccessWriteScope, type EnvironmentId } from "@t3tools/contracts";
-import type * as C from "@t3tools/contracts/deckhand/historyImportRpc";
+import { AuthAccessReadScope, AuthAccessWriteScope, type EnvironmentId } from "@cinderdeck/contracts";
+import type * as C from "@cinderdeck/contracts/deckhand/historyImportRpc";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { useAtomCommand } from "../state/use-atom-command";
 import { usePrimarySessionState } from "../environments/primary";
@@ -23,10 +23,10 @@ export function HistoryImportPanel() {
   const [environmentID, setEnvironmentID] = useState<EnvironmentId | null>(primary);
   const selected = environments.find((environment) => environment.environmentId === environmentID);
   return (
-    <section id="storage-history-import" className={styles.panel} aria-label="Import T3 history">
-      <h2>Bring your T3 history</h2>
+    <section id="storage-history-import" className={styles.panel} aria-label="Import Cinderdeck history">
+      <h2>Bring your Cinderdeck history</h2>
       <p>
-        Copy previous conversations into a separate Cinderdeck history archive. Your T3 database
+        Copy previous conversations into a separate Cinderdeck history archive. Your Cinderdeck database
         stays unchanged. Credentials, pending work and provider sessions are not imported.
       </p>
       <label className={styles.field}>
@@ -197,7 +197,7 @@ export function HistoryArchiveBrowser({
     if (result._tag === "Success") choose(result.value);
     else
       setError(
-        "History copy was refused. Use the real absolute path to a supported T3 V2 database and an account with administrator access.",
+        "History copy was refused. Use the real absolute path to a supported Cinderdeck V2 database and an account with administrator access.",
       );
     setBusy(false);
   };
@@ -206,7 +206,7 @@ export function HistoryArchiveBrowser({
       {canWrite ? (
         <div className={styles.copy}>
           <label className={styles.field}>
-            T3 database path on this computer
+            Cinderdeck database path on this computer
             <input
               value={path}
               onChange={(event) => setPath(event.target.value)}
@@ -216,7 +216,7 @@ export function HistoryArchiveBrowser({
             />
           </label>
           <button type="button" disabled={busy || !path.trim()} onClick={() => void begin()}>
-            {busy ? "Starting copy…" : "Copy T3 history"}
+            {busy ? "Starting copy…" : "Copy Cinderdeck history"}
           </button>
           <small>
             Requires administrator access. Schema versions 55 and 56 are supported. Import is
@@ -347,7 +347,7 @@ export function HistoryArchiveBrowser({
                 <strong>{item.title}</strong>
                 <span>
                   {item.provider} · {item.messageCount} messages{item.archived ? " · Archived" : ""}
-                  {item.deleted ? " · Deleted in T3" : ""}
+                  {item.deleted ? " · Deleted in Cinderdeck" : ""}
                 </span>
               </button>
             ))}

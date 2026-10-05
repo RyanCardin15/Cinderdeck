@@ -2,7 +2,7 @@
 import * as Electron from "electron";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import type { NativeHostRoute, NativeToolRequest } from "@t3tools/contracts";
+import type { NativeHostRoute, NativeToolRequest } from "@cinderdeck/contracts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";

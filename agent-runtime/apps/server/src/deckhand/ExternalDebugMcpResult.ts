@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off
 // @effect-diagnostics preferSchemaOverJson:off
 import * as Schema from "effect/Schema";
-import * as C from "@t3tools/contracts/deckhand/externalDebugRpc";
+import * as C from "@cinderdeck/contracts/deckhand/externalDebugRpc";
 import { McpSchema } from "effect/unstable/ai";
 import { record } from "./ExternalDebugCDP.ts";
 

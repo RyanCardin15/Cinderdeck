@@ -1,16 +1,16 @@
 import { useAtomValue } from "@effect/atom-react";
 import { useIsFocused, useNavigation } from "@react-navigation/native";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { summarizeSubagentStatuses } from "@t3tools/client-runtime/state/subagent-display";
+import { scopeThreadRef } from "@cinderdeck/client-runtime/environment";
+import { summarizeSubagentStatuses } from "@cinderdeck/client-runtime/state/subagent-display";
 import {
   isActiveSubagentStatus,
   isTerminalSubagentStatus,
-} from "@t3tools/client-runtime/state/subagentRuntime";
+} from "@cinderdeck/client-runtime/state/subagentRuntime";
 import type {
   EnvironmentId,
   OrchestrationV2Subagent,
   OrchestrationV2TurnItem,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { useEffect, useState } from "react";
 import { AppState, Pressable, View, type ColorValue } from "react-native";
 

@@ -1,7 +1,7 @@
 import { useNavigation } from "@react-navigation/native";
-import type { EnvironmentThreadSearchMatch } from "@t3tools/client-runtime/state/thread-search";
-import { THREAD_JUMP_KEYBINDING_COMMANDS } from "@t3tools/contracts";
-import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
+import type { EnvironmentThreadSearchMatch } from "@cinderdeck/client-runtime/state/thread-search";
+import { THREAD_JUMP_KEYBINDING_COMMANDS } from "@cinderdeck/contracts";
+import { threadPullRequestSearchTerms } from "@cinderdeck/shared/threadPullRequests";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,

@@ -1,8 +1,8 @@
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/shell";
-import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+} from "@cinderdeck/client-runtime/state/shell";
+import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@cinderdeck/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { buildHomeProjectScopes, sortHomeProjectScopes } from "./homeThreadList";
@@ -117,7 +117,7 @@ describe("home project scopes", () => {
         environmentId: remoteEnvironmentId,
         id: ProjectId.make("project-remote-fresh"),
         title: "t3code",
-        workspaceRoot: "/remote/t3code/",
+        workspaceRoot: "/remote/cinderdeck/",
         updatedAt: "2026-06-02T00:00:00.000Z",
       }),
     ];

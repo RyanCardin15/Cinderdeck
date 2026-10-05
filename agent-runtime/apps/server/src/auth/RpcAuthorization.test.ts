@@ -1,4 +1,4 @@
-import { OWNERSHIP_METHODS } from "@t3tools/contracts/deckhand/ownershipRpc";
+import { OWNERSHIP_METHODS } from "@cinderdeck/contracts/deckhand/ownershipRpc";
 import {
   AuthReviewWriteScope,
   AuthAccessReadScope,
@@ -10,10 +10,10 @@ import {
   AuthRelayWriteScope,
   WS_METHODS,
   WsRpcGroup,
-} from "@t3tools/contracts";
-import { HISTORY_IMPORT_METHODS } from "@t3tools/contracts/deckhand/historyImportRpc";
-import { OWNED_PREVIEW_METHODS } from "@t3tools/contracts/deckhand/ownedPreviewRpc";
-import { DECKHAND_METHODS } from "@t3tools/contracts/deckhand/rpc";
+} from "@cinderdeck/contracts";
+import { HISTORY_IMPORT_METHODS } from "@cinderdeck/contracts/deckhand/historyImportRpc";
+import { OWNED_PREVIEW_METHODS } from "@cinderdeck/contracts/deckhand/ownedPreviewRpc";
+import { DECKHAND_METHODS } from "@cinderdeck/contracts/deckhand/rpc";
 import { describe, expect, it } from "@effect/vitest";
 
 import {

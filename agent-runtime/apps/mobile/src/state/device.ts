@@ -1,6 +1,6 @@
-import { createDeviceEnvironmentAtoms } from "@t3tools/client-runtime/state/device";
-import { resolveDeviceHubAccess } from "@t3tools/client-runtime/state/deviceHubAccess";
-import type { EnvironmentId } from "@t3tools/contracts";
+import { createDeviceEnvironmentAtoms } from "@cinderdeck/client-runtime/state/device";
+import { resolveDeviceHubAccess } from "@cinderdeck/client-runtime/state/deviceHubAccess";
+import type { EnvironmentId } from "@cinderdeck/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { Atom } from "effect/unstable/reactivity";

@@ -1,10 +1,10 @@
 import type {
   EnvironmentPresentation,
   PreparedConnection,
-} from "@t3tools/client-runtime/connection";
-import { PrimaryConnectionTarget } from "@t3tools/client-runtime/connection";
-import type { ServerConfig } from "@t3tools/contracts";
-import { EnvironmentId } from "@t3tools/contracts";
+} from "@cinderdeck/client-runtime/connection";
+import { PrimaryConnectionTarget } from "@cinderdeck/client-runtime/connection";
+import type { ServerConfig } from "@cinderdeck/contracts";
+import { EnvironmentId } from "@cinderdeck/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Option from "effect/Option";
 import { Atom, AtomRegistry } from "effect/unstable/reactivity";

@@ -58,8 +58,8 @@ describe("Pi upstream output-budget workaround", () => {
   });
 });
 
-describe("Pi Deckhand MCP identity", () => {
-  it("registers a Deckhand-prefixed tool while keeping the authenticated wire call unprefixed", async () => {
+describe("Pi Cinderdeck MCP identity", () => {
+  it("registers a Cinderdeck-prefixed tool while keeping the authenticated wire call unprefixed", async () => {
     const tools = new Map<
       string,
       {

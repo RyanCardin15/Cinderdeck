@@ -46,7 +46,7 @@ node_modules/
 # pnpm content-addressable store; never belongs in the repo.
 .pnpm-store/
 
-# Deckhand execution/test state
+# Cinderdeck execution/test state
 .deckhand/
 
 # Native Debug test coverage output

@@ -2,7 +2,7 @@
 // @effect-diagnostics preferSchemaOverJson:off - The simulated native process speaks raw JSON envelopes.
 import * as NodeNet from "node:net";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -14,8 +14,8 @@ import * as IntegrationDiscovery from "./IntegrationDiscovery.ts";
 import * as IntegrationHub from "./IntegrationHub.ts";
 import * as Migrations from "./Migrations.ts";
 import * as OperationJournal from "./OperationJournal.ts";
-import * as Contracts from "@t3tools/contracts/deckhand";
-import { ThreadId } from "@t3tools/contracts";
+import * as Contracts from "@cinderdeck/contracts/deckhand";
+import { ThreadId } from "@cinderdeck/contracts";
 import * as Schema from "effect/Schema";
 import * as CheckoutIdentity from "./CheckoutIdentity.ts";
 import * as ManagedCheckoutGuard from "./ManagedCheckoutGuard.ts";
@@ -135,7 +135,7 @@ const hubLayer = (socketPath: string) =>
 const TestLayer = NodeSqliteClient.layer({ filename: ":memory:" }).pipe(
   Layer.provideMerge(NodeServices.layer),
 );
-describe("Deckhand integration hub", () => {
+describe("Cinderdeck integration hub", () => {
   it.effect(
     "reads one fresh off-page resource without replacing the 609-context catalogue or advancing replay",
     () =>

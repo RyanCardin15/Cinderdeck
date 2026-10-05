@@ -1,4 +1,4 @@
-import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
+import { resolveThreadWorkingStartedAt } from "@cinderdeck/client-runtime/state/models";
 import {
   type AssetResource,
   type OrchestrationV2ExecutionNode,
@@ -12,26 +12,26 @@ import {
   type ToolActivitySurface,
   type ToolActivityIcon,
   type ToolActivitySource,
-} from "@t3tools/contracts";
-import { extractToolActivityPresentation } from "@t3tools/client-runtime/work-log/tool-presentation";
+} from "@cinderdeck/contracts";
+import { extractToolActivityPresentation } from "@cinderdeck/client-runtime/work-log/tool-presentation";
 import {
   classifyToolActivity,
   collectToolFilePaths,
   formatReadToolLabel,
   formatSearchToolLabel,
-} from "@t3tools/shared/toolActivity";
+} from "@cinderdeck/shared/toolActivity";
 import {
   contextCompactionLabel,
   workEntryIndicatesToolFailure,
-} from "@t3tools/client-runtime/work-log/presentation";
-import type { ThreadCheckpointSummary } from "@t3tools/client-runtime/state/thread-checkpoints";
+} from "@cinderdeck/client-runtime/work-log/presentation";
+import type { ThreadCheckpointSummary } from "@cinderdeck/client-runtime/state/thread-checkpoints";
 import type {
   ThreadPendingApproval,
   ThreadPendingUserInput,
-} from "@t3tools/client-runtime/state/thread-requests";
-import type { ThreadRunSummary, ThreadRuntimeSummary } from "@t3tools/client-runtime/state/shell";
-import { threadRuntimeHasInterruptibleRun } from "@t3tools/client-runtime/state/thread-execution";
-import { turnItemIsWorkspacePreparation } from "@t3tools/client-runtime/state/turn-item-presentation";
+} from "@cinderdeck/client-runtime/state/thread-requests";
+import type { ThreadRunSummary, ThreadRuntimeSummary } from "@cinderdeck/client-runtime/state/shell";
+import { threadRuntimeHasInterruptibleRun } from "@cinderdeck/client-runtime/state/thread-execution";
+import { turnItemIsWorkspacePreparation } from "@cinderdeck/client-runtime/state/turn-item-presentation";
 
 import {
   isImageAttachment,
@@ -45,11 +45,11 @@ import * as DateTime from "effect/DateTime";
 import * as Equal from "effect/Equal";
 import { shallow } from "zustand/vanilla/shallow";
 
-export { formatDuration } from "@t3tools/shared/orchestrationTiming";
+export { formatDuration } from "@cinderdeck/shared/orchestrationTiming";
 export {
   workEntryDisplayIndicatesToolFailure,
   workEntryIndicatesToolFailure,
-} from "@t3tools/client-runtime/work-log/presentation";
+} from "@cinderdeck/client-runtime/work-log/presentation";
 
 export type WorkLogToolLifecycleStatus =
   | "idle"
@@ -60,7 +60,7 @@ export type WorkLogToolLifecycleStatus =
   | "stopped";
 
 export interface WorkLogEntry {
-  readonly questionAnswer?: import("@t3tools/contracts").UserInputAttachmentAnswerPayload;
+  readonly questionAnswer?: import("@cinderdeck/contracts").UserInputAttachmentAnswerPayload;
   readonly id: string;
   readonly createdAt: string;
   readonly runId?: RunId | null;

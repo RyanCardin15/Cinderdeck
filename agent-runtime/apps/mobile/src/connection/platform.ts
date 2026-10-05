@@ -2,15 +2,15 @@ import {
   ClientCapabilities,
   PlatformConnectionSource,
   Persistence,
-} from "@t3tools/client-runtime/platform";
+} from "@cinderdeck/client-runtime/platform";
 import {
   ConnectionBlockedError,
   ConnectionTransientError,
   Connectivity,
   Wakeups,
-} from "@t3tools/client-runtime/connection";
-import { managedRelayAccountChanges, managedRelaySessionAtom } from "@t3tools/client-runtime/relay";
-import { AuthStandardClientScopes } from "@t3tools/contracts";
+} from "@cinderdeck/client-runtime/connection";
+import { managedRelayAccountChanges, managedRelaySessionAtom } from "@cinderdeck/client-runtime/relay";
+import { AuthStandardClientScopes } from "@cinderdeck/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -122,7 +122,7 @@ const capabilitiesLayer = Layer.effectContext(
           if (session === null) {
             return yield* new ConnectionBlockedError({
               reason: "authentication",
-              detail: "Sign in to T3 Connect to connect this environment.",
+              detail: "Sign in to Remote connections to connect this environment.",
             });
           }
           const token = yield* session.readClerkToken().pipe(
@@ -137,7 +137,7 @@ const capabilitiesLayer = Layer.effectContext(
           if (token === null) {
             return yield* new ConnectionBlockedError({
               reason: "authentication",
-              detail: "The T3 Connect session is unavailable.",
+              detail: "The Remote connections session is unavailable.",
             });
           }
           return token;

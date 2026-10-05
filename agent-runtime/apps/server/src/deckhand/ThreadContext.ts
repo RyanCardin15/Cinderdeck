@@ -1,6 +1,6 @@
-import { isProviderNativeSubagentThread, type ThreadId } from "@t3tools/contracts";
-import * as Contracts from "@t3tools/contracts/deckhand";
-import * as Rpc from "@t3tools/contracts/deckhand/rpc";
+import { isProviderNativeSubagentThread, type ThreadId } from "@cinderdeck/contracts";
+import * as Contracts from "@cinderdeck/contracts/deckhand";
+import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
 import * as Context from "effect/Context";
 import * as Option from "effect/Option";
 import * as Effect from "effect/Effect";
@@ -33,7 +33,7 @@ export class ThreadContext extends Context.Service<
       input: Rpc.ThreadContextInput,
     ) => Stream.Stream<Rpc.ThreadContextView | null, ThreadContextError>;
   }
->()("t3/deckhand/ThreadContext") {}
+>()("@cinderdeck/server/deckhand/ThreadContext") {}
 const isThreadContextError = Schema.is(ThreadContextError);
 const isCurrentError = Schema.is(CurrentCheckout.CurrentCheckoutError);
 const decodeSession = Schema.decodeUnknownEffect(Schema.fromJsonString(Contracts.SessionBinding));

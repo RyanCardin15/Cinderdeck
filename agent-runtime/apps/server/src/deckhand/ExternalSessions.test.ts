@@ -1,9 +1,9 @@
 import * as Stream from "effect/Stream";
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
-import * as Base from "@t3tools/contracts/deckhand";
-import * as C from "@t3tools/contracts/deckhand/externalSessionsRpc";
+import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
+import * as Base from "@cinderdeck/contracts/deckhand";
+import * as C from "@cinderdeck/contracts/deckhand/externalSessionsRpc";
 import * as Effect from "effect/Effect";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";

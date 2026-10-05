@@ -1,7 +1,7 @@
-# T3 Code Mobile
+# Cinderdeck Mobile
 
 > [!WARNING]
-> T3 Code Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
+> Cinderdeck Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
 
 ## Quickstart
 
@@ -10,13 +10,13 @@
 
 This app has three variants:
 
-- `development`: Expo dev client, installable side-by-side as `T3 Code Dev`
-- `preview`: persistent internal preview build, installable side-by-side as `T3 Code Preview`
-- `production`: store/release build as `T3 Code`
+- `development`: Expo dev client, installable side-by-side as `Cinderdeck Dev`
+- `preview`: persistent internal preview build, installable side-by-side as `Cinderdeck Preview`
+- `production`: store/release build as `Cinderdeck`
 
 Run commands from `apps/mobile`.
 
-T3 Connect is optional and disabled in a fresh clone. Public configuration belongs in the
+Remote connections is optional and disabled in a fresh clone. Public configuration belongs in the
 repository-root `.env` or `.env.local`, not an `apps/mobile/.env` file. See
 [`../../.env.example`](../../.env.example).
 
@@ -71,8 +71,8 @@ reduced-capability local build. Personal Team builds omit the widget and share e
 entitlement, and native Sign in with Apple entitlement; builds without this opt-in are unchanged.
 
 ```bash
-T3CODE_IOS_PERSONAL_TEAM=1 \
-T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID=com.example.t3code.dev \
+CINDERDECK_IOS_PERSONAL_TEAM=1 \
+CINDERDECK_IOS_PERSONAL_TEAM_BUNDLE_ID=com.example.cinderdeck.dev \
 vp run ios:dev
 ```
 
@@ -85,8 +85,8 @@ vp run ios:release
 The Personal Team equivalent also needs a unique bundle identifier:
 
 ```bash
-T3CODE_IOS_PERSONAL_TEAM=1 \
-T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID=com.example.t3code \
+CINDERDECK_IOS_PERSONAL_TEAM=1 \
+CINDERDECK_IOS_PERSONAL_TEAM_BUNDLE_ID=com.example.cinderdeck \
 vp run ios:release
 ```
 
@@ -119,38 +119,10 @@ node ../../scripts/mobile-native-static-check.ts
 
 The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin. Missing native tools are reported as warnings and skipped locally. CI installs the default toolset from `apps/mobile/Brewfile` before running the native checks.
 
-## EAS Builds
+## Companion builds
 
-Preview and production variants use Expo fingerprinting so OTA updates only reach binaries with matching native dependencies, config plugins, and patches. CI uses the `preview:dev` profile to reuse a compatible native build when possible.
+The companion connects to Cinderdeck environments through pairing, LAN/Tailscale or SSH. No inherited cloud account, relay, signing team or OTA project is configured. Set `CINDERDECK_APPLE_TEAM_ID` to your own team when building with managed Apple signing; the Personal Team option above is available for local development.
 
-The development variant uses `appVersion` to avoid recalculating the native fingerprint for each Metro launch manifest. `MOBILE_VERSION_POLICY` can override either default. If you distribute a custom Release build with the development identity and publish OTA updates to it, set `MOBILE_VERSION_POLICY=fingerprint` for both its build and updates. Changing the runtime policy requires a native rebuild for OTA matching; an existing dev client can still load local Metro bundles.
+Local iOS and Android builds remain the quickest development path. The checked-in EAS profiles are optional build templates. Register a Cinderdeck-owned Expo project and provide its credentials before using them. App versions are maintained locally, and remote updates remain disabled until a Cinderdeck update service is configured.
 
-For preview or production EAS environments, set `T3CODE_CLERK_PUBLISHABLE_KEY`,
-`T3CODE_CLERK_JWT_TEMPLATE`, and `T3CODE_RELAY_URL`
-as EAS environment variables. Expo config maps the canonical values into the mobile build.
-
-Create a PR preview dev-client build manually:
-
-```bash
-vp run eas:ios:preview:dev
-```
-
-Create a cloud dev-client build:
-
-```bash
-vp run eas:ios:dev
-```
-
-Create a persistent preview build:
-
-```bash
-vp run eas:ios:preview
-```
-
-Android equivalents:
-
-```bash
-vp run eas:android:dev
-vp run eas:android:preview:dev
-vp run eas:android:preview
-```
+Development uses the `appVersion` runtime policy; preview and production use `fingerprint`. `MOBILE_VERSION_POLICY` overrides the policy. This controls build compatibility and does not enable remote updates.

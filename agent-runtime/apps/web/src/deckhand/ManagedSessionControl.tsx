@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { ProviderSessionId, type ScopedThreadRef } from "@t3tools/contracts";
-import type { ThreadContextView } from "@t3tools/contracts/deckhand/rpc";
-import type { ReviewerSourceStopResult } from "@t3tools/contracts/deckhand/reviewerRpc";
+import { ProviderSessionId, type ScopedThreadRef } from "@cinderdeck/contracts";
+import type { ThreadContextView } from "@cinderdeck/contracts/deckhand/rpc";
+import type { ReviewerSourceStopResult } from "@cinderdeck/contracts/deckhand/reviewerRpc";
 import { CircleStopIcon } from "lucide-react";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 import { useAtomCommand } from "../state/use-atom-command";

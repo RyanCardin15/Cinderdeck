@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { EnvironmentId, TerminalSessionSnapshot, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, TerminalSessionSnapshot, ThreadId } from "@cinderdeck/contracts";
 
 import {
   applyTerminalAttachStreamEvent,

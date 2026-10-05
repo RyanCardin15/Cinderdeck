@@ -11,7 +11,7 @@ export class CheckoutMutations extends Context.Service<
     readonly run: WorkspaceBackend.WorkspaceBackend["Service"]["reserve"];
     readonly includeCheckout: WorkspaceBackend.WorkspaceBackend["Service"]["includeCheckout"];
   }
->()("t3/deckhand/CheckoutMutations") {}
+>()("@cinderdeck/server/deckhand/CheckoutMutations") {}
 const make = Effect.gen(function* () {
   const backend = yield* WorkspaceBackend.WorkspaceBackend;
   return CheckoutMutations.of({ run: backend.reserve, includeCheckout: backend.includeCheckout });

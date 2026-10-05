@@ -1,14 +1,11 @@
 {
-  "name": "t3",
+  "name": "@cinderdeck/server",
   "version": "0.1.0-alpha.1",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/pingdotgg/t3code",
-    "directory": "apps/server"
-  },
-  "bin": {
-    "deckhand": "./dist/bin.mjs"
+    "url": "https://github.com/RyanCardin15/Cinderdeck",
+    "directory": "agent-runtime/apps/server"
   },
   "files": [
     "dist"
@@ -17,7 +14,6 @@
   "scripts": {
     "dev": "node --watch src/bin.ts",
     "build:bundle": "vp pack",
-    "build:exe": "node scripts/cli.ts build-exe",
     "start": "node dist/bin.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vp test run",
@@ -50,11 +46,11 @@
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
-    "@t3tools/contracts": "workspace:*",
-    "@t3tools/shared": "workspace:*",
-    "@t3tools/ssh": "workspace:*",
-    "@t3tools/tailscale": "workspace:*",
-    "@t3tools/web": "workspace:*",
+    "@cinderdeck/contracts": "workspace:*",
+    "@cinderdeck/shared": "workspace:*",
+    "@cinderdeck/ssh": "workspace:*",
+    "@cinderdeck/tailscale": "workspace:*",
+    "@cinderdeck/web": "workspace:*",
     "@types/node": "catalog:",
     "@types/proper-lockfile": "^4.1.4",
     "@types/yauzl": "^3.4.0",
@@ -64,5 +60,6 @@
   },
   "engines": {
     "node": "^22.16 || ^23.11 || >=24.10"
-  }
+  },
+  "private": true
 }

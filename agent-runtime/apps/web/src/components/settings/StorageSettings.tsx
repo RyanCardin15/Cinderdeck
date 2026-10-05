@@ -1,6 +1,6 @@
 import { HistoryImportPanel } from "../../deckhand/HistoryImportPanel";
-import type { StorageCleanupSettings, WorktreeCleanupRules } from "@t3tools/contracts";
-import { resolveWorktreeCleanup } from "@t3tools/shared/projectSettings";
+import type { StorageCleanupSettings, WorktreeCleanupRules } from "@cinderdeck/contracts";
+import { resolveWorktreeCleanup } from "@cinderdeck/shared/projectSettings";
 import { useState } from "react";
 
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";

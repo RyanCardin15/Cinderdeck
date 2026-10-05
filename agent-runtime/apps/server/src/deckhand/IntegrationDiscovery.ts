@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - Local discovery follows the native application's documented state path.
 import * as NodeOS from "node:os";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
@@ -21,7 +21,7 @@ export class DiscoveryConfig extends Context.Service<
     readonly socketPath?: string;
     readonly statePath: string;
   }
->()("t3/deckhand/IntegrationDiscovery/DiscoveryConfig") {}
+>()("@cinderdeck/server/deckhand/IntegrationDiscovery/DiscoveryConfig") {}
 export const configLayer = Layer.effect(
   DiscoveryConfig,
   Effect.gen(function* () {
@@ -57,7 +57,7 @@ export class HostIdentity extends Context.Service<
   {
     readonly get: Effect.Effect<string, CinderdeckClient.BridgeError>;
   }
->()("t3/deckhand/IntegrationDiscovery/HostIdentity") {}
+>()("@cinderdeck/server/deckhand/IntegrationDiscovery/HostIdentity") {}
 export const hostLayer = Layer.effect(
   HostIdentity,
   Effect.gen(function* () {
@@ -112,7 +112,7 @@ export class IntegrationDiscovery extends Context.Service<
       CinderdeckClient.BridgeError
     >;
   }
->()("t3/deckhand/IntegrationDiscovery") {}
+>()("@cinderdeck/server/deckhand/IntegrationDiscovery") {}
 const isBridgeError = Schema.is(CinderdeckClient.BridgeError);
 const decodeState = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Schema.Struct({ socket: Schema.String, appRunning: Schema.Boolean })),

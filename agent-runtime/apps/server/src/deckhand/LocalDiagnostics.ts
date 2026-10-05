@@ -1,13 +1,12 @@
 // @effect-diagnostics nodeBuiltinImport:off - Local support collection never opens a database or reads user content.
 import * as NodeOS from "node:os";
-import { HostProcessPlatform, HostProcessArchitecture } from "@t3tools/shared/hostProcess";
+import { HostProcessPlatform, HostProcessArchitecture } from "@cinderdeck/shared/hostProcess";
 import * as NodeChildProcess from "node:child_process";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as DateTime from "effect/DateTime";
 import packageJson from "../../package.json" with { type: "json" };
-import upstream from "../../../../docs/deckhand/upstream-patches.json" with { type: "json" };
 const presence = (value: string | undefined) => Boolean(value?.trim());
 export function diagnosticConfiguration(env: Readonly<Record<string, string | undefined>>) {
   return {
@@ -84,9 +83,8 @@ export const collectLocalDiagnostics = (input: {
       : [];
     return {
       schemaVersion: 1,
-      product: "Deckhand",
+      product: "Cinderdeck",
       version: packageJson.version,
-      upstreamRevision: upstream.upstreamRevision,
       collectedAt,
       runtime: {
         node: process.version,

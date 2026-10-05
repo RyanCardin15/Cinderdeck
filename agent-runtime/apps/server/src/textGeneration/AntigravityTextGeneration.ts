@@ -2,9 +2,9 @@ import {
   type ModelSelection,
   type ProviderSetupError,
   TextGenerationError,
-} from "@t3tools/contracts";
-import { formatGeneratedBranchName, sanitizeFeatureBranchName } from "@t3tools/shared/git";
-import { extractJsonObject } from "@t3tools/shared/schemaJson";
+} from "@cinderdeck/contracts";
+import { formatGeneratedBranchName, sanitizeFeatureBranchName } from "@cinderdeck/shared/git";
+import { extractJsonObject } from "@cinderdeck/shared/schemaJson";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";

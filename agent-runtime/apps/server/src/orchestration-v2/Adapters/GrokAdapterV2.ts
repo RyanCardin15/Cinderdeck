@@ -4,15 +4,15 @@ import {
   isXAiTaskCompletedWakeNotification,
   xAiRateLimitedErrorCode,
 } from "../../provider/acp/XAiAcpExtension.ts";
-import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { resolveSelfInvocation, type SelfInvocation } from "@t3tools/shared/nodeRuntime";
+import { HostProcessEnvironment, HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
+import { resolveSelfInvocation, type SelfInvocation } from "@cinderdeck/shared/nodeRuntime";
 import {
   defaultInstanceIdForDriver,
   GrokSettings,
   ProviderDriverKind,
   type OrchestrationV2ProviderCapabilities,
   type RuntimeMode,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -153,7 +153,7 @@ const registerGrokAcpExtensions: NonNullable<AcpAdapterV2Flavor["registerExtensi
 
 /**
  * Grok intercepts exit_plan_mode and reverse-requests client approval. Capture
- * the plan into T3's proposed-plan card and abandon the native gate so the
+ * the plan into Cinderdeck's proposed-plan card and abandon the native gate so the
  * turn does not hang (#8358; mirrors the Claude ExitPlanMode pattern). Plan
  * content preference: the request payload, then the plan.md contents sniffed
  * from tool calls this turn, then the empty-state placeholder.
@@ -218,7 +218,7 @@ const registerGrokAskUserQuestionExtensions = ({
 
 /**
  * Grok's permission mode is fixed at launch. Explicit approval or sandbox
- * overrides launch it asking, so every mutating prompt reaches T3's policy
+ * overrides launch it asking, so every mutating prompt reaches Cinderdeck's policy
  * check instead of being bypassed by always-approve or Grok's auto classifier.
  */
 export function grokLaunchRuntimeMode(

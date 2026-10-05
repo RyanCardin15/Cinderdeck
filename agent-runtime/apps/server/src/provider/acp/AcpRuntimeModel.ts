@@ -7,14 +7,14 @@ import type * as EffectAcpSchema from "effect-acp/compat";
 import {
   deriveToolActivityPresentation,
   mergeToolActivityData,
-} from "@t3tools/shared/toolActivity";
-import { T3_MCP_TOOL_NAMES } from "@t3tools/shared/t3McpToolPresentation";
+} from "@cinderdeck/shared/toolActivity";
+import { T3_MCP_TOOL_NAMES } from "@cinderdeck/shared/t3McpToolPresentation";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import type {
   OrchestrationV2ProviderThreadNativeMetadata,
   ThreadTokenUsageSnapshot,
   ToolLifecycleItemType,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -1057,7 +1057,7 @@ export interface AcpMcpToolCallIdentity {
   readonly input?: Record<string, unknown>;
 }
 
-/** Matches an invocation of T3's `acp-mcp-call` bridge fallback CLI. */
+/** Matches an invocation of Cinderdeck's `acp-mcp-call` bridge fallback CLI. */
 const ACP_MCP_FALLBACK_CALL = /(?:^|[\s"'=])acp-mcp-call[\s"']+([A-Za-z0-9_.-]+)(?:\s+(.+?))?\s*$/u;
 
 function acpMcpFallbackInput(value: string | undefined): Record<string, unknown> | undefined {
@@ -1082,8 +1082,8 @@ function acpMcpFallbackInput(value: string | undefined): Record<string, unknown>
 
 /**
  * Agents flatten injected MCP tools with underscores, hyphens, slashes, or a
- * tool-first suffix. Preserve the origin of historical T3 calls while new
- * sessions use Deckhand. Loose matches still require the known tool inventory.
+ * tool-first suffix. Preserve the origin of historical Cinderdeck calls while new
+ * sessions use Cinderdeck. Loose matches still require the known tool inventory.
  */
 const APP_MCP_TITLE_CALL =
   /^(?:mcp[-_]{1,2})?(?<server>deckhand|t3[-_ ]?code)[-_.:/ ]{1,3}(?<tool>[A-Za-z0-9][A-Za-z0-9_.-]*)(?::.*)?$/i;
@@ -1101,7 +1101,7 @@ function appMcpOrigin(server: string): string | undefined {
 /**
  * glm-acp-agent and Kimi CLI register injected MCP tools under their bare
  * names; Kimi additionally appends ": <raw args json>". Safe only because the
- * match is gated on the known T3 tool inventory.
+ * match is gated on the known Cinderdeck tool inventory.
  */
 const T3_MCP_BARE_TITLE_CALL = /^(?<tool>[A-Za-z0-9_]+)(?::\s|$)/;
 
@@ -1110,7 +1110,7 @@ const T3_MCP_BARE_TITLE_CALL = /^(?<tool>[A-Za-z0-9_]+)(?::\s|$)/;
  *
  * ACP has no typed MCP tool-call item, so agents surface MCP calls in
  * agent-specific shapes: codex-acp tags execute calls with
- * `rawInput.server`/`rawInput.tool`, while agents on T3's terminal fallback
+ * `rawInput.server`/`rawInput.tool`, while agents on Cinderdeck's terminal fallback
  * run the `acp-mcp-call <tool>` CLI through their command or an embedded
  * client terminal. Recovered identity lets the projection render the same
  * branded MCP item that native providers produce.
@@ -1134,7 +1134,7 @@ export function extractMcpToolCallIdentity(
   // in the title. The verbatim wire title survives merges even when a later
   // titleless or LLM-enriched update replaces the presentation title, so
   // match those rather than the summarized state title. Name-derived matches
-  // are gated on the known T3 tool inventory so path-like titles (for
+  // are gated on the known Cinderdeck tool inventory so path-like titles (for
   // example "t3-code/README.md") never brand.
   const claudeCode = isRecord(meta?.claudeCode) ? meta.claudeCode : undefined;
   const gooseToolCall = isRecord(meta?.goose)

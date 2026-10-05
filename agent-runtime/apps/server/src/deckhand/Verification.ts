@@ -1,9 +1,9 @@
 import * as AttentionObservations from "./AttentionObservations.ts";
 // @effect-diagnostics nodeBuiltinImport:off - Immutable local evidence digests.
 import * as NodeCrypto from "node:crypto";
-import * as C from "@t3tools/contracts/deckhand/verificationRpc";
-import * as Recording from "@t3tools/contracts/deckhand/recordingsRpc";
-import * as Contracts from "@t3tools/contracts/deckhand";
+import * as C from "@cinderdeck/contracts/deckhand/verificationRpc";
+import * as Recording from "@cinderdeck/contracts/deckhand/recordingsRpc";
+import * as Contracts from "@cinderdeck/contracts/deckhand";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -130,7 +130,7 @@ export class Verification extends Context.Service<
       input: C.VerificationUnlink,
     ) => Effect.Effect<C.VerificationOverview, C.VerificationError>;
   }
->()("t3/deckhand/Verification") {}
+>()("@cinderdeck/server/deckhand/Verification") {}
 export const verificationReferenceKey = (input: C.VerificationInput) =>
   digest(
     json([

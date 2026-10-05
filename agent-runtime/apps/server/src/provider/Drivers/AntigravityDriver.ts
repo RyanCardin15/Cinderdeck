@@ -1,11 +1,11 @@
 import { withAgentDeviceEnvironment } from "../../mcp/McpProviderSession.ts";
-import { AntigravitySettings, ProviderDriverKind, ProviderSetupError } from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import { resolveSelfInvocation } from "@t3tools/shared/nodeRuntime";
+import { AntigravitySettings, ProviderDriverKind, ProviderSetupError } from "@cinderdeck/contracts";
+import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
+import { resolveSelfInvocation } from "@cinderdeck/shared/nodeRuntime";
 import {
   NodeRuntimeUnavailableError,
   nodeRuntimeUnavailableMessage,
-} from "@t3tools/shared/nodeRuntime";
+} from "@cinderdeck/shared/nodeRuntime";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";

@@ -4,11 +4,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import { Atom, AtomRegistry } from "effect/unstable/reactivity";
 import * as Option from "effect/Option";
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
 import {
   EMPTY_ENVIRONMENT_THREAD_STATE,
   type EnvironmentThreadState,
-} from "@t3tools/client-runtime/state/threads";
+} from "@cinderdeck/client-runtime/state/threads";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 import { makeThreadFixture, makeThreadProjectionFixture } from "../test-fixtures";
 import type { Thread } from "../types";
