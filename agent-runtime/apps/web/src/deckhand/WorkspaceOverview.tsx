@@ -11,11 +11,16 @@ import {
   XIcon,
   ChevronRightIcon,
   MessagesSquareIcon,
+  PanelRightCloseIcon,
+  PanelRightOpenIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as Option from "effect/Option";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import { useLocalStorage } from "../hooks/useLocalStorage";
+import { WorkspaceInspector } from "./WorkspaceInspector";
 import { runtime } from "../lib/runtime";
 import { WorkspaceContextViews } from "./WorkspaceContextViews";
 import { AsyncResult } from "effect/unstable/reactivity";
@@ -136,6 +141,11 @@ function ConnectedWorkspace({
   const navigate = useNavigate();
   const agentMode = search.tab === "agents";
   const mapMode = search.tab === "lane-map";
+  const [inspectorOpen, setInspectorOpen] = useLocalStorage(
+    "deckhand:workspace-inspector-open",
+    true,
+    Schema.Boolean,
+  );
   const contextMode =
     search.tab === "tasks" ||
     search.tab === "workflows" ||
@@ -577,7 +587,7 @@ function ConnectedWorkspace({
   };
   return (
     <div
-      className={`${native.workspace} ${styles["dh-shell"]} ${agentMode || contextMode ? styles["dh-shell-agents"] : ""}`}
+      className={`${native.workspace} ${styles["dh-shell"]} ${agentMode || contextMode || !inspectorOpen ? styles["dh-shell-agents"] : ""}`}
     >
       <ProductNavigation
         current={
@@ -765,6 +775,19 @@ function ConnectedWorkspace({
           >
             <RefreshCwIcon size={16} />
           </button>
+          {!agentMode && !contextMode ? (
+            <button
+              type="button"
+              className={styles["dh-button"]}
+              aria-label={inspectorOpen ? "Collapse selected context" : "Open selected context"}
+              aria-expanded={inspectorOpen}
+              aria-controls="dh-selected-context"
+              onClick={() => setInspectorOpen(!inspectorOpen)}
+            >
+              {inspectorOpen ? <PanelRightCloseIcon size={16} /> : <PanelRightOpenIcon size={16} />}
+              Selected context
+            </button>
+          ) : null}
         </div>
         {!agentMode && !contextMode ? (
           <WorkspaceFilters
@@ -1174,7 +1197,7 @@ function ConnectedWorkspace({
         ) : null}
       </main>
       {!agentMode && !contextMode ? (
-        <aside className={styles["dh-inspector"]} aria-label="Selected context">
+        <WorkspaceInspector open={inspectorOpen}>
           <span className={styles["dh-eyebrow"]}>Selected context</span>
           <h2>
             {selected?.workspace?.lane?.name ??
@@ -1329,7 +1352,7 @@ function ConnectedWorkspace({
             <i />
             <span>{connectionLabel}</span>
           </div>
-        </aside>
+        </WorkspaceInspector>
       ) : null}
     </div>
   );

@@ -5,7 +5,7 @@
   --dh-line: color-mix(in srgb, var(--foreground) 12%, transparent);
   --dh-muted: var(--muted-foreground);
   display: grid;
-  grid-template-columns: var(--deck-rail-width) minmax(0, 1fr) 280px;
+  grid-template-columns: var(--deck-rail-width) minmax(0, 1fr) auto;
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
@@ -351,7 +351,35 @@
 .dh-page-footer span {
   margin-right: auto;
 }
+.dh-inspector-panel {
+  position: relative;
+  min-height: 0;
+}
+.dh-inspector-panel[hidden] {
+  display: none;
+}
+.dh-inspector-resize {
+  position: absolute;
+  inset: 0 auto 0 -4px;
+  width: 8px;
+  z-index: 2;
+  cursor: col-resize;
+  touch-action: none;
+  -webkit-app-region: no-drag;
+}
+.dh-inspector-resize::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 4px;
+  width: 2px;
+}
+.dh-inspector-resize:hover::after,
+.dh-inspector-resize:active::after,
+.dh-inspector-resize:focus-visible::after {
+  background: var(--dh-accent);
+}
 .dh-inspector {
+  height: 100%;
   border-left: 1px solid var(--dh-line);
   padding: 31px 20px 20px;
   min-width: 0;
@@ -467,12 +495,6 @@
   gap: 6px;
 }
 @media (max-width: 1100px) {
-  .dh-shell {
-    grid-template-columns: var(--deck-rail-width) minmax(0, 1fr) 240px;
-  }
-  .dh-shell-agents {
-    grid-template-columns: var(--deck-rail-width) minmax(0, 1fr);
-  }
   .dh-lane-row {
     grid-template-columns: 1.4fr 1fr;
   }
@@ -493,8 +515,15 @@
     overflow: visible;
     min-height: auto;
   }
-  .dh-inspector {
+  .dh-inspector-panel {
     grid-column: 2;
+    width: auto !important;
+  }
+  .dh-inspector-resize {
+    display: none;
+  }
+  .dh-inspector {
+    height: auto;
     border-left: 0;
     border-top: 1px solid var(--dh-line);
   }

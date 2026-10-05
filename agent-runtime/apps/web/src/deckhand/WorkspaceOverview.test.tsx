@@ -173,7 +173,7 @@ const view: IntegrationView = {
       "operations.services",
       "operations.lane.create",
       "operations.lane.create.repositoryRefs",
-            "operations.receipts.wait",
+      "operations.receipts.wait",
     ],
     maximumFrameBytes: 4194304,
     maximumPageSize: 100,
@@ -232,6 +232,7 @@ const changeSelect = async (name: string, value: string) => {
   });
 };
 beforeEach(() => {
+  window.localStorage.clear();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.clearAllMocks();
   boundary.search = {};
@@ -254,6 +255,29 @@ afterEach(async () => {
   container.remove();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+it("keeps the inspector collapsed across context changes and restores the current selection", async () => {
+  boundary.search = { workspace: "primary", context: "primary" };
+  await render();
+  const panel = () => container.querySelector<HTMLElement>("#dh-selected-context")!;
+  const toggle = () =>
+    container.querySelector<HTMLButtonElement>("button[aria-controls='dh-selected-context']")!;
+  expect(panel().hidden).toBe(false);
+  await act(async () => toggle().click());
+  expect(panel().hidden).toBe(true);
+  expect(toggle().getAttribute("aria-expanded")).toBe("false");
+  boundary.search = { workspace: "primary", context: "lane" };
+  await render();
+  expect(panel().hidden).toBe(true);
+  await act(async () => toggle().click());
+  expect(panel().hidden).toBe(false);
+  expect(panel().querySelector("h2")?.textContent).toBe("Retry lane");
+  await act(async () => toggle().click());
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await render();
+  expect(panel().hidden).toBe(true);
 });
 
 it("shows the selected workspace page count instead of unrelated catalog contexts", async () => {

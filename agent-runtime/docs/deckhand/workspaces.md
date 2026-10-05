@@ -14,6 +14,8 @@ Native lane lifecycle API clients submit `lane.create`, `lane.adopt`, `lane.setu
 
 The overview can filter the loaded contexts by search, activity, lifecycle and provider, and sort them by name or observed activity. The selected context stays in the inspector when its row is filtered out. Load another page to inspect its contexts; agent details that are unavailable keep a context visible rather than presenting an unverified match as empty.
 
+Use **Selected context** beside Refresh to collapse or reopen the inspector. Drag its left edge to resize it, or focus the divider and use the left/right arrow keys (Shift for larger steps). Home and End select the smallest and largest widths; double-click resets the width. Cinderdeck remembers the width and visibility across workspace and lane changes. Narrow windows show the inspector below the overview, with resizing available when it returns to the side.
+
 For a named lane, **Run setup** reports the actual setup result. **Remove lane** first reviews the affected worktrees and defaults to keeping their files. Deleting eligible managed worktrees and discarding ignored or changed copied files require separate choices. Cinderdeck checks active work, shared ownership and source changes before accepting removal. Check a saved request after a lost reply; its original lane and operation identity remain available across navigation.
 
 The selected context’s **Pull requests** tab includes saved conversation links across its repositories and older contributors. Choose a PR to open the existing review and verification view, then return to the same workspace or Agents context. A replaced installation or lane generation keeps its saved identity visible and requires selecting a current context before inspection.
