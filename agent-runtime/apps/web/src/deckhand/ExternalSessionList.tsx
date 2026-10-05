@@ -8,6 +8,7 @@ import { connectionAtomRuntime } from "../connection/runtime";
 import { useAgentObservation } from "./useAgentObservation";
 import { agentExecutionLabel } from "./agentPresentation";
 import styles from "./workspace.module.css";
+import sessionsStyles from "./sessions.module.css";
 export const externalSessionsView = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
   label: "deckhand:external-sessions",
   tag: EXTERNAL_SESSION_METHODS.list,
@@ -22,6 +23,7 @@ export function ExternalSessionList(props: {
   installationID: string;
   workspaceID: string;
   generation: number;
+  presentation?: "default" | "workspace";
 }) {
   return (
     <ScopedExternalSessionList
@@ -35,11 +37,13 @@ function ScopedExternalSessionList({
   installationID,
   workspaceID,
   generation,
+  presentation = "default",
 }: {
   environmentId: EnvironmentId;
   installationID: string;
   workspaceID: string;
   generation: number;
+  presentation?: "default" | "workspace";
 }) {
   const result = useAtomValue(
     externalSessionsView({
@@ -55,11 +59,15 @@ function ScopedExternalSessionList({
     sessions,
   );
   return (
-    <section className={styles["dh-session-list"]} aria-label="Reported external sessions">
+    <section
+      className={`${styles["dh-session-list"]} ${presentation === "workspace" ? sessionsStyles.workspaceExternal : ""}`}
+      aria-label="Reported external sessions"
+    >
       <h3>External sessions</h3>
       <p>
-        Agents registered by other apps appear here. Their status comes from that app; open it to
-        control them.
+        {presentation === "workspace"
+          ? "Sessions reported by other apps. Manage them in their original app."
+          : "Agents registered by other apps appear here. Their status comes from that app; open it to control them."}
       </p>
       {unavailable ? (
         <p role="status">
@@ -73,7 +81,11 @@ function ScopedExternalSessionList({
       ) : sessions === null ? (
         <p>Loading external sessions…</p>
       ) : !sessions.length ? (
-        <p>No registered external sessions in this context.</p>
+        <p>
+          {presentation === "workspace"
+            ? "No external sessions reported."
+            : "No registered external sessions in this context."}
+        </p>
       ) : null}
       {sessions?.map((session) => (
         <article key={session.id} className={styles["dh-session-row"]}>

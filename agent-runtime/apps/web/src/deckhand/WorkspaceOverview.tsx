@@ -10,6 +10,7 @@ import {
   ActivityIcon,
   XIcon,
   ChevronRightIcon,
+  MessagesSquareIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as Option from "effect/Option";
@@ -62,6 +63,7 @@ import type { RecordingContextOverview } from "@t3tools/contracts/deckhand/recor
 import { recordingOverview } from "./recordingState";
 import { RecordingThumbnail } from "./RecordingThumbnail";
 import styles from "./workspace.module.css";
+import agents from "./workspaceAgents.module.css";
 import native from "./nativeWorkspace.module.css";
 import { WorkspaceSections } from "./WorkspaceSections";
 
@@ -1003,26 +1005,32 @@ function ConnectedWorkspace({
             cameraKey={activeBase?.workspaceID ?? "catalog"}
           />
         ) : agentMode ? (
-          <section className={styles["dh-agent-panel"]} aria-label="Agents in selected context">
-            <header>
-              <div>
-                <span className={styles["dh-eyebrow"]}>Agents in</span>
-                <h2>{selected ? selectedName : "Choose a context"}</h2>
-                <p>
-                  Each session keeps its provider, task and checkout. Helper tasks stay inside their
-                  parent conversation.
-                </p>
+          <section className={agents.panel} aria-label="Agents in selected context">
+            <header className={agents.heading}>
+              <span className={agents.icon}>
+                <MessagesSquareIcon size={22} aria-hidden />
+              </span>
+              <div className={agents.title}>
+                <h2>Agents</h2>
+                <p>Conversations and ongoing work in this checkout.</p>
               </div>
+              <span className={agents.context}>
+                <GitBranchIcon size={13} aria-hidden />
+                {selected ? selectedName : "Choose a context"}
+              </span>
             </header>
             {selected && view?.hello ? (
               <>
-                <SessionLauncher
-                  key={`add:${environmentId}:${view.hello.installationID}:${selected.workspaceID}:${selected.generation}`}
-                  environmentId={environmentId}
-                  installationID={view.hello.installationID}
-                  resource={selected}
-                  enabled={enabled && actionable(selected)}
-                />
+                <div className={agents.launchArea}>
+                  <SessionLauncher
+                    key={`add:${environmentId}:${view.hello.installationID}:${selected.workspaceID}:${selected.generation}`}
+                    environmentId={environmentId}
+                    installationID={view.hello.installationID}
+                    resource={selected}
+                    enabled={enabled && actionable(selected)}
+                    compact
+                  />
+                </div>
                 <SessionList
                   environmentId={environmentId}
                   installationID={view.hello.installationID}
@@ -1030,10 +1038,15 @@ function ConnectedWorkspace({
                   generation={selected.generation}
                   providers={providers}
                   contextLabel={selected.workspace?.lane?.name ?? "Primary checkout"}
+                  presentation="workspace"
                 />
               </>
             ) : (
-              <p>Select an available workspace and checkout to see its agents.</p>
+              <div className={agents.empty}>
+                <MessagesSquareIcon size={28} aria-hidden />
+                <h3>Choose a checkout</h3>
+                <p>Select an available workspace and checkout to see its agents.</p>
+              </div>
             )}
           </section>
         ) : (

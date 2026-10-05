@@ -1,5 +1,6 @@
 import { ExternalSessionList } from "./ExternalSessionList";
 import { useState } from "react";
+import { BotIcon, ChevronRightIcon, MessagesSquareIcon, SearchIcon } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import { ThreadId, type EnvironmentId } from "@t3tools/contracts";
@@ -35,6 +36,7 @@ type SessionListProps = {
   selectedThreadId?: string;
   showExternal?: boolean;
   compact?: boolean;
+  presentation?: "default" | "workspace";
 };
 export function SessionList(props: SessionListProps) {
   return (
@@ -54,7 +56,9 @@ function ScopedSessionList({
   selectedThreadId,
   showExternal = true,
   compact = false,
+  presentation = "default",
 }: SessionListProps) {
+  const workspacePresentation = presentation === "workspace" && !compact;
   const { showMenu, renameDialog } = useSessionActions(environmentId);
   const [page, setPage] = useState<{ offset: number; previousIDs: ReadonlyArray<string> }>({
     offset: 0,
@@ -178,6 +182,14 @@ function ScopedSessionList({
       })}
       aria-current={selectedThreadId === session.binding.threadId ? "page" : undefined}
       className={styles.session}
+      data-tone={
+        rowStale ||
+        rowUnavailable ||
+        session.source === "unavailable" ||
+        session.binding.connection !== "connected"
+          ? "other"
+          : groupFor(session)
+      }
       onContextMenu={(event) => {
         event.preventDefault();
         void showMenu(
@@ -193,6 +205,11 @@ function ScopedSessionList({
         void showMenu(session, { x: bounds.left, y: bounds.bottom }, !rowStale && !rowUnavailable);
       }}
     >
+      {workspacePresentation ? (
+        <span className={styles.sessionIcon}>
+          <BotIcon size={19} aria-hidden />
+        </span>
+      ) : null}
       <div className={styles.sessionIdentity}>
         <span className={styles.provider}>
           {agentProviderLabel(session.binding.providerInstanceId, providers)}
@@ -218,6 +235,9 @@ function ScopedSessionList({
             ? "Unknown · Agent not connected"
             : `${session.binding.connection === "stale" ? "Last observed" : agentExecutionLabel(session.binding.execution)} · ${connectionLabels[session.binding.connection]}`}
       </span>
+      {workspacePresentation ? (
+        <ChevronRightIcon className={styles.rowArrow} size={16} aria-hidden />
+      ) : null}
     </Link>
   );
   const selectedOutsideFilters =
@@ -233,9 +253,14 @@ function ScopedSessionList({
       <div className={styles.filters}>
         <label className={styles.search}>
           <span className={styles.srOnly}>Search sessions on this page</span>
+          {workspacePresentation ? <SearchIcon size={15} aria-hidden /> : null}
           <input
             type="search"
-            placeholder="Find a session on this page…"
+            placeholder={
+              workspacePresentation
+                ? "Search conversations on this page…"
+                : "Find a session on this page…"
+            }
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -280,7 +305,9 @@ function ScopedSessionList({
         ) : null}
       </div>
       <p className={styles.scopeNote}>
-        Filters apply to this fetched page. Helpers stay in their parent conversation.
+        {workspacePresentation
+          ? "Search and filters apply to this page. Helpers stay in their parent conversation."
+          : "Filters apply to this fetched page. Helpers stay in their parent conversation."}
       </p>
     </>
   );
@@ -288,13 +315,15 @@ function ScopedSessionList({
     <>
       {renameDialog}
       <section
-        className={compact ? `${styles.roster} ${styles.compact}` : styles.roster}
+        className={`${styles.roster} ${compact ? styles.compact : workspacePresentation ? styles.workspaceRoster : ""}`}
         aria-label="Managed agent sessions"
       >
         <header className={styles.rosterHeading}>
           <div>
-            <h3>Sessions</h3>
-            {!compact ? <p>{contextLabel} · independent conversations</p> : null}
+            <h3>{workspacePresentation ? "Conversations" : "Sessions"}</h3>
+            {!compact && !workspacePresentation ? (
+              <p>{contextLabel} · independent conversations</p>
+            ) : null}
           </div>
           {sessions ? (
             <span className={styles.count}>
@@ -323,11 +352,19 @@ function ScopedSessionList({
         ) : !sessions ? (
           <p className={styles.empty}>Loading sessions…</p>
         ) : !sessions.length ? (
-          <p className={styles.empty}>
-            {page.offset
-              ? "No older sessions on this page. Return to the previous page."
-              : "No managed sessions in this context yet."}
-          </p>
+          <div className={styles.empty}>
+            {workspacePresentation ? <MessagesSquareIcon size={28} aria-hidden /> : null}
+            {workspacePresentation && !page.offset ? (
+              <h4>Your next conversation starts here</h4>
+            ) : null}
+            <p>
+              {page.offset
+                ? "No older sessions on this page. Return to the previous page."
+                : workspacePresentation
+                  ? "No conversations in this checkout yet. Open a new chat to get started."
+                  : "No managed sessions in this context yet."}
+            </p>
+          </div>
         ) : null}
         {sessions?.length && !filtered.length ? (
           <p className={styles.empty}>
@@ -421,6 +458,7 @@ function ScopedSessionList({
           installationID={installationID}
           workspaceID={workspaceID}
           generation={generation}
+          presentation={presentation}
         />
       ) : null}
     </>

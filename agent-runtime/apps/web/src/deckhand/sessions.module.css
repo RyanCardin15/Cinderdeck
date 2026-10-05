@@ -461,3 +461,233 @@
 .chatReview code {
   overflow-wrap: anywhere;
 }
+
+/* Full workspace roster. The compact conversation inspector keeps its own density. */
+.workspaceRoster {
+  container-type: inline-size;
+  --session-line: var(--border);
+  gap: 18px;
+}
+.workspaceRoster .rosterHeading h3 {
+  font-size: 14px;
+  letter-spacing: -0.15px;
+}
+.workspaceRoster .count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.workspaceRoster .filters {
+  gap: 8px;
+  align-items: center;
+}
+.workspaceRoster .filters label {
+  min-width: 0;
+}
+.workspaceRoster .filters label > span:not(.srOnly) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.workspaceRoster .filters input,
+.workspaceRoster .filters select {
+  min-height: 34px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  background: var(--card);
+  font-size: 11px;
+}
+.workspaceRoster .search {
+  position: relative;
+  flex-basis: 220px;
+}
+.workspaceRoster .search svg {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.workspaceRoster .search input {
+  padding-left: 34px;
+}
+.workspaceRoster > .scopeNote {
+  font-size: 11px;
+  margin-top: -9px;
+}
+.workspaceRoster .group {
+  gap: 0;
+}
+.workspaceRoster .group h4 {
+  gap: 7px;
+  margin: 0 0 8px;
+  color: var(--foreground);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.workspaceRoster .group h4 span {
+  border: 0;
+  border-radius: 5px;
+  background: var(--muted);
+  font-size: 10px;
+  padding: 2px 6px;
+  font-variant-numeric: tabular-nums;
+}
+.workspaceRoster .session {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) minmax(100px, 210px) 16px;
+  gap: 12px;
+  padding: 15px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--session-line);
+  border-radius: 0;
+  background: transparent;
+}
+.workspaceRoster .session:last-child {
+  border-bottom-color: transparent;
+}
+.workspaceRoster .session:hover,
+.workspaceRoster .session[aria-current="page"] {
+  background: var(--muted);
+  border-radius: 8px;
+}
+.sessionIcon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--session-line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--muted-foreground);
+}
+.workspaceRoster .sessionIdentity {
+  gap: 3px;
+}
+.workspaceRoster .sessionIdentity strong {
+  order: -1;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.15px;
+  line-height: 1.5;
+}
+.workspaceRoster .provider {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.workspaceRoster .sessionScope {
+  font-size: 11px;
+}
+.workspaceRoster .sessionStatus {
+  justify-self: end;
+  font-size: 11px;
+  line-height: 1.6;
+  text-wrap: balance;
+}
+.workspaceRoster .sessionStatus::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  margin-bottom: 1px;
+  border-radius: 50%;
+  background: var(--muted-foreground);
+}
+.workspaceRoster .session[data-tone="active"] .sessionStatus::before {
+  background: var(--deck-success, var(--primary));
+}
+.workspaceRoster .session[data-tone="attention"] .sessionStatus::before {
+  background: var(--deck-warning, var(--primary));
+}
+.rowArrow {
+  color: var(--muted-foreground);
+  opacity: 0.4;
+}
+.session:hover .rowArrow {
+  opacity: 1;
+}
+.workspaceRoster .empty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 44px 20px;
+  margin: 0;
+  border: 1px solid var(--session-line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--muted) 50%, var(--card));
+}
+.workspaceRoster .empty h4 {
+  margin: 2px 0 0;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+}
+.workspaceRoster .empty p {
+  margin: 0;
+  max-width: 42ch;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.workspaceExternal {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.workspaceExternal h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.workspaceExternal[class] p,
+.workspaceExternal[class] article span {
+  font-size: 11px;
+  line-height: 1.7;
+}
+.workspaceExternal p {
+  margin: 6px 0;
+}
+.workspaceExternal article {
+  padding: 14px;
+  margin: 12px 0 0;
+  background: var(--muted);
+  border-color: transparent;
+  border-radius: 8px;
+}
+.workspaceExternal article strong {
+  font-size: 12px;
+}
+.workspaceExternal summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+@container (max-width: 580px) {
+  .workspaceRoster .filters label:not(.search) {
+    flex: 1 1 140px;
+  }
+  .workspaceRoster .search {
+    flex-basis: 100%;
+  }
+  .workspaceRoster .session {
+    grid-template-columns: 32px minmax(0, 1fr) 16px;
+    gap: 6px 10px;
+  }
+  .workspaceRoster .sessionIcon {
+    width: 32px;
+    height: 32px;
+  }
+  .workspaceRoster .sessionStatus {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+    text-align: left;
+    max-width: none;
+  }
+  .workspaceRoster .rowArrow {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}

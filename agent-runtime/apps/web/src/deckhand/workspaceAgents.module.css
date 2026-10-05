@@ -1,0 +1,115 @@
+.panel {
+  min-width: 0;
+  max-width: 1120px;
+  margin-inline: auto;
+  padding: 26px 28px 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 2%);
+}
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+}
+.icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  height: 44px;
+  border-radius: 12px;
+  color: var(--primary);
+  background: var(--accent);
+}
+.title {
+  flex: 1;
+  min-width: 0;
+}
+.title h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.6px;
+  line-height: 1.3;
+}
+.title p {
+  margin: 5px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.context {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 42%;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow-wrap: anywhere;
+}
+.context svg {
+  flex: none;
+}
+.launchArea {
+  margin-block: 20px 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.launchArea > section {
+  padding-block: 0;
+  margin-bottom: 0;
+}
+.launchArea button,
+.launchArea select {
+  min-height: 34px;
+  font-size: 12px;
+  border-radius: 7px;
+}
+.launchArea button {
+  padding: 7px 12px;
+}
+.empty {
+  display: grid;
+  justify-items: center;
+  padding: 56px 16px 40px;
+  text-align: center;
+  color: var(--muted-foreground);
+}
+.empty h3 {
+  margin: 14px 0 6px;
+  color: var(--foreground);
+  font-size: 15px;
+  font-weight: 600;
+}
+.empty p {
+  margin: 0;
+  max-width: 38ch;
+  font-size: 12px;
+  line-height: 1.7;
+}
+@media (max-width: 800px) {
+  .panel {
+    padding: 20px;
+  }
+  .heading {
+    flex-wrap: wrap;
+  }
+  .context {
+    max-width: 100%;
+    margin-left: 57px;
+  }
+}
+@media (max-width: 500px) {
+  .panel {
+    padding: 18px 14px;
+  }
+  .title p {
+    max-width: 28ch;
+  }
+}

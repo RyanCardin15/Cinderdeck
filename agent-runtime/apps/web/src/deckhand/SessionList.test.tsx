@@ -110,7 +110,7 @@ const target = (generation: number, offset = 0) => ({
 });
 const resultAtom = (generation = 3, offset = 0) =>
   queries.get(JSON.stringify(target(generation, offset)))!;
-const render = async (generation = 3) =>
+const render = async (generation = 3, presentation: "default" | "workspace" = "default") =>
   act(async () => {
     root.render(
       <RegistryContext.Provider value={registry}>
@@ -119,6 +119,7 @@ const render = async (generation = 3) =>
           installationID="installation"
           workspaceID="lane"
           generation={generation}
+          presentation={presentation}
           providers={[{ instanceId: "codex", displayName: "Configured Codex" }]}
         />
       </RegistryContext.Provider>,
@@ -233,24 +234,27 @@ afterEach(async () => {
   element.remove();
   vi.unstubAllGlobals();
 });
-it("retains conversation navigation but requires a fresh session value after transport recovery", async () => {
-  await render();
-  await act(async () => registry.set(resultAtom(), AsyncResult.success([session])));
-  expect(element.textContent).toContain("Working · Agent connected");
-  expect(element.textContent).toContain("Configured Codex");
-  transport.phase = "reconnecting";
-  await render();
-  expect(element.textContent).toContain("Current review");
-  expect(element.textContent).toContain("Last observed · Agent not connected");
-  expect(element.textContent).not.toContain("Working · Agent connected");
-  expect(element.querySelector("a")).not.toBeNull();
-  transport.phase = "connected";
-  await render();
-  expect(element.textContent).not.toContain("Working · Agent connected");
-  await act(async () => registry.set(resultAtom(), AsyncResult.success([{ ...session }])));
-  expect(element.textContent).toContain("Working · Agent connected");
-  expect(element.textContent).not.toContain("Last observed");
-});
+it.each(["default", "workspace"] as const)(
+  "%s roster retains navigation but requires a fresh session value after transport recovery",
+  async (presentation) => {
+    await render(3, presentation);
+    await act(async () => registry.set(resultAtom(), AsyncResult.success([session])));
+    expect(element.textContent).toContain("Working · Agent connected");
+    expect(element.textContent).toContain("Configured Codex");
+    transport.phase = "reconnecting";
+    await render(3, presentation);
+    expect(element.textContent).toContain("Current review");
+    expect(element.textContent).toContain("Last observed · Agent not connected");
+    expect(element.textContent).not.toContain("Working · Agent connected");
+    expect(element.querySelector("a")).not.toBeNull();
+    transport.phase = "connected";
+    await render(3, presentation);
+    expect(element.textContent).not.toContain("Working · Agent connected");
+    await act(async () => registry.set(resultAtom(), AsyncResult.success([{ ...session }])));
+    expect(element.textContent).toContain("Working · Agent connected");
+    expect(element.textContent).not.toContain("Last observed");
+  },
+);
 it("clears a departed generation and cannot show its late session response", async () => {
   await render();
   await act(async () => registry.set(resultAtom(), AsyncResult.success([session])));
