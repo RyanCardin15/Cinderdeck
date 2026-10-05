@@ -941,8 +941,7 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
             const existingBrowser = current.surfaces.filter(
               (surface): surface is Extract<RightPanelSurface, { kind: "preview" }> =>
                 surface.kind === "preview" &&
-                surface.id !== "browser:new" &&
-                validIds.has(surface.id),
+                (surface.id === "browser:new" || validIds.has(surface.id)),
             );
             const knownIds = new Set(existingBrowser.map((surface) => surface.id));
             const added = tabIds

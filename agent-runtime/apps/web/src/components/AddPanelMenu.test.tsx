@@ -86,3 +86,14 @@ it("keeps unavailable Git actions disabled for both clicks and letter shortcuts"
   });
   expect(input.onAddDiff).not.toHaveBeenCalled();
 });
+
+it("dismisses the launcher before mounting another panel", async () => {
+  const input = props();
+  let launcherStillOpen: boolean | undefined;
+  input.onAddExternalApp = () => {
+    launcherStillOpen = document.querySelector('[role="menu"]') !== null;
+  };
+  await openMenu(input);
+  await act(async () => item("External app").click());
+  expect(launcherStillOpen).toBe(false);
+});
