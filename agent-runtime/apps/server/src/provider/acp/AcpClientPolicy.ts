@@ -20,6 +20,8 @@ export interface AcpRuntimePolicy {
   readonly cwd: string | null;
   readonly approvalPolicy?: unknown;
   readonly sandboxPolicy?: unknown;
+  readonly workspaceFolders?: ReadonlyArray<string> | undefined;
+  readonly workspaceFiles?: ReadonlyArray<string> | undefined;
 }
 
 export type AcpPermissionDisposition = "allow" | "ask" | "deny";
@@ -142,7 +144,11 @@ function acpWorkspaceWriteAllowsMutation(
     const canonicalCwd = acpCanonicalPathForContainment(cwd);
     if (canonicalCwd !== undefined) roots.push(canonicalCwd);
   }
-  const writableRoots = sandboxPolicy.writableRoots;
+  const writableRoots = [
+    ...(Array.isArray(sandboxPolicy.writableRoots) ? sandboxPolicy.writableRoots : []),
+    ...(runtimePolicy.workspaceFolders ?? []),
+    ...(runtimePolicy.workspaceFiles ?? []),
+  ];
   if (Array.isArray(writableRoots)) {
     for (const writableRoot of writableRoots) {
       if (typeof writableRoot !== "string") continue;

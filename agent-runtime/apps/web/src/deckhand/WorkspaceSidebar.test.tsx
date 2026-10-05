@@ -46,7 +46,12 @@ vi.mock("./state", () => ({
     return scopedAtoms.get(input.selectedWorkspaceID ?? "") ?? native;
   },
 }));
+vi.mock("../state/environments", () => ({
+  useEnvironments: () => ({ environments: [{ environmentId: "computer" }] }),
+  usePrimaryEnvironmentId: () => "computer",
+}));
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
+import { ProductWorkspaces } from "./ProductWorkspaces";
 type Resource = IntegrationView["resources"][number];
 const resource = (id: string, source?: string): Resource => ({
   workspaceID: id,
@@ -329,4 +334,37 @@ it("saves workspace and lane moves through the keyboard drag handles", async () 
   await press(laneDrag, "Space");
   expect(readSidebarPreferences(key).order["lanes:alpha"]).toEqual(["lane-b", "lane-a"]);
   expect(boundary.navigate).not.toHaveBeenCalled();
+});
+
+it("offers the native workspace tree on app-wide views with exact checkout pins", async () => {
+  await act(async () =>
+    root.render(
+      <RegistryContext.Provider value={registry}>
+        <ProductWorkspaces search={{ environment: "computer" }} />
+      </RegistryContext.Provider>,
+    ),
+  );
+  expect(workspaceIDs()).toEqual(["alpha", "beta"]);
+  const link = [...container.querySelectorAll("a")].find((item) => item.textContent === "beta")!;
+  await act(async () => link.click());
+  expect(boundary.navigate).toHaveBeenLastCalledWith({
+    environment: "computer",
+    workspace: "beta",
+    context: "beta",
+    tab: "services",
+    expectedInstallationID: "install",
+    expectedGeneration: 3,
+  });
+});
+
+it("does not substitute the local catalog for an unavailable remote computer", async () => {
+  await act(async () =>
+    root.render(
+      <RegistryContext.Provider value={registry}>
+        <ProductWorkspaces search={{ environment: "missing" }} />
+      </RegistryContext.Provider>,
+    ),
+  );
+  expect(container.textContent).toContain("Computer unavailable");
+  expect(workspaceIDs()).toEqual([]);
 });

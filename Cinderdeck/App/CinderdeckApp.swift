@@ -159,7 +159,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
     guard didFinishLaunching else { return true }
     if AgentShellController.shared.configured {
-      WorkspaceWindowController.shared.show()
+      if AgentShellController.shared.running {
+        AgentShellController.shared.activateOwnedWindow()
+      } else {
+        WorkspaceWindowController.shared.show()
+      }
       return false
     }
     let showsMenuBarIcon = UserDefaults.standard.object(forKey: PreferencesKeys.showMenuBarIcon) as? Bool ?? true

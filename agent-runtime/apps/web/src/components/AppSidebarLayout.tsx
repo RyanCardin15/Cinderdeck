@@ -55,6 +55,7 @@ import {
   useSidebarVisibility,
 } from "./ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { ProductSidebarLayout } from "../deckhand/ProductSidebarLayout";
 import { ProductNavigation } from "../deckhand/ProductNavigation";
 import { ConnectedWorkspaceShell } from "../deckhand/ConnectedWorkspaceShell";
 import { useLaneSessionContext } from "../deckhand/LaneSessionContext";
@@ -222,6 +223,14 @@ function ProjectProjectionRetention() {
 }
 
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
+  return (
+    <ProductSidebarLayout>
+      <AppSidebarLayoutContent>{children}</AppSidebarLayoutContent>
+    </ProductSidebarLayout>
+  );
+}
+
+function AppSidebarLayoutContent({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const legacySidebarEnabled = useLegacySidebarEnabled();
   const { active: panelAnimationsActive, durationMs: panelAnimationDurationMs } =
@@ -231,11 +240,14 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   // Seeds server-side visited tracking from this browser's localStorage the
   useThreadVisitedMigration();
   const pathname = useLocation({ select: (location) => location.pathname });
-  const standalonePullRequests = useLocation({ select: (location) => {
-    if (location.pathname !== "/pull-requests" && location.pathname !== "/pull-requests/") return false;
-    const params = new URLSearchParams(location.searchStr);
-    return !["projectId", "number", "deckhandContext"].some((key) => params.has(key));
-  } });
+  const standalonePullRequests = useLocation({
+    select: (location) => {
+      if (location.pathname !== "/pull-requests" && location.pathname !== "/pull-requests/")
+        return false;
+      const params = new URLSearchParams(location.searchStr);
+      return !["projectId", "number", "deckhandContext"].some((key) => params.has(key));
+    },
+  });
   const panelAnimationsSuppressed = usePanelNavigationSuppression(pathname);
   const routePanelAnimationsActive = panelAnimationsActive && !panelAnimationsSuppressed;
   const connectedThreadRef = useParams({
@@ -349,7 +361,10 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       </PanelAnimationSuppressionProvider>
     );
 
-  if (standalonePullRequests || ["/workspaces", "/inbox", "/services", "/recordings", "/linked-work"].includes(pathname))
+  if (
+    standalonePullRequests ||
+    ["/workspaces", "/inbox", "/services", "/recordings", "/linked-work"].includes(pathname)
+  )
     return (
       <>
         <NativeHostNavigation />

@@ -239,7 +239,11 @@ function RootRouteView() {
           <ProjectCloneToastCoordinator />
           <HostedStaticEnvironmentBootstrap />
           {primaryEnvironmentAuthenticated ? (
-            <EventRouter skipInitialBootstrapNavigation={returningFromWelcomeRef.current} />
+            <EventRouter
+              skipInitialBootstrapNavigation={
+                returningFromWelcomeRef.current || window.desktopBridge?.isNativeHost?.() === true
+              }
+            />
           ) : null}
           {primaryEnvironmentAuthenticated ? <ProviderUpdateLaunchNotification /> : null}
           {appShell}

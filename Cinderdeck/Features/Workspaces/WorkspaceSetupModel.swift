@@ -11,6 +11,7 @@ final class WorkspaceSetupModel: ObservableObject {
   @Published var name = ""
   @Published var folder = "" { didSet { if folder != oldValue { folderChanged() } } }
   @Published var additionalFolders: [WorkspaceFolderSelection] = [] { didSet { if additionalFolders != oldValue { folderChanged() } } }
+  @Published var files: [URL] = [] { didSet { edited() } }
   @Published var repositories: [RepoDefinition] = [] { didSet { if repositories != oldValue { edited() } } }
   @Published var copyEnvironmentFiles = false { didSet { edited() } }
   @Published var setupTask = "" { didSet { edited() } }
@@ -133,7 +134,8 @@ final class WorkspaceSetupModel: ObservableObject {
       do {
         let components = try Self.components(root: proposal.root, commands: commands, repositories: repositories,
           copyEnvironmentFiles: copyEnvironmentFiles, setupTask: setupTask)
-        let file = try WorkspaceDefinitionWriter.createWorkspace(name: name, root: proposal.root.path, components: components)
+        let references = files.isEmpty ? "" : "files = \(WorkspaceDefinitionWriter.array(files.map(\.path)))\n"
+        let file = try WorkspaceDefinitionWriter.createWorkspace(name: name, root: proposal.root.path, components: references + components)
         onSaved(file.deletingPathExtension().lastPathComponent, start)
       } catch { self.error = error.localizedDescription }
     }

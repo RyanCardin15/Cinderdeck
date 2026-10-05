@@ -54,7 +54,7 @@ struct StacksTabView: View {
           Task { await viewModel.supervisor.reloadDefinitions(); viewModel.select(id); if start { await viewModel.supervisor.start(stack: id, actor: .user) } }
         }
       } else {
-        StackDefinitionEditor(file: context.file) {
+        WorkspaceSettingsView(file: context.file!) {
           viewModel.editor = nil
           Task { await viewModel.supervisor.reloadDefinitions() }
         }

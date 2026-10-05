@@ -53,6 +53,7 @@ export function GitHubPullRequests({
     <div className={styles.shell}>
       <ProductNavigation
         current="pull-requests"
+        workspaceSearch={environmentId ? { environment: environmentId } : {}}
         {...(environment
           ? {
               connection: {

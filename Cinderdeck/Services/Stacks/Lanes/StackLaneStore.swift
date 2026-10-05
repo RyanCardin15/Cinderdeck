@@ -165,6 +165,7 @@ nonisolated enum StackLaneStore {
       restartOnBranchChange: source.restartOnBranchChange, environment: source.environment, secrets: source.secrets)
     definition.rawEnvironment = source.rawEnvironment
     definition.laneSettings = source.laneSettings
+    definition.files = source.files.map { remap($0, worktrees: trees) ?? $0 }
     if let settings = source.laneSettings {
       definition.environment.merge(settings.environment) { _, value in value }
       for key in settings.environment.keys { definition.rawEnvironment[key] = settings.rawEnvironment[key] }

@@ -111,6 +111,12 @@ nonisolated struct StackDefinition: Codable, Equatable, Identifiable, Sendable {
   var environment: [String: String] = [:]
   var secrets: [String: String] = [:]
   var repos: [RepoDefinition] = []
+  /// Individual workspace references; selecting a file does not include its parent folder.
+  var fileReferences: [URL]? = nil
+  var files: [URL] {
+    get { fileReferences ?? [] }
+    set { fileReferences = newValue.isEmpty ? nil : newValue }
+  }
   var services: [ServiceDefinition] = []
   var tasks: [WorkspaceTaskDefinition] = []
   var workflows: [WorkspaceWorkflowDefinition] = []

@@ -3,6 +3,7 @@ import type { ThreadId } from "@cinderdeck/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as FileSystem from "effect/FileSystem";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as CheckoutIdentity from "./CheckoutIdentity.ts";
@@ -10,6 +11,7 @@ import * as IntegrationHub from "./IntegrationHub.ts";
 import * as Relationships from "./Relationships.ts";
 import * as CurrentCheckout from "./CurrentCheckout.ts";
 import * as Migrations from "./Migrations.ts";
+import { resolveWorkspaceFolder } from "./WorkspaceFolderIdentity.ts";
 
 export class ManagedCheckoutError extends Schema.TaggedError<ManagedCheckoutError>()(
   "ManagedCheckoutError",
@@ -34,6 +36,8 @@ export interface ManagedContext {
   readonly cwd: string;
   readonly physicalId: string;
   readonly access?: "read_only" | "write";
+  readonly folders?: ReadonlyArray<string>;
+  readonly files?: ReadonlyArray<string>;
 }
 const decodeSession = Schema.decodeEffect(Schema.fromJsonString(Contracts.SessionBinding));
 const isCheckoutError = Schema.is(ManagedCheckoutError);
@@ -51,6 +55,9 @@ const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   yield* Migrations.migrate;
   const identity = yield* CheckoutIdentity.CheckoutIdentity;
+  const fs = yield* FileSystem.FileSystem;
+  const resolveFolder = (path: string) =>
+    resolveWorkspaceFolder(identity, path).pipe(Effect.provideService(FileSystem.FileSystem, fs));
   const relationships = yield* Relationships.Relationships;
   const ownershipDependencies = yield* Effect.context<
     SqlClient.SqlClient | Relationships.Relationships
@@ -87,7 +94,9 @@ const make = Effect.gen(function* () {
         if (binding !== null) return yield* fail("missing");
         return null;
       }
-      const checkout = yield* identity.resolve(cwd).pipe(Effect.result);
+      const checkout = yield* (binding === null ? identity.resolve(cwd) : resolveFolder(cwd)).pipe(
+        Effect.result,
+      );
       if (checkout._tag === "Failure") {
         if (binding !== null) return yield* fail("missing");
         if (checkout.failure.operation !== "not_git") return yield* fail("unavailable");
@@ -129,9 +138,11 @@ const make = Effect.gen(function* () {
         binding.repositoryScope?.includes(repo.physicalId),
       );
       if (wanted.length !== binding.repositoryScope.length) return yield* fail("stale_binding");
-      const physical = yield* Effect.forEach(wanted, (repo) => identity.resolve(repo.root));
+      const physical = yield* Effect.forEach(wanted, (repo) => resolveFolder(repo.root));
       if (physical.some((repo, index) => repo.physicalId !== wanted[index]?.physicalId))
         return yield* fail("wrong_checkout");
+      let folders: ReadonlyArray<string> | undefined;
+      let files: ReadonlyArray<string> | undefined;
       if (target.backend === "cinderdeck") {
         if (target.nativeGeneration === undefined) return yield* fail("stale_binding");
         const native = yield* hub
@@ -152,15 +163,25 @@ const make = Effect.gen(function* () {
         )
           return yield* fail("stale_binding");
         const actual = yield* Effect.forEach(native.resource.workspace?.repos ?? [], (repo) =>
-          identity.resolve(repo.path),
+          resolveFolder(repo.path),
         );
         if (physical.some((repo) => !actual.some((item) => item.physicalId === repo.physicalId)))
           return yield* fail("wrong_checkout");
+        // Membership comes from the live native definition, including shared folders in lanes.
+        folders = [
+          ...new Set([
+            ...(native.resource.workspace?.root ? [native.resource.workspace.root] : []),
+            ...(native.resource.workspace?.repos.map((repo) => repo.path) ?? []),
+          ]),
+        ];
+        files = native.resource.workspace?.files ?? [];
       }
       return {
         cwd: checkout.success.root,
         physicalId: checkout.success.physicalId,
         access: readOnly ? ("read_only" as const) : ("write" as const),
+        ...(folders === undefined ? {} : { folders }),
+        ...(files === undefined ? {} : { files }),
       };
     }).pipe(Effect.mapError(storage(threadId)));
   return ManagedCheckoutGuard.of({ connected, resolve });

@@ -19,7 +19,9 @@ final class AgentShellWorkspaceTools: NSWindowController, NSWindowDelegate {
     window.setFrameAutosaveName("CinderdeckNativeWorkspaceTools")
     // Keep the complete existing sheet/inspector wiring, including setup discovery,
     // task/workflow editors, lane management, logs, and the operational execution map.
-    window.contentView = NSHostingView(rootView: WorkspaceView(model: model, runner: .shared))
+    window.contentView = NSHostingView(rootView: WorkspaceView(model: model, runner: .shared,
+      onOpenInCinderdeck: { [weak self] in self?.close() },
+      onToolSheetDismiss: { [weak self] in self?.finishPresentedSheet() }))
     window.center()
   }
 
@@ -96,6 +98,14 @@ final class AgentShellWorkspaceTools: NSWindowController, NSWindowDelegate {
     window?.makeKeyAndOrderFront(nil)
     model.supervisor.gitMonitor.setVisible(true, source: "native-workspace-tools")
     NSApp.activate(ignoringOtherApps: true)
+  }
+
+  private func finishPresentedSheet() {
+    guard let request = presentedRequest,
+      request.surface == "workspace-setup" || request.surface == "agent-access" ||
+        (request.surface == "workspace-editor" && request.mode == nil) else { return }
+    presentedRequest = nil
+    close()
   }
 
   func windowWillClose(_ notification: Notification) {

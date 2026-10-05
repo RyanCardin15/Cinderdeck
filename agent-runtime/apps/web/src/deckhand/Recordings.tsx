@@ -76,12 +76,15 @@ export function RecordingsPage() {
   return environmentId ? (
     <RecordingWorkspace key={environmentId} environmentId={environmentId} />
   ) : (
-    <main className={styles.empty}>
-      <ClapperboardIcon />
-      <h1>Recordings</h1>
-      <p>Connect an execution computer to review its recordings.</p>
-      <Link to="/settings/connections">Manage connections</Link>
-    </main>
+    <div className={`${styles.shell} ${native.workspace}`}>
+      <ProductNavigation current="recordings" workspaceSearch={search} />
+      <main className={styles.empty}>
+        <ClapperboardIcon />
+        <h1>Recordings</h1>
+        <p>Connect an execution computer to review its recordings.</p>
+        <Link to="/settings/connections">Manage connections</Link>
+      </main>
+    </div>
   );
 }
 function RecordingWorkspace({ environmentId }: { environmentId: EnvironmentId }) {

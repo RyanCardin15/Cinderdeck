@@ -28,6 +28,7 @@ struct WorkspaceSetupView: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
           folderPicker
+          filePicker
           if let proposal = model.proposal {
             VStack(alignment: .leading, spacing: 6) {
               DeckSectionLabel(title: "Workspace name")
@@ -116,6 +117,35 @@ struct WorkspaceSetupView: View {
     panel.allowsMultipleSelection = multiple; panel.prompt = multiple ? "Add folders" : "Choose folder"
     panel.message = "Select repositories or folders for this workspace."
     if panel.runModal() == .OK { selected(panel.urls.map(\.path)) }
+  }
+
+  private var filePicker: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        DeckSectionLabel(title: "Workspace files")
+        Spacer()
+        Button("Add files…") {
+          let panel = NSOpenPanel(); panel.canChooseFiles = true; panel.canChooseDirectories = false
+          panel.allowsMultipleSelection = true; panel.prompt = "Add files"
+          guard panel.runModal() == .OK else { return }
+          var known = Set(model.files.map { $0.resolvingSymlinksInPath().path })
+          let additions = panel.urls.filter { known.insert($0.resolvingSymlinksInPath().path).inserted }
+          guard model.files.count + additions.count <= 128 else { model.error = "Choose up to 128 workspace files."; return }
+          model.files += additions
+        }.disabled(model.files.count >= 128)
+      }
+      ForEach(model.files, id: \.path) { url in
+        HStack {
+          Label(url.lastPathComponent, systemImage: "doc")
+          Text(url.path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).help(url.path)
+          Spacer()
+          Button { model.files.removeAll { $0 == url } } label: { Image(systemName: "minus.circle") }
+            .buttonStyle(.plain).accessibilityLabel("Remove file \(url.path)")
+        }
+      }
+      Text("Add reference documents or individual files. Their parent folders are not included.")
+        .font(.caption).foregroundStyle(.secondary)
+    }
   }
 
   private var laneDefaults: some View {

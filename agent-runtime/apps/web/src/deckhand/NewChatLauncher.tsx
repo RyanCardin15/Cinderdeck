@@ -268,7 +268,8 @@ export function NewChatLauncher({
       <div className={styles.chatActions}>
         {repos.length > 1 ? (
           <select
-            aria-label="Chat repository"
+            aria-label="Chat starting folder"
+            title="Starting folder; the chat can access all workspace locations"
             value={repositoryID}
             disabled={busy || saved !== null || !enabled}
             onChange={(event) => setRepositoryID(event.target.value)}

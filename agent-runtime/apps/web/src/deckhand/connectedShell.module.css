@@ -128,7 +128,7 @@
     grid-template-columns: var(--deck-rail-width) minmax(0, 1fr);
   }
   .body {
-    grid-template-columns: var(--deck-rail-width) minmax(0, 1fr);
+    grid-template-columns: 220px minmax(0, 1fr);
   }
 }
 @media (max-width: 850px) {

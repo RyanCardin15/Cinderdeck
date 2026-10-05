@@ -106,15 +106,18 @@ export function WorkspaceOverview() {
       selectEnvironment={select}
     />
   ) : (
-    <main className={styles["dh-empty"]}>
-      <h1>
-        {search.environment ? "Execution computer unavailable" : "Choose an execution computer"}
-      </h1>
-      <p>Connect a computer to browse its workspaces.</p>
-      <Link to="/settings/connections">
-        Manage connections <ArrowRightIcon size={16} />
-      </Link>
-    </main>
+    <div className={`${native.workspace} ${styles["dh-shell"]} ${styles["dh-shell-agents"]}`}>
+      <ProductNavigation current="workspaces" workspaceSearch={search} />
+      <main className={styles["dh-empty"]}>
+        <h1>
+          {search.environment ? "Execution computer unavailable" : "Choose an execution computer"}
+        </h1>
+        <p>Connect a computer to browse its workspaces.</p>
+        <Link to="/settings/connections">
+          Manage connections <ArrowRightIcon size={16} />
+        </Link>
+      </main>
+    </div>
   );
 }
 
@@ -586,7 +589,7 @@ function ConnectedWorkspace({
                 : (search.tab as "services" | "pull-requests" | "recordings")
               : "workspaces"
         }
-        workspaceMode
+        hasWorkspaceTree
         workspaceSearch={tabSearch}
         connection={{
           label: connectionLabel,

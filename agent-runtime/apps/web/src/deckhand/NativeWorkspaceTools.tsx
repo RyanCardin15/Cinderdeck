@@ -79,7 +79,7 @@ export function NativeWorkspaceTools({
               type="button"
               disabled={disabled}
               aria-label={
-                workspaceID !== sourceWorkspaceID ? "Edit source workspace" : "Edit workspace"
+                workspaceID !== sourceWorkspaceID ? "Source workspace settings" : "Workspace settings"
               }
               onClick={() =>
                 void request({ surface: "workspace-editor", workspaceID: sourceWorkspaceID })
@@ -87,7 +87,7 @@ export function NativeWorkspaceTools({
             >
               <SlidersHorizontalIcon size={15} />
             </TooltipTrigger>
-            <TooltipPopup>Edit workspace</TooltipPopup>
+            <TooltipPopup>Workspace settings</TooltipPopup>
           </Tooltip>
         ) : null}
         <Tooltip>

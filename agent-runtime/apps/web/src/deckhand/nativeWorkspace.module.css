@@ -22,7 +22,7 @@
   --deck-warning: #946000;
   --deck-danger: #ba3245;
   --deck-page-title: 23px;
-  --deck-rail-width: 225px;
+  --deck-rail-width: var(--product-sidebar-width, 260px);
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: var(--background);
   color: var(--foreground);
@@ -168,7 +168,7 @@
 }
 @media (max-width: 700px) {
   .workspace {
-    --deck-rail-width: 190px;
+    --deck-rail-width: var(--product-sidebar-width, 260px);
   }
   .path {
     max-width: 35ch;

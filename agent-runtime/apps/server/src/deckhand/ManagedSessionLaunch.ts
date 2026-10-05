@@ -7,6 +7,7 @@ import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as FileSystem from "effect/FileSystem";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { makeKeyedSerialExecutor } from "../orchestration-v2/KeyedSerialExecutor.ts";
@@ -15,6 +16,7 @@ import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
 import * as CheckoutIdentity from "./CheckoutIdentity.ts";
+import { resolveWorkspaceFolder } from "./WorkspaceFolderIdentity.ts";
 import * as WorkspaceBackend from "./WorkspaceBackend.ts";
 import * as Migrations from "./Migrations.ts";
 import * as Relationships from "./Relationships.ts";
@@ -102,6 +104,9 @@ const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const backend = yield* WorkspaceBackend.WorkspaceBackend;
   const identities = yield* CheckoutIdentity.CheckoutIdentity;
+  const fs = yield* FileSystem.FileSystem;
+  const resolveFolder = (path: string) =>
+    resolveWorkspaceFolder(identities, path).pipe(Effect.provideService(FileSystem.FileSystem, fs));
   const relationships = yield* Relationships.Relationships;
   const projects = yield* ProjectService.ProjectService;
   const launcher = yield* ThreadLaunchService.ThreadLaunchService;
@@ -256,7 +261,7 @@ const make = Effect.gen(function* () {
         )
           return yield* error(key, "stale_context");
         const physical = yield* Effect.forEach(context.repos, (repo) =>
-          identities.resolve(repo.path).pipe(Effect.mapError(() => error(key, "stale_context"))),
+          resolveFolder(repo.path).pipe(Effect.mapError(() => error(key, "stale_context"))),
         );
         if (
           review &&
@@ -497,7 +502,7 @@ const make = Effect.gen(function* () {
                         providerInstanceId: input.modelSelection.instanceId,
                         featureId,
                         checkoutId,
-                        repositoryScope: [cwd.physicalId],
+                        repositoryScope: [...new Set(physical.map((repo) => repo.physicalId))],
                         role: input.reviewerContext
                           ? "reviewer"
                           : input.access === "read_only"

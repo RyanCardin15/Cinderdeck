@@ -85,7 +85,9 @@ final class StackControlService: ObservableObject {
     for runtime in state.services.values {
       if let service = runtime.launchDefinition?.service, !services.contains(where: { $0.id == service.id }) { services.append(service) }
     }
-    let repos = file.definition?.repos ?? []
+    let repos = file.definition.map { definition in
+      definition.repos.isEmpty ? [RepoDefinition(id: "workspace", path: definition.root, laneMode: .shared)] : definition.repos
+    } ?? []
     let host = file.definition?.host ?? "localhost"
     var snapshot = StackSnapshot(
       id: file.id, name: file.name, file: file.file.path, state: state.label, operation: state.operation,
@@ -122,6 +124,8 @@ final class StackControlService: ObservableObject {
           changedFiles: status.changedFiles, ahead: status.ahead, behind: status.behind, upstream: status.upstream,
           operation: status.operation, error: status.error)
       }, lane: file.lane)
+    snapshot.root = file.definition?.root.path
+    snapshot.files = file.definition?.files.map(\.path)
     if let lane = file.lane {
       let git = supervisor.laneGitStates[file.id]
       var urls: [String: String] = [:]

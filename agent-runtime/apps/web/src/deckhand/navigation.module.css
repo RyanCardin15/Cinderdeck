@@ -1,47 +1,41 @@
 .rail {
   --navigation-accent: var(--primary);
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--foreground) 20%, transparent) transparent;
+  position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-height: 0;
   min-width: 0;
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
   border-right: 1px solid var(--border);
-  padding: 32px 16px 16px;
-  background: color-mix(in srgb, var(--foreground) 2%, var(--background));
+  background: var(--sidebar);
   font-family: var(--font-sans);
 }
-.brand {
+.scroll {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  text-decoration: none;
-  font-size: 23px;
-  letter-spacing: -0.9px;
-  color: var(--foreground);
-  margin: 4px 0 12px;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 12px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--foreground) 20%, transparent) transparent;
 }
-.rail:has(> .titlebar) {
+.scroll:has(> .titlebar) {
   padding-top: 0;
-  padding-inline: 16px;
 }
-.rail > .titlebar {
+.titlebar {
   position: sticky;
   top: 0;
   z-index: 1;
   height: var(--workspace-topbar-height);
   min-height: var(--workspace-topbar-height);
   flex-shrink: 0;
-  margin: 0 -16px;
-  max-width: none;
+  margin: 0 -12px;
   background: var(--sidebar);
   -webkit-app-region: drag;
   user-select: none;
 }
-/* Every product view leaves space above its content. Keep that top edge
-   draggable across the window as well as above the navigation rail. */
 .titlebar::before {
   content: "";
   position: fixed;
@@ -49,39 +43,113 @@
   height: 16px;
   -webkit-app-region: drag;
 }
+.brandRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--foreground);
+  text-decoration: none;
+  font-size: 15px;
+  white-space: nowrap;
+}
+.brand strong {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .brand svg {
-  width: 29px;
-  height: 29px;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 5px;
   color: var(--navigation-accent);
+  background: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, transparent);
+  border-radius: 8px;
+}
+.toggle {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  background: transparent;
+  cursor: pointer;
+}
+.toggle:hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
 }
 .links {
   display: grid;
-  gap: 5px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  flex-shrink: 0;
 }
 .links a,
 .bottom a {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px;
-  min-height: 38px;
-  line-height: 1.4;
-  border-radius: 6px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 7px 9px;
+  border-radius: var(--deck-radius);
   color: var(--muted-foreground);
   text-decoration: none;
-  font-size: 14px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
 }
-.links .current {
+.links a > svg,
+.bottom a > svg {
+  flex-shrink: 0;
+}
+.links .current,
+.bottom a[aria-current="page"] {
   color: var(--foreground);
   background: color-mix(in srgb, var(--foreground) 7%, transparent);
   box-shadow: inset 2px 0 var(--primary);
 }
 .links a:hover,
 .bottom a:hover {
-  background: color-mix(in srgb, var(--foreground) 5%, transparent);
   color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.workspaces {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.workspaces[hidden] {
+  display: none;
+}
+.workspaces > *,
+.scroll > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.rail select {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
 }
 .bottom {
+  flex-shrink: 0;
   margin-top: auto;
   padding-top: 12px;
   border-top: 1px solid var(--border);
@@ -90,148 +158,96 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 8px;
   font-size: 12px;
   color: var(--muted-foreground);
-  padding: 8px;
 }
 .bottom i {
-  height: 7px;
+  flex-shrink: 0;
   width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--muted-foreground);
-  flex-shrink: 0;
 }
 .bottom [data-connected="true"] i {
   background: var(--deck-success);
 }
+.tools {
+  width: 100%;
+}
+.resize {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 6px;
+  z-index: 2;
+  cursor: col-resize;
+  touch-action: none;
+  -webkit-app-region: no-drag;
+}
+.resize:hover,
+.resize:focus-visible {
+  background: color-mix(in srgb, var(--primary) 35%, transparent);
+}
 .rail :focus-visible {
   outline: 2px solid var(--navigation-accent);
-  outline-offset: 3px;
+  outline-offset: -2px;
+}
+.rail button,
+.rail a {
+  -webkit-app-region: no-drag;
+}
+.rail[data-collapsed="true"] .scroll {
+  padding-inline: 8px;
+}
+.rail[data-collapsed="true"] .titlebar {
+  margin-inline: -8px;
+}
+.rail[data-collapsed="true"] .brand {
+  display: none;
+}
+.rail[data-collapsed="true"] .brandRow,
+.rail[data-collapsed="true"] .links a,
+.rail[data-collapsed="true"] .bottom a {
+  justify-content: center;
+}
+/* Keep the link names available to assistive technology in the icon rail. */
+.rail[data-collapsed="true"] .links span,
+.rail[data-collapsed="true"] .bottom a span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 @media (max-width: 700px) {
   .rail {
-    padding: 16px;
     border-right: 0;
     border-bottom: 1px solid var(--border);
-    gap: 10px;
   }
-  .brand {
-    margin: 0;
-    font-size: 21px;
+  .scroll {
+    padding: 12px;
+    gap: 10px;
   }
   .links {
     display: flex;
     flex-wrap: wrap;
   }
-  .links a {
-    padding: 7px 9px;
-  }
   .bottom {
     display: flex;
-    align-items: center;
     flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
-    margin-top: 0;
-    padding-top: 8px;
-  }
-  .bottom p {
-    margin: 0;
-    padding: 7px 9px;
-    margin-left: auto;
   }
   .bottom .tools {
     width: auto;
   }
-}
-
-.links a > svg,
-.bottom a > svg {
-  flex-shrink: 0;
-}
-.brand strong {
-  font-weight: 600;
-}
-
-.rail > * {
-  min-width: 0;
-  max-width: 100%;
-}
-.rail select {
-  min-width: 0;
-  width: 100%;
-  max-width: 100%;
-}
-.links {
-  grid-template-columns: minmax(0, 1fr);
-}
-.links a,
-.bottom a {
-  min-width: 0;
-}
-
-.tools {
-  width: 100%;
-}
-
-.bottom a[aria-current="page"] {
-  color: var(--foreground);
-  background: color-mix(in srgb, var(--primary) 10%, transparent);
-  box-shadow: inset 2px 0 var(--primary);
-}
-.brand {
-  white-space: nowrap;
-}
-.links a,
-.bottom a {
-  font-weight: 500;
-  border-radius: var(--deck-radius);
-}
-
-.rail {
-  background: var(--sidebar);
-  padding: 20px 16px 16px;
-  gap: 14px;
-}
-.brand {
-  font-size: 15px;
-  letter-spacing: 0;
-  gap: 10px;
-  margin: 4px 0 0;
-}
-.brand > svg {
-  width: 30px;
-  height: 30px;
-  padding: 5px;
-  border-radius: 8px;
-  background: var(--accent);
-  border: 1px solid color-mix(in srgb, var(--primary) 18%, transparent);
-}
-.brand small {
-  display: block;
-  font: 600 10px var(--font-mono, monospace);
-  color: var(--muted-foreground);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-top: 3px;
-}
-.allViews {
-  margin-bottom: 8px;
-}
-.allViews > summary {
-  list-style: none;
-  cursor: pointer;
-  padding: 7px 9px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--card);
-  font-size: 12px;
-}
-.allViews .links {
-  margin-top: 8px;
-}
-.links a,
-.bottom a {
-  padding: 7px 9px;
-  font-size: 12px;
-  min-height: 32px;
+  .resize,
+  .rail[data-collapsed="true"] .links,
+  .rail[data-collapsed="true"] .bottom {
+    display: none;
+  }
+  .rail[data-collapsed="true"] .brandRow {
+    justify-content: flex-start;
+  }
 }

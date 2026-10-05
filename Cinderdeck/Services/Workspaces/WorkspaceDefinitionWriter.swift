@@ -9,8 +9,9 @@ nonisolated enum WorkspaceDefinitionWriter {
   }
 
   /// Patch root-level strings without reserializing unrelated tables, templates, or comments.
-  static func metadata(_ source: String, values: [String: String]) throws -> String {
+  static func metadata(_ source: String, values: [String: String], arrays: [String: [String]] = [:]) throws -> String {
     _ = try SimpleTOMLParser.parse(source, strict: true)
+    let replacements = values.mapValues(quote).merging(arrays.mapValues(array)) { _, new in new }
     var inRoot = true
     var lines: [String] = []
     for line in source.components(separatedBy: "\n") {
@@ -18,11 +19,11 @@ nonisolated enum WorkspaceDefinitionWriter {
       if trimmed.hasPrefix("[") { inRoot = false }
       if inRoot, let equals = trimmed.firstIndex(of: "=") {
         let key = trimmed[..<equals].trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
-        if values[key] != nil { continue }
+        if replacements[key] != nil { continue }
       }
       lines.append(line)
     }
-    return values.keys.sorted().map { "\($0) = \(quote(values[$0]!))" }.joined(separator: "\n") + "\n" + lines.joined(separator: "\n")
+    return replacements.keys.sorted().map { "\($0) = \(replacements[$0]!)" }.joined(separator: "\n") + "\n" + lines.joined(separator: "\n")
   }
 
   static func saveSource(file: URL, original: String, source: String) throws {

@@ -134,6 +134,8 @@ nonisolated struct StackSnapshot: Codable, Sendable {
   let issues: [String]
   let services: [StackServiceSnapshot]
   let repos: [StackRepoSnapshot]
+  var root: String? = nil
+  var files: [String]? = nil
   var lane: StackLaneInfo?
   var laneStatus: StackLaneStatusSnapshot? = nil
   /// Services this workspace uses but does not run.

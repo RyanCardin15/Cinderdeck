@@ -39,7 +39,9 @@ export function NativeHostNavigation() {
             ? "agents"
             : target.section === "lane-map"
               ? "lane-map"
-              : "services",
+              : target.workspaceID
+                ? "services"
+                : "overview",
         },
       });
     }

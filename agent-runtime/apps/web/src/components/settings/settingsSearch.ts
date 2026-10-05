@@ -12,6 +12,7 @@ import {
 } from "./settingsScope";
 
 export type SettingsPath =
+  | "/settings/workspaces"
   | "/settings/projects"
   | "/settings/general"
   | "/settings/appearance"
@@ -85,6 +86,7 @@ export interface SettingsSearchAvailability {
  * subtitles both render from this record, so each label exists once.
  */
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
+  "/settings/workspaces": "Workspaces",
   "/settings/projects": "Project",
   "/settings/general": "General",
   "/settings/appearance": "Appearance",
@@ -133,6 +135,12 @@ const KEYBINDING_SEARCH_ITEMS = STATIC_KEYBINDING_COMMANDS.toSorted((left, right
  * that may not be mounted point at their nearest stable section instead.
  */
 export const SETTINGS_SEARCH_ITEMS = [
+  {
+    id: "workspace-locations",
+    title: "Workspace folders and files",
+    to: "/settings/workspaces",
+    searchTerms: ["custom workspace", "multiple folders", "add folders", "add files"],
+  },
   {
     id: "workspace-ownership",
     title: "Worktree ownership",
@@ -940,6 +948,7 @@ export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
 const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item] as const));
 
 const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
+  "/settings/workspaces": null,
   "/settings/projects": "project",
   "/settings/general": null,
   "/settings/appearance": null,

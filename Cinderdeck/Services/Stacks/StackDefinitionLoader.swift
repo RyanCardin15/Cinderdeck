@@ -24,7 +24,7 @@ nonisolated enum StackDefinitionLoader {
       let document = try SimpleTOMLParser.parse(source, strict: true)
       var reader = StackDefinitionReader(root: document.root)
       if !validID(id) { reader.error("File name must use letters, numbers, hyphens or underscores.") }
-      reader.warnUnknown(document.root, allowed: ["name", "root", "workspace", "shell", "restart_on_branch_change", "env", "secrets", "repos", "services", "tasks", "workflows", "lanes"], at: "")
+      reader.warnUnknown(document.root, allowed: ["name", "root", "files", "workspace", "shell", "restart_on_branch_change", "env", "secrets", "repos", "services", "tasks", "workflows", "lanes"], at: "")
       result.parentWorkspaceID = reader.string(document.root, "workspace")
       if let parent = result.parentWorkspaceID, !validID(parent) || parent == id {
         reader.error("workspace must identify a different source workspace")
@@ -37,6 +37,21 @@ nonisolated enum StackDefinitionLoader {
       stack.environment = reader.strings(document.root, "env")
       stack.rawEnvironment = stack.environment.filter { StackTemplates.containsTemplate($0.value) }
       stack.secrets = reader.strings(document.root, "secrets")
+      let filePaths = reader.array(document.root, "files", at: "") ?? []
+      if filePaths.count > 128 { reader.error("Choose up to 128 workspace files") }
+      stack.files = filePaths.map { resolve($0, relativeTo: root) }
+      if filePaths.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+        reader.error("Workspace file paths cannot be empty")
+      }
+      if Set(stack.files.map(\.path)).count != stack.files.count { reader.error("Workspace files must be unique") }
+      if validatePaths {
+        for url in stack.files {
+          var isDirectory: ObjCBool = false
+          if !FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) || isDirectory.boolValue {
+            reader.error("Workspace file is missing or is not a file: \(url.path)")
+          }
+        }
+      }
       if validatePaths {
         reader.directory(root, label: "root")
         if !FileManager.default.isExecutableFile(atPath: stack.shell) { reader.error("Shell is not executable: \(stack.shell)") }

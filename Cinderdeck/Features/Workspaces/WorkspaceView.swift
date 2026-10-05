@@ -16,6 +16,17 @@ enum WorkspaceSection: String, CaseIterable {
   static func initialSection(_ workspace: StackDefinition) -> WorkspaceSection {
     workspace.services.isEmpty && !workspace.tasks.isEmpty ? .tasks : .services
   }
+  var agentShellSection: String {
+    switch self {
+    case .services: return "services"
+    case .tasks: return "tasks"
+    case .workflows: return "workflows"
+    case .laneMap: return "lane-map"
+    case .runs: return "runs"
+    case .recordings: return "recordings"
+    case .linkedWork: return "agents"
+    }
+  }
   var explanation: String {
     switch self {
     case .services: return "Keep APIs, databases, and development servers running together."
@@ -32,6 +43,8 @@ enum WorkspaceSection: String, CaseIterable {
 struct WorkspaceView: View {
   @ObservedObject var model: StacksViewModel
   @ObservedObject var runner: WorkspaceRunner
+  var onOpenInCinderdeck: (() -> Void)? = nil
+  var onToolSheetDismiss: (() -> Void)? = nil
   @ObservedObject private var theme = ThemeManager.shared
   @State private var section = WorkspaceSection.services
   @State private var editing: WorkspaceComponentEditor.Context?
@@ -106,7 +119,7 @@ struct WorkspaceView: View {
     .background(DeckStyle.canvas)
     .preferredColorScheme(theme.systemAppearance)
     .tint(DeckStyle.accent)
-    .sheet(item: $model.editor) { context in
+    .sheet(item: $model.editor, onDismiss: { onToolSheetDismiss?() }) { context in
       if context.file == nil {
         WorkspaceCreateView { id, start in
           model.editor = nil
@@ -117,13 +130,13 @@ struct WorkspaceView: View {
           }
         }
       } else {
-        StackDefinitionEditor(file: context.file) { model.editor = nil; Task { await model.supervisor.reloadDefinitions() } }
+        WorkspaceSettingsView(file: context.file!) { model.editor = nil; Task { await model.supervisor.reloadDefinitions() } }
       }
     }
     .sheet(item: $editing) { context in
       WorkspaceComponentEditor(context: context) { editing = nil; Task { await model.supervisor.reloadDefinitions() } }
     }
-    .sheet(isPresented: $model.agentsSheet) { StackAgentsSheet() }
+    .sheet(isPresented: $model.agentsSheet, onDismiss: { onToolSheetDismiss?() }) { StackAgentsSheet() }
     .sheet(isPresented: $model.lanesSheet) { StackLanesView(viewModel: model) }
     .sheet(item: $model.laneRemoval) { StackLaneRemovalView(request: $0, viewModel: model) }
     .sheet(item: $model.laneAttachment) { StackLaneAttachmentView(file: $0, model: model) }
@@ -152,6 +165,16 @@ struct WorkspaceView: View {
       }
       Spacer(minLength: 12)
       HStack(spacing: 8) {
+        if AgentShellController.shared.configured {
+          Button {
+            AgentShellController.shared.show(workspaceID: file.id, section: section.agentShellSection)
+            if AgentShellController.shared.running { onOpenInCinderdeck?() }
+          } label: {
+            Label("Open in Cinderdeck", systemImage: "macwindow")
+          }
+          .help("Open this workspace in the main Cinderdeck window")
+          .accessibilityIdentifier("workspace.openInCinderdeck")
+        }
         Image(systemName: "hand.draw").foregroundStyle(.secondary)
           .frame(width: 28, height: 28).contentShape(Rectangle())
           .workspaceReferenceDrag(file, model: model)

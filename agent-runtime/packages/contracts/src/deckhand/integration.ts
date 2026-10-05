@@ -98,6 +98,8 @@ export const IntegrationWorkspace = Schema.Struct({
   issues: Schema.Array(Schema.String),
   services: Schema.Array(IntegrationService),
   repos: Schema.Array(IntegrationRepository),
+  root: Schema.optionalKey(Schema.String),
+  files: Schema.optionalKey(Schema.Array(Schema.String).check(Schema.isMaxLength(128))),
 });
 export const IntegrationSnapshot = Schema.Struct({
   installationID: TrimmedNonEmptyString,

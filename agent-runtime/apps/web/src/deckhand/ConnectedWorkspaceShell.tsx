@@ -86,7 +86,7 @@ export function ConnectedWorkspaceShell({
   return (
     <div className={`${styles.shell} ${native.workspace}`}>
       <ProductNavigation
-        workspaceMode
+        hasWorkspaceTree
         current="conversations"
         workspaceSearch={search}
         connection={{

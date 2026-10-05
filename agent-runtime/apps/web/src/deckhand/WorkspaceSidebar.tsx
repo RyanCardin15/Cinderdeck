@@ -423,6 +423,15 @@ function WorkspaceSidebarTree({
             );
           }}
         </Siblings>
+        {!bases.length ? (
+          <p className={styles.notice} role="status">
+            {catalog?.state === "connected"
+              ? "No workspaces yet"
+              : AsyncResult.isInitial(catalogResult)
+                ? "Loading workspaces…"
+                : "Workspace list unavailable"}
+          </p>
+        ) : null}
         {catalog && (offset > 0 || catalog.nextOffset !== null) ? (
           <div className={styles.pages}>
             <button

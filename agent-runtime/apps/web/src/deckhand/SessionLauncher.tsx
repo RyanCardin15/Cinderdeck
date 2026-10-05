@@ -438,7 +438,7 @@ function SessionSetupLauncher({
       <section className={sessionStyles.launchPrompt} aria-label="New session">
         <div>
           <h3>Start a new session</h3>
-          <p>{contextLabel} · choose a configured provider and repository.</p>
+          <p>{contextLabel} · choose a configured provider and starting folder.</p>
         </div>
         <button
           ref={launchButton}
@@ -591,7 +591,7 @@ function SessionSetupLauncher({
               </p>
             </>
           ) : null}
-          <label htmlFor={`${id}-repo`}>Repository</label>
+          <label htmlFor={`${id}-repo`}>Starting folder</label>
           <select
             id={`${id}-repo`}
             value={repositoryID}
@@ -603,6 +603,7 @@ function SessionSetupLauncher({
               </option>
             ))}
           </select>
+          <p className="text-sm text-muted-foreground">The session can access every folder and file selected in this workspace.</p>
           <span id={`${id}-provider-label`}>Provider account</span>
           <div
             className={sessionStyles.providerChoices}

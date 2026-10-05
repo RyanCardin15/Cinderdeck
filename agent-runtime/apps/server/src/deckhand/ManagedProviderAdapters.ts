@@ -5,6 +5,7 @@ import * as ProviderAdapter from "../orchestration-v2/ProviderAdapter.ts";
 import { forceCodexReadOnlyPolicy } from "../orchestration-v2/CodexReadOnlyPolicy.ts";
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ManagedCheckoutGuard from "./ManagedCheckoutGuard.ts";
+import { workspaceContextText } from "./WorkspaceSessionContext.ts";
 const isCheckoutError = Schema.is(ManagedCheckoutGuard.ManagedCheckoutError);
 
 /** Keep provider protocols upstream. Validate checkout identity and read-only policy at provider boundaries. */
@@ -38,10 +39,14 @@ export const layer = Layer.effect(
                         ? forceCodexReadOnlyPolicy({
                             ...value,
                             cwd: current.cwd,
+                            ...(current.folders ? { workspaceFolders: current.folders } : {}),
+                            ...(current.files ? { workspaceFiles: current.files } : {}),
                           })
                         : {
                             ...value,
                             cwd: current?.cwd ?? value.cwd,
+                            ...(current?.folders ? { workspaceFolders: current.folders } : {}),
+                            ...(current?.files ? { workspaceFiles: current.files } : {}),
                           };
                     const contexts = new Map<
                       typeof input.threadId,
@@ -155,6 +160,12 @@ export const layer = Layer.effect(
                           Effect.flatMap((current) =>
                             runtime.startTurn({
                               ...request,
+                              message: {
+                                ...request.message,
+                                text:
+                                  workspaceContextText(policy(request.runtimePolicy, current)) +
+                                  request.message.text,
+                              },
                               runtimePolicy: policy(request.runtimePolicy, current),
                             }),
                           ),

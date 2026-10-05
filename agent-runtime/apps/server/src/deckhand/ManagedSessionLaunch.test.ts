@@ -1034,6 +1034,61 @@ describe("saved launch context review", () => {
 });
 
 describe("managed lane session launch", () => {
+  it.effect("launches across Git and ordinary folders with individual file context", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture;
+      const docs = `${f.root}/docs`;
+      yield* f.fs.makeDirectory(docs);
+      const brief = `${f.root}/brief.md`;
+      yield* f.fs.writeFileString(brief, "Workspace brief");
+      const resource = f.resources.get("lane")!;
+      resource.workspace.repos.push({
+        id: "docs",
+        path: docs,
+        physicalID: "",
+        repositoryPhysicalID: "",
+        branch: "",
+        dirty: false,
+        changedFiles: 0,
+        ahead: 0,
+        behind: 0,
+      });
+      Object.assign(resource.workspace, { files: [brief] });
+      let called = false;
+      const dependencies = yield* Effect.context<
+        FileSystem.FileSystem | Path.Path | ProcessRunner.ProcessRunner | SqlClient.SqlClient
+      >();
+      const external = f.external((request) =>
+        Effect.gen(function* () {
+          const guard = yield* ManagedCheckoutGuard.ManagedCheckoutGuard;
+          const context = yield* guard.resolve(request.threadId!, docs);
+          assert.deepEqual(context?.folders, [f.lane, docs]);
+          assert.deepEqual(context?.files, [brief]);
+          assert.equal(context?.cwd, yield* f.fs.realPath(docs));
+          called = true;
+          return accepted(request);
+        }).pipe(
+          Effect.provide(
+            ManagedCheckoutGuard.layer.pipe(
+              Layer.provide(Relationships.layer),
+              Layer.provide(CheckoutIdentity.layer),
+              Layer.provide(f.hubLayer),
+            ),
+          ),
+          Effect.provide(dependencies),
+          Effect.orDie,
+        ),
+      );
+      const service = yield* ManagedSessionLaunch.ManagedSessionLaunch.pipe(
+        Effect.provide(serviceLayer.pipe(Layer.provide(external))),
+      );
+      assert.equal(
+        (yield* service.launch("actor", { ...input("multi-folder"), repositoryID: "docs" })).state,
+        "accepted",
+      );
+      assert.isTrue(called);
+    }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
   it.live("opens an idle bound chat with no initial message and replays its durable receipt", () =>
     Effect.gen(function* () {
       const f = yield* fixture;
