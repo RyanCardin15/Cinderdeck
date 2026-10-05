@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { DEFAULT_SERVER_SETTINGS, EnvironmentId, ProviderInstanceId } from "@cinderdeck/contracts";
 import * as Contracts from "@cinderdeck/contracts/deckhand/rpc";
@@ -421,6 +421,80 @@ it("opens an empty chat in the selected checkout without asking for a task or na
     params: { environmentId, threadId: "thread" },
   });
   expect(localStorage.getItem(launchKey)).toBeNull();
+});
+
+it("opens a sidebar lane session once under StrictMode with its exact checkout and remembered folder", async () => {
+  const lane = {
+    ...resource,
+    workspaceID: "source--feature",
+    generation: 7,
+    revision: "lane-revision",
+  };
+  useChatDefaultsStore
+    .getState()
+    .rememberRepository("computer:installation:source--feature", "api");
+  const onOpened = vi.fn();
+  const launcher = () => (
+    <StrictMode>
+      <SessionLauncher
+        environmentId={environmentId}
+        installationID="installation"
+        resource={lane}
+        enabled
+        compact
+        autoOpen
+        onOpened={onOpened}
+      />
+    </StrictMode>
+  );
+  await act(async () => root.render(launcher()));
+  expect(commands.launch).toHaveBeenCalledTimes(1);
+  expect(commands.launch).toHaveBeenCalledWith({
+    environmentId,
+    input: expect.objectContaining({
+      workspaceID: "source--feature",
+      generation: 7,
+      revision: "lane-revision",
+      repositoryID: "api",
+      deferStart: true,
+      objective: "",
+    }),
+  });
+  expect(commands.create).not.toHaveBeenCalled();
+  expect(onOpened).toHaveBeenCalledTimes(1);
+  expect(commands.navigate).toHaveBeenCalledWith({
+    to: "/$environmentId/$threadId",
+    params: { environmentId, threadId: "thread" },
+  });
+  await act(async () => root.render(launcher()));
+  expect(commands.launch).toHaveBeenCalledTimes(1);
+});
+
+it("keeps an uncertain sidebar launch available for explicit retry with the original key", async () => {
+  commands.launch.mockResolvedValue(success({ ...acceptedLaunch, state: "unknown_outcome" }));
+  const onOpened = vi.fn();
+  const launcher = () => (
+    <SessionLauncher
+      environmentId={environmentId}
+      installationID="installation"
+      resource={resource}
+      enabled
+      compact
+      autoOpen
+      onOpened={onOpened}
+    />
+  );
+  await act(async () => root.render(launcher()));
+  const first = commands.launch.mock.calls[0]![0];
+  expect(commands.launch).toHaveBeenCalledTimes(1);
+  expect(onOpened).not.toHaveBeenCalled();
+  expect(commands.navigate).not.toHaveBeenCalled();
+  await act(async () => root.render(launcher()));
+  expect(commands.launch).toHaveBeenCalledTimes(1);
+  commands.launch.mockResolvedValue(success(acceptedLaunch));
+  await click("Retry saved chat");
+  expect(commands.launch).toHaveBeenLastCalledWith(first);
+  expect(onOpened).toHaveBeenCalledTimes(1);
 });
 
 it("preserves existing-checkout launch behavior with no native creation", async () => {

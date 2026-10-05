@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { EnvironmentId, ModelSelection } from "@cinderdeck/contracts";
 import * as Contracts from "@cinderdeck/contracts/deckhand/rpc";
@@ -33,6 +33,8 @@ export type NewChatLauncherProps = {
   resource: Contracts.IntegrationView["resources"][number];
   enabled: boolean;
   compact?: boolean;
+  autoOpen?: boolean;
+  onOpened?: () => void;
 };
 const decodeDraft = Schema.decodeUnknownSync(Schema.fromJsonString(Contracts.ManagedLaunchInput));
 const encodeDraft = Schema.encodeSync(Schema.fromJsonString(Contracts.ManagedLaunchInput));
@@ -45,6 +47,8 @@ export function NewChatLauncher({
   resource,
   enabled,
   compact = false,
+  autoOpen = false,
+  onOpened,
 }: NewChatLauncherProps) {
   const navigate = useNavigate();
   const settings = useEnvironmentSettings(environmentId);
@@ -62,6 +66,7 @@ export function NewChatLauncher({
   const [saved, setSaved] = useState(initial.request);
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
+  const autoOpened = useRef(false);
   const [error, setError] = useState<string | null>(
     initial.error
       ? "The saved chat request could not be read. Restore browser storage before opening another chat."
@@ -107,6 +112,7 @@ export function NewChatLauncher({
   };
   const open = (record: Contracts.ManagedLaunchRecord) => {
     setAccepted(null);
+    onOpened?.();
     void navigate({
       to: "/$environmentId/$threadId",
       params: buildThreadRouteParams({ environmentId, threadId: record.threadId }),
@@ -254,6 +260,12 @@ export function NewChatLauncher({
       setBusy(false);
     }
   };
+  useEffect(() => {
+    if (!autoOpen || autoOpened.current || !enabled || !repositoryID) return;
+    // A sidebar click opens once, including under StrictMode. Recovery stays explicit.
+    autoOpened.current = true;
+    void start();
+  }, [autoOpen, enabled, repositoryID, start]);
   return (
     <section className={compact ? styles.chatShortcut : styles.launchPrompt} aria-label="New chat">
       {!compact ? (

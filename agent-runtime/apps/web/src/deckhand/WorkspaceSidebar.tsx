@@ -24,12 +24,15 @@ import {
   FolderGit2Icon,
   GitBranchIcon,
   GripVerticalIcon,
+  PlusIcon,
   StarIcon,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { EnvironmentId } from "@cinderdeck/contracts";
 import type { IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
 import { workspaceView } from "./state";
+import { SessionLauncher } from "./SessionLauncher";
+import { Dialog, DialogPopup, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { overviewWorkspaceContexts, type WorkspaceSearch } from "./workspaceNavigation";
 import {
   orderedSidebarRows,
@@ -44,6 +47,12 @@ type Resource = IntegrationView["resources"][number];
 const workspaceGroup = "workspaces";
 const laneGroup = (id: string) => `lanes:${id}`;
 const name = (row: Resource) => row.workspace?.lane?.name ?? row.workspace?.name ?? row.workspaceID;
+const canLaunch = (row: Resource) =>
+  row.available &&
+  !!row.workspace &&
+  !row.workspace.definitionChanged &&
+  !row.workspace.issues.length &&
+  row.workspace.repos.length > 0;
 
 function useSidebarPreferences(key: string) {
   const [preferences, setPreferences] = useState(() => readSidebarPreferences(key));
@@ -126,6 +135,8 @@ function SidebarRow({
   onExpand,
   attention,
   onNavigate,
+  onNewSession,
+  launchEnabled,
   children,
 }: {
   resource: Resource;
@@ -138,6 +149,8 @@ function SidebarRow({
   onExpand?: () => void;
   attention?: boolean;
   onNavigate?: (() => void) | undefined;
+  onNewSession: (resource: Resource) => void;
+  launchEnabled: boolean;
   children?: ReactNode;
 }) {
   const {
@@ -198,12 +211,27 @@ function SidebarRow({
             expectedGeneration: resource.generation,
           }}
           aria-current={selected ? "page" : undefined}
+          title={label}
           onClick={onNavigate}
         >
           {onExpand ? <FolderGit2Icon size={15} /> : <GitBranchIcon size={14} />}
           <span>{label}</span>
           {attention ? <CircleDotIcon size={10} aria-label="Needs attention" /> : null}
         </Link>
+        <button
+          type="button"
+          className={styles.control}
+          aria-label={`New session in ${label}`}
+          title={
+            launchEnabled
+              ? `New session in ${label}`
+              : "Reconnect an available checkout to open a session"
+          }
+          disabled={!launchEnabled}
+          onClick={() => onNewSession(resource)}
+        >
+          <PlusIcon size={15} aria-hidden />
+        </button>
         <button
           type="button"
           className={styles.control}
@@ -235,6 +263,7 @@ function WorkspaceLanes({
   search,
   needsAttention,
   onNavigate,
+  onNewSession,
 }: {
   baseID: string;
   environmentId: EnvironmentId;
@@ -244,6 +273,7 @@ function WorkspaceLanes({
   search: WorkspaceSearch;
   needsAttention?: ((row: Resource) => boolean) | undefined;
   onNavigate?: (() => void) | undefined;
+  onNewSession: (resource: Resource) => void;
 }) {
   const [offset, setOffset] = useState(0);
   const result = useAtomValue(
@@ -293,6 +323,8 @@ function WorkspaceLanes({
             selected={search.context === row.workspaceID}
             attention={needsAttention?.(row) ?? false}
             onNavigate={onNavigate}
+            onNewSession={onNewSession}
+            launchEnabled={fresh && canLaunch(row)}
           />
         )}
       </Siblings>
@@ -361,11 +393,13 @@ function WorkspaceSidebarTree({
     expectedInstallationID: installationID,
   };
   const [offset, setOffset] = useState(0);
+  const [launchTarget, setLaunchTarget] = useState<Resource | null>(null);
   const catalogResult = useAtomValue(
     workspaceView({ environmentId, input: { offset, limit: 50 } }),
   );
   const observed = Option.getOrNull(AsyncResult.value(catalogResult));
   const catalog = observed?.hello?.installationID === installationID ? observed : null;
+  const catalogFresh = catalogResult._tag !== "Failure" && catalog?.state === "connected";
   const candidates = catalog
     ? [...catalog.resources, ...resources.filter((row) => row.workspaceID === search.workspace)]
     : resources;
@@ -400,6 +434,8 @@ function WorkspaceSidebarTree({
                 workspaceActive={search.workspace === base.workspaceID}
                 expanded={expanded}
                 onNavigate={onNavigate}
+                onNewSession={setLaunchTarget}
+                launchEnabled={catalogFresh && canLaunch(base)}
                 onExpand={() =>
                   state.update((current) => ({
                     ...current,
@@ -417,6 +453,7 @@ function WorkspaceSidebarTree({
                     search={navigationSearch}
                     needsAttention={needsAttention}
                     onNavigate={onNavigate}
+                    onNewSession={setLaunchTarget}
                   />
                 ) : null}
               </SidebarRow>
@@ -453,6 +490,35 @@ function WorkspaceSidebarTree({
           </div>
         ) : null}
       </nav>
+      {launchTarget ? (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setLaunchTarget(null);
+          }}
+        >
+          <DialogPopup>
+            <DialogTitle>New session in {name(launchTarget)}</DialogTitle>
+            <DialogDescription>
+              {launchTarget.workspace?.lane ? "Lane checkout" : "Workspace checkout"} · opens with
+              your chat defaults.
+            </DialogDescription>
+            <SessionLauncher
+              key={`${environmentId}:${installationID}:${launchTarget.workspaceID}:${launchTarget.generation}`}
+              environmentId={environmentId}
+              installationID={installationID}
+              resource={launchTarget}
+              enabled={catalogFresh && canLaunch(launchTarget)}
+              compact
+              autoOpen
+              onOpened={() => {
+                setLaunchTarget(null);
+                onNavigate?.();
+              }}
+            />
+          </DialogPopup>
+        </Dialog>
+      ) : null}
     </>
   );
 }

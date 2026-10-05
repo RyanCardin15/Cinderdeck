@@ -91,12 +91,14 @@ function SessionSetupLauncher({
   installationID,
   resource,
   enabled,
+  onOpened,
   creation,
 }: {
   environmentId: EnvironmentId;
   installationID: string;
   resource: Resource;
   enabled: boolean;
+  onOpened?: () => void;
   onRecovered?: () => void;
   creation?: {
     visible: boolean;
@@ -214,6 +216,7 @@ function SessionSetupLauncher({
   const provider = choices.find((choice) => choice.instanceId === instanceId);
   const open = (value: Contracts.ManagedLaunchRecord) => {
     if (!isCreation) onRecovered?.();
+    onOpened?.();
     void navigate({
       to: "/$environmentId/$threadId",
       params: buildThreadRouteParams({ environmentId, threadId: value.threadId }),
@@ -603,7 +606,9 @@ function SessionSetupLauncher({
               </option>
             ))}
           </select>
-          <p className="text-sm text-muted-foreground">The session can access every folder and file selected in this workspace.</p>
+          <p className="text-sm text-muted-foreground">
+            The session can access every folder and file selected in this workspace.
+          </p>
           <span id={`${id}-provider-label`}>Provider account</span>
           <div
             className={sessionStyles.providerChoices}

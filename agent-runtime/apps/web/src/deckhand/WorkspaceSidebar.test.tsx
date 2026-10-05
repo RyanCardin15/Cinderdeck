@@ -13,6 +13,19 @@ const boundary = vi.hoisted(() => ({
   navigate: vi.fn(),
   requests: [] as string[],
   pages: [] as { workspace: string; offset: number }[],
+  launcher: vi.fn(),
+}));
+vi.mock("./SessionLauncher", () => ({
+  SessionLauncher: (props: { onOpened: () => void }) => {
+    boundary.launcher(props);
+    return <button onClick={props.onOpened}>Finish opening session</button>;
+  },
+}));
+vi.mock("../components/ui/dialog", () => ({
+  Dialog: ({ children }: { children: ReactNode }) => <div role="dialog">{children}</div>,
+  DialogPopup: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DialogTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
+  DialogDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
 }));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ search, children, ...props }: { search: WorkspaceSearch; children: ReactNode }) => (
@@ -66,7 +79,17 @@ const resource = (id: string, source?: string): Resource => ({
     definitionChanged: false,
     issues: [],
     services: [],
-    repos: [],
+    repos: [
+      {
+        id: "app",
+        path: `/fixture/${id}`,
+        branch: "main",
+        dirty: false,
+        changedFiles: 0,
+        ahead: 0,
+        behind: 0,
+      },
+    ],
     ...(source
       ? {
           lane: {
@@ -136,6 +159,7 @@ const workspaceIDs = () =>
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   boundary.navigate.mockClear();
+  boundary.launcher.mockClear();
   boundary.requests = [];
   boundary.pages = [];
   scopedAtoms.clear();
@@ -367,4 +391,67 @@ it("does not substitute the local catalog for an unavailable remote computer", a
   );
   expect(container.textContent).toContain("Computer unavailable");
   expect(workspaceIDs()).toEqual([]);
+});
+
+it("opens sessions in the clicked workspace and lane without selecting or expanding another row", async () => {
+  await render({ workspace: "beta", context: "beta", tab: "services" });
+  expect(boundary.launcher).not.toHaveBeenCalled();
+  await act(async () => button("New session in alpha").click());
+  expect(boundary.launcher).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      environmentId,
+      installationID: "install",
+      resource: alpha,
+      enabled: true,
+      autoOpen: true,
+    }),
+  );
+  expect(button("Expand lanes for alpha").getAttribute("aria-expanded")).toBe("false");
+  await act(async () =>
+    [...container.querySelectorAll("button")]
+      .find((item) => item.textContent === "Finish opening session")!
+      .click(),
+  );
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  await act(async () => button("Expand lanes for alpha").click());
+  await act(async () => button("New session in lane-b").click());
+  expect(boundary.launcher).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      environmentId,
+      installationID: "install",
+      resource: laneB,
+      enabled: true,
+      autoOpen: true,
+    }),
+  );
+  expect(boundary.navigate).not.toHaveBeenCalled();
+  expect(readSidebarPreferences(key).favorites).toEqual([]);
+});
+
+it("prevents new sessions from stale catalogs, unavailable lanes, and changed definitions", async () => {
+  await act(async () =>
+    registry.set(native, AsyncResult.success({ ...view, state: "unavailable" })),
+  );
+  await render();
+  expect(button("New session in alpha").disabled).toBe(true);
+  await act(async () => button("New session in alpha").click());
+  expect(boundary.launcher).not.toHaveBeenCalled();
+  await act(async () =>
+    registry.set(
+      native,
+      AsyncResult.success({
+        ...view,
+        resources: [
+          alpha,
+          { ...beta, workspace: { ...beta.workspace!, definitionChanged: true } },
+          { ...laneA, available: false },
+        ],
+      }),
+    ),
+  );
+  await render();
+  expect(button("New session in alpha").disabled).toBe(false);
+  expect(button("New session in beta").disabled).toBe(true);
+  await act(async () => button("Expand lanes for alpha").click());
+  expect(button("New session in lane-a").disabled).toBe(true);
 });

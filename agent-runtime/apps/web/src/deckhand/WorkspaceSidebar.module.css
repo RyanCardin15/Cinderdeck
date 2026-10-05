@@ -38,7 +38,9 @@
   font-size: 12px;
 }
 .select span {
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .select svg {
   flex-shrink: 0;
@@ -60,6 +62,10 @@
 .control:hover {
   color: var(--foreground);
   background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+.control:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 .control[aria-pressed="true"] {
   color: var(--primary);
