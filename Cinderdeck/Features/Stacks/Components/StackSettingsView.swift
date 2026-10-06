@@ -9,6 +9,8 @@ struct StackSettingsView: View {
   @AppStorage(PreferencesKeys.stacksAutoFetchMinutes) private var autoFetch = 0
   @State private var managesSecrets = false
   @State private var managesAgents = false
+  @State private var refreshMessage: String?
+  @State private var refreshFailed = false
   var body: some View {
     Section("Workspaces") {
       Toggle("Show workspace quick controls in History", isOn: $enabled)
@@ -20,6 +22,26 @@ struct StackSettingsView: View {
           panel.canCreateDirectories = true
           if panel.runModal() == .OK, let url = panel.url { directory = url.path }
         }
+      }
+      HStack {
+        DeckRefreshButton(title: "Refresh workspaces") {
+          refreshMessage = nil
+          let supervisor = StackSupervisor.shared
+          await supervisor.reloadDefinitions()
+          refreshFailed = supervisor.errorMessage != nil
+          if let error = supervisor.errorMessage { refreshMessage = error }
+          else {
+            let changed = supervisor.files.filter { supervisor.definitionChanged($0.id) }.map(\.name)
+            let invalid = supervisor.files.filter { $0.issues.contains { $0.severity == .error } }.map(\.name)
+            refreshFailed = !invalid.isEmpty
+            refreshMessage = !invalid.isEmpty
+              ? "Definitions reloaded. Fix configuration errors in: \(invalid.joined(separator: ", "))."
+              : changed.isEmpty ? "Workspace definitions refreshed."
+              : "Definitions reloaded. Restart services to apply older running settings in: \(changed.joined(separator: ", "))."
+          }
+        }
+        Text(refreshMessage ?? "Reload workspace definitions from disk.")
+          .font(.caption).foregroundStyle(refreshFailed ? Color.red : Color.secondary)
       }
       HStack {
         Text("Lane worktrees")

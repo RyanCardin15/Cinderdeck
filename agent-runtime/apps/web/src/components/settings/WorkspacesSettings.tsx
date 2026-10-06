@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { workspaceView } from "../../deckhand/state";
 import { NativeWorkspaceTools } from "../../deckhand/NativeWorkspaceTools";
+import { WorkspaceRefreshButton } from "../../deckhand/WorkspaceRefreshButton";
 import { WorkspaceSettingsButton } from "../../deckhand/WorkspaceSettingsButton";
 import { useAgentObservation } from "../../deckhand/useAgentObservation";
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
@@ -75,6 +76,7 @@ function WorkspaceList({ environmentId, local }: { environmentId: EnvironmentId;
           {view ? countLabel(view.total, "workspace") : "Your workspaces"}
         </div>
         <div className="flex flex-wrap items-center gap-4">
+          <WorkspaceRefreshButton environmentId={environmentId} />
           <Link to="/workspaces" search={{ environment: environmentId }} className={linkClass}>
             Open Workspaces <ArrowUpRightIcon className="size-3.5" aria-hidden />
           </Link>

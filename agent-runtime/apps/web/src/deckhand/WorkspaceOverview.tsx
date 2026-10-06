@@ -5,7 +5,6 @@ import {
   GitBranchIcon,
   PlusIcon,
   ArrowRightIcon,
-  RefreshCwIcon,
   FolderGit2Icon,
   ActivityIcon,
   XIcon,
@@ -60,7 +59,6 @@ import { NativeWorkspaceTools } from "./NativeWorkspaceTools";
 import {
   workspaceView,
   managedContextsView,
-  refreshWorkspaces,
   submitOperation,
   inspectOperation,
   recentOperations,
@@ -73,6 +71,7 @@ import agents from "./workspaceAgents.module.css";
 import native from "./nativeWorkspace.module.css";
 import { workspaceChatUnavailableReason } from "@cinderdeck/shared/workspaceChat";
 import { WorkspaceSections } from "./WorkspaceSections";
+import { WorkspaceRefreshButton } from "./WorkspaceRefreshButton";
 
 type Resource = IntegrationView["resources"][number];
 const label = (state: IntegrationView["state"]) =>
@@ -269,7 +268,6 @@ function ConnectedWorkspace({
     refused: boolean;
     message: string | null;
   } | null>(null);
-  const refresh = useAtomCommand(refreshWorkspaces, { reportFailure: false });
   const submit = useAtomCommand(submitOperation, { reportFailure: false });
   const inspect = useAtomCommand(inspectOperation, { reportFailure: false });
   const recent = useAtomCommand(recentOperations, { reportFailure: false });
@@ -788,15 +786,7 @@ function ConnectedWorkspace({
               </select>
             </label>
           ) : null}
-          <button
-            className={styles["dh-icon-button"]}
-            aria-label="Refresh workspaces"
-            onClick={() => {
-              void refresh({ environmentId, input: {} });
-            }}
-          >
-            <RefreshCwIcon size={16} />
-          </button>
+          <WorkspaceRefreshButton environmentId={environmentId} />
           {!agentMode && !contextMode ? (
             <button
               type="button"

@@ -15,6 +15,7 @@ struct StackDefinitionEditor: View {
   @State private var projectCommand = ""
   @State private var projectPort = ""
   @State private var projectUsesGit = true
+  @State private var refreshMessage: String?
 
   private var destination: URL { file ?? StackDefinitionLoader.directory().appendingPathComponent(filename + ".toml") }
   var body: some View {
@@ -33,10 +34,16 @@ struct StackDefinitionEditor: View {
       HStack {
         Button("Add project…", systemImage: "folder.badge.plus") { chooseProject() }
         Button("Validate") { validate() }
+        if file != nil {
+          DeckRefreshButton(title: "Refresh definition") { await refreshDefinition() }
+        }
         Spacer()
         Text("Changes apply on the next start or restart").font(.caption).foregroundColor(.secondary)
       }
       if addingProject { projectForm }
+      if let refreshMessage {
+        Text(refreshMessage).font(.caption).foregroundStyle(.secondary)
+      }
       TextEditor(text: $source).font(.system(size: 12, design: .monospaced)).disableAutocorrection(true)
         .padding(5).background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.2)))
@@ -63,6 +70,28 @@ struct StackDefinitionEditor: View {
           catch { issues = [.init(severity: .error, message: error.localizedDescription)] }
         }
       }
+  }
+  private func refreshDefinition() async {
+    guard let file else { return }
+    refreshMessage = nil
+    let supervisor = StackSupervisor.shared
+    await supervisor.reloadDefinitions()
+    guard supervisor.errorMessage == nil else {
+      issues = [.init(severity: .error, message: supervisor.errorMessage!)]; return
+    }
+    do {
+      let saved = try String(contentsOf: file, encoding: .utf8)
+      let loaded = StackDefinitionLoader.load(saved, file: file)
+      guard loaded.definition != nil, !loaded.issues.contains(where: { $0.severity == .error }) else {
+        issues = loaded.issues; return
+      }
+      let preserveEdits = source != originalSource || addingProject
+      if !preserveEdits { source = saved; originalSource = saved; issues = loaded.issues }
+      let changed = loaded.definition.map { supervisor.definitionChanged($0.id) } ?? false
+      refreshMessage = changed
+        ? "Definition reloaded. Restart running services from Services to apply the saved settings."
+        : preserveEdits ? "Definition reloaded. Your unsaved edits are preserved." : "Saved definition refreshed."
+    } catch { issues = [.init(severity: .error, message: error.localizedDescription)] }
   }
   private var projectForm: some View {
     VStack(alignment: .leading, spacing: 8) {

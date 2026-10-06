@@ -106,7 +106,7 @@ export const layer = Layer.effect(
               );
             if (sourceWorkspace.definitionChanged)
               return yield* fail(
-                "The workspace has unapplied settings. Reload its definition in workspace settings before moving this conversation.",
+                "The workspace has unapplied settings: running services still use an older definition. Refresh the definition in workspace settings, then restart services from Services before moving this conversation.",
               );
             if (sourceWorkspace.issues.length)
               return yield* fail(
