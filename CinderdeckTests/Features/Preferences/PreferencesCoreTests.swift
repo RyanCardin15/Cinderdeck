@@ -120,12 +120,14 @@ final class PreferencesCoreTests: XCTestCase {
       .permissions,
       .cloud,
       .github,
+      .dictation,
       .advanced,
       .about,
     ]
 
-    XCTAssertEqual(tabs.count, 12)
-    XCTAssertEqual(PreferencesTab.allCases.count, 12)
+    XCTAssertEqual(tabs.count, 13)
+    XCTAssertEqual(Set(PreferencesTab.allCases), tabs)
+    XCTAssertEqual(PreferencesTab.allCases.count, tabs.count)
   }
 
   func testPreferencesTabGroups_coverAllCasesExactlyOnce() {
