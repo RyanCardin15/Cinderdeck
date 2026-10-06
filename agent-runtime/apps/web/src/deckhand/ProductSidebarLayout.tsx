@@ -1,7 +1,10 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
@@ -38,6 +41,8 @@ function readPreferences() {
 const ProductSidebarContext = createContext({
   width: PRODUCT_SIDEBAR_DEFAULT_WIDTH,
   collapsed: false,
+  readScrollTop: (): number => 0,
+  rememberScrollTop: (_value: number) => {},
   resize: (_width: number): number => PRODUCT_SIDEBAR_DEFAULT_WIDTH,
   toggle: () => {},
   reset: () => {},
@@ -47,6 +52,11 @@ export const useProductSidebar = () => useContext(ProductSidebarContext);
 
 /** One preference owner survives navigation between every main-app surface. */
 export function ProductSidebarLayout({ children }: { children: ReactNode }) {
+  const scrollPosition = useRef(0);
+  const readScrollTop = useCallback(() => scrollPosition.current, []);
+  const rememberScrollTop = useCallback((value: number) => {
+    scrollPosition.current = value;
+  }, []);
   const [preferences, setPreferences] = useState(readPreferences);
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   useEffect(() => {
@@ -62,21 +72,27 @@ export function ProductSidebarLayout({ children }: { children: ReactNode }) {
     }
   }, [preferences]);
   const width = clampProductSidebarWidth(preferences.width, viewportWidth);
+  const value = useMemo(
+    () => ({
+      width,
+      collapsed: preferences.collapsed,
+      readScrollTop,
+      rememberScrollTop,
+      resize: (nextWidth: number) => {
+        const next = clampProductSidebarWidth(nextWidth, window.innerWidth);
+        setPreferences((current) =>
+          current.width === next ? current : { ...current, width: next },
+        );
+        return next;
+      },
+      toggle: () => setPreferences((current) => ({ ...current, collapsed: !current.collapsed })),
+      reset: () =>
+        setPreferences((current) => ({ ...current, width: PRODUCT_SIDEBAR_DEFAULT_WIDTH })),
+    }),
+    [width, preferences.collapsed, readScrollTop, rememberScrollTop],
+  );
   return (
-    <ProductSidebarContext.Provider
-      value={{
-        width,
-        collapsed: preferences.collapsed,
-        resize: (nextWidth) => {
-          const next = clampProductSidebarWidth(nextWidth, window.innerWidth);
-          setPreferences((current) => ({ ...current, width: next }));
-          return next;
-        },
-        toggle: () => setPreferences((current) => ({ ...current, collapsed: !current.collapsed })),
-        reset: () =>
-          setPreferences((current) => ({ ...current, width: PRODUCT_SIDEBAR_DEFAULT_WIDTH })),
-      }}
-    >
+    <ProductSidebarContext.Provider value={value}>
       <div
         style={
           {

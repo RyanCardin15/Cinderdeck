@@ -52,6 +52,7 @@ import { agentExecutionLabel, agentProviderLabel } from "./agentPresentation";
 import { environmentServerConfigsAtom } from "../state/server";
 import { deriveProviderInstanceEntries } from "../providerInstances";
 import { SessionLauncher } from "./SessionLauncher";
+import { useNavigationSnapshot } from "./useNavigationSnapshot";
 import { ProductNavigation } from "./ProductNavigation";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { WorkspaceLaneMap } from "./WorkspaceLaneMap";
@@ -214,17 +215,31 @@ function ConnectedWorkspace({
   const workspaceOffset = workspacePage.workspaceID === pageWorkspaceID ? workspacePage.offset : 0;
   const pageInput = overviewPageSelection(search, offset, workspaceOffset);
   const result = useAtomValue(workspaceView({ environmentId, input: pageInput }));
-  const view = Option.getOrNull(AsyncResult.value(result));
-  const nativeObservation = useAgentObservation(environmentId, JSON.stringify(pageInput), view);
+  const observedView = Option.getOrNull(AsyncResult.value(result));
+  const { value: view, retained: navigationPending } = useNavigationSnapshot(
+    environmentId,
+    observedView,
+    AsyncResult.isInitial(result),
+  );
+  const nativeObservation = useAgentObservation(
+    environmentId,
+    JSON.stringify(pageInput),
+    observedView,
+  );
   const nativeCurrent =
-    result._tag !== "Failure" && !nativeObservation.stale && view?.state === "connected";
-  const connectionLabel = nativeObservation.stale
-    ? nativeObservation.reconnecting
-      ? "Reconnecting to this computer"
-      : "Computer connection unavailable"
-    : view
-      ? label(view.state)
-      : "Connecting…";
+    !navigationPending &&
+    result._tag !== "Failure" &&
+    !nativeObservation.stale &&
+    view?.state === "connected";
+  const connectionLabel = navigationPending
+    ? "Loading workspace…"
+    : nativeObservation.stale
+      ? nativeObservation.reconnecting
+        ? "Reconnecting to this computer"
+        : "Computer connection unavailable"
+      : view
+        ? label(view.state)
+        : "Connecting…";
   const serverConfigs = useAtomValue(environmentServerConfigsAtom);
   const providers = deriveProviderInstanceEntries(
     serverConfigs.get(environmentId)?.providers ?? [],
@@ -305,6 +320,7 @@ function ConnectedWorkspace({
   const summaries = Option.getOrNull(AsyncResult.value(contextResult));
   const agentObservation = useAgentObservation(environmentId, agentScope, summaries);
   const agentsUnavailable =
+    navigationPending ||
     contextResult._tag === "Failure" ||
     agentObservation.stale ||
     nativeObservation.stale ||
@@ -350,6 +366,7 @@ function ConnectedWorkspace({
     ? contexts.find((resource) => resource.workspaceID === selectedID)
     : activeBase;
   const savedContextChanged =
+    !navigationPending &&
     view?.state === "connected" &&
     !savedWorkspaceMatches(search, view.hello?.installationID, selectedCandidate?.generation);
   const selected = savedContextChanged ? undefined : selectedCandidate;
@@ -811,7 +828,8 @@ function ConnectedWorkspace({
             are unavailable. Choose an available context to inspect its current work.
           </div>
         ) : null}
-        {view?.state === "connected" &&
+        {!navigationPending &&
+        view?.state === "connected" &&
         !savedContextChanged &&
         ((workspaceID && !activeBase) || (selectedID && !selected)) ? (
           <div role="status" className={styles["dh-status-error"]}>

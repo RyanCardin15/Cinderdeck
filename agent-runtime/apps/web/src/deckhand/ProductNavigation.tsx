@@ -1,6 +1,6 @@
 import { EnvironmentId } from "@cinderdeck/contracts";
 import { PullRequestGlyph } from "../components/pullRequest/pullRequestIcons";
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   ServerIcon,
@@ -44,6 +44,11 @@ export function ProductNavigation({
   hasWorkspaceTree?: boolean;
 }) {
   const sidebar = useProductSidebar();
+  const { readScrollTop } = sidebar;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = readScrollTop();
+  }, [readScrollTop]);
   const globalSearch = workspaceSearch?.environment
     ? { environment: workspaceSearch.environment }
     : {};
@@ -126,7 +131,13 @@ export function ProductNavigation({
       data-collapsed={sidebar.collapsed}
       aria-label="Cinderdeck navigation"
     >
-      <div className={styles.scroll}>
+      <div
+        className={styles.scroll}
+        ref={scrollRef}
+        onScroll={(event) => {
+          sidebar.rememberScrollTop(event.currentTarget.scrollTop);
+        }}
+      >
         {window.desktopBridge ? <div className={styles.titlebar} aria-hidden="true" /> : null}
         <div className={styles.brandRow}>
           <Link

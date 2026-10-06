@@ -442,3 +442,31 @@ it("keeps removed-lane chats discoverable, searchable and navigable in workspace
   await render(3, "workspace");
   expect(element.textContent).not.toContain("Original checkout chat");
 });
+
+it("opens in-progress and other sessions on entry, preserves a manual collapse, and expands on re-entry", async () => {
+  await render();
+  const other = {
+    ...session,
+    binding: { ...session.binding, id: "other", threadId: "other-thread", execution: "idle" },
+  } as ManagedSessionView;
+  await act(async () => registry.set(resultAtom(), AsyncResult.success([session, other])));
+  const groups = () => [
+    ...element.querySelectorAll<HTMLDetailsElement>(
+      'details[data-group="active"], details[data-group="other"]',
+    ),
+  ];
+  expect(groups()).toHaveLength(2);
+  expect(groups().every((group) => group.open)).toBe(true);
+  await act(async () => {
+    for (const group of groups()) group.open = false;
+  });
+  await act(async () =>
+    registry.set(resultAtom(), AsyncResult.success([{ ...session, title: "Updated" }, other])),
+  );
+  expect(groups().every((group) => !group.open)).toBe(true);
+  await act(async () => root.unmount());
+  root = createRoot(element);
+  await render();
+  expect(groups()).toHaveLength(2);
+  expect(groups().every((group) => group.open)).toBe(true);
+});
