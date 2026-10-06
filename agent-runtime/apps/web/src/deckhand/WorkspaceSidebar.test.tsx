@@ -71,7 +71,7 @@ vi.mock("../state/environments", () => ({
   usePrimaryEnvironmentId: () => "computer",
 }));
 import { NativeWorkspaceTools } from "./NativeWorkspaceTools";
-import { WorkspaceBranchesButton } from "./WorkspaceSettingsButton";
+import { WorkspaceBranchesButton, WorkspaceDeleteButton } from "./WorkspaceSettingsButton";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { ProductWorkspaces } from "./ProductWorkspaces";
 type Resource = IntegrationView["resources"][number];
@@ -166,6 +166,96 @@ const workspaceIDs = () =>
   [...container.querySelectorAll("nav > [data-workspace-id]")].map((row) =>
     row.getAttribute("data-workspace-id"),
   );
+it("opens deletion confirmation for the exact local workspace and suppresses repeat requests", async () => {
+  let finish!: (accepted: boolean) => void;
+  const openNativeTool = vi.fn(
+    () =>
+      new Promise<boolean>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  Object.defineProperty(window, "desktopBridge", {
+    configurable: true,
+    value: { isNativeHost: () => true, openNativeTool },
+  });
+  try {
+    const renderDelete = (computer: string, enabled: boolean) =>
+      act(async () =>
+        root.render(
+          <WorkspaceDeleteButton
+            environmentId={computer}
+            workspaceID="beta"
+            label="Delete workspace beta"
+            enabled={enabled}
+            showLabel
+          />,
+        ),
+      );
+    await renderDelete(environmentId, true);
+    await act(async () => {
+      button("Delete workspace beta").click();
+      button("Delete workspace beta").click();
+    });
+    expect(openNativeTool).toHaveBeenCalledTimes(1);
+    expect(openNativeTool).toHaveBeenCalledWith({
+      surface: "workspace-editor",
+      workspaceID: "beta",
+      mode: "delete",
+    });
+    expect(button("Delete workspace beta").disabled).toBe(true);
+    await act(async () => finish(true));
+    expect(button("Delete workspace beta").disabled).toBe(false);
+    await renderDelete(environmentId, false);
+    button("Delete workspace beta").click();
+    await renderDelete("remote", true);
+    button("Delete workspace beta").click();
+    expect(button("Delete workspace beta").disabled).toBe(true);
+    expect(openNativeTool).toHaveBeenCalledTimes(1);
+  } finally {
+    delete window.desktopBridge;
+  }
+});
+
+it("header deletion targets the primary workspace and never deletes a source from its lane header", async () => {
+  const openNativeTool = vi.fn(async () => true);
+  Object.defineProperty(window, "desktopBridge", {
+    configurable: true,
+    value: { isNativeHost: () => true, openNativeTool },
+  });
+  try {
+    const renderTools = (workspaceID: string) =>
+      act(async () =>
+        root.render(
+          <NativeWorkspaceTools
+            environmentId={environmentId}
+            workspaceID={workspaceID}
+            sourceWorkspaceID="alpha"
+            enabled
+            header
+          />,
+        ),
+      );
+    await renderTools("alpha");
+    await act(async () =>
+      [...container.querySelectorAll("button")]
+        .find((item) => item.textContent?.includes("Delete workspace"))!
+        .click(),
+    );
+    expect(openNativeTool).toHaveBeenCalledWith({
+      surface: "workspace-editor",
+      workspaceID: "alpha",
+      mode: "delete",
+    });
+    await renderTools("lane-a");
+    expect(
+      [...container.querySelectorAll("button")].some((item) =>
+        item.textContent?.includes("Delete workspace"),
+      ),
+    ).toBe(false);
+  } finally {
+    delete window.desktopBridge;
+  }
+});
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   boundary.navigate.mockClear();

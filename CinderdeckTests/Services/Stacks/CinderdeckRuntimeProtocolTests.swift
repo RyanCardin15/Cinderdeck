@@ -2,6 +2,18 @@ import XCTest
 @testable import Cinderdeck
 
 final class CinderdeckRuntimeProtocolTests: XCTestCase {
+  func testWorkspaceDeletionOpensScopedEditorAndRejectsArbitraryModesOrCommands() throws {
+    let request = try CinderdeckRuntimeUIRequest.decode(Data(#"{"surface":"workspace-editor","workspaceID":"fixture","mode":"delete"}"#.utf8))
+    XCTAssertEqual(request.mode, "delete")
+    XCTAssertEqual(request.workspaceID, "fixture")
+    for input in [
+      #"{"surface":"workspace-editor","mode":"delete"}"#,
+      #"{"surface":"workspace-editor","workspaceID":"fixture","mode":"erase-files"}"#,
+      #"{"surface":"workspace-editor","workspaceID":"fixture","mode":"delete","command":"rm"}"#,
+    ] {
+      XCTAssertThrowsError(try CinderdeckRuntimeUIRequest.decode(Data(input.utf8)), input)
+    }
+  }
   func testAgentAccessOpensWithoutWorkspaceOrMode() throws {
     let request = try CinderdeckRuntimeUIRequest.decode(Data(#"{"surface":"agent-access"}"#.utf8))
     XCTAssertEqual(request.surface, "agent-access")

@@ -16,7 +16,10 @@ import {
 import { workspaceView } from "../../deckhand/state";
 import { NativeWorkspaceTools } from "../../deckhand/NativeWorkspaceTools";
 import { WorkspaceRefreshButton } from "../../deckhand/WorkspaceRefreshButton";
-import { WorkspaceSettingsButton } from "../../deckhand/WorkspaceSettingsButton";
+import {
+  WorkspaceSettingsButton,
+  WorkspaceDeleteButton,
+} from "../../deckhand/WorkspaceSettingsButton";
 import { useAgentObservation } from "../../deckhand/useAgentObservation";
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
 import { Button } from "../ui/button";
@@ -167,13 +170,22 @@ function WorkspaceCard({
           </p>
         </div>
         {local ? (
-          <WorkspaceSettingsButton
-            environmentId={environmentId}
-            workspaceID={resource.workspaceID}
-            label={`Workspace settings for ${workspace.name}`}
-            enabled={enabled}
-            showLabel
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <WorkspaceSettingsButton
+              environmentId={environmentId}
+              workspaceID={resource.workspaceID}
+              label={`Workspace settings for ${workspace.name}`}
+              enabled={enabled}
+              showLabel
+            />
+            <WorkspaceDeleteButton
+              environmentId={environmentId}
+              workspaceID={resource.workspaceID}
+              label={`Delete workspace ${workspace.name}`}
+              enabled={connected}
+              showLabel
+            />
+          </div>
         ) : (
           <span className="text-xs text-muted-foreground">Edit on this workspace’s Mac</span>
         )}

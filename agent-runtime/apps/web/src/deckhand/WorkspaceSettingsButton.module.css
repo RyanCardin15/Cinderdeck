@@ -28,6 +28,13 @@
   font: inherit;
   cursor: pointer;
 }
+.destructive {
+  color: var(--destructive);
+  border-color: color-mix(in srgb, var(--destructive) 25%, var(--border));
+}
+.destructive:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--destructive) 7%, var(--card));
+}
 .control:disabled,
 .button:disabled,
 .control[aria-disabled="true"],

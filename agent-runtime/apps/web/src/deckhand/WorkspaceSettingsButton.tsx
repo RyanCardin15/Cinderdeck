@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { GitBranchIcon, SettingsIcon } from "lucide-react";
+import { GitBranchIcon, SettingsIcon, Trash2Icon } from "lucide-react";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../components/ui/tooltip";
 import styles from "./WorkspaceSettingsButton.module.css";
@@ -20,6 +20,9 @@ export function WorkspaceSettingsButton(props: WorkspaceButtonProps) {
 export function WorkspaceBranchesButton(props: WorkspaceButtonProps) {
   return <WorkspaceToolButton {...props} surface="workspace-branches" />;
 }
+export function WorkspaceDeleteButton(props: WorkspaceButtonProps) {
+  return <WorkspaceToolButton {...props} surface="workspace-editor" mode="delete" />;
+}
 function WorkspaceToolButton({
   environmentId,
   workspaceID,
@@ -28,7 +31,8 @@ function WorkspaceToolButton({
   compact = false,
   showLabel = false,
   surface,
-}: WorkspaceButtonProps & { surface: "workspace-editor" | "workspace-branches" }) {
+  mode,
+}: WorkspaceButtonProps & { surface: "workspace-editor" | "workspace-branches"; mode?: "delete" }) {
   const primary = usePrimaryEnvironmentId();
   const available =
     environmentId === primary &&
@@ -42,7 +46,13 @@ function WorkspaceToolButton({
     busy.current = true;
     setPending(true);
     try {
-      if (!(await window.desktopBridge!.openNativeTool!({ surface, workspaceID })))
+      if (
+        !(await window.desktopBridge!.openNativeTool!({
+          surface,
+          workspaceID,
+          ...(mode ? { mode } : {}),
+        }))
+      )
         throw new Error("Workspace unavailable");
     } catch {
       toastManager.add({
@@ -69,7 +79,7 @@ function WorkspaceToolButton({
         type="button"
         render={
           <button
-            className={compact ? styles.control : styles.button}
+            className={`${compact ? styles.control : styles.button} ${mode === "delete" ? styles.destructive : ""}`}
             disabled={!available || !enabled || pending}
           />
         }
@@ -77,15 +87,19 @@ function WorkspaceToolButton({
         disabled={!available || !enabled || pending}
         onClick={() => void open()}
       >
-        {surface === "workspace-editor" ? (
+        {mode === "delete" ? (
+          <Trash2Icon size={15} aria-hidden />
+        ) : surface === "workspace-editor" ? (
           <SettingsIcon size={15} aria-hidden />
         ) : (
           <GitBranchIcon size={15} aria-hidden />
         )}
         {showLabel
-          ? surface === "workspace-editor"
-            ? "Workspace settings"
-            : "Switch branch…"
+          ? mode === "delete"
+            ? "Delete workspace…"
+            : surface === "workspace-editor"
+              ? "Workspace settings"
+              : "Switch branch…"
           : null}
       </TooltipTrigger>
       <TooltipPopup>{tooltip}</TooltipPopup>

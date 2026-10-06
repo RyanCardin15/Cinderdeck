@@ -16,6 +16,7 @@ struct StackBranchChoice: Identifiable {
 
 struct StackEditorContext: Identifiable {
   let file: URL?
+  var requestsDeletion = false
   var id: String { file?.path ?? "new-stack" }
 }
 
