@@ -3,7 +3,7 @@ import { useState } from "react";
 import { BotIcon, ChevronRightIcon, MessagesSquareIcon, SearchIcon } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
-import { ThreadId, type EnvironmentId } from "@cinderdeck/contracts";
+import { ThreadId, type EnvironmentId, type ProviderDriverKind } from "@cinderdeck/contracts";
 import type { ManagedSessionView } from "@cinderdeck/contracts/deckhand/rpc";
 import type { SessionBinding } from "@cinderdeck/contracts/deckhand";
 import * as Option from "effect/Option";
@@ -15,23 +15,80 @@ import { useThreadShell } from "../state/entities";
 import { useAgentObservation } from "./useAgentObservation";
 import { agentExecutionLabel, agentProviderLabel } from "./agentPresentation";
 import { useSessionActions } from "./useSessionActions";
+import {
+  ProviderInstanceIcon,
+  providerTextColorClassName,
+} from "../components/chat/ProviderInstanceIcon";
+import { formatRelativeTimeLabel } from "../timestampFormat";
 import styles from "./sessions.module.css";
-const EMPTY_PROVIDERS: ReadonlyArray<{
+type SessionProvider = {
   readonly instanceId: string;
   readonly displayName: string;
-}> = [];
+  readonly driverKind?: ProviderDriverKind;
+  readonly accentColor?: string | undefined;
+  readonly acpRegistryAgentId?: string | undefined;
+  readonly acpRegistryIconUrl?: string | undefined;
+};
+const EMPTY_PROVIDERS: ReadonlyArray<SessionProvider> = [];
 const connectionLabels: Record<SessionBinding["connection"], string> = {
   connected: "Agent connected",
   reconnecting: "Agent connecting",
   unavailable: "Agent not connected",
   stale: "Agent not connected",
 };
+const sessionPurpose = (binding: SessionBinding) =>
+  binding.role === "writer"
+    ? "Implementation"
+    : binding.role === "reviewer"
+      ? "Review"
+      : binding.desiredAccess === "read_only" && binding.capabilities.enforcedReadOnly
+        ? "Analysis · read only"
+        : "Observer";
+function SessionAvatar({ provider }: { provider: SessionProvider | undefined }) {
+  return (
+    <span className={styles.sessionIcon} aria-hidden>
+      {provider?.driverKind ? (
+        <ProviderInstanceIcon
+          driverKind={provider.driverKind}
+          displayName={provider.displayName}
+          accentColor={provider.accentColor}
+          acpRegistryAgentId={provider.acpRegistryAgentId}
+          acpRegistryIconUrl={provider.acpRegistryIconUrl}
+          className={`${styles.providerGlyph ?? ""} ${providerTextColorClassName(provider.driverKind) ?? ""}`}
+          iconClassName={styles.providerGlyphIcon ?? ""}
+        />
+      ) : (
+        <BotIcon size={16} />
+      )}
+      <i className={styles.statusDot} />
+    </span>
+  );
+}
+/** Reads the thread's last activity from the client shell when it is loaded. */
+function SessionAge({
+  environmentId,
+  threadId,
+}: {
+  environmentId: EnvironmentId;
+  threadId: ThreadId;
+}) {
+  const shell = useThreadShell({ environmentId, threadId });
+  const label = shell?.updatedAt ? formatRelativeTimeLabel(shell.updatedAt) : "";
+  return label ? (
+    <>
+      {" · "}
+      <time className={styles.sessionAge} dateTime={shell!.updatedAt}>
+        {label}
+      </time>
+    </>
+  ) : null;
+}
 type SessionListProps = {
   environmentId: EnvironmentId;
   installationID: string;
   workspaceID: string;
   generation: number;
-  providers?: ReadonlyArray<{ readonly instanceId: string; readonly displayName: string }>;
+  providers?: ReadonlyArray<SessionProvider>;
   contextLabel?: string;
   selectedThreadId?: string;
   showExternal?: boolean;
@@ -149,9 +206,8 @@ function ScopedSessionList({
     { id: "other", label: "Other sessions" },
   ];
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const filtered = (sessions ?? []).filter(
+  const searchMatches = (sessions ?? []).filter(
     (session) =>
-      (statusFilter === "all" || groupFor(session) === statusFilter) &&
       (providerFilter === "all" || session.binding.providerInstanceId === providerFilter) &&
       (!normalizedQuery ||
         [
@@ -163,6 +219,13 @@ function ScopedSessionList({
           .toLocaleLowerCase()
           .includes(normalizedQuery)),
   );
+  const filtered = searchMatches.filter(
+    (session) => statusFilter === "all" || groupFor(session) === statusFilter,
+  );
+  const statusCount = (id: string) =>
+    id === "all"
+      ? searchMatches.length
+      : searchMatches.filter((session) => groupFor(session) === id).length;
   const pageProviders = Array.from(
     new Set(sessions?.map((s) => s.binding.providerInstanceId) ?? []),
   );
@@ -172,74 +235,77 @@ function ScopedSessionList({
     session: ManagedSessionView,
     rowStale = observation.stale,
     rowUnavailable = unavailable,
-  ) => (
-    <Link
-      key={session.binding.id}
-      to="/$environmentId/$threadId"
-      params={buildThreadRouteParams({
-        environmentId,
-        threadId: session.binding.threadId,
-      })}
-      aria-current={selectedThreadId === session.binding.threadId ? "page" : undefined}
-      className={styles.session}
-      data-tone={
-        rowStale ||
-        rowUnavailable ||
-        session.source === "unavailable" ||
-        session.binding.connection !== "connected"
-          ? "other"
-          : groupFor(session)
-      }
-      onContextMenu={(event) => {
-        event.preventDefault();
-        void showMenu(
-          session,
-          { x: event.clientX, y: event.clientY },
-          !rowStale && !rowUnavailable,
-        );
-      }}
-      onKeyDown={(event) => {
-        if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
-        event.preventDefault();
-        const bounds = event.currentTarget.getBoundingClientRect();
-        void showMenu(session, { x: bounds.left, y: bounds.bottom }, !rowStale && !rowUnavailable);
-      }}
-    >
-      {workspacePresentation ? (
-        <span className={styles.sessionIcon}>
-          <BotIcon size={19} aria-hidden />
+  ) => {
+    const notConnected = rowStale || rowUnavailable || session.source === "unavailable";
+    const execution = rowStale
+      ? "Last observed"
+      : notConnected
+        ? "Unknown"
+        : session.binding.connection === "stale"
+          ? "Last observed"
+          : agentExecutionLabel(session.binding.execution);
+    const connected = !notConnected && session.binding.connection === "connected";
+    const tone = !connected
+      ? "other"
+      : session.binding.execution === "failed"
+        ? "failed"
+        : groupFor(session);
+    return (
+      <Link
+        key={session.binding.id}
+        to="/$environmentId/$threadId"
+        params={buildThreadRouteParams({
+          environmentId,
+          threadId: session.binding.threadId,
+        })}
+        aria-current={selectedThreadId === session.binding.threadId ? "page" : undefined}
+        className={styles.session}
+        data-tone={tone}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          void showMenu(
+            session,
+            { x: event.clientX, y: event.clientY },
+            !rowStale && !rowUnavailable,
+          );
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+          event.preventDefault();
+          const bounds = event.currentTarget.getBoundingClientRect();
+          void showMenu(
+            session,
+            { x: bounds.left, y: bounds.bottom },
+            !rowStale && !rowUnavailable,
+          );
+        }}
+      >
+        <SessionAvatar
+          provider={providers.find(
+            (provider) => provider.instanceId === session.binding.providerInstanceId,
+          )}
+        />
+        <div className={styles.sessionIdentity}>
+          <strong>{session.title}</strong>
+          <span className={styles.provider}>
+            {agentProviderLabel(session.binding.providerInstanceId, providers)}
+            {` · ${sessionPurpose(session.binding)}${session.archived ? " · Archived" : ""}`}
+            <SessionAge environmentId={environmentId} threadId={session.binding.threadId} />
+          </span>
+        </div>
+        <span className={styles.sessionStatus}>
+          <span className={styles.statusLabel}>{execution}</span>
+          <span className={connected ? styles.srOnly : styles.connectionNote}>
+            <span className={styles.srOnly}> · </span>
+            {notConnected ? "Agent not connected" : connectionLabels[session.binding.connection]}
+          </span>
         </span>
-      ) : null}
-      <div className={styles.sessionIdentity}>
-        <span className={styles.provider}>
-          {agentProviderLabel(session.binding.providerInstanceId, providers)}
-        </span>
-        <strong>{session.title}</strong>
-        <span className={styles.sessionScope}>
-          {contextLabel} ·{" "}
-          {session.binding.role === "writer"
-            ? "Implementation"
-            : session.binding.role === "reviewer"
-              ? "Review"
-              : session.binding.desiredAccess === "read_only" &&
-                  session.binding.capabilities.enforcedReadOnly
-                ? "Analysis · read only"
-                : "Observer"}
-          {session.archived ? " · Archived" : ""}
-        </span>
-      </div>
-      <span className={styles.sessionStatus}>
-        {rowStale
-          ? "Last observed · Agent not connected"
-          : rowUnavailable || session.source === "unavailable"
-            ? "Unknown · Agent not connected"
-            : `${session.binding.connection === "stale" ? "Last observed" : agentExecutionLabel(session.binding.execution)} · ${connectionLabels[session.binding.connection]}`}
-      </span>
-      {workspacePresentation ? (
-        <ChevronRightIcon className={styles.rowArrow} size={16} aria-hidden />
-      ) : null}
-    </Link>
-  );
+        {workspacePresentation ? (
+          <ChevronRightIcon className={styles.rowArrow} size={16} aria-hidden />
+        ) : null}
+      </Link>
+    );
+  };
   const selectedOutsideFilters =
     selectedOnPage && !filtered.some((session) => session.binding.id === selectedOnPage.binding.id);
   const selectedOutsidePage = selectedThreadId && !selectedOnPage;
@@ -248,8 +314,31 @@ function ScopedSessionList({
     : selectedOutsidePage
       ? exactSelected
       : null;
+  const statusTabs = (
+    <div className={styles.statusTabs} role="group" aria-label="Filter by status">
+      {[{ id: "all", label: "All" }, ...groups].map(({ id, label }) => {
+        const count = statusCount(id);
+        if (id !== "all" && id !== statusFilter && !count) return null;
+        return (
+          <button
+            type="button"
+            key={id}
+            className={styles.statusTab}
+            data-status={id}
+            aria-pressed={statusFilter === id}
+            onClick={() => setStatusFilter(id)}
+          >
+            {id === "all" ? null : <i aria-hidden />}
+            {label}
+            <span>{count}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
   const filterControls = (
     <>
+      {workspacePresentation && sessions?.length ? statusTabs : null}
       <div className={styles.filters}>
         <label className={styles.search}>
           <span className={styles.srOnly}>Search sessions on this page</span>
@@ -265,31 +354,35 @@ function ScopedSessionList({
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
-        <label>
-          <span>Status</span>
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-            <option value="all">All statuses</option>
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span>Provider</span>
-          <select
-            value={providerFilter}
-            onChange={(event) => setProviderFilter(event.target.value)}
-          >
-            <option value="all">All providers on this page</option>
-            {pageProviders.map((id) => (
-              <option key={id} value={id}>
-                {agentProviderLabel(id, providers)}
-              </option>
-            ))}
-          </select>
-        </label>
+        {workspacePresentation ? null : (
+          <label>
+            <span>Status</span>
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              <option value="all">All statuses</option>
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {workspacePresentation && pageProviders.length < 2 && providerFilter === "all" ? null : (
+          <label>
+            <span>Provider</span>
+            <select
+              value={providerFilter}
+              onChange={(event) => setProviderFilter(event.target.value)}
+            >
+              <option value="all">All providers on this page</option>
+              {pageProviders.map((id) => (
+                <option key={id} value={id}>
+                  {agentProviderLabel(id, providers)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {hasFilters ? (
           <button
             type="button"
@@ -395,13 +488,26 @@ function ScopedSessionList({
         {groups.map((group) => {
           const rows = filtered.filter((session) => groupFor(session) === group.id);
           return rows.length ? (
-            <section className={styles.group} key={group.id} aria-label={group.label}>
-              <h4>
-                {observation.stale || unavailable ? "Last observed · " : ""}
-                {group.label} <span>{rows.length}</span>
-              </h4>
-              {rows.map((session) => sessionRow(session))}
-            </section>
+            <details
+              className={`${styles.group} ${styles.sessionGroup}`}
+              key={group.id}
+              data-group={group.id}
+              aria-label={group.label}
+              open={
+                group.id === "attention" ||
+                group.id === "active" ||
+                rows.some((session) => session.binding.threadId === selectedThreadId)
+              }
+            >
+              <summary>
+                <ChevronRightIcon size={13} aria-hidden />
+                <h4>
+                  {observation.stale || unavailable ? "Last observed · " : ""}
+                  {group.label} <span>{rows.length}</span>
+                </h4>
+              </summary>
+              <div className={styles.groupRows}>{rows.map((session) => sessionRow(session))}</div>
+            </details>
           ) : null;
         })}
         {pagingUnavailable ? (

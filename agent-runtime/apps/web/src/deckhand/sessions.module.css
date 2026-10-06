@@ -3,13 +3,14 @@
 .launchPrompt,
 .chatShortcut {
   --session-accent: var(--primary);
-  --session-line: color-mix(in srgb, var(--foreground) 13%, transparent);
+  --session-line: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --status-ring: var(--background);
   color: var(--foreground);
   min-width: 0;
 }
 .roster {
   display: grid;
-  gap: 16px;
+  gap: 14px;
 }
 .rosterHeading,
 .formHeading,
@@ -39,19 +40,22 @@
   padding: 20px;
   margin-bottom: 22px;
   border: 1px solid var(--session-line);
-  border-radius: 10px;
+  border-radius: 12px;
   background: color-mix(in srgb, var(--foreground) 3%, var(--background));
 }
 .count {
   color: var(--muted-foreground);
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* Filters */
 .filters {
   display: flex;
   align-items: end;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
 }
 .filters label {
   display: grid;
@@ -70,16 +74,89 @@
   width: 100%;
   min-width: 0;
   border: 1px solid var(--session-line);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--background);
   color: var(--foreground);
   font: inherit;
   padding: 10px 12px;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+.filters input:focus,
+.filters select:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--session-accent) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--session-accent) 16%, transparent);
 }
 .filters input,
 .filters select {
-  min-height: 39px;
+  min-height: 36px;
   font-size: 12px;
+}
+.statusTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.statusTab {
+  --tone: var(--muted-foreground);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 6px 0 11px;
+  border: 1px solid var(--session-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+.statusTab[data-status="attention"] {
+  --tone: var(--deck-warning);
+}
+.statusTab[data-status="active"] {
+  --tone: var(--deck-success);
+}
+.statusTab[data-status="completed"] {
+  --tone: var(--deck-info);
+}
+.statusTab i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tone);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--tone) 70%, transparent);
+}
+.statusTab span {
+  min-width: 20px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
+  color: var(--foreground);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.statusTab:hover {
+  color: var(--foreground);
+  border-color: color-mix(in srgb, var(--foreground) 22%, transparent);
+}
+.statusTab[aria-pressed="true"] {
+  color: var(--foreground);
+  border-color: color-mix(in srgb, var(--tone) 45%, var(--session-line));
+  background: color-mix(in srgb, var(--tone) 11%, transparent);
+}
+.statusTab[data-status="all"][aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--foreground) 22%, transparent);
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
 }
 .scopeNote {
   color: var(--muted-foreground);
@@ -89,9 +166,10 @@
 }
 .notice {
   margin: 0;
-  border-left: 2px solid var(--session-accent);
+  border: 1px solid color-mix(in srgb, var(--session-accent) 22%, transparent);
+  border-radius: 10px;
   padding: 10px 14px;
-  background: color-mix(in srgb, var(--session-accent) 7%, var(--background));
+  background: color-mix(in srgb, var(--session-accent) 7%, transparent);
   color: var(--muted-foreground);
   font-size: 12px;
   line-height: 1.7;
@@ -101,112 +179,330 @@
   color: var(--muted-foreground);
   text-align: center;
   border: 1px dashed var(--session-line);
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 13px;
 }
+
+/* Status groups */
 .group {
   display: grid;
-  gap: 7px;
+  gap: 4px;
 }
 .group h4 {
-  margin: 0 0 4px;
+  margin: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   color: var(--muted-foreground);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.6px;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .group h4 span {
-  color: var(--muted-foreground);
-  border: 1px solid var(--session-line);
-  border-radius: 4px;
-  padding: 1px 5px;
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
+  color: var(--foreground);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0;
+  text-align: center;
 }
-.session {
+.sessionGroup {
+  display: block;
+}
+.sessionGroup > summary {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 16px 18px;
-  border: 1px solid var(--session-line);
-  border-radius: 8px;
+  gap: 7px;
+  padding: 6px 4px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--muted-foreground);
+  user-select: none;
+}
+.sessionGroup > summary::-webkit-details-marker {
+  display: none;
+}
+.sessionGroup > summary::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--session-line), transparent);
+}
+.sessionGroup > summary > svg {
+  flex: none;
+  opacity: 0.6;
+  transition: transform 140ms ease;
+}
+.sessionGroup[open] > summary > svg {
+  transform: rotate(90deg);
+}
+.sessionGroup > summary:hover h4,
+.sessionGroup > summary:hover > svg {
+  color: var(--foreground);
+  opacity: 1;
+}
+.sessionGroup[data-group="attention"] h4 {
+  color: var(--deck-warning);
+}
+.sessionGroup[data-group="attention"] h4 span {
+  background: color-mix(in srgb, var(--deck-warning) 16%, transparent);
+  color: var(--deck-warning);
+}
+.sessionGroup > summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.groupRows {
+  display: grid;
+  gap: 2px;
+  padding-top: 2px;
+}
+
+/* Session rows */
+.session {
+  --tone: var(--muted-foreground);
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
   color: inherit;
-  background: color-mix(in srgb, var(--foreground) 2%, var(--background));
   text-decoration: none;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+.session[data-tone="active"] {
+  --tone: var(--deck-success);
+}
+.session[data-tone="attention"] {
+  --tone: var(--deck-warning);
+}
+.session[data-tone="failed"] {
+  --tone: var(--deck-danger);
+}
+.session[data-tone="completed"] {
+  --tone: var(--deck-info);
 }
 .session:hover {
-  border-color: color-mix(in srgb, var(--session-accent) 50%, var(--session-line));
-  background: color-mix(in srgb, var(--foreground) 5%, var(--background));
+  border-color: var(--session-line);
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
 }
 .session[aria-current="page"] {
-  border-color: var(--session-accent);
-  background: color-mix(in srgb, var(--session-accent) 7%, var(--background));
+  border-color: color-mix(in srgb, var(--session-accent) 32%, transparent);
+  background: color-mix(in srgb, var(--session-accent) 9%, transparent);
+}
+.session[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--session-accent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--session-accent) 70%, transparent);
+}
+.sessionIcon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--session-line);
+  border-radius: 10px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--foreground) 6%, var(--status-ring)),
+    var(--status-ring)
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--muted-foreground);
+}
+.sessionIcon .providerGlyph {
+  z-index: auto;
+}
+.sessionIcon .providerGlyphIcon {
+  width: 17px;
+  height: 17px;
+}
+.statusDot {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tone);
+  box-shadow: 0 0 0 2px var(--status-ring);
+}
+.session[data-tone="other"] .statusDot {
+  background: color-mix(in srgb, var(--muted-foreground) 55%, var(--status-ring));
+}
+.session[data-tone="active"] .statusDot::after,
+.session[data-tone="attention"] .statusDot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--tone);
+  animation: session-pulse 1.8s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+}
+@keyframes session-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.65;
+  }
+  100% {
+    transform: scale(2.8);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .statusDot::after {
+    display: none;
+  }
 }
 .sessionIdentity {
   display: grid;
-  gap: 6px;
+  gap: 3px;
   min-width: 0;
 }
 .sessionIdentity strong {
-  font-size: 14px;
+  overflow: hidden;
+  font-size: 13.5px;
   font-weight: 600;
-  overflow-wrap: anywhere;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .provider {
-  color: var(--session-accent);
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-.sessionScope,
-.sessionStatus {
+  overflow: hidden;
   color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: 11.5px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sessionAge {
+  font-variant-numeric: tabular-nums;
 }
 .sessionStatus {
-  max-width: 230px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 8px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.5;
   text-align: right;
+}
+.statusLabel {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border: 1px solid color-mix(in srgb, var(--tone) 24%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tone) 12%, transparent);
+  color: var(--tone);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.session[data-tone="other"] .statusLabel {
+  border-color: var(--session-line);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  color: var(--muted-foreground);
+}
+.connectionNote {
+  white-space: nowrap;
+}
+.rowArrow {
+  color: var(--muted-foreground);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+.session:hover .rowArrow,
+.session:focus-visible .rowArrow,
+.session[aria-current="page"] .rowArrow {
+  opacity: 1;
+  transform: none;
 }
 .pages {
   display: flex;
   gap: 10px;
   justify-content: space-between;
 }
+
+/* Buttons */
 .quiet,
 .primary,
 .providerChoice {
   font: inherit;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 .quiet {
   border: 1px solid var(--session-line);
   background: transparent;
   color: var(--foreground);
-  padding: 9px 12px;
+  padding: 8px 12px;
   font-size: 12px;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 .primary {
-  border: 1px solid var(--session-accent);
-  background: var(--session-accent);
+  border: 1px solid color-mix(in srgb, var(--session-accent) 80%, black);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--session-accent) 86%, white),
+    var(--session-accent)
+  );
   color: var(--primary-foreground);
-  padding: 10px 15px;
+  padding: 9px 15px;
   font-size: 12px;
   font-weight: 600;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 20%),
+    0 1px 2px rgb(0 0 0 / 18%),
+    0 6px 18px -8px color-mix(in srgb, var(--session-accent) 80%, transparent);
+  transition:
+    filter 120ms ease,
+    box-shadow 120ms ease;
 }
 .quiet:hover {
-  background: color-mix(in srgb, var(--foreground) 5%, var(--background));
+  border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
 }
 .primary:hover {
-  filter: brightness(1.08);
+  filter: brightness(1.07);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 24%),
+    0 1px 2px rgb(0 0 0 / 18%),
+    0 8px 24px -8px color-mix(in srgb, var(--session-accent) 95%, transparent);
+}
+.primary:active {
+  filter: brightness(0.96);
 }
 .quiet:disabled,
 .primary:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+  filter: none;
+  box-shadow: none;
 }
 .launcher {
   container-type: inline-size;
@@ -293,11 +589,80 @@
     flex-wrap: wrap;
   }
 }
+.chatShortcut {
+  container-type: inline-size;
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+}
+.chatActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.chatActions a {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-decoration: none;
+}
+.chatActions a:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.chatActions select {
+  max-width: 180px;
+  border: 1px solid var(--session-line);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+}
+/* In the narrow conversation sidebar, New chat spans the column. */
+@container (max-width: 300px) {
+  .chatActions .primary {
+    flex: 1 1 100%;
+  }
+}
+
+.chatOptions {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.chatOptions summary {
+  cursor: pointer;
+  list-style: none;
+}
+.chatOptions summary::-webkit-details-marker {
+  display: none;
+}
+.chatOptions summary:hover {
+  color: var(--foreground);
+}
+.chatOptions button {
+  margin-top: 8px;
+}
+
+.chatReview {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  font-size: 12px;
+}
+.chatReview div {
+  display: grid;
+  gap: 4px;
+}
+.chatReview code {
+  overflow-wrap: anywhere;
+}
 .roster :focus-visible,
 .launcher :focus-visible,
 .launchPrompt :focus-visible {
   outline: 2px solid var(--session-accent);
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 .srOnly {
   position: absolute;
@@ -309,13 +674,11 @@
 }
 @media (max-width: 650px) {
   .session {
-    align-items: start;
-    flex-direction: column;
-    gap: 10px;
-    padding: 14px;
+    grid-template-columns: 34px minmax(0, 1fr);
   }
   .sessionStatus {
-    max-width: none;
+    grid-column: 2;
+    justify-content: flex-start;
     text-align: left;
   }
   .form fieldset {
@@ -337,36 +700,51 @@
   }
 }
 
-/* The conversation shell already provides the selected checkout heading. */
+/* Conversation sidebar. The shell already provides the selected checkout heading. */
 .compact {
-  gap: 9px;
+  --status-ring: color-mix(in srgb, var(--foreground) 1.5%, var(--background));
+  gap: 8px;
 }
 .compact .rosterHeading {
   gap: 8px;
-  flex-wrap: wrap;
+  padding-inline: 4px;
 }
 .compact .rosterHeading h3 {
-  font-size: 14px;
-  letter-spacing: 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .compact .count {
-  font-size: 12px;
-  white-space: normal;
+  font-size: 11px;
+}
+.filterFold {
+  padding-inline: 4px;
 }
 .filterFold > summary {
   width: fit-content;
+  padding: 3px 9px;
+  border: 1px solid var(--session-line);
+  border-radius: 999px;
   cursor: pointer;
+  list-style: none;
   color: var(--muted-foreground);
-  font-size: 12px;
-  padding: 3px 0;
+  font-size: 11px;
+}
+.filterFold > summary::-webkit-details-marker {
+  display: none;
+}
+.filterFold > summary:hover {
+  color: var(--foreground);
 }
 .filterFold > summary:focus-visible {
   outline: 2px solid var(--session-accent);
-  outline-offset: 3px;
-  border-radius: 2px;
+  outline-offset: 2px;
 }
 .filterFold[open] > summary {
   margin-bottom: 8px;
+  color: var(--foreground);
 }
 .compact .filters {
   gap: 8px;
@@ -377,28 +755,81 @@
 }
 .compact .filters input,
 .compact .filters select {
-  min-height: 32px;
-  padding: 7px 8px;
+  min-height: 30px;
+  padding: 6px 8px;
   font-size: 12px;
 }
 .compact .scopeNote {
   margin-top: 8px;
+  font-size: 11px;
 }
+/* Title on top; status, provider and age share one quiet line underneath. */
 .compact .session {
-  display: grid;
-  justify-content: stretch;
-  gap: 5px;
-  padding: 10px 11px;
+  grid-template-columns: 28px auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1px 8px;
+  padding: 8px 9px;
+}
+.compact .sessionIcon {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+.compact .sessionIcon .providerGlyphIcon {
+  width: 15px;
+  height: 15px;
+}
+.compact .statusDot {
+  width: 8px;
+  height: 8px;
+  right: -2px;
+  bottom: -2px;
 }
 .compact .sessionIdentity {
-  gap: 3px;
+  display: contents;
 }
 .compact .sessionIdentity strong {
-  font-size: 12px;
+  display: -webkit-box;
+  grid-column: 2 / -1;
+  grid-row: 1;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 12.5px;
+  font-weight: 550;
+  white-space: normal;
+}
+.compact .session[aria-current="page"] .sessionIdentity strong {
+  font-weight: 650;
 }
 .compact .sessionStatus {
-  max-width: none;
+  grid-column: 2;
+  grid-row: 2;
+  justify-content: flex-start;
+  gap: 0 5px;
   text-align: left;
+}
+.compact .statusLabel {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-weight: 600;
+}
+.compact .session[data-tone="other"] .statusLabel {
+  background: none;
+}
+.compact .connectionNote {
+  display: none;
+}
+.compact .provider {
+  grid-column: 3;
+  grid-row: 2;
+  margin-left: -3px;
+  font-size: 11px;
+}
+.compact .provider::before {
+  content: "·\00a0";
 }
 .compact .notice {
   padding: 8px 10px;
@@ -412,69 +843,20 @@
   font-size: 12px;
 }
 
-.chatShortcut {
-  display: grid;
-  gap: 8px;
-  padding: 12px 0;
-}
-.chatActions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
-.chatActions a {
-  color: var(--muted-foreground);
-  font-size: 12px;
-}
-.chatActions select {
-  max-width: 180px;
-  border: 1px solid var(--session-line);
-  border-radius: 6px;
-  padding: 8px;
-  background: var(--background);
-  color: var(--foreground);
-  font: inherit;
-}
-
-.chatOptions {
-  font-size: 12px;
-  color: var(--muted-foreground);
-}
-.chatOptions summary {
-  cursor: pointer;
-}
-.chatOptions button {
-  margin-top: 8px;
-}
-
-.chatReview {
-  display: grid;
-  gap: 8px;
-  width: 100%;
-  font-size: 12px;
-}
-.chatReview div {
-  display: grid;
-  gap: 4px;
-}
-.chatReview code {
-  overflow-wrap: anywhere;
-}
-
-/* Full workspace roster. The compact conversation inspector keeps its own density. */
+/* Full workspace roster. */
 .workspaceRoster {
   container-type: inline-size;
-  --session-line: var(--border);
-  gap: 18px;
+  --session-line: color-mix(in srgb, var(--foreground) 9%, transparent);
+  --status-ring: var(--card);
+  gap: 14px;
 }
 .workspaceRoster .rosterHeading h3 {
-  font-size: 14px;
-  letter-spacing: -0.15px;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
 }
 .workspaceRoster .count {
   font-size: 11px;
-  font-variant-numeric: tabular-nums;
 }
 .workspaceRoster .filters {
   gap: 8px;
@@ -494,18 +876,18 @@
 .workspaceRoster .filters select {
   min-height: 34px;
   padding: 7px 10px;
-  border-radius: 7px;
-  background: var(--card);
-  font-size: 11px;
+  background: color-mix(in srgb, var(--foreground) 3%, var(--card));
+  font-size: 12px;
 }
 .workspaceRoster .search {
   position: relative;
-  flex-basis: 220px;
+  flex-basis: 240px;
 }
 .workspaceRoster .search svg {
   position: absolute;
   left: 11px;
   top: 50%;
+  color: var(--muted-foreground);
   transform: translateY(-50%);
   pointer-events: none;
 }
@@ -513,117 +895,63 @@
   padding-left: 34px;
 }
 .workspaceRoster > .scopeNote {
+  margin-top: -6px;
   font-size: 11px;
-  margin-top: -9px;
+  opacity: 0.8;
 }
-.workspaceRoster .group {
-  gap: 0;
-}
-.workspaceRoster .group h4 {
-  gap: 7px;
-  margin: 0 0 8px;
-  color: var(--foreground);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0;
-}
-.workspaceRoster .group h4 span {
-  border: 0;
-  border-radius: 5px;
-  background: var(--muted);
-  font-size: 10px;
-  padding: 2px 6px;
-  font-variant-numeric: tabular-nums;
+.workspaceRoster .groupRows {
+  gap: 4px;
 }
 .workspaceRoster .session {
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) minmax(100px, 210px) 16px;
-  gap: 12px;
-  padding: 15px 10px;
-  border: 0;
-  border-bottom: 1px solid var(--session-line);
-  border-radius: 0;
-  background: transparent;
+  grid-template-columns: 38px minmax(0, 1fr) auto 16px;
+  gap: 14px;
+  padding: 11px 12px 11px 11px;
+  border-color: var(--session-line);
+  background: color-mix(in srgb, var(--foreground) 1.5%, var(--card));
 }
-.workspaceRoster .session:last-child {
-  border-bottom-color: transparent;
+.workspaceRoster .session:hover {
+  border-color: color-mix(in srgb, var(--foreground) 18%, transparent);
+  background: color-mix(in srgb, var(--foreground) 4%, var(--card));
+  box-shadow: 0 6px 20px -14px rgb(0 0 0 / 45%);
 }
-.workspaceRoster .session:hover,
 .workspaceRoster .session[aria-current="page"] {
-  background: var(--muted);
-  border-radius: 8px;
+  border-color: color-mix(in srgb, var(--session-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--session-accent) 8%, var(--card));
 }
-.sessionIcon {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--session-line);
-  border-radius: 10px;
-  background: var(--card);
-  color: var(--muted-foreground);
+.workspaceRoster .sessionIcon {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
 }
-.workspaceRoster .sessionIdentity {
-  gap: 3px;
+.workspaceRoster .sessionIcon .providerGlyphIcon {
+  width: 19px;
+  height: 19px;
 }
 .workspaceRoster .sessionIdentity strong {
-  order: -1;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.15px;
-  line-height: 1.5;
-}
-.workspaceRoster .provider {
-  color: var(--muted-foreground);
-  font-size: 11px;
-}
-.workspaceRoster .sessionScope {
-  font-size: 11px;
-}
-.workspaceRoster .sessionStatus {
-  justify-self: end;
-  font-size: 11px;
-  line-height: 1.6;
-  text-wrap: balance;
-}
-.workspaceRoster .sessionStatus::before {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 6px;
-  margin-bottom: 1px;
-  border-radius: 50%;
-  background: var(--muted-foreground);
-}
-.workspaceRoster .session[data-tone="active"] .sessionStatus::before {
-  background: var(--deck-success, var(--primary));
-}
-.workspaceRoster .session[data-tone="attention"] .sessionStatus::before {
-  background: var(--deck-warning, var(--primary));
-}
-.rowArrow {
-  color: var(--muted-foreground);
-  opacity: 0.4;
-}
-.session:hover .rowArrow {
-  opacity: 1;
+  font-size: 14px;
 }
 .workspaceRoster .empty {
   display: grid;
   justify-items: center;
   gap: 10px;
-  padding: 44px 20px;
+  padding: 48px 20px;
   margin: 0;
-  border: 1px solid var(--session-line);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--muted) 50%, var(--card));
+  border: 1px dashed color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: 14px;
+  background: radial-gradient(
+    120% 90% at 50% 0%,
+    color-mix(in srgb, var(--session-accent) 7%, transparent),
+    transparent 70%
+  );
+}
+.workspaceRoster .empty svg {
+  color: var(--session-accent);
 }
 .workspaceRoster .empty h4 {
   margin: 2px 0 0;
   color: var(--foreground);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 650;
 }
 .workspaceRoster .empty p {
   margin: 0;
@@ -654,7 +982,7 @@
   margin: 12px 0 0;
   background: var(--muted);
   border-color: transparent;
-  border-radius: 8px;
+  border-radius: 10px;
 }
 .workspaceExternal article strong {
   font-size: 12px;
@@ -672,22 +1000,22 @@
     flex-basis: 100%;
   }
   .workspaceRoster .session {
-    grid-template-columns: 32px minmax(0, 1fr) 16px;
-    gap: 6px 10px;
+    grid-template-columns: 34px minmax(0, 1fr) 16px;
+    gap: 6px 12px;
   }
   .workspaceRoster .sessionIcon {
-    width: 32px;
-    height: 32px;
+    grid-row: 1 / 3;
+    width: 34px;
+    height: 34px;
   }
   .workspaceRoster .sessionStatus {
     grid-column: 2;
     grid-row: 2;
-    justify-self: start;
+    justify-content: flex-start;
     text-align: left;
-    max-width: none;
   }
   .workspaceRoster .rowArrow {
     grid-column: 3;
-    grid-row: 1;
+    grid-row: 1 / 3;
   }
 }
