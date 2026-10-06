@@ -22,6 +22,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   CircleDotIcon,
+  PlayIcon,
   FolderGit2Icon,
   GitBranchIcon,
   GripVerticalIcon,
@@ -30,10 +31,10 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { EnvironmentId } from "@cinderdeck/contracts";
-import type { IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
+import type { AgentActivityCounts, IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
 import { managedContextsView, workspaceView } from "./state";
-import { useAgentObservation } from "./useAgentObservation";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../components/ui/tooltip";
+import { useAgentObservation } from "./useAgentObservation";
 import { WorkspaceSettingsButton } from "./WorkspaceSettingsButton";
 import { SessionLauncher } from "./SessionLauncher";
 import { Dialog, DialogPopup, DialogTitle, DialogDescription } from "../components/ui/dialog";
@@ -134,7 +135,7 @@ function SidebarRow({
   workspaceActive,
   expanded,
   onExpand,
-  attention,
+  activity,
   reviewer = false,
   onNavigate,
   onNewSession,
@@ -150,7 +151,7 @@ function SidebarRow({
   workspaceActive?: boolean;
   expanded?: boolean;
   onExpand?: () => void;
-  attention?: boolean;
+  activity?: AgentActivityCounts | undefined;
   reviewer?: boolean;
   onNavigate?: (() => void) | undefined;
   onNewSession: (resource: Resource) => void;
@@ -223,7 +224,7 @@ function SidebarRow({
           {onExpand ? <FolderGit2Icon size={15} /> : <GitBranchIcon size={14} />}
           <span className={styles.label}>{label}</span>
           {reviewer ? <span className={reviewerStyles.badge}>Reviewer</span> : null}
-          {attention ? <CircleDotIcon size={10} aria-label="Needs attention" /> : null}
+          <AgentBadges activity={activity} label={label} />
         </Link>
         <Tooltip>
           <TooltipTrigger
@@ -277,7 +278,41 @@ function SidebarRow({
   );
 }
 
-function useReviewerLaneContexts(
+function AgentBadges({
+  activity,
+  label,
+}: {
+  activity?: AgentActivityCounts | undefined;
+  label: string;
+}) {
+  if (!activity || activity.unavailable) return null;
+  return (
+    <span className={styles.badges}>
+      {activity.running > 0 ? (
+        <span
+          className={`${styles.badge} ${styles.running}`}
+          aria-label={`${label}: ${activity.running} ${activity.running === 1 ? "agent" : "agents"} running`}
+          title={`${activity.running} ${activity.running === 1 ? "agent" : "agents"} running`}
+        >
+          <PlayIcon size={9} fill="currentColor" aria-hidden />
+          {activity.running}
+        </span>
+      ) : null}
+      {activity.review > 0 ? (
+        <span
+          className={`${styles.badge} ${styles.review}`}
+          aria-label={`${label}: ${activity.review} ${activity.review === 1 ? "agent needs" : "agents need"} review`}
+          title={`${activity.review} ${activity.review === 1 ? "agent needs" : "agents need"} review`}
+        >
+          <CircleDotIcon size={10} aria-hidden />
+          {activity.review}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function useSidebarAgentActivity(
   environmentId: EnvironmentId,
   installationID: string,
   rows: readonly Resource[],
@@ -301,7 +336,6 @@ function WorkspaceLanes({
   resources,
   state,
   search,
-  needsAttention,
   onNavigate,
   onNewSession,
 }: {
@@ -311,7 +345,6 @@ function WorkspaceLanes({
   resources: readonly Resource[];
   state: SidebarState;
   search: WorkspaceSearch;
-  needsAttention?: ((row: Resource) => boolean) | undefined;
   onNavigate?: (() => void) | undefined;
   onNewSession: (resource: Resource) => void;
 }) {
@@ -345,7 +378,7 @@ function WorkspaceLanes({
     state.preferences.order[laneGroup(baseID)] ?? [],
     name,
   );
-  const summaries = useReviewerLaneContexts(environmentId, installationID, lanes);
+  const summaries = useSidebarAgentActivity(environmentId, installationID, lanes);
   return (
     <div className={styles.lanes}>
       {view && !fresh && lanes.length > 0 ? (
@@ -362,7 +395,14 @@ function WorkspaceLanes({
             state={state}
             search={search}
             selected={search.context === row.workspaceID}
-            attention={needsAttention?.(row) ?? false}
+            activity={
+              fresh
+                ? summaries?.find(
+                    (item) =>
+                      item.workspaceID === row.workspaceID && item.generation === row.generation,
+                  )?.agentActivity
+                : undefined
+            }
             reviewer={isReviewerLane(
               row,
               summaries?.find(
@@ -415,7 +455,6 @@ type SidebarProps = {
   installationID: string;
   resources: readonly Resource[];
   search: WorkspaceSearch;
-  needsAttention?: (row: Resource) => boolean;
   onNavigate?: () => void;
 };
 export function WorkspaceSidebar(props: SidebarProps) {
@@ -432,7 +471,6 @@ function WorkspaceSidebarTree({
   installationID,
   resources,
   search,
-  needsAttention,
   onNavigate,
 }: SidebarProps) {
   const state = useSidebarPreferences(sidebarPreferenceKey(environmentId, installationID));
@@ -462,6 +500,7 @@ function WorkspaceSidebarTree({
     state.preferences.order[workspaceGroup] ?? [],
     name,
   );
+  const summaries = useSidebarAgentActivity(environmentId, installationID, bases);
   return (
     <>
       <div className={styles.heading}>Workspaces</div>
@@ -481,6 +520,15 @@ function WorkspaceSidebarTree({
                   (!search.context || search.context === base.workspaceID)
                 }
                 workspaceActive={search.workspace === base.workspaceID}
+                activity={
+                  catalogFresh
+                    ? summaries?.find(
+                        (item) =>
+                          item.workspaceID === base.workspaceID &&
+                          item.generation === base.generation,
+                      )?.workspaceAgentActivity
+                    : undefined
+                }
                 expanded={expanded}
                 onNavigate={onNavigate}
                 onNewSession={setLaunchTarget}
@@ -501,7 +549,6 @@ function WorkspaceSidebarTree({
                     resources={resources}
                     state={state}
                     search={navigationSearch}
-                    needsAttention={needsAttention}
                     onNavigate={onNavigate}
                     onNewSession={setLaunchTarget}
                   />

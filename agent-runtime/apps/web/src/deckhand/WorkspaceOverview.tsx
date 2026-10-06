@@ -355,13 +355,6 @@ function ConnectedWorkspace({
     activity: view?.activity,
   };
   const visible = selectWorkspaceContexts(contexts, summaries, filters, filterOptions).resources;
-  const needsAttention = (resource: Resource) =>
-    selectWorkspaceContexts(
-      [resource],
-      summaries,
-      { ...defaultWorkspaceFilters, activity: "attention" },
-      filterOptions,
-    ).matchedCount > 0;
   const selectedCandidate = selectedID
     ? contexts.find((resource) => resource.workspaceID === selectedID)
     : activeBase;
@@ -649,7 +642,6 @@ function ConnectedWorkspace({
           environmentId={environmentId}
           installationID={view?.hello?.installationID ?? "unconnected"}
           resources={resources}
-          needsAttention={needsAttention}
           onNavigate={() => {
             setFeatureCreating(false);
             setCreating(false);

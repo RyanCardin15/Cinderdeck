@@ -272,12 +272,20 @@ export const ManagedContextsInput = Schema.Struct({
   ).check(Schema.isMaxLength(100)),
 });
 export type ManagedContextsInput = typeof ManagedContextsInput.Type;
+export const AgentActivityCounts = Schema.Struct({
+  running: NonNegativeInt,
+  review: NonNegativeInt,
+  unavailable: Schema.Boolean,
+});
+export type AgentActivityCounts = typeof AgentActivityCounts.Type;
 export const ManagedContextView = Schema.Struct({
   workspaceID: launchIdentifier,
   generation: PositiveInt,
   total: NonNegativeInt,
   sessions: Schema.Array(ManagedSessionView),
   externalSessions: Schema.optionalKey(ExternalSessionSummary),
+  agentActivity: Schema.optionalKey(AgentActivityCounts),
+  workspaceAgentActivity: Schema.optionalKey(AgentActivityCounts),
 });
 export type ManagedContextView = typeof ManagedContextView.Type;
 export const ContextPullRequestsInput = Schema.Struct({

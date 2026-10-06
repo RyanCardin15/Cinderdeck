@@ -602,3 +602,42 @@ it("workspace header tools also refuse remote IDs instead of opening a local wor
     delete window.desktopBridge;
   }
 });
+
+it("shows workspace totals while collapsed, exact lane counts, and updates without showing stale counts", async () => {
+  const summary = (workspaceID: string, running: number, review: number): ManagedContextView => ({
+    workspaceID,
+    generation: 3,
+    total: running + review,
+    sessions: [],
+    agentActivity: { running, review, unavailable: false },
+    workspaceAgentActivity: { running: 3, review: 2, unavailable: false },
+  });
+  await act(async () =>
+    registry.set(
+      activity,
+      AsyncResult.success([
+        summary("alpha", 1, 0),
+        summary("lane-a", 2, 2),
+        summary("lane-b", 0, 0),
+      ]),
+    ),
+  );
+  await render();
+  expect(container.querySelector('[aria-label="alpha: 3 agents running"]')?.textContent).toBe("3");
+  expect(container.querySelector('[aria-label="alpha: 2 agents need review"]')?.textContent).toBe(
+    "2",
+  );
+  await act(async () => button("Expand lanes for alpha").click());
+  expect(container.querySelector('[aria-label="lane-a: 2 agents running"]')?.textContent).toBe("2");
+  expect(container.querySelector('[data-workspace-id="lane-b"] [aria-label*="review"]')).toBeNull();
+  await act(async () =>
+    registry.set(activity, AsyncResult.success([summary("alpha", 0, 0), summary("lane-a", 0, 1)])),
+  );
+  expect(container.querySelector('[aria-label="lane-a: 2 agents running"]')).toBeNull();
+  expect(container.querySelector('[aria-label="lane-a: 1 agent needs review"]')).not.toBeNull();
+  await act(async () =>
+    registry.set(native, AsyncResult.success({ ...view, state: "unavailable" })),
+  );
+  expect(container.querySelector('[aria-label="alpha: 3 agents running"]')).toBeNull();
+  expect(container.querySelector('[aria-label="lane-a: 1 agent needs review"]')).toBeNull();
+});
