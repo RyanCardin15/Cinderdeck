@@ -115,6 +115,7 @@ const render = async (
   generation = 3,
   presentation: "default" | "workspace" = "default",
   selectedThreadId?: string,
+  scope?: "workspace",
 ) =>
   act(async () => {
     root.render(
@@ -125,6 +126,7 @@ const render = async (
           workspaceID="lane"
           generation={generation}
           presentation={presentation}
+          {...(scope ? { scope } : {})}
           {...(selectedThreadId ? { selectedThreadId } : {})}
           providers={[{ instanceId: "codex", displayName: "Configured Codex" }]}
         />
@@ -394,4 +396,49 @@ it("keeps an empty older page recoverable and refuses silently repeated legacy p
     [...element.querySelectorAll("button")].find((item) => item.textContent === "Next sessions")
       ?.disabled,
   ).toBe(true);
+});
+
+it("keeps removed-lane chats discoverable, searchable and navigable in workspace history", async () => {
+  await render(3, "workspace", undefined, "workspace");
+  const workspaceTarget = { ...target(3), input: { ...target(3).input, scope: "workspace" } };
+  const historyAtom = [...queries.entries()].find(([key]) => {
+    const value = JSON.parse(key);
+    return value.input.scope === workspaceTarget.input.scope;
+  })![1];
+  const past = {
+    ...session,
+    title: "Original checkout chat",
+    archived: true,
+    context: {
+      workspaceID: "removed",
+      generation: 1,
+      label: "Checkout redesign",
+      lane: true,
+      availability: "removed" as const,
+    },
+  };
+  await act(async () => registry.set(historyAtom, AsyncResult.success([past])));
+  const history = element.querySelector<HTMLDetailsElement>(
+    'details[aria-label="Past checkouts"]',
+  )!;
+  expect(history.open).toBe(false);
+  expect(history.textContent).toContain("Original checkout chat");
+  expect(history.textContent).toContain("Checkout removed · chat saved");
+  const input = element.querySelector<HTMLInputElement>('input[type="search"]')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+      input,
+      "Checkout redesign",
+    );
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(history.open).toBe(true);
+  expect(history.querySelector("a")?.textContent).toContain("Original checkout chat");
+  await openMenu("open");
+  expect(controls.navigate).toHaveBeenCalledWith(
+    expect.objectContaining({ params: expect.any(Object) }),
+  );
+  // Switching to an exact lane cannot keep a workspace-wide response.
+  await render(3, "workspace");
+  expect(element.textContent).not.toContain("Original checkout chat");
 });

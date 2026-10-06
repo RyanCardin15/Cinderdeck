@@ -90,8 +90,8 @@ vi.mock("./ProductNavigation", () => ({
   ProductNavigation: ({ children }: { children: ReactNode }) => <aside>{children}</aside>,
 }));
 vi.mock("./SessionList", () => ({
-  SessionList: ({ workspaceID }: { workspaceID: string }) => (
-    <p>Saved sessions for {workspaceID}</p>
+  SessionList: ({ workspaceID, scope }: { workspaceID: string; scope?: string }) => (
+    <p data-session-scope={scope}>Saved sessions for {workspaceID}</p>
   ),
 }));
 vi.mock("./useSessionActions", () => ({
@@ -833,4 +833,16 @@ it("resolves a native lane entry to its owning workspace before opening its tool
   expect(
     container.querySelector('section[aria-label="Services in selected context"]')?.textContent,
   ).toContain("services for lane");
+});
+
+it("shows all workspace history at the root and narrows to a selected lane", async () => {
+  boundary.search = { environment: "computer", workspace: "primary", tab: "agents" };
+  await render();
+  expect(container.querySelector('[data-session-scope="workspace"]')?.textContent).toContain(
+    "primary",
+  );
+  await changeSelect("Context", "lane");
+  await render();
+  expect(container.querySelector('[data-session-scope="context"]')?.textContent).toContain("lane");
+  expect(container.querySelector('[data-session-scope="workspace"]')).toBeNull();
 });

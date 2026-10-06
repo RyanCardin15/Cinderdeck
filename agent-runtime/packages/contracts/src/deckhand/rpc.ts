@@ -237,6 +237,7 @@ export const ManagedCreateRecord = Schema.Struct({
 });
 export type ManagedCreateRecord = typeof ManagedCreateRecord.Type;
 export const ManagedSessionsInput = Schema.Struct({
+  scope: Schema.optionalKey(Schema.Literals(["context", "workspace"])),
   installationID: launchIdentifier,
   workspaceID: launchIdentifier,
   generation: PositiveInt,
@@ -245,6 +246,15 @@ export const ManagedSessionsInput = Schema.Struct({
 });
 export type ManagedSessionsInput = typeof ManagedSessionsInput.Type;
 export const ManagedSessionView = Schema.Struct({
+  context: Schema.optionalKey(
+    Schema.Struct({
+      workspaceID: Schema.String,
+      generation: Schema.NullOr(PositiveInt),
+      label: Schema.String,
+      lane: Schema.Boolean,
+      availability: Schema.Literals(["available", "removed", "unknown"]),
+    }),
+  ),
   binding: SessionBinding,
   title: Schema.String,
   objective: Schema.optionalKey(Schema.String),

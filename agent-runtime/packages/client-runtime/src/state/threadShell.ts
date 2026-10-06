@@ -1,6 +1,7 @@
 import type {
   EnvironmentId,
   OrchestrationV2ShellSnapshot,
+  OrchestrationV2ArchivedShellSnapshot,
   OrchestrationV2ThreadShell,
   ProjectId,
   ScopedProjectRef,
@@ -34,6 +35,9 @@ export function createEnvironmentThreadShellAtoms(input: {
   readonly snapshotAtom: (
     environmentId: EnvironmentId,
   ) => Atom.Atom<OrchestrationV2ShellSnapshot | null>;
+  readonly archivedSnapshotAtom?: (
+    environmentId: EnvironmentId,
+  ) => Atom.Atom<OrchestrationV2ArchivedShellSnapshot | null>;
 }) {
   // Point reads and aggregate lists share values without keeping an atom alive
   // for every listed thread. Replaced source objects can be collected.
@@ -130,10 +134,30 @@ export function createEnvironmentThreadShellAtoms(input: {
     }).pipe(Atom.withLabel(`environment-thread-refs-by-project:${environmentId}`));
   });
 
+  // Archives remain out of active lists, but exact conversation links must resolve.
+  // Read archived metadata lazily, without hydrating any other thread's transcript.
+  const archivedThreadIndexAtom = Atom.family((environmentId: EnvironmentId) =>
+    Atom.make((get): ReadonlyMap<ThreadId, OrchestrationV2ThreadShell> => {
+      const snapshot = input.archivedSnapshotAtom
+        ? get(input.archivedSnapshotAtom(environmentId))
+        : null;
+      return snapshot
+        ? new Map(
+            snapshot.threads
+              .filter((thread) => thread.archivedAt !== null && thread.deletedAt === null)
+              .map((thread) => [thread.id, thread]),
+          )
+        : EMPTY_THREAD_INDEX;
+    }),
+  );
+
   const threadShellAtomFamily = Atom.family((key: string) => {
     const ref = parseThreadKey(key);
     return Atom.make((get) => {
-      const source = get(environmentThreadIndexAtom(ref.environmentId)).get(ref.threadId) ?? null;
+      const source =
+        get(environmentThreadIndexAtom(ref.environmentId)).get(ref.threadId) ??
+        get(archivedThreadIndexAtom(ref.environmentId)).get(ref.threadId) ??
+        null;
       return source === null ? null : scopedThread(ref.environmentId, source);
     }).pipe(Atom.withLabel(`environment-thread-shell:${key}`));
   });

@@ -16,6 +16,7 @@ import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { environmentCatalog } from "../connection/catalog";
 import { connectionAtomRuntime } from "../connection/runtime";
 import { environmentSnapshotAtom } from "./shell";
+import { orchestrationEnvironment } from "./orchestration";
 
 export const threadEnvironment = createThreadEnvironmentAtoms(
   connectionAtomRuntime,
@@ -25,9 +26,19 @@ const environmentThreads = createEnvironmentThreadStateAtoms(connectionAtomRunti
 export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(
   environmentThreads.stateAtom,
 );
+const archivedShellSnapshotAtom = Atom.family((environmentId: EnvironmentId) =>
+  Atom.make((get) =>
+    Option.getOrNull(
+      AsyncResult.value(
+        get(orchestrationEnvironment.archivedShellSnapshot({ environmentId, input: {} })),
+      ),
+    ),
+  ),
+);
 export const environmentThreadShells = createEnvironmentThreadShellAtoms({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
   snapshotAtom: threadEnvironment.snapshotAtom,
+  archivedSnapshotAtom: archivedShellSnapshotAtom,
 });
 
 const EMPTY_THREAD_STATE_ATOM = Atom.make(AsyncResult.success(EMPTY_ENVIRONMENT_THREAD_STATE)).pipe(

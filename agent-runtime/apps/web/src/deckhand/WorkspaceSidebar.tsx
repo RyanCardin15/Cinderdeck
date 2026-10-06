@@ -202,7 +202,7 @@ function SidebarRow({
           to="/workspaces"
           search={{
             ...(search.environment ? { environment: search.environment } : {}),
-            tab: search.tab ?? "services",
+            tab: resource.workspace?.lane ? (search.tab ?? "agents") : "agents",
             workspace: baseID,
             context: resource.workspaceID,
             ...(search.expectedInstallationID

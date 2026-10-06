@@ -69,6 +69,7 @@ export const CheckoutBinding = Schema.Struct({
   backend: BackendKind,
   kind: Schema.Literals(["primary", "lane"]),
   laneId: Schema.NullOr(identifier),
+  laneName: Schema.optionalKey(Schema.String),
   state: Schema.Literals(["creating", "ready", "unavailable", "releasing", "released"]),
   repositories: Schema.Array(PhysicalCheckout),
   revision: PositiveInt,

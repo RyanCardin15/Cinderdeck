@@ -84,7 +84,7 @@ export function ConnectedWorkspaceShell({
   const search = connectedWorkspaceSearch(threadRef.environmentId, context, "agents");
   const current =
     context.native?.workspace?.lane?.name ??
-    (context.checkout.laneId ? context.feature.title : "Primary");
+    (context.checkout.laneId ? (context.checkout.laneName ?? context.feature.title) : "Primary");
   return (
     <div className={`${styles.shell} ${native.workspace}`}>
       <ProductNavigation
@@ -115,7 +115,15 @@ export function ConnectedWorkspaceShell({
       <div className={styles.main}>
         <header className={styles.header}>
           <div>
-            <Link to="/workspaces" search={search}>
+            <Link
+              to="/workspaces"
+              search={{
+                environment: threadRef.environmentId,
+                workspace: context.workspace.ownerId,
+                tab: "agents",
+                expectedInstallationID: context.workspace.environmentId,
+              }}
+            >
               {context.workspace.name}
             </Link>
             <span> / </span>

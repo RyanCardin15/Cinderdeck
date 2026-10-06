@@ -416,6 +416,7 @@ const buildsProvided = Builds.layer.pipe(Layer.provide(deckhandTransportProvided
 const managedSessionsProvided = ManagedSessions.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
+      IntegrationHub.layerLive,
       Relationships.layer,
       projectionStoreLayer,
       eventSinkProvided,

@@ -764,7 +764,8 @@ function ConnectedWorkspace({
                 ) : null}
                 {contexts.map((resource) => (
                   <option key={resource.workspaceID} value={resource.workspaceID}>
-                    {resource.workspace?.lane?.name ?? "Primary checkout"}
+                    {resource.workspace?.lane?.name ??
+                      (agentMode ? "All lanes & primary checkout" : "Primary checkout")}
                   </option>
                 ))}
               </select>
@@ -1040,11 +1041,19 @@ function ConnectedWorkspace({
               </span>
               <div className={agents.title}>
                 <h2>Agents</h2>
-                <p>Conversations and ongoing work across this workspace’s folders.</p>
+                <p>
+                  {selected?.workspace?.lane
+                    ? "Conversations and ongoing work in this lane."
+                    : "Every lane’s conversations, together. Your history stays here when lanes are removed."}
+                </p>
               </div>
               <span className={agents.context}>
                 <GitBranchIcon size={13} aria-hidden />
-                {selected ? selectedName : "Choose a context"}
+                {selected
+                  ? selected.workspace?.lane
+                    ? selectedName
+                    : "All lanes"
+                  : "Choose a context"}
               </span>
             </header>
             {selected && view?.hello ? (
@@ -1065,6 +1074,7 @@ function ConnectedWorkspace({
                   installationID={view.hello.installationID}
                   workspaceID={selected.workspaceID}
                   generation={selected.generation}
+                  scope={selected.workspace?.lane ? "context" : "workspace"}
                   providers={providers}
                   contextLabel={
                     selected.workspace?.lane?.name ?? selected.workspace?.name ?? "Workspace"
