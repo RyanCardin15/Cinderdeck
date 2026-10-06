@@ -970,6 +970,65 @@ final class StackLaneTests: XCTestCase {
 
   // MARK: Redesigned lanes
 
+  func testFourRepositoryDefaultsAndOneOffOverridesPinTheCorrectCommits() async throws {
+    var source = StackDefinition(id: "suite", name: "Suite", file: definitions.appendingPathComponent("suite.toml"), root: root, shell: "/bin/sh")
+    var mainHeads: [String: String] = [:]
+    var developHeads: [String: String] = [:]
+    for index in 0..<4 {
+      let id = "repo\(index)"
+      let path = root.appendingPathComponent(id)
+      _ = try await StackLaneStore.git(["clone", repo.path, path.path], at: root)
+      mainHeads[id] = try await StackLaneStore.git(["rev-parse", "HEAD"], at: path)
+      _ = try await StackLaneStore.git(["checkout", "-b", "develop"], at: path)
+      try "develop \(index)".write(to: path.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)
+      try await commitAll("develop", at: path)
+      developHeads[id] = try await StackLaneStore.git(["rev-parse", "HEAD"], at: path)
+      source.repos.append(.init(id: id, path: path, laneFrom: index == 3 ? "develop" : "main"))
+    }
+    let first = try await StackLaneStore.create(source: source, request: .init(branch: "defaults"), owner: codex,
+      directory: supervisor.lanesDirectory, worktreeRoot: supervisor.worktreeRoot, occupiedPorts: [])
+    XCTAssertEqual(first.record.info.repositoryRefs, ["repo0": mainHeads["repo0"]!, "repo1": mainHeads["repo1"]!, "repo2": mainHeads["repo2"]!, "repo3": developHeads["repo3"]!])
+    var override = StackLaneRequest(branch: "one-off")
+    override.repositoryRefs = ["repo0": "develop", "repo3": "main"]
+    let second = try await StackLaneStore.create(source: source, request: override, owner: codex,
+      directory: supervisor.lanesDirectory, worktreeRoot: supervisor.worktreeRoot, occupiedPorts: [])
+    XCTAssertEqual(second.record.info.repositoryRefs["repo0"], developHeads["repo0"])
+    XCTAssertEqual(second.record.info.repositoryRefs["repo3"], mainHeads["repo3"])
+    XCTAssertEqual(source.repo("repo0")?.laneFrom, "main")
+    XCTAssertEqual(source.repo("repo3")?.laneFrom, "develop")
+    for path in source.repos.map(\.path) {
+      let branch = try await StackLaneStore.git(["branch", "--show-current"], at: path)
+      XCTAssertEqual(branch, "develop", "Creating a lane must not switch the current workspace")
+    }
+  }
+
+  func testAgentCreationReviewsTheProposedNameBeforeEffectsAndCancellationCreatesNothing() async throws {
+    try await load()
+    control.laneCreationPresenter = { source, options, create in
+      XCTAssertEqual(source.id, "shop")
+      XCTAssertEqual(options.request.name, "Agent proposal")
+      XCTAssertTrue(options.request.branch.isEmpty, "A display name must not become the proposed Git branch")
+      XCTAssertTrue(try StackLaneStore.records(in: self.supervisor.lanesDirectory).isEmpty)
+      var approved = options
+      approved.request.name = "Reviewed name"
+      approved.request.branch = "reviewed"
+      approved.request.repositoryRefs = ["app": "main"]
+      return try await create(approved)
+    }
+    let result = try await control.handle("lane.create", params: .object(["workspace": .string("shop"), "name": .string("Agent proposal"), "start": .bool(false), "setup": .bool(false)]), actor: codex)
+    XCTAssertEqual(result["workspace"]?["lane"]?["name"]?.stringValue, "Reviewed name")
+    XCTAssertEqual(result["creationReviewed"]?.boolValue, true)
+    XCTAssertEqual(result["createdBranch"]?.stringValue, "reviewed")
+    control.laneCreationPresenter = { _, _, _ in throw StackControlError(code: "cancelled", message: "Cancelled") }
+    do {
+      _ = try await control.handle("lane.create", params: .object(["workspace": .string("shop"), "branch": .string("cancelled")]), actor: codex)
+      XCTFail("Expected cancellation")
+    } catch { XCTAssertEqual((error as? StackControlError)?.code, "cancelled") }
+    XCTAssertEqual(try StackLaneStore.records(in: supervisor.lanesDirectory).count, 1)
+    let cancelled = try await StackLaneStore.git(["branch", "--list", "cancelled"], at: repo)
+    XCTAssertTrue(cancelled.isEmpty)
+  }
+
   private func write(_ source: String, id: String = "shop") async throws {
     try source.write(to: definitions.appendingPathComponent(id + ".toml"), atomically: true, encoding: .utf8)
     await supervisor.reloadDefinitions()

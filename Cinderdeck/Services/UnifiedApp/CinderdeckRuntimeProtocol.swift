@@ -16,7 +16,7 @@ nonisolated struct CinderdeckRuntimeUIRequest: Decodable, Equatable, Sendable {
   let mode: String?
   let workspaceID: String?
 
-  static let surfaces: Set<String> = ["workspace", "lane-map", "history", "preferences", "capture", "recording", "annotate", "updates", "workspace-setup", "workspace-editor", "workspace-terminal", "workspace-branches", "execution-map", "agent-access"]
+  static let surfaces: Set<String> = ["workspace", "lane-map", "history", "preferences", "capture", "recording", "annotate", "updates", "workspace-setup", "workspace-editor", "workspace-terminal", "workspace-branches", "workspace-lane-create", "execution-map", "agent-access"]
   static let workspaceEditorModes: Set<String> = ["services", "tasks", "workflows", "delete"]
   static let captureModes: Set<String> = ["region", "window", "fullscreen", "scrolling", "ocr"]
 
@@ -29,7 +29,7 @@ nonisolated struct CinderdeckRuntimeUIRequest: Decodable, Equatable, Sendable {
     let request = try JSONDecoder().decode(Self.self, from: data)
     guard surfaces.contains(request.surface),
       request.surface != "workspace-editor" || (request.workspaceID != nil && (request.mode.map(workspaceEditorModes.contains) ?? true)),
-      !["workspace-terminal", "workspace-branches"].contains(request.surface) || (request.workspaceID != nil && request.mode == nil),
+      !["workspace-terminal", "workspace-branches", "workspace-lane-create"].contains(request.surface) || (request.workspaceID != nil && request.mode == nil),
       request.surface != "agent-access" || (request.mode == nil && request.workspaceID == nil),
       request.mode.map({ !$0.isEmpty && $0.utf8.count <= 80 && !$0.contains(where: { $0.isNewline || $0.isASCII && $0.asciiValue! < 32 }) }) ?? true,
       request.workspaceID.map({ !$0.isEmpty && $0.utf8.count <= 512 && !$0.contains(where: { $0.isNewline || $0.isASCII && $0.asciiValue! < 32 }) }) ?? true else {

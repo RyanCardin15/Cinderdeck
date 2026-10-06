@@ -25,6 +25,8 @@ nonisolated struct RepoDefinition: Codable, Equatable, Identifiable, Sendable {
   let id: String
   let path: URL
   var laneMode: StackRepoLaneMode = .worktree
+  /// Default start revision for new lane branches in this repository.
+  var laneFrom: String?
 }
 
 nonisolated enum StackReadiness: Codable, Equatable, Sendable {

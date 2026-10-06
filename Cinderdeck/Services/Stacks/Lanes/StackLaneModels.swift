@@ -176,6 +176,8 @@ nonisolated struct StackLaneRequest: Sendable {
   /// Repository IDs whose new branch must start at this exact revision.
   var repositoryRefs: [String: String] = [:]
   var environment: [String: String] = [:]
+  /// Bases reviewed in the native sheet for implicit repositories used by commands.
+  var rootRefs: [URL: String] = [:]
   var copy: [String] = []
   /// Adopt an existing worktree instead of creating one for its repository.
   var adoptPath: URL?

@@ -6,7 +6,17 @@ import Foundation
 /// `state.json` current.
 @MainActor
 final class StackControlService: ObservableObject {
-  static let shared = StackControlService(supervisor: .shared, runner: .shared)
+  static let shared: StackControlService = {
+    let service = StackControlService(supervisor: .shared, runner: .shared)
+    service.laneCreationPresenter = { source, options, create in
+      try await LaneCreationWindowController.shared.present(source: source, options: options, create: create)
+    }
+    return service
+  }()
+
+  /// Test instances inject a reviewer or exercise the operation without application UI.
+  var laneCreationPresenter: ((StackDefinition, LaneCreationOptions,
+    @escaping @MainActor (LaneCreationOptions) async throws -> JSONValue) async throws -> JSONValue)?
 
   @Published private(set) var serverError: String?
   @Published private(set) var isServing = false
@@ -309,14 +319,14 @@ final class StackControlService: ObservableObject {
   private func createLane(_ params: JSONValue, adopt: Bool, actor: StackActor, operationID: String? = nil) async throws -> JSONValue {
     let source = try workspaceFile(params)
     guard source.lane == nil else { throw StackControlError.invalid("Create lanes from the original workspace, not from lane \(source.name).") }
-    var request = StackLaneRequest(branch: params["branch"]?.stringValue ?? params["name"]?.stringValue ?? "")
+    var request = StackLaneRequest(branch: params["branch"]?.stringValue ?? (adopt ? params["name"]?.stringValue : nil) ?? "")
     request.name = params["name"]?.stringValue
     request.integrationOperationID = operationID
     if adopt {
       let path = params["path"]?.stringValue ?? actor.cwd
       guard let path, !path.isEmpty else { throw StackControlError.invalid("Pass path: the worktree to adopt") }
       request.adoptPath = URL(fileURLWithPath: (path as NSString).expandingTildeInPath).standardizedFileURL
-    } else if request.branch.isEmpty {
+    } else if request.branch.isEmpty && laneCreationPresenter == nil {
       throw StackControlError.invalid("Pass a branch name for the new lane.")
     }
     if let refs = params["repositoryRefs"] {
@@ -337,15 +347,39 @@ final class StackControlService: ObservableObject {
     }
     request.copy = params["copy"]?.stringsValue ?? []
     try requireIdle(source)
+    let options = LaneCreationOptions(request: request, setup: params["setup"]?.boolValue ?? !adopt,
+      start: params["start"]?.boolValue ?? true)
+    if let present = laneCreationPresenter, let definition = source.definition {
+      return try await present(definition, options) { [self] approved in
+        await supervisor.reloadDefinitions()
+        guard supervisor.definition(source.id) == definition else {
+          throw StackControlError(code: "stale_revision", message: "Workspace settings changed while this sheet was open. Cancel and open New lane again to review the new defaults.")
+        }
+        try requireIdle(source)
+        return try await createApprovedLane(source, options: approved, params: params, actor: actor, reviewed: true)
+      }
+    }
+    return try await createApprovedLane(source, options: options, params: params, actor: actor, reviewed: false)
+  }
+
+  private func createApprovedLane(_ source: StackDefinitionFile, options: LaneCreationOptions,
+    params: JSONValue, actor: StackActor, reviewed: Bool) async throws -> JSONValue {
+    let request = options.request
     let created: StackLaneCoordinator.Creation
     do {
       created = try await lanes.create(stack: source.id, request: request, actor: actor,
-        setup: params["setup"]?.boolValue ?? !adopt)
+        setup: options.setup)
     } catch let refusal as StackLaneStore.StartRevisionRefusal {
       throw StackControlError.invalid(refusal.message)
     }
     let file = created.file
     var extra: [String: JSONValue] = [:]
+    if reviewed {
+      extra["creationReviewed"] = .bool(true)
+      if let branch = try? StackLaneStore.record(id: file.id, in: supervisor.lanesDirectory)?.worktrees.first?.branch {
+        extra["createdBranch"] = .string(branch)
+      }
+    }
     if !created.warnings.isEmpty { extra["warnings"] = .array(created.warnings.map(JSONValue.string)) }
     if let setup = created.setup { extra["setup"] = (try? JSONValue(encoding: setup)) ?? .null }
     func respond(_ value: JSONValue) -> JSONValue {
@@ -353,7 +387,7 @@ final class StackControlService: ObservableObject {
       object.merge(extra) { _, new in new }
       return .object(object)
     }
-    if params["start"]?.boolValue == false || !created.setupSucceeded {
+    if !options.start || !created.setupSucceeded {
       if !created.setupSucceeded {
         extra["note"] = .string("Setup failed, so services were not started. Read the run with workspace_run_logs, fix it, then run_lane_setup or start_services.")
       }

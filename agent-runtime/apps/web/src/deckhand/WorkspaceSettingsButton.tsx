@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { GitBranchIcon, SettingsIcon, Trash2Icon } from "lucide-react";
+import { GitBranchIcon, PlusIcon, SettingsIcon, Trash2Icon } from "lucide-react";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../components/ui/tooltip";
 import styles from "./WorkspaceSettingsButton.module.css";
@@ -20,6 +20,9 @@ export function WorkspaceSettingsButton(props: WorkspaceButtonProps) {
 export function WorkspaceBranchesButton(props: WorkspaceButtonProps) {
   return <WorkspaceToolButton {...props} surface="workspace-branches" />;
 }
+export function WorkspaceCreateLaneButton(props: WorkspaceButtonProps) {
+  return <WorkspaceToolButton {...props} surface="workspace-lane-create" />;
+}
 export function WorkspaceDeleteButton(props: WorkspaceButtonProps) {
   return <WorkspaceToolButton {...props} surface="workspace-editor" mode="delete" />;
 }
@@ -32,7 +35,10 @@ function WorkspaceToolButton({
   showLabel = false,
   surface,
   mode,
-}: WorkspaceButtonProps & { surface: "workspace-editor" | "workspace-branches"; mode?: "delete" }) {
+}: WorkspaceButtonProps & {
+  surface: "workspace-editor" | "workspace-branches" | "workspace-lane-create";
+  mode?: "delete";
+}) {
   const primary = usePrimaryEnvironmentId();
   const available =
     environmentId === primary &&
@@ -60,7 +66,9 @@ function WorkspaceToolButton({
         title:
           surface === "workspace-editor"
             ? "Could not open workspace settings"
-            : "Could not open branch picker",
+            : surface === "workspace-lane-create"
+              ? "Could not open lane creation"
+              : "Could not open branch picker",
         description: "Refresh the workspace connection and try again.",
       });
     } finally {
@@ -89,6 +97,8 @@ function WorkspaceToolButton({
       >
         {mode === "delete" ? (
           <Trash2Icon size={15} aria-hidden />
+        ) : surface === "workspace-lane-create" ? (
+          <PlusIcon size={15} aria-hidden />
         ) : surface === "workspace-editor" ? (
           <SettingsIcon size={15} aria-hidden />
         ) : (
@@ -99,7 +109,9 @@ function WorkspaceToolButton({
             ? "Delete workspace…"
             : surface === "workspace-editor"
               ? "Workspace settings"
-              : "Switch branch…"
+              : surface === "workspace-lane-create"
+                ? "New lane"
+                : "Switch branch…"
           : null}
       </TooltipTrigger>
       <TooltipPopup>{tooltip}</TooltipPopup>

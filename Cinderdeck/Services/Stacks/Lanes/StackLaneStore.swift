@@ -388,21 +388,41 @@ nonisolated enum StackLaneStore {
     var starts: [URL: String] = [:]
     var repositoryRefs: [String: String] = [:]
     do {
-      for (id, ref) in request.repositoryRefs.sorted(by: { $0.key < $1.key }) {
+      var refs = request.repositoryRefs
+      if request.from == nil {
+        for repo in source.repos where repo.laneMode == .worktree && refs[repo.id] == nil {
+          if let ref = repo.laneFrom { refs[repo.id] = ref }
+        }
+      }
+      for (id, ref) in refs.sorted(by: { $0.key < $1.key }) {
         guard !id.isEmpty, id.utf8.count <= 160, !ref.isEmpty, ref.utf8.count <= 200,
           !ref.hasPrefix("-"), !ref.contains("\0"), !ref.contains("\n"), !ref.contains("\r"),
           let repo = source.repo(id), repo.laneMode == .worktree, let root = await topLevel(repo.path), roots.contains(root) else {
           throw StackError.message("Choose a valid start revision for an isolated repository in this workspace: \(id).")
         }
+        if adopted?.source == root { continue }
         let commit = try await git(["rev-parse", "--verify", "--quiet", ref + "^{commit}"], at: root)
         if let previous = starts[root], previous != commit {
           throw StackError.message("Repository aliases request different start revisions for \(root.path).")
         }
         let local = try await git(["for-each-ref", "--format=%(refname)", "refs/heads/" + branch], at: root)
           .components(separatedBy: "\n").contains("refs/heads/" + branch)
+        if local && request.repositoryRefs[id] == nil { continue }
         guard !local else { throw StackError.message("Branch \(branch) already exists in \(id). Explicit repository start revisions create a new branch.") }
         starts[root] = commit
         repositoryRefs[id] = commit
+      }
+      for (root, ref) in request.rootRefs {
+        guard roots.contains(root), adopted?.source != root, !ref.isEmpty, ref.utf8.count <= 200,
+          !ref.hasPrefix("-"), !ref.contains(where: { $0.isNewline || $0 == "\0" }) else {
+          throw StackError.message("Choose a valid start revision for \(root.lastPathComponent).")
+        }
+        let commit = try await git(["rev-parse", "--verify", "--quiet", ref + "^{commit}"], at: root)
+        if let previous = starts[root], previous != commit { throw StackError.message("Repository aliases request different start revisions for \(root.path).") }
+        let local = try await git(["for-each-ref", "--format=%(refname)", "refs/heads/" + branch], at: root)
+          .components(separatedBy: "\n").contains("refs/heads/" + branch)
+        guard !local else { throw StackError.message("Branch \(branch) already exists in \(root.lastPathComponent). Choose a new lane branch.") }
+        starts[root] = commit
       }
     } catch {
       throw StartRevisionRefusal(message: error.localizedDescription)

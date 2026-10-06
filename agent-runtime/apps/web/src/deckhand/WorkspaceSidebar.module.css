@@ -94,6 +94,14 @@
   border-left: 1px solid var(--border);
   min-width: 0;
 }
+.laneHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px 4px 24px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
 .notice {
   margin: 8px 4px;
   color: var(--muted-foreground);

@@ -352,8 +352,8 @@ nonisolated enum StackCLI {
         if args.count == 2 { params["name"] = .string(args[1]) }
         params["setup"] = .bool(options.has("setup"))
       } else {
-        guard args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane create <workspace> <branch> [--name <name>] [--from <ref>] [--repo-from <repo>=<ref>] [--env KEY=VALUE] [--copy <pattern>] [--no-setup] [--no-start] [--no-wait]") }
-        params["branch"] = .string(args[1])
+        guard (1...2).contains(args.count) else { throw StackControlError.invalid("Usage: cinderdeck lane create <workspace> [branch] [--name <name>] [--from <ref>] [--repo-from <repo>=<ref>] [--env KEY=VALUE] [--copy <pattern>] [--no-setup] [--no-start] [--no-wait]; opens the lane creation sheet") }
+        if args.count == 2 { params["branch"] = .string(args[1]) }
         if let name = options["name"] { params["name"] = .string(name) }
         params["setup"] = .bool(!options.has("no-setup"))
       }
@@ -631,9 +631,9 @@ nonisolated enum StackCLI {
     cinderdeck services agent-help                    Instructions to paste into AGENTS.md
 
   WORKTREE LANES
-    cinderdeck lane create <workspace> <branch>       Create, set up and start an isolated worktree lane (--repo-from <repo>=<ref> pins a repository start)
+    cinderdeck lane create <workspace> [branch]       Review a new lane in Cinderdeck (--name suggests a name; --repo-from <repo>=<ref> suggests a repository base)
       --from <ref>  --env KEY=VALUE  --copy <glob>    Start point, lane-only variables, extra files to copy
-      --name <name>                                 Optional lane display name (default: branch)
+      --name <name>                                 Proposed lane display name (default: numbered lane)
       --no-setup  --no-start                          Skip [lanes] setup, or create without starting
     cinderdeck lane adopt <workspace> [name]          Use an existing worktree (--path, default: here)
       --setup  --no-start                            Setup is off by default; name required for detached HEAD

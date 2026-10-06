@@ -101,11 +101,12 @@ nonisolated enum StackAgentGuide {
       - `logs <workspace> [service] -n 200 [--grep regex] [-f]`
       - `ports` — who owns each listening port (Cinderdeck service, or which app/terminal started it)
       - `switch <workspace> <branch> [--repo id] [--stash|--carry]`, `git <workspace>`, `branches <workspace>`
-    - Parallel work: `\(command) lane create <workspace> <branch> [--name "Search polish"] [--from origin/main]` creates, sets up and starts a worktree lane
+    - Parallel work: `\(command) lane create <workspace> [branch] [--name "Search polish"] [--from origin/main]` opens the shared lane creation sheet, then creates, sets up and starts after the user confirms
       - `--repo-from <repo>=<ref>` pins a new branch in that repository; repeat for independent repositories. Other repos keep their defaults. Existing local branches or conflicting aliases are refused before creation
       - Already in your own worktree: `\(command) lane adopt <workspace> [name] --env FEATURE_X=1` runs it as a lane; setup is off unless `--setup`, and a detached HEAD requires a name. Cinderdeck never deletes the adopted folder
       - `\(command) lane list [workspace]` / `\(command) lane remove <lane>` (branches are kept; `--discard-ignored` also deletes ignored files, changed copies and copied directories — ask first)
-      - Use the stable lane ID or `<workspace>/<name>` with every command; the name defaults to the branch
+      - Names and per-repository bases can be edited in the sheet. With no proposed name, it shows Lane 1, Lane 2, etc. Use the returned stable lane ID or `<workspace>/<name>` with every command
+      - Configure repository defaults with `[repos.<id>] lane_from = "main"` (or `"develop"`); `[lanes] from` remains the workspace fallback
       - `\(command) lane edit <lane> --name <name>` or `--env KEY=VALUE` renames a lane while running; env edits require stopping and replaces all overrides, `--clear-env` clears them
       - `eval "$(\(command) lane env <lane> <service> --export)"` gives your shell that service's `PORT`, own env, and workspace ports/URLs; omit the service for workspace-wide values. Run tests from its actual worktree folder, or use `workspace task <lane> <task> --wait`
       - `\(command) lane release <lane>` stops and forgets a lane while keeping its worktrees; removal and release require running dependents to stop first

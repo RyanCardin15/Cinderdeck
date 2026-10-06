@@ -2,6 +2,14 @@ import XCTest
 @testable import Cinderdeck
 
 final class CinderdeckRuntimeProtocolTests: XCTestCase {
+  func testLaneCreationRequiresAnExactWorkspaceAndAcceptsNoCommandOrMode() throws {
+    XCTAssertEqual(try CinderdeckRuntimeUIRequest.decode(Data(#"{"surface":"workspace-lane-create","workspaceID":"fixture"}"#.utf8)).workspaceID, "fixture")
+    for input in [
+      #"{"surface":"workspace-lane-create"}"#,
+      #"{"surface":"workspace-lane-create","workspaceID":"fixture","mode":"create"}"#,
+      #"{"surface":"workspace-lane-create","workspaceID":"fixture","command":"git"}"#,
+    ] { XCTAssertThrowsError(try CinderdeckRuntimeUIRequest.decode(Data(input.utf8))) }
+  }
   func testWorkspaceDeletionOpensScopedEditorAndRejectsArbitraryModesOrCommands() throws {
     let request = try CinderdeckRuntimeUIRequest.decode(Data(#"{"surface":"workspace-editor","workspaceID":"fixture","mode":"delete"}"#.utf8))
     XCTAssertEqual(request.mode, "delete")

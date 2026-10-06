@@ -20,6 +20,7 @@ const surfaces = new Set([
   "workspace-editor",
   "workspace-terminal",
   "workspace-branches",
+  "workspace-lane-create",
   "execution-map",
   "agent-access",
   "history",
@@ -55,7 +56,9 @@ function toolRequest(value: unknown): value is NativeToolRequest {
     typeof value.surface === "string" &&
     surfaces.has(value.surface) &&
     Object.keys(value).every((key) => ["surface", "mode", "workspaceID"].includes(key)) &&
-    (!["workspace-terminal", "workspace-branches"].includes(value.surface) ||
+    (!["workspace-terminal", "workspace-branches", "workspace-lane-create"].includes(
+      value.surface,
+    ) ||
       (value.workspaceID !== undefined && value.mode === undefined)) &&
     (value.surface !== "agent-access" ||
       (value.mode === undefined && value.workspaceID === undefined)) &&

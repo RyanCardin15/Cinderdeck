@@ -1134,6 +1134,7 @@ export interface NativeToolRequest {
     | "workspace-editor"
     | "workspace-terminal"
     | "workspace-branches"
+    | "workspace-lane-create"
     | "execution-map"
     | "agent-access"
     | "history"

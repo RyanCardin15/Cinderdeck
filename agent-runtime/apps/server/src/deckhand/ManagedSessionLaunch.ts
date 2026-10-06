@@ -773,7 +773,8 @@ const make = Effect.gen(function* () {
         !created?.lane ||
         created.id !== record.laneID ||
         created.lane.sourceStackID !== input.workspaceID ||
-        created.lane.name !== (input.name ?? input.branch) ||
+        (record.receipt.result?.creationReviewed !== true &&
+          created.lane.name !== (input.name ?? input.branch)) ||
         !created.repos.length ||
         created.repos.some((repo) => !repo.physicalID || !repo.repositoryPhysicalID)
       )

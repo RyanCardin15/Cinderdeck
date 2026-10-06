@@ -7,7 +7,6 @@ import {
   ArrowRightIcon,
   FolderGit2Icon,
   ActivityIcon,
-  XIcon,
   ChevronRightIcon,
   MessagesSquareIcon,
   PanelRightCloseIcon,
@@ -56,6 +55,7 @@ import { ProductNavigation } from "./ProductNavigation";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { WorkspaceLaneMap } from "./WorkspaceLaneMap";
 import { NativeWorkspaceTools } from "./NativeWorkspaceTools";
+import { WorkspaceCreateLaneButton } from "./WorkspaceSettingsButton";
 import {
   workspaceView,
   managedContextsView,
@@ -249,12 +249,6 @@ function ConnectedWorkspace({
   const [filters, setFilters] = useState<WorkspaceFilterValue>(() => ({
     ...defaultWorkspaceFilters,
   }));
-  const [branch, setBranch] = useState("");
-  const [laneName, setLaneName] = useState("");
-  const [laneFrom, setLaneFrom] = useState("");
-  const [laneSetup, setLaneSetup] = useState(false);
-  const [laneStart, setLaneStart] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [featureCreating, setFeatureCreating] = useState(false);
   const [featurePending, setFeaturePending] = useState(false);
   const newFeatureButton = useRef<HTMLButtonElement>(null);
@@ -529,7 +523,7 @@ function ConnectedWorkspace({
   }, [operation, reconcile]);
   const run = async (
     target: Resource,
-    method: "lane.create" | "services.start" | "services.stop" | "services.restart",
+    method: "services.start" | "services.stop" | "services.restart",
   ) => {
     if (!view?.hello || !enabled || !actionable(target)) return;
     const key = await runtime.runPromise(
@@ -553,17 +547,7 @@ function ConnectedWorkspace({
         generation: target.generation,
         revision: target.revision,
         method,
-        arguments:
-          method === "lane.create"
-            ? {
-                workspace: target.workspaceID,
-                branch: branch.trim(),
-                ...(laneName.trim() ? { name: laneName.trim() } : {}),
-                ...(laneFrom.trim() ? { from: laneFrom.trim() } : {}),
-                start: laneStart,
-                setup: laneSetup,
-              }
-            : { workspace: target.workspaceID },
+        arguments: { workspace: target.workspaceID },
       },
     });
     setBusy(false);
@@ -576,13 +560,6 @@ function ConnectedWorkspace({
         refused: false,
         message: null,
       });
-      if (method === "lane.create") {
-        setCreating(false);
-        setBranch("");
-        setLaneFrom("");
-        setLaneSetup(false);
-        setLaneStart(false);
-      }
     } else {
       const records = await recent({ environmentId, input: {} });
       const record =
@@ -647,7 +624,6 @@ function ConnectedWorkspace({
           resources={resources}
           onNavigate={() => {
             setFeatureCreating(false);
-            setCreating(false);
           }}
           search={{
             ...tabSearch,
@@ -709,28 +685,27 @@ function ConnectedWorkspace({
                     !canCreateFeature
                   }
                   onClick={() => {
-                    setCreating(false);
                     setFeatureCreating(true);
                   }}
                 >
                   <PlusIcon size={17} />
                   New feature
                 </button>
-                <button
-                  className={styles["dh-button"]}
-                  disabled={
-                    !enabled ||
-                    featurePending ||
-                    featureCreating ||
-                    !activeBase ||
-                    !actionable(activeBase) ||
-                    !view?.hello?.capabilities.includes("operations.lane.create")
-                  }
-                  onClick={() => setCreating(true)}
-                >
-                  <PlusIcon size={17} />
-                  New lane
-                </button>
+                {activeBase ? (
+                  <WorkspaceCreateLaneButton
+                    environmentId={environmentId}
+                    workspaceID={activeBase.workspaceID}
+                    label="Create lane"
+                    showLabel
+                    enabled={
+                      enabled &&
+                      !featurePending &&
+                      !featureCreating &&
+                      actionable(activeBase) &&
+                      view?.hello?.capabilities.includes("operations.lane.create") === true
+                    }
+                  />
+                ) : null}
                 <Link to="/workspaces" search={{ ...tabSearch, tab: "lane-map" }}>
                   Lane map
                 </Link>
@@ -755,7 +730,6 @@ function ConnectedWorkspace({
               onChange={(event) => {
                 setWorkspaceID(event.target.value);
                 setFeatureCreating(false);
-                setCreating(false);
               }}
             >
               {!activeBase ? (
@@ -881,96 +855,6 @@ function ConnectedWorkspace({
               onPending: setFeaturePending,
             }}
           />
-        ) : null}
-        {creating && activeBase ? (
-          <form
-            className={styles["dh-create"]}
-            onSubmit={(event) => {
-              event.preventDefault();
-              void run(activeBase, "lane.create");
-            }}
-          >
-            <label htmlFor="dh-lane-name">Lane name (optional)</label>
-            <input
-              id="dh-lane-name"
-              value={laneName}
-              placeholder="Default: branch"
-              maxLength={100}
-              disabled={!enabled}
-              onChange={(event) => setLaneName(event.target.value)}
-            />
-            <label htmlFor="dh-branch">New lane branch</label>
-            <div>
-              <input
-                id="dh-branch"
-                autoFocus
-                required
-                maxLength={160}
-                placeholder="fix/payment-retry"
-                value={branch}
-                onChange={(event) => setBranch(event.target.value)}
-              />
-              <button
-                className={styles["dh-button"] + " " + styles["dh-accent"]}
-                type="submit"
-                disabled={!enabled || !branch.trim()}
-              >
-                Create lane
-              </button>
-              <button
-                type="button"
-                className={styles["dh-icon-button"]}
-                aria-label="Cancel new lane"
-                onClick={() => setCreating(false)}
-              >
-                <XIcon size={17} />
-              </button>
-            </div>
-            <p>
-              Git repositories get separate worktrees and ports. Shared repositories and regular
-              folders keep their original files.
-            </p>
-            <details className={styles["dh-revision-fields"]}>
-              <summary>Folders and lane options</summary>
-              <ul aria-label="Workspace folders for this lane">
-                {activeBase.workspace?.repos.map((repo) => (
-                  <li key={repo.id}>
-                    <strong>{repo.id}</strong> · {repo.path}
-                  </li>
-                ))}
-              </ul>
-              <div>
-                <label htmlFor="dh-lane-from">Start new branches from</label>
-                <input
-                  id="dh-lane-from"
-                  maxLength={200}
-                  placeholder="Each repository’s default"
-                  value={laneFrom}
-                  onChange={(event) => setLaneFrom(event.target.value)}
-                />
-              </div>
-              <p>
-                Leave blank to use workspace defaults. A start point must exist in each repository
-                that needs a new branch.
-              </p>
-              <label className={styles["dh-check-field"]}>
-                <input
-                  type="checkbox"
-                  checked={laneSetup}
-                  onChange={(event) => setLaneSetup(event.target.checked)}
-                />
-                Run workspace setup
-              </label>
-              <label className={styles["dh-check-field"]}>
-                <input
-                  type="checkbox"
-                  checked={laneStart}
-                  onChange={(event) => setLaneStart(event.target.checked)}
-                />
-                Start services after creation
-              </label>
-            </details>
-          </form>
         ) : null}
         {recoveryError ? (
           <div role="alert" className={styles["dh-status-error"]}>
