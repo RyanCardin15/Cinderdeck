@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ExternalLinkIcon, XIcon } from "lucide-react";
@@ -40,7 +40,7 @@ export function checksLabel(pr: GitHubWorkspaceRequest) {
         : "No checks";
 }
 
-export function GitHubPullRequestInspector({
+export const GitHubPullRequestInspector = memo(function GitHubPullRequestInspector({
   request,
   identity,
   run,
@@ -168,11 +168,15 @@ export function GitHubPullRequestInspector({
       }
     }
   };
-  const activity = detail
-    ? [...detail.comments.nodes, ...detail.reviews.nodes].sort((a, b) =>
-        a.createdAt.localeCompare(b.createdAt),
-      )
-    : [];
+  const activity = useMemo(
+    () =>
+      detail
+        ? [...detail.comments.nodes, ...detail.reviews.nodes].sort((a, b) =>
+            a.createdAt.localeCompare(b.createdAt),
+          )
+        : [],
+    [detail],
+  );
   const validation = !review
     ? null
     : review.state !== "OPEN"
@@ -188,38 +192,48 @@ export function GitHubPullRequestInspector({
     <aside className={styles.inspector} aria-label="Selected pull request">
       <header>
         <span>
-          {request.repository.nameWithOwner} #{request.number}
+          {request.repository.nameWithOwner} <b>#{request.number}</b>
         </span>
         <a
+          className={styles.iconButton}
           href={safeGitHubUrl(request.url, hostname)}
           target="_blank"
           rel="noreferrer"
           aria-label="Open pull request on GitHub"
         >
-          <ExternalLinkIcon size={15} />
+          <ExternalLinkIcon size={14} />
         </a>
-        <button type="button" aria-label="Close pull request details" onClick={onClose}>
-          <XIcon size={15} />
+        <button
+          type="button"
+          className={styles.iconButton}
+          aria-label="Close pull request details"
+          onClick={onClose}
+        >
+          <XIcon size={14} />
         </button>
       </header>
       {error ? (
-        <div className={styles.empty} role="alert">
+        <div className={styles.inspectorMessage} role="alert">
           <p>{error}</p>
           <button type="button" onClick={() => setRetry((value) => value + 1)}>
             Retry details
           </button>
         </div>
       ) : !detail ? (
-        <div className={styles.empty} role="status">
-          Loading details…
+        <div className={styles.inspectorLoading} role="status" aria-label="Loading details…">
+          <b />
+          <b />
+          <b />
         </div>
       ) : (
         <>
           <div className={styles.detailTitle}>
             <h2>{request.title}</h2>
             <p>
-              <b className={styles[requestState(detail).toLowerCase()]}>{requestState(detail)}</b> ·{" "}
-              {request.author?.login ?? "Deleted user"}
+              <span className={styles.badge} data-state={requestState(detail)}>
+                {requestState(detail)}
+              </span>
+              <span>{request.author?.login ?? "Deleted user"}</span>
             </p>
             <code>
               {detail.headRefName} → {detail.baseRefName}
@@ -262,7 +276,11 @@ export function GitHubPullRequestInspector({
                 </dl>
                 {request.labels.nodes.length ? (
                   <p className={styles.labels}>
-                    {request.labels.nodes.map((label) => label.name).join(" · ")}
+                    {request.labels.nodes.map((label) => (
+                      <span key={label.name} className={styles.labelChip}>
+                        {label.name}
+                      </span>
+                    ))}
                   </p>
                 ) : null}
                 <h3 className={styles.sectionLabel}>Description</h3>
@@ -281,39 +299,7 @@ export function GitHubPullRequestInspector({
                   {files.length} of {request.changedFiles} files · diff previews
                 </p>
                 {files.map((file) => (
-                  <details className={styles.file} key={file.filename}>
-                    <summary>
-                      <code>{file.filename}</code>
-                      <small>
-                        {file.status} · <span className={styles.additions}>+{file.additions}</span>{" "}
-                        <span className={styles.deletions}>−{file.deletions}</span>
-                      </small>
-                    </summary>
-                    {file.patch ? (
-                      <pre>
-                        {file.patch.split("\n").map((line, index) => (
-                          <span
-                            key={index}
-                            className={
-                              line.startsWith("+")
-                                ? styles.additions
-                                : line.startsWith("-")
-                                  ? styles.deletions
-                                  : undefined
-                            }
-                          >
-                            {line}
-                            {"\n"}
-                          </span>
-                        ))}
-                      </pre>
-                    ) : (
-                      <p>
-                        No text preview. This file may be binary, too large, or unchanged after a
-                        rename.
-                      </p>
-                    )}
-                  </details>
+                  <FileDiff file={file} key={file.filename} />
                 ))}
                 {loadingFiles ? <p role="status">Loading files…</p> : null}
                 {filesError ? (
@@ -366,12 +352,17 @@ export function GitHubPullRequestInspector({
           </div>
           <footer>
             <span>
-              <small>{request.changedFiles} changed files</small>
-              <span className={styles.additions}>+{request.additions}</span>{" "}
-              <span className={styles.deletions}>−{request.deletions}</span>
+              <small>
+                {request.changedFiles} changed file{request.changedFiles === 1 ? "" : "s"}
+              </small>
+              <span className={styles.diffStat}>
+                <span className={styles.additions}>+{request.additions}</span>
+                <span className={styles.deletions}>−{request.deletions}</span>
+              </span>
             </span>
             <button
               type="button"
+              className={styles.primaryButton}
               disabled={detail.state !== "OPEN" || submitting}
               onClick={() => {
                 setReview(detail);
@@ -461,6 +452,46 @@ export function GitHubPullRequestInspector({
         </DialogPopup>
       </Dialog>
     </aside>
+  );
+});
+
+/** A diff is only built when its file is opened; a hundred collapsed patches cost nothing. */
+function FileDiff({ file }: { file: GitHubWorkspaceFile }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details className={styles.file} onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>
+        <code>{file.filename}</code>
+        <small>
+          {file.status} · <span className={styles.additions}>+{file.additions}</span>{" "}
+          <span className={styles.deletions}>−{file.deletions}</span>
+        </small>
+      </summary>
+      {open ? (
+        file.patch ? (
+          <pre>
+            {file.patch.split("\n").map((line, index) => (
+              <span
+                key={index}
+                className={
+                  line.startsWith("+")
+                    ? styles.addedLine
+                    : line.startsWith("-")
+                      ? styles.removedLine
+                      : line.startsWith("@@")
+                        ? styles.hunkLine
+                        : undefined
+                }
+              >
+                {line || " "}
+              </span>
+            ))}
+          </pre>
+        ) : (
+          <p>No text preview. This file may be binary, too large, or unchanged after a rename.</p>
+        )
+      ) : null}
+    </details>
   );
 }
 function errorMessage(cause: unknown) {
