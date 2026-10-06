@@ -2,6 +2,24 @@ import Foundation
 import Security
 
 nonisolated struct DictationConfiguration: Codable, Equatable, Sendable {
+  enum Provider: String, Codable, CaseIterable { case service, macOS }
+  // Optional storage keeps configurations saved before native dictation compatible.
+  private var savedProvider: Provider?
+  var provider: Provider {
+    get { savedProvider ?? .service }
+    set { savedProvider = newValue }
+  }
+  private var savedOnDeviceOnly: Bool?
+  var onDeviceOnly: Bool {
+    get { savedOnDeviceOnly ?? true }
+    set { savedOnDeviceOnly = newValue }
+  }
+  private var savedNativeLanguage: String?
+  var nativeLanguage: String {
+    get { savedNativeLanguage ?? "" }
+    set { savedNativeLanguage = newValue }
+  }
+  var recordingLimit: TimeInterval { provider == .macOS ? 55 : 300 }
   enum Format: String, Codable, CaseIterable { case openAI, elevenLabs }
   enum Authentication: String, Codable, CaseIterable { case bearer, header, none }
   var endpoint = "https://api.openai.com/v1/audio/transcriptions"
@@ -15,6 +33,13 @@ nonisolated struct DictationConfiguration: Codable, Equatable, Sendable {
   var shortcutKeyCode: UInt16?
   var shortcutLabel = "⌃ Control"
   var holdDelay = 0.35
+
+  func validate() throws {
+    if provider == .service { _ = try validatedURL() }
+    else if nativeLanguage.utf8.count > 64 || nativeLanguage.contains(where: { $0.isNewline }) {
+      throw DictationError.message("Choose a supported macOS dictation language.")
+    }
+  }
 
   func validatedURL() throws -> URL {
     guard let url = URL(string: endpoint.trimmingCharacters(in: .whitespacesAndNewlines)),

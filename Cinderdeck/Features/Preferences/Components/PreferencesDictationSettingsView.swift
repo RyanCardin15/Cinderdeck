@@ -21,33 +21,58 @@ struct DictationSettingsView: View {
         Text("Speak into your chat or hold a shortcut to write in another app. Review the text before sending it.")
           .foregroundStyle(.secondary)
       }
-      Section("Transcription service") {
-        Menu("Use a service preset") {
-          Button("OpenAI") { preset(.openAI, url: "https://api.openai.com/v1/audio/transcriptions", model: "gpt-transcribe", auth: .bearer) }
-          Button("ElevenLabs") { preset(.elevenLabs, url: "https://api.elevenlabs.io/v1/speech-to-text", model: "scribe_v2", auth: .header) }
-          Button("Local OpenAI-compatible server") { preset(.openAI, url: "http://localhost:8080/v1/audio/transcriptions", model: "whisper-1", auth: .none) }
+      Section("Speech recognition") {
+        Picker("Provider", selection: $configuration.provider) {
+          Text("Transcription service").tag(DictationConfiguration.Provider.service)
+          Text("macOS (no API key)").tag(DictationConfiguration.Provider.macOS)
         }
-        Picker("API format", selection: $configuration.format) {
-          Text("OpenAI compatible").tag(DictationConfiguration.Format.openAI)
-          Text("ElevenLabs").tag(DictationConfiguration.Format.elevenLabs)
+      }
+      if configuration.provider == .macOS {
+        Section("macOS dictation") {
+          Picker("Language", selection: $configuration.nativeLanguage) {
+            Text("System language").tag("")
+            ForEach(Array(Set(NativeDictationTranscriber.supportedLanguages + (configuration.nativeLanguage.isEmpty ? [] : [configuration.nativeLanguage]))).sorted(), id: \.self) { identifier in
+              Text(Locale.current.localizedString(forIdentifier: identifier) ?? identifier).tag(identifier)
+            }
+          }
+          Toggle("Require on-device recognition", isOn: $configuration.onDeviceOnly)
+          Text("Uses Apple’s speech recognizer with no API key. On-device recognition keeps speech on this Mac and requires a supported language. If you turn this off, Apple’s servers may process audio when on-device recognition is unavailable.")
+            .font(.caption).foregroundStyle(.secondary)
+          Text("Recordings stop after 55 seconds. Microphone and Speech Recognition permissions are requested the first time you dictate. The chat microphone and hold-to-talk shortcut work with either provider.")
+            .font(.caption).foregroundStyle(.secondary)
+          Button("Open Speech Recognition permissions") {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition")!)
+          }
         }
-        TextField("Full transcription URL", text: $configuration.endpoint)
-        TextField("Model slug", text: $configuration.model)
-        TextField("Language (optional, e.g. en)", text: $configuration.language)
-        Picker("Authentication", selection: $configuration.authentication) {
-          Text("Bearer token").tag(DictationConfiguration.Authentication.bearer)
-          Text("Custom header").tag(DictationConfiguration.Authentication.header)
-          Text("None (local server)").tag(DictationConfiguration.Authentication.none)
+      } else {
+        Section("Transcription service") {
+          Menu("Use a service preset") {
+            Button("OpenAI") { preset(.openAI, url: "https://api.openai.com/v1/audio/transcriptions", model: "gpt-transcribe", auth: .bearer) }
+            Button("ElevenLabs") { preset(.elevenLabs, url: "https://api.elevenlabs.io/v1/speech-to-text", model: "scribe_v2", auth: .header) }
+            Button("Local OpenAI-compatible server") { preset(.openAI, url: "http://localhost:8080/v1/audio/transcriptions", model: "whisper-1", auth: .none) }
+          }
+          Picker("API format", selection: $configuration.format) {
+            Text("OpenAI compatible").tag(DictationConfiguration.Format.openAI)
+            Text("ElevenLabs").tag(DictationConfiguration.Format.elevenLabs)
+          }
+          TextField("Full transcription URL", text: $configuration.endpoint)
+          TextField("Model slug", text: $configuration.model)
+          TextField("Language (optional, e.g. en)", text: $configuration.language)
+          Picker("Authentication", selection: $configuration.authentication) {
+            Text("Bearer token").tag(DictationConfiguration.Authentication.bearer)
+            Text("Custom header").tag(DictationConfiguration.Authentication.header)
+            Text("None (local server)").tag(DictationConfiguration.Authentication.none)
+          }
+          if configuration.authentication == .header { TextField("Header name", text: $configuration.headerName) }
+          if configuration.authentication != .none {
+            SecureField(savedKey ? "API key saved — enter to replace" : "API key", text: Binding(get: { key }, set: { key = $0; keyChanged = true }))
+            if savedKey { Button("Remove saved API key") { key = ""; keyChanged = true; savedKey = false } }
+          }
+          Text("Use a model that supports audio transcription. OpenAI-compatible servers receive multipart audio at the exact URL above and return a JSON text field. Local models need a running server; Cinderdeck does not download models.")
+            .font(.caption).foregroundStyle(.secondary)
+          Text("Recordings are sent only to this endpoint when you stop. Temporary audio is deleted after completion or cancellation. Keys stay in macOS Keychain.")
+            .font(.caption).foregroundStyle(.secondary)
         }
-        if configuration.authentication == .header { TextField("Header name", text: $configuration.headerName) }
-        if configuration.authentication != .none {
-          SecureField(savedKey ? "API key saved — enter to replace" : "API key", text: Binding(get: { key }, set: { key = $0; keyChanged = true }))
-          if savedKey { Button("Remove saved API key") { key = ""; keyChanged = true; savedKey = false } }
-        }
-        Text("Use a model that supports audio transcription. OpenAI-compatible servers receive multipart audio at the exact URL above and return a JSON text field. Local models need a running server; Cinderdeck does not download models.")
-          .font(.caption).foregroundStyle(.secondary)
-        Text("Recordings are sent only to this endpoint when you stop. Temporary audio is deleted after completion or cancellation. Keys stay in macOS Keychain.")
-          .font(.caption).foregroundStyle(.secondary)
       }
       Section("Dictate anywhere on your Mac") {
         Toggle("Enable hold-to-talk shortcut", isOn: $configuration.globalEnabled)
@@ -79,17 +104,23 @@ struct DictationSettingsView: View {
       Section {
         HStack {
           Button("Save settings") { save() }.buttonStyle(.borderedProminent).disabled(controller.isBusy || recordingShortcut)
-          Button(controller.phase == "recording" ? "Stop test" : "Test microphone & service") {
+          Button(controller.phase == "recording" ? "Stop test" : "Test dictation") {
             if controller.phase == "recording" { controller.finish() }
             else if save() { controller.begin(test: true) }
           }.disabled((controller.isBusy && controller.phase != "recording") || recordingShortcut)
         }
         if !feedback.isEmpty { Text(feedback).font(.callout).textSelection(.enabled) }
-        Text("Microphone permission is requested when you start dictating. The test sends your recorded speech to the saved endpoint.")
+        Text(configuration.provider == .macOS ? "The test uses macOS speech recognition and shows the transcript without inserting it." : "Microphone permission is requested when you start dictating. The test sends your recorded speech to the saved endpoint.")
           .font(.caption).foregroundStyle(.secondary)
       }
     }.formStyle(.grouped)
-      .onAppear { configuration = controller.configuration; savedKey = controller.hasKey() }
+      .onAppear {
+        configuration = controller.configuration
+        if configuration.provider == .service { savedKey = controller.hasKey() }
+      }
+      .onChange(of: configuration.provider) { provider in
+        if provider == .service && !keyChanged { savedKey = controller.hasKey() }
+      }
       .onDisappear { stopShortcutCapture() }
   }
 
@@ -102,7 +133,7 @@ struct DictationSettingsView: View {
   @discardableResult private func save() -> Bool {
     do {
       try controller.save(configuration, key: keyChanged ? key : nil)
-      savedKey = controller.hasKey(); key = ""; keyChanged = false
+      if configuration.provider == .service { savedKey = controller.hasKey(); key = ""; keyChanged = false }
       feedback = "Settings saved."
       return true
     } catch { feedback = error.localizedDescription; return false }

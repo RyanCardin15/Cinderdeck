@@ -1,3 +1,5 @@
 "NSMicrophoneUsageDescription" = "Cinderdeck cần quyền truy cập micrô để nhập liệu bằng giọng nói và ghi âm khi quay màn hình.";
 "NSCameraUsageDescription" = "Cinderdeck cần quyền truy cập camera để thêm hình ảnh camera vào bản ghi màn hình của bạn.";
 "NSScreenCaptureUsageDescription" = "Cinderdeck cần quyền ghi màn hình để chụp ảnh màn hình và quay màn hình của bạn.";
+
+"NSSpeechRecognitionUsageDescription" = "Cinderdeck dùng tính năng nhận dạng giọng nói của Apple để chuyển lời nói thành văn bản. Âm thanh có thể được gửi đến Apple khi tắt nhận dạng trên thiết bị.";

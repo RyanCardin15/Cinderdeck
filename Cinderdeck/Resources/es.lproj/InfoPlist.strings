@@ -1,3 +1,5 @@
 "NSMicrophoneUsageDescription" = "Cinderdeck necesita acceso al micrófono para el dictado y el audio de las grabaciones de pantalla.";
 "NSCameraUsageDescription" = "Cinderdeck necesita acceso a la cámara para añadir una imagen de cámara a sus grabaciones de pantalla.";
 "NSScreenCaptureUsageDescription" = "Cinderdeck necesita permiso de grabación de pantalla para realizar capturas de pantalla y grabar su pantalla.";
+
+"NSSpeechRecognitionUsageDescription" = "Cinderdeck usa el reconocimiento de voz de Apple para convertir el dictado en texto. El audio puede enviarse a Apple si se desactiva el reconocimiento en el dispositivo.";
