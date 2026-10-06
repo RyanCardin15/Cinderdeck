@@ -35,7 +35,7 @@ import type { AgentActivityCounts, IntegrationView } from "@cinderdeck/contracts
 import { managedContextsView, workspaceView } from "./state";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../components/ui/tooltip";
 import { useAgentObservation } from "./useAgentObservation";
-import { WorkspaceSettingsButton } from "./WorkspaceSettingsButton";
+import { WorkspaceCreateLaneButton, WorkspaceSettingsButton } from "./WorkspaceSettingsButton";
 import { SessionLauncher } from "./SessionLauncher";
 import { Dialog, DialogPopup, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { overviewWorkspaceContexts, type WorkspaceSearch } from "./workspaceNavigation";
@@ -381,6 +381,16 @@ function WorkspaceLanes({
   const summaries = useSidebarAgentActivity(environmentId, installationID, lanes);
   return (
     <div className={styles.lanes}>
+      <div className={styles.laneHeading}>
+        <span>{fresh && lanes.length === 0 ? "No lanes" : "Lanes"}</span>
+        <WorkspaceCreateLaneButton
+          environmentId={environmentId}
+          workspaceID={baseID}
+          label={`Create lane in ${view?.resources.find((row) => row.workspaceID === baseID)?.workspace?.name ?? baseID}`}
+          compact
+          enabled={fresh && view?.hello?.capabilities.includes("operations.lane.create") === true}
+        />
+      </div>
       {view && !fresh && lanes.length > 0 ? (
         <p className={styles.notice} role="status">
           Last observed lanes
@@ -417,7 +427,7 @@ function WorkspaceLanes({
           />
         )}
       </Siblings>
-      {!lanes.length ? (
+      {!lanes.length && !fresh ? (
         <p className={styles.notice} role="status">
           {fresh
             ? "No lanes"

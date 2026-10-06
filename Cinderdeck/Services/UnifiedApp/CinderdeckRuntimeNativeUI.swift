@@ -14,6 +14,23 @@ enum CinderdeckRuntimeNativeUI {
       throw StackControlError(code: "resource_missing", message: "The requested workspace is unavailable")
     }
     switch request.surface {
+    case "workspace-lane-create":
+      guard let id = request.workspaceID, request.mode == nil,
+        let file = StackSupervisor.shared.files.first(where: { $0.id == id }), file.lane == nil else {
+        throw StackControlError.invalid("Create a lane from an exact source workspace, with no mode")
+      }
+      if LaneCreationWindowController.shared.focusIfPresented() { return }
+      Task { @MainActor in
+        do {
+          _ = try await StackControlService.shared.handle("lane.create",
+            params: .object(["workspace": .string(id), "start": .bool(false)]), actor: .user)
+        } catch {
+          if (error as? StackControlError)?.code != "cancelled" {
+            let alert = NSAlert(); alert.messageText = "Could not create lane"; alert.informativeText = error.localizedDescription
+            alert.runModal()
+          }
+        }
+      }
     case "agent-access":
       // Older shells still ask for the native sheet; the setup now lives in the shell's own settings.
       guard request.workspaceID == nil, request.mode == nil else { throw StackControlError.invalid("Agent access does not accept a workspace or mode") }

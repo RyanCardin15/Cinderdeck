@@ -731,3 +731,39 @@ it("shows workspace totals while collapsed, exact lane counts, and updates witho
   expect(container.querySelector('[aria-label="alpha: 3 agents running"]')).toBeNull();
   expect(container.querySelector('[aria-label="lane-a: 1 agent needs review"]')).toBeNull();
 });
+
+it("shows a separate lane plus for empty and populated workspace dropdowns", async () => {
+  const openNativeTool = vi.fn(async () => true);
+  Object.defineProperty(window, "desktopBridge", {
+    configurable: true,
+    value: { isNativeHost: () => true, openNativeTool },
+  });
+  try {
+    const emptyBetaRows = resources.filter((row) => row.workspaceID !== "lane-c");
+    registry.set(
+      native,
+      AsyncResult.success({
+        ...view,
+        resources: emptyBetaRows,
+        hello: { ...view.hello!, capabilities: ["operations.lane.create"] },
+      }),
+    );
+    await render(undefined, emptyBetaRows);
+    await act(async () => button("Expand lanes for beta").click());
+    expect(container.textContent).toContain("No lanes");
+    await act(async () => button("Create lane in beta").click());
+    expect(openNativeTool).toHaveBeenLastCalledWith({
+      surface: "workspace-lane-create",
+      workspaceID: "beta",
+    });
+    await act(async () => button("Expand lanes for alpha").click());
+    expect(button("Create lane in alpha").disabled).toBe(false);
+    await act(async () => button("Create lane in alpha").click());
+    expect(openNativeTool).toHaveBeenLastCalledWith({
+      surface: "workspace-lane-create",
+      workspaceID: "alpha",
+    });
+  } finally {
+    delete window.desktopBridge;
+  }
+});

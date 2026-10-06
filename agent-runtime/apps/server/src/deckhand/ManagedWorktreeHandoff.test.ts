@@ -62,6 +62,7 @@ const fixture = (
     generation?: number;
     sourceFailures?: number;
     targetFailures?: number;
+    reviewed?: boolean;
     sourceTransform?: (context: NativeContext) => NativeContext;
   } = {},
 ) =>
@@ -177,6 +178,7 @@ const fixture = (
     let sourceReads = 0;
     let targetReads = 0;
     let submittedGeneration: number | undefined;
+    let submittedRefs: unknown;
     const hello = yield* Schema.decodeUnknownEffect(I.IntegrationHello)({
       protocolVersion: 1,
       installationID: "installation",
@@ -214,7 +216,7 @@ const fixture = (
                 ? {
                     lane: {
                       sourceStackID: "primary",
-                      name: "feature/task",
+                      name: options.reviewed ? "Reviewed handoff lane" : "feature/task",
                       directory: lanePath,
                       adopted: false,
                       createdAt: "now",
@@ -254,13 +256,17 @@ const fixture = (
         Effect.gen(function* () {
           created++;
           submittedGeneration = input.generation;
+          submittedRefs = input.arguments.repositoryRefs;
           yield* git([
             "worktree",
             "add",
             "-b",
-            "feature/task",
+            options.reviewed ? "codex/reviewed-handoff" : "feature/task",
             lanePath,
-            String((input.arguments.repositoryRefs as Record<string, string>).repo),
+            String(
+              (input.arguments.repositoryRefs as Record<string, string> | undefined)?.repo ??
+                "HEAD",
+            ),
           ]);
           receipt = yield* Schema.decodeUnknownEffect(I.IntegrationOperationReceipt)({
             id: "receipt",
@@ -273,6 +279,9 @@ const fixture = (
             createdAt: "now",
             updatedAt: "now",
             result: {
+              ...(options.reviewed
+                ? { creationReviewed: true, createdBranch: "codex/reviewed-handoff" }
+                : {}),
               createdWorkspaceID: "lane",
               workspace: (yield* resource(true)).resource.workspace,
               creationReady: true,
@@ -388,6 +397,7 @@ const fixture = (
       sourceReads: () => sourceReads,
       targetReads: () => targetReads,
       submittedGeneration: () => submittedGeneration,
+      submittedRefs: () => submittedRefs,
       reloadWorkspace: () => {
         generation++;
       },
@@ -399,6 +409,25 @@ const fixture = (
   });
 
 describe("Cinderdeck conversation lane handoff", () => {
+  it.effect("moves into the name and branch approved in the shared creation sheet", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture({ reviewed: true });
+      const result = yield* f.run({ continuationPrompt: "Continue" });
+      assert.ok(result);
+      assert.equal(result.branch, "codex/reviewed-handoff");
+      assert.equal(f.submittedRefs(), undefined);
+      assert.equal(f.created(), 1);
+      assert.equal(f.continuationPath(), result.worktreePath);
+    }).pipe(Effect.provide(base), Effect.scoped),
+  );
+  it.effect("prefills an explicit base only for the conversation's repository", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture();
+      const result = yield* f.run({ baseRef: "main" });
+      assert.ok(result);
+      assert.deepEqual(f.submittedRefs(), { repo: "main" });
+    }).pipe(Effect.provide(base), Effect.scoped),
+  );
   it.effect("moves an older conversation using the live workspace generation", () =>
     Effect.gen(function* () {
       const f = yield* fixture({ generation: 7 });

@@ -67,6 +67,7 @@ Use double-quoted strings, arrays of strings, named tables, and dotted keys. Thi
 | `name` | File name | Display name |
 | `root` | Definition file's folder | Base for relative paths; expands `~` |
 | `[repos.<id>] lane` | `"worktree"` | `"shared"`: lanes use the original checkout of this repo |
+| `[repos.<id>] lane_from` | `[lanes] from`, then `HEAD` | Default branch or revision for new lanes in this repository, such as `"main"` or `"develop"`. Choose it in Workspace settings. |
 | `shell` | `$SHELL`, then `/bin/zsh` | Executable shell path |
 | `restart_on_branch_change` | `true` | Restart affected running services around Git checkout/pull |
 | `[env]` | Empty | Shared environment variables; string values |

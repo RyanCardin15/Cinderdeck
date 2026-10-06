@@ -3,6 +3,34 @@ import XCTest
 @testable import Cinderdeck
 
 final class WorkspaceSettingsTests: XCTestCase {
+  func testIndependentLaneDefaultsRoundTripAndSurviveMembershipEdits() throws {
+    let file = URL(fileURLWithPath: "/tmp/defaults.toml")
+    let original = """
+    name = "Suite"
+    root = "/tmp/suite"
+    [repos.app]
+    path = "app"
+    lane_from = "main"
+    [repos.api]
+    path = "api"
+    lane_from = "develop"
+    [lanes]
+    from = "origin/main"
+    """
+    let definition = try XCTUnwrap(StackDefinitionLoader.load(original, file: file, validatePaths: false).definition)
+    XCTAssertEqual(definition.repo("api")?.laneFrom, "develop")
+    var folders = definition.repos
+    folders[try XCTUnwrap(folders.firstIndex(where: { $0.id == "app" }))].laneFrom = "release"
+    let saved = try WorkspaceSettingsWriter.source(original: original, definition: definition, name: "Suite renamed", folders: folders, files: [])
+    let loaded = try XCTUnwrap(StackDefinitionLoader.load(saved, file: file, validatePaths: false).definition)
+    XCTAssertEqual(loaded.repo("app")?.laneFrom, "release")
+    XCTAssertEqual(loaded.repo("api")?.laneFrom, "develop")
+    XCTAssertEqual(loaded.laneSettings?.from, "origin/main")
+    for ref in ["", "-main", "main\nother"] {
+      let invalid = original.replacingOccurrences(of: "lane_from = \"develop\"", with: "lane_from = \(WorkspaceDefinitionWriter.quote(ref))")
+      XCTAssertNil(StackDefinitionLoader.load(invalid, file: file, validatePaths: false).definition)
+    }
+  }
   func testFolderAndFileMembershipPreservesCommandsAndRejectsConflictingSave() throws {
     let root = try StackTestSupport.temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }

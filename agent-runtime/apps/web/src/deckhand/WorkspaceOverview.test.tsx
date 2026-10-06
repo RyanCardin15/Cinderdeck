@@ -17,6 +17,7 @@ const boundary = vi.hoisted(() => ({
   inspect: vi.fn(),
   recordings: vi.fn(),
   mutation: vi.fn(),
+  nativeTool: vi.fn(async () => true),
 }));
 const environmentId = EnvironmentId.make("computer");
 const environment = () => ({
@@ -234,6 +235,10 @@ const changeSelect = async (name: string, value: string) => {
 };
 beforeEach(() => {
   window.localStorage.clear();
+  Object.defineProperty(window, "desktopBridge", {
+    configurable: true,
+    value: { isNativeHost: () => true, openNativeTool: boundary.nativeTool },
+  });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.clearAllMocks();
   boundary.search = {};
@@ -254,6 +259,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   registry.dispose();
   container.remove();
+  delete window.desktopBridge;
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
@@ -761,65 +767,15 @@ it("checks a new scope's journal even while retaining a terminal operation", asy
   expect(boundary.mutation).not.toHaveBeenCalled();
 });
 
-it("reviews multiple workspace folders and submits the selected lane launch options", async () => {
-  boundary.search = { workspace: "primary", context: "primary" };
-  const repo = primary.workspace!.repos[0]!;
-  const configured = {
-    ...primary,
-    workspace: {
-      ...primary.workspace!,
-      repos: [
-        repo,
-        { ...repo, id: "api", path: "/fixture/api" },
-        { ...repo, id: "docs", path: "/fixture/docs", branch: "" },
-      ],
-    },
-  };
-  registry.set(nativeAtom, AsyncResult.success({ ...view, resources: [configured, lane, other] }));
-  boundary.mutation.mockResolvedValue({
-    _tag: "Success",
-    value: {
-      operationID: "configured-create",
-      method: "lane.create",
-      state: "failed",
-      result: null,
-    },
-  });
+it("opens the shared native creation sheet from the lane header with the source workspace", async () => {
+  boundary.search = { workspace: "primary", context: "lane" };
   await render();
   await act(async () => button("New lane").click());
-  const folders = container.querySelector('ul[aria-label="Workspace folders for this lane"]')!;
-  expect(folders.textContent).toContain("/fixture/api");
-  expect(folders.textContent).toContain("/fixture/docs");
-  const change = async (id: string, value: string) => {
-    const input = container.querySelector<HTMLInputElement>(`#${id}`)!;
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-  };
-  await change("dh-branch", "feature/suite");
-  await change("dh-lane-from", "origin/main");
-  for (const name of ["Run workspace setup", "Start services after creation"]) {
-    const checkbox = [...container.querySelectorAll("label")]
-      .find((label) => label.textContent?.trim() === name)!
-      .querySelector<HTMLInputElement>("input")!;
-    await act(async () => checkbox.click());
-  }
-  await act(async () => button("Create lane").click());
-  expect(boundary.mutation).toHaveBeenCalledWith(
-    expect.objectContaining({
-      input: expect.objectContaining({
-        method: "lane.create",
-        arguments: {
-          workspace: "primary",
-          branch: "feature/suite",
-          from: "origin/main",
-          setup: true,
-          start: true,
-        },
-      }),
-    }),
-  );
+  expect(boundary.nativeTool).toHaveBeenCalledExactlyOnceWith({
+    surface: "workspace-lane-create",
+    workspaceID: "primary",
+  });
+  expect(boundary.mutation).not.toHaveBeenCalled();
 });
 
 it("resolves a native lane entry to its owning workspace before opening its tool", async () => {

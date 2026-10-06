@@ -217,7 +217,8 @@ const fixture = Effect.gen(function* () {
       | "setup_failed"
       | "pending"
       | "unknown_outcome"
-      | "stale_target" = "ready",
+      | "stale_target"
+      | "reviewed" = "ready",
   ) => {
     const receipts = new Map<string, Integration.IntegrationOperationReceipt>();
     let creations = 0;
@@ -272,11 +273,13 @@ const fixture = Effect.gen(function* () {
               .length,
             intentInput.reviewerContext ? 1 : 0,
           );
+          const approvedBranch =
+            mode === "reviewed" ? "codex/reviewed-feature" : String(request.arguments.branch);
           yield* git(source, [
             "worktree",
             "add",
             "-b",
-            String(request.arguments.branch),
+            approvedBranch,
             created,
             String((request.arguments.repositoryRefs as Record<string, string>).frontend),
           ]);
@@ -285,12 +288,13 @@ const fixture = Effect.gen(function* () {
           resource.workspaceID = "created";
           resource.workspace.id = "created";
           const identity = yield* identities.resolve(created);
-          resource.workspace.lane!.name = String(request.arguments.branch);
+          resource.workspace.lane!.name =
+            mode === "reviewed" ? "Human reviewed name" : String(request.arguments.branch);
           resource.workspace.lane!.directory = created;
           resource.workspace.repos[0]!.physicalID = identity.physicalId;
           resource.workspace.repos[0]!.repositoryPhysicalID = identity.repositoryPhysicalId;
           resource.workspace.repos[0]!.path = created;
-          resource.workspace.repos[0]!.branch = String(request.arguments.branch);
+          resource.workspace.repos[0]!.branch = approvedBranch;
           resources.set("created", resource);
           const receipt = yield* decodeReceipt({
             id: "native-operation",
@@ -303,12 +307,18 @@ const fixture = Effect.gen(function* () {
             createdAt: "now",
             updatedAt: "now",
             result: {
+              ...(mode === "reviewed"
+                ? { creationReviewed: true, createdBranch: approvedBranch }
+                : {}),
               ...(mode === "unknown_outcome"
                 ? {}
                 : { createdWorkspaceID: "created", workspace: resource.workspace }),
               ...(mode === "native_shape"
                 ? { workspace: resource.workspace }
-                : { creationReady: mode === "ready" || mode === "stale_target" }),
+                : {
+                    creationReady:
+                      mode === "ready" || mode === "stale_target" || mode === "reviewed",
+                  }),
               setup: { status: mode === "setup_failed" ? "failed" : "skipped", updatedAt: "now" },
             },
           });
@@ -353,7 +363,7 @@ const creationInput = (key = "create-one") =>
   });
 
 describe("connected lane and session creation", () => {
-  it.live.each(["ready", "native_shape"] as const)(
+  it.live.each(["ready", "native_shape", "reviewed"] as const)(
     "commits intent before Git, launches returned checkout, and replays requests (%s)",
     (mode) =>
       Effect.gen(function* () {
@@ -686,7 +696,7 @@ describe("connected lane and session creation", () => {
         yield* sql`DELETE FROM deckhand_schema WHERE version >= 8`;
         yield* sql`DROP TABLE deckhand_launch_reviews`;
         yield* sql`DROP TABLE deckhand_reviewer_queue`;
-      yield* sql`DROP TABLE deckhand_checkout_transfers`;
+        yield* sql`DROP TABLE deckhand_checkout_transfers`;
         yield* sql`DROP VIEW IF EXISTS deckhand_current_checkouts`;
         yield* sql`DROP TABLE IF EXISTS deckhand_checkout_ownership`;
         yield* sql`DROP TABLE IF EXISTS deckhand_ownership_transitions`;

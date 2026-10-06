@@ -59,7 +59,7 @@ nonisolated enum StackDefinitionLoader {
       for (repoID, value) in reader.table(document.root, "repos").sorted(by: { $0.key < $1.key }) {
         guard case .table(let table) = value else { reader.error("repos.\(repoID) must be a table"); continue }
         if !validID(repoID) { reader.error("Invalid repo ID: \(repoID)") }
-        reader.warnUnknown(table, allowed: ["path", "lane"], at: "repos.\(repoID)")
+        reader.warnUnknown(table, allowed: ["path", "lane", "lane_from"], at: "repos.\(repoID)")
         guard let path = reader.string(table, "path", at: "repos.\(repoID)"), !path.isEmpty else {
           reader.error("repos.\(repoID).path is required"); continue
         }
@@ -70,7 +70,11 @@ nonisolated enum StackDefinitionLoader {
           if let parsed = StackRepoLaneMode(rawValue: text) { mode = parsed }
           else { reader.error("repos.\(repoID).lane must be worktree or shared") }
         }
-        stack.repos.append(.init(id: repoID, path: url, laneMode: mode))
+        let laneFrom = reader.string(table, "lane_from", at: "repos.\(repoID)")
+        if let laneFrom, laneFrom.isEmpty || laneFrom.utf8.count > 200 || laneFrom.hasPrefix("-") || laneFrom.contains(where: { $0.isNewline || $0 == "\0" }) {
+          reader.error("repos.\(repoID).lane_from must be a valid Git start revision")
+        }
+        stack.repos.append(.init(id: repoID, path: url, laneMode: mode, laneFrom: laneFrom))
       }
       for (serviceID, value) in reader.table(document.root, "services").sorted(by: { $0.key < $1.key }) {
         let prefix = "services.\(serviceID)"

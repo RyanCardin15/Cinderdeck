@@ -186,6 +186,8 @@ export const IntegrationOperationReceipt = Schema.Struct({
         workspace: Schema.optionalKey(IntegrationWorkspace),
         createdWorkspaceID: Schema.optionalKey(Schema.String),
         creationReady: Schema.optionalKey(Schema.Boolean),
+        creationReviewed: Schema.optionalKey(Schema.Boolean),
+        createdBranch: Schema.optionalKey(Schema.String),
         removed: Schema.optionalKey(Schema.String),
         released: Schema.optionalKey(Schema.String),
         resourceAvailable: Schema.optionalKey(Schema.Boolean),

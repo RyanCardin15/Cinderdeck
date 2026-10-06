@@ -207,16 +207,9 @@ export const layer = Layer.effect(
                   setup: input.runSetupScript ?? true,
                   ...(input.adoptExisting
                     ? { path: input.path }
-                    : {
-                        repositoryRefs: Object.fromEntries(
-                          sourceWorkspace.repos.map((repo, index) => [
-                            repo.id,
-                            index === selectedIndex
-                              ? ref
-                              : (sourcePhysical[index]!.commit ?? "HEAD"),
-                          ]),
-                        ),
-                      }),
+                    : input.baseRef || input.startFromOrigin
+                      ? { repositoryRefs: { [sourceWorkspace.repos[selectedIndex]!.id]: ref } }
+                      : {}),
                 },
               };
               receipt = yield* input.adoptExisting
@@ -241,12 +234,18 @@ export const layer = Layer.effect(
               );
             const target = yield* readContext(laneID);
             const lane = target.resource.workspace;
+            const reviewed = receipt.result?.creationReviewed === true;
+            const reviewedLane = reviewed ? receipt.result?.workspace : undefined;
             if (
               target.hello.installationID !== workspace.environmentId ||
               !target.resource.available ||
               !lane?.lane ||
               lane.lane.sourceStackID !== workspace.ownerId ||
-              lane.lane.name !== (input.name ?? input.branch) ||
+              lane.lane.name !==
+                (reviewed ? reviewedLane?.lane?.name : (input.name ?? input.branch)) ||
+              (reviewed &&
+                (!receipt.result?.createdBranch ||
+                  lane.lane.directory !== reviewedLane?.lane?.directory)) ||
               lane.definitionChanged ||
               lane.issues.length ||
               lane.repos.length !== sourceWorkspace.repos.length
@@ -264,7 +263,7 @@ export const layer = Layer.effect(
             if (
               !destination ||
               destination.physicalId === selected.physicalId ||
-              destination.branch !== input.branch ||
+              destination.branch !== (reviewed ? receipt.result?.createdBranch : input.branch) ||
               physical.some((repo, index) => {
                 const originalIndex = sourceWorkspace.repos.findIndex(
                   (item) => item.id === lane.repos[index]!.id,
@@ -273,7 +272,10 @@ export const layer = Layer.effect(
                   originalIndex < 0 ||
                   repo.repositoryPhysicalId !==
                     sourcePhysical[originalIndex]!.repositoryPhysicalId ||
-                  repo.physicalId !== lane.repos[index]!.physicalID
+                  repo.physicalId !== lane.repos[index]!.physicalID ||
+                  (reviewed &&
+                    reviewedLane?.lane?.repositoryRefs?.[lane.repos[index]!.id] !== undefined &&
+                    repo.commit !== reviewedLane.lane.repositoryRefs[lane.repos[index]!.id])
                 );
               })
             )
@@ -364,8 +366,12 @@ export const layer = Layer.effect(
                 }
                 return {
                   worktreePath: destination.root,
-                  branch: input.branch,
-                  baseRef,
+                  branch: destination.branch!,
+                  baseRef: reviewed
+                    ? (reviewedLane?.lane?.repositoryRefs?.[
+                        sourceWorkspace.repos[selectedIndex]!.id
+                      ] ?? baseRef)
+                    : baseRef,
                   startedFromOrigin: input.startFromOrigin ?? false,
                   setupScript: {
                     status:

@@ -75,6 +75,7 @@ struct WorkspaceSettingsView: View {
             Button("Add folders…") { choose(files: false) }.disabled(folders.count >= 64)
           }
           ForEach($folders) { $folder in
+            VStack(alignment: .leading, spacing: 8) {
             HStack {
               pathRow(folder.path, icon: "folder")
               Spacer()
@@ -85,6 +86,17 @@ struct WorkspaceSettingsView: View {
               Button { folders.removeAll { $0.id == folder.id } } label: { Image(systemName: "minus.circle") }
                 .buttonStyle(.plain).accessibilityLabel("Remove folder \(folder.path.path)")
             }
+              if folder.laneMode == .worktree {
+                HStack {
+                  Text("New lanes start from").font(.caption).foregroundStyle(.secondary)
+                  LaneBaseBranchPicker(path: folder.path, selection: Binding(
+                    get: { folder.laneFrom ?? definition?.laneSettings?.from ?? "HEAD" },
+                    set: { folder.laneFrom = $0 == (definition?.laneSettings?.from ?? "HEAD") ? nil : $0 }),
+                    label: "Default lane base for \(folder.id)")
+                  Spacer()
+                }
+              }
+            }.padding(10).background(DeckStyle.surface, in: RoundedRectangle(cornerRadius: 8))
           }
           if folders.isEmpty { Text("The primary folder is used when no additional folders are configured.").font(.caption).foregroundStyle(.secondary) }
           HStack {
@@ -260,7 +272,8 @@ nonisolated enum WorkspaceSettingsWriter {
     }
     for folder in folders where definition.repo(folder.id) != folder {
       source = try WorkspaceDefinitionWriter.replacing(source, section: "repos." + folder.id,
-        with: WorkspaceDefinitionWriter.repo(id: folder.id, path: folder.path) + "\nlane = \(WorkspaceDefinitionWriter.quote(folder.laneMode.rawValue))")
+        with: WorkspaceDefinitionWriter.repo(id: folder.id, path: folder.path) + "\nlane = \(WorkspaceDefinitionWriter.quote(folder.laneMode.rawValue))"
+          + (folder.laneFrom.map { "\nlane_from = \(WorkspaceDefinitionWriter.quote($0))" } ?? ""))
     }
     return source
   }
