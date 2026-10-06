@@ -113,6 +113,40 @@ const fixture = Effect.gen(function* () {
   const identity = yield* identities.resolve(repo);
   return { root, repo, git, identity };
 });
+const saveNativeCheckout = Effect.fn(function* (
+  id: string,
+  repositories: ReadonlyArray<Bindings.PhysicalCheckout>,
+  kind: "primary" | "lane",
+) {
+  const sql = yield* SqlClient.SqlClient;
+  const workspace = yield* decodeWorkspace({
+    id: "workspace-" + id,
+    environmentId: "native",
+    backend: "cinderdeck",
+    ownerId: "owner-" + id,
+    generation: 1,
+    revision: 1,
+    name: id,
+    state: "active",
+  });
+  const binding = yield* decodeCheckout({
+    id,
+    workspaceId: workspace.id,
+    workspaceGeneration: 1,
+    nativeGeneration: 1,
+    environmentId: "native",
+    backend: "cinderdeck",
+    kind,
+    laneId: kind === "lane" ? id : null,
+    state: "ready",
+    repositories,
+    revision: 1,
+  });
+  yield* sql`INSERT INTO deckhand_workspaces(id, environment_id, backend, owner_id, generation, revision, record_json)
+    VALUES (${workspace.id}, 'native', 'cinderdeck', ${workspace.ownerId}, 1, 1, ${yield* encodeWorkspace(workspace)})`;
+  yield* sql`INSERT INTO deckhand_checkouts(id, workspace_id, revision, record_json)
+    VALUES (${id}, ${workspace.id}, 1, ${yield* encodeCheckout(binding)})`;
+});
 describe("checkout mutations across Git and files", () => {
   it.effect(
     "disconnected cached physical identities protect moved native worktrees and shared refs while unrelated standalone Git remains usable",
@@ -470,6 +504,142 @@ describe("checkout mutations across Git and files", () => {
                 runtimeEpoch: "epoch",
                 contexts,
               }),
+          }),
+        ),
+      );
+    },
+  );
+
+  it.effect(
+    "switches branches past a forgotten saved lane while protecting registered, damaged and replaced checkouts",
+    () => {
+      let contexts: ReadonlyArray<Contracts.IntegrationCheckoutContext> = [];
+      return Effect.gen(function* () {
+        const { root, repo, git, identity } = yield* fixture;
+        const fs = yield* FileSystem.FileSystem;
+        const identities = yield* CheckoutIdentity.CheckoutIdentity;
+        const sql = yield* SqlClient.SqlClient;
+        const backend = yield* WorkspaceBackend.WorkspaceBackend;
+        const driver = yield* GitVcsDriver.makeVcsDriverShape();
+        const lane = root + "/old lane";
+        yield* git(repo, ["worktree", "add", "-b", "old-lane", lane]);
+        const linked = yield* identities.resolve(lane);
+        yield* saveNativeCheckout("primary", [identity], "primary");
+        yield* saveNativeCheckout("old-lane", [linked], "lane");
+        contexts = [
+          {
+            workspaceID: "owner-primary",
+            generation: 2,
+            revision: "live",
+            available: true,
+            repos: ["app"],
+            physicalIDs: [identity.physicalId],
+          },
+        ];
+        yield* git(repo, ["branch", "feature/forgotten-lane"]);
+        yield* fs.remove(lane, { recursive: true });
+        // Missing files are insufficient: Git still owns the lane registration.
+        assert.equal(
+          (yield* backend.inspect({ cwd: repo, sharedRefs: true }).pipe(Effect.flip)).reason,
+          "stale_binding",
+        );
+        yield* sql`INSERT INTO deckhand_ownership_transitions(id, actor_id, physical_id, original_json, record_json)
+          VALUES ('move', 'actor', ${linked.physicalId}, '{}', '{"state":"pending"}')`;
+        assert.equal(
+          (yield* backend.inspect({ cwd: repo, sharedRefs: true }).pipe(Effect.flip)).reason,
+          "uncertain",
+        );
+        yield* sql`UPDATE deckhand_ownership_transitions SET record_json='{"state":"completed"}' WHERE id='move'`;
+        yield* git(repo, ["worktree", "prune", "--expire", "now"]);
+        yield* driver.execute({
+          operation: "GitVcsDriver.switchRef.checkout",
+          cwd: repo,
+          args: ["checkout", "feature/forgotten-lane", "--"],
+        });
+        assert.equal(
+          (yield* git(repo, ["branch", "--show-current"])).stdout.trim(),
+          "feature/forgotten-lane",
+        );
+        const inspected = yield* backend.inspect({ cwd: repo, sharedRefs: true });
+        assert.deepEqual(inspected?.physicalIDs, [identity.physicalId]);
+        assert.equal(inspected?.backend, "cinderdeck");
+        const saved = yield* sql`SELECT id FROM deckhand_current_checkouts WHERE id='old-lane'`;
+        assert.equal(saved.length, 1, "historical lane bindings remain saved");
+
+        yield* fs.makeDirectory(lane);
+        yield* fs.writeFileString(lane + "/.git", "damaged");
+        assert.equal(
+          (yield* backend.inspect({ cwd: repo, sharedRefs: true }).pipe(Effect.flip)).reason,
+          "stale_binding",
+        );
+        yield* fs.remove(lane, { recursive: true });
+        const replacement = yield* fixture;
+        yield* fs.rename(replacement.repo, lane);
+        const result = yield* driver
+          .execute({
+            operation: "GitVcsDriver.switchRef.checkout",
+            cwd: repo,
+            args: ["checkout", "main", "--"],
+          })
+          .pipe(Effect.flip);
+        assert.include(result.message, "saved workspace no longer matches");
+        assert.equal(
+          (yield* git(repo, ["branch", "--show-current"])).stdout.trim(),
+          "feature/forgotten-lane",
+        );
+      }).pipe(
+        Effect.provide(
+          testLayer({
+            checkoutContexts: () =>
+              Effect.succeed({ installationID: "native", runtimeEpoch: "epoch", contexts }),
+          }),
+        ),
+      );
+    },
+  );
+
+  it.effect(
+    "keeps native ownership checks for the remaining repository in a partially forgotten lane",
+    () => {
+      let contexts: ReadonlyArray<Contracts.IntegrationCheckoutContext> = [];
+      return Effect.gen(function* () {
+        const { root, repo, git, identity } = yield* fixture;
+        const identities = yield* CheckoutIdentity.CheckoutIdentity;
+        const backend = yield* WorkspaceBackend.WorkspaceBackend;
+        const removed = root + "/removed";
+        const remaining = root + "/remaining";
+        yield* git(repo, ["worktree", "add", "-b", "removed", removed]);
+        yield* git(repo, ["worktree", "add", "-b", "remaining", remaining]);
+        const removedIdentity = yield* identities.resolve(removed);
+        const remainingIdentity = yield* identities.resolve(remaining);
+        yield* saveNativeCheckout("partial-lane", [removedIdentity, remainingIdentity], "lane");
+        yield* git(repo, ["worktree", "remove", removed]);
+        contexts = [
+          {
+            workspaceID: "partial-lane",
+            generation: 2,
+            revision: "live",
+            available: true,
+            repos: ["remaining"],
+            physicalIDs: [remainingIdentity.physicalId],
+          },
+        ];
+        const inspected = yield* backend.inspect({ cwd: repo, sharedRefs: true });
+        assert.sameMembers([...inspected!.physicalIDs], [
+          identity.physicalId,
+          remainingIdentity.physicalId,
+        ]);
+        assert.equal(inspected?.backend, "standalone");
+        contexts = [];
+        assert.equal(
+          (yield* backend.inspect({ cwd: repo, sharedRefs: true }).pipe(Effect.flip)).reason,
+          "stale_binding",
+        );
+      }).pipe(
+        Effect.provide(
+          testLayer({
+            checkoutContexts: () =>
+              Effect.succeed({ installationID: "native", runtimeEpoch: "epoch", contexts }),
           }),
         ),
       );

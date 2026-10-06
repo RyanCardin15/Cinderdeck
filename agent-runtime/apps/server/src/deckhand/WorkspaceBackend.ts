@@ -159,17 +159,10 @@ const make = Effect.gen(function* () {
           OR json_extract(repo.value,'$.root')=${current.root}
           OR (${input.sharedRefs ? 1 : 0} AND json_extract(repo.value,'$.repositoryPhysicalId')=${current.repositoryPhysicalId})) LIMIT 65`;
       if (rows.length > 64) return yield* new CheckoutMutationError({ reason: "stale_binding" });
-      const known = yield* Effect.forEach(rows, (row) =>
+      const saved = yield* Effect.forEach(rows, (row) =>
         Effect.gen(function* () {
           const binding = yield* decodeCheckout(row.checkout_json);
           const workspace = yield* decodeWorkspace(row.workspace_json);
-          if (
-            binding.state !== "ready" ||
-            workspace.state !== "active" ||
-            binding.workspaceGeneration !== workspace.generation ||
-            binding.environmentId !== workspace.environmentId
-          )
-            return yield* new CheckoutMutationError({ reason: "stale_binding" });
           return { binding, workspace };
         }),
       );
@@ -216,7 +209,9 @@ const make = Effect.gen(function* () {
           physicalIDs.add(linked.physicalId);
         }
       }
-      for (const { binding } of known) {
+      const known: Array<(typeof saved)[number]> = [];
+      for (const { binding, workspace } of saved) {
+        const repositories: Array<Contracts.PhysicalCheckout> = [];
         for (const repo of binding.repositories) {
           if (
             repo.physicalId !== current.physicalId &&
@@ -228,14 +223,39 @@ const make = Effect.gen(function* () {
             Effect.catch(() => identities.missingRegistration(current, repo.root)),
             Effect.mapError(() => new CheckoutMutationError({ reason: "stale_binding" })),
           );
-          if (!actual) return yield* new CheckoutMutationError({ reason: "stale_binding" });
+          if (!actual) {
+            // A saved sibling lane is history once both its folder and Git
+            // registration are gone. Null alone is insufficient: an existing
+            // damaged folder also has no recoverable missing registration.
+            if (
+              input.sharedRefs &&
+              binding.kind === "lane" &&
+              repo.physicalId !== current.physicalId &&
+              repo.root !== current.root &&
+              !(yield* fs.exists(repo.root))
+            )
+              continue;
+            return yield* new CheckoutMutationError({ reason: "stale_binding" });
+          }
           if (
             actual.physicalId !== repo.physicalId ||
             actual.repositoryPhysicalId !== repo.repositoryPhysicalId
           )
             return yield* new CheckoutMutationError({ reason: "stale_binding" });
           physicalIDs.add(repo.physicalId);
+          repositories.push(repo);
         }
+        // Retain every verified repository in a partially removed lane. Only
+        // fully forgotten bindings stop requiring a live native context.
+        if (!repositories.length) continue;
+        if (
+          binding.state !== "ready" ||
+          workspace.state !== "active" ||
+          binding.workspaceGeneration !== workspace.generation ||
+          binding.environmentId !== workspace.environmentId
+        )
+          return yield* new CheckoutMutationError({ reason: "stale_binding" });
+        known.push({ binding: { ...binding, repositories }, workspace });
       }
       if (physicalIDs.size > 64)
         return yield* new CheckoutMutationError({ reason: "stale_binding" });
