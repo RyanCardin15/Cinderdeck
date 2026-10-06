@@ -118,6 +118,7 @@ const seed = Effect.gen(function* () {
 const source = () => {
   const state = {
     sequence: 8,
+    shells: new Map<ThreadId, OrchestrationV2ThreadShell>(),
     shell: {
       id: threadId,
       providerInstanceId: instanceId,
@@ -136,7 +137,7 @@ const source = () => {
     attachedSessionId: ProviderSessionId.make("provider-session") as ProviderSessionId | null,
   };
   const projectionLayer = Layer.mock(ProjectionStore.ProjectionStoreV2)({
-    getThreadShell: () => Effect.sync(() => state.shell),
+    getThreadShell: (id) => Effect.sync(() => state.shells.get(id) ?? state.shell),
     getThreadRecords: (() =>
       Effect.sync(() => ({
         thread: {},
@@ -382,6 +383,76 @@ describe("managed session provider projection", () => {
           assert.equal(unavailable[0]!.total, 6);
           assert.equal(unavailable[0]!.sessions[0]!.source, "unavailable");
           assert.equal(unavailable[0]!.sessions[0]!.binding.execution, "unknown");
+        }).pipe(Effect.provide(f.layer()));
+      }).pipe(Effect.provide(baseLayer)),
+  );
+
+  it.effect(
+    "counts older agents across collapsed lanes and excludes idle, archived and foreign generations",
+    () =>
+      Effect.gen(function* () {
+        const f = source();
+        yield* Effect.gen(function* () {
+          yield* seed;
+          const store = yield* Relationships.Relationships;
+          const original = yield* store.session("session");
+          for (let index = 2; index <= 8; index++) {
+            const id = ThreadId.make(`thread${index}`);
+            yield* store.putSession(
+              { ...original, id: Contracts.SessionBindingId.make(`session${index}`), threadId: id },
+              null,
+            );
+            f.state.shells.set(id, {
+              ...f.state.shell!,
+              id,
+              status: "completed",
+              activityRunStatus: null,
+            });
+          }
+          // These older agents are beyond the four returned summaries.
+          f.state.shells.set(ThreadId.make("thread2"), {
+            ...f.state.shell!,
+            id: ThreadId.make("thread2"),
+            hasActionableProposedPlan: true,
+          });
+          f.state.shells.set(ThreadId.make("thread3"), {
+            ...f.state.shell!,
+            id: ThreadId.make("thread3"),
+            pendingRuntimeRequest: {
+              kind: "user_input",
+            } as OrchestrationV2ThreadShell["pendingRuntimeRequest"],
+          });
+          f.state.shells.set(ThreadId.make("thread4"), {
+            ...f.state.shell!,
+            id: ThreadId.make("thread4"),
+            archivedAt: DateTime.makeUnsafe("2026-10-06T00:00:00Z"),
+          });
+          const service = yield* ManagedSessions.ManagedSessions;
+          const input = {
+            installationID: "installation",
+            contexts: [
+              { workspaceID: "payment", generation: 2 },
+              { workspaceID: "lane", generation: 7 },
+            ],
+          };
+          const page = yield* service.contexts(input);
+          assert.deepEqual(page[0]!.workspaceAgentActivity, {
+            running: 1,
+            review: 2,
+            unavailable: false,
+          });
+          assert.deepEqual(page[1]!.agentActivity, page[0]!.workspaceAgentActivity);
+          assert.equal(page[1]!.sessions.length, 4);
+          assert.equal(page[0]!.sessions.length, 0);
+          assert.deepEqual(
+            (yield* service.contexts({
+              ...input,
+              contexts: [{ workspaceID: "payment", generation: 9 }],
+            }))[0]!.workspaceAgentActivity,
+            { running: 0, review: 0, unavailable: false },
+          );
+          f.state.shell = { ...f.state.shell!, status: "completed", activityRunStatus: null };
+          assert.equal((yield* service.contexts(input))[0]!.workspaceAgentActivity!.running, 0);
         }).pipe(Effect.provide(f.layer()));
       }).pipe(Effect.provide(baseLayer)),
   );

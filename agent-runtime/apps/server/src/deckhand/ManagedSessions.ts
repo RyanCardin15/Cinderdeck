@@ -112,7 +112,8 @@ const stateEvent = (type: string) =>
   type.startsWith("provider-session.") ||
   type.startsWith("provider-thread.") ||
   type.startsWith("runtime-request.") ||
-  type.startsWith("thread.");
+  type.startsWith("thread.") ||
+  type.startsWith("plan.");
 const isManagedContextsInput = Schema.is(Rpc.ManagedContextsInput);
 const encodeContextTargets = Schema.encodeEffect(
   Schema.fromJsonString(Rpc.ManagedContextsInput.fields.contexts),
@@ -369,6 +370,8 @@ const make = Effect.gen(function* () {
       const sequence = yield* events.latestSequence();
       const rows = yield* sql<{
         workspace_id: string;
+        owner_id: string;
+        owner_generation: number;
         generation: number;
         total: number;
         record_json: string;
@@ -377,6 +380,7 @@ const make = Effect.gen(function* () {
       }>`
       WITH scoped AS (
         SELECT COALESCE(json_extract(c.record_json, '$.laneId'), w.owner_id) AS workspace_id,
+          w.owner_id, json_extract(c.record_json, '$.workspaceGeneration') AS owner_generation,
           json_extract(c.record_json, '$.nativeGeneration') AS generation,
           s.record_json, json_extract(f.record_json, '$.title') AS title,
           json_extract(f.record_json, '$.objective') AS objective,
@@ -389,8 +393,47 @@ const make = Effect.gen(function* () {
             WHERE t.thread_id = s.thread_id AND t.deleted_at IS NOT NULL)
           AND EXISTS (SELECT 1 FROM json_each(${targets}) t
             WHERE json_extract(t.value, '$.workspaceID') = COALESCE(json_extract(c.record_json, '$.laneId'), w.owner_id)
-              AND json_extract(t.value, '$.generation') = json_extract(c.record_json, '$.nativeGeneration'))
-      ) SELECT workspace_id, generation, total, record_json, title, objective FROM scoped WHERE rank <= 4 ORDER BY workspace_id, rank`;
+              AND json_extract(t.value, '$.generation') = json_extract(c.record_json, '$.nativeGeneration')
+              OR json_extract(t.value, '$.workspaceID') = w.owner_id
+                AND json_extract(t.value, '$.generation') = json_extract(c.record_json, '$.workspaceGeneration'))
+      ) SELECT workspace_id, owner_id, owner_generation, generation, total, record_json, title, objective FROM scoped ORDER BY workspace_id, rank`;
+      // Count every matching saved agent, including older sessions and collapsed lanes.
+      // Read canonical shells only; keep the returned sibling summaries bounded to four.
+      const shells = new Map<ThreadId, OrchestrationV2ThreadShell | null>();
+      const observed = yield* Effect.forEach(rows, (row) =>
+        Effect.gen(function* () {
+          const binding = yield* decodeBinding(row.record_json);
+          if (!shells.has(binding.threadId)) {
+            const shell = yield* projections
+              .getThreadShell(binding.threadId)
+              .pipe(Effect.catch(() => Effect.succeed(null)));
+            shells.set(binding.threadId, shell);
+          }
+          return { row, threadId: binding.threadId, shell: shells.get(binding.threadId) ?? null };
+        }),
+      );
+      const activityFor = (matches: typeof observed): Rpc.AgentActivityCounts => {
+        const counts = { running: 0, review: 0, unavailable: false };
+        const seen = new Set<ThreadId>();
+        for (const { threadId, shell } of matches) {
+          if (seen.has(threadId)) continue;
+          seen.add(threadId);
+          if (!shell) {
+            counts.unavailable = true;
+            continue;
+          }
+          if (shell.archivedAt || shell.deletedAt) continue;
+          const state = execution(shell);
+          if (
+            shell.hasActionableProposedPlan ||
+            shell.lastError ||
+            ["waiting_input", "waiting_approval", "failed"].includes(state)
+          )
+            counts.review++;
+          else if (["queued", "starting", "working"].includes(state)) counts.running++;
+        }
+        return counts;
+      };
       const externalSummaries = yield* external.summaries(input).pipe(
         Effect.catch(() =>
           Effect.succeed(
@@ -410,7 +453,7 @@ const make = Effect.gen(function* () {
             (row) =>
               row.workspace_id === target.workspaceID && row.generation === target.generation,
           );
-          const sessions = yield* Effect.forEach(group, (row) =>
+          const sessions = yield* Effect.forEach(group.slice(0, 4), (row) =>
             decodeBinding(row.record_json).pipe(
               Effect.flatMap((binding) => readCurrent(binding, row.title, sequence, row.objective)),
             ),
@@ -419,6 +462,18 @@ const make = Effect.gen(function* () {
             ...target,
             total: group[0]?.total ?? 0,
             sessions,
+            agentActivity: activityFor(
+              observed.filter(
+                ({ row }) =>
+                  row.workspace_id === target.workspaceID && row.generation === target.generation,
+              ),
+            ),
+            workspaceAgentActivity: activityFor(
+              observed.filter(
+                ({ row }) =>
+                  row.owner_id === target.workspaceID && row.owner_generation === target.generation,
+              ),
+            ),
             externalSessions: externalSummaries.find(
               (item) =>
                 item.workspaceID === target.workspaceID && item.generation === target.generation,

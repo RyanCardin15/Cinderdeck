@@ -37,7 +37,8 @@
   text-decoration: none;
   font-size: 12px;
 }
-.select span {
+.label {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -104,4 +105,44 @@
 .tree :focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+
+.badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 24px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.badge svg {
+  color: inherit;
+}
+.running {
+  color: light-dark(#15713c, #86dca4);
+  background: light-dark(#e0f3e7, #203d2b);
+}
+.review {
+  color: light-dark(#925b08, #f5c76b);
+  background: light-dark(#fff0ce, #49371e);
+}
+/* Keep room for names and counts; row actions appear on hover or keyboard focus. */
+.row > button:not([aria-expanded]):not([aria-pressed="true"]) {
+  display: none;
+}
+.row:hover > button,
+.row:focus-within > button {
+  display: grid !important;
 }
