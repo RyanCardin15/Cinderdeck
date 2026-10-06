@@ -130,7 +130,7 @@ struct WorkspaceView: View {
           }
         }
       } else {
-        WorkspaceSettingsView(file: context.file!) { model.editor = nil; Task { await model.supervisor.reloadDefinitions() } }
+        WorkspaceSettingsView(file: context.file!, requestsDeletion: context.requestsDeletion) { model.editor = nil; Task { await model.supervisor.reloadDefinitions() } }
       }
     }
     .sheet(item: $editing) { context in

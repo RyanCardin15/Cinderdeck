@@ -64,3 +64,10 @@
 .header button:first-child {
   border-color: var(--border);
 }
+.tools button.destructive {
+  color: var(--destructive);
+  border-color: color-mix(in srgb, var(--destructive) 25%, var(--border));
+}
+.tools button.destructive:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--destructive) 7%, var(--card));
+}

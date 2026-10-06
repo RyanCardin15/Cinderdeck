@@ -4,6 +4,7 @@ import SwiftUI
 /// Visual workspace membership editing, with the original definition retained for conflict checks.
 struct WorkspaceSettingsView: View {
   let file: URL
+  var requestsDeletion = false
   let onSaved: () -> Void
   @Environment(\.dismiss) private var dismiss
   @ObservedObject private var supervisor = StackSupervisor.shared
@@ -15,6 +16,24 @@ struct WorkspaceSettingsView: View {
   @State private var error: String?
   @State private var advanced = false
   @State private var refreshMessage: String?
+  @State private var confirmsDeletion = false
+  @State private var deleting = false
+  @State private var deletionError: String?
+  @ObservedObject private var runner = WorkspaceRunner.shared
+
+  private var workspaceID: String { file.deletingPathExtension().lastPathComponent }
+  private var deletionBlocker: String? {
+    if supervisor.isBootstrapping || supervisor.isRemovingLane(workspaceID) || supervisor.states[workspaceID]?.operation != nil {
+      return "Wait for the current workspace operation to finish."
+    }
+    if supervisor.states[workspaceID]?.isActive == true || runner.activeRun(workspaceID) != nil {
+      return "Stop this workspace's services and finish or cancel its active runs before deleting."
+    }
+    if supervisor.files.contains(where: { $0.lane?.sourceStackID == workspaceID || $0.parentWorkspaceID == workspaceID }) {
+      return "Remove or release this workspace's lanes before deleting."
+    }
+    return nil
+  }
 
   private var hasEdits: Bool {
     guard let definition else { return false }
@@ -86,6 +105,7 @@ struct WorkspaceSettingsView: View {
         }.padding(.trailing, 4)
       }
       if let error { Text(error).font(.callout).foregroundStyle(.red).textSelection(.enabled) }
+      deletionSection
       Divider()
       HStack {
         Button("Edit definition…") { advanced = true }
@@ -95,10 +115,62 @@ struct WorkspaceSettingsView: View {
           .buttonStyle(.borderedProminent).disabled(definition == nil || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
       }
     }.padding(24).frame(width: 740, height: 620).background(DeckStyle.canvas)
-      .onAppear { load() }
+      .disabled(deleting)
+      .interactiveDismissDisabled(deleting)
+      .onAppear { load(); confirmsDeletion = requestsDeletion && !original.isEmpty && deletionBlocker == nil }
+      .alert("Delete \(definition?.name ?? workspaceID)?", isPresented: $confirmsDeletion) {
+        Button("Cancel", role: .cancel) {}
+        Button("Delete workspace", role: .destructive) { deleteWorkspace() }
+      } message: {
+        Text("This removes the workspace from Cinderdeck. Project folders and files, Git branches, logs, and saved runs are kept."
+          + (hasEdits ? " Unsaved workspace settings will be discarded." : ""))
+      }
       .sheet(isPresented: $advanced) {
         StackDefinitionEditor(file: file) { onSaved(); dismiss() }
       }
+  }
+
+  private var deletionSection: some View {
+    HStack(alignment: .center, spacing: 16) {
+      VStack(alignment: .leading, spacing: 5) {
+        Label("Delete workspace", systemImage: "trash").font(.callout.weight(.semibold))
+        Text("Remove from Cinderdeck. Your project folders and files stay on disk.")
+          .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        if let message = deletionError ?? deletionBlocker {
+          Text(message).font(.caption).foregroundStyle(.red)
+            .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+        }
+      }
+      Spacer(minLength: 0)
+      if deleting { ProgressView().controlSize(.small).accessibilityLabel("Deleting workspace") }
+      Button(role: .destructive) { deletionError = nil; confirmsDeletion = true } label: {
+        Text(deleting ? "Deleting…" : "Delete workspace…")
+      }
+      .buttonStyle(DeckButtonStyle(prominent: true, tint: .red))
+      .disabled(original.isEmpty || deletionBlocker != nil || deleting)
+      .accessibilityIdentifier("workspace.settings.delete")
+    }
+    .padding(14)
+    .background(DeckStyle.surface, in: RoundedRectangle(cornerRadius: 10))
+    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.red.opacity(0.2)))
+  }
+
+  private func deleteWorkspace() {
+    guard !deleting, !original.isEmpty else { return }
+    deleting = true; deletionError = nil
+    let revision = WorkspaceDefinitionWriter.revision(original)
+    Task { @MainActor in
+      defer { deleting = false }
+      do {
+        _ = try await StackControlService.shared.handleWorkspaceLifecycle("workspace.delete",
+          params: .object(["workspace": .string(workspaceID), "revision": .string(revision)]), actor: .user)
+        onSaved(); dismiss()
+      } catch {
+        deletionError = (error as? StackControlError)?.code == "stale_definition"
+          ? "Workspace settings changed since you opened this window. Cancel and reopen workspace settings before deleting."
+          : error.localizedDescription
+      }
+    }
   }
 
   private func pathRow(_ url: URL, icon: String) -> some View {
@@ -113,6 +185,7 @@ struct WorkspaceSettingsView: View {
     guard force || original.isEmpty else { return }
     do {
       let source = try String(contentsOf: file, encoding: .utf8)
+      original = source
       let loaded = StackDefinitionLoader.load(source, file: file, validatePaths: false)
       guard let value = loaded.definition else { error = loaded.issues.map(\.message).joined(separator: "\n"); return }
       original = source; definition = value; name = value.name; folders = value.repos; files = value.files; error = nil

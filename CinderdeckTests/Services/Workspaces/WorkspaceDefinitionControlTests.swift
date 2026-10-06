@@ -60,9 +60,13 @@ final class WorkspaceDefinitionControlTests: XCTestCase {
     _ = try await call("workspace.run.wait", ["run": .string(run.id.uuidString)])
     let marker = root.appendingPathComponent("keep.txt")
     try "keep".write(to: marker, atomically: true, encoding: .utf8)
+    let serviceLog = root.appendingPathComponent("logs/shop/api.log")
+    try FileManager.default.createDirectory(at: serviceLog.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try "retained service output".write(to: serviceLog, atomically: true, encoding: .utf8)
     _ = try await call("workspace.delete", ["workspace": .string("shop"), "revision": currentRevision])
     XCTAssertNil(supervisor.definition("shop"))
     XCTAssertTrue(FileManager.default.fileExists(atPath: marker.path))
+    XCTAssertEqual(try String(contentsOf: serviceLog, encoding: .utf8), "retained service output")
     XCTAssertFalse(FileManager.default.fileExists(atPath: supervisor.definitionsDirectory.appendingPathComponent("shop.toml").path))
     let retained = try await call("workspace.runs", ["workspace": .string("shop")])
     XCTAssertEqual(retained.arrayValue?.first?["id"]?.stringValue, run.id.uuidString)
@@ -96,6 +100,18 @@ final class WorkspaceDefinitionControlTests: XCTestCase {
     let broken = try await call("workspace.definition", ["workspace": .string("shop")])
     _ = try await call("workspace.save", ["workspace": .string("shop"), "source": .string(source), "revision": broken["revision"]!])
     XCTAssertNotNil(supervisor.definition("shop"))
+  }
+
+  func testDeleteRejectsDefinitionChangedSinceConfirmation() async throws {
+    _ = try await call("workspace.create", ["name": .string("Shop"), "folder": .string(root.path)])
+    let opened = try await call("workspace.definition", ["workspace": .string("shop")])
+    _ = try await call("workspace.save", ["workspace": .string("shop"), "name": .string("Updated Shop")])
+    do {
+      _ = try await call("workspace.delete", ["workspace": .string("shop"), "revision": try XCTUnwrap(opened["revision"])], as: .user)
+      XCTFail("A confirmation for an older definition must not delete the workspace")
+    } catch { XCTAssertEqual((error as? StackControlError)?.code, "stale_definition") }
+    XCTAssertEqual(supervisor.definition("shop")?.name, "Updated Shop")
+    XCTAssertTrue(FileManager.default.fileExists(atPath: supervisor.definitionsDirectory.appendingPathComponent("shop.toml").path))
   }
 
   func testWorkspaceRemovalAndEditsProtectBusyRunsAndExternalReferences() async throws {

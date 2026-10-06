@@ -71,7 +71,9 @@ final class CinderdeckRuntimeWorkspaceTools: NSWindowController, NSWindowDelegat
       window.title = "Workspace tools — \(file.name) — Cinderdeck"
       presentedRequest = request
       activate()
-      if request.mode == nil { model.edit(file) }
+      if request.mode == nil || request.mode == "delete" {
+        model.editor = .init(file: file.file, requestsDeletion: request.mode == "delete")
+      }
     case "workspace-branches":
       guard let file, request.mode == nil, let definition = file.definition, !definition.repos.isEmpty else {
         throw StackControlError.invalid("Branch switching requires an exact workspace or lane with repositories and no mode")
@@ -110,7 +112,7 @@ final class CinderdeckRuntimeWorkspaceTools: NSWindowController, NSWindowDelegat
   private func finishPresentedSheet() {
     guard let request = presentedRequest,
       request.surface == "workspace-setup" ||
-        (request.surface == "workspace-editor" && request.mode == nil) else { return }
+        (request.surface == "workspace-editor" && (request.mode == nil || request.mode == "delete")) else { return }
     presentedRequest = nil
     close()
   }

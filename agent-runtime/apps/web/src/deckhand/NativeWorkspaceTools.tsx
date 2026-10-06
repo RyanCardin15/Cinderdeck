@@ -10,6 +10,7 @@ import {
   GitBranchIcon,
   SparklesIcon,
   TerminalIcon,
+  Trash2Icon,
 } from "lucide-react";
 import { toastManager } from "../components/ui/toast";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../components/ui/tooltip";
@@ -127,6 +128,22 @@ export function NativeWorkspaceTools({
                 : "Open workspace settings in Cinderdeck on this workspace's Mac"}
             </TooltipPopup>
           </Tooltip>
+        ) : null}
+        {sourceWorkspaceID && workspaceID === sourceWorkspaceID ? (
+          <button
+            type="button"
+            className={styles.destructive}
+            disabled={disabled}
+            onClick={() =>
+              void request({
+                surface: "workspace-editor",
+                workspaceID: sourceWorkspaceID,
+                mode: "delete",
+              })
+            }
+          >
+            <Trash2Icon size={15} aria-hidden /> Delete workspace…
+          </button>
         ) : null}
         <Tooltip>
           <TooltipTrigger
