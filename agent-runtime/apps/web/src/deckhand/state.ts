@@ -9,10 +9,12 @@ import {
   createEnvironmentRpcCommand,
 } from "@cinderdeck/client-runtime/state/runtime";
 import { connectionAtomRuntime } from "../connection/runtime";
+// A short live grace period avoids cold subscriptions on rapid back-and-forth navigation.
+// Streams still expire; reconnect freshness is checked by useAgentObservation.
 export const workspaceView = createEnvironmentRpcSubscriptionAtomFamily(connectionAtomRuntime, {
   label: "deckhand:workspaces",
   tag: DECKHAND_METHODS.subscribe,
-  idleTtlMs: 0,
+  idleTtlMs: 15_000,
 });
 export const refreshWorkspaces = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "deckhand:refresh",
@@ -50,7 +52,7 @@ export const managedSessionsView = createEnvironmentRpcSubscriptionAtomFamily(
   {
     label: "deckhand:managed-sessions",
     tag: DECKHAND_METHODS.sessions,
-    idleTtlMs: 0,
+    idleTtlMs: 15_000,
   },
 );
 
@@ -83,7 +85,7 @@ export const managedContextsView = createEnvironmentRpcSubscriptionAtomFamily(
 export const threadContextView = createEnvironmentRpcSubscriptionAtomFamily(connectionAtomRuntime, {
   label: "deckhand:thread-context",
   tag: THREAD_CONTEXT_METHOD,
-  idleTtlMs: 0,
+  idleTtlMs: 15_000,
 });
 
 export const previewReviewer = createEnvironmentRpcCommand(connectionAtomRuntime, {

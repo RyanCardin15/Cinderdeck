@@ -7,6 +7,7 @@ import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments"
 import { workspaceView } from "./state";
 import { overviewResources, type WorkspaceSearch } from "./workspaceNavigation";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
+import { useEnvironmentQuery } from "../state/query";
 import styles from "./WorkspaceSidebar.module.css";
 
 /** App-wide views use the same native catalog as the selected workspace view. */
@@ -40,6 +41,34 @@ function ConnectedWorkspaces({
 }) {
   const result = useAtomValue(workspaceView({ environmentId, input: { offset: 0, limit: 50 } }));
   const view = Option.getOrNull(AsyncResult.value(result));
+  // The catalog stays subscribed as selection changes. Supplement it with the
+  // selected workspace's lanes, including workspaces outside the first page.
+  const selected = useEnvironmentQuery(
+    search.workspace
+      ? workspaceView({
+          environmentId,
+          input: {
+            offset: 0,
+            limit: 48,
+            selectedWorkspaceID: search.workspace,
+            selectedContextID: search.context ?? search.workspace,
+            workspacePage: { offset: 0, limit: 50 },
+          },
+        })
+      : null,
+  );
+  const resources = [
+    ...new Map(
+      [
+        ...overviewResources(view),
+        ...overviewResources(
+          selected.data?.hello?.installationID === view?.hello?.installationID
+            ? selected.data
+            : null,
+        ),
+      ].map((resource) => [resource.workspaceID, resource]),
+    ).values(),
+  ];
   return (
     <section aria-label="Workspace navigator">
       {view?.hello ? (
@@ -52,7 +81,7 @@ function ConnectedWorkspaces({
           <WorkspaceSidebar
             environmentId={environmentId}
             installationID={view.hello.installationID}
-            resources={overviewResources(view)}
+            resources={resources}
             search={{ ...search, environment: environmentId }}
           />
         </>

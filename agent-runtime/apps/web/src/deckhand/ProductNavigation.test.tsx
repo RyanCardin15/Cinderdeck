@@ -115,6 +115,15 @@ it("keeps one expandable sidebar across views and restores its size after relaun
   try {
     await render("workspaces");
     expect(container.querySelector('[aria-label="Workspaces and lanes"]')).not.toBeNull();
+    const scroll = container.querySelector('aside[aria-label="Cinderdeck navigation"] > div')!;
+    await act(async () => {
+      scroll.scrollTop = 180;
+      scroll.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await render("inbox");
+    expect(
+      container.querySelector('aside[aria-label="Cinderdeck navigation"] > div')!.scrollTop,
+    ).toBe(180);
     // A pointer-down/up within one animation frame must still commit the delta.
     const rail = separator();
     Object.assign(rail, {

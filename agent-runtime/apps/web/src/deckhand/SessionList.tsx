@@ -519,6 +519,7 @@ function ScopedSessionList({
               open={
                 group.id === "attention" ||
                 group.id === "active" ||
+                group.id === "other" ||
                 (scope === "workspace" && group.id !== "history") ||
                 (hasFilters && scope === "workspace") ||
                 rows.some((session) => session.binding.threadId === selectedThreadId)

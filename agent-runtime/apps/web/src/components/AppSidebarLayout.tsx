@@ -61,7 +61,7 @@ import { ConnectedWorkspaceShell } from "../deckhand/ConnectedWorkspaceShell";
 import { useLaneSessionContext } from "../deckhand/LaneSessionContext";
 import { NativeHostNavigation } from "../deckhand/NativeHostNavigation";
 import productStyles from "../deckhand/pullRequestsShell.module.css";
-import unifiedStyles from "../deckhand/unifiedLayout.module.css";
+import { useNavigationSnapshot } from "../deckhand/useNavigationSnapshot";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "var(--desktop-window-controls-inset, 90px)";
 
@@ -255,6 +255,11 @@ function AppSidebarLayoutContent({ children }: { children: ReactNode }) {
     select: (params) => resolveThreadRouteRef(params),
   });
   const connectedThread = useLaneSessionContext(connectedThreadRef);
+  const { value: visibleContext, retained: contextPending } = useNavigationSnapshot(
+    connectedThreadRef?.environmentId ?? null,
+    connectedThread.data,
+    connectedThreadRef !== null && !connectedThread.isSuccess && connectedThread.error === null,
+  );
   const isOnSettings = pathname === "/settings" || pathname.startsWith("/settings/");
   const isMacosDesktop = isElectron && isMacPlatform(navigator.platform);
   const [sidebarWidth, setSidebarWidth] = useState(readInitialThreadSidebarWidth);
@@ -322,26 +327,6 @@ function AppSidebarLayoutContent({ children }: { children: ReactNode }) {
     };
   }, [navigate, pathname]);
 
-  if (connectedThreadRef && connectedThread.data) {
-    return (
-      <PanelAnimationSuppressionProvider value={panelAnimationsSuppressed}>
-        <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={sidebarProviderStyle}>
-          <NativeHostNavigation />
-          <ProjectProjectionRetention />
-          <ConnectedWorkspaceShell
-            context={connectedThread.data}
-            threadRef={connectedThreadRef}
-            stale={!connectedThread.isSuccess || connectedThread.error !== null}
-          >
-            {children}
-          </ConnectedWorkspaceShell>
-          <NavigationHistoryShortcuts />
-          <MainAppLocationTracker />
-        </SidebarProvider>
-      </PanelAnimationSuppressionProvider>
-    );
-  }
-
   if (!standalonePullRequests && (pathname === "/pull-requests" || pathname === "/pull-requests/"))
     return (
       <PanelAnimationSuppressionProvider value={panelAnimationsSuppressed}>
@@ -378,27 +363,26 @@ function AppSidebarLayoutContent({ children }: { children: ReactNode }) {
   if (isOnSettings || pathname === "/" || connectedThreadRef || pathname.startsWith("/draft/")) {
     return (
       <PanelAnimationSuppressionProvider value={panelAnimationsSuppressed}>
-        <SidebarProvider
-          className="grid! h-dvh! min-h-0! min-w-0 grid-cols-[var(--deck-rail-width)_230px_minmax(0,1fr)] overflow-hidden max-[1000px]:grid-cols-[var(--deck-rail-width)_205px_minmax(0,1fr)] max-[700px]:grid-cols-1 max-[700px]:grid-rows-[auto_auto_minmax(0,1fr)] max-[700px]:[&>aside:first-of-type]:max-h-[145px]"
-          defaultOpen
-          style={sidebarProviderStyle}
-        >
+        <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={sidebarProviderStyle}>
           <NativeHostNavigation />
           <ProjectProjectionRetention />
-          <ProductNavigation current={isOnSettings ? "settings" : "conversations"} />
-          <aside
-            className={unifiedStyles.secondary}
-            aria-label={isOnSettings ? "Settings categories" : "Other agent conversations"}
+          <ConnectedWorkspaceShell
+            context={visibleContext}
+            threadRef={connectedThreadRef}
+            stale={contextPending || !connectedThread.isSuccess || connectedThread.error !== null}
+            settings={isOnSettings}
+            fallbackSidebar={
+              isOnSettings ? (
+                <SettingsSidebarNav pathname={pathname} />
+              ) : legacySidebarEnabled ? (
+                <LegacyThreadSidebar />
+              ) : (
+                <ThreadSidebar />
+              )
+            }
           >
-            {isOnSettings ? (
-              <SettingsSidebarNav pathname={pathname} />
-            ) : legacySidebarEnabled ? (
-              <LegacyThreadSidebar />
-            ) : (
-              <ThreadSidebar />
-            )}
-          </aside>
-          <div className={unifiedStyles.content}>{children}</div>
+            {children}
+          </ConnectedWorkspaceShell>
           <NavigationHistoryShortcuts />
           <MainAppLocationTracker />
         </SidebarProvider>

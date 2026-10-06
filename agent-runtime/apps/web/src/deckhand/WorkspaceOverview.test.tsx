@@ -846,3 +846,21 @@ it("shows all workspace history at the root and narrows to a selected lane", asy
   expect(container.querySelector('[data-session-scope="context"]')?.textContent).toContain("lane");
   expect(container.querySelector('[data-session-scope="workspace"]')).toBeNull();
 });
+
+it("keeps the workspace navigator and selection visible while loading without enabling stale actions", async () => {
+  boundary.search = { workspace: "primary", context: "lane", tab: "agents" };
+  await render();
+  const tree = container.querySelector('[aria-label="Workspaces and lanes"]');
+  expect(tree).not.toBeNull();
+  const workspaceLink = tree!.querySelector("a");
+  await act(async () => registry.set(nativeAtom, AsyncResult.initial(true)));
+  boundary.search = { workspace: "other", context: "other", tab: "agents" };
+  await render();
+  expect(container.querySelector('[aria-label="Workspaces and lanes"]')).toBe(tree);
+  expect(tree!.querySelector("a")).toBe(workspaceLink);
+  expect(container.querySelector("h1")?.textContent).toBe("Other project");
+  expect(button("Launch selected agent").disabled).toBe(true);
+  expect(container.textContent).not.toContain("Choose a workspace");
+  await act(async () => registry.set(nativeAtom, AsyncResult.success({ ...view })));
+  expect(button("Launch selected agent").disabled).toBe(false);
+});
