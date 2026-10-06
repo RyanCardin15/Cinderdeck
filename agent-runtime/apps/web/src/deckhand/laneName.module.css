@@ -1,0 +1,55 @@
+.root {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 100%;
+}
+.name {
+  font: inherit;
+  font-weight: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: text;
+  border: 0;
+  background: transparent;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border-radius: 4px;
+}
+.name:hover:not(:disabled),
+.name:focus-visible {
+  background: var(--dh-surface-raised, #ffffff10);
+  outline: 1px solid var(--dh-border, #8885);
+}
+.name:disabled {
+  cursor: default;
+}
+.editor {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.editor input {
+  min-width: 140px;
+  max-width: 360px;
+  width: 20ch;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--dh-border, #8888);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font: inherit;
+}
+.editor button {
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--dh-border, #8888);
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+.error {
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--dh-warning, #be742a);
+}

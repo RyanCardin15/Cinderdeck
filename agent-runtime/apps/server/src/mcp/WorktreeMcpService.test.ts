@@ -32,6 +32,8 @@ import * as ServerSettings from "../serverSettings.ts";
 import * as VcsStatusBroadcaster from "../vcs/VcsStatusBroadcaster.ts";
 import type * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as WorktreeMcpService from "./WorktreeMcpService.ts";
+import * as CurrentCheckout from "../deckhand/CurrentCheckout.ts";
+import * as WorkspaceBackend from "../deckhand/WorkspaceBackend.ts";
 import * as ManagedWorktreeHandoff from "../deckhand/ManagedWorktreeHandoff.ts";
 
 const environmentId = EnvironmentId.make("environment-worktree-test");
@@ -1088,6 +1090,90 @@ describe("WorktreeMcpHandoffInput schema", () => {
     Effect.gen(function* () {
       const exit = yield* Effect.exit(decode({ branch: "feature/x", continuationPrompt: " " }));
       expect(Exit.isFailure(exit)).toBe(true);
+    }),
+  );
+});
+
+describe("t3_worktree_rename", () => {
+  const namedHarness = (
+    kind: "lane" | "primary" = "lane",
+    access: "write" | "read_only" = "write",
+  ) => {
+    const harness = makeHarness();
+    const submit = vi.fn(
+      (..._args: Parameters<WorkspaceBackend.WorkspaceBackend["Service"]["submit"]>) =>
+        Effect.succeed({
+          state: "succeeded",
+          result: { workspace: { lane: { name: "Search polish" } } },
+        } as never),
+    );
+    const context = vi.fn(() =>
+      Effect.succeed({
+        hello: { installationID: "installation" },
+        resource: {
+          workspaceID: "own-lane",
+          generation: 7,
+          revision: "revision",
+          available: true,
+          workspace: { lane: { name: "feature/search" } },
+        },
+      } as never),
+    );
+    return {
+      ...harness,
+      submit,
+      context,
+      layer: harness.layer.pipe(
+        Layer.provide(
+          Layer.mergeAll(
+            Layer.mock(CurrentCheckout.CurrentCheckout)({
+              forThread: () =>
+                Effect.succeed({
+                  checkout: {
+                    kind,
+                    laneId: kind === "lane" ? "own-lane" : null,
+                    nativeGeneration: 7,
+                  },
+                  workspace: { environmentId: "installation" },
+                  session: { role: "writer", desiredAccess: access },
+                } as unknown as CurrentCheckout.CurrentThreadContext),
+            }),
+            Layer.mock(WorkspaceBackend.WorkspaceBackend)({ context, submit }),
+          ),
+        ),
+      ),
+    };
+  };
+  const rename = (harness: ReturnType<typeof namedHarness>) =>
+    Effect.gen(function* () {
+      const service = yield* WorktreeMcpService.WorktreeMcpService;
+      return yield* service.rename(harness.scope, {
+        name: "Search polish",
+        expectedName: "feature/search",
+      });
+    }).pipe(Effect.provide(harness.layer));
+  it.effect("pins a rename to its own native lane and preserves the observed name guard", () => {
+    const harness = namedHarness();
+    return Effect.gen(function* () {
+      expect(yield* rename(harness)).toEqual({ name: "Search polish" });
+      expect(harness.context).toHaveBeenCalledWith("own-lane");
+      expect(harness.submit.mock.calls[0]?.[1]).toMatchObject({
+        workspaceID: "own-lane",
+        generation: 7,
+        revision: "revision",
+        installationID: "installation",
+        method: "lane.update",
+        arguments: { workspace: "own-lane", name: "Search polish", expectedName: "feature/search" },
+      });
+    });
+  });
+  it.effect("refuses primary checkouts and read-only sessions before submitting", () =>
+    Effect.gen(function* () {
+      for (const harness of [namedHarness("primary"), namedHarness("lane", "read_only")]) {
+        const result = yield* rename(harness).pipe(Effect.exit);
+        expect(Exit.isFailure(result)).toBe(true);
+        expect(harness.submit).not.toHaveBeenCalled();
+      }
     }),
   );
 });

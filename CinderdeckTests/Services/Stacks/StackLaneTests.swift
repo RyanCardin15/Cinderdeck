@@ -264,6 +264,57 @@ final class StackLaneTests: XCTestCase {
     try await supervisor.removeLane(lane.id, actor: codex)
   }
 
+  func testDefaultLongBranchNameRemainsSupportedAndCanBeRenamed() async throws {
+    try await load()
+    let branch = "agent/" + String(repeating: "long-name", count: 15)
+    let created = try await durableLane("lane.create", workspace: "shop", arguments: [
+      "branch": .string(branch), "setup": .bool(false), "start": .bool(false)
+    ])
+    XCTAssertEqual(created.state, "succeeded")
+    let id = try XCTUnwrap(created.result?["workspace"]?["id"]?.stringValue)
+    XCTAssertEqual(supervisor.definition(id)?.lane?.name, branch)
+    let renamed = try await durableLane("lane.update", workspace: id, arguments: [
+      "name": .string("Short display name"), "expectedName": .string(branch)
+    ])
+    XCTAssertEqual(renamed.state, "succeeded")
+    XCTAssertEqual(supervisor.definition(id)?.lane?.name, "Short display name")
+  }
+
+  func testNamedLaneAndDurableRenameWhileRunningKeepRuntimeIdentity() async throws {
+    try await load()
+    let created = try await durableLane("lane.create", workspace: "shop", arguments: [
+      "branch": .string("agent/naming"), "name": .string("Search polish"), "setup": .bool(false), "start": .bool(false)
+    ])
+    XCTAssertEqual(created.state, "succeeded")
+    let id = try XCTUnwrap(created.result?["workspace"]?["id"]?.stringValue)
+    let before = try XCTUnwrap(StackLaneStore.record(id: id, in: supervisor.lanesDirectory))
+    XCTAssertEqual(before.info.name, "Search polish")
+    XCTAssertEqual(before.worktrees.first?.branch, "agent/naming")
+    await supervisor.start(stack: id)
+    XCTAssertTrue(supervisor.states[id]?.isActive == true)
+    XCTAssertFalse(supervisor.definitionChanged(id))
+    let renamed = try await durableLane("lane.update", workspace: id, arguments: [
+      "name": .string("Search results"), "expectedName": .string("Search polish")
+    ])
+    XCTAssertEqual(renamed.state, "succeeded")
+    let after = try XCTUnwrap(StackLaneStore.record(id: id, in: supervisor.lanesDirectory))
+    XCTAssertEqual(after.info.name, "Search results")
+    XCTAssertEqual(after.info.ports, before.info.ports)
+    XCTAssertEqual(after.info.effectiveSlug, before.info.effectiveSlug)
+    XCTAssertEqual(after.info.directory, before.info.directory)
+    XCTAssertEqual(after.worktrees, before.worktrees)
+    XCTAssertTrue(supervisor.states[id]?.isActive == true)
+    XCTAssertFalse(supervisor.definitionChanged(id), "Display names do not require a process restart")
+    do {
+      _ = try await control.handle("lane.update", params: .object([
+        "workspace": .string(id), "name": .string("Stale overwrite"), "expectedName": .string("Search polish")
+      ]), actor: claude)
+      XCTFail("Stale name should be refused")
+    } catch { XCTAssertEqual((error as? StackControlError)?.code, "stale_revision") }
+    XCTAssertEqual(try StackLaneStore.record(id: id, in: supervisor.lanesDirectory)?.info.name, "Search results")
+    await supervisor.stop(stack: id)
+  }
+
   func testLaneEditingKeepsIdentityAndWorktreesAcrossAgents() async throws {
     try await load()
     let created = try await control.handle("lane.create", params: .object(["workspace": .string("shop"), "branch": .string("agent/original"),

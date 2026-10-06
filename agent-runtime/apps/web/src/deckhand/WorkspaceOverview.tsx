@@ -73,6 +73,7 @@ import agents from "./workspaceAgents.module.css";
 import native from "./nativeWorkspace.module.css";
 import { workspaceChatUnavailableReason } from "@cinderdeck/shared/workspaceChat";
 import { WorkspaceSections } from "./WorkspaceSections";
+import { LaneName } from "./LaneName";
 import { WorkspaceRefreshButton } from "./WorkspaceRefreshButton";
 
 type Resource = IntegrationView["resources"][number];
@@ -249,6 +250,7 @@ function ConnectedWorkspace({
     ...defaultWorkspaceFilters,
   }));
   const [branch, setBranch] = useState("");
+  const [laneName, setLaneName] = useState("");
   const [laneFrom, setLaneFrom] = useState("");
   const [laneSetup, setLaneSetup] = useState(false);
   const [laneStart, setLaneStart] = useState(false);
@@ -556,6 +558,7 @@ function ConnectedWorkspace({
             ? {
                 workspace: target.workspaceID,
                 branch: branch.trim(),
+                ...(laneName.trim() ? { name: laneName.trim() } : {}),
                 ...(laneFrom.trim() ? { from: laneFrom.trim() } : {}),
                 start: laneStart,
                 setup: laneSetup,
@@ -669,10 +672,18 @@ function ConnectedWorkspace({
                 {selected?.workspace?.lane ? "Worktree lane" : "Workspace"}
               </div>
               <h1 id="dh-title">
-                {selected?.workspace?.lane?.name ??
-                  selected?.workspace?.name ??
-                  activeBase?.workspace?.name ??
-                  "Workspaces"}
+                {selected?.workspace?.lane && view?.hello && environmentId ? (
+                  <LaneName
+                    environmentId={environmentId}
+                    installationID={view.hello.installationID}
+                    resource={selected}
+                    enabled={
+                      nativeCurrent && view.hello.capabilities.includes("operations.lane.update")
+                    }
+                  />
+                ) : (
+                  (selected?.workspace?.name ?? activeBase?.workspace?.name ?? "Workspaces")
+                )}
               </h1>
               <p className={native.path}>
                 {selected?.workspace?.repos[0]?.path ??
@@ -879,6 +890,15 @@ function ConnectedWorkspace({
               void run(activeBase, "lane.create");
             }}
           >
+            <label htmlFor="dh-lane-name">Lane name (optional)</label>
+            <input
+              id="dh-lane-name"
+              value={laneName}
+              placeholder="Default: branch"
+              maxLength={100}
+              disabled={!enabled}
+              onChange={(event) => setLaneName(event.target.value)}
+            />
             <label htmlFor="dh-branch">New lane branch</label>
             <div>
               <input

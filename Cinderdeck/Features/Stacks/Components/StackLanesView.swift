@@ -9,6 +9,7 @@ struct StackLanesView: View {
   @Environment(\.dismiss) private var dismiss
   @State private var branch = ""
   @State private var from = ""
+  @State private var displayName = ""
   @State private var adopting = false
   @State private var adoptPath = ""
   @State private var startAfterCreation = true
@@ -93,6 +94,8 @@ struct StackLanesView: View {
               .disabled(working || (adopting ? adoptPath : branch).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || source?.definition == nil || isolatedRepositories.isEmpty)
               .accessibilityIdentifier("stacks.createLane")
           }.disabled(working)
+          TextField("Lane name (optional, default: branch)", text: $displayName)
+            .textFieldStyle(.roundedBorder).disabled(working).accessibilityIdentifier("stacks.laneDisplayName")
           HStack(spacing: 18) {
             if let setupReference {
               Toggle("Run setup (\(setupReference))", isOn: $runSetup).disabled(working)
@@ -338,12 +341,14 @@ struct StackLanesView: View {
       params["branch"] = .string(name)
       if !start.isEmpty { params["from"] = .string(start) }
     }
+    let display = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !display.isEmpty { params["name"] = .string(display) }
     let method = adopting ? "lane.adopt" : "lane.create"
     Task {
       defer { working = false }
       do {
         let result = try await StackControlService.shared.handle(method, params: .object(params), actor: .user)
-        branch = ""; from = ""; adoptPath = ""; copyFiles = ""; environment = ""
+        branch = ""; from = ""; displayName = ""; adoptPath = ""; copyFiles = ""; environment = ""
         warnings = result["warnings"]?.stringsValue ?? []
         if result["setup"]?["status"]?.stringValue == "failed" {
           error = "Setup failed: \(result["setup"]?["detail"]?.stringValue ?? ""). Services were not started. Fix it, then choose Run setup."

@@ -7,9 +7,12 @@ extension StackControlService {
     guard params["name"] != nil || params["env"] != nil else { throw StackControlError.invalid("Pass name or env to update") }
     try await supervisor.withDefinitionLock(workspace: file.id) {
 
-      try requireStoppedForDefinition(file.id)
+      if params["env"] != nil { try requireStoppedForDefinition(file.id) }
       guard var record = try StackLaneStore.record(id: file.id, in: supervisor.lanesDirectory) else { throw StackControlError.notFound("Lane no longer exists") }
-      guard !record.info.pinned else { throw StackControlError(code: "lane", message: "Unpin this lane before editing its settings") }
+      if let expected = params["expectedName"] {
+        guard expected.stringValue == record.info.name else { throw StackControlError(code: "stale_revision", message: "The lane name changed. Refresh before renaming it") }
+      }
+      guard params["env"] == nil || !record.info.pinned else { throw StackControlError(code: "lane", message: "Unpin this lane before editing its settings") }
       if let raw = params["name"] {
         guard let name = raw.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty, name.count <= 100,
           name.rangeOfCharacter(from: .controlCharacters) == nil else { throw StackControlError.invalid("name must contain 1–100 characters without control characters") }

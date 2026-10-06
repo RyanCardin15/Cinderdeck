@@ -170,6 +170,8 @@ nonisolated struct StackLaneRecord: Codable, Sendable {
 nonisolated struct StackLaneRequest: Sendable {
   var integrationOperationID: String?
   var branch: String
+  /// Optional display name, independent of the Git branch.
+  var name: String?
   var from: String?
   /// Repository IDs whose new branch must start at this exact revision.
   var repositoryRefs: [String: String] = [:]

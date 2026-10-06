@@ -310,6 +310,7 @@ final class StackControlService: ObservableObject {
     let source = try workspaceFile(params)
     guard source.lane == nil else { throw StackControlError.invalid("Create lanes from the original workspace, not from lane \(source.name).") }
     var request = StackLaneRequest(branch: params["branch"]?.stringValue ?? params["name"]?.stringValue ?? "")
+    request.name = params["name"]?.stringValue
     request.integrationOperationID = operationID
     if adopt {
       let path = params["path"]?.stringValue ?? actor.cwd

@@ -37,6 +37,12 @@ const handlers = {
       const service = yield* WorktreeMcpService.WorktreeMcpService;
       return yield* service.handoff(scope, input);
     }),
+  t3_worktree_rename: (input) =>
+    Effect.gen(function* () {
+      const scope = yield* McpInvocationContext.McpInvocationContext;
+      const service = yield* WorktreeMcpService.WorktreeMcpService;
+      return yield* service.rename(scope, input);
+    }),
   t3_worktree_status: () =>
     Effect.gen(function* () {
       const scope = yield* McpInvocationContext.McpInvocationContext;

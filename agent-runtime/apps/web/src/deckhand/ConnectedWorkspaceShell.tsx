@@ -17,6 +17,7 @@ import { environmentServerConfigsAtom } from "../state/server";
 import { deriveProviderInstanceEntries } from "../providerInstances";
 import styles from "./connectedShell.module.css";
 import native from "./nativeWorkspace.module.css";
+import { LaneName } from "./LaneName";
 import { WorkspaceSections } from "./WorkspaceSections";
 
 /** Shares the operational navigator around the existing single ChatView. */
@@ -135,7 +136,20 @@ export function ConnectedWorkspaceShell({
                 {context.workspace.name}
               </Link>
               <span> / </span>
-              <strong>{current}</strong>
+              <strong>
+                {currentResource?.workspace?.lane && view?.hello ? (
+                  <LaneName
+                    environmentId={threadRef.environmentId}
+                    installationID={view.hello.installationID}
+                    resource={currentResource}
+                    enabled={
+                      connected && view.hello.capabilities.includes("operations.lane.update")
+                    }
+                  />
+                ) : (
+                  current
+                )}
+              </strong>
               <WorkspaceBranchesButton
                 environmentId={threadRef.environmentId}
                 workspaceID={context.checkout.laneId ?? context.workspace.ownerId}

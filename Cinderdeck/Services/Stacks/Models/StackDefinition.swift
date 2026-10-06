@@ -132,6 +132,20 @@ nonisolated struct StackDefinition: Codable, Equatable, Identifiable, Sendable {
   var sourceID: String { lane?.sourceStackID ?? id }
   func link(_ id: String) -> StackServiceLink? { links.first { $0.id == id } }
 
+  /// Display-name edits do not invalidate a running process. Resolved commands/env still compare.
+  func hasSameRuntimeConfiguration(as other: StackDefinition?) -> Bool {
+    guard var other else { return false }
+    var original = self
+    other.name = original.name
+    if var lane = original.lane, var current = other.lane {
+      current.name = lane.name
+      lane.slug = lane.effectiveSlug
+      current.slug = current.effectiveSlug
+      original.lane = lane; other.lane = current
+    }
+    return original == other
+  }
+
   var fingerprint: String {
     let encoder = JSONEncoder()
     encoder.outputFormatting = .sortedKeys

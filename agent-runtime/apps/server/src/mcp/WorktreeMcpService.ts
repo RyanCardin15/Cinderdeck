@@ -25,6 +25,7 @@ import * as ServerSettings from "../serverSettings.ts";
 import * as VcsStatusBroadcaster from "../vcs/VcsStatusBroadcaster.ts";
 import type { McpInvocationScope } from "./McpInvocationContext.ts";
 import * as ManagedWorktreeHandoff from "../deckhand/ManagedWorktreeHandoff.ts";
+import * as WorkspaceBackend from "../deckhand/WorkspaceBackend.ts";
 import * as CurrentCheckout from "../deckhand/CurrentCheckout.ts";
 
 export class WorktreeMcpService extends Context.Service<
@@ -34,6 +35,10 @@ export class WorktreeMcpService extends Context.Service<
       scope: McpInvocationScope,
       input: WorktreeMcpHandoffInput,
     ) => Effect.Effect<WorktreeMcpHandoffResult, WorktreeMcpFailure>;
+    readonly rename: (
+      scope: McpInvocationScope,
+      input: { readonly name: string; readonly expectedName: string },
+    ) => Effect.Effect<{ readonly name: string }, WorktreeMcpFailure>;
     readonly status: (
       scope: McpInvocationScope,
     ) => Effect.Effect<WorktreeMcpStatusResult, WorktreeMcpFailure>;
@@ -67,6 +72,7 @@ const make = Effect.gen(function* () {
   const setupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
   const managedHandoff = yield* Effect.serviceOption(ManagedWorktreeHandoff.ManagedWorktreeHandoff);
+  const workspaceBackend = yield* Effect.serviceOption(WorkspaceBackend.WorkspaceBackend);
   const currentCheckout = yield* Effect.serviceOption(CurrentCheckout.CurrentCheckout);
 
   // Serializes handoffs per thread: two concurrent calls could otherwise both
@@ -469,6 +475,69 @@ const make = Effect.gen(function* () {
     },
   );
 
+  const rename: WorktreeMcpService["Service"]["rename"] = Effect.fn("WorktreeMcpService.rename")(
+    function* (scope, input) {
+      yield* requireCapability(scope);
+      yield* loadThread(scope);
+      if (Option.isNone(currentCheckout) || Option.isNone(workspaceBackend))
+        return yield* failure(
+          "invalid_request",
+          "Lane naming requires a Cinderdeck workspace conversation.",
+        );
+      const managed = yield* currentCheckout.value
+        .forThread(scope.threadId)
+        .pipe(asOperationFailed("Unable to resolve current lane"));
+      if (!managed || managed.checkout.kind !== "lane" || !managed.checkout.laneId)
+        return yield* failure("invalid_request", "This conversation is not in a worktree lane.");
+      if (managed.session.desiredAccess !== "write" || managed.session.role !== "writer")
+        return yield* failure(
+          "capability_denied",
+          "Only a writable parent conversation can rename its lane.",
+        );
+      const target = yield* workspaceBackend.value
+        .context(managed.checkout.laneId)
+        .pipe(asOperationFailed("Unable to read current lane"));
+      if (
+        target.hello.installationID !== managed.workspace.environmentId ||
+        !target.resource.workspace?.lane ||
+        !target.resource.available ||
+        target.resource.generation !== managed.checkout.nativeGeneration
+      )
+        return yield* failure(
+          "invalid_request",
+          "The lane context changed. Refresh before naming it.",
+        );
+      const operationKey = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
+      const actorID = `chat-${scope.threadId}`;
+      let receipt = yield* workspaceBackend.value
+        .submit(actorID, {
+          operationKey,
+          installationID: target.hello.installationID,
+          workspaceID: target.resource.workspaceID,
+          generation: target.resource.generation,
+          revision: target.resource.revision,
+          method: "lane.update",
+          arguments: {
+            workspace: target.resource.workspaceID,
+            name: input.name,
+            expectedName: input.expectedName,
+          },
+        })
+        .pipe(asOperationFailed("Unable to rename lane"));
+      if (receipt.state === "pending" || receipt.state === "running")
+        receipt = yield* workspaceBackend.value
+          .operation(actorID, operationKey, 25000)
+          .pipe(asOperationFailed("Unable to inspect rename"));
+      if (receipt.state !== "succeeded")
+        return yield* failure(
+          "operation_failed",
+          receipt.error?.message ??
+            `Rename ${receipt.state}; inspect operation ${operationKey} before retrying.`,
+        );
+      return { name: receipt.result?.workspace?.lane?.name ?? input.name };
+    },
+  );
+
   const status: WorktreeMcpService["Service"]["status"] = Effect.fn("WorktreeMcpService.status")(
     function* (scope) {
       yield* requireCapability(scope);
@@ -490,7 +559,17 @@ const make = Effect.gen(function* () {
             .pipe(Effect.option)
         : Option.none();
 
+      const laneName =
+        managed?.checkout.kind === "lane" &&
+        Option.isSome(workspaceBackend) &&
+        managed.checkout.laneId
+          ? yield* workspaceBackend.value.context(managed.checkout.laneId).pipe(
+              Effect.map((target) => target.resource.workspace?.lane?.name),
+              Effect.orElseSucceed(() => undefined),
+            )
+          : undefined;
       const result: WorktreeMcpStatusResult = {
+        ...(laneName !== undefined ? { laneName } : {}),
         attached: managed
           ? managed.checkout.kind === "lane"
           : projection.thread.worktreePath !== null,
@@ -506,7 +585,7 @@ const make = Effect.gen(function* () {
     },
   );
 
-  return WorktreeMcpService.of({ handoff, status });
+  return WorktreeMcpService.of({ handoff, status, rename });
 });
 
 export const layer: Layer.Layer<

@@ -50,6 +50,11 @@ struct WorkspaceView: View {
   @State private var editing: WorkspaceComponentEditor.Context?
   @State private var selectedRun: UUID?
   @State private var search = ""
+  @State private var renamingLane = false
+  @State private var laneNameDraft = ""
+  @State private var laneNameExpected = ""
+  @State private var savingLaneName = false
+  @FocusState private var laneNameFocused: Bool
   @State private var expandedWorkspaces = Set<String>()
   private var workspace: StackDefinition? { model.selectedDefinition }
   private var navigation: WorkspaceNavigation { model.workspaceNavigation }
@@ -141,10 +146,25 @@ struct WorkspaceView: View {
     .sheet(item: $model.laneRemoval) { StackLaneRemovalView(request: $0, viewModel: model) }
     .sheet(item: $model.laneAttachment) { StackLaneAttachmentView(file: $0, model: model) }
     .sheet(isPresented: $model.stackBranchPicker) { StackBranchPickerSheet(viewModel: model) }
-    .onChange(of: model.selectedStackID) { _ in selectedRun = nil; revealSelectedLane() }
+    .onChange(of: model.selectedStackID) { _ in selectedRun = nil; renamingLane = false; revealSelectedLane() }
     .onChange(of: model.selectedWorkspaceID) { _ in revealSelectedLane() }
     .onAppear { consumeSectionRequest(); revealSelectedLane() }
     .onChange(of: model.requestedSection) { _ in consumeSectionRequest() }
+  }
+
+  private func saveLaneName(_ file: StackDefinitionFile) {
+    guard !savingLaneName else { return }
+    savingLaneName = true
+    let name = laneNameDraft, expected = laneNameExpected
+    Task {
+      defer { savingLaneName = false }
+      do {
+        _ = try await StackControlService.shared.handle("lane.update", params: .object([
+          "workspace": .string(file.id), "name": .string(name), "expectedName": .string(expected)
+        ]), actor: .user)
+        if model.selectedStackID == file.id { renamingLane = false }
+      } catch { model.error = error.localizedDescription }
+    }
   }
 
   private func workspaceHeader(_ file: StackDefinitionFile) -> some View {
@@ -154,9 +174,27 @@ struct WorkspaceView: View {
         .help("Drag a workspace reference to an editor or chat")
       VStack(alignment: .leading, spacing: 5) {
         DeckSectionLabel(title: file.lane == nil ? "Workspace" : "Worktree lane")
-        Text(file.name).font(DeckStyle.title).lineLimit(2).help(file.name)
-          .workspaceReferenceDrag(file, model: model)
-          .accessibilityAddTraits(.isHeader)
+        if let lane = file.lane {
+          if renamingLane {
+            HStack {
+              TextField("Lane name", text: $laneNameDraft).textFieldStyle(.roundedBorder)
+                .focused($laneNameFocused).onSubmit { saveLaneName(file) }
+                .onExitCommand { if !savingLaneName { renamingLane = false } }
+              Button("Save") { saveLaneName(file) }.disabled(savingLaneName)
+              Button("Cancel") { renamingLane = false }.disabled(savingLaneName)
+            }.disabled(savingLaneName)
+          } else {
+            Button {
+              laneNameDraft = lane.name; laneNameExpected = lane.name
+              renamingLane = true; laneNameFocused = true
+            } label: { Text(lane.name).font(DeckStyle.title).lineLimit(2) }
+              .buttonStyle(.plain).help("Click to rename lane")
+              .accessibilityLabel("Rename lane \(lane.name)")
+          }
+        } else {
+          Text(file.name).font(DeckStyle.title).lineLimit(2).help(file.name)
+            .workspaceReferenceDrag(file, model: model).accessibilityAddTraits(.isHeader)
+        }
         Text((workspace?.root.path ?? file.file.path)
           .replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path + "/", with: "~/"))
           .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)

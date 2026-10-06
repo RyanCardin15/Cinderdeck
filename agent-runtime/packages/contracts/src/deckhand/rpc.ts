@@ -200,6 +200,12 @@ export const ManagedLaunchRecord = Schema.Struct({
 export type ManagedLaunchRecord = typeof ManagedLaunchRecord.Type;
 export const ManagedCreateInput = Schema.Struct({
   ...ManagedLaunchInput.fields,
+  name: Schema.optionalKey(
+    TrimmedNonEmptyString.check(
+      Schema.isMaxLength(100),
+      Schema.isPattern(/^[^\x00-\x1f\x7f-\x9f]+$/),
+    ),
+  ),
   // Native lane creation keeps its explicit objective-and-launch flow.
   deferStart: Schema.optionalKey(Schema.Literal(false)),
   objective: TrimmedNonEmptyString.check(Schema.isMaxLength(16000)),
