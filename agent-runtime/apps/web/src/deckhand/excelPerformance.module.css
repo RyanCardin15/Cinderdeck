@@ -1,0 +1,446 @@
+.performance {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: 14px 12px 20px;
+  font-size: 12px;
+  container-type: inline-size;
+}
+
+.performance :is(button, a):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Probe status */
+.probeCard {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+}
+
+.probeHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.probeDot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted-foreground);
+}
+
+.probeCard[data-state="connected"] .probeDot,
+.probeCard[data-state="collecting"] .probeDot {
+  background: var(--success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 18%, transparent);
+}
+
+.probeCard[data-state="waiting"] .probeDot {
+  background: var(--warning, var(--primary));
+}
+
+.probeIdentity {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.probeIdentity strong {
+  font-weight: 600;
+}
+
+.probeIdentity span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.probeActions {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+.error,
+.notice {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.error {
+  border: 1px solid color-mix(in srgb, var(--destructive) 30%, var(--border));
+  background: color-mix(in srgb, var(--destructive) 7%, var(--background));
+  color: var(--destructive);
+}
+
+.notice {
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+
+.disclosure {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.disclosure:hover {
+  color: var(--foreground);
+}
+
+.probeSetup {
+  display: grid;
+  gap: 8px;
+}
+
+.probeSetup p {
+  margin: 0;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+}
+
+.setupActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.segmented {
+  display: flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--muted);
+}
+
+.segmented button {
+  padding: 3px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.segmented button[aria-checked="true"] {
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+}
+
+.snippet {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--background);
+}
+
+.snippet > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 2px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.snippet pre {
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* Sections */
+.section {
+  display: grid;
+  gap: 10px;
+}
+
+.section h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.count {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.stat {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--card);
+}
+
+.stat dt {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.stat dd {
+  display: grid;
+  gap: 1px;
+  margin: 4px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat dd strong {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.stat dd span {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+/* Tables */
+.tableScroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.tableScroll table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tableScroll :is(th, td) {
+  padding: 6px 10px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.tableScroll :is(th:first-child, td:first-child) {
+  text-align: left;
+}
+
+.tableScroll thead th {
+  position: sticky;
+  top: 0;
+  background: var(--muted);
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.tableScroll tbody th {
+  font-weight: 500;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tableScroll tbody tr + tr :is(th, td) {
+  border-top: 1px solid var(--border);
+}
+
+.tableScroll td[data-verdict="regression"] {
+  color: var(--destructive);
+  font-weight: 600;
+}
+
+.tableScroll td[data-verdict="improvement"] {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.timedOut {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--destructive);
+}
+
+/* Benchmarks */
+.reports {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reports li {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--card);
+  overflow: hidden;
+}
+
+.reports li[data-open="true"] {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+}
+
+.reportRow {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reportRow:hover {
+  background: var(--accent);
+}
+
+.reportRow > svg {
+  flex: none;
+  color: var(--muted-foreground);
+}
+
+.reportName {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.reportName strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+
+.reportName span,
+.reportSummary {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.reportSummary {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--muted);
+  font-size: 10px;
+  color: var(--muted-foreground);
+  text-transform: capitalize;
+}
+
+.badge[data-tone="regression"],
+.badge[data-tone="failed"] {
+  background: color-mix(in srgb, var(--destructive) 12%, var(--card));
+  color: var(--destructive);
+}
+
+.badge[data-tone="running"] {
+  background: color-mix(in srgb, var(--primary) 14%, var(--card));
+  color: var(--primary);
+}
+
+.report {
+  display: grid;
+  gap: 8px;
+  padding: 4px 10px 12px;
+}
+
+.reportMeta,
+.progress {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.progress {
+  color: var(--primary);
+}
+
+.warning {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
+.empty {
+  margin: 0;
+  padding: 14px;
+  border: 1px dashed var(--border);
+  border-radius: 9px;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+}
+
+@container (max-width: 420px) {
+  .probeHeader {
+    flex-wrap: wrap;
+  }
+  .probeIdentity {
+    flex-basis: calc(100% - 20px);
+  }
+  .probeActions {
+    margin-left: 18px;
+  }
+  .reportSummary {
+    display: none;
+  }
+}
