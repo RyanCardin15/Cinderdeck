@@ -368,6 +368,26 @@ describe("Cinderdeck integration hub", () => {
           const hub = yield* IntegrationHub.IntegrationHub;
           yield* hub.refresh;
           assert.deepEqual(offsets, [0, 100, 200, 300, 400, 500]);
+          // Settings paginates source workspaces, independent of their lane count.
+          const sources = yield* hub.overview({ offset: 0, limit: 20, workspacesOnly: true });
+          assert.equal(sources.total, 100);
+          assert.equal(sources.nextOffset, 20);
+          assert.deepEqual(
+            sources.resources.map((item) => item.workspaceID),
+            Array.from({ length: 20 }, (_, index) => `context-${index * 6}`),
+          );
+          const lastSources = yield* hub.overview({ offset: 80, limit: 20, workspacesOnly: true });
+          assert.equal(lastSources.resources[0]?.workspaceID, "context-480");
+          assert.equal(lastSources.nextOffset, null);
+          const sourceLanes = yield* hub.overview({
+            offset: 0,
+            limit: 20,
+            workspacesOnly: true,
+            selectedWorkspaceID: "context-594",
+            workspacePage: { offset: 0, limit: 20 },
+          });
+          assert.equal(sourceLanes.workspaceContexts?.laneCount, 5);
+          assert.equal(sourceLanes.workspaceContexts?.resources.length, 6);
           for (const offset of [0, 196, 490]) {
             const page = yield* hub.overview({
               offset,

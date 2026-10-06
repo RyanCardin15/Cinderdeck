@@ -94,7 +94,11 @@ const empty: Rpc.IntegrationView = {
   nextOffset: null,
 };
 const pageView = (view: Rpc.IntegrationView, page: Page): Rpc.IntegrationView => {
-  const resources = view.resources.slice(page.offset, page.offset + page.limit);
+  const catalog = page.workspacesOnly
+    ? view.resources.filter((resource) => resource.workspace && !resource.workspace.lane)
+    : view.resources;
+  const total = page.workspacesOnly ? catalog.length : view.total;
+  const resources = catalog.slice(page.offset, page.offset + page.limit);
   const selectedContext = page.selectedContextID
     ? view.resources.find((resource) => resource.workspaceID === page.selectedContextID)
     : undefined;
@@ -137,10 +141,12 @@ const pageView = (view: Rpc.IntegrationView, page: Page): Rpc.IntegrationView =>
           },
         }
       : {}),
-    nextOffset: page.offset + page.limit < view.total ? page.offset + page.limit : null,
+    total,
+    nextOffset: page.offset + page.limit < total ? page.offset + page.limit : null,
   };
 };
 const validatePage = (page: Page) =>
+  (page.workspacesOnly === undefined || typeof page.workspacesOnly === "boolean") &&
   Number.isInteger(page.offset) &&
   page.offset >= 0 &&
   Number.isInteger(page.limit) &&

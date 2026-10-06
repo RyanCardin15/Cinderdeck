@@ -110,6 +110,8 @@ export class DeckhandRpcError extends Schema.TaggedError<DeckhandRpcError>()("De
 export const OverviewPageInput = Schema.Struct({
   offset: NonNegativeInt,
   limit: PositiveInt.check(Schema.isLessThanOrEqualTo(100)),
+  // Filter before pagination so lane checkouts never consume workspace slots.
+  workspacesOnly: Schema.optionalKey(Schema.Boolean),
   selectedWorkspaceID: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(160))),
   selectedContextID: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(160))),
   workspacePage: Schema.optionalKey(
