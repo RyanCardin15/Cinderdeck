@@ -50,9 +50,7 @@ const encodeWorkspace = Schema.encodeEffect(Schema.fromJsonString(Bindings.Works
 const encodeCheckout = Schema.encodeEffect(Schema.fromJsonString(Bindings.CheckoutBinding));
 const unavailable = () => Effect.fail(new Rpc.DeckhandRpcError({ reason: "unavailable" }));
 const testLayer = (hub: Partial<IntegrationHub.IntegrationHub["Service"]> = {}) => {
-  const dependencies = Layer.mergeAll(
-    CheckoutIdentity.layer,
-  ).pipe(
+  const dependencies = Layer.mergeAll(CheckoutIdentity.layer).pipe(
     Layer.provideMerge(ProcessRunner.layer),
     Layer.provideMerge(
       Layer.mock(IntegrationHub.IntegrationHub)({
@@ -395,6 +393,154 @@ describe("checkout mutations across Git and files", () => {
     },
   );
   it.effect(
+    "switches a real branch after a settings generation changes, but rejects a replaced native checkout",
+    () => {
+      let contexts: ReadonlyArray<Contracts.IntegrationCheckoutContext> = [];
+      return Effect.gen(function* () {
+        const { repo, git, identity } = yield* fixture;
+        const sql = yield* SqlClient.SqlClient;
+        const driver = yield* GitVcsDriver.makeVcsDriverShape();
+        const workspace = yield* decodeWorkspace({
+          id: "workspace",
+          environmentId: "native",
+          backend: "cinderdeck",
+          ownerId: "native-workspace",
+          generation: 1,
+          revision: 1,
+          name: "Native",
+          state: "active",
+        });
+        const binding = yield* decodeCheckout({
+          id: "checkout",
+          workspaceId: "workspace",
+          workspaceGeneration: 1,
+          nativeGeneration: 1,
+          environmentId: "native",
+          backend: "cinderdeck",
+          kind: "primary",
+          laneId: null,
+          state: "ready",
+          repositories: [identity],
+          revision: 1,
+        });
+        yield* sql`INSERT INTO deckhand_workspaces(id, environment_id, backend, owner_id, generation, revision, record_json)
+        VALUES ('workspace', 'native', 'cinderdeck', 'native-workspace', 1, 1, ${yield* encodeWorkspace(workspace)})`;
+        yield* sql`INSERT INTO deckhand_checkouts(id, workspace_id, revision, record_json)
+        VALUES ('checkout', 'workspace', 1, ${yield* encodeCheckout(binding)})`;
+        contexts = [
+          {
+            workspaceID: "native-workspace",
+            generation: 2,
+            revision: "new-settings",
+            available: true,
+            repos: ["app"],
+            physicalIDs: [identity.physicalId],
+          },
+        ];
+        yield* git(repo, ["branch", "feature/settings-reload"]);
+        yield* driver.execute({
+          operation: "GitVcsDriver.switchRef.checkout",
+          cwd: repo,
+          args: ["checkout", "feature/settings-reload", "--"],
+        });
+        assert.equal(
+          (yield* git(repo, ["branch", "--show-current"])).stdout.trim(),
+          "feature/settings-reload",
+        );
+        // The same workspace name/generation is insufficient when its checkout changed.
+        contexts = [{ ...contexts[0]!, physicalIDs: ["different-physical-checkout"] }];
+        const result = yield* driver
+          .execute({
+            operation: "GitVcsDriver.switchRef.checkout",
+            cwd: repo,
+            args: ["checkout", "main", "--"],
+          })
+          .pipe(Effect.flip);
+        assert.include(result.message, "saved workspace no longer matches");
+        assert.equal(
+          (yield* git(repo, ["branch", "--show-current"])).stdout.trim(),
+          "feature/settings-reload",
+        );
+      }).pipe(
+        Effect.provide(
+          testLayer({
+            checkoutContexts: () =>
+              Effect.succeed({
+                installationID: "native",
+                runtimeEpoch: "epoch",
+                contexts,
+              }),
+          }),
+        ),
+      );
+    },
+  );
+
+  it.effect(
+    "refreshes a transient connection before mutation and never replays a failed mutation",
+    () => {
+      let refreshed = false;
+      let mutationRuns = 0;
+      let refreshes = 0;
+      return Effect.gen(function* () {
+        const { repo } = yield* fixture;
+        const backend = yield* WorkspaceBackend.WorkspaceBackend;
+        const effect = Effect.sync(() => {
+          mutationRuns++;
+        }).pipe(Effect.andThen(Effect.fail("git failed")));
+        const result = yield* backend
+          .withCheckout({ cwd: repo, sharedRefs: true }, effect)
+          .pipe(Effect.flip);
+        assert.equal(result, "git failed");
+        assert.equal(mutationRuns, 1);
+        assert.equal(refreshes, 1);
+      }).pipe(
+        Effect.provide(
+          testLayer({
+            checkoutContexts: () =>
+              refreshed
+                ? Effect.succeed({ installationID: "native", runtimeEpoch: "epoch", contexts: [] })
+                : Effect.fail(new Rpc.DeckhandRpcError({ reason: "invalid_response" })),
+            refresh: Effect.sync(() => {
+              refreshed = true;
+              refreshes++;
+            }),
+          }),
+        ),
+      );
+    },
+  );
+
+  it.effect(
+    "pending ownership in a sibling worktree blocks shared refs until that operation finishes",
+    () =>
+      Effect.gen(function* () {
+        const { root, repo, git } = yield* fixture;
+        const sql = yield* SqlClient.SqlClient;
+        const identities = yield* CheckoutIdentity.CheckoutIdentity;
+        const driver = yield* GitVcsDriver.makeVcsDriverShape();
+        const lane = root + "/pending lane";
+        yield* git(repo, ["worktree", "add", "-b", "pending-lane", lane]);
+        yield* git(repo, ["branch", "other"]);
+        const linked = yield* identities.resolve(lane);
+        yield* sql`INSERT INTO deckhand_ownership_transitions(id, actor_id, physical_id, original_json, record_json)
+        VALUES ('move', 'actor', ${linked.physicalId}, '{}', '{"state":"pending"}')`;
+        const result = yield* driver
+          .execute({ operation: "switch", cwd: repo, args: ["checkout", "other", "--"] })
+          .pipe(Effect.flip);
+        assert.include(result.message, "still pending");
+        assert.equal((yield* git(repo, ["branch", "--show-current"])).stdout.trim(), "main");
+        yield* sql`UPDATE deckhand_ownership_transitions SET record_json='{"state":"completed"}' WHERE id='move'`;
+        yield* driver.execute({
+          operation: "switch",
+          cwd: repo,
+          args: ["checkout", "other", "--"],
+        });
+        assert.equal((yield* git(repo, ["branch", "--show-current"])).stdout.trim(), "other");
+      }).pipe(Effect.provide(testLayer())),
+  );
+
+  it.effect(
     "delegates every connected lifecycle intent with unchanged actor, generation and operation identity",
     () => {
       const seen: Array<{
@@ -478,15 +624,23 @@ describe("checkout mutations across Git and files", () => {
       const service = yield* CheckoutMutations.CheckoutMutations;
       const entered = yield* Deferred.make<void>();
       const finish = yield* Deferred.make<void>();
-      const first = yield* service.run({ cwd: repo, sharedRefs: false },
-        Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(finish))),
-      ).pipe(Effect.forkChild);
+      const first = yield* service
+        .run(
+          { cwd: repo, sharedRefs: false },
+          Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(finish))),
+        )
+        .pipe(Effect.forkChild);
       yield* Deferred.await(entered);
-      yield* service.run({ cwd: alias, sharedRefs: true }, git(repo, ["branch", "concurrent-agent"]));
-      assert.include((yield* git(repo, ["branch", "--list", "concurrent-agent"])).stdout, "concurrent-agent");
+      yield* service.run(
+        { cwd: alias, sharedRefs: true },
+        git(repo, ["branch", "concurrent-agent"]),
+      );
+      assert.include(
+        (yield* git(repo, ["branch", "--list", "concurrent-agent"])).stdout,
+        "concurrent-agent",
+      );
       yield* Deferred.succeed(finish, undefined);
       yield* Fiber.join(first);
     }).pipe(Effect.provide(testLayer())),
   );
-
 });

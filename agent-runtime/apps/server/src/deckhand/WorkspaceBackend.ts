@@ -24,6 +24,7 @@ export class CheckoutMutationError extends Schema.TaggedError<CheckoutMutationEr
       "uncertain",
       "storage",
     ]),
+    detail: Schema.optional(Schema.String),
   },
 ) {
   override get message() {
@@ -197,9 +198,19 @@ const make = Effect.gen(function* () {
           const root = first.slice(9);
           const linked = yield* identities.resolve(root).pipe(
             Effect.catch(() => identities.missingRegistration(current, root)),
-            Effect.mapError(() => new CheckoutMutationError({ reason: "unavailable" })),
+            Effect.mapError(
+              () =>
+                new CheckoutMutationError({
+                  reason: "unavailable",
+                  detail: `Git cannot verify the linked worktree at ${root}. Restore access to that folder or repair its worktree registration before switching branches.`,
+                }),
+            ),
           );
-          if (!linked) return yield* new CheckoutMutationError({ reason: "unavailable" });
+          if (!linked)
+            return yield* new CheckoutMutationError({
+              reason: "unavailable",
+              detail: `Git cannot verify the linked worktree at ${root}. Restore access to that folder or repair its worktree registration before switching branches.`,
+            });
           if (linked.repositoryPhysicalId !== current.repositoryPhysicalId)
             return yield* new CheckoutMutationError({ reason: "stale_binding" });
           physicalIDs.add(linked.physicalId);
@@ -228,6 +239,12 @@ const make = Effect.gen(function* () {
       }
       if (physicalIDs.size > 64)
         return yield* new CheckoutMutationError({ reason: "stale_binding" });
+      // All registered worktrees share refs, including standalone or offline ones.
+      for (const id of physicalIDs)
+        yield* CurrentCheckout.assertPhysicalAvailable(id).pipe(
+          Effect.provide(ownershipDependencies),
+          Effect.mapError(() => new CheckoutMutationError({ reason: "uncertain" })),
+        );
       const lookup = yield* hub
         .checkoutContexts({
           physicalID: current.physicalId,
@@ -290,6 +307,9 @@ const make = Effect.gen(function* () {
         return yield* new CheckoutMutationError({ reason: "stale_binding" });
       if (contexts.some((item) => !item.available))
         return yield* new CheckoutMutationError({ reason: "unavailable" });
+      // A settings edit/reload changes the native generation. Git mutations use
+      // the live context plus the verified physical identities above; an old
+      // conversation generation must not block the same physical checkout.
       for (const { binding, workspace } of known.filter(
         (item) => item.binding.backend === "cinderdeck",
       )) {
@@ -297,7 +317,11 @@ const make = Effect.gen(function* () {
         if (
           workspace.environmentId !== lookup.success.installationID ||
           !contexts.some(
-            (item) => item.workspaceID === id && item.generation === binding.nativeGeneration,
+            (item) =>
+              item.workspaceID === id &&
+              binding.repositories
+                .filter((repo) => physicalIDs.has(repo.physicalId))
+                .every((repo) => item.physicalIDs.includes(repo.physicalId)),
           )
         )
           return yield* new CheckoutMutationError({ reason: "stale_binding" });
@@ -307,6 +331,11 @@ const make = Effect.gen(function* () {
       for (const context of contexts) for (const id of context.physicalIDs) physicalIDs.add(id);
       if (physicalIDs.size > 64)
         return yield* new CheckoutMutationError({ reason: "stale_binding" });
+      for (const id of physicalIDs)
+        yield* CurrentCheckout.assertPhysicalAvailable(id).pipe(
+          Effect.provide(ownershipDependencies),
+          Effect.mapError(() => new CheckoutMutationError({ reason: "uncertain" })),
+        );
       return {
         backend: nativeIDs.has(current.physicalId)
           ? ("cinderdeck" as const)
@@ -323,7 +352,18 @@ const make = Effect.gen(function* () {
     );
   const withCheckout: WorkspaceBackend["Service"]["withCheckout"] = (input, effect) =>
     Effect.gen(function* () {
-      const resolved = yield* inspect(input);
+      // Retry only the read-only inspection after a transient connection failure.
+      // The Git/file effect below is never replayed, even if it fails.
+      const resolved = yield* inspect(input).pipe(
+        Effect.catchIf(
+          (error) => error.reason === "unavailable",
+          (error) =>
+            hub.refresh.pipe(
+              Effect.mapError(() => error),
+              Effect.andThen(inspect(input)),
+            ),
+        ),
+      );
       if (resolved === null) return yield* effect;
       const context: MutationContextScope = {
         repositoryPhysicalId: resolved.current.repositoryPhysicalId,

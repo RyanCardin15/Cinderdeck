@@ -18,7 +18,7 @@ enum CinderdeckRuntimeNativeUI {
       // Older shells still ask for the native sheet; the setup now lives in the shell's own settings.
       guard request.workspaceID == nil, request.mode == nil else { throw StackControlError.invalid("Agent access does not accept a workspace or mode") }
       CinderdeckRuntimeController.shared.show(section: AgentAccessNavigation.section)
-    case "workspace-setup", "workspace-editor", "workspace-terminal", "execution-map":
+    case "workspace-setup", "workspace-editor", "workspace-terminal", "workspace-branches", "execution-map":
       try CinderdeckRuntimeWorkspaceTools.shared.open(request)
     case "workspace", "lane-map":
       guard request.mode == nil else { throw StackControlError.invalid("This surface does not accept a mode") }

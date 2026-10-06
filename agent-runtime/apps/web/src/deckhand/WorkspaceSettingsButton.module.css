@@ -1,0 +1,42 @@
+.control {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 30px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.control:hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--foreground);
+  font: inherit;
+  cursor: pointer;
+}
+.control:disabled,
+.button:disabled,
+.control[aria-disabled="true"],
+.button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+.control:focus-visible,
+.button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}

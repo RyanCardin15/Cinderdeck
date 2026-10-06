@@ -717,6 +717,7 @@ function ConnectedWorkspace({
               </div>
             </details>
             <NativeWorkspaceTools
+              environmentId={environmentId}
               enabled={nativeCurrent}
               workspaceID={selected?.workspaceID}
               sourceWorkspaceID={activeBase?.workspaceID}
@@ -1212,6 +1213,7 @@ function ConnectedWorkspace({
           {selected ? (
             <>
               <NativeWorkspaceTools
+                environmentId={environmentId}
                 enabled={nativeCurrent && !savedContextChanged}
                 workspaceID={selected.workspaceID}
                 sourceWorkspaceID={activeBase?.workspaceID}
