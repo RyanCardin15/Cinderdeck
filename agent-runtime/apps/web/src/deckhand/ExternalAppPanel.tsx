@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   AppWindowIcon,
+  BugIcon,
   FileSpreadsheetIcon,
   MonitorIcon,
+  PlugIcon,
   RefreshCwIcon,
   Settings2Icon,
   UnplugIcon,
@@ -57,6 +59,24 @@ export const matchesExternalApp = (target: DebugTarget, filter: string) =>
   `${target.app ?? ""} ${target.url} ${target.title}`
     .toLowerCase()
     .includes(filter.trim().toLowerCase());
+const byAppAndTitle = (targets: readonly DebugTarget[]) =>
+  [...targets].sort((a, b) => `${a.app} ${a.title}`.localeCompare(`${b.app} ${b.title}`));
+// Mac window IDs are `mac:<pid>:<window>`; an undocked Inspector shares its host's process.
+const sameProcess = (a: DebugTarget, b: DebugTarget) => a.id.split(":")[1] === b.id.split(":")[1];
+/** The single Inspector to pair with `host`, or undefined when none or several qualify. */
+export function inspectorFor(
+  host: DebugTarget,
+  targets: readonly DebugTarget[],
+  filter: string,
+  exclude: readonly string[] = [],
+) {
+  const candidates = targets.filter(
+    (target) =>
+      target.id !== host.id && !exclude.includes(target.id) && matchesExternalApp(target, filter),
+  );
+  const local = candidates.filter((target) => sameProcess(target, host));
+  return local.length === 1 ? local[0] : candidates.length === 1 ? candidates[0] : undefined;
+}
 
 type ExternalAppPanelProps = {
   threadRef: ScopedThreadRef;
@@ -118,13 +138,14 @@ function ScopedExternalAppPanel({ threadRef, profileId, visible }: ExternalAppPa
   const [showAll, setShowAll] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [hint, setHint] = useState("");
   const [conflict, setConflict] = useState<{
     targetIds: string[];
     sessions: readonly DebugConflict[];
     selected: string[];
     error: string;
   } | null>(null);
-  const [view, setView] = useState<"app" | "inspector" | "split">("app");
+  const [view, setView] = useState<"app" | "inspector" | "split" | "performance">("app");
   const AppIcon = profile?.id === "excel" ? FileSpreadsheetIcon : AppWindowIcon;
   const mounted = useRef(true);
   const connectionEpoch = useRef(0);
@@ -170,11 +191,7 @@ function ScopedExternalAppPanel({ threadRef, profileId, visible }: ExternalAppPa
       });
       if (result._tag === "Failure") throw squashAtomCommandFailure(result);
       if (!mounted.current) return;
-      setTargets(
-        [...result.value].sort((a, b) =>
-          `${a.app} ${a.title}`.localeCompare(`${b.app} ${b.title}`),
-        ),
-      );
+      setTargets(byAppAndTitle(result.value));
       setAppId((previous) =>
         result.value.some((target) => target.id === previous) ? previous : "",
       );
@@ -251,8 +268,8 @@ function ScopedExternalAppPanel({ threadRef, profileId, visible }: ExternalAppPa
       if (mounted.current && connectionEpoch.current === epoch) setBusy(false);
     }
   }
-  async function openApp() {
-    if (!profile || busy) return;
+  async function openApp(continuing = false) {
+    if (!profile || (busy && !continuing)) return;
     setBusy(true);
     setError("");
     const epoch = connectionEpoch.current;
@@ -397,6 +414,91 @@ function ScopedExternalAppPanel({ threadRef, profileId, visible }: ExternalAppPa
       if (mounted.current && connectionEpoch.current === epoch) setBusy(false);
     }
   }
+  /** One click: reuse or attach the app window and its Inspector, opening the app if needed. */
+  async function connectAutomatically() {
+    if (!profile || busy) return;
+    setBusy(true);
+    setError("");
+    setHint("");
+    const epoch = connectionEpoch.current;
+    try {
+      const result = await discover({
+        environmentId: threadRef.environmentId,
+        input: { endpoint: "mac://local" },
+      });
+      if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+      if (!mounted.current || connectionEpoch.current !== epoch) return;
+      const found = byAppAndTitle(result.value);
+      setTargets(found);
+      const windows = found.filter(
+        (target) =>
+          matchesExternalApp(target, profile.applicationFilter) &&
+          !(profile.includeInspector && matchesExternalApp(target, profile.inspectorFilter)),
+      );
+      if (windows.length > 1) {
+        setAppId("");
+        setHint(`${windows.length} ${profile.name} windows are open. Choose one below.`);
+        return;
+      }
+      const host = windows[0];
+      if (!host) {
+        if (opensByBundleId) await openApp(true);
+        else setError(`No ${profile.name} window is open on ${computer}. Open one and try again.`);
+        return;
+      }
+      const inspector = profile.includeInspector
+        ? inspectorFor(host, found, profile.inspectorFilter)
+        : undefined;
+      setAppId(host.id);
+      setInspectorId(inspector?.id ?? "");
+      await connect([host.id, ...(inspector ? [inspector.id] : [])], true);
+    } catch (cause) {
+      if (mounted.current && connectionEpoch.current === epoch) setError(failureText(cause));
+    } finally {
+      if (mounted.current && connectionEpoch.current === epoch) setBusy(false);
+    }
+  }
+  /** Adds the host's Web Inspector to an app window that is already connected. */
+  async function attachInspector() {
+    const host = active[0];
+    if (!profile || busy || !host) return;
+    setBusy(true);
+    setError("");
+    const epoch = connectionEpoch.current;
+    try {
+      const result = await discover({
+        environmentId: threadRef.environmentId,
+        input: { endpoint: "mac://local" },
+      });
+      if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+      if (!mounted.current || connectionEpoch.current !== epoch) return;
+      const inspector = inspectorFor(
+        host.target,
+        result.value,
+        profile.inspectorFilter,
+        active.map((session) => session.target.id),
+      );
+      if (!inspector) {
+        setError(
+          result.value.some(
+            (target) =>
+              target.id !== host.target.id && matchesExternalApp(target, profile.inspectorFilter),
+          )
+            ? "Several Inspector windows are open. Close the extras and try again."
+            : `No Web Inspector window is open. In ${profile.name}, right-click the add-in, choose Inspect Element, undock the Inspector, and try again.`,
+        );
+        return;
+      }
+      await connect([host.target.id, inspector.id], true);
+    } catch (cause) {
+      if (mounted.current && connectionEpoch.current === epoch) setError(failureText(cause));
+    } finally {
+      if (mounted.current && connectionEpoch.current === epoch) setBusy(false);
+    }
+  }
+  const opensByBundleId = /^[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$/.test(
+    profile?.applicationFilter ?? "",
+  );
   const settingsLink = (
     <Button
       render={<Link to="/settings/external-apps" />}
@@ -575,25 +677,44 @@ function ScopedExternalAppPanel({ threadRef, profileId, visible }: ExternalAppPa
             <MonitorIcon size={11} aria-hidden /> {computer}
           </span>
         </div>
-        {active.length > 1 ? (
+        {active.length ? (
           <div className={styles.viewTabs} role="tablist" aria-label="External app view">
-            {(
-              [
-                ["app", "Application"],
-                ["inspector", "Inspector"],
-                ["split", "Both"],
-              ] as const
+            {(active.length > 1
+              ? ([
+                  ["app", "Application"],
+                  ["inspector", "Inspector"],
+                  ["split", "Both"],
+                  ["performance", "Performance"],
+                ] as const)
+              : ([
+                  ["app", "Window"],
+                  ["performance", "Performance"],
+                ] as const)
             ).map(([mode, label]) => (
               <button
                 key={mode}
                 role="tab"
-                aria-selected={view === mode}
+                aria-selected={
+                  view === mode || (mode === "app" && view !== "performance" && active.length === 1)
+                }
                 onClick={() => setView(mode)}
               >
                 {label}
               </button>
             ))}
           </div>
+        ) : null}
+        {profile.includeInspector && active.length === 1 ? (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              void attachInspector();
+            }}
+          >
+            <BugIcon /> {busy ? "Attaching…" : "Attach Inspector"}
+          </Button>
         ) : null}
         {settingsLink}
         {active.length ? (
@@ -619,41 +740,30 @@ function ScopedExternalAppPanel({ threadRef, profileId, visible }: ExternalAppPa
       ) : null}
       {active.length ? (
         <>
-          <div className={styles.windows} data-view={view}>
-            {active.map((session, index) => (
-              <div
-                key={session.sessionId}
-                className={styles.window}
-                hidden={
-                  active.length > 1 &&
-                  view !== "split" &&
-                  (index === 0 ? view !== "app" : view !== "inspector")
-                }
-              >
-                <MacWindowPanel
-                  environmentId={threadRef.environmentId}
-                  threadId={threadRef.threadId}
-                  session={session}
-                  compact
-                  label={index === 0 ? "Application" : "Web Inspector"}
-                  visible={
-                    visible &&
-                    (active.length === 1 ||
-                      view === "split" ||
-                      (index === 0 ? view === "app" : view === "inspector"))
-                  }
-                />
-              </div>
-            ))}
+          <div className={styles.windows} data-view={view} hidden={view === "performance"}>
+            {active.map((session, index) => {
+              const shown =
+                view !== "performance" &&
+                (active.length === 1 ||
+                  view === "split" ||
+                  (index === 0 ? view === "app" : view === "inspector"));
+              return (
+                <div key={session.sessionId} className={styles.window} hidden={!shown}>
+                  <MacWindowPanel
+                    environmentId={threadRef.environmentId}
+                    threadId={threadRef.threadId}
+                    session={session}
+                    compact
+                    label={index === 0 ? "Application" : "Web Inspector"}
+                    visible={visible && shown}
+                  />
+                </div>
+              );
+            })}
           </div>
-          <ExcelPerformancePanel
-            environmentId={threadRef.environmentId}
-            threadId={threadRef.threadId}
-            visible={visible}
-          />
-          <p className={styles.footnote}>
-            Closing this tab disconnects capture. {profile.name} stays open on {computer}.
-          </p>
+          {view === "performance" ? (
+            <ExcelPerformancePanel threadRef={threadRef} visible={visible} />
+          ) : null}
         </>
       ) : (
         <div className={styles.setup}>
@@ -663,37 +773,38 @@ function ScopedExternalAppPanel({ threadRef, profileId, visible }: ExternalAppPa
                 <AppIcon size={28} aria-hidden />
               </span>
               <div>
-                <h2>Connect {profile.name}</h2>
-                <p>Choose its windows on {computer}.</p>
+                <h2>{profile.name}</h2>
+                <p>Not connected · {computer}</p>
               </div>
             </div>
             <p className={styles.description}>
-              Bring a window into this conversation to work alongside your agent.
+              Mirror {profile.name}
+              {profile.includeInspector ? " and its Web Inspector" : ""} beside this conversation.
+              {opensByBundleId ? ` Opens ${profile.name} if it isn’t running.` : ""}
             </p>
             <div className={styles.setupActions}>
-              {/^[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$/.test(profile.applicationFilter) ? (
-                <Button
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => {
-                    void openApp();
-                  }}
-                >
-                  <AppWindowIcon /> Open {profile.name} on {computer}
-                </Button>
-              ) : null}
               <Button
-                variant="outline"
+                disabled={busy}
+                onClick={() => {
+                  void connectAutomatically();
+                }}
+              >
+                <PlugIcon /> {busy ? "Connecting…" : `Connect ${profile.name}`}
+              </Button>
+              <Button
+                variant="ghost"
                 size="sm"
                 disabled={busy}
                 onClick={() => {
+                  setHint("");
                   void find();
                 }}
               >
                 <RefreshCwIcon />
-                {busy ? "Connecting…" : "Find windows"}
+                Find windows
               </Button>
             </div>
+            {hint ? <p className={styles.hint}>{hint}</p> : null}
             {targets.length ? (
               <div className={styles.selectors}>
                 <label>
@@ -800,7 +911,7 @@ function ScopedExternalAppPanel({ threadRef, profileId, visible }: ExternalAppPa
             ) : null}
             <p className={styles.footnote}>
               Viewing requires Screen Recording on {computer}. Your agent can control this window
-              using Accessibility; Control window enables your own mouse and keyboard.
+              using Accessibility; Control enables your own mouse and keyboard.
             </p>
           </div>
         </div>

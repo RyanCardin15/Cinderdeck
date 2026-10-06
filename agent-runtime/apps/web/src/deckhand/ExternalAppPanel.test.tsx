@@ -86,7 +86,8 @@ vi.mock("../hooks/useSettings", async () => {
 import { agentAppBindings, useAgentExternalApps } from "./useAgentExternalApps";
 import { useRightPanelStore } from "../rightPanelStore";
 import { ExternalAppPanel } from "./ExternalAppPanel";
-import { ExcelPerformancePanel } from "./ExcelPerformancePanel";
+import { ExcelPerformancePanel, PROBE_SETUP_PROMPT } from "./ExcelPerformancePanel";
+import { useComposerDraftStore } from "../composerDraftStore";
 import { ExternalAppsSettings } from "../components/settings/ExternalAppsSettings";
 import { externalAppBindingKey, useExternalAppSessions } from "./externalAppSessions";
 
@@ -203,22 +204,14 @@ const probeStatus = (armed = false) => ({
   summary: null,
 });
 async function performancePanel(visible = true) {
-  await act(async () =>
-    root.render(
-      <ExcelPerformancePanel
-        environmentId={ref.environmentId}
-        threadId={ref.threadId}
-        visible={visible}
-      />,
-    ),
-  );
+  await act(async () => root.render(<ExcelPerformancePanel threadRef={ref} visible={visible} />));
 }
-it("loads Excel performance only when expanded and stops polling when hidden", async () => {
+it("loads Excel performance only while visible", async () => {
   mocks.probe.mockResolvedValue(success({ status: probeStatus() }));
   mocks.benchmark.mockResolvedValue(success({ reports: [] }));
-  await performancePanel();
+  await performancePanel(false);
   expect(mocks.probe).not.toHaveBeenCalled();
-  await click("Add-in performance");
+  await performancePanel();
   expect(mocks.probe).toHaveBeenCalledWith({
     environmentId: ref.environmentId,
     input: { action: "status", threadId: ref.threadId },
@@ -232,18 +225,21 @@ it("loads Excel performance only when expanded and stops polling when hidden", a
   await act(async () => vi.advanceTimersByTimeAsync(5000));
   expect(mocks.probe).toHaveBeenCalledTimes(calls);
 });
-it("arms and disarms collection for the selected Excel thread", async () => {
+it("connects the probe with one click, waiting for the add-in page, then disarms", async () => {
   mocks.probe.mockImplementation(async ({ input }) =>
     success({ status: probeStatus(input.action === "arm") }),
   );
   mocks.benchmark.mockResolvedValue(success({ reports: [] }));
   await performancePanel();
-  await click("Add-in performance");
-  await click("Collect add-in telemetry");
+  await click("Connect probe");
   expect(mocks.probe).toHaveBeenLastCalledWith({
     environmentId: ref.environmentId,
-    input: { action: "arm", waitForClientMs: 0, threadId: ref.threadId },
+    input: { action: "arm", waitForClientMs: 12_000, threadId: ref.threadId },
   });
+  // No page reported in, so setup guidance opens with the agent shortcut.
+  expect(element.textContent).toContain("no add-in page has reported in");
+  await click("Ask agent to set it up");
+  expect(useComposerDraftStore.getState().getComposerDraft(ref)?.prompt).toBe(PROBE_SETUP_PROMPT);
   await click("Stop collecting");
   expect(mocks.probe).toHaveBeenLastCalledWith({
     environmentId: ref.environmentId,
@@ -254,11 +250,10 @@ it("shows probe command failures and keeps collection available to retry", async
   mocks.probe.mockResolvedValue(success({ status: probeStatus() }));
   mocks.benchmark.mockResolvedValue(success({ reports: [] }));
   await performancePanel();
-  await click("Add-in performance");
   mocks.probe.mockResolvedValue({ _tag: "Failure", cause: new Error("Probe unavailable") });
-  await click("Collect add-in telemetry");
+  await click("Connect probe");
   expect(element.textContent).toContain("Probe unavailable");
-  expect((button("Collect add-in telemetry") as HTMLButtonElement).disabled).toBe(false);
+  expect((button("Connect probe") as HTMLButtonElement).disabled).toBe(false);
 });
 it("opens a saved Excel benchmark and displays unavailable metric warnings", async () => {
   mocks.probe.mockResolvedValue(success({ status: probeStatus() }));
@@ -278,15 +273,20 @@ it("opens a saved Excel benchmark and displays unavailable metric warnings", asy
       : success({
           report: {
             id: "saved-run",
+            name: "Validate fixture",
             state: "completed",
-            progress: { iteration: 1, iterations: 1 },
+            progress: { iteration: 1, iterations: 1, step: "" },
+            target: { app: "Excel", title: "Workbook" },
+            iterations: 1,
+            warmup: 0,
+            comparison: null,
+            error: null,
             steps: [],
             warnings: ["Repaint timing unavailable"],
           },
         }),
   );
   await performancePanel();
-  await click("Add-in performance");
   const saved = [...element.querySelectorAll<HTMLButtonElement>("button")].find((node) =>
     node.textContent?.includes("Validate fixture"),
   )!;
@@ -588,9 +588,61 @@ it("expands inside the app and collapses when the session panel is hidden", asyn
   expect(document.body.querySelector('section[data-expanded="true"]')).toBeNull();
 });
 
-it("opens Excel from its thread panel and reuses the returned attachment", async () => {
+it("connects the running app window and its Inspector with one click", async () => {
+  const otherInspector = { ...inspector, id: "mac:30:2" };
+  mocks.discover.mockResolvedValue(success([otherInspector, app, inspector]));
   await panel();
-  await click("Open Excel on Test Mac");
+  await click("Connect Excel");
+  expect(mocks.open).not.toHaveBeenCalled();
+  expect(mocks.attach.mock.calls.map(([r]) => r.input.targetId)).toEqual([app.id, inspector.id]);
+  expect(
+    useExternalAppSessions.getState().bindings[externalAppBindingKey(ref, "excel")]?.sessions,
+  ).toEqual([session(app), session(inspector)]);
+});
+it("asks for a choice instead of guessing between several workbooks", async () => {
+  const second = { ...app, id: "mac:10:3", title: "Second workbook" };
+  mocks.discover.mockResolvedValue(success([app, second, inspector]));
+  await panel();
+  await click("Connect Excel");
+  expect(mocks.attach).not.toHaveBeenCalled();
+  expect(mocks.open).not.toHaveBeenCalled();
+  expect(element.querySelector<HTMLSelectElement>('[aria-label="Application window"]')?.value).toBe(
+    "",
+  );
+});
+it("attaches the Inspector to an already connected window", async () => {
+  useExternalAppSessions
+    .getState()
+    .bind({ threadRef: ref, profileId: "excel", sessions: [session(app)] });
+  mocks.sessions.mockResolvedValue(success([session(app)]));
+  await panel();
+  await click("Attach Inspector");
+  expect(mocks.attach.mock.calls.map(([r]) => r.input.targetId)).toEqual([inspector.id]);
+  expect(
+    useExternalAppSessions.getState().bindings[externalAppBindingKey(ref, "excel")]?.sessions,
+  ).toEqual([session(app), session(inspector)]);
+  expect(element.textContent).not.toContain("Attach Inspector");
+});
+it("shows add-in performance in its own tab and pauses window capture there", async () => {
+  mocks.probe.mockResolvedValue(success({ status: probeStatus() }));
+  mocks.benchmark.mockResolvedValue(success({ reports: [] }));
+  useExternalAppSessions
+    .getState()
+    .bind({ threadRef: ref, profileId: "excel", sessions: [session(app)] });
+  await panel();
+  expect(mocks.probe).not.toHaveBeenCalled();
+  await click("Performance");
+  expect(mocks.probe).toHaveBeenCalled();
+  const reads = mocks.read.mock.calls.length;
+  await tick();
+  expect(mocks.read).toHaveBeenCalledTimes(reads);
+  await click("Window");
+  expect(element.querySelector("img")).not.toBeNull();
+});
+it("opens Excel when no window is running and reuses the returned attachment", async () => {
+  mocks.discover.mockResolvedValue(success([]));
+  await panel();
+  await click("Connect Excel");
   expect(mocks.open).toHaveBeenCalledWith({
     environmentId: "local",
     input: { bundleId: "com.microsoft.Excel", threadId: ref.threadId },
@@ -604,8 +656,9 @@ it("opens Excel from its thread panel and reuses the returned attachment", async
 it("requires a deliberate window choice when opening multiple workbooks", async () => {
   const second = { ...app, id: "mac:10:3", title: "Second workbook" };
   mocks.open.mockResolvedValue(success({ targets: [app, second], session: null }));
+  mocks.discover.mockResolvedValue(success([]));
   await panel();
-  await click("Open Excel on Test Mac");
+  await click("Connect Excel");
   expect(mocks.attach).not.toHaveBeenCalled();
   expect(element.querySelector<HTMLSelectElement>('[aria-label="Application window"]')?.value).toBe(
     "",
@@ -641,8 +694,9 @@ it("retains action history across changed-frame polling without storing typed te
       callFrames: [],
     }),
   );
+  mocks.discover.mockResolvedValue(success([]));
   await panel();
-  await click("Open Excel on Test Mac");
+  await click("Connect Excel");
   await tick();
   expect(element.querySelector('[aria-label="Application action history"]')?.textContent).toContain(
     "type accepted",
@@ -807,12 +861,12 @@ it("keeps the old pane when disconnect fails and does not attach the new pane", 
 
 it("offers the same conflict dialog when opening an already attached app", async () => {
   mocks.open.mockResolvedValue({ _tag: "Failure", cause: { reason: "busy" } });
-  mocks.discover.mockResolvedValue(success([app]));
+  mocks.discover.mockResolvedValueOnce(success([])).mockResolvedValue(success([app]));
   mocks.conflicts.mockResolvedValue(
     success([{ session: session(app), threadId: other.threadId, threadTitle: "Other chat" }]),
   );
   await panel();
-  await click("Open Excel on Test Mac");
+  await click("Connect Excel");
   expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain("Other chat");
   await click("Disconnect and connect here");
   expect(mocks.open).toHaveBeenCalledTimes(1);

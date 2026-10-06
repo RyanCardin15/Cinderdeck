@@ -1,6 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AppWindowIcon, ChevronRightIcon, MaximizeIcon, MinimizeIcon } from "lucide-react";
+import {
+  AppWindowIcon,
+  ChevronRightIcon,
+  MaximizeIcon,
+  MinimizeIcon,
+  ZoomInIcon,
+  ZoomOutIcon,
+} from "lucide-react";
 import type { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
 import {
   DEBUG_KEYS,
@@ -12,6 +19,7 @@ import {
 } from "@cinderdeck/contracts/deckhand/externalDebugRpc";
 import { squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
 import { useAtomCommand } from "../state/use-atom-command";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 import { readDebugSession, runDebugCommand } from "./externalDebugState";
 import styles from "./macWindowPanel.module.css";
 
@@ -58,6 +66,11 @@ const point = (event: { clientX: number; clientY: number }, rect: DOMRect) => ({
   y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
 });
 
+// "fit" shows the whole window; "width" fills the panel width; numbers scale beyond it.
+const zoomLevels = ["fit", "width", 1.5, 2, 3] as const;
+type Zoom = (typeof zoomLevels)[number];
+const zoomLabel = (zoom: Zoom) =>
+  zoom === "fit" ? "Fit" : zoom === "width" ? "Width" : `${Math.round(zoom * 100)}%`;
 export function MacWindowPanel({
   environmentId,
   session,
@@ -81,6 +94,7 @@ export function MacWindowPanel({
   const [live, setLive] = useState(true),
     [controls, setControls] = useState(false),
     [expanded, setExpanded] = useState(false),
+    [zoom, setZoom] = useState<Zoom>("fit"),
     [text, setText] = useState(""),
     [error, setError] = useState("");
   const cursor = useRef(0),
@@ -237,9 +251,12 @@ export function MacWindowPanel({
       data-expanded={expanded && visible}
     >
       <div className={styles.panelHeader}>
+        <span className={styles.connectionState} data-state={state} aria-hidden />
         <div className={styles.windowIdentity}>
           <strong>{session.target.title || label}</strong>
-          <span>{label}</span>
+          <span>
+            {label} · {state === "connected" ? (live ? "Live" : "Paused") : state}
+          </span>
         </div>
         <div className={styles.macPanelToolbar}>
           <label>
@@ -253,34 +270,71 @@ export function MacWindowPanel({
                 imageSequence.current = undefined;
               }}
             />
-            Live view
+            Live
           </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={controls}
-              disabled={state !== "connected" || !live}
-              onChange={(event) => {
-                setControls(event.target.checked);
-                setError("");
-              }}
-            />
-            Control window
-          </label>
+          <Tooltip>
+            <TooltipTrigger render={<label />}>
+              <input
+                type="checkbox"
+                checked={controls}
+                disabled={state !== "connected" || !live}
+                onChange={(event) => {
+                  setControls(event.target.checked);
+                  setError("");
+                }}
+              />
+              Control
+            </TooltipTrigger>
+            <TooltipPopup>
+              Click, type, paste, and scroll in the window. Input activates it on its Mac.
+            </TooltipPopup>
+          </Tooltip>
           {controls ? <button onClick={() => send({ action: "focus" })}>Open on Mac</button> : null}
         </div>
-        <span className={styles.connectionState} data-state={state}>
-          {state === "connected" ? (live ? "Live" : "Paused") : state}
-        </span>
+        <div className={styles.zoom} role="group" aria-label={`${label} zoom`}>
+          <button
+            aria-label={`Zoom out ${label}`}
+            disabled={zoom === zoomLevels[0]}
+            onClick={() =>
+              setZoom((current) => zoomLevels[Math.max(0, zoomLevels.indexOf(current) - 1)]!)
+            }
+          >
+            <ZoomOutIcon size={13} />
+          </button>
+          <button aria-label={`Reset zoom for ${label}`} onClick={() => setZoom("fit")}>
+            {zoomLabel(zoom)}
+          </button>
+          <button
+            aria-label={`Zoom in ${label}`}
+            disabled={zoom === zoomLevels.at(-1)}
+            onClick={() =>
+              setZoom(
+                (current) =>
+                  zoomLevels[Math.min(zoomLevels.length - 1, zoomLevels.indexOf(current) + 1)]!,
+              )
+            }
+          >
+            <ZoomInIcon size={13} />
+          </button>
+        </div>
         <button
+          className={styles.iconButton}
           aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
           aria-expanded={expanded}
           onClick={() => setExpanded((previous) => !previous)}
         >
-          {expanded ? <MinimizeIcon size={15} /> : <MaximizeIcon size={15} />}
+          {expanded ? <MinimizeIcon size={14} /> : <MaximizeIcon size={14} />}
         </button>
       </div>
-      <div className={styles.macCanvas}>
+      <div
+        className={styles.macCanvas}
+        data-zoom={snapshot?.image && live ? zoom : undefined}
+        style={
+          typeof zoom === "number"
+            ? ({ "--zoom-width": `${zoom * 100}%` } as CSSProperties)
+            : undefined
+        }
+      >
         {snapshot?.image && live ? (
           <img
             src={`data:image/jpeg;base64,${snapshot.image}`}
@@ -439,11 +493,6 @@ export function MacWindowPanel({
           ))}
         </ol>
       </details>
-      <p className={styles.previewNote}>
-        {controls
-          ? "Click the window to type, paste, or scroll. Input activates it on its Mac."
-          : "Viewing only. Enable Control window to click, type, or scroll on its Mac."}
-      </p>
     </section>
   );
   // Stay in the app's window: macOS fullscreen creates a separate Space,
