@@ -45,6 +45,7 @@
     "./deckhand/historyImportRpc": "./src/deckhand/historyImportRpc.ts",
     "./deckhand/ownershipRpc": "./src/deckhand/ownershipRpc.ts",
     "./deckhand/externalDebugRpc": "./src/deckhand/externalDebugRpc.ts",
+    "./deckhand/computerUse": "./src/deckhand/computerUse.ts",
     "./deckhand/externalAppPreferences": "./src/deckhand/externalAppPreferences.ts",
     "./deckhand/excelPerformance": "./src/deckhand/excelPerformance.ts",
     "./deckhand/externalDebugInput": "./src/deckhand/externalDebugInput.ts",

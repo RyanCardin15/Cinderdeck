@@ -91,6 +91,14 @@ Advance `after` using `nextSequence`; each read holds at most 100 events. Pass t
 
 An explicit loopback HTTP endpoint selects the separate CDP adapter for a Chromium runtime. CDP supports `sources`, `source`, `evaluate`, breakpoints, and pause/resume/stepping. Expressions execute in the live app and can change its data. See [Mac external app setup](external-apps.md).
 
+## Native Mac computer use
+
+The conversation MCP server exposes `computer_*` tools for indexed app state,
+background actions and batched JavaScript. Start with `computer_list_apps` and
+`computer_get_app_state`; prefer element indexes and verify after acting. Use
+`includeScreenshot:false` for text checks. See [Computer use for agents](../../../docs/COMPUTER_USE.md)
+for the complete workflow, permission requirements and fixture checks.
+
 ## Move the current conversation to a lane
 
 `t3_worktree_handoff({branch, continuationPrompt})` creates a Cinderdeck lane for a primary-checkout conversation and transfers the same chat. It updates the thread directory and managed binding atomically, so agent lists, services, preview/capture controls and subsequent provider turns use the lane. The primary checkout is eligible even though its chat has a saved working directory. `t3_worktree_status` distinguishes primary checkout from lane and reads the live branch when available.
