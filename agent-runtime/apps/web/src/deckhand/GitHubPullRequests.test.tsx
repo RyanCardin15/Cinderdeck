@@ -31,6 +31,7 @@ vi.mock("./NativeToolsSettings", () => ({
 }));
 import { GitHubPullRequestInspector } from "./GitHubPullRequestInspector";
 import { GitHubPullRequests } from "./GitHubPullRequests";
+import { resetGitHubWorkspaceCache } from "./useGitHubWorkspace";
 let root: Root;
 let container: HTMLDivElement;
 let preferences: GitHubWorkspacePreferences;
@@ -69,6 +70,7 @@ const request = {
   commits: { nodes: [] },
 };
 beforeEach(() => {
+  resetGitHubWorkspaceCache();
   boundary.phase = "connected";
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.useFakeTimers();
