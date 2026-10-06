@@ -1,5 +1,7 @@
 # Working in a Cinderdeck workspace
 
+**Settings → Workspaces** lists each source workspace once. Expand **Folders & files** to inspect its primary checkout, or **Lanes** to see its parallel checkouts and branches. **Workspace settings** edits the parent workspace; **Manage lanes** opens its lane map, and each lane's **Open** link selects that exact checkout. Workspace pages count only source workspaces, while expanded lane lists paginate independently. Disconnected lists remain visible as last observed, with editing and lane navigation unavailable until refreshed.
+
 Use the **gear beside the plus and star** in the sidebar to open that workspace's settings. A lane's gear opens its source workspace settings; it does not edit a lane snapshot. **Workspace settings** also appears in the workspace and conversation headers. Settings manage folders, files, lane defaults and the workspace definition. These native tools are available on the workspace's own Mac.
 
 Use **Switch branch…** in the workspace or conversation header to open the native branch picker for the selected workspace or lane. It shows the repositories affected and uses the existing changes review and service checks. The branch control in a conversation also supports switching and creating branches; its tooltip says **Switch branch**. Use lanes when you want separate working folders for parallel branches.
