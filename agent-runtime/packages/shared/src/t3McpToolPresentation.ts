@@ -167,6 +167,35 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
     "browser",
     "browser",
   ),
+  computer_list_apps: tool(["List", "Listing", "Listed", "Mac apps"], "browser", "device"),
+  computer_get_app_state: tool(["Read", "Reading", "Read", "a Mac app"], "browser", "device"),
+  computer_click: tool(["Click", "Clicking", "Clicked", "in a Mac app"], "browser", "device"),
+  computer_type_text: tool(["Type", "Typing", "Typed", "in a Mac app"], "browser", "device"),
+  computer_press_key: tool(
+    ["Press", "Pressing", "Pressed", "a key in a Mac app"],
+    "browser",
+    "device",
+  ),
+  computer_scroll: tool(["Scroll", "Scrolling", "Scrolled", "a Mac app"], "browser", "device"),
+  computer_set_value: tool(["Set", "Setting", "Set", "a value in a Mac app"], "browser", "device"),
+  computer_select_text: tool(
+    ["Select", "Selecting", "Selected", "text in a Mac app"],
+    "browser",
+    "device",
+  ),
+  computer_perform_secondary_action: tool(
+    ["Run", "Running", "Ran", "an action in a Mac app"],
+    "browser",
+    "device",
+  ),
+  computer_drag: tool(["Drag", "Dragging", "Dragged", "in a Mac app"], "browser", "device"),
+  computer_paste: tool(["Paste", "Pasting", "Pasted", "into a Mac app"], "browser", "device"),
+  computer_activate_app: tool(
+    ["Bring", "Bringing", "Brought", "a Mac app forward"],
+    "browser",
+    "device",
+  ),
+  computer_script: tool(["Run", "Running", "Ran", "computer use"], "browser", "device"),
   deckhand_evidence_read: tool(["Read", "Reading", "Read", "evidence bytes"], "attachment-prepare"),
   deckhand_recording_windows: tool(
     ["List", "Listing", "Listed", "capture windows"],
@@ -407,7 +436,10 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
   t3_thread_search: tool(["Search", "Searching", "Searched", "thread content"], "thread-search"),
   t3_thread_transfers: tool(["Read", "Reading", "Read", "thread transfers"], "thread-transfers"),
   t3_thread_organize: tool(["Organize", "Organizing", "Organized", "a thread"], "thread-organize"),
-  t3_thread_update: tool(["Update", "Updating", "Updated", "Cinderdeck thread metadata"], "thread-update"),
+  t3_thread_update: tool(
+    ["Update", "Updating", "Updated", "Cinderdeck thread metadata"],
+    "thread-update",
+  ),
   t3_worktree_list: tool(["List", "Listing", "Listed", "workspace branches"], "worktree-list"),
   t3_preview_list: tool(["List", "Listing", "Listed", "preview tabs"], "browser", "browser"),
   t3_preview_close: tool(["Close", "Closing", "Closed", "a preview tab"], "browser", "browser"),
@@ -468,13 +500,17 @@ function resolveT3McpToolName(value: string): string | null {
   }
 
   const namespaceMatch =
-    /^(?<server>cinderdeck(?:[-_]code)?|t3-code|t3_code|t3code|deckhand)(?:[.:/]|\s*·\s*)(?<tool>.+)$/i.exec(label);
+    /^(?<server>cinderdeck(?:[-_]code)?|t3-code|t3_code|t3code|deckhand)(?:[.:/]|\s*·\s*)(?<tool>.+)$/i.exec(
+      label,
+    );
   if (namespaceMatch?.groups) {
     return namespaceMatch.groups.tool ?? null;
   }
 
   const prefixed =
-    /^(?:mcp[-_]{1,2})?(?:cinderdeck(?:[-_ ]code)?|deckhand|t3[-_ ]?code)(?:__|[-_.:/ ])(?<tool>.+)$/i.exec(label);
+    /^(?:mcp[-_]{1,2})?(?:cinderdeck(?:[-_ ]code)?|deckhand|t3[-_ ]?code)(?:__|[-_.:/ ])(?<tool>.+)$/i.exec(
+      label,
+    );
   const candidate = prefixed?.groups?.tool ?? label;
   return Object.hasOwn(T3_MCP_TOOLS, candidate) ? candidate : null;
 }

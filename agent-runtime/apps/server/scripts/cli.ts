@@ -96,6 +96,16 @@ const buildCmd = Command.make(
             { cwd: repoRoot, stdout: "inherit", stderr: "inherit", shell: false },
           ),
         );
+        yield* runCommand(
+          ChildProcess.make(
+            process.execPath,
+            [
+              path.join(repoRoot, "scripts/deckhand/build-mac-computer-use.mjs"),
+              path.join(serverDir, "dist/native/deckhand-mac-computer-use"),
+            ],
+            { cwd: repoRoot, stdout: "inherit", stderr: "inherit", shell: false },
+          ),
+        );
       }
 
       const webDist = path.join(repoRoot, "apps/web/dist");

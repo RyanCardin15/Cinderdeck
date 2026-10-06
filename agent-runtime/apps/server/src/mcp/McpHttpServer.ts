@@ -5,6 +5,14 @@ import {
 } from "./toolkits/deckhand/externalDebug.ts";
 import * as ExternalDebugService from "../deckhand/ExternalDebug.ts";
 import { externalDebugMcpResult } from "../deckhand/ExternalDebugMcpResult.ts";
+import {
+  ComputerUseHandlersLive,
+  ComputerUseStandardToolkit,
+  ComputerUseToolkit,
+  computerScriptMcpResult,
+  computerStateMcpResult,
+} from "./toolkits/computerUse/tools.ts";
+import * as ComputerUseService from "../deckhand/ComputerUse.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as NodeCrypto from "node:crypto";
 import * as Cause from "effect/Cause";
@@ -684,6 +692,42 @@ const registerExternalDebugRead = Effect.fn("McpHttpServer.registerExternalDebug
   },
 );
 
+// The app state and script results carry screenshots, so they are registered as image tools.
+const registerComputerUseImageTools = Effect.fn("McpHttpServer.registerComputerUseImageTools")(
+  function* () {
+    const service = yield* ComputerUseService.ComputerUse;
+    const threads = yield* ThreadManagementService.ThreadManagementService;
+    const built = yield* ComputerUseToolkit;
+    const provide = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+      effect.pipe(
+        Effect.provideService(ComputerUseService.ComputerUse, service),
+        Effect.provideService(ThreadManagementService.ThreadManagementService, threads),
+      );
+    yield* registerImageTool(
+      ComputerUseToolkit.tools.computer_get_app_state,
+      (payload) =>
+        built
+          .handle("computer_get_app_state", payload)
+          .pipe(Stream.unwrap, Stream.run(Sink.last()), Effect.flatMap(Effect.fromOption)),
+      provide,
+      "state",
+      "Computer use could not read the app.",
+      computerStateMcpResult,
+    );
+    yield* registerImageTool(
+      ComputerUseToolkit.tools.computer_script,
+      (payload) =>
+        built
+          .handle("computer_script", payload)
+          .pipe(Stream.unwrap, Stream.run(Sink.last()), Effect.flatMap(Effect.fromOption)),
+      provide,
+      "script",
+      "The computer-use script could not run.",
+      computerScriptMcpResult,
+    );
+  },
+);
+
 const PreviewStandardToolkitRegistrationLive = McpServer.toolkit(PreviewStandardToolkit).pipe(
   Layer.provide(PreviewStandardToolkitHandlersLive),
 );
@@ -814,6 +858,10 @@ export const layer = Layer.mergeAll(
     McpServer.toolkit(ExternalDebugStandardToolkit),
     Layer.effectDiscard(registerExternalDebugRead()),
   ).pipe(Layer.provide(ExternalDebugHandlersLive)),
+  Layer.mergeAll(
+    McpServer.toolkit(ComputerUseStandardToolkit),
+    Layer.effectDiscard(registerComputerUseImageTools()),
+  ).pipe(Layer.provide(ComputerUseHandlersLive), Layer.provide(ComputerUseService.layerLive)),
   DeckhandToolkitRegistrationLive,
   PreviewToolkitRegistrationLive,
   OrchestratorToolkitRegistrationLive,

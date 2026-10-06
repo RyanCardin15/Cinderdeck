@@ -150,6 +150,10 @@ it.effect("production mcp layer lists worktree tools over http", () =>
         "deckhand_excel_benchmark",
       ])
         expect(toolNames).toContain(name);
+      for (const name of ["computer_get_app_state", "computer_script"])
+        expect(tools.filter((tool) => tool.name === name)).toHaveLength(1);
+      for (const name of ["computer_list_apps", "computer_click", "computer_type_text"])
+        expect(toolNames).toContain(name);
       for (const name of [
         "deckhand_external_session_register",
         "deckhand_external_session_heartbeat",

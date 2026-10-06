@@ -135,3 +135,5 @@ flowchart TD
 - Settings → Advanced exports and imports portable TOML preferences at `~/.config/cinderdeck/config.toml`; folder access is granted once (onboarding config step or Settings → Advanced), background sync is debounced and signature-guarded, and valid direct edits apply on next launch. Details in `CONFIGURATION.md`.
 
 If one of these behaviors changes, update this file, the owning feature doc, [`STRUCTURE.md`](STRUCTURE.md), and the root [`README.md`](../README.md) in the same change.
+
+- [Computer use for agents](COMPUTER_USE.md) — App state, actions, batching, permissions and native fixture checks.

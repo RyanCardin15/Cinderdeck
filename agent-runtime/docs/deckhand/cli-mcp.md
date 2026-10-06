@@ -90,3 +90,11 @@ MCP reads deliver screenshots as JPEG image blocks, keeping base64 out of text a
 Advance `after` using `nextSequence`; each read holds at most 100 events. Pass the returned `imageSequence` as `afterImage` to receive image data only when it changes. `image:null` with the same sequence and `imageUnavailable:false` means the last image is unchanged; discard it on disconnection or unavailable status. Always detach when finished. Debugger previews are transient diagnostics, separate from saved recordings and build evidence.
 
 An explicit loopback HTTP endpoint selects the separate CDP adapter for a Chromium runtime. CDP supports `sources`, `source`, `evaluate`, breakpoints, and pause/resume/stepping. Expressions execute in the live app and can change its data. See [Mac external app setup](external-apps.md).
+
+## Native Mac computer use
+
+The conversation MCP server exposes `computer_*` tools for indexed app state,
+background actions and batched JavaScript. Start with `computer_list_apps` and
+`computer_get_app_state`; prefer element indexes and verify after acting. Use
+`includeScreenshot:false` for text checks. See [Computer use for agents](../../../docs/COMPUTER_USE.md)
+for the complete workflow, permission requirements and fixture checks.
