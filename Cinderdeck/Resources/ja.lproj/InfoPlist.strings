@@ -1,3 +1,5 @@
 "NSMicrophoneUsageDescription" = "Cinderdeck では、音声入力と画面録画の音声のためにマイクへのアクセスが必要です。";
 "NSCameraUsageDescription" = "Cinderdeck では、画面録画にカメラ映像を追加するためにカメラへのアクセスが必要です。";
 "NSScreenCaptureUsageDescription" = "Cinderdeck では、スクリーンショットをキャプチャして画面を記録するには、画面収録とシステムオーディオ録音への許可が必要です。";
+
+"NSSpeechRecognitionUsageDescription" = "CinderdeckはAppleの音声認識を使用して音声をテキストに変換します。オンデバイス認識を無効にすると、音声がAppleに送信される場合があります。";

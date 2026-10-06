@@ -1,3 +1,5 @@
 "NSMicrophoneUsageDescription" = "Cinderdeck 需要麥克風存取權，以進行聽寫和錄製螢幕錄製中的音訊。";
 "NSCameraUsageDescription" = "Cinderdeck 需要相機存取權才能在螢幕錄製中加入相機畫面。";
 "NSScreenCaptureUsageDescription" = "Cinderdeck 需要螢幕錄製權限才能擷取螢幕截圖並錄製螢幕。";
+
+"NSSpeechRecognitionUsageDescription" = "Cinderdeck 使用 Apple 語音辨識將聽寫轉換為文字。關閉裝置端辨識後，音訊可能會傳送給 Apple。";

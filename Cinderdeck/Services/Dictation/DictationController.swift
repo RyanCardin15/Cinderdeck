@@ -19,6 +19,7 @@ final class DictationController: NSObject, ObservableObject, AVAudioRecorderDele
   private var requestID: String?
   private var target: DictationInsertionTarget?
   private var testing = false
+  private var sessionConfiguration: DictationConfiguration?
   private var panel: NSPanel?
   private let defaults: UserDefaults
   private let keychain = DictationKeychain()
@@ -31,9 +32,9 @@ final class DictationController: NSObject, ObservableObject, AVAudioRecorderDele
   nonisolated deinit {}
 
   func save(_ configuration: DictationConfiguration, key: String?) throws {
-    _ = try configuration.validatedURL()
+    try configuration.validate()
     let data = try JSONEncoder().encode(configuration)
-    if let key { try keychain.save(key) }
+    if configuration.provider == .service, let key { try keychain.save(key) }
     defaults.set(data, forKey: "dictation.configuration")
     self.configuration = configuration
     DictationShortcutMonitor.shared.restart()
@@ -52,11 +53,18 @@ final class DictationController: NSObject, ObservableObject, AVAudioRecorderDele
     update("preparing", "Preparing microphone…")
     showPanel()
     let configuration = configuration
+    sessionConfiguration = configuration
     task = Task {
       do {
-        _ = try configuration.validatedURL()
-        let key = configuration.authentication == .none ? "" : try keychain.read()
-        guard configuration.authentication == .none || !key.isEmpty else { throw DictationError.message("Add your API key in Settings → Dictation first.") }
+        try configuration.validate()
+        if configuration.provider == .macOS {
+          try await NativeDictationTranscriber.authorize()
+          guard self.token == token, !Task.isCancelled else { return }
+          try NativeDictationTranscriber.checkAvailability(configuration: configuration)
+        } else {
+          let key = configuration.authentication == .none ? "" : try keychain.read()
+          guard configuration.authentication == .none || !key.isEmpty else { throw DictationError.message("Add your API key in Settings → Dictation first.") }
+        }
         let granted = await AVCaptureDevice.requestAccess(for: .audio)
         guard self.token == token, !Task.isCancelled else { return }
         guard granted else { throw DictationError.message("Allow Cinderdeck microphone access in System Settings → Privacy & Security → Microphone.") }
@@ -72,7 +80,7 @@ final class DictationController: NSObject, ObservableObject, AVAudioRecorderDele
         self.recorder = recorder
         update("recording", "Listening… Release your shortcut or press Stop.")
         timeout = Task { [weak self] in
-          try? await Task.sleep(for: .seconds(300))
+          try? await Task.sleep(for: .seconds(configuration.recordingLimit))
           guard !Task.isCancelled, self?.token == token else { return }
           self?.finish()
         }
@@ -90,11 +98,16 @@ final class DictationController: NSObject, ObservableObject, AVAudioRecorderDele
     recorder?.stop(); recorder = nil; timeout?.cancel(); timeout = nil
     guard duration >= 0.25 else { cancel(); return }
     update("transcribing", "Transcribing…")
-    let configuration = configuration
+    let configuration = sessionConfiguration ?? configuration
     task = Task {
       do {
-        let key = configuration.authentication == .none ? "" : try keychain.read()
-        let text = try await DictationTranscriber.transcribe(configuration: configuration, key: key, file: file)
+        let text: String
+        if configuration.provider == .macOS {
+          text = try await NativeDictationTranscriber().transcribe(configuration: configuration, file: file)
+        } else {
+          let key = configuration.authentication == .none ? "" : try keychain.read()
+          text = try await DictationTranscriber.transcribe(configuration: configuration, key: key, file: file)
+        }
         guard self.token == token, !Task.isCancelled else { return }
         transcript = text
         cleanupAudio()

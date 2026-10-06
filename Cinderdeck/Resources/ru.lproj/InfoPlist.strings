@@ -1,3 +1,5 @@
 "NSMicrophoneUsageDescription" = "Cinderdeck требуется доступ к микрофону для диктовки и записи звука при записи экрана.";
 "NSCameraUsageDescription" = "Cinderdeck требуется доступ к камере, чтобы добавить изображение с камеры к записи экрана.";
 "NSScreenCaptureUsageDescription" = "Cinderdeck требуется разрешение на запись экрана, чтобы делать снимки экрана и записывать ваш экран.";
+
+"NSSpeechRecognitionUsageDescription" = "Cinderdeck использует распознавание речи Apple для преобразования диктовки в текст. Если распознавание на устройстве отключено, аудио может отправляться в Apple.";

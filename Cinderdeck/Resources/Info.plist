@@ -45,6 +45,8 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Cinderdeck uses Apple speech recognition to turn your dictated speech into text. Audio may be sent to Apple when on-device recognition is disabled.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Cinderdeck needs microphone access for dictation and audio in screen recordings.</string>
 	<key>NSCameraUsageDescription</key>
