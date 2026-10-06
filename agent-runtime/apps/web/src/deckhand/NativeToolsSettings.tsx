@@ -4,6 +4,7 @@ import type { NativeToolRequest } from "@cinderdeck/contracts";
 import {
   ArrowUpRightIcon,
   CameraIcon,
+  MicIcon,
   CheckCheckIcon,
   ClockIcon,
   FileImageIcon,
@@ -169,6 +170,12 @@ export function NativeToolsMenu({ className }: { className?: string | undefined 
 }
 
 const preferences = [
+  {
+    mode: "dictation",
+    title: "Dictation",
+    description: "Microphone, transcription service and hold-to-talk shortcut",
+    Icon: MicIcon,
+  },
   {
     mode: "capture",
     title: "Capture",

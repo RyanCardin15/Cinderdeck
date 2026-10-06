@@ -1,5 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off -- The native owner exchanges bounded messages over inherited pipes.
 import * as Electron from "electron";
+import { isDictationCommand, parseDictationEvent } from "./dictationProtocol.ts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import type { NativeHostRoute, NativeToolRequest } from "@cinderdeck/contracts";
@@ -143,6 +144,15 @@ export const install = Effect.gen(function* () {
         void run(desktop.ensureMain).catch(() => undefined);
         continue;
       }
+      if (value.type === "dictation") {
+        const event = parseDictationEvent(value);
+        if (event)
+          void main().then((window) => {
+            if (window && !window.isDestroyed())
+              window.webContents.send("cinderdeck:dictation-event", event);
+          });
+        continue;
+      }
       if (
         value.type !== "route" ||
         !Object.keys(value).every((key) => ["type", "workspaceID", "section"].includes(key)) ||
@@ -165,6 +175,12 @@ export const install = Effect.gen(function* () {
     return true;
   });
 
+  Electron.ipcMain.handle("cinderdeck:dictation", async (event, value: unknown) => {
+    if (!(await trusted(event)) || !isDictationCommand(value)) return false;
+    process.stdout.write("CINDERDECK_RUNTIME_DICTATION " + JSON.stringify(value) + "\n");
+    return true;
+  });
+
   process.stdin.setEncoding("utf8");
   process.stdin.on("data", onInput);
   process.stdin.on("end", quit);
@@ -175,6 +191,7 @@ export const install = Effect.gen(function* () {
       Electron.ipcMain.removeListener(NATIVE_HOST_READY_CHANNEL, readyListener);
 
       Electron.ipcMain.removeHandler(NATIVE_TOOL_CHANNEL);
+      Electron.ipcMain.removeHandler("cinderdeck:dictation");
       process.stdin.removeListener("data", onInput);
       process.stdin.removeListener("end", quit);
       process.stdin.pause();

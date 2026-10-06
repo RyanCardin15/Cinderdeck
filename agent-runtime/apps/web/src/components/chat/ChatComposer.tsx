@@ -1,3 +1,4 @@
+import { DictationButton } from "./DictationButton";
 import { DESKTOP_PASTE_AS_TEXT_EVENT } from "../../lib/desktopPasteAsText";
 import { runtimeModeConfig, runtimeModeOptions as runtimeModes } from "./runtimeModeConfig";
 import { isLocalEnvironmentDisabled } from "../../localEnvironment";
@@ -1681,6 +1682,11 @@ export interface ChatComposerProps {
 // --------------------------------------------------------------------------
 
 export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps) {
+  const dictationAvailable =
+    typeof window !== "undefined" &&
+    window.desktopBridge?.isNativeHost?.() === true &&
+    typeof window.desktopBridge?.dictation === "function" &&
+    typeof window.desktopBridge?.onDictation === "function";
   const {
     composerDraftTarget,
     environmentId,
@@ -7253,10 +7259,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   isComposerResting &&
                     ((settings.contextWindowMeterEnabled && activeContextWindow) ||
                     reserveContextWindowMeter
-                      ? "pr-28"
+                      ? dictationAvailable
+                        ? "pr-48"
+                        : "pr-28"
                       : showComposerAttachAction
-                        ? "pr-20"
-                        : "pr-12"),
+                        ? dictationAvailable
+                          ? "pr-40"
+                          : "pr-20"
+                        : dictationAvailable
+                          ? "pr-32"
+                          : "pr-12"),
                 )}
               >
                 {previewFile ? (
@@ -7478,6 +7490,19 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       </Tooltip>
                     </>
                   ) : null}
+                  <DictationButton
+                    key={`${environmentId}:${activeThreadId ?? draftId}:${activePendingProgress?.activeQuestion?.id ?? "draft"}`}
+                    draft={activePendingProgress ? activePendingProgress.customAnswer : prompt}
+                    insert={(text, expected) => {
+                      if (promptRef.current !== expected) return false;
+                      const end = promptRef.current.length;
+                      return applyPromptReplacement(
+                        end,
+                        end,
+                        `${end && !/\s$/.test(promptRef.current) ? " " : ""}${text}`,
+                      );
+                    }}
+                  />
                   <ComposerFooterPrimaryActions
                     compact={isComposerResting || isComposerPrimaryActionsCompact}
                     activeContextWindow={

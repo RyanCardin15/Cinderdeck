@@ -40,8 +40,13 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Cinderdeck needs microphone access to record audio with your screen recordings.</string>
+	<string>Cinderdeck needs microphone access for dictation and audio in screen recordings.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Cinderdeck needs camera access to add a camera overlay to your screen recordings.</string>
 	<key>NSCameraUseContinuityCameraDeviceType</key>

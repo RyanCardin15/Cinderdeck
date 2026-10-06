@@ -51,6 +51,8 @@ jobs:
           apps/web/src/deckhand/ExternalAppPanel.test.tsx
           apps/desktop/src/app/DesktopAssets.test.ts
           apps/desktop/src/app/DesktopEnvironment.test.ts
+          apps/desktop/src/cinderdeck/dictationProtocol.test.ts
+          apps/web/src/components/chat/DictationButton.test.tsx
           apps/web/src/components/desktopUpdate.logic.test.ts
           apps/web/src/deckhand/ProductNavigation.test.tsx
           apps/web/src/deckhand/connectedWorkspaceNavigation.test.tsx

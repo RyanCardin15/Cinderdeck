@@ -70,6 +70,7 @@ final class AppCoordinator {
     RecordingMetadataCleanupScheduler.shared.start()
     CaptureHistoryRetentionService.shared.start()
     ClipboardTextHistoryStore.shared.start()
+    DictationShortcutMonitor.shared.restart()
     ReproRecorder.shared.start()
     ReproRecorder.shared.onSaved = { session in
       // Agent and Workspaces recordings confirm through their own controls.
@@ -114,6 +115,8 @@ final class AppCoordinator {
     RecordingMetadataCleanupScheduler.shared.stop()
     CinderdeckConfigurationSyncCoordinator.shared.stop()
     ClipboardTextHistoryStore.shared.stop()
+    DictationShortcutMonitor.shared.stop()
+    DictationController.shared.cancel()
     CinderdeckRuntimeController.shared.closeInputOnTermination()
     StackControlService.shared.stop()
 
