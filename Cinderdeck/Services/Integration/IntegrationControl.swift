@@ -43,7 +43,7 @@ nonisolated struct IntegrationHello: Encodable, Sendable {
   let executionHostID: String
   let channel: String
   let runtimeEpoch: String
-  let capabilities = ["github.workspace", "projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.adopt", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.contexts", "recordings.library", "runs.library", "runs.detail", "runs.failures", "builds.declared", "linked-work.projection"]
+  let capabilities = ["github.workspace", "projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.adopt", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.contexts", "recordings.library", "runs.library", "runs.detail", "runs.failures", "builds.declared", "linked-work.projection", "agents.setup"]
   let maximumFrameBytes = StackControlSocketServer.maximumFrameBytes
   let maximumPageSize = 500
   let maximumWaitMs = 25_000
@@ -74,6 +74,7 @@ extension StackControlService {
   func handleIntegration(_ method: String, params: JSONValue, actor: StackActor) async throws -> JSONValue {
     if method.hasPrefix("integration.build.") { return try await handleIntegrationBuild(method, params: params, actor: actor) }
     if method.hasPrefix("integration.linked-work.") { return try await handleIntegrationLinkedWork(method, params: params, actor: actor) }
+    if method.hasPrefix("integration.agents.") { return try await handleIntegrationAgents(method, params: params) }
     if method == "integration.checkout.contexts" { return try await lookupCheckoutContexts(params) }
     if method.hasPrefix("integration.runs.") { return try await handleIntegrationRuns(method, params: params, actor: actor) }
     if method.hasPrefix("integration.recording.") { return try await handleIntegrationRecording(method, params: params, actor: actor) }

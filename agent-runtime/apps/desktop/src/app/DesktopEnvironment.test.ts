@@ -103,7 +103,7 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.serverRoot, "/repo");
       assert.equal(environment.backendEntryPath, "/repo/apps/server/dist/bin.mjs");
       assert.equal(environment.backendCwd, "/repo");
-      assert.equal(environment.appUserModelId, "com.ryancardin.cinderdeck.agentshell.dev");
+      assert.equal(environment.appUserModelId, "com.ryancardin.cinderdeck.runtime.dev");
       assert.equal(environment.linuxWmClass, "deckhand-dev");
       assert.equal(
         environment.linuxDesktopEntryName,
@@ -202,12 +202,12 @@ describe("DesktopEnvironment", () => {
       const environment = yield* makeEnvironment(
         {},
         {
-          DECKHAND_DESKTOP_APP_USER_MODEL_ID: " com.ryancardin.cinderdeck.agentshell.dev.local ",
+          DECKHAND_DESKTOP_APP_USER_MODEL_ID: " com.ryancardin.cinderdeck.runtime.dev.local ",
           VITE_DEV_SERVER_URL: "http://localhost:5173",
         },
       );
 
-      assert.equal(environment.appUserModelId, "com.ryancardin.cinderdeck.agentshell.dev.local");
+      assert.equal(environment.appUserModelId, "com.ryancardin.cinderdeck.runtime.dev.local");
     }),
   );
 

@@ -1,4 +1,5 @@
 import * as GitHubWorkspace from "./deckhand/GitHubWorkspace.ts";
+import * as AgentAccess from "./deckhand/AgentAccess.ts";
 import { GITHUB_WORKSPACE_METHOD } from "@cinderdeck/contracts/deckhand/gitHubWorkspace";
 import * as ActorAccess from "./deckhand/ActorAccess.ts";
 import * as OwnershipTransitions from "./deckhand/OwnershipTransitions.ts";
@@ -220,6 +221,7 @@ import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServerSettings from "./serverSettings.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
+import { openThreadSessionTerminal } from "./terminal/ThreadSessionTerminal.ts";
 import { withTerminalOutputWindow } from "./terminal/OutputProtocol.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import * as DeviceService from "./device/DeviceService.ts";
@@ -251,7 +253,7 @@ import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
-import { requiredScopeForRpcMethod, requiredScopeForDeviceList, requiredScopeForGitHubWorkspace } from "./auth/RpcAuthorization.ts";
+import { requiredScopeForRpcMethod, requiredScopeForDeviceList, requiredScopeForGitHubWorkspace, requiredScopeForAgentAccess } from "./auth/RpcAuthorization.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
@@ -1159,6 +1161,7 @@ const makeWsRpcLayer = (
         );
       const deckhand = yield* IntegrationHub.IntegrationHub;
       const githubWorkspace = yield* GitHubWorkspace.GitHubWorkspace;
+      const agentAccess = yield* AgentAccess.AgentAccess;
       const workspaceBackend = yield* WorkspaceBackend.WorkspaceBackend;
       const managedSessions = yield* ManagedSessions.ManagedSessions;
       const recordings = yield* DeckhandRecordings.Recordings;
@@ -1837,6 +1840,7 @@ const makeWsRpcLayer = (
 
       const deckhandHandlers = DeckhandRpc.DeckhandRpcGroup.of({
         [GITHUB_WORKSPACE_METHOD]: (input) => observeRpcEffect(GITHUB_WORKSPACE_METHOD, authorizeEffect(requiredScopeForGitHubWorkspace(input), githubWorkspace.request(input))),
+        [DeckhandRpc.AGENT_ACCESS_METHOD]: (input) => observeRpcEffect(DeckhandRpc.AGENT_ACCESS_METHOD, authorizeEffect(requiredScopeForAgentAccess(input), agentAccess.request(input))),
         [OWNERSHIP_METHODS.preview]: (input) =>
           observeRpcEffect(
             OWNERSHIP_METHODS.preview,
@@ -1939,6 +1943,43 @@ const makeWsRpcLayer = (
           observeRpcEffect(HISTORY_IMPORT_METHODS.messageText, historyImports.messageText(input)),
         [EXTERNAL_DEBUG_METHODS.discover]: (input) =>
           observeRpcEffect(EXTERNAL_DEBUG_METHODS.discover, externalDebug.discover(input)),
+        [EXTERNAL_DEBUG_METHODS.conflicts]: (input) =>
+          observeRpcEffect(
+            EXTERNAL_DEBUG_METHODS.conflicts,
+            withActor(
+              input.threadId ? { type: "thread", threadId: input.threadId } : undefined,
+              (actor) =>
+                Effect.gen(function* () {
+                  const conflicts = yield* externalDebug.conflicts(
+                    input.threadId ? ExternalDebug.externalDebugThreadOwner(input.threadId) : actor,
+                    input,
+                  );
+                  const visible = yield* Effect.forEach(conflicts, (conflict) =>
+                    Effect.gen(function* () {
+                      if (!conflict.threadId) return conflict;
+                      const access = yield* actorAccess
+                        .resolve(currentSession, {
+                          type: "thread",
+                          threadId: conflict.threadId,
+                        })
+                        .pipe(Effect.result);
+                      if (access._tag === "Failure") return null;
+                      const shell = yield* threadManagement
+                        .getThreadShell(conflict.threadId)
+                        .pipe(Effect.result);
+                      return {
+                        ...conflict,
+                        ...(shell._tag === "Success" && shell.success
+                          ? { threadTitle: shell.success.title }
+                          : {}),
+                      };
+                    }),
+                  );
+                  return visible.filter((conflict) => conflict !== null);
+                }),
+              () => new ExternalDebugError({ reason: "unavailable" }),
+            ),
+          ),
         [EXTERNAL_DEBUG_METHODS.sessions]: (input) =>
           observeRpcEffect(
             EXTERNAL_DEBUG_METHODS.sessions,
@@ -2010,6 +2051,32 @@ const makeWsRpcLayer = (
               input.threadId ? { type: "thread", threadId: input.threadId } : undefined,
               (actor) =>
                 externalDebug.detach(
+                  input.threadId ? ExternalDebug.externalDebugThreadOwner(input.threadId) : actor,
+                  input,
+                ),
+              () => new ExternalDebugError({ reason: "unavailable" }),
+            ),
+          ),
+        [EXTERNAL_DEBUG_METHODS.probe]: (input) =>
+          observeRpcEffect(
+            EXTERNAL_DEBUG_METHODS.probe,
+            withActor(
+              input.threadId ? { type: "thread", threadId: input.threadId } : undefined,
+              (actor) =>
+                externalDebug.probe(
+                  input.threadId ? ExternalDebug.externalDebugThreadOwner(input.threadId) : actor,
+                  input,
+                ),
+              () => new ExternalDebugError({ reason: "unavailable" }),
+            ),
+          ),
+        [EXTERNAL_DEBUG_METHODS.benchmark]: (input) =>
+          observeRpcEffect(
+            EXTERNAL_DEBUG_METHODS.benchmark,
+            withActor(
+              input.threadId ? { type: "thread", threadId: input.threadId } : undefined,
+              (actor) =>
+                externalDebug.benchmark(
                   input.threadId ? ExternalDebug.externalDebugThreadOwner(input.threadId) : actor,
                   input,
                 ),
@@ -4525,6 +4592,12 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.terminalClose, terminalManager.close(input), {
             "rpc.aggregate": "terminal",
           }),
+        [WS_METHODS.terminalOpenThreadSession]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.terminalOpenThreadSession,
+            openThreadSessionTerminal({ threadManagement, projectService, serverSettings }, input),
+            { "rpc.aggregate": "terminal" },
+          ),
         [WS_METHODS.subscribeTerminalEvents]: (_input) =>
           observeRpcStream(
             WS_METHODS.subscribeTerminalEvents,

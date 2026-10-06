@@ -2,7 +2,7 @@
 //  CinderdeckApp.swift
 //  Cinderdeck
 //
-//  Main app entry point - Menu Bar App
+//  Main application entry point
 //
 
 import AppKit
@@ -104,6 +104,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       return
     }
 
+    NSApp.setActivationPolicy(.regular)
+
     #if DEBUG
     if CommandLine.arguments.contains("--github-preferences-preview") {
       PreferencesWindowController.shared.show(tab: .github)
@@ -152,25 +154,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
     guard didFinishLaunching else { return .terminateNow }
     return StackQuitCoordinator.shouldTerminate(sender, beforeTermination: {
-      await AgentShellController.shared.stopForTermination()
+      await CinderdeckRuntimeController.shared.stopForTermination()
     })
   }
 
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
     guard didFinishLaunching else { return true }
-    if AgentShellController.shared.configured {
-      if AgentShellController.shared.running {
-        AgentShellController.shared.activateOwnedWindow()
+    if CinderdeckRuntimeController.shared.configured {
+      if CinderdeckRuntimeController.shared.running {
+        CinderdeckRuntimeController.shared.activateOwnedWindow()
       } else {
         WorkspaceWindowController.shared.show()
       }
       return false
     }
-    let showsMenuBarIcon = UserDefaults.standard.object(forKey: PreferencesKeys.showMenuBarIcon) as? Bool ?? true
-    guard !showsMenuBarIcon else { return true }
-
-    AppStatusBarController.shared.openPreferencesWindow(tab: .general)
+    WorkspaceWindowController.shared.show()
     return false
+  }
+
+  func applicationDidBecomeActive(_ notification: Notification) {
+    guard didFinishLaunching else { return }
+    // Dock and app-switcher activation target the native host. Keep auxiliary
+    // native tools in focus when they are open; otherwise reveal the main window.
+    let hasNativeWindow = NSApp.windows.contains {
+      $0.isVisible && $0.level == .normal && $0.className != "NSStatusBarWindow"
+    }
+    guard !hasNativeWindow else { return }
+    if CinderdeckRuntimeController.shared.running {
+      CinderdeckRuntimeController.shared.activateOwnedWindow()
+    } else {
+      WorkspaceWindowController.shared.show()
+    }
   }
 
   private enum DatabaseLaunchRecoveryAction {

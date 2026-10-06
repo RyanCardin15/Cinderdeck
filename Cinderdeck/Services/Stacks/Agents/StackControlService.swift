@@ -578,12 +578,16 @@ final class StackControlService: ObservableObject {
       let git = supervisor.gitMonitor.git
       let branches = try await git.branches(at: repo.path)
       let current = try? await git.status(at: repo.path)
-      result[repo.id] = .object([
+      let recent: [String] = (try? await git.recentBranches(at: repo.path)) ?? []
+      let local: [JSONValue] = branches.filter { !$0.isRemote }.map { .string($0.name) }
+      let remote: [JSONValue] = branches.filter(\.isRemote).map { .string($0.displayName) }
+      let entry: [String: JSONValue] = [
         "current": .string(current?.branchLabel ?? ""),
-        "recent": .array(((try? await git.recentBranches(at: repo.path)) ?? []).map(JSONValue.string)),
-        "local": .array(branches.filter { !$0.isRemote }.map { .string($0.name) }),
-        "remote": .array(branches.filter(\.isRemote).map { .string($0.displayName) }),
-      ])
+        "recent": .array(recent.map(JSONValue.string)),
+        "local": .array(local),
+        "remote": .array(remote),
+      ]
+      result[repo.id] = .object(entry)
     }
     return .object(result)
   }

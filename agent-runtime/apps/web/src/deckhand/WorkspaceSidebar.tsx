@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { workspaceChatUnavailableReason } from "@cinderdeck/shared/workspaceChat";
 import { Link } from "@tanstack/react-router";
 import {
   DndContext,
@@ -47,12 +48,7 @@ type Resource = IntegrationView["resources"][number];
 const workspaceGroup = "workspaces";
 const laneGroup = (id: string) => `lanes:${id}`;
 const name = (row: Resource) => row.workspace?.lane?.name ?? row.workspace?.name ?? row.workspaceID;
-const canLaunch = (row: Resource) =>
-  row.available &&
-  !!row.workspace &&
-  !row.workspace.definitionChanged &&
-  !row.workspace.issues.length &&
-  row.workspace.repos.length > 0;
+const canLaunch = (row: Resource) => workspaceChatUnavailableReason(row) === null;
 
 function useSidebarPreferences(key: string) {
   const [preferences, setPreferences] = useState(() => readSidebarPreferences(key));
@@ -500,7 +496,7 @@ function WorkspaceSidebarTree({
           <DialogPopup>
             <DialogTitle>New session in {name(launchTarget)}</DialogTitle>
             <DialogDescription>
-              {launchTarget.workspace?.lane ? "Lane checkout" : "Workspace checkout"} · opens with
+              {launchTarget.workspace?.lane ? "Lane folders" : "Workspace folders"} · opens with
               your chat defaults.
             </DialogDescription>
             <SessionLauncher

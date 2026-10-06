@@ -31,6 +31,8 @@ nonisolated enum StackAgentSkills {
     let summary: String
     let folder: URL
     let fingerprint: String
+    /// The file that marks an installed copy: a skill's SKILL.md, or a plugin's manifest.
+    var entry = "SKILL.md"
   }
 
   enum State: Equatable, Sendable {
@@ -104,7 +106,7 @@ nonisolated enum StackAgentSkills {
     var mine: URL?
     for folder in agent.reads {
       let url = home.appendingPathComponent(folder).appendingPathComponent(skill.name)
-      guard FileManager.default.fileExists(atPath: url.appendingPathComponent("SKILL.md").path) else { continue }
+      guard FileManager.default.fileExists(atPath: url.appendingPathComponent(skill.entry).path) else { continue }
       if let installed = installedFingerprint(url) {
         managed.append(installed == skill.fingerprint ? .current(url) : .outdated(url))
       } else if mine == nil {
@@ -139,7 +141,7 @@ nonisolated enum StackAgentSkills {
       var mine: URL?
       for folder in agent.reads {
         let url = home.appendingPathComponent(folder).appendingPathComponent(skill.name)
-        guard FileManager.default.fileExists(atPath: url.appendingPathComponent("SKILL.md").path) else { continue }
+        guard FileManager.default.fileExists(atPath: url.appendingPathComponent(skill.entry).path) else { continue }
         if installedFingerprint(url) != nil { targets.append(url) } else if mine == nil { mine = url }
       }
       if targets.isEmpty, let mine {

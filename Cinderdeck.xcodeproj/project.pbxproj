@@ -256,7 +256,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -euo pipefail\n# Agent skills from skills/ ship in the app so Agent access can install them.\ndestination=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/AgentSkills\"\nrm -rf \"$destination\"\nmkdir -p \"$destination\"\ncp -R \"${SRCROOT}/skills/\" \"$destination/\"\n";
+			shellScript = "set -euo pipefail\n# Agent skills from skills/ ship in the app so Agent access can install them.\ndestination=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/AgentSkills\"\nrm -rf \"$destination\"\nmkdir -p \"$destination\"\ncp -R \"${SRCROOT}/skills/\" \"$destination/\"\n# The Claude Code mod from mods/claude-code ships the same way, without the engine-written types.\nmod=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ClaudeCodeMod\"\nrm -rf \"$mod\"\nmkdir -p \"$mod\"\ncp -R \"${SRCROOT}/mods/claude-code/\" \"$mod/\"\nrm -rf \"$mod\"/*/.claude-plugin/types\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -427,7 +427,7 @@
 				INFOPLIST_FILE = Cinderdeck/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Cinderdeck Debug";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Ryan Cardin. Open-source acknowledgments included.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -468,7 +468,7 @@
 				INFOPLIST_FILE = Cinderdeck/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Cinderdeck;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Ryan Cardin. Open-source acknowledgments included.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

@@ -16,7 +16,7 @@ enum WorkspaceSection: String, CaseIterable {
   static func initialSection(_ workspace: StackDefinition) -> WorkspaceSection {
     workspace.services.isEmpty && !workspace.tasks.isEmpty ? .tasks : .services
   }
-  var agentShellSection: String {
+  var runtimeSection: String {
     switch self {
     case .services: return "services"
     case .tasks: return "tasks"
@@ -165,10 +165,10 @@ struct WorkspaceView: View {
       }
       Spacer(minLength: 12)
       HStack(spacing: 8) {
-        if AgentShellController.shared.configured {
+        if CinderdeckRuntimeController.shared.configured {
           Button {
-            AgentShellController.shared.show(workspaceID: file.id, section: section.agentShellSection)
-            if AgentShellController.shared.running { onOpenInCinderdeck?() }
+            CinderdeckRuntimeController.shared.show(workspaceID: file.id, section: section.runtimeSection)
+            if CinderdeckRuntimeController.shared.running { onOpenInCinderdeck?() }
           } label: {
             Label("Open in Cinderdeck", systemImage: "macwindow")
           }
@@ -186,7 +186,7 @@ struct WorkspaceView: View {
         Button { model.edit(file) } label: { Image(systemName: "slider.horizontal.3") }
           .help(file.lane == nil ? "Edit workspace" : "Edit source workspace")
           .accessibilityLabel(file.lane == nil ? "Edit workspace" : "Edit source workspace")
-        Button { model.agentsSheet = true } label: { Image(systemName: "sparkles") }
+        Button { AgentAccessNavigation.open { model.agentsSheet = true } } label: { Image(systemName: "sparkles") }
           .help("Connect agents and CLI").accessibilityLabel("Connect agents and CLI")
       }.buttonStyle(DeckButtonStyle())
     }.padding(.bottom, 4)

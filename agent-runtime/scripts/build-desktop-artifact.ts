@@ -54,7 +54,7 @@ import { Command, Flag } from "effect/unstable/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
-const DESKTOP_APP_ID = "com.ryancardin.cinderdeck.agentshell";
+const DESKTOP_APP_ID = "com.ryancardin.cinderdeck.runtime";
 // The native Cinderdeck bundle owns installation, URL registration and updates.
 // Package only its private Chromium agent window.
 const nativeShellBuild = true;
@@ -2703,7 +2703,7 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 }
 
 export function resolveDesktopProductName(version: string): string {
-  if (nativeShellBuild) return "AgentShell";
+  if (nativeShellBuild) return "Cinderdeck";
   if (isDesktopPreviewVersion(version)) return "Cinderdeck (Preview)";
   return resolveDesktopUpdateChannel(version) === "nightly"
     ? "Cinderdeck (Nightly)"
@@ -2730,10 +2730,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   arch?: typeof BuildArch.Type,
 ) {
   const buildConfig: Record<string, unknown> = {
-    appId: nativeShellBuild ? "com.ryancardin.cinderdeck.agentshell" : DESKTOP_APP_ID,
+    appId: nativeShellBuild ? "com.ryancardin.cinderdeck.runtime" : DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
     artifactName: nativeShellBuild
-      ? "AgentShell-${version}-${arch}.${ext}"
+      ? "Cinderdeck-${version}-${arch}.${ext}"
       : "Cinderdeck-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [
@@ -2787,7 +2787,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       category: "public.app-category.developer-tools",
       extendInfo: {
         ...(nativeShellBuild
-          ? { CFBundleName: "AgentShell", CFBundleDisplayName: "Cinderdeck" }
+          ? { CFBundleName: "Cinderdeck", CFBundleDisplayName: "Cinderdeck", LSUIElement: true }
           : {}),
         NSScreenCaptureUsageDescription:
           "Cinderdeck captures the active window when you use the window capture shortcut.",
@@ -3457,7 +3457,7 @@ export class PrivateShellBuildError extends Schema.TaggedError<PrivateShellBuild
 export function privateShellBuildError(options: Pick<ResolvedBuildOptions, "platform" | "target">): string | undefined {
   return options.platform === "mac" && options.target === "dir"
     ? undefined
-    : "Build AgentShell with --platform mac --target dir; package the complete app with scripts/build-unified.sh.";
+    : "Build the Cinderdeck runtime with --platform mac --target dir; package the complete app with scripts/build-unified.sh.";
 }
 
 const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
@@ -4076,7 +4076,7 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
     Flag.optional,
   ),
 }).pipe(
-  Command.withDescription("Build the private Cinderdeck AgentShell bundle."),
+  Command.withDescription("Build the private Cinderdeck runtime bundle."),
   Command.withHandler((input) => Effect.flatMap(resolveBuildOptions(input), buildDesktopArtifact)),
 );
 

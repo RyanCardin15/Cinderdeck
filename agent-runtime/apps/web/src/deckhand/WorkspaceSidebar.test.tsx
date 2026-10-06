@@ -428,7 +428,7 @@ it("opens sessions in the clicked workspace and lane without selecting or expand
   expect(readSidebarPreferences(key).favorites).toEqual([]);
 });
 
-it("prevents new sessions from stale catalogs, unavailable lanes, and changed definitions", async () => {
+it("prevents new sessions from stale catalogs and unavailable lanes while allowing changed service settings", async () => {
   await act(async () =>
     registry.set(native, AsyncResult.success({ ...view, state: "unavailable" })),
   );
@@ -451,7 +451,7 @@ it("prevents new sessions from stale catalogs, unavailable lanes, and changed de
   );
   await render();
   expect(button("New session in alpha").disabled).toBe(false);
-  expect(button("New session in beta").disabled).toBe(true);
+  expect(button("New session in beta").disabled).toBe(false);
   await act(async () => button("Expand lanes for alpha").click());
   expect(button("New session in lane-a").disabled).toBe(true);
 });

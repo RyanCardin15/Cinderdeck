@@ -141,6 +141,7 @@ import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
+import { useThreadSessionTerminal } from "../hooks/useThreadSessionTerminal";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
 import {
@@ -2355,6 +2356,7 @@ export default function Sidebar() {
       );
     },
   });
+  const threadSessionTerminal = useThreadSessionTerminal();
   const { copyToClipboard: copyThreadIdToClipboard } = useCopyToClipboard<{ threadId: ThreadId }>({
     onCopy: ({ threadId }) => {
       toastManager.add({
@@ -4326,6 +4328,8 @@ export default function Sidebar() {
               canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
               isRegeneratingTitle,
               isRunning: !threadRuntimeCanArchive(thread.runtime),
+              canOpenSessionTerminal:
+                thread.activeProviderThreadId !== null && threadSessionTerminal.canOpen(threadRef),
               supports: {
                 settlement: supportsSettlement,
                 autoSettleOptOut: supportsAutoSettleOptOut,
@@ -4463,6 +4467,12 @@ export default function Sidebar() {
           case "copy-thread-id":
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
             return;
+          case "open-session-terminal":
+            await threadSessionTerminal.openInTerminal(threadRef);
+            return;
+          case "copy-resume-command":
+            await threadSessionTerminal.copyResumeCommand(threadRef);
+            return;
           case "archive": {
             if (confirmThreadArchive) {
               const confirmed = await settlePromise(() =>
@@ -4546,6 +4556,7 @@ export default function Sidebar() {
       setProjectScopeKey,
       setThreadAutoSettle,
       startThreadRename,
+      threadSessionTerminal,
       updateThreadMetadata,
       timestampFormat,
     ],

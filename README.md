@@ -55,9 +55,9 @@ cinderdeck repro frame --at first_error           # the video frame at the first
 
 Agents can also record headless Chromium: `cinderdeck repro start --headless http://localhost:3000` launches an isolated browser and automatically saves console errors and failed requests alongside workspace logs. `repro browser` inspects and controls its page; normal stop, frame, and export commands apply. Use `--cdp <http-endpoint>` to attach to an existing browser.
 
-Agents can record exactly one window (`cinderdeck repro windows`, then `--window-id`), record with or without workspace logs (`--no-logs`), and add browser console output to the log (`cinderdeck repro append`). The [`cinderdeck-record-session`](skills/cinderdeck-record-session/SKILL.md) and [`cinderdeck-review-recording`](skills/cinderdeck-review-recording/SKILL.md) skills teach Claude Code, Codex, Cursor, and VS Code Copilot how to do this. Install them for each agent from **Agent access**, or with `cinderdeck skills install --all`. Agents also pick them up automatically in a clone of this repository.
+Agents can record exactly one window (`cinderdeck repro windows`, then `--window-id`), record with or without workspace logs (`--no-logs`), and add browser console output to the log (`cinderdeck repro append`). The [`cinderdeck-record-session`](skills/cinderdeck-record-session/SKILL.md) and [`cinderdeck-review-recording`](skills/cinderdeck-review-recording/SKILL.md) skills teach Claude Code, Codex, Cursor, and VS Code Copilot how to do this. Install them for each agent from **Settings → Integrations → MCP & skills**, or with `cinderdeck skills install --all`. Agents also pick them up automatically in a clone of this repository.
 
-In the agent harness, open **Settings → Integrations → MCP & skills → Set up MCP & skills** to reach Agent access. Harness sessions receive authenticated MCP tools automatically; Agent access installs the bundled skills and registers MCP for external clients. For a remote execution computer, run `cinderdeck setup --all --skills` on that computer. Restart the agent after installation; providers with custom homes need skills in their configured home.
+Open **Settings → Integrations → MCP & skills** in the main window to see, per agent, whether the MCP server is registered and the bundled skills are current, and to connect, install or update them; the sparkles buttons in workspace and pull request windows open the same place. Harness sessions receive authenticated MCP tools automatically. The [Claude Code mod](mods/claude-code/cinderdeck) adds a Cinderdeck status line, a `/cinderdeck` pane with service restarts and logs, crash alerts, and `/cinderdeck logs <service>` to hand recent logs to Claude. For a remote execution computer, the same settings act on that computer, or run `cinderdeck setup --all --skills --mod` there. Restart the agent after installation; providers with custom homes need skills in their configured home.
 
 [Read the recordings guide](docs/REPROS.md).
 
@@ -67,7 +67,7 @@ In the agent harness, open **Settings → Integrations → MCP & skills → Set 
 - **See what is running.** Service status, listening ports, process ownership, live logs, crash output, and activity live together. Start, stop, or restart individual services or an entire stack.
 - **Work across repositories.** Inspect branches and changes, fetch or pull, and switch branches with explicit stash/carry choices.
 - **Record with logs.** Screen recordings save a `.log` file next to the video with your workspaces' output, stamped with video times. You choose which workspaces, or record a plain video. [Recordings with logs](docs/REPROS.md).
-- **Give agents the same controls.** The `cinderdeck` CLI and local MCP server work with Codex, Cursor, Claude Code, VS Code Copilot, and other clients. **Agent access** adds the MCP server and the bundled agent skills to each one.
+- **Give agents the same controls.** The `cinderdeck` CLI and local MCP server work with Codex, Cursor, Claude Code, VS Code Copilot, and other clients. **Settings → Integrations → MCP & skills** adds the MCP server, the bundled agent skills and the Claude Code mod to each one.
 - **Organize your GitHub work.** Browse repositories, sync GitHub stars, filter pull requests, save custom views, inspect changes, and submit reviews in a native PRs workspace. [Explore pull requests](docs/PULL_REQUESTS.md).
 - **Keep useful context nearby.** Local text clipboard history, capture history, and search sit alongside your stacks.
 - **Capture what you are building.** Screenshots, scrolling capture, screen recording, annotation, OCR, and video editing remain available from the Snapzy foundation.
@@ -76,7 +76,7 @@ Built with SwiftUI and AppKit. Local configuration, local history, no Cinderdeck
 
 ## One app, one repository
 
-This repository includes the complete native app and its agent harness in `agent-runtime/`. A normal clone includes both, without submodules or a second checkout. The default build and local installer produce one Cinderdeck app with agents, previews, Workspaces, lanes, pull requests, capture and history. The internal AgentShell ships inside the app and updates with it.
+This repository includes the complete native app and its agent harness in `agent-runtime/`. A normal clone includes both, without submodules or a second checkout. The default build and local installer produce one Cinderdeck app with agents, previews, Workspaces, lanes, pull requests, capture and history. The bundled runtime ships inside Cinderdeck and updates with it.
 
 ## Start with your own projects
 
@@ -125,6 +125,7 @@ cinderdeck services start my-workspace --as Codex
 cinderdeck services logs my-workspace -f
 cinderdeck services stop my-workspace
 cinderdeck services setup-agents --print
+cinderdeck services setup-agents --claude --skills --mod   # MCP, skills and the Claude Code mod
 ```
 
 Use the filename without `.toml` as the workspace ID. `cinderdeck mcp` exposes the same controls over MCP stdio, including workspace creation, edits and removal, component management, and lane creation, edits and removal. `cinderdeck tools` lists every operation and its JSON schema; `cinderdeck call <tool-name> --arguments '<json>'` runs any MCP tool from the CLI. [Workspace commands and examples](docs/WORKSPACES.md#cli-and-agents). Agent setup changes client configuration only when you run the setup command. Use `cinderdeck services agent-help` for the full command reference and agent instructions.

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import type { NativeToolRequest } from "@cinderdeck/contracts";
 import {
   FolderPlusIcon,
@@ -11,6 +12,7 @@ import {
 import { toastManager } from "../components/ui/toast";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../components/ui/tooltip";
 import styles from "./nativeWorkspaceTools.module.css";
+import { AGENT_ACCESS_SETTINGS_ID } from "./AgentAccessSettings";
 
 /** These requests open native UI; its existing validation owns all changes. */
 export function NativeWorkspaceTools({
@@ -30,6 +32,7 @@ export function NativeWorkspaceTools({
 }) {
   const host = typeof window !== "undefined" && window.desktopBridge?.isNativeHost?.() === true;
   const available = host && typeof window.desktopBridge?.openNativeTool === "function";
+  const navigate = useNavigate();
   const busy = useRef(false);
   const [pending, setPending] = useState(false);
   const request = async (input: NativeToolRequest) => {
@@ -79,7 +82,9 @@ export function NativeWorkspaceTools({
               type="button"
               disabled={disabled}
               aria-label={
-                workspaceID !== sourceWorkspaceID ? "Source workspace settings" : "Workspace settings"
+                workspaceID !== sourceWorkspaceID
+                  ? "Source workspace settings"
+                  : "Workspace settings"
               }
               onClick={() =>
                 void request({ surface: "workspace-editor", workspaceID: sourceWorkspaceID })
@@ -93,9 +98,10 @@ export function NativeWorkspaceTools({
         <Tooltip>
           <TooltipTrigger
             type="button"
-            disabled={disabled}
             aria-label="Connect agents and CLI"
-            onClick={() => void request({ surface: "agent-access" })}
+            onClick={() =>
+              void navigate({ to: "/settings/integrations", hash: AGENT_ACCESS_SETTINGS_ID })
+            }
           >
             <SparklesIcon size={15} />
           </TooltipTrigger>

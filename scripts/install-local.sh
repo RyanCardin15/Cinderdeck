@@ -73,7 +73,7 @@ fi
 [[ -d "$APP_PATH" ]] || fail "Built app missing: $APP_PATH"
 ACTUAL_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Contents/Info.plist")
 [[ "$ACTUAL_BUNDLE_ID" == "$BUNDLE_ID" ]] || fail "Unexpected bundle identifier: $ACTUAL_BUNDLE_ID"
-[[ -x "$APP_PATH/Contents/Resources/AgentShell.app/Contents/MacOS/AgentShell" ]] \
+[[ -x "$APP_PATH/Contents/Resources/Cinderdeck.app/Contents/MacOS/Cinderdeck" ]] \
   || fail "Built app is missing its agent harness."
 
 verify() {

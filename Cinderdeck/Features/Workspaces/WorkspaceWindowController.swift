@@ -7,7 +7,7 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
   let model: StacksViewModel
   init(supervisor: StackSupervisor = .shared, runner: WorkspaceRunner = .shared) {
     model = StacksViewModel(supervisor: supervisor)
-    if AgentShellController.shared.configured {
+    if CinderdeckRuntimeController.shared.configured {
       super.init(window: nil)
       return
     }
@@ -27,7 +27,7 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
   }
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
   func show(workspace: String? = nil, section: WorkspaceSection? = nil) {
-    if AgentShellController.shared.show(workspaceID: workspace, section: section?.agentShellSection) { return }
+    if CinderdeckRuntimeController.shared.show(workspaceID: workspace, section: section?.runtimeSection) { return }
     if let workspace { model.select(workspace) }
     if let section { model.requestedSection = section }
     showWindow(nil)

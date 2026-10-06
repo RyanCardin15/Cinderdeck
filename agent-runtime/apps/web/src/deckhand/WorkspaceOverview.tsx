@@ -70,6 +70,7 @@ import { RecordingThumbnail } from "./RecordingThumbnail";
 import styles from "./workspace.module.css";
 import agents from "./workspaceAgents.module.css";
 import native from "./nativeWorkspace.module.css";
+import { workspaceChatUnavailableReason } from "@cinderdeck/shared/workspaceChat";
 import { WorkspaceSections } from "./WorkspaceSections";
 
 type Resource = IntegrationView["resources"][number];
@@ -444,6 +445,8 @@ function ConnectedWorkspace({
     ) &&
     !(operation && !operation.refused && operation.receipt === null);
   const enabled = nativeActionsEnabled && !lifecyclePending;
+  // Conversation intake verifies folders independently of service/lane operation recovery.
+  const chatsEnabled = !savedContextChanged && nativeCurrent;
   const createdLaneID =
     operation?.receipt?.result?.workspace?.id ?? operation?.receipt?.result?.createdWorkspaceID;
   const tabSearch = {
@@ -1036,7 +1039,7 @@ function ConnectedWorkspace({
               </span>
               <div className={agents.title}>
                 <h2>Agents</h2>
-                <p>Conversations and ongoing work in this checkout.</p>
+                <p>Conversations and ongoing work across this workspace’s folders.</p>
               </div>
               <span className={agents.context}>
                 <GitBranchIcon size={13} aria-hidden />
@@ -1051,7 +1054,8 @@ function ConnectedWorkspace({
                     environmentId={environmentId}
                     installationID={view.hello.installationID}
                     resource={selected}
-                    enabled={enabled && actionable(selected)}
+                    enabled={chatsEnabled && workspaceChatUnavailableReason(selected) === null}
+                    disabledReason={workspaceChatUnavailableReason(selected) ?? undefined}
                     compact
                   />
                 </div>
@@ -1061,7 +1065,9 @@ function ConnectedWorkspace({
                   workspaceID={selected.workspaceID}
                   generation={selected.generation}
                   providers={providers}
-                  contextLabel={selected.workspace?.lane?.name ?? "Primary checkout"}
+                  contextLabel={
+                    selected.workspace?.lane?.name ?? selected.workspace?.name ?? "Workspace"
+                  }
                   presentation="workspace"
                 />
               </>
@@ -1286,7 +1292,8 @@ function ConnectedWorkspace({
                     environmentId={environmentId}
                     installationID={view.hello.installationID}
                     resource={selected}
-                    enabled={enabled && actionable(selected)}
+                    enabled={chatsEnabled && workspaceChatUnavailableReason(selected) === null}
+                    disabledReason={workspaceChatUnavailableReason(selected) ?? undefined}
                   />
                 </details>
               ) : null}

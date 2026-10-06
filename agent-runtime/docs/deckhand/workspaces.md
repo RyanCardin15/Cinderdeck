@@ -1,8 +1,10 @@
 # Working in a Cinderdeck workspace
 
-Open Workspaces and select a workspace. New feature creates an independent native lane and starts a conversation in its selected repository. Choose a new branch, repository, provider, title and objective; optionally override each repository’s start revision, run setup, or start the lane’s services. Setup is enabled by default and services remain stopped unless selected. New lane remains available for creating a checkout without an agent.
+Open Workspaces and select a workspace. New feature creates an independent native lane and starts a conversation with all its workspace folders. Choose a new branch, provider, title and objective; optionally override each repository’s start revision, run setup, or start the lane’s services. Setup is enabled by default and services remain stopped unless selected. New lane remains available for creating a checkout without an agent.
 
-To start an agent in a primary checkout or existing lane, choose the repository it should work in, a configured provider account and model, then enter the feature title and objective. Approval-required access is the default. The conversation opens in that repository's existing checkout.
+To open a conversation in a primary checkout or existing lane, use **+ New chat** in Agents or the **+** on its sidebar row. Cinderdeck automatically uses the first configured folder as the starting directory and gives the chat access to all workspace folders and files. Choose the provider and model in the chat; no folder selection is required. Saved launch requests retain their original starting directory when recovered.
+
+Workspace roots can be ordinary folders containing repositories; Git at the workspace root is not required. Service warnings, changed settings for running services, and pending service/lane operation recovery do not block New chat. Chat validates the current workspace identity, revision and folders separately. An unavailable computer or invalid workspace shows the specific reason beside New chat with **Refresh workspaces** to reload the current context. Errors in Workspace settings must be corrected before opening a new chat.
 
 Agent sessions keeps the newest 20 conversations for the selected context. Open one to continue its work or inspect its saved history. A finished turn means the agent has answered; it does not mark the feature complete. Connection state is shown separately, so a saved result can remain available while its provider is stopped.
 

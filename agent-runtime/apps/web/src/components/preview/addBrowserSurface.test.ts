@@ -6,6 +6,7 @@ import {
   type PreviewSessionSnapshot,
   type ScopedThreadRef,
 } from "@cinderdeck/contracts";
+import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -80,4 +81,52 @@ describe("addBrowserSurface", () => {
       ).surfaces.map((surface) => surface.id),
     ).toEqual(["browser:tab-1", "browser:tab-2"]);
   });
+});
+
+const panelState = () =>
+  selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, threadRef);
+
+it("opens the first browser panel before backend setup resolves", async () => {
+  let finish!: (result: ReturnType<typeof AsyncResult.success<PreviewSessionSnapshot>>) => void;
+  const request = addBrowserSurface({
+    threadRef,
+    openPreview: () =>
+      new Promise<ReturnType<typeof AsyncResult.success<PreviewSessionSnapshot>>>((resolve) => {
+        finish = resolve;
+      }),
+  });
+  expect(panelState()).toMatchObject({ isOpen: true, activeSurfaceId: "browser:new" });
+  useRightPanelStore.getState().reconcileBrowserSurfaces(threadRef, []);
+  expect(panelState()).toMatchObject({ isOpen: true, activeSurfaceId: "browser:new" });
+  await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+  finish(AsyncResult.success(snapshot("tab-1")));
+  await request;
+  expect(panelState()).toMatchObject({ isOpen: true, activeSurfaceId: "browser:tab-1" });
+  expect(panelState().surfaces).toHaveLength(1);
+});
+
+it("does not reopen the panel if it was closed during first-browser setup", async () => {
+  let finish!: (result: ReturnType<typeof AsyncResult.success<PreviewSessionSnapshot>>) => void;
+  const request = addBrowserSurface({
+    threadRef,
+    openPreview: () =>
+      new Promise<ReturnType<typeof AsyncResult.success<PreviewSessionSnapshot>>>((resolve) => {
+        finish = resolve;
+      }),
+  });
+  useRightPanelStore.getState().close(threadRef);
+  await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+  finish(AsyncResult.success(snapshot("tab-1")));
+  await request;
+  expect(panelState().isOpen).toBe(false);
+  expect(panelState().surfaces.some((surface) => surface.id === "browser:new")).toBe(false);
+});
+
+it("clears the pending first-browser panel after a backend failure", async () => {
+  const result = await addBrowserSurface({
+    threadRef,
+    openPreview: async () => AsyncResult.failure(Cause.fail(new Error("Preview unavailable"))),
+  });
+  expect(result._tag).toBe("Failure");
+  expect(panelState()).toMatchObject({ isOpen: false, activeSurfaceId: null, surfaces: [] });
 });

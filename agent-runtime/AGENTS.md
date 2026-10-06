@@ -1,6 +1,6 @@
 # Cinderdeck agent runtime
 
-This directory is part of the Cinderdeck super app, the private runtime of the native host. The native macOS host owns app identity, permissions, workspaces, services, lanes, logs, runs, recordings, and Sparkle updates. The embedded AgentShell owns agent threads, providers, diffs, terminals, and Chromium previews. The mobile app is a companion client, not an independent desktop product.
+This directory is part of the Cinderdeck super app, the private runtime of the native host. The native macOS host owns app identity, permissions, workspaces, services, lanes, logs, runs, recordings, and Sparkle updates. The embedded runtime owns agent threads, providers, diffs, terminals, and Chromium previews. The mobile app is a companion client, not an independent desktop product.
 
 ## Development
 
@@ -15,7 +15,7 @@ This directory is part of the Cinderdeck super app, the private runtime of the n
 ## Architecture
 
 - apps/server: typed RPC, event-sourced orchestration, providers and checkpoints. Commands commit before effects run; tests await persisted events or drain the effect worker.
-- apps/web: React UI. apps/desktop: the private Electron AgentShell and preview runtime. apps/mobile: React Native companion.
+- apps/web: React UI. apps/desktop: the private Electron runtime and preview runtime. apps/mobile: React Native companion.
 - packages/contracts: schemas and wire contracts. packages/client-runtime: shared client state and operations. packages/shared: small runtime helpers with explicit subpath imports.
 - Keep orchestration pure, service methods reusable by transports and MCP, and complexity at provider adapters. See docs/internals/effect-services.md and docs/internals/overview.md.
 - Check changes across relevant clients, providers, entry points, remote/local connections, and reverse actions. Native authority stays with Cinderdeck.

@@ -2,6 +2,7 @@ import {
   GITHUB_WORKSPACE_METHOD,
   type GitHubWorkspaceInput,
 } from "@cinderdeck/contracts/deckhand/gitHubWorkspace";
+import { AGENT_ACCESS_METHOD, type AgentAccessInput } from "@cinderdeck/contracts/deckhand/rpc";
 import { EXTERNAL_DEBUG_METHODS } from "@cinderdeck/contracts/deckhand/externalDebugRpc";
 import { OWNERSHIP_METHODS } from "@cinderdeck/contracts/deckhand/ownershipRpc";
 import { HISTORY_IMPORT_METHODS } from "@cinderdeck/contracts/deckhand/historyImportRpc";
@@ -41,13 +42,17 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  */
 export const RPC_REQUIRED_SCOPES = {
   [GITHUB_WORKSPACE_METHOD]: AuthOrchestrationReadScope,
+  [AGENT_ACCESS_METHOD]: AuthOrchestrationReadScope,
   [EXTERNAL_DEBUG_METHODS.discover]: AuthOrchestrationReadScope,
   [EXTERNAL_DEBUG_METHODS.sessions]: AuthOrchestrationReadScope,
+  [EXTERNAL_DEBUG_METHODS.conflicts]: AuthOrchestrationReadScope,
   [EXTERNAL_DEBUG_METHODS.read]: AuthOrchestrationReadScope,
   [EXTERNAL_DEBUG_METHODS.open]: AuthOrchestrationOperateScope,
   [EXTERNAL_DEBUG_METHODS.attach]: AuthOrchestrationOperateScope,
   [EXTERNAL_DEBUG_METHODS.command]: AuthOrchestrationOperateScope,
   [EXTERNAL_DEBUG_METHODS.detach]: AuthOrchestrationOperateScope,
+  [EXTERNAL_DEBUG_METHODS.probe]: AuthOrchestrationOperateScope,
+  [EXTERNAL_DEBUG_METHODS.benchmark]: AuthOrchestrationOperateScope,
   [OWNERSHIP_METHODS.preview]: AuthOrchestrationReadScope,
   [OWNERSHIP_METHODS.get]: AuthOrchestrationOperateScope,
   [OWNERSHIP_METHODS.list]: AuthOrchestrationReadScope,
@@ -277,6 +282,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.terminalClear]: AuthTerminalOperateScope,
   [WS_METHODS.terminalRestart]: AuthTerminalOperateScope,
   [WS_METHODS.terminalClose]: AuthTerminalOperateScope,
+  [WS_METHODS.terminalOpenThreadSession]: AuthTerminalOperateScope,
   [WS_METHODS.subscribeTerminalEvents]: AuthTerminalOperateScope,
   [WS_METHODS.subscribeTerminalMetadata]: AuthTerminalOperateScope,
   [WS_METHODS.previewOpen]: AuthOrchestrationOperateScope,
@@ -322,6 +328,10 @@ export const requiredScopeForDeviceList = (input: DeviceListInput): AuthEnvironm
   input.retryHostId || input.updateTool
     ? AuthOrchestrationOperateScope
     : AuthOrchestrationReadScope;
+
+/** Reading setup state is harmless; every other action writes agent configuration on the host. */
+export const requiredScopeForAgentAccess = (input: AgentAccessInput): AuthEnvironmentScope =>
+  input.action === "status" ? AuthOrchestrationReadScope : AuthOrchestrationOperateScope;
 
 export function requiredScopeForGitHubWorkspace(
   input: Pick<GitHubWorkspaceInput, "action">,

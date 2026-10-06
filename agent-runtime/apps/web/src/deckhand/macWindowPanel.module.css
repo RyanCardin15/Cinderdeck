@@ -5,7 +5,7 @@
   gap: 7px;
   padding: 8px 11px;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: 7px;
   background: var(--background);
   color: var(--foreground);
   font: inherit;
@@ -33,7 +33,7 @@
   gap: 10px;
   padding: 11px 13px;
   border-bottom: 1px solid var(--border);
-  min-height: 51px;
+  min-height: 48px;
   font-size: 12px;
   flex-wrap: wrap;
 }
@@ -44,7 +44,7 @@
 }
 
 .panelHeader > span[data-state="connected"] {
-  color: #218553;
+  color: var(--success);
 }
 
 .panelHeader label {
@@ -72,9 +72,9 @@
 .error {
   margin-bottom: 15px;
   padding: 12px 15px;
-  border: 1px solid color-mix(in srgb, #c04431 30%, var(--border));
-  border-radius: 5px;
-  background: color-mix(in srgb, #c04431 7%, var(--background));
+  border: 1px solid color-mix(in srgb, var(--destructive) 30%, var(--border));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--destructive) 7%, var(--background));
   font-size: 12px;
   line-height: 1.7;
 }
@@ -84,6 +84,7 @@
 }
 
 .macPanel {
+  container-type: inline-size;
   flex-shrink: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -94,7 +95,9 @@
 
 .macPanel[data-embedded="true"] {
   border: 0;
-  border-radius: 0;
+  border-radius: 10px;
+  margin: 0 10px 8px;
+  border: 1px solid var(--border);
 }
 
 .macPanel[data-embedded="true"] .macCanvas {
@@ -104,7 +107,7 @@
 .macPanel[data-embedded="true"] .macPanelToolbar {
   justify-content: flex-start;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 6px;
 }
 
 .macPanel[data-embedded="true"] .previewNote {
@@ -141,25 +144,38 @@
 .macPanelToolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 15px;
-  padding: 10px 13px;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 0;
   font-size: 11px;
-  border-bottom: 1px solid var(--border);
 }
 
 .macPanelToolbar label {
   display: flex;
   align-items: center;
+  margin-left: 0;
   gap: 6px;
   color: var(--muted-foreground);
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.macPanelToolbar label:has(input:checked) {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.macPanelToolbar label:has(input:disabled) {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .macCanvas {
   min-height: 300px;
   display: grid;
   place-items: center;
-  background: var(--muted);
+  background: color-mix(in srgb, var(--muted) 60%, var(--background));
   overflow: hidden;
 }
 
@@ -200,7 +216,7 @@
   padding: 8px 10px;
   min-width: 0;
   flex: 1;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 11px;
   width: 70px;
 }
@@ -211,7 +227,25 @@
   font-size: 11px;
 }
 .actionHistory summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   cursor: pointer;
+  list-style: none;
+  color: var(--muted-foreground);
+}
+.actionHistory summary::-webkit-details-marker {
+  display: none;
+}
+.actionHistory[open] summary > svg {
+  transform: rotate(90deg);
+}
+.actionHistory summary:hover {
+  color: var(--foreground);
+}
+.actionHistory summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
 }
 .actionHistory p {
   color: var(--muted-foreground);
@@ -229,5 +263,62 @@
   color: var(--muted-foreground);
 }
 .actionHistory li[data-level="error"] {
-  color: #c04431;
+  color: var(--destructive);
+}
+
+.windowIdentity {
+  flex: 1;
+  min-width: 80px;
+  display: grid;
+  gap: 2px;
+}
+.windowIdentity strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+.windowIdentity > span {
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+.connectionState {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.connectionState::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.eventCount {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+}
+.macPanelToolbar input {
+  accent-color: var(--primary);
+}
+.macPanel[data-embedded="true"][data-expanded="true"] {
+  margin: 0;
+  border-radius: 0;
+}
+@media (max-width: 420px) {
+  .macTextEntry {
+    flex-wrap: wrap;
+  }
+  .macTextEntry input {
+    flex-basis: 100%;
+  }
+}
+
+@container (max-width: 520px) {
+  .macPanelToolbar {
+    order: 4;
+    flex-basis: 100%;
+    padding-top: 2px;
+  }
 }

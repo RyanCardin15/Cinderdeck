@@ -111,6 +111,14 @@ await Effect.runPromise(
       });
       yield* service.command(actor, { sessionId: host.sessionId, action: "type", text: note });
       yield* Effect.promise(() => waitForReceipt((value) => value.note === note));
+      const outline = yield* service.command(actor, {
+        sessionId: host.sessionId,
+        action: "snapshot",
+      });
+      const ref = /\[(e\d+)\] Button "Update test workbook"/.exec(outline.text)?.[1];
+      NodeAssert.ok(ref, "The accessibility outline exposes the task pane's DOM button");
+      yield* service.command(actor, { sessionId: host.sessionId, action: "press", ref });
+      yield* Effect.promise(() => waitForReceipt((value) => value.count === baseline.count + 2));
       yield* service.detach(actor, { sessionId: host.sessionId });
       const remaining = yield* service.read(actor, {
         sessionId: tools.sessionId,
@@ -138,6 +146,8 @@ await Effect.runPromise(
               unchangedReads: deltas,
               nativeClick: true,
               nativeText: true,
+              accessibilityOutline: true,
+              elementPress: true,
               discoveryPreservedStreams: true,
               detachPreservedOtherStream: true,
               detachPreservedWindows: true,

@@ -1,6 +1,6 @@
 # Cinderdeck agent runtime
 
-The embedded agent, chat, terminal, and Chromium preview runtime for the Cinderdeck super app. This source is maintained in the same repository as the native macOS host. Install, build, sign, and update the complete Cinderdeck app; AgentShell is a private child bundle.
+The embedded agent, chat, terminal, and Chromium preview runtime for the Cinderdeck super app. This source is maintained in the same repository as the native macOS host. Install, build, sign, and update the complete Cinderdeck app; the runtime is a private child bundle.
 
 See [the product README](../README.md), [build and architecture](../docs/UNIFIED_APP.md), and [contributor guidance](AGENTS.md). `apps/mobile` contains the companion client.
 

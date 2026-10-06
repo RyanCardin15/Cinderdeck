@@ -145,9 +145,7 @@ function SessionSetupLauncher({
   const [optionsLoaded, setOptionsLoaded] = useState(false);
   const [formOpen, setFormOpen] = useState(initial.request !== null || initial.error);
   const optionsGeneration = useRef(0);
-  const [repositoryID, setRepositoryID] = useState(
-    saved?.repositoryID ?? resource.workspace?.repos[0]?.id ?? "",
-  );
+  const repositoryID = saved?.repositoryID ?? resource.workspace?.repos[0]?.id ?? "";
   const [instanceId, setInstanceId] = useState<string>(saved?.modelSelection.instanceId ?? "");
   const [model, setModel] = useState(saved?.modelSelection.model ?? "");
   const [title, setTitle] = useState(saved?.title ?? "");
@@ -441,7 +439,7 @@ function SessionSetupLauncher({
       <section className={sessionStyles.launchPrompt} aria-label="New session">
         <div>
           <h3>Start a new session</h3>
-          <p>{contextLabel} · choose a configured provider and starting folder.</p>
+          <p>{contextLabel} · choose a configured provider.</p>
         </div>
         <button
           ref={launchButton}
@@ -493,7 +491,7 @@ function SessionSetupLauncher({
       </header>
       <p className={sessionStyles.scopeNote}>
         {isCreation
-          ? `Create a lane in ${resource.workspace?.name ?? resource.workspaceID}, then start its agent in the selected repository. Repository and service sharing follow the workspace definition.`
+          ? `Create a lane in ${resource.workspace?.name ?? resource.workspaceID}, then start its agent with all workspace folders. Repository and service sharing follow the workspace definition.`
           : "Choose a provider and purpose. Keep analysis alongside your feature sessions, or give one session permission to implement changes."}
       </p>
       {initial.error ? (
@@ -594,18 +592,6 @@ function SessionSetupLauncher({
               </p>
             </>
           ) : null}
-          <label htmlFor={`${id}-repo`}>Starting folder</label>
-          <select
-            id={`${id}-repo`}
-            value={repositoryID}
-            onChange={(event) => setRepositoryID(event.target.value)}
-          >
-            {resource.workspace?.repos.map((repo) => (
-              <option key={repo.id} value={repo.id}>
-                {repo.id}
-              </option>
-            ))}
-          </select>
           <p className="text-sm text-muted-foreground">
             The session can access every folder and file selected in this workspace.
           </p>

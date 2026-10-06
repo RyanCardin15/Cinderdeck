@@ -6,7 +6,7 @@
 //  system cursor's visibility. `CGDisplayHideCursor` only takes effect for the
 //  FOREGROUND application (Apple: "your application must be in the foreground"),
 //  but the live-capture passthrough overlay needs to hide the system arrow while
-//  Cinderdeck stays a background `LSUIElement` that never activates (activating would
+//  Cursor operations do not activate Cinderdeck (activating would
 //  dismiss the hover UI the feature exists to preserve). Setting the private
 //  CoreGraphics Services connection property `SetsCursorInBackground` on this
 //  process's main WindowServer connection lifts that restriction, so the existing

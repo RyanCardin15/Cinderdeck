@@ -3,7 +3,7 @@
 //  Cinderdeck
 //
 //  Dedicated window controller for Preferences/Settings window.
-//  Directly manages NSWindow lifecycle, size constraints, and activation policy (.regular ↔ .accessory).
+//  Directly manages NSWindow lifecycle, size constraints, and regular application activation.
 //
 
 import AppKit
@@ -24,8 +24,6 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
   /// Minimum window size to prevent label truncation.
   static let minimumContentSize = CGSize(width: 700, height: 520)
 
-  private var didElevateActivationPolicy = false
-
   override private init() {
     super.init()
   }
@@ -36,12 +34,7 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
       PreferencesNavigationState.shared.select(tab)
     }
 
-    // Elevate to regular app so Cinderdeck appears in the top-left menu bar and takes key focus
-    if !didElevateActivationPolicy {
-      NSApp.setActivationPolicy(.regular)
-      didElevateActivationPolicy = true
-      DiagnosticLogger.shared.log(.debug, .ui, "Activation policy elevated for preferences window")
-    }
+    NSApp.maintainRegularActivationPolicy()
 
     NSApp.activate(ignoringOtherApps: true)
 
@@ -105,19 +98,6 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
   // MARK: - NSWindowDelegate
 
   func windowWillClose(_ notification: Notification) {
-    // Check if any visible normal windows remain
-    let visibleWindows = NSApp.windows.filter { win in
-      win.isVisible &&
-      win !== self.window &&
-      win.className != "NSStatusBarWindow" &&
-      win.level == .normal
-    }
-
-    // If no normal windows remain, revert back to accessory (menu bar only) mode
-    if visibleWindows.isEmpty && didElevateActivationPolicy {
-      NSApp.setActivationPolicy(.accessory)
-      didElevateActivationPolicy = false
-      DiagnosticLogger.shared.log(.debug, .ui, "Activation policy restored to accessory after preferences closed")
-    }
+    NSApp.maintainRegularActivationPolicy()
   }
 }

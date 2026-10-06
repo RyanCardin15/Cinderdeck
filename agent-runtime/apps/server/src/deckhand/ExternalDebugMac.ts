@@ -60,6 +60,9 @@ type Broker = {
   idle: () => void;
 };
 let broker: Broker | undefined;
+// Office cold launch waits for its first window; snapshots have their own 3 s budget
+// plus per-element AX messaging timeouts.
+const callTimeout: Record<string, number> = { "Native.open": 45000, "Native.snapshot": 15000 };
 function startBroker(): Broker {
   // A single long-lived capture client owns discovery and all streams. Exiting
   // a separate discovery process can interrupt existing ScreenCaptureKit clients.
@@ -119,7 +122,8 @@ function startBroker(): Broker {
       if (idleTimer) clearTimeout(idleTimer);
       const id = ++sequence;
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => stop(fail("timeout")), 10000);
+        // An unresponsive helper is restarted; only launch and AX reads may run long.
+        const timer = setTimeout(() => stop(fail("timeout")), callTimeout[method] ?? 10000);
         timer.unref();
         pending.set(id, { resolve, reject, timer });
         child.stdin.write(JSON.stringify({ id, method, params }) + "\n", (error) => {

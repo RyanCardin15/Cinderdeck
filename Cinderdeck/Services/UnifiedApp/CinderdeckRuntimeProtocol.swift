@@ -1,13 +1,13 @@
 import Foundation
 
 /// The native process owns this pipe. No URLs, filesystem paths, or commands cross it.
-nonisolated struct AgentShellMessage: Encodable, Sendable {
+nonisolated struct CinderdeckRuntimeMessage: Encodable, Sendable {
   let type: String
   var workspaceID: String?
   var section: String?
 }
 
-nonisolated struct AgentShellUIRequest: Decodable, Equatable, Sendable {
+nonisolated struct CinderdeckRuntimeUIRequest: Decodable, Equatable, Sendable {
   let surface: String
   let mode: String?
   let workspaceID: String?
@@ -16,7 +16,7 @@ nonisolated struct AgentShellUIRequest: Decodable, Equatable, Sendable {
   static let workspaceEditorModes: Set<String> = ["services", "tasks", "workflows"]
   static let captureModes: Set<String> = ["region", "window", "fullscreen", "scrolling", "ocr"]
 
-  static func decode(_ data: Data) throws -> AgentShellUIRequest {
+  static func decode(_ data: Data) throws -> CinderdeckRuntimeUIRequest {
     guard data.count <= 16_384,
       let value = try JSONSerialization.jsonObject(with: data) as? [String: Any],
       Set(value.keys).isSubset(of: ["surface", "mode", "workspaceID"]) else {
@@ -35,7 +35,7 @@ nonisolated struct AgentShellUIRequest: Decodable, Equatable, Sendable {
 }
 
 /// FileHandle callbacks may arrive off MainActor. Keep framing bounded before hopping to UI.
-nonisolated final class AgentShellOutputFramer: @unchecked Sendable {
+nonisolated final class CinderdeckRuntimeOutputFramer: @unchecked Sendable {
   private let lock = NSLock()
   private var buffer = Data()
   private var discarding = false

@@ -3,10 +3,10 @@ import Combine
 import Darwin
 import Foundation
 
-/// Cinderdeck remains the application. AgentShell is one captured, supervised child.
+/// Cinderdeck remains the application. Its runtime is one captured, supervised child.
 @MainActor
-final class AgentShellController: ObservableObject {
-  static let shared = AgentShellController()
+final class CinderdeckRuntimeController: ObservableObject {
+  static let shared = CinderdeckRuntimeController()
   enum Phase: String { case absent, idle, starting, running, closing, exited, failed }
 
   @Published private(set) var phase = Phase.idle
@@ -19,26 +19,26 @@ final class AgentShellController: ObservableObject {
   private var uiToken: String?
   private var stopping = false
   private var quitRequested = false
-  private var pendingRoute: AgentShellMessage?
+  private var pendingRoute: CinderdeckRuntimeMessage?
 
   var running: Bool { process?.isRunning == true }
   var available: Bool { (try? executableURL()) != nil }
   var configured: Bool {
-    ProcessInfo.processInfo.environment["CINDERDECK_AGENT_SHELL_PATH"].map { !$0.isEmpty } == true ||
-      Bundle.main.url(forResource: "AgentShell", withExtension: "app") != nil
+    ProcessInfo.processInfo.environment["CINDERDECK_RUNTIME_PATH"].map { !$0.isEmpty } == true ||
+      Bundle.main.url(forResource: "Cinderdeck", withExtension: "app") != nil
   }
 
   private func executableURL() throws -> URL? {
     let environment = ProcessInfo.processInfo.environment
     let requested: URL?
-    if let override = environment["CINDERDECK_AGENT_SHELL_PATH"], !override.isEmpty {
+    if let override = environment["CINDERDECK_RUNTIME_PATH"], !override.isEmpty {
       guard override.hasPrefix("/"), override.utf8.count <= 4096, !override.contains("\0") else {
-        throw StackControlError.invalid("AgentShell override must be an absolute executable path")
+        throw StackControlError.invalid("Cinderdeck runtime override must be an absolute executable path")
       }
       let source = URL(fileURLWithPath: override).resolvingSymlinksInPath()
-      requested = source.pathExtension == "app" ? source.appendingPathComponent("Contents/MacOS/AgentShell") : source
+      requested = source.pathExtension == "app" ? source.appendingPathComponent("Contents/MacOS/Cinderdeck") : source
     } else {
-      requested = Bundle.main.url(forResource: "AgentShell", withExtension: "app")?.appendingPathComponent("Contents/MacOS/AgentShell")
+      requested = Bundle.main.url(forResource: "Cinderdeck", withExtension: "app")?.appendingPathComponent("Contents/MacOS/Cinderdeck")
     }
     guard let requested else { return nil }
     let url = requested.resolvingSymlinksInPath()
@@ -48,7 +48,7 @@ final class AgentShellController: ObservableObject {
     guard attributes[.type] as? FileAttributeType == .typeRegular,
       FileManager.default.isExecutableFile(atPath: url.path), owner == getuid() || owner == 0,
       permissions & 0o022 == 0 else {
-      throw StackControlError.invalid("AgentShell must be a trusted local executable")
+      throw StackControlError.invalid("Cinderdeck runtime must be a trusted local executable")
     }
     return url
   }
@@ -93,7 +93,7 @@ final class AgentShellController: ObservableObject {
       child.standardInput = stdin
       child.standardOutput = stdout
       child.standardError = FileHandle.nullDevice
-      let framer = AgentShellOutputFramer { [weak self, weak child] line in
+      let framer = CinderdeckRuntimeOutputFramer { [weak self, weak child] line in
         let controller = self, owner = child
         Task { @MainActor in
           guard let controller, let owner, controller.process === owner else { return }
@@ -141,9 +141,9 @@ final class AgentShellController: ObservableObject {
           throw StackControlError(code: "resource_missing", message: "The requested workspace is unavailable")
         }
       }
-      let sections: Set<String> = ["overview", "agents", "pull-requests", "services", "tasks", "workflows", "lane-map", "runs", "recordings"]
+      let sections: Set<String> = ["overview", "agents", "pull-requests", "services", "tasks", "workflows", "lane-map", "runs", "recordings", AgentAccessNavigation.section]
       guard section.map({ sections.contains($0) }) ?? true else { throw StackControlError.invalid("Unknown workspace section") }
-      pendingRoute = AgentShellMessage(type: "route", workspaceID: workspaceID, section: section)
+      pendingRoute = CinderdeckRuntimeMessage(type: "route", workspaceID: workspaceID, section: section)
       // Deep links can arrive while the native supervisor is still bootstrapping.
       // The coordinator starts the shell once its authoritative socket is ready.
       guard StackControlService.shared.isServing else { return true }
@@ -162,10 +162,10 @@ final class AgentShellController: ObservableObject {
   /// Return from a native auxiliary tool without changing its saved route.
   func activateOwnedWindow() {
     guard running, ready, !stopping else { return }
-    try? send(AgentShellMessage(type: "activate"))
+    try? send(CinderdeckRuntimeMessage(type: "activate"))
   }
 
-  private func send(_ message: AgentShellMessage) throws {
+  private func send(_ message: CinderdeckRuntimeMessage) throws {
     guard let input, running else { throw StackControlError(code: "host_unavailable", message: "The agent window is not running") }
     var data = try JSONEncoder().encode(message)
     guard data.count < 16_384 else { throw StackControlError.invalid("Agent window request exceeds its limit") }
@@ -182,11 +182,11 @@ final class AgentShellController: ObservableObject {
       }
       try send(pendingRoute); self.pendingRoute = nil
     }
-    try send(AgentShellMessage(type: "activate"))
+    try send(CinderdeckRuntimeMessage(type: "activate"))
   }
 
   private func receive(_ line: Data) {
-    if line == Data("CINDERDECK_AGENT_SHELL_READY".utf8) {
+    if line == Data("CINDERDECK_RUNTIME_READY".utf8) {
       guard !stopping else { return }
       ready = true; phase = .running
       do { try flushRoute() }
@@ -196,7 +196,7 @@ final class AgentShellController: ObservableObject {
       }
       return
     }
-    if line == Data("CINDERDECK_AGENT_SHELL_QUIT_REQUEST".utf8) {
+    if line == Data("CINDERDECK_RUNTIME_QUIT_REQUEST".utf8) {
       guard !stopping, !quitRequested else { return }
       quitRequested = true
       // terminateLater enters AppKit's nested event loop. Calling it inside the
@@ -212,9 +212,9 @@ final class AgentShellController: ObservableObject {
       }
       return
     }
-    let prefix = Data("CINDERDECK_AGENT_SHELL_UI_REQUEST ".utf8)
+    let prefix = Data("CINDERDECK_RUNTIME_UI_REQUEST ".utf8)
     guard !stopping, ready, line.starts(with: prefix) else { return }
-    do { try AgentShellNativeUI.open(AgentShellUIRequest.decode(Data(line.dropFirst(prefix.count)))) }
+    do { try CinderdeckRuntimeNativeUI.open(CinderdeckRuntimeUIRequest.decode(Data(line.dropFirst(prefix.count)))) }
     catch {
       let alert = NSAlert(); alert.messageText = "Native action is unavailable"; alert.informativeText = error.localizedDescription; alert.runModal()
     }
@@ -239,7 +239,7 @@ final class AgentShellController: ObservableObject {
   func stopForTermination() async -> Bool {
     guard let child = process, child.isRunning else { return true }
     stopping = true; phase = .closing
-    do { try send(AgentShellMessage(type: "quit")) }
+    do { try send(CinderdeckRuntimeMessage(type: "quit")) }
     catch { try? input?.close(); input = nil }
     while child.isRunning {
       let deadline = ContinuousClock.now.advanced(by: .seconds(20))

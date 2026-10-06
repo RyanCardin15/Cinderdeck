@@ -625,7 +625,8 @@ nonisolated enum StackCLI {
     cinderdeck services reload | where | ping
     cinderdeck services install-cli                   Link ~/.local/bin/cinderdeck to this app
     cinderdeck services setup-agents                  Add the Cinderdeck MCP server to Cursor, Codex, Claude Code, VS Code Copilot
-                                                      (--skills also installs the agent skills)
+                                                      (--skills also installs the agent skills,
+                                                    --mod the Claude Code mod: status line and /cinderdeck)
     cinderdeck services agent-help                    Instructions to paste into AGENTS.md
 
   WORKTREE LANES

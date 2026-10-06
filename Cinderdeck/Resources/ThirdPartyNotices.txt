@@ -44,7 +44,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Embedded agent runtime
 
-The AgentShell bundled inside Cinderdeck is derived from T3 Code.
+The agent runtime bundled inside Cinderdeck is derived from T3 Code.
 https://github.com/pingdotgg/t3code
 The included runtime and its Cinderdeck-specific contributions retain MIT terms.
 Runtime dependency notices are also available in the agent shell's open-source licenses.

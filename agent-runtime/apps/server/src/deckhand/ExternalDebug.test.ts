@@ -1,3 +1,4 @@
+// @effect-diagnostics globalDate:off
 // @effect-diagnostics preferSchemaOverJson:off
 // Tests exercise opaque CDP JSON, including malformed/redacted remote values.
 import { describe, expect, it } from "@effect/vitest";
@@ -39,9 +40,37 @@ function fixture(native = false) {
       disconnect = disconnected;
       return {
         call: async (method, params) => {
-          calls.push({ method, params });
+          calls.push({
+            method,
+            params: method === "Native.press" ? { ...params, dispatched: Date.now() } : params,
+          });
           if (method === failing) throw new C.ExternalDebugError({ reason: "unsupported" });
           if (method === "Page.captureScreenshot") return { data: "aGVsbG8=" };
+          if (method === "Native.frame")
+            return params?.known === 1
+              ? { sequence: 1, unchanged: true }
+              : { sequence: 1, data: "aGVsbG8=" };
+          if (method === "Native.press") return { accepted: true, at: Date.now() };
+          if (method === "Native.benchmark")
+            return { enabled: params?.enabled, processes: 3, grouped: true };
+          if (method === "Native.timeline") {
+            const since = Number(params?.since);
+            const press = calls.findLast((call) => call.method === "Native.press");
+            const at = press ? Number(press.params?.dispatched) : 0;
+            return {
+              now: Date.now(),
+              changes:
+                at && at + 25 > since && at + 25 <= Date.now()
+                  ? [{ t: at + 25, area: 0.1, rects: [[0.7, 0, 0.3, 1]] }]
+                  : [],
+              samples: [{ t: Date.now(), cpu: 35, memory: 250_000_000, processes: 3 }],
+            };
+          }
+          if (method === "Native.snapshot")
+            return {
+              text: '[e0] Window "Book1"\n  [e1] Button "Run add-in" @0.500,0.400',
+              elements: 2,
+            };
           if (method === "Runtime.evaluate")
             return {
               result: {
@@ -72,6 +101,9 @@ function fixture(native = false) {
     closed: () => closed,
     layer: Service.layer.pipe(
       Layer.provide(Layer.succeed(Service.ExternalDebugTransport, transport)),
+      Layer.provide(
+        Layer.succeed(Service.ExcelPerformanceOptions, { probePort: 0, reportsDirectory: null }),
+      ),
     ),
     target,
     targets: (value: typeof targets) => {
@@ -89,6 +121,78 @@ const withService = (
     }).pipe(Effect.provide(f.layer)),
   );
 describe("external runtime debugging", () => {
+  it.effect("reports the blocking thread and releases the exact connection before retry", () => {
+    const f = fixture(true);
+    return withService(f, (service) =>
+      Effect.gen(function* () {
+        const owner = Service.externalDebugThreadOwner("first-chat");
+        const requester = Service.externalDebugThreadOwner("second-chat");
+        const input = { endpoint: "mac://local", targetId: f.target.id };
+        const original = yield* service.attach(owner, input);
+        expect(yield* service.conflicts(requester, input)).toEqual([
+          { session: original, threadId: "first-chat" },
+        ]);
+        expect(
+          (yield* service.detach(requester, { sessionId: original.sessionId }).pipe(Effect.result))
+            ._tag,
+        ).toBe("Failure");
+        yield* service.detach(owner, { sessionId: original.sessionId });
+        expect(yield* service.conflicts(requester, input)).toEqual([]);
+        const replacement = yield* service.attach(requester, input);
+        expect(replacement.sessionId).not.toBe(original.sessionId);
+        expect(yield* service.sessions(owner)).toEqual([]);
+      }),
+    );
+  });
+  it.effect("offers disconnected sessions when the thread limit is reached", () => {
+    const f = fixture(true);
+    const targets = Array.from({ length: 5 }, (_, i) => ({ ...f.target, id: `window-${i}` }));
+    f.targets(targets);
+    return withService(f, (service) =>
+      Effect.gen(function* () {
+        const owner = Service.externalDebugThreadOwner("limited-chat");
+        const sessions: C.DebugSession[] = [];
+        for (const target of targets.slice(0, 4))
+          sessions.push(
+            yield* service.attach(owner, { endpoint: "mac://local", targetId: target.id }),
+          );
+        f.disconnect();
+        const input = { endpoint: "mac://local", targetId: targets[4]!.id };
+        const conflicts = yield* service.conflicts(owner, input);
+        expect(conflicts).toHaveLength(4);
+        expect(conflicts.at(-1)?.session.state).toBe("disconnected");
+        yield* service.detach(owner, { sessionId: sessions[3]!.sessionId });
+        expect((yield* service.attach(owner, input)).state).toBe("connected");
+      }),
+    );
+  });
+  it.effect("offers global capacity connections and prioritizes an exact target conflict", () => {
+    const f = fixture(true);
+    const targets = Array.from({ length: 17 }, (_, i) => ({ ...f.target, id: `global-${i}` }));
+    f.targets(targets);
+    return withService(f, (service) =>
+      Effect.gen(function* () {
+        for (let i = 0; i < 16; i++)
+          yield* service.attach(Service.externalDebugThreadOwner(`chat-${Math.floor(i / 4)}`), {
+            endpoint: "mac://local",
+            targetId: targets[i]!.id,
+          });
+        const requester = Service.externalDebugThreadOwner("new-chat");
+        expect(
+          yield* service.conflicts(requester, {
+            endpoint: "mac://local",
+            targetId: targets[16]!.id,
+          }),
+        ).toHaveLength(16);
+        const exact = yield* service.conflicts(requester, {
+          endpoint: "mac://local",
+          targetId: targets[0]!.id,
+        });
+        expect(exact).toHaveLength(1);
+        expect(exact[0]?.threadId).toBe("chat-0");
+      }),
+    );
+  });
   it.effect("opens an exact app identity and reuses the thread's single attachment", () => {
     const f = fixture(true);
     return withService(f, (service) =>
@@ -162,6 +266,182 @@ describe("external runtime debugging", () => {
           snapshot.events.filter((event) => event.kind === "action").map((event) => event.text),
         ).toEqual(["type accepted", "key accepted (meta+n)", "click failed: unsupported"]);
         expect(JSON.stringify(snapshot)).not.toContain("private workbook data");
+      }),
+    );
+  });
+  it.effect("reads accessibility outlines and targets elements, drags and repaints", () => {
+    const f = fixture(true);
+    return withService(f, (service) =>
+      Effect.gen(function* () {
+        const session = yield* service.attach("owner", {
+          endpoint: "mac://local",
+          targetId: f.target.id,
+        });
+        const outline = yield* service.command("owner", {
+          sessionId: session.sessionId,
+          action: "snapshot",
+        });
+        expect(outline.text).toContain('[e1] Button "Run add-in"');
+        const first = yield* service.read("owner", {
+          sessionId: session.sessionId,
+          after: 0,
+          screenshot: true,
+        });
+        // Reading the outline is observation: no action log, no repaint wait.
+        expect(first.events.filter((event) => event.kind === "action")).toEqual([]);
+        expect(f.calls.find((call) => call.method === "Native.frame")?.params).toEqual({});
+        expect(first.image).toBe("aGVsbG8=");
+        const before = f.calls.length;
+        for (const invalid of [
+          { action: "press" },
+          { action: "click" },
+          { action: "drag", x: 0.1, y: 0.1 },
+          { action: "key" },
+        ] as const)
+          expect(
+            (yield* service
+              .command("owner", { sessionId: session.sessionId, ...invalid })
+              .pipe(Effect.result))._tag,
+          ).toBe("Failure");
+        expect(f.calls).toHaveLength(before);
+        yield* service.command("owner", {
+          sessionId: session.sessionId,
+          action: "click",
+          ref: "e1",
+        });
+        expect(f.calls.at(-1)).toEqual({ method: "Native.click", params: { ref: "e1" } });
+        yield* service.command("owner", {
+          sessionId: session.sessionId,
+          action: "drag",
+          x: 0.1,
+          y: 0.2,
+          toX: 0.3,
+          toY: 0.4,
+          modifiers: ["shift"],
+        });
+        expect(f.calls.at(-1)).toEqual({
+          method: "Native.drag",
+          params: { x: 0.1, y: 0.2, toX: 0.3, toY: 0.4, modifiers: ["shift"] },
+        });
+        yield* service.command("owner", {
+          sessionId: session.sessionId,
+          action: "press",
+          ref: "e1",
+        });
+        const after = yield* service.read("owner", {
+          sessionId: session.sessionId,
+          after: first.nextSequence,
+          screenshot: true,
+          ...(first.imageSequence === undefined ? {} : { afterImage: first.imageSequence }),
+        });
+        // Input makes the next read wait for a newer frame; the helper withholds unchanged bytes.
+        expect(f.calls.at(-1)).toEqual({
+          method: "Native.frame",
+          params: { known: 1, after: 1, waitMs: 600 },
+        });
+        expect(after.image).toBeNull();
+        expect(after.imageSequence).toBe(first.imageSequence);
+        expect(after.events.map((event) => event.text)).toEqual([
+          "click accepted (e1)",
+          "drag accepted",
+          "press accepted (e1)",
+        ]);
+        const repeat = yield* service.read("owner", {
+          sessionId: session.sessionId,
+          after: 0,
+          screenshot: true,
+        });
+        expect(repeat.image).toBe("aGVsbG8=");
+      }),
+    );
+  });
+  it.effect("benchmarks a native window, reserving its input while the run is active", () => {
+    const f = fixture(true);
+    return withService(f, (service) =>
+      Effect.gen(function* () {
+        const session = yield* service.attach("owner", {
+          endpoint: "mac://local",
+          targetId: f.target.id,
+        });
+        const steps = [{ label: "Run validation", action: "press" as const, ref: "e1" }];
+        const started = yield* service.benchmark("owner", {
+          action: "start",
+          sessionId: session.sessionId,
+          steps,
+          iterations: 2,
+          warmup: 0,
+          settleMs: 150,
+        });
+        const runId = started.report!.id;
+        expect(started.report?.state).toBe("running");
+        expect(
+          (yield* service
+            .command("owner", { sessionId: session.sessionId, action: "press", ref: "e1" })
+            .pipe(Effect.result))._tag,
+        ).toBe("Failure");
+        yield* service.command("owner", { sessionId: session.sessionId, action: "snapshot" });
+        expect(
+          (yield* service.benchmark("other", { action: "get", runId }).pipe(Effect.result))._tag,
+        ).toBe("Failure");
+        const finished = yield* service.benchmark("owner", { action: "get", runId, waitMs: 10000 });
+        const report = finished.report!;
+        expect(report.state).toBe("completed");
+        expect(report.samples).toEqual([]);
+        expect(report.steps[0]).toMatchObject({ label: "Run validation", samples: 2, timedOut: 0 });
+        expect(report.steps[0]!.duration.p50).toBe(25);
+        expect(report.steps[0]!.firstPaint?.p50).toBe(25);
+        expect(report.steps[0]!.cpuAverage?.p50).toBe(35);
+        expect(report.processesMeasured).toBe(3);
+        expect(report.warnings.join(" ")).toContain("No add-in probe is connected");
+        expect(
+          f.calls
+            .filter((call) => call.method === "Native.benchmark")
+            .map((call) => call.params?.enabled),
+        ).toEqual([true, false]);
+        const withSamples = yield* service.benchmark("owner", {
+          action: "get",
+          runId,
+          includeSamples: true,
+        });
+        expect(withSamples.report?.samples).toHaveLength(2);
+        const listed = yield* service.benchmark("owner", { action: "list" });
+        expect(listed.reports.map((entry) => entry.id)).toEqual([runId]);
+        const compared = yield* service.benchmark("owner", {
+          action: "start",
+          sessionId: session.sessionId,
+          steps,
+          iterations: 1,
+          warmup: 0,
+          settleMs: 150,
+          baselineId: runId,
+          waitMs: 10000,
+        });
+        expect(compared.report?.comparison?.steps[0]).toMatchObject({
+          label: "Run validation",
+          verdict: "unchanged",
+        });
+        yield* service.command("owner", {
+          sessionId: session.sessionId,
+          action: "press",
+          ref: "e1",
+        });
+      }),
+    );
+  });
+  it.effect("arms, reads and disarms the add-in probe per thread", () => {
+    const f = fixture(true);
+    return withService(f, (service) =>
+      Effect.gen(function* () {
+        const armed = yield* service.probe("owner", { action: "arm", waitForClientMs: 0 });
+        expect(armed.status).toMatchObject({ armed: true, listening: true, clients: [] });
+        expect(armed.status.port).toBeGreaterThan(0);
+        expect((yield* service.probe("other", { action: "status" })).status.armed).toBe(false);
+        const read = yield* service.probe("owner", { action: "read", after: 0 });
+        expect(read.events).toEqual([]);
+        expect((yield* service.probe("owner", { action: "setup" }).pipe(Effect.result))._tag).toBe(
+          "Failure",
+        );
+        expect((yield* service.probe("owner", { action: "disarm" })).status.armed).toBe(false);
       }),
     );
   });

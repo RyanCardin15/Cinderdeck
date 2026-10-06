@@ -232,6 +232,8 @@ struct CinderdeckMockAreaCaptureView: View {
   private var activeAreaSelectionView: some View {
     let currentWidth = max(28, targetSelectionWidth * selectionProgress)
     let currentHeight = max(24, targetSelectionHeight * selectionProgress)
+    let badgeProgress: CGFloat = max(0.1, selectionProgress)
+    let badgeText: String = "\(Int(420 * badgeProgress)) × \(Int(160 * badgeProgress))"
 
     return VStack(spacing: 0) {
       Spacer(minLength: 16)
@@ -259,7 +261,7 @@ struct CinderdeckMockAreaCaptureView: View {
 
           // 4. Dimension Badge
           HStack(spacing: 2) {
-            Text("\(Int(420 * max(0.1, selectionProgress))) × \(Int(160 * max(0.1, selectionProgress)))")
+            Text(badgeText)
               .font(.system(size: 8.5, weight: .bold, design: .monospaced))
               .lineLimit(1)
             Text("px")

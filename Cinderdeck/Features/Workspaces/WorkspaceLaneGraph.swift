@@ -74,15 +74,18 @@ struct WorkspaceLaneGraph {
       let endpoint = configured?.port.map { "\(definition?.host ?? "localhost"):\($0)" }
       let owner = byID[workspace]?.lane?.name ?? byID[workspace]?.name ?? workspace
       let process = runtime.process.map { "PID \($0.pid) · Process group \($0.pgid)" }
-      add(.init(id: id, workspaceID: workspace, title: name, subtitle: [owner, endpoint].compactMap { $0 }.joined(separator: "\n"),
+      // Typed locals keep these literals from dominating the module's type-check time.
+      let subtitle: [String?] = [owner, endpoint]
+      let detail: [String?] = [process, endpoint, ports.isEmpty ? nil : ports, configured?.command,
+        configured?.directory.path, runtime.owner.map { "Started by \($0.label)" }, runtime.bindWarning, runtime.detail]
+      let failed: Bool = runtime.phase == .crashed || runtime.phase == .unhealthy
+      let warning: String? = runtime.bindWarning ?? (failed ? runtime.detail : nil)
+      add(.init(id: id, workspaceID: workspace, title: name, subtitle: subtitle.compactMap { $0 }.joined(separator: "\n"),
         status: configured == nil ? "Unavailable" : runtime.phase.label,
-        detail: [process, endpoint, ports.isEmpty ? nil : ports, configured?.command,
-          configured?.directory.path, runtime.owner.map { "Started by \($0.label)" }, runtime.bindWarning, runtime.detail]
-          .compactMap { $0 }.joined(separator: "\n"), phase: runtime.phase, serviceID: name,
+        detail: detail.compactMap { $0 }.joined(separator: "\n"), phase: runtime.phase, serviceID: name,
         process: runtime.process, command: configured?.command, directory: configured?.directory.path,
         endpoint: endpoint.flatMap { URL(string: "http://" + $0) }, owner: runtime.owner?.label,
-        warning: runtime.bindWarning ?? ([.crashed, .unhealthy].contains(runtime.phase) ? runtime.detail : nil),
-        isSharedResource: configured?.laneMode == .shared))
+        warning: warning, isSharedResource: configured?.laneMode == .shared))
       for dependency in configured?.dependencies ?? [] {
         let (stack, serviceName) = target(dependency, definition: definition, workspace: workspace)
         connect(id, service(stack, serviceName), .depends)
@@ -93,15 +96,15 @@ struct WorkspaceLaneGraph {
       let state = states[file.id] ?? .init()
       let branches = Self.branchSummary(file, statuses: statuses)
       let activeRuns = runs.filter { $0.workspaceID == file.id && $0.status.isActive }
-      add(.init(id: .lane(file.id), workspaceID: file.id,
-        title: file.lane?.name ?? (file.id == workspaceID ? "Original checkout" : file.name),
-        subtitle: branches,
-        status: file.definition == nil ? "Needs attention" : activeRuns.first.map { "\($0.kind.rawValue.capitalized) \($0.status.rawValue)" } ?? state.label,
-        detail: [file.name, branches, file.lane?.owner.label, file.definition?.root.path,
-          file.issues.isEmpty ? nil : file.issues.map(\.message).joined(separator: "\n")].compactMap { $0 }.joined(separator: "\n"),
+      let title: String = file.lane?.name ?? (file.id == workspaceID ? "Original checkout" : file.name)
+      let runLabel: String? = activeRuns.first.map { "\($0.kind.rawValue.capitalized) \($0.status.rawValue)" }
+      let status: String = file.definition == nil ? "Needs attention" : runLabel ?? state.label
+      let issues: String? = file.issues.isEmpty ? nil : file.issues.map(\.message).joined(separator: "\n")
+      let detail: [String?] = [file.name, branches, file.lane?.owner.label, file.definition?.root.path, issues]
+      add(.init(id: .lane(file.id), workspaceID: file.id, title: title, subtitle: branches, status: status,
+        detail: detail.compactMap { $0 }.joined(separator: "\n"),
         runStatus: activeRuns.first?.status, isLane: true, runtimeActive: state.isActive,
-        directory: file.definition?.root.path, owner: file.lane?.owner.label,
-        warning: file.issues.isEmpty ? nil : file.issues.map(\.message).joined(separator: "\n")))
+        directory: file.definition?.root.path, owner: file.lane?.owner.label, warning: issues))
       let services = Set(file.definition?.services.map(\.id) ?? []).union(state.services.keys)
       for name in services.sorted() { connect(.lane(file.id), service(file.id, name), .contains) }
       // Include links even when only a task or a URL template uses the service.
@@ -116,10 +119,12 @@ struct WorkspaceLaneGraph {
         var previous = runID
         for step in run.steps {
           let stepID = ID.step(step.id)
+          let stepDetail: [String?] = [
+            step.process.map { "PID \($0.pid) · Process group \($0.pgid)" }, step.command, step.directory, step.detail,
+          ]
           add(.init(id: stepID, workspaceID: file.id, title: step.title, subtitle: step.reference,
             status: step.status.label,
-            detail: [step.process.map { "PID \($0.pid) · Process group \($0.pgid)" }, step.command, step.directory, step.detail]
-              .compactMap { $0 }.joined(separator: "\n"), runStatus: step.status, runID: run.id, process: step.process,
+            detail: stepDetail.compactMap { $0 }.joined(separator: "\n"), runStatus: step.status, runID: run.id, process: step.process,
             command: step.command, directory: step.directory, owner: run.actor.label,
             warning: step.status == .failed ? step.detail : nil))
           connect(previous, stepID, previous == runID ? .contains : .sequence)

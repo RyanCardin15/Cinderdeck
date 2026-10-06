@@ -231,8 +231,8 @@ final class SplashWindowController: NSObject, NSWindowDelegate {
       MainActor.assumeIsolated {
         self?.splashWindow = nil
 
-        // Revert to menu-bar-only mode (hide from Cmd+Tab switcher) if no other normal windows are visible
-        NSApp.revertActivationPolicyToAccessoryIfNeeded(excluding: window)
+        // Closing the splash keeps the application available in the Dock.
+        NSApp.maintainRegularActivationPolicy()
         DiagnosticLogger.shared.log(.debug, .ui, "Splash window dismissed")
       }
     })
@@ -242,9 +242,8 @@ final class SplashWindowController: NSObject, NSWindowDelegate {
 
   nonisolated func windowWillClose(_ notification: Notification) {
     MainActor.assumeIsolated {
-      let closingWindow = notification.object as? NSWindow
       self.splashWindow = nil
-      NSApp.revertActivationPolicyToAccessoryIfNeeded(excluding: closingWindow)
+      NSApp.maintainRegularActivationPolicy()
       DiagnosticLogger.shared.log(.debug, .ui, "Splash window closed")
     }
   }

@@ -1,6 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - UUIDs and hashes identify durable launch intents.
 import * as NodeCrypto from "node:crypto";
 import { CommandId, ProjectId, ThreadId } from "@cinderdeck/contracts";
+import { blockingWorkspaceIssue } from "@cinderdeck/shared/workspaceChat";
 import * as Contracts from "@cinderdeck/contracts/deckhand";
 import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
 import * as Context from "effect/Context";
@@ -235,8 +236,7 @@ const make = Effect.gen(function* () {
           !resource.available ||
           resource.generation !== input.generation ||
           resource.revision !== (review?.revision ?? input.revision) ||
-          context.definitionChanged ||
-          context.issues.length ||
+          blockingWorkspaceIssue(context.issues) ||
           !context.repos.length ||
           context.repos.length > 64 ||
           new Set(context.repos.map((repo) => repo.id)).size !== context.repos.length
@@ -256,8 +256,7 @@ const make = Effect.gen(function* () {
           !parent.available ||
           !parent.workspace ||
           parent.workspace.lane ||
-          parent.workspace.definitionChanged ||
-          parent.workspace.issues.length
+          blockingWorkspaceIssue(parent.workspace.issues)
         )
           return yield* error(key, "stale_context");
         const physical = yield* Effect.forEach(context.repos, (repo) =>
@@ -1057,8 +1056,10 @@ const make = Effect.gen(function* () {
         resource.generation !== saved.input.generation ||
         !resource.available ||
         !workspace ||
-        workspace.definitionChanged ||
-        workspace.issues.length ||
+        (input.kind === "creation" && workspace.definitionChanged) ||
+        (input.kind === "creation"
+          ? workspace.issues.length
+          : blockingWorkspaceIssue(workspace.issues)) ||
         !workspace.repos.length ||
         workspace.repos.length > 64 ||
         new Set(workspace.repos.map((repo) => repo.id)).size !== workspace.repos.length ||
@@ -1066,9 +1067,9 @@ const make = Effect.gen(function* () {
       )
         return yield* error(input.operationKey, "stale_context");
       const physical = yield* Effect.forEach(workspace.repos, (repo) =>
-        identities
-          .resolve(repo.path)
-          .pipe(Effect.mapError(() => error(input.operationKey, "stale_context"))),
+        (input.kind === "creation" ? identities.resolve(repo.path) : resolveFolder(repo.path)).pipe(
+          Effect.mapError(() => error(input.operationKey, "stale_context")),
+        ),
       );
       if (new Set(physical.map((repo) => repo.physicalId)).size !== physical.length)
         return yield* error(input.operationKey, "stale_context");

@@ -12,10 +12,9 @@ import {
   CircleAlertIcon,
   GitBranchIcon,
   GlobeIcon,
-  TerminalIcon,
-  FilesIcon,
   ChevronRightIcon,
 } from "lucide-react";
+import { AddPanelMenu, type AddPanelMenuProps } from "../components/RightPanelTabs";
 import type { ProviderInstanceEntry } from "../providerInstances";
 import { useEnvironmentQuery } from "../state/query";
 import { threadContextView } from "./state";
@@ -39,9 +38,7 @@ export function LaneSessionContext({
   stale: suppliedStale,
   previewAvailable,
   onOpenPreview,
-  onOpenDiff,
-  onOpenTerminal,
-  onOpenSource,
+  panelMenu,
   onOpenPullRequests,
   pullRequestsAvailable,
   pullRequestCount,
@@ -52,9 +49,7 @@ export function LaneSessionContext({
   stale: boolean;
   previewAvailable: boolean;
   onOpenPreview: (url: string) => void;
-  onOpenDiff: () => void;
-  onOpenTerminal: () => void;
-  onOpenSource: () => void;
+  panelMenu: AddPanelMenuProps;
   onOpenPullRequests: () => void;
   pullRequestsAvailable: boolean;
   pullRequestCount: number;
@@ -210,7 +205,7 @@ export function LaneSessionContext({
         </nav>
         <div className={styles.panelActions} aria-label="Repository panels">
           <ManagedSessionControl threadRef={threadRef} context={context} enabled={connected} />
-          <LinkedWorkContext threadRef={threadRef} context={context} enabled={connected} />
+          <LinkedWorkContext threadRef={threadRef} enabled={connected} />
           {context.session.role === "writer" ? (
             <ReviewerLauncher
               key={`${threadRef.environmentId}:${threadRef.threadId}`}
@@ -225,30 +220,7 @@ export function LaneSessionContext({
               }
             />
           ) : null}
-          <button
-            type="button"
-            onClick={onOpenSource}
-            aria-label="Source files in this session’s repository"
-          >
-            <FilesIcon aria-hidden size={15} />
-            <span>Source</span>
-          </button>
-          <button
-            type="button"
-            onClick={onOpenDiff}
-            aria-label="Changes in this session’s checkout"
-          >
-            <GitBranchIcon aria-hidden size={15} />
-            <span>Diff</span>
-          </button>
-          <button
-            type="button"
-            onClick={onOpenTerminal}
-            aria-label="Shell in this session’s repository"
-          >
-            <TerminalIcon aria-hidden size={15} />
-            <span>Terminal</span>
-          </button>
+          <AddPanelMenu {...panelMenu} />
           {previewService && !previewAvailable ? (
             <span
               aria-label="Preview addresses belong to the execution computer"

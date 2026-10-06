@@ -172,14 +172,14 @@ nonisolated struct PRFilters: Codable, Equatable, Sendable {
   func query(login: String) -> String {
     // The global inbox is deliberately scoped to the viewer. Selecting a repo
     // removes that implicit involvement filter so all of its PRs are visible.
-    let scope = repository.map { "repo:\($0)" } ?? organization.map { "org:\($0)" } ?? (role == .anyone ? "involves:\(login)" : "")
+    let scope: String = repository.map { "repo:\($0)" } ?? organization.map { "org:\($0)" } ?? (role == .anyone ? "involves:\(login)" : "")
     let personal = role.query(login: login)
     let labelQuery = label.trimmingCharacters(in: .whitespacesAndNewlines)
     let labelClause = labelQuery.isEmpty ? "" : "label:\(Self.quote(labelQuery))"
     let search = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    return ["is:pr", scope, personal, advanced ? "" : state.query, advanced ? "" : labelClause,
-      advanced ? search.replacingOccurrences(of: "@me", with: login) : (search.isEmpty ? "" : Self.quote(search)), sort.query]
-      .filter { !$0.isEmpty }.joined(separator: " ")
+    let searchClause: String = advanced ? search.replacingOccurrences(of: "@me", with: login) : (search.isEmpty ? "" : Self.quote(search))
+    let clauses: [String] = ["is:pr", scope, personal, advanced ? "" : state.query, advanced ? "" : labelClause, searchClause, sort.query]
+    return clauses.filter { !$0.isEmpty }.joined(separator: " ")
   }
   private static func quote(_ value: String) -> String {
     "\"" + value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""

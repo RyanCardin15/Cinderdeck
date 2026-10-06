@@ -1,4 +1,5 @@
 import { SessionLauncher } from "./SessionLauncher";
+import { workspaceChatUnavailableReason } from "@cinderdeck/shared/workspaceChat";
 import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import { AsyncResult } from "effect/unstable/reactivity";
@@ -144,12 +145,8 @@ export function ConnectedWorkspaceShell({
                 environmentId={threadRef.environmentId}
                 installationID={context.workspace.environmentId}
                 resource={currentResource}
-                enabled={
-                  connected &&
-                  currentResource.available &&
-                  !currentResource.workspace?.definitionChanged &&
-                  !currentResource.workspace?.issues.length
-                }
+                enabled={connected && workspaceChatUnavailableReason(currentResource) === null}
+                disabledReason={workspaceChatUnavailableReason(currentResource) ?? undefined}
               />
             ) : (
               <Link className={styles.newSession} to="/workspaces" search={search}>

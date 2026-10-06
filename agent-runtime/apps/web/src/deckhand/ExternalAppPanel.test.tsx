@@ -12,10 +12,13 @@ const mocks = vi.hoisted(() => ({
   open: vi.fn<(request: Request) => Promise<unknown>>(),
   discover: vi.fn<(request: Request) => Promise<unknown>>(),
   attach: vi.fn<(request: Request) => Promise<unknown>>(),
+  conflicts: vi.fn<(request: Request) => Promise<unknown>>(),
   sessions: vi.fn<(request: Request) => Promise<unknown>>(),
   detach: vi.fn<(request: Request) => Promise<unknown>>(),
   read: vi.fn<(request: Request) => Promise<unknown>>(),
   run: vi.fn<(request: Request) => Promise<unknown>>(),
+  probe: vi.fn<(request: Request) => Promise<unknown>>(),
+  benchmark: vi.fn<(request: Request) => Promise<unknown>>(),
   settings: { externalAppProfiles: [] as (typeof EXCEL_EXTERNAL_APP)[] },
   listeners: new Set<() => void>(),
 }));
@@ -24,13 +27,27 @@ vi.mock("./externalDebugState", () => ({
   openDebugApp: "open",
   attachDebugTarget: "attach",
   listDebugSessions: "sessions",
+  listDebugConflicts: "conflicts",
   detachDebugSession: "detach",
   readDebugSession: "read",
   runDebugCommand: "run",
+  excelProbe: "probe",
+  excelBenchmark: "benchmark",
 }));
 vi.mock("../state/use-atom-command", () => ({
-  useAtomCommand: (name: "open" | "discover" | "attach" | "sessions" | "detach" | "read" | "run") =>
-    mocks[name],
+  useAtomCommand: (
+    name:
+      | "open"
+      | "discover"
+      | "attach"
+      | "conflicts"
+      | "sessions"
+      | "detach"
+      | "read"
+      | "run"
+      | "probe"
+      | "benchmark",
+  ) => mocks[name],
 }));
 vi.mock("../state/environments", () => ({
   useEnvironments: () => ({ environments: [{ environmentId: "local", label: "Test Mac" }] }),
@@ -69,6 +86,7 @@ vi.mock("../hooks/useSettings", async () => {
 import { agentAppBindings, useAgentExternalApps } from "./useAgentExternalApps";
 import { useRightPanelStore } from "../rightPanelStore";
 import { ExternalAppPanel } from "./ExternalAppPanel";
+import { ExcelPerformancePanel } from "./ExcelPerformancePanel";
 import { ExternalAppsSettings } from "../components/settings/ExternalAppsSettings";
 import { externalAppBindingKey, useExternalAppSessions } from "./externalAppSessions";
 
@@ -95,11 +113,23 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   mocks.settings = { externalAppProfiles: [{ ...EXCEL_EXTERNAL_APP, enabled: true }] };
-  for (const key of ["open", "discover", "attach", "sessions", "detach", "read", "run"] as const)
+  for (const key of [
+    "open",
+    "discover",
+    "attach",
+    "conflicts",
+    "sessions",
+    "detach",
+    "read",
+    "run",
+    "probe",
+    "benchmark",
+  ] as const)
     mocks[key].mockReset();
   mocks.open.mockResolvedValue(success({ targets: [app], session: session(app) }));
   mocks.discover.mockResolvedValue(success([app, inspector]));
   mocks.sessions.mockResolvedValue(success([]));
+  mocks.conflicts.mockResolvedValue(success([]));
   mocks.attach.mockImplementation(async ({ input }) =>
     success(session(input.targetId === app.id ? app : inspector)),
   );
@@ -133,7 +163,7 @@ const panel = async (threadRef: ScopedThreadRef = ref, visible = true) =>
     root.render(<ExternalAppPanel threadRef={threadRef} profileId="excel" visible={visible} />),
   );
 function button(name: string) {
-  const node = [...element.querySelectorAll<HTMLElement>("button,[role=switch]")].find(
+  const node = [...document.body.querySelectorAll<HTMLElement>("button,[role=switch]")].find(
     (n) => n.textContent?.trim() === name || n.getAttribute("aria-label") === name,
   );
   if (!node) throw new Error(`Missing ${name}`);
@@ -163,6 +193,110 @@ const tick = () =>
   act(async () => {
     await vi.advanceTimersByTimeAsync(1200);
   });
+
+const probeStatus = (armed = false) => ({
+  armed,
+  listening: true,
+  port: 47823,
+  unavailable: null,
+  clients: [],
+  summary: null,
+});
+async function performancePanel(visible = true) {
+  await act(async () =>
+    root.render(
+      <ExcelPerformancePanel
+        environmentId={ref.environmentId}
+        threadId={ref.threadId}
+        visible={visible}
+      />,
+    ),
+  );
+}
+it("loads Excel performance only when expanded and stops polling when hidden", async () => {
+  mocks.probe.mockResolvedValue(success({ status: probeStatus() }));
+  mocks.benchmark.mockResolvedValue(success({ reports: [] }));
+  await performancePanel();
+  expect(mocks.probe).not.toHaveBeenCalled();
+  await click("Add-in performance");
+  expect(mocks.probe).toHaveBeenCalledWith({
+    environmentId: ref.environmentId,
+    input: { action: "status", threadId: ref.threadId },
+  });
+  expect(mocks.benchmark).toHaveBeenCalledWith({
+    environmentId: ref.environmentId,
+    input: { action: "list", threadId: ref.threadId },
+  });
+  const calls = mocks.probe.mock.calls.length;
+  await performancePanel(false);
+  await act(async () => vi.advanceTimersByTimeAsync(5000));
+  expect(mocks.probe).toHaveBeenCalledTimes(calls);
+});
+it("arms and disarms collection for the selected Excel thread", async () => {
+  mocks.probe.mockImplementation(async ({ input }) =>
+    success({ status: probeStatus(input.action === "arm") }),
+  );
+  mocks.benchmark.mockResolvedValue(success({ reports: [] }));
+  await performancePanel();
+  await click("Add-in performance");
+  await click("Collect add-in telemetry");
+  expect(mocks.probe).toHaveBeenLastCalledWith({
+    environmentId: ref.environmentId,
+    input: { action: "arm", waitForClientMs: 0, threadId: ref.threadId },
+  });
+  await click("Stop collecting");
+  expect(mocks.probe).toHaveBeenLastCalledWith({
+    environmentId: ref.environmentId,
+    input: { action: "disarm", waitForClientMs: 0, threadId: ref.threadId },
+  });
+});
+it("shows probe command failures and keeps collection available to retry", async () => {
+  mocks.probe.mockResolvedValue(success({ status: probeStatus() }));
+  mocks.benchmark.mockResolvedValue(success({ reports: [] }));
+  await performancePanel();
+  await click("Add-in performance");
+  mocks.probe.mockResolvedValue({ _tag: "Failure", cause: new Error("Probe unavailable") });
+  await click("Collect add-in telemetry");
+  expect(element.textContent).toContain("Probe unavailable");
+  expect((button("Collect add-in telemetry") as HTMLButtonElement).disabled).toBe(false);
+});
+it("opens a saved Excel benchmark and displays unavailable metric warnings", async () => {
+  mocks.probe.mockResolvedValue(success({ status: probeStatus() }));
+  mocks.benchmark.mockImplementation(async ({ input }) =>
+    input.action === "list"
+      ? success({
+          reports: [
+            {
+              id: "saved-run",
+              name: "Validate fixture",
+              state: "completed",
+              steps: [],
+              regressions: 0,
+            },
+          ],
+        })
+      : success({
+          report: {
+            id: "saved-run",
+            state: "completed",
+            progress: { iteration: 1, iterations: 1 },
+            steps: [],
+            warnings: ["Repaint timing unavailable"],
+          },
+        }),
+  );
+  await performancePanel();
+  await click("Add-in performance");
+  const saved = [...element.querySelectorAll<HTMLButtonElement>("button")].find((node) =>
+    node.textContent?.includes("Validate fixture"),
+  )!;
+  await act(async () => saved.click());
+  expect(mocks.benchmark).toHaveBeenCalledWith({
+    environmentId: ref.environmentId,
+    input: { action: "get", runId: "saved-run", threadId: ref.threadId },
+  });
+  expect(element.textContent).toContain("Repaint timing unavailable");
+});
 
 it("reveals configuration only after enabling Excel and supports a custom app", async () => {
   mocks.settings = { externalAppProfiles: [{ ...EXCEL_EXTERNAL_APP, enabled: false }] };
@@ -329,21 +463,32 @@ it("reopens the agent's existing app and Inspector without creating duplicate at
     useExternalAppSessions.getState().bindings[externalAppBindingKey(ref, "excel")]?.sessions,
   ).toEqual([session(app), session(inspector)]);
 });
-it("does not reuse an attachment owned by another profile in the same conversation", async () => {
+it("prompts before replacing an attachment in another pane of the same conversation", async () => {
   useExternalAppSessions
     .getState()
     .bind({ threadRef: ref, profileId: "custom", sessions: [session(app)] });
   mocks.sessions.mockResolvedValue(success([session(app)]));
+  mocks.conflicts.mockResolvedValue(success([{ session: session(app), threadId: ref.threadId }]));
   await pick();
   await click("Connect selected windows");
-  expect(element.querySelector('[role="alert"]')?.textContent).toContain(
-    "another external app tab",
+  expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(
+    "Resolve window connection",
   );
   expect(mocks.attach).not.toHaveBeenCalled();
   expect(mocks.detach).not.toHaveBeenCalled();
   expect(
     useExternalAppSessions.getState().bindings[externalAppBindingKey(ref, "custom")]?.sessions,
   ).toEqual([session(app)]);
+  mocks.sessions.mockResolvedValue(success([]));
+  await click("Disconnect and connect here");
+  expect(mocks.detach).toHaveBeenCalledWith({
+    environmentId: ref.environmentId,
+    input: { threadId: ref.threadId, sessionId: session(app).sessionId },
+  });
+  expect(
+    useExternalAppSessions.getState().bindings[externalAppBindingKey(ref, "custom")],
+  ).toBeUndefined();
+  expect(mocks.attach).toHaveBeenCalledTimes(2);
 });
 
 it("gates native input, translates image coordinates, and revokes input when viewing stops", async () => {
@@ -594,4 +739,124 @@ it("keeps a newer user panel choice when an agent attachment arrives late", asyn
   expect(
     useExternalAppSessions.getState().bindings[externalAppBindingKey(ref, "excel")],
   ).toBeDefined();
+});
+
+it("identifies another conversation and transfers selected windows only after confirmation", async () => {
+  const old = session(app);
+  const unrelated = session({ ...app, id: "mac:20:1", title: "Other workbook" });
+  useExternalAppSessions
+    .getState()
+    .bind({ threadRef: other, profileId: "excel", sessions: [old, unrelated] });
+  mocks.attach.mockResolvedValueOnce({ _tag: "Failure", cause: { reason: "busy" } });
+  mocks.conflicts.mockImplementation(async ({ input }) =>
+    success(
+      input.targetId === app.id
+        ? [{ session: old, threadId: other.threadId, threadTitle: "Quarterly forecast" }]
+        : [],
+    ),
+  );
+  await pick();
+  await click("Connect selected windows");
+  const dialog = document.body.querySelector('[role="dialog"]');
+  expect(dialog?.textContent).toContain("Quarterly forecast");
+  expect(dialog?.textContent).toContain(old.sessionId);
+  expect(dialog?.textContent).toContain(other.threadId);
+  expect(mocks.detach).not.toHaveBeenCalled();
+  await click("Disconnect and connect here");
+  expect(mocks.detach).toHaveBeenCalledWith({
+    environmentId: ref.environmentId,
+    input: { threadId: other.threadId, sessionId: old.sessionId },
+  });
+  expect(
+    useExternalAppSessions.getState().bindings[externalAppBindingKey(other, "excel")]?.sessions,
+  ).toEqual([unrelated]);
+  expect(
+    useExternalAppSessions.getState().bindings[externalAppBindingKey(ref, "excel")]?.sessions,
+  ).toEqual([session(app), session(inspector)]);
+});
+
+it("cancels a busy connection without releasing anything", async () => {
+  mocks.attach.mockResolvedValue({ _tag: "Failure", cause: { reason: "busy" } });
+  mocks.conflicts.mockResolvedValue(success([{ session: session(app), threadId: other.threadId }]));
+  await pick();
+  await click("Connect selected windows");
+  await click("Cancel");
+  expect(mocks.detach).not.toHaveBeenCalled();
+  expect(mocks.attach).toHaveBeenCalledTimes(1);
+  expect(useExternalAppSessions.getState().bindings).toEqual({});
+});
+
+it("keeps the old pane when disconnect fails and does not attach the new pane", async () => {
+  useExternalAppSessions
+    .getState()
+    .bind({ threadRef: other, profileId: "excel", sessions: [session(app)] });
+  mocks.attach.mockResolvedValue({ _tag: "Failure", cause: { reason: "busy" } });
+  mocks.conflicts.mockResolvedValue(success([{ session: session(app), threadId: other.threadId }]));
+  mocks.detach.mockResolvedValue({ _tag: "Failure", cause: new Error("Disconnect unavailable") });
+  await pick();
+  await click("Connect selected windows");
+  await click("Disconnect and connect here");
+  expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(
+    "Disconnect unavailable",
+  );
+  expect(mocks.attach).toHaveBeenCalledTimes(1);
+  expect(
+    useExternalAppSessions.getState().bindings[externalAppBindingKey(other, "excel")]?.sessions,
+  ).toEqual([session(app)]);
+});
+
+it("offers the same conflict dialog when opening an already attached app", async () => {
+  mocks.open.mockResolvedValue({ _tag: "Failure", cause: { reason: "busy" } });
+  mocks.discover.mockResolvedValue(success([app]));
+  mocks.conflicts.mockResolvedValue(
+    success([{ session: session(app), threadId: other.threadId, threadTitle: "Other chat" }]),
+  );
+  await panel();
+  await click("Open Excel on Test Mac");
+  expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain("Other chat");
+  await click("Disconnect and connect here");
+  expect(mocks.open).toHaveBeenCalledTimes(1);
+  expect(mocks.attach).toHaveBeenCalledTimes(1);
+});
+
+it("replaces both blocking windows and rolls back only new captures if reconnect fails", async () => {
+  useExternalAppSessions
+    .getState()
+    .bind({ threadRef: other, profileId: "excel", sessions: [session(app), session(inspector)] });
+  mocks.attach
+    .mockResolvedValueOnce({ _tag: "Failure", cause: { reason: "busy" } })
+    .mockResolvedValueOnce(success(session(app)))
+    .mockResolvedValueOnce({ _tag: "Failure", cause: new Error("Inspector disappeared") });
+  mocks.conflicts.mockImplementation(async ({ input }) =>
+    success([
+      { session: session(input.targetId === app.id ? app : inspector), threadId: other.threadId },
+    ]),
+  );
+  await pick();
+  await click("Connect selected windows");
+  await click("Disconnect and connect here");
+  expect(mocks.detach.mock.calls.map(([request]) => request.input)).toEqual([
+    { sessionId: session(app).sessionId, threadId: other.threadId },
+    { sessionId: session(inspector).sessionId, threadId: other.threadId },
+    { sessionId: session(app).sessionId, threadId: ref.threadId },
+  ]);
+  expect(element.querySelector('[role="alert"]')?.textContent).toContain("Inspector disappeared");
+  expect(useExternalAppSessions.getState().bindings).toEqual({});
+});
+
+it("ignores conflict results that arrive after switching conversations", async () => {
+  let finish!: (value: unknown) => void;
+  mocks.attach.mockResolvedValue({ _tag: "Failure", cause: { reason: "busy" } });
+  mocks.conflicts.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await pick();
+  await click("Connect selected windows");
+  await panel(other);
+  await act(async () => finish(success([{ session: session(app), threadId: ref.threadId }])));
+  expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+  expect(mocks.detach).not.toHaveBeenCalled();
 });

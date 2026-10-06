@@ -15,15 +15,17 @@ import { environmentServerConfigsAtom } from "../state/server";
 import { useEnvironmentSettings } from "../hooks/useSettings";
 import { readProjects } from "../state/entities";
 import { resolveProjectSettings } from "@cinderdeck/shared/projectSettings";
+import { workspaceChatUnavailableReason } from "@cinderdeck/shared/workspaceChat";
 import { resolveDefaultProviderModelSelection } from "../providerInstances";
 import { useComposerDraftStore } from "../composerDraftStore";
-import { resolveChatModes, useChatDefaultsStore } from "./chatDefaults";
+import { resolveChatModes } from "./chatDefaults";
 import {
   inspectSessionLaunch,
   launchSession,
   sessionLaunchOptions,
   previewLaunchReview,
   confirmLaunchReview,
+  refreshWorkspaces,
 } from "./state";
 import styles from "./sessions.module.css";
 
@@ -32,6 +34,7 @@ export type NewChatLauncherProps = {
   installationID: string;
   resource: Contracts.IntegrationView["resources"][number];
   enabled: boolean;
+  disabledReason?: string | undefined;
   compact?: boolean;
   autoOpen?: boolean;
   onOpened?: () => void;
@@ -46,6 +49,7 @@ export function NewChatLauncher({
   installationID,
   resource,
   enabled,
+  disabledReason,
   compact = false,
   autoOpen = false,
   onOpened,
@@ -73,11 +77,15 @@ export function NewChatLauncher({
       : null,
   );
   const [accepted, setAccepted] = useState<Contracts.ManagedLaunchRecord | null>(null);
-  const rememberedRepo = useChatDefaultsStore((state) => state.repositories[scope]);
   const repos = resource.workspace?.repos ?? [];
-  const [repositoryID, setRepositoryID] = useState(
-    repos.find((repo) => repo.id === rememberedRepo)?.id ?? repos[0]?.id ?? "",
-  );
+  // The first configured folder anchors the chat; the server supplies the entire workspace.
+  const repositoryID = repos[0]?.id ?? "";
+  const unavailableReason = !enabled
+    ? (disabledReason ??
+      "Waiting for a current connection to this computer. Refresh workspaces to try again.")
+    : workspaceChatUnavailableReason(resource);
+  const canOpen = unavailableReason === null;
+  const refresh = useAtomCommand(refreshWorkspaces, { reportFailure: false });
   const launch = useAtomCommand(launchSession, { reportFailure: false });
   const inspect = useAtomCommand(inspectSessionLaunch, { reportFailure: false });
   const options = useAtomCommand(sessionLaunchOptions, { reportFailure: false });
@@ -138,12 +146,12 @@ export function NewChatLauncher({
     const failure = cause ? Option.getOrNull(Cause.findErrorOption(cause)) : null;
     setError(
       isRpcError(failure) && failure.reason === "stale_context"
-        ? "This checkout changed. Check the saved result before opening another chat."
+        ? "Workspace folders or settings changed. Check the saved result before opening another chat."
         : "The chat result could not be confirmed. Check the saved result or retry the same request.",
     );
   };
   const start = async (access: "read_only" | "write" = "write") => {
-    if (!enabled || initial.error || inFlight.current || review) return;
+    if (!canOpen || initial.error || inFlight.current || review) return;
     inFlight.current = true;
     setBusy(true);
     setError(null);
@@ -222,7 +230,6 @@ export function NewChatLauncher({
         // open retries the same chat, never allocates a second conversation.
         localStorage.setItem(storageKey, encodeDraft(request));
         setSaved(request);
-        useChatDefaultsStore.getState().rememberRepository(scope, repositoryID);
       }
       const result = await launch({ environmentId, input: request });
       if (result._tag === "Success") handleResult(result.value, true);
@@ -250,7 +257,7 @@ export function NewChatLauncher({
           // Only a confirmed absence permits fresh defaults and checkout scope.
           localStorage.removeItem(storageKey);
           setSaved(null);
-          setError("No chat was created. You can open a new chat with the current checkout.");
+          setError("No chat was created. You can open a new chat in the current workspace.");
         } else showFailure(result._tag === "Failure" ? result.cause : undefined);
       }
     } catch {
@@ -261,42 +268,45 @@ export function NewChatLauncher({
     }
   };
   useEffect(() => {
-    if (!autoOpen || autoOpened.current || !enabled || !repositoryID) return;
+    if (!autoOpen || autoOpened.current || !canOpen || !repositoryID) return;
     // A sidebar click opens once, including under StrictMode. Recovery stays explicit.
     autoOpened.current = true;
     void start();
-  }, [autoOpen, enabled, repositoryID, start]);
+  }, [autoOpen, canOpen, repositoryID, start]);
+  const refreshContext = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    try {
+      const result = await refresh({ environmentId, input: {} });
+      if (result._tag !== "Success")
+        setError(
+          "Workspaces could not be refreshed. Check this computer’s connection in Settings → Connections.",
+        );
+      else setError(null);
+    } catch {
+      setError("Workspaces could not be refreshed. Try again.");
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  };
   return (
     <section className={compact ? styles.chatShortcut : styles.launchPrompt} aria-label="New chat">
       {!compact ? (
         <div>
           <h3>Open a chat</h3>
           <p>
-            {resource.workspace?.lane?.name ?? "Primary checkout"} · choose your provider and model
-            in the chat.
+            {resource.workspace?.lane?.name ?? resource.workspace?.name ?? "Workspace"} · choose
+            your provider and model in the chat.
           </p>
         </div>
       ) : null}
       <div className={styles.chatActions}>
-        {repos.length > 1 ? (
-          <select
-            aria-label="Chat starting folder"
-            title="Starting folder; the chat can access all workspace locations"
-            value={repositoryID}
-            disabled={busy || saved !== null || !enabled}
-            onChange={(event) => setRepositoryID(event.target.value)}
-          >
-            {repos.map((repo) => (
-              <option key={repo.id} value={repo.id}>
-                {repo.id}
-              </option>
-            ))}
-          </select>
-        ) : null}
         <button
           type="button"
           className={styles.primary}
-          disabled={busy || !enabled || initial.error || !repositoryID || review !== null}
+          disabled={busy || (!accepted && !canOpen) || initial.error || review !== null}
           onClick={() => (accepted ? open(accepted) : void start())}
         >
           {busy ? "Opening…" : accepted ? "Open chat" : saved ? "Retry saved chat" : "+ New chat"}
@@ -307,7 +317,7 @@ export function NewChatLauncher({
             <button
               type="button"
               className={styles.quiet}
-              disabled={busy || !enabled || initial.error}
+              disabled={busy || !canOpen || initial.error}
               onClick={() => void start("read_only")}
             >
               Open read-only analysis chat
@@ -328,8 +338,18 @@ export function NewChatLauncher({
           Chat defaults
         </Link>
       </div>
-      {!enabled ? (
-        <p className={styles.scopeNote}>Reconnect this checkout to open a chat.</p>
+      {unavailableReason ? (
+        <div className={styles.scopeNote} role="status">
+          <p>{unavailableReason}</p>
+          <button
+            type="button"
+            className={styles.quiet}
+            disabled={busy}
+            onClick={() => void refreshContext()}
+          >
+            Refresh workspaces
+          </button>
+        </div>
       ) : null}
       {saved && error ? (
         <button
@@ -343,14 +363,16 @@ export function NewChatLauncher({
       ) : null}
       {review ? (
         <div className={styles.chatReview} aria-label="Review saved chat context">
-          <p>Review the checkout before retrying this chat.</p>
+          <p>Review the workspace folders before retrying this chat.</p>
           {review.repositories.map((repo) => (
             <div key={repo.repositoryID}>
               <strong>{repo.repositoryID}</strong>
               <code>{repo.checkout.root}</code>
               <span>
-                {repo.checkout.branch ?? "Detached HEAD"} ·{" "}
-                {repo.checkout.commit?.slice(0, 12) ?? "Commit unavailable"}
+                {repo.checkout.gitDirectory === repo.checkout.root
+                  ? "Folder"
+                  : (repo.checkout.branch ?? "Detached HEAD")}
+                {repo.checkout.commit ? ` · ${repo.checkout.commit.slice(0, 12)}` : ""}
               </span>
             </div>
           ))}

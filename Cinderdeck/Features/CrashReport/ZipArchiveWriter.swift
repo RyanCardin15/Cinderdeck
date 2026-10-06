@@ -126,15 +126,17 @@ private struct ZipTimestamp {
   init(date sourceDate: Date) {
     let calendar = Calendar.current
     let components = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: sourceDate)
-    let year = min(max(components.year ?? 1980, 1980), 2107)
-    let month = min(max(components.month ?? 1, 1), 12)
-    let day = min(max(components.day ?? 1, 1), 31)
-    let hour = min(max(components.hour ?? 0, 0), 23)
-    let minute = min(max(components.minute ?? 0, 0), 59)
-    let second = min(max(components.second ?? 0, 0), 59)
+    let year: Int = min(max(components.year ?? 1980, 1980), 2107)
+    let month: Int = min(max(components.month ?? 1, 1), 12)
+    let day: Int = min(max(components.day ?? 1, 1), 31)
+    let hour: Int = min(max(components.hour ?? 0, 0), 23)
+    let minute: Int = min(max(components.minute ?? 0, 0), 59)
+    let second: Int = min(max(components.second ?? 0, 0), 59)
 
-    time = UInt16((hour << 11) | (minute << 5) | (second / 2))
-    date = UInt16(((year - 1980) << 9) | (month << 5) | day)
+    let packedTime: Int = (hour << 11) | (minute << 5) | (second / 2)
+    let packedDate: Int = ((year - 1980) << 9) | (month << 5) | day
+    time = UInt16(packedTime)
+    date = UInt16(packedDate)
   }
 }
 

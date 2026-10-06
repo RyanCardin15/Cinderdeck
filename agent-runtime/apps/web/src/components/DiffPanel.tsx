@@ -17,6 +17,7 @@ import {
   ChevronsUpDownIcon,
   Columns2Icon,
   FolderTreeIcon,
+  SquareArrowOutUpRightIcon,
   PilcrowIcon,
   Rows3Icon,
   TextWrapIcon,
@@ -45,6 +46,7 @@ import {
 } from "../lib/diffRendering";
 import { PREFERRED_HIGHLIGHTER } from "../lib/syntaxHighlighting";
 import { areAllDiffFilesCollapsed, toggleAllDiffFiles } from "../lib/diffCollapse";
+import { diffHeaderFilePath } from "../lib/diffHeaderInteraction";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { useWorkspaceMutationRefresh } from "../hooks/useWorkspaceMutationRefresh";
 import { useProject, useThreadProjection, useThreadShell } from "../state/entities";
@@ -1022,35 +1024,15 @@ export default function DiffPanel({
                 <div
                   className="min-h-0 min-w-0 flex-1"
                   onClickCapture={(event) => {
-                    const composedPath = event.nativeEvent.composedPath?.() ?? [];
-                    for (const node of composedPath) {
-                      if (!(node instanceof HTMLElement)) continue;
-                      // Header controls keep their own actions. In particular, the chevron must
-                      // not also trigger the row handler or the two toggles cancel each other.
-                      if (node instanceof HTMLButtonElement || node instanceof HTMLAnchorElement) {
-                        return;
-                      }
-                    }
-                    const title = composedPath.find(
-                      (node): node is HTMLElement =>
-                        node instanceof HTMLElement && node.hasAttribute("data-title"),
+                    const headerFilePath = diffHeaderFilePath(
+                      event.nativeEvent.composedPath?.() ?? [],
                     );
-                    const filePath = title?.textContent;
-                    // The filename remains the explicit "open in editor" affordance.
-                    if (filePath) {
-                      openDiffFile(filePath);
-                      return;
-                    }
-                    const header = composedPath.find(
-                      (node): node is HTMLElement =>
-                        node instanceof HTMLElement && node.hasAttribute("data-diffs-header"),
-                    );
-                    const headerFilePath = header?.querySelector("[data-title]")?.textContent;
                     if (!headerFilePath) return;
                     const file = codeViewFiles.find(
                       (candidate) => candidate.filePath === headerFilePath,
                     );
-                    if (file) toggleDiffFileCollapsed(file.fileKey);
+                    if (file && !file.fileDiff.cacheKey?.endsWith(":pending"))
+                      toggleDiffFileCollapsed(file.fileKey);
                   }}
                   onContextMenuCapture={(event) => {
                     const composedPath = event.nativeEvent.composedPath?.() ?? [];
@@ -1087,6 +1069,21 @@ export default function DiffPanel({
                       const stat = fileStats.get(path);
                       return (
                         <>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  size="icon-micro"
+                                  variant="ghost-muted"
+                                  aria-label={`Open ${path} in editor`}
+                                  onClick={() => openDiffFile(path)}
+                                />
+                              }
+                            >
+                              <SquareArrowOutUpRightIcon className="size-3" />
+                            </TooltipTrigger>
+                            <TooltipPopup>Open in editor</TooltipPopup>
+                          </Tooltip>
                           <DiffFilePathCopyButton filePath={path} />
                           {stat ? (
                             <DiffFileStatus {...fileStates.get(path)} retry={() => retry(path)} />

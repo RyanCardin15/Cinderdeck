@@ -228,7 +228,7 @@ struct PullRequestsView: View {
           .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
       }
       Spacer()
-      Button { showsAgentAccess = true } label: { Image(systemName: "sparkles") }
+      Button { AgentAccessNavigation.open { showsAgentAccess = true } } label: { Image(systemName: "sparkles") }
         .buttonStyle(.plain).help("Let agents configure PR views").accessibilityLabel("Agent access")
       if let message = loadingMessage {
         ProgressView().progressViewStyle(.circular).controlSize(.small)

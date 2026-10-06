@@ -273,11 +273,11 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.match(privateShellBuildError({ platform: "mac", target: "dmg" })!, /build-unified/);
   });
 
-  it("keeps every private child bundle named AgentShell", () => {
-    assert.equal(resolveDesktopProductName("0.0.17"), "AgentShell");
-    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "AgentShell");
-    assert.equal(resolveDesktopProductName("0.0.17-preview.20261003.3"), "AgentShell");
-    assert.equal(resolveDesktopProductName("0.0.17-pr.42.1"), "AgentShell");
+  it("brands every private runtime bundle as Cinderdeck", () => {
+    assert.equal(resolveDesktopProductName("0.0.17"), "Cinderdeck");
+    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "Cinderdeck");
+    assert.equal(resolveDesktopProductName("0.0.17-preview.20261003.3"), "Cinderdeck");
+    assert.equal(resolveDesktopProductName("0.0.17-pr.42.1"), "Cinderdeck");
   });
 
   it("switches desktop packaging icons to the nightly artwork for nightly versions", () => {
@@ -709,7 +709,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "**/*.map",
       ]);
       assert.deepStrictEqual(mac.dmg, {
-        title: "AgentShell 1.2.3 Installer",
+        title: "Cinderdeck 1.2.3 Installer",
         background: "dmg/dmg-background-latest.png",
         window: { width: 640, height: 432 },
         contents: [
@@ -1911,7 +1911,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     });
 
     assert.deepStrictEqual(configuration, {
-      appId: "com.ryancardin.cinderdeck.agentshell",
+      appId: "com.ryancardin.cinderdeck.runtime",
       teamId: "ABC1234567",
       rpDomains: ["example.clerk.accounts.dev"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
@@ -1931,7 +1931,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "clerk.example.com",
       "example.clerk.accounts.dev",
     ]);
-    assert.include(entitlements, "<string>ABC1234567.com.ryancardin.cinderdeck.agentshell</string>");
+    assert.include(entitlements, "<string>ABC1234567.com.ryancardin.cinderdeck.runtime</string>");
     assert.include(entitlements, "<string>webcredentials:clerk.example.com</string>");
     assert.include(entitlements, "<string>webcredentials:example.clerk.accounts.dev</string>");
     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
@@ -2026,8 +2026,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       });
 
       const mac = config.mac as Record<string, unknown>;
-      assert.equal(config.appId, "com.ryancardin.cinderdeck.agentshell");
-      assert.equal(config.artifactName, "AgentShell-${version}-${arch}.${ext}");
+      assert.equal(config.appId, "com.ryancardin.cinderdeck.runtime");
+      assert.equal(config.artifactName, "Cinderdeck-${version}-${arch}.${ext}");
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
       assert.match(String(mac.sign), /[\\/]scripts[\\/]sign-macos\.ts$/);

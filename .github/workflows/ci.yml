@@ -43,6 +43,12 @@ jobs:
           packages/shared/src/cliRelease.test.ts
           apps/server/src/deckhand/LocalDiagnostics.test.ts
           apps/server/src/deckhand/CinderdeckClient.test.ts
+          apps/server/src/deckhand/ExcelProbe.test.ts
+          apps/server/src/deckhand/ExcelBenchmark.test.ts
+          apps/server/src/deckhand/ExternalDebug.test.ts
+          apps/server/src/deckhand/ExternalDebugCDP.test.ts
+          apps/server/src/deckhand/ExternalDebugMcpResult.test.ts
+          apps/web/src/deckhand/ExternalAppPanel.test.tsx
           apps/desktop/src/app/DesktopAssets.test.ts
           apps/desktop/src/app/DesktopEnvironment.test.ts
           apps/web/src/components/desktopUpdate.logic.test.ts
@@ -210,7 +216,7 @@ jobs:
       - name: Build complete app
         run: |
           ./scripts/build-unified.sh --configuration Debug --output-dir "$PWD/build/unified"
-          test -x 'build/unified/Cinderdeck Debug.app/Contents/Resources/AgentShell.app/Contents/MacOS/AgentShell'
+          test -x 'build/unified/Cinderdeck Debug.app/Contents/Resources/Cinderdeck.app/Contents/MacOS/Cinderdeck'
           codesign --verify --deep --strict 'build/unified/Cinderdeck Debug.app'
 
       - name: Verify app bundle

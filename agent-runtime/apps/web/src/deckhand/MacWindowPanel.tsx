@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AppWindowIcon, MaximizeIcon, MinimizeIcon } from "lucide-react";
+import { AppWindowIcon, ChevronRightIcon, MaximizeIcon, MinimizeIcon } from "lucide-react";
 import type { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
-import type {
-  DebugCommand,
-  DebugEvent,
-  DebugSession,
-  DebugSnapshot,
+import {
+  DEBUG_KEYS,
+  type DebugCommand,
+  type DebugEvent,
+  type DebugKey,
+  type DebugSession,
+  type DebugSnapshot,
 } from "@cinderdeck/contracts/deckhand/externalDebugRpc";
 import { squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -31,6 +33,30 @@ const modifiers = (event: {
     event.shiftKey && "shift",
     event.ctrlKey && "control",
   ].filter(Boolean) as NonNullable<DebugCommand["modifiers"]>;
+
+const debugKeys = new Set<string>(DEBUG_KEYS);
+// Named keys always go through as keys. Characters (and Space) do only with Command
+// or Control, so ordinary typing, including Option characters, stays text. Plain
+// Command-V stays a paste of the viewer's clipboard.
+function shortcut(event: {
+  key: string;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+}): DebugKey | undefined {
+  if (event.key.length > 1) return debugKeys.has(event.key) ? (event.key as DebugKey) : undefined;
+  if (event.key === " " && (event.shiftKey || event.ctrlKey || event.metaKey)) return "Space";
+  if (!(event.metaKey || event.ctrlKey)) return undefined;
+  const key = event.key.toLowerCase();
+  if (key === "v" && event.metaKey && !event.shiftKey && !event.altKey && !event.ctrlKey)
+    return undefined;
+  return debugKeys.has(key) ? (key as DebugKey) : undefined;
+}
+const point = (event: { clientX: number; clientY: number }, rect: DOMRect) => ({
+  x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
+  y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
+});
 
 export function MacWindowPanel({
   environmentId,
@@ -63,7 +89,8 @@ export function MacWindowPanel({
     allowed = useRef(false),
     mounted = useRef(true),
     queue = useRef(Promise.resolve()),
-    pending = useRef(0);
+    pending = useRef(0),
+    pressed = useRef<{ clientX: number; clientY: number } | null>(null);
   useEffect(() => {
     epoch.current += 1;
     allowed.current = controls && live && visible;
@@ -210,8 +237,41 @@ export function MacWindowPanel({
       data-expanded={expanded && visible}
     >
       <div className={styles.panelHeader}>
-        <strong>{label}</strong>
-        <span data-state={state}>{state}</span>
+        <div className={styles.windowIdentity}>
+          <strong>{session.target.title || label}</strong>
+          <span>{label}</span>
+        </div>
+        <div className={styles.macPanelToolbar}>
+          <label>
+            <input
+              type="checkbox"
+              checked={live}
+              onChange={(event) => {
+                setLive(event.target.checked);
+                setControls(false);
+                // Request a fresh frame when viewing resumes.
+                imageSequence.current = undefined;
+              }}
+            />
+            Live view
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={controls}
+              disabled={state !== "connected" || !live}
+              onChange={(event) => {
+                setControls(event.target.checked);
+                setError("");
+              }}
+            />
+            Control window
+          </label>
+          {controls ? <button onClick={() => send({ action: "focus" })}>Open on Mac</button> : null}
+        </div>
+        <span className={styles.connectionState} data-state={state}>
+          {state === "connected" ? (live ? "Live" : "Paused") : state}
+        </span>
         <button
           aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
           aria-expanded={expanded}
@@ -219,34 +279,6 @@ export function MacWindowPanel({
         >
           {expanded ? <MinimizeIcon size={15} /> : <MaximizeIcon size={15} />}
         </button>
-      </div>
-      <div className={styles.macPanelToolbar}>
-        <label>
-          <input
-            type="checkbox"
-            checked={live}
-            onChange={(event) => {
-              setLive(event.target.checked);
-              setControls(false);
-              // Request a fresh frame when viewing resumes.
-              imageSequence.current = undefined;
-            }}
-          />
-          Live view
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={controls}
-            disabled={state !== "connected" || !live}
-            onChange={(event) => {
-              setControls(event.target.checked);
-              setError("");
-            }}
-          />
-          Control window
-        </label>
-        {controls ? <button onClick={() => send({ action: "focus" })}>Open on Mac</button> : null}
       </div>
       <div className={styles.macCanvas}>
         {snapshot?.image && live ? (
@@ -260,16 +292,37 @@ export function MacWindowPanel({
               if (!controls || ![0, 2].includes(event.button)) return;
               event.preventDefault();
               event.currentTarget.focus({ preventScroll: true });
+              pressed.current =
+                event.button === 0 ? { clientX: event.clientX, clientY: event.clientY } : null;
             }}
             onMouseUp={(event) => {
               if (!controls || ![0, 2].includes(event.button)) return;
               event.preventDefault();
               // Release the viewer's mouse before activation changes the native key window.
               const rect = event.currentTarget.getBoundingClientRect();
+              const start = pressed.current;
+              pressed.current = null;
+              if (
+                start &&
+                event.button === 0 &&
+                Math.hypot(event.clientX - start.clientX, event.clientY - start.clientY) > 4
+              ) {
+                // A drag selects ranges, moves panes and resizes columns on the Mac.
+                const from = point(start, rect),
+                  to = point(event, rect);
+                send({
+                  action: "drag",
+                  x: from.x,
+                  y: from.y,
+                  toX: to.x,
+                  toY: to.y,
+                  modifiers: modifiers(event),
+                });
+                return;
+              }
               send({
                 action: "click",
-                x: (event.clientX - rect.left) / rect.width,
-                y: (event.clientY - rect.top) / rect.height,
+                ...point(event, rect),
                 button: event.button === 2 ? "right" : "left",
                 clickCount: event.detail === 2 ? 2 : 1,
                 modifiers: modifiers(event),
@@ -292,34 +345,10 @@ export function MacWindowPanel({
             }}
             onKeyDown={(event) => {
               if (!controls) return;
-              if (
-                [
-                  "Enter",
-                  "Tab",
-                  "Escape",
-                  "Backspace",
-                  "Delete",
-                  "ArrowLeft",
-                  "ArrowRight",
-                  "ArrowDown",
-                  "ArrowUp",
-                  "Home",
-                  "End",
-                  "PageUp",
-                  "PageDown",
-                  "F6",
-                  "F7",
-                  "F8",
-                ].includes(event.key) ||
-                (event.metaKey &&
-                  ["a", "c", "x", "z", "n", "o", "s", "w", "f", "p"].includes(event.key))
-              ) {
+              const key = shortcut(event);
+              if (key) {
                 event.preventDefault();
-                send({
-                  action: "key",
-                  key: event.key as NonNullable<DebugCommand["key"]>,
-                  modifiers: modifiers(event),
-                });
+                send({ action: "key", key, modifiers: modifiers(event) });
               } else if (event.key.length === 1 && !event.metaKey && !event.ctrlKey) {
                 event.preventDefault();
                 send({ action: "type", text: event.key });
@@ -354,40 +383,46 @@ export function MacWindowPanel({
           {error}
         </p>
       ) : null}
-      <div className={styles.macTextEntry}>
-        <input
-          aria-label={`Text for ${label}`}
-          value={text}
-          maxLength={4000}
-          disabled={!controls}
-          placeholder={
-            label === "Web Inspector"
-              ? "JavaScript for the Inspector’s console…"
-              : "Text for the selected field…"
-          }
-          onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && text) {
+      {controls ? (
+        <div className={styles.macTextEntry}>
+          <input
+            aria-label={`Text for ${label}`}
+            value={text}
+            maxLength={4000}
+            disabled={!controls}
+            placeholder={
+              label === "Web Inspector"
+                ? "JavaScript for the Inspector’s console…"
+                : "Text for the selected field…"
+            }
+            onChange={(event) => setText(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && text) {
+                send({ action: "type", text });
+                setText("");
+              }
+            }}
+          />
+          <button
+            disabled={!controls || !text}
+            onClick={() => {
               send({ action: "type", text });
               setText("");
-            }
-          }}
-        />
-        <button
-          disabled={!controls || !text}
-          onClick={() => {
-            send({ action: "type", text });
-            setText("");
-          }}
-        >
-          Send text
-        </button>
-        <button disabled={!controls} onClick={() => send({ action: "key", key: "Enter" })}>
-          Return
-        </button>
-      </div>
+            }}
+          >
+            Send text
+          </button>
+          <button disabled={!controls} onClick={() => send({ action: "key", key: "Enter" })}>
+            Return
+          </button>
+        </div>
+      ) : null}
       <details className={styles.actionHistory}>
-        <summary>Action history & diagnostics ({events.length})</summary>
+        <summary>
+          <ChevronRightIcon size={13} aria-hidden />
+          <span>Action history</span>
+          <span className={styles.eventCount}>{events.length}</span>
+        </summary>
         <p>
           Shared with your agent. Verify accepted input against the live view. App console output is
           available in Web Inspector.
@@ -405,11 +440,9 @@ export function MacWindowPanel({
         </ol>
       </details>
       <p className={styles.previewNote}>
-        {session.target.app} · {session.target.title}
-        <br />
         {controls
-          ? "Click the live window, then type or paste. Controls activate this selected window on its Mac. Dragging is not supported."
-          : "Viewing only. Control window activates it on the selected Mac for clicking, typing, pasting, and scrolling."}
+          ? "Click the window to type, paste, or scroll. Input activates it on its Mac."
+          : "Viewing only. Enable Control window to click, type, or scroll on its Mac."}
       </p>
     </section>
   );
