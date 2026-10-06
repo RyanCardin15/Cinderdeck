@@ -11,6 +11,12 @@ import { TrimmedNonEmptyString } from "./baseSchemas.ts";
  * the conversation continues inside the worktree on the thread's next run.
  */
 export const WorktreeMcpHandoffInput = Schema.Struct({
+  adoptExisting: Schema.optional(
+    Schema.Boolean.annotate({
+      description:
+        "For Cinderdeck conversations, adopt the existing worktree at path as a native lane and move this conversation there. Requires path and its exact branch; omit baseRef and startFromOrigin.",
+    }),
+  ),
   branch: TrimmedNonEmptyString.annotate({
     description: "Branch name to create for the worktree (e.g. 'feature/my-change').",
   }),
@@ -32,7 +38,7 @@ export const WorktreeMcpHandoffInput = Schema.Struct({
       Schema.isPattern(/^(?:[A-Za-z]:[\\/]|[\\/])/),
     ).annotate({
       description:
-        "Absolute filesystem path for the new worktree. Relative paths are rejected. Defaults to the server-managed worktrees directory.",
+        "Absolute filesystem path. Cinderdeck chooses new lane folders; use path with adoptExisting to attach an existing worktree. Standalone sessions may specify the new worktree path.",
     }),
   ),
   runSetupScript: Schema.optional(
@@ -51,6 +57,7 @@ export const WorktreeMcpHandoffInput = Schema.Struct({
 export type WorktreeMcpHandoffInput = typeof WorktreeMcpHandoffInput.Type;
 
 export const WorktreeMcpSetupScriptStatus = Schema.Union([
+  Schema.Struct({ status: Schema.Literal("completed") }),
   Schema.Struct({
     status: Schema.Literal("started"),
     scriptName: TrimmedNonEmptyString,

@@ -169,7 +169,7 @@ it.each(["lane", "primary"] as const)(
       />,
     );
     const returns = observed.links.filter((link) => link.to === "/workspaces");
-    expect(returns).toHaveLength(3);
+    expect(returns).toHaveLength(4);
     const expected = connectedWorkspaceSearch(threadRef.environmentId, current);
     for (const link of returns) {
       expect(link.search).toEqual({
@@ -182,6 +182,7 @@ it.each(["lane", "primary"] as const)(
       expect(savedWorkspaceMatches(saved, "replacement-installation", 7)).toBe(false);
     }
     expect(returns.filter((link) => link.search?.tab === "agents")).toHaveLength(1);
+    expect(header).toContain(kind === "lane" ? "Lane · review-lane" : "Payment · Primary checkout");
     expect(header).toContain("Manage services in workspace");
     expect(returns.filter((link) => link.search?.tab === "services")).toHaveLength(1);
     expect(sidebar).toContain(kind === "lane" ? "Lane · review-lane" : "Primary checkout");
@@ -236,4 +237,52 @@ it("retains scoped conversation links while downgrading disconnected agent obser
       ),
   ).toBe(true);
   observed.stale = false;
+});
+
+it("shows the branch of the conversation's working repository in a multi-repository lane", () => {
+  const repository = {
+    physicalId: "first",
+    repositoryPhysicalId: "repo-first",
+    root: "/lane/first",
+    commonDirectory: "/first/.git",
+    gitDirectory: "/first/.git/worktrees/lane",
+    branch: "first-branch",
+    commit: null,
+    remotes: [],
+  };
+  const current = Schema.decodeUnknownSync(ThreadContextView)({
+    ...context,
+    checkout: {
+      ...context.checkout,
+      repositories: [
+        repository,
+        {
+          ...repository,
+          physicalId: "second",
+          repositoryPhysicalId: "repo-second",
+          root: "/lane/second",
+          branch: "second-branch",
+        },
+      ],
+    },
+    session: { ...context.session, repositoryScope: ["first", "second"] },
+  });
+  observed.stale = false;
+  const header = renderToStaticMarkup(
+    <LaneSessionContext
+      context={current}
+      threadRef={threadRef}
+      workingDirectory="/lane/second"
+      providers={[]}
+      stale={false}
+      previewAvailable={false}
+      onOpenPreview={noAction}
+      panelMenu={panelMenu}
+      onOpenPullRequests={noAction}
+      pullRequestsAvailable={false}
+      pullRequestCount={0}
+    />,
+  );
+  expect(header).toContain("second-branch");
+  expect(header).not.toContain("first-branch");
 });

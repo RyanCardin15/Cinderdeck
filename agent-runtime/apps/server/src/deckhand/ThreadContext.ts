@@ -133,15 +133,31 @@ const make = Effect.gen(function* () {
                 item.generation === saved.checkout.nativeGeneration,
             );
             const sameHost = view.hello?.installationID === saved.workspace.environmentId;
+            const native =
+              sameHost && view.state === "connected" && resource?.available ? resource : null;
+            // Saved bindings establish identity; the native Git monitor owns current branch labels.
+            const checkout = {
+              ...saved.checkout,
+              repositories: saved.checkout.repositories.map((repo) => {
+                const live = native?.workspace?.repos.find(
+                  (item) =>
+                    item.physicalID === repo.physicalId &&
+                    item.repositoryPhysicalID === repo.repositoryPhysicalId,
+                );
+                return live
+                  ? { ...repo, branch: live.branch === "HEAD" || !live.branch ? null : live.branch }
+                  : repo;
+              }),
+            };
             return {
               ...saved,
+              checkout,
               session: currentSessions.selected?.binding ?? {
                 ...saved.session,
                 execution: "unknown",
                 connection: "unavailable",
               },
-              native:
-                sameHost && view.state === "connected" && resource?.available ? resource : null,
+              native,
               nativeConnection: sameHost ? view.state : "identity_changed",
               ...(sameHost && view.hello ? { nativeChannel: view.hello.channel } : {}),
               sessions: currentSessions.siblings,

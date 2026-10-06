@@ -90,3 +90,11 @@ MCP reads deliver screenshots as JPEG image blocks, keeping base64 out of text a
 Advance `after` using `nextSequence`; each read holds at most 100 events. Pass the returned `imageSequence` as `afterImage` to receive image data only when it changes. `image:null` with the same sequence and `imageUnavailable:false` means the last image is unchanged; discard it on disconnection or unavailable status. Always detach when finished. Debugger previews are transient diagnostics, separate from saved recordings and build evidence.
 
 An explicit loopback HTTP endpoint selects the separate CDP adapter for a Chromium runtime. CDP supports `sources`, `source`, `evaluate`, breakpoints, and pause/resume/stepping. Expressions execute in the live app and can change its data. See [Mac external app setup](external-apps.md).
+
+## Move the current conversation to a lane
+
+`t3_worktree_handoff({branch, continuationPrompt})` creates a Cinderdeck lane for a primary-checkout conversation and transfers the same chat. It updates the thread directory and managed binding atomically, so agent lists, services, preview/capture controls and subsequent provider turns use the lane. The primary checkout is eligible even though its chat has a saved working directory. `t3_worktree_status` distinguishes primary checkout from lane and reads the live branch when available.
+
+To adopt an agent-created worktree, use `{branch, path, adoptExisting: true, continuationPrompt}`. The path must identify a separate worktree of the selected repository with that exact branch. Native Cinderdeck owns creation, adoption and setup; new lane paths are not supplied by the caller. Connected handoffs start from the current local branch unless `baseRef` or `startFromOrigin: true` is supplied. Standalone defaults retain their existing server setting. Existing uncommitted source files and terminal processes are not moved.
+
+Call handoff as the last action of the turn. A successful transfer detaches the old provider and queues `continuationPrompt`, if supplied. Read-only chats and conversations already in lanes cannot use this transfer. Retry the same input after a pending/unknown native result; the durable native operation is reused and the original chat stays in place until a verified lane is ready.

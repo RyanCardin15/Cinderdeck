@@ -32,6 +32,7 @@ import * as EventStore from "./EventStore.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
+import * as ManagedCheckoutTransfer from "../deckhand/ManagedCheckoutTransfer.ts";
 
 /**
  * ERRORS
@@ -208,6 +209,9 @@ const baseLayer: Layer.Layer<
     const effectOutbox = yield* EffectOutbox.EffectOutboxV2;
     const eventStore = yield* EventStore.EventStoreV2;
     const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
+    const checkoutTransfer = yield* Effect.serviceOption(
+      ManagedCheckoutTransfer.ManagedCheckoutTransfer,
+    );
     const projectStore = yield* ProjectStore.ProjectStoreV2;
     const turnItemPositions = yield* TurnItemPositionStore.TurnItemPositionStoreV2;
     const liveEvents = yield* PubSub.unbounded<OrchestrationV2StoredEvent>();
@@ -226,7 +230,17 @@ const baseLayer: Layer.Layer<
         }
       });
     const publishStoredEvents = (events: ReadonlyArray<OrchestrationV2StoredEvent>) =>
-      eventStore.publishCommitted(events).pipe(Effect.andThen(publishLiveEvents(events)));
+      eventStore
+        .publishCommitted(events)
+        .pipe(
+          Effect.andThen(publishLiveEvents(events)),
+          Effect.andThen(
+            Option.isSome(checkoutTransfer) &&
+              events.some((item) => item.event.type === "thread.metadata-updated")
+              ? checkoutTransfer.value.notify
+              : Effect.void,
+          ),
+        );
 
     // Transactions commit one at a time, but each writer publishes after its
     // commit. If a writer is descheduled in between, a later commit reaches
@@ -330,9 +344,17 @@ const baseLayer: Layer.Layer<
 
     const applyStoredEvents = (storedEvents: ReadonlyArray<OrchestrationV2StoredEvent>) =>
       Effect.gen(function* () {
-        yield* Effect.forEach(storedEvents, (stored) => projectionStore.apply(stored.event), {
-          concurrency: 1,
-        });
+        yield* Effect.forEach(
+          storedEvents,
+          (stored) =>
+            Effect.gen(function* () {
+              if (Option.isSome(checkoutTransfer)) yield* checkoutTransfer.value.apply(stored);
+              yield* projectionStore.apply(stored.event);
+            }),
+          {
+            concurrency: 1,
+          },
+        );
         const sequence = storedEvents.at(-1)?.sequence;
         if (sequence !== undefined) {
           const now = DateTime.formatIso(yield* DateTime.now);

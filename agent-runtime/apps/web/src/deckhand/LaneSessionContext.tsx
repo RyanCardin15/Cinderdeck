@@ -35,6 +35,7 @@ export function useLaneSessionContext(threadRef: ScopedThreadRef | null) {
 export function LaneSessionContext({
   context,
   threadRef,
+  workingDirectory,
   stale: suppliedStale,
   previewAvailable,
   onOpenPreview,
@@ -45,6 +46,7 @@ export function LaneSessionContext({
 }: {
   context: ThreadContextView;
   threadRef: ScopedThreadRef;
+  workingDirectory?: string | null;
   providers: ReadonlyArray<ProviderInstanceEntry>;
   stale: boolean;
   previewAvailable: boolean;
@@ -75,15 +77,22 @@ export function LaneSessionContext({
   const previewService = services.find(
     (service) => service.ready && /^https?:\/\//i.test(service.url ?? ""),
   );
-  const repository = context.checkout.repositories.find((repo) =>
+  const scopedRepositories = context.checkout.repositories.filter((repo) =>
     context.session.repositoryScope?.includes(repo.physicalId),
   );
+  const repository =
+    scopedRepositories.find((repo) => repo.root === workingDirectory) ?? scopedRepositories[0];
   const workspaceSearch = connectedWorkspaceSearch(threadRef.environmentId, context);
   return (
     <section className={styles.context} aria-label="Connected lane controls">
       <div className={styles.titleRow}>
         <div className={styles.heading}>
           <div className={styles.metadata}>
+            <Link to="/workspaces" search={workspaceSearch}>
+              {context.checkout.kind === "lane"
+                ? (native?.name ?? `Lane · ${context.checkout.laneId ?? "Saved checkout"}`)
+                : `${context.workspace.name} · Primary checkout`}
+            </Link>
             <span aria-label={repository?.root}>
               <GitBranchIcon aria-hidden size={15} />
               <code>{repository?.branch ?? "Detached checkout"}</code>
@@ -205,7 +214,7 @@ export function LaneSessionContext({
         </nav>
         <div className={styles.panelActions} aria-label="Repository panels">
           <ManagedSessionControl threadRef={threadRef} context={context} enabled={connected} />
-          <LinkedWorkContext threadRef={threadRef} enabled={connected} />
+          <LinkedWorkContext key={context.checkout.id} threadRef={threadRef} enabled={connected} />
           {context.session.role === "writer" ? (
             <ReviewerLauncher
               key={`${threadRef.environmentId}:${threadRef.threadId}`}

@@ -686,6 +686,7 @@ describe("connected lane and session creation", () => {
         yield* sql`DELETE FROM deckhand_schema WHERE version >= 8`;
         yield* sql`DROP TABLE deckhand_launch_reviews`;
         yield* sql`DROP TABLE deckhand_reviewer_queue`;
+      yield* sql`DROP TABLE deckhand_checkout_transfers`;
         yield* sql`DROP VIEW IF EXISTS deckhand_current_checkouts`;
         yield* sql`DROP TABLE IF EXISTS deckhand_checkout_ownership`;
         yield* sql`DROP TABLE IF EXISTS deckhand_ownership_transitions`;
