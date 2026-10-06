@@ -88,6 +88,7 @@ type SessionListProps = {
   installationID: string;
   workspaceID: string;
   generation: number;
+  scope?: "context" | "workspace";
   providers?: ReadonlyArray<SessionProvider>;
   contextLabel?: string;
   selectedThreadId?: string;
@@ -98,7 +99,7 @@ type SessionListProps = {
 export function SessionList(props: SessionListProps) {
   return (
     <ScopedSessionList
-      key={`${props.environmentId}:${props.installationID}:${props.workspaceID}:${props.generation}`}
+      key={`${props.environmentId}:${props.installationID}:${props.workspaceID}:${props.generation}:${props.scope ?? "context"}`}
       {...props}
     />
   );
@@ -108,6 +109,7 @@ function ScopedSessionList({
   installationID,
   workspaceID,
   generation,
+  scope = "context",
   providers = EMPTY_PROVIDERS,
   contextLabel = "Selected checkout",
   selectedThreadId,
@@ -131,6 +133,7 @@ function ScopedSessionList({
         installationID,
         workspaceID,
         generation,
+        ...(scope === "workspace" ? { scope } : {}),
         limit: 20,
         ...(page.offset ? { offset: page.offset } : {}),
       },
@@ -166,8 +169,10 @@ function ScopedSessionList({
   const selectedContextMatchesScope =
     selectedContext !== null &&
     selectedContext.workspace.environmentId === installationID &&
-    (selectedContext.checkout.laneId ?? selectedContext.workspace.ownerId) === workspaceID &&
-    selectedContext.checkout.nativeGeneration === generation;
+    (scope === "workspace"
+      ? selectedContext.workspace.ownerId === workspaceID
+      : (selectedContext.checkout.laneId ?? selectedContext.workspace.ownerId) === workspaceID &&
+        selectedContext.checkout.nativeGeneration === generation);
   const selectedMatchesScope =
     selectedContextMatchesScope &&
     selectedContext?.session.threadId === selectedThreadId &&
@@ -192,6 +197,7 @@ function ScopedSessionList({
     sessions.length === page.previousIDs.length &&
     sessions.every((session, index) => session.binding.id === page.previousIDs[index]);
   const groupFor = (session: NonNullable<typeof sessions>[number]) => {
+    if (scope === "workspace" && session.context?.availability === "removed") return "history";
     if (session.archived) return "other";
     if (session.source === "unavailable" || session.binding.execution === "unknown") return "other";
     if (["waiting_input", "waiting_approval", "failed"].includes(session.binding.execution))
@@ -204,6 +210,7 @@ function ScopedSessionList({
     { id: "active", label: "In progress" },
     { id: "completed", label: "Completed turns" },
     { id: "other", label: "Other sessions" },
+    ...(scope === "workspace" ? [{ id: "history", label: "Past checkouts" }] : []),
   ];
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const searchMatches = (sessions ?? []).filter(
@@ -212,6 +219,7 @@ function ScopedSessionList({
       (!normalizedQuery ||
         [
           session.title,
+          session.context?.label,
           contextLabel,
           agentProviderLabel(session.binding.providerInstanceId, providers),
         ]
@@ -292,6 +300,14 @@ function ScopedSessionList({
             {` · ${sessionPurpose(session.binding)}${session.archived ? " · Archived" : ""}`}
             <SessionAge environmentId={environmentId} threadId={session.binding.threadId} />
           </span>
+          {scope === "workspace" && session.context ? (
+            <span className={styles.checkoutLabel}>
+              <span>{session.context.label}</span>
+              {session.context.availability === "removed" ? (
+                <em>Checkout removed · chat saved</em>
+              ) : null}
+            </span>
+          ) : null}
         </div>
         <span className={styles.sessionStatus}>
           <span className={styles.statusLabel}>{execution}</span>
@@ -425,6 +441,11 @@ function ScopedSessionList({
             </span>
           ) : null}
         </header>
+        {scope === "workspace" ? (
+          <p className={styles.scopeNote}>
+            All lanes, including saved chats from removed checkouts.
+          </p>
+        ) : null}
         {compact ? (
           <details className={styles.filterFold}>
             <summary>Filter{hasFilters ? " · active" : ""}</summary>
@@ -454,7 +475,9 @@ function ScopedSessionList({
               {page.offset
                 ? "No older sessions on this page. Return to the previous page."
                 : workspacePresentation
-                  ? "No conversations in this checkout yet. Open a new chat to get started."
+                  ? scope === "workspace"
+                    ? "No conversations in this workspace yet. Open a new chat to get started."
+                    : "No conversations in this checkout yet. Open a new chat to get started."
                   : "No managed sessions in this context yet."}
             </p>
           </div>
@@ -496,6 +519,8 @@ function ScopedSessionList({
               open={
                 group.id === "attention" ||
                 group.id === "active" ||
+                (scope === "workspace" && group.id !== "history") ||
+                (hasFilters && scope === "workspace") ||
                 rows.some((session) => session.binding.threadId === selectedThreadId)
               }
             >
@@ -517,7 +542,8 @@ function ScopedSessionList({
         ) : sessions?.length ? (
           <p className={styles.scopeNote}>
             {observation.stale || unavailable ? "Last observed sessions" : "Sessions"}{" "}
-            {rangeOffset + 1}–{rangeOffset + sessions.length} in this context.
+            {rangeOffset + 1}–{rangeOffset + sessions.length} in this{" "}
+            {scope === "workspace" ? "workspace" : "context"}.
           </p>
         ) : null}
         {page.offset || sessions?.length === 20 ? (

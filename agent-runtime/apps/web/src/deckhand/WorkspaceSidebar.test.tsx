@@ -379,7 +379,7 @@ it("offers the native workspace tree on app-wide views with exact checkout pins"
     environment: "computer",
     workspace: "beta",
     context: "beta",
-    tab: "services",
+    tab: "agents",
     expectedInstallationID: "install",
     expectedGeneration: 3,
   });

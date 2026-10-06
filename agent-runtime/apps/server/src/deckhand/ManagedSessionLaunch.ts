@@ -466,6 +466,7 @@ const make = Effect.gen(function* () {
                           backend: "cinderdeck",
                           kind: context.lane ? "lane" : "primary",
                           laneId: context.lane ? resource.workspaceID : null,
+                          ...(context.lane ? { laneName: context.lane.name } : {}),
                           state: "ready",
                           repositories: physical,
                           revision: 1,

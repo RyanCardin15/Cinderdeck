@@ -199,3 +199,41 @@ describe("v2 thread shell lists", () => {
     }
   });
 });
+
+it("resolves exact archived chats without adding them to active lists or crossing environments", () => {
+  const harness = makeHarness([environmentId, remoteEnvironmentId]);
+  const archivedSnapshotAtom = Atom.family((_environmentId: EnvironmentId) =>
+    Atom.make<import("@cinderdeck/contracts").OrchestrationV2ArchivedShellSnapshot | null>(null),
+  );
+  const shells = createEnvironmentThreadShellAtoms({
+    catalogValueAtom: harness.catalogValueAtom,
+    snapshotAtom: harness.snapshotAtom,
+    archivedSnapshotAtom,
+  });
+  const ref = { environmentId, threadId: ThreadId.make("archived-history") };
+  const archived = { ...v2ThreadShell, id: ref.threadId, archivedAt: v2ThreadShell.updatedAt };
+  const snapshot = { schemaVersion: 1, snapshotSequence: 1, projects: [], threads: [archived] };
+  harness.registry.set(archivedSnapshotAtom(environmentId), snapshot);
+  const dispose = harness.registry.mount(shells.threadShellAtom(ref));
+  expect(harness.registry.get(shells.threadShellAtom(ref))?.archivedAt).not.toBeNull();
+  expect(
+    harness.registry.get(shells.threadShellAtom({ ...ref, environmentId: remoteEnvironmentId })),
+  ).toBeNull();
+  expect(
+    harness.registry.get(shells.threadRefsAtom).some((item) => item.threadId === ref.threadId),
+  ).toBe(false);
+  // Restoring makes the live shell authoritative, even if an archive read was retained.
+  harness.registry.set(harness.snapshotAtom(environmentId), {
+    ...v2ShellSnapshot,
+    threads: [{ ...archived, archivedAt: null, title: "Restored conversation" }],
+  });
+  expect(harness.registry.get(shells.threadShellAtom(ref))?.title).toBe("Restored conversation");
+  harness.registry.set(harness.snapshotAtom(environmentId), { ...v2ShellSnapshot, threads: [] });
+  harness.registry.set(archivedSnapshotAtom(environmentId), {
+    ...snapshot,
+    threads: [{ ...archived, deletedAt: archived.updatedAt }],
+  });
+  expect(harness.registry.get(shells.threadShellAtom(ref))).toBeNull();
+  dispose();
+  harness.registry.dispose();
+});

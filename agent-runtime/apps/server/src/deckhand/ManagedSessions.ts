@@ -71,6 +71,7 @@ const decodeContextPullRequest = Schema.decodeUnknownEffect(Rpc.ContextPullReque
 const decodeContextPullRequestLink = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Rpc.ContextPullRequest.fields.link),
 );
+const decodeCheckout = Schema.decodeUnknownEffect(Schema.fromJsonString(Contracts.CheckoutBinding));
 const decodeBinding = Schema.decodeUnknownEffect(Schema.fromJsonString(Contracts.SessionBinding));
 const execution = (shell: OrchestrationV2ThreadShell): Contracts.SessionBinding["execution"] => {
   if (shell.pendingRuntimeRequest) {
@@ -123,6 +124,7 @@ const make = Effect.gen(function* () {
   const projections = yield* ProjectionStore.ProjectionStoreV2;
   const events = yield* EventSink.EventSinkV2;
   const external = yield* External.ExternalSessions;
+  const hub = yield* Effect.serviceOption(IntegrationHub.IntegrationHub);
   const ownership = yield* Effect.serviceOption(CurrentCheckout.CurrentCheckout);
   const ownershipChanges = Option.isSome(ownership)
     ? ownership.value.changes.pipe(Stream.map(() => undefined))
@@ -209,7 +211,20 @@ const make = Effect.gen(function* () {
       if (!isSessionsInput(input))
         return yield* new ManagedSessionsError({ reason: "invalid_request" });
       const sequence = yield* events.latestSequence();
-      const rows = yield* sql<{ record_json: string; title: string }>`SELECT s.record_json,
+      const rows = yield* sql<{
+        record_json: string;
+        title: string;
+        workspace_id: string;
+        checkout_json: string;
+        generation: number | null;
+        lane_id: string | null;
+        label: string | null;
+      }>`SELECT s.record_json, c.record_json AS checkout_json,
+      COALESCE(json_extract(c.record_json, '$.laneId'), w.owner_id) AS workspace_id,
+      json_extract(c.record_json, '$.nativeGeneration') AS generation,
+      json_extract(c.record_json, '$.laneId') AS lane_id,
+      COALESCE(json_extract(c.record_json, '$.laneName'),
+        json_extract(c.record_json, '$.repositories[0].branch')) AS label,
       json_extract(f.record_json, '$.title') AS title FROM deckhand_sessions s
       JOIN deckhand_features f ON f.id = s.feature_id
       JOIN deckhand_current_checkouts c ON c.origin_id = s.checkout_id
@@ -217,13 +232,60 @@ const make = Effect.gen(function* () {
       WHERE c.workspace_id = w.id AND w.environment_id = ${input.installationID} AND w.backend = 'cinderdeck'
         AND NOT EXISTS (SELECT 1 FROM orchestration_v2_projection_threads t
           WHERE t.thread_id = s.thread_id AND t.deleted_at IS NOT NULL)
-        AND json_extract(c.record_json, '$.nativeGeneration') = ${input.generation}
-        AND COALESCE(json_extract(c.record_json, '$.laneId'), w.owner_id) = ${input.workspaceID}
+        AND ((${input.scope === "workspace" ? 1 : 0} AND w.owner_id = ${input.workspaceID})
+          OR (${input.scope !== "workspace" ? 1 : 0}
+            AND json_extract(c.record_json, '$.nativeGeneration') = ${input.generation}
+            AND COALESCE(json_extract(c.record_json, '$.laneId'), w.owner_id) = ${input.workspaceID}))
       ORDER BY s.rowid DESC LIMIT ${input.limit} OFFSET ${input.offset ?? 0}`;
+      // History belongs to durable workspace/checkouts, not the live lane catalog.
+      // Native availability annotates rows; it never decides whether history is readable.
+      const catalog =
+        input.scope === "workspace" && Option.isSome(hub)
+          ? yield* hub.value
+              .currentResources([...new Set(rows.map((row) => row.workspace_id))])
+              .pipe(Effect.catch(() => Effect.succeed(null)))
+          : null;
       return yield* Effect.forEach(rows, (row) =>
-        decodeBinding(row.record_json).pipe(
-          Effect.flatMap((binding) => readCurrent(binding, row.title, sequence)),
-        ),
+        Effect.gen(function* () {
+          const binding = yield* decodeBinding(row.record_json);
+          const session = yield* readCurrent(binding, row.title, sequence);
+          if (input.scope !== "workspace") return session;
+          const resource = catalog?.resources.find((item) => item.workspaceID === row.workspace_id);
+          const current =
+            catalog?.state === "connected" &&
+            catalog.hello?.installationID === input.installationID;
+          const checkout = yield* decodeCheckout(row.checkout_json);
+          const samePhysicalCheckout =
+            checkout.repositories.length > 0 &&
+            checkout.repositories.length === resource?.workspace?.repos.length &&
+            checkout.repositories.every((repo) =>
+              resource?.workspace?.repos.some(
+                (live) =>
+                  live.physicalID === repo.physicalId &&
+                  live.repositoryPhysicalID === repo.repositoryPhysicalId,
+              ),
+            );
+          const available =
+            resource?.available && (resource.generation === row.generation || samePhysicalCheckout);
+          return {
+            ...session,
+            context: {
+              workspaceID: row.workspace_id,
+              generation: row.generation,
+              label: row.lane_id
+                ? ((available ? resource.workspace?.lane?.name : undefined) ??
+                  row.label ??
+                  row.lane_id)
+                : "Primary checkout",
+              lane: row.lane_id !== null,
+              availability: !current
+                ? ("unknown" as const)
+                : available
+                  ? ("available" as const)
+                  : ("removed" as const),
+            },
+          };
+        }),
       );
     }).pipe(
       sql.withTransaction,
@@ -546,7 +608,15 @@ const make = Effect.gen(function* () {
               Stream.filter((stored) => stateEvent(stored.event.type)),
               Stream.map(() => undefined),
             ),
-            ownershipChanges,
+            Stream.merge(
+              ownershipChanges,
+              input.scope === "workspace" && Option.isSome(hub)
+                ? hub.value.subscribe({ offset: 0, limit: 1 }).pipe(
+                    Stream.map(() => undefined),
+                    Stream.catch(() => Stream.make(undefined)),
+                  )
+                : Stream.empty,
+            ),
           ).pipe(
             Stream.buffer({ capacity: 1, strategy: "sliding" }),
             Stream.mapEffect(() => list(input)),

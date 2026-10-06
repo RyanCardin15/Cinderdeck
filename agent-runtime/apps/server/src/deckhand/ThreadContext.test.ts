@@ -410,3 +410,17 @@ describe("connected conversation context", () => {
     }).pipe(Effect.provide(fixture())),
   );
 });
+
+it.effect("opens saved conversation context after its lane leaves the native catalog", () =>
+  Effect.gen(function* () {
+    yield* seed;
+    const service = yield* ThreadContext.ThreadContext;
+    const [context] = yield* service
+      .subscribe({ threadId })
+      .pipe(Stream.take(1), Stream.runCollect);
+    assert.equal(context?.session.threadId, threadId);
+    assert.equal(context?.checkout.id, "checkout");
+    assert.equal(context?.workspace.ownerId, "payment");
+    assert.isNull(context?.native);
+  }).pipe(Effect.provide(fixture({ ...view, resources: [], total: 0 }))),
+);

@@ -21,6 +21,8 @@ import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexA
 import * as Relationships from "./Relationships.ts";
 import * as ManagedSessions from "./ManagedSessions.ts";
 import * as External from "./ExternalSessions.ts";
+import * as IntegrationHub from "./IntegrationHub.ts";
+import type { IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
 
 const threadId = ThreadId.make("thread");
 const instanceId = ProviderInstanceId.make("codex-account");
@@ -626,3 +628,191 @@ describe("managed session provider projection", () => {
       }).pipe(Effect.provide(baseLayer)),
   );
 });
+
+const historyLane = (name: string): IntegrationView["resources"][number] => ({
+  workspaceID: "lane",
+  generation: 7,
+  revision: "head",
+  available: true,
+  workspace: {
+    id: "lane",
+    name,
+    file: "/fixture/workspace.toml",
+    state: "stopped",
+    definitionChanged: false,
+    issues: [],
+    repos: [],
+    services: [],
+    lane: {
+      name,
+      sourceStackID: "payment",
+      directory: "/fixture/lane",
+      createdAt: "now",
+      ports: {},
+    },
+  },
+});
+
+describe("workspace conversation history", () => {
+  it.effect(
+    "retains removed lanes and prior generations, isolates workspace/host identity, and pages archives",
+    () =>
+      Effect.gen(function* () {
+        const f = source();
+        let catalog = {
+          state: "connected",
+          hello: { installationID: "installation" },
+          resources: [],
+        } as unknown as Pick<IntegrationView, "state" | "hello" | "resources">;
+        const hub = Layer.mock(IntegrationHub.IntegrationHub)({
+          currentResources: () => Effect.sync(() => catalog),
+          subscribe: () => Stream.empty,
+        });
+        yield* Effect.gen(function* () {
+          yield* seed;
+          const store = yield* Relationships.Relationships;
+          const service = yield* ManagedSessions.ManagedSessions;
+          const original = yield* store.session("session");
+          const checkout = yield* store.checkout("checkout");
+          const feature = yield* store.feature("feature");
+          const workspace = yield* store.workspace("workspace");
+          const add = (id: string, ownerId: string, environmentId: string, laneId: string | null) =>
+            Effect.gen(function* () {
+              const w = {
+                ...workspace,
+                id: Contracts.WorkspaceBindingId.make(id),
+                ownerId,
+                environmentId: Contracts.EnvironmentId.make(environmentId),
+                generation: id === "primary" ? 3 : 1,
+              };
+              const c = {
+                ...checkout,
+                id: Contracts.CheckoutBindingId.make(id),
+                workspaceId: w.id,
+                environmentId: w.environmentId,
+                workspaceGeneration: w.generation,
+                nativeGeneration: 1,
+                kind: laneId ? ("lane" as const) : ("primary" as const),
+                laneId,
+                ...(laneId ? { laneName: "Completed feature" } : {}),
+              };
+              const feat = { ...feature, id: Contracts.FeatureId.make(id), workspaceId: w.id };
+              yield* store.putWorkspace(w, null);
+              yield* store.putCheckout(c, null);
+              yield* store.putFeature(feat, null);
+              yield* store.linkCheckout(feat.id, c.id, true);
+              yield* store.putSession(
+                {
+                  ...original,
+                  id: Contracts.SessionBindingId.make(id),
+                  threadId: ThreadId.make(id),
+                  checkoutId: c.id,
+                  featureId: feat.id,
+                },
+                null,
+              );
+            });
+          yield* add("old-lane", "payment", "installation", "retired");
+          yield* add("primary", "payment", "installation", null);
+          yield* add("other-workspace", "elsewhere", "installation", "foreign");
+          yield* add("other-host", "payment", "another-installation", "foreign");
+          f.state.shell = {
+            ...f.state.shell!,
+            archivedAt: DateTime.makeUnsafe("2026-10-05T00:00:00Z"),
+          };
+          const input = { ...scope, workspaceID: "payment", scope: "workspace" as const };
+          const rows = yield* service.list(input);
+          assert.deepEqual(
+            rows.map((row) => row.binding.id),
+            ["primary", "old-lane", "session"],
+          );
+          assert.isTrue(rows.every((row) => row.archived));
+          assert.equal(rows[1]!.context?.label, "Completed feature");
+          assert.isTrue(rows.every((row) => row.context?.availability === "removed"));
+          assert.equal(rows[0]!.context?.label, "Primary checkout");
+          assert.equal(
+            (yield* service.list({ ...input, limit: 1, offset: 1 }))[0]!.binding.id,
+            "old-lane",
+          );
+          // Exact lane queries retain their generation boundary.
+          assert.equal((yield* service.list(scope)).length, 1);
+          assert.deepEqual(yield* service.list({ ...scope, generation: 8 }), []);
+          catalog = {
+            ...catalog,
+            resources: [historyLane("Retry payments")],
+          };
+          assert.equal((yield* service.list(input))[2]!.context?.availability, "available");
+          assert.equal((yield* service.list(input))[2]!.context?.label, "Retry payments");
+          // A reused lane ID never makes the old checkout current.
+          catalog = { ...catalog, resources: [{ ...catalog.resources[0]!, generation: 8 }] };
+          assert.equal((yield* service.list(input))[2]!.context?.availability, "removed");
+          // Reloaded settings may change generation while the physical checkout stays put.
+          catalog = {
+            ...catalog,
+            resources: [
+              {
+                ...catalog.resources[0]!,
+                workspace: {
+                  ...catalog.resources[0]!.workspace!,
+                  repos: [
+                    {
+                      id: "repo",
+                      path: "/fixture/lane",
+                      branch: "lane",
+                      dirty: false,
+                      changedFiles: 0,
+                      ahead: 0,
+                      behind: 0,
+                      physicalID: "physical",
+                      repositoryPhysicalID: "repository",
+                    },
+                  ],
+                },
+              },
+            ],
+          };
+          assert.equal((yield* service.list(input))[2]!.context?.availability, "available");
+          catalog = { ...catalog, state: "unavailable" };
+          assert.equal((yield* service.list(input))[2]!.context?.availability, "unknown");
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`INSERT INTO orchestration_v2_projection_threads VALUES ('old-lane', '2026-10-05')`;
+          assert.deepEqual(
+            (yield* service.list(input)).map((row) => row.binding.id),
+            ["primary", "session"],
+          );
+        }).pipe(Effect.provide(f.layer().pipe(Layer.provide(hub))));
+      }).pipe(Effect.provide(baseLayer)),
+  );
+});
+
+it.effect("updates workspace history when a lane disappears without a thread event", () =>
+  Effect.gen(function* () {
+    const f = source();
+    let resources = [historyLane("Payments")];
+    const hub = Layer.mock(IntegrationHub.IntegrationHub)({
+      currentResources: () =>
+        Effect.succeed({
+          state: "connected",
+          hello: { installationID: "installation" } as IntegrationView["hello"],
+          resources,
+        }),
+      subscribe: () =>
+        Stream.fromEffect(
+          Effect.sync(() => {
+            resources = [];
+            return {} as IntegrationView;
+          }),
+        ),
+    });
+    yield* Effect.gen(function* () {
+      yield* seed;
+      const service = yield* ManagedSessions.ManagedSessions;
+      const images = yield* service
+        .subscribe({ ...scope, workspaceID: "payment", scope: "workspace" })
+        .pipe(Stream.take(2), Stream.runCollect);
+      assert.equal(images[0]![0]!.context?.availability, "available");
+      assert.equal(images[1]![0]!.context?.availability, "removed");
+      assert.equal(images[1]![0]!.binding.threadId, threadId);
+    }).pipe(Effect.provide(f.layer().pipe(Layer.provide(hub))));
+  }).pipe(Effect.provide(baseLayer)),
+);
