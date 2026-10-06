@@ -15,10 +15,17 @@ import {
   RotateCcwIcon,
   CircleAlertIcon,
   RefreshCwIcon,
+  FolderGit2Icon,
+  SearchIcon,
+  ShieldCheckIcon,
 } from "lucide-react";
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { useThreadShells, useAllEnvironmentShellsBootstrapped } from "../state/entities";
+import {
+  useThreadShells,
+  useProjects,
+  useAllEnvironmentShellsBootstrapped,
+} from "../state/entities";
 import { useEnvironments, type EnvironmentPresentation } from "../state/environments";
 import { useAtomCommand } from "../state/use-atom-command";
 import { buildThreadRouteParams } from "../threadRoutes";
@@ -26,6 +33,8 @@ import { readPullRequestListPreferences } from "../components/pullRequest/pullRe
 import { ProductNavigation } from "./ProductNavigation";
 import { workspaceView } from "./state";
 import { attentionList, attentionChange } from "./attentionState";
+import { groupWorkspaceAgents, type AgentResource } from "./agentWorkspaceGroups";
+import { InboxApproval } from "./InboxApproval";
 import styles from "./inbox.module.css";
 type View = AttentionListInput["view"];
 export function Inbox() {
@@ -34,6 +43,8 @@ export function Inbox() {
   const { environments } = useEnvironments();
   const [view, setView] = useState<View>("active");
   const [unread, setUnread] = useState(false);
+  const [query, setQuery] = useState("");
+  const [kind, setKind] = useState("all");
   return (
     <div className={styles.shell}>
       <ProductNavigation current="inbox" />
@@ -41,7 +52,7 @@ export function Inbox() {
         <header>
           <span className={styles.eyebrow}>Your work</span>
           <h1>Inbox</h1>
-          <p>Questions, reviews and failures. Every item opens the work that caused it.</p>
+          <p>What needs you, organized by workspace. Review requests and take action right here.</p>
         </header>
         <div className={styles.filters}>
           {(["active", "snoozed", "history"] as const).map((value) => (
@@ -53,17 +64,36 @@ export function Inbox() {
               ) : (
                 <InboxIcon size={15} />
               )}
-              {
-                { active: "Needs attention", snoozed: "Snoozed", history: "Resolved by source" }[
-                  value
-                ]
-              }
+              {{ active: "Needs attention", snoozed: "Snoozed", history: "Resolved" }[value]}
             </button>
           ))}
           <label>
             <input type="checkbox" checked={unread} onChange={(e) => setUnread(e.target.checked)} />{" "}
             Unread only
           </label>
+        </div>
+        <div className={styles.searchbar}>
+          <label>
+            <SearchIcon size={16} />
+            <input
+              type="search"
+              aria-label="Search attention items"
+              placeholder="Search workspaces, agents and requests…"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          <select
+            aria-label="Attention type"
+            value={kind}
+            onChange={(event) => setKind(event.target.value)}
+          >
+            <option value="all">All attention</option>
+            <option value="approval">Approvals</option>
+            <option value="input">Questions & sign-in</option>
+            <option value="review">Reviews & plans</option>
+            <option value="failure">Failures & connections</option>
+          </select>
         </div>
         {!ready ? (
           <p role="status" className={styles.alert}>
@@ -77,6 +107,8 @@ export function Inbox() {
             threads={threads.filter((thread) => thread.environmentId === environment.environmentId)}
             view={view}
             unread={unread}
+            query={query}
+            kind={kind}
           />
         ))}
         {!environments.length ? (
@@ -109,7 +141,14 @@ function AttentionDestination({
         to="/$environmentId/$threadId"
         params={buildThreadRouteParams({ environmentId, threadId })}
       >
-        Open conversation <ArrowRightIcon size={14} />
+        {item.kind === "input"
+          ? "Respond"
+          : item.kind === "auth"
+            ? "Sign in"
+            : item.kind === "plan"
+              ? "Review plan"
+              : "Open conversation"}{" "}
+        <ArrowRightIcon size={14} />
       </Link>
     );
   if (target.kind === "runs") {
@@ -178,13 +217,18 @@ function ComputerInbox({
   threads,
   view,
   unread,
+  query,
+  kind,
 }: {
   environment: EnvironmentPresentation;
   threads: ReturnType<typeof useThreadShells>;
   view: View;
   unread: boolean;
+  query: string;
+  kind: string;
 }) {
   const environmentId = environment.environmentId;
+  const projects = useProjects().filter((project) => project.environmentId === environmentId);
   const connected = environment.connection.phase === "connected";
   const list = useAtomCommand(attentionList, { reportFailure: false });
   const change = useAtomCommand(attentionChange, { reportFailure: false });
@@ -200,6 +244,18 @@ function ComputerInbox({
     workspaceView({ environmentId, input: { offset: nativeOffset, limit: 100 } }),
   );
   const native = Option.getOrNull(AsyncResult.value(nativeResult));
+  const [catalog, setCatalog] = useState<Record<string, AgentResource>>({});
+  const installation = native?.hello?.installationID;
+  useEffect(() => {
+    setCatalog({});
+  }, [installation]);
+  useEffect(() => {
+    if (native)
+      setCatalog((previous) => ({
+        ...previous,
+        ...Object.fromEntries(native.resources.map((resource) => [resource.workspaceID, resource])),
+      }));
+  }, [native]);
   const sources = useMemo(
     () => ({
       threadIds: threads.map((thread) => thread.id),
@@ -221,6 +277,7 @@ function ComputerInbox({
     threads.map((thread) => [
       thread.id,
       thread.hasPendingApprovals,
+      thread.source.pendingRuntimeRequest?.id,
       thread.hasPendingUserInput,
       thread.hasActionableProposedPlan,
       thread.runtime?.status,
@@ -301,13 +358,86 @@ function ComputerInbox({
       setBusy(null);
     }
   };
-  const items = page?.items.filter((item) => !unread || !item.read) ?? [];
+  const workspaceGroups = groupWorkspaceAgents(Object.values(catalog), projects, threads);
+  const groupFor = (item: AttentionItem) => {
+    const target = item.target;
+    if (target.kind === "thread" || (target.kind === "review" && target.threadId))
+      return workspaceGroups.find((group) =>
+        group.threads.some((thread) => thread.id === target.threadId),
+      );
+    if (target.kind === "runs" || target.kind === "review")
+      return workspaceGroups.find((group) =>
+        group.resources.some((resource) => resource.workspaceID === target.context.workspaceID),
+      );
+    if (target.kind === "verification")
+      return workspaceGroups.find((group) =>
+        group.threads.some((thread) => thread.projectId === target.reference.projectId),
+      );
+    return undefined;
+  };
+  const agentFor = (item: AttentionItem) =>
+    item.target.kind === "thread" || item.target.kind === "review"
+      ? threads.find(
+          (thread) =>
+            thread.id ===
+            (item.target.kind === "thread" || item.target.kind === "review"
+              ? item.target.threadId
+              : null),
+        )
+      : undefined;
+  const items =
+    page?.items
+      .filter(
+        (item) =>
+          (!unread || !item.read) &&
+          (kind === "all" ||
+            (kind === "approval"
+              ? item.kind === "approval"
+              : kind === "input"
+                ? ["input", "auth"].includes(item.kind)
+                : kind === "review"
+                  ? ["plan", "review_ready", "review_blocked", "verification"].includes(item.kind)
+                  : ["agent_failure", "run_failure", "connection"].includes(item.kind))) &&
+          (!query.trim() ||
+            [item.title, item.detail, groupFor(item)?.label, agentFor(item)?.title]
+              .join(" ")
+              .toLocaleLowerCase()
+              .includes(query.trim().toLocaleLowerCase())),
+      )
+      .toSorted(
+        (a, b) =>
+          Number(b.kind === "approval") - Number(a.kind === "approval") ||
+          Number(b.severity === "error") - Number(a.severity === "error"),
+      ) ?? [];
+  const grouped = new Map<string, { label: string; items: AttentionItem[] }>();
+  for (const item of items) {
+    const workspace = groupFor(item);
+    const id = workspace?.id ?? "other";
+    const group = grouped.get(id) ?? {
+      label: workspace?.label ?? "Other work & connections",
+      items: [],
+    };
+    group.items.push(item);
+    grouped.set(id, group);
+  }
   return (
     <section className={styles.computer} aria-label={`${environment.label} attention`}>
       <div className={styles.computerHeading}>
         <h2>
           {environment.label}
           <span>{connected && !failed ? "Connected" : "Last observed"}</span>
+          {page ? (
+            <span>
+              {page.total}{" "}
+              {view === "active"
+                ? page.total === 1
+                  ? "needs attention"
+                  : "need attention"
+                : page.total === 1
+                  ? "item"
+                  : "items"}
+            </span>
+          ) : null}
         </h2>
         <button
           disabled={!connected || busy !== null}
@@ -340,59 +470,99 @@ function ComputerInbox({
         </p>
       ) : null}
       <div className={styles.list}>
-        {items.map((item) => {
-          const live = connected && !failed && item.freshness === "current";
-          return (
-            <article key={item.id} className={styles.item} data-read={item.read}>
-              <div className={styles.icon}>
-                <CircleAlertIcon size={20} />
-              </div>
-              <div className={styles.content}>
-                <span className={styles.kind}>
-                  {!live ? "Last observed · " : ""}
-                  {item.state === "resolved"
-                    ? "Resolved by source"
-                    : item.kind.replaceAll("_", " ")}
-                  {item.read ? " · Read" : " · Unread"}
-                </span>
-                <h2>{item.title}</h2>
-                <p>{item.detail}</p>
-                <small>
-                  Observed {new Date(item.observedAt).toLocaleString()}
-                  {item.target.kind === "runs" || item.target.kind === "review"
-                    ? ` · Workspace generation ${item.target.context.generation}`
-                    : ""}
-                  {item.snoozedUntil
-                    ? ` · Snoozed until ${new Date(item.snoozedUntil).toLocaleTimeString()}`
-                    : ""}
-                </small>
-              </div>
-              <div className={styles.actions}>
-                <AttentionDestination item={item} environmentId={environmentId} />
-                <button
-                  disabled={!live || busy !== null}
-                  onClick={() => {
-                    void act(item, item.read ? "unread" : "read");
-                  }}
-                >
-                  <EyeIcon size={14} />
-                  {item.read ? "Mark unread" : "Mark read"}
-                </button>
-                {item.canSnooze && item.state !== "resolved" ? (
-                  <button
-                    disabled={!live || busy !== null}
-                    onClick={() => {
-                      void act(item, item.snoozedUntil ? "unsnooze" : "snooze");
-                    }}
-                  >
-                    <ClockIcon size={14} />
-                    {item.snoozedUntil ? "Wake now" : "Snooze for 1 hour"}
-                  </button>
-                ) : null}
-              </div>
-            </article>
-          );
-        })}
+        {[...grouped].map(([id, group]) => (
+          <section
+            className={styles.workspaceGroup}
+            key={id}
+            aria-label={`${group.label} attention`}
+          >
+            <div className={styles.workspaceHeading}>
+              <FolderGit2Icon size={18} />
+              <h3>{group.label}</h3>
+              <span>
+                {group.items.length} {group.items.length === 1 ? "item" : "items"}
+              </span>
+            </div>
+            {group.items.map((item) => {
+              const live = connected && !failed && item.freshness === "current";
+              const agent = agentFor(item);
+              const detail =
+                item.kind === "approval" && item.target.kind === "thread"
+                  ? item.state === "resolved"
+                    ? "This approval request has been resolved."
+                    : null
+                  : agent && item.detail.startsWith(`${agent.title}: `)
+                    ? item.detail.slice(agent.title.length + 2)
+                    : item.detail;
+              return (
+                <article key={item.id} className={styles.item} data-read={item.read}>
+                  <div className={styles.icon}>
+                    {item.kind === "approval" ? (
+                      <ShieldCheckIcon size={20} />
+                    ) : (
+                      <CircleAlertIcon size={20} />
+                    )}
+                  </div>
+                  <div className={styles.content}>
+                    <span className={styles.kind}>
+                      {!live ? "Last observed · " : ""}
+                      {item.state === "resolved"
+                        ? "Resolved by source"
+                        : item.kind.replaceAll("_", " ")}
+                      {item.read ? " · Read" : " · Unread"}
+                    </span>
+                    <h2>{item.title}</h2>
+                    {agent ? <strong className={styles.agentName}>{agent.title}</strong> : null}
+                    {detail ? <p>{detail}</p> : null}
+                    {item.kind === "approval" &&
+                    item.state !== "resolved" &&
+                    item.target.kind === "thread" ? (
+                      <InboxApproval
+                        key={`${item.id}:${item.causeVersion}`}
+                        item={item}
+                        environmentId={environmentId}
+                        live={live}
+                        onResolved={() => setRefresh((value) => value + 1)}
+                      />
+                    ) : null}
+                    <small>
+                      Observed {new Date(item.observedAt).toLocaleString()}
+                      {item.target.kind === "runs" || item.target.kind === "review"
+                        ? ` · Workspace generation ${item.target.context.generation}`
+                        : ""}
+                      {item.snoozedUntil
+                        ? ` · Snoozed until ${new Date(item.snoozedUntil).toLocaleTimeString()}`
+                        : ""}
+                    </small>
+                  </div>
+                  <div className={styles.actions}>
+                    <AttentionDestination item={item} environmentId={environmentId} />
+                    <button
+                      disabled={!live || busy !== null}
+                      onClick={() => {
+                        void act(item, item.read ? "unread" : "read");
+                      }}
+                    >
+                      <EyeIcon size={14} />
+                      {item.read ? "Mark unread" : "Mark read"}
+                    </button>
+                    {item.canSnooze && item.state !== "resolved" ? (
+                      <button
+                        disabled={!live || busy !== null}
+                        onClick={() => {
+                          void act(item, item.snoozedUntil ? "unsnooze" : "snooze");
+                        }}
+                      >
+                        <ClockIcon size={14} />
+                        {item.snoozedUntil ? "Wake now" : "Snooze for 1 hour"}
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })}
+          </section>
+        ))}
       </div>
       {!page && !failed && connected ? (
         <p role="status" className={styles.batch}>
@@ -402,13 +572,15 @@ function ComputerInbox({
         <div className={styles.empty}>
           <InboxIcon size={26} />
           <h3>
-            {unread
-              ? "No unread items on this page"
-              : view === "snoozed"
-                ? "Nothing snoozed on this page"
-                : view === "history"
-                  ? "No resolved items on this page"
-                  : "No attention items on this page"}
+            {query || kind !== "all"
+              ? "No items match these filters on this page"
+              : unread
+                ? "No unread items on this page"
+                : view === "snoozed"
+                  ? "Nothing snoozed on this page"
+                  : view === "history"
+                    ? "No resolved items on this page"
+                    : "You’re all caught up on this page"}
           </h3>
           <p>
             Read and snoozed work stays saved. Its original source determines when it is resolved.

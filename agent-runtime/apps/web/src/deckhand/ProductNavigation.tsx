@@ -75,7 +75,7 @@ export function ProductNavigation({
       <Link
         to="/workspaces"
         title="Agents"
-        search={{ ...globalSearch, tab: "agents" }}
+        search={{ tab: "agents" }}
         className={current === "conversations" ? styles.current : ""}
         aria-current={current === "conversations" ? "page" : undefined}
       >

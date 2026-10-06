@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import {
   ThreadId,
+  RuntimeRequestId,
   OrchestrationV2ThreadShell,
   OrchestrationV2PlanArtifact,
 } from "@cinderdeck/contracts";
@@ -175,6 +176,10 @@ describe("Cinderdeck authoritative attention", () => {
         const attention = yield* Attention.Attention;
         const original = (yield* attention.list("alice", input)).items[0]!;
         assert.equal(original.kind, "input");
+        assert.equal(
+          original.target.kind === "thread" && original.target.requestId,
+          RuntimeRequestId.make("request1"),
+        );
         assert.equal(original.canSnooze, false);
         const read = yield* attention.change("alice", change(original, "read"));
         assert.isTrue(read.read);
@@ -190,6 +195,10 @@ describe("Cinderdeck authoritative attention", () => {
         const next = (yield* attention.list("alice", input)).items[0]!;
         assert.equal(next.id, original.id);
         assert.notEqual(next.causeVersion, original.causeVersion);
+        assert.equal(
+          next.target.kind === "thread" && next.target.requestId,
+          RuntimeRequestId.make("request2"),
+        );
         assert.isFalse(next.read);
         assert.equal(
           (yield* attention.change("alice", change(read, "unread")).pipe(Effect.flip)).reason,

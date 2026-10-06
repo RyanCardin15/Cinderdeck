@@ -69,7 +69,13 @@ const make = Effect.gen(function* () {
             title: title.slice(0, 200),
             detail: detail.slice(0, 1200),
             severity: kind === "agent_failure" ? "error" : "info",
-            target: { kind: "thread", threadId },
+            target: {
+              kind: "thread",
+              threadId,
+              ...(shell.pendingRuntimeRequest && ["approval", "input", "auth"].includes(kind)
+                ? { requestId: shell.pendingRuntimeRequest.id }
+                : {}),
+            },
             observedAt: now,
             canSnooze,
           });

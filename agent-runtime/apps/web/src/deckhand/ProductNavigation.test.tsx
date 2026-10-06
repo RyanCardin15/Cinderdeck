@@ -63,7 +63,7 @@ it("opens app-wide views from a lane without carrying its saved context pins", a
       root.render(<ProductNavigation current="services" workspaceSearch={scope} />),
     );
     for (const [label, to, search] of [
-      ["Agents", "/workspaces", { environment: "remote", tab: "agents" }],
+      ["Agents", "/workspaces", { tab: "agents" }],
       ["Overview", "/workspaces", { environment: "remote", tab: "overview" }],
       ["Services & runs", "/services", { environment: "remote" }],
       ["Recordings", "/recordings", { environment: "remote" }],
@@ -88,7 +88,7 @@ it("opens app-wide views from a lane without carrying its saved context pins", a
     );
     expect(boundary.navigate).toHaveBeenLastCalledWith({
       to: "/workspaces",
-      search: { environment: "other", tab: "agents" },
+      search: { tab: "agents" },
     });
   } finally {
     await act(async () => root.unmount());

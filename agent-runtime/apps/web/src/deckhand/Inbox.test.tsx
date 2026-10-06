@@ -13,8 +13,10 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("../state/entities", () => ({
   useThreadShells: () => [],
+  useProjects: () => [],
   useAllEnvironmentShellsBootstrapped: () => true,
 }));
+vi.mock("./InboxApproval", () => ({ InboxApproval: () => null }));
 vi.mock("../state/environments", () => ({
   useEnvironments: () => ({
     environments: [
