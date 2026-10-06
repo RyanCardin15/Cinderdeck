@@ -773,7 +773,7 @@ const make = Effect.gen(function* () {
         !created?.lane ||
         created.id !== record.laneID ||
         created.lane.sourceStackID !== input.workspaceID ||
-        created.lane.name !== input.branch ||
+        created.lane.name !== (input.name ?? input.branch) ||
         !created.repos.length ||
         created.repos.some((repo) => !repo.physicalID || !repo.repositoryPhysicalID)
       )
@@ -963,6 +963,7 @@ const make = Effect.gen(function* () {
             arguments: {
               workspace: input.workspaceID,
               branch: input.branch,
+              ...(input.name !== undefined ? { name: input.name } : {}),
               repositoryRefs: input.repositoryRefs,
               setup: input.setup,
               start: input.start,

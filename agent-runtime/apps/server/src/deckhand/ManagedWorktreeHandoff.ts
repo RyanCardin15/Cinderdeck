@@ -154,6 +154,7 @@ export const layer = Layer.effect(
               scope.threadId,
               checkout.id,
               input.branch,
+              ...(input.name !== undefined ? [input.name] : []),
               input.baseRef ?? null,
               input.path ?? null,
               input.adoptExisting ?? false,
@@ -196,7 +197,12 @@ export const layer = Layer.effect(
                 revision: source.resource.revision,
                 arguments: {
                   workspace: workspace.ownerId,
-                  branch: input.branch,
+                  ...(input.adoptExisting
+                    ? { name: input.name ?? input.branch }
+                    : {
+                        branch: input.branch,
+                        ...(input.name !== undefined ? { name: input.name } : {}),
+                      }),
                   start: false,
                   setup: input.runSetupScript ?? true,
                   ...(input.adoptExisting
@@ -240,7 +246,7 @@ export const layer = Layer.effect(
               !target.resource.available ||
               !lane?.lane ||
               lane.lane.sourceStackID !== workspace.ownerId ||
-              lane.lane.name !== input.branch ||
+              lane.lane.name !== (input.name ?? input.branch) ||
               lane.definitionChanged ||
               lane.issues.length ||
               lane.repos.length !== sourceWorkspace.repos.length

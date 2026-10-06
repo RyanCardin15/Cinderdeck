@@ -73,7 +73,7 @@ final class StackSupervisor: ObservableObject {
   func runtime(_ id: String, _ service: String) -> StackServiceRuntime { states[id]?.services[service] ?? .init() }
   func definitionChanged(_ id: String) -> Bool {
     let current = definition(id)
-    return states[id]?.services.values.contains { $0.launchDefinition.map { $0.stack != current } ?? false } ?? false
+    return states[id]?.services.values.contains { $0.launchDefinition.map { $0.stack.hasSameRuntimeConfiguration(as: current) == false } ?? false } ?? false
   }
   private func key(_ id: String, _ service: String) -> String { "\(id)/\(service)" }
   var logDirectory: URL { logRoot }

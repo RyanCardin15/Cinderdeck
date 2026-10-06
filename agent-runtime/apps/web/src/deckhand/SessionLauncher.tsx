@@ -135,6 +135,7 @@ function SessionSetupLauncher({
   >(initial.request);
   const initialCreation = isCreationInput(initial.request) ? initial.request : null;
   const [branch, setBranch] = useState(initialCreation?.branch ?? "");
+  const [laneName, setLaneName] = useState(initialCreation?.name ?? "");
   const [repositoryRefs, setRepositoryRefs] = useState<Readonly<{ [id: string]: string }>>(
     initialCreation?.repositoryRefs ?? {},
   );
@@ -294,6 +295,7 @@ function SessionSetupLauncher({
           ...(isCreation
             ? {
                 branch: branch.trim(),
+                ...(laneName.trim() ? { name: laneName.trim() } : {}),
                 repositoryRefs: Object.fromEntries(
                   Object.entries(repositoryRefs)
                     .filter(([, ref]) => ref.trim())
@@ -535,6 +537,14 @@ function SessionSetupLauncher({
         >
           {isCreation ? (
             <>
+              <label htmlFor={`${id}-lane-name`}>Lane name (optional)</label>
+              <input
+                id={`${id}-lane-name`}
+                value={laneName}
+                placeholder="Default: branch"
+                maxLength={100}
+                onChange={(event) => setLaneName(event.target.value)}
+              />
               <label htmlFor={`${id}-branch`}>New lane branch</label>
               <input
                 ref={branchInput}

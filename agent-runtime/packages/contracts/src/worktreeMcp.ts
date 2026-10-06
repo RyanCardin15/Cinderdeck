@@ -11,6 +11,15 @@ import { TrimmedNonEmptyString } from "./baseSchemas.ts";
  * the conversation continues inside the worktree on the thread's next run.
  */
 export const WorktreeMcpHandoffInput = Schema.Struct({
+  name: Schema.optionalKey(
+    TrimmedNonEmptyString.check(
+      Schema.isMaxLength(100),
+      Schema.isPattern(/^[^\x00-\x1f\x7f-\x9f]+$/),
+    ),
+  ).annotate({
+    description:
+      "Optional Cinderdeck lane display name; defaults to the branch. Independent of Git branches and folders.",
+  }),
   adoptExisting: Schema.optional(
     Schema.Boolean.annotate({
       description:
@@ -103,6 +112,7 @@ export const WorktreeMcpHandoffResult = Schema.Struct({
 export type WorktreeMcpHandoffResult = typeof WorktreeMcpHandoffResult.Type;
 
 export const WorktreeMcpStatusResult = Schema.Struct({
+  laneName: Schema.optionalKey(Schema.String),
   attached: Schema.Boolean.annotate({
     description: "True when this thread is already attached to a git worktree.",
   }),

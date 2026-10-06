@@ -352,8 +352,9 @@ nonisolated enum StackCLI {
         if args.count == 2 { params["name"] = .string(args[1]) }
         params["setup"] = .bool(options.has("setup"))
       } else {
-        guard args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane create <workspace> <branch> [--from <ref>] [--repo-from <repo>=<ref>] [--env KEY=VALUE] [--copy <pattern>] [--no-setup] [--no-start] [--no-wait]") }
+        guard args.count == 2 else { throw StackControlError.invalid("Usage: cinderdeck lane create <workspace> <branch> [--name <name>] [--from <ref>] [--repo-from <repo>=<ref>] [--env KEY=VALUE] [--copy <pattern>] [--no-setup] [--no-start] [--no-wait]") }
         params["branch"] = .string(args[1])
+        if let name = options["name"] { params["name"] = .string(name) }
         params["setup"] = .bool(!options.has("no-setup"))
       }
       params["workspace"] = .string(args[0])
@@ -632,11 +633,12 @@ nonisolated enum StackCLI {
   WORKTREE LANES
     cinderdeck lane create <workspace> <branch>       Create, set up and start an isolated worktree lane (--repo-from <repo>=<ref> pins a repository start)
       --from <ref>  --env KEY=VALUE  --copy <glob>    Start point, lane-only variables, extra files to copy
+      --name <name>                                 Optional lane display name (default: branch)
       --no-setup  --no-start                          Skip [lanes] setup, or create without starting
     cinderdeck lane adopt <workspace> [name]          Use an existing worktree (--path, default: here)
       --setup  --no-start                            Setup is off by default; name required for detached HEAD
       --from <ref>  --env KEY=VALUE  --copy <glob>    Copy/from apply to new worktrees of other repos
-    cinderdeck lane edit <lane> --name <name>          Rename a stopped lane; id, branches and folders stay
+    cinderdeck lane edit <lane> --name <name>          Rename a lane, including while running; id, branches and folders stay
     cinderdeck lane edit <lane> --env KEY=VALUE        Replace stopped lane overrides; --clear-env clears them
     cinderdeck lane list [workspace]                  Original checkout and lanes, with setup and merge state
     cinderdeck lane env <lane> [service] --export     Resolved ports, URLs and variables for your shell

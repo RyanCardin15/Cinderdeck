@@ -43,7 +43,7 @@ nonisolated struct IntegrationHello: Encodable, Sendable {
   let executionHostID: String
   let channel: String
   let runtimeEpoch: String
-  let capabilities = ["github.workspace", "projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.adopt", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.contexts", "recordings.library", "runs.library", "runs.detail", "runs.failures", "builds.declared", "linked-work.projection", "linked-work.lane-transfer", "agents.setup"]
+  let capabilities = ["github.workspace", "projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.adopt", "operations.lane.update", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.contexts", "recordings.library", "runs.library", "runs.detail", "runs.failures", "builds.declared", "linked-work.projection", "linked-work.lane-transfer", "agents.setup"]
   let maximumFrameBytes = StackControlSocketServer.maximumFrameBytes
   let maximumPageSize = 500
   let maximumWaitMs = 25_000
@@ -183,6 +183,11 @@ extension StackControlService {
     integrationOperations = created
     return created
   }
+  private func validateLaneName(_ name: String) throws {
+    guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, name.count <= 100, name.rangeOfCharacter(from: .controlCharacters) == nil else {
+      throw StackControlError.invalid("name must contain 1–100 characters without control characters")
+    }
+  }
   private func validateOperation(_ input: IntegrationOperationInput) throws {
     func bounded(_ value: String, _ maximum: Int) -> Bool {
       !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && value.utf8.count <= maximum
@@ -198,8 +203,9 @@ extension StackControlService {
     }
     let allowed: Set<String>
     if input.method == "lane.create" {
-      allowed = ["workspace", "branch", "from", "repositoryRefs", "start", "setup"]
+      allowed = ["workspace", "branch", "name", "from", "repositoryRefs", "start", "setup"]
       let decoded: IntegrationLaneOperation = try decodeIntegration(input.arguments)
+      if let name = decoded.name { try validateLaneName(name) }
       guard decoded.repositoryRefs.map({ $0.count <= 64 && $0.allSatisfy({ bounded($0.key, 160) && bounded($0.value, 200) && !$0.value.hasPrefix("-") && !$0.value.contains("\0") && !$0.value.contains("\n") && !$0.value.contains("\r") }) }) ?? true else {
         throw StackControlError.invalid("Invalid repository start revisions")
       }
@@ -210,6 +216,11 @@ extension StackControlService {
       guard bounded(decoded.path, 4096), decoded.path.hasPrefix("/"), !decoded.path.contains("\0"), !decoded.path.contains("\n"),
         decoded.name.map({ bounded($0, 200) }) ?? true,
         decoded.from.map({ bounded($0, 200) }) ?? true else { throw StackControlError.invalid("Adoption requires an absolute worktree path and bounded name/source") }
+    } else if input.method == "lane.update" {
+      allowed = ["workspace", "name", "expectedName"]
+      let decoded: IntegrationLaneRename = try decodeIntegration(input.arguments)
+      try validateLaneName(decoded.name)
+      if let expected = decoded.expectedName, expected.utf8.count > 4096 { throw StackControlError.invalid("expectedName is too long") }
     } else if input.method == "lane.setup" {
       allowed = ["workspace"]
       let _: IntegrationLaneSetup = try decodeIntegration(input.arguments)
@@ -329,6 +340,7 @@ extension StackControlService {
 nonisolated private struct IntegrationLaneOperation: Decodable {
   let workspace: String
   let branch: String
+  let name: String?
   let from: String?
   let repositoryRefs: [String: String]?
   let start: Bool?
@@ -349,6 +361,11 @@ nonisolated private struct IntegrationLaneAdoption: Decodable {
   let from: String?
   let start: Bool?
   let setup: Bool?
+}
+nonisolated private struct IntegrationLaneRename: Decodable {
+  let workspace: String
+  let name: String
+  let expectedName: String?
 }
 nonisolated private struct IntegrationLaneSetup: Decodable {
   let workspace: String

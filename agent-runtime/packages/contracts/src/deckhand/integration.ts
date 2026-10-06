@@ -142,6 +142,7 @@ export type IntegrationEvents = typeof IntegrationEvents.Type;
 export const IntegrationOperationMethod = Schema.Literals([
   "lane.create",
   "lane.adopt",
+  "lane.update",
   "lane.setup",
   "lane.release",
   "lane.remove",

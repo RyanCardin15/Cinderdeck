@@ -367,8 +367,12 @@ nonisolated enum StackLaneStore {
     guard !branch.isEmpty, !branch.hasPrefix("-"), !branch.contains("\0"), !branch.contains("\n"), branch != "HEAD" else {
       throw StackError.message("Use a valid local Git branch name for the lane.")
     }
-    guard !existing.contains(where: { $0.info.reference == source.id + "/" + branch }) else {
-      let message = "Lane \(source.id)/\(branch) already exists. Start or inspect it with that name."
+    let name = request.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? branch
+    guard !name.isEmpty, (request.name == nil || name.count <= 100), name.rangeOfCharacter(from: .controlCharacters) == nil else {
+      throw StackError.message("name must contain 1–100 characters without control characters")
+    }
+    guard !existing.contains(where: { $0.info.sourceStackID == source.id && $0.info.name.caseInsensitiveCompare(name) == .orderedSame }) else {
+      let message = "Lane \(source.id)/\(name) already exists. Start or inspect it with that name."
       if !request.repositoryRefs.isEmpty { throw StartRevisionRefusal(message: message) }
       throw StackError.message(message)
     }
@@ -459,7 +463,7 @@ nonisolated enum StackLaneStore {
     let id = source.id + "--lane-" + UUID().uuidString.lowercased()
     let keys = requiredPortKeys(source, worktrees: worktrees)
     let ports = try allocate(keys, excluding: occupiedPorts)
-    var info = StackLaneInfo(sourceStackID: source.id, name: branch, owner: owner, createdAt: Date(), directory: laneDirectory,
+    var info = StackLaneInfo(sourceStackID: source.id, name: name, owner: owner, createdAt: Date(), directory: laneDirectory,
       ports: ports, slug: slug, environment: request.environment, from: request.from ?? settings?.from)
     info.repositoryRefs = repositoryRefs
     info.adopted = worktrees.contains { !$0.managed }
