@@ -2,12 +2,12 @@ import AppKit
 import SwiftUI
 
 /// Native operations remain on their existing models and supervisor. This auxiliary
-/// tool deliberately bypasses the main-window façade, which routes into AgentShell.
+/// tool deliberately bypasses the main-window façade, which routes into CinderdeckRuntime.
 @MainActor
-final class AgentShellWorkspaceTools: NSWindowController, NSWindowDelegate {
-  static let shared = AgentShellWorkspaceTools()
+final class CinderdeckRuntimeWorkspaceTools: NSWindowController, NSWindowDelegate {
+  static let shared = CinderdeckRuntimeWorkspaceTools()
   private let model = StacksViewModel(supervisor: .shared)
-  private var presentedRequest: AgentShellUIRequest?
+  private var presentedRequest: CinderdeckRuntimeUIRequest?
 
   private init() {
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1380, height: 860),
@@ -27,7 +27,7 @@ final class AgentShellWorkspaceTools: NSWindowController, NSWindowDelegate {
 
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-  func open(_ request: AgentShellUIRequest) throws {
+  func open(_ request: CinderdeckRuntimeUIRequest) throws {
     guard let window else { throw StackControlError(code: "host_unavailable", message: "The native workspace tool is unavailable") }
     // Repeated opens can focus the same editor without losing its draft. A request
     // for another scope must wait until the user closes the existing sheet.
@@ -59,7 +59,7 @@ final class AgentShellWorkspaceTools: NSWindowController, NSWindowDelegate {
       guard let file, file.lane == nil, model.workspaceNavigation.workspaces.contains(where: { $0.id == file.id }) else {
         throw StackControlError.invalid("Select the source workspace to edit its definition; lane snapshots cannot be edited here")
       }
-      guard request.mode.map({ AgentShellUIRequest.workspaceEditorModes.contains($0) }) ?? true else {
+      guard request.mode.map({ CinderdeckRuntimeUIRequest.workspaceEditorModes.contains($0) }) ?? true else {
         throw StackControlError.invalid("Unsupported workspace editor mode")
       }
       model.select(file.id)
@@ -104,6 +104,6 @@ final class AgentShellWorkspaceTools: NSWindowController, NSWindowDelegate {
 
   func windowWillClose(_ notification: Notification) {
     model.supervisor.gitMonitor.setVisible(false, source: "native-workspace-tools")
-    AgentShellController.shared.activateOwnedWindow()
+    CinderdeckRuntimeController.shared.activateOwnedWindow()
   }
 }

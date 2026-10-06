@@ -233,7 +233,7 @@ jobs:
               --signing-identity "$SIGN_IDENTITY" --output-dir "$PWD/build/unified"
           rm -rf "$APP_PATH"
           mv build/unified/Cinderdeck.app "$APP_PATH"
-          test -x "$APP_PATH/Contents/Resources/AgentShell.app/Contents/MacOS/AgentShell"
+          test -x "$APP_PATH/Contents/Resources/Cinderdeck.app/Contents/MacOS/Cinderdeck"
 
       - name: Verify exported app bundle
         run: |

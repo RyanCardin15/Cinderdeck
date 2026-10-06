@@ -44,11 +44,11 @@ enum StackPreviewHarness {
     ]) { _, preview in preview }
     UserDefaults.standard.setVolatileDomain(overrides, forName: UserDefaults.argumentDomain)
     NSApp.setActivationPolicy(.regular)
-    let usesUnifiedShell = AgentShellController.shared.configured
+    let usesUnifiedShell = CinderdeckRuntimeController.shared.configured
     if usesUnifiedShell {
       let capture = ScreenCaptureViewModel()
       recordingViewModel = capture
-      AgentShellNativeUI.configure(capture)
+      CinderdeckRuntimeNativeUI.configure(capture)
     }
     Task {
       await StackSupervisor.shared.bootstrap()

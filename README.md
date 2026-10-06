@@ -76,7 +76,7 @@ Built with SwiftUI and AppKit. Local configuration, local history, no Cinderdeck
 
 ## One app, one repository
 
-This repository includes the complete native app and its agent harness in `agent-runtime/`. A normal clone includes both, without submodules or a second checkout. The default build and local installer produce one Cinderdeck app with agents, previews, Workspaces, lanes, pull requests, capture and history. The internal AgentShell ships inside the app and updates with it.
+This repository includes the complete native app and its agent harness in `agent-runtime/`. A normal clone includes both, without submodules or a second checkout. The default build and local installer produce one Cinderdeck app with agents, previews, Workspaces, lanes, pull requests, capture and history. The bundled runtime ships inside Cinderdeck and updates with it.
 
 ## Start with your own projects
 

@@ -95,13 +95,13 @@ final class AnnotateManager {
     }
   }
 
-  /// Switch back to accessory mode (menu bar only) if no windows open
-  private func becomeAccessoryAppIfNeeded() {
+  /// Closing editors keeps Cinderdeck available in the Dock and app switcher.
+  private func maintainActivationAfterClosingEditors() {
     DispatchQueue.main.async { [weak self] in
       guard let self = self else { return }
       guard self.windowControllers.isEmpty && self.manualWindowControllers.isEmpty else { return }
       guard !VideoEditorManager.shared.hasOpenWindows else { return }
-      NSApp.revertActivationPolicyToAccessoryIfNeeded()
+      NSApp.maintainRegularActivationPolicy()
     }
   }
 
@@ -148,7 +148,7 @@ final class AnnotateManager {
       ) { [weak self] _ in
         MainActor.assumeIsolated {
           self?.windowControllers.removeValue(forKey: itemId)
-          self?.becomeAccessoryAppIfNeeded()
+          self?.maintainActivationAfterClosingEditors()
 
           // Resume Quick Access countdown
           QuickAccessManager.shared.resumeCountdownForEditingItem(itemId)
@@ -172,7 +172,7 @@ final class AnnotateManager {
     }
     manualWindowControllers.removeAll()
 
-    becomeAccessoryAppIfNeeded()
+    maintainActivationAfterClosingEditors()
   }
 
   /// Check if annotation window is open for item
@@ -211,7 +211,7 @@ final class AnnotateManager {
       ) { [weak self] _ in
         MainActor.assumeIsolated {
           self?.windowControllers.removeValue(forKey: controllerId)
-          self?.becomeAccessoryAppIfNeeded()
+          self?.maintainActivationAfterClosingEditors()
         }
       }
     }
@@ -243,7 +243,7 @@ final class AnnotateManager {
       ) { [weak self] _ in
         MainActor.assumeIsolated {
           self?.manualWindowControllers.removeValue(forKey: controllerId)
-          self?.becomeAccessoryAppIfNeeded()
+          self?.maintainActivationAfterClosingEditors()
         }
       }
     }
@@ -268,7 +268,7 @@ final class AnnotateManager {
       ) { [weak self] _ in
         MainActor.assumeIsolated {
           self?.manualWindowControllers.removeValue(forKey: controllerID)
-          self?.becomeAccessoryAppIfNeeded()
+          self?.maintainActivationAfterClosingEditors()
         }
       }
     }

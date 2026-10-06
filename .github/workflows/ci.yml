@@ -216,7 +216,7 @@ jobs:
       - name: Build complete app
         run: |
           ./scripts/build-unified.sh --configuration Debug --output-dir "$PWD/build/unified"
-          test -x 'build/unified/Cinderdeck Debug.app/Contents/Resources/AgentShell.app/Contents/MacOS/AgentShell'
+          test -x 'build/unified/Cinderdeck Debug.app/Contents/Resources/Cinderdeck.app/Contents/MacOS/Cinderdeck'
           codesign --verify --deep --strict 'build/unified/Cinderdeck Debug.app'
 
       - name: Verify app bundle

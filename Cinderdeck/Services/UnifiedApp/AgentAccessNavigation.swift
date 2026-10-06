@@ -7,6 +7,6 @@ enum AgentAccessNavigation {
   static let section = "agent-access"
 
   static func open(orPresent fallback: () -> Void) {
-    if !AgentShellController.shared.show(section: section) { fallback() }
+    if !CinderdeckRuntimeController.shared.show(section: section) { fallback() }
   }
 }

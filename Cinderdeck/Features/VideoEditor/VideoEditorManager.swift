@@ -37,13 +37,13 @@ final class VideoEditorManager {
     }
   }
 
-  /// Switch back to accessory mode (menu bar only) if no windows open
-  private func becomeAccessoryAppIfNeeded() {
+  /// Closing editors keeps Cinderdeck available in the Dock and app switcher.
+  private func maintainActivationAfterClosingEditors() {
     DispatchQueue.main.async { [weak self] in
       guard let self = self else { return }
       guard !self.hasOpenWindows else { return }
       guard !AnnotateManager.shared.hasOpenWindows else { return }
-      NSApp.revertActivationPolicyToAccessoryIfNeeded()
+      NSApp.maintainRegularActivationPolicy()
     }
   }
 
@@ -79,7 +79,7 @@ final class VideoEditorManager {
       ) { [weak self] _ in
         MainActor.assumeIsolated {
           self?.cleanupWindow(for: itemId)
-          self?.becomeAccessoryAppIfNeeded()
+          self?.maintainActivationAfterClosingEditors()
 
           // Resume Quick Access countdown
           QuickAccessManager.shared.resumeCountdownForEditingItem(itemId)
@@ -127,7 +127,7 @@ final class VideoEditorManager {
       ) { [weak self] _ in
         MainActor.assumeIsolated {
           self?.cleanupURLWindow(for: url)
-          self?.becomeAccessoryAppIfNeeded()
+          self?.maintainActivationAfterClosingEditors()
         }
       }
       urlObservers[url] = observer
@@ -164,7 +164,7 @@ final class VideoEditorManager {
       ) { [weak self] _ in
         MainActor.assumeIsolated {
           self?.emptyWindowController = nil
-          self?.becomeAccessoryAppIfNeeded()
+          self?.maintainActivationAfterClosingEditors()
         }
       }
     }
@@ -224,7 +224,7 @@ final class VideoEditorManager {
     emptyWindowController?.window?.close()
     emptyWindowController = nil
 
-    becomeAccessoryAppIfNeeded()
+    maintainActivationAfterClosingEditors()
   }
 
   private func cleanupWindow(for itemId: UUID) {

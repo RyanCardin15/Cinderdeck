@@ -1,6 +1,6 @@
 # Updating Cinderdeck
 
-Use Cinderdeck’s native update action to update the complete macOS app. The bundled AgentShell is updated with the host; it has no independent feed or installer. Source builds use [the complete app builder](../../../docs/UNIFIED_APP.md).
+Use Cinderdeck’s native update action to update the complete macOS app. The bundled runtime is updated with the host; it has no independent feed or installer. Source builds use [the complete app builder](../../../docs/UNIFIED_APP.md).
 
 Before restarting, stop or finish active agents, services, and terminal commands. Conversations and provider resume state remain in the host’s AgentRuntime directory. A companion and its execution host must use compatible wire contracts; update the machine named in a version mismatch and reconnect.
 

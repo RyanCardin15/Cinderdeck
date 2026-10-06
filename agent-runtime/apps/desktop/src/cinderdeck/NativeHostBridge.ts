@@ -32,7 +32,7 @@ let parentRequestedQuit = false;
 export function delegateQuitToNative(event: Electron.Event): boolean {
   if (process.env.CINDERDECK_NATIVE_HOST !== "1" || parentRequestedQuit) return false;
   event.preventDefault();
-  process.stdout.write("CINDERDECK_AGENT_SHELL_QUIT_REQUEST\n");
+  process.stdout.write("CINDERDECK_RUNTIME_QUIT_REQUEST\n");
   return true;
 }
 
@@ -106,7 +106,7 @@ export const install = Effect.gen(function* () {
     void trusted(event).then((ok) => {
       if (!ok) return;
       ready = true;
-      process.stdout.write("CINDERDECK_AGENT_SHELL_READY\n");
+      process.stdout.write("CINDERDECK_RUNTIME_READY\n");
       void sendRoute();
     });
   };
@@ -160,7 +160,7 @@ export const install = Effect.gen(function* () {
   Electron.ipcMain.on(NATIVE_HOST_READY_CHANNEL, readyListener);
   Electron.ipcMain.handle(NATIVE_TOOL_CHANNEL, async (event, value: unknown) => {
     if (!(await trusted(event)) || !toolRequest(value)) return false;
-    process.stdout.write("CINDERDECK_AGENT_SHELL_UI_REQUEST " + JSON.stringify(value) + "\n");
+    process.stdout.write("CINDERDECK_RUNTIME_UI_REQUEST " + JSON.stringify(value) + "\n");
     return true;
   });
 

@@ -39,13 +39,13 @@ elif command == 'node':
         print('11.10.0')
     elif args[0] != '-e':
         output = pathlib.Path(args[args.index('--output-dir') + 1])
-        shell = output / 'AgentShell.app/Contents'
+        shell = output / 'Cinderdeck.app/Contents'
         (shell / 'MacOS').mkdir(parents=True)
-        executable = shell / 'MacOS/AgentShell'
+        executable = shell / 'MacOS/Cinderdeck'
         executable.write_text('#!/bin/sh\nexit 0\n')
         executable.chmod(0o755)
         with (shell / 'Info.plist').open('wb') as info:
-            plistlib.dump({'CFBundleIdentifier': 'com.ryancardin.cinderdeck.agentshell', 'CFBundleExecutable': 'AgentShell'}, info)
+            plistlib.dump({'CFBundleIdentifier': 'com.ryancardin.cinderdeck.runtime', 'CFBundleExecutable': 'Cinderdeck'}, info)
 elif command == 'npm':
     pathlib.Path('node_modules').mkdir(exist_ok=True)
 elif command == 'lipo':
@@ -142,16 +142,19 @@ class LocalSigningTests(unittest.TestCase):
         self.assertIn('Reusing code-signing identity', result.stdout)
         signatures = [call for call in self.calls() if call[0] == 'codesign' and '--sign' in call]
         self.assertGreaterEqual(len(signatures), 6)
-        self.assertTrue(any(call[-1].endswith('/AgentShell.app') for call in signatures))
+        self.assertTrue(any(call[-1].endswith('/Cinderdeck.app') for call in signatures))
         for call in signatures:
             self.assertEqual(call[call.index('--sign') + 1], FINGERPRINT)
         self.assertTrue(signatures[-1][-1].endswith('/Cinderdeck.app'))
         # Locate the final delivery independently of its staging directory.
-        shell = next((self.directory / 'derived data').glob('unified.*/Cinderdeck.app/Contents/Resources/AgentShell.app/Contents'))
+        shell = next((self.directory / 'derived data').glob('unified.*/Cinderdeck.app/Contents/Resources/Cinderdeck.app/Contents'))
         info = plistlib.loads((shell / 'Info.plist').read_bytes())
-        self.assertEqual(info['CFBundleName'], 'AgentShell')
+        self.assertEqual(info['CFBundleName'], 'Cinderdeck')
         self.assertEqual(info['CFBundleDisplayName'], 'Cinderdeck')
-        self.assertEqual(info['CFBundleExecutable'], 'AgentShell')
+        self.assertEqual(info['CFBundleExecutable'], 'Cinderdeck')
+        self.assertTrue(info['LSUIElement'])
+        outer = plistlib.loads((shell.parent.parent.parent / 'Info.plist').read_bytes())
+        self.assertFalse(outer['LSUIElement'])
         self.assertEqual((shell / 'Resources' / info['CFBundleIconFile']).read_bytes(), b'fixture cinderdeck icon')
         entitlements = plistlib.loads((self.directory / 'derived data/signed-entitlements.plist').read_bytes())
         self.assertTrue(entitlements['com.apple.security.cs.disable-library-validation'])

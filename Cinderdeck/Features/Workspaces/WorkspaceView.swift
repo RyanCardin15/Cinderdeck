@@ -16,7 +16,7 @@ enum WorkspaceSection: String, CaseIterable {
   static func initialSection(_ workspace: StackDefinition) -> WorkspaceSection {
     workspace.services.isEmpty && !workspace.tasks.isEmpty ? .tasks : .services
   }
-  var agentShellSection: String {
+  var runtimeSection: String {
     switch self {
     case .services: return "services"
     case .tasks: return "tasks"
@@ -165,10 +165,10 @@ struct WorkspaceView: View {
       }
       Spacer(minLength: 12)
       HStack(spacing: 8) {
-        if AgentShellController.shared.configured {
+        if CinderdeckRuntimeController.shared.configured {
           Button {
-            AgentShellController.shared.show(workspaceID: file.id, section: section.agentShellSection)
-            if AgentShellController.shared.running { onOpenInCinderdeck?() }
+            CinderdeckRuntimeController.shared.show(workspaceID: file.id, section: section.runtimeSection)
+            if CinderdeckRuntimeController.shared.running { onOpenInCinderdeck?() }
           } label: {
             Label("Open in Cinderdeck", systemImage: "macwindow")
           }

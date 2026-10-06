@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNTIME_SOURCE="$ROOT_DIR/agent-runtime"
 OUTPUT_DIR=""
 CONFIGURATION="Debug"
-AGENT_SHELL=""
+RUNTIME_APP=""
 NATIVE_APP=""
 NATIVE_DERIVED_DATA="$ROOT_DIR/.build/unified-native"
 ARCH="$(uname -m)"
@@ -18,7 +18,7 @@ DRY_RUN=0
 STAGING_DIR=""
 COMPLETE=0
 RUNTIME_CACHE="${CINDERDECK_RUNTIME_CACHE:-1}"
-RUNTIME_CACHE_DIR="$ROOT_DIR/.build/agent-shell-cache"
+RUNTIME_CACHE_DIR="$ROOT_DIR/.build/runtime-cache"
 RUNTIME_CACHE_KEY=""
 RUNTIME_PID=""
 
@@ -28,22 +28,22 @@ usage() {
 Usage: $0 --output-dir /absolute/output \\
   --configuration Debug|Release [options]
 
-Build and assemble one Cinderdeck app containing Resources/AgentShell.app.
+Build and assemble one Cinderdeck app containing Resources/Cinderdeck.app.
 Does not install, launch, reset permissions, create certificates, or publish.
 
   --runtime-source /absolute/checkout   Override the included agent-runtime source.
   --derived-data /absolute/path         Native build cache (default .build/unified-native).
-  --agent-shell /absolute/AgentShell.app  Reuse this internal runtime app.
+  --runtime-app /absolute/Cinderdeck.app  Reuse this internal runtime app.
   --native-app /absolute/native.app      Reuse this native build.
   --arch arm64|x64|universal             Default: host architecture.
   --signing-identity NAME|SHA1           Exact existing certificate identity.
                                          Release requires it; Debug defaults to ad-hoc.
-  --no-runtime-cache                    Rebuild AgentShell even when a Debug build from
+  --no-runtime-cache                    Rebuild the runtime even when a Debug build from
                                          identical runtime inputs is cached.
   --dry-run                             Validate inputs and print the build plan only.
 
-AgentShell and the native app build in parallel. Debug builds reuse a cached
-AgentShell (.build/agent-shell-cache) when the runtime sources, ignored .env
+The runtime and native app build in parallel. Debug builds reuse a cached
+runtime (.build/runtime-cache) when the runtime sources, ignored .env
 files, toolchains, build environment and Git metadata it embeds are unchanged.
 
 Environment:
@@ -62,7 +62,7 @@ while [[ $# -gt 0 ]]; do
     --derived-data) require_value "$@"; NATIVE_DERIVED_DATA=$2; shift ;;
     --output-dir) require_value "$@"; OUTPUT_DIR=$2; shift ;;
     --configuration) require_value "$@"; CONFIGURATION=$2; shift ;;
-    --agent-shell) require_value "$@"; AGENT_SHELL=$2; shift ;;
+    --runtime-app) require_value "$@"; RUNTIME_APP=$2; shift ;;
     --native-app) require_value "$@"; NATIVE_APP=$2; shift ;;
     --arch) require_value "$@"; ARCH=$2; shift ;;
     --signing-identity) require_value "$@"; SIGNING_IDENTITY=$2; shift ;;
@@ -113,16 +113,16 @@ validate_app() {
   [[ "$executable" == "$expected_executable" && -x "$app/Contents/MacOS/$executable" ]] || fail "Unexpected or missing executable in $app"
 }
 validate_shell() {
-  validate_app "$1" com.ryancardin.cinderdeck.agentshell AgentShell
+  validate_app "$1" com.ryancardin.cinderdeck.runtime Cinderdeck
   python3 - "$1/Contents/Info.plist" <<'PY'
 import plistlib, sys
 with open(sys.argv[1], 'rb') as file:
     data = plistlib.load(file)
 if data.get('CFBundleURLTypes'):
-    raise SystemExit('Internal AgentShell must not register URL schemes; native Cinderdeck owns them.')
+    raise SystemExit('Internal Cinderdeck must not register URL schemes; native Cinderdeck owns them.')
 PY
 }
-# Everything that can change the unsigned AgentShell: the runtime checkout's
+# Everything that can change the unsigned runtime: the runtime checkout's
 # Git-visible files and ignored .env files, toolchains, build environment, this
 # builder, and the commit/dirty state build-desktop-artifact embeds for About.
 runtime_cache_key() {
@@ -158,7 +158,7 @@ for path in sorted(set(ls_files('-c', '-o', '--exclude-standard') + ignored_env)
 print(digest.hexdigest())
 PY
 }
-# Keep the three most recently used AgentShell builds.
+# Keep the three most recently used runtime builds.
 store_runtime_cache() {
   [[ -n "$RUNTIME_CACHE_KEY" && ! -e "$RUNTIME_CACHE_DIR/$RUNTIME_CACHE_KEY" ]] || return 0
   # Sources edited during the build may not match the key computed before it.
@@ -166,7 +166,7 @@ store_runtime_cache() {
   mkdir -p "$RUNTIME_CACHE_DIR"
   local partial
   partial=$(mktemp -d "$RUNTIME_CACHE_DIR/.partial.XXXXXX")
-  if ditto "$AGENT_SHELL" "$partial/AgentShell.app"; then
+  if ditto "$RUNTIME_APP" "$partial/Cinderdeck.app"; then
     # rename(2) refuses a non-empty destination, so a concurrent writer wins cleanly.
     python3 -c 'import os, sys; os.rename(*sys.argv[1:])' "$partial" "$RUNTIME_CACHE_DIR/$RUNTIME_CACHE_KEY" 2>/dev/null || true
   fi
@@ -176,9 +176,9 @@ store_runtime_cache() {
     rm -rf "${RUNTIME_CACHE_DIR:?}/$stale"
   done < <(ls -1t "$RUNTIME_CACHE_DIR" | tail -n +4)
 }
-[[ -z "$AGENT_SHELL" ]] || validate_shell "$AGENT_SHELL"
+[[ -z "$RUNTIME_APP" ]] || validate_shell "$RUNTIME_APP"
 [[ -z "$NATIVE_APP" ]] || validate_app "$NATIVE_APP" "$BUNDLE_ID" Cinderdeck
-for input_app in "$AGENT_SHELL" "$NATIVE_APP"; do
+for input_app in "$RUNTIME_APP" "$NATIVE_APP"; do
   [[ -n "$input_app" ]] || continue
   input_app="$(cd "$input_app" && pwd -P)"
   case "$OUTPUT_DIR/" in "$input_app/"*) fail "Output must not be inside a prebuilt input app." ;; esac
@@ -187,8 +187,8 @@ done
 
 if [[ "$DRY_RUN" == 1 ]]; then
   printf 'Configuration: %s\nArchitecture: %s\nRuntime checkout: %s\n' "$CONFIGURATION" "$ARCH" "$RUNTIME_SOURCE"
-  printf 'AgentShell: %s\nNative app: %s\nSigning identity: %s\nOutput: %s\n' \
-    "${AGENT_SHELL:-build from runtime source}" "${NATIVE_APP:-build with Xcode}" "$SIGNING_IDENTITY" "$FINAL_APP"
+  printf 'Runtime app: %s\nNative app: %s\nSigning identity: %s\nOutput: %s\n' \
+    "${RUNTIME_APP:-build from runtime source}" "${NATIVE_APP:-build with Xcode}" "$SIGNING_IDENTITY" "$FINAL_APP"
   exit 0
 fi
 
@@ -201,21 +201,21 @@ if [[ "$SIGNING_IDENTITY" != - ]]; then
     || fail "Signing identity is unavailable or ambiguous. Use an exact valid certificate name or SHA-1 fingerprint."
 fi
 
-if [[ -z "$AGENT_SHELL" ]]; then
+if [[ -z "$RUNTIME_APP" ]]; then
   command -v cargo >/dev/null 2>&1 || fail "Rust and Cargo are required to build the runtime helpers. Install Rust (for example: brew install rust), then retry."
   source "$ROOT_DIR/scripts/runtime-build-env.sh"
   ensure_runtime_node
   # Release builds always rebuild the runtime from source.
   if [[ "$RUNTIME_CACHE" != 0 && "$CONFIGURATION" == Debug ]]; then
     RUNTIME_CACHE_KEY=$(runtime_cache_key) || RUNTIME_CACHE_KEY=""
-    cached_shell="$RUNTIME_CACHE_DIR/$RUNTIME_CACHE_KEY/AgentShell.app"
+    cached_shell="$RUNTIME_CACHE_DIR/$RUNTIME_CACHE_KEY/Cinderdeck.app"
     if [[ -n "$RUNTIME_CACHE_KEY" && -d "$cached_shell" ]] && (validate_shell "$cached_shell") 2>/dev/null; then
-      AGENT_SHELL=$cached_shell
+      RUNTIME_APP=$cached_shell
       touch "$RUNTIME_CACHE_DIR/$RUNTIME_CACHE_KEY"
-      printf 'Reusing AgentShell built from identical runtime inputs: %s\n' "$AGENT_SHELL"
+      printf 'Reusing runtime built from identical runtime inputs: %s\n' "$RUNTIME_APP"
     fi
   fi
-  [[ -n "$AGENT_SHELL" ]] || install_runtime_dependencies
+  [[ -n "$RUNTIME_APP" ]] || install_runtime_dependencies
 fi
 
 mkdir -p "$OUTPUT_DIR"
@@ -233,9 +233,9 @@ trap cleanup EXIT
 
 # The runtime and native builds share no inputs, so the runtime builds in the
 # background while Xcode compiles. exec makes RUNTIME_PID the builder itself.
-if [[ -z "$AGENT_SHELL" ]]; then
+if [[ -z "$RUNTIME_APP" ]]; then
   RUNTIME_OUTPUT="$STAGING_DIR/runtime"
-  printf 'Building internal AgentShell. Log: %s\n' "$STAGING_DIR/runtime-build.log"
+  printf 'Building Cinderdeck runtime. Log: %s\n' "$STAGING_DIR/runtime-build.log"
   (cd "$RUNTIME_SOURCE" && \
     export PATH="$(dirname "$NODE_BINARY"):$RUNTIME_SOURCE/node_modules/.bin:$PATH" \
       CINDERDECK_NATIVE_SHELL_BUILD=1 DECKHAND_DESKTOP_SIGNED=false && \
@@ -261,7 +261,7 @@ if [[ -z "$NATIVE_APP" ]]; then
 fi
 
 if [[ -n "$RUNTIME_PID" ]]; then
-  printf 'Waiting for internal AgentShell.\n'
+  printf 'Waiting for Cinderdeck runtime.\n'
   if ! wait "$RUNTIME_PID"; then
     RUNTIME_PID=""
     tail -60 "$STAGING_DIR/runtime-build.log" >&2
@@ -269,16 +269,16 @@ if [[ -n "$RUNTIME_PID" ]]; then
   fi
   RUNTIME_PID=""
   while IFS= read -r -d '' app; do
-    [[ -z "$AGENT_SHELL" ]] || fail "Runtime builder produced multiple AgentShell apps."
-    AGENT_SHELL=$app
-  done < <(find "$RUNTIME_OUTPUT" -type d -name AgentShell.app -prune -print0)
-  [[ -n "$AGENT_SHELL" ]] || fail "Runtime builder did not produce AgentShell.app."
-  validate_shell "$AGENT_SHELL"
+    [[ -z "$RUNTIME_APP" ]] || fail "Runtime builder produced multiple Cinderdeck apps."
+    RUNTIME_APP=$app
+  done < <(find "$RUNTIME_OUTPUT" -type d -name Cinderdeck.app -prune -print0)
+  [[ -n "$RUNTIME_APP" ]] || fail "Runtime builder did not produce Cinderdeck.app."
+  validate_shell "$RUNTIME_APP"
   store_runtime_cache
 fi
 
 # Check the selected/prebuilt products agree with the requested architecture.
-for app_binary in "$NATIVE_APP/Contents/MacOS/Cinderdeck" "$AGENT_SHELL/Contents/MacOS/AgentShell"; do
+for app_binary in "$NATIVE_APP/Contents/MacOS/Cinderdeck" "$RUNTIME_APP/Contents/MacOS/Cinderdeck"; do
   binary_archs=$(lipo -archs "$app_binary")
   case "$ARCH" in
     arm64) [[ " $binary_archs " == *' arm64 '* ]] || fail "Missing arm64 in $app_binary" ;;
@@ -290,9 +290,9 @@ done
 STAGED_APP="$STAGING_DIR/$APP_NAME"
 ditto "$NATIVE_APP" "$STAGED_APP"
 [[ -d "$STAGED_APP/Contents/Resources" && ! -L "$STAGED_APP/Contents/Resources" ]] || fail "Native Resources must be a real directory."
-SHELL_DEST="$STAGED_APP/Contents/Resources/AgentShell.app"
+SHELL_DEST="$STAGED_APP/Contents/Resources/Cinderdeck.app"
 rm -rf "$SHELL_DEST"
-ditto "$AGENT_SHELL" "$SHELL_DEST"
+ditto "$RUNTIME_APP" "$SHELL_DEST"
 # The executable stays an internal implementation detail; macOS presents its
 # running window using the child bundle's name and icon, not the outer app's.
 python3 - "$STAGED_APP" "$SHELL_DEST" <<'PY'
@@ -312,9 +312,13 @@ if not source.is_file():
 (shell / 'Resources').mkdir(exist_ok=True)
 shutil.copy2(source, shell / 'Resources' / icon_file)
 # Electron resolves its helper bundles from CFBundleName. Keep the internal
-# AgentShell name aligned with their executables; brand the visible name only.
-shell_info.update(CFBundleName='AgentShell', CFBundleDisplayName='Cinderdeck',
-                  CFBundleIconFile=icon_file)
+# Cinderdeck name aligned with their executables.
+shell_info.update(CFBundleName='Cinderdeck', CFBundleDisplayName='Cinderdeck',
+                  CFBundleIconFile=icon_file, LSUIElement=True)
+# The outer app owns the single Dock icon, including when reusing native builds.
+native_info['LSUIElement'] = False
+with (native / 'Info.plist').open('wb') as file:
+    plistlib.dump(native_info, file)
 # Use the copied ICNS rather than the runtime's compiled icon catalog.
 shell_info.pop('CFBundleIconName', None)
 with (shell / 'Info.plist').open('wb') as file:
@@ -429,4 +433,4 @@ mv -n "$STAGED_APP" "$FINAL_APP"
 [[ ! -e "$STAGED_APP" ]] || fail "Output already exists; staged app was not moved."
 COMPLETE=1
 printf 'Unified app ready for manual validation: %s\n' "$FINAL_APP"
-printf 'Native identity: %s; AgentShell remains an internal child, not a second install.\n' "$BUNDLE_ID"
+printf 'Native identity: %s; the runtime is bundled with Cinderdeck.\n' "$BUNDLE_ID"

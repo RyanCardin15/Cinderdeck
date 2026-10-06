@@ -17,8 +17,8 @@ const devBundleIdSuffix = NodePath.basename(repoRoot)
   .replaceAll(/[^a-z0-9]+/g, "");
 const APP_DISPLAY_NAME = isDevelopment ? "Cinderdeck (Dev)" : "Cinderdeck (Alpha)";
 const APP_BUNDLE_ID = isDevelopment
-  ? `com.ryancardin.cinderdeck.agentshell.dev.${devBundleIdSuffix || "local"}`
-  : "com.ryancardin.cinderdeck.agentshell";
+  ? `com.ryancardin.cinderdeck.runtime.dev.${devBundleIdSuffix || "local"}`
+  : "com.ryancardin.cinderdeck.runtime";
 const APP_PROTOCOL_SCHEMES = [];
 const LAUNCHER_VERSION = 20;
 const developmentMacIconPngPath = NodePath.join(

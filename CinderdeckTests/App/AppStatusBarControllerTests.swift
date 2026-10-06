@@ -23,7 +23,7 @@ final class AppStatusBarControllerTests: XCTestCase {
   override func tearDown() {
     // Restore initial state
     NSApp.setActivationPolicy(initialPolicy)
-    controller.didElevateForSettingsForTesting = false
+    controller.isObservingSettingsWindowsForTesting = false
     controller.trackedPreferencesWindowForTesting = nil
     UserDefaults.standard.removeObject(forKey: PreferencesKeys.recordingHoverBarVisible)
     UserDefaults.standard.removeObject(forKey: PreferencesKeys.recordingShowTimeOnMenuBar)
@@ -82,9 +82,9 @@ final class AppStatusBarControllerTests: XCTestCase {
     }
   }
 
-  func testWindowDidClose_revertsActivationPolicyWhenNoOtherVisibleWindows() {
-    // 1. Setup initial elevated state
-    controller.didElevateForSettingsForTesting = true
+  func testWindowDidClose_keepsDockPresenceWhenNoOtherVisibleWindows() {
+    // 1. Setup an observed Settings window
+    controller.isObservingSettingsWindowsForTesting = true
     NSApp.setActivationPolicy(.regular)
 
     // 2. Create a mock closing window and make it visible
@@ -105,9 +105,9 @@ final class AppStatusBarControllerTests: XCTestCase {
     )
     controller.simulateWindowDidClose(notification: notification)
 
-    // 4. Verify that activation policy reverted to .accessory
-    XCTAssertEqual(NSApp.activationPolicy(), .accessory)
-    XCTAssertFalse(controller.didElevateForSettingsForTesting)
+    // 4. Verify closing Settings keeps the application in the Dock
+    XCTAssertEqual(NSApp.activationPolicy(), .regular)
+    XCTAssertFalse(controller.isObservingSettingsWindowsForTesting)
     XCTAssertNil(controller.trackedPreferencesWindowForTesting)
 
     // 5. Cleanup window to prevent leakage

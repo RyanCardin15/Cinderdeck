@@ -1,8 +1,8 @@
 # Building the unified Cinderdeck app
 
-Cinderdeck is one installed macOS application. The native app retains its identity, capture permissions, preferences, global shortcuts, menu/status bar, workspace services, control socket, and Sparkle updater. Its main workspace window is the Cinderdeck React agent shell, with the existing Chromium preview and recording runtime. Native capture, annotation, history, and preference tools remain available through that shell.
+Cinderdeck is one regular macOS application. Open it from Finder, Spotlight, or the Dock to show its main window. It stays in the Dock and app switcher when windows close; reopening returns to the main window. The native app retains its identity, capture permissions, preferences, global shortcuts, menu/status bar, workspace services, control socket, and Sparkle updater. Its main workspace window is the Cinderdeck React agent shell, with the existing Chromium preview and recording runtime. Native capture, annotation, history, and preference tools remain available through that shell.
 
-The native app launches a private `Contents/Resources/AgentShell.app/Contents/MacOS/AgentShell` child. This bundle is shipped inside Cinderdeck; it is not a second product to install. Its identifier is `com.ryancardin.cinderdeck.agentshell`, while the outer app remains `com.ryancardin.cinderdeck` (`com.ryancardin.cinderdeck.debug` for Debug). The internal bundle does not register URL schemes. Native Cinderdeck owns updates for the entire bundle; AgentShell's independent updater is disabled in native-host mode.
+The native app launches a private `Contents/Resources/Cinderdeck.app/Contents/MacOS/Cinderdeck` child. This bundle is shipped inside Cinderdeck; it is not a second product to install. Its identifier is `com.ryancardin.cinderdeck.runtime`, while the outer app remains `com.ryancardin.cinderdeck` (`com.ryancardin.cinderdeck.debug` for Debug). The internal bundle does not register URL schemes. Native Cinderdeck owns updates for the entire bundle; the runtime's independent updater is disabled in native-host mode.
 
 ## Build and assemble
 
@@ -16,7 +16,7 @@ Clone the Cinderdeck repository normally. The maintained agent runtime source is
 
 The command runs the runtime's existing desktop artifact builder with `CINDERDECK_NATIVE_SHELL_BUILD=1`, targeting an unpacked macOS app. Node's directory and the runtime's `node_modules/.bin` lead that build's `PATH`. It builds native Cinderdeck at the same time, with the documented Xcode performance-inliner workaround and without an index store, then copies both products into a fresh staging directory and verifies the executable and bundle identifiers before signing.
 
-Debug builds keep the three most recently used AgentShell builds in `.build/agent-shell-cache`. A build is reused only when everything that shapes it is unchanged: the runtime checkout's Git-visible files and ignored `.env` files, the Node, Rust and Swift toolchains, the architecture, the `DECKHAND_`, `VITE_`, `EXPO_PUBLIC_`, `CSC_`, `APPLE_`, `APP_VERSION` and `NODE_OPTIONS` environment, the build scripts, and the commit and dirty state embedded for About. A native-only change therefore skips the runtime build. A new commit rebuilds the runtime once. Release builds always rebuild it. Pass `--no-runtime-cache` or set `CINDERDECK_RUNTIME_CACHE=0` to force a rebuild.
+Debug builds keep the three most recently used runtime builds in `.build/runtime-cache`. A build is reused only when everything that shapes it is unchanged: the runtime checkout's Git-visible files and ignored `.env` files, the Node, Rust and Swift toolchains, the architecture, the `DECKHAND_`, `VITE_`, `EXPO_PUBLIC_`, `CSC_`, `APPLE_`, `APP_VERSION` and `NODE_OPTIONS` environment, the build scripts, and the commit and dirty state embedded for About. A native-only change therefore skips the runtime build. A new commit rebuilds the runtime once. Release builds always rebuild it. Pass `--no-runtime-cache` or set `CINDERDECK_RUNTIME_CACHE=0` to force a rebuild.
 
 To assemble already-built products for manual validation, supply either or both prebuilt apps:
 
@@ -25,7 +25,7 @@ To assemble already-built products for manual validation, supply either or both 
   --output-dir /absolute/path/to/a/fresh-delivery-directory \
   --configuration Debug --arch arm64 \
   --native-app '/absolute/path/to/Cinderdeck Debug.app' \
-  --agent-shell /absolute/path/to/AgentShell.app
+  --runtime-app /absolute/path/to/Cinderdeck.app
 ```
 
 The inputs are copied; they are not modified. Missing prebuilt products are built normally. `--arch` accepts `arm64`, `x64`, or `universal`, and supplied products must contain the requested architecture. `--dry-run` validates inputs and prints the plan without building, copying, or signing. Existing output apps are refused. A failed build retains its staging directory and logs for inspection.
@@ -43,9 +43,9 @@ Debug defaults to ad-hoc signing for disposable manual output. Such builds do no
   --signing-identity 'Your Existing Code Signing Identity'
 ```
 
-`CINDERDECK_SIGNING_KEYCHAIN` selects an existing keychain; it defaults to the login keychain. The packager signs nested Mach-O code and bundles inside-out, first AgentShell, then native helpers including Sparkle, then the outer app. It preserves existing helper entitlements, permits Electron's executable memory, and resolves the native entitlement bundle-ID variables for the selected configuration. Local/ad-hoc identities require library-validation exceptions for the internal Electron runtime and native Sparkle loading. Apple-issued signatures retain the declared entitlements without adding that local exception.
+`CINDERDECK_SIGNING_KEYCHAIN` selects an existing keychain; it defaults to the login keychain. The packager signs nested Mach-O code and bundles inside-out, first the runtime, then native helpers including Sparkle, then the outer app. It preserves existing helper entitlements, permits Electron's executable memory, and resolves the native entitlement bundle-ID variables for the selected configuration. Local/ad-hoc identities require library-validation exceptions for the internal Electron runtime and native Sparkle loading. Apple-issued signatures retain the declared entitlements without adding that local exception.
 
-The completed bundle and AgentShell receive strict recursive signature checks. Release also requires a certificate-based designated requirement. Local signing uses `--timestamp=none`. Distribution sets `CINDERDECK_SIGNING_TIMESTAMP=--timestamp` for Developer ID signatures, including nested runtime code. This command does not notarize, assess Gatekeeper acceptance, generate a signed Sparkle feed, or validate a public release. Follow the release/signing procedures separately before distribution.
+The completed bundle and its runtime receive strict recursive signature checks. Release also requires a certificate-based designated requirement. Local signing uses `--timestamp=none`. Distribution sets `CINDERDECK_SIGNING_TIMESTAMP=--timestamp` for Developer ID signatures, including nested runtime code. This command does not notarize, assess Gatekeeper acceptance, generate a signed Sparkle feed, or validate a public release. Follow the release/signing procedures separately before distribution.
 
 ## Runtime and authority boundaries
 
@@ -61,7 +61,7 @@ Native Cinderdeck remains the only owner of workspace/lane service processes, po
 
 ## Maintaining the app
 
-The runtime in `agent-runtime/` is owned and maintained as part of Cinderdeck. Workspace packages use `@cinderdeck/*`; AgentShell is a private child bundle with no independent release feed. There is no upstream subtree update, patch allowlist, vendor website, or relay deployment in this repository. Preserve the original MIT license and copyright notices for incorporated source.
+The runtime in `agent-runtime/` is owned and maintained as part of Cinderdeck. Workspace packages use `@cinderdeck/*`; the runtime is a private child bundle with no independent release feed. There is no upstream subtree update, patch allowlist, vendor website, or relay deployment in this repository. Preserve the original MIT license and copyright notices for incorporated source.
 
 Update the runtime and native host together, then rebuild, sign, and validate the complete outer app. Provider protocol identifiers, internal `deckhand` module paths, and persisted storage keys remain compatibility details; renaming product labels does not justify moving user databases.
 

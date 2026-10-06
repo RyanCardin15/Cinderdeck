@@ -240,7 +240,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
     branding,
     displayName,
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
-      isDevelopment ? "com.ryancardin.cinderdeck.agentshell.dev" : "com.ryancardin.cinderdeck.agentshell",
+      isDevelopment ? "com.ryancardin.cinderdeck.runtime.dev" : "com.ryancardin.cinderdeck.runtime",
     ),
     linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
     linuxWmClass: isDevelopment ? "deckhand-dev" : "deckhand",

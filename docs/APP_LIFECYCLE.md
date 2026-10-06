@@ -1,12 +1,12 @@
 # App Lifecycle
 
-How Cinderdeck launches, runs onboarding, lives in the menu bar, and shuts down. Covers `Cinderdeck/App/`, splash/onboarding, app identity, theme, data migrations, and the entitlements/Info.plist contract.
+How Cinderdeck launches, runs onboarding, stays available in the Dock and menu bar, and shuts down. Covers `Cinderdeck/App/`, splash/onboarding, app identity, theme, data migrations, and the entitlements/Info.plist contract.
 
 Current as of HEAD (`v1.1.0`, build 201, macOS 13.0+ deployment target).
 
 ## Platform shape
 
-- Menu-bar-only app: `INFOPLIST_KEY_LSUIElement = YES` (build setting in `Cinderdeck.xcodeproj/project.pbxproj`), no Dock icon by default.
+- Regular application: `INFOPLIST_KEY_LSUIElement = NO` in both configurations. Native Cinderdeck owns the Dock icon and app-switcher entry; its private runtime is an accessory app. Closing auxiliary windows keeps the host’s `.regular` activation policy.
 - `@main` entry: `CinderdeckApp` in `Cinderdeck/App/CinderdeckApp.swift` — declares only a `Settings` scene hosting `PreferencesView`, tinted by `ThemeManager.shared.systemAppearance`. All other windows are AppKit-driven.
 - `CinderdeckApp.init()` calls `AppIdentityManager.shared.refresh()` before anything else.
 - Bundle IDs: `com.ryancardin.cinderdeck` (release), `com.ryancardin.cinderdeck.debug` (debug) — see `AppBundleIdentity` in `Cinderdeck/Services/AppIdentity/AppIdentityManager.swift`.
@@ -16,7 +16,7 @@ Current as of HEAD (`v1.1.0`, build 201, macOS 13.0+ deployment target).
 
 ```mermaid
 flowchart TD
-    A["CinderdeckApp @main<br/>(LSUIElement, Settings scene only)"] --> B["AppDelegate.applicationWillFinishLaunching<br/>register AppleEvent kAEGetURL handler"]
+    A["CinderdeckApp @main<br/>(regular app, Settings scene only)"] --> B["AppDelegate.applicationWillFinishLaunching<br/>register AppleEvent kAEGetURL handler"]
     B --> C["applicationDidFinishLaunching"]
     C --> D{"AppLaunchPolicy<br/>shouldStartInteractiveApplication?"}
     D -- "XCTest && !CINDERDECK_ALLOW_INTERACTIVE_XCTEST_HOST=1" --> X[return, no UI]
@@ -37,7 +37,7 @@ flowchart TD
 - Sandbox-off migration failure loops a critical modal: **Try Again** (retry), **Start Fresh…** (confirm, then `skipMigration()`; old sandbox data is left untouched), **Quit Cinderdeck**.
 - Database failure loops: **Try Repair** (`DatabaseManager.attemptRepair()`), **Reset Database…** (moves files into `DatabaseRecovery-<timestamp>` then `retryInitialization()`), **Quit Cinderdeck**.
 - AppleEvents arriving before the coordinator exists are queued in `pendingDeepLinkURLs` and flushed after launch; same for cold-launch "Open With" file URLs (`pendingOpenFileURLs`).
-- `applicationShouldHandleReopen`: when the menu bar icon is hidden (`showMenuBarIcon == false`) and no windows are visible, opens Preferences (General tab) and suppresses default reopen.
+- `applicationShouldHandleReopen`: activates the running main window without changing its route, or starts it again if its runtime exited. Native-only builds open Workspaces. `applicationDidBecomeActive` forwards app-switcher activation to the owned main window when no native auxiliary window is visible.
 - `application(_:open:)`: file URLs routed to `AnnotateManager.shared.openAnnotation(url:)` (Finder "Open With" / Dock drop); non-file URLs ignored here (deep links flow through the AppleEvent handler).
 - `applicationWillTerminate`: removes the AppleEvent handler, forwards to `AppCoordinator.applicationWillTerminate()`.
 
@@ -110,7 +110,7 @@ State machine (`SplashScreen`): `splash` → `language` → `sponsor` (only when
 - Icon customization (`MenuBarIconRenderer` + `MenuBarIconStyle`, `menuBar.iconStyle`): bundled default (occupancy-normalized), SF Symbol alternates, or custom PNG from `Application Support/Cinderdeck/MenuBarIcon/custom.png` (alpha-bounds normalized, template-rendered monochrome). The cached idle image invalidates on style or custom-file change.
 - Recording state rendering: while recording, the title shows a monospaced-digit timer (`recorder.formattedDuration`); when paused it is prefixed with `|| `; tooltip mirrors state. `setProcessing(_:)` swaps the icon for an `NSProgressIndicator` spinner (used e.g. during OCR) on Core Animation so it keeps animating.
 - Visibility: `showMenuBarIcon` pref toggles the status item (`syncStatusItemVisibility`).
-- Preferences activation-policy dance (`presentPreferencesWindow`): elevates `.accessory` → `.regular` so Cinderdeck appears in the app menu/Cmd+Tab, triggers the Settings scene (synthesized `⌘,` key equivalent on macOS 14+, `showSettingsWindow:` before), tracks the window (12 retry passes), and reverts to `.accessory` in `windowDidClose` when no other normal windows remain. While recording, the tracked Preferences window is added to the recorder's runtime exclusion list so Cinderdeck's own window isn't captured.
+- Preferences retain regular application activation. The status-bar controller tracks window closure to remove recording exclusions. While recording, the tracked Preferences window is added to the recorder’s runtime exclusion list so Cinderdeck’s own window is not captured.
 
 Known leftover: `reportProblemAction` (calls `CrashReportService.presentAlert()`) and the stored `didDetectCrash` flag exist, but **no menu item is wired to them** in `buildMenu()` — problem reporting currently lives in Preferences → About (and Preferences → General → Help). See [UPDATES.md](UPDATES.md).
 

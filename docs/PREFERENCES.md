@@ -5,7 +5,7 @@ Reference for the Settings window: tab structure, every section, and how prefere
 ## Root
 
 - `PreferencesView` (`Cinderdeck/Features/Preferences/PreferencesView.swift`) — SwiftUI `NavigationSplitView` sidebar layout, resizable (default 800×620, min 700×520), 11 categories in 4 unlabelled groups.
-- `PreferencesWindowController` (`Cinderdeck/Features/Preferences/PreferencesWindowController.swift`) — Dedicated `NSWindowController` directly managing window lifecycle, activation policy transitions (`.regular` ↔ `.accessory`), fullSizeContentView, and titlebar transparency.
+- `PreferencesWindowController` (`Cinderdeck/Features/Preferences/PreferencesWindowController.swift`) — Dedicated `NSWindowController` directly managing window lifecycle, regular application activation, fullSizeContentView, and titlebar transparency.
 - Selection driven by `PreferencesNavigationState.shared.selectedTab` (`Models/PreferencesNavigationState.swift`, `PreferencesTab` enum) — supports back/forward history stacks (`⌘[` and `⌘]`), last-visited tab persistence, and programmatical routing from menu bar, deep links (`cinderdeck://settings?tab=`, see [SHORTCUTS.md](SHORTCUTS.md)), and the shortcut overlay.
 
 ## Storage pattern

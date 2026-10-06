@@ -39,8 +39,8 @@ final class AppStatusBarController: ObservableObject {
     viewModel
   }
 
-  // Track if we elevated activation policy for Settings window
-  private var didElevateForSettings = false
+  // Track Settings closure observations for recording exclusions
+  private var isObservingSettingsWindows = false
   private weak var trackedPreferencesWindow: NSWindow?
   private var trackedPreferencesExcludedWindowID: CGWindowID?
   private var pendingPreferencesWindowTrackingWorkItem: DispatchWorkItem?
@@ -951,13 +951,12 @@ final class AppStatusBarController: ObservableObject {
   }
 
   private func presentPreferencesWindow(tab: PreferencesTab? = nil) {
-    // Elevate to regular app so Cinderdeck appears in top-left menu bar
-    if !didElevateForSettings {
-      NSApp.setActivationPolicy(.regular)
-      didElevateForSettings = true
-      DiagnosticLogger.shared.log(.debug, .ui, "Activation policy elevated for preferences window")
+    // Observe Settings closure to release recording exclusions.
+    if !isObservingSettingsWindows {
+      NSApp.maintainRegularActivationPolicy()
+      isObservingSettingsWindows = true
 
-      // Observe when Settings window closes to revert policy
+      // Observe when Settings windows close.
       NotificationCenter.default.addObserver(
         self,
         selector: #selector(windowDidClose(_:)),
@@ -1094,11 +1093,10 @@ final class AppStatusBarController: ObservableObject {
       window.level == .normal
     }
 
-    // If no visible windows, revert to accessory (menu bar only) mode
-    if visibleWindows.isEmpty && didElevateForSettings {
-      NSApp.setActivationPolicy(.accessory)
-      didElevateForSettings = false
-      DiagnosticLogger.shared.log(.debug, .ui, "Activation policy restored after preferences closed")
+    // Stop observing when the last native window closes. The app stays regular.
+    if visibleWindows.isEmpty && isObservingSettingsWindows {
+      NSApp.maintainRegularActivationPolicy()
+      isObservingSettingsWindows = false
       NotificationCenter.default.removeObserver(
         self,
         name: NSWindow.willCloseNotification,
@@ -1296,9 +1294,9 @@ final class AppStatusBarController: ObservableObject {
   }
 
   #if DEBUG
-    var didElevateForSettingsForTesting: Bool {
-      get { didElevateForSettings }
-      set { didElevateForSettings = newValue }
+    var isObservingSettingsWindowsForTesting: Bool {
+      get { isObservingSettingsWindows }
+      set { isObservingSettingsWindows = newValue }
     }
 
     var trackedPreferencesWindowForTesting: NSWindow? {

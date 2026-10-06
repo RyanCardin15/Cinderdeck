@@ -185,7 +185,7 @@ final class CinderdeckOnboardingWindowController: NSObject, NSWindowDelegate {
       window.alphaValue = 1
       MainActor.assumeIsolated {
         self?.window = nil
-        NSApp.revertActivationPolicyToAccessoryIfNeeded(excluding: window)
+        NSApp.maintainRegularActivationPolicy()
       }
     }
   }
@@ -264,8 +264,7 @@ final class CinderdeckOnboardingWindowController: NSObject, NSWindowDelegate {
   func windowWillClose(_ notification: Notification) {
     MainActor.assumeIsolated {
       self.window = nil
-      let closingWindow = notification.object as? NSWindow
-      NSApp.revertActivationPolicyToAccessoryIfNeeded(excluding: closingWindow)
+      NSApp.maintainRegularActivationPolicy()
       self.onClose?()
     }
   }

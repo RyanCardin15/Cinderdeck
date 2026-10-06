@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Process entry point. `cinderdeck services …` and `cinderdeck mcp` run as command-line
 /// tools from the same binary and exit before any UI starts; everything else
-/// launches the menu bar app.
+/// launches the Cinderdeck application.
 @main
 enum CinderdeckMain {
   static func main() {
