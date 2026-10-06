@@ -1,11 +1,13 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import type { NativeToolRequest } from "@cinderdeck/contracts";
+import { usePrimaryEnvironmentId } from "../state/environments";
+import type { EnvironmentId, NativeToolRequest } from "@cinderdeck/contracts";
 import {
   FolderPlusIcon,
   PencilLineIcon,
   WorkflowIcon,
-  SlidersHorizontalIcon,
+  SettingsIcon,
+  GitBranchIcon,
   SparklesIcon,
   TerminalIcon,
 } from "lucide-react";
@@ -16,6 +18,7 @@ import { AGENT_ACCESS_SETTINGS_ID } from "./AgentAccessSettings";
 
 /** These requests open native UI; its existing validation owns all changes. */
 export function NativeWorkspaceTools({
+  environmentId,
   workspaceID,
   sourceWorkspaceID,
   enabled,
@@ -23,6 +26,7 @@ export function NativeWorkspaceTools({
   header = false,
   terminal = false,
 }: {
+  environmentId: EnvironmentId;
   workspaceID?: string | undefined;
   sourceWorkspaceID?: string | undefined;
   enabled: boolean;
@@ -31,7 +35,9 @@ export function NativeWorkspaceTools({
   terminal?: boolean;
 }) {
   const host = typeof window !== "undefined" && window.desktopBridge?.isNativeHost?.() === true;
-  const available = host && typeof window.desktopBridge?.openNativeTool === "function";
+  const primary = usePrimaryEnvironmentId();
+  const local = environmentId === primary;
+  const available = host && local && typeof window.desktopBridge?.openNativeTool === "function";
   const navigate = useNavigate();
   const busy = useRef(false);
   const [pending, setPending] = useState(false);
@@ -76,10 +82,28 @@ export function NativeWorkspaceTools({
   if (header)
     return (
       <div className={`${styles.tools} ${styles.header}`} aria-label="Workspace settings">
+        {workspaceID ? (
+          <Tooltip>
+            <TooltipTrigger
+              type="button"
+              render={<button disabled={disabled} />}
+              disabled={disabled}
+              onClick={() => void request({ surface: "workspace-branches", workspaceID })}
+            >
+              <GitBranchIcon size={15} aria-hidden /> Switch branch…
+            </TooltipTrigger>
+            <TooltipPopup>
+              {local
+                ? "Switch branches in the selected workspace or lane"
+                : "Open branch tools in Cinderdeck on this workspace's Mac"}
+            </TooltipPopup>
+          </Tooltip>
+        ) : null}
         {sourceWorkspaceID ? (
           <Tooltip>
             <TooltipTrigger
               type="button"
+              render={<button disabled={disabled} />}
               disabled={disabled}
               aria-label={
                 workspaceID !== sourceWorkspaceID
@@ -90,9 +114,18 @@ export function NativeWorkspaceTools({
                 void request({ surface: "workspace-editor", workspaceID: sourceWorkspaceID })
               }
             >
-              <SlidersHorizontalIcon size={15} />
+              <SettingsIcon size={15} />
+              {workspaceID !== sourceWorkspaceID
+                ? "Source workspace settings"
+                : "Workspace settings"}
             </TooltipTrigger>
-            <TooltipPopup>Workspace settings</TooltipPopup>
+            <TooltipPopup>
+              {local
+                ? workspaceID !== sourceWorkspaceID
+                  ? "Source workspace settings"
+                  : "Workspace settings"
+                : "Open workspace settings in Cinderdeck on this workspace's Mac"}
+            </TooltipPopup>
           </Tooltip>
         ) : null}
         <Tooltip>

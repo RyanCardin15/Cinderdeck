@@ -227,6 +227,75 @@ const fixture = (native = view, showSession = true, updates = [native], olderSel
   );
 };
 describe("connected conversation context", () => {
+  it.effect("uses current native Git metadata without rebinding the physical checkout", () => {
+    const updated = {
+      ...view,
+      resources: view.resources.map((resource) => ({
+        ...resource,
+        workspace: {
+          ...resource.workspace!,
+          repos: [
+            {
+              id: "repo",
+              path: "/fixture/lane",
+              branch: "feature/new",
+              physicalID: "physical",
+              repositoryPhysicalID: "repository",
+              dirty: false,
+              changedFiles: 0,
+              ahead: 0,
+              behind: 0,
+            },
+          ],
+        },
+      })),
+    };
+    return Effect.gen(function* () {
+      yield* seed;
+      const service = yield* ThreadContext.ThreadContext;
+      const [context] = yield* service
+        .subscribe({ threadId })
+        .pipe(Stream.take(1), Stream.runCollect);
+      assert.equal(context?.checkout.repositories[0]?.branch, "feature/new");
+      assert.equal(context?.checkout.id, "checkout");
+      assert.equal(
+        (yield* (yield* Relationships.Relationships).checkout("checkout")).repositories[0]?.branch,
+        "lane",
+      );
+    }).pipe(Effect.provide(fixture(updated)));
+  });
+  it.effect("does not borrow a branch label from a replacement checkout at the same path", () => {
+    const updated = {
+      ...view,
+      resources: view.resources.map((resource) => ({
+        ...resource,
+        workspace: {
+          ...resource.workspace!,
+          repos: [
+            {
+              id: "repo",
+              path: "/fixture/lane",
+              branch: "unrelated",
+              physicalID: "replacement",
+              repositoryPhysicalID: "repository",
+              dirty: false,
+              changedFiles: 0,
+              ahead: 0,
+              behind: 0,
+            },
+          ],
+        },
+      })),
+    };
+    return Effect.gen(function* () {
+      yield* seed;
+      const [context] = yield* (yield* ThreadContext.ThreadContext)
+        .subscribe({ threadId })
+        .pipe(Stream.take(1), Stream.runCollect);
+      assert.equal(context?.checkout.repositories[0]?.branch, "lane");
+    }).pipe(Effect.provide(fixture(updated)));
+  });
+
   it.effect("resolves saved lane identity with live provider state and exact service target", () =>
     Effect.gen(function* () {
       yield* seed;

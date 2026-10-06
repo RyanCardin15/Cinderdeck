@@ -48,7 +48,7 @@ function WorkspaceList({ environmentId, local }: { environmentId: EnvironmentId;
   const connected = result._tag !== "Failure" && view?.state === "connected" && !observation.stale;
   return (
     <div className="space-y-4">
-      {local ? <NativeWorkspaceTools enabled={connected} /> : null}
+      {local ? <NativeWorkspaceTools environmentId={environmentId} enabled={connected} /> : null}
       <Link
         to="/workspaces"
         search={{ environment: environmentId }}
@@ -80,6 +80,7 @@ function WorkspaceList({ environmentId, local }: { environmentId: EnvironmentId;
             </ul>
             {local ? (
               <NativeWorkspaceTools
+                environmentId={environmentId}
                 workspaceID={item.workspaceID}
                 sourceWorkspaceID={item.workspaceID}
                 showSetup={false}

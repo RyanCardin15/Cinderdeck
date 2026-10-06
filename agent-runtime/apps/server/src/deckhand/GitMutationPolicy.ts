@@ -264,9 +264,20 @@ const make = Effect.gen(function* () {
                 command: "git",
                 cwd: input.cwd,
                 detail:
-                  error.reason === "native_lifecycle"
-                    ? "Manage this checkout's worktrees through its Cinderdeck workspace."
-                    : "Checkout ownership could not be verified. Refresh its workspace connection before changing Git or restoring files.",
+                  "Checkout ownership could not be verified. " +
+                  (error.detail ??
+                    {
+                      native_lifecycle:
+                        "Manage worktrees from this workspace's Lane map in Cinderdeck.",
+                      unavailable:
+                        "The workspace connection or a linked worktree is unavailable. Use Refresh workspace connection, then try again. Open the gear beside the workspace name to check its folders.",
+                      stale_binding:
+                        "The saved workspace no longer matches this checkout. Open the gear beside the workspace name, check its folders, and reconnect the checkout before trying again.",
+                      uncertain:
+                        "A checkout move between workspaces is still pending or its result is unknown. In Settings → Integrations → Choose who manages a worktree, check the original operation's status before trying again.",
+                      storage:
+                        "Cinderdeck could not read the saved checkout state. Refresh the workspace connection and try again.",
+                    }[error.reason]),
               }),
             ),
           ),

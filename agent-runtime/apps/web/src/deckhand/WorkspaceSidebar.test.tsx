@@ -28,6 +28,7 @@ vi.mock("../components/ui/dialog", () => ({
   DialogDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
 }));
 vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => boundary.navigate,
   Link: ({ search, children, ...props }: { search: WorkspaceSearch; children: ReactNode }) => (
     <a
       {...props}
@@ -63,6 +64,8 @@ vi.mock("../state/environments", () => ({
   useEnvironments: () => ({ environments: [{ environmentId: "computer" }] }),
   usePrimaryEnvironmentId: () => "computer",
 }));
+import { NativeWorkspaceTools } from "./NativeWorkspaceTools";
+import { WorkspaceBranchesButton } from "./WorkspaceSettingsButton";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { ProductWorkspaces } from "./ProductWorkspaces";
 type Resource = IntegrationView["resources"][number];
@@ -137,12 +140,13 @@ let registry: AtomRegistry.AtomRegistry;
 const render = async (
   search: WorkspaceSearch = { workspace: "alpha", context: "alpha" },
   rows = resources,
+  executionEnvironment = environmentId,
 ) =>
   act(async () =>
     root.render(
       <RegistryContext.Provider value={registry}>
         <WorkspaceSidebar
-          environmentId={environmentId}
+          environmentId={executionEnvironment}
           installationID="install"
           resources={rows}
           search={{ environment: environmentId, expectedInstallationID: "install", ...search }}
@@ -454,4 +458,113 @@ it("prevents new sessions from stale catalogs and unavailable lanes while allowi
   expect(button("New session in beta").disabled).toBe(false);
   await act(async () => button("Expand lanes for alpha").click());
   expect(button("New session in lane-a").disabled).toBe(true);
+});
+
+it("opens exact workspace settings beside plus/star, and lane settings target their source", async () => {
+  const openNativeTool = vi.fn(async () => true);
+  Object.defineProperty(window, "desktopBridge", {
+    configurable: true,
+    value: { isNativeHost: () => true, openNativeTool },
+  });
+  try {
+    await render();
+    await act(async () => {
+      button("Workspace settings for beta").click();
+    });
+    expect(openNativeTool).toHaveBeenLastCalledWith({
+      surface: "workspace-editor",
+      workspaceID: "beta",
+    });
+    expect(boundary.launcher).not.toHaveBeenCalled();
+    await act(async () => {
+      button("Expand lanes for alpha").click();
+    });
+    await act(async () => {
+      button("Source workspace settings for lane-a").click();
+    });
+    expect(openNativeTool).toHaveBeenLastCalledWith({
+      surface: "workspace-editor",
+      workspaceID: "alpha",
+    });
+    expect(readSidebarPreferences(key).favorites).toEqual([]);
+  } finally {
+    delete window.desktopBridge;
+  }
+});
+
+it("does not send remote workspace settings to the local native host", async () => {
+  const openNativeTool = vi.fn(async () => true);
+  Object.defineProperty(window, "desktopBridge", {
+    configurable: true,
+    value: { isNativeHost: () => true, openNativeTool },
+  });
+  try {
+    await render({ workspace: "alpha" }, resources, EnvironmentId.make("remote"));
+    expect(button("Workspace settings for alpha").disabled).toBe(true);
+    button("Workspace settings for alpha").click();
+    expect(openNativeTool).not.toHaveBeenCalled();
+  } finally {
+    delete window.desktopBridge;
+  }
+});
+
+it("branch shortcut opens the exact lane picker and does not select its source checkout", async () => {
+  const openNativeTool = vi.fn(async () => true);
+  Object.defineProperty(window, "desktopBridge", {
+    configurable: true,
+    value: { isNativeHost: () => true, openNativeTool },
+  });
+  try {
+    await act(async () =>
+      root.render(
+        <WorkspaceBranchesButton
+          environmentId={environmentId}
+          workspaceID="lane-a"
+          label="Switch branch in lane-a"
+          enabled
+          showLabel
+        />,
+      ),
+    );
+    await act(async () => button("Switch branch in lane-a").click());
+    expect(openNativeTool).toHaveBeenCalledExactlyOnceWith({
+      surface: "workspace-branches",
+      workspaceID: "lane-a",
+    });
+  } finally {
+    delete window.desktopBridge;
+  }
+});
+
+it("workspace header tools also refuse remote IDs instead of opening a local workspace", async () => {
+  const openNativeTool = vi.fn(async () => true);
+  Object.defineProperty(window, "desktopBridge", {
+    configurable: true,
+    value: { isNativeHost: () => true, openNativeTool },
+  });
+  try {
+    await act(async () =>
+      root.render(
+        <NativeWorkspaceTools
+          environmentId={EnvironmentId.make("remote")}
+          workspaceID="alpha"
+          sourceWorkspaceID="alpha"
+          enabled
+          header
+        />,
+      ),
+    );
+    expect(button("Workspace settings").disabled).toBe(true);
+    const branchButton = [...container.querySelectorAll("button")].find((item) =>
+      item.textContent?.includes("Switch branch"),
+    )!;
+    expect(branchButton.disabled).toBe(true);
+    await act(async () => {
+      button("Workspace settings").click();
+      branchButton.click();
+    });
+    expect(openNativeTool).not.toHaveBeenCalled();
+  } finally {
+    delete window.desktopBridge;
+  }
 });

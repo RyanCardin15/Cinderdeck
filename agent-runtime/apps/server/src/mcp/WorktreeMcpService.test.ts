@@ -32,6 +32,7 @@ import * as ServerSettings from "../serverSettings.ts";
 import * as VcsStatusBroadcaster from "../vcs/VcsStatusBroadcaster.ts";
 import type * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as WorktreeMcpService from "./WorktreeMcpService.ts";
+import * as ManagedWorktreeHandoff from "../deckhand/ManagedWorktreeHandoff.ts";
 
 const environmentId = EnvironmentId.make("environment-worktree-test");
 const threadId = ThreadId.make("thread-worktree-test");
@@ -385,6 +386,33 @@ const runStatus = (harness: ReturnType<typeof makeHarness>) =>
   }).pipe(Effect.provide(harness.layer));
 
 describe("t3_worktree_handoff", () => {
+  it.effect("routes a primary checkout with a saved directory through native lane handoff", () => {
+    const harness = makeHarness({ thread: { worktreePath: workspaceRoot, branch: "main" } });
+    const expected = {
+      worktreePath: "/native/lane",
+      branch: "feature/task",
+      baseRef: "main",
+      startedFromOrigin: false,
+      setupScript: { status: "skipped" as const },
+      continuation: { status: "skipped" as const },
+      note: "Moved",
+    };
+    const handoff = vi.fn(() => Effect.succeed(expected));
+    const linked = {
+      ...harness,
+      layer: harness.layer.pipe(
+        Layer.provide(Layer.succeed(ManagedWorktreeHandoff.ManagedWorktreeHandoff, { handoff })),
+      ),
+    };
+    return Effect.gen(function* () {
+      const result = yield* runHandoff(linked, { branch: "feature/task" });
+      expect(result).toEqual(expected);
+      expect(handoff).toHaveBeenCalledWith(harness.scope, { branch: "feature/task" });
+      expect(harness.createWorktree).not.toHaveBeenCalled();
+      expect(harness.dispatch).not.toHaveBeenCalled();
+    });
+  });
+
   it.effect("creates a worktree from the current branch and re-points the thread", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {

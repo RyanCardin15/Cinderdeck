@@ -30,4 +30,16 @@ final class CinderdeckRuntimeProtocolTests: XCTestCase {
     }
   }
 
+  func testWorkspaceBranchesRequireExactScopeAndNoModeOrCommands() throws {
+    let request = try CinderdeckRuntimeUIRequest.decode(Data(#"{"surface":"workspace-branches","workspaceID":"fixture-lane"}"#.utf8))
+    XCTAssertEqual(request.workspaceID, "fixture-lane")
+    for input in [
+      #"{"surface":"workspace-branches"}"#,
+      #"{"surface":"workspace-branches","workspaceID":"fixture","mode":"main"}"#,
+      #"{"surface":"workspace-branches","workspaceID":"fixture","command":"git checkout main"}"#,
+    ] {
+      XCTAssertThrowsError(try CinderdeckRuntimeUIRequest.decode(Data(input.utf8)), input)
+    }
+  }
+
 }

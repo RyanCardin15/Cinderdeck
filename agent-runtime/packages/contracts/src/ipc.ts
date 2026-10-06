@@ -1133,6 +1133,7 @@ export interface NativeToolRequest {
     | "workspace-setup"
     | "workspace-editor"
     | "workspace-terminal"
+    | "workspace-branches"
     | "execution-map"
     | "agent-access"
     | "history"

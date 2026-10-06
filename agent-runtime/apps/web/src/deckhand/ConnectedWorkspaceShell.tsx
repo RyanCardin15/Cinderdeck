@@ -1,3 +1,4 @@
+import { WorkspaceSettingsButton, WorkspaceBranchesButton } from "./WorkspaceSettingsButton";
 import { SessionLauncher } from "./SessionLauncher";
 import { workspaceChatUnavailableReason } from "@cinderdeck/shared/workspaceChat";
 import { useAtomValue } from "@effect/atom-react";
@@ -119,6 +120,20 @@ export function ConnectedWorkspaceShell({
             </Link>
             <span> / </span>
             <strong>{current}</strong>
+            <WorkspaceBranchesButton
+              environmentId={threadRef.environmentId}
+              workspaceID={contextID}
+              label={`Switch branch in ${context.workspace.name} / ${current}`}
+              enabled={connected && !!currentResource?.workspace?.repos.length}
+              showLabel
+            />
+            <WorkspaceSettingsButton
+              environmentId={threadRef.environmentId}
+              workspaceID={baseID}
+              label={`Workspace settings for ${context.workspace.name}`}
+              enabled={connected}
+              showLabel
+            />
           </div>
           <WorkspaceSections search={search} />
         </header>

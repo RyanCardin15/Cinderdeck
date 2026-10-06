@@ -72,6 +72,19 @@ final class CinderdeckRuntimeWorkspaceTools: NSWindowController, NSWindowDelegat
       presentedRequest = request
       activate()
       if request.mode == nil { model.edit(file) }
+    case "workspace-branches":
+      guard let file, request.mode == nil, let definition = file.definition, !definition.repos.isEmpty else {
+        throw StackControlError.invalid("Branch switching requires an exact workspace or lane with repositories and no mode")
+      }
+      guard !model.isBusy(file.id) else {
+        throw StackControlError(code: "busy", message: "Wait for this workspace's current operation to finish before switching branches.")
+      }
+      model.select(file.id)
+      model.requestedSection = .services
+      window.title = "Switch branches — \(file.name) — Cinderdeck"
+      presentedRequest = request
+      activate()
+      model.openStackBranchPicker()
     case "workspace-terminal":
       guard let file, request.mode == nil else { throw StackControlError.invalid("Workspace terminal requires an exact workspace and no mode") }
       model.showLogs(stack: file.id, service: nil)

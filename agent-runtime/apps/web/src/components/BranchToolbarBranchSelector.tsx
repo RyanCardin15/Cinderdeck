@@ -9,6 +9,8 @@ import {
   squashAtomCommandFailure,
 } from "@cinderdeck/client-runtime/state/runtime";
 import type { ContextMenuItem, EnvironmentId, VcsRef, ThreadId } from "@cinderdeck/contracts";
+import { Link } from "@tanstack/react-router";
+import { refreshWorkspaces } from "../deckhand/state";
 import { ChevronDownIcon, GitBranchIcon } from "lucide-react";
 import {
   useCallback,
@@ -115,6 +117,30 @@ export function BranchToolbarBranchSelector({
     threadEnvironment.updateMetadata,
     "thread metadata update",
   );
+  const [checkoutRecovery, setCheckoutRecovery] = useState<string | null>(null);
+  const [refreshingCheckout, setRefreshingCheckout] = useState(false);
+  const [checkoutRefreshStatus, setCheckoutRefreshStatus] = useState<string | null>(null);
+  const refreshWorkspace = useAtomCommand(refreshWorkspaces, { reportFailure: false });
+  const recoverCheckout = async () => {
+    if (refreshingCheckout) return;
+    setRefreshingCheckout(true);
+    try {
+      const result = await refreshWorkspace({ environmentId, input: {} });
+      setCheckoutRefreshStatus(
+        result._tag === "Success"
+          ? "Workspace connection refreshed. Try selecting the branch again. If it is still blocked, check the workspace folders or the saved ownership operation below."
+          : "Workspace connection could not be refreshed. Check the connection to this workspace's Mac, then try again.",
+      );
+    } finally {
+      setRefreshingCheckout(false);
+    }
+  };
+  const reportCheckoutFailure = (message: string) => {
+    if (message.includes("Checkout ownership could not be verified")) {
+      setCheckoutRefreshStatus(null);
+      setCheckoutRecovery(message);
+    }
+  };
   const switchRef = useAtomCommand(vcsEnvironment.switchRef, {
     reportFailure: false,
   });
@@ -393,6 +419,8 @@ export function BranchToolbarBranchSelector({
 
   const runBranchAction = (action: () => Promise<void>) => {
     startBranchActionTransition(async () => {
+      setCheckoutRecovery(null);
+      setCheckoutRefreshStatus(null);
       await action();
       branchRefState.refresh();
       branchStatusQuery.refresh();
@@ -449,10 +477,11 @@ export function BranchToolbarBranchSelector({
       }
       setOptimisticBranch(previousBranch);
       if (!isAtomCommandInterrupted(checkoutResult)) {
+        reportCheckoutFailure(toBranchActionErrorMessage(squashAtomCommandFailure(checkoutResult)));
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Failed to switch ref.",
+            title: "Could not switch branch",
             description: toBranchActionErrorMessage(squashAtomCommandFailure(checkoutResult)),
           }),
         );
@@ -485,10 +514,13 @@ export function BranchToolbarBranchSelector({
       }
       setOptimisticBranch(previousBranch);
       if (!isAtomCommandInterrupted(createBranchResult)) {
+        reportCheckoutFailure(
+          toBranchActionErrorMessage(squashAtomCommandFailure(createBranchResult)),
+        );
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Failed to create and switch ref.",
+            title: "Could not create and switch branch",
             description: toBranchActionErrorMessage(squashAtomCommandFailure(createBranchResult)),
           }),
         );
@@ -654,117 +686,153 @@ export function BranchToolbarBranchSelector({
   }
 
   return (
-    <BranchPicker
-      items={branchPickerItems}
-      filteredItems={filteredBranchPickerItems}
-      open={isBranchMenuOpen}
-      onOpenChange={handleOpenChange}
-      onSelectItem={selectPickerItem}
-      value={resolvedActiveBranch}
-      query={branchQuery}
-      resultsQuery={deferredTrimmedBranchQuery}
-      onQueryChange={setBranchQuery}
-      hasNextPage={hasNextPage}
-      isFetchingNextPage={isFetchingNextPage}
-      onLoadNext={branchRefState.loadNext}
-      statusText={branchStatusText}
-      renderItem={renderPickerItem}
-      getItemType={(item) =>
-        item === checkoutPullRequestItemValue
-          ? "checkout-pull-request"
-          : item === createBranchItemValue
-            ? "create-branch"
-            : "branch"
-      }
-      originControl={
-        isSelectingWorktreeBase
-          ? { checked: startFromOrigin, onCheckedChange: onStartFromOriginChange }
-          : undefined
-      }
-      popupProps={{
-        align: displayMode === "panel" ? "start" : "end",
-        side: displayMode === "panel" ? "bottom" : "top",
-        className: cn("flex flex-col", displayMode === "panel" ? "w-(--anchor-width)" : "w-80"),
-        ...(displayMode === "toolbar" ? composerFloatingLayerProps : {}),
-      }}
-    >
-      <div
-        className={cn(
-          "flex min-w-0",
-          displayMode === "panel" ? "w-full flex-col items-stretch" : "items-center gap-1",
-          className,
-        )}
+    <>
+      {checkoutRecovery ? (
+        <div role="alert" className="rounded-md border border-border bg-card p-3 text-xs">
+          <p className="mb-2 whitespace-pre-wrap">{checkoutRecovery}</p>
+          {checkoutRefreshStatus ? (
+            <p className="mb-2" role="status">
+              {checkoutRefreshStatus}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="underline"
+              disabled={refreshingCheckout}
+              onClick={() => void recoverCheckout()}
+            >
+              {refreshingCheckout ? "Refreshing…" : "Refresh workspace connection"}
+            </button>
+            <Link to="/settings/integrations" hash="workspace-ownership" className="underline">
+              Check ownership changes
+            </Link>
+            <button type="button" className="underline" onClick={() => setCheckoutRecovery(null)}>
+              Dismiss
+            </button>
+          </div>
+          <p className="mt-2 text-muted-foreground">
+            Workspace settings: use the gear beside the workspace name in the sidebar.
+          </p>
+        </div>
+      ) : null}
+      <BranchPicker
+        items={branchPickerItems}
+        filteredItems={filteredBranchPickerItems}
+        open={isBranchMenuOpen}
+        onOpenChange={handleOpenChange}
+        onSelectItem={selectPickerItem}
+        value={resolvedActiveBranch}
+        query={branchQuery}
+        resultsQuery={deferredTrimmedBranchQuery}
+        onQueryChange={setBranchQuery}
+        hasNextPage={hasNextPage}
+        isFetchingNextPage={isFetchingNextPage}
+        onLoadNext={branchRefState.loadNext}
+        statusText={branchStatusText}
+        renderItem={renderPickerItem}
+        getItemType={(item) =>
+          item === checkoutPullRequestItemValue
+            ? "checkout-pull-request"
+            : item === createBranchItemValue
+              ? "create-branch"
+              : "branch"
+        }
+        originControl={
+          isSelectingWorktreeBase
+            ? { checked: startFromOrigin, onCheckedChange: onStartFromOriginChange }
+            : undefined
+        }
+        popupProps={{
+          align: displayMode === "panel" ? "start" : "end",
+          side: displayMode === "panel" ? "bottom" : "top",
+          className: cn("flex flex-col", displayMode === "panel" ? "w-(--anchor-width)" : "w-80"),
+          ...(displayMode === "toolbar" ? composerFloatingLayerProps : {}),
+        }}
       >
-        {displayMode !== "panel" ? (
-          <ThreadPullRequestBadgeControl
-            render={<ComposerControl size="xs" />}
-            badge={prBadge}
-            pullRequests={serverThread?.pullRequests ?? []}
-            number={prNumber}
-            url={prUrl}
-            status={displayedPrStatus}
-            onOpenList={() => useRightPanelStore.getState().open(threadRef, "pull-requests")}
-            onOpenPullRequest={(event, targetUrl = prUrl) => {
-              if (targetUrl) openPrLink(event, targetUrl);
-            }}
-          />
-        ) : null}
-        <span
-          className="flex min-w-0"
-          onMouseDownCapture={(event) => {
-            if (event.button !== 0 || event.ctrlKey) {
-              event.stopPropagation();
-            }
-          }}
-          onContextMenu={(event) => handleBranchContextMenu(event, resolvedActiveBranch)}
+        <div
+          className={cn(
+            "flex min-w-0",
+            displayMode === "panel" ? "w-full flex-col items-stretch" : "items-center gap-1",
+            className,
+          )}
         >
-          <ComboboxTrigger
-            render={
-              displayMode === "panel" ? (
-                <ThreadDetailsControl part="select" />
-              ) : (
-                <ComposerControl size="xs" />
-              )
-            }
-            className="min-w-0 max-w-full active:scale-100"
-            disabled={isInitialBranchesLoadPending || isBranchActionPending}
-          >
-            <GitBranchIcon
-              className={cn(
-                "size-3 shrink-0 opacity-70",
-                displayMode === "panel" && THREAD_DETAILS_PANEL_ICON_CLASS,
-              )}
+          {displayMode !== "panel" ? (
+            <ThreadPullRequestBadgeControl
+              render={<ComposerControl size="xs" />}
+              badge={prBadge}
+              pullRequests={serverThread?.pullRequests ?? []}
+              number={prNumber}
+              url={prUrl}
+              status={displayedPrStatus}
+              onOpenList={() => useRightPanelStore.getState().open(threadRef, "pull-requests")}
+              onOpenPullRequest={(event, targetUrl = prUrl) => {
+                if (targetUrl) openPrLink(event, targetUrl);
+              }}
             />
-            <ComposerContextLabel displayMode={displayMode}>
-              <MiddleTruncate value={triggerLabel} className="w-full" />
-            </ComposerContextLabel>
-            {displayMode === "panel" ? (
-              <span data-slot="select-icon">
-                <ChevronDownIcon className={THREAD_DETAILS_PANEL_CHEVRON_CLASS} />
-              </span>
-            ) : (
-              <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
-            )}
-          </ComboboxTrigger>
-        </span>
-        {displayMode === "panel" && prNumber !== undefined && prUrl !== undefined ? (
-          <ThreadDetailsPrRows
-            links={serverThread?.pullRequests ?? []}
-            currentLink={currentLinkedPr}
-            onOpenLink={openPrLink}
-            environmentId={environmentId}
-            pr={displayedPr}
-            number={prNumber}
-            reference={currentLinkedPr}
-            status={displayedPrStatus}
-            project={activeProject}
-            label={panelPrLabel}
-            openAriaLabel={prUrl ?? "Open pull request"}
-            onOpen={(event) => openPrLink(event, prUrl)}
-            onActed={() => branchStatusQuery.refresh()}
-          />
-        ) : null}
-      </div>
-    </BranchPicker>
+          ) : null}
+          <span
+            className="flex min-w-0"
+            onMouseDownCapture={(event) => {
+              if (event.button !== 0 || event.ctrlKey) {
+                event.stopPropagation();
+              }
+            }}
+            onContextMenu={(event) => handleBranchContextMenu(event, resolvedActiveBranch)}
+          >
+            <ComboboxTrigger
+              render={
+                displayMode === "panel" ? (
+                  <ThreadDetailsControl part="select" />
+                ) : (
+                  <ComposerControl size="xs" />
+                )
+              }
+              className="min-w-0 max-w-full active:scale-100"
+              disabled={isInitialBranchesLoadPending || isBranchActionPending}
+              aria-label={
+                isSelectingWorktreeBase
+                  ? "Choose starting branch for new worktree"
+                  : "Switch branch"
+              }
+            >
+              <GitBranchIcon
+                className={cn(
+                  "size-3 shrink-0 opacity-70",
+                  displayMode === "panel" && THREAD_DETAILS_PANEL_ICON_CLASS,
+                )}
+              />
+              <ComposerContextLabel displayMode={displayMode}>
+                <MiddleTruncate value={triggerLabel} className="w-full" />
+              </ComposerContextLabel>
+              {displayMode === "panel" ? (
+                <span data-slot="select-icon">
+                  <ChevronDownIcon className={THREAD_DETAILS_PANEL_CHEVRON_CLASS} />
+                </span>
+              ) : (
+                <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
+              )}
+            </ComboboxTrigger>
+          </span>
+          {displayMode === "panel" && prNumber !== undefined && prUrl !== undefined ? (
+            <ThreadDetailsPrRows
+              links={serverThread?.pullRequests ?? []}
+              currentLink={currentLinkedPr}
+              onOpenLink={openPrLink}
+              environmentId={environmentId}
+              pr={displayedPr}
+              number={prNumber}
+              reference={currentLinkedPr}
+              status={displayedPrStatus}
+              project={activeProject}
+              label={panelPrLabel}
+              openAriaLabel={prUrl ?? "Open pull request"}
+              onOpen={(event) => openPrLink(event, prUrl)}
+              onActed={() => branchStatusQuery.refresh()}
+            />
+          ) : null}
+        </div>
+      </BranchPicker>
+    </>
   );
 }

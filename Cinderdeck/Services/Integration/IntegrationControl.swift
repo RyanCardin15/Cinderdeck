@@ -43,7 +43,7 @@ nonisolated struct IntegrationHello: Encodable, Sendable {
   let executionHostID: String
   let channel: String
   let runtimeEpoch: String
-  let capabilities = ["github.workspace", "projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.adopt", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.contexts", "recordings.library", "runs.library", "runs.detail", "runs.failures", "builds.declared", "linked-work.projection", "agents.setup"]
+  let capabilities = ["github.workspace", "projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.adopt", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.contexts", "recordings.library", "runs.library", "runs.detail", "runs.failures", "builds.declared", "linked-work.projection", "linked-work.lane-transfer", "agents.setup"]
   let maximumFrameBytes = StackControlSocketServer.maximumFrameBytes
   let maximumPageSize = 500
   let maximumWaitMs = 25_000

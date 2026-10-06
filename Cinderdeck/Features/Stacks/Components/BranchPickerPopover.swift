@@ -48,6 +48,7 @@ struct StackBranchPickerSheet: View {
       List(viewModel.stackBranches.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }) { choice in
         Button { viewModel.chooseStackBranch(choice) } label: {
           HStack { Text(choice.name); Spacer(); Text("\(choice.branches.count) of \(viewModel.selectedDefinition?.repos.count ?? 0) repos").foregroundColor(.secondary) }
+            .contentShape(Rectangle())
         }.buttonStyle(.plain)
       }
       HStack { Spacer(); Button("Cancel") { viewModel.stackBranchPicker = false }.keyboardShortcut(.cancelAction) }

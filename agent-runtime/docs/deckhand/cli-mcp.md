@@ -98,3 +98,11 @@ background actions and batched JavaScript. Start with `computer_list_apps` and
 `computer_get_app_state`; prefer element indexes and verify after acting. Use
 `includeScreenshot:false` for text checks. See [Computer use for agents](../../../docs/COMPUTER_USE.md)
 for the complete workflow, permission requirements and fixture checks.
+
+## Move the current conversation to a lane
+
+`t3_worktree_handoff({branch, continuationPrompt})` creates a Cinderdeck lane for a primary-checkout conversation and transfers the same chat. It updates the thread directory and managed binding atomically, so agent lists, services, preview/capture controls and subsequent provider turns use the lane. The primary checkout is eligible even though its chat has a saved working directory. `t3_worktree_status` distinguishes primary checkout from lane and reads the live branch when available.
+
+To adopt an agent-created worktree, use `{branch, path, adoptExisting: true, continuationPrompt}`. The path must identify a separate worktree of the selected repository with that exact branch. Native Cinderdeck owns creation, adoption and setup; new lane paths are not supplied by the caller. Connected handoffs start from the current local branch unless `baseRef` or `startFromOrigin: true` is supplied. Standalone defaults retain their existing server setting. Existing uncommitted source files and terminal processes are not moved.
+
+Call handoff as the last action of the turn. A successful transfer detaches the old provider and queues `continuationPrompt`, if supplied. Read-only chats and conversations already in lanes cannot use this transfer. Retry the same input after a pending/unknown native result; the durable native operation is reused and the original chat stays in place until a verified lane is ready.

@@ -36,6 +36,7 @@ import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as Schema from "effect/Schema";
 
 import * as CheckpointStore from "../checkpointing/CheckpointStore.ts";
 import * as GitWorkflow from "../git/GitWorkflowService.ts";
@@ -4653,3 +4654,174 @@ it.layer(TestLayer)("usage-limit recovery", (it) => {
     }),
   );
 });
+
+it.layer(ProjectStore.layer.pipe(Layer.provideMerge(LegacyImportTestLayer)))(
+  "managed conversation checkout transfer",
+  (it) => {
+    it.effect(
+      "commits the native lane binding and thread location in the same event transaction",
+      () =>
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          const orchestrator = yield* Orchestrator.OrchestratorV2;
+          const threadId = ThreadId.make("managed-move-thread");
+          const projectId = ProjectId.make("managed-move-project");
+          const commandId = CommandId.make("managed-move-command");
+          yield* seedProject({
+            projectId,
+            title: "Move",
+            workspaceRoot: "/primary",
+            defaultModelSelection: modelSelection,
+            createdAt: "2026-10-06T00:00:00.000Z",
+          });
+          yield* orchestrator.dispatch({
+            type: "thread.create",
+            commandId: CommandId.make("managed-move-create"),
+            createdBy: "user",
+            creationSource: "web",
+            threadId,
+            projectId,
+            title: "Preserve this conversation",
+            modelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: "main",
+            worktreePath: "/primary",
+          });
+          const workspace = {
+            id: "move-workspace",
+            environmentId: "installation",
+            backend: "cinderdeck",
+            ownerId: "primary",
+            generation: 1,
+            revision: 1,
+            name: "Move",
+            state: "active",
+          };
+          yield* sql`INSERT INTO deckhand_workspaces(id,environment_id,backend,owner_id,generation,revision,record_json) VALUES('move-workspace','installation','cinderdeck','primary',1,1,${yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(workspace)})`;
+          const source = {
+            id: "move-primary",
+            workspaceId: workspace.id,
+            environmentId: "installation",
+            backend: "cinderdeck",
+            workspaceGeneration: 1,
+            nativeGeneration: 1,
+            revision: 1,
+            kind: "primary",
+            laneId: null,
+            state: "ready",
+            repositories: [
+              {
+                physicalId: "physical",
+                repositoryPhysicalId: "repository",
+                root: "/primary",
+                commonDirectory: "/primary/.git",
+                gitDirectory: "/primary/.git",
+                branch: "main",
+                commit: null,
+                remotes: [],
+              },
+            ],
+          };
+          const target = {
+            ...source,
+            id: "move-lane",
+            kind: "lane",
+            laneId: "lane",
+            repositories: [
+              {
+                ...source.repositories[0]!,
+                physicalId: "lane-physical",
+                root: "/lane",
+                gitDirectory: "/primary/.git/worktrees/lane",
+                branch: "feature/task",
+              },
+            ],
+          };
+          for (const checkout of [source, target])
+            yield* sql`INSERT INTO deckhand_checkouts(id,workspace_id,revision,record_json) VALUES(${checkout.id},${workspace.id},1,${yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(checkout)})`;
+          const feature = {
+            id: "move-feature",
+            workspaceId: workspace.id,
+            title: "Move",
+            objective: "Move conversation",
+            status: "active",
+            revision: 1,
+            createdAt: "now",
+            updatedAt: "now",
+          };
+          yield* sql`INSERT INTO deckhand_features(id,workspace_id,revision,record_json) VALUES(${feature.id},${workspace.id},1,${yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(feature)})`;
+          yield* sql`INSERT INTO deckhand_feature_checkouts(feature_id,checkout_id,is_primary) VALUES(${feature.id},${source.id},1)`;
+          const session = {
+            id: "move-session",
+            threadId,
+            providerSessionId: null,
+            providerInstanceId: modelSelection.instanceId,
+            featureId: feature.id,
+            checkoutId: source.id,
+            repositoryScope: ["physical"],
+            role: "writer",
+            desiredAccess: "write",
+            execution: "idle",
+            connection: "unavailable",
+            lastSequence: 0,
+            capabilities: {
+              managed: true,
+              enforcedReadOnly: false,
+              nativeResume: false,
+              interrupt: true,
+              steering: true,
+              approvals: true,
+              questions: true,
+              imageInput: false,
+              videoInput: false,
+            },
+          };
+          yield* sql`INSERT INTO deckhand_sessions(id,thread_id,feature_id,checkout_id,record_json) VALUES(${session.id},${threadId},${feature.id},${source.id},${yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(session)})`;
+          yield* sql`INSERT INTO deckhand_checkout_transfers(command_id,session_id,source_checkout_id,target_checkout_id,target_path) VALUES(${commandId},${session.id},${source.id},${target.id},'/lane')`;
+          const rejected = yield* orchestrator
+            .dispatch({
+              type: "thread.metadata.update",
+              commandId,
+              threadId,
+              worktreePath: "/wrong",
+              branch: "feature/task",
+              expectedWorktreePath: "/primary",
+            })
+            .pipe(Effect.result);
+          assert.equal(rejected._tag, "Failure");
+          assert.equal((yield* orchestrator.getThreadShell(threadId))?.worktreePath, "/primary");
+          assert.equal(
+            (yield* sql<{
+              checkout_id: string;
+            }>`SELECT checkout_id FROM deckhand_sessions WHERE id=${session.id}`)[0]?.checkout_id,
+            source.id,
+          );
+          yield* orchestrator.dispatch({
+            type: "thread.metadata.update",
+            commandId,
+            threadId,
+            worktreePath: "/lane",
+            branch: "feature/task",
+            expectedWorktreePath: "/primary",
+          });
+          const thread = yield* orchestrator.getThreadShell(threadId);
+          assert.equal(thread?.worktreePath, "/lane");
+          assert.equal(thread?.title, "Preserve this conversation");
+          const [moved] = yield* sql<{
+            checkout_id: string;
+            scope: string;
+          }>`SELECT checkout_id,json_extract(record_json,'$.repositoryScope[0]') AS scope FROM deckhand_sessions WHERE id=${session.id}`;
+          assert.equal(moved?.checkout_id, target.id);
+          assert.equal(moved?.scope, "lane-physical");
+          assert.equal(
+            (yield* sql<{
+              completed: number;
+            }>`SELECT completed FROM deckhand_checkout_transfers WHERE command_id=${commandId}`)[0]
+              ?.completed,
+            1,
+          );
+        }),
+    );
+  },
+);
