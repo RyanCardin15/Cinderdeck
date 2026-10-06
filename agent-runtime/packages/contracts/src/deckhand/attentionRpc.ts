@@ -4,6 +4,7 @@ import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { EnvironmentAuthorizationError } from "../auth.ts";
 import {
   ThreadId,
+  RuntimeRequestId,
   PositiveInt,
   NonNegativeInt,
   TrimmedNonEmptyString,
@@ -17,7 +18,11 @@ export const ATTENTION_METHODS = {
   change: "deckhand.attention.change",
 } as const;
 export const AttentionTarget = Schema.Union([
-  Schema.Struct({ kind: Schema.Literal("thread"), threadId: ThreadId }),
+  Schema.Struct({
+    kind: Schema.Literal("thread"),
+    threadId: ThreadId,
+    requestId: Schema.optionalKey(RuntimeRequestId),
+  }),
   Schema.Struct({
     kind: Schema.Literal("runs"),
     context: RunContext,
