@@ -6,6 +6,12 @@ process-targeted input. Each app requires the person's approval per conversation
 Terminals, Cinderdeck and credential/consent interfaces are excluded. Prefer an
 app's dedicated MCP, API or CLI when it covers the task.
 
+The bundled [cinderdeck-computer-use skill](../skills/cinderdeck-computer-use/SKILL.md)
+teaches agents how to choose tools, batch actions, keep reads cheap and recover
+without replaying uncertain mutations. Install it through **Settings → Integrations
+→ MCP & skills**, or `cinderdeck skills install --all`. The skill is guidance;
+the conversation must also expose the runtime's `computer_*` tools.
+
 ## The short path
 
 1. Call `computer_list_apps` for bundle IDs and permission status.
