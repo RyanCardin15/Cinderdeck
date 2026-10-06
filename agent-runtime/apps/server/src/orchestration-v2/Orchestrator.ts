@@ -9360,12 +9360,36 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             "runtimeRequests",
             "subagents",
             "providerSessions",
+            ...(command.onlyIfUnused ? (["messages", "providerThreads"] as const) : []),
           ])
           .pipe(
             Effect.mapError(
               (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
             ),
           );
+        // Dispatch holds this thread's lock through commit, so a submitted turn
+        // or imported provider history cannot race this automatic cleanup.
+        if (
+          command.onlyIfUnused &&
+          (projection.thread.deletedAt !== null ||
+            projection.thread.archivedAt !== null ||
+            projection.thread.pinnedAt != null ||
+            projection.thread.creationSource !== "web" ||
+            projection.thread.createdBy !== "user" ||
+            projection.thread.historyOrigin != null ||
+            projection.thread.forkedFrom !== null ||
+            projection.thread.activeProviderThreadId !== null ||
+            projection.messages.length > 0 ||
+            projection.runs.length > 0 ||
+            projection.attempts.length > 0 ||
+            projection.nodes.length > 0 ||
+            projection.runtimeRequests.length > 0 ||
+            projection.subagents.length > 0 ||
+            projection.providerSessions.length > 0 ||
+            projection.providerThreads.length > 0)
+        ) {
+          break;
+        }
         return yield* mapDispatchError(command)(
           planThreadDeletion({
             command,
@@ -9621,9 +9645,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
 
     const plan = yield* dispatchOnce(command).pipe(
       Effect.flatMap((planned) =>
-        // A settle that finds the provider already ended everything has
-        // nothing to record, which is its expected outcome, not a failure.
-        planned.events.length > 0 || command.type === "thread.background-work.settle"
+        // Background settlement and guarded abandonment can legitimately
+        // find nothing to change after another action wins the thread lock.
+        planned.events.length > 0 ||
+        command.type === "thread.background-work.settle" ||
+        (command.type === "thread.delete" && command.onlyIfUnused === true)
           ? Effect.succeed(planned)
           : Effect.fail(
               new OrchestratorDispatchError({
@@ -9671,8 +9697,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     );
 
     if (plan.events.length === 0) {
-      // A settle that ended nothing still records its receipt: a replayed Stop
-      // effect then finds it instead of settling work that appeared since.
+      // Record even a no-op receipt so replay cannot change a later state.
       const resultSequence = yield* Effect.gen(function* () {
         const sequence = yield* eventSink.latestSequence({ threadId: commandThreadId(command) });
         yield* commandReceipts.insertIfAbsent({

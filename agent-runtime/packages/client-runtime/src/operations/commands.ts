@@ -80,7 +80,9 @@ export interface ThreadCommandInput extends CommandMetadata {
   readonly threadId: ThreadId;
 }
 
-export type DeleteThreadInput = ThreadCommandInput;
+export interface DeleteThreadInput extends ThreadCommandInput {
+  readonly onlyIfUnused?: boolean;
+}
 export type ArchiveThreadInput = ThreadCommandInput;
 export type UnarchiveThreadInput = ThreadCommandInput;
 export type SettleThreadInput = ThreadCommandInput;
@@ -405,13 +407,7 @@ export const createThread = Effect.fn("EnvironmentCommands.createThread")(functi
 });
 
 function simpleThreadCommand(
-  type:
-    | "thread.delete"
-    | "thread.archive"
-    | "thread.unarchive"
-    | "thread.settle"
-    | "thread.pin"
-    | "thread.unpin",
+  type: "thread.archive" | "thread.unarchive" | "thread.settle" | "thread.pin" | "thread.unpin",
   input: ThreadCommandInput,
 ) {
   return allocateCommandId(input).pipe(
@@ -422,7 +418,12 @@ function simpleThreadCommand(
 export const deleteThread = Effect.fn("EnvironmentCommands.deleteThread")(function* (
   input: DeleteThreadInput,
 ) {
-  return yield* simpleThreadCommand("thread.delete", input);
+  return yield* dispatch({
+    type: "thread.delete",
+    commandId: yield* allocateCommandId(input),
+    threadId: input.threadId,
+    ...(input.onlyIfUnused === undefined ? {} : { onlyIfUnused: input.onlyIfUnused }),
+  });
 });
 
 export const archiveThread = Effect.fn("EnvironmentCommands.archiveThread")(function* (

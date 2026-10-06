@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import * as Option from "effect/Option";
 
 import ChatView from "./ChatView";
+import { useDiscardEmptySession } from "../hooks/useDiscardEmptySession";
 import { resolveDraftPromotionNavigationTarget, threadHasStarted } from "./ChatView.logic";
 import { waitForDraftHeroTransition } from "./chat/draftHeroTransition";
 import { SidebarInset } from "./ui/sidebar";
@@ -56,6 +57,7 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
     : null;
   const serverThreadRef: ScopedThreadRef | null =
     target.kind === "server" ? target.threadRef : (draftSession?.promotedTo ?? inferredThreadRef);
+  useDiscardEmptySession(serverThreadRef);
   const serverThread = useThreadShell(serverThreadRef);
   const backgroundSubmissionPending = useBackgroundDraftSubmissionPending(
     target.kind === "draft" ? serverThreadRef : null,

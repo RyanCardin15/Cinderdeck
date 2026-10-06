@@ -57,6 +57,124 @@ const testLayer = Layer.mergeAll(
   ),
 );
 
+it.effect("discards abandoned empty chats but preserves history, submitted turns and pins", () =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const now = yield* DateTime.now;
+    for (const kind of ["empty", "history", "submitted", "pinned", "provider"] as const) {
+      const threadId = ThreadId.make(`thread:abandoned:${kind}`);
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make(`create-abandoned-${kind}`),
+        threadId,
+        projectId: ProjectId.make("project:abandoned"),
+        title: "New chat",
+        modelSelection,
+        runtimeMode: "approval-required",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdBy: "user",
+        creationSource: "web",
+      });
+      if (kind === "history") {
+        // History survives even when no latest run exists in the shell.
+        yield* projections.apply({
+          id: EventId.make("abandoned-history-message"),
+          type: "message.updated",
+          threadId,
+          occurredAt: now,
+          payload: {
+            id: MessageId.make("abandoned-history"),
+            threadId,
+            runId: null,
+            nodeId: null,
+            role: "user",
+            text: "Keep this conversation",
+            attachments: [],
+            streaming: false,
+            createdBy: "user",
+            creationSource: "web",
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+      }
+      if (kind === "submitted") {
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make("submit-before-abandon"),
+          threadId,
+          messageId: MessageId.make("abandoned-submitted"),
+          text: "Start work",
+          attachments: [],
+          dispatchMode: { type: "defer_start" },
+          createdBy: "user",
+          creationSource: "web",
+        });
+      }
+      if (kind === "pinned") {
+        yield* orchestrator.dispatch({
+          type: "thread.pin",
+          commandId: CommandId.make("pin-before-abandon"),
+          threadId,
+        });
+      }
+      if (kind === "provider") {
+        yield* projections.apply({
+          id: EventId.make("abandoned-provider-session"),
+          type: "provider-session.attached",
+          threadId,
+          occurredAt: now,
+          payload: {
+            id: ProviderSessionId.make("abandoned-provider"),
+            driver: adapter.driver,
+            providerInstanceId: instanceId,
+            status: "ready",
+            cwd: "/repo",
+            model: modelSelection.model,
+            capabilities: CodexProviderCapabilitiesV2,
+            createdAt: now,
+            updatedAt: now,
+            lastError: null,
+          },
+        });
+      }
+      yield* orchestrator.dispatch({
+        type: "thread.delete",
+        commandId: CommandId.make(`discard-abandoned-${kind}`),
+        threadId,
+        onlyIfUnused: true,
+      });
+      const thread = yield* projections.getThread(threadId);
+      assert.equal(thread.deletedAt !== null, kind === "empty");
+      const sessionRoster = yield* projections.getShellSnapshot();
+      assert.equal(
+        sessionRoster.threads.some((session) => session.id === threadId),
+        kind !== "empty",
+      );
+      if (kind !== "empty") {
+        // The explicit Delete action still works for a used conversation.
+        yield* orchestrator.dispatch({
+          type: "thread.delete",
+          commandId: CommandId.make(`explicit-delete-${kind}`),
+          threadId,
+        });
+        assert.isNotNull((yield* projections.getThread(threadId)).deletedAt);
+      } else {
+        // Duplicate departure notifications remain safe.
+        yield* orchestrator.dispatch({
+          type: "thread.delete",
+          commandId: CommandId.make("discard-abandoned-again"),
+          threadId,
+          onlyIfUnused: true,
+        });
+      }
+    }
+  }).pipe(Effect.provide(testLayer)),
+);
+
 it.effect(
   "dispatches metadata, queue resume and request controls without hydrating unrelated history",
   () =>
