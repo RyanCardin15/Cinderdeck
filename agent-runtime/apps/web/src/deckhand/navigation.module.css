@@ -202,8 +202,11 @@
 .rail[data-collapsed="true"] .titlebar {
   margin-inline: -8px;
 }
-.rail[data-collapsed="true"] .brand {
+.rail[data-collapsed="true"] .brand strong {
   display: none;
+}
+.rail[data-collapsed="true"] .brandRow {
+  flex-direction: column;
 }
 .rail[data-collapsed="true"] .brandRow,
 .rail[data-collapsed="true"] .links a,
@@ -248,6 +251,7 @@
     display: none;
   }
   .rail[data-collapsed="true"] .brandRow {
+    flex-direction: row;
     justify-content: flex-start;
   }
 }
