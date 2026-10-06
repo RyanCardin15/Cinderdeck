@@ -41,9 +41,13 @@
   min-height: 0;
 }
 .sessions {
-  padding: 18px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 10px 18px;
   overflow: auto;
   border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--foreground) 1.5%, var(--background));
   min-width: 0;
 }
 .conversation {
@@ -102,25 +106,30 @@
 }
 .newSession {
   display: block;
-  padding: 11px;
+  padding: 9px 11px;
   text-align: center;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 12px;
+  font-weight: 600;
   text-decoration: none;
   color: var(--foreground);
-  margin-top: 14px;
+  margin-block: 12px 6px;
+}
+.newSession:hover {
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
 }
 .shell :focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 3px;
 }
 .helperNotice {
+  margin: 0;
   font-size: 12px;
   line-height: 1.6;
   padding: 10px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--muted-foreground);
 }
 @media (max-width: 1100px) {

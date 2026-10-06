@@ -138,17 +138,6 @@ export function ConnectedWorkspaceShell({
                 </Link>
               </p>
             ) : null}
-            <SessionList
-              compact
-              environmentId={threadRef.environmentId}
-              installationID={context.workspace.environmentId}
-              workspaceID={contextID}
-              generation={context.checkout.nativeGeneration!}
-              providers={providers}
-              contextLabel={current}
-              selectedThreadId={threadRef.threadId}
-              showExternal={false}
-            />
             {currentResource ? (
               <SessionLauncher
                 key={`chat:${threadRef.environmentId}:${context.workspace.environmentId}:${contextID}:${currentResource.generation}`}
@@ -164,6 +153,17 @@ export function ConnectedWorkspaceShell({
                 New chat
               </Link>
             )}
+            <SessionList
+              compact
+              environmentId={threadRef.environmentId}
+              installationID={context.workspace.environmentId}
+              workspaceID={contextID}
+              generation={context.checkout.nativeGeneration!}
+              providers={providers}
+              contextLabel={current}
+              selectedThreadId={threadRef.threadId}
+              showExternal={false}
+            />
           </aside>
           <div className={styles.conversation}>{children}</div>
         </div>

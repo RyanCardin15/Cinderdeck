@@ -1,28 +1,61 @@
 .panel {
+  position: relative;
+  isolation: isolate;
   min-width: 0;
   width: 100%;
   max-width: 1040px;
   margin-inline: auto;
-  padding: 28px 32px;
+  padding: 30px 32px 28px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--card);
-  box-shadow: 0 4px 24px rgb(0 0 0 / 3%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--foreground) 4%, transparent),
+    0 18px 48px -28px rgb(0 0 0 / 35%);
+}
+/* A low ember glow anchors the page header without competing with session states. */
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background:
+    radial-gradient(
+      640px 200px at 0% 0%,
+      color-mix(in srgb, var(--primary) 13%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      420px 160px at 100% 0%,
+      color-mix(in srgb, var(--primary) 5%, transparent),
+      transparent 70%
+    );
+  pointer-events: none;
 }
 .heading {
   display: flex;
   align-items: center;
-  gap: 13px;
+  gap: 14px;
   min-width: 0;
 }
 .icon {
   display: grid;
   place-items: center;
-  flex: 0 0 38px;
-  height: 38px;
-  border-radius: 10px;
-  color: var(--primary);
-  background: var(--accent);
+  flex: 0 0 42px;
+  height: 42px;
+  border: 1px solid color-mix(in srgb, var(--primary) 70%, black);
+  border-radius: 12px;
+  color: var(--primary-foreground);
+  background: linear-gradient(
+    150deg,
+    color-mix(in srgb, var(--primary) 82%, white),
+    var(--primary) 55%,
+    color-mix(in srgb, var(--primary) 80%, black)
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 25%),
+    0 10px 24px -10px color-mix(in srgb, var(--primary) 85%, transparent);
 }
 .title {
   flex: 1;
@@ -30,15 +63,15 @@
 }
 .title h2 {
   margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.6px;
-  line-height: 1.3;
+  font-size: 23px;
+  font-weight: 680;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
 }
 .title p {
-  margin: 5px 0 0;
+  margin: 4px 0 0;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.5;
 }
 .context {
@@ -46,34 +79,40 @@
   align-items: center;
   gap: 6px;
   max-width: 42%;
-  color: var(--muted-foreground);
+  padding: 6px 11px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 4%, var(--card));
+  color: var(--foreground);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 11px;
   line-height: 1.5;
-  padding: 6px 9px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
   overflow-wrap: anywhere;
 }
 .context svg {
   flex: none;
+  color: var(--primary);
 }
+/* New chat sits in a quiet command bar between the header and the roster. */
 .launchArea {
-  margin-block: 20px 24px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--border);
+  margin-block: 22px;
+  padding: 4px 12px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--foreground) 2.5%, var(--card));
 }
 .launchArea > section {
-  padding-block: 0;
+  padding-block: 8px;
   margin-bottom: 0;
 }
 .launchArea button,
 .launchArea select {
   min-height: 34px;
   font-size: 12px;
-  border-radius: 7px;
+  border-radius: 8px;
 }
 .launchArea button {
-  padding: 7px 12px;
+  padding: 7px 14px;
 }
 .empty {
   display: grid;
@@ -82,11 +121,14 @@
   text-align: center;
   color: var(--muted-foreground);
 }
+.empty svg {
+  color: var(--primary);
+}
 .empty h3 {
   margin: 14px 0 6px;
   color: var(--foreground);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 650;
 }
 .empty p {
   margin: 0;
@@ -103,14 +145,18 @@
   }
   .context {
     max-width: 100%;
-    margin-left: 51px;
+    margin-left: 56px;
   }
 }
 @media (max-width: 500px) {
   .panel {
     padding: 18px 14px;
+    border-radius: 12px;
   }
   .title p {
     max-width: 28ch;
+  }
+  .context {
+    margin-left: 0;
   }
 }

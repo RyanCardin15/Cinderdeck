@@ -803,18 +803,30 @@
 }
 .dh-row-agent {
   display: grid;
-  gap: 5px;
+  gap: 3px;
+  min-width: 0;
+  margin-inline: -8px;
+  padding: 7px 8px;
+  border-radius: 8px;
   text-decoration: none;
-  padding-block: 7px;
+  transition: background-color 120ms ease;
+}
+.dh-row-agent:hover {
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
 }
 .dh-row-agent strong {
-  font-size: 14px;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .dh-row-agent span {
   display: flex;
   gap: 6px;
   align-items: center;
-  font-size: 14px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--dh-muted);
 }
 .dh-row-agent i {
@@ -822,6 +834,7 @@
   height: 7px;
   background: currentColor;
   border-radius: 50%;
+  box-shadow: 0 0 8px color-mix(in srgb, currentColor 60%, transparent);
   flex-shrink: 0;
 }
 .dh-row-agent [data-execution="working"],
