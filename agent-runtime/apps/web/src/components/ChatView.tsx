@@ -10594,6 +10594,7 @@ export default function ChatView(props: ChatViewProps) {
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
       {laneSessionContext.data && activeThreadRef ? (
         <LaneSessionContext
+          workingDirectory={activeThreadWorktreePath}
           context={laneSessionContext.data}
           threadRef={activeThreadRef}
           providers={providerInstanceEntries}

@@ -3,9 +3,9 @@ import XCTest
 @testable import Cinderdeck
 
 @MainActor final class IntegrationLinkedWorkTests: XCTestCase {
-  private func publication(sequence: Int64 = 1, workspace: String = "lane") -> IntegrationLinkedWorkPublication {
+  private func publication(sequence: Int64 = 1, workspace: String = "lane", checkout: String = "checkout") -> IntegrationLinkedWorkPublication {
     .init(installationID: "installation", executionHostID: "host", environmentID: "environment", workspaceID: workspace,
-      generation: 7, sessionID: "session", featureID: "feature", checkoutID: "checkout", threadID: "thread", title: "A connected feature",
+      generation: 7, sessionID: "session", featureID: "feature", checkoutID: checkout, threadID: "thread", title: "A connected feature",
       provider: "codex", role: "writer", execution: "working", connection: "connected", sourceSequence: sequence,
       repositories: [.init(repositoryID: "frontend", head: String(repeating: "a", count: 40))],
       pullRequests: [.init(url: "https://github.com/example/repo/pull/1", host: "github.com", repository: "example/repo", number: 1)], recordingIDs: [])
@@ -60,6 +60,27 @@ import XCTest
     XCTAssertEqual(relaunched.records.first?.publication.sourceSequence, 2)
     let permissions = try FileManager.default.attributesOfItem(atPath: directory.appendingPathComponent("linked-work.json").path)[.posixPermissions] as? NSNumber
     XCTAssertEqual(permissions?.intValue, 0o600)
+  }
+  func testVerifiedLaneTransferMovesOneConversationAndPreservesEvidenceLinks() throws {
+    let directory = try StackTestSupport.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = IntegrationLinkedWorkStore(directory: directory)
+    var original = publication(workspace: "primary")
+    let recording = UUID().uuidString
+    original.recordingIDs = [recording]
+    try store.publish(original, actorKey: "owner", epoch: "runtime")
+    let moved = publication(sequence: 2, workspace: "lane", checkout: "lane-checkout")
+    XCTAssertThrowsError(try store.publish(moved, actorKey: "owner", epoch: "runtime"))
+    XCTAssertThrowsError(try store.publish(moved, actorKey: "other", epoch: "runtime", transferFromWorkspaceID: "primary"))
+    XCTAssertThrowsError(try store.publish(moved, actorKey: "owner", epoch: "runtime", transferFromWorkspaceID: "unrelated"))
+    XCTAssertThrowsError(try store.publish(publication(workspace: "lane", checkout: "lane-checkout"), actorKey: "owner", epoch: "runtime", transferFromWorkspaceID: "primary"))
+    try store.publish(moved, actorKey: "owner", epoch: "runtime", transferFromWorkspaceID: "primary")
+    XCTAssertEqual(store.records.count, 1)
+    XCTAssertEqual(store.records.first?.publication.workspaceID, "lane")
+    XCTAssertEqual(store.records.first?.publication.threadID, "thread")
+    XCTAssertEqual(store.records.first?.publication.recordingIDs, [recording])
+    XCTAssertThrowsError(try store.publish(original, actorKey: "owner", epoch: "runtime", transferFromWorkspaceID: "lane"))
+    XCTAssertEqual(IntegrationLinkedWorkStore(directory: directory).records.first?.publication.workspaceID, "lane")
   }
   func testCorruptHistoryCannotBeOverwrittenAndNavigationRejectsExtraCommands() async throws {
     let directory = try StackTestSupport.temporaryDirectory()

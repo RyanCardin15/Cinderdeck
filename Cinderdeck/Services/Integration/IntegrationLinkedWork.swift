@@ -59,6 +59,11 @@ nonisolated struct IntegrationLinkedWorkPublication: Codable, Equatable, Sendabl
       && workspaceID == other.workspaceID && generation == other.generation && sessionID == other.sessionID
       && featureID == other.featureID && checkoutID == other.checkoutID && threadID == other.threadID && role == other.role
   }
+  func sameConversation(as other: Self) -> Bool {
+    installationID == other.installationID && executionHostID == other.executionHostID
+      && environmentID == other.environmentID && sessionID == other.sessionID
+      && featureID == other.featureID && threadID == other.threadID && role == other.role
+  }
   func isAssociated(with target: NativeLinkedWorkTarget) -> Bool {
     switch target {
     case .pullRequest(let url): return pullRequests.contains { $0.url == url }
@@ -99,12 +104,16 @@ nonisolated struct IntegrationLinkedWorkRecord: Codable, Identifiable, Sendable 
       records = saved
     } catch { self.error = "Saved linked work could not be loaded. Restore the store before publishing new projections." }
   }
-  @discardableResult func publish(_ input: IntegrationLinkedWorkPublication, actorKey: String, epoch: String) throws -> IntegrationLinkedWorkRecord {
+  @discardableResult func publish(_ input: IntegrationLinkedWorkPublication, actorKey: String, epoch: String, transferFromWorkspaceID: String? = nil) throws -> IntegrationLinkedWorkRecord {
     guard error == nil else { throw StackControlError(code: "linked_work_store_unavailable", message: error!) }
     try input.validated()
     if let old = records.first(where: { $0.id == input.sessionID }) {
       guard old.actorKey == actorKey else { throw StackControlError(code: "wrong_actor", message: "This session projection belongs to another authenticated actor") }
-      guard old.publication.sameIdentity(as: input) else { throw StackControlError(code: "identity_changed", message: "A saved session cannot be rebound to another context") }
+      let transferring = transferFromWorkspaceID == old.publication.workspaceID
+        && input.workspaceID != old.publication.workspaceID && input.checkoutID != old.publication.checkoutID
+        && input.role == "writer" && old.publication.sameConversation(as: input)
+        && input.sourceSequence > old.publication.sourceSequence
+      guard old.publication.sameIdentity(as: input) || transferring else { throw StackControlError(code: "identity_changed", message: "A saved session requires a verified lane handoff to change checkout") }
       guard input.sourceSequence >= old.publication.sourceSequence else { throw StackControlError(code: "stale_projection", message: "This session projection is older than the saved observation") }
     }
     var publication = input
@@ -164,7 +173,10 @@ extension StackControlService {
       for id in publication.recordingIDs {
         guard let uuid = UUID(uuidString: id), let session = ReproStore.shared.loadSession(uuid), session.workspaces.contains(where: { $0.id == publication.workspaceID }) else { throw StackControlError.invalid("The linked recording does not belong to this workspace") }
       }
-      return try JSONValue(encoding: linkedWork.publish(publication, actorKey: actor.key, epoch: journal.runtimeEpoch))
+      // Only the authenticated backend may publish. The source of a transfer is
+      // taken from this verified native lane, never from caller-supplied metadata.
+      return try JSONValue(encoding: linkedWork.publish(publication, actorKey: actor.key, epoch: journal.runtimeEpoch,
+        transferFromWorkspaceID: resource.workspace?.lane?.sourceStackID))
     }
     guard params["installationID"]?.stringValue == journal.installationID, params["executionHostID"]?.stringValue?.lowercased() == journal.executionHostID.lowercased(),
       let workspace = params["workspaceID"]?.stringValue, IntegrationLinkedWorkPublication.boundedID(workspace), let generation = params["generation"]?.intValue, generation > 0 else { throw StackControlError.invalid("Select this installation and execution host") }

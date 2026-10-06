@@ -2,6 +2,8 @@ import * as GitHubWorkspace from "../deckhand/GitHubWorkspace.ts";
 import * as AgentAccess from "../deckhand/AgentAccess.ts";
 import * as ActorAccess from "../deckhand/ActorAccess.ts";
 import * as CurrentCheckout from "../deckhand/CurrentCheckout.ts";
+import * as ManagedCheckoutTransfer from "../deckhand/ManagedCheckoutTransfer.ts";
+import * as ManagedWorktreeHandoff from "../deckhand/ManagedWorktreeHandoff.ts";
 import * as OwnershipTransitions from "../deckhand/OwnershipTransitions.ts";
 import * as HistoryImports from "../deckhand/HistoryImports.ts";
 import * as OwnedPreviewCapture from "../deckhand/OwnedPreviewCapture.ts";
@@ -115,7 +117,15 @@ const storesLayer = Layer.mergeAll(
   turnItemPositionStoreLayer,
 );
 
-export const OrchestrationV2EventSinkLayerLive = eventSinkLayer.pipe(Layer.provide(storesLayer));
+const currentCheckoutProvided = CurrentCheckout.layer.pipe(Layer.provide(Relationships.layer));
+export const OrchestrationV2EventSinkLayerLive = eventSinkLayer.pipe(
+  Layer.provide(storesLayer),
+  Layer.provide(
+    ManagedCheckoutTransfer.layer.pipe(
+      Layer.provide(Layer.merge(Relationships.layer, currentCheckoutProvided)),
+    ),
+  ),
+);
 const eventSinkProvided = OrchestrationV2EventSinkLayerLive;
 const projectionMaintenanceProvided = projectionMaintenanceLayer.pipe(Layer.provide(storesLayer));
 const legacyV1ThreadImporterProvided = LegacyV1ThreadImporter.layer.pipe(
@@ -403,7 +413,6 @@ const verificationProvided = Verification.layer.pipe(
   ),
 );
 const buildsProvided = Builds.layer.pipe(Layer.provide(deckhandTransportProvided));
-const currentCheckoutProvided = CurrentCheckout.layer.pipe(Layer.provide(Relationships.layer));
 const managedSessionsProvided = ManagedSessions.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
@@ -461,6 +470,17 @@ export const OrchestrationV2ProductionLayerLive = Layer.mergeAll(
   HistoryImports.layer,
   currentCheckoutProvided,
   ownershipTransitionsProvided,
+  ManagedWorktreeHandoff.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        currentCheckoutProvided,
+        Relationships.layer,
+        WorkspaceBackend.layerLive,
+        CheckoutIdentity.layer.pipe(Layer.provide(ProcessRunner.layer)),
+        threadManagementProvided,
+      ),
+    ),
+  ),
   ownedPreviewAttestationsProvided,
   ownedPreviewCaptureProvided,
   OrchestrationV2LayerLive.pipe(Layer.provide(ProjectServiceLayerLive)),

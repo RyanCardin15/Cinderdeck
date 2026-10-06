@@ -10,7 +10,7 @@ export class DeckhandStoreVersionError extends Schema.TaggedError<DeckhandStoreV
     return "This Cinderdeck store requires a newer application. Restore a compatible binary or store backup.";
   }
 }
-export const VERSION = 17;
+export const VERSION = 18;
 /** Separate migration ledger prevents a new upstream migration number from colliding with fork state. */
 export const migrate = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -244,6 +244,14 @@ export const migrate = Effect.gen(function* () {
         yield* sql`DROP TABLE IF EXISTS deckhand_writer_scope`;
         yield* sql`DROP TABLE IF EXISTS deckhand_writer_requests`;
         yield* sql`DROP TABLE IF EXISTS deckhand_native_writer_intents`;
+      }
+      if (found < 18) {
+        yield* sql`CREATE TABLE deckhand_checkout_transfers (
+          command_id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES deckhand_sessions(id),
+          source_checkout_id TEXT NOT NULL REFERENCES deckhand_checkouts(id),
+          target_checkout_id TEXT NOT NULL REFERENCES deckhand_checkouts(id),
+          target_path TEXT NOT NULL, completed INTEGER NOT NULL DEFAULT 0
+        )`;
       }
       yield* sql`INSERT INTO deckhand_schema(version) VALUES (${VERSION})`;
     }),

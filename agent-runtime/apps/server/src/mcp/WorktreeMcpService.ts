@@ -24,6 +24,8 @@ import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.t
 import * as ServerSettings from "../serverSettings.ts";
 import * as VcsStatusBroadcaster from "../vcs/VcsStatusBroadcaster.ts";
 import type { McpInvocationScope } from "./McpInvocationContext.ts";
+import * as ManagedWorktreeHandoff from "../deckhand/ManagedWorktreeHandoff.ts";
+import * as CurrentCheckout from "../deckhand/CurrentCheckout.ts";
 
 export class WorktreeMcpService extends Context.Service<
   WorktreeMcpService,
@@ -64,6 +66,8 @@ const make = Effect.gen(function* () {
   const gitWorkflow = yield* GitWorkflowService.GitWorkflowService;
   const setupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
+  const managedHandoff = yield* Effect.serviceOption(ManagedWorktreeHandoff.ManagedWorktreeHandoff);
+  const currentCheckout = yield* Effect.serviceOption(CurrentCheckout.CurrentCheckout);
 
   // Serializes handoffs per thread: two concurrent calls could otherwise both
   // pass the worktreePath === null check and each create a worktree, leaving
@@ -133,6 +137,15 @@ const make = Effect.gen(function* () {
     scope: McpInvocationScope,
     input: WorktreeMcpHandoffInput,
   ) {
+    if (Option.isSome(managedHandoff)) {
+      const result = yield* managedHandoff.value.handoff(scope, input);
+      if (result) return result;
+    }
+    if (input.adoptExisting)
+      return yield* failure(
+        "invalid_request",
+        "Adopting an existing worktree requires a Cinderdeck workspace conversation.",
+      );
     const alreadyInWorktree = (worktreePath: string) =>
       failure(
         "already_in_worktree",
@@ -463,11 +476,29 @@ const make = Effect.gen(function* () {
       const project = yield* loadProject(scope, projection.thread.projectId);
 
       const defaultStartFromOrigin = yield* readDefaultStartFromOrigin;
+      const managed = Option.isSome(currentCheckout)
+        ? yield* currentCheckout.value
+            .forThread(scope.threadId)
+            .pipe(asOperationFailed("Unable to resolve current lane"))
+        : null;
+      const managedRepository = managed?.checkout.repositories.find(
+        (repo) => repo.root === projection.thread.worktreePath,
+      );
+      const liveStatus = managed
+        ? yield* gitWorkflow
+            .localStatus({ cwd: projection.thread.worktreePath ?? project.workspaceRoot })
+            .pipe(Effect.option)
+        : Option.none();
 
       const result: WorktreeMcpStatusResult = {
-        attached: projection.thread.worktreePath !== null,
-        worktreePath: projection.thread.worktreePath,
-        branch: projection.thread.branch,
+        attached: managed
+          ? managed.checkout.kind === "lane"
+          : projection.thread.worktreePath !== null,
+        worktreePath: managed?.checkout.kind === "primary" ? null : projection.thread.worktreePath,
+        branch:
+          Option.isSome(liveStatus) && liveStatus.value.isRepo
+            ? liveStatus.value.refName
+            : (managedRepository?.branch ?? projection.thread.branch),
         projectWorkspaceRoot: project.workspaceRoot,
         defaultStartFromOrigin,
       };

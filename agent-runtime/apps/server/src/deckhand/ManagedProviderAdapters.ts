@@ -163,6 +163,9 @@ export const layer = Layer.effect(
                               message: {
                                 ...request.message,
                                 text:
+                                  (current?.access === "write" && current.folders
+                                    ? "This conversation is linked to a Cinderdeck workspace. When starting new-branch work from a primary checkout, use t3_worktree_handoff instead of switching the primary checkout in the shell, unless the user explicitly requests an in-place branch switch. To move this conversation into a worktree, use t3_worktree_handoff; it creates a native lane and transfers the conversation. For an existing worktree, pass adoptExisting: true, its path and branch. Pass continuationPrompt with the remaining task to resume there. Do not use shell git worktree add or cd as a conversation handoff; they do not move its binding.\n\n"
+                                    : "") +
                                   workspaceContextText(policy(request.runtimePolicy, current)) +
                                   request.message.text,
                               },
