@@ -102,7 +102,10 @@ struct WorkspaceLaneMapCanvas: View {
       }
     }.frame(width: layout.size.width * zoom, height: layout.size.height * zoom)
   }
-  private func color(_ workspace: String) -> Color { WorkspaceLaneMapStyle.tint(workspace, source: sourceID, lanes: laneIDs) }
+  private func color(_ workspace: String) -> Color {
+    WorkspaceLaneMapStyle.tint(workspace, source: sourceID, lanes: laneIDs,
+      isReviewer: graph.nodes.contains { $0.workspaceID == workspace && $0.isReviewerLane })
+  }
   private func columnLabel(_ title: String, width: CGFloat) -> some View {
     WorkspaceMapEyebrow(text: title).frame(width: width, alignment: .leading)
   }

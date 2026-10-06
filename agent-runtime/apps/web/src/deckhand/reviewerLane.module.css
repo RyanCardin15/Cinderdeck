@@ -1,0 +1,17 @@
+.reviewer {
+  --reviewer-accent: light-dark(#6d3db3, #c7a5ff);
+  --reviewer-wash: color-mix(in srgb, var(--reviewer-accent) 8%, var(--background));
+  --reviewer-border: color-mix(in srgb, var(--reviewer-accent) 45%, transparent);
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 3px 6px;
+  border-radius: 5px;
+  color: var(--reviewer-accent);
+  background: color-mix(in srgb, var(--reviewer-accent) 12%, transparent);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.2;
+}

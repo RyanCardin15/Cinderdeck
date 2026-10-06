@@ -47,6 +47,8 @@ import {
   type WorkspaceSidebarPreferences,
 } from "./workspaceSidebarPreferences";
 import styles from "./WorkspaceSidebar.module.css";
+import { isReviewerLane } from "./reviewerLane";
+import reviewerStyles from "./reviewerLane.module.css";
 
 type Resource = IntegrationView["resources"][number];
 const workspaceGroup = "workspaces";
@@ -134,6 +136,7 @@ function SidebarRow({
   expanded,
   onExpand,
   activity,
+  reviewer = false,
   onNavigate,
   onNewSession,
   launchEnabled,
@@ -149,6 +152,7 @@ function SidebarRow({
   expanded?: boolean;
   onExpand?: () => void;
   activity?: AgentActivityCounts | undefined;
+  reviewer?: boolean;
   onNavigate?: (() => void) | undefined;
   onNewSession: (resource: Resource) => void;
   launchEnabled: boolean;
@@ -174,7 +178,8 @@ function SidebarRow({
       style={{ transform: CSS.Transform.toString(transform), transition }}
     >
       <div
-        className={styles.row}
+        className={`${styles.row} ${reviewer ? reviewerStyles.reviewer : ""}`}
+        data-reviewer={reviewer}
         data-current={selected || workspaceActive}
         data-dragging={isDragging}
       >
@@ -218,6 +223,7 @@ function SidebarRow({
         >
           {onExpand ? <FolderGit2Icon size={15} /> : <GitBranchIcon size={14} />}
           <span className={styles.label}>{label}</span>
+          {reviewer ? <span className={reviewerStyles.badge}>Reviewer</span> : null}
           <AgentBadges activity={activity} label={label} />
         </Link>
         <Tooltip>
@@ -397,6 +403,13 @@ function WorkspaceLanes({
                   )?.agentActivity
                 : undefined
             }
+            reviewer={isReviewerLane(
+              row,
+              summaries?.find(
+                (item) =>
+                  item.workspaceID === row.workspaceID && item.generation === row.generation,
+              ),
+            )}
             onNavigate={onNavigate}
             onNewSession={onNewSession}
             launchEnabled={fresh && canLaunch(row)}

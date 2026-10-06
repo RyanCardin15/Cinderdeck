@@ -26,6 +26,16 @@
 .row:hover {
   background: color-mix(in srgb, var(--foreground) 5%, transparent);
 }
+.row[data-reviewer="true"] {
+  background: var(--reviewer-wash);
+  box-shadow: inset 2px 0 var(--reviewer-accent);
+}
+.row[data-reviewer="true"]:is(:hover, [data-current="true"]) {
+  background: color-mix(in srgb, var(--reviewer-accent) 15%, var(--background));
+}
+.row[data-reviewer="true"] .select > svg {
+  color: var(--reviewer-accent);
+}
 .select {
   flex: 1;
   display: flex;

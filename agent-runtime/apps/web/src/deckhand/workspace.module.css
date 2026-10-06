@@ -1140,6 +1140,20 @@
 .dh-lane-row:hover {
   background: color-mix(in srgb, var(--foreground) 3%, var(--card));
 }
+.dh-lane-row[data-reviewer="true"] {
+  background: var(--reviewer-wash);
+  border-color: var(--reviewer-border);
+  box-shadow: inset 3px 0 var(--reviewer-accent);
+}
+.dh-lane-row[data-reviewer="true"]:hover {
+  background: color-mix(in srgb, var(--reviewer-accent) 12%, var(--background));
+}
+.dh-lane-row[data-reviewer="true"].dh-lane-selected {
+  border-color: var(--reviewer-accent);
+}
+.dh-lane-row[data-reviewer="true"] .dh-branch > svg {
+  color: var(--reviewer-accent);
+}
 
 /* Compact workspace chrome follows the native workspace header. */
 .dh-main {

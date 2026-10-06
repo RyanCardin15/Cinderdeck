@@ -7,6 +7,8 @@ import styles from "./laneSession.module.css";
 import { useAgentObservation } from "./useAgentObservation";
 import { connectedWorkspaceSearch } from "./workspaceNavigation";
 import { agentExecutionLabel, agentProviderLabel, agentCheckoutLabel } from "./agentPresentation";
+import { isReviewerLaneName } from "./reviewerLane";
+import reviewerStyles from "./reviewerLane.module.css";
 
 const noProviders: ReadonlyArray<{ readonly instanceId: string; readonly displayName: string }> =
   [];
@@ -33,17 +35,27 @@ export function ConnectedLaneSidebar({
   );
   if (!context || !threadRef) return null;
   const workspaceSearch = connectedWorkspaceSearch(threadRef.environmentId, context);
+  const reviewer =
+    Boolean(context.checkout.laneId) &&
+    (isReviewerLaneName(context.native?.workspace?.lane?.name) ||
+      context.sessions.some(
+        ({ binding }) => binding.role === "reviewer" && binding.desiredAccess === "isolated",
+      ));
   return (
     <section className={styles.sidebarContext} aria-label="Current connected lane">
       <Link className={styles.backLink} to="/workspaces" search={workspaceSearch}>
         <ChevronLeftIcon aria-hidden size={14} />
         {context.workspace.name}
       </Link>
-      <div className={styles.sidebarLane}>
+      <div
+        className={`${styles.sidebarLane} ${reviewer ? reviewerStyles.reviewer : ""}`}
+        data-reviewer={reviewer}
+      >
         <GitBranchIcon aria-hidden size={16} />
         <strong>
           {agentCheckoutLabel(context.checkout, context.native?.workspace?.lane?.name)}
         </strong>
+        {reviewer ? <span className={reviewerStyles.badge}>Reviewer</span> : null}
       </div>
       <p className={styles.sidebarObjective}>{context.feature.title}</p>
       <p className={styles.sidebarObjective}>{context.feature.objective}</p>
