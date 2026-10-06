@@ -657,6 +657,7 @@ export function ServicesRuns({
                 <RefreshCwIcon size={14} /> Restart
               </button>
               <NativeWorkspaceTools
+                environmentId={environmentId}
                 workspaceID={context.workspaceID}
                 enabled={!disabled}
                 terminal

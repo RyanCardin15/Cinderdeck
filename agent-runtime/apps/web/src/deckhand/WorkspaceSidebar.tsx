@@ -32,6 +32,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { EnvironmentId } from "@cinderdeck/contracts";
 import type { IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
 import { workspaceView } from "./state";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "../components/ui/tooltip";
+import { WorkspaceSettingsButton } from "./WorkspaceSettingsButton";
 import { SessionLauncher } from "./SessionLauncher";
 import { Dialog, DialogPopup, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { overviewWorkspaceContexts, type WorkspaceSearch } from "./workspaceNavigation";
@@ -133,6 +135,7 @@ function SidebarRow({
   onNavigate,
   onNewSession,
   launchEnabled,
+  settingsEnabled,
   children,
 }: {
   resource: Resource;
@@ -147,6 +150,7 @@ function SidebarRow({
   onNavigate?: (() => void) | undefined;
   onNewSession: (resource: Resource) => void;
   launchEnabled: boolean;
+  settingsEnabled: boolean;
   children?: ReactNode;
 }) {
   const {
@@ -214,36 +218,52 @@ function SidebarRow({
           <span>{label}</span>
           {attention ? <CircleDotIcon size={10} aria-label="Needs attention" /> : null}
         </Link>
-        <button
-          type="button"
-          className={styles.control}
-          aria-label={`New session in ${label}`}
-          title={
-            launchEnabled
+        <Tooltip>
+          <TooltipTrigger
+            type="button"
+            render={<button className={styles.control} disabled={!launchEnabled} />}
+            aria-label={`New session in ${label}`}
+            disabled={!launchEnabled}
+            onClick={() => onNewSession(resource)}
+          >
+            <PlusIcon size={15} aria-hidden />
+          </TooltipTrigger>
+          <TooltipPopup>
+            {launchEnabled
               ? `New session in ${label}`
-              : "Reconnect an available checkout to open a session"
+              : "Reconnect an available checkout to open a session"}
+          </TooltipPopup>
+        </Tooltip>
+        <WorkspaceSettingsButton
+          environmentId={search.environment!}
+          workspaceID={baseID}
+          label={
+            resource.workspace?.lane
+              ? `Source workspace settings for ${label}`
+              : `Workspace settings for ${label}`
           }
-          disabled={!launchEnabled}
-          onClick={() => onNewSession(resource)}
-        >
-          <PlusIcon size={15} aria-hidden />
-        </button>
-        <button
-          type="button"
-          className={styles.control}
-          aria-pressed={favorite}
-          aria-label={`${favorite ? "Unfavorite" : "Favorite"} ${label}`}
-          onClick={() =>
-            state.update((current) => ({
-              ...current,
-              favorites: favorite
-                ? current.favorites.filter((id) => id !== resource.workspaceID)
-                : [...current.favorites, resource.workspaceID],
-            }))
-          }
-        >
-          <StarIcon size={14} fill={favorite ? "currentColor" : "none"} />
-        </button>
+          enabled={settingsEnabled}
+          compact
+        />
+        <Tooltip>
+          <TooltipTrigger
+            type="button"
+            render={<button className={styles.control} />}
+            aria-pressed={favorite}
+            aria-label={`${favorite ? "Unfavorite" : "Favorite"} ${label}`}
+            onClick={() =>
+              state.update((current) => ({
+                ...current,
+                favorites: favorite
+                  ? current.favorites.filter((id) => id !== resource.workspaceID)
+                  : [...current.favorites, resource.workspaceID],
+              }))
+            }
+          >
+            <StarIcon size={14} fill={favorite ? "currentColor" : "none"} />
+          </TooltipTrigger>
+          <TooltipPopup>{`${favorite ? "Unfavorite" : "Favorite"} ${label}`}</TooltipPopup>
+        </Tooltip>
       </div>
       {children}
     </div>
@@ -321,6 +341,7 @@ function WorkspaceLanes({
             onNavigate={onNavigate}
             onNewSession={onNewSession}
             launchEnabled={fresh && canLaunch(row)}
+            settingsEnabled={fresh}
           />
         )}
       </Siblings>
@@ -432,6 +453,7 @@ function WorkspaceSidebarTree({
                 onNavigate={onNavigate}
                 onNewSession={setLaunchTarget}
                 launchEnabled={catalogFresh && canLaunch(base)}
+                settingsEnabled={catalogFresh}
                 onExpand={() =>
                   state.update((current) => ({
                     ...current,
