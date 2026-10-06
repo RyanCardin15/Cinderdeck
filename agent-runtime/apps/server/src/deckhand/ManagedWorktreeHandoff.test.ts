@@ -11,6 +11,7 @@ import {
 } from "@cinderdeck/contracts";
 import * as C from "@cinderdeck/contracts/deckhand";
 import * as I from "@cinderdeck/contracts/deckhand/integration";
+import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -47,12 +48,21 @@ const base = Layer.mergeAll(
   Layer.provideMerge(ProcessRunner.layer),
   Layer.provideMerge(NodeServices.layer),
 );
+type NativeContext = Effect.Success<ReturnType<Backend.WorkspaceBackend["Service"]["context"]>>;
+
+const encodeOwnershipState = Schema.encodeEffect(
+  Schema.fromJsonString(Schema.Struct({ state: Schema.String })),
+);
 const fixture = (
   options: {
     readOnly?: boolean;
     failCommit?: boolean;
     pending?: boolean;
     legacyHost?: boolean;
+    generation?: number;
+    sourceFailures?: number;
+    targetFailures?: number;
+    sourceTransform?: (context: NativeContext) => NativeContext;
   } = {},
 ) =>
   Effect.gen(function* () {
@@ -163,6 +173,10 @@ const fixture = (
     let adopted = 0;
     let continuationPath: string | null = null;
     let failCommit = options.failCommit ?? false;
+    let generation = options.generation ?? 1;
+    let sourceReads = 0;
+    let targetReads = 0;
+    let submittedGeneration: number | undefined;
     const hello = yield* Schema.decodeUnknownEffect(I.IntegrationHello)({
       protocolVersion: 1,
       installationID: "installation",
@@ -185,7 +199,7 @@ const fixture = (
           hello,
           resource: {
             workspaceID: lane ? "lane" : "primary",
-            generation: 1,
+            generation,
             revision: "revision",
             available: true,
             workspace: {
@@ -227,10 +241,19 @@ const fixture = (
       }).pipe(Effect.orDie);
     let receipt: I.IntegrationOperationReceipt;
     const native = Layer.mock(Backend.WorkspaceBackend)({
-      context: (name) => resource(name === "lane"),
+      context: (name) =>
+        Effect.gen(function* () {
+          const lane = name === "lane";
+          const read = lane ? ++targetReads : ++sourceReads;
+          if (read <= (lane ? (options.targetFailures ?? 0) : (options.sourceFailures ?? 0)))
+            return yield* new Rpc.DeckhandRpcError({ reason: "unavailable" });
+          const result = yield* resource(lane);
+          return !lane && options.sourceTransform ? options.sourceTransform(result) : result;
+        }),
       createLane: (_actor, input) =>
         Effect.gen(function* () {
           created++;
+          submittedGeneration = input.generation;
           yield* git([
             "worktree",
             "add",
@@ -261,6 +284,7 @@ const fixture = (
       adoptLane: (_actor, input) =>
         Effect.gen(function* () {
           adopted++;
+          submittedGeneration = input.generation;
           return yield* Schema.decodeUnknownEffect(I.IntegrationOperationReceipt)({
             id: "adopt",
             operationKey: input.operationKey,
@@ -360,6 +384,13 @@ const fixture = (
       current,
       relationships,
       sql,
+      fs,
+      sourceReads: () => sourceReads,
+      targetReads: () => targetReads,
+      submittedGeneration: () => submittedGeneration,
+      reloadWorkspace: () => {
+        generation++;
+      },
       continuationPath: () => continuationPath,
       allowCommit: () => {
         failCommit = false;
@@ -368,6 +399,162 @@ const fixture = (
   });
 
 describe("Cinderdeck conversation lane handoff", () => {
+  it.effect("moves an older conversation using the live workspace generation", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture({ generation: 7 });
+      const result = yield* f.run({ continuationPrompt: "Continue" });
+      assert.ok(result);
+      assert.equal(f.created(), 1);
+      assert.equal(f.submittedGeneration(), 7);
+      assert.equal(f.continuationPath(), result.worktreePath);
+      assert.equal((yield* f.current.forThread(threadId))?.checkout.nativeGeneration, 7);
+      assert.equal(
+        (yield* f.current.forThread(ThreadId.make("sibling")))?.checkout.nativeGeneration,
+        1,
+      );
+    }).pipe(Effect.provide(base), Effect.scoped),
+  );
+
+  it.effect("adopts a worktree after the primary workspace generation changes", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture({ generation: 7 });
+      yield* f.git(["worktree", "add", "-b", "feature/task", f.lanePath]);
+      assert.ok(yield* f.run({ adoptExisting: true, path: f.lanePath }));
+      assert.equal(f.submittedGeneration(), 7);
+      assert.equal(f.adopted(), 1);
+    }).pipe(Effect.provide(base), Effect.scoped),
+  );
+
+  it.effect("refreshes transient source and target reads without replaying lane creation", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture({ sourceFailures: 1, targetFailures: 1 });
+      assert.ok(yield* f.run());
+      assert.equal(f.sourceReads(), 2);
+      assert.equal(f.targetReads(), 2);
+      assert.equal(f.created(), 1);
+    }).pipe(Effect.provide(base), Effect.scoped),
+  );
+
+  it.effect("bounds connection recovery and leaves the chat in place", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture({ sourceFailures: 10 });
+      assert.equal((yield* f.run().pipe(Effect.result))._tag, "Failure");
+      assert.equal(f.sourceReads(), 2);
+      assert.equal(f.created(), 0);
+      assert.equal((yield* f.current.forThread(threadId))?.checkout.id, "primary");
+    }).pipe(Effect.provide(base), Effect.scoped),
+  );
+
+  it.effect("reuses the created lane after a failed target read and a workspace reload", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture({ targetFailures: 2 });
+      assert.equal((yield* f.run().pipe(Effect.result))._tag, "Failure");
+      assert.equal((yield* f.current.forThread(threadId))?.checkout.id, "primary");
+      f.reloadWorkspace();
+      assert.ok(yield* f.run());
+      assert.equal(f.created(), 1);
+    }).pipe(Effect.provide(base), Effect.scoped),
+  );
+
+  const invalidSources = [
+    {
+      name: "a replaced installation",
+      message: "different Cinderdeck installation",
+      transform: (context: NativeContext) => ({
+        ...context,
+        hello: { ...context.hello, installationID: "replacement" },
+      }),
+    },
+    {
+      name: "a different workspace",
+      message: "primary workspace is no longer available",
+      transform: (context: NativeContext) => ({
+        ...context,
+        resource: { ...context.resource, workspaceID: "other" },
+      }),
+    },
+    {
+      name: "unapplied settings",
+      message: "unapplied settings",
+      transform: (context: NativeContext) => ({
+        ...context,
+        resource: {
+          ...context.resource,
+          workspace: { ...context.resource.workspace!, definitionChanged: true },
+        },
+      }),
+    },
+    {
+      name: "configuration issues",
+      message: "configuration issues",
+      transform: (context: NativeContext) => ({
+        ...context,
+        resource: {
+          ...context.resource,
+          workspace: { ...context.resource.workspace!, issues: ["Missing repository folder"] },
+        },
+      }),
+    },
+    {
+      name: "native identity drift",
+      message: "working directory does not match",
+      transform: (context: NativeContext) => ({
+        ...context,
+        resource: {
+          ...context.resource,
+          workspace: {
+            ...context.resource.workspace!,
+            repos: context.resource.workspace!.repos.map((repo) => ({
+              ...repo,
+              physicalID: "replacement",
+            })),
+          },
+        },
+      }),
+    },
+  ] satisfies ReadonlyArray<{
+    name: string;
+    message: string;
+    transform: NonNullable<Parameters<typeof fixture>[0]>["sourceTransform"];
+  }>;
+  it.effect.each(invalidSources)("still refuses $name after a generation change", (invalid) =>
+    Effect.gen(function* () {
+      const f = yield* fixture({ generation: 7, sourceTransform: invalid.transform });
+      const result = yield* f.run().pipe(Effect.result);
+      assert.equal(result._tag, "Failure");
+      if (result._tag === "Failure") assert.include(result.failure.message, invalid.message);
+      assert.equal(f.created(), 0);
+      assert.equal((yield* f.current.forThread(threadId))?.checkout.id, "primary");
+    }).pipe(Effect.provide(base), Effect.scoped),
+  );
+
+  it.effect("refuses a replaced Git checkout even at the same path", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture({ generation: 7 });
+      yield* f.fs.rename(`${f.root}/.git`, `${f.root}/.old-git`);
+      yield* f.git(["init", "-b", "main"]);
+      assert.equal((yield* f.run().pipe(Effect.result))._tag, "Failure");
+      assert.equal(f.created(), 0);
+      assert.equal((yield* f.current.forThread(threadId))?.checkout.id, "primary");
+    }).pipe(Effect.provide(base), Effect.scoped),
+  );
+
+  it.effect.each(["pending", "unknown_outcome"])(
+    "keeps %s ownership moves blocked after a generation change",
+    (state) =>
+      Effect.gen(function* () {
+        const f = yield* fixture({ generation: 7 });
+        const physicalId = (yield* f.current.forThread(threadId))!.checkout.repositories[0]!
+          .physicalId;
+        const record = yield* encodeOwnershipState({ state });
+        yield* f.sql`INSERT INTO deckhand_ownership_transitions(id, actor_id, physical_id, original_json, record_json)
+          VALUES ('move', 'actor', ${physicalId}, '{}', ${record})`;
+        assert.equal((yield* f.run().pipe(Effect.result))._tag, "Failure");
+        assert.equal(f.created(), 0);
+        assert.equal((yield* f.relationships.session("session")).checkoutId, "primary");
+      }).pipe(Effect.provide(base), Effect.scoped),
+  );
+
   it.effect("refuses an older native host before creating a lane", () =>
     Effect.gen(function* () {
       const f = yield* fixture({ legacyHost: true });

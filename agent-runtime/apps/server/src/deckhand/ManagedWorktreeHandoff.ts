@@ -1,5 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off - Stable IDs make interrupted native operations retryable.
-import { createHash } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 import {
   CommandId,
   MessageId,
@@ -32,7 +32,7 @@ export class ManagedWorktreeHandoff extends Context.Service<
   }
 >()("@cinderdeck/server/deckhand/ManagedWorktreeHandoff") {}
 const id = (kind: string, parts: unknown[]) =>
-  `${kind}:${createHash("sha256").update(JSON.stringify(parts)).digest("hex")}`;
+  `${kind}:${NodeCrypto.createHash("sha256").update(JSON.stringify(parts)).digest("hex")}`;
 const fail = (message: string, code: WorktreeMcpFailure["code"] = "operation_failed") =>
   new WorktreeMcpFailure({ code, message });
 
@@ -47,6 +47,15 @@ export const layer = Layer.effect(
     const threads = yield* ThreadManagement.ThreadManagementService;
     const git = yield* GitWorkflow.GitWorkflowService;
     const locks = yield* makeKeyedSerialExecutor<string>();
+    // context refreshes the native connection. Retry only that read, never lane
+    // creation/adoption or a transfer whose outcome may already be committed.
+    const readContext = (workspaceID: string) =>
+      backend.context(workspaceID).pipe(
+        Effect.catchIf(
+          (error) => error.reason === "unavailable",
+          () => backend.context(workspaceID),
+        ),
+      );
     return ManagedWorktreeHandoff.of({
       handoff: (scope, input) =>
         locks.withLock(
@@ -75,24 +84,37 @@ export const layer = Layer.effect(
             const projection = yield* threads.getThreadRecords(scope.threadId, []);
             if (projection.thread.deletedAt !== null || projection.thread.archivedAt !== null)
               return yield* fail("This conversation is no longer active.", "thread_not_found");
-            const source = yield* backend.context(workspace.ownerId);
+            const source = yield* readContext(workspace.ownerId);
             if (!source.hello.capabilities.includes("linked-work.lane-transfer"))
               return yield* fail(
                 "This Cinderdeck host needs an update before conversations can move between checkouts.",
               );
             const sourceWorkspace = source.resource.workspace;
+            if (source.hello.installationID !== workspace.environmentId)
+              return yield* fail(
+                "This conversation belongs to a different Cinderdeck installation. Reconnect it to the current workspace before moving it.",
+              );
             if (
-              source.hello.installationID !== workspace.environmentId ||
-              source.resource.generation !== checkout.nativeGeneration ||
               !source.resource.available ||
               !sourceWorkspace ||
-              sourceWorkspace.lane ||
-              sourceWorkspace.definitionChanged ||
-              sourceWorkspace.issues.length
+              source.resource.workspaceID !== workspace.ownerId ||
+              sourceWorkspace.id !== workspace.ownerId ||
+              sourceWorkspace.lane
             )
               return yield* fail(
-                "Refresh the workspace connection before moving this conversation.",
+                "The conversation's primary workspace is no longer available. Check its folders in workspace settings before moving it.",
               );
+            if (sourceWorkspace.definitionChanged)
+              return yield* fail(
+                "The workspace has unapplied settings. Reload its definition in workspace settings before moving this conversation.",
+              );
+            if (sourceWorkspace.issues.length)
+              return yield* fail(
+                "The workspace has configuration issues. Resolve them in workspace settings before moving this conversation.",
+              );
+            // A workspace reload can advance its generation while retaining the
+            // exact checkout. Verify physical identity below and submit the live
+            // generation/revision; refreshing cannot repair an old saved number.
             const sourcePhysical = yield* Effect.forEach(sourceWorkspace.repos, (repo) =>
               identities.resolve(repo.path),
             );
@@ -108,7 +130,18 @@ export const layer = Layer.effect(
               !session.repositoryScope?.includes(selected.physicalId) ||
               checkout.repositories.length !== sourcePhysical.length ||
               checkout.repositories.some(
-                (repo) => !sourcePhysical.some((actual) => actual.physicalId === repo.physicalId),
+                (repo) =>
+                  !sourcePhysical.some(
+                    (actual) =>
+                      actual.physicalId === repo.physicalId &&
+                      actual.repositoryPhysicalId === repo.repositoryPhysicalId,
+                  ),
+              ) ||
+              sourcePhysical.some(
+                (actual, index) =>
+                  actual.physicalId !== sourceWorkspace.repos[index]!.physicalID ||
+                  actual.repositoryPhysicalId !==
+                    sourceWorkspace.repos[index]!.repositoryPhysicalID,
               )
             )
               return yield* fail(
@@ -127,7 +160,7 @@ export const layer = Layer.effect(
               input.startFromOrigin ?? false,
               input.runSetupScript ?? true,
             ]);
-            const actorID = `chat-${createHash("sha256").update(scope.threadId).digest("hex").slice(0, 40)}`;
+            const actorID = `chat-${NodeCrypto.createHash("sha256").update(scope.threadId).digest("hex").slice(0, 40)}`;
             const previous =
               yield* sql`SELECT operation_key FROM deckhand_operations WHERE operation_key=${operationKey}`;
             let receipt;
@@ -200,7 +233,7 @@ export const layer = Layer.effect(
                   ? "handoff_in_progress"
                   : "operation_failed",
               );
-            const target = yield* backend.context(laneID);
+            const target = yield* readContext(laneID);
             const lane = target.resource.workspace;
             if (
               target.hello.installationID !== workspace.environmentId ||
