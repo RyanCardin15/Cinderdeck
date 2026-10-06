@@ -173,6 +173,15 @@ final class CinderdeckRuntimeController: ObservableObject {
     try input.write(contentsOf: data)
   }
 
+  @discardableResult
+  func sendDictation(requestID: String, state: String, text: String? = nil, error: String? = nil) -> Bool {
+    guard ready, !stopping else { return false }
+    do {
+      try send(CinderdeckRuntimeMessage(type: "dictation", requestID: requestID, state: state, text: text, error: error))
+      return true
+    } catch { return false }
+  }
+
   private func flushRoute() throws {
     if let pendingRoute {
       if let workspaceID = pendingRoute.workspaceID,
@@ -212,6 +221,13 @@ final class CinderdeckRuntimeController: ObservableObject {
       }
       return
     }
+    let dictationPrefix = Data("CINDERDECK_RUNTIME_DICTATION ".utf8)
+    if !stopping, ready, line.starts(with: dictationPrefix) {
+      if let request = try? DictationCommand.decode(Data(line.dropFirst(dictationPrefix.count))) {
+        DictationController.shared.handle(request)
+      }
+      return
+    }
     let prefix = Data("CINDERDECK_RUNTIME_UI_REQUEST ".utf8)
     guard !stopping, ready, line.starts(with: prefix) else { return }
     do { try CinderdeckRuntimeNativeUI.open(CinderdeckRuntimeUIRequest.decode(Data(line.dropFirst(prefix.count)))) }
@@ -230,6 +246,7 @@ final class CinderdeckRuntimeController: ObservableObject {
   }
 
   private func cleanup() {
+    DictationController.shared.cancelChat()
     output?.readabilityHandler = nil
     try? input?.close(); try? output?.close()
     input = nil; output = nil; process = nil; ready = false; uiToken = nil

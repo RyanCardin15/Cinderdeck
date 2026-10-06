@@ -1146,7 +1146,20 @@ export interface NativeToolRequest {
   readonly workspaceID?: string;
 }
 
+export interface DictationCommand {
+  readonly action: "start" | "stop" | "cancel";
+  readonly requestID: string;
+}
+export interface DictationEvent {
+  readonly requestID: string;
+  readonly state: "idle" | "preparing" | "recording" | "transcribing" | "completed" | "error";
+  readonly text?: string;
+  readonly error?: string;
+}
+
 export interface DesktopBridge {
+  dictation?: (command: DictationCommand) => Promise<boolean>;
+  onDictation?: (listener: (event: DictationEvent) => void) => () => void;
   isNativeHost?: () => boolean;
   onNativeHostRoute?: (listener: (route: NativeHostRoute) => void) => () => void;
   openNativeTool?: (request: NativeToolRequest) => Promise<boolean>;

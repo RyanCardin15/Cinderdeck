@@ -1,10 +1,14 @@
 import Foundation
 
-/// The native process owns this pipe. No URLs, filesystem paths, or commands cross it.
+/// The native process owns this pipe. Only validated UI messages and scoped dictation results cross it.
 nonisolated struct CinderdeckRuntimeMessage: Encodable, Sendable {
   let type: String
   var workspaceID: String?
   var section: String?
+  var requestID: String?
+  var state: String?
+  var text: String?
+  var error: String?
 }
 
 nonisolated struct CinderdeckRuntimeUIRequest: Decodable, Equatable, Sendable {

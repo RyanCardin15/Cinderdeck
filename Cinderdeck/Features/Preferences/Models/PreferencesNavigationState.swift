@@ -19,6 +19,7 @@ enum PreferencesTab: String, CaseIterable, Identifiable, Hashable {
   case permissions
   case cloud
   case github
+  case dictation
   case advanced
   case about
 
@@ -52,6 +53,8 @@ enum PreferencesTab: String, CaseIterable, Identifiable, Hashable {
       return L10n.Preferences.shortcutsTab
     case .permissions:
       return L10n.Preferences.permissionsTab
+    case .dictation:
+      return "Dictation"
     case .github:
       return "GitHub"
     case .cloud:
@@ -81,6 +84,8 @@ enum PreferencesTab: String, CaseIterable, Identifiable, Hashable {
       return "keyboard"
     case .permissions:
       return "lock.shield"
+    case .dictation:
+      return "mic"
     case .github:
       return "arrow.triangle.pull"
     case .cloud:
@@ -95,7 +100,7 @@ enum PreferencesTab: String, CaseIterable, Identifiable, Hashable {
   /// The sidebar's running order in 4 unlabelled groups separated by natural whitespace (Ruru & macOS System Settings style).
   static let groups: [[PreferencesTab]] = [
     [.general, .menuBar, .quickAccess, .history],
-    [.capture, .annotate, .cloud, .github],
+    [.capture, .annotate, .dictation, .cloud, .github],
     [.shortcuts, .permissions, .advanced],
     [.about],
   ]

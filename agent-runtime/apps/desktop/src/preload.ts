@@ -64,6 +64,13 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  dictation: (command) => ipcRenderer.invoke("cinderdeck:dictation", command),
+  onDictation: (listener) => {
+    const wrapped = (_event: Electron.IpcRendererEvent, value: Parameters<typeof listener>[0]) =>
+      listener(value);
+    ipcRenderer.on("cinderdeck:dictation-event", wrapped);
+    return () => ipcRenderer.removeListener("cinderdeck:dictation-event", wrapped);
+  },
   isNativeHost: () => ipcRenderer.sendSync("cinderdeck:native-host-info") === true,
   openNativeTool: (request) => ipcRenderer.invoke("cinderdeck:native-tool", request),
   onNativeHostRoute: (listener) => {
