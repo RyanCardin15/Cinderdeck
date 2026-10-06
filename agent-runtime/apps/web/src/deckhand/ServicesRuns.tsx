@@ -1,3 +1,4 @@
+import { RefreshButton } from "../components/ui/refresh-button";
 import { NativeWorkspaceTools } from "./NativeWorkspaceTools";
 import native from "./nativeWorkspace.module.css";
 import { useAtomValue } from "@effect/atom-react";
@@ -290,6 +291,7 @@ export function ServicesRuns({
   });
   const [error, setError] = useState<string | null>(restored.error);
   const [loading, setLoading] = useState(true);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
   const [busy, setBusy] = useState(restored.error !== null);
   const [pending, setPending] = useState<IntegrationOperationInput | null>(restored.pending);
   const [receipt, setReceipt] = useState<IntegrationOperationReceipt | null>(null);
@@ -308,7 +310,7 @@ export function ServicesRuns({
   const [source, setSource] = useState("");
   const [validation, setValidation] = useState<DefinitionValidation | null>(null);
   const alive = useRef(true);
-  const fetching = useRef(false);
+  const fetching = useRef<Promise<boolean> | null>(null);
   const dispatching = useRef(false);
   const logVersion = useRef(0);
 
@@ -318,23 +320,34 @@ export function ServicesRuns({
       alive.current = false;
     };
   }, []);
-  const reload = useCallback(async () => {
-    if (fetching.current) return;
-    fetching.current = true;
-    try {
-      const response = await list({ environmentId, input: scope });
-      if (!alive.current) return;
-      if (response._tag === "Success") {
+  const reload = useCallback(() => {
+    if (fetching.current) return fetching.current;
+    const request = (async () => {
+      try {
+        const response = await list({ environmentId, input: scope });
+        if (!alive.current) return false;
+        if (response._tag !== "Success") throw new Error("Workspace unavailable");
         setOverview(response.value);
-      } else
-        setError(
-          "Services and run history are unavailable. Refresh after checking the Cinderdeck connection.",
-        );
-      setLoading(false);
-    } finally {
-      fetching.current = false;
-    }
+        setOverviewError(null);
+        return true;
+      } catch {
+        if (alive.current)
+          setOverviewError(
+            "Services and run history are unavailable. Check the Cinderdeck connection and refresh to try again.",
+          );
+        return false;
+      } finally {
+        if (alive.current) setLoading(false);
+        fetching.current = null;
+      }
+    })();
+    fetching.current = request;
+    return request;
   }, [list, environmentId, scope]);
+  const refreshOverview = async () => {
+    if (!(await reload()))
+      throw new Error("Could not refresh services. Check the Cinderdeck connection and try again.");
+  };
   useEffect(() => {
     void reload();
     const timer = window.setInterval(() => {
@@ -577,18 +590,10 @@ export function ServicesRuns({
   const definitionTab = panel === "tasks" || panel === "workflows" ? panel : tab;
   return (
     <div className={styles.operational} data-panel={panel}>
-      {error || overview?.storageError ? (
+      {error || overviewError || overview?.storageError ? (
         <div className={styles.alert} role="alert">
-          <span>{error ?? overview?.storageError}</span>
-          <button
-            type="button"
-            onClick={() => {
-              setError(null);
-              void reload();
-            }}
-          >
-            Refresh
-          </button>
+          <span>{error ?? overviewError ?? overview?.storageError}</span>
+          <RefreshButton label="Retry refreshing services and runs" onRefresh={refreshOverview} />
         </div>
       ) : null}
       {pending ? (
@@ -625,6 +630,11 @@ export function ServicesRuns({
               <p>Keep APIs, databases, and development servers running together.</p>
             </div>
             <div className={styles.actions}>
+              <RefreshButton
+                label="Refresh services"
+                successMessage="Service status updated"
+                onRefresh={refreshOverview}
+              />
               <button
                 type="button"
                 disabled={disabled || !overview?.services.some((service) => !service.sharedFrom)}

@@ -7,6 +7,7 @@ import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 const boundary = vi.hoisted(() => ({
   navigate: vi.fn(),
+  refresh: vi.fn(),
   requests: [] as (typeof OverviewPageInput.Type)[],
   stale: false,
 }));
@@ -48,11 +49,13 @@ vi.mock("../../deckhand/useAgentObservation", () => ({
 const catalog = Atom.make<AsyncResult.AsyncResult<IntegrationView, Error>>(AsyncResult.initial());
 const pages = new Map<string, typeof catalog>();
 vi.mock("../../deckhand/state", () => ({
+  refreshWorkspaces: "refresh",
   workspaceView: ({ input }: { input: typeof OverviewPageInput.Type }) => {
     boundary.requests.push(input);
     return pages.get(`${input.selectedWorkspaceID}:${input.workspacePage?.offset}`) ?? catalog;
   },
 }));
+vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => boundary.refresh }));
 import { WorkspacesSettings } from "./WorkspacesSettings";
 type Resource = IntegrationView["resources"][number];
 const resource = (id: string, source?: string): Resource => ({
@@ -161,6 +164,7 @@ beforeEach(() => {
     value: { isNativeHost: () => true, openNativeTool },
   });
   boundary.navigate.mockClear();
+  boundary.refresh.mockReset().mockResolvedValue({ _tag: "Success", value: undefined });
   openNativeTool.mockClear();
   boundary.requests = [];
   boundary.stale = false;
@@ -249,4 +253,23 @@ it("keeps workspace pagination separate from lane pages", async () => {
   expect(boundary.requests.at(-1)).toMatchObject({ offset: 20, workspacesOnly: true });
   await click("Previous workspaces");
   expect(boundary.requests.at(-1)).toMatchObject({ offset: 0, workspacesOnly: true });
+});
+
+it("refreshes the selected computer from settings and shows pending feedback", async () => {
+  let finish!: (value: { _tag: string }) => void;
+  boundary.refresh.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await render();
+  await click("Refresh workspaces");
+  expect(boundary.refresh).toHaveBeenCalledWith({ environmentId: "computer", input: {} });
+  expect(button("Refresh workspaces").disabled).toBe(true);
+  expect(button("Refresh workspaces").getAttribute("aria-busy")).toBe("true");
+  expect(container.textContent).toContain("Refreshing…");
+  await act(async () => {
+    finish({ _tag: "Success" });
+  });
 });

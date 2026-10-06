@@ -174,3 +174,57 @@ it("opens task and workflow definitions independently, then loads the selected r
     input: { ...context, runID: "saved", stepOffset: 0, stepLimit: 16 },
   });
 });
+
+it("waits for an in-flight service read, reports failure, and refreshes current service status on retry", async () => {
+  vi.useFakeTimers();
+  try {
+    let finish!: (value: { _tag: string }) => void;
+    commands.list.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await act(async () =>
+      root.render(
+        <ServicesRuns
+          environmentId={EnvironmentId.make("computer")}
+          context={context}
+          panel="services"
+        />,
+      ),
+    );
+    const refresh = () =>
+      container.querySelector<HTMLButtonElement>('button[aria-label="Refresh services"]')!;
+    await act(async () => {
+      refresh().click();
+      await vi.advanceTimersByTimeAsync(450);
+    });
+    expect(commands.list).toHaveBeenCalledOnce();
+    expect(refresh().disabled).toBe(true);
+    await act(async () => {
+      finish({ _tag: "Failure" });
+    });
+    expect(container.textContent).toContain("Could not refresh services");
+    expect(refresh().disabled).toBe(false);
+    commands.list.mockResolvedValueOnce({
+      _tag: "Success",
+      value: {
+        ...overview,
+        services: [{ ...overview.services[0], phase: "ready", status: "Ready", ready: true }],
+      },
+    });
+    await act(async () => {
+      refresh().click();
+      await vi.advanceTimersByTimeAsync(450);
+    });
+    expect(commands.list).toHaveBeenLastCalledWith({ environmentId: "computer", input: context });
+    expect(container.textContent).toContain("Service status updated");
+    expect(container.textContent).toContain("Ready");
+    expect(container.textContent).not.toContain("Could not refresh services");
+    expect(container.textContent).not.toContain("Services and run history are unavailable");
+    expect(commands.submit).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
