@@ -1,10 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as Option from "effect/Option";
 import type { EnvironmentId } from "@cinderdeck/contracts";
-import { BotIcon, FolderGit2Icon, SearchIcon, ArrowRightIcon } from "lucide-react";
+import {
+  BotIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  FolderGit2Icon,
+  SearchIcon,
+  ArrowRightIcon,
+} from "lucide-react";
 import {
   useProjects,
   useThreadShells,
@@ -28,6 +35,7 @@ import {
   agentNeedsAttention,
   agentStatus,
   type AgentResource,
+  type AgentWorkspaceGroup,
 } from "./agentWorkspaceGroups";
 import styles from "./agentsOverview.module.css";
 
@@ -226,80 +234,15 @@ function ComputerAgents({
         </p>
       ) : null}
       {matching.map((group) => (
-        <section key={group.id} className={styles.workspace} aria-label={`${group.label} agents`}>
-          <header className={styles.workspaceHeading}>
-            <FolderGit2Icon size={20} />
-            <div>
-              <h3>{group.label}</h3>
-              <span>
-                {group.threads.length} {group.threads.length === 1 ? "agent" : "agents"}
-                {group.resources.length > 1 ? ` · ${group.resources.length} checkouts` : ""}
-              </span>
-            </div>
-            {group.resources[0] && installation ? (
-              <Link
-                to="/workspaces"
-                search={{
-                  environment: environment.environmentId,
-                  workspace:
-                    group.resources[0].workspace?.lane?.sourceStackID ??
-                    group.resources[0].workspaceID,
-                  tab: "agents",
-                  expectedInstallationID: installation,
-                }}
-              >
-                Open workspace <ArrowRightIcon size={14} />
-              </Link>
-            ) : null}
-          </header>
-          {group.threads
-            .toSorted(
-              (a, b) =>
-                Number(agentNeedsAttention(b)) - Number(agentNeedsAttention(a)) ||
-                b.updatedAt.localeCompare(a.updatedAt),
-            )
-            .map((thread) => (
-              <Link
-                key={thread.id}
-                className={styles.agent}
-                to="/$environmentId/$threadId"
-                params={buildThreadRouteParams({
-                  environmentId: environment.environmentId,
-                  threadId: thread.id,
-                })}
-              >
-                <BotIcon size={18} />
-                <div>
-                  <strong>{thread.title}</strong>
-                  <span>
-                    {thread.modelSelection.model}
-                    {thread.branch ? ` · ${thread.branch}` : ""} ·{" "}
-                    {formatRelativeTimeLabel(thread.updatedAt)}
-                  </span>
-                </div>
-                <span
-                  className={styles.status}
-                  data-attention={connected && agentNeedsAttention(thread)}
-                >
-                  {!connected ? "Last observed · " : ""}
-                  {agentStatus(thread)}
-                </span>
-                <ArrowRightIcon size={14} />
-              </Link>
-            ))}
-          {!group.threads.length ? (
-            <p className={styles.notice}>
-              No agents here yet. Open the workspace to start a conversation.
-            </p>
-          ) : null}
-          {installation && !search && filter === "all" && group.resources.length ? (
-            <WorkspaceExternalAgents
-              environmentId={environment.environmentId}
-              installationID={installation}
-              resources={group.resources}
-            />
-          ) : null}
-        </section>
+        <WorkspaceAgents
+          key={`${installation ?? ""}:${group.id}`}
+          group={group}
+          environmentId={environment.environmentId}
+          installation={installation}
+          connected={connected}
+          revealMatches={Boolean(search) || filter !== "all" || archived}
+          showExternal={!search && filter === "all"}
+        />
       ))}
       {!matching.length ? (
         <p className={styles.empty}>
@@ -315,6 +258,144 @@ function ComputerAgents({
           Load more workspaces
         </button>
       ) : null}
+    </section>
+  );
+}
+function WorkspaceAgents({
+  group,
+  environmentId,
+  installation,
+  connected,
+  revealMatches,
+  showExternal,
+}: {
+  group: AgentWorkspaceGroup;
+  environmentId: EnvironmentId;
+  installation: string | undefined;
+  connected: boolean;
+  revealMatches: boolean;
+  showExternal: boolean;
+}) {
+  const contentId = useId();
+  const activeThreads = group.threads.filter(
+    (thread) =>
+      !thread.archivedAt &&
+      (agentNeedsAttention(thread) || ["Working", "Waiting"].includes(agentStatus(thread))),
+  );
+  const hasActiveAgents = activeThreads.length > 0;
+  const [expanded, setExpanded] = useState(hasActiveAgents || revealMatches);
+  const [showAll, setShowAll] = useState(false);
+  // Follow new activity and explicit filters, while allowing a manual collapse
+  // to survive ordinary streaming updates within the same activity state.
+  useEffect(() => {
+    setExpanded(hasActiveAgents || revealMatches);
+    setShowAll(false);
+  }, [hasActiveAgents, revealMatches]);
+  const visibleThreads = showAll || revealMatches ? group.threads : activeThreads;
+  return (
+    <section className={styles.workspace} aria-label={`${group.label} agents`}>
+      <header className={styles.workspaceHeading}>
+        <button
+          type="button"
+          className={styles.workspaceToggle}
+          aria-label={`${expanded ? "Collapse" : "Expand"} agents for ${group.label}`}
+          aria-expanded={expanded}
+          aria-controls={contentId}
+          onClick={() => {
+            setExpanded(!expanded);
+            if (!expanded) setShowAll(true);
+          }}
+        >
+          {expanded ? <ChevronDownIcon size={16} /> : <ChevronRightIcon size={16} />}
+          <FolderGit2Icon size={20} />
+          <span className={styles.workspaceLabel}>
+            <span className={styles.workspaceName}>{group.label}</span>
+            <span>
+              {group.threads.length} {group.threads.length === 1 ? "agent" : "agents"}
+              {activeThreads.length ? ` · ${activeThreads.length} active` : ""}
+              {group.resources.length > 1 ? ` · ${group.resources.length} checkouts` : ""}
+            </span>
+          </span>
+        </button>
+        {group.resources[0] && installation ? (
+          <Link
+            to="/workspaces"
+            search={{
+              environment: environmentId,
+              workspace:
+                group.resources[0].workspace?.lane?.sourceStackID ?? group.resources[0].workspaceID,
+              tab: "agents",
+              expectedInstallationID: installation,
+            }}
+          >
+            Open workspace <ArrowRightIcon size={14} />
+          </Link>
+        ) : null}
+      </header>
+      <div id={contentId} hidden={!expanded}>
+        {expanded ? (
+          <>
+            {visibleThreads
+              .toSorted(
+                (a, b) =>
+                  Number(agentNeedsAttention(b)) - Number(agentNeedsAttention(a)) ||
+                  b.updatedAt.localeCompare(a.updatedAt),
+              )
+              .map((thread) => (
+                <Link
+                  key={thread.id}
+                  className={styles.agent}
+                  to="/$environmentId/$threadId"
+                  params={buildThreadRouteParams({
+                    environmentId,
+                    threadId: thread.id,
+                  })}
+                >
+                  <BotIcon size={18} />
+                  <div>
+                    <strong>{thread.title}</strong>
+                    <span>
+                      {thread.modelSelection.model}
+                      {thread.branch ? ` · ${thread.branch}` : ""} ·{" "}
+                      {formatRelativeTimeLabel(thread.updatedAt)}
+                    </span>
+                  </div>
+                  <span
+                    className={styles.status}
+                    data-attention={connected && agentNeedsAttention(thread)}
+                  >
+                    {!connected ? "Last observed · " : ""}
+                    {agentStatus(thread)}
+                  </span>
+                  <ArrowRightIcon size={14} />
+                </Link>
+              ))}
+            {!group.threads.length ? (
+              <p className={styles.notice}>
+                No agents here yet. Open the workspace to start a conversation.
+              </p>
+            ) : null}
+            {!revealMatches &&
+            activeThreads.length > 0 &&
+            activeThreads.length < group.threads.length ? (
+              <button
+                type="button"
+                className={styles.showAgents}
+                onClick={() => setShowAll(!showAll)}
+              >
+                {showAll ? "Show active agents only" : `Show all ${group.threads.length} agents`}
+              </button>
+            ) : null}
+            {expanded && installation && showExternal && group.resources.length ? (
+              <WorkspaceExternalAgents
+                environmentId={environmentId}
+                installationID={installation}
+                resources={group.resources}
+              />
+            ) : null}
+          </>
+        ) : null}
+      </div>
     </section>
   );
 }

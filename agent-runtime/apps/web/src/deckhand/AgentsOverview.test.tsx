@@ -123,7 +123,9 @@ beforeEach(() => {
   mocks.links = [];
   mocks.threads = [
     thread("same-id", "local", "Needs approval", { hasPendingApprovals: true }),
-    thread("same-id", "remote", "Remote agent"),
+    thread("same-id", "remote", "Remote agent", {
+      runtime: { status: "running" } as EnvironmentThreadShell["runtime"],
+    }),
     thread("old", "local", "Archived conversation", { archivedAt: "2026-10-05T00:00:00Z" }),
   ];
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -173,4 +175,76 @@ it("filters attention and restores archived agents on request, preserving discon
   mocks.connected = false;
   await render();
   expect(container.textContent).toContain("Last observed · Approval needed");
+});
+
+const toggleWorkspace = (label: string) =>
+  act(async () =>
+    container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.click(),
+  );
+
+it("collapses inactive and empty workspaces and lets each workspace expand independently", async () => {
+  mocks.threads = [thread("idle", "local", "Idle conversation")];
+  await render();
+  expect(container.textContent).not.toContain("Idle conversation");
+  expect(
+    container
+      .querySelector('button[aria-label="Expand agents for Alpha"]')
+      ?.getAttribute("aria-expanded"),
+  ).toBe("false");
+  await toggleWorkspace("Expand agents for Alpha");
+  expect(container.textContent).toContain("Idle conversation");
+  expect(
+    container.querySelector('button[aria-label="Expand agents for Remote workspace"]'),
+  ).not.toBeNull();
+  await toggleWorkspace("Collapse agents for Alpha");
+  expect(container.textContent).not.toContain("Idle conversation");
+  await toggleWorkspace("Expand agents for Remote workspace");
+  expect(container.textContent).toContain("No agents here yet.");
+});
+
+it("automatically shows only active agents and allows revealing other conversations", async () => {
+  mocks.threads.push(thread("idle", "local", "Idle conversation"));
+  await render();
+  expect(container.textContent).toContain("Needs approval");
+  expect(container.textContent).not.toContain("Idle conversation");
+  await click("Show all 2 agents");
+  expect(container.textContent).toContain("Idle conversation");
+  await click("Show active agents only");
+  expect(container.textContent).not.toContain("Idle conversation");
+  await toggleWorkspace("Collapse agents for Alpha");
+  mocks.threads = mocks.threads.map((item) => ({ ...item, updatedAt: "2026-10-06T01:00:00Z" }));
+  await render();
+  expect(container.textContent).not.toContain("Needs approval");
+  expect(container.textContent).toContain("Remote agent");
+});
+
+it("opens when an agent becomes active and collapses after its activity ends", async () => {
+  mocks.threads = [thread("changing", "local", "Changing agent")];
+  await render();
+  expect(container.textContent).not.toContain("Changing agent");
+  mocks.threads = [
+    thread("changing", "local", "Changing agent", {
+      runtime: { status: "running" } as EnvironmentThreadShell["runtime"],
+    }),
+  ];
+  await render();
+  expect(container.textContent).toContain("Changing agent");
+  mocks.threads = [thread("changing", "local", "Changing agent")];
+  await render();
+  expect(container.textContent).not.toContain("Changing agent");
+});
+
+it("reveals idle search matches without requiring a workspace expansion", async () => {
+  mocks.threads = [thread("idle", "local", "Find this conversation")];
+  await render();
+  const input = container.querySelector<HTMLInputElement>('input[type="search"]')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+      input,
+      "Find this",
+    );
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(container.textContent).toContain("Find this conversation");
+  expect(container.querySelector('button[aria-label="Collapse agents for Alpha"]')).not.toBeNull();
 });

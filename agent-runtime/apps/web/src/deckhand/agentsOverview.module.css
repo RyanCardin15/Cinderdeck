@@ -106,13 +106,29 @@
   padding: 18px 20px;
   background: color-mix(in srgb, var(--foreground) 2%, var(--card));
 }
-.workspaceHeading > svg {
+.workspaceToggle > svg {
   color: var(--primary);
 }
-.workspaceHeading div {
+.workspaceToggle {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   flex: 1;
+  min-width: 0;
+  text-align: left;
+  cursor: pointer;
 }
-.workspaceHeading h3 {
+.workspaceLabel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.workspaceToggle > svg {
+  flex-shrink: 0;
+}
+.workspaceHeading .workspaceName {
+  color: var(--foreground);
+  overflow-wrap: anywhere;
   font-size: 15px;
   font-weight: 600;
 }
@@ -168,7 +184,7 @@
   color: var(--primary);
   border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
 }
-.workspace > .notice,
+.workspace .notice,
 .external {
   padding: 16px 20px;
 }
@@ -216,4 +232,14 @@
   .workspaceHeading {
     flex-wrap: wrap;
   }
+}
+
+.showAgents {
+  width: 100%;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  color: var(--primary);
+  text-align: left;
+  font-size: 12px;
+  cursor: pointer;
 }
