@@ -18,6 +18,7 @@ struct WorkspaceLaneGraph {
     var serviceID: String?
     var runID: UUID?
     var isLane = false
+    var isReviewerLane = false
     var runtimeActive = false
     var process: StackProcessIdentity?
     var command: String?
@@ -34,7 +35,7 @@ struct WorkspaceLaneGraph {
         || status == "Needs attention" || status == "Unavailable"
     }
     var kind: String {
-      switch id { case .lane: return "Checkout"; case .service: return "Service"; case .run: return "Run"; case .step: return "Step" }
+      switch id { case .lane: return isReviewerLane ? "Reviewer lane" : "Checkout"; case .service: return "Service"; case .run: return "Run"; case .step: return "Step" }
     }
   }
   struct Edge: Hashable, Identifiable {
@@ -103,7 +104,7 @@ struct WorkspaceLaneGraph {
       let detail: [String?] = [file.name, branches, file.lane?.owner.label, file.definition?.root.path, issues]
       add(.init(id: .lane(file.id), workspaceID: file.id, title: title, subtitle: branches, status: status,
         detail: detail.compactMap { $0 }.joined(separator: "\n"),
-        runStatus: activeRuns.first?.status, isLane: true, runtimeActive: state.isActive,
+        runStatus: activeRuns.first?.status, isLane: true, isReviewerLane: file.lane?.isReviewer == true, runtimeActive: state.isActive,
         directory: file.definition?.root.path, owner: file.lane?.owner.label, warning: issues))
       let services = Set(file.definition?.services.map(\.id) ?? []).union(state.services.keys)
       for name in services.sorted() { connect(.lane(file.id), service(file.id, name), .contains) }

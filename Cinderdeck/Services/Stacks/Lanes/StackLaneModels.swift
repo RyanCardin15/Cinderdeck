@@ -25,6 +25,9 @@ nonisolated struct StackLaneInfo: Codable, Equatable, Sendable {
   var adopted = false
 
   var reference: String { sourceStackID + "/" + name }
+  /// Compatibility identity used by the runtime's isolated reviewer launcher.
+  /// Match the generated name, never arbitrary branches under review/.
+  var isReviewer: Bool { name.range(of: "^review/[a-f0-9]{24}$", options: .regularExpression) != nil }
   var effectiveSlug: String { slug ?? Self.slug(for: name) }
 
   static func portVariable(_ service: String) -> String {

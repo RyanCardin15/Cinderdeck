@@ -192,7 +192,7 @@ struct WorkspaceLaneMapView: View {
   }
   private func clear() { jump = nil; selection = nil; focus = false; direction = .dependencies; query = "" }
   private func tint(_ workspace: String, lanes: [WorkspaceLaneGraph.Node]) -> Color {
-    WorkspaceLaneMapStyle.tint(workspace, source: sourceID, lanes: lanes.map(\.workspaceID))
+    WorkspaceLaneMapStyle.tint(workspace, source: sourceID, lanes: lanes.map(\.workspaceID), isReviewer: lanes.contains { $0.workspaceID == workspace && $0.isReviewerLane })
   }
 }
 

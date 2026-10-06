@@ -31,7 +31,8 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import type { EnvironmentId } from "@cinderdeck/contracts";
 import type { IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
-import { workspaceView } from "./state";
+import { managedContextsView, workspaceView } from "./state";
+import { useAgentObservation } from "./useAgentObservation";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../components/ui/tooltip";
 import { WorkspaceSettingsButton } from "./WorkspaceSettingsButton";
 import { SessionLauncher } from "./SessionLauncher";
@@ -45,6 +46,8 @@ import {
   type WorkspaceSidebarPreferences,
 } from "./workspaceSidebarPreferences";
 import styles from "./WorkspaceSidebar.module.css";
+import { isReviewerLane } from "./reviewerLane";
+import reviewerStyles from "./reviewerLane.module.css";
 
 type Resource = IntegrationView["resources"][number];
 const workspaceGroup = "workspaces";
@@ -132,6 +135,7 @@ function SidebarRow({
   expanded,
   onExpand,
   attention,
+  reviewer = false,
   onNavigate,
   onNewSession,
   launchEnabled,
@@ -147,6 +151,7 @@ function SidebarRow({
   expanded?: boolean;
   onExpand?: () => void;
   attention?: boolean;
+  reviewer?: boolean;
   onNavigate?: (() => void) | undefined;
   onNewSession: (resource: Resource) => void;
   launchEnabled: boolean;
@@ -172,7 +177,8 @@ function SidebarRow({
       style={{ transform: CSS.Transform.toString(transform), transition }}
     >
       <div
-        className={styles.row}
+        className={`${styles.row} ${reviewer ? reviewerStyles.reviewer : ""}`}
+        data-reviewer={reviewer}
         data-current={selected || workspaceActive}
         data-dragging={isDragging}
       >
@@ -215,7 +221,8 @@ function SidebarRow({
           onClick={onNavigate}
         >
           {onExpand ? <FolderGit2Icon size={15} /> : <GitBranchIcon size={14} />}
-          <span>{label}</span>
+          <span className={styles.label}>{label}</span>
+          {reviewer ? <span className={reviewerStyles.badge}>Reviewer</span> : null}
           {attention ? <CircleDotIcon size={10} aria-label="Needs attention" /> : null}
         </Link>
         <Tooltip>
@@ -270,6 +277,23 @@ function SidebarRow({
   );
 }
 
+function useReviewerLaneContexts(
+  environmentId: EnvironmentId,
+  installationID: string,
+  rows: readonly Resource[],
+) {
+  const contexts = rows
+    .map((row) => ({ workspaceID: row.workspaceID, generation: row.generation }))
+    .sort((a, b) => a.workspaceID.localeCompare(b.workspaceID));
+  const scope = JSON.stringify([installationID, contexts]);
+  const result = useAtomValue(
+    managedContextsView({ environmentId, input: { installationID, contexts } }),
+  );
+  const summaries = Option.getOrNull(AsyncResult.value(result));
+  const observation = useAgentObservation(environmentId, scope, summaries);
+  return result._tag === "Failure" || observation.stale ? null : summaries;
+}
+
 function WorkspaceLanes({
   baseID,
   environmentId,
@@ -321,6 +345,7 @@ function WorkspaceLanes({
     state.preferences.order[laneGroup(baseID)] ?? [],
     name,
   );
+  const summaries = useReviewerLaneContexts(environmentId, installationID, lanes);
   return (
     <div className={styles.lanes}>
       {view && !fresh && lanes.length > 0 ? (
@@ -338,6 +363,13 @@ function WorkspaceLanes({
             search={search}
             selected={search.context === row.workspaceID}
             attention={needsAttention?.(row) ?? false}
+            reviewer={isReviewerLane(
+              row,
+              summaries?.find(
+                (item) =>
+                  item.workspaceID === row.workspaceID && item.generation === row.generation,
+              ),
+            )}
             onNavigate={onNavigate}
             onNewSession={onNewSession}
             launchEnabled={fresh && canLaunch(row)}

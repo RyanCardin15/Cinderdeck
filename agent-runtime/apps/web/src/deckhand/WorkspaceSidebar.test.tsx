@@ -3,8 +3,9 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { RegistryContext } from "@effect/atom-react";
 import { EnvironmentId } from "@cinderdeck/contracts";
-import type { IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
+import type { IntegrationView, ManagedContextView } from "@cinderdeck/contracts/deckhand/rpc";
 import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
+import * as Cause from "effect/Cause";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 import type { WorkspaceSearch } from "./workspaceNavigation";
 import { readSidebarPreferences, sidebarPreferenceKey } from "./workspaceSidebarPreferences";
@@ -43,8 +44,12 @@ vi.mock("@tanstack/react-router", () => ({
   ),
 }));
 const native = Atom.make<AsyncResult.AsyncResult<IntegrationView, Error>>(AsyncResult.initial());
+const activity = Atom.make<AsyncResult.AsyncResult<readonly ManagedContextView[], Error>>(
+  AsyncResult.initial(),
+);
 const scopedAtoms = new Map<string, typeof native>();
 vi.mock("./state", () => ({
+  managedContextsView: () => activity,
   workspaceView: ({
     input,
   }: {
@@ -61,6 +66,7 @@ vi.mock("./state", () => ({
   },
 }));
 vi.mock("../state/environments", () => ({
+  useEnvironment: () => ({ connection: { phase: "connected" } }),
   useEnvironments: () => ({ environments: [{ environmentId: "computer" }] }),
   usePrimaryEnvironmentId: () => "computer",
 }));
@@ -169,7 +175,10 @@ beforeEach(() => {
   scopedAtoms.clear();
   localStorage.clear();
   registry = AtomRegistry.make();
+  registry.mount(native);
   registry.set(native, AsyncResult.success(view));
+  registry.mount(activity);
+  registry.set(activity, AsyncResult.success([]));
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -220,6 +229,31 @@ it("selects in place and expands multiple workspaces independently without reope
     expectedGeneration: 3,
   });
   expect(workspaceIDs()).toEqual(["alpha", "beta"]);
+});
+
+it("identifies a scheduled reviewer before agent status exists and retains it when selected or offline", async () => {
+  const reviewer = resource("review/0123456789abcdef01234567", "alpha");
+  const ordinary = resource("review/payments", "alpha");
+  const rows = [alpha, reviewer, ordinary];
+  registry.set(native, AsyncResult.success({ ...view, resources: rows }));
+  await render({ workspace: "alpha", context: reviewer.workspaceID }, rows);
+  await act(async () => button("Expand lanes for alpha").click());
+  const reviewerRow = () =>
+    container.querySelector(`[data-workspace-id="${reviewer.workspaceID}"] [data-reviewer]`)!;
+  expect(reviewerRow().getAttribute("data-reviewer")).toBe("true");
+  expect(reviewerRow().getAttribute("data-current")).toBe("true");
+  expect(reviewerRow().textContent).toContain("Reviewer");
+  expect(
+    container
+      .querySelector('[data-workspace-id="review/payments"] [data-reviewer]')
+      ?.getAttribute("data-reviewer"),
+  ).toBe("false");
+  await act(async () =>
+    registry.set(native, AsyncResult.failure(Cause.fail(new Error("Offline")))),
+  );
+  expect(reviewerRow().getAttribute("data-reviewer")).toBe("true");
+  expect(reviewerRow().textContent).toContain("Reviewer");
+  expect(button(`New session in ${reviewer.workspaceID}`).disabled).toBe(true);
 });
 
 it("retains favorites, manual order, and collapse state after remount without moving a favorite", async () => {

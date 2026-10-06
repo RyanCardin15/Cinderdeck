@@ -264,6 +264,21 @@
 .map .selected {
   border-color: var(--map-accent);
 }
+.band[data-reviewer="true"],
+.map .node[data-reviewer="true"],
+.checkouts button[data-reviewer="true"] {
+  border-color: var(--reviewer-border);
+  background: var(--reviewer-wash);
+}
+.band[data-reviewer="true"] > span,
+.node[data-reviewer="true"] .kind {
+  color: var(--reviewer-accent);
+}
+.map .node[data-reviewer="true"].selected,
+.checkouts button[data-reviewer="true"][aria-pressed="true"] {
+  border-color: var(--reviewer-accent);
+  box-shadow: inset 3px 0 var(--reviewer-accent);
+}
 .dimmed {
   opacity: 0.38;
 }

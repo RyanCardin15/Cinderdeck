@@ -160,6 +160,7 @@ struct StackLanesView: View {
         .font(.caption).foregroundColor(.secondary)
       if let lane {
         HStack(spacing: 6) {
+          if lane.isReviewer { badge("Reviewer", WorkspaceLaneMapStyle.reviewer, help: "Separate checkout pinned to the reviewed commits") }
           if lane.pinned { badge("Pinned", .orange, help: "Keeps the definition saved when it was created") }
           if lane.adopted { badge("Adopted", .secondary, help: "Cinderdeck never deletes this worktree") }
           if git?.merged == true { badge("Merged", .green, help: "Every branch with new commits is in the default remote branch") }
@@ -246,6 +247,8 @@ struct StackLanesView: View {
       }
     }
     .padding(14).frame(width: 260, alignment: .topLeading).stackSurface(cornerRadius: 12)
+    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(
+      lane?.isReviewer == true ? WorkspaceLaneMapStyle.reviewer.opacity(0.5) : .clear, lineWidth: 1))
     .contextMenu {
       if file.lane != nil {
         Button("Delete lane…", role: .destructive) { removal = .init(file: file) }
