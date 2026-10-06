@@ -5,6 +5,8 @@ import type { IntegrationView, ManagedContextView } from "@cinderdeck/contracts/
 import { buildThreadRouteParams } from "../threadRoutes";
 import { agentExecutionLabel, agentProviderLabel } from "./agentPresentation";
 import styles from "./workspaceLaneMap.module.css";
+import { isReviewerLane } from "./reviewerLane";
+import reviewerStyles from "./reviewerLane.module.css";
 
 type Resource = IntegrationView["resources"][number];
 type Providers = ReadonlyArray<{ readonly instanceId: string; readonly displayName: string }>;
@@ -30,6 +32,7 @@ type MapNode = {
   shared: boolean;
   available: boolean;
   unresolved?: boolean;
+  reviewer?: boolean;
   session?: ManagedContextView["sessions"][number];
   x: number;
   y: number;
@@ -115,10 +118,18 @@ function graphFor(
     : [...resources];
   for (const resource of ordered) {
     const workspace = resource.workspace;
+    const reviewer = isReviewerLane(
+      resource,
+      summaries.find(
+        (item) =>
+          item.workspaceID === resource.workspaceID && item.generation === resource.generation,
+      ),
+    );
     const checkout = key("checkout", resource.workspaceID);
     add({
       id: checkout,
       kind: "checkout",
+      reviewer,
       contextID: resource.workspaceID,
       title: contextName(resource),
       subtitle:
@@ -127,7 +138,7 @@ function graphFor(
       status: resource.available ? (workspace?.state ?? "State unavailable") : "Unavailable",
       detail: [
         workspace?.name,
-        workspace?.lane ? "Feature lane" : "Original checkout",
+        reviewer ? "Reviewer lane" : workspace?.lane ? "Feature lane" : "Original checkout",
         workspace?.lane?.adopted ? "Adopted checkout" : null,
         workspace?.definitionChanged ? "Definition changed" : null,
         ...(workspace?.issues ?? []),
@@ -313,8 +324,14 @@ function graphFor(
         )
       ),
   );
-  const bands: Array<{ id: string; title: string; y: number; height: number; shared: boolean }> =
-    [];
+  const bands: Array<{
+    id: string;
+    title: string;
+    y: number;
+    height: number;
+    shared: boolean;
+    reviewer?: boolean;
+  }> = [];
   let y = 22;
   for (const resource of ordered) {
     const local = [...nodes.values()].filter(
@@ -341,6 +358,7 @@ function graphFor(
       y,
       height,
       shared: false,
+      reviewer: nodes.get(key("checkout", resource.workspaceID))?.reviewer ?? false,
     });
     y += height + 18;
   }
@@ -563,6 +581,16 @@ function ScopedWorkspaceLaneMap({
           <button
             type="button"
             key={resource.workspaceID}
+            className={
+              graph.nodes.find((node) => node.id === key("checkout", resource.workspaceID))
+                ?.reviewer
+                ? reviewerStyles.reviewer
+                : undefined
+            }
+            data-reviewer={
+              graph.nodes.find((node) => node.id === key("checkout", resource.workspaceID))
+                ?.reviewer
+            }
             aria-pressed={selectedContextID === resource.workspaceID}
             onClick={() => {
               const node = graph.nodes.find(
@@ -572,6 +600,9 @@ function ScopedWorkspaceLaneMap({
             }}
           >
             {contextName(resource)}
+            {graph.nodes.find((node) => node.id === key("checkout", resource.workspaceID))?.reviewer
+              ? " · Reviewer"
+              : ""}
           </button>
         ))}
       </div>
@@ -593,7 +624,8 @@ function ScopedWorkspaceLaneMap({
             {graph.bands.map((band) => (
               <div
                 key={band.id}
-                className={`${styles.band} ${band.shared ? styles.sharedBand : ""}`}
+                className={`${styles.band} ${band.shared ? styles.sharedBand : ""} ${band.reviewer ? reviewerStyles.reviewer : ""}`}
+                data-reviewer={band.reviewer}
                 style={{
                   left: band.shared ? graph.width - COLUMN : 8,
                   top: band.y,
@@ -603,7 +635,10 @@ function ScopedWorkspaceLaneMap({
                   height: band.height,
                 }}
               >
-                <span>{band.title}</span>
+                <span>
+                  {band.title}
+                  {band.reviewer ? " · Reviewer" : ""}
+                </span>
               </div>
             ))}
             <svg
@@ -647,13 +682,15 @@ function ScopedWorkspaceLaneMap({
               <button
                 type="button"
                 key={node.id}
-                className={`${styles.node} ${node.shared ? styles.sharedNode : ""} ${node.kind === "checkout" ? styles.checkout : ""} ${selectedID === node.id ? styles.selected : ""} ${traced && !traced.has(node.id) ? styles.dimmed : ""}`}
+                className={`${styles.node} ${node.shared ? styles.sharedNode : ""} ${node.kind === "checkout" ? styles.checkout : ""} ${selectedID === node.id ? styles.selected : ""} ${traced && !traced.has(node.id) ? styles.dimmed : ""} ${node.reviewer ? reviewerStyles.reviewer : ""}`}
+                data-reviewer={node.reviewer}
                 style={{ left: node.x, top: node.y, width: CARD_WIDTH, height: CARD_HEIGHT }}
                 aria-pressed={selectedID === node.id}
                 onClick={() => choose(node)}
               >
                 <span className={styles.kind}>
                   {node.kind}
+                  {node.reviewer ? " · Reviewer" : ""}
                   {node.shared ? " · shared" : ""}
                 </span>
                 <strong>{node.title}</strong>

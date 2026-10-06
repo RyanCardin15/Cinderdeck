@@ -67,6 +67,8 @@ import type { RecordingContextOverview } from "@cinderdeck/contracts/deckhand/re
 import { recordingOverview } from "./recordingState";
 import { RecordingThumbnail } from "./RecordingThumbnail";
 import styles from "./workspace.module.css";
+import { isReviewerLane } from "./reviewerLane";
+import reviewerStyles from "./reviewerLane.module.css";
 import agents from "./workspaceAgents.module.css";
 import native from "./nativeWorkspace.module.css";
 import { workspaceChatUnavailableReason } from "@cinderdeck/shared/workspaceChat";
@@ -1411,6 +1413,7 @@ function LaneRow({
   showSessionMenu: ReturnType<typeof useSessionActions>["showMenu"];
 }) {
   const sessions = summary?.sessions ?? [];
+  const reviewer = isReviewerLane(resource, summary);
   const prs = [
     ...new Map(
       sessions
@@ -1422,10 +1425,12 @@ function LaneRow({
   ];
   return (
     <article
-      className={`${styles["dh-lane-row"]} ${selected ? styles["dh-lane-selected"] : ""}`}
+      className={`${styles["dh-lane-row"]} ${selected ? styles["dh-lane-selected"] : ""} ${reviewer ? reviewerStyles.reviewer : ""}`}
+      data-reviewer={reviewer}
       aria-label={resource.workspace?.lane?.name ?? "Primary checkout"}
     >
       <div className={styles["dh-lane-identity"]}>
+        {reviewer ? <span className={reviewerStyles.badge}>Reviewer</span> : null}
         <button className={styles["dh-lane-select"]} aria-pressed={selected} onClick={select}>
           <h2>{resource.workspace?.lane?.name ?? "Primary checkout"}</h2>
           <ChevronRightIcon size={16} />

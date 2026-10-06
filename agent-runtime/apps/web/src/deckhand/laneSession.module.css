@@ -463,6 +463,15 @@
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+.sidebarLane[data-reviewer="true"] {
+  padding: 7px;
+  border-radius: 6px;
+  background: var(--reviewer-wash);
+  box-shadow: inset 2px 0 var(--reviewer-accent);
+}
+.sidebarLane[data-reviewer="true"] > svg {
+  color: var(--reviewer-accent);
+}
 .sidebarObjective {
   display: -webkit-box;
   -webkit-box-orient: vertical;

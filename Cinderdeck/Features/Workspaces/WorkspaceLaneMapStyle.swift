@@ -2,7 +2,9 @@ import SwiftUI
 
 enum WorkspaceLaneMapStyle {
   static let resource = Color.teal
-  static func tint(_ workspace: String, source: String, lanes: [String]) -> Color {
+  static let reviewer = Color.purple
+  static func tint(_ workspace: String, source: String, lanes: [String], isReviewer: Bool = false) -> Color {
+    if isReviewer { return reviewer }
     if workspace == source { return DeckStyle.warning }
     let colors: [Color] = [.cyan, .mint, .blue, .pink, .yellow]
     let index = lanes.filter { $0 != source }.firstIndex(of: workspace) ?? 0

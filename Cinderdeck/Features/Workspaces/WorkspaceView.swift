@@ -268,7 +268,7 @@ struct WorkspaceView: View {
     let laneCount = isWorkspace ? navigation.lanes(for: file.id).count : 0
     let selected = model.selectedStackID == file.id
     let source = navigation.workspaceID(for: file.id) ?? file.id
-    let tint = WorkspaceLaneMapStyle.tint(file.id, source: source, lanes: navigation.lanes(for: source).map(\.id))
+    let tint = WorkspaceLaneMapStyle.tint(file.id, source: source, lanes: navigation.lanes(for: source).map(\.id), isReviewer: file.lane?.isReviewer == true)
     let state = model.states[file.id] ?? .init()
     let active = runner.activeRun(file.id) != nil || state.isActive
     return HStack(spacing: 0) {
@@ -290,6 +290,11 @@ struct WorkspaceView: View {
           }
           VStack(alignment: .leading, spacing: 4) {
             Text(isWorkspace ? file.name : file.lane?.name ?? file.name).fontWeight(.semibold).lineLimit(2)
+            if file.lane?.isReviewer == true {
+              Text("Reviewer").font(.system(size: 10, weight: .semibold)).foregroundColor(tint)
+                .padding(.horizontal, 6).padding(.vertical, 3)
+                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
+            }
             if !isWorkspace {
               Text(WorkspaceLaneGraph.branchSummary(file, statuses: model.repoStatuses))
                 .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -300,7 +305,7 @@ struct WorkspaceView: View {
             if laneCount > 0 {
               HStack(spacing: 5) {
                 ForEach(navigation.lanes(for: file.id).prefix(5)) { lane in
-                  Circle().fill(WorkspaceLaneMapStyle.tint(lane.id, source: file.id, lanes: navigation.lanes(for: file.id).map(\.id)))
+                  Circle().fill(WorkspaceLaneMapStyle.tint(lane.id, source: file.id, lanes: navigation.lanes(for: file.id).map(\.id), isReviewer: lane.lane?.isReviewer == true))
                     .frame(width: 5, height: 5)
                 }
                 Text("\(laneCount) \(laneCount == 1 ? "lane" : "lanes")").font(.system(size: 10, weight: .medium))

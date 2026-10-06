@@ -43,6 +43,21 @@ final class WorkspaceLaneGraphTests: XCTestCase {
     XCTAssertTrue(result.edges.contains { $0.from == .service("first", "web") && $0.to == .service("shop", "db") })
   }
 
+  func testReviewerIdentitySurvivesGraphFocusWithoutMarkingOrdinaryReviewBranches() {
+    let base = file("shop")
+    var review = file("reviewer", source: "shop")
+    review.definition?.lane?.name = "review/0123456789abcdef01234567"
+    review.definition?.services = [service("web")]
+    var ordinary = file("ordinary", source: "shop")
+    ordinary.definition?.lane?.name = "review/payments"
+    let result = graph([base, review, ordinary])
+    let reviewer = result.nodes.first { $0.id == .lane("reviewer") }
+    XCTAssertEqual(reviewer?.kind, "Reviewer lane")
+    XCTAssertEqual(reviewer?.isReviewerLane, true)
+    XCTAssertEqual(result.nodes.first { $0.id == .lane("ordinary") }?.isReviewerLane, false)
+    XCTAssertEqual(result.focused(on: .service("reviewer", "web")).nodes.first { $0.isLane }?.isReviewerLane, true)
+  }
+
   func testActiveRunShowsStepsProcessIdentityAndRequiredServicesOnlyWhileActive() {
     var base = file("shop")
     base.definition?.services = [service("api")]
