@@ -21,6 +21,7 @@ const shellAtom = Atom.make<Thread | null>(null);
 const detailAtom = Atom.make<EnvironmentThreadState>(EMPTY_ENVIRONMENT_THREAD_STATE);
 const emptyAtom = Atom.make(EMPTY_ENVIRONMENT_THREAD_STATE);
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => boundary.navigate }));
+vi.mock("../hooks/useDiscardEmptySession", () => ({ useDiscardEmptySession: vi.fn() }));
 vi.mock("./ChatView", () => ({
   default: ({ environmentId, threadId }: { environmentId: string; threadId: string }) => (
     <p data-testid="chat">

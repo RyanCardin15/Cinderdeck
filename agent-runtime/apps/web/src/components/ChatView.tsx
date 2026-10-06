@@ -90,6 +90,7 @@ import { readPastedComposerContext } from "./composerInlineTokenPaste";
 import { isPasteAsTextShortcut } from "@cinderdeck/client-runtime/text-paste";
 import { effectiveSnoozed, threadWokeAt } from "@cinderdeck/client-runtime/state/thread-settled";
 import { useAcknowledgeThreadWoke, useThreadActions } from "../hooks/useThreadActions";
+import { preserveSessionOnSubmission } from "../hooks/useDiscardEmptySession";
 import {
   deriveProviderSubagentStatus,
   deriveReportedModelSelection,
@@ -7984,6 +7985,7 @@ export default function ChatView(props: ChatViewProps) {
     const threadId = activeThread.id;
     const messageId = newMessageId();
     const createdAt = new Date().toISOString();
+    preserveSessionOnSubmission(routeThreadRef);
     sendInFlightRef.current = true;
     beginLocalDispatch();
     setThreadError(threadId, null);
@@ -8059,6 +8061,7 @@ export default function ChatView(props: ChatViewProps) {
       return;
     }
     const threadId = activeThread.id;
+    preserveSessionOnSubmission(routeThreadRef);
     sendInFlightRef.current = true;
     setResumingThreadKeys((current) => new Set(current).add(routeThreadKey));
     setThreadError(threadId, null);
@@ -8726,6 +8729,7 @@ export default function ChatView(props: ChatViewProps) {
       });
     }
 
+    preserveSessionOnSubmission(routeThreadRef);
     sendInFlightRef.current = true;
     const sendGeneration = ++composerSendGenerationRef.current;
     const attachmentCapabilitiesBeforeUpload = readLiveAttachmentCapabilities();
@@ -9755,6 +9759,7 @@ export default function ChatView(props: ChatViewProps) {
       text: trimmed,
     });
 
+    preserveSessionOnSubmission(routeThreadRef);
     sendInFlightRef.current = true;
     beginLocalDispatch({ preparingWorktree: false });
     setThreadError(threadIdForSend, null);
@@ -9895,6 +9900,7 @@ export default function ChatView(props: ChatViewProps) {
     const nextThreadTitle = truncate(buildPlanImplementationThreadTitle(planMarkdown));
     const nextThreadModelSelection: ModelSelection = ctxSelectedModelSelection;
 
+    preserveSessionOnSubmission(routeThreadRef);
     sendInFlightRef.current = true;
     beginLocalDispatch({ preparingWorktree: false });
     const finish = () => {

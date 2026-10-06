@@ -40,6 +40,7 @@ import {
   archiveThread,
   cancelQueuedRun,
   createProject,
+  deleteThread,
   dismissThreadUserInput,
   editQueuedRun,
   forkThreadFromRun,
@@ -831,6 +832,31 @@ describe("V2 environment commands", () => {
         expect(projectionRequests).toEqual([v2ThreadId]);
       }
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
+  );
+
+  it.effect(
+    "preserves the guarded deletion flag while leaving explicit deletion unconditional",
+    () =>
+      Effect.gen(function* () {
+        const dispatched: OrchestrationV2Command[] = [];
+        const supervisor = yield* makeSupervisor({ commands: dispatched, projects: [] });
+        for (const onlyIfUnused of [undefined, true]) {
+          yield* deleteThread({
+            commandId: CommandId.make(`delete-${onlyIfUnused}`),
+            threadId: ThreadId.make("thread-1"),
+            ...(onlyIfUnused === undefined ? {} : { onlyIfUnused }),
+          }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
+        }
+        expect(dispatched).toEqual([
+          { type: "thread.delete", commandId: "delete-undefined", threadId: "thread-1" },
+          {
+            type: "thread.delete",
+            commandId: "delete-true",
+            threadId: "thread-1",
+            onlyIfUnused: true,
+          },
+        ]);
+      }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
   );
 
   it.effect("dispatches settle and unsettle commands without timestamps", () =>
