@@ -11,10 +11,17 @@ import { randomUUID } from "../lib/utils";
 import { workspaceView } from "./state";
 import { ownershipPreview, ownershipSubmit, ownershipGet, ownershipList } from "./ownershipState";
 import styles from "./ownership.module.css";
-export function OwnershipTransitionPanel() {
+export function OwnershipTransitionPanel({
+  environmentId,
+  embedded = false,
+}: {
+  environmentId?: EnvironmentId | null;
+  embedded?: boolean;
+} = {}) {
   const { environments } = useEnvironments();
   const primary = usePrimaryEnvironmentId();
-  const [environmentID, setEnvironmentID] = useState<EnvironmentId | null>(primary);
+  const [chosenEnvironmentID, setEnvironmentID] = useState<EnvironmentId | null>(primary);
+  const environmentID = environmentId === undefined ? chosenEnvironmentID : environmentId;
   const [threadID, setThreadID] = useState<ThreadId | null>(null);
   const [threadLimit, setThreadLimit] = useState(20);
   const selected = environments.find((item) => item.environmentId === environmentID);
@@ -23,38 +30,44 @@ export function OwnershipTransitionPanel() {
       item.environmentId === environmentID && item.worktreePath !== null && item.deletedAt === null,
   );
   return (
-    <section className={styles.panel} id="workspace-ownership" aria-label="Workspace ownership">
-      <h3>Choose who manages a worktree</h3>
+    <section
+      className={`${styles.panel} ${embedded ? styles.embedded : ""}`}
+      id={embedded ? undefined : "workspace-ownership"}
+      aria-label="Workspace ownership"
+    >
+      {embedded ? null : <h3>Choose who manages a worktree</h3>}
       <p>
         Adopt an existing worktree into Cinderdeck, or release a lane while keeping its files and
         conversations. Stop all work first. Switching computers or disconnecting does not change
         ownership.
       </p>
       <div className={styles.fields}>
-        <label>
-          Execution computer
-          <select
-            value={environmentID ?? ""}
-            onChange={(event) => {
-              setEnvironmentID(
-                environments.find((item) => item.environmentId === event.target.value)
-                  ?.environmentId ?? null,
-              );
-              setThreadID(null);
-              setThreadLimit(20);
-            }}
-          >
-            <option value="">Choose a computer</option>
-            {environmentID && !selected ? (
-              <option value={environmentID}>Unavailable computer</option>
-            ) : null}
-            {environments.map((item) => (
-              <option key={item.environmentId} value={item.environmentId}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {environmentId === undefined ? (
+          <label>
+            Execution computer
+            <select
+              value={environmentID ?? ""}
+              onChange={(event) => {
+                setEnvironmentID(
+                  environments.find((item) => item.environmentId === event.target.value)
+                    ?.environmentId ?? null,
+                );
+                setThreadID(null);
+                setThreadLimit(20);
+              }}
+            >
+              <option value="">Choose a computer</option>
+              {environmentID && !selected ? (
+                <option value={environmentID}>Unavailable computer</option>
+              ) : null}
+              {environments.map((item) => (
+                <option key={item.environmentId} value={item.environmentId}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <label>
           Conversation in the worktree
           <select

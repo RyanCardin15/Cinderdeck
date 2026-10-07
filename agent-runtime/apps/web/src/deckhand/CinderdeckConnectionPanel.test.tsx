@@ -171,6 +171,37 @@ it("keeps an unavailable requested execution computer explicit without querying 
   expect(mocks.recent).not.toHaveBeenCalled();
 });
 
+it("uses the settings computer without duplicating workspace selection, and follows a computer change", async () => {
+  mocks.environments.push({
+    environmentId: "remote",
+    label: "Remote Mac",
+    connection: { phase: "connected" },
+  });
+  await render({ initialEnvironmentId: environmentId, variant: "settings" });
+  expect(container.querySelector("select")).toBeNull();
+  expect(container.querySelector('input[type="radio"]')).toBeNull();
+  expect(container.textContent).toContain("Manage workspaces");
+  expect(mocks.subscription).toHaveBeenLastCalledWith({
+    environmentId,
+    input: { offset: 0, limit: 20 },
+  });
+  await render({ initialEnvironmentId: EnvironmentId.make("remote"), variant: "settings" });
+  expect(mocks.subscription).toHaveBeenLastCalledWith({
+    environmentId: "remote",
+    input: { offset: 0, limit: 20 },
+  });
+  expect(container.textContent).toContain("Remote Mac");
+});
+
+it("does not fall back to a different computer in settings and reports refresh failures", async () => {
+  await render({ initialEnvironmentId: null, variant: "settings" });
+  expect(mocks.subscription).not.toHaveBeenCalled();
+  await render({ initialEnvironmentId: environmentId, variant: "settings" });
+  mocks.refresh.mockResolvedValue({ _tag: "Failure" });
+  await act(async () => button("Refresh").click());
+  expect(container.textContent).toContain("connection check could not complete");
+});
+
 it("refuses stale snapshots and invalidates a selection after installation identity changes", async () => {
   const onChoose = vi.fn();
   await render({ onChoose: (selection) => onChoose(selection) });

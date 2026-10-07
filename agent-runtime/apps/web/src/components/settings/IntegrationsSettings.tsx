@@ -1,6 +1,4 @@
-import { OwnershipTransitionPanel } from "../../deckhand/OwnershipTransitionPanel";
-import { CinderdeckConnectionPanel } from "../../deckhand/CinderdeckConnectionPanel";
-import { AgentAccessSettings } from "../../deckhand/AgentAccessSettings";
+import { CinderdeckIntegrationSettings } from "../../deckhand/CinderdeckIntegrationSettings";
 import { DeviceHostUpdates } from "../device/DeviceHostUpdates";
 import { DeviceToolVersions } from "../device/DeviceToolVersions";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
@@ -1450,16 +1448,9 @@ export function IntegrationsSettingsPanel() {
     <SettingsPageContainer>
       {/* Server-authoritative agent access is scoped by the header selection;
           the preview defaults below are device-local and ignore it. */}
-      <SettingsSection id="cinderdeck" title="Cinderdeck">
-        <CinderdeckConnectionPanel
-          key={environment?.environmentId ?? "choose-computer"}
-          initialEnvironmentId={environment?.environmentId}
-        />
-      </SettingsSection>
-      <AgentAccessSettings
+      <CinderdeckIntegrationSettings
         environmentId={environment?.environmentId ?? primaryEnvironment?.environmentId ?? null}
       />
-      <OwnershipTransitionPanel />
       <ProjectDefaultsSettings category="integrations" />
       <SettingsSection id="browser" title="Browser">
         {previewDefaultsDisabled ? (
