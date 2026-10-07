@@ -156,6 +156,7 @@ export function isRetryableReason(reason: BrowserImportFailureReason): boolean {
     case "readFailed":
     case "sessionUnavailable":
     case "profileNotSaved":
+    case "sourceNotSaved":
       return true;
     default:
       return false;

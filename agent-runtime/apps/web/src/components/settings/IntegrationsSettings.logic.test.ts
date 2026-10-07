@@ -1,5 +1,14 @@
-import { describe, expect, it, vi } from "vite-plus/test";
-import type { EnvironmentId } from "@cinderdeck/contracts";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { DEFAULT_CLIENT_SETTINGS, type EnvironmentId } from "@cinderdeck/contracts";
+
+const persistence = vi.hoisted(() => ({ setClientSettings: vi.fn() }));
+vi.mock("~/localApi", () => ({ ensureLocalApi: () => ({ persistence }) }));
+import { __setClientSettingsForTests } from "~/hooks/useSettings";
+
+beforeEach(() => {
+  __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
+  persistence.setClientSettings.mockReset().mockResolvedValue(undefined);
+});
 
 import {
   browserProfileRemovalAvailable,

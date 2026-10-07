@@ -13,7 +13,6 @@ import { DeviceHostsSettings } from "./DeviceHostsSettings";
  * @module IntegrationsSettings
  */
 import {
-  BrowserImportFailureReason,
   BROWSER_PROFILE_MAX_COUNT,
   type BrowserLinkTarget,
   type BrowserProfile,
@@ -41,9 +40,16 @@ import {
 } from "@cinderdeck/contracts";
 import { PREVIEW_VIEWPORT_PRESETS } from "@cinderdeck/shared/previewViewport";
 import { MoreVertical, Plus as PlusIcon } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { Fragment, useCallback, useRef, useState } from "react";
 
 import { ScreenRotationIcon } from "~/browser/ScreenRotationIcon";
+import {
+  disconnectBrowserCookieSource,
+  refreshBrowserCookiesWithFeedback,
+  withBrowserCookieRefreshPaused,
+} from "~/browser/browserCookieRefresh";
+export { importFailureReason } from "~/browser/browserCookieRefresh";
+import { importBrowserProfileCookies } from "~/browser/browserProfileImport";
 import { AnimatedHeight } from "~/components/AnimatedHeight";
 import { resolveEnvironmentOptionLabel } from "~/components/BranchToolbar.logic";
 import { previewBridge } from "~/components/preview/previewBridge";
@@ -99,7 +105,6 @@ import { Switch } from "../ui/switch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   getClientSettings,
-  persistClientSettingsUpdate,
   useClientSettings,
   useClientSettingsHydrated,
   useUpdatePrimarySettings,
@@ -142,6 +147,16 @@ export async function clearBrowserProfileData(
   );
 }
 
+const clearBrowserProfileDataAndDisconnect = (
+  bridge: BrowserProfileDataBridge | null,
+  environmentIds: ReadonlyArray<EnvironmentId>,
+  profileId: string,
+) =>
+  withBrowserCookieRefreshPaused(environmentIds, profileId, async () => {
+    await disconnectBrowserCookieSource(profileId);
+    await clearBrowserProfileData(bridge, environmentIds, profileId);
+  });
+
 export function browserProfileRemovalAvailable(
   bridgeAvailable: boolean,
   environmentsReady: boolean,
@@ -172,22 +187,6 @@ const zoomLabel = (zoomFactor: number) => `${Math.round(zoomFactor * 100)}%`;
  * it. Anything unrecognised reads as a plain read failure rather than leaking
  * the raw message into a toast.
  */
-/** Thrown from the post-import settings updater when the cap was hit meanwhile. */
-class ProfileLimitReachedError extends Error {
-  constructor() {
-    super("Browser profile limit reached.");
-    this.name = "ProfileLimitReachedError";
-  }
-}
-
-export const importFailureReason = (cause: unknown): BrowserImportFailureReason => {
-  const message = String((cause as { message?: unknown } | undefined)?.message ?? "");
-  return (
-    BrowserImportFailureReason.literals.find((reason) => message.includes(`failed: ${reason}.`)) ??
-    "readFailed"
-  );
-};
-
 const viewportSelectValue = (viewport: PreviewViewportSetting): string => {
   if (viewport._tag === "fill") return FILL_VALUE;
   if (
@@ -907,6 +906,7 @@ function BrowserAutoShowFloatingPreviewSetting({ disabled }: { readonly disabled
  */
 function BrowserProfilesSetting({ disabled }: { readonly disabled: boolean }) {
   const userProfiles = useClientSettings((settings) => settings.browserProfiles);
+  const cookieSources = useClientSettings((settings) => settings.browserCookieSources);
   const defaultProfileId = useClientSettings((settings) => settings.browserDefaultProfileId);
   const settingsHydrated = useClientSettingsHydrated();
   const updateSettings = useUpdatePrimarySettings();
@@ -976,7 +976,7 @@ function BrowserProfilesSetting({ disabled }: { readonly disabled: boolean }) {
       });
       return;
     }
-    void clearBrowserProfileData(
+    void clearBrowserProfileDataAndDisconnect(
       previewBridge,
       environments.map((environment) => environment.environmentId),
       id,
@@ -1000,7 +1000,7 @@ function BrowserProfilesSetting({ disabled }: { readonly disabled: boolean }) {
     // Drop the partition's data too, otherwise a removed profile's cookies
     // stay on disk with nothing in the UI pointing at them.
     try {
-      await clearBrowserProfileData(
+      await clearBrowserProfileDataAndDisconnect(
         previewBridge,
         environmentsReady ? environments.map((environment) => environment.environmentId) : [],
         id,
@@ -1051,98 +1051,13 @@ function BrowserProfilesSetting({ disabled }: { readonly disabled: boolean }) {
     environmentId: EnvironmentId,
     input: { readonly sourceProfileDirectory: string; readonly target: WizardTarget },
   ): Promise<ImportOutcome> => {
-    if (!previewBridge) return { kind: "blocked", reason: "sessionUnavailable" };
-    if (!settingsHydrated) return { kind: "blocked", reason: "sessionUnavailable" };
-    if (
-      input.target.kind === "existing" &&
-      !resolveBrowserProfiles(getClientSettings().browserProfiles).some(
-        (profile) => profile.id === input.target.profileId,
-      )
-    ) {
-      return { kind: "blocked", reason: "readFailed" };
-    }
+    if (!previewBridge || !settingsHydrated)
+      return { kind: "blocked", reason: "sessionUnavailable" };
     if (importInFlightRef.current) return { kind: "blocked", reason: "readFailed" };
     importInFlightRef.current = true;
     setImportInFlight(true);
     try {
-      const result = await previewBridge.importBrowserCookies({
-        environmentId,
-        sourceId: source.id,
-        sourceProfileDirectory: input.sourceProfileDirectory,
-        targetProfileId: input.target.profileId,
-      });
-      if (
-        input.target.kind === "existing" &&
-        !resolveBrowserProfiles(getClientSettings().browserProfiles).some(
-          (profile) => profile.id === input.target.profileId,
-        )
-      ) {
-        return { kind: "blocked", reason: "readFailed" };
-      }
-      let targetName: string;
-      if (input.target.kind === "new") {
-        // Registered only when something actually came over: an import that
-        // found no cookies should not leave a new, empty profile behind.
-        if (result.imported > 0) {
-          try {
-            const persisted = await persistClientSettingsUpdate((current) => {
-              const existing = current.browserProfiles.find(
-                (profile) => profile.id === input.target.profileId,
-              );
-              if (existing) return current;
-              // The wizard refuses a new target at the cap, but the cap can be
-              // reached while the import runs; the updater sees the newest
-              // settings, so this is the check that holds.
-              if (current.browserProfiles.length >= BROWSER_PROFILE_MAX_COUNT) {
-                throw new ProfileLimitReachedError();
-              }
-              const taken = new Set(
-                resolveBrowserProfiles(current.browserProfiles).map((profile) => profile.name),
-              );
-              let name = source.name;
-              for (let index = 2; taken.has(name); index += 1) name = `${source.name} ${index}`;
-              return {
-                ...current,
-                browserProfiles: [
-                  ...current.browserProfiles,
-                  { id: input.target.profileId, name, kind: "persistent" as const },
-                ],
-              };
-            });
-            targetName =
-              persisted.browserProfiles.find((profile) => profile.id === input.target.profileId)
-                ?.name ?? source.name;
-          } catch (cause) {
-            // This target id belongs only to the attempted new profile. Clear
-            // its partition so a failed registration cannot strand imported
-            // cookies behind a profile that disappears on restart.
-            await clearBrowserProfileData(
-              previewBridge,
-              [environmentId],
-              input.target.profileId,
-            ).catch(() => undefined);
-            // Not a read failure: the cookies came over and were cleared again
-            // because the profile could not be kept. Name that, in the same
-            // token form `importFailureReason` recovers from a bridge error.
-            const reason =
-              cause instanceof ProfileLimitReachedError ? "profileLimitReached" : "profileNotSaved";
-            throw new Error(`Importing cookies from ${source.id} failed: ${reason}.`, { cause });
-          }
-        } else {
-          targetName = source.name;
-        }
-      } else {
-        targetName = input.target.name;
-      }
-      return {
-        kind: "imported",
-        imported: result.imported,
-        skipped: result.skipped,
-        skippedDomains: result.skippedDomains,
-        targetName,
-      };
-    } catch (cause) {
-      return { kind: "blocked", reason: importFailureReason(cause) };
+      return await importBrowserProfileCookies(previewBridge, source, environmentId, input);
     } finally {
       importInFlightRef.current = false;
       setImportInFlight(false);
@@ -1169,7 +1084,7 @@ function BrowserProfilesSetting({ disabled }: { readonly disabled: boolean }) {
   return (
     <SettingsRow
       {...searchableSetting("browser-profiles")}
-      description="Profiles separate cookies and logins. Incognito data is cleared when the app closes."
+      description="Profiles separate cookies and logins. Imported profiles refresh from their source when the Browser panel opens. Incognito data is cleared when the app closes."
       control={
         <Menu onOpenChange={(open) => open && loadSources()}>
           <MenuTrigger
@@ -1245,6 +1160,9 @@ function BrowserProfilesSetting({ disabled }: { readonly disabled: boolean }) {
         {listedProfiles.map((profile, index) => {
           const builtIn = isBuiltInBrowserProfileId(profile.id);
           const isDefault = profile.id === resolvedDefaultId;
+          const linkedSources = cookieSources.filter(
+            (source) => source.targetProfileId === profile.id,
+          );
           return (
             <div
               key={profile.id}
@@ -1300,6 +1218,55 @@ function BrowserProfilesSetting({ disabled }: { readonly disabled: boolean }) {
                   <MoreVertical />
                 </MenuTrigger>
                 <MenuPopup align="end">
+                  {linkedSources.map((linkedSource) => (
+                    <Fragment key={linkedSource.environmentId}>
+                      <MenuGroup>
+                        <MenuGroupLabel className="max-w-64">
+                          <span className="block truncate">
+                            {linkedSource.sourceName} · {linkedSource.sourceProfileName}
+                          </span>
+                          <span className="block truncate">
+                            {environments.find(
+                              (environment) =>
+                                environment.environmentId === linkedSource.environmentId,
+                            )?.label ?? linkedSource.environmentId}
+                          </span>
+                        </MenuGroupLabel>
+                        <MenuItem
+                          onClick={() =>
+                            void refreshBrowserCookiesWithFeedback(
+                              linkedSource.environmentId as EnvironmentId,
+                              profile.id,
+                              true,
+                            )
+                          }
+                        >
+                          Refresh cookies now
+                        </MenuItem>
+                        <MenuItem
+                          onClick={() =>
+                            void withBrowserCookieRefreshPaused(
+                              [linkedSource.environmentId],
+                              profile.id,
+                              () =>
+                                disconnectBrowserCookieSource(
+                                  profile.id,
+                                  linkedSource.environmentId,
+                                ),
+                            ).catch(() =>
+                              toastManager.add({
+                                type: "error",
+                                title: "Could not disconnect cookie source",
+                              }),
+                            )
+                          }
+                        >
+                          Stop refreshing from source
+                        </MenuItem>
+                      </MenuGroup>
+                      <MenuSeparator />
+                    </Fragment>
+                  ))}
                   <MenuItem
                     disabled={!settingsHydrated || isDefault}
                     onClick={() => {

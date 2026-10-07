@@ -21,6 +21,13 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 
 import { previewBridge } from "./previewBridge";
+import { useClientSettings } from "~/hooks/useSettings";
+import { toastManager } from "~/components/ui/toast";
+import {
+  disconnectBrowserCookieSource,
+  refreshBrowserCookiesWithFeedback,
+  withBrowserCookieRefreshPaused,
+} from "~/browser/browserCookieRefresh";
 
 const COLOR_SCHEME_OPTIONS: ReadonlyArray<{
   value: DesktopPreviewColorScheme;
@@ -83,6 +90,11 @@ export function PreviewMoreMenu({
   profileId,
   profileName,
 }: Props) {
+  const cookieSource = useClientSettings((settings) =>
+    settings.browserCookieSources.find(
+      (source) => source.environmentId === environmentId && source.targetProfileId === profileId,
+    ),
+  );
   if (!previewBridge) return null;
   const bridge = previewBridge;
   const tabDisabled = !tabId || !hasWebContents;
@@ -211,9 +223,50 @@ export function PreviewMoreMenu({
               <span className="block truncate">Profile: {profileName}</span>
             </MenuGroupLabel>
           ) : null}
+          {cookieSource ? (
+            <>
+              <MenuGroupLabel className="max-w-64">
+                <span className="block truncate">
+                  Source: {cookieSource.sourceName} · {cookieSource.sourceProfileName}
+                </span>
+              </MenuGroupLabel>
+              <MenuItem
+                onClick={() =>
+                  void refreshBrowserCookiesWithFeedback(environmentId, profileId, true).then(
+                    (result) => {
+                      if (result && result.imported > 0 && tabId && hasWebContents) {
+                        void bridge.refresh(tabId).catch(() => undefined);
+                      }
+                    },
+                  )
+                }
+              >
+                Refresh cookies now
+              </MenuItem>
+              <MenuItem
+                onClick={() =>
+                  void withBrowserCookieRefreshPaused([environmentId], profileId, () =>
+                    disconnectBrowserCookieSource(profileId, environmentId),
+                  ).catch(() =>
+                    toastManager.add({
+                      type: "error",
+                      title: "Could not disconnect cookie source",
+                    }),
+                  )
+                }
+              >
+                Stop refreshing from source
+              </MenuItem>
+            </>
+          ) : null}
           <MenuItem
             onClick={() =>
-              void bridge.clearCookies(environmentId, profileId).catch(() => undefined)
+              void withBrowserCookieRefreshPaused([environmentId], profileId, async () => {
+                await disconnectBrowserCookieSource(profileId, environmentId);
+                await bridge.clearCookies(environmentId, profileId);
+              }).catch(() =>
+                toastManager.add({ type: "error", title: "Could not clear browser cookies" }),
+              )
             }
           >
             Clear cookies

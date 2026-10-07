@@ -17,6 +17,9 @@ const mocks = vi.hoisted(() => ({
   closeTab: vi.fn<DesktopPreviewBridge["closeTab"]>(),
   registerWebview: vi.fn<DesktopPreviewBridge["registerWebview"]>(),
   getPreviewConfig: vi.fn<DesktopPreviewBridge["getPreviewConfig"]>(),
+  importBrowserCookies: vi.fn<DesktopPreviewBridge["importBrowserCookies"]>(),
+  refresh: vi.fn<DesktopPreviewBridge["refresh"]>(),
+  addToast: vi.fn(),
   activeRecordings: new Set<string>(),
 }));
 
@@ -30,8 +33,12 @@ vi.mock("~/components/preview/previewBridge", () => ({
     closeTab: mocks.closeTab,
     registerWebview: mocks.registerWebview,
     getPreviewConfig: mocks.getPreviewConfig,
+    importBrowserCookies: mocks.importBrowserCookies,
+    refresh: mocks.refresh,
   },
 }));
+
+vi.mock("~/components/ui/toast", () => ({ toastManager: { add: mocks.addToast } }));
 
 vi.mock("~/components/preview/usePreviewBridge", () => ({
   usePreviewBridge: () => undefined,
@@ -75,6 +82,11 @@ beforeEach(() => {
     webPreferences: "contextIsolation=yes",
     preloadUrl: null,
   });
+  mocks.importBrowserCookies
+    .mockReset()
+    .mockResolvedValue({ imported: 1, skipped: 0, skippedDomains: [] });
+  mocks.refresh.mockReset().mockResolvedValue(undefined);
+  mocks.addToast.mockReset();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("window", globalThis);
   vi.stubGlobal("navigator", { platform: "Linux" });
@@ -99,6 +111,125 @@ afterEach(async () => {
 });
 
 describe("HostedBrowserWebview settings hydration", () => {
+  it("refreshes before the first request and refreshes a retained tab when reopened", async () => {
+    const refresh = deferred<Awaited<ReturnType<DesktopPreviewBridge["importBrowserCookies"]>>>();
+    const threadRef = {
+      environmentId: EnvironmentId.make("cookie-source"),
+      threadId: ThreadId.make("cookie-thread"),
+    };
+    mocks.getClientSettings.mockResolvedValue({
+      ...DEFAULT_CLIENT_SETTINGS,
+      browserProfiles: [{ id: "work", name: "Work", kind: "persistent" }],
+      browserCookieSources: [
+        {
+          environmentId: threadRef.environmentId,
+          targetProfileId: "work",
+          sourceId: "chrome",
+          sourceName: "Chrome",
+          sourceProfileDirectory: "Profile 2",
+          sourceProfileName: "Work account",
+        },
+      ],
+    });
+    mocks.importBrowserCookies.mockReturnValueOnce(refresh.promise);
+    const runtimeTabId = "cookie-tab";
+    const owner = Symbol("panel");
+    const rect = { x: 0, y: 0, width: 800, height: 600 };
+    const store = useBrowserSurfaceStore.getState();
+    store.claim(runtimeTabId, owner, false);
+    store.present(runtimeTabId, owner, rect, true, 0, 30);
+    const guest = vi.fn(() => Object.assign(new EventTarget(), { getWebContentsId: () => 42 }));
+    await act(async () => {
+      renderer = create(
+        <HostedBrowserWebview
+          threadRef={threadRef}
+          tabId="server-cookie-tab"
+          runtimeTabId={runtimeTabId}
+          initialUrl="https://example.com"
+          viewport={FILL_PREVIEW_VIEWPORT}
+          pictureInPicture={false}
+          profileId="work"
+          zoomFactor={1}
+        />,
+        {
+          createNodeMock: (element) =>
+            element.type === "webview" ? guest() : { scrollTo: () => undefined },
+        },
+      );
+      await ensureClientSettingsHydrated();
+    });
+    expect(mocks.importBrowserCookies).toHaveBeenCalledOnce();
+    expect(guest).not.toHaveBeenCalled();
+    await act(async () => {
+      refresh.resolve({ imported: 1, skipped: 0, skippedDomains: [] });
+      await refresh.promise;
+    });
+    expect(guest).toHaveBeenCalledOnce();
+    expect(mocks.importBrowserCookies).toHaveBeenCalledOnce();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    await act(() => store.present(runtimeTabId, owner, rect, false, 0, 30));
+    await act(async () => store.present(runtimeTabId, owner, rect, true, 0, 30));
+    expect(mocks.importBrowserCookies).toHaveBeenCalledTimes(2);
+    expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith(runtimeTabId);
+    // Size changes while visible are not another panel opening.
+    await act(() => store.present(runtimeTabId, owner, { ...rect, width: 900 }, true, 0, 30));
+    expect(mocks.importBrowserCookies).toHaveBeenCalledTimes(2);
+    // A failed later refresh keeps the existing guest and reports the reason.
+    mocks.importBrowserCookies.mockRejectedValueOnce(
+      new Error("Importing cookies from chrome failed: needsKeychainApproval."),
+    );
+    await act(() => store.present(runtimeTabId, owner, rect, false, 0, 30));
+    await act(async () => store.present(runtimeTabId, owner, rect, true, 0, 30));
+    expect(guest).toHaveBeenCalledOnce();
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+    expect(mocks.addToast).toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
+  });
+
+  it("loads the existing cookies when the initial refresh fails", async () => {
+    const threadRef = {
+      environmentId: EnvironmentId.make("cookie-error"),
+      threadId: ThreadId.make("cookie-thread"),
+    };
+    mocks.getClientSettings.mockResolvedValue({
+      ...DEFAULT_CLIENT_SETTINGS,
+      browserCookieSources: [
+        {
+          environmentId: threadRef.environmentId,
+          targetProfileId: "default",
+          sourceId: "chrome",
+          sourceName: "Chrome",
+          sourceProfileDirectory: "Default",
+          sourceProfileName: "Personal",
+        },
+      ],
+    });
+    mocks.importBrowserCookies.mockRejectedValueOnce(
+      new Error("Importing cookies from chrome failed: readFailed."),
+    );
+    await act(async () => {
+      renderer = create(
+        <HostedBrowserWebview
+          threadRef={threadRef}
+          tabId="error-tab"
+          runtimeTabId="runtime-error-tab"
+          initialUrl="https://example.com"
+          viewport={FILL_PREVIEW_VIEWPORT}
+          pictureInPicture={false}
+          profileId={undefined}
+          zoomFactor={1}
+        />,
+      );
+      await ensureClientSettingsHydrated();
+    });
+    expect(renderer!.root.findByType("webview").props.src).toBe("https://example.com");
+    expect(mocks.importBrowserCookies).toHaveBeenCalledOnce();
+    expect(mocks.addToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: expect.stringContaining("Existing cookies were kept"),
+      }),
+    );
+  });
+
   it("starts a retained background tab only after a settings read succeeds on retry", async () => {
     const firstRead = deferred<ClientSettings | null>();
     const retryRead = deferred<ClientSettings | null>();

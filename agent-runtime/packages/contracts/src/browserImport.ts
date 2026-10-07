@@ -76,6 +76,8 @@ export const BrowserImportFailureReason = Schema.Literals([
    * import ran, so the new profile was not saved and its partition was cleared.
    */
   "profileLimitReached",
+  /** Cookies were imported, but their refresh source could not be saved. */
+  "sourceNotSaved",
   /** Anything else: a corrupt database, a failed decrypt, a vanished file. */
   "readFailed",
 ]);
@@ -104,6 +106,17 @@ export const BrowserImportSource = Schema.Struct({
   unavailable: Schema.optional(BrowserImportUnavailableReason),
 });
 export type BrowserImportSource = typeof BrowserImportSource.Type;
+
+/** Local source link; cookie values and encryption keys stay out of settings. */
+export const BrowserCookieSource = Schema.Struct({
+  environmentId: TrimmedNonEmptyString,
+  targetProfileId: BrowserProfileId,
+  sourceId: BrowserImportSourceId,
+  sourceName: TrimmedNonEmptyString,
+  sourceProfileDirectory: TrimmedNonEmptyString,
+  sourceProfileName: TrimmedNonEmptyString,
+});
+export type BrowserCookieSource = typeof BrowserCookieSource.Type;
 
 export const BrowserImportInput = Schema.Struct({
   sourceId: BrowserImportSourceId,
@@ -161,5 +174,7 @@ export const BROWSER_IMPORT_FAILURE_COPY: Readonly<Record<BrowserImportFailureRe
   profileNotSaved: "The cookies were imported, but the new profile couldn't be saved. Try again.",
   profileLimitReached:
     "You've reached the profile limit. Delete a profile or import into an existing one.",
+  sourceNotSaved:
+    "The cookies were imported, but automatic refresh couldn't be saved. Import again to reconnect the source.",
   readFailed: "The browser's cookie database could not be read.",
 };

@@ -26,6 +26,7 @@ import { ModelSelection } from "./modelSelection.ts";
 import { ProjectScript } from "./project.ts";
 import { DEFAULT_RUNTIME_MODE, RuntimeMode } from "./providerPolicy.ts";
 import { BrowserProfile, BrowserProfileId, DEFAULT_BROWSER_PROFILE_ID } from "./browserProfile.ts";
+import { BrowserCookieSource } from "./browserImport.ts";
 import {
   DEFAULT_PREVIEW_APPEARANCE,
   DEFAULT_PREVIEW_ZOOM_FACTOR,
@@ -353,6 +354,9 @@ export const ClientSettingsSchema = Schema.Struct({
    * cannot be renamed away or deleted.
    */
   browserProfiles: Schema.Array(BrowserProfile).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  browserCookieSources: Schema.Array(BrowserCookieSource).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
   externalAppProfiles: ExternalAppProfiles.pipe(
@@ -1736,6 +1740,7 @@ export const ClientSettingsPatch = Schema.Struct({
   browserLinkTarget: Schema.optionalKey(BrowserLinkTarget),
   browserAutoShowFloatingPreview: Schema.optionalKey(Schema.Boolean),
   browserProfiles: Schema.optionalKey(Schema.Array(BrowserProfile)),
+  browserCookieSources: Schema.optionalKey(Schema.Array(BrowserCookieSource)),
   externalAppProfiles: Schema.optionalKey(ExternalAppProfiles),
   browserDefaultProfileId: Schema.optionalKey(BrowserProfileId),
   confirmQuit: Schema.optionalKey(QuitConfirmationMode),

@@ -32,7 +32,6 @@ import {
   BROWSER_IMPORT_SOURCES,
   resolveCookieDatabase,
   isSourceInstalled,
-  isSourceRunning,
   listSourceProfiles,
   sourcePathContext,
   type BrowserImportPathContext,
@@ -92,7 +91,8 @@ const unavailableReason = Effect.fn("BrowserImport.unavailableReason")(function*
 > {
   if (!definition.platforms.includes(context.platform)) return "unsupportedPlatform";
   if (!(yield* isSourceInstalled(definition, context))) return "notInstalled";
-  if (yield* isSourceRunning(definition, context)) return "browserRunning";
+  // SQLite readers take a read-only, transactional snapshot, including
+  // committed WAL writes. A live browser's profile lock need not block them.
   // Safari's jar is found by `stat`, which TCC permits without Full Disk
   // Access — so a Safari that lists as ready may still refuse the read. Probe
   // the grant here, so the wizard can open on the permission step and a

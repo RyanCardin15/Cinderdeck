@@ -20,6 +20,31 @@ const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
+describe("browser cookie sources", () => {
+  it("keeps legacy imports unlinked and round-trips exact source links locally", () => {
+    expect(decodeClientSettings({}).browserCookieSources).toEqual([]);
+    const input = {
+      browserCookieSources: [
+        {
+          environmentId: "local",
+          targetProfileId: "work",
+          sourceId: "chrome",
+          sourceName: "Chrome",
+          sourceProfileDirectory: "Profile 2",
+          sourceProfileName: "Work account",
+        },
+      ],
+    };
+    expect(encodeClientSettings(decodeClientSettings(input))).toMatchObject(input);
+    expect(decodeClientSettingsPatch(input)).toEqual(input);
+    expect(() =>
+      decodeClientSettingsPatch({
+        browserCookieSources: [{ ...input.browserCookieSources[0], sourceId: "unknown-browser" }],
+      }),
+    ).toThrow();
+  });
+});
+
 describe("ServerSettings response streaming", () => {
   it("defaults to paragraph buffering", () => {
     expect(decodeServerSettings({}).responseStreamingMode).toBe("paragraph");

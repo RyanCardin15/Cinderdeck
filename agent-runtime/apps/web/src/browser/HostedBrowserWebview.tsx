@@ -1,6 +1,10 @@
 "use client";
 
-import type { PreviewViewportSetting, ScopedThreadRef } from "@cinderdeck/contracts";
+import {
+  DEFAULT_BROWSER_PROFILE_ID,
+  type PreviewViewportSetting,
+  type ScopedThreadRef,
+} from "@cinderdeck/contracts";
 import { useShallow } from "zustand/react/shallow";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -22,6 +26,7 @@ import { acquireDesktopTab, type AcquiredDesktopTab } from "./desktopTabLifetime
 import { resolveHostedBrowserWebviewWrapperStyle } from "./hostedBrowserWebviewStyle";
 import { usePreviewWebviewConfig } from "./previewWebviewConfigState";
 import { useBrowserViewportResize } from "./useBrowserViewportResize";
+import { refreshBrowserCookiesWithFeedback } from "./browserCookieRefresh";
 import {
   INITIAL_WEBVIEW_CRASH_RECOVERY_STATE,
   planWebviewCrashRecovery,
@@ -95,6 +100,56 @@ export function HostedBrowserWebview(props: {
   const recordingActive = useActiveBrowserRecordingTabIds().has(runtimeTabId);
   usePreviewBridge({ threadRef, tabId, runtimeTabId });
 
+  const cookieScope = JSON.stringify([
+    threadRef.environmentId,
+    profileId ?? DEFAULT_BROWSER_PROFILE_ID,
+  ]);
+  const [preparedCookieScope, setPreparedCookieScope] = useState<string | null>(null);
+  const preparedCookieScopeRef = useRef<string | null>(null);
+  const cookiesReady = preparedCookieScope === cookieScope;
+
+  // Hydrate the saved source and refresh before the first page request, including
+  // restored/agent-created tabs. A failed refresh still releases the guest.
+  useEffect(() => {
+    if (!clientSettingsHydrated) return;
+    let disposed = false;
+    void refreshBrowserCookiesWithFeedback(threadRef.environmentId, profileId).then(() => {
+      if (disposed) return;
+      preparedCookieScopeRef.current = cookieScope;
+      setPreparedCookieScope(cookieScope);
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [clientSettingsHydrated, cookieScope, threadRef.environmentId, profileId]);
+
+  // Guests remain mounted when their panel closes. Refresh that retained tab
+  // when it becomes visible again, then reload so the page uses the new login.
+  useEffect(() => {
+    if (
+      !clientSettingsHydrated ||
+      !presentation.visible ||
+      preparedCookieScopeRef.current !== cookieScope
+    )
+      return;
+    let disposed = false;
+    void refreshBrowserCookiesWithFeedback(threadRef.environmentId, profileId).then((result) => {
+      if (!disposed && result && result.imported > 0 && webviewRef.current) {
+        void previewBridge?.refresh(runtimeTabId).catch(() => undefined);
+      }
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [
+    clientSettingsHydrated,
+    cookieScope,
+    threadRef.environmentId,
+    profileId,
+    presentation.visible,
+    runtimeTabId,
+  ]);
+
   useEffect(() => {
     if (!clientSettingsHydrated) return;
     crashRecoveryRef.current = INITIAL_WEBVIEW_CRASH_RECOVERY_STATE;
@@ -121,7 +176,7 @@ export function HostedBrowserWebview(props: {
   useEffect(() => {
     const webview = webviewRef.current;
     const bridge = previewBridge;
-    if (!clientSettingsHydrated || !webview || !config || !bridge) return;
+    if (!clientSettingsHydrated || !cookiesReady || !webview || !config || !bridge) return;
     let disposed = false;
     let recoveryTimeout: ReturnType<typeof setTimeout> | null = null;
     const register = () => {
@@ -177,7 +232,7 @@ export function HostedBrowserWebview(props: {
       webview.removeEventListener("render-process-gone", recoverGuest);
       webview.removeEventListener("focus", dismissHostPopups);
     };
-  }, [clientSettingsHydrated, config, initialSrc, runtimeTabId, webviewGeneration]);
+  }, [clientSettingsHydrated, cookiesReady, config, initialSrc, runtimeTabId, webviewGeneration]);
 
   const active = presentation.visible && presentation.rect !== null;
   const lastRect = presentation.rect;
@@ -262,7 +317,7 @@ export function HostedBrowserWebview(props: {
     wrapper.scrollTo({ left: 0, top: 0 });
   }, [runtimeTabId, viewport._tag, viewportHeight, viewportWidth]);
 
-  if (!clientSettingsHydrated || !config) return null;
+  if (!clientSettingsHydrated || !cookiesReady || !config) return null;
 
   const renderingActive = active || backgroundActivity || pictureInPicture || recordingActive;
   const wrapperStyle = resolveHostedBrowserWebviewWrapperStyle({

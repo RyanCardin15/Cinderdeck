@@ -713,6 +713,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Browser profiles",
     to: "/settings/integrations",
     targetId: "browser",
+    searchTerms: ["cookies import refresh source chrome login session disconnect"],
   },
   {
     id: "browser-default-profile",

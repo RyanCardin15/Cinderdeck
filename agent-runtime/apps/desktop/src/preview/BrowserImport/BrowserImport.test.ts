@@ -107,20 +107,19 @@ describe("BrowserImport.importCookies", () => {
   );
 
   it.effect.skipIf(!symlinksSupported)(
-    "refuses to import while the source browser holds its profile",
+    "allows a live POSIX source and still validates the requested profile",
     () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const { importer, root } = yield* withImporter();
-        // The lock Chromium leaves while it is running, dangling target and
-        // all. This must stop the import before it ever asks the keychain.
+        // A live profile lock does not block its read-only SQLite snapshot.
         yield* fileSystem.symlink("host-that-does-not-exist-1234", `${root}/SingletonLock`);
 
         const error = yield* importer
           .importCookies({
             input: {
               sourceId: "helium",
-              sourceProfileDirectory: "Default",
+              sourceProfileDirectory: "unreported-profile",
               targetProfileId: "default",
             },
             scope: "persist:t3code-preview-test",
@@ -128,7 +127,11 @@ describe("BrowserImport.importCookies", () => {
           })
           .pipe(Effect.flip);
 
-        assert.equal(error.reason, "browserRunning");
+        assert.equal(error.reason, "unknownSourceProfile");
+        const sources = yield* importer.listSources;
+        const source = sources.find((candidate) => candidate.id === "helium");
+        assert.isUndefined(source?.unavailable);
+        assert.equal(source?.profiles[0]?.directory, "Default");
       }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
   );
 });
