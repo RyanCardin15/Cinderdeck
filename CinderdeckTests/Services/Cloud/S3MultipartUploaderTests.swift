@@ -123,6 +123,49 @@ final class S3MultipartUploaderTests: XCTestCase {
     XCTAssertTrue(requests[4].url?.absoluteString.contains("uploadId=\(expectedUploadId)") == true)
   }
 
+  func testMalformedInitiationXMLFailsWithoutFurtherRequests() async throws {
+    let bodies = [
+      "</UploadId><UploadId>x</UploadId>", "<UploadId>x", "<UploadId></UploadId>",
+      "<Result><UploadId>a</UploadId><UploadId>b</UploadId></Result>",
+      "<UploadId><Nested>x</Nested></UploadId>",
+      "<!DOCTYPE a [<!ENTITY x 'expanded'>]><UploadId>&x;</UploadId>",
+      "<UploadId>" + String(repeating: "x", count: 65 * 1024) + "</UploadId>",
+    ]
+    for body in bodies {
+      let session = MockURLSession { request in
+        (Data(body.utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+      }
+      let uploader = S3MultipartUploader(accessKey: "access", secretKey: "secret", region: "us-east-1", endpoint: URL(string: "https://storage.test")!, bucket: "bucket", session: session, partSize: 10)
+      do {
+        _ = try await uploader.upload(fileURL: tempFileURL, key: "file.bin", contentType: "application/octet-stream", expireTime: .day7, progress: { _ in })
+        XCTFail("Expected malformed XML rejection")
+      } catch { XCTAssertEqual(session.requests.count, 1) }
+    }
+  }
+
+  func testUploadIdEntitiesAndDelimitersRemainOneQueryValueIncludingAbort() async throws {
+    let uploadId = "id+/=&ampersand#%雪"
+    for abort in [false, true] {
+      let session = MockURLSession { request in
+        if request.url?.query == "uploads" {
+          return (Data("<Result><UploadId>id+/=&amp;ampersand#%雪</UploadId></Result>".utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        }
+        let items = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        XCTAssertEqual(items.first { $0.name == "uploadId" }?.value, uploadId)
+        XCTAssertNil(request.url?.fragment)
+        XCTAssertTrue(request.url!.absoluteString.contains("%2B%2F%3D%26"))
+        let status = abort && request.httpMethod == "PUT" ? 400 : 200
+        return (Data(), HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: ["ETag": "etag"])!)
+      }
+      let uploader = S3MultipartUploader(accessKey: "access", secretKey: "secret", region: "us-east-1", endpoint: URL(string: "https://storage.test")!, bucket: "bucket", session: session, partSize: 10)
+      do {
+        _ = try await uploader.upload(fileURL: tempFileURL, key: "file.bin", contentType: "application/octet-stream", expireTime: .day7, progress: { _ in })
+        XCTAssertFalse(abort)
+      } catch { XCTAssertTrue(abort) }
+      XCTAssertEqual(session.requests.last?.httpMethod, abort ? "DELETE" : "POST")
+    }
+  }
+
   func testMultipartUpload_abortsOnFailure() async throws {
     let expectedUploadId = "mock-upload-id-abort"
     var isAborted = false

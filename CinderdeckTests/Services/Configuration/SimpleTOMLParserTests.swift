@@ -49,6 +49,23 @@ final class SimpleTOMLParserTests: XCTestCase {
     XCTAssertEqual(document.value(at: "general", "play_sounds")?.boolValue, false)
   }
 
+  func testUntrustedIntegerConversionRejectsUnrepresentableValues() throws {
+    for source in ["1e100", "-1e100", "inf", "-inf", "nan", "1.5"] {
+      let document = try SimpleTOMLParser.parse("schema_version = \(source)")
+      XCTAssertNil(document.value(at: "schema_version")?.intValue, source)
+      var reader = CinderdeckConfigurationReader(document: document)
+      XCTAssertNil(reader.int("schema_version"), source)
+      XCTAssertTrue(reader.issues.contains { $0.severity == .error }, source)
+    }
+    for integer in ["9223372036854775808", "-9223372036854775809"] {
+      XCTAssertThrowsError(try SimpleTOMLParser.parse("schema_version = \(integer)"))
+    }
+    XCTAssertEqual(SimpleTOMLValue.double(1.0).intValue, 1)
+    XCTAssertEqual(SimpleTOMLValue.integer(Int.max).intValue, Int.max)
+    XCTAssertEqual(SimpleTOMLValue.integer(Int.min).intValue, Int.min)
+    XCTAssertEqual(SimpleTOMLValue.double(Double(Int.min)).intValue, Int.min)
+  }
+
   func testInvalidValueReportsLine() {
     XCTAssertThrowsError(try SimpleTOMLParser.parse("schema_version = nope")) { error in
       XCTAssertEqual(error as? SimpleTOMLError, .invalidValue(1, "nope"))

@@ -772,7 +772,7 @@ final class ReproRecorder: ObservableObject {
     var environment = (try? await ShellEnvironmentResolver.shared.resolve()) ?? ProcessInfo.processInfo.environment
     environment["GIT_TERMINAL_PROMPT"] = "0"; environment["GIT_OPTIONAL_LOCKS"] = "0"; environment["LC_ALL"] = "C"
     func git(_ arguments: [String]) async -> String? {
-      guard let result = try? await StackCommandRunner.run("/usr/bin/git", ["-c", "color.ui=false"] + arguments,
+      guard let result = try? await StackCommandRunner.run("/usr/bin/git", StackCommandRunner.gitArguments(arguments, passive: true),
         directory: repo.path, environment: environment, timeout: 20), result.status == 0, result.output.count < 8 * 1024 * 1024 else { return nil }
       return String(data: result.output, encoding: .utf8)
     }
@@ -853,7 +853,7 @@ final class ReproRecorder: ObservableObject {
     environment["GIT_TERMINAL_PROMPT"] = "0"; environment["GIT_OPTIONAL_LOCKS"] = "0"; environment["LC_ALL"] = "C"
     let root = URL(fileURLWithPath: repo.path)
     func git(_ args: [String]) async -> String? {
-      guard let result = try? await StackCommandRunner.run("/usr/bin/git", ["-c", "color.ui=false"] + args,
+      guard let result = try? await StackCommandRunner.run("/usr/bin/git", StackCommandRunner.gitArguments(args, passive: true),
         directory: root, environment: environment, timeout: 20), result.status == 0, result.output.count < 8 * 1024 * 1024 else { return nil }
       return String(data: result.output, encoding: .utf8)
     }

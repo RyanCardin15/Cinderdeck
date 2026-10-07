@@ -2,6 +2,11 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { EnvironmentId } from "@cinderdeck/contracts";
 import { expect, it } from "@effect/vitest";
 import * as Duration from "effect/Duration";
+import * as Deferred from "effect/Deferred";
+import * as Fiber from "effect/Fiber";
+import { WS_METHODS } from "@cinderdeck/contracts";
+import { authorizeSessionScope, withActiveWebSocketSession } from "./WebSocketSession.ts";
+import { requiredScopeForRpcMethod } from "./RpcAuthorization.ts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -114,6 +119,130 @@ const failingSessionLookupCredentialLayer = Layer.effect(
 );
 
 it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
+  it.effect.each(["revoke", "revokeOthers", "replace"] as const)(
+    "interrupts every connected transport and pending stream on %s",
+    (mode) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const sessions = yield* SessionStore.SessionStore;
+          const admin = yield* sessions.issue({ subject: "admin" });
+          const client = yield* sessions.issue({
+            subject: "replaceable",
+            method: "bearer-access-token",
+            scopes: ["terminal:operate"],
+          });
+          let writes = 0;
+          yield* authorizeSessionScope(
+            sessions,
+            client.sessionId,
+            "terminal:operate",
+            Effect.sync(() => {
+              writes += 1;
+            }),
+          );
+          const sockets = yield* Effect.forEach([0, 1], () =>
+            Effect.gen(function* () {
+              const ready = yield* Deferred.make<void>();
+              const interrupted = yield* Deferred.make<void>();
+              const socket = yield* withActiveWebSocketSession(
+                sessions,
+                client.sessionId,
+                Stream.concat(
+                  Stream.fromEffect(Deferred.succeed(ready, undefined)),
+                  Stream.never,
+                ).pipe(
+                  Stream.runDrain,
+                  Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
+                ),
+              ).pipe(Effect.forkScoped);
+              yield* Deferred.await(ready);
+              return { socket, interrupted };
+            }),
+          );
+          if (mode === "revoke") yield* sessions.revoke(client.sessionId);
+          else if (mode === "revokeOthers") yield* sessions.revokeAllExcept(admin.sessionId);
+          else
+            yield* sessions.issue({
+              subject: "replaceable",
+              method: "bearer-access-token",
+              replaceActiveForSubjectAndMethod: true,
+            });
+          for (const socket of sockets) {
+            yield* Deferred.await(socket.interrupted);
+            yield* Fiber.await(socket.socket);
+          }
+          const error = yield* Effect.flip(
+            authorizeSessionScope(
+              sessions,
+              client.sessionId,
+              "terminal:operate",
+              Effect.sync(() => {
+                writes += 1;
+              }),
+            ),
+          );
+          expect(error._tag).toBe("EnvironmentAuthorizationError");
+          expect(writes).toBe(1);
+          let started = false;
+          const deniedSocket = yield* withActiveWebSocketSession(
+            sessions,
+            client.sessionId,
+            Effect.sync(() => {
+              started = true;
+            }),
+          ).pipe(Effect.forkScoped);
+          const alreadyRevoked = yield* Fiber.await(deniedSocket);
+          expect(alreadyRevoked._tag).toBe("Failure");
+          expect(started).toBe(false);
+        }),
+      ).pipe(Effect.provide(makeSessionStoreLayer())),
+  );
+
+  it.effect("denies all provider-profile operations before their effects or streams start", () =>
+    Effect.gen(function* () {
+      const sessions = yield* SessionStore.SessionStore;
+      const observer = yield* sessions.issue({ scopes: ["orchestration:read"] });
+      const operator = yield* sessions.issue({ scopes: ["orchestration:operate"] });
+      let mutations = 0;
+      for (const method of [
+        WS_METHODS.chatGptReconnectProfile,
+        WS_METHODS.chatGptImportProfile,
+        WS_METHODS.chatGptHandoffSubscribe,
+      ]) {
+        const operation = Effect.sync(() => {
+          mutations += 1;
+          return "profile";
+        });
+        const scope = requiredScopeForRpcMethod(method);
+        expect(
+          (yield* Effect.flip(
+            authorizeSessionScope(sessions, observer.sessionId, scope, operation),
+          ))._tag,
+        ).toBe("EnvironmentAuthorizationError");
+        const deniedStream = Stream.unwrap(
+          authorizeSessionScope(
+            sessions,
+            observer.sessionId,
+            scope,
+            Effect.succeed(Stream.fromEffect(operation)),
+          ),
+        );
+        expect((yield* Effect.flip(Stream.runCollect(deniedStream)))._tag).toBe(
+          "EnvironmentAuthorizationError",
+        );
+        expect(mutations).toBe(0);
+      }
+      expect(
+        yield* authorizeSessionScope(
+          sessions,
+          operator.sessionId,
+          "orchestration:operate",
+          Effect.succeed("profile"),
+        ),
+      ).toBe("profile");
+    }).pipe(Effect.provide(makeSessionStoreLayer())),
+  );
+
   it.effect("keys remote cookies by environment identity instead of state directory", () =>
     Effect.gen(function* () {
       const cookieName = (stateDir: string, environmentId: EnvironmentId) =>

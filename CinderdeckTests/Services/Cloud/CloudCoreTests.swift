@@ -150,6 +150,31 @@ final class CloudCoreTests: XCTestCase {
     }
   }
 
+  func testCloudCredentialTransferRejectsUntrustedWorkBeforeDerivation() throws {
+    let archive = try CloudCredentialTransferService.exportArchive(payload: makeTransferPayload(), passphrase: passphrase)
+    let original = try XCTUnwrap(JSONSerialization.jsonObject(with: archive) as? [String: Any])
+    let invalidFields: [(String, Any)] = [
+      ("iterations", -1), ("iterations", 0), ("iterations", 1_000_001),
+      ("iterations", Int(UInt32.max) + 1), ("iterations", Int.max),
+      ("salt", Data([1]).base64EncodedString()),
+      ("nonce", Data([1]).base64EncodedString()),
+      ("tag", Data([1]).base64EncodedString()),
+    ]
+    for (field, value) in invalidFields {
+      var envelope = original
+      envelope[field] = value
+      let data = try JSONSerialization.data(withJSONObject: envelope)
+      XCTAssertThrowsError(try CloudCredentialTransferService.importArchive(from: data, passphrase: passphrase)) { error in
+        guard case CloudCredentialTransferError.invalidArchive = error else { return XCTFail("Unexpected error: \(error)") }
+      }
+    }
+    XCTAssertThrowsError(try CloudCredentialTransferService.importArchive(from: Data(repeating: 32, count: 1024 * 1024 + 1), passphrase: passphrase))
+    let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: file) }
+    try Data(repeating: 32, count: 1024 * 1024 + 1).write(to: file)
+    XCTAssertThrowsError(try CloudCredentialTransferService.importArchive(from: file, passphrase: passphrase))
+  }
+
   func testCloudCredentialTransferSuggestedArchiveFileName_sanitizesBucket() {
     let payload = CloudCredentialTransferPayload(
       configuration: CloudConfiguration(

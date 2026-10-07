@@ -96,7 +96,7 @@ nonisolated enum WorkspaceRunProvenance {
         result.append(.init(repositoryID: repo.id, canonicalRepositoryKeys: [], checkoutPhysicalID: nil, repositoryPhysicalID: nil, head: nil, capturedAt: capturedAt, fingerprint: nil, complete: false)); continue
       }
       func git(_ arguments: [String]) async -> String? {
-        guard let output = try? await StackCommandRunner.run("/usr/bin/git", ["-c", "color.ui=false"] + arguments, directory: identity.root, environment: environment, timeout: 20),
+        guard let output = try? await StackCommandRunner.run("/usr/bin/git", StackCommandRunner.gitArguments(arguments, passive: true), directory: identity.root, environment: environment, timeout: 20),
           output.status == 0, output.output.count < 8 * 1024 * 1024 else { return nil }
         return String(data: output.output, encoding: .utf8)
       }

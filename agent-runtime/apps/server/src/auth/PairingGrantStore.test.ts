@@ -90,6 +90,48 @@ it.layer(NodeServices.layer)("PairingGrantStore.layer", (it) => {
     }).pipe(Effect.provide(makePairingGrantStoreLayer())),
   );
 
+  it.effect(
+    "inspects grants without consuming them and rejects unavailable or mismatched credentials",
+    () =>
+      Effect.gen(function* () {
+        const grants = yield* PairingGrantStore.PairingGrantStore;
+        const token = yield* grants.issueOneTimeToken({ proofKeyThumbprint: "bound-key" });
+        expect((yield* Effect.flip(grants.inspect(token.credential)))._tag).toBe(
+          "BootstrapCredentialProofKeyMismatchError",
+        );
+        expect(
+          (yield* Effect.flip(
+            grants.inspect(token.credential, { proofKeyThumbprint: "wrong-key" }),
+          ))._tag,
+        ).toBe("BootstrapCredentialProofKeyMismatchError");
+        const first = yield* grants.inspect(token.credential, { proofKeyThumbprint: "bound-key" });
+        expect(
+          yield* grants.inspect(token.credential, { proofKeyThumbprint: "bound-key" }),
+        ).toEqual(first);
+        expect(
+          yield* grants.consume(token.credential, { proofKeyThumbprint: "bound-key" }),
+        ).toEqual(first);
+        expect(
+          (yield* Effect.flip(
+            grants.inspect(token.credential, { proofKeyThumbprint: "bound-key" }),
+          ))._tag,
+        ).toBe("UnknownBootstrapCredentialError");
+        const revoked = yield* grants.issueOneTimeToken();
+        yield* grants.revoke(revoked.id);
+        expect((yield* Effect.flip(grants.inspect(revoked.credential)))._tag).toBe(
+          "UnavailableBootstrapCredentialError",
+        );
+        const expired = yield* grants.issueOneTimeToken({ ttl: Duration.seconds(1) });
+        yield* TestClock.adjust(Duration.seconds(2));
+        expect((yield* Effect.flip(grants.inspect(expired.credential)))._tag).toBe(
+          "ExpiredBootstrapCredentialError",
+        );
+        expect((yield* Effect.flip(grants.inspect("unknown-credential")))._tag).toBe(
+          "UnknownBootstrapCredentialError",
+        );
+      }).pipe(Effect.provide(makePairingGrantStoreLayer())),
+  );
+
   it.effect("atomically consumes a one-time token when multiple requests race", () =>
     Effect.gen(function* () {
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;

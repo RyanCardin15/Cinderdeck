@@ -37,7 +37,12 @@ import * as PairingGrantStore from "./PairingGrantStore.ts";
 import * as ServerSecretStore from "./ServerSecretStore.ts";
 import * as SessionStore from "./SessionStore.ts";
 import { REUSABLE_DEV_SESSION_EXPIRES_AT, resolveReusableDevAuth } from "./ReusableDevAuth.ts";
-import { verifyRequestDpopProof } from "./dpop.ts";
+import {
+  verifyRequestDpopProof,
+  checkDpopProofReplay,
+  recordDpopProof,
+  type ValidatedDpopProof,
+} from "./dpop.ts";
 import * as SqlitePersistence from "../persistence/Layers/Sqlite.ts";
 
 const DEFAULT_SESSION_SUBJECT = "cli-issued-session";
@@ -440,6 +445,7 @@ export class EnvironmentAuth extends Context.Service<
       requestMetadata: AuthClientMetadata,
       input?: {
         readonly proofKeyThumbprint?: string;
+        readonly dpopProof?: ValidatedDpopProof;
       },
     ) => Effect.Effect<
       AuthAccessTokenResult,
@@ -779,14 +785,14 @@ export const make = Effect.gen(function* () {
   const resolveBootstrapGrant = (
     credential: string,
     input?: { readonly proofKeyThumbprint?: string },
+    consume = true,
   ): Effect.Effect<
     ResolvedBootstrapGrant,
     ServerAuthInvalidCredentialError | ServerAuthInternalError
   > => {
     if (!devAuth?.matches(credential)) {
-      return bootstrapCredentials
-        .consume(credential, input)
-        .pipe(Effect.mapError(toBootstrapExchangeError));
+      const resolve = consume ? bootstrapCredentials.consume : bootstrapCredentials.inspect;
+      return resolve(credential, input).pipe(Effect.mapError(toBootstrapExchangeError));
     }
     return sessions.verify(credential).pipe(
       mapSessionVerificationErrors,
@@ -803,12 +809,28 @@ export const make = Effect.gen(function* () {
 
   const exchangeBootstrapCredentialForAccessToken: EnvironmentAuth["Service"]["exchangeBootstrapCredentialForAccessToken"] =
     (credential, requestedScopes, requestMetadata, input) =>
-      resolveBootstrapGrant(credential, input).pipe(
+      Effect.gen(function* () {
+        if (input?.dpopProof)
+          yield* checkDpopProofReplay(input.dpopProof).pipe(
+            Effect.provideService(Crypto.Crypto, crypto),
+            Effect.provideService(ServerSecretStore.ServerSecretStore, secretStore),
+          );
+        return yield* resolveBootstrapGrant(credential, input, input?.dpopProof === undefined);
+      }).pipe(
         Effect.flatMap((grant) =>
           Effect.gen(function* () {
             const grantedScopes = requestedScopes ?? grant.scopes;
             if (!grantedScopes.every((scope) => grant.scopes.includes(scope))) {
               return yield* new ServerAuthScopeNotGrantedError({});
+            }
+            if (input?.dpopProof) {
+              yield* recordDpopProof(input.dpopProof).pipe(
+                Effect.provideService(Crypto.Crypto, crypto),
+                Effect.provideService(ServerSecretStore.ServerSecretStore, secretStore),
+              );
+              // Only the winning proof may consume its authenticated grant.
+              // consume rechecks availability atomically after the read-only inspection.
+              yield* resolveBootstrapGrant(credential, input);
             }
             return yield* sessions
               .issue({

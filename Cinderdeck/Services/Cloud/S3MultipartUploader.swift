@@ -185,7 +185,7 @@ final class S3MultipartUploader {
     data: Data,
     onProgress: @escaping @Sendable (Double) -> Void
   ) async throws -> String {
-    let url = URL(string: "\(endpoint.absoluteString)/\(bucket)/\(key)?partNumber=\(partNumber)&uploadId=\(uploadId)")!
+    let url = try multipartURL(key: key, uploadId: uploadId, partNumber: partNumber)
     var request = URLRequest(url: url)
     request.httpMethod = "PUT"
     request.setValue("\(data.count)", forHTTPHeaderField: "Content-Length")
@@ -217,7 +217,7 @@ final class S3MultipartUploader {
     uploadId: String,
     parts: [(partNumber: Int, eTag: String)]
   ) async throws -> URL {
-    let url = URL(string: "\(endpoint.absoluteString)/\(bucket)/\(key)?uploadId=\(uploadId)")!
+    let url = try multipartURL(key: key, uploadId: uploadId)
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.setValue("application/xml", forHTTPHeaderField: "Content-Type")
@@ -257,7 +257,7 @@ final class S3MultipartUploader {
   }
 
   private func abortMultipartUpload(key: String, uploadId: String) async throws {
-    let url = URL(string: "\(endpoint.absoluteString)/\(bucket)/\(key)?uploadId=\(uploadId)")!
+    let url = try multipartURL(key: key, uploadId: uploadId)
     var request = URLRequest(url: url)
     request.httpMethod = "DELETE"
 
@@ -288,11 +288,29 @@ final class S3MultipartUploader {
     }
   }
 
+  private func multipartURL(key: String, uploadId: String, partNumber: Int? = nil) throws -> URL {
+    guard var components = URLComponents(string: "\(endpoint.absoluteString)/\(bucket)/\(key)") else {
+      throw CloudError.invalidResponse
+    }
+    // Encode every non-unreserved byte; IDs can contain +, /, =, &, # and %.
+    let unreserved = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")
+    guard let encodedId = uploadId.addingPercentEncoding(withAllowedCharacters: unreserved) else {
+      throw CloudError.invalidResponse
+    }
+    components.percentEncodedQuery = (partNumber.map { "partNumber=\($0)&" } ?? "") + "uploadId=" + encodedId
+    guard let url = components.url else { throw CloudError.invalidResponse }
+    return url
+  }
+
   private func parseUploadId(from xmlData: Data) -> String? {
-    let xmlString = String(data: xmlData, encoding: .utf8) ?? ""
-    guard let startRange = xmlString.range(of: "<UploadId>") else { return nil }
-    guard let endRange = xmlString.range(of: "</UploadId>") else { return nil }
-    return String(xmlString[startRange.upperBound..<endRange.lowerBound])
+    guard xmlData.count <= 64 * 1024 else { return nil }
+    let delegate = MultipartUploadIdParser()
+    let parser = XMLParser(data: xmlData)
+    parser.shouldResolveExternalEntities = false
+    parser.delegate = delegate
+    guard parser.parse(), !delegate.invalid, delegate.count == 1,
+          !delegate.uploadId.isEmpty, delegate.uploadId.utf8.count <= 4096 else { return nil }
+    return delegate.uploadId
   }
 
   private func uploadChunkWithProgress(
@@ -377,5 +395,34 @@ private final class MultipartProgressDelegate: NSObject, URLSessionTaskDelegate,
       completion(.failure(CloudError.invalidResponse))
     }
     session.invalidateAndCancel()
+  }
+}
+
+/// Reject ambiguous/nested IDs and DTDs; never resolve remote entities.
+private final class MultipartUploadIdParser: NSObject, XMLParserDelegate {
+  var uploadId = ""
+  var count = 0
+  var invalid = false
+  private var reading = false
+  func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String: String]) {
+    if reading { invalid = true }
+    if elementName == "UploadId" {
+      count += 1
+      reading = true
+    }
+  }
+  func parser(_ parser: XMLParser, foundCharacters string: String) {
+    if reading { uploadId += string }
+  }
+  func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
+    if elementName == "UploadId" { reading = false }
+  }
+  func parser(_ parser: XMLParser, foundInternalEntityDeclarationWithName name: String, value: String?) {
+    invalid = true
+    parser.abortParsing()
+  }
+  func parser(_ parser: XMLParser, foundExternalEntityDeclarationWithName name: String, publicID: String?, systemID: String?) {
+    invalid = true
+    parser.abortParsing()
   }
 }

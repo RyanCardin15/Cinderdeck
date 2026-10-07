@@ -48,6 +48,9 @@ enum CloudCredentialTransferService {
   private static let keyLength = 32
   private static let saltLength = 16
   private static let iterationCount = 300_000
+  // Version 1 exports use 300,000 rounds. Bound untrusted work before PBKDF2.
+  private static let maximumIterationCount = 1_000_000
+  private static let maximumArchiveBytes = 1024 * 1024
 
   static func exportArchive(
     payload: CloudCredentialTransferPayload,
@@ -114,7 +117,9 @@ enum CloudCredentialTransferService {
     )
     do {
       let archiveData = try withScopedAccess(to: archiveURL) {
-        try Data(contentsOf: archiveURL)
+        let file = try FileHandle(forReadingFrom: archiveURL)
+        defer { try? file.close() }
+        return try file.read(upToCount: maximumArchiveBytes + 1) ?? Data()
       }
       let payload = try importArchive(from: archiveData, passphrase: passphrase)
       DiagnosticLogger.shared.log(
@@ -195,6 +200,9 @@ enum CloudCredentialTransferService {
     from archiveData: Data,
     passphrase: String
   ) throws -> CloudCredentialTransferPayload {
+    guard archiveData.count <= maximumArchiveBytes else {
+      throw CloudCredentialTransferError.invalidArchive
+    }
     let envelope: CloudCredentialTransferEnvelope
     do {
       envelope = try JSONDecoder().decode(CloudCredentialTransferEnvelope.self, from: archiveData)
@@ -230,7 +238,11 @@ enum CloudCredentialTransferService {
       let salt = Data(base64Encoded: envelope.salt),
       let nonceData = Data(base64Encoded: envelope.nonce),
       let ciphertext = Data(base64Encoded: envelope.ciphertext),
-      let tag = Data(base64Encoded: envelope.tag)
+      let tag = Data(base64Encoded: envelope.tag),
+      salt.count == saltLength,
+      nonceData.count == 12,
+      tag.count == 16,
+      !ciphertext.isEmpty
     else {
       DiagnosticLogger.shared.log(.warning, .cloud, "Cloud credential archive contains invalid base64 fields")
       throw CloudCredentialTransferError.invalidArchive
@@ -289,6 +301,10 @@ enum CloudCredentialTransferService {
     salt: Data,
     iterations: Int
   ) throws -> SymmetricKey {
+    guard (1...maximumIterationCount).contains(iterations),
+          let rounds = UInt32(exactly: iterations) else {
+      throw CloudCredentialTransferError.invalidArchive
+    }
     var derivedKey = [UInt8](repeating: 0, count: keyLength)
     let status = salt.withUnsafeBytes { saltBytes in
       passphrase.withCString { passphraseBytes in
@@ -299,7 +315,7 @@ enum CloudCredentialTransferService {
           saltBytes.bindMemory(to: UInt8.self).baseAddress,
           salt.count,
           CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256),
-          UInt32(iterations),
+          rounds,
           &derivedKey,
           derivedKey.count
         )

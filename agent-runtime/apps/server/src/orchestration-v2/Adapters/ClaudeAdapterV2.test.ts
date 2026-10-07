@@ -497,6 +497,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
   it("leaves an absent allowlist absent when no MCP session exists", () => {
     const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({
       threadId: ThreadId.make("thread-claude-no-mcp-no-allowlist"),
+      permissionMode: "bypassPermissions",
       readOnlySandbox: false,
     });
 
@@ -506,6 +507,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
   it("preserves an explicit allowlist when no MCP session exists", () => {
     const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({
       threadId: ThreadId.make("thread-claude-no-mcp-with-allowlist"),
+      permissionMode: "bypassPermissions",
       readOnlySandbox: false,
       allowedTools: ["Read"],
     });
@@ -518,6 +520,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
     assert.deepEqual(
       ClaudeAdapterV2.claudeMcpQueryOverrides({
         threadId: ThreadId.make("thread-claude-no-mcp-disallowed"),
+        permissionMode: "bypassPermissions",
         readOnlySandbox: false,
         disallowedMcpTools,
       }),
@@ -529,6 +532,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
       assert.deepEqual(
         ClaudeAdapterV2.claudeMcpQueryOverrides({
           threadId,
+          permissionMode: "bypassPermissions",
           readOnlySandbox: false,
           disallowedMcpTools,
         }),
@@ -546,6 +550,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
     withMcpSession(threadId, () => {
       const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({
         threadId,
+        permissionMode: "bypassPermissions",
         readOnlySandbox: false,
       });
 
@@ -561,6 +566,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
     withMcpSession(threadId, () => {
       const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({
         threadId,
+        permissionMode: "bypassPermissions",
         readOnlySandbox: false,
         allowedTools: ["Read", "mcp__t3-code__*"],
       });
@@ -572,11 +578,34 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
     });
   });
 
+  it.each(["default", "acceptEdits", "dontAsk", "plan", "auto"] as const)(
+    "keeps arbitrary script execution behind the effective %s permission policy",
+    (permissionMode) => {
+      const threadId = ThreadId.make(`supervised-mcp-${permissionMode}`);
+      withMcpSession(threadId, () => {
+        const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({
+          threadId,
+          permissionMode,
+          readOnlySandbox: false,
+        });
+        assert.deepEqual(
+          overrides.allowedTools,
+          ClaudeAdapterV2.CLAUDE_READ_ONLY_T3_MCP_ALLOWED_TOOLS,
+        );
+        assert.isFalse(overrides.allowedTools?.includes("mcp__deckhand__computer_script"));
+        assert.isFalse(
+          overrides.allowedTools?.includes(ClaudeAdapterV2.CLAUDE_T3_MCP_TOOL_WILDCARD),
+        );
+      });
+    },
+  );
+
   it("pre-approves only read-only deckhand tools in a read-only sandbox", () => {
     const threadId = ThreadId.make("thread-claude-mcp-read-only");
     withMcpSession(threadId, () => {
       const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({
         threadId,
+        permissionMode: "dontAsk",
         readOnlySandbox: true,
         allowedTools: [...ClaudeAdapterV2.CLAUDE_READ_ONLY_ALLOWED_TOOLS],
       });
@@ -597,6 +626,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
     withMcpSession(threadId, () => {
       const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({
         threadId,
+        permissionMode: "dontAsk",
         readOnlySandbox: true,
       });
 
@@ -625,11 +655,19 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
 
       const readOnlyKey = ClaudeAdapterV2.claudeEffectiveQueryPolicyKey(
         queryPolicy,
-        ClaudeAdapterV2.claudeMcpQueryOverrides({ threadId, readOnlySandbox: true }),
+        ClaudeAdapterV2.claudeMcpQueryOverrides({
+          threadId,
+          permissionMode: "dontAsk",
+          readOnlySandbox: true,
+        }),
       );
       const fullAccessKey = ClaudeAdapterV2.claudeEffectiveQueryPolicyKey(
         queryPolicy,
-        ClaudeAdapterV2.claudeMcpQueryOverrides({ threadId, readOnlySandbox: false }),
+        ClaudeAdapterV2.claudeMcpQueryOverrides({
+          threadId,
+          permissionMode: "bypassPermissions",
+          readOnlySandbox: false,
+        }),
       );
       const detachedKey = ClaudeAdapterV2.claudeEffectiveQueryPolicyKey(queryPolicy, {});
 
@@ -650,7 +688,11 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
       );
       const initialKey = ClaudeAdapterV2.claudeEffectiveQueryPolicyKey(
         queryPolicy,
-        ClaudeAdapterV2.claudeMcpQueryOverrides({ threadId, readOnlySandbox: false }),
+        ClaudeAdapterV2.claudeMcpQueryOverrides({
+          threadId,
+          permissionMode: "bypassPermissions",
+          readOnlySandbox: false,
+        }),
       );
 
       McpProviderSession.setMcpProviderSession({
@@ -665,7 +707,11 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
 
       const rotatedKey = ClaudeAdapterV2.claudeEffectiveQueryPolicyKey(
         queryPolicy,
-        ClaudeAdapterV2.claudeMcpQueryOverrides({ threadId, readOnlySandbox: false }),
+        ClaudeAdapterV2.claudeMcpQueryOverrides({
+          threadId,
+          permissionMode: "bypassPermissions",
+          readOnlySandbox: false,
+        }),
       );
       assert.notEqual(rotatedKey, initialKey);
     });
@@ -707,6 +753,7 @@ describe("ClaudeAdapterV2 native protocol logging", () => {
     try {
       const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({
         threadId,
+        permissionMode: "bypassPermissions",
         readOnlySandbox: false,
         allowedTools: ["Read"],
       });
@@ -4321,6 +4368,62 @@ describe("ClaudeAdapterV2 background wake turns", () => {
           );
         }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
       ),
+  );
+
+  it.effect("waits for and honors denial of a supervised computer_script command", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const harness = yield* makeWakeHarness;
+        const runtimePolicy = ProviderAdapterV2RuntimePolicy.make({
+          runtimeMode: "approval-required",
+          interactionMode: "default",
+          cwd: "/workspace",
+        });
+        yield* harness.runtime.startTurn(
+          makeClaudeTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: harness.providerThread,
+            now: yield* DateTime.now,
+            attemptId: RunAttemptId.make("supervised-script-attempt"),
+            text: "Inspect.",
+            attachments: [],
+            runtimePolicy,
+          }),
+        );
+        const options = harness.getOpenedOptions();
+        assert.isFunction(options?.canUseTool);
+        let executed = false;
+        const permission = yield* Effect.promise(async () => {
+          const result = await options!.canUseTool!(
+            "mcp__deckhand__computer_script",
+            { code: "process.getBuiltinModule('node:fs').writeFileSync('/tmp/blocked', 'x')" },
+            {
+              signal: new AbortController().signal,
+              toolUseID: "supervised-script",
+              requestId: "script-request",
+            },
+          );
+          if (result?.behavior === "allow") executed = true;
+          return result;
+        }).pipe(Effect.forkScoped);
+        yield* awaitUntil(
+          () => harness.events.some((event) => event.type === "runtime_request.updated"),
+          "script approval",
+        );
+        assert.isFalse(executed);
+        const request = harness.events.findLast(
+          (event) => event.type === "runtime_request.updated",
+        );
+        assert.equal(request?.type, "runtime_request.updated");
+        if (request?.type !== "runtime_request.updated") return;
+        yield* harness.runtime.respondToRuntimeRequest({
+          requestId: request.runtimeRequest.id,
+          decision: "decline",
+        });
+        assert.equal((yield* Fiber.join(permission))?.behavior, "deny");
+        assert.isFalse(executed);
+      }),
+    ).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
   );
 
   it.effect("answers an approval a held wake turn raises without waiting for the echo", () =>

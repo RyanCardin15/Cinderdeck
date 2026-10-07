@@ -153,6 +153,11 @@ nonisolated enum SimpleTOMLParser {
       return .array(values)
     }
     if let intValue = Int(value) { return .integer(intValue) }
+    // An overflowing integer must not round to a different valid Int via Double.
+    let digits = value.first == "+" || value.first == "-" ? value.dropFirst() : value[...]
+    if !digits.isEmpty && digits.utf8.allSatisfy({ (48...57).contains($0) }) {
+      throw SimpleTOMLError.invalidValue(line, value)
+    }
     if let doubleValue = Double(value) { return .double(doubleValue) }
     throw SimpleTOMLError.invalidValue(line, value)
   }

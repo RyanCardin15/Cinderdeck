@@ -264,7 +264,7 @@ nonisolated enum StackLaneStore {
     var environment = ProcessInfo.processInfo.environment
     environment["GIT_TERMINAL_PROMPT"] = "0"
     environment["GIT_OPTIONAL_LOCKS"] = "0"
-    return try await StackCommandRunner.run("/usr/bin/git", ["-c", "color.ui=false"] + arguments,
+    return try await StackCommandRunner.run("/usr/bin/git", StackCommandRunner.gitArguments(arguments),
       directory: path, environment: environment, timeout: timeout)
   }
 

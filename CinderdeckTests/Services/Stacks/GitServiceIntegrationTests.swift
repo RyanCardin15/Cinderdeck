@@ -38,6 +38,28 @@ final class GitServiceIntegrationTests: XCTestCase {
     if let root { try? FileManager.default.removeItem(at: root) }
     git = nil
   }
+  func testPassiveGitReadsNeverExecuteImportedFsmonitorHook() async throws {
+    let marker = root.appendingPathComponent("hook-executed")
+    let hook = clone.appendingPathComponent(".git/fsmonitor-hook")
+    try "#!/bin/sh\ntouch '\(marker.path)'\n".write(to: hook, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: hook.path)
+    _ = try await run(["config", "core.fsmonitor", hook.path], at: clone)
+    _ = try await run(["config", "core.fsmonitorHookVersion", "2"], at: clone)
+    // Establish that the disposable fixture reaches Git's hook mechanism.
+    _ = try await run(["status", "--porcelain"], at: clone)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: marker.path))
+    try FileManager.default.removeItem(at: marker)
+    try "changed\n".write(to: clone.appendingPathComponent("tracked.txt"), atomically: true, encoding: .utf8)
+    let status = try await git.status(at: clone)
+    XCTAssertEqual(status.branch, "main")
+    XCTAssertTrue(status.isDirty)
+    _ = try await git.gitDirectories(at: clone)
+    _ = try await StackLaneStore.git(["status", "--porcelain=v1", "-z"], at: clone)
+    _ = try await StackCommandRunner.run("/usr/bin/git", StackCommandRunner.gitArguments(["diff", "HEAD", "--no-ext-diff", "--no-textconv"], passive: true), directory: clone)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
+    XCTAssertFalse(StackCommandRunner.gitArguments(["switch", "main"]).contains("core.hooksPath=/dev/null"))
+  }
+
   func testLocalAndRemoteTrackingSwitchWithStashAndPop() async throws {
     let branches = try await git.branches(at: clone)
     XCTAssertFalse(branches.contains { $0.reference.hasSuffix("origin/HEAD") })

@@ -18,6 +18,7 @@ import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as Option from "effect/Option";
 
@@ -399,6 +400,14 @@ export class SessionStore extends Context.Service<
     readonly listActive: () => Effect.Effect<
       ReadonlyArray<AuthClientSession>,
       SessionCredentialInternalError
+    >;
+    readonly getActive: (
+      sessionId: AuthSessionId,
+    ) => Effect.Effect<Option.Option<AuthClientSession>, SessionCredentialVerificationError>;
+    readonly subscribeChanges: Effect.Effect<
+      PubSub.Subscription<SessionCredentialChange>,
+      never,
+      Scope.Scope
     >;
     readonly streamChanges: Stream.Stream<SessionCredentialChange>;
     readonly revoke: (
@@ -1039,6 +1048,11 @@ export const make = Effect.gen(function* () {
     issueWebSocketToken,
     verifyWebSocketToken,
     listActive,
+    getActive: (sessionId) =>
+      loadActiveSession(sessionId).pipe(
+        Effect.mapError((cause) => new SessionCredentialVerificationError({ sessionId, cause })),
+      ),
+    subscribeChanges: PubSub.subscribe(changesPubSub),
     get streamChanges() {
       return Stream.fromPubSub(changesPubSub);
     },

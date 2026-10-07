@@ -55,7 +55,7 @@ private actor GitRepositoryCommands {
     env["GIT_OPTIONAL_LOCKS"] = "0"
     env["LC_ALL"] = "C"
     for attempt in 0...1 {
-      let result = try await execute(["-c", "color.ui=false"] + args, path, env)
+      let result = try await execute(StackCommandRunner.gitArguments(args), path, env)
       if result.status == 0 { return result.text }
       if attempt == 0, result.errorText.contains("index.lock") {
         try await Task.sleep(nanoseconds: 500_000_000); continue

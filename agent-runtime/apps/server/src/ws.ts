@@ -20,7 +20,10 @@ import {
   OwnedPreviewError,
 } from "@cinderdeck/contracts/deckhand/ownedPreviewRpc";
 import * as VerificationAttempts from "./deckhand/VerificationAttempts.ts";
-import { ATTEMPT_METHODS, AttemptError } from "@cinderdeck/contracts/deckhand/verificationAttemptsRpc";
+import {
+  ATTEMPT_METHODS,
+  AttemptError,
+} from "@cinderdeck/contracts/deckhand/verificationAttemptsRpc";
 import * as ExternalSessions from "./deckhand/ExternalSessions.ts";
 import {
   EXTERNAL_SESSION_METHODS,
@@ -127,7 +130,6 @@ import {
   ChatAttachmentId,
   PersistChatAttachmentsError,
   RpcClientId,
-  EnvironmentAuthorizationError,
   type ProjectId,
   type ProviderDriverKind,
   type ProviderInstanceId,
@@ -249,7 +251,12 @@ import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
-import { requiredScopeForRpcMethod, requiredScopeForDeviceList, requiredScopeForGitHubWorkspace, requiredScopeForAgentAccess } from "./auth/RpcAuthorization.ts";
+import {
+  requiredScopeForRpcMethod,
+  requiredScopeForDeviceList,
+  requiredScopeForGitHubWorkspace,
+  requiredScopeForAgentAccess,
+} from "./auth/RpcAuthorization.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
@@ -274,6 +281,7 @@ import * as VcsDriverRegistry from "./vcs/VcsDriverRegistry.ts";
 import * as VcsProjectConfig from "./vcs/VcsProjectConfig.ts";
 import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
+import { authorizeSessionScope, withActiveWebSocketSession } from "./auth/WebSocketSession.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
 import * as RelayClient from "@cinderdeck/shared/relayClient";
 import {
@@ -1236,25 +1244,14 @@ const makeWsRpcLayer = (
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const relayClient = yield* RelayClient.RelayClient;
-      const authorizationError = (requiredScope: AuthEnvironmentScope) =>
-        new EnvironmentAuthorizationError({
-          message: `The authenticated token is missing required scope: ${requiredScope}.`,
-          requiredScope,
-        });
       const authorizeEffect = <A, E, R>(
         requiredScope: AuthEnvironmentScope,
         effect: Effect.Effect<A, E, R>,
-      ): Effect.Effect<A, E | EnvironmentAuthorizationError, R> =>
-        currentSession.scopes.includes(requiredScope)
-          ? effect
-          : Effect.fail(authorizationError(requiredScope));
+      ) => authorizeSessionScope(sessions, currentSessionId, requiredScope, effect);
       const authorizeStream = <A, E, R>(
         requiredScope: AuthEnvironmentScope,
         stream: Stream.Stream<A, E, R>,
-      ): Stream.Stream<A, E | EnvironmentAuthorizationError, R> =>
-        currentSession.scopes.includes(requiredScope)
-          ? stream
-          : Stream.fail(authorizationError(requiredScope));
+      ) => Stream.unwrap(authorizeEffect(requiredScope, Effect.succeed(stream)));
 
       const acpRegistryProject = Effect.fn("ws.acpRegistry.project")(function* (
         projectId: ProjectId,
@@ -1473,7 +1470,8 @@ const makeWsRpcLayer = (
             if (importedThread !== null) {
               return yield* new AcpRegistryOperationError({
                 reason: "session_delete_failed",
-                message: "Delete the imported Cinderdeck thread before deleting its native ACP session.",
+                message:
+                  "Delete the imported Cinderdeck thread before deleting its native ACP session.",
               });
             }
             yield* manager.deleteSession({
@@ -1768,8 +1766,16 @@ const makeWsRpcLayer = (
       });
 
       const deckhandHandlers = DeckhandRpc.DeckhandRpcGroup.of({
-        [GITHUB_WORKSPACE_METHOD]: (input) => observeRpcEffect(GITHUB_WORKSPACE_METHOD, authorizeEffect(requiredScopeForGitHubWorkspace(input), githubWorkspace.request(input))),
-        [DeckhandRpc.AGENT_ACCESS_METHOD]: (input) => observeRpcEffect(DeckhandRpc.AGENT_ACCESS_METHOD, authorizeEffect(requiredScopeForAgentAccess(input), agentAccess.request(input))),
+        [GITHUB_WORKSPACE_METHOD]: (input) =>
+          observeRpcEffect(
+            GITHUB_WORKSPACE_METHOD,
+            authorizeEffect(requiredScopeForGitHubWorkspace(input), githubWorkspace.request(input)),
+          ),
+        [DeckhandRpc.AGENT_ACCESS_METHOD]: (input) =>
+          observeRpcEffect(
+            DeckhandRpc.AGENT_ACCESS_METHOD,
+            authorizeEffect(requiredScopeForAgentAccess(input), agentAccess.request(input)),
+          ),
         [OWNERSHIP_METHODS.preview]: (input) =>
           observeRpcEffect(
             OWNERSHIP_METHODS.preview,
@@ -3565,10 +3571,18 @@ const makeWsRpcLayer = (
             providerAuth.complete(input, currentSessionId),
             { "rpc.aggregate": "provider" },
           ),
-        [WS_METHODS.chatGptReconnectProfile]: (input) => providerAuth.reconnectProfile(input),
-        [WS_METHODS.chatGptImportProfile]: (input) => providerAuth.importProfile(input),
+        [WS_METHODS.chatGptReconnectProfile]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.chatGptReconnectProfile,
+            providerAuth.reconnectProfile(input),
+          ),
+        [WS_METHODS.chatGptImportProfile]: (input) =>
+          observeRpcEffect(WS_METHODS.chatGptImportProfile, providerAuth.importProfile(input)),
         [WS_METHODS.chatGptHandoffSubscribe]: (input) =>
-          subscribeChatGptHandoff(input, currentSessionId),
+          observeRpcStream(
+            WS_METHODS.chatGptHandoffSubscribe,
+            subscribeChatGptHandoff(input, currentSessionId),
+          ),
         [WS_METHODS.codexAuthCallbackSubscribe]: (input) =>
           observeRpcStream(
             WS_METHODS.codexAuthCallbackSubscribe,
@@ -4945,21 +4959,16 @@ export const websocketRpcRouteLayer = Layer.unwrap(
         );
         const clientOrigin = readClientConnectionOrigin(request);
         yield* sessions.recordClientConnection(session.sessionId, clientOrigin);
-        const rpcWebSocketHttpEffect = yield* Effect.gen(function* () {
+        const rpcWebSocketHttpEffect = Effect.gen(function* () {
           const { protocol, httpEffect } = yield* RpcServer.makeProtocolWithHttpEffectWebsocket;
           yield* RpcServer.make(ServerWsRpcGroup, { disableTracing: true }).pipe(
             Effect.provideService(RpcServer.Protocol, withTerminalOutputWindow(protocol)),
             Effect.forkScoped,
           );
-          // @effect-diagnostics-next-line returnEffectInGen:off
-          return httpEffect;
+          return yield* httpEffect;
         }).pipe(
           Effect.provide(
-            makeWsRpcLayer(
-              session,
-              clientOrigin,
-              previewAutomationBroker,
-            ).pipe(
+            makeWsRpcLayer(session, clientOrigin, previewAutomationBroker).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               Layer.provide(Layer.succeed(SqlClient.SqlClient, sql)),
               Layer.provide(Layer.succeed(IntegrationHub.IntegrationHub, deckhandHub)),
@@ -4996,7 +5005,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
         );
         return yield* Effect.acquireUseRelease(
           sessions.markConnected(session.sessionId),
-          () => rpcWebSocketHttpEffect,
+          () => withActiveWebSocketSession(sessions, session.sessionId, rpcWebSocketHttpEffect),
           () => sessions.markDisconnected(session.sessionId),
         );
       }).pipe(

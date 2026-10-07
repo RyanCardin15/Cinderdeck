@@ -11,6 +11,15 @@ nonisolated struct StackCommandResult: Sendable {
 /// Short, bounded commands use private files, never undrained pipes. Each call has
 /// its own group so a timed-out shell or credential helper cannot keep running.
 nonisolated enum StackCommandRunner {
+  /// Passive index reads must not execute extensions from imported .git metadata.
+  /// Explicit mutations retain the user's normal hooks and Git configuration.
+  static func gitArguments(_ arguments: [String], passive: Bool = false) -> [String] {
+    let readsIndex = arguments.first.map { ["status", "diff", "ls-files"].contains($0) } ?? false
+    let safety = passive || readsIndex
+      ? ["-c", "core.fsmonitor=", "-c", "core.hooksPath=/dev/null"] : []
+    return ["-c", "color.ui=false"] + safety + arguments
+  }
+
   static func run(_ executable: String, _ arguments: [String], directory: URL? = nil,
     environment: [String: String] = ProcessInfo.processInfo.environment, timeout: TimeInterval = 60
   ) async throws -> StackCommandResult {

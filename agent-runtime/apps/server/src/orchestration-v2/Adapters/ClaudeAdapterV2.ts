@@ -948,15 +948,13 @@ export const CLAUDE_READ_ONLY_T3_MCP_ALLOWED_TOOLS: ReadonlyArray<string> = [
 // above that and the server's own wait timeout is what ends a long call.
 export const CLAUDE_T3_MCP_TOOL_TIMEOUT_MS = 65 * 60 * 1_000;
 
-// The SDK's `allowedTools` only pre-approves tool calls; availability is the
-// separate `tools` option. Attaching the t3-code MCP server therefore always
-// pre-approves its tools (headless modes like `dontAsk` deny anything that is
-// not pre-approved), but read-only sandboxes pre-approve only the annotated
-// read-only orchestrator tools so a read-only session cannot silently spawn
-// threads or scheduled tasks.
+// allowedTools skips the SDK permission callback. Only an unrestricted effective
+// policy may preapprove every managed tool, including arbitrary computer_script
+// code. Other modes keep observations automatic and route mutations to approval.
 export function claudeMcpQueryOverrides(input: {
   readonly threadId: ThreadId;
   readonly readOnlySandbox: boolean;
+  readonly permissionMode: PermissionMode;
   readonly allowedTools?: ReadonlyArray<string>;
   /** `mcp__…` rules for the MCP servers and tools the user turned off. */
   readonly disallowedMcpTools?: ReadonlyArray<string>;
@@ -975,9 +973,10 @@ export function claudeMcpQueryOverrides(input: {
       ? disallowed
       : { allowedTools: input.allowedTools, ...disallowed };
   }
-  const mcpAllowedTools = input.readOnlySandbox
-    ? CLAUDE_READ_ONLY_T3_MCP_ALLOWED_TOOLS
-    : [CLAUDE_T3_MCP_TOOL_WILDCARD];
+  const mcpAllowedTools =
+    !input.readOnlySandbox && input.permissionMode === "bypassPermissions"
+      ? [CLAUDE_T3_MCP_TOOL_WILDCARD]
+      : CLAUDE_READ_ONLY_T3_MCP_ALLOWED_TOOLS;
   return {
     allowedTools: Array.from(new Set([...(input.allowedTools ?? []), ...mcpAllowedTools])),
     ...disallowed,
@@ -6865,6 +6864,7 @@ export function makeClaudeAdapterV2(
           );
           const mcpOverrides = claudeMcpQueryOverrides({
             threadId: turnInput.threadId,
+            permissionMode: queryPolicy.permissionMode,
             disallowedMcpTools: claudeDisallowedMcpTools(mcpPreferences),
             readOnlySandbox:
               sandboxPolicyKindForClaudeRuntimePolicy(turnInput.runtimePolicy) === "readOnly",

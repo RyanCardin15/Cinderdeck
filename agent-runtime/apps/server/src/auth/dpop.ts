@@ -1,5 +1,6 @@
 import {
   type DpopVerificationFailureCode as DpopVerificationFailureCodeType,
+  type DpopVerificationResult,
   verifyDpopProof,
 } from "@cinderdeck/shared/dpop";
 import type { DpopFailureReason } from "@cinderdeck/contracts";
@@ -53,7 +54,9 @@ export const mapDpopReplayStoreError = (
         cause: error,
       });
 
-export const verifyRequestDpopProof = (input: {
+export type ValidatedDpopProof = Extract<DpopVerificationResult, { readonly ok: true }>;
+
+export const validateRequestDpopProof = (input: {
   readonly request: HttpServerRequest.HttpServerRequest;
   readonly expectedThumbprint?: string;
   readonly expectedAccessToken?: string;
@@ -84,22 +87,41 @@ export const verifyRequestDpopProof = (input: {
         dpopFailureReason: mapDpopFailureReason(result.code),
       });
     }
+    return result;
+  });
+
+const replayMarkerName = (proof: ValidatedDpopProof) =>
+  Crypto.Crypto.pipe(
+    Effect.flatMap((crypto) =>
+      crypto.digest("SHA-256", new TextEncoder().encode(`${proof.thumbprint}:${proof.jti}`)),
+    ),
+    Effect.map(Encoding.encodeBase64Url),
+    Effect.map((key) => `${DPOP_REPLAY_MARKER_PREFIX}${key}`),
+    Effect.mapError((cause) => new ServerAuthDpopReplayKeyCalculationError({ cause })),
+  );
+
+/** Checking a replay before consuming a one-time bootstrap is read-only. */
+export const checkDpopProofReplay = (proof: ValidatedDpopProof) =>
+  Effect.gen(function* () {
+    const store = yield* ServerSecretStore.ServerSecretStore;
+    const marker = yield* store
+      .get(yield* replayMarkerName(proof))
+      .pipe(Effect.mapError((cause) => new ServerAuthDpopReplayStateRecordError({ cause })));
+    if (Option.isSome(marker))
+      return yield* new ServerAuthInvalidCredentialError({
+        diagnostic: "DPoP proof replayed.",
+        dpopFailureReason: "replay",
+      });
+  });
+
+export const recordDpopProof = (result: ValidatedDpopProof) =>
+  Effect.gen(function* () {
+    const now = yield* DateTime.now;
     const secretStore = yield* ServerSecretStore.ServerSecretStore;
-    const replayKey = yield* Crypto.Crypto.pipe(
-      Effect.flatMap((crypto) =>
-        crypto.digest("SHA-256", new TextEncoder().encode(`${result.thumbprint}:${result.jti}`)),
-      ),
-      Effect.map(Encoding.encodeBase64Url),
-      Effect.mapError(
-        (cause) =>
-          new ServerAuthDpopReplayKeyCalculationError({
-            cause,
-          }),
-      ),
-    );
+    const markerName = yield* replayMarkerName(result);
     yield* secretStore
       .create(
-        `${DPOP_REPLAY_MARKER_PREFIX}${replayKey}`,
+        markerName,
         new TextEncoder().encode(
           [
             `thumbprint=${result.thumbprint}`,
@@ -122,5 +144,10 @@ export const verifyRequestDpopProof = (input: {
           }),
         ),
       );
-    return result.thumbprint;
   });
+
+export const verifyRequestDpopProof = (input: Parameters<typeof validateRequestDpopProof>[0]) =>
+  validateRequestDpopProof(input).pipe(
+    Effect.tap(recordDpopProof),
+    Effect.map((proof) => proof.thumbprint),
+  );
