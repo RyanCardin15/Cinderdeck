@@ -40,6 +40,9 @@ vi.mock("./SessionLauncher", () => ({
 vi.mock("../components/ui/dialog", () => ({
   Dialog: ({ children }: { children: ReactNode }) => <div role="dialog">{children}</div>,
   DialogPopup: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DialogHeader: ({ children }: { children: ReactNode }) => <header>{children}</header>,
+  DialogPanel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DialogFooter: ({ children }: { children: ReactNode }) => <footer>{children}</footer>,
   DialogTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
   DialogDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
 }));
@@ -325,16 +328,14 @@ const removalCapabilities = [
 ];
 const rightClickLane = async (id: string) =>
   act(async () => {
-    container
-      .querySelector(`[data-workspace-id="${id}"] a`)!
-      .dispatchEvent(
-        new MouseEvent("contextmenu", {
-          bubbles: true,
-          cancelable: true,
-          clientX: 24,
-          clientY: 48,
-        }),
-      );
+    container.querySelector(`[data-workspace-id="${id}"] a`)!.dispatchEvent(
+      new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 24,
+        clientY: 48,
+      }),
+    );
   });
 const clickText = async (text: string) =>
   act(async () => {
@@ -368,10 +369,10 @@ it("right-click deletes the clicked remote lane through confirmation without sel
     ],
     { x: 24, y: 48 },
   );
-  expect(container.textContent).toContain("Delete lane lane-b?");
+  expect(container.textContent).toContain("Remove lane “lane-b”?");
   expect(boundary.submit).not.toHaveBeenCalled();
   expect(boundary.navigate).not.toHaveBeenCalled();
-  await clickText("Delete lane-b");
+  await clickText("Remove lane");
   expect(boundary.submit).toHaveBeenCalledTimes(1);
   expect(boundary.submit).toHaveBeenCalledWith({
     environmentId: "remote",
@@ -401,7 +402,7 @@ it("returns to the source workspace only after the selected lane was removed", a
   await act(async () => button("Expand lanes for alpha").click());
   await rightClickLane("lane-a");
   expect(boundary.navigate).not.toHaveBeenCalled();
-  await clickText("Delete lane-a");
+  await clickText("Remove lane");
   expect(boundary.navigate).toHaveBeenCalledWith({
     to: "/workspaces",
     search: {
@@ -428,7 +429,7 @@ it("cancel sends no deletion and a lost reply keeps the saved lane request avail
   expect(boundary.submit).not.toHaveBeenCalled();
   await rightClickLane("lane-b");
   boundary.submit.mockResolvedValue({ _tag: "Failure" });
-  await clickText("Delete lane-b");
+  await clickText("Remove lane");
   expect(container.textContent).toContain("Lane removal outcome unknown");
   expect(container.querySelector('[role="dialog"]')).not.toBeNull();
   expect(boundary.navigate).not.toHaveBeenCalled();

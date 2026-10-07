@@ -158,6 +158,14 @@
 .dh-button:hover:enabled {
   background: color-mix(in srgb, var(--foreground) 10%, var(--dh-bg));
 }
+.dh-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.dh-button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
 .dh-accent {
   background: var(--dh-accent);
   color: var(--primary-foreground);
@@ -599,6 +607,11 @@
   margin: 1.5rem 0;
   border-block: 1px solid var(--border);
   padding: 0.75rem 0 1.25rem;
+}
+:global([data-slot="dialog-panel"]) .dh-launcher {
+  margin: 0;
+  border: 0;
+  padding: 0;
 }
 .dh-launcher p {
   font-size: 0.8rem;

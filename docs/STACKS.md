@@ -222,6 +222,8 @@ A detached worktree requires an explicit name, for example `lane adopt shop revi
 
 ### Removing and cleaning up
 
+Every lane removal entry point opens the same confirmation, including the sidebar context menu, lane overview, native lane cards, and execution map. **Keep worktrees and their files** is selected by default. Choose **Delete managed worktrees** to remove eligible lane folders, and explicitly select the additional checkbox to discard ignored or changed copied files. Cancel leaves the lane unchanged. The native dialog’s **Service logs** disclosure also allows immediate log deletion.
+
 `lane remove` checks for local changes and running dependents, stops only that lane, runs teardown, removes its worktrees. Stop lanes or workspaces using its services first; removal and release otherwise return `in_use`. It keeps Git branches, adopted worktrees, and worktrees another lane still uses, and reports branches with commits on no remote. Tracked or untracked changes block removal. Ignored files (`node_modules`, build output, a changed `.env`) block it too, with their sizes listed, until you pass `--discard-ignored` (MCP `discard_ignored`); the Lanes view asks with a checkbox. Unchanged individual files and links Cinderdeck copied are removed without asking, even when not ignored by Git. Copied directories require explicit discard because their contents can change. Cleanup metadata follows shared worktrees until the last lane is removed. `lane release` forgets a lane and relinquishes ownership of its worktrees, so other lanes cannot delete them later. Failed teardown keeps the lane stopped for inspection; failed starts keep it for inspection, and interrupted creation leaves a recovery record.
 
 

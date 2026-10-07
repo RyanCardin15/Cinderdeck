@@ -9,7 +9,17 @@ import * as Schema from "effect/Schema";
 import { runtime } from "../lib/runtime";
 import { useAtomCommand } from "../state/use-atom-command";
 import { inspectOperation, recentOperations, submitOperation } from "./state";
+import { Button } from "../components/ui/button";
+import {
+  Dialog,
+  DialogPopup,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "../components/ui/dialog";
 import styles from "./workspace.module.css";
+import removalStyles from "./laneRemoval.module.css";
 
 type Resource = IntegrationView["resources"][number];
 type LifecycleMethod = "lane.setup" | "lane.release" | "lane.remove";
@@ -20,6 +30,7 @@ type Props = {
   capabilities: readonly string[];
   enabled: boolean;
   onPending?: (pending: boolean) => void;
+  onWorking?: (working: boolean) => void;
   mode?: "all" | "remove";
   onCancel?: () => void;
   onRemoved?: () => void;
@@ -96,6 +107,7 @@ function LaneLifecyclePanel(props: Props) {
     capabilities,
     enabled,
     onPending,
+    onWorking,
     mode = "all",
     onCancel,
     onRemoved,
@@ -115,6 +127,7 @@ function LaneLifecyclePanel(props: Props) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(mode === "remove");
+  const [removalOpen, setRemovalOpen] = useState(mode === "remove");
   const [deleteWorktrees, setDeleteWorktrees] = useState(false);
   const [discardIgnored, setDiscardIgnored] = useState(false);
   const mounted = useRef(true);
@@ -142,6 +155,10 @@ function LaneLifecyclePanel(props: Props) {
     onPending?.(pending);
     return () => onPending?.(false);
   }, [onPending, pending]);
+  useEffect(() => {
+    onWorking?.(busy);
+    return () => onWorking?.(false);
+  }, [onWorking, busy]);
   useEffect(() => {
     if (
       operation?.receipt?.state === "succeeded" &&
@@ -325,172 +342,224 @@ function LaneLifecyclePanel(props: Props) {
     operation.input.workspaceID === resource.workspaceID &&
     operation.input.generation === resource.generation &&
     operation.input.revision === resource.revision;
-  return (
-    <section aria-label={mode === "remove" ? "Lane removal" : "Lane setup and removal"}>
-      {mode === "all" ? <h3>Lane setup and removal</h3> : null}
-      {namedLane && mode === "all" ? (
-        <p>Run this lane’s configured setup tasks, or remove it when you’re finished.</p>
-      ) : null}
-      {!namedLane && !operation ? <p>Select a named lane to set it up or remove it.</p> : null}
-      {mode === "all" ? (
-        <div className={styles["dh-inspector-actions"]}>
-          <button
-            className={styles["dh-button"]}
-            disabled={!ready || !supported("lane.setup")}
-            onClick={() => void begin("lane.setup")}
-          >
-            Run setup
-          </button>
-          <button
-            className={styles["dh-button"]}
-            disabled={!ready || (!supported("lane.release") && !supported("lane.remove"))}
-            onClick={() => {
-              setDeleteWorktrees(false);
-              setDiscardIgnored(false);
-              setConfirming(true);
-            }}
-          >
-            Remove lane…
-          </button>
-        </div>
-      ) : null}
-      {!enabled && namedLane ? (
-        <p>Fresh Cinderdeck state is required to change this lane.</p>
-      ) : null}
+  const cancel = () => {
+    if (busy) return;
+    setConfirming(false);
+    setRemovalOpen(false);
+    onCancel?.();
+  };
+  const availability = (
+    <>
+      {!enabled && namedLane ? <p role="status">Refresh the lane to continue.</p> : null}
       {!receiptsSupported ? (
-        <p>This Cinderdeck version cannot confirm lane actions. Update it to continue.</p>
+        <p role="status">Update Cinderdeck to confirm lane actions.</p>
       ) : recoveryError ? (
-        <p role="alert">
-          Previous lane requests are unavailable.{" "}
-          <button className={styles["dh-button"]} onClick={() => setRecoveryError(false)}>
+        <div role="alert">
+          <p>Previous lane requests are unavailable.</p>
+          <Button variant="outline" onClick={() => setRecoveryError(false)}>
             Check previous requests
-          </button>
-        </p>
+          </Button>
+        </div>
       ) : !recovered ? (
         <p role="status">Checking previous lane requests…</p>
       ) : null}
-      {confirming ? (
-        <fieldset disabled={busy}>
-          <legend>Remove {name}</legend>
-          <p>
-            Stop this lane’s services and remove it from Cinderdeck. Branches and logs are kept.
-            Adopted and shared worktrees are kept.
-          </p>
-          <label className={styles["dh-field-label"]}>
-            <input
-              type="radio"
-              name={`remove-${resource.workspaceID}`}
-              checked={!deleteWorktrees}
-              onChange={() => {
-                setDeleteWorktrees(false);
-                setDiscardIgnored(false);
-              }}
-            />{" "}
-            Keep worktrees and their files
-          </label>
-          <label className={styles["dh-field-label"]}>
-            <input
-              type="radio"
-              name={`remove-${resource.workspaceID}`}
-              checked={deleteWorktrees}
-              onChange={() => setDeleteWorktrees(true)}
-            />{" "}
-            Delete eligible managed worktrees
-          </label>
-          {deleteWorktrees ? (
-            <label className={styles["dh-field-label"]}>
-              <input
-                type="checkbox"
-                checked={discardIgnored}
-                onChange={(event) => setDiscardIgnored(event.target.checked)}
-              />{" "}
-              Also delete ignored files and changed copied files in those worktrees
-            </label>
+    </>
+  );
+  const operationStatus = operation ? (
+    <div className={removalStyles.result} role="status">
+      <strong>{resultLabel(operation)}</strong>
+      {operation.receipt?.result?.setup?.detail || operation.receipt?.error?.message ? (
+        <p>{operation.receipt?.result?.setup?.detail ?? operation.receipt?.error?.message}</p>
+      ) : null}
+      {operation.receipt?.result?.report ? (
+        <p>
+          {operation.receipt.result.report.removedWorktrees.length} worktrees deleted;{" "}
+          {operation.receipt.result.report.keptWorktrees.length} kept. Branches and logs were kept.
+        </p>
+      ) : null}
+      {!sameOriginalScope ? (
+        <p>
+          This request belongs to the lane state where it was started. Checking it does not change
+          the current lane.
+        </p>
+      ) : null}
+      {unresolved(operation) ? (
+        <>
+          <button
+            className={styles["dh-button"]}
+            disabled={busy || !receiptsSupported}
+            onClick={() => void reconcile()}
+          >
+            Check result
+          </button>
+          {!operation.receipt && sameOriginalScope ? (
+            <button
+              className={styles["dh-button"]}
+              disabled={
+                busy || !sourceReady || !supported(operation.input.method as LifecycleMethod)
+              }
+              onClick={() => void send(operation)}
+            >
+              Send saved request
+            </button>
           ) : null}
+        </>
+      ) : (
+        <button
+          className={styles["dh-button"]}
+          disabled={busy}
+          onClick={() => {
+            save(storageKey, null);
+            setOperation(null);
+            setMessage(null);
+            setRecovered(false);
+            setRemovalOpen(false);
+            setConfirming(false);
+            if (mode === "remove") onCancel?.();
+          }}
+        >
+          Done
+        </button>
+      )}
+    </div>
+  ) : null;
+  const removalContent = (
+    <>
+      <DialogHeader>
+        <DialogTitle>Remove lane “{name}”?</DialogTitle>
+        <DialogDescription>
+          This lane’s services will stop. Choose what happens to its files.
+        </DialogDescription>
+      </DialogHeader>
+      <div className={removalStyles.body}>
+        {availability}
+        {confirming ? (
+          <fieldset className={removalStyles.choices} disabled={busy}>
+            <legend className={removalStyles.legend}>Worktree files</legend>
+            <label className={removalStyles.choice}>
+              <input
+                type="radio"
+                name={`remove-${resource.workspaceID}`}
+                checked={!deleteWorktrees}
+                onChange={() => {
+                  setDeleteWorktrees(false);
+                  setDiscardIgnored(false);
+                }}
+              />
+              <span>
+                <strong>Keep worktrees and their files</strong>
+                <span>Remove the lane from Cinderdeck. Leave its folders on disk.</span>
+              </span>
+            </label>
+            <label className={removalStyles.choice}>
+              <input
+                type="radio"
+                name={`remove-${resource.workspaceID}`}
+                checked={deleteWorktrees}
+                onChange={() => setDeleteWorktrees(true)}
+              />
+              <span>
+                <strong>Delete managed worktrees</strong>
+                <span>
+                  Delete folders created for this lane. Changed source files block deletion.
+                </span>
+              </span>
+            </label>
+            {deleteWorktrees ? (
+              <label className={removalStyles.extra}>
+                <input
+                  type="checkbox"
+                  checked={discardIgnored}
+                  onChange={(event) => setDiscardIgnored(event.target.checked)}
+                />
+                <span>
+                  <strong>Also delete ignored and changed copied files</strong>
+                  <span>Includes local configuration and build output in these worktrees.</span>
+                </span>
+              </label>
+            ) : null}
+            <p className={removalStyles.note}>
+              Git branches, logs, and adopted or shared worktrees are kept. Active agents, runs, or
+              shared services may prevent removal.
+            </p>
+          </fieldset>
+        ) : null}
+        {operationStatus}
+        {message ? (
+          <p className={removalStyles.error} role="alert">
+            {message}
+          </p>
+        ) : null}
+      </div>
+      {confirming ? (
+        <DialogFooter>
+          <Button variant="outline" disabled={busy} onClick={cancel}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={!ready || !supported(deleteWorktrees ? "lane.remove" : "lane.release")}
+            onClick={() => void begin(deleteWorktrees ? "lane.remove" : "lane.release")}
+          >
+            {busy ? "Removing…" : deleteWorktrees ? "Delete lane & worktrees" : "Remove lane"}
+          </Button>
+        </DialogFooter>
+      ) : null}
+    </>
+  );
+  return (
+    <section
+      className={`${removalStyles.panel} ${mode === "remove" ? removalStyles.dialogContent : ""}`}
+      aria-label={mode === "remove" ? "Lane removal" : "Lane setup and removal"}
+    >
+      {mode === "all" ? (
+        <>
+          <h3>Lane setup and removal</h3>
           <p>
-            Active agents, runs and shared services can prevent removal.
-            {deleteWorktrees
-              ? " Changed source files prevent worktree deletion."
-              : " Your worktree files will be preserved."}
+            {namedLane
+              ? "Run this lane’s setup tasks, or remove it when you’re finished."
+              : "Select a named lane to set it up or remove it."}
           </p>
           <div className={styles["dh-inspector-actions"]}>
-            <button
-              className={styles["dh-button"]}
-              disabled={!ready || !supported(deleteWorktrees ? "lane.remove" : "lane.release")}
-              onClick={() => void begin(deleteWorktrees ? "lane.remove" : "lane.release")}
+            <Button
+              variant="outline"
+              disabled={!ready || !supported("lane.setup")}
+              onClick={() => void begin("lane.setup")}
             >
-              {mode === "remove" ? "Delete" : "Remove"} {name}
-            </button>
-            <button
-              className={styles["dh-button"]}
+              Run setup
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!ready || (!supported("lane.release") && !supported("lane.remove"))}
               onClick={() => {
-                setConfirming(false);
-                onCancel?.();
+                setDeleteWorktrees(false);
+                setDiscardIgnored(false);
+                setConfirming(true);
+                setRemovalOpen(true);
               }}
             >
-              Cancel
-            </button>
+              Remove lane…
+            </Button>
           </div>
-        </fieldset>
-      ) : null}
-      {operation ? (
-        <div className={styles["dh-operation"]} role="status">
-          <strong>{resultLabel(operation)}</strong>
-          {operation.receipt?.result?.setup?.detail || operation.receipt?.error?.message ? (
-            <p>{operation.receipt?.result?.setup?.detail ?? operation.receipt?.error?.message}</p>
-          ) : null}
-          {operation.receipt?.result?.report ? (
-            <p>
-              {operation.receipt.result.report.removedWorktrees.length} worktrees deleted;{" "}
-              {operation.receipt.result.report.keptWorktrees.length} kept. Branches and logs were
-              kept.
-            </p>
-          ) : null}
-          {!sameOriginalScope ? (
-            <p>
-              This request belongs to the lane state where it was started. Checking it does not
-              change the current lane.
-            </p>
-          ) : null}
-          {unresolved(operation) ? (
+          {!removalOpen ? (
             <>
-              <button
-                className={styles["dh-button"]}
-                disabled={busy || !receiptsSupported}
-                onClick={() => void reconcile()}
-              >
-                Check result
-              </button>
-              {!operation.receipt && sameOriginalScope ? (
-                <button
-                  className={styles["dh-button"]}
-                  disabled={
-                    busy || !sourceReady || !supported(operation.input.method as LifecycleMethod)
-                  }
-                  onClick={() => void send(operation)}
-                >
-                  Send saved request
-                </button>
-              ) : null}
+              {availability}
+              {operationStatus}
+              {message ? <p role="alert">{message}</p> : null}
             </>
-          ) : (
-            <button
-              className={styles["dh-button"]}
-              disabled={busy}
-              onClick={() => {
-                save(storageKey, null);
-                setOperation(null);
-                setMessage(null);
-                setRecovered(false);
-                if (mode === "remove") setConfirming(true);
-              }}
-            >
-              Done
-            </button>
-          )}
-        </div>
-      ) : null}
-      {message ? <p role="alert">{message}</p> : null}
+          ) : null}
+          <Dialog
+            open={removalOpen}
+            onOpenChange={(open) => {
+              if (!open) cancel();
+            }}
+          >
+            <DialogPopup showCloseButton={!busy}>{removalContent}</DialogPopup>
+          </Dialog>
+        </>
+      ) : (
+        removalContent
+      )}
     </section>
   );
 }

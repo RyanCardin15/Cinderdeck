@@ -157,10 +157,7 @@ struct StackLanesView: View {
           }.fixedSize()
           if lane.pinned { Button("Unpin") { unpin(file) }.help("Follow \(lane.sourceStackID)'s current definition") }
           Spacer()
-          Menu("Remove") {
-            Button("Delete lane…", role: .destructive) { removal = .init(file: file) }
-            Button("Release, keep worktrees…") { removal = .init(file: file, keepWorktrees: true) }
-          }.fixedSize()
+          Button("Remove lane…", role: .destructive) { removal = .init(file: file) }.fixedSize()
         }.disabled(working || viewModel.isBusy(file.id))
       }
     }

@@ -25,6 +25,7 @@ vi.mock("../state/use-atom-command", () => ({
 }));
 vi.mock("../lib/runtime", () => ({ runtime: { runPromise: commands.uuid } }));
 import { LaneLifecycleControls } from "./LaneLifecycleControls";
+import { Dialog, DialogPopup } from "../components/ui/dialog";
 
 const environmentId = EnvironmentId.make("computer");
 const capabilities = [
@@ -132,10 +133,24 @@ afterEach(async () => {
   host.remove();
 });
 const render = async () => {
-  await act(async () => root.render(<LaneLifecycleControls {...props} />));
+  await act(async () =>
+    root.render(
+      props.mode === "remove" ? (
+        <Dialog open>
+          <DialogPopup showCloseButton={false}>
+            <LaneLifecycleControls {...props} />
+          </DialogPopup>
+        </Dialog>
+      ) : (
+        <LaneLifecycleControls {...props} />
+      ),
+    ),
+  );
 };
 const button = (text: string) => {
-  const found = [...host.querySelectorAll("button")].find((item) => item.textContent === text);
+  const found = [...document.body.querySelectorAll("button")].find(
+    (item) => item.textContent === text,
+  );
   if (!found) throw new Error(`Button not found: ${text}`);
   return found;
 };
@@ -143,7 +158,7 @@ const click = async (text: string) => {
   await act(async () => button(text).click());
 };
 const change = async (selector: string) => {
-  await act(async () => (host.querySelector(selector) as HTMLInputElement).click());
+  await act(async () => (document.body.querySelector(selector) as HTMLInputElement).click());
 };
 
 it("opens removal directly, cancels without a request, and suppresses rapid duplicate confirmations", async () => {
@@ -151,15 +166,15 @@ it("opens removal directly, cancels without a request, and suppresses rapid dupl
   const onRemoved = vi.fn();
   props = { ...props, mode: "remove", onCancel, onRemoved };
   await render();
-  expect(host.textContent).not.toContain("Run setup");
+  expect(document.body.textContent).not.toContain("Run setup");
   await click("Cancel");
   expect(onCancel).toHaveBeenCalledOnce();
   expect(commands.submit).not.toHaveBeenCalled();
   await act(async () => root.render(null));
   await render();
   await act(async () => {
-    button("Delete Retry").click();
-    button("Delete Retry").click();
+    button("Remove lane").click();
+    button("Remove lane").click();
   });
   expect(commands.submit).toHaveBeenCalledOnce();
   expect(commands.submit.mock.calls[0]?.[0].input.method).toBe("lane.release");
@@ -176,13 +191,38 @@ it("does not delete a lane that changes while its removal request is being prepa
   );
   props = { ...props, mode: "remove", onRemoved: vi.fn() };
   await render();
-  await click("Delete Retry");
+  await click("Remove lane");
   props = { ...props, resource: { ...resource(), revision: "changed-revision" } };
   await render();
   await act(async () => resolve("delete-key"));
   expect(commands.submit).not.toHaveBeenCalled();
   expect(props.onRemoved).not.toHaveBeenCalled();
-  expect(host.textContent).toContain("The lane changed");
+  expect(document.body.textContent).toContain("The lane changed");
+});
+
+it("keeps the removal dialog open through request preparation and its saved result", async () => {
+  let resolve!: (key: string) => void;
+  commands.uuid.mockImplementation(
+    () =>
+      new Promise<string>((done) => {
+        resolve = done;
+      }),
+  );
+  props = { ...props, onWorking: vi.fn() };
+  await render();
+  await click("Remove lane…");
+  await click("Remove lane");
+  expect(button("Cancel").disabled).toBe(true);
+  expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+  expect(document.body.querySelector('button[aria-label="Close"]')).toBeNull();
+  expect(props.onWorking).toHaveBeenLastCalledWith(true);
+  expect(commands.submit).not.toHaveBeenCalled();
+  await act(async () => resolve("removal-key"));
+  expect(document.body.textContent).toContain("Lane removed from Cinderdeck");
+  expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+  expect(props.onWorking).toHaveBeenLastCalledWith(false);
+  await click("Done");
+  expect(document.body.querySelector('[role="dialog"]')).toBeNull();
 });
 
 it("pins setup to the exact selected lane and reports a failed setup even when the receipt succeeded", async () => {
@@ -204,17 +244,19 @@ it("pins setup to the exact selected lane and reports a failed setup even when t
     environmentId,
     input: { ...input(), operationKey: "new-key" },
   });
-  expect(host.textContent).toContain("Setup failed");
-  expect(host.textContent).toContain("Dependency check failed");
-  expect(host.textContent).not.toContain("Setup succeeded");
+  expect(document.body.textContent).toContain("Setup failed");
+  expect(document.body.textContent).toContain("Dependency check failed");
+  expect(document.body.textContent).not.toContain("Setup succeeded");
   expect(props.onPending).toHaveBeenLastCalledWith(false);
 });
 
 it("defaults removal to preserved worktrees and requires explicit choices for managed and ignored file deletion", async () => {
   await render();
   await click("Remove lane…");
-  expect((host.querySelector('input[type="radio"]') as HTMLInputElement).checked).toBe(true);
-  await click("Remove Retry");
+  expect((document.body.querySelector('input[type="radio"]') as HTMLInputElement).checked).toBe(
+    true,
+  );
+  await click("Remove lane");
   expect(commands.submit.mock.calls[0]?.[0].input).toEqual({
     ...input("lane.release"),
     operationKey: "new-key",
@@ -222,17 +264,19 @@ it("defaults removal to preserved worktrees and requires explicit choices for ma
   await click("Done");
   commands.uuid.mockResolvedValue("delete-key");
   await click("Remove lane…");
-  const radios = host.querySelectorAll('input[type="radio"]');
+  const radios = document.body.querySelectorAll('input[type="radio"]');
   await act(async () => (radios[1] as HTMLInputElement).click());
-  expect((host.querySelector('input[type="checkbox"]') as HTMLInputElement).checked).toBe(false);
+  expect((document.body.querySelector('input[type="checkbox"]') as HTMLInputElement).checked).toBe(
+    false,
+  );
   await change('input[type="checkbox"]');
-  await click("Remove Retry");
+  await click("Delete lane & worktrees");
   expect(commands.submit.mock.calls[1]?.[0].input).toEqual({
     ...input("lane.remove"),
     operationKey: "delete-key",
     arguments: { workspace: "lane-a", discard_ignored: true },
   });
-  expect(host.textContent).toContain("Lane removed from Cinderdeck");
+  expect(document.body.textContent).toContain("Lane removed from Cinderdeck");
   expect(
     commands.submit.mock.calls.every(
       ([call]) =>
@@ -276,7 +320,7 @@ it("never admits stale, unsupported, changed-definition or primary-checkout life
   };
   await render();
   expect(button("Run setup").disabled).toBe(true);
-  expect(host.textContent).toContain("Select a named lane");
+  expect(document.body.textContent).toContain("Select a named lane");
   expect(commands.submit).not.toHaveBeenCalled();
 });
 
@@ -284,7 +328,7 @@ it("recovers the original receipt after a lost reply without resubmitting or cha
   commands.submit.mockResolvedValue({ _tag: "Failure" });
   await render();
   await click("Run setup");
-  expect(host.textContent).toContain("Setup outcome unknown");
+  expect(document.body.textContent).toContain("Setup outcome unknown");
   expect(button("Run setup").disabled).toBe(true);
   const original = commands.submit.mock.calls[0]?.[0].input as IntegrationOperationInput;
   props = {
@@ -299,14 +343,14 @@ it("recovers the original receipt after a lost reply without resubmitting or cha
     }),
   });
   await render();
-  expect(host.textContent).not.toContain("Send saved request");
+  expect(document.body.textContent).not.toContain("Send saved request");
   await click("Check result");
   expect(commands.inspect).toHaveBeenCalledWith({
     environmentId,
     input: { operationKey: "new-key", waitMs: 25000 },
   });
   expect(commands.submit).toHaveBeenCalledTimes(1);
-  expect(host.textContent).toContain("Setup succeeded");
+  expect(document.body.textContent).toContain("Setup succeeded");
 });
 
 it("restores a saved request from the server journal and preserves an authoritative dirty refusal", async () => {
@@ -316,7 +360,7 @@ it("restores a saved request from the server journal and preserves an authoritat
     value: [record(input("services.start")), record(original)],
   });
   await render();
-  expect(host.textContent).toContain("Lane removal outcome unknown");
+  expect(document.body.textContent).toContain("Lane removal outcome unknown");
   expect(commands.submit).not.toHaveBeenCalled();
   commands.inspect.mockResolvedValue({
     _tag: "Success",
@@ -326,8 +370,8 @@ it("restores a saved request from the server journal and preserves an authoritat
     },
   });
   await click("Check result");
-  expect(host.textContent).toContain("Lane removal failed");
-  expect(host.textContent).toContain("The worktree has changed source files.");
+  expect(document.body.textContent).toContain("Lane removal failed");
+  expect(document.body.textContent).toContain("The worktree has changed source files.");
   expect(props.onPending).toHaveBeenLastCalledWith(false);
 });
 
@@ -356,10 +400,10 @@ it("keeps a late lane-A result out of lane B and restores it when the user retur
       }),
     }),
   );
-  expect(host.textContent).not.toContain("Retry lane check failed");
+  expect(document.body.textContent).not.toContain("Retry lane check failed");
   expect(button("Run setup").disabled).toBe(false);
   props = { ...props, resource: resource() };
   await render();
-  expect(host.textContent).toContain("Retry lane check failed");
+  expect(document.body.textContent).toContain("Retry lane check failed");
   expect(commands.submit).toHaveBeenCalledTimes(1);
 });
