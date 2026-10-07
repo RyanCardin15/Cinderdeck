@@ -229,17 +229,3 @@ struct CinderdeckMockMenuBar: View, Equatable {
     .frame(width: 98, height: 18)
   }
 }
-
-// MARK: - Backward-compatible Wrapper
-
-struct CinderdeckMockDesktopCanvas: View {
-  var app: CinderdeckMockApp = .notes
-
-  var body: some View {
-    ZStack(alignment: .top) {
-      CinderdeckMockWallpaper(app: app).equatable()
-      CinderdeckMockMenuBar(app: app).equatable()
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-  }
-}

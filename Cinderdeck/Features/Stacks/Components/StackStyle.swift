@@ -138,12 +138,6 @@ struct StackPillButtonStyle: ButtonStyle {
   }
 }
 
-struct StackTightLabelStyle: LabelStyle {
-  func makeBody(configuration: Configuration) -> some View {
-    HStack(spacing: 5) { configuration.icon.font(.system(size: 9.5, weight: .bold)); configuration.title }
-  }
-}
-
 /// Compact icon button with a hover highlight.
 struct StackIconButton: View {
   let systemName: String

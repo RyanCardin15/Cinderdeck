@@ -24,44 +24,6 @@ enum ToolbarConstants {
   static let pressAnimation: Animation = .easeInOut(duration: 0.1)
 }
 
-// MARK: - Native Toolbar Button Style (for icon buttons)
-
-struct NativeToolbarButtonStyle: ButtonStyle {
-  var isActive: Bool = false
-
-  func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .opacity(configuration.isPressed ? 0.6 : 1.0)
-      .animation(ToolbarConstants.pressAnimation, value: configuration.isPressed)
-  }
-}
-
-// MARK: - Record Button Style
-
-struct RecordButtonStyle: ButtonStyle {
-  func makeBody(configuration: Configuration) -> some View {
-    DeckButtonStyle(prominent: true, tint: DeckStyle.danger).makeBody(configuration: configuration)
-  }
-}
-
-// MARK: - Options Button Style (text with chevron, native look)
-
-struct OptionsButtonStyle: ButtonStyle {
-  func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .font(.system(size: 13, weight: .regular))
-      .foregroundColor(.primary)
-      .padding(.horizontal, 12)
-      .padding(.vertical, 6)
-      .background(
-        RoundedRectangle(cornerRadius: ToolbarConstants.buttonCornerRadius)
-          .fill(Color.primary.opacity(configuration.isPressed ? 0.12 : 0))
-      )
-      .contentShape(RoundedRectangle(cornerRadius: ToolbarConstants.buttonCornerRadius))
-      .animation(ToolbarConstants.pressAnimation, value: configuration.isPressed)
-  }
-}
-
 // MARK: - Recording Toolbar Divider
 
 struct RecordingToolbarDivider: View {
@@ -104,18 +66,6 @@ struct StopButtonStyle: ButtonStyle {
 }
 
 // MARK: - Previews
-
-#Preview("Record Button") {
-  HStack {
-    Button(L10n.RecordingToolbar.options) {}
-      .buttonStyle(OptionsButtonStyle())
-    Button(L10n.RecordingToolbar.record) {}
-      .buttonStyle(RecordButtonStyle())
-  }
-  .padding()
-  .background(.ultraThinMaterial)
-  .clipShape(RoundedRectangle(cornerRadius: ToolbarConstants.toolbarCornerRadius))
-}
 
 #Preview("Toolbar Divider") {
   HStack {

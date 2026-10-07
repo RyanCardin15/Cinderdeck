@@ -93,7 +93,7 @@ Settings → History: enable toggle, floating panel (position, scale, max items,
 
 ## Dead / Legacy Code
 
-Unused (kept in tree): `HistoryMainView` (except `HistoryBackdropView`, still used by the floating panel + preferences + cloud history), `HistoryItemView`, `HistoryToolbar`, `HistoryFilterBar`, `HistoryGridView`. Live card views are `HistoryCardView` / `HistoryExpandedCaptureCardView` / `HistoryCompactCarouselView`.
+The former standalone history window views were removed. `HistoryMainView.swift` now holds only `HistoryBackdropView`, shared by the floating panel, preferences and cloud history. Live card views are `HistoryCardView` / `HistoryExpandedCaptureCardView` / `HistoryCompactCarouselView`.
 
 ## Related docs
 

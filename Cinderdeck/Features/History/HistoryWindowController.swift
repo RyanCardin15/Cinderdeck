@@ -10,68 +10,9 @@ import Carbon.HIToolbox
 
 extension Notification.Name {
   static let historyCopySelection = Notification.Name("historyCopySelection")
-  static let historyMoveClipboardSelection = Notification.Name("historyMoveClipboardSelection")
   static let historyActivateSelection = Notification.Name("historyActivateSelection")
   static let historyDeleteSelection = Notification.Name("historyDeleteSelection")
   static let historySelectAll = Notification.Name("historySelectAll")
-}
-
-final class HistoryWindow: NSWindow {
-  override func performKeyEquivalent(with event: NSEvent) -> Bool {
-    guard event.type == .keyDown else {
-      return super.performKeyEquivalent(with: event)
-    }
-
-    let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-
-    if event.keyCode == 8 && flags == .command {
-      if isTextInputActive {
-        return super.performKeyEquivalent(with: event)
-      }
-
-      NotificationCenter.default.post(name: .historyCopySelection, object: self)
-      return true
-    }
-
-    if event.keyCode == 0 && flags == .command {
-      if isTextInputActive {
-        return super.performKeyEquivalent(with: event)
-      }
-
-      NotificationCenter.default.post(name: .historySelectAll, object: self)
-      return true
-    }
-
-    if HistoryFloatingManager.shared.isToggleModeShortcutEnabled,
-       let toggleShortcut = HistoryFloatingManager.shared.toggleModeShortcut,
-       let eventShortcut = ShortcutConfig(from: event) {
-      if eventShortcut.keyCode == toggleShortcut.keyCode && eventShortcut.modifiers == toggleShortcut.modifiers {
-        if isTextInputActive {
-          return super.performKeyEquivalent(with: event)
-        }
-        HistoryFloatingManager.shared.togglePresentationMode()
-        return true
-      }
-    }
-
-    return super.performKeyEquivalent(with: event)
-  }
-
-  override func keyDown(with event: NSEvent) {
-    let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-
-    if !isTextInputActive, flags.isEmpty, (event.keyCode == 51 || event.keyCode == 117) {
-      NotificationCenter.default.post(name: .historyDeleteSelection, object: self)
-      return
-    }
-
-    super.keyDown(with: event)
-  }
-
-  private var isTextInputActive: Bool {
-    guard let responder = firstResponder else { return false }
-    return responder is NSTextView || responder is NSTextField
-  }
 }
 
 /// Manages the capture history browser window

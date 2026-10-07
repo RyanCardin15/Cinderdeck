@@ -39,35 +39,6 @@ struct GradientPresetButton: View {
   }
 }
 
-// MARK: - Placeholders
-
-struct WallpaperPlaceholder: View {
-  var body: some View {
-    RoundedRectangle(cornerRadius: Size.radiusMd)
-      .fill(Color.gray.opacity(0.3))
-      .frame(width: Size.gridItem, height: Size.gridItem)
-  }
-}
-
-// MARK: - Wallpaper Preset Button
-
-struct WallpaperPresetButton: View {
-  let preset: WallpaperPreset
-  let isSelected: Bool
-  let action: () -> Void
-
-  var body: some View {
-    Button(action: action) {
-      RoundedRectangle(cornerRadius: Size.radiusMd)
-        .fill(preset.gradient)
-        .sidebarItemStyle(isSelected: isSelected)
-    }
-    .buttonStyle(.plain)
-    .accessibilityLabel(preset.displayName)
-    .accessibilityAddTraits(isSelected ? .isSelected : [])
-  }
-}
-
 // MARK: - Custom Wallpaper Button
 
 struct CustomWallpaperButton: View {
@@ -197,33 +168,6 @@ struct DefaultWallpaperButton: View {
 
 // MARK: - Grant Access Button
 
-struct GrantAccessButton: View {
-  let action: () -> Void
-
-  var body: some View {
-    Button(action: action) {
-      VStack(spacing: Spacing.xs) {
-        Image(systemName: "folder.badge.plus")
-          .font(.system(size: 16, weight: .medium))
-        Text(L10n.Onboarding.grantAccess)
-          .font(Typography.labelSmall)
-      }
-      .foregroundColor(.primary.opacity(0.5))
-      .actionButtonStyle()
-    }
-    .buttonStyle(.plain)
-  }
-}
-
-struct BlurredPlaceholder: View {
-  var body: some View {
-    RoundedRectangle(cornerRadius: Size.radiusMd)
-      .fill(Color.gray.opacity(0.2))
-      .frame(width: Size.gridItem, height: Size.gridItem)
-      .blur(radius: 2)
-  }
-}
-
 struct BlurredBackgroundEffectButton: View {
   let effect: BlurredBackgroundEffect
   let backgroundStyle: BackgroundStyle
@@ -281,85 +225,6 @@ struct BlurredBackgroundEffectButton: View {
 }
 
 // MARK: - Color Swatch Grid
-
-struct ColorSwatchGrid: View {
-  @Binding var selectedColor: Color?
-  @ObservedObject private var paletteStore = AnnotateColorPaletteStore.shared
-  @State private var draftCustomColor = Color.red
-
-  private let colors: [[Color]] = [
-    [.red, .orange, .yellow, .green, .blue, .purple, .pink],
-    [.gray, .white, .black, Color(white: 0.3), Color(white: 0.5), Color(white: 0.7), Color(white: 0.9)],
-  ]
-
-  var body: some View {
-    VStack(spacing: Spacing.sm) {
-      ForEach(0 ..< colors.count, id: \.self) { row in
-        HStack(spacing: Spacing.sm) {
-          ForEach(0 ..< colors[row].count, id: \.self) { col in
-            ColorSwatch(
-              color: colors[row][col],
-              isSelected: AnnotateColorPaletteStore.colorsMatch(selectedColor, colors[row][col])
-            ) {
-              selectedColor = colors[row][col]
-            }
-          }
-        }
-      }
-
-      LazyVGrid(
-        columns: Array(repeating: GridItem(.flexible(), spacing: GridConfig.gap), count: GridConfig.colorColumns),
-        spacing: GridConfig.gap
-      ) {
-        ForEach(paletteStore.customColors, id: \.self) { color in
-          AnnotateColorSwatchButton(
-            color: color,
-            isSelected: AnnotateColorPaletteStore.colorsMatch(selectedColor, color),
-            size: Size.colorSwatchSmall,
-            onDelete: {
-              paletteStore.removeColor(color)
-            }
-          ) {
-            selectedColor = color
-          }
-        }
-
-        AnnotateCustomColorPickerControl(
-          selectedColor: customColorBinding,
-          draftColor: $draftCustomColor,
-          swatchSize: Size.colorSwatchSmall
-        )
-      }
-    }
-  }
-
-  private var customColorBinding: Binding<Color> {
-    Binding(
-      get: { selectedColor ?? draftCustomColor },
-      set: { color in
-        draftCustomColor = color
-        selectedColor = color
-      }
-    )
-  }
-}
-
-struct ColorSwatch: View {
-  let color: Color
-  let isSelected: Bool
-  let action: () -> Void
-
-  var body: some View {
-    Button(action: action) {
-      Circle()
-        .fill(color)
-        .colorSwatchStyle(isSelected: isSelected)
-    }
-    .buttonStyle(.plain)
-    .accessibilityLabel(AnnotateColorPaletteStore.accessibilityName(for: color))
-    .accessibilityAddTraits(isSelected ? .isSelected : [])
-  }
-}
 
 struct AnnotateColorSwatchButton: View {
   let color: Color
@@ -859,46 +724,6 @@ private struct HSBAColor: Equatable {
 
 private func clamped(_ value: Double) -> Double {
   min(max(value, 0), 1)
-}
-
-// MARK: - Slider Row
-
-struct SliderRow: View {
-  let label: String
-  @Binding var value: CGFloat
-  let range: ClosedRange<CGFloat>
-  var onDragging: ((Bool, CGFloat) -> Void)? = nil
-
-  @State private var localValue: CGFloat = 0
-  @State private var isDragging: Bool = false
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: Spacing.xs) {
-      Text(label)
-        .font(Typography.labelMedium)
-        .foregroundColor(SidebarColors.labelSecondary)
-
-      Slider(
-        value: $localValue,
-        in: range,
-        onEditingChanged: { editing in
-          isDragging = editing
-          onDragging?(editing, localValue)
-          if !editing {
-            // Sync to binding only when drag ends
-            value = localValue
-          }
-        }
-      )
-      .controlSize(.small)
-      .accessibilityLabel(label)
-    }
-    .onAppear { localValue = value }
-    .onChange(of: value) { newValue in
-      // External changes sync to local (e.g., preset selection)
-      if !isDragging { localValue = newValue }
-    }
-  }
 }
 
 // MARK: - Alignment Grid

@@ -1121,7 +1121,7 @@ final class AreaSelectionController: NSObject {
     retainedPopoverVisibilityRefreshTask = nil
   }
 
-  func applyBackdrop(_ backdrop: AreaSelectionBackdrop, for displayID: CGDirectDisplayID, animated: Bool = false) {
+  func applyBackdrop(_ backdrop: AreaSelectionBackdrop, for displayID: CGDirectDisplayID) {
     let shouldDeferVisualBackdrop = manualSelectionStartPoint != nil
       && selectionBackdrops[displayID] == nil
     liveFallbackDisplayIDs.remove(displayID)
@@ -1138,8 +1138,7 @@ final class AreaSelectionController: NSObject {
       deferredBackdropDisplayIDs.insert(displayID)
     } else {
       deferredBackdropDisplayIDs.remove(displayID)
-      // Animate only when caller opts in and no manual drag is active.
-      window.overlayView.applyBackdrop(backdrop, animated: animated && manualSelectionStartPoint == nil)
+      window.overlayView.applyBackdrop(backdrop)
     }
     window.overlayView.setSelectionEnabled(selectionEnabled(for: displayID))
     window.overlayView.activatePendingSelectionIfNeeded()
@@ -1340,7 +1339,7 @@ final class AreaSelectionController: NSObject {
 
           guard let self, selectionSessionID == sessionID else { return }
           if let backdrop {
-            applyBackdrop(backdrop, for: displayID, animated: true)
+            applyBackdrop(backdrop, for: displayID)
           }
         }
       }
@@ -3256,28 +3255,12 @@ final class AreaSelectionOverlayView: NSView {
     CATransaction.commit()
   }
 
-  func applyBackdrop(_ backdrop: AreaSelectionBackdrop, animated: Bool = false) {
-    let shouldAnimate = animated
-      && BackdropTransitionEffect.shouldCrossfade(
-        isReapplication: currentBackdropImage != nil,
-        isVisible: backdrop.isVisible
-      )
-
-    // Frame, scale, and visibility are never animated.
+  func applyBackdrop(_ backdrop: AreaSelectionBackdrop) {
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     snapshotLayer.frame = bounds
     snapshotLayer.contentsScale = backdrop.scaleFactor
     snapshotLayer.isHidden = !backdrop.isVisible
-    CATransaction.commit()
-
-    // Contents swap: crossfade on re-apply when opted-in, hard swap otherwise.
-    CATransaction.begin()
-    if shouldAnimate {
-      BackdropTransitionEffect.addCrossfade(to: snapshotLayer)
-    } else {
-      CATransaction.setDisableActions(true)
-    }
     snapshotLayer.contents = backdrop.image
     CATransaction.commit()
 
