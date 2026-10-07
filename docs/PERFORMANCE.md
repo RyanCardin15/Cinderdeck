@@ -155,3 +155,39 @@ TEST_RUNNER_CINDERDECK_LANE_PERFORMANCE_AUDIT=1 xcodebuild test \
 Set `TEST_RUNNER_CINDERDECK_LANE_PERFORMANCE_FILES` to change the number of files
 per repository. The benchmark prints all five samples and verifies lane readiness,
 repository count, pinned commits and unchanged original branches.
+
+## Lane creation modal: October 7, 2026
+
+The creation sheet previously rediscovered repository roots and resolved symlinks
+while evaluating its body, including after every lane-name edit. Repository rows
+and their branch menus also rebuilt when unrelated form fields changed.
+
+The sheet now discovers one repository snapshot on a background executor, leaving
+the name field usable while discovery runs. Rendering, button eligibility and
+submission use that snapshot. The repository list skips updates when its bases,
+current branches and progress are unchanged. A new presentation discovers fresh
+filesystem state, and the lane store still validates current Git metadata before
+mutations. Branch menus query reference names without reading every branch's
+commit subject or sorting by commit date. Explicit repository base revisions are
+pinned with the existing four-reader concurrency bound.
+
+Creation reports each repository's checkout, submodule initialization and readiness,
+followed by file copying, saving, workspace loading, setup and service startup.
+The sheet shows elapsed time throughout. Repository readiness does not imply that
+setup or the complete lane has finished; failed creation reports its cleanup stage.
+
+In a disposable fixture with four repository roots, 64 services and 64 tasks,
+the former discovery work cost a median **28.279 ms per edit** across ten samples.
+The new one-time background snapshot took **10.474 ms**. These measure repository
+discovery, not native UI frame pacing. The four-repository/10,000-file checkout
+benchmark measured a **633.623 ms** median and **679.307 ms** maximum across five
+samples (baseline on this run: 669.432 ms median). Host workload affects these
+timings; hooks, submodules, file copies and setup commands remain additional work.
+
+All 68 existing lane regressions passed. Four presentation tests passed, covering
+snapshot freshness, aliases and shared folders, branch reference names, truthful
+checkout progress and progress forwarding through the reviewed creation/setup
+path. Both opt-in benchmarks passed. The whole-app builder rebuilt native Debug,
+bundled the existing runtime, and passed bundle identity and signature verification.
+Manual typing responsiveness in the running app and performance on personal
+repositories have not been profiled.

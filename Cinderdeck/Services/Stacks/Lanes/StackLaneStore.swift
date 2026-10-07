@@ -343,7 +343,8 @@ nonisolated enum StackLaneStore {
   /// Creates or adopts worktrees and journals the record before any Git change, so an
   /// interrupted creation stays discoverable. `occupiedPorts` must include every port in use.
   @concurrent static func create(source: StackDefinition, request: StackLaneRequest, owner: StackActor, directory: URL,
-    worktreeRoot: URL, occupiedPorts: Set<Int>) async throws -> Creation {
+    worktreeRoot: URL, occupiedPorts: Set<Int>, progress: StackLaneProgressHandler? = nil) async throws -> Creation {
+    await progress?(.checkingRepositories)
     guard source.lane == nil else { throw StackError.message("Create lanes from the original stack, not from another lane.") }
     var warnings: [String] = []
     let existing = try records(in: directory)
@@ -441,6 +442,7 @@ nonisolated enum StackLaneStore {
           if let ref = repo.laneFrom { refs[repo.id] = ref }
         }
       }
+      var requested: [(id: String, root: URL, ref: String)] = []
       for (id, ref) in refs.sorted(by: { $0.key < $1.key }) {
         guard !id.isEmpty, id.utf8.count <= 160, !ref.isEmpty, ref.utf8.count <= 200,
           !ref.hasPrefix("-"), !ref.contains("\0"), !ref.contains("\n"), !ref.contains("\r"),
@@ -449,7 +451,15 @@ nonisolated enum StackLaneStore {
           throw StackError.message("Choose a valid start revision for an isolated repository in this workspace: \(id).")
         }
         if adopted?.source == root { continue }
-        let commit = try await git(["rev-parse", "--verify", "--quiet", ref + "^{commit}"], at: root)
+        requested.append((id, root, ref))
+      }
+      // Pin independent repositories together, without moving validation past
+      // the journal or changing the alias/conflicting-base safety checks.
+      let commits = try await mapRepositories(requested) { item in
+        try await git(["rev-parse", "--verify", "--quiet", item.ref + "^{commit}"], at: item.root)
+      }
+      for (item, commit) in zip(requested, commits) {
+        let id = item.id, root = item.root
         if let previous = starts[root], previous != commit {
           throw StackError.message("Repository aliases request different start revisions for \(root.path).")
         }
@@ -546,6 +556,7 @@ nonisolated enum StackLaneStore {
     do {
       try Task.checkCancellation()
       try FileManager.default.createDirectory(at: laneDirectory, withIntermediateDirectories: true)
+      await progress?(.preparingWorktrees(worktrees.map(\.source)))
       // Worktrees sharing Git metadata stay serial. Independent repositories use
       // at most four workers; finish active workers before attempting rollback.
       let treeSnapshot = worktrees, startSnapshot = starts, fallbackStart = info.from
@@ -562,13 +573,16 @@ nonisolated enum StackLaneStore {
               do {
                 try Task.checkCancellation()
                 if case .create = plans[tree.source] {
+                  await progress?(.checkingOut(tree.source))
                   try await addWorktree(tree, branch: worktreeBranch, from: startSnapshot[tree.source] ?? fallbackStart, explicitStart: startSnapshot[tree.source] != nil)
                 }
                 tree.baseCommit = try? await git(["rev-parse", "HEAD"], at: tree.path)
                 try Task.checkCancellation()
                 if case .create = plans[tree.source], FileManager.default.fileExists(atPath: tree.path.appendingPathComponent(".gitmodules").path) {
+                  await progress?(.updatingSubmodules(tree.source))
                   _ = try await git(["submodule", "update", "--init", "--recursive"], at: tree.path, timeout: 600)
                 }
+                await progress?(.repositoryReady(tree.source))
                 results.append(Outcome(index: index, tree: tree, error: nil))
               } catch {
                 results.append(Outcome(index: index, tree: tree, error: error))
@@ -610,11 +624,14 @@ nonisolated enum StackLaneStore {
           return false
         }
       }
+      await progress?(.copyingFiles)
       record.copied += try copyFiles(patterns, link: settings?.link ?? [], worktrees: newTrees)
       record.ready = true
+      await progress?(.savingLane)
       try write(record, in: directory)
       return Creation(record: record, warnings: warnings)
     } catch {
+      await progress?(.recovering)
       // The journal owns these unique destination paths. Inspect even a failed
       // checkout: Git can leave a registered partial worktree on cancellation.
       let destinations = worktrees.filter { if case .create = plans[$0.source] { return true }; return false }

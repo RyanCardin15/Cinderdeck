@@ -555,7 +555,8 @@ final class StackSupervisor: ObservableObject {
     try await createLane(stack: id, request: .init(branch: branch), actor: actor).file
   }
 
-  func createLane(stack id: String, request: StackLaneRequest, actor: StackActor) async throws -> LaneCreation {
+  func createLane(stack id: String, request: StackLaneRequest, actor: StackActor,
+    progress: StackLaneProgressHandler? = nil) async throws -> LaneCreation {
     guard !isBootstrapping else { throw StackError.message("Cinderdeck is still reconnecting to running services. Try again in a moment.") }
     await laneLock.acquire()
     let creation: StackLaneStore.Creation
@@ -563,13 +564,14 @@ final class StackSupervisor: ObservableObject {
       guard states[id]?.operation == nil, let source = definition(id) else { throw StackError.message("This stack needs a valid definition and must finish its current operation") }
       guard definition(id) == source else { throw StackControlError(code: "stale_revision", message: "The source workspace changed before lane creation.") }
       creation = try await StackLaneStore.create(source: source, request: request, owner: actor,
-        directory: lanesDirectory, worktreeRoot: worktreeRoot, occupiedPorts: occupiedPorts())
+        directory: lanesDirectory, worktreeRoot: worktreeRoot, occupiedPorts: occupiedPorts(), progress: progress)
     } catch {
       laneLock.release()
       await reloadDefinitions()
       throw error
     }
     laneLock.release()
+    progress?(.loadingWorkspace)
     await reloadDefinitions()
     guard let file = files.first(where: { $0.id == creation.record.id }), file.definition != nil else {
       let issues = files.first { $0.id == creation.record.id }?.issues.map(\.message).joined(separator: "; ") ?? ""
