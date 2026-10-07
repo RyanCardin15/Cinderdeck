@@ -1,5 +1,5 @@
 /**
- * Naming shared by the release workflow, the runtime installers, and
+ * Naming shared by release artifacts, the runtime installers, and
  * install scripts for the per-platform CLI archives attached to GitHub
  * Releases. Every consumer derives the same file names from a version and a
  * platform key, so a rename here is a release-breaking change.
@@ -11,11 +11,9 @@ export const CLI_RELEASE_CHECKSUMS_FILE = "SHA256SUMS";
 export const CLI_RELEASE_BASE_URL_ENV = "DECKHAND_RELEASE_BASE_URL";
 
 /**
- * The archives a release attaches. Kept in step with the build_linux_cli
- * matrix, build_windows_arm64_cli, and the `cli_archive` rows in
- * .github/workflows/release.yml: a key here without a build there produces
- * download URLs that 404, and a build there without a key here is
- * unreachable from every installer.
+ * Compatibility names for CLI archives attached to historical releases.
+ * Preserve these keys so existing installers and configured mirrors derive
+ * the same download URLs. The embedded runtime has no independent release.
  */
 // No darwin-x64: Node single-executables are unsupported on x64 macOS (the
 // SEA docs list macOS as arm64 only) and the binary segfaults on start.

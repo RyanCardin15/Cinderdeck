@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Persistent local signing, or one-time certificate creation for release secrets.
+# Persistent local signing, or one-time certificate creation with a private backup export.
 # Usage: ./scripts/create-signing-cert.sh [--local] [cert-name] [validity-days]
 set -euo pipefail
 umask 077
@@ -9,7 +9,7 @@ LOCAL_ONLY=0
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   echo "Usage: $0 [--local] [cert-name] [validity-days]"
   echo "--local: reuse/create a local identity without exporting or printing its private key."
-  echo "Without --local: create a release identity and print an encrypted P12 for GitHub Secrets."
+  echo "Without --local: create a release identity and print an encrypted P12 for private backup."
   exit 0
 fi
 if [[ "${1:-}" == "--local" ]]; then
@@ -36,7 +36,7 @@ if [[ -n "$MATCHES" ]]; then
   [[ "$MATCHES" != *$'\n'* ]] || fail "Multiple valid identities named '$CERT_NAME'; resolve the duplicate certificates in Keychain Access."
   echo "Reusing code-signing identity: $CERT_NAME ($MATCHES)"
   if [[ "$LOCAL_ONLY" == 0 ]]; then
-    echo "No new certificate created. Export the existing identity from Keychain Access for release secrets."
+    echo "No new certificate created. Export the existing identity from Keychain Access for private backup."
   fi
   exit 0
 fi
@@ -69,10 +69,10 @@ openssl req -x509 -newkey rsa:2048 -nodes \
 if [[ "$LOCAL_ONLY" == 1 ]]; then
   P12_PASSWORD=$(uuidgen)
 elif [[ -n "${CINDERDECK_P12_PASSWORD:-}" ]]; then
-  # Supplied by setup-release-signing.sh, which uploads the export itself.
+  # Optional password supplied by the caller for an encrypted backup export.
   P12_PASSWORD="$CINDERDECK_P12_PASSWORD"
 else
-  printf 'Password for the P12 export (SELF_SIGNED_CERT_PASSWORD): ' >&2
+  printf 'Password for the encrypted P12 backup export: ' >&2
   read -rs P12_PASSWORD
   printf '\n' >&2
   [[ -n "$P12_PASSWORD" ]] || fail "Password cannot be empty."
@@ -96,7 +96,7 @@ MATCHES=$(printf '%s\n' "$IDENTITIES" | awk -F '"' -v name="$CERT_NAME" '$2 == n
 echo "Code-signing identity ready: $CERT_NAME ($MATCHES)"
 
 if [[ "$LOCAL_ONLY" == 0 ]]; then
-  echo "Add SELF_SIGNED_CERT_PASSWORD and the following SELF_SIGNED_CERT_P12 to GitHub Secrets."
+  echo "Keep this encrypted P12 export and its password in a private backup."
   echo "This encrypted export contains your private key; do not commit it or share the output."
   echo "--- BEGIN BASE64 ---"
   base64 < "$P12_PATH"

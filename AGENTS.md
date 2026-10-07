@@ -4,4 +4,6 @@ This repository builds one Cinderdeck macOS super app and its mobile companion. 
 
 Use `scripts/build-unified.sh` to build the complete app. Native Cinderdeck owns app identity, capture permissions, services, lanes, logs, recordings and Sparkle updates. The Cinderdeck runtime is a private bundled child with no separate product release. Do not reintroduce the former T3 website, relay deployment, installers or upstream patch policy. Preserve licenses, original copyright notices, protocol fixtures and compatibility storage keys.
 
+GitHub Actions is disabled for this project. Do not add hosted workflows. Run checks locally and follow docs/RELEASES.md for manual whole-app release preparation and publication.
+
 Preserve unrelated uncommitted work. Stop only processes you started and tracked; never kill by name or path matching. Never use live user data for development. Run checks appropriate to the changed surfaces and describe any unverified runtime behavior. Do not install, launch a browser/device, publish, merge or create a PR without authorization for that action. Repository-wide cleanup warrants package typechecks and build validation.

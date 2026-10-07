@@ -61,7 +61,7 @@ fi
 ditto "$ARCHIVE_PATH/Products/Applications/Cinderdeck.app" "$APP_PATH"
 success "App bundle extracted to $APP_PATH"
 
-# Step 4: Dry-Run Codesigning (using Ad-hoc identity "-" to test the CI pipeline structure)
+# Step 4: Dry-Run Codesigning (using Ad-hoc identity "-" to test local signing structure)
 info "Starting dry-run ad-hoc codesigning (simulating non-Developer ID environment)..."
 SIGN_IDENTITY="-"
 TIMESTAMP_FLAG="--timestamp=none"
@@ -70,7 +70,7 @@ TIMESTAMP_FLAG="--timestamp=none"
 info "Cleaning extended attributes..."
 xattr -rc "$APP_PATH"
 
-# Sign Sparkle components inside-out (exact same logic as CI)
+# Sign Sparkle components inside-out.
 info "Signing Sparkle framework sub-components..."
 if [ -d "$SPARKLE_FRAMEWORK/Versions/B/XPCServices/Installer.xpc" ]; then
   info "Signing Installer.xpc..."

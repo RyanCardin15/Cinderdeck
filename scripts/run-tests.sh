@@ -16,7 +16,7 @@ BUILD_DIR="${BUILD_DIR:-build}"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-${BUILD_DIR}/DerivedData}"
 # If running in CI, default to local package cache to avoid caching issues on CI runners.
 # Otherwise, default to empty to let xcodebuild use the user's global SwiftPM cache for speed.
-if [[ -n "${CI:-}" || -n "${GITHUB_ACTIONS:-}" ]]; then
+if [[ -n "${CI:-}" ]]; then
   SOURCE_PACKAGES_PATH="${SOURCE_PACKAGES_PATH:-${BUILD_DIR}/SourcePackages}"
 else
   SOURCE_PACKAGES_PATH="${SOURCE_PACKAGES_PATH:-}"
@@ -178,7 +178,7 @@ XCODEBUILD_CMD=(
   -resultBundlePath "$RESULT_BUNDLE_PATH"
 )
 
-if [[ -n "${CI:-}" || -n "${GITHUB_ACTIONS:-}" ]]; then
+if [[ -n "${CI:-}" ]]; then
   XCODEBUILD_CMD+=(
     CODE_SIGN_IDENTITY=
     CODE_SIGNING_REQUIRED=NO

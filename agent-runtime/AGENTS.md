@@ -10,7 +10,7 @@ This directory is part of the Cinderdeck super app, the private runtime of the n
 - Internal deckhand module paths, DECKHAND_* environment variables, wire identifiers and persisted keys are compatibility details. Do not rename or migrate them merely to change displayed branding. Preserve provider protocol fixtures and all original licenses/copyright notices.
 - Never point a development server at live user data. Use an explicit --home-dir in temporary storage. The native host supplies its AgentRuntime directory; linked worktrees use their own ignored .t3 compatibility directory. Copy test data read-only into an isolated directory; never symlink it to a live store.
 - Preserve other contributors' uncommitted work. Never kill processes by name, path matching, or pkill -f. Stop only a process you captured at spawn.
-- Vendor-hosted accounts, telemetry, update feeds, deployment credentials and T3 release installers do not belong in this product. Whole-app releases use the root workflows; there is no upstream patch allowlist or subtree sync gate.
+- Vendor-hosted accounts, telemetry, update feeds, deployment credentials and T3 release installers do not belong in this product. Whole-app releases are built and published manually; see ../docs/RELEASES.md. This repository does not use GitHub Actions, and there is no upstream patch allowlist or subtree sync gate.
 
 ## Architecture
 
@@ -24,6 +24,6 @@ This directory is part of the Cinderdeck super app, the private runtime of the n
 ## Verification and delivery
 
 - Use focused tests and package typechecks appropriate to the change. Backend behavior changes require meaningful tests; do not add tests that mirror implementation or merely assert markup.
-- Full checks are appropriate when explicitly requested for a repository-wide change. Otherwise CI owns the complete suite.
+- Full checks are appropriate when explicitly requested for a repository-wide change. Run checks locally; there is no hosted CI suite.
 - Do not run browsers/computer use without user authorization. Do not publish, merge or create a PR unless requested.
 - Update inaccurate docs in place. Do not commit implementation plans or scratch notes. PR evidence belongs in the PR, not the source tree.

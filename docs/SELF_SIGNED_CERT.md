@@ -53,20 +53,19 @@ chmod +x scripts/create-signing-cert.sh
 ./scripts/create-signing-cert.sh
 ```
 
-You'll be prompted for a password — remember it for step 2. This separate release mode uses the name **Cinderdeck Self-Signed** and prints an encrypted private-key export. Keep that output private. If the named identity already exists, the script reuses it without generating a replacement; export it from Keychain Access if you need its P12 again.
+You'll be prompted for a password for the encrypted private-key export. This separate release mode uses the name **Cinderdeck Self-Signed**. Keep the export and its password in a private backup. If the named identity already exists, the script reuses it without generating a replacement; export it from Keychain Access if you need its P12 again.
 
-### 2. Add GitHub Secrets
+### 2. Build and Verify Locally
 
-Go to **Settings → Secrets and variables → Actions** in your GitHub repo and add:
+Pass the exact identity to the unified builder:
 
-| Secret Name | Value |
-|---|---|
-| `SELF_SIGNED_CERT_P12` | Base64 output from the script |
-| `SELF_SIGNED_CERT_PASSWORD` | The password you entered |
+```bash
+./scripts/build-unified.sh --configuration Release --arch arm64 \
+  --output-dir /absolute/path/to/release-output \
+  --signing-identity 'Cinderdeck Self-Signed'
+```
 
-### 3. Verify
-
-Push a release and check the "Import self-signed certificate" step in the workflow logs. You should see the certificate imported successfully.
+The builder verifies the outer app and its private bundled runtime. Keep the identity and its private key in the release Mac's keychain; GitHub secrets are not part of the manual release process. Follow [RELEASES.md](RELEASES.md) to package, sign the update archive, and publish.
 
 ## Local Testing
 
@@ -105,19 +104,19 @@ Clean up test artifacts when done:
 
 ## Signing Hierarchy
 
-The release workflow uses this fallback chain:
+Choose an explicit persistent identity for the release:
 
 1. **Developer ID** — best (Gatekeeper pass + TCC persist). Requires Apple Developer Program.
 2. **Self-signed cert** — good (TCC persist, Gatekeeper warning on first install).
-3. **Ad-hoc** — worst (TCC revoked every update).
+3. **Ad-hoc** — suitable for disposable Debug builds; refused for normal Release builds because permission identity changes between builds.
 
 ## Upgrading to Developer ID
 
 When you enroll in Apple Developer Program:
 
-1. Add `DEVELOPER_ID_P12`, `DEVELOPER_ID_PASSWORD` secrets
-2. Optionally add `APPLE_ID`, `APPLE_ID_PASSWORD`, `APPLE_TEAM_ID` for notarization
-3. Remove `SELF_SIGNED_CERT_P12` and `SELF_SIGNED_CERT_PASSWORD` (optional)
+1. Import your Developer ID certificate and private key into the release Mac's keychain.
+2. Select that exact identity with `--signing-identity` and set `CINDERDECK_SIGNING_TIMESTAMP=--timestamp` when building for distribution.
+3. Configure local `notarytool` credentials, then notarize and staple the release archive.
 4. Users re-grant permissions **once** on the first update with the new identity
 
 ## Certificate Renewal
@@ -128,4 +127,4 @@ The default certificate is valid for 10 years. The script deliberately refuses t
 ./scripts/create-signing-cert.sh "Cinderdeck Self-Signed 2036" 3650
 ```
 
-Then update the GitHub Secrets with the new values and the release workflow's `SIGN_IDENTITY` to match the new name. Changing the certificate changes the designated requirement; users must re-grant permissions once. For local renewal, create a new named identity with `--local` and select it with `CINDERDECK_SIGNING_IDENTITY` when running the installer with `--reset-permissions`.
+Then select the new name with the unified builder's `--signing-identity` option and privately back up the new certificate and key. Changing the certificate changes the designated requirement; users must re-grant permissions once. For local renewal, create a new named identity with `--local` and select it with `CINDERDECK_SIGNING_IDENTITY` when running the installer with `--reset-permissions`.

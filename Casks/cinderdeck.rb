@@ -1,4 +1,4 @@
-# Generated with a real artifact checksum by the stable release workflow.
+# Updated manually with the stable release artifact's checksum.
 cask "cinderdeck" do
   version "1.1.0"
   sha256 "265c0e6220a8b143b38707c36940a3edc239851ad8e8512939b238c5dc898789"
