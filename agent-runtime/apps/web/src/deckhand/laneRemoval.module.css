@@ -1,0 +1,137 @@
+.panel {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.panel > h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.panel > p {
+  margin: 0 0 12px;
+  color: var(--muted-foreground);
+}
+.dialogContent {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.body {
+  padding: 0 24px 24px;
+  min-height: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.body > p,
+.body > div > p {
+  margin: 0 0 12px;
+}
+.choices {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.legend {
+  margin-bottom: 10px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+.choice,
+.extra {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  cursor: pointer;
+}
+.choice {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--popover);
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+.choice:hover {
+  background: var(--accent);
+}
+.choice:has(input:checked) {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 7%, var(--popover));
+}
+.choice:has(input:focus-visible),
+.extra:has(input:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.choice > input,
+.extra > input {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  margin: 2px 0 0;
+  padding: 0;
+  accent-color: var(--primary);
+}
+.choice > span,
+.extra > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.choice strong,
+.extra strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+.choice span > span,
+.extra span > span,
+.note {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.extra {
+  margin: 2px 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--muted);
+}
+.note {
+  margin: 4px 0 0;
+}
+.choices:disabled .choice,
+.choices:disabled .extra {
+  cursor: default;
+  opacity: 0.6;
+}
+.result {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--muted);
+  margin-top: 12px;
+}
+.result p {
+  margin: 0;
+  color: var(--muted-foreground);
+}
+.error {
+  color: var(--deck-danger);
+}
+@media (prefers-reduced-motion: reduce) {
+  .choice {
+    transition: none;
+  }
+}

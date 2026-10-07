@@ -60,6 +60,12 @@ html.dark:not([data-theme-id]) [data-app-sidebar] {
 /* Shared product roles keep operational states legible in both appearances.
    Brand colors remain owned by the selected theme's primary/ring tokens. */
 :root {
+  /* Operational controls also render in portals outside the workspace shell. */
+  --dh-accent: var(--primary);
+  --dh-accent-text: var(--primary);
+  --dh-bg: var(--background);
+  --dh-line: color-mix(in srgb, var(--foreground) 12%, transparent);
+  --dh-muted: var(--muted-foreground);
   --deck-success: #16733d;
   --deck-warning: #855800;
   --deck-danger: #b32c40;

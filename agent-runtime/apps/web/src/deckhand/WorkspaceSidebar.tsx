@@ -39,7 +39,14 @@ import { Tooltip, TooltipTrigger, TooltipPopup } from "../components/ui/tooltip"
 import { useAgentObservation } from "./useAgentObservation";
 import { WorkspaceCreateLaneButton, WorkspaceSettingsButton } from "./WorkspaceSettingsButton";
 import { SessionLauncher } from "./SessionLauncher";
-import { Dialog, DialogPopup, DialogTitle, DialogDescription } from "../components/ui/dialog";
+import {
+  Dialog,
+  DialogPopup,
+  DialogHeader,
+  DialogPanel,
+  DialogTitle,
+  DialogDescription,
+} from "../components/ui/dialog";
 import {
   overviewResources,
   overviewWorkspaceContexts,
@@ -326,24 +333,30 @@ function AgentBadges({
   return (
     <span className={styles.badges}>
       {activity.running > 0 ? (
-        <span
-          className={`${styles.badge} ${styles.running}`}
-          aria-label={`${label}: ${activity.running} ${activity.running === 1 ? "agent" : "agents"} running`}
-          title={`${activity.running} ${activity.running === 1 ? "agent" : "agents"} running`}
-        >
-          <PlayIcon size={9} fill="currentColor" aria-hidden />
-          {activity.running}
-        </span>
+        <Tooltip>
+          <TooltipTrigger
+            render={<span />}
+            className={`${styles.badge} ${styles.running}`}
+            aria-label={`${label}: ${activity.running} ${activity.running === 1 ? "agent" : "agents"} running`}
+          >
+            <PlayIcon size={9} fill="currentColor" aria-hidden />
+            {activity.running}
+          </TooltipTrigger>
+          <TooltipPopup>{`${activity.running} ${activity.running === 1 ? "agent" : "agents"} running`}</TooltipPopup>
+        </Tooltip>
       ) : null}
       {activity.review > 0 ? (
-        <span
-          className={`${styles.badge} ${styles.review}`}
-          aria-label={`${label}: ${activity.review} ${activity.review === 1 ? "agent needs" : "agents need"} review`}
-          title={`${activity.review} ${activity.review === 1 ? "agent needs" : "agents need"} review`}
-        >
-          <CircleDotIcon size={10} aria-hidden />
-          {activity.review}
-        </span>
+        <Tooltip>
+          <TooltipTrigger
+            render={<span />}
+            className={`${styles.badge} ${styles.review}`}
+            aria-label={`${label}: ${activity.review} ${activity.review === 1 ? "agent needs" : "agents need"} review`}
+          >
+            <CircleDotIcon size={10} aria-hidden />
+            {activity.review}
+          </TooltipTrigger>
+          <TooltipPopup>{`${activity.review} ${activity.review === 1 ? "agent needs" : "agents need"} review`}</TooltipPopup>
+        </Tooltip>
       ) : null}
     </span>
   );
@@ -699,24 +712,28 @@ function WorkspaceSidebarTree({
           }}
         >
           <DialogPopup>
-            <DialogTitle>New session in {name(launchTarget)}</DialogTitle>
-            <DialogDescription>
-              {launchTarget.workspace?.lane ? "Lane folders" : "Workspace folders"} · opens with
-              your chat defaults.
-            </DialogDescription>
-            <SessionLauncher
-              key={`${environmentId}:${installationID}:${launchTarget.workspaceID}:${launchTarget.generation}`}
-              environmentId={environmentId}
-              installationID={installationID}
-              resource={launchTarget}
-              enabled={catalogFresh && canLaunch(launchTarget)}
-              compact
-              autoOpen
-              onOpened={() => {
-                setLaunchTarget(null);
-                onNavigate?.();
-              }}
-            />
+            <DialogHeader>
+              <DialogTitle>New session in {name(launchTarget)}</DialogTitle>
+              <DialogDescription>
+                {launchTarget.workspace?.lane ? "Lane folders" : "Workspace folders"} · opens with
+                your chat defaults.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogPanel>
+              <SessionLauncher
+                key={`${environmentId}:${installationID}:${launchTarget.workspaceID}:${launchTarget.generation}`}
+                environmentId={environmentId}
+                installationID={installationID}
+                resource={launchTarget}
+                enabled={catalogFresh && canLaunch(launchTarget)}
+                compact
+                autoOpen
+                onOpened={() => {
+                  setLaunchTarget(null);
+                  onNavigate?.();
+                }}
+              />
+            </DialogPanel>
           </DialogPopup>
         </Dialog>
       ) : null}
@@ -737,6 +754,7 @@ function SidebarLaneRemoval({
   onClose: () => void;
   onRemoved: () => void;
 }) {
+  const [working, setWorking] = useState(false);
   const result = useAtomValue(
     workspaceView({
       environmentId,
@@ -762,14 +780,10 @@ function SidebarLaneRemoval({
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) onClose();
+        if (!open && !working) onClose();
       }}
     >
-      <DialogPopup>
-        <DialogTitle>Delete lane {name(target)}?</DialogTitle>
-        <DialogDescription>
-          Choose what to keep when removing this lane from Cinderdeck.
-        </DialogDescription>
+      <DialogPopup showCloseButton={!working}>
         <LaneLifecycleControls
           environmentId={environmentId}
           installationID={installationID}
@@ -779,6 +793,7 @@ function SidebarLaneRemoval({
           mode="remove"
           onCancel={onClose}
           onRemoved={onRemoved}
+          onWorking={setWorking}
         />
       </DialogPopup>
     </Dialog>
