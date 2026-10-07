@@ -12,14 +12,21 @@ import * as Contracts from "@cinderdeck/contracts/deckhand";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as ManagedSessionLaunch from "./ManagedSessionLaunch.ts";
-import { resolveReviewerSource, ReviewerSourceError } from "./ReviewerSource.ts";
+import {
+  resolveReviewerSource,
+  ReviewerSourceError,
+  reviewerContextMatches,
+} from "./ReviewerSource.ts";
 import * as Relationships from "./Relationships.ts";
 import * as WorkspaceBackend from "./WorkspaceBackend.ts";
 import * as CheckoutIdentity from "./CheckoutIdentity.ts";
 import * as ProcessRunner from "../processRunner.ts";
+import { readCodeReviewSkill } from "./CodeReviewSkill.ts";
 
 export class ReviewerLaunch extends Context.Service<
   ReviewerLaunch,
@@ -55,7 +62,6 @@ const encodeQueueInput = Schema.encodeEffect(Schema.fromJsonString(Queue.Reviewe
 const decodeQueueInput = Schema.decodeEffect(Schema.fromJsonString(Queue.ReviewerLaunchInput));
 const encodeQueueRecord = Schema.encodeEffect(Schema.fromJsonString(Queue.ReviewerQueueRecord));
 const decodeQueueRecord = Schema.decodeEffect(Schema.fromJsonString(Queue.ReviewerQueueRecord));
-const encodePreview = Schema.encodeEffect(Schema.fromJsonString(Queue.ReviewerLaunchPreview));
 const isManagedError = Schema.is(ManagedSessionLaunch.ManagedLaunchError);
 const make = Effect.gen(function* () {
   yield* Migrations.migrate;
@@ -69,6 +75,8 @@ const make = Effect.gen(function* () {
     | SqlClient.SqlClient
   >();
   const sql = yield* SqlClient.SqlClient;
+  const skillDependencies = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
+  const backend = yield* WorkspaceBackend.WorkspaceBackend;
   const managed = yield* ManagedSessionLaunch.ManagedSessionLaunch;
   const providerSessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
   const projections = yield* ProjectionStore.ProjectionStoreV2;
@@ -79,13 +87,21 @@ const make = Effect.gen(function* () {
       }>`SELECT record_json FROM deckhand_sessions WHERE thread_id=${input.threadId}`;
       if (!rows[0]) return yield* new ReviewerSourceError({ reason: "invalid_feature" });
       const binding = yield* decodeSession(rows[0].record_json);
-      return yield* resolveReviewerSource({
+      const source = yield* resolveReviewerSource({
         featureId: binding.featureId,
         sourceCheckoutId: binding.checkoutId,
         ...(binding.repositoryScope?.[0]
           ? { repositoryPhysicalId: binding.repositoryScope[0] }
           : {}),
       }).pipe(Effect.provideContext(reviewerDependencies));
+      const parent = yield* backend.context(source.workspaceID);
+      const root = parent.resource.workspace?.root ?? parent.resource.workspace?.repos[0]?.path;
+      if (!root) return yield* new ReviewerSourceError({ reason: "stale_context" });
+      const codeReviewSkill = yield* readCodeReviewSkill(root).pipe(
+        Effect.provideContext(skillDependencies),
+        Effect.mapError((cause) => new ReviewerSourceError({ reason: "invalid_feature", cause })),
+      );
+      return { ...source, codeReviewSkill };
     }).pipe(
       Effect.mapError((cause) =>
         isSourceError(cause) ? cause : new ReviewerSourceError({ reason: "stale_context", cause }),
@@ -105,7 +121,13 @@ const make = Effect.gen(function* () {
       start: false,
       modelSelection: input.modelSelection,
       runtimeMode: input.runtimeMode,
-      objective: `Review the following committed revision set in this isolated checkout. Source checkout changes are excluded. Do not modify the source lane or submit a hosting-provider review.\n${heads}\n\n${input.objective}`,
+      ...(input.interactionMode ? { interactionMode: input.interactionMode } : {}),
+      codeReviewSkill: preview.codeReviewSkill ?? {
+        path: Queue.CODE_REVIEW_SKILL_PATH,
+        content: Queue.DEFAULT_CODE_REVIEW_SKILL,
+        configured: false,
+      },
+      objective: `Review the following committed revision set in this isolated checkout, following the attached Code Review Skill. Source checkout changes are excluded. Do not modify the source lane or submit a hosting-provider review.\n${heads}\n\n${input.objective}`,
     });
   };
   const queueError = (key: string, reason: ManagedSessionLaunch.ManagedLaunchError["reason"]) =>
@@ -154,9 +176,15 @@ const make = Effect.gen(function* () {
           ),
         ),
       );
-      const currentJSON = yield* encodePreview(current);
-      const expected = yield* encodePreview(input.preview);
-      if (currentJSON !== expected) return yield* queueError(input.operationKey, "stale_context");
+      const expected = input.preview;
+      if (
+        current.installationID !== expected.installationID ||
+        current.workspaceID !== expected.workspaceID ||
+        current.generation !== expected.generation ||
+        current.repositoryID !== expected.repositoryID ||
+        !reviewerContextMatches(current.reviewerContext, expected.reviewerContext)
+      )
+        return yield* queueError(input.operationKey, "stale_context");
     });
   const briefCreation = (record: Rpc.ManagedCreateRecord) => ({
     operationKey: record.operationKey,
@@ -174,7 +202,6 @@ const make = Effect.gen(function* () {
           let record = saved.record;
           if (["accepted", "needs_refresh", "failed", "cancelled"].includes(record.state))
             return record;
-          const wasUncertain = record.state === "unknown_outcome";
           if (!record.attemptKey) {
             const validation = yield* validateQueuedSource(saved.input).pipe(Effect.result);
             if (validation._tag === "Failure")

@@ -52,6 +52,18 @@ it("opens the overview by default after the native computer becomes available, r
       to: "/workspaces",
       search: { environment: "local-owner", context: "lane", tab: "recordings" },
     });
+    await act(async () =>
+      boundary.listener!({ workspaceID: "workspace", section: "code-review-skill" }),
+    );
+    expect(boundary.navigate).toHaveBeenLastCalledWith({
+      to: "/workspaces",
+      search: {
+        environment: "local-owner",
+        context: "workspace",
+        tab: "agents",
+        editReviewSkill: true,
+      },
+    });
   } finally {
     await act(async () => root.unmount());
   }

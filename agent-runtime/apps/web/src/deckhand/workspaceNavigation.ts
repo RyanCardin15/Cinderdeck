@@ -22,6 +22,7 @@ export type WorkspaceSearch = {
   prOffset?: number;
   expectedGeneration?: number;
   expectedInstallationID?: string;
+  editReviewSkill?: boolean;
 };
 // A conversation belongs to its execution environment, even when the viewer's
 // primary computer differs. Saved native pins refuse a replaced lane/install.
@@ -46,6 +47,8 @@ export function connectedWorkspaceSearch(
 }
 export function validateWorkspaceSearch(value: Record<string, unknown>): WorkspaceSearch {
   const search: WorkspaceSearch = {};
+  if (value.editReviewSkill === true || value.editReviewSkill === "true")
+    search.editReviewSkill = true;
   if (value.tab !== undefined) {
     if (
       ![

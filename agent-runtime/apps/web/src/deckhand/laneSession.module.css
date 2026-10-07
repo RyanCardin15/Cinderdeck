@@ -530,41 +530,29 @@
   text-transform: capitalize;
 }
 
-.reviewer {
-  position: relative;
+.reviewerTrigger {
   font-size: 11px;
-}
-.reviewer > summary {
   cursor: pointer;
-  list-style: none;
   border: 1px solid var(--lane-line);
   border-radius: 5px;
   padding: 6px 8px;
   color: var(--foreground);
   white-space: nowrap;
 }
-.reviewer > summary::-webkit-details-marker {
-  display: none;
-}
 .reviewerForm {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
-  width: min(400px, 85vw);
-  max-height: 65vh;
+  max-height: calc(100dvh - 64px);
   overflow: auto;
-  z-index: 45;
-  padding: 17px;
-  border: 1px solid var(--lane-line);
-  border-radius: 8px;
+  padding: 24px;
+  --lane-line: var(--border);
+  --lane-ember: var(--primary);
   background: var(--background);
   box-shadow: 0 12px 38px #0004;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-auto-rows: max-content;
   gap: 8px;
 }
 .reviewerForm h2 {
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 600;
   margin: 0;
 }
@@ -609,6 +597,12 @@
   color: var(--muted-foreground);
   overflow-wrap: anywhere;
 }
+.reviewerForm pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 1.5;
+}
 .reviewerForm button {
   padding: 8px 11px;
   border: 1px solid var(--lane-line);
@@ -622,15 +616,6 @@
   font-size: 12px;
   color: var(--lane-ember);
   padding: 5px 0;
-}
-@media (max-width: 640px) {
-  .reviewer {
-    position: static;
-  }
-  .reviewerForm {
-    right: 12px;
-    top: auto;
-  }
 }
 
 .sidebarLabel {

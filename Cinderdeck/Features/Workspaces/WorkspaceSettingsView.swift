@@ -19,6 +19,10 @@ struct WorkspaceSettingsView: View {
   @State private var confirmsDeletion = false
   @State private var deleting = false
   @State private var deletionError: String?
+  @State private var reviewSkill = ""
+  @State private var savedReviewSkill: String?
+  @State private var loadedReviewSkill = ""
+  @State private var reviewSkillMessage: String?
   @ObservedObject private var runner = WorkspaceRunner.shared
 
   private var workspaceID: String { file.deletingPathExtension().lastPathComponent }
@@ -37,7 +41,7 @@ struct WorkspaceSettingsView: View {
 
   private var hasEdits: Bool {
     guard let definition else { return false }
-    return name != definition.name || folders != definition.repos || files != definition.files
+    return name != definition.name || folders != definition.repos || files != definition.files || reviewSkill != loadedReviewSkill
   }
 
   var body: some View {
@@ -68,6 +72,23 @@ struct WorkspaceSettingsView: View {
             pathRow(definition.root, icon: "folder.fill")
             Text("Chats can start in any workspace folder. Services and tasks keep their configured locations.")
               .font(.caption).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 8) {
+              DeckSectionLabel(title: "Code Review Skill")
+              Text("Isolated review chats use these workspace instructions. Customize them here or open a session to view and edit the skill.")
+                .font(.caption).foregroundStyle(.secondary)
+              Text(WorkspaceCodeReviewSkill.file(root: definition.root).path)
+                .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+              TextEditor(text: $reviewSkill).font(.system(.caption, design: .monospaced))
+                .frame(height: 160).accessibilityLabel("Code Review Skill")
+              HStack {
+                Button("Save skill") { saveReviewSkill(openSession: false) }
+                Button("Open in Session") { saveReviewSkill(openSession: true) }
+                Spacer()
+                Text(savedReviewSkill == nil ? "Using default skill" : "Workspace skill")
+                  .font(.caption).foregroundStyle(.secondary)
+              }
+              if let reviewSkillMessage { Text(reviewSkillMessage).font(.caption).textSelection(.enabled) }
+            }
           }
           HStack {
             DeckSectionLabel(title: "Folders")
@@ -201,6 +222,8 @@ struct WorkspaceSettingsView: View {
       let loaded = StackDefinitionLoader.load(source, file: file, validatePaths: false)
       guard let value = loaded.definition else { error = loaded.issues.map(\.message).joined(separator: "\n"); return }
       original = source; definition = value; name = value.name; folders = value.repos; files = value.files; error = nil
+      let skill = try WorkspaceCodeReviewSkill.load(root: value.root)
+      savedReviewSkill = skill.saved; loadedReviewSkill = skill.content; reviewSkill = skill.content; reviewSkillMessage = nil
     } catch { self.error = error.localizedDescription }
   }
 
@@ -255,9 +278,57 @@ struct WorkspaceSettingsView: View {
     do {
       let updated = try WorkspaceSettingsWriter.source(original: original, definition: definition,
         name: name, folders: folders, files: files)
+      if reviewSkill != loadedReviewSkill {
+        try WorkspaceCodeReviewSkill.save(root: definition.root, original: savedReviewSkill, content: reviewSkill)
+        savedReviewSkill = reviewSkill; loadedReviewSkill = reviewSkill
+      }
       try WorkspaceDefinitionWriter.saveSource(file: file, original: original, source: updated)
       onSaved(); dismiss()
     } catch { self.error = error.localizedDescription }
+  }
+
+  private func saveReviewSkill(openSession: Bool) {
+    guard let definition else { return }
+    do {
+      try WorkspaceCodeReviewSkill.save(root: definition.root, original: savedReviewSkill, content: reviewSkill)
+      savedReviewSkill = reviewSkill; loadedReviewSkill = reviewSkill; reviewSkillMessage = "Code review skill saved. New reviews will use these instructions."
+      if openSession {
+        guard CinderdeckRuntimeController.shared.show(workspaceID: workspaceID, section: "code-review-skill") else {
+          throw StackError.message("The session could not be opened. Try again when Cinderdeck is connected.")
+        }
+        dismiss()
+      }
+    } catch { reviewSkillMessage = error.localizedDescription }
+  }
+}
+
+nonisolated enum WorkspaceCodeReviewSkill {
+  static func file(root: URL) -> URL { root.appendingPathComponent(".cinderdeck/skills/code-review/SKILL.md") }
+
+  static func load(root: URL, defaultContent: String? = nil) throws -> (saved: String?, content: String) {
+    let url = file(root: root)
+    if FileManager.default.fileExists(atPath: url.path) {
+      let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+      guard size <= 24000 else { throw StackError.message("Code review skills must contain at most 6000 characters.") }
+      let text = try String(contentsOf: url, encoding: .utf8)
+      return (text, text)
+    }
+    if let defaultContent { return (nil, defaultContent) }
+    guard let bundled = StackAgentSkills.bundledFolder()?.appendingPathComponent("cinderdeck-code-review/SKILL.md") else {
+      throw StackError.message("The bundled code review skill is unavailable. Rebuild the complete Cinderdeck app.")
+    }
+    return (nil, try String(contentsOf: bundled, encoding: .utf8))
+  }
+
+  static func save(root: URL, original: String?, content: String) throws {
+    guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, content.utf16.count <= 6000 else {
+      throw StackError.message("Enter a code review skill with at most 6000 characters.")
+    }
+    let url = file(root: root)
+    let current = FileManager.default.fileExists(atPath: url.path) ? try String(contentsOf: url, encoding: .utf8) : nil
+    guard current == original else { throw StackError.message("The code review skill changed on disk. Reopen workspace settings to review it before saving.") }
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try content.write(to: url, atomically: true, encoding: .utf8)
   }
 }
 

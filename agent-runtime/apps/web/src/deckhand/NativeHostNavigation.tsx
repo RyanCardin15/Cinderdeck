@@ -19,6 +19,11 @@ export function NativeHostNavigation() {
     // Native Agent access buttons and older shells land on the MCP & skills settings.
     if (section === "agent-access") {
       void navigate({ to: "/settings/integrations", hash: AGENT_ACCESS_SETTINGS_ID });
+    } else if (section === "code-review-skill" && target.workspaceID) {
+      void navigate({
+        to: "/workspaces",
+        search: { environment, context: target.workspaceID, tab: "agents", editReviewSkill: true },
+      });
     } else if (["services", "tasks", "workflows", "runs", "recordings"].includes(section)) {
       void navigate({
         to: "/workspaces",

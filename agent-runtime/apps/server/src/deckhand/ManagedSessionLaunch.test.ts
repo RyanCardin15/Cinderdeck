@@ -39,6 +39,8 @@ import * as ManagedSessionLaunch from "./ManagedSessionLaunch.ts";
 import * as Relationships from "./Relationships.ts";
 import { resolveReviewerSource } from "./ReviewerSource.ts";
 import { currentFeatureWorkspaceAuthorized } from "./CurrentCheckout.ts";
+import * as ServerConfig from "../config.ts";
+import { resolveAttachmentPath, resolveAttachmentPathById } from "../attachmentStore.ts";
 
 const instanceId = ProviderInstanceId.make("codex-fixture");
 const decodeInput = Schema.decodeUnknownSync(Rpc.ManagedLaunchInput);
@@ -81,7 +83,11 @@ const hello = Schema.decodeUnknownSync(Integration.IntegrationHello)({
   maximumFrameBytes: 4194304,
   maximumPageSize: 100,
   maximumWaitMs: 25000,
-  capabilities: ["operations.lane.create.repositoryRefs", "operations.receipts.wait"],
+  capabilities: [
+    "operations.lane.create.repositoryRefs",
+    "operations.lane.create.reviewer",
+    "operations.receipts.wait",
+  ],
 });
 const provider = Schema.decodeSync(ServerProvider)({
   instanceId,
@@ -103,6 +109,7 @@ const serviceLayer = ManagedSessionLaunch.layer.pipe(
 const baseLayer = Layer.mergeAll(
   NodeSqliteClient.layer({ filename: ":memory:" }),
   ProcessRunner.layer,
+  ServerConfig.layerTest(process.cwd(), { prefix: "dh-skill-attachments-" }),
 ).pipe(Layer.provideMerge(NodeServices.layer));
 const fixture = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -255,13 +262,17 @@ const fixture = Effect.gen(function* () {
           const feature = yield* decodeFeatureJson(intendedFeatures[0]!.record_json);
           assert.equal(feature.objective, input().objective);
           assert.isTrue(
-            feature.workspaceId === intended!.workspaceBindingId ||
+            intentInput.reviewerContext !== undefined ||
+              feature.workspaceId === intended!.workspaceBindingId ||
               (yield* currentFeatureWorkspaceAuthorized(
                 feature.id,
                 intended!.workspaceBindingId,
               ).pipe(Effect.provideService(SqlClient.SqlClient, sql))),
           );
-          assert.deepEqual(intended!.repositoryIDs, ["frontend"]);
+          assert.deepEqual(
+            intended!.repositoryIDs,
+            resources.get("payment")!.workspace.repos.map((repo) => repo.id),
+          );
           assert.equal(
             (yield* sql`SELECT checkout_id FROM deckhand_feature_checkouts WHERE feature_id = ${intended!.featureId}`)
               .length,
@@ -273,28 +284,35 @@ const fixture = Effect.gen(function* () {
               .length,
             intentInput.reviewerContext ? 1 : 0,
           );
+          assert.equal(request.arguments.reviewer, intentInput.reviewerContext ? true : undefined);
           const approvedBranch =
             mode === "reviewed" ? "codex/reviewed-feature" : String(request.arguments.branch);
-          yield* git(source, [
-            "worktree",
-            "add",
-            "-b",
-            approvedBranch,
-            created,
-            String((request.arguments.repositoryRefs as Record<string, string>).frontend),
-          ]);
-          creations++;
           const resource = structuredClone(resources.get("lane")!);
           resource.workspaceID = "created";
           resource.workspace.id = "created";
-          const identity = yield* identities.resolve(created);
           resource.workspace.lane!.name =
             mode === "reviewed" ? "Human reviewed name" : String(request.arguments.branch);
           resource.workspace.lane!.directory = created;
-          resource.workspace.repos[0]!.physicalID = identity.physicalId;
-          resource.workspace.repos[0]!.repositoryPhysicalID = identity.repositoryPhysicalId;
-          resource.workspace.repos[0]!.path = created;
-          resource.workspace.repos[0]!.branch = approvedBranch;
+          for (const [index, repo] of resource.workspace.repos.entries()) {
+            const parent = resources
+              .get("payment")!
+              .workspace.repos.find((item) => item.id === repo.id)!;
+            const target = index === 0 ? created : `${created}-${repo.id}`;
+            yield* git(parent.path, [
+              "worktree",
+              "add",
+              "-b",
+              approvedBranch,
+              target,
+              String((request.arguments.repositoryRefs as Record<string, string>)[repo.id]),
+            ]);
+            const identity = yield* identities.resolve(target);
+            repo.physicalID = identity.physicalId;
+            repo.repositoryPhysicalID = identity.repositoryPhysicalId;
+            repo.path = target;
+            repo.branch = approvedBranch;
+          }
+          creations++;
           resources.set("created", resource);
           const receipt = yield* decodeReceipt({
             id: "native-operation",
@@ -1045,6 +1063,65 @@ describe("saved launch context review", () => {
 });
 
 describe("managed lane session launch", () => {
+  it.live.each([false, true])(
+    "attaches the %s configured editing skill and retains its file context across retries",
+    (configured) =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const calls: ThreadLaunchService.ThreadLaunchInput[] = [];
+        const layer = serviceLayer.pipe(
+          Layer.provide(
+            f.external((request) => {
+              calls.push(request);
+              return calls.length === 1 ? failed(request) : Effect.succeed(accepted(request));
+            }),
+          ),
+        );
+        const path = `${f.source}/.cinderdeck/skills/code-review/SKILL.md`;
+        const content = configured
+          ? "Review race conditions and pagination."
+          : Rpc.DEFAULT_CODE_REVIEW_SKILL;
+        if (configured) {
+          yield* f.fs.makeDirectory(`${f.source}/.cinderdeck/skills/code-review`, {
+            recursive: true,
+          });
+          yield* f.fs.writeFileString(path, content);
+        }
+        yield* Effect.gen(function* () {
+          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          const request = {
+            ...input("edit-skill"),
+            workspaceID: "payment",
+            generation: 2,
+            title: "Code Review Skill",
+            objective: `Read the attached Code Review Skill. Save edits to ${path}.`,
+            editReviewSkill: true as const,
+          };
+          assert.equal(
+            (yield* service.launch("actor", request).pipe(Effect.flip)).reason,
+            "launch_failed",
+          );
+          assert.equal(yield* f.fs.readFileString(path), content);
+          yield* f.fs.writeFileString(path, "Edited after the initial launch");
+          const result = yield* service.launch("actor", request);
+          assert.equal(result.state, "accepted");
+          assert.equal(calls[0]!.threadId, calls[1]!.threadId);
+          const message = calls[1]!.initialMessage!;
+          assert.equal(message.attachments.length, 1);
+          assert.deepEqual(message.attachments, calls[0]!.initialMessage!.attachments);
+          assert.notInclude(message.text, content);
+          const attachment = message.attachments[0]!;
+          const config = yield* ServerConfig.ServerConfig;
+          const savedPath = resolveAttachmentPath({
+            attachmentsDir: config.attachmentsDir,
+            attachment,
+          })!;
+          assert.equal(yield* f.fs.readFileString(savedPath), content);
+          assert.equal(attachment.sizeBytes, new TextEncoder().encode(content).length);
+          assert.equal(yield* f.fs.readFileString(path), "Edited after the initial launch");
+        }).pipe(Effect.provide(layer));
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
   it.effect(
     "opens a parent folder workspace containing repos despite service warnings and changed service settings",
     () =>
@@ -1684,55 +1761,48 @@ describe("isolated reviewer scheduling", () => {
         assert.equal(launches, 2);
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
-  it.live.each(["dirty", "head_changed"] as const)(
-    "refuses %s source changes before native creation",
-    (mode) =>
-      Effect.gen(function* () {
-        const f = yield* fixture;
-        const native = f.nativeCreation();
-        const layer = serviceLayer.pipe(
-          Layer.provide(f.external((request) => Effect.succeed(accepted(request)), native.hub)),
+  it.live.each(["head_changed"] as const)("refuses %s source changes before native creation", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture;
+      const native = f.nativeCreation();
+      const layer = serviceLayer.pipe(
+        Layer.provide(f.external((request) => Effect.succeed(accepted(request)), native.hub)),
+      );
+      yield* Effect.gen(function* () {
+        const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+        const writer = yield* service.launch("actor", input("writer"));
+        const preview = yield* resolveReviewerSource({
+          featureId: writer.featureId,
+          sourceCheckoutId: writer.checkoutId,
+        });
+        yield* f.git(f.lane, [
+          "-c",
+          "user.name=Fixture",
+          "-c",
+          "user.email=fixture@example.invalid",
+          "commit",
+          "--allow-empty",
+          "-m",
+          "New source head",
+        ]);
+        const refused = yield* service
+          .create("actor", {
+            ...creationInput("reviewer"),
+            ...preview,
+            repositoryRefs: Object.fromEntries(
+              preview.reviewerContext.repositories.map((repo) => [repo.repositoryID, repo.commit]),
+            ),
+          })
+          .pipe(Effect.flip);
+        assert.equal(refused.reason, "stale_context");
+        assert.equal(native.creations(), 0);
+        assert.equal(
+          (yield* (yield* SqlClient.SqlClient)`SELECT operation_key FROM deckhand_managed_creations`)
+            .length,
+          0,
         );
-        yield* Effect.gen(function* () {
-          const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
-          const writer = yield* service.launch("actor", input("writer"));
-          const preview = yield* resolveReviewerSource({
-            featureId: writer.featureId,
-            sourceCheckoutId: writer.checkoutId,
-          });
-          if (mode === "dirty") yield* f.fs.writeFileString(`${f.lane}/uncommitted.txt`, "pending");
-          else
-            yield* f.git(f.lane, [
-              "-c",
-              "user.name=Fixture",
-              "-c",
-              "user.email=fixture@example.invalid",
-              "commit",
-              "--allow-empty",
-              "-m",
-              "New source head",
-            ]);
-          const refused = yield* service
-            .create("actor", {
-              ...creationInput("reviewer"),
-              ...preview,
-              repositoryRefs: Object.fromEntries(
-                preview.reviewerContext.repositories.map((repo) => [
-                  repo.repositoryID,
-                  repo.commit,
-                ]),
-              ),
-            })
-            .pipe(Effect.flip);
-          assert.equal(refused.reason, mode === "dirty" ? "dirty_source" : "stale_context");
-          assert.equal(native.creations(), 0);
-          assert.equal(
-            (yield* (yield* SqlClient.SqlClient)`SELECT operation_key FROM deckhand_managed_creations`)
-              .length,
-            0,
-          );
-        }).pipe(Effect.provide(Relationships.layer.pipe(Layer.provideMerge(layer))));
-      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+      }).pipe(Effect.provide(Relationships.layer.pipe(Layer.provideMerge(layer))));
+    }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 });
 
@@ -1740,10 +1810,12 @@ describe("durable reviewer scheduling", () => {
   const queueLayer = (
     f: Effect.Success<typeof fixture>,
     native: ReturnType<Effect.Success<typeof fixture>["nativeCreation"]>,
+    launch: ThreadLaunchService.ThreadLaunchService["Service"]["launch"] = (request) =>
+      Effect.succeed(accepted(request)),
   ) =>
     ReviewerLaunch.layer.pipe(
       Layer.provideMerge(serviceLayer),
-      Layer.provide(f.external((request) => Effect.succeed(accepted(request)), native.hub)),
+      Layer.provide(f.external(launch, native.hub)),
       Layer.provide(
         Layer.mergeAll(
           Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({}),
@@ -1813,28 +1885,183 @@ describe("durable reviewer scheduling", () => {
         }).pipe(Effect.provide(queueLayer(f, native)));
       }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
-  it.live("refuses dirty queued source before effects and safely cancels waiting work", () =>
+  it.live(
+    "reviews committed heads across generation reloads and leaves uncommitted files in the source",
+    () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const native = f.nativeCreation();
+        yield* Effect.gen(function* () {
+          const managed = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+          const queue = yield* ReviewerLaunch.ReviewerLaunch;
+          const sql = yield* SqlClient.SqlClient;
+          const writer = yield* managed.launch("actor", input("writer"));
+          f.resources.get("lane")!.generation++;
+          f.resources.get("payment")!.generation++;
+          yield* f.fs.writeFileString(`${f.lane}/uncommitted.txt`, "pending");
+          f.resources.get("lane")!.workspace!.repos[0]!.dirty = true;
+          const preview = yield* queue.preview({ threadId: writer.threadId! });
+          assert.equal(preview.generation, 3);
+          assert.equal(preview.reviewerContext.sourceGeneration, 8);
+          assert.equal(preview.codeReviewSkill?.configured, false);
+          f.resources.get("lane")!.revision = "status-updated";
+          f.resources.get("payment")!.revision = "service-updated";
+          const result = yield* queue.schedule("actor", queuedInput(preview, "committed-review"));
+          assert.equal(result.state, "accepted", result.detail ?? undefined);
+          assert.equal(native.creations(), 1);
+          assert.equal(yield* f.fs.readFileString(`${f.lane}/uncommitted.txt`), "pending");
+          assert.isFalse(yield* f.fs.exists(`${f.root}/created/uncommitted.txt`));
+          const actual = yield* (yield* CheckoutIdentity.CheckoutIdentity).resolve(
+            `${f.root}/created`,
+          );
+          assert.equal(actual.commit, preview.reviewerContext.repositories[0]!.commit);
+          const intent = yield* decodeCreationRecord(
+            (yield* sql<{
+              record_json: string;
+            }>`SELECT record_json FROM deckhand_managed_creations`)[0]!.record_json,
+          );
+          assert.equal(intent.nativeRevision, "service-updated");
+          assert.equal((yield* sql`SELECT id FROM deckhand_features`).length, 1);
+        }).pipe(Effect.provide(queueLayer(f, native)));
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+  it.live("snapshots the workspace skill and delivers it with the chosen session settings", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture;
+      const native = f.nativeCreation();
+      const calls: ThreadLaunchService.ThreadLaunchInput[] = [];
+      yield* Effect.gen(function* () {
+        const managed = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+        const queue = yield* ReviewerLaunch.ReviewerLaunch;
+        const writer = yield* managed.launch("actor", input("writer"));
+        const path = `${f.source}/.cinderdeck/skills/code-review/SKILL.md`;
+        yield* f.fs.makeDirectory(`${f.source}/.cinderdeck/skills/code-review`, {
+          recursive: true,
+        });
+        yield* f.fs.writeFileString(path, "Check pagination and concurrency carefully.");
+        const preview = yield* queue.preview({ threadId: writer.threadId! });
+        assert.equal(
+          preview.codeReviewSkill?.content,
+          "Check pagination and concurrency carefully.",
+        );
+        assert.equal(preview.codeReviewSkill?.path, path);
+        assert.equal(preview.codeReviewSkill?.configured, true);
+        // Editing instructions after inspection does not change the saved request.
+        yield* f.fs.writeFileString(path, "Changed later");
+        const request = { ...queuedInput(preview), interactionMode: "plan" as const };
+        const result = yield* queue.schedule("actor", request);
+        assert.equal(result.state, "accepted");
+        const sql = yield* SqlClient.SqlClient;
+        const intent = yield* decodeCreationInput(
+          (yield* sql<{
+            input_json: string;
+          }>`SELECT input_json FROM deckhand_managed_creations`)[0]!.input_json,
+        );
+        assert.notInclude(intent.objective, "Check pagination and concurrency carefully.");
+        assert.notInclude(intent.objective, "Changed later");
+        assert.include(intent.objective, "attached Code Review Skill");
+        assert.equal(
+          intent.codeReviewSkill?.content,
+          "Check pagination and concurrency carefully.",
+        );
+        const initial = calls.at(-1)!.initialMessage!;
+        assert.equal(initial.attachments.length, 1);
+        const attachment = initial.attachments[0]!;
+        assert.equal(attachment.type, "file");
+        assert.equal(attachment.name, "Code Review Skill.md");
+        const config = yield* ServerConfig.ServerConfig;
+        const savedPath = resolveAttachmentPath({
+          attachmentsDir: config.attachmentsDir,
+          attachment,
+        })!;
+        assert.equal(
+          resolveAttachmentPathById({
+            attachmentsDir: config.attachmentsDir,
+            attachmentId: attachment.id,
+          }),
+          savedPath,
+        );
+        assert.equal(
+          yield* f.fs.readFileString(savedPath),
+          "Check pagination and concurrency carefully.",
+        );
+        assert.notInclude(initial.text, "Check pagination and concurrency carefully.");
+        assert.equal(intent.interactionMode, "plan");
+      }).pipe(
+        Effect.provide(
+          queueLayer(f, native, (request) => {
+            calls.push(request);
+            return Effect.succeed(accepted(request));
+          }),
+        ),
+      );
+    }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+  it.live("creates each reviewer repository from its lane's committed head", () =>
     Effect.gen(function* () {
       const f = yield* fixture;
       const native = f.nativeCreation();
       yield* Effect.gen(function* () {
+        const identities = yield* CheckoutIdentity.CheckoutIdentity;
+        const api = `${f.root}/api`;
+        const apiLane = `${f.root}/api-lane`;
+        yield* f.fs.makeDirectory(api);
+        yield* f.git(api, ["init", "--initial-branch=main"]);
+        yield* f.git(api, [
+          "-c",
+          "user.name=Fixture",
+          "-c",
+          "user.email=fixture@example.invalid",
+          "commit",
+          "--allow-empty",
+          "-m",
+          "API base",
+        ]);
+        yield* f.git(api, ["worktree", "add", "-b", "feature-api", apiLane]);
+        yield* f.git(apiLane, [
+          "-c",
+          "user.name=Fixture",
+          "-c",
+          "user.email=fixture@example.invalid",
+          "commit",
+          "--allow-empty",
+          "-m",
+          "API feature",
+        ]);
+        for (const [id, path] of [
+          ["payment", api],
+          ["lane", apiLane],
+        ]) {
+          const actual = yield* identities.resolve(path!);
+          f.resources.get(id!)!.workspace.repos.push({
+            ...f.resources.get(id!)!.workspace.repos[0]!,
+            id: "api",
+            path: path!,
+            physicalID: actual.physicalId,
+            repositoryPhysicalID: actual.repositoryPhysicalId,
+            branch: actual.branch!,
+          });
+        }
         const managed = yield* ManagedSessionLaunch.ManagedSessionLaunch;
         const queue = yield* ReviewerLaunch.ReviewerLaunch;
-        const sql = yield* SqlClient.SqlClient;
-        const writer = yield* managed.launch("actor", input("writer"));
+        const writer = yield* managed.launch("actor", input("multi-writer"));
         const preview = yield* queue.preview({ threadId: writer.threadId! });
-        yield* f.fs.writeFileString(`${f.lane}/uncommitted.txt`, "pending");
-        assert.equal(native.creations(), 0);
-        assert.equal(
-          (yield* queue.schedule("actor", queuedInput(preview, "dirty-new")).pipe(Effect.flip))
-            .reason,
-          "dirty_source",
+        assert.equal(preview.reviewerContext.repositories.length, 2);
+        assert.notEqual(
+          preview.reviewerContext.repositories[0]!.commit,
+          preview.reviewerContext.repositories[1]!.commit,
         );
-        assert.equal(
-          (yield* sql`SELECT operation_key FROM deckhand_reviewer_queue WHERE operation_key='dirty-new'`)
-            .length,
-          0,
-        );
+        const result = yield* queue.schedule("actor", queuedInput(preview, "multi-review"));
+        assert.equal(result.state, "accepted", result.detail ?? undefined);
+        for (const repo of preview.reviewerContext.repositories) {
+          const created = f.resources
+            .get("created")!
+            .workspace.repos.find((item) => item.id === repo.repositoryID)!;
+          const actual = yield* identities.resolve(created.path);
+          assert.equal(actual.commit, repo.commit);
+          assert.notEqual(actual.physicalId, repo.sourcePhysicalId);
+        }
+        assert.equal(native.creations(), 1);
       }).pipe(Effect.provide(queueLayer(f, native)));
     }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );

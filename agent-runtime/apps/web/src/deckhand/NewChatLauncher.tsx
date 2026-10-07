@@ -38,6 +38,7 @@ export type NewChatLauncherProps = {
   compact?: boolean;
   autoOpen?: boolean;
   onOpened?: () => void;
+  editReviewSkill?: boolean;
 };
 const decodeDraft = Schema.decodeUnknownSync(Schema.fromJsonString(Contracts.ManagedLaunchInput));
 const encodeDraft = Schema.encodeSync(Schema.fromJsonString(Contracts.ManagedLaunchInput));
@@ -53,12 +54,13 @@ export function NewChatLauncher({
   compact = false,
   autoOpen = false,
   onOpened,
+  editReviewSkill = false,
 }: NewChatLauncherProps) {
   const navigate = useNavigate();
   const settings = useEnvironmentSettings(environmentId);
   const configs = useAtomValue(environmentServerConfigsAtom);
   const scope = `${environmentId}:${installationID}:${resource.workspaceID}`;
-  const storageKey = `deckhand:launch:${scope}:${resource.generation}`;
+  const storageKey = `deckhand:launch:${scope}:${resource.generation}${editReviewSkill ? ":code-review-skill" : ""}`;
   const [initial] = useState(() => {
     try {
       const value = localStorage.getItem(storageKey);
@@ -118,22 +120,31 @@ export function NewChatLauncher({
       setBusy(false);
     }
   };
-  const open = (record: Contracts.ManagedLaunchRecord) => {
+  const open = async (record: Contracts.ManagedLaunchRecord) => {
     setAccepted(null);
     onOpened?.();
-    void navigate({
-      to: "/$environmentId/$threadId",
-      params: buildThreadRouteParams({ environmentId, threadId: record.threadId }),
-    });
+    try {
+      await navigate({
+        to: "/$environmentId/$threadId",
+        params: buildThreadRouteParams({ environmentId, threadId: record.threadId }),
+      });
+      // A workspace refresh can remount this launcher while navigation settles.
+      // Keep its immutable request available until the destination has opened.
+      const current = localStorage.getItem(storageKey);
+      if (current && decodeDraft(current).operationKey === record.operationKey)
+        localStorage.removeItem(storageKey);
+      setSaved(null);
+    } catch {
+      setAccepted(record);
+      setError("The chat is ready. Open it again to continue the same conversation.");
+    }
   };
   const handleResult = (record: Contracts.ManagedLaunchRecord, navigateOnAccepted: boolean) => {
     if (record.state === "accepted") {
       setReview(null);
       setAccepted(record);
-      localStorage.removeItem(storageKey);
-      setSaved(null);
       setError(null);
-      if (navigateOnAccepted) open(record);
+      if (navigateOnAccepted) void open(record);
     } else {
       setError(
         record.state === "failed"
@@ -218,9 +229,12 @@ export function NewChatLauncher({
           generation: resource.generation,
           revision: resource.revision,
           repositoryID,
-          title: "New chat",
-          objective: "",
-          deferStart: true,
+          title: editReviewSkill ? "Code Review Skill" : "New chat",
+          objective: editReviewSkill
+            ? `Read the attached Code Review Skill and explain its instructions. Help me customize it when I ask, saving requested edits to the workspace file at ${JSON.stringify(`${resource.workspace?.root ?? repos[0]?.path}/${Contracts.CODE_REVIEW_SKILL_PATH}`)}.`
+            : "",
+          ...(editReviewSkill ? { editReviewSkill: true } : {}),
+          deferStart: !editReviewSkill,
           modelSelection: selection,
           ...(access === "read_only" ? { access } : {}),
           ...modes,
@@ -307,7 +321,7 @@ export function NewChatLauncher({
           type="button"
           className={styles.primary}
           disabled={busy || (!accepted && !canOpen) || initial.error || review !== null}
-          onClick={() => (accepted ? open(accepted) : void start())}
+          onClick={() => (accepted ? void open(accepted) : void start())}
         >
           {busy ? "Opening…" : accepted ? "Open chat" : saved ? "Retry saved chat" : "+ New chat"}
         </button>

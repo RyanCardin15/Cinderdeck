@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
+import { DEFAULT_SERVER_SETTINGS, EnvironmentId, ThreadId } from "@cinderdeck/contracts";
 import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
 import * as Schema from "effect/Schema";
 import * as Cause from "effect/Cause";
@@ -14,6 +14,8 @@ const commands = vi.hoisted(() => ({
   inspectQueue: vi.fn(),
   cancel: vi.fn(),
   stop: vi.fn(),
+  navigate: vi.fn(),
+  defaultModel: null as import("@cinderdeck/contracts").ModelSelection | null,
 }));
 vi.mock("./state", () => ({
   previewReviewer: "preview",
@@ -29,7 +31,18 @@ vi.mock("../state/use-atom-command", () => ({
 }));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
+  useNavigate: () => commands.navigate,
 }));
+vi.mock("../hooks/useSettings", () => ({
+  useEnvironmentSettings: () => ({
+    ...DEFAULT_SERVER_SETTINGS,
+    defaultModelSelection: commands.defaultModel,
+  }),
+}));
+vi.mock("../state/server", () => ({ environmentServerConfigsAtom: "config" }));
+vi.mock("@effect/atom-react", () => ({ useAtomValue: () => new Map() }));
+vi.mock("../state/entities", () => ({ readProjects: () => [] }));
+vi.mock("../components/chat/TraitsPicker", () => ({ TraitsPicker: () => null }));
 vi.mock("../lib/runtime", () => ({ runtime: { runPromise: async () => "review-operation" } }));
 import { ReviewerLauncher } from "./ReviewerLauncher";
 const preview = Schema.decodeSync(Rpc.ReviewerLaunchPreview)({
@@ -64,9 +77,10 @@ const render = async () => {
       <ReviewerLauncher threadRef={threadRef} providerSessionId="provider-writer" enabled />,
     );
   });
+  await click("Schedule isolated review");
 };
 const click = async (text: string) => {
-  const button = Array.from(container.querySelectorAll("button")).find(
+  const button = Array.from(document.body.querySelectorAll("button")).find(
     (item) => item.textContent === text,
   );
   expect(button).toBeDefined();
@@ -76,6 +90,7 @@ const click = async (text: string) => {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  commands.defaultModel = null;
   localStorage.clear();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   container = document.createElement("div");
@@ -111,14 +126,55 @@ it("inspects actual heads, persists request before dispatch, and opens the accep
   expect(commands.preview).not.toHaveBeenCalled();
   expect(commands.launch).not.toHaveBeenCalled();
   await click("Inspect committed revision");
-  expect(container.textContent).toContain("a".repeat(40));
+  expect(document.body.textContent).toContain("a".repeat(40));
   expect(commands.launch).not.toHaveBeenCalled();
   await click("Schedule reviewer");
   expect(commands.launch).toHaveBeenCalledTimes(1);
   const body = commands.launch.mock.calls[0]![0].input;
   expect(body.preview.reviewerContext.featureId).toBe("feature");
   expect(body.preview.reviewerContext.sourceCheckoutId).toBe("checkout");
-  expect(container.textContent).toContain("Open reviewer conversation");
+  expect(document.body.textContent).toContain("Open reviewer conversation");
+  expect(commands.navigate).toHaveBeenCalledTimes(1);
+});
+it("prefills the chosen model and reasoning, and saves the workspace skill with the review", async () => {
+  commands.defaultModel = {
+    instanceId: "codex" as import("@cinderdeck/contracts").ProviderInstanceId,
+    model: "gpt-test",
+    options: [{ id: "reasoningEffort", value: "high" }],
+  };
+  commands.preview.mockResolvedValue({
+    _tag: "Success",
+    value: {
+      ...preview,
+      codeReviewSkill: {
+        path: "/fixture/.cinderdeck/skills/code-review/SKILL.md",
+        content: "Inspect transactional boundaries.",
+        configured: true,
+      },
+    },
+  });
+  commands.launch.mockResolvedValue({
+    _tag: "Success",
+    value: { state: "accepted", creation: { threadID: "reviewer" } },
+  });
+  await render();
+  await click("Inspect committed revision");
+  expect(document.body.textContent).toContain("Inspect transactional boundaries.");
+  await click("Schedule reviewer");
+  const request = commands.launch.mock.calls[0]![0].input;
+  expect(request.modelSelection).toEqual(commands.defaultModel);
+  expect(request.preview.codeReviewSkill.content).toBe("Inspect transactional boundaries.");
+});
+it("describes a fresh inspection failure without referring to a nonexistent saved request", async () => {
+  commands.preview.mockResolvedValue({
+    _tag: "Failure",
+    cause: Cause.fail(new Rpc.DeckhandRpcError({ reason: "stale_context" })),
+  });
+  await render();
+  await click("Inspect committed revision");
+  expect(document.body.textContent).toContain("Refresh the workspace connection");
+  expect(document.body.textContent).not.toContain("saved request");
+  expect(commands.launch).not.toHaveBeenCalled();
 });
 it("reloads an uncertain request without launching and continues the exact original revision", async () => {
   commands.launch.mockResolvedValue({
@@ -136,8 +192,8 @@ it("reloads an uncertain request without launching and continues the exact origi
   await render();
   expect(commands.launch).not.toHaveBeenCalled();
   expect(commands.preview).not.toHaveBeenCalled();
-  expect(container.textContent).toContain("Continue saved review");
-  expect(container.textContent).not.toContain("Start another review");
+  expect(document.body.textContent).toContain("Continue saved review");
+  expect(document.body.textContent).not.toContain("Start another review");
   await click("Continue saved review");
   expect(commands.launch.mock.calls[0]![0].input).toEqual(original);
 });
@@ -156,9 +212,9 @@ it("retains one queued request without stopping its writer and allows cancellati
   await render();
   await click("Inspect committed revision");
   await click("Schedule reviewer");
-  expect(container.textContent).not.toContain("Start another review");
+  expect(document.body.textContent).not.toContain("Start another review");
   expect(commands.stop).not.toHaveBeenCalled();
-  expect(container.textContent).not.toContain("Stop writer");
+  expect(document.body.textContent).not.toContain("Stop writer");
   await click("Cancel scheduled review");
   expect(commands.cancel.mock.calls[0]![0].input.operationKey).toBe("review-operation");
   await click("Start another review");
@@ -176,8 +232,39 @@ it("keeps unknown outcomes on their original key and does not offer a new review
   await render();
   await click("Inspect committed revision");
   await click("Schedule reviewer");
-  expect(container.textContent).not.toContain("Start another review");
+  expect(document.body.textContent).not.toContain("Start another review");
   expect(localStorage.getItem("deckhand:reviewer:host:writer")).not.toBeNull();
+});
+it("opens the reviewer once when queued creation is accepted after submission", async () => {
+  commands.launch.mockResolvedValue({
+    _tag: "Success",
+    value: { state: "queued", creation: null },
+  });
+  commands.inspectQueue.mockResolvedValue({
+    _tag: "Success",
+    value: { state: "queued", creation: null },
+  });
+  await render();
+  await click("Inspect committed revision");
+  vi.useFakeTimers();
+  try {
+    await click("Schedule reviewer");
+    expect(commands.navigate).not.toHaveBeenCalled();
+    commands.inspectQueue.mockResolvedValue({
+      _tag: "Success",
+      value: { state: "accepted", creation: { threadID: "reviewer" } },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+    expect(commands.navigate).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+    expect(commands.navigate).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 it("does not migrate a saved direct review into a second queued creation", async () => {
   localStorage.setItem(
@@ -200,7 +287,7 @@ it("does not migrate a saved direct review into a second queued creation", async
     },
   });
   await render();
-  const continuation = Array.from(container.querySelectorAll("button")).find(
+  const continuation = Array.from(document.body.querySelectorAll("button")).find(
     (item) => item.textContent === "Continue saved review",
   );
   expect(continuation?.disabled).toBe(true);

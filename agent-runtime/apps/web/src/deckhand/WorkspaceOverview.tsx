@@ -966,13 +966,15 @@ function ConnectedWorkspace({
               <>
                 <div className={agents.launchArea}>
                   <SessionLauncher
-                    key={`add:${environmentId}:${view.hello.installationID}:${selected.workspaceID}:${selected.generation}`}
+                    key={`add:${environmentId}:${view.hello.installationID}:${selected.workspaceID}:${selected.generation}:${search.editReviewSkill ? "code-review-skill" : "chat"}`}
                     environmentId={environmentId}
                     installationID={view.hello.installationID}
                     resource={selected}
                     enabled={chatsEnabled && workspaceChatUnavailableReason(selected) === null}
                     disabledReason={workspaceChatUnavailableReason(selected) ?? undefined}
                     compact
+                    editReviewSkill={search.editReviewSkill === true}
+                    autoOpen={search.editReviewSkill === true}
                   />
                 </div>
                 <SessionList

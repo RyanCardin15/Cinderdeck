@@ -411,7 +411,7 @@ it("opens an empty chat in the selected checkout without asking for a task or na
       interactionMode: "default",
     });
     expect(input).not.toHaveProperty("branch");
-    return success(acceptedLaunch);
+    return success({ ...acceptedLaunch, operationKey: input.operationKey });
   });
   await render(resource, false);
   expect(container.querySelector("textarea")).toBeNull();
@@ -747,4 +747,65 @@ it("confirms a missing recovery result before permitting another new chat", asyn
   expect(commands.launch.mock.calls[1]![0].input.operationKey).not.toBe(
     commands.launch.mock.calls[0]![0].input.operationKey,
   );
+});
+it("opens the workspace code review skill in a dedicated session using chat defaults", async () => {
+  await act(async () =>
+    root.render(
+      <SessionLauncher
+        environmentId={EnvironmentId.make("computer")}
+        installationID="installation"
+        resource={resource}
+        enabled
+        compact
+        editReviewSkill
+        autoOpen
+      />,
+    ),
+  );
+  expect(commands.launch).toHaveBeenCalledTimes(1);
+  const input = commands.launch.mock.calls[0]![0].input;
+  expect(input.title).toBe("Code Review Skill");
+  expect(input.deferStart).toBe(false);
+  expect(input.editReviewSkill).toBe(true);
+  expect(input.objective).toContain("/fixture/app/.cinderdeck/skills/code-review/SKILL.md");
+  expect(input.objective).toContain("attached Code Review Skill");
+  expect(input.objective).not.toContain("Review the committed changes against");
+  expect(input.modelSelection).toMatchObject({ instanceId: "codex", model: "gpt-test" });
+  expect(commands.navigate).toHaveBeenCalledTimes(1);
+});
+
+it("reuses the skill session when a workspace refresh remounts its launcher before navigation settles", async () => {
+  commands.launch.mockImplementation(async ({ input }) =>
+    success({ ...acceptedLaunch, operationKey: input.operationKey }),
+  );
+  let finishNavigation!: () => void;
+  commands.navigate.mockReturnValue(
+    new Promise<void>((resolve) => {
+      finishNavigation = resolve;
+    }),
+  );
+  const launcher = (key: string) => (
+    <SessionLauncher
+      key={key}
+      environmentId={environmentId}
+      installationID="installation"
+      resource={resource}
+      enabled
+      compact
+      editReviewSkill
+      autoOpen
+    />
+  );
+  await act(async () => root.render(launcher("first")));
+  const first = commands.launch.mock.calls[0]![0];
+  expect(
+    localStorage.getItem("deckhand:launch:computer:installation:source:1:code-review-skill"),
+  ).not.toBeNull();
+  await act(async () => root.render(launcher("refreshed")));
+  expect(commands.launch).toHaveBeenCalledTimes(2);
+  expect(commands.launch.mock.calls[1]![0]).toEqual(first);
+  await act(async () => finishNavigation());
+  expect(
+    localStorage.getItem("deckhand:launch:computer:installation:source:1:code-review-skill"),
+  ).toBeNull();
 });

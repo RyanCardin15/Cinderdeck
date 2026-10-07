@@ -3,6 +3,21 @@ import XCTest
 @testable import Cinderdeck
 
 final class WorkspaceSettingsTests: XCTestCase {
+  func testCodeReviewSkillDefaultsAreWorkspaceScopedAndProtectExternalEdits() throws {
+    let root = try StackTestSupport.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let initial = try WorkspaceCodeReviewSkill.load(root: root, defaultContent: "Default review instructions")
+    XCTAssertNil(initial.saved)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: WorkspaceCodeReviewSkill.file(root: root).path))
+    try WorkspaceCodeReviewSkill.save(root: root, original: nil, content: "Review concurrency")
+    XCTAssertEqual(try WorkspaceCodeReviewSkill.load(root: root).content, "Review concurrency")
+    try "Externally edited".write(to: WorkspaceCodeReviewSkill.file(root: root), atomically: true, encoding: .utf8)
+    XCTAssertThrowsError(try WorkspaceCodeReviewSkill.save(root: root, original: "Review concurrency", content: "Stale edit"))
+    XCTAssertEqual(try WorkspaceCodeReviewSkill.load(root: root).content, "Externally edited")
+    XCTAssertThrowsError(try WorkspaceCodeReviewSkill.save(root: root, original: "Externally edited", content: " "))
+    let other = root.appendingPathComponent("other")
+    XCTAssertEqual(try WorkspaceCodeReviewSkill.load(root: other, defaultContent: "Default").content, "Default")
+  }
   func testIndependentLaneDefaultsRoundTripAndSurviveMembershipEdits() throws {
     let file = URL(fileURLWithPath: "/tmp/defaults.toml")
     let original = """

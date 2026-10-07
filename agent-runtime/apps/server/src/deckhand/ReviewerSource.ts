@@ -1,13 +1,11 @@
 import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
 import * as Effect from "effect/Effect";
-import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as WorkspaceBackend from "./WorkspaceBackend.ts";
 import * as Relationships from "./Relationships.ts";
 import { resolveCurrentCheckout } from "./CurrentCheckout.ts";
 import * as CheckoutIdentity from "./CheckoutIdentity.ts";
-import * as ProcessRunner from "../processRunner.ts";
 export class ReviewerSourceError extends Schema.TaggedError<ReviewerSourceError>()(
   "ReviewerSourceError",
   {
@@ -22,6 +20,26 @@ export class ReviewerSourceError extends Schema.TaggedError<ReviewerSourceError>
   }
 }
 const isSourceError = Schema.is(ReviewerSourceError);
+/** Native revisions also cover services, dirty status and display hydration.
+ * Only committed heads and ownership identify the reviewed source. */
+export function reviewerContextMatches(a: Rpc.ReviewerLaunchContext, b: Rpc.ReviewerLaunchContext) {
+  return (
+    a.featureId === b.featureId &&
+    a.sourceCheckoutId === b.sourceCheckoutId &&
+    a.sourceWorkspaceID === b.sourceWorkspaceID &&
+    a.sourceGeneration === b.sourceGeneration &&
+    a.repositories.length === b.repositories.length &&
+    a.repositories.every((repo) =>
+      b.repositories.some(
+        (other) =>
+          repo.repositoryID === other.repositoryID &&
+          repo.sourcePhysicalId === other.sourcePhysicalId &&
+          repo.repositoryPhysicalId === other.repositoryPhysicalId &&
+          repo.commit === other.commit,
+      ),
+    )
+  );
+}
 // Shared service-domain resolution is used by both preview and managed creation;
 // calling the general creation RPC cannot bypass source provenance checks.
 export const resolveReviewerSource = (input: {
@@ -33,7 +51,6 @@ export const resolveReviewerSource = (input: {
     const store = yield* Relationships.Relationships;
     const backend = yield* WorkspaceBackend.WorkspaceBackend;
     const identities = yield* CheckoutIdentity.CheckoutIdentity;
-    const runner = yield* ProcessRunner.ProcessRunner;
     const sql = yield* SqlClient.SqlClient;
     const feature = yield* store.feature(input.featureId);
     const origin = yield* store.checkout(input.sourceCheckoutId);
@@ -67,8 +84,6 @@ export const resolveReviewerSource = (input: {
     if (
       source.hello.installationID !== workspace.environmentId ||
       primary.hello.installationID !== workspace.environmentId ||
-      source.resource.generation !== checkout.nativeGeneration ||
-      primary.resource.generation !== workspace.generation ||
       !source.resource.available ||
       !primary.resource.available ||
       !source.resource.workspace ||
@@ -90,8 +105,6 @@ export const resolveReviewerSource = (input: {
       new Set(native.repos.map((repo) => repo.id)).size !== native.repos.length
     )
       return yield* new ReviewerSourceError({ reason: "stale_context" });
-    if (native.repos.some((repo) => repo.dirty))
-      return yield* new ReviewerSourceError({ reason: "dirty_source" });
     const repositories = yield* Effect.forEach(native.repos, (repo) =>
       Effect.gen(function* () {
         const actual = yield* identities.resolve(repo.path);
@@ -107,16 +120,7 @@ export const resolveReviewerSource = (input: {
         const parentPhysical = yield* identities.resolve(parent.path);
         if (parentPhysical.repositoryPhysicalId !== actual.repositoryPhysicalId)
           return yield* new ReviewerSourceError({ reason: "stale_context" });
-        const status = yield* runner.run({
-          command: "git",
-          args: ["-C", actual.root, "status", "--porcelain=v1", "--untracked-files=normal"],
-          timeout: Duration.seconds(10),
-          maxOutputBytes: 65536,
-          env: { LC_ALL: "C" },
-        });
-        if (status.code !== 0 || status.stdoutTruncated || status.stdoutInvalidUtf8)
-          return yield* new ReviewerSourceError({ reason: "stale_context" });
-        if (status.stdout.trim()) return yield* new ReviewerSourceError({ reason: "dirty_source" });
+        // Inspect HEAD, not the worktree. Uncommitted edits never enter the reviewer lane.
         const after = yield* identities.resolve(repo.path);
         if (after.commit !== actual.commit || after.physicalId !== actual.physicalId)
           return yield* new ReviewerSourceError({ reason: "stale_context" });
@@ -135,9 +139,10 @@ export const resolveReviewerSource = (input: {
     return {
       installationID: workspace.environmentId,
       workspaceID: workspace.ownerId,
-      generation: workspace.generation,
+      generation: primary.resource.generation,
       revision: primary.resource.revision,
       repositoryID: selected.repositoryID,
+      repositoryPath: native.repos.find((repo) => repo.id === selected.repositoryID)!.path,
       title: feature.title,
       reviewerContext: {
         featureId: feature.id,

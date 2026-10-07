@@ -1120,6 +1120,33 @@ final class StackLaneTests: XCTestCase {
     XCTAssertNotNil(supervisor.definition(id), supervisor.files.first { $0.id == id }?.issues.map(\.message).joined(separator: "; ") ?? "missing")
   }
 
+  func testPinnedReviewerCreationUsesInspectedHeadsWithoutOpeningTheGeneralLaneSheet() async throws {
+    try await load()
+    let head = try await StackLaneStore.git(["rev-parse", "HEAD"], at: repo)
+    control.laneCreationPresenter = { _, _, _ in
+      XCTFail("An inspected reviewer must not ask for different base revisions")
+      throw StackControlError(code: "cancelled", message: "Unexpected sheet")
+    }
+    let arguments: JSONValue = .object([
+      "workspace": .string("shop"), "branch": .string("review/pinned"),
+      "repositoryRefs": .object(["app": .string(head)]),
+      "reviewer": .bool(true), "start": .bool(false), "setup": .bool(false),
+    ])
+    do {
+      _ = try await control.handle("lane.create", params: arguments, actor: codex)
+      XCTFail("Reviewer creation must use a durable integration operation")
+    } catch { XCTAssertEqual((error as? StackControlError)?.code, "invalid_params") }
+    XCTAssertTrue(try StackLaneStore.records(in: supervisor.lanesDirectory).isEmpty)
+    let result = try await control.handle("lane.create", params: arguments, actor: codex, operationID: "review-operation")
+    let records = try StackLaneStore.records(in: supervisor.lanesDirectory)
+    XCTAssertEqual(records.count, 1)
+    XCTAssertEqual(records.first?.info.repositoryRefs, ["app": head])
+    XCTAssertEqual(result["creationReviewed"]?.boolValue, true)
+    let reviewerPath = try XCTUnwrap(records.first?.worktrees.first?.path)
+    let reviewerHead = try await StackLaneStore.git(["rev-parse", "HEAD"], at: reviewerPath)
+    XCTAssertEqual(reviewerHead, head)
+  }
+
   private func laneDefinition(_ stack: String, _ branch: String, _ actor: StackActor) async throws -> StackDefinition {
     let file = try await supervisor.createLane(stack: stack, branch: branch, actor: actor)
     return try XCTUnwrap(file.definition)

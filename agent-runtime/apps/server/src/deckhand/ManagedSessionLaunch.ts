@@ -9,6 +9,8 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
+import * as ServerConfig from "../config.ts";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { makeKeyedSerialExecutor } from "../orchestration-v2/KeyedSerialExecutor.ts";
@@ -21,9 +23,10 @@ import { resolveWorkspaceFolder } from "./WorkspaceFolderIdentity.ts";
 import * as WorkspaceBackend from "./WorkspaceBackend.ts";
 import * as Migrations from "./Migrations.ts";
 import * as Relationships from "./Relationships.ts";
-import { resolveReviewerSource } from "./ReviewerSource.ts";
+import { resolveReviewerSource, reviewerContextMatches } from "./ReviewerSource.ts";
 import { currentFeatureWorkspaceAuthorized, resolveCurrentCheckout } from "./CurrentCheckout.ts";
 import * as ProcessRunner from "../processRunner.ts";
+import { attachCodeReviewSkill } from "./CodeReviewSkill.ts";
 
 export class ManagedLaunchError extends Schema.TaggedError<ManagedLaunchError>()(
   "ManagedLaunchError",
@@ -88,7 +91,6 @@ const decodeReview = Schema.decodeUnknownEffect(Schema.fromJsonString(Rpc.Manage
 const encodeCheckouts = Schema.encodeSync(
   Schema.fromJsonString(Schema.Array(Contracts.PhysicalCheckout)),
 );
-const encodeReviewerContext = Schema.encodeSync(Schema.fromJsonString(Rpc.ReviewerLaunchContext));
 const isLaunchError = Schema.is(ManagedLaunchError);
 const bindingID = (kind: string, parts: ReadonlyArray<string | number>) =>
   `${kind}:${NodeCrypto.createHash("sha256").update(JSON.stringify(parts)).digest("hex")}`;
@@ -103,6 +105,9 @@ const make = Effect.gen(function* () {
     | SqlClient.SqlClient
   >();
   const sql = yield* SqlClient.SqlClient;
+  const skillDependencies = yield* Effect.context<
+    FileSystem.FileSystem | Path.Path | ServerConfig.ServerConfig
+  >();
   const backend = yield* WorkspaceBackend.WorkspaceBackend;
   const identities = yield* CheckoutIdentity.CheckoutIdentity;
   const fs = yield* FileSystem.FileSystem;
@@ -295,14 +300,12 @@ const make = Effect.gen(function* () {
           if (
             !context.lane ||
             resource.workspaceID === pinned.sourceWorkspaceID ||
-            currentSource.workspaceId !== reservedContext?.workspaceBindingId ||
+            currentSourceWorkspace.ownerId !== parentID ||
             currentSource.backend !== "cinderdeck" ||
             currentSource.state !== "ready" ||
             currentSource.environmentId !== input.installationID ||
-            currentSource.nativeGeneration !== pinned.sourceGeneration ||
             (currentSource.laneId ?? currentSourceWorkspace.ownerId) !== pinned.sourceWorkspaceID ||
             currentSourceWorkspace.state !== "active" ||
-            currentSource.workspaceGeneration !== currentSourceWorkspace.generation ||
             pinned.repositories.length !== context.repos.length ||
             physical.some((repo, index) => {
               const expected = pinned.repositories.find(
@@ -349,7 +352,8 @@ const make = Effect.gen(function* () {
               : null;
             const reservedFeatureWorkspaceAuthorized =
               reservedFeature &&
-              (reservedFeature.workspaceId === workspaceId ||
+              (input.reviewerContext !== undefined ||
+                reservedFeature.workspaceId === workspaceId ||
                 (yield* currentFeatureWorkspaceAuthorized(reservedFeature.id, workspaceId).pipe(
                   Effect.provideService(SqlClient.SqlClient, sql),
                   Effect.mapError(() => error(key, "stale_context")),
@@ -541,6 +545,15 @@ const make = Effect.gen(function* () {
                 .pipe(Effect.mapError(storage(key)));
             }
             const prepared = record;
+            const skillAttachment =
+              !input.deferStart && (input.codeReviewSkill || input.editReviewSkill)
+                ? yield* attachCodeReviewSkill(prepared.threadId, {
+                    ...(input.codeReviewSkill ? { snapshot: input.codeReviewSkill } : {}),
+                    ...(input.editReviewSkill
+                      ? { editRoot: context.root ?? context.repos[0]!.path }
+                      : {}),
+                  }).pipe(Effect.provideContext(skillDependencies), Effect.mapError(storage(key)))
+                : undefined;
             const update = (state: Rpc.ManagedLaunchRecord["state"]) =>
               Effect.gen(function* () {
                 const next = { ...prepared, state };
@@ -567,7 +580,12 @@ const make = Effect.gen(function* () {
                 },
                 ...(input.deferStart
                   ? {}
-                  : { initialMessage: { text: input.objective, attachments: [] } }),
+                  : {
+                      initialMessage: {
+                        text: input.objective,
+                        attachments: skillAttachment ? [skillAttachment] : [],
+                      },
+                    }),
                 createdBy: "user",
                 creationSource: "web",
               })
@@ -709,7 +727,8 @@ const make = Effect.gen(function* () {
               : null;
             const reviewedFeatureWorkspaceAuthorized =
               reviewedFeature &&
-              (reviewedFeature.workspaceId === workspaceBindingId ||
+              (input.reviewerContext !== undefined ||
+                reviewedFeature.workspaceId === workspaceBindingId ||
                 (yield* currentFeatureWorkspaceAuthorized(
                   reviewedFeature.id,
                   workspaceBindingId,
@@ -856,7 +875,7 @@ const make = Effect.gen(function* () {
             source.hello.installationID !== input.installationID ||
             !source.resource.available ||
             source.resource.generation !== input.generation ||
-            source.resource.revision !== input.revision ||
+            (!input.reviewerContext && source.resource.revision !== input.revision) ||
             !workspace ||
             workspace.lane ||
             workspace.definitionChanged ||
@@ -886,8 +905,7 @@ const make = Effect.gen(function* () {
               current.installationID !== input.installationID ||
               current.workspaceID !== input.workspaceID ||
               current.generation !== input.generation ||
-              current.revision !== input.revision ||
-              encodeReviewerContext(current.reviewerContext) !== encodeReviewerContext(pinned) ||
+              !reviewerContextMatches(current.reviewerContext, pinned) ||
               Object.keys(input.repositoryRefs).length !== pinned.repositories.length ||
               pinned.repositories.some(
                 (repo) => input.repositoryRefs[repo.repositoryID] !== repo.commit,
@@ -921,6 +939,11 @@ const make = Effect.gen(function* () {
               operationKey: key,
               laneOperationKey: bindingID("lane", [key]),
               launchOperationKey: bindingID("session", [key]),
+              ...(input.reviewerContext ? { nativeRevision: source.resource.revision } : {}),
+              ...(input.reviewerContext &&
+              source.hello.capabilities.includes("operations.lane.create.reviewer")
+                ? { nativeReviewer: true }
+                : {}),
               state: "prepared",
               laneID: null,
               receipt: null,
@@ -960,12 +983,13 @@ const make = Effect.gen(function* () {
             installationID: input.installationID,
             workspaceID: input.workspaceID,
             generation: input.generation,
-            revision: input.revision,
+            revision: record.nativeRevision ?? input.revision,
             arguments: {
               workspace: input.workspaceID,
               branch: input.branch,
               ...(input.name !== undefined ? { name: input.name } : {}),
               repositoryRefs: input.repositoryRefs,
+              ...(record.nativeReviewer ? { reviewer: true } : {}),
               setup: input.setup,
               start: input.start,
             },
@@ -994,6 +1018,7 @@ const make = Effect.gen(function* () {
               : { interactionMode: input.interactionMode }),
             ...(input.access === undefined ? {} : { access: input.access }),
             ...(input.reviewerContext ? { reviewerContext: input.reviewerContext } : {}),
+            ...(input.codeReviewSkill ? { codeReviewSkill: input.codeReviewSkill } : {}),
           };
           const json = yield* encodeInput(launchInput);
           yield* sql`UPDATE deckhand_managed_creations SET launch_input_json = ${json} WHERE operation_key = ${key}`;

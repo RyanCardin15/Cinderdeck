@@ -24,6 +24,7 @@ export * from "./linkedWorkRpc.ts";
 import { RunsRpcGroup } from "./runsRpc.ts";
 import {
   REVIEWER_METHODS,
+  CodeReviewSkill,
   ReviewerLaunchContext,
   ReviewerLaunchPreview,
   ReviewerPreviewInput,
@@ -35,6 +36,8 @@ import {
 } from "./reviewerRpc.ts";
 export {
   REVIEWER_METHODS,
+  CODE_REVIEW_SKILL_PATH,
+  DEFAULT_CODE_REVIEW_SKILL,
   ReviewerLaunchContext,
   ReviewerLaunchPreview,
   ReviewerPreviewInput,
@@ -186,6 +189,8 @@ export const ManagedLaunchInput = Schema.Struct({
   runtimeMode: RuntimeMode,
   access: Schema.optionalKey(Schema.Literals(["read_only", "write"])),
   reviewerContext: Schema.optionalKey(ReviewerLaunchContext),
+  codeReviewSkill: Schema.optionalKey(CodeReviewSkill),
+  editReviewSkill: Schema.optionalKey(Schema.Literal(true)),
 });
 export type ManagedLaunchInput = typeof ManagedLaunchInput.Type;
 export const ManagedLaunchRecord = Schema.Struct({
@@ -230,6 +235,9 @@ export const ManagedCreateRecord = Schema.Struct({
   launchOperationKey: Schema.String,
   // Older saved receipts remain decodable; new creation commits this before native effects.
   contextIntent: Schema.optionalKey(ManagedCreationContextIntent),
+  // Reviewer admission refreshes presentation state while preserving the saved commit set.
+  nativeRevision: Schema.optionalKey(launchIdentifier),
+  nativeReviewer: Schema.optionalKey(Schema.Boolean),
   state: Schema.Literals([
     "prepared",
     "creating",

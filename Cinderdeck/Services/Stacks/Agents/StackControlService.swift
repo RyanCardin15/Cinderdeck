@@ -349,6 +349,18 @@ final class StackControlService: ObservableObject {
     try requireIdle(source)
     let options = LaneCreationOptions(request: request, setup: params["setup"]?.boolValue ?? !adopt,
       start: params["start"]?.boolValue ?? true)
+    if params["reviewer"]?.boolValue == true {
+      // The review launcher already inspected and saved every committed head.
+      // Durable integration intake pins those choices; the general lane sheet
+      // must not offer to replace them with another branch or revision.
+      let repositories = source.definition?.repos.filter { $0.laneMode == .worktree } ?? []
+      guard !adopt, operationID != nil, !options.start, !repositories.isEmpty,
+        Set(request.repositoryRefs.keys) == Set(repositories.map(\.id)),
+        request.repositoryRefs.values.allSatisfy({ $0.range(of: "^[0-9a-f]{40,64}$", options: .regularExpression) != nil }) else {
+        throw StackControlError.invalid("Reviewer lanes require a durable operation and exact committed heads for every isolated repository")
+      }
+      return try await createApprovedLane(source, options: options, params: params, actor: actor, reviewed: true)
+    }
     if let present = laneCreationPresenter, let definition = source.definition {
       return try await present(definition, options) { [self] approved in
         await supervisor.reloadDefinitions()

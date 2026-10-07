@@ -43,7 +43,7 @@ nonisolated struct IntegrationHello: Encodable, Sendable {
   let executionHostID: String
   let channel: String
   let runtimeEpoch: String
-  let capabilities = ["github.workspace", "projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.adopt", "operations.lane.update", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.contexts", "recordings.library", "runs.library", "runs.detail", "runs.failures", "builds.declared", "linked-work.projection", "linked-work.lane-transfer", "agents.setup"]
+  let capabilities = ["github.workspace", "projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.create.reviewer", "operations.lane.adopt", "operations.lane.update", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.contexts", "recordings.library", "runs.library", "runs.detail", "runs.failures", "builds.declared", "linked-work.projection", "linked-work.lane-transfer", "agents.setup"]
   let maximumFrameBytes = StackControlSocketServer.maximumFrameBytes
   let maximumPageSize = 500
   let maximumWaitMs = 25_000
@@ -203,7 +203,7 @@ extension StackControlService {
     }
     let allowed: Set<String>
     if input.method == "lane.create" {
-      allowed = ["workspace", "branch", "name", "from", "repositoryRefs", "start", "setup"]
+      allowed = ["workspace", "branch", "name", "from", "repositoryRefs", "start", "setup", "reviewer"]
       let decoded: IntegrationLaneOperation = try decodeIntegration(input.arguments)
       if let name = decoded.name { try validateLaneName(name) }
       guard decoded.repositoryRefs.map({ $0.count <= 64 && $0.allSatisfy({ bounded($0.key, 160) && bounded($0.value, 200) && !$0.value.hasPrefix("-") && !$0.value.contains("\0") && !$0.value.contains("\n") && !$0.value.contains("\r") }) }) ?? true else {
@@ -345,6 +345,7 @@ nonisolated private struct IntegrationLaneOperation: Decodable {
   let repositoryRefs: [String: String]?
   let start: Bool?
   let setup: Bool?
+  let reviewer: Bool?
 }
 nonisolated private struct IntegrationServiceOperation: Decodable {
   let workspace: String
