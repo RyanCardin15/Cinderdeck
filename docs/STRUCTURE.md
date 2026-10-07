@@ -385,7 +385,7 @@ Directory structure mirrors the app: `CinderdeckTests/Services/Cloud/AWSV4Signer
 - `@MainActor` singletons (`TempCaptureManager.shared`) require `@MainActor` test methods.
 - `SCShareableContent`/`SCStream` cannot be mocked — test capture logic through `CaptureOutputNaming` and `PostCaptureActionHandler` instead.
 - OCR fixtures: bundle test images in `CinderdeckTests/Fixtures/`, load via `Bundle(for: type(of: self))`.
-- CI: GitHub Actions macOS 14+ runners have Screen Recording permission. Older runners: `try XCTSkipUnless(CGPreflightScreenCaptureAccess())`.
+- Capture integration tests require local Screen Recording permission: `try XCTSkipUnless(CGPreflightScreenCaptureAccess())`.
 
 ## Agent Edit Guide
 

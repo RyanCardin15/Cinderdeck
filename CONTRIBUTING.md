@@ -79,7 +79,7 @@ Examples:
 
 - `fix: prevent duplicate quick access panels`
 - `docs: update local build instructions`
-- `chore: clean up release workflow notes`
+- `chore: clean up local release notes`
 
 ## Reporting bugs
 

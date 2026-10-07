@@ -5,7 +5,7 @@
 Test the full Sparkle in-app update flow locally before pushing releases. This validates that code signing configurations work correctly with Sparkle's XPC installer in sandboxed mode.
 
 > [!IMPORTANT]
-> The release workflow signs with `codesign` which does **not** substitute Xcode build variables like `$(PRODUCT_BUNDLE_IDENTIFIER)`. All signing scripts pre-process the entitlements file with `sed` to substitute the actual bundle ID. Without this, Sparkle's XPC mach-lookup connections fail with error 4005.
+> The local release builder signs with `codesign` which does **not** substitute Xcode build variables like `$(PRODUCT_BUNDLE_IDENTIFIER)`. Signing scripts resolve those variables to the actual bundle ID before signing. Without this, Sparkle's XPC mach-lookup connections fail with error 4005.
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ Test the full Sparkle in-app update flow locally before pushing releases. This v
    ./scripts/create-signing-cert.sh
    ```
 
-2. **Sparkle EdDSA private key** file. Export the release key that `scripts/setup-release-signing.sh` stored in your keychain, and delete the file when you finish:
+2. **Sparkle EdDSA private key** file. Export the release key from your keychain account `cinderdeck`, and delete the file when you finish. See [RELEASES.md](RELEASES.md) for signing setup:
    ```bash
    GENERATE_KEYS=$(find build ~/Library/Developer/Xcode/DerivedData -path '*/sparkle/Sparkle/bin/generate_keys' | head -1)
    "$GENERATE_KEYS" --account cinderdeck -x ~/cinderdeck-sparkle-key
@@ -50,7 +50,7 @@ The script creates a simulated update scenario:
 
 | Mode | Sparkle helpers | Main app | Purpose |
 |---|---|---|---|
-| `test-current` | Self-signed cert | Self-signed cert | Match the release workflow |
+| `test-current` | Self-signed cert | Self-signed cert | Validate self-signed release behavior |
 | `test-hybrid` | Ad-hoc (`-`) | Self-signed cert | Validate hybrid fix |
 | `test-channel` | Ad-hoc (`-`) | Self-signed cert | Validate stable/beta channel filtering |
 
@@ -126,5 +126,5 @@ Removes `/tmp/test-sparkle-update/` and resets the `updates.channel` preference.
 ## Related
 
 - [Self-signed certificate setup](SELF_SIGNED_CERT.md)
-- [Release workflow](RELEASES.md)
+- [Manual releases](RELEASES.md)
 - `scripts/test-tcc-local.sh` — TCC permission persistence testing (separate concern)

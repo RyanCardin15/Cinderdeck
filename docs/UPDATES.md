@@ -39,7 +39,7 @@ flowchart TD
 
 ### Configuration
 
-- Feed: `SUFeedURL` = `https://raw.githubusercontent.com/RyanCardin15/Cinderdeck/main/appcast.xml`; archives are EdDSA signed and verified against `SUPublicEDKey` (written by `scripts/setup-release-signing.sh`).
+- Feed: `SUFeedURL` = `https://raw.githubusercontent.com/RyanCardin15/Cinderdeck/main/appcast.xml`; archives are EdDSA signed and verified against `SUPublicEDKey` (configured locally before manual publication; see [RELEASES.md](RELEASES.md)).
 - Channels: `UpdateChannel { stable, beta }` persisted under `updates.channel` (`PreferencesKeys.updateChannel`); `allowedChannels(for:)` returns `["beta"]` on beta, `[]` on stable. Stable items are untagged; beta items carry `<sparkle:channel>beta</sparkle:channel>`. Changing the channel checks again from Preferences.
 - The installer runs in-process (no `SUEnableInstallerLauncherService`): Cinderdeck is not sandboxed, and Sparkle's launcher XPC service is only for sandboxed apps. The leftover `-spks`/`-spki` mach-lookup entitlements have no effect outside the sandbox.
 - `CinderdeckUpdatePolicy.isConfigured` requires `CinderdeckSignedUpdatesEnabled`, the release bundle identifier (Debug builds never update), Cinderdeck's feed (or `scripts/test-update-local.sh`'s localhost feed), and a 32-byte key other than upstream Snapzy's.

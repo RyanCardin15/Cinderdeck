@@ -11,7 +11,7 @@
 # Usage:
 #   export SPARKLE_PRIVATE_KEY_FILE=~/path/to/sparkle_private_key.pem
 #
-#   ./scripts/test-update-local.sh test-current   # All self-signed, like the release workflow
+#   ./scripts/test-update-local.sh test-current   # All self-signed
 #   ./scripts/test-update-local.sh test-hybrid     # Hybrid signing (expect success)
 #   ./scripts/test-update-local.sh clean           # Remove test artifacts
 #
@@ -422,7 +422,7 @@ run_test() {
   local mode="$1"  # "current" or "hybrid"
   local mode_label
   if [ "$mode" = "current" ]; then
-    mode_label="ALL SELF-SIGNED, like the release workflow (should work)"
+    mode_label="ALL SELF-SIGNED (should work)"
   else
     mode_label="HYBRID — Sparkle ad-hoc + main self-signed (should work)"
   fi
@@ -564,7 +564,7 @@ case "$cmd" in
     echo "  SPARKLE_PRIVATE_KEY_FILE   Path to Sparkle EdDSA private key (required)"
     echo ""
     echo "Commands:"
-    echo "  test-current   Sign everything with self-signed cert, like the release workflow"
+    echo "  test-current   Sign everything with self-signed cert"
     echo "  test-hybrid    Sparkle helpers ad-hoc + main app self-signed (expect success)"
     echo "  test-channel   Stable + beta appcast items; verify channel filtering"
     echo "  clean          Remove test artifacts, stop server, reset channel pref"

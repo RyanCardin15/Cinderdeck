@@ -3,11 +3,11 @@
 //  sparkle-key-tool.swift
 //  Cinderdeck
 //
-//  Checks Sparkle EdDSA material without Sparkle's tools, so the release workflow can prove
-//  that SPARKLE_PRIVATE_KEY matches the SUPublicEDKey installed copies trust.
+//  Checks Sparkle EdDSA material without Sparkle's tools, so a maintainer can prove
+//  that the private update key matches the SUPublicEDKey installed copies trust.
 //
 //  Usage:
-//    printf '%s' "$SPARKLE_PRIVATE_KEY" | swift scripts/sparkle-key-tool.swift public-key
+//    swift scripts/sparkle-key-tool.swift public-key < /private/path/to/sparkle-key
 //    swift scripts/sparkle-key-tool.swift verify <archive> <edSignature> <SUPublicEDKey>
 //
 

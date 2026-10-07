@@ -8,15 +8,10 @@
 //  as their FIRST line so CI runs stay deterministic while the tests remain
 //  runnable locally.
 //
-//  NOTE ON CI SKIPPING: `xcodebuild test` does NOT forward the shell's `CI` /
-//  `GITHUB_ACTIONS` env vars to the separate XCTest host process, so this
-//  runtime gate does NOT trip during `xcodebuild test` in GitHub Actions.
-//  Guaranteed CI skipping is done by the `CINDERDECK_CI_SKIP_TESTS` allowlist in
-//  .github/workflows/ci.yml (passed as `-skip-testing:` identifiers). Any test
-//  calling `skipIfRunningInCI()` MUST also be listed there. This gate remains
-//  as defense-in-depth: it trips when env IS forwarded (Xcode scheme env, or a
-//  `TEST_RUNNER_CI=1` / `CI=1` value the runner actually sees), and documents
-//  intent at the call site.
+//  `xcodebuild test` does not forward the shell's `CI` environment variable to
+//  the separate XCTest host process. For unattended local runs, explicitly
+//  pass `-skip-testing:` identifiers or configure `CI=1` in the test host's
+//  scheme environment. This gate documents intent at each call site.
 //
 
 import XCTest
@@ -30,7 +25,7 @@ extension XCTestCase {
     line: UInt = #line
   ) throws {
     let environment = ProcessInfo.processInfo.environment
-    let isRunningInCI = environment["CI"] != nil || environment["GITHUB_ACTIONS"] != nil
+    let isRunningInCI = environment["CI"] != nil
     try XCTSkipIf(isRunningInCI, message, file: file, line: line)
   }
 }

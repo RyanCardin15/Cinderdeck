@@ -2,65 +2,60 @@
 
 Cinderdeck has its own release line, beginning at **1.0.0 (200)**. Its repository is `RyanCardin15/Cinderdeck`; its default branch is `main`. Upstream Snapzy tags and history are provenance, not Cinderdeck release artifacts.
 
-People install Cinderdeck once from a release (the DMG or `install.sh`). After that, Sparkle keeps it current: it checks the signed feed daily, downloads new versions in the background, and installs them when Cinderdeck quits or when the user chooses **Restart to Update**. See [UPDATES.md](UPDATES.md) for the in-app flow.
+GitHub Actions is disabled for this repository. Builds, checks, signing, and release publication run locally and are initiated by a maintainer. Pull requests, pushes, tags, and release commits do not automatically build or publish anything.
 
-## One-time setup
+People install Cinderdeck once from a release (the DMG or `install.sh`). After that, Sparkle checks the signed feed daily, downloads new versions in the background, and installs them when Cinderdeck quits or when the user chooses **Restart to Update**. Removing hosted release automation leaves this in-app update flow available for manually published releases. See [UPDATES.md](UPDATES.md).
 
-Releases refuse to publish until update signing is configured, because a release that cannot verify updates would strand every copy installed from it.
+## Signing setup
 
-On your Mac, on an up-to-date `main`, with the [GitHub CLI](https://cli.github.com) signed in (`gh auth login`), run:
+Use an existing persistent code-signing identity on the release Mac. [SELF_SIGNED_CERT.md](SELF_SIGNED_CERT.md) covers local certificate creation and reuse. Developer ID signing and notarization are preferred for public distribution; self-signed builds require first-install approval in macOS. The whole-app builder requires an explicit persistent identity for Release builds.
+
+Keep Sparkle's EdDSA private key in the maintainer's keychain or a private backup. Reuse the key whose public half is already stored in `Cinderdeck/Resources/Info.plist` as `SUPublicEDKey`. Sparkle's `generate_keys --account cinderdeck -p` prints the public key for that keychain account. For an initial setup only, `generate_keys --account cinderdeck` creates the key if it is missing. These tools come from the pinned Sparkle distribution; no private key needs to be uploaded to GitHub.
+
+Before distribution, verify that `SUPublicEDKey` matches the signing key and that `CinderdeckSignedUpdatesEnabled` is true. Review and commit any changes to those plist values through the normal repository process. Back up the key: Keychain Access lists it as **Private key for signing Sparkle updates**. Without it, new releases cannot update copies already installed.
+
+## Local verification
+
+Run the checks appropriate to the changed surfaces before delivery. The repository boundary check rejects new workflow files:
 
 ```bash
-./scripts/setup-release-signing.sh
+python3 scripts/check-repository.py
+python3 scripts/tests/test_local_signing.py
+./scripts/run-tests.sh
 ```
 
-It asks before each change to GitHub (`--yes` answers for you) and:
+Run package typechecks from `agent-runtime/` with installed dependencies:
 
-1. Creates Cinderdeck's Sparkle EdDSA key in your login keychain (keychain account `cinderdeck`), or reuses it. The private key goes straight to the `SPARKLE_PRIVATE_KEY` Actions secret and is never printed.
-2. If the repository has no code-signing secret, creates the **Cinderdeck Self-Signed** certificate and uploads `SELF_SIGNED_CERT_P12` and `SELF_SIGNED_CERT_PASSWORD`. Existing `DEVELOPER_ID_P12` or `SELF_SIGNED_CERT_P12` secrets are left alone.
-3. Commits the matching `SUPublicEDKey` and `CinderdeckSignedUpdatesEnabled = true` to `Cinderdeck/Resources/Info.plist` on `main` through the GitHub API.
-4. Runs **Release Prepare** (a `minor` bump by default; `--bump patch|minor|major`, or `--no-release` to stop here) and opens the release pull request itself if GitHub Actions is not allowed to. You review and merge that pull request on GitHub; the script waits, follows **Release Publish**, and offers to install the new release into `/Applications`.
+```bash
+node_modules/.bin/vp run -r --concurrency-limit 2 typecheck
+```
 
-Back up the key afterwards: Keychain Access lists it as **Private key for signing Sparkle updates**. Without it, new releases cannot update copies already installed. If `main` already trusts a different key, the script stops instead of replacing it; see [Changing the update key](#changing-the-update-key).
+Build the complete app with `scripts/build-unified.sh`; see [UNIFIED_APP.md](UNIFIED_APP.md) for toolchain, build, and validation requirements. Native Cinderdeck owns signing and updates for the private bundled runtime.
 
-Code signing options, best first:
+## Publishing a release manually
 
-| Secrets | Result |
-|---|---|
-| `DEVELOPER_ID_P12`, `DEVELOPER_ID_PASSWORD` (+ `APPLE_ID`, `APPLE_ID_PASSWORD`, `APPLE_TEAM_ID` to notarize) | No Gatekeeper warning; library validation stays on. Requires the Apple Developer Program. |
-| `SELF_SIGNED_CERT_P12`, `SELF_SIGNED_CERT_PASSWORD` | macOS asks users to approve the first install from a browser download (System Settings → Privacy & Security → Open Anyway). Updates and permissions carry over afterwards. |
-| `ALLOW_ADHOC_RELEASE=true` | Not recommended: permissions may reset on every update. |
+1. On an up-to-date release checkout, run `./scripts/bump-version.sh patch stable` (or choose `minor`, `major`, or `beta`). It updates the marketing version and increments the build number. Prepare the corresponding `CHANGELOG.md` entry; `scripts/generate-changelog.sh` can generate notes from commits. Review and commit the release changes. Merging them does not publish a release.
+2. Build the unified Release app using `scripts/build-unified.sh --configuration Release --arch arm64 --output-dir /absolute/path/to/release-output --signing-identity 'Your Existing Code Signing Identity'`. For Developer ID distribution, set `CINDERDECK_SIGNING_TIMESTAMP=--timestamp`. Verify the complete outer app, including the bundled runtime, and manually validate the release behavior.
+3. Package the app into `Cinderdeck-vVERSION.dmg`. For Developer ID distribution, notarize and staple the archive with Apple's tools. Sign the final archive with Sparkle's `sign_update` using the existing EdDSA private key. Verify the returned signature with `swift scripts/sparkle-key-tool.swift verify <archive> <edSignature> <SUPublicEDKey>` before uploading anything.
+4. Create the `vVERSION` GitHub release manually, attach the signed DMG, and use the changelog entry as its release notes. Mark beta versions as pre-releases. Publication requires explicit authorization.
+5. Generate release-note HTML with `scripts/changelog-to-html.py`. Prepend the signed item to `appcast.xml` with `scripts/update-appcast.sh <version> <build_number> <dmg_path> appcast.xml <ed_signature> <release_notes_html> [channel]`. Use `beta` for a beta release. Update `Casks/cinderdeck.rb` from its template with the version and DMG SHA-256 for stable releases, and update documentation stamps with `scripts/update-docs-version-stamps.sh`. Review and commit these metadata changes to `main` through the normal repository process.
 
-With the repository setting **Allow GitHub Actions to create and approve pull requests** off, Release Prepare still pushes the `release/v…` branch and warns with a link for opening the pull request by hand.
-
-## Publishing a release
-
-1. Run **Actions → Release Prepare** (or `gh workflow run release-prepare.yml -f version_type=patch -f channel=stable`). A push to `main` whose commit message starts with `release(patch):`, `release(minor):`, or `release(major):` (with `-beta` for a beta, such as `release(patch-beta):`) does the same. The first release must be stable, because beta numbering is based on existing tags.
-2. The workflow bumps the version and build number, turns the `## Unreleased` section of `CHANGELOG.md` into the release's entry (or, without one, generates notes from conventional commits since the last tag, or since the Cinderdeck fork point for the first release), and opens a `release/v…` pull request. Those notes become the GitHub release text and the notes in Sparkle's update window.
-3. Merge that pull request. **Release Publish** then:
-   - checks that `SPARKLE_PRIVATE_KEY` matches `SUPublicEDKey` and that signed updates are on, before building anything;
-   - builds, signs Sparkle's helpers and the app with hardened runtime (library validation is disabled only for signing identities without an Apple Team ID, as in `scripts/install-local.sh`), and confirms the signed app launches;
-   - packages `Cinderdeck-vVERSION.dmg`, notarizes it when Developer ID credentials exist, signs it with EdDSA, and confirms the signature matches the key in the app;
-   - publishes the GitHub release, prepends the item to `appcast.xml` (tagged `beta` for pre-releases), updates `Casks/cinderdeck.rb` for stable releases, and pushes those changes to `main`.
-
-Installed copies see the update at their next daily check, or immediately from **Check for Updates**. `raw.githubusercontent.com` can cache `appcast.xml` for a few minutes.
+Installed copies see the published feed item at their next daily check, or immediately from **Check for Updates**. `raw.githubusercontent.com` can cache `appcast.xml` for a few minutes. Release notifications are manual.
 
 ## Moving existing installs onto releases
 
-Copies built from source before signed updates were configured, or with the Debug configuration, cannot update themselves. Install the first release once, from the DMG or with:
+Copies built before signed updates were configured, or with the Debug configuration, cannot update themselves. Install a published release once, from the DMG or with:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/RyanCardin15/Cinderdeck/main/install.sh | bash
 ```
 
-Release builds made from source after the setup commit trust the same key, so they also update to published releases. Their signing identity differs from the release certificate, so macOS asks for capture and accessibility permissions again after that first update.
+Release builds made from source with the trusted public key also update to published releases. If their signing identity differs from the release certificate, macOS may require capture and accessibility permissions again after that first update.
 
 ## Changing the update key
 
-Sparkle accepts an update when either its EdDSA signature matches the installed app's `SUPublicEDKey` or its code signature matches the installed app's. To rotate the key, keep the release code-signing certificate unchanged for that release, run `./scripts/setup-release-signing.sh --replace-key` with the new key, and publish. Never change the key and the certificate in the same release.
+Sparkle accepts an update when either its EdDSA signature matches the installed app's `SUPublicEDKey` or its code signature matches the installed app's. To rotate the key, keep the release code-signing certificate unchanged for that release, update `SUPublicEDKey` locally to the new key's public half, review and commit it, then manually publish the signed release. Never change the key and the certificate in the same release.
 
 ## Runtime policy
 
 `CinderdeckUpdatePolicy` starts the updater only when `CinderdeckSignedUpdatesEnabled` is true, the bundle identifier is `com.ryancardin.cinderdeck` (never the Debug build), the feed is Cinderdeck's (or the local test feed of `scripts/test-update-local.sh`), and `SUPublicEDKey` is a 32-byte key other than upstream Snapzy's. Otherwise Preferences shows that the build cannot update itself and **Check for Updates** opens the releases page.
-
-The optional release notification workflow uses only explicitly configured repository secrets. No notification is sent by a local build or rename.

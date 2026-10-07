@@ -8,6 +8,10 @@ ROOT = Path(__file__).resolve().parent.parent
 RUNTIME = ROOT / "agent-runtime"
 errors = []
 
+for workflow in (ROOT / ".github/workflows").glob("*"):
+    if workflow.is_file() and workflow.suffix.lower() in (".yml", ".yaml"):
+        errors.append(f"GitHub Actions workflows are disabled for this project: {workflow.relative_to(ROOT)}")
+
 for obsolete in (
     ".repos", ".github", "apps/marketing", "infra", "packaging", "t3.json",
     "oxlint-plugin-t3code", "docs/deckhand/upstream-patches.json",
