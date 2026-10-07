@@ -4,7 +4,7 @@ export type WorkspaceSidebarPreferences = {
   expanded: Record<string, boolean>;
 };
 
-export const emptySidebarPreferences = (): WorkspaceSidebarPreferences => ({
+const emptySidebarPreferences = (): WorkspaceSidebarPreferences => ({
   order: {},
   favorites: [],
   expanded: {},

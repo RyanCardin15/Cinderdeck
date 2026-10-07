@@ -33,11 +33,7 @@ const threadPrSnapshotsAtom = Atom.make<ReadonlyMap<string, ThreadPrSnapshot>>(n
   Atom.withLabel("mobile:thread-pr-snapshots"),
 );
 
-export {
-  presentThreadPr,
-  type ThreadPr,
-  type ThreadPrPresentation,
-} from "./thread-pr-presentation";
+export { type ThreadPr, type ThreadPrPresentation } from "./thread-pr-presentation";
 
 /**
  * Linked PRs use server snapshots. Branch fallback and legacy references share

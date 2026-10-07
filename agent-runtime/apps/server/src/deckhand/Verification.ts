@@ -72,7 +72,7 @@ export function sourceAssessment(
   );
 }
 /** User-declared scenario continuity is an association, never proof of a capture target. */
-export function validateScenarioPair(
+function validateScenarioPair(
   baseline: C.Evidence | undefined,
   followup: C.Evidence | undefined,
 ): string | null {

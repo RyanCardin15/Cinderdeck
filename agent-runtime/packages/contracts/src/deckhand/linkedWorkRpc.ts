@@ -139,12 +139,3 @@ export function linkedWorkDesktopURL(target: LinkedWorkTarget, development: bool
   for (const key of targetKeys) url.searchParams.set(key, String(target[key]));
   return url.href;
 }
-export function linkedWorkNativeURL(
-  target: Pick<LinkedWorkTarget, "installation" | "workspace" | "generation">,
-): string {
-  const url = new URL("cinderdeck://linked-work");
-  url.searchParams.set("installation", target.installation);
-  url.searchParams.set("workspace", target.workspace);
-  url.searchParams.set("generation", String(target.generation));
-  return url.href;
-}

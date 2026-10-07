@@ -74,7 +74,7 @@ export function buildSessionResumeCommand(input: {
   }
 }
 
-export function quoteShellArgument(value: string): string {
+function quoteShellArgument(value: string): string {
   return /^[A-Za-z0-9_@%+=:,./-]+$/.test(value) ? value : `'${value.replaceAll("'", `'\\''`)}'`;
 }
 

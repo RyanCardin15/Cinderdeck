@@ -20,7 +20,7 @@ import { cloudDebugLog } from "./cloudDebugLog";
 
 const managedRelayAtomRuntime = Atom.runtime(runtimeContextLayer);
 
-export const managedRelayQueryManager = createManagedRelayQueryManager(managedRelayAtomRuntime, {
+const managedRelayQueryManager = createManagedRelayQueryManager(managedRelayAtomRuntime, {
   onQueryEvent: (event) =>
     cloudDebugLog(`query:${event.operation}:${event.stage}:${event.phase}`, { ...event }),
 });

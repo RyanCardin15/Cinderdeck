@@ -482,7 +482,7 @@ function WorkingDuration(props: {
   );
 }
 
-export function WorkingTimer(props: { readonly startedAt: string }) {
+function WorkingTimer(props: { readonly startedAt: string }) {
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     const intervalId = setInterval(() => setNowMs(Date.now()), 1_000);

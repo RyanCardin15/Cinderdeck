@@ -31,8 +31,6 @@ import {
   type PendingThreadOrder,
 } from "./threadOrder";
 
-export { snoozeWakeLabel };
-
 /**
  * Provider drivers for a row's trailing icon stack, back to front. Instances
  * missing from the environment's config are skipped, and an unresolved

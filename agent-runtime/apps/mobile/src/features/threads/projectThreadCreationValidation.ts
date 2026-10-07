@@ -51,26 +51,3 @@ export function resolveProjectThreadCreationBranch(input: {
   }
   return input.workspaceMode === "local" ? input.currentCheckoutBranch : null;
 }
-
-export function validateProjectThreadCreation(input: {
-  readonly environmentId: EnvironmentId;
-  readonly projectId: ProjectId;
-  readonly environmentMode: "local" | "worktree";
-  readonly branch: string | null;
-  readonly initialMessageText: string;
-}): ProjectThreadCreationValidationError | null {
-  if (input.initialMessageText.trim().length === 0) {
-    return new ProjectThreadTaskRequiredError({
-      environmentId: input.environmentId,
-      projectId: input.projectId,
-      environmentMode: input.environmentMode,
-    });
-  }
-  if (input.environmentMode === "worktree" && !input.branch) {
-    return new ProjectThreadBaseBranchRequiredError({
-      environmentId: input.environmentId,
-      projectId: input.projectId,
-    });
-  }
-  return null;
-}

@@ -11,12 +11,12 @@ import {
 } from "react";
 
 export const PRODUCT_SIDEBAR_STORAGE_KEY = "cinderdeck.product-sidebar";
-export const PRODUCT_SIDEBAR_DEFAULT_WIDTH = 260;
+const PRODUCT_SIDEBAR_DEFAULT_WIDTH = 260;
 export const PRODUCT_SIDEBAR_MIN_WIDTH = 210;
 export const PRODUCT_SIDEBAR_MAX_WIDTH = 420;
-export const PRODUCT_SIDEBAR_COLLAPSED_WIDTH = 60;
+const PRODUCT_SIDEBAR_COLLAPSED_WIDTH = 60;
 
-export function clampProductSidebarWidth(width: number, viewportWidth: number) {
+function clampProductSidebarWidth(width: number, viewportWidth: number) {
   return Math.max(
     PRODUCT_SIDEBAR_MIN_WIDTH,
     Math.min(width, PRODUCT_SIDEBAR_MAX_WIDTH, viewportWidth - 360),

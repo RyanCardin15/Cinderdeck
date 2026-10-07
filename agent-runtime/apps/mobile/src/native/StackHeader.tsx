@@ -10,7 +10,6 @@ export { NativeHeaderToolbar } from "./NativeHeaderToolbar";
 
 export {
   nativeHeaderScrollEdgeEffects,
-  nativeTopScrollEdgeEffect,
   type NativeHeaderScrollEdgeEffects,
   type NativeTopScrollEdgeEffect,
 } from "./scrollEdgeEffects";

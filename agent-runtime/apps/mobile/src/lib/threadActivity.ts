@@ -1288,7 +1288,7 @@ function isWorkLogFeedRow(row: ThreadFeedEntry | undefined): boolean {
 }
 
 /** Shared by the trailing live tool row and its Thinking fallback. */
-export const LIVE_ACTIVITY_ROW_ID = "live-activity-row";
+const LIVE_ACTIVITY_ROW_ID = "live-activity-row";
 
 function thinkingRow(createdAt: string, runId: RunId | null) {
   if (cachedThinkingRow?.createdAt !== createdAt || cachedThinkingRow.runId !== runId) {

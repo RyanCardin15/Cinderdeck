@@ -7,7 +7,7 @@ import { environmentCatalog } from "../connection/catalog";
 import { environmentPresentations } from "./presentation";
 import { createWorkspaceConnectionAtoms } from "./workspace-connection-atoms";
 
-export const workspaceConnections = createWorkspaceConnectionAtoms({
+const workspaceConnections = createWorkspaceConnectionAtoms({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
   networkStatusValueAtom: environmentCatalog.networkStatusValueAtom,
   presentationAtom: environmentPresentations.presentationAtom,

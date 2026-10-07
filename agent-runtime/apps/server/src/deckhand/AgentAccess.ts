@@ -41,7 +41,7 @@ const make = Effect.gen(function* () {
       ),
   });
 });
-export const layer = Layer.effect(AgentAccess, make);
+const layer = Layer.effect(AgentAccess, make);
 export const layerLive = layer.pipe(
   Layer.provide(CinderdeckClient.layer),
   Layer.provide(

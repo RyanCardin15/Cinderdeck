@@ -4,11 +4,7 @@ import { nextTerminalId, resolveTerminalSessionLabel } from "@cinderdeck/shared/
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
 
-export {
-  getTerminalLabel,
-  nextTerminalId,
-  resolveTerminalSessionLabel,
-} from "@cinderdeck/shared/terminalLabels";
+export { resolveTerminalSessionLabel } from "@cinderdeck/shared/terminalLabels";
 
 export interface TerminalMenuSession {
   readonly terminalId: string;

@@ -2,7 +2,7 @@
 // the licenses for incorporated source; optional product policies are supplied
 // by the maintainer through explicit URLs.
 export const LEGAL_URL = "https://github.com/RyanCardin15/Cinderdeck/blob/main/NOTICE";
-export const SECURITY_POLICY_URL = "https://github.com/RyanCardin15/Cinderdeck/blob/main/SECURITY.md";
+const SECURITY_POLICY_URL = "https://github.com/RyanCardin15/Cinderdeck/blob/main/SECURITY.md";
 const configuredDocument = (value: string | undefined): string | undefined => {
   try {
     const url = new URL(value ?? "");
@@ -11,10 +11,10 @@ const configuredDocument = (value: string | undefined): string | undefined => {
     return undefined;
   }
 };
-export const PRIVACY_POLICY_URL = configuredDocument(process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL);
-export const TERMS_OF_SERVICE_URL = configuredDocument(process.env.EXPO_PUBLIC_TERMS_OF_SERVICE_URL);
+const PRIVACY_POLICY_URL = configuredDocument(process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL);
+const TERMS_OF_SERVICE_URL = configuredDocument(process.env.EXPO_PUBLIC_TERMS_OF_SERVICE_URL);
 
-export const ALLOWED_LEGAL_DOCUMENT_URLS = [
+const ALLOWED_LEGAL_DOCUMENT_URLS = [
   LEGAL_URL,
   PRIVACY_POLICY_URL,
   TERMS_OF_SERVICE_URL,

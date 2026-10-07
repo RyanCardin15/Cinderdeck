@@ -46,7 +46,7 @@ export interface PendingDraftTask {
  * Settings-only drafts (a model pick with no text) are not work the user
  * would look for in the list; only text or attachments make a draft visible.
  */
-export function composerDraftHasUserContent(draft: ComposerDraft): boolean {
+function composerDraftHasUserContent(draft: ComposerDraft): boolean {
   return draft.text.trim().length > 0 || draft.attachments.length > 0;
 }
 

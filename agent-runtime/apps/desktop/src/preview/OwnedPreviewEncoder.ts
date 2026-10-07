@@ -3,7 +3,7 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodeCrypto from "node:crypto";
 import { BrowserWindow, ipcMain } from "electron";
-export const MAX_OWNED_CAPTURE_BYTES = 268435456;
+const MAX_OWNED_CAPTURE_BYTES = 268435456;
 const RESULT = "deckhand:owned-encoder:result";
 export interface OwnedEncodedVideo {
   path: string;

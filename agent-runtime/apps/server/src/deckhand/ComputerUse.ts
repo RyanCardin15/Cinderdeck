@@ -451,7 +451,7 @@ const attempt = <A>(run: () => Promise<A>) =>
     catch: (cause) => (isComputerUseError(cause) ? cause : fail("unavailable")),
   });
 
-export const make = (core: ComputerUseCore, scripts = makeComputerUseScripts(core)) => {
+const make = (core: ComputerUseCore, scripts = makeComputerUseScripts(core)) => {
   return ComputerUse.of({
     listApps: (actor) => attempt(() => core.listApps(actor)),
     getAppState: (actor, input) => attempt(() => core.getAppState(actor, input)),

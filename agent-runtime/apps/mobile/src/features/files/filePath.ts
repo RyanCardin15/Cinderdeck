@@ -115,18 +115,6 @@ export function isMarkdownPreviewFile(path: string): boolean {
   return /\.(?:md|mdx)$/i.test(path.split(/[?#]/, 1)[0] ?? "");
 }
 
-export function fileBreadcrumbs(projectName: string, relativePath: string): FileBreadcrumb[] {
-  const parts = relativePath.split("/").filter(Boolean);
-  return [
-    { label: projectName, path: "", kind: "project" },
-    ...parts.map((part, index) => ({
-      label: part,
-      path: parts.slice(0, index + 1).join("/"),
-      kind: index === parts.length - 1 ? ("file" as const) : ("directory" as const),
-    })),
-  ];
-}
-
 /**
  * The location line under a file's name: `project · parent/dir`. A host file outside the
  * workspace is not under the project, so it shows its directory alone.

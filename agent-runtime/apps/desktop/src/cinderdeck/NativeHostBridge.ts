@@ -8,10 +8,10 @@ import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 
-export const NATIVE_HOST_ROUTE_CHANNEL = "cinderdeck:native-host-route";
-export const NATIVE_HOST_READY_CHANNEL = "cinderdeck:native-host-ready";
-export const NATIVE_TOOL_CHANNEL = "cinderdeck:native-tool";
-export const NATIVE_HOST_INFO_CHANNEL = "cinderdeck:native-host-info";
+const NATIVE_HOST_ROUTE_CHANNEL = "cinderdeck:native-host-route";
+const NATIVE_HOST_READY_CHANNEL = "cinderdeck:native-host-ready";
+const NATIVE_TOOL_CHANNEL = "cinderdeck:native-tool";
+const NATIVE_HOST_INFO_CHANNEL = "cinderdeck:native-host-info";
 const MAX_LINE_BYTES = 16 * 1024;
 const surfaces = new Set([
   "workspace",

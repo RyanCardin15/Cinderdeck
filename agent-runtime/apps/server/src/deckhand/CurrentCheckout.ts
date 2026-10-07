@@ -55,7 +55,7 @@ export const resolveCurrentCheckout = (id: string) =>
     for (const repo of checkout.repositories) yield* assertPhysicalAvailable(repo.physicalId);
     return checkout;
   }).pipe(Effect.mapError(normalize));
-export const resolveCurrentThread = (id: ThreadId) =>
+const resolveCurrentThread = (id: ThreadId) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const relationships = yield* Relationships.Relationships;

@@ -362,7 +362,7 @@ export const OrchestrationV2LayerLive = Layer.mergeAll(
   legacyV1ThreadImporterProvided,
 );
 
-export const externalSessionsProvided = ExternalSessions.layer.pipe(
+const externalSessionsProvided = ExternalSessions.layer.pipe(
   Layer.provide(Layer.mergeAll(Relationships.layer, IntegrationHub.layerLive)),
 );
 const deckhandTransportProvided = RecordingTransport.layer.pipe(

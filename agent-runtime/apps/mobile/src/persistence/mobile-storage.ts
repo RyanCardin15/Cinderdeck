@@ -117,7 +117,7 @@ export class MobileStorage extends Context.Service<
   }
 >()("@cinderdeck/mobile/persistence/MobileStorage") {}
 
-export const make = Effect.fn("MobileStorage.make")(function* () {
+const make = Effect.fn("MobileStorage.make")(function* () {
   const secureStorage = yield* MobileSecureStorage.MobileSecureStorage;
 
   const parseJson = <A>(key: string, raw: string): A | null => {

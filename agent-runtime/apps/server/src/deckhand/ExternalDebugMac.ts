@@ -30,7 +30,7 @@ function failure(value: unknown) {
       return fail("unavailable");
   }
 }
-export function macHelperPath(): string {
+function macHelperPath(): string {
   const candidates = [
     new NodeURL.URL("./native/deckhand-mac-external-debug", import.meta.url),
     new NodeURL.URL("../../../../.deckhand/native/deckhand-mac-external-debug", import.meta.url),

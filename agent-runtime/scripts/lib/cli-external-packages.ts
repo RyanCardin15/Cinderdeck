@@ -25,7 +25,7 @@
  * only inside the emitted bundle and is unreachable there. This closure is
  * enforced by a test, not by inspection.
  */
-export const CLI_RUNTIME_EXTERNAL_PREFIXES = [
+const CLI_RUNTIME_EXTERNAL_PREFIXES = [
   // Cursor ships computed Webpack imports and platform helper packages.
   "@cursor/sdk",
   "node-pty",
