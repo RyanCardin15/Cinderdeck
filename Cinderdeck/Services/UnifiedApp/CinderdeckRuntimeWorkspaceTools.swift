@@ -28,6 +28,13 @@ final class CinderdeckRuntimeWorkspaceTools: NSWindowController, NSWindowDelegat
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
   func open(_ request: CinderdeckRuntimeUIRequest) throws {
+    if request.surface == "workspace-editor" {
+      guard let id = request.workspaceID, let file = StackSupervisor.shared.files.first(where: { $0.id == id }), file.lane == nil else {
+        throw StackControlError.invalid("Select an exact source workspace for Settings")
+      }
+      UnifiedSettingsNavigation.openWorkspace(id, deleting: request.mode == "delete", configuration: ["services", "tasks", "workflows"].contains(request.mode ?? ""))
+      return
+    }
     guard let window else { throw StackControlError(code: "host_unavailable", message: "The native workspace tool is unavailable") }
     // Repeated opens can focus the same editor without losing its draft. A request
     // for another scope must wait until the user closes the existing sheet.
@@ -55,25 +62,6 @@ final class CinderdeckRuntimeWorkspaceTools: NSWindowController, NSWindowDelegat
       presentedRequest = request
       activate()
       model.create()
-    case "workspace-editor":
-      guard let file, file.lane == nil, model.workspaceNavigation.workspaces.contains(where: { $0.id == file.id }) else {
-        throw StackControlError.invalid("Select the source workspace to edit its definition; lane snapshots cannot be edited here")
-      }
-      guard request.mode.map({ CinderdeckRuntimeUIRequest.workspaceEditorModes.contains($0) }) ?? true else {
-        throw StackControlError.invalid("Unsupported workspace editor mode")
-      }
-      model.select(file.id)
-      switch request.mode {
-      case "tasks": model.requestedSection = .tasks
-      case "workflows": model.requestedSection = .workflows
-      default: model.requestedSection = .services
-      }
-      window.title = "Workspace tools — \(file.name) — Cinderdeck"
-      presentedRequest = request
-      activate()
-      if request.mode == nil || request.mode == "delete" {
-        model.editor = .init(file: file.file, requestsDeletion: request.mode == "delete")
-      }
     case "workspace-branches":
       guard let file, request.mode == nil, let definition = file.definition, !definition.repos.isEmpty else {
         throw StackControlError.invalid("Branch switching requires an exact workspace or lane with repositories and no mode")

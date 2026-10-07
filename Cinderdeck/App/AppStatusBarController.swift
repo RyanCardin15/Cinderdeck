@@ -937,73 +937,13 @@ final class AppStatusBarController: ObservableObject {
   }
 
   func openPreferencesWindow(tab: PreferencesTab? = nil) {
-    if let tab {
-      PreferencesNavigationState.shared.select(tab)
-    }
-    DiagnosticLogger.shared.log(
-      .info,
-      .preferences,
-      "Preferences window requested",
-      context: ["tab": tab.map { "\($0)" } ?? "current"]
-    )
-    presentPreferencesWindow(tab: tab)
-  }
-
-  private func presentPreferencesWindow(tab: PreferencesTab? = nil) {
-    // Observe Settings closure to release recording exclusions.
-    if !isObservingSettingsWindows {
-      NSApp.maintainRegularActivationPolicy()
-      isObservingSettingsWindows = true
-
-      // Observe when Settings windows close.
-      NotificationCenter.default.addObserver(
-        self,
-        selector: #selector(windowDidClose(_:)),
-        name: NSWindow.willCloseNotification,
-        object: nil
-      )
-    }
-
-    PreferencesWindowController.shared.show(tab: tab)
-
-    if let window = PreferencesWindowController.shared.window {
-      trackedPreferencesWindow = window
-      syncTrackedPreferencesWindowExclusion()
-    }
+    UnifiedSettingsNavigation.open(tab)
   }
 
   // MARK: - Settings Scene Trigger
 
-  private static let settingsTriggerRetryDelay: TimeInterval = 0.1
-
-  /// Physical key that macOS binds to the "Settings…" app menu item.
+  /// Physical key bound to the unified Settings command.
   private static let settingsShortcutKeyCode = UInt16(kVK_ANSI_Comma)
-
-  private func attemptToTriggerSettings(remainingAttempts: Int) {
-    if let mainMenu = NSApp.mainMenu,
-       let settingsItem = Self.findSettingsMenuItem(
-         in: mainMenu,
-         shortcutCharacter: Self.settingsShortcutCharacter()
-       ),
-       let parentMenu = settingsItem.menu,
-       let itemIndex = parentMenu.items.firstIndex(of: settingsItem) {
-      parentMenu.performActionForItem(at: itemIndex)
-      return
-    }
-
-    if remainingAttempts > 1 {
-      DispatchQueue.main.asyncAfter(deadline: .now() + Self.settingsTriggerRetryDelay) { [weak self] in
-        self?.attemptToTriggerSettings(remainingAttempts: remainingAttempts - 1)
-      }
-    } else {
-      DiagnosticLogger.shared.log(
-        .warning,
-        .preferences,
-        "Settings menu item not found; falling back to responder-chain action"
-      )
-      NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-    }
-  }
 
   /// Finds the "Settings…" menu item created by the SwiftUI `Settings` scene.
   ///

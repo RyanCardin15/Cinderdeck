@@ -1,3 +1,4 @@
+import { isNativeSettingsHost } from "../deckhand/nativeSettingsPresentation";
 import { Outlet, createFileRoute, redirect, useLocation } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import { RotateCcwIcon } from "lucide-react";
@@ -88,7 +89,8 @@ function SettingsScopeBoundary({ pathname, children }: { pathname: string; child
   }
   // Device-local pages ignore the scope entirely; the project page follows
   // remembered members while a grouping change replaces its URL key.
-  if (SETTINGS_DEVICE_ONLY_PATHS.has(pathname) || pathname === "/settings/projects") {
+  if (SETTINGS_DEVICE_ONLY_PATHS.has(pathname) || pathname === "/settings/projects" ||
+    (hash.startsWith("native-") && isNativeSettingsHost())) {
     return children;
   }
   // Keep the scope sentence on screen so the selection can be changed back.

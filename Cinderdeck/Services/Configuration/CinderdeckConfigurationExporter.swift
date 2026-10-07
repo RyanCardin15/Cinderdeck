@@ -74,6 +74,10 @@ enum CinderdeckConfigurationExporter {
     writer.value("recording_template", CaptureOutputNaming.resolvedTemplate(for: .recording, defaults: defaults))
 
     writer.section("capture.screenshot")
+    writer.value("auto_detect_element", defaults.boolValue(PreferencesKeys.screenshotAutoDetectElementUnderCursor, default: false))
+    writer.value("auto_detect_window", defaults.boolValue(PreferencesKeys.screenshotAutoDetectWindowUnderCursor, default: false))
+    writer.value("live_passthrough", defaults.boolValue(PreferencesKeys.screenshotLivePassthrough, default: true))
+    writer.value("include_window_shadow", defaults.boolValue(PreferencesKeys.captureIncludeWindowShadow, default: true))
     writer.value("format", defaults.string(forKey: PreferencesKeys.screenshotFormat) ?? ImageFormatOption.png.rawValue)
     writer.value("include_cinderdeck", defaults.boolValue(PreferencesKeys.screenshotIncludeOwnApp, default: false))
     writer.value("show_cursor", defaults.boolValue(PreferencesKeys.screenshotShowCursor, default: false))
@@ -87,6 +91,7 @@ enum CinderdeckConfigurationExporter {
     writer.value("show_hints", defaults.boolValue(PreferencesKeys.scrollingCaptureShowHints, default: true))
 
     writer.section("capture.ocr")
+    writer.value("link_detection", defaults.boolValue(PreferencesKeys.ocrLinkDetectionEnabled, default: true))
     writer.value("success_notification", defaults.boolValue(PreferencesKeys.ocrSuccessNotificationEnabled, default: true))
     writer.value("selected_model", defaults.string(forKey: PreferencesKeys.ocrSelectedModel) ?? OCRModelSelection.builtIn.persistedValue)
     writer.value("custom_models", customModelsJSON(defaults: defaults))
@@ -100,6 +105,8 @@ enum CinderdeckConfigurationExporter {
 
   private static func writeRecording(_ writer: inout SimpleTOMLWriter, defaults: UserDefaults) {
     writer.section("recording")
+    writer.value("show_time_on_menu_bar", defaults.boolValue(PreferencesKeys.recordingShowTimeOnMenuBar, default: true))
+    writer.value("hover_bar_visible", defaults.boolValue(PreferencesKeys.recordingHoverBarVisible, default: true))
     writer.value("format", RecordingToolbarPreferences.selectedFormat(defaults: defaults).rawValue)
     writer.value("quality", RecordingToolbarPreferences.selectedQuality(defaults: defaults).rawValue)
     writer.value("fps", defaults.integerValue(PreferencesKeys.recordingFPS, default: 30))
@@ -187,6 +194,7 @@ enum CinderdeckConfigurationExporter {
 
   private static func writeCloud(_ writer: inout SimpleTOMLWriter, defaults: UserDefaults) {
     writer.section("cloud")
+    writer.value("enabled", defaults.boolValue(PreferencesKeys.cloudEnabled, default: false))
     let providerRaw = defaults.string(forKey: PreferencesKeys.cloudProviderType) ?? CloudProviderType.awsS3.rawValue
     writer.value("provider", providerRaw)
 

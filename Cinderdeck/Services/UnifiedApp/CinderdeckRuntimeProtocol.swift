@@ -9,6 +9,7 @@ nonisolated struct CinderdeckRuntimeMessage: Encodable, Sendable {
   var state: String?
   var text: String?
   var error: String?
+  var settings: JSONValue?
 }
 
 nonisolated struct CinderdeckRuntimeUIRequest: Decodable, Equatable, Sendable {
@@ -45,8 +46,9 @@ nonisolated final class CinderdeckRuntimeOutputFramer: @unchecked Sendable {
   private var buffer = Data()
   private var discarding = false
   private let onLine: @Sendable (Data) -> Void
+  private let limit: Int
 
-  init(onLine: @escaping @Sendable (Data) -> Void) { self.onLine = onLine }
+  init(limit: Int = 16_384, onLine: @escaping @Sendable (Data) -> Void) { self.limit = limit; self.onLine = onLine }
 
   func consume(_ data: Data) {
     lock.lock()
@@ -57,7 +59,7 @@ nonisolated final class CinderdeckRuntimeOutputFramer: @unchecked Sendable {
         buffer.removeAll(keepingCapacity: true)
         discarding = false
       } else if !discarding {
-        if buffer.count < 16_384 { buffer.append(byte) }
+        if buffer.count < limit { buffer.append(byte) }
         else { buffer.removeAll(keepingCapacity: true); discarding = true }
       }
     }

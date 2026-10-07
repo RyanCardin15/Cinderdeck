@@ -4,6 +4,7 @@ import type { NativeHostRoute } from "@cinderdeck/contracts";
 import type { WorkspaceSearch } from "./workspaceNavigation";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { AGENT_ACCESS_SETTINGS_ID } from "./AgentAccessSettings";
+import { nativeSettingsTarget } from "./nativeSettingsNavigation";
 
 /** Native menu/deep-link routes use the local owner, never the viewed remote computer. */
 export function NativeHostNavigation() {
@@ -12,7 +13,35 @@ export function NativeHostNavigation() {
   const [pending, setPending] = useState<NativeHostRoute | null>(null);
   useEffect(() => window.desktopBridge?.onNativeHostRoute?.(setPending), []);
   useEffect(() => {
-    if (!pending || !environment) return;
+    if (!pending) return;
+    if (
+      (pending.section === "settings:workspace" ||
+        pending.section === "settings:workspace-delete" ||
+        pending.section === "settings:workspace-configuration") &&
+      pending.workspaceID
+    ) {
+      setPending(null);
+      void navigate({
+        to: "/settings/workspaces",
+        hash: "native-workspace",
+        search: {
+          workspace: pending.workspaceID,
+          ...(pending.section === "settings:workspace-delete"
+            ? { workspaceAction: "delete" }
+            : pending.section === "settings:workspace-configuration"
+              ? { workspaceAction: "configuration" }
+              : {}),
+        },
+      });
+      return;
+    }
+    const settingsTarget = nativeSettingsTarget(pending.section ?? "");
+    if (settingsTarget) {
+      setPending(null);
+      void navigate({ ...settingsTarget, search: {} });
+      return;
+    }
+    if (!environment) return;
     const target = pending;
     setPending(null);
     const section = (target.section ?? "").toLowerCase();

@@ -1,3 +1,6 @@
+import { NATIVE_SETTINGS_SEARCH_ITEMS } from "../../deckhand/nativeSettingsSearch";
+import { isNativeSettingsHost } from "../../deckhand/nativeSettingsPresentation";
+import { NATIVE_SETTINGS_PAGES, type NativeSettingsPath } from "../../deckhand/nativeSettingsNavigation";
 import { isElectron } from "~/env";
 import { isMacPlatform, normalizeSearchText } from "~/lib/utils";
 import { STATIC_KEYBINDING_COMMANDS, type KeybindingCommand } from "@cinderdeck/contracts";
@@ -12,6 +15,7 @@ import {
 } from "./settingsScope";
 
 export type SettingsPath =
+  | NativeSettingsPath
   | "/settings/workspaces"
   | "/settings/projects"
   | "/settings/general"
@@ -51,6 +55,7 @@ export interface SettingsSearchItem {
   // Its row only renders in the desktop app, so a browser result would land on
   // an anchor that isn't there.
   readonly desktopOnly?: boolean;
+  readonly nativeHostOnly?: boolean;
   readonly macOnly?: boolean;
   // Its row only renders on Windows desktop, so other desktop platforms must
   // not expose a result that points to a missing anchor.
@@ -83,6 +88,7 @@ export interface SettingsSearchAvailability {
  * subtitles both render from this record, so each label exists once.
  */
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
+  ...Object.fromEntries(Object.entries(NATIVE_SETTINGS_PAGES).map(([path, page]) => [path, page.title])) as Record<NativeSettingsPath, string>,
   "/settings/workspaces": "Workspaces",
   "/settings/projects": "Project",
   "/settings/general": "General",
@@ -132,6 +138,8 @@ const KEYBINDING_SEARCH_ITEMS = STATIC_KEYBINDING_COMMANDS.toSorted((left, right
  * that may not be mounted point at their nearest stable section instead.
  */
 export const SETTINGS_SEARCH_ITEMS = [
+  ...NATIVE_SETTINGS_SEARCH_ITEMS,
+  ...Object.entries(NATIVE_SETTINGS_PAGES).map(([path, page]) => ({ id: `native-${page.category}`, title: page.title, to: path as NativeSettingsPath, searchTerms: [page.description], desktopOnly: true, macOnly: true, nativeHostOnly: true })),
   {
     id: "workspace-locations",
     title: "Workspace folders and files",
@@ -933,6 +941,7 @@ export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
 const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item] as const));
 
 const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
+  ...Object.fromEntries(Object.keys(NATIVE_SETTINGS_PAGES).map((path) => [path, null])) as Record<NativeSettingsPath, null>,
   "/settings/workspaces": null,
   "/settings/projects": "project",
   "/settings/general": null,
@@ -1082,6 +1091,7 @@ export function searchSettings(
   return items
     .flatMap((item, index) => {
       if (!isElectron && item.desktopOnly === true) return [];
+      if (!isNativeSettingsHost() && item.nativeHostOnly === true) return [];
       if (item.macOnly && !isMacPlatform(platform)) return [];
 
       const title = normalizeSearchText(item.title);

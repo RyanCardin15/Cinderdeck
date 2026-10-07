@@ -93,7 +93,7 @@ final class CinderdeckRuntimeController: ObservableObject {
       child.standardInput = stdin
       child.standardOutput = stdout
       child.standardError = FileHandle.nullDevice
-      let framer = CinderdeckRuntimeOutputFramer { [weak self, weak child] line in
+      let framer = CinderdeckRuntimeOutputFramer(limit: 131_072) { [weak self, weak child] line in
         let controller = self, owner = child
         Task { @MainActor in
           guard let controller, let owner, controller.process === owner else { return }
@@ -142,7 +142,7 @@ final class CinderdeckRuntimeController: ObservableObject {
         }
       }
       let sections: Set<String> = ["overview", "agents", "code-review-skill", "pull-requests", "services", "tasks", "workflows", "lane-map", "runs", "recordings", AgentAccessNavigation.section]
-      guard section.map({ sections.contains($0) }) ?? true else { throw StackControlError.invalid("Unknown workspace section") }
+      guard section.map({ sections.contains($0) || UnifiedSettingsNavigation.sections.contains($0) }) ?? true else { throw StackControlError.invalid("Unknown workspace section") }
       pendingRoute = CinderdeckRuntimeMessage(type: "route", workspaceID: workspaceID, section: section)
       // Deep links can arrive while the native supervisor is still bootstrapping.
       // The coordinator starts the shell once its authoritative socket is ready.
@@ -168,7 +168,7 @@ final class CinderdeckRuntimeController: ObservableObject {
   private func send(_ message: CinderdeckRuntimeMessage) throws {
     guard let input, running else { throw StackControlError(code: "host_unavailable", message: "The agent window is not running") }
     var data = try JSONEncoder().encode(message)
-    guard data.count < 16_384 else { throw StackControlError.invalid("Agent window request exceeds its limit") }
+    guard data.count < (message.type == "settings" ? 131_072 : 16_384) else { throw StackControlError.invalid("Agent window request exceeds its limit") }
     data.append(10)
     try input.write(contentsOf: data)
   }
@@ -225,6 +225,22 @@ final class CinderdeckRuntimeController: ObservableObject {
     if !stopping, ready, line.starts(with: dictationPrefix) {
       if let request = try? DictationCommand.decode(Data(line.dropFirst(dictationPrefix.count))) {
         DictationController.shared.handle(request)
+      }
+      return
+    }
+    let settingsPrefix = Data("CINDERDECK_RUNTIME_SETTINGS ".utf8)
+    if !stopping, ready, line.starts(with: settingsPrefix) {
+      guard let request = try? NativeSettingsRequest.decode(Data(line.dropFirst(settingsPrefix.count))) else { return }
+      let owner = process
+      Task { @MainActor [weak self] in
+        do {
+          let result = try await CinderdeckNativeSettings.handle(request)
+          guard self?.process === owner, self?.stopping == false else { return }
+          try self?.send(CinderdeckRuntimeMessage(type: "settings", requestID: request.requestID, settings: result))
+        } catch {
+          guard self?.process === owner, self?.stopping == false else { return }
+          try? self?.send(CinderdeckRuntimeMessage(type: "settings", requestID: request.requestID, error: error.localizedDescription))
+        }
       }
       return
     }

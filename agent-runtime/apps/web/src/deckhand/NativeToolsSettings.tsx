@@ -1,16 +1,11 @@
-import { PullRequestGlyph } from "../components/pullRequest/pullRequestIcons";
+import { isNativeSettingsHost } from "./nativeSettingsPresentation";
+import { Link } from "@tanstack/react-router";
+import { NativeSettingsSection } from "./NativeSettings";
 import { useRef, useState } from "react";
 import type { NativeToolRequest } from "@cinderdeck/contracts";
 import {
-  ArrowUpRightIcon,
   CameraIcon,
-  MicIcon,
-  CheckCheckIcon,
   ClockIcon,
-  FileImageIcon,
-  FolderIcon,
-  KeyboardIcon,
-  LockKeyholeIcon,
   PencilLineIcon,
   ScanTextIcon,
   VideoIcon,
@@ -27,10 +22,9 @@ import {
 } from "../components/ui/menu";
 import { toastManager } from "../components/ui/toast";
 import { Button } from "../components/ui/button";
-import styles from "./nativeToolsSettings.module.css";
 
 function useNativeTools() {
-  const host = typeof window !== "undefined" && window.desktopBridge?.isNativeHost?.() === true;
+  const host = isNativeSettingsHost();
   const available = host && typeof window.desktopBridge?.openNativeTool === "function";
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
@@ -169,143 +163,17 @@ export function NativeToolsMenu({ className }: { className?: string | undefined 
   );
 }
 
-const preferences = [
-  {
-    mode: "dictation",
-    title: "Dictation",
-    description: "Microphone, transcription service and hold-to-talk shortcut",
-    Icon: MicIcon,
-  },
-  {
-    mode: "capture",
-    title: "Capture",
-    description: "Screenshots, recording and capture defaults",
-    Icon: CameraIcon,
-  },
-  {
-    mode: "annotate",
-    title: "Annotations",
-    description: "Image editor and annotation defaults",
-    Icon: FileImageIcon,
-  },
-  {
-    mode: "permissions",
-    title: "Permissions",
-    description: "Screen recording and system access",
-    Icon: LockKeyholeIcon,
-  },
-  {
-    mode: "shortcuts",
-    title: "Shortcuts",
-    description: "Capture and desktop keyboard shortcuts",
-    Icon: KeyboardIcon,
-  },
-  {
-    mode: "history",
-    title: "History & clipboard",
-    description: "Saved captures and history preferences",
-    Icon: ClockIcon,
-  },
-  {
-    mode: "general",
-    title: "Storage & updates",
-    description: "Save location and automatic updates",
-    Icon: FolderIcon,
-  },
-] as const;
-const morePreferences = [
-  { mode: "menuBar", title: "Menu bar" },
-  { mode: "quickAccess", title: "Quick access" },
-  { mode: "cloud", title: "Cloud sync" },
-  { mode: "advanced", title: "Advanced" },
-  { mode: "about", title: "About Cinderdeck" },
-] as const;
 export function NativeToolsSettings() {
-  const tools = useNativeTools();
-  if (!tools.host) return null;
-  const disabled = !tools.available || tools.pending;
+  return <NativeSettingsSection category="general" title="Desktop defaults" />;
+}
+export function NativeGitHubSettingsButton({ iconOnly = false }: { iconOnly?: boolean }) {
   return (
-    <section className={styles.settings} aria-labelledby="native-tools-heading">
-      <header>
-        <div>
-          <h2 id="native-tools-heading">Capture & desktop</h2>
-          <p>Open Cinderdeck’s native preferences for capture, permissions and storage.</p>
-        </div>
-        <CameraIcon size={22} aria-hidden />
-      </header>
-      {!tools.available ? <p role="status">The native connection is unavailable.</p> : null}
-      <div className={styles.categories}>
-        {preferences.map(({ mode, title, description, Icon }) => (
-          <button
-            type="button"
-            key={mode}
-            disabled={disabled}
-            onClick={() => {
-              void tools.request({ surface: "preferences", mode });
-            }}
-          >
-            <Icon size={19} aria-hidden />
-            <span>
-              <strong>{title}</strong>
-              <small>{description}</small>
-            </span>
-            <ArrowUpRightIcon size={14} aria-hidden />
-          </button>
-        ))}
-      </div>
-      <div className={styles.updates}>
-        <div>
-          <strong>Application updates</strong>
-          <p>Cinderdeck checks for updates in its native updater.</p>
-        </div>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => {
-            void tools.request({ surface: "updates" });
-          }}
-        >
-          <CheckCheckIcon size={16} aria-hidden />
-          Check for updates
-        </button>
-      </div>
-      <details className={styles.more}>
-        <summary>More desktop preferences</summary>
-        <div>
-          {morePreferences.map(({ mode, title }) => (
-            <button
-              type="button"
-              key={mode}
-              disabled={disabled}
-              onClick={() => {
-                void tools.request({ surface: "preferences", mode });
-              }}
-            >
-              {title}
-              <ArrowUpRightIcon size={12} aria-hidden />
-            </button>
-          ))}
-        </div>
-      </details>
-    </section>
+    <Link to="/settings/source-control" hash="native-github" aria-label="GitHub account settings">
+      <SettingsIcon size={14} />
+      {iconOnly ? null : "Configure GitHub account"}
+    </Link>
   );
 }
-
-export function NativeGitHubSettingsButton({ iconOnly = false }: { iconOnly?: boolean }) {
-  const tools = useNativeTools();
-  if (!tools.host) return <a href="/settings/source-control" aria-label="GitHub account settings">{iconOnly ? <SettingsIcon size={14} /> : "GitHub account settings"}</a>;
-  return <button type="button" aria-label="GitHub account settings"
-    disabled={!tools.available || tools.pending} onClick={() => void tools.request({ surface: "preferences", mode: "github" })}>
-    <SettingsIcon size={14} />{iconOnly ? null : "Configure GitHub account"}
-  </button>;
-}
 export function NativeGitHubAccountSettings() {
-  const tools = useNativeTools();
-  return <section className={styles.settings} aria-labelledby="github-account-heading"><header><div>
-    <h2 id="github-account-heading">GitHub account</h2>
-    <p>Use one connection for your repositories, organization selectors, favorites and saved pull request queries.</p>
-  </div><PullRequestGlyph.pullRequest size={22} aria-hidden /></header>
-  <div className={styles.updates}><div><strong>Connect your account</strong><p>Your existing Cinderdeck saved views appear automatically. You can browse GitHub without loading a workspace.</p></div>
-  {tools.host ? <NativeGitHubSettingsButton /> : <p>Open Settings → GitHub in Cinderdeck on the execution computer to configure its account.</p>}</div>
-  {tools.host && !tools.available ? <p role="status">The native connection is unavailable.</p> : null}</section>;
+  return <NativeSettingsSection category="github" title="GitHub account" />;
 }

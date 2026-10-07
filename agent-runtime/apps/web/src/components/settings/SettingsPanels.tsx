@@ -1,7 +1,8 @@
+import { NativeSettingsSection, isNativeSettingsHost } from "../../deckhand/NativeSettings";
 import { SettingsGroup } from "./SettingsGroup";
 import { Spinner } from "~/components/ui/spinner";
 import { NotificationSettings } from "./NotificationSettings";
-import { NativeToolsSettings, NativeGitHubAccountSettings } from "../../deckhand/NativeToolsSettings";
+import { NativeToolsSettings } from "../../deckhand/NativeToolsSettings";
 import { ArchiveIcon, ArchiveX, CheckIcon, ChevronRightIcon, SettingsIcon } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { CSSProperties, ReactNode } from "react";
@@ -1147,6 +1148,7 @@ export function AppearanceSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <NativeSettingsSection category="appearance" title="Native tools appearance" />
       <SettingsSection id="appearance" title="Colors & themes" variant="plain" hideTitle>
         <div id={searchableSetting("theme").id}>
           <ThemeLibrary
@@ -2218,7 +2220,6 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <NativeGitHubAccountSettings />
       <NativeToolsSettings />
       <ProjectDefaultsSettings category="general" />
       <SettingsSection id="organization" title="Organization">
@@ -3299,7 +3300,17 @@ export function GeneralSettingsPanel() {
       </SettingsSection>
 
       <SettingsSection id="about" title="About">
-        {isElectron ? (
+        {isNativeSettingsHost() ? (
+          <SettingsRow
+            title="About Cinderdeck"
+            description="Version, licenses and support for this installation."
+            control={
+              <Button size="sm" variant="outline" render={<Link to="/settings/about" />}>
+                About Cinderdeck
+              </Button>
+            }
+          />
+        ) : isElectron ? (
           <AboutVersionSection />
         ) : (
           <SettingsRow

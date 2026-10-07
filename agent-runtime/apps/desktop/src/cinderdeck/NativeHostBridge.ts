@@ -1,3 +1,4 @@
+// @effect-diagnostics cryptoRandomUUID:off -- Pipe request correlation uses a process-local random nonce, independent of Effect service lifetimes.
 // @effect-diagnostics nodeBuiltinImport:off -- The native owner exchanges bounded messages over inherited pipes.
 import * as Electron from "electron";
 import { isDictationCommand, parseDictationEvent } from "./dictationProtocol.ts";
@@ -7,12 +8,13 @@ import type { NativeHostRoute, NativeToolRequest } from "@cinderdeck/contracts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
+import { isNativeSettingsCommand, NativeSettingsRequests } from "./nativeSettingsProtocol.ts";
 
 const NATIVE_HOST_ROUTE_CHANNEL = "cinderdeck:native-host-route";
 const NATIVE_HOST_READY_CHANNEL = "cinderdeck:native-host-ready";
 const NATIVE_TOOL_CHANNEL = "cinderdeck:native-tool";
 const NATIVE_HOST_INFO_CHANNEL = "cinderdeck:native-host-info";
-const MAX_LINE_BYTES = 16 * 1024;
+const MAX_LINE_BYTES = 128 * 1024;
 const surfaces = new Set([
   "workspace",
   "lane-map",
@@ -89,6 +91,7 @@ export const install = Effect.gen(function* () {
   let latestRoute: NativeHostRoute | null = {};
   let input = "";
   let pendingQuit = false;
+  const settings = new NativeSettingsRequests((line) => { process.stdout.write(line); });
   const main = async () => Option.getOrNull(await run(windows.main));
   const trusted = async (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) => {
     const window = await main();
@@ -139,6 +142,10 @@ export const install = Effect.gen(function* () {
         continue;
       }
       if (!record(value)) continue;
+      if (value.type === "settings") {
+        settings.receive(value);
+        continue;
+      }
       if (value.type === "quit" && Object.keys(value).length === 1) {
         quit();
         continue;
@@ -178,6 +185,11 @@ export const install = Effect.gen(function* () {
     return true;
   });
 
+  Electron.ipcMain.handle("cinderdeck:native-settings", async (event, value: unknown) => {
+    if (!(await trusted(event)) || !isNativeSettingsCommand(value)) throw new Error("Invalid native settings request.");
+    return settings.request(value, crypto.randomUUID());
+  });
+
   Electron.ipcMain.handle("cinderdeck:dictation", async (event, value: unknown) => {
     if (!(await trusted(event)) || !isDictationCommand(value)) return false;
     process.stdout.write("CINDERDECK_RUNTIME_DICTATION " + JSON.stringify(value) + "\n");
@@ -194,6 +206,8 @@ export const install = Effect.gen(function* () {
       Electron.ipcMain.removeListener(NATIVE_HOST_READY_CHANNEL, readyListener);
 
       Electron.ipcMain.removeHandler(NATIVE_TOOL_CHANNEL);
+      Electron.ipcMain.removeHandler("cinderdeck:native-settings");
+      settings.close();
       Electron.ipcMain.removeHandler("cinderdeck:dictation");
       process.stdin.removeListener("data", onInput);
       process.stdin.removeListener("end", quit);

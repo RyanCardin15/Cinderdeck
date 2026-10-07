@@ -36,7 +36,7 @@ flowchart LR
         C["AppCoordinator"]
         D["AppStatusBarController"]
         E["SplashWindowController"]
-        F["PreferencesView"]
+        F["UnifiedSettingsNavigation → React Settings"]
     end
 
     subgraph CaptureDomain["Capture domain"]
@@ -247,7 +247,7 @@ CinderdeckTests/
 | `Features/History/` | Floating capture history panel, compact/expanded cards, restore flow, and direct file drag-out |
 | `Features/Annotate/` | Image editor, export, crop, blur, mockup, cutout-aware editing, inline area annotate |
 | `Features/VideoEditor/` | Trim, zoom, speed (timelapse) segments, background, Smart Camera, GIF/video export |
-| `Features/Preferences/` | General, Capture, Quick Access, Shortcuts, Permissions, History storage/retention, Cloud, Advanced, About tabs |
+| `Features/Preferences/` | Native preference keys/managers, compatibility routing and reusable native helpers; the settings UI lives in the unified React shell |
 | `Features/Shortcuts/` | Keyboard shortcut cheat-sheet overlay |
 | `Features/Updates/` | Sparkle menu binding and update UI bridge |
 | `Features/CrashReport/` | Crash report prompt and diagnostics UX |
@@ -313,7 +313,7 @@ CinderdeckTests/
 ## Implementation Notes That Matter
 
 - `ScreenCaptureViewModel` is the main entrypoint for capture actions fired from shortcuts, the status bar menu, or `cinderdeck://` automation URLs. Deep links can be toggled on/off globally in Advanced preferences (`urlSchemeEnabled`).
-- `AppStatusBarController` is the AppKit bridge for the menu bar item. It now keeps the menu accessible during active recording, renders the live recording timer from `ScreenRecordingManager`, and coordinates temporary Preferences-window exclusion for record-own-app sessions.
+- `AppStatusBarController` is the AppKit bridge for the menu bar item. It now keeps the menu accessible during active recording, renders the live recording timer from `ScreenRecordingManager`, and routes every native Settings action into the unified main-window settings shell.
 - Area screenshot now freezes the active display first through `FrozenAreaCaptureSession`, then keeps one overlay session that can toggle between manual region selection and application window selection with the configurable `Application Capture` overlay key. The default key is `A`.
 - Area + inline annotate uses `InlineAreaAnnotateCoordinator` with `InlineAreaAnnotateSession` and `InlineAreaAnnotateWindow`. It starts after a frozen all-display snapshot set, creates coordinated per-display panels that share one desktop coordinate space, reuses Annotate state/canvas/export services, and routes the saved image through `PostCaptureActionHandler`.
 - `AreaSelectionController` and `AreaSelectionWindow` own the cross-display overlay session, target-display keyboard ownership for screenshot sessions, and highlight rendering for both manual and application screenshot interaction modes.
@@ -418,7 +418,7 @@ Directory structure mirrors the app: `CinderdeckTests/Services/Cloud/AWSV4Signer
 - Annotate, Video Editor, GIF conversion, and cloud upload pause Quick Access countdowns for the active item and resume them when the activity ends.
 - During recording, the menu bar item no longer turns into a left-click stop button. It keeps the normal menu path available, adds a live timer to the status item, and exposes stop plus pause/resume from the active menu section.
 - The recording shortcut (`GlobalShortcutKind.recording`, default `⇧⌘5`) is a start/stop toggle handled in `CaptureViewModel.toggleRecordingFromShortcut(...)`. An optional `GlobalShortcutKind.pauseResumeRecording` ships unbound (seeded into `clearedShortcuts` on first launch) and, when bound via Preferences → Shortcuts → Recording, dispatches to `ScreenRecordingManager.togglePause()` only while a recording is active.
-- When Preferences is opened during an active recording with own-app capture enabled, Cinderdeck temporarily excludes that Settings window from the stream instead of forcing the user to stop recording first.
+- Settings opens inside the main React window. The former native Preferences window is removed; settings navigation does not create an auxiliary window.
 - TOML config import is all-or-nothing for validation errors. Warnings, such as
   imported folder paths that may need macOS file-access confirmation, are shown
   after import and do not block applied changes.

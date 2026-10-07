@@ -60,7 +60,7 @@ struct CompletionView: View {
       VStack(spacing: 10) {
         HStack(spacing: 12) {
           Button {
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            UnifiedSettingsNavigation.open()
             onComplete()
           } label: {
             Text(openPreferencesTitle)

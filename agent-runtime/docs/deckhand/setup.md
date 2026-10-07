@@ -56,3 +56,7 @@ Conversations retain their original IDs and history. Pending or uncertain change
 ## Debug an application hosted by Excel
 
 Enable **Excel** in **Settings → External apps**, then open **External app → Excel** in a conversation’s right panel to view and control the selected Mac Excel window and its real WebKit Inspector together. Excel retains the workbook APIs and sign-in. See [External app debugging](external-apps.md) for Mac permissions, Inspector setup, and another Mac’s connection.
+
+## Unified Mac settings
+
+The complete Mac app uses this settings shell for native capture, recording, annotations, dictation, quick access, menu bar, history, cloud uploads, permissions, updates and diagnostics. **⌘,**, native settings links and workspace gears all land here. Native controls save through the private parent bridge with validation and confirmed replies. Workspace settings includes folders, lane defaults, code review instructions and advanced configuration; definition and review revisions protect external edits. See [`docs/PREFERENCES.md`](../../../docs/PREFERENCES.md) for the category map and native ownership rules.

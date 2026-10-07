@@ -1,0 +1,221 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-width: 0;
+  width: 100%;
+}
+.header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: start;
+  justify-content: space-between;
+}
+.header > div {
+  min-width: 0;
+}
+.header p {
+  overflow-wrap: anywhere;
+}
+.shortcutGroup {
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--card);
+  overflow: hidden;
+}
+.shortcutGroup summary {
+  cursor: pointer;
+  padding: 0.8rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.shortcutGroup summary span {
+  float: right;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+.shortcutGroup summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -3px;
+}
+.shortcutControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: end;
+  gap: 0.6rem;
+}
+.shortcutControls > input {
+  width: 5.5rem;
+  text-align: center;
+}
+.shortcutModifiers {
+  display: flex;
+  gap: 0.25rem;
+}
+.shortcutModifier {
+  cursor: pointer;
+  width: 1.9rem;
+  height: 1.9rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  color: var(--muted-foreground);
+  font-size: 0.9rem;
+}
+.shortcutModifier:has(input:checked) {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+.shortcutModifier:has(input:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.shortcutModifier input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.header h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.header p,
+.note {
+  margin-top: 0.3rem;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--muted-foreground);
+}
+.badge {
+  flex-shrink: 0;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  color: var(--muted-foreground);
+  font-size: 0.65rem;
+}
+.field {
+  width: min(100%, 20rem);
+  min-height: 2rem;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  border-radius: 0.45rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+}
+.field:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.field:disabled {
+  opacity: 0.55;
+}
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 0.4rem;
+  max-width: 25rem;
+}
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  font-size: 0.75rem;
+}
+.ordered {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: min(100%, 20rem);
+}
+.orderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+.feedback {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.error {
+  color: var(--destructive);
+  border-color: color-mix(in srgb, var(--destructive) 35%, var(--border));
+}
+.actions {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.saveBar {
+  position: sticky;
+  bottom: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--background);
+  box-shadow: 0 4px 18px #0000000d;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  z-index: 2;
+}
+.saveBar span {
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+}
+.model {
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.model label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+}
+.models {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+@media (max-width: 640px) {
+  .model label {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .list {
+    justify-content: start;
+  }
+}
+
+.editor {
+  width: 100%;
+  resize: vertical;
+  min-height: 10rem;
+  line-height: 1.6;
+  font-family: var(--font-mono, monospace);
+}

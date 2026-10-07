@@ -29,10 +29,15 @@ struct CinderdeckApp: App {
   }
 
   var body: some Scene {
-    // Settings Window
+    // SwiftUI supplies the app scene; the command opens the unified settings route.
     Settings {
-      PreferencesView()
-        .preferredColorScheme(themeManager.systemAppearance)
+      EmptyView()
+    }
+    .commands {
+      CommandGroup(replacing: .appSettings) {
+        Button("Settings…") { UnifiedSettingsNavigation.open() }
+          .keyboardShortcut(",", modifiers: .command)
+      }
     }
   }
 }

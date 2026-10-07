@@ -189,6 +189,21 @@ enum CinderdeckConfigurationImporter {
     keychainStore: OCRKeychainStoring,
     mutations: inout [() -> Void]
   ) {
+    collectBool(&reader, "capture", "screenshot", "include_window_shadow", mutations: &mutations) {
+      defaults.set($0, forKey: PreferencesKeys.captureIncludeWindowShadow)
+    }
+    collectBool(&reader, "capture", "screenshot", "live_passthrough", mutations: &mutations) {
+      defaults.set($0, forKey: PreferencesKeys.screenshotLivePassthrough)
+    }
+    collectBool(&reader, "capture", "screenshot", "auto_detect_window", mutations: &mutations) {
+      defaults.set($0, forKey: PreferencesKeys.screenshotAutoDetectWindowUnderCursor)
+    }
+    collectBool(&reader, "capture", "screenshot", "auto_detect_element", mutations: &mutations) {
+      defaults.set($0, forKey: PreferencesKeys.screenshotAutoDetectElementUnderCursor)
+    }
+    collectBool(&reader, "capture", "ocr", "link_detection", mutations: &mutations) {
+      defaults.set($0, forKey: PreferencesKeys.ocrLinkDetectionEnabled)
+    }
     collectBool(&reader, "capture", "hide_desktop_icons", mutations: &mutations) {
       defaults.set($0, forKey: PreferencesKeys.hideDesktopIcons)
     }
@@ -251,6 +266,12 @@ enum CinderdeckConfigurationImporter {
     defaults: UserDefaults,
     mutations: inout [() -> Void]
   ) {
+    collectBool(&reader, "recording", "hover_bar_visible", mutations: &mutations) {
+      defaults.set($0, forKey: PreferencesKeys.recordingHoverBarVisible)
+    }
+    collectBool(&reader, "recording", "show_time_on_menu_bar", mutations: &mutations) {
+      defaults.set($0, forKey: PreferencesKeys.recordingShowTimeOnMenuBar)
+    }
     collectEnumString(&reader, "recording", "format", allowed: VideoFormat.allCases.map(\.rawValue), mutations: &mutations) {
       defaults.set($0, forKey: PreferencesKeys.recordingFormat)
     }
@@ -479,6 +500,9 @@ enum CinderdeckConfigurationImporter {
     defaults: UserDefaults,
     mutations: inout [() -> Void]
   ) {
+    collectBool(&reader, "cloud", "enabled", mutations: &mutations) {
+      defaults.set($0, forKey: PreferencesKeys.cloudEnabled)
+    }
     collectEnumString(&reader, "cloud", "provider", allowed: CloudProviderType.allCases.map(\.rawValue), mutations: &mutations) {
       defaults.set($0, forKey: PreferencesKeys.cloudProviderType)
     }

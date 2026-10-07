@@ -1,164 +1,61 @@
-# Preferences
+# Unified settings
 
-Reference for the Settings window: tab structure, every section, and how preferences are stored. Verified against `Cinderdeck/Features/Preferences/` at HEAD (`v1.1.0`).
+Cinderdeck has one Settings interface in its main application window. Open it with **⌘,**, the application or menu-bar Settings command, a settings link, or a workspace gear. The legacy native preferences window and sidebar are removed. Compatibility callers and `cinderdeck://settings?tab=…` links route into the same settings shell.
 
-## Root
+## Organization
 
-- `PreferencesView` (`Cinderdeck/Features/Preferences/PreferencesView.swift`) — SwiftUI `NavigationSplitView` sidebar layout, resizable (default 800×620, min 700×520), 11 categories in 4 unlabelled groups.
-- `PreferencesWindowController` (`Cinderdeck/Features/Preferences/PreferencesWindowController.swift`) — Dedicated `NSWindowController` directly managing window lifecycle, regular application activation, fullSizeContentView, and titlebar transparency.
-- Selection driven by `PreferencesNavigationState.shared.selectedTab` (`Models/PreferencesNavigationState.swift`, `PreferencesTab` enum) — supports back/forward history stacks (`⌘[` and `⌘]`), last-visited tab persistence, and programmatical routing from menu bar, deep links (`cinderdeck://settings?tab=`, see [SHORTCUTS.md](SHORTCUTS.md)), and the shortcut overlay.
+| Group | Pages |
+| --- | --- |
+| Personalization | General, Appearance, Keybindings |
+| Workspaces & agents | Workspaces, Projects, Providers, Integrations, Source control, Scheduled tasks, External apps |
+| Capture & desktop | Capture, Recording, Annotations, Dictation, Quick access, Menu bar, History & clipboard, Cloud uploads, Snap Shot |
+| Application | Permissions, Updates, Storage, Connections, Archived, Advanced, About Cinderdeck |
 
-## Storage pattern
+Desktop capabilities appear in the complete Mac app. The sidebar search includes native preference fields and scrolls to their controls without reading native configuration while typing. Device controls show **This Mac**; project and execution-computer controls retain the existing settings scope picker.
 
-- Simple prefs: `@AppStorage(PreferencesKeys.*)` directly in views; keys centralized in `Cinderdeck/Features/Preferences/Models/PreferencesKeys.swift`.
-- Complex structured prefs: `PreferencesManager.shared` (`PreferencesManager.swift`) behind the `PreferencesProviding` protocol (`PreferencesProviding.swift`) for DI.
-- TOML export/import covers most prefs — see [CONFIGURATION.md](CONFIGURATION.md).
+## Native controls
 
-## Tabs
+Native preferences use the existing storage keys, native managers, configuration validation and Keychain services. The renderer edits a draft and explicitly saves it. A successful native reply confirms the save. A stale edit, failed validation, or missing connection keeps the draft and displays an actionable error. Discard restores the observed values, and navigation warns about unsaved changes.
 
-### Dictation (`PreferencesDictationSettingsView.swift`)
+- **General:** language, save folder, launch at login, sounds, menu icon visibility and Cinderdeck links. Choosing a save folder uses the native chooser and preserves its sandbox access bookmark.
+- **Appearance:** appearance of native windows alongside the agent shell’s existing theme and display settings.
+- **Keybindings:** native capture, recording, history, quick-access and annotation bindings alongside the shell bindings. Key, modifiers and enabled state save together. Reset desktop shortcuts uses the native default configuration.
+- **Capture:** screenshot selection, window shadow, magnifier, hidden desktop elements, image format, file names, post-capture actions, scrolling hints, object cutout and OCR. Custom OCR models have named forms, native connection tests and separate API key controls.
+- **Recording:** video format and quality, frame rate, microphone and system audio, file names, post-recording actions, cursor/click/keystroke overlays, annotation modifiers, hover bar, menu timer and editor defaults.
+- **Annotations:** tool defaults, clipboard images, crop and text snapping, quick-properties sync and drag behavior.
+- **Quick access:** action visibility/order/slots, position, size, dismiss behavior, gestures, sound and animation.
+- **Menu bar:** icon style, custom PNG import/removal, item visibility/order and reset.
+- **History & clipboard:** capture and clipboard retention, floating panel behavior, storage access and separately confirmed clear actions.
+- **Dictation:** macOS speech recognition or a transcription service, on-device recognition, language, endpoint/model/API format/authentication, native Keychain key, hold-to-talk trigger/delay and a sample test. The sample transcript appears inline. Chat dictation still inserts into a draft without sending it.
+- **Cloud uploads:** provider configuration, expiration, floating-window position, connection validation, Google authorization, encrypted credential import/export, optional protection password and disconnect. Credentials and protection hashes remain in native Keychain storage. Changing configuration during an asynchronous connection refuses the stale result.
+- **Source control:** native GitHub hostname, connection status, device authorization and refresh alongside source-control defaults. Environment-managed credentials retain their existing restrictions.
+- **Permissions:** current native screen/microphone/accessibility/save-folder status, OS permission links and notification authorization. OS permission panes are system interfaces opened by an explicit user action.
+- **Updates:** whole-app update channel, automatic checks/downloads, live update state, release notes, download/install and restart-to-update. Debug builds use manual release links. Sparkle remains the native update authority.
+- **Advanced:** diagnostics, configuration folder access, safe sync/open, export/import and confirmed restoration of native defaults.
+- **About Cinderdeck:** installed version/build, support and open-source acknowledgments.
 
-The chat microphone records speech into the current draft; it never sends a message. Settings → Capture & desktop → Dictation opens the native settings, also available beside the chat microphone. Select **macOS (no API key)** to use Apple speech recognition, or **Transcription service** to choose a preset or enter a full transcription URL, model slug, API format, optional language and bearer/custom-header/no authentication. OpenAI-compatible services accept multipart `model` and WAV `file`, returning JSON `{ "text": "…" }`; ElevenLabs uses `model_id`, `language_code` and `xi-api-key`. Company deployment paths and URL query parameters are preserved. A model must support speech transcription; a text-only model slug is insufficient. Local inference requires an already-running compatible server. HTTPS is required except for HTTP loopback servers. Redirects are refused.
+## Workspace settings
 
-The **macOS** provider uses Apple's public Speech framework with a system-language default and a supported-language picker. **Require on-device recognition** defaults on: unsupported languages fail with an actionable message and never silently upload audio. If disabled, recognition still uses on-device processing when available; otherwise Apple may process the audio on its servers. macOS requests Speech Recognition and Microphone permissions on first use. This provider works with the same chat and hold-to-talk controls, needs no endpoint or key, and keeps saved service settings/credentials unchanged. Switching providers does not change an active recording's provider. Native recordings stop at 55 seconds to stay within [Apple's documented one-minute audio limit](https://developer.apple.com/documentation/speech/sfspeechrecognizer). Recognition times out after 90 seconds; cancel/timeout stop the recognition task and ignore late callbacks. This is an in-app Apple speech recognizer integration, independent of the system Keyboard → Dictation shortcut.
+Source-workspace gears and **Delete workspace…** open **Settings → Workspaces**. The inline inspector edits the name, folder/file membership, each folder’s independent/shared lane checkout and default starting revision. Code review instructions save separately into `.cinderdeck/skills/code-review/SKILL.md`. An advanced configuration editor covers services, tasks, workflows and lane preparation.
 
-Keys live in the native app's Keychain, separately for Debug and Release. Non-secret configuration lives under `dictation.configuration` in UserDefaults; neither is included in TOML export/import. **Save settings** applies edits; a blank untouched key field preserves the existing key. **Remove saved API key**, followed by Save, removes it. Changing a service preset clears the draft credential to avoid reusing another service's key. **Test dictation** records a sample and transcribes it with the selected provider when stopped, displaying the result without inserting it.
+Native writers preserve unrelated definition content. Saves and removals require the observed revision, an exact local source workspace, stopped services/runs and the existing native definition lock and dependency checks. Lane snapshots are not edited as source definitions. Removing a workspace requires the named confirmation action; project folders and files remain on disk. Review instruction saves also reject changes made externally since loading.
 
-**Enable hold-to-talk shortcut** is off by default. The default trigger is holding Control for 0.35 seconds. Record another modifier or modifier/key combination, adjust the delay, allow Accessibility, then save. Release transcribes; Escape cancels. Short taps do nothing, and pressing a different key cancels modifier-only recording. Capture shortcuts already used by Cinderdeck are rejected when recording a binding; choose one unused by macOS and other apps too. The shortcut observes keys rather than suppressing them in the target app. Microphone permission is requested on first capture. Refresh permissions after granting Accessibility.
+Workspace configuration requests, including services/tasks/workflows, also route to this inspector. Project setup, branch selection and the execution map remain native utilities. They do not open another preferences page.
 
-A floating indicator shows preparation, recording, transcription, cancellation and errors. Service audio is limited to five minutes and 24 MB (55 seconds for macOS), uses a private temporary directory, and is deleted on completion, failure or cancellation. Requests time out and response size is bounded. No transcript, audio or provider response body is written to diagnostics. For other apps, dictation captures the focused accessibility text element and selection, excluding password fields. It inserts only if that application, element and selection still match. Native selection replacement is preferred; otherwise a targeted Cmd-V paste uses a transient clipboard item, then restores the prior clipboard only if nothing else copied in the meantime. Apps that do not expose a text selection, changed focus, or failed insertion leave a copyable transcript. Paste dispatch is not proof that a third-party app accepted the text. The chat bridge scopes results to a UUID and mounted draft; changing the draft preserves the transcript for manual copying, and navigating away cancels its recording. This feature requires the bundled native Mac host; browser-only and mobile clients do not show the microphone.
+## Implementation and transport
 
-### General (`PreferencesGeneralSettingsView.swift`)
+- `agent-runtime/apps/web/src/components/settings/` owns the settings shell, sidebar, scope and existing panels.
+- `agent-runtime/apps/web/src/deckhand/NativeSettings.tsx` and `NativeWorkspaceSettings.tsx` render native controls in that shell.
+- `UnifiedSettingsNavigation` routes native entry points. `PreferencesWindowController` is a compatibility routing adapter and does not own a window.
+- `CinderdeckNativeSettings`, `NativeSettingsUtilities`, `NativeWorkspaceSettings` and `NativeUpdateSettings` keep native preference and lifecycle authority in the parent.
+- `DesktopBridge.nativeSettings` is accepted only from the trusted main renderer and uses the private inherited parent pipe. Provider processes, preview frames, remote environments and the public control socket do not receive settings authority.
+- UUID-correlated replies, bounded pending work, bounded message sizes, timeouts and shutdown rejection prevent delivery from being mistaken for a completed save. Ordinary settings requests are limited to 16 KiB; workspace editor messages are limited to 128 KiB. Other native UI request decoders retain their 16 KiB bound.
+- Forms load only their selected category. Idle pages have no periodic reads. GitHub sign-in, dictation tests and active updates refresh only while active and stop when the page unmounts. Native host identity is cached per desktop bridge.
 
-- **Startup**: Start at Login (`LoginItemManager` / SMAppService), Play Sounds (`playSounds`), Show Menu Bar Icon (`showMenuBarIcon`).
-- **Appearance**: Language row (`PreferencesLanguageSettingRow`), theme picker (`AppearanceModePicker` → `appearanceMode`).
-- **Storage**: Save Location (`exportLocation` + `exportLocation.bookmark`, via `SandboxFileAccessManager`).
-- **Updates**: update status with Check for Updates / Download & Install / Restart to Update (`PreferencesSoftwareUpdateView`), Check Automatically / Download Automatically (via `UpdaterManager`; downloads disabled while checks are off), Last Checked — see [UPDATES.md](UPDATES.md).
-- **Help**: Restart Onboarding (`OnboardingFlowView.resetOnboarding()` + `.showOnboarding`), Report Issue (opens bug-report page; full bundle flow in [UPDATES.md](UPDATES.md)).
+## Storage and validation
 
-### Menu Bar (`PreferencesMenuBarSettingsView.swift`)
+Simple preferences retain `PreferencesKeys` and UserDefaults. Structured preferences retain their existing native stores. Non-secret settings use the configuration exporter/importer described in [CONFIGURATION.md](CONFIGURATION.md). Dictation configuration retains its separate native storage. Secrets are submitted only for explicit credential actions and never returned in snapshots.
 
-- **Menu Bar Icon**: label-less tile picker for the status item icon — bundled default, built-in SF Symbol alternates (`camera.viewfinder`, `camera.fill`, `scissors`, `photo.on.rectangle`), or a custom PNG. The custom slot is a dashed "+" add tile: click opens an `NSOpenPanel`, or drop a PNG onto it; the file is validated, copied to `Application Support/Cinderdeck/MenuBarIcon/custom.png`, alpha-bounds normalized, and rendered as a monochrome template. Replace/Remove controls appear while custom is selected. Backed by `MenuBarIconStyle` + `MenuBarIconRenderer` (`menuBar.iconStyle`).
-- **Capture / Recording / Tools**: per-item visibility toggles and drag-to-reorder within each section, backed by `MenuBarCustomizationStore` (`menuBar.itemOrder`, `menuBar.hiddenItems`). Hidden features remain available via keyboard shortcuts and the `cinderdeck://` URL scheme; group order and separators are fixed (separators render only between non-empty groups).
-- **App**: Check for Updates visibility toggle (fixed position; Preferences and Quit are pinned and not customizable).
-- **Reset to Defaults** restores order, visibility, and the bundled icon.
+Settings validation covers native request bounds, category routing, partial/stale patches, shortcut companion fields, isolated preference persistence, workspace definition preservation, confirmed renderer saves, failed-draft retention, deletion confirmation, pipe correlation and shutdown. Run native tests with `xcodebuild` and runtime tests/typechecks locally. Build the complete application with `scripts/build-unified.sh`; do not treat a web build alone as whole-app validation.
 
-### Capture (`PreferencesCaptureSettingsView.swift`)
-
-Segmented into four panes (`CaptureSettingsPane`): General / Screenshot / Recording / OCR.
-
-- **General pane**:
-  - App Windows: Include Cinderdeck windows in screenshots (`screenshot.includeOwnApp`) / in recordings (`recording.includeOwnApp`).
-  - Desktop: Hide Desktop Icons (`hideDesktopIcons`), Hide Desktop Widgets (`hideDesktopWidgets`).
-  - Overlay: Show Selection Area Overlay (`screenshot.showSelectionAreaOverlay`) — in live passthrough sessions the dim appears from capture start when this is on (already-visible hover UI stays alive but looks dimmed until the drag cutout).
-  - Magnifier: Reverse Magnifier Zoom Direction (`screenshot.reverseMagnifierZoomDirection`).
-  - Output Naming: screenshot/recording file-name templates (`screenshot.fileNameTemplate`, `recording.fileNameTemplate`) with token list + live preview + reset.
-  - After Capture: action matrix (see below) + Auto-Crop Subject (`backgroundCutout.autoCropEnabled`).
-- **Screenshot pane**:
-  - Format: Show Cursor (`screenshot.showCursor`), Freeze Area (`screenshot.freezeArea`), Hover Passthrough (`screenshot.livePassthrough`, requires Accessibility), Image Format (`screenshot.format`, `ImageFormatOption`; WebP shows a warning, JPEG a cutout note).
-  - Preset: default annotate canvas preset (`PreferencesScreenshotDefaultPresetPicker`).
-  - Scrolling Capture: Show Session Hints (`scrollingCapture.showHints`) + info note.
-- **Recording pane**:
-  - Format: MOV / MP4 (`recording.format`).
-  - Quality: Frame Rate 30/60 (`recording.fps`), Quality (`recording.quality`, `VideoQuality`).
-  - Behavior: Show Cursor (`recording.showCursor`), Dim Non-Selected Area (`recording.dimNonSelectedArea`, default on — darkens everything outside the recording region during recording; turn off to keep other windows fully visible/usable while recording), Remember Last Area (`recording.rememberLastArea`).
-  - Controls: Hover Bar Visible (`recording.hoverBarVisible`), Show Time on Menu Bar (`recording.showTimeOnMenuBar`).
-  - Mouse Highlight: size 30–100, animation 0.3–2.0 s, ripple count 1–5, color (archived `NSColor` in `recording.mouseHighlight.color`), opacity 0.2–1.0; reset-to-default.
-  - Keystroke Overlay: font size 12–32, position (`KeystrokeOverlayPosition`), display duration 0.5–5.0 s; reset-to-default.
-  - Audio: System Audio (`recording.captureAudio`), Microphone (`recording.captureMicrophone`, runs `AVCaptureDevice` authorization flow with System Settings fallback), Mic Input device picker (`recording.microphoneDeviceID`).
-- **OCR pane**:
-  - OCR Model: active recognition provider (`PreferencesOCRModelListView` + `Models/PreferencesOCRModelListViewModel`; selection persisted in `ocr.selectedModel` as `builtin` | `custom:<uuid>`).
-    - Built-in OCR is Apple Vision (default, always available).
-    - Add Custom Model opens `PreferencesCustomOCRModelSheet` (name, base URL, model identifier, optional prompt, optional API key stored in the macOS Keychain — service `com.ryancardin.cinderdeck.ocr`; Test Connection; edit/rename/test/remove; metadata JSON in `ocr.customModels`).
-    - A removed or unavailable custom endpoint falls back to Built-in OCR (`OCRModelResolver`). Legacy downloadable selections are treated as Built-in OCR.
-  - Notifications: OCR Notifications (`ocr.successNotificationEnabled`, default on — posts a native macOS notification with a preview of the recognized text; falls back to an in-app toast when notifications are unavailable). When the toggle is on, an inline row surfaces the macOS-level permission only when it would block delivery: `notDetermined` shows an "Allow" button that triggers the system prompt in place, `denied` shows an orange hint plus "Open Settings". A granted (or unavailable) state renders nothing, so a healthy setup stays uncluttered. The row refreshes on `NSApplication.didBecomeActiveNotification`, so returning from System Settings updates it.
-  - Text Actions: Link Detection (`ocr.linkDetectionEnabled`).
-
-### Annotate (`PreferencesAnnotateSettingsView.swift`)
-
-- Behavior section only:
-  - Sync Tool Defaults / quick-properties sync (`annotate.quickPropertiesSyncEnabled`, default on).
-  - Combine Save-as-Edit (`annotate.combineSaveAsEdit`, default on).
-  - Crop Snap to Edges (`annotate.cropSnapToEdgesEnabled`, default on; also togglable from the crop toolbar; ⌘ held during a drag temporarily bypasses).
-  - Snap Highlight to Text (`annotate.highlighterTextSnappingEnabled`, default on; also togglable from the highlighter quick-properties bar; aligns highlighter drags to detected text lines, ⌘ held during a drag temporarily bypasses).
-  - Clipboard image open behavior (`annotate.clipboardImageOpenBehavior`): `ask` (default) / `loadAutomatically` / `doNothing` (`AnnotateClipboardImageBehavior`).
-  - Close After Drag (`annotate.closeAfterDrag`, default on).
-  - Bring Forward After Drag (`annotate.bringForwardAfterDrag`, default off; disabled when Close After Drag is on).
-
-### Quick Access (`PreferencesQuickAccessSettingsView.swift`)
-
-- **Actions**: `QuickAccessActionCustomizationView` — action enable/order/slot assignment with live preview card (`PreferencesQuickAccessPreviewCard`); keys `quickAccess.actions.*`, `quickAccess.swipe.action.*`.
-- **Position**: screen edge left/right (`floatingScreenshot.position`).
-- **Appearance**: overlay size slider 0.75–1.5 (`floatingScreenshot.overlayScale`).
-- **Behaviors**: floating overlay enable (`floatingScreenshot.enabled`), Auto-Close toggle + 3–30 s slider (default 10, `floatingScreenshot.autoDismiss*`) + Pause on Hover, Hide Card When Window Open (`quickAccess.hideCardWhenWindowOpen`), Animation Style (`quickAccess.animationStyle`), Sound Effects (`quickAccess.playSounds`), Drag & Drop (`floatingScreenshot.dragDropEnabled`), Two-Finger Swipe to Dismiss + sensitivity 0.5–3.0 (`floatingScreenshot.twoFingerSwipe*`).
-- **Trackpad Swipe Mode**: mode picker (`quickAccess.trackpad.swipe.mode`) + swipe-action hints; visible when swipe-to-dismiss is on.
-
-### History (`PreferencesHistorySettingsView.swift`)
-
-- **Floating Panel**: enable (`history.floating.enabled`), Panel Position (`history.floating.position`).
-- **Display**: Default Filter (all/screenshots/videos/gifs), Background Style (`history.backgroundStyle`, thumbnail picker), Panel Size scale slider (`history.floating.scale`), Max Items 3–20 (`history.floating.maxDisplayedItems`).
-- **Retention**: Retention Days 0–90, 0 = keep forever (`history.retentionDays`), Max Count 0–1000, 0 = unlimited (`history.maxCount`).
-- **Storage**: capture storage size + Open Capture Storage (`CaptureStorageManager`), Clear History with confirmation (`HistoryWindowController.deleteRecords`).
-- Master history enable (`history.enabled`) seeded on; see [APP_LIFECYCLE.md](APP_LIFECYCLE.md) for seeded defaults.
-
-### Shortcuts (`PreferencesShortcutsSettingsView.swift`)
-
-- Master toggle (`shortcutsEnabled`).
-- Grouped recorders with per-shortcut enable toggles and per-section Reset: Capture, Recording, Tools, History, Quick Access, Quick Access Card Actions, Annotate Actions, Annotate Tool Keys; Reset to Defaults (all).
-- Quick Access Card Actions (`PreferencesQuickAccessActionShortcutsSection.swift`): master toggle plus one recorder per card action, active only while a card is hovered.
-- System-conflict guidance via `SystemScreenshotShortcutManager`.
-- Full mechanics and default bindings: [SHORTCUTS.md](SHORTCUTS.md).
-
-### Permissions (`PreferencesPermissionsSettingsView.swift`)
-
-- Rows with status labels + System Settings deep links:
-  - Screen Recording → `Privacy_ScreenCapture`
-  - Save Folder → `Privacy_FilesAndFolders`
-  - Microphone → `Privacy_Microphone`
-  - Accessibility → `Privacy_Accessibility`
-- Shows `grantedButUnavailableDueToAppIdentity` when `AppIdentityManager` reports issues (see [APP_LIFECYCLE.md](APP_LIFECYCLE.md)).
-
-### Cloud (`PreferencesCloudSettingsView.swift`)
-
-Provider configuration, credentials, expiration, usage stats, and the Cloud Uploads window. Summary only here — full reference in [CLOUD.md](CLOUD.md).
-
-### Advanced (`PreferencesAdvancedSettingsView.swift`)
-
-- **Backup**: TOML Import / Export / Restore Defaults (`CinderdeckConfiguration*` services).
-- **Configuration File**: grant access to `~/.config/cinderdeck`, Sync Now, Open Config, status/issues — see [CONFIGURATION.md](CONFIGURATION.md).
-- **Integration**: URL Scheme toggle (`urlSchemeEnabled`).
-- **Diagnostics**: enable toggle (`diagnostics.enabled`), retention days (`diagnostics.retentionDays`, default 3, range 1–30 via `LogCleanupScheduler`), Open Folder (`~/Library/Logs/Cinderdeck`) — see [UPDATES.md](UPDATES.md).
-
-### About (`PreferencesAboutSettingsView.swift`)
-
-- App icon/name/version+build, last update check.
-- Creator attribution ("Made by").
-- Update status and actions (`PreferencesSoftwareUpdateView`: Check for Updates, Download & Install, Restart to Update) — see [UPDATES.md](UPDATES.md).
-- Update channel picker — stable/beta.
-
-## After-capture matrix
-
-```mermaid
-flowchart LR
-    A["Capture completes"] --> B{"PreferencesManager.isActionEnabled<br/>(action, type)"}
-    B --> C["showQuickAccess → Quick Access card"]
-    B --> D["copyFile → clipboard"]
-    B --> E["save → export location"]
-    B --> F["openAnnotate → editor (screenshot only)"]
-```
-
-- `AfterCaptureAction` (4 cases) × `CaptureType` (2: screenshot, recording) — defined in `PreferencesManager.swift`.
-- Defaults: `showQuickAccess`, `copyFile`, `save` = on for both types; `openAnnotate` = off (opt-in, screenshot-only).
-- Stored as JSON `[String: [String: Bool]]` under UserDefaults key `afterCaptureActions`; load failures fall back to seeded defaults.
-- Edited via `PreferencesAfterCaptureMatrixView.swift` (Capture → General pane).
-- **Removed at `dd4ccd5`**: the `uploadToCloud` after-capture auto-upload case no longer exists. Manual cloud uploads remain (Quick Access, Annotate ⌘U, Video Editor, History) — see [CLOUD.md](CLOUD.md).
-
-## Related docs
-
-- [SHORTCUTS.md](SHORTCUTS.md) — shortcut mechanics, defaults, conflicts
-- [CLOUD.md](CLOUD.md) — Cloud tab + uploads window
-- [UPDATES.md](UPDATES.md) — update channel, diagnostics, problem reporting
-- [APP_LIFECYCLE.md](APP_LIFECYCLE.md) — seeded defaults, activation policy, onboarding
-- [CONFIGURATION.md](CONFIGURATION.md) — TOML backup/sync of these prefs
-- [QUICK_ACCESS.md](QUICK_ACCESS.md) — overlay behavior details
-- [HISTORY.md](HISTORY.md) — retention and storage internals
+See also [UNIFIED_APP.md](UNIFIED_APP.md), [SHORTCUTS.md](SHORTCUTS.md), [CLOUD.md](CLOUD.md), [POST_CAPTURE.md](POST_CAPTURE.md), and [UPDATES.md](UPDATES.md).
