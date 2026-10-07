@@ -108,15 +108,13 @@ tailscale serve --https=443 off
 If that port is already in use, choose another with
 `--tailscale-serve-port`. See `t3 pair --help` for other pairing options.
 
-### Hosted web app
+### Pairing links
 
-A separately configured hosted client needs an HTTPS endpoint. It connects directly
-to your server; a hosted pairing link does not make an unreachable backend
-reachable or convert HTTP to HTTPS.
-
-For a plain HTTP LAN endpoint, use the direct pairing URL in a browser that can
-open it, or pair from the desktop app. On mobile, an IP address entered without a
-scheme uses HTTP, so include `https://` when your server uses HTTPS.
+Pairing links open the server's own address, so a link does not make an
+unreachable backend reachable or convert HTTP to HTTPS. For a plain HTTP LAN
+endpoint, use the pairing URL in a browser that can open it, or pair from the
+desktop app. On mobile, an IP address entered without a scheme uses HTTP, so
+include `https://` when your server uses HTTPS.
 
 For Antigravity's Google callback on a remote host, see
 [remote sign-in](./providers-antigravity.md#sign-in-from-a-remote-device).

@@ -1,5 +1,3 @@
-import { readHashParams } from "./remote.ts";
-
 const CONNECT_AUTH_STATE_PARAM = "state";
 const CONNECT_AUTH_CHALLENGE_PARAM = "challenge";
 const CONNECT_AUTH_PORT_PARAM = "port";
@@ -8,28 +6,11 @@ const CONNECT_LOOPBACK_CALLBACK_PATH = "/callback";
 const CONNECT_AUTHORIZE_PATH = "/connect";
 
 /**
- * The CLI prints URLs against this origin and the web bundle uses it to
- * decide whether it is the hosted deployment — the two must agree, so the
- * default lives here.
- */
-export const DEFAULT_HOSTED_APP_URL = "http://127.0.0.1:3773";
-
-/**
  * Requested at authorize time by the hosted page and by the CLI's device
  * authorization request; keep both sides on this single definition.
  * `offline_access` asks Clerk for the refresh token the CLI relies on.
  */
 export const CONNECT_OAUTH_SCOPES = ["openid", "profile", "email", "offline_access"] as const;
-
-export interface ConnectAuthorizeRequest {
-  readonly state: string;
-  readonly challenge: string;
-  /**
-   * The hosted /connect page asks Clerk to redirect the authorization code
-   * straight to `http://127.0.0.1:<port>/callback` on the waiting CLI.
-   */
-  readonly loopbackPort: number;
-}
 
 /**
  * The URL the CLI prints for the user to open in a browser. `state` and
@@ -59,48 +40,10 @@ export function buildConnectAuthorizeRequestUrl(input: {
   return url.toString();
 }
 
-export function readConnectAuthorizeRequest(url: URL): ConnectAuthorizeRequest | null {
-  const params = readHashParams(url);
-  const state = params.get(CONNECT_AUTH_STATE_PARAM)?.trim() ?? "";
-  const challenge = params.get(CONNECT_AUTH_CHALLENGE_PARAM)?.trim() ?? "";
-  const loopbackPort = parseLoopbackPort(params.get(CONNECT_AUTH_PORT_PARAM)?.trim() ?? "");
-  if (!state || !challenge || loopbackPort === null) {
-    return null;
-  }
-  return { state, challenge, loopbackPort };
-}
-
-function parseLoopbackPort(value: string): number | null {
-  if (!/^\d{1,5}$/.test(value)) {
-    return null;
-  }
-  const port = Number(value);
-  return port >= 1 && port <= 65535 ? port : null;
-}
-
 /**
  * Redirect URI for the CLI's local callback listener. Must stay in sync with
  * the redirect URI registered on the Clerk CLI OAuth application.
  */
 export function connectLoopbackRedirectUri(port: number): string {
   return `http://127.0.0.1:${port}${CONNECT_LOOPBACK_CALLBACK_PATH}`;
-}
-
-export function buildConnectClerkAuthorizeUrl(input: {
-  readonly authorizationEndpoint: string;
-  readonly clientId: string;
-  readonly redirectUri: string;
-  readonly scopes: ReadonlyArray<string>;
-  readonly state: string;
-  readonly challenge: string;
-}): string {
-  const url = new URL(input.authorizationEndpoint);
-  url.searchParams.set("client_id", input.clientId);
-  url.searchParams.set("redirect_uri", input.redirectUri);
-  url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", input.scopes.join(" "));
-  url.searchParams.set("state", input.state);
-  url.searchParams.set("code_challenge", input.challenge);
-  url.searchParams.set("code_challenge_method", "S256");
-  return url.toString();
 }

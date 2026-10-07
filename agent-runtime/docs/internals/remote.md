@@ -24,18 +24,17 @@ prove that a route works. In particular, a host's loopback address refers to a
 different machine when another device opens it. Endpoint selection must not
 silently fall back to loopback when a shareable endpoint is unavailable.
 
-## Hosted web is a client
+## Pairing URLs
 
-The hosted web app stores its connection catalog in the browser and connects
-directly to each environment. It does not proxy traffic or hold server-side
-pairing state. Hosting the UI over HTTPS therefore cannot make a plain HTTP LAN
-backend accessible from that browser context.
-
-A [hosted pairing URL](../../apps/web/src/hostedPairing.ts) identifies the backend
-in its query and carries the pairing secret in its fragment. Fragments stay out
-of requests to the hosted origin. The browser exchanges the secret with the
+A pairing URL carries the pairing secret in its fragment, which stays out of
+requests to the serving origin. The browser exchanges the secret with the
 environment and strips it from its history. Moving the token into a query
 parameter would disclose it to the wrong origin.
+
+Clients generate direct pairing URLs on the environment's own origin. A
+[`/pair?host=` URL](../../apps/web/src/hostedPairing.ts) instead names the backend
+in its query; web and mobile clients still accept that form when it is opened
+or pasted.
 
 ## Access and process ownership are different
 

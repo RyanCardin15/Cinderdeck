@@ -71,7 +71,6 @@ export function browserDeviceType(identity: BrowserIdentity): AuthClientMetadata
 
 export function clientPresentationMetadata(input: {
   readonly appVersion: string;
-  readonly hosted: boolean;
   readonly identity: BrowserIdentity;
   readonly desktopBridge: Pick<DesktopBridge, "getClientPlatform"> | undefined;
 }): AuthClientPresentationMetadata {
@@ -90,7 +89,7 @@ export function clientPresentationMetadata(input: {
     deviceType: browserDeviceType(input.identity),
     os: browserClientOs(input.identity),
     surface: "web",
-    webDeployment: input.hosted ? "hosted" : "server",
+    webDeployment: "server",
     browser: browserFamily(input.identity.userAgent),
     ...(input.appVersion === "0.0.0" ? {} : { appVersion: input.appVersion }),
   };

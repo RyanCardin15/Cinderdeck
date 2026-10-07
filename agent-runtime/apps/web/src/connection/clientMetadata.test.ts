@@ -15,17 +15,16 @@ const desktopChrome = {
 };
 
 describe("client telemetry metadata", () => {
-  it("distinguishes hosted web from server-served web", () => {
+  it("describes server-served web clients", () => {
     expect(
       clientPresentationMetadata({
         appVersion: "1.2.3",
-        hosted: true,
         identity: desktopChrome,
         desktopBridge: undefined,
       }),
     ).toMatchObject({
       surface: "web",
-      webDeployment: "hosted",
+      webDeployment: "server",
       deviceType: "desktop",
       os: "Windows",
       browser: "Chrome",
@@ -35,11 +34,10 @@ describe("client telemetry metadata", () => {
     expect(
       clientPresentationMetadata({
         appVersion: "0.0.0",
-        hosted: false,
         identity: desktopChrome,
         desktopBridge: undefined,
       }),
-    ).toMatchObject({ surface: "web", webDeployment: "server" });
+    ).not.toHaveProperty("appVersion");
   });
 
   it("identifies phone and tablet browsers", () => {
@@ -75,7 +73,6 @@ describe("client telemetry metadata", () => {
     expect(
       clientPresentationMetadata({
         appVersion: "1.2.3",
-        hosted: false,
         identity: desktopChrome,
         desktopBridge: { getClientPlatform: () => "darwin" },
       }),
