@@ -4,6 +4,8 @@ import {
   EnvironmentId,
   ProviderDriverKind,
   ProviderInstanceId,
+  resolveProviderInstanceEnabled,
+  type ProviderInstanceConfig,
   type ServerProvider,
   type UnifiedSettings,
 } from "@cinderdeck/contracts";
@@ -217,24 +219,62 @@ describe("EnvironmentProviderSettings routing", () => {
       .mockResolvedValue({ _tag: "Success", value: { accepted: true } });
   });
 
-  it("shows Codex and Claude while hiding untouched disabled provider slots", () => {
-    const panel = renderPanel();
-    for (const driver of ["codex", "claudeAgent"] as const) {
-      expect(
-        visitElements(
-          panel,
-          (element) => element.props.instanceId === driver && element.props.mode === "list",
-        ),
-      ).not.toBeNull();
-    }
-    for (const driver of ["cursor", "grok", "pi", "opencode", "antigravity"] as const) {
-      expect(
-        visitElements(
-          panel,
-          (element) => element.props.instanceId === driver && element.props.mode === "list",
-        ),
-      ).toBeNull();
-    }
+  it.each(["loading", "empty", "codex-only"] as const)(
+    "shows every built-in provider with %s provider snapshots",
+    (snapshotState) => {
+      atoms.providers =
+        snapshotState === "loading" ? null : snapshotState === "empty" ? [] : [provider()];
+      const panel = renderPanel();
+      for (const driver of [
+        "codex",
+        "claudeAgent",
+        "cursor",
+        "grok",
+        "pi",
+        "opencode",
+        "antigravity",
+      ] as const) {
+        expect(
+          visitElements(
+            panel,
+            (element) => element.props.instanceId === driver && element.props.mode === "list",
+          ),
+        ).not.toBeNull();
+      }
+      expect(settingsState.mutateProviderInstance).not.toHaveBeenCalled();
+    },
+  );
+
+  it("opens and enables an unconfigured Antigravity provider on the selected device", async () => {
+    let panel = renderPanel();
+    const row = visitElements(
+      panel,
+      (element) => element.props.instanceId === "antigravity" && element.props.mode === "list",
+    );
+    expect(row).not.toBeNull();
+    if (!row) throw new Error("Antigravity provider row was not rendered");
+    (row.props.onSelect as () => void)();
+    panel = renderPanel();
+    const editor = visitElements(panel, (element) => element.props.mode === "editor");
+    expect(editor?.props.instanceId).toBe("antigravity");
+    if (!editor) throw new Error("Antigravity provider editor was not rendered");
+    const instance = editor.props.instance as ProviderInstanceConfig;
+    expect(resolveProviderInstanceEnabled(instance)).toBe(false);
+    (editor.props.onUpdate as (next: ProviderInstanceConfig) => void)({
+      ...instance,
+      enabled: true,
+    });
+    await flushPromises();
+
+    expect(settingsState.mutationEnvironmentIds).toEqual([environmentId, environmentId]);
+    expect(settingsState.mutateProviderInstance).toHaveBeenCalledExactlyOnceWith(
+      { operation: "upsert", instanceId: "antigravity", instance: { ...instance, enabled: true } },
+      expect.objectContaining({
+        providers: expect.objectContaining({
+          antigravity: DEFAULT_UNIFIED_SETTINGS.providers.antigravity,
+        }),
+      }),
+    );
   });
 
   it("keeps explicitly configured providers visible when disabled", () => {

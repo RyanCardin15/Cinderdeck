@@ -1,9 +1,89 @@
 import type { EnvironmentConnectionPhase } from "@cinderdeck/client-runtime/connection";
 import {
   AuthOrchestrationOperateScope,
+  defaultInstanceIdForDriver,
   type AuthSessionState,
   type EnvironmentId,
+  type ProviderDriverKind,
+  type ProviderInstanceConfig,
+  type ProviderInstanceId,
+  type ServerSettings,
 } from "@cinderdeck/contracts";
+import { DEFAULT_UNIFIED_SETTINGS } from "@cinderdeck/contracts/settings";
+import * as Equal from "effect/Equal";
+
+import { DRIVER_OPTIONS } from "./providerDriverMeta";
+
+export interface ProviderSettingsInstanceRow {
+  readonly instanceId: ProviderInstanceId;
+  readonly instance: ProviderInstanceConfig;
+  readonly driver: ProviderDriverKind;
+  readonly isDefault: boolean;
+  readonly isDirty?: boolean;
+}
+
+/** Show every supported default slot, including providers awaiting setup or disabled by the user. */
+export function buildProviderSettingsInstanceRows(
+  settings: Pick<ServerSettings, "providers" | "providerInstances">,
+): ReadonlyArray<ProviderSettingsInstanceRow> {
+  const instancesByDriver = new Map<
+    ProviderDriverKind,
+    Array<[ProviderInstanceId, ProviderInstanceConfig]>
+  >();
+  for (const [rawId, instance] of Object.entries(settings.providerInstances ?? {})) {
+    const list = instancesByDriver.get(instance.driver) ?? [];
+    list.push([rawId as ProviderInstanceId, instance]);
+    instancesByDriver.set(instance.driver, list);
+  }
+
+  type LegacyProviderSettings = ServerSettings["providers"][keyof ServerSettings["providers"]];
+  const legacyProviders = settings.providers as Record<string, LegacyProviderSettings>;
+  const defaultLegacyProviders = DEFAULT_UNIFIED_SETTINGS.providers as Record<
+    string,
+    LegacyProviderSettings
+  >;
+  const rows: ProviderSettingsInstanceRow[] = [];
+
+  for (const definition of DRIVER_OPTIONS) {
+    const driver = definition.value;
+    const defaultInstanceId = defaultInstanceIdForDriver(driver);
+    const explicitInstance = settings.providerInstances?.[defaultInstanceId];
+    // Older remote servers may not support this driver. Registry agents also
+    // have no legacy default slot; their configured instances still appear below.
+    const legacyConfig = legacyProviders[driver];
+    let effectiveInstance = explicitInstance;
+    if (effectiveInstance === undefined && legacyConfig !== undefined) {
+      // The envelope owns the enabled flag so enabling a synthesized default
+      // cannot be overridden by its old in-config flag.
+      const { enabled, ...config } = legacyConfig;
+      effectiveInstance = { driver, enabled, config };
+    }
+    if (effectiveInstance !== undefined) {
+      rows.push({
+        instanceId: defaultInstanceId,
+        instance: effectiveInstance,
+        driver,
+        isDefault: true,
+        isDirty:
+          explicitInstance !== undefined ||
+          !Equal.equals(legacyConfig, defaultLegacyProviders[driver]),
+      });
+    }
+    for (const [instanceId, instance] of instancesByDriver.get(driver) ?? []) {
+      if (instanceId === defaultInstanceId) continue;
+      rows.push({ instanceId, instance, driver: instance.driver, isDefault: false });
+    }
+    instancesByDriver.delete(driver);
+  }
+
+  // Preserve instances supplied by newer servers or custom drivers.
+  for (const list of instancesByDriver.values()) {
+    for (const [instanceId, instance] of list) {
+      rows.push({ instanceId, instance, driver: instance.driver, isDefault: false });
+    }
+  }
+  return rows;
+}
 
 export interface ProviderEnvironmentOptionLike {
   readonly environmentId: EnvironmentId;
