@@ -75,6 +75,28 @@ is running update the picker without waiting for another provider probe.
 Slash commands the agent provides appear under **Provider** in the `/` menu while a session is
 running. Commands the agent names with a `$` prefix appear in Cinderdeck's `$` skill menu instead.
 
+## MCP servers and tools
+
+Open **Settings → Providers → Copilot CLI / Cursor CLI → MCP servers** to inspect
+that instance's servers and tools. Opening the section or refreshing connects to its
+MCP servers on the environment hosting the CLI. The configured executable and instance
+environment are used; inspection does not send a chat prompt. A disabled provider is not probed.
+
+Copilot uses its SDK runtime's MCP inventory, including connection failures and sign-in
+requirements. Cinderdeck closes and deletes the temporary inventory session afterwards.
+Server and tool switches apply through Copilot's session-only disable and deny flags when a
+conversation starts or resumes. They do not edit Copilot's configuration. Manage server
+registration with `copilot mcp add`; complete MCP sign-in through `/mcp` in Copilot CLI.
+
+Cursor uses `agent mcp list` and `agent mcp list-tools` to show connection status and tool
+names. This integration supports inspection; Cursor's CLI currently has no session-only
+server or tool deny override, so Cinderdeck does not offer switches it cannot enforce.
+Manage servers with `agent mcp enable <name>` / `agent mcp disable <name>`, sign in with
+`agent mcp login <name>`, and configure tool permissions in Cursor's own CLI configuration.
+Then refresh the inventory. Unapproved servers require approval in Cursor before tools can
+be listed. Other Registry agents retain their own MCP configuration until they provide an
+inventory interface.
+
 ## Native sessions
 
 When an agent advertises ACP session listing and import support, expand its provider card,

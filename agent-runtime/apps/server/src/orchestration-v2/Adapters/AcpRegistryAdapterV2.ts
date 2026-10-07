@@ -21,6 +21,12 @@ import type * as Scope from "effect/Scope";
 import { ChildProcessSpawner } from "effect/unstable/process";
 import * as EffectAcpErrors from "effect-acp/errors";
 
+import { cliMcpSessionArgs } from "../../provider/acp/CliMcpInventory.ts";
+import {
+  makeReadProviderMcpPreferences,
+  readNoProviderMcpPreferences,
+} from "../../provider/providerMcp.ts";
+import * as ServerSettings from "../../serverSettings.ts";
 import * as ServerConfig from "../../config.ts";
 import {
   normalizeAcpRegistryCommands,
@@ -74,6 +80,10 @@ export interface AcpRegistryAdapterV2Options {
     EffectAcpErrors.AcpError,
     Crypto.Crypto | Scope.Scope
   >;
+  /** Provider integration can add session-only launch options without changing ACP behavior. */
+  readonly prepareSpawn?: (
+    spawn: AcpSessionRuntime.AcpSpawnInput,
+  ) => Effect.Effect<AcpSessionRuntime.AcpSpawnInput>;
   readonly assertComplete?: Effect.Effect<void, EffectAcpErrors.AcpError>;
 }
 
@@ -158,15 +168,19 @@ function makeAcpRegistryRuntime(options: AcpRegistryAdapterV2Options) {
               }),
           ),
         );
+      const spawn =
+        options.prepareSpawn === undefined
+          ? resolved.spawn
+          : yield* options.prepareSpawn(resolved.spawn);
       const context = yield* Layer.build(
         AcpSessionRuntime.layer({
           ...runtimeInput,
           spawn:
             processEnvironment === undefined
-              ? resolved.spawn
+              ? spawn
               : {
-                  ...resolved.spawn,
-                  env: { ...resolved.spawn.env, ...processEnvironment },
+                  ...spawn,
+                  env: { ...spawn.env, ...processEnvironment },
                 },
           ...(options.settings.authMethodId ? { authMethodId: options.settings.authMethodId } : {}),
         }).pipe(
@@ -290,8 +304,19 @@ export const AcpRegistryAdapterV2Driver: ProviderAdapterDriver<
       const runtimeCoordinator = yield* Effect.serviceOption(
         AcpRegistryRuntimeCoordinator.AcpRegistryRuntimeCoordinator,
       );
+      const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
+      const readMcpPreferences = Option.isSome(serverSettings)
+        ? makeReadProviderMcpPreferences(serverSettings.value, input.instanceId)
+        : readNoProviderMcpPreferences;
       return makeAcpRegistryAdapterV2({
         instanceId: input.instanceId,
+        prepareSpawn: (spawn) =>
+          readMcpPreferences.pipe(
+            Effect.map((preferences) => ({
+              ...spawn,
+              args: [...spawn.args, ...cliMcpSessionArgs(input.config, preferences)],
+            })),
+          ),
         settings: { ...input.config, enabled: input.enabled },
         environment: mergeProviderInstanceEnvironment(input.environment, hostEnvironment),
         childProcessSpawner,

@@ -1,7 +1,14 @@
-import { EMPTY_PROVIDER_MCP_PREFERENCES, type ProviderMcpServer } from "@cinderdeck/contracts";
+import {
+  ProviderDriverKind,
+  EMPTY_PROVIDER_MCP_PREFERENCES,
+  type ProviderMcpServer,
+} from "@cinderdeck/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  effectiveMcpPreferences,
+  mcpEmptyHint,
+  mcpSignInHint,
   describeMcpToolCount,
   mcpPreferencesPatchValue,
   presentMcpServer,
@@ -52,5 +59,28 @@ describe("MCP preferences", () => {
     expect(
       presentMcpServer({ ...server, status: "disabled" }, EMPTY_PROVIDER_MCP_PREFERENCES, "Codex"),
     ).toEqual({ label: "Off in Codex config", tone: "muted", toggleable: false, turnedOff: false });
+  });
+});
+
+describe("CLI inventory controls", () => {
+  it("ignores stored overrides for inspection-only providers", () => {
+    const preferences = { disabledServers: ["linear"], disabledTools: { linear: ["list_issues"] } };
+    expect(effectiveMcpPreferences(preferences, false)).toEqual(EMPTY_PROVIDER_MCP_PREFERENCES);
+    expect(effectiveMcpPreferences(preferences, true)).toBe(preferences);
+    expect(effectiveMcpPreferences(preferences, undefined)).toBe(preferences);
+  });
+  it("gives CLI-specific setup and sign-in guidance with quoted Cursor names", () => {
+    expect(mcpEmptyHint(ProviderDriverKind.make("acpRegistry"), "cursor")).toContain(
+      "~/.cursor/mcp.json",
+    );
+    expect(mcpEmptyHint(ProviderDriverKind.make("acpRegistry"), "github-copilot-cli")).toContain(
+      "copilot mcp add",
+    );
+    expect(mcpSignInHint(ProviderDriverKind.make("acpRegistry"), "team docs", "cursor")).toContain(
+      "agent mcp login 'team docs'",
+    );
+    expect(
+      mcpSignInHint(ProviderDriverKind.make("acpRegistry"), "docs", "github-copilot-cli"),
+    ).toContain("/mcp");
   });
 });

@@ -3532,7 +3532,15 @@ const makeWsRpcLayer = (
                       }),
                   ),
                 );
-              return { instanceId: input.instanceId, supported: true, servers, checkedAt };
+              return {
+                instanceId: input.instanceId,
+                supported: true,
+                servers,
+                checkedAt,
+                ...(instance.mcpPreferencesSupported === undefined
+                  ? {}
+                  : { preferencesSupported: instance.mcpPreferencesSupported }),
+              };
             }),
             { "rpc.aggregate": "provider", instanceId: input.instanceId },
           ),

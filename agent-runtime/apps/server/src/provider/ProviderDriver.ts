@@ -95,6 +95,8 @@ export interface ProviderInstance {
    * tools. Starts the servers, so it runs only on an explicit user request.
    * Absent when the provider cannot report its MCP servers.
    */
+  /** False when Settings can inspect MCP but cannot override its tools per session. */
+  readonly mcpPreferencesSupported?: boolean;
   readonly listMcpServers?: (input: {
     readonly cwd: string | undefined;
   }) => Effect.Effect<ReadonlyArray<ProviderMcpServer>, ProviderDriverError>;

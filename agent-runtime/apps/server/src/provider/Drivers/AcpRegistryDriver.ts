@@ -22,6 +22,8 @@ import * as Semaphore from "effect/Semaphore";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
+import { ProcessRunner, make as makeProcessRunner } from "../../processRunner.ts";
+import { cliMcpKind, listCliMcpServers } from "../acp/CliMcpInventory.ts";
 import * as ServerConfig from "../../config.ts";
 import {
   AcpRegistryAdapterV2Driver,
@@ -485,6 +487,9 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
       const hostEnvironment = yield* HostProcessEnvironment;
       const serverConfig = yield* ServerConfig.ServerConfig;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
+      const processRunner = yield* makeProcessRunner().pipe(
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      );
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,
@@ -803,6 +808,57 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
         },
         orchestrationAdapter,
         textGeneration: makeUnsupportedTextGeneration(),
+        ...(cliMcpKind(effectiveConfig) === undefined
+          ? {}
+          : {
+              mcpPreferencesSupported: cliMcpKind(effectiveConfig) === "copilot",
+              listMcpServers: ({ cwd }: { readonly cwd: string | undefined }) =>
+                // Resolve the configured executable, including a prepared Registry distribution.
+                catalog.inspect(effectiveConfig, processEnvironment).pipe(
+                  Effect.flatMap(
+                    (
+                      inspection,
+                    ): Effect.Effect<
+                      AcpRegistrySupport.ResolvedAcpRegistryAgent,
+                      AcpRegistrySupport.AcpRegistryError | ProviderDriverError
+                    > =>
+                      inspection.status === "ready"
+                        ? catalog.resolve(
+                            effectiveConfig,
+                            cwd ?? serverConfig.cwd,
+                            processEnvironment,
+                          )
+                        : Effect.fail(
+                            new ProviderDriverError({
+                              driver: DRIVER_KIND,
+                              instanceId,
+                              detail:
+                                "Prepare this CLI in provider settings before listing MCP servers.",
+                            }),
+                          ),
+                  ),
+                  Effect.flatMap((resolved) =>
+                    listCliMcpServers({
+                      kind: cliMcpKind(effectiveConfig)!,
+                      command: resolved.spawn.command,
+                      cwd: cwd ?? serverConfig.cwd,
+                      environment: resolved.spawn.env ?? processEnvironment,
+                    }),
+                  ),
+                  Effect.timeout("45 seconds"),
+                  Effect.provideService(ProcessRunner, processRunner),
+                  Effect.mapError(
+                    (cause) =>
+                      new ProviderDriverError({
+                        driver: DRIVER_KIND,
+                        instanceId,
+                        detail:
+                          "Could not list this CLI's MCP servers. Check the installed version and MCP configuration.",
+                        cause,
+                      }),
+                  ),
+                ),
+            }),
         acpSessionManagement: {
           listSessions: ({ cwd, cursor }) =>
             provideAcpManagementServices(

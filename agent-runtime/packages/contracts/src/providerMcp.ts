@@ -27,6 +27,8 @@ export const ProviderMcpTool = Schema.Struct({
   title: Schema.optionalKey(Schema.String),
   description: Schema.optionalKey(Schema.String),
   readOnly: Schema.optionalKey(Schema.Boolean),
+  /** False when the provider cannot apply a per-tool override for this name. */
+  toggleable: Schema.optionalKey(Schema.Boolean),
   destructive: Schema.optionalKey(Schema.Boolean),
   /** Turned off in the provider's own configuration; Cinderdeck cannot turn it on. */
   disabledByProvider: Schema.optionalKey(Schema.Boolean),
@@ -42,6 +44,7 @@ export const ProviderMcpServer = Schema.Struct({
   /** Host of a remote server. Never includes credentials, path or query. */
   origin: Schema.optionalKey(Schema.String),
   status: ProviderMcpServerStatus,
+  approvalRequired: Schema.optionalKey(Schema.Boolean),
   auth: Schema.optionalKey(ProviderMcpServerAuth),
   error: Schema.optionalKey(Schema.String),
   tools: Schema.Array(ProviderMcpTool),
@@ -59,6 +62,8 @@ export const ProviderMcpListResult = Schema.Struct({
   /** False when the provider cannot report its MCP servers to Cinderdeck. */
   supported: Schema.Boolean,
   servers: Schema.Array(ProviderMcpServer),
+  /** False for inventory-only integrations; defaults to true for existing clients. */
+  preferencesSupported: Schema.optionalKey(Schema.Boolean),
   checkedAt: IsoDateTime,
 });
 export type ProviderMcpListResult = typeof ProviderMcpListResult.Type;

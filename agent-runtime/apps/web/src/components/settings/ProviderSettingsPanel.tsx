@@ -998,6 +998,7 @@ export function EnvironmentProviderSettings({
               environmentId={environmentId}
               instanceId={row.instanceId}
               driver={row.driver}
+              agentId={providerConfigString(row.instance.config, "agentId") ?? undefined}
               providerLabel={resetLabel}
               providerEnabled={resolveProviderInstanceEnabled(row.instance)}
               readOnly={readOnly}

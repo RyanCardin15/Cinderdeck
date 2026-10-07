@@ -38,6 +38,7 @@ import { Switch } from "../ui/switch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   describeMcpToolCount,
+  effectiveMcpPreferences,
   filterMcpTools,
   mcpEmptyHint,
   mcpPreferencesKey,
@@ -129,6 +130,7 @@ function ToolRow({
   providerLabel,
   disabled,
   onToggle,
+  editable = true,
 }: {
   readonly tool: ProviderMcpTool;
   readonly enabled: boolean;
@@ -136,6 +138,7 @@ function ToolRow({
   readonly providerLabel: string;
   readonly disabled: boolean;
   readonly onToggle: (enabled: boolean) => void;
+  readonly editable?: boolean;
 }) {
   const locked = tool.disabledByProvider === true;
   const description = tool.description ?? null;
@@ -195,7 +198,7 @@ function ToolRow({
           </TooltipTrigger>
           <TooltipPopup side="top">Off in {providerLabel} config</TooltipPopup>
         </Tooltip>
-      ) : (
+      ) : editable && tool.toggleable !== false ? (
         <Switch
           size="sm"
           checked={enabled}
@@ -203,7 +206,7 @@ function ToolRow({
           onCheckedChange={onToggle}
           aria-label={`Allow ${label}`}
         />
-      )}
+      ) : null}
     </div>
   );
 }
@@ -214,6 +217,8 @@ function ServerRow({
   driver,
   providerLabel,
   readOnly,
+  agentId,
+  preferencesSupported,
   onChange,
 }: {
   readonly server: ProviderMcpServer;
@@ -222,6 +227,8 @@ function ServerRow({
   readonly providerLabel: string;
   readonly readOnly: boolean;
   readonly onChange: (next: ProviderMcpPreferences) => void;
+  readonly agentId?: string | undefined;
+  readonly preferencesSupported: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -232,9 +239,13 @@ function ServerRow({
     () => new Set(preferences.disabledTools[server.name] ?? []),
     [preferences.disabledTools, server.name],
   );
-  const toggleableTools = server.tools.filter((tool) => !tool.disabledByProvider);
+  const toggleableTools = server.tools.filter(
+    (tool) => !tool.disabledByProvider && tool.toggleable !== false,
+  );
   const visibleTools = filterMcpTools(server.tools, query);
-  const visibleToggleable = visibleTools.filter((tool) => !tool.disabledByProvider);
+  const visibleToggleable = visibleTools.filter(
+    (tool) => !tool.disabledByProvider && tool.toggleable !== false,
+  );
   const allVisibleOn = visibleToggleable.every((tool) => !disabledTools.has(tool.name));
   const allVisibleOff = visibleToggleable.every((tool) => disabledTools.has(tool.name));
   const name = server.title ?? server.name;
@@ -305,7 +316,7 @@ function ServerRow({
             </Badge>
           ) : null}
         </CollapsibleTrigger>
-        {presentation.toggleable ? (
+        {preferencesSupported && presentation.toggleable ? (
           <Switch
             checked={!presentation.turnedOff}
             disabled={readOnly}
@@ -314,7 +325,7 @@ function ServerRow({
             }
             aria-label={`Use ${name} in ${providerLabel} sessions`}
           />
-        ) : (
+        ) : preferencesSupported ? (
           <Tooltip>
             <TooltipTrigger render={<span className="flex shrink-0 items-center" />}>
               <Switch checked={false} disabled aria-label={`${name} is off in ${providerLabel}`} />
@@ -323,7 +334,7 @@ function ServerRow({
               Turned off in {providerLabel}&apos;s own config. Turn it on there first.
             </TooltipPopup>
           </Tooltip>
-        )}
+        ) : null}
       </div>
       <CollapsiblePanel>
         <div className="space-y-2.5 border-t border-border/40 bg-muted/10 px-3 py-3 sm:pr-4 sm:pl-11">
@@ -331,7 +342,7 @@ function ServerRow({
             <div className="flex items-start gap-2 rounded-lg border border-warning/25 bg-warning/6 px-3 py-2 text-xs text-foreground/85">
               <KeyRoundIcon className="mt-0.5 size-3.5 shrink-0 text-warning" />
               <p>
-                <InlineCode text={mcpSignInHint(driver, server.name)} />
+                <InlineCode text={mcpSignInHint(driver, server.name, agentId)} />
               </p>
             </div>
           ) : null}
@@ -363,7 +374,7 @@ function ServerRow({
                 ) : (
                   <span className="flex-1 text-xs text-muted-foreground">Tools</span>
                 )}
-                {toggleableTools.length > 1 ? (
+                {preferencesSupported && toggleableTools.length > 1 ? (
                   <div className="flex shrink-0 items-center gap-0.5">
                     <Button
                       size="xs"
@@ -411,6 +422,7 @@ function ServerRow({
                     serverOff={serverOff}
                     providerLabel={providerLabel}
                     disabled={readOnly}
+                    editable={preferencesSupported}
                     onToggle={(enabled) =>
                       onChange(setMcpToolsEnabled(preferences, server.name, [tool.name], enabled))
                     }
@@ -476,6 +488,7 @@ export function ProviderMcpSection({
   environmentId,
   instanceId,
   driver,
+  agentId,
   providerLabel,
   providerEnabled,
   readOnly = false,
@@ -485,6 +498,7 @@ export function ProviderMcpSection({
   readonly driver: ProviderDriverKind | undefined;
   readonly providerLabel: string;
   readonly providerEnabled: boolean;
+  readonly agentId?: string | undefined;
   readonly readOnly?: boolean | undefined;
 }) {
   const cacheKey = `${environmentId}:${instanceId}`;
@@ -585,10 +599,12 @@ export function ProviderMcpSection({
         ? state.previous
         : null;
   const servers = result?.servers ?? [];
+  const preferencesSupported = result?.preferencesSupported !== false;
+  const effectivePreferences = effectiveMcpPreferences(preferences, result?.preferencesSupported);
   const enabledServerCount = servers.filter(
     (server) =>
       server.status !== "disabled" &&
-      !presentMcpServer(server, preferences, providerLabel).turnedOff,
+      !presentMcpServer(server, effectivePreferences, providerLabel).turnedOff,
   ).length;
   const needsAuthCount = servers.filter((server) => server.status === "needsAuth").length;
   const failedCount = servers.filter((server) => server.status === "failed").length;
@@ -672,7 +688,7 @@ export function ProviderMcpSection({
   } else if (servers.length === 0) {
     body = (
       <MessageRow icon={<PlugIcon className="size-3.5" />} title="No MCP servers configured">
-        <InlineCode text={mcpEmptyHint(driver)} />
+        <InlineCode text={mcpEmptyHint(driver, agentId)} />
       </MessageRow>
     );
   } else {
@@ -688,7 +704,9 @@ export function ProviderMcpSection({
           <ServerRow
             key={server.name}
             server={server}
-            preferences={preferences}
+            preferences={effectivePreferences}
+            preferencesSupported={preferencesSupported}
+            agentId={agentId}
             driver={driver}
             providerLabel={providerLabel}
             readOnly={readOnly}
@@ -715,8 +733,18 @@ export function ProviderMcpSection({
       <SettingsGroup>{body}</SettingsGroup>
       {servers.length > 0 ? (
         <p className="px-3 text-xs text-muted-foreground sm:px-4">
-          Changes apply to new {providerLabel} sessions. {providerLabel}&apos;s own config files
-          aren&apos;t changed.
+          {preferencesSupported ? (
+            <>
+              Changes apply when {providerLabel} sessions start or resume. {providerLabel}&apos;s
+              own config files aren&apos;t changed.
+            </>
+          ) : (
+            <>
+              This CLI supports inspection here. Manage servers with{" "}
+              <InlineCode text="agent mcp enable / disable" /> and tool permissions in its own
+              configuration, then refresh.
+            </>
+          )}
         </p>
       ) : null}
     </section>

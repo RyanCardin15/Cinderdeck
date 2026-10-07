@@ -45,7 +45,12 @@ export function presentMcpServer(
     case "needsAuth":
       return { label: "Needs sign-in", tone: "warning", toggleable: true, turnedOff: false };
     case "pending":
-      return { label: "Connecting", tone: "pending", toggleable: true, turnedOff: false };
+      return {
+        label: server.approvalRequired ? "Needs approval" : "Connecting",
+        tone: "pending",
+        toggleable: true,
+        turnedOff: false,
+      };
     case "failed":
       return { label: "Failed", tone: "error", toggleable: true, turnedOff: false };
   }
@@ -137,7 +142,18 @@ export function filterMcpTools<T extends { readonly name: string; readonly title
 }
 
 /** Where a server that needs sign-in can be authenticated. */
-export function mcpSignInHint(driver: ProviderDriverKind | undefined, serverName: string): string {
+export function mcpSignInHint(
+  driver: ProviderDriverKind | undefined,
+  serverName: string,
+  agentId?: string,
+): string {
+  if (driver === "acpRegistry" && agentId === "cursor") {
+    const quoted = "'" + serverName.replaceAll("'", "'\"'\"'") + "'";
+    return `Run \`agent mcp login ${quoted}\` in a terminal, then refresh.`;
+  }
+  if (driver === "acpRegistry" && agentId === "github-copilot-cli") {
+    return "Run `/mcp` in Copilot CLI and choose this server to sign in, then refresh.";
+  }
   switch (driver) {
     case "codex":
       return `Run \`codex mcp login ${serverName}\` in a terminal, then refresh.`;
@@ -148,7 +164,11 @@ export function mcpSignInHint(driver: ProviderDriverKind | undefined, serverName
   }
 }
 
-export function mcpEmptyHint(driver: ProviderDriverKind | undefined): string {
+export function mcpEmptyHint(driver: ProviderDriverKind | undefined, agentId?: string): string {
+  if (driver === "acpRegistry" && agentId === "cursor")
+    return "Add one in `~/.cursor/mcp.json` or your project’s `.cursor/mcp.json`.";
+  if (driver === "acpRegistry" && agentId === "github-copilot-cli")
+    return "Add one with `copilot mcp add` or in `~/.copilot/mcp-config.json`.";
   switch (driver) {
     case "codex":
       return "Add one with `codex mcp add` or in `~/.codex/config.toml`.";
@@ -157,4 +177,12 @@ export function mcpEmptyHint(driver: ProviderDriverKind | undefined): string {
     default:
       return "Add one in the provider's own configuration.";
   }
+}
+
+/** Ignore old stored overrides when a provider only supports inspection. */
+export function effectiveMcpPreferences(
+  preferences: ProviderMcpPreferences,
+  supported: boolean | undefined,
+): ProviderMcpPreferences {
+  return supported === false ? EMPTY_PROVIDER_MCP_PREFERENCES : preferences;
 }

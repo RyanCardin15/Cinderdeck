@@ -59,3 +59,11 @@ Simple preferences retain `PreferencesKeys` and UserDefaults. Structured prefere
 Settings validation covers native request bounds, category routing, partial/stale patches, shortcut companion fields, isolated preference persistence, workspace definition preservation, confirmed renderer saves, failed-draft retention, deletion confirmation, pipe correlation and shutdown. Run native tests with `xcodebuild` and runtime tests/typechecks locally. Build the complete application with `scripts/build-unified.sh`; do not treat a web build alone as whole-app validation.
 
 See also [UNIFIED_APP.md](UNIFIED_APP.md), [SHORTCUTS.md](SHORTCUTS.md), [CLOUD.md](CLOUD.md), [POST_CAPTURE.md](POST_CAPTURE.md), and [UPDATES.md](UPDATES.md).
+
+### CLI provider MCP inventory
+
+**Settings → Providers → Copilot CLI / Cursor CLI → MCP servers** lists the configured
+servers and their tools using the provider instance's executable and environment. Copilot
+supports session-only server and tool switches when conversations start or resume. Cursor
+supports inspection and CLI setup guidance; its server and tool permissions are managed in
+Cursor's own configuration. See [ACP providers](../agent-runtime/docs/user/providers-acp.md#mcp-servers-and-tools).
