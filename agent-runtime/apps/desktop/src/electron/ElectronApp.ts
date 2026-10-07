@@ -62,14 +62,12 @@ export class ElectronApp extends Context.Service<
     readonly setAboutPanelOptions: (
       options: Electron.AboutPanelOptionsOptions,
     ) => Effect.Effect<void>;
-    readonly setAppUserModelId: (id: string) => Effect.Effect<void>;
     readonly getAppMetrics: Effect.Effect<ReadonlyArray<Electron.ProcessMetric>>;
     readonly setAsDefaultProtocolClient: (
       protocol: string,
       path?: string,
       args?: readonly string[],
     ) => Effect.Effect<boolean>;
-    readonly setDesktopName: (desktopName: string) => Effect.Effect<void>;
     readonly setDockIcon: (iconPath: string) => Effect.Effect<void>;
     readonly appendCommandLineSwitch: (switchName: string, value?: string) => Effect.Effect<void>;
     readonly onBeforeQuitForUpdate: (
@@ -160,10 +158,6 @@ export const make = ElectronApp.of({
     Effect.sync(() => {
       Electron.app.setAboutPanelOptions(options);
     }),
-  setAppUserModelId: (id) =>
-    Effect.sync(() => {
-      Electron.app.setAppUserModelId(id);
-    }),
   getAppMetrics: Effect.sync(() => Electron.app.getAppMetrics()),
   setAsDefaultProtocolClient: (protocol, path, args) =>
     Effect.sync(() => {
@@ -171,13 +165,6 @@ export const make = ElectronApp.of({
         return Electron.app.setAsDefaultProtocolClient(protocol);
       }
       return Electron.app.setAsDefaultProtocolClient(protocol, path, [...(args ?? [])]);
-    }),
-  setDesktopName: (desktopName) =>
-    Effect.sync(() => {
-      const linuxApp = Electron.app as Electron.App & {
-        setDesktopName?: (desktopName: string) => void;
-      };
-      linuxApp.setDesktopName?.(desktopName);
     }),
   setDockIcon: (iconPath) =>
     Effect.sync(() => {

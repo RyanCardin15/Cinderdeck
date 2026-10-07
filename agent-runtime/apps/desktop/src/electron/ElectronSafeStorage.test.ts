@@ -1,7 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
 import { beforeEach, vi } from "vite-plus/test";
 
 const mocks = vi.hoisted(() => ({
@@ -11,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   isEncryptionAvailable: vi.fn(),
   encryptString: vi.fn(),
   decryptString: vi.fn(),
-  getSelectedStorageBackend: vi.fn(),
 }));
 vi.mock("electron", () => ({ safeStorage: mocks }));
 
@@ -20,7 +17,7 @@ import * as ElectronSafeStorage from "./ElectronSafeStorage.ts";
 // Native calls are mocked; these tests never touch the user's Keychain.
 const layer = ElectronSafeStorage.layer;
 const provide = <A, E>(effect: Effect.Effect<A, E, ElectronSafeStorage.ElectronSafeStorage>) =>
-  effect.pipe(Effect.provide(layer), Effect.provideService(HostProcessPlatform, "darwin"));
+  effect.pipe(Effect.provide(layer));
 
 describe("ElectronSafeStorage", () => {
   beforeEach(() => {
@@ -48,7 +45,6 @@ describe("ElectronSafeStorage", () => {
           assert.equal(mocks.isEncryptionAvailable.mock.calls.length, 0);
           assert.equal(mocks.encryptString.mock.calls.length, 0);
           assert.equal(mocks.decryptString.mock.calls.length, 0);
-          assert.deepEqual(yield* storage.selectedStorageBackend, Option.none());
         }),
       ),
   );

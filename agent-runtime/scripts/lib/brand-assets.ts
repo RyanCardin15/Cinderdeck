@@ -1,11 +1,8 @@
 export const BRAND_ASSET_PATHS = {
   developmentIosIconPng: "assets/cinderdeck/dev/ios-1024.png",
-  developmentUniversalIconPng: "assets/cinderdeck/dev/universal-1024.png",
 
   productionIosIconPng: "assets/cinderdeck/prod/ios-1024.png",
   productionMacIconPng: "assets/cinderdeck/prod/macos-1024.png",
-  productionLinuxIconPng: "assets/cinderdeck/prod/universal-1024.png",
-  productionWindowsIconIco: "assets/cinderdeck/prod/windows.ico",
   productionWebFaviconIco: "assets/cinderdeck/prod/web-favicon.ico",
   productionWebFavicon16Png: "assets/cinderdeck/prod/web-favicon-16x16.png",
   productionWebFavicon32Png: "assets/cinderdeck/prod/web-favicon-32x32.png",
@@ -13,15 +10,12 @@ export const BRAND_ASSET_PATHS = {
 
   nightlyIosIconPng: "assets/cinderdeck/nightly/ios-1024.png",
   nightlyMacIconPng: "assets/cinderdeck/nightly/macos-1024.png",
-  nightlyLinuxIconPng: "assets/cinderdeck/nightly/universal-1024.png",
-  nightlyWindowsIconIco: "assets/cinderdeck/nightly/windows.ico",
   nightlyWebFaviconIco: "assets/cinderdeck/nightly/web-favicon.ico",
   nightlyWebFavicon16Png: "assets/cinderdeck/nightly/web-favicon-16x16.png",
   nightlyWebFavicon32Png: "assets/cinderdeck/nightly/web-favicon-32x32.png",
   nightlyWebAppleTouchIconPng: "assets/cinderdeck/nightly/web-apple-touch-180.png",
 
   developmentDesktopIconPng: "assets/cinderdeck/dev/macos-1024.png",
-  developmentWindowsIconIco: "assets/cinderdeck/dev/windows.ico",
   developmentWebFaviconIco: "assets/cinderdeck/dev/web-favicon.ico",
   developmentWebFavicon16Png: "assets/cinderdeck/dev/web-favicon-16x16.png",
   developmentWebFavicon32Png: "assets/cinderdeck/dev/web-favicon-32x32.png",

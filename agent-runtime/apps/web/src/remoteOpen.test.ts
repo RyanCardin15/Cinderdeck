@@ -48,8 +48,8 @@ describe("resolveRemoteOpenState", () => {
   });
 
   it("keeps exec behavior for the desktop app's own primary even on a NAT URL", () => {
-    // wsl-only mode binds the primary to the WSL2 NAT address; it is still
-    // this machine because the desktop app manages its own primary backend.
+    // A non-loopback primary is still this machine because the desktop app
+    // manages its own primary backend.
     expect(
       resolveRemoteOpenState({
         target: primaryTarget("http://172.29.112.1:14369"),
@@ -64,8 +64,8 @@ describe("resolveRemoteOpenState", () => {
       resolveRemoteOpenState({
         target: new BearerConnectionTarget({
           environmentId,
-          label: "WSL (Ubuntu)",
-          connectionId: "local:wsl-1",
+          label: "Secondary",
+          connectionId: "local:secondary-1",
         }),
         isDesktopRenderer: false,
         remoteOpenTargets: TAILSCALE_TARGETS,

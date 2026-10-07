@@ -530,7 +530,7 @@ export const make = Effect.gen(function* () {
             return next;
           });
 
-          // Secondary desktop-local backends (e.g. a parallel WSL backend) live
+          // Secondary desktop-local backends live
           // on their own loopback origin, so they authenticate with a bearer
           // token instead of the primary's same-origin cookie. Stash it where
           // the resolver's bearer broker looks it up.
@@ -573,7 +573,7 @@ export const make = Effect.gen(function* () {
   );
 
   // Tear down a platform-managed environment that the host no longer reports
-  // (e.g. the user turned the parallel WSL backend off). Platform environments
+  // (e.g. a secondary local backend was turned off). Platform environments
   // bypass the user-facing `remove` guard since they are reconciled from the
   // bootstrap rather than removed by hand.
   const removePlatformEnvironment = Effect.fn("EnvironmentRegistry.removePlatformEnvironment")(
@@ -643,7 +643,7 @@ export const make = Effect.gen(function* () {
 
   // Reconcile the full set of platform-managed environments against what the
   // host currently reports: add/refresh the desired ones and tear down any
-  // platform environment that disappeared (WSL toggled off, distro switched).
+  // platform environment that disappeared.
   const reconcilePlatform = Effect.fn("EnvironmentRegistry.reconcilePlatform")(function* (
     platformRegistrations: ReadonlyArray<PlatformConnectionRegistration>,
   ) {

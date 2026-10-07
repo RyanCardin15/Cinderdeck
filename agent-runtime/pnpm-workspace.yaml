@@ -139,9 +139,6 @@ overrides:
   "@exodus/bytes>@noble/hashes": "1.8.0"
   # Earlier React Navigation declarations create a circular type alias in TypeScript 7.
   "@react-navigation/core": 7.21.13
-  # The dbus-next patch drops usocket from the package, but pnpm resolves from the
-  # registry manifest, so the edge has to be cut here as well.
-  "dbus-next>usocket": "-"
   # The SDK always receives the user's Claude executable, so its bundled binaries are unused.
   "@anthropic-ai/claude-agent-sdk>@anthropic-ai/claude-agent-sdk-darwin-arm64": "-"
   "@anthropic-ai/claude-agent-sdk>@anthropic-ai/claude-agent-sdk-darwin-x64": "-"
@@ -224,9 +221,7 @@ patchedDependencies:
   "@react-native-ai/apple@0.12.0": patches/@react-native-ai__apple@0.12.0.patch
   "@react-native-menu/menu@2.0.0": patches/@react-native-menu__menu@2.0.0.patch
   "@react-navigation/native-stack@7.17.6": patches/@react-navigation%2Fnative-stack@7.17.6.patch
-  dbus-next@0.10.2: patches/dbus-next@0.10.2.patch
   effect@4.0.0-rc.115: patches/effect@4.0.0-rc.115.patch
-  node-pty@1.2.0-beta.15: patches/node-pty@1.2.0-beta.15.patch
   # Link http(s) URLs with a port or a single-label host. md4c otherwise requires a dotted host and stops at ':'.
   react-native-nitro-markdown@0.5.8: patches/react-native-nitro-markdown@0.5.8.patch
   react-native-gesture-handler@3.2.1: patches/react-native-gesture-handler@3.2.1.patch

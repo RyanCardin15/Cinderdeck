@@ -28,13 +28,12 @@ const mac = await fs.readFile(macSource);
 const favicon16 = await png(16);
 const favicon32 = await png(32);
 const touch = await png(180);
-const win = ico(await png(256), 256);
 for (const variant of ["dev", "nightly", "prod"]) {
   const prefix = `assets/cinderdeck/${variant}`;
   for (const [name, bytes] of Object.entries({
-    "ios-1024.png": full, "macos-1024.png": mac, "universal-1024.png": full,
+    "ios-1024.png": full, "macos-1024.png": mac,
     "web-apple-touch-180.png": touch, "web-favicon-16x16.png": favicon16,
-    "web-favicon-32x32.png": favicon32, "web-favicon.ico": ico(favicon32, 32), "windows.ico": win,
+    "web-favicon-32x32.png": favicon32, "web-favicon.ico": ico(favicon32, 32),
   })) outputs.set(`${prefix}/${name}`, bytes);
 }
 for (const [name, bytes] of Object.entries({

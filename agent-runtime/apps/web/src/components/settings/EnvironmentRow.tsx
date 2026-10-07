@@ -8,13 +8,13 @@ import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 
 /**
  * How this client reaches a machine, printed first in every environment row so
- * Remote connections, WSL, and plain remote links are told apart without a legend.
+ * Remote connections, local backends, and plain remote links are told apart without a legend.
  */
 export function environmentTransportLabel(environment: EnvironmentPresentation): string {
   const { entry } = environment;
   if (entry.target._tag === "PrimaryConnectionTarget") return "This machine";
   if (environment.relayManaged) return "Remote connections";
-  if (isDesktopLocalConnectionTarget(entry.target)) return "WSL";
+  if (isDesktopLocalConnectionTarget(entry.target)) return "Local backend";
   return environment.displayUrl ?? "Remote link";
 }
 

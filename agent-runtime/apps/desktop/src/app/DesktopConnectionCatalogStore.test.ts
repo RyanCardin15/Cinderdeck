@@ -50,7 +50,6 @@ function makeSafeStorageLayer(
         return decoded.slice("encrypted:".length);
       });
     },
-    selectedStorageBackend: Effect.succeedNone,
   } satisfies ElectronSafeStorage.ElectronSafeStorage["Service"]);
 }
 

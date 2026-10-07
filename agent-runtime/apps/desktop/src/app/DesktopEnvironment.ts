@@ -13,7 +13,6 @@ import * as Path from "effect/Path";
 
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopConfig from "./DesktopConfig.ts";
-import { resolveLinuxDesktopEntryName } from "./DesktopEarlyElectronStartup.ts";
 import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePaths.ts";
 import { isNightlyDesktopVersion, isPreviewDesktopVersion } from "../updates/updateChannels.ts";
 import type { OtlpProtocol } from "@cinderdeck/shared/observability";
@@ -55,13 +54,6 @@ export class DesktopEnvironment extends Context.Service<
     readonly browserArtifactsDir: string;
     readonly rootDir: string;
     readonly appRoot: string;
-    // Root of the tree containing apps/server/dist and node_modules for the
-    // backend. Equals appRoot everywhere except packaged Windows, where the
-    // server tree ships as the resources/server.asar sidecar (see
-    // scripts/build-desktop-artifact.ts) that the asar-aware
-    // ELECTRON_RUN_AS_NODE primary reads in place and the WSL backend
-    // extracts on demand (see DesktopWslServerTree).
-    readonly serverRoot: string;
     readonly backendEntryPath: string;
     // Built web client the packaged renderer is served from over deckhand://app.
     readonly clientAssetsDir: string;
@@ -81,11 +73,6 @@ export class DesktopEnvironment extends Context.Service<
     readonly otlpProtocol: OtlpProtocol;
     readonly branding: DesktopAppBranding;
     readonly displayName: string;
-    readonly appUserModelId: string;
-    readonly linuxDesktopEntryName: string;
-    readonly linuxWmClass: string;
-    readonly linuxApplicationsDir: string;
-    readonly appImagePath: Option.Option<string>;
     readonly defaultDesktopSettings: DesktopAppSettings.DesktopSettings;
     readonly runtimeInfo: DesktopRuntimeInfo;
     readonly resolvePickFolderDefaultPath: (rawOptions: unknown) => Option.Option<string>;
@@ -158,13 +145,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const devServerUrl = config.devServerUrl;
   const isDevelopment = Option.isSome(devServerUrl);
   const appDataDirectory = Option.getOrElse(config.deckhandProfileRoot, () =>
-    input.platform === "win32"
-      ? Option.getOrElse(config.appDataDirectory, () =>
-          path.join(homeDirectory, "AppData", "Roaming"),
-        )
-      : input.platform === "darwin"
-        ? path.join(homeDirectory, "Library", "Application Support")
-        : Option.getOrElse(config.xdgConfigHome, () => path.join(homeDirectory, ".config")),
+    path.join(homeDirectory, "Library", "Application Support"),
   );
   const baseDir = resolveDesktopBaseDir({
     homeDirectory,
@@ -173,10 +154,6 @@ const make = Effect.fn("desktop.environment.make")(function* (
   });
   const rootDir = path.resolve(input.dirname, "../../..");
   const appRoot = input.isPackaged ? input.appPath : rootDir;
-  const serverRoot =
-    input.isPackaged && input.platform === "win32"
-      ? path.join(input.resourcesPath, "server.asar")
-      : appRoot;
   const branding = resolveDesktopAppBranding({
     isDevelopment,
     appVersion: input.appVersion,
@@ -188,10 +165,6 @@ const make = Effect.fn("desktop.environment.make")(function* (
     joinPath: path.join,
     t3Home: config.t3Home,
   });
-  const linuxApplicationsDir = path.join(
-    Option.getOrElse(config.xdgDataHome, () => path.join(homeDirectory, ".local", "share")),
-    "applications",
-  );
   const resourcesPath = input.resourcesPath;
 
   return DesktopEnvironment.of({
@@ -217,9 +190,8 @@ const make = Effect.fn("desktop.environment.make")(function* (
     browserArtifactsDir: path.join(stateDir, "browser-artifacts"),
     rootDir,
     appRoot,
-    serverRoot,
-    backendEntryPath: path.join(serverRoot, "apps/server/dist/bin.mjs"),
-    clientAssetsDir: path.join(serverRoot, "apps/server/dist/client"),
+    backendEntryPath: path.join(appRoot, "apps/server/dist/bin.mjs"),
+    clientAssetsDir: path.join(appRoot, "apps/server/dist/client"),
     backendCwd: input.isPackaged ? homeDirectory : appRoot,
     preloadPath: path.join(input.dirname, "preload.cjs"),
     compileCachePath: path.join(input.dirname, "compileCache.cjs"),
@@ -237,13 +209,6 @@ const make = Effect.fn("desktop.environment.make")(function* (
     otlpProtocol: config.otlpProtocol,
     branding,
     displayName,
-    appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
-      isDevelopment ? "com.ryancardin.cinderdeck.runtime.dev" : "com.ryancardin.cinderdeck.runtime",
-    ),
-    linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
-    linuxWmClass: isDevelopment ? "deckhand-dev" : "deckhand",
-    linuxApplicationsDir,
-    appImagePath: config.appImagePath,
     defaultDesktopSettings: DesktopAppSettings.resolveDefaultDesktopSettings(input.appVersion),
     runtimeInfo: resolveDesktopRuntimeInfo({
       platform: input.platform,

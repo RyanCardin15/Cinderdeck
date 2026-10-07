@@ -36,12 +36,8 @@ const compactEnv = (env: Readonly<Record<string, string | undefined>>): Record<s
 export const DesktopConfig = Config.all({
   nativeHost: Config.String("CINDERDECK_NATIVE_HOST").pipe(Config.withDefault("0"), Config.map(value => value === "1")),
   deckhandProfileRoot: trimmedString("DECKHAND_PROFILE_ROOT"),
-  appDataDirectory: trimmedString("APPDATA"),
-  xdgConfigHome: trimmedString("XDG_CONFIG_HOME"),
-  xdgDataHome: trimmedString("XDG_DATA_HOME"),
   t3Home: trimmedString("DECKHAND_HOME"),
   devServerUrl: Config.URL("VITE_DEV_SERVER_URL").pipe(Config.option),
-  appUserModelIdOverride: trimmedString("DECKHAND_DESKTOP_APP_USER_MODEL_ID"),
   configuredBackendPort: Config.Port("DECKHAND_PORT").pipe(Config.option),
   commitHashOverride: trimmedString("DECKHAND_COMMIT_HASH"),
   desktopLanHostOverride: trimmedString("DECKHAND_DESKTOP_LAN_HOST"),
@@ -56,7 +52,6 @@ export const DesktopConfig = Config.all({
   otlpProtocol: Config.schema(OtlpProtocol, "DECKHAND_OTLP_PROTOCOL").pipe(
     Config.withDefault("http/json"),
   ),
-  appImagePath: trimmedString("APPIMAGE"),
   disableAutoUpdate: optionalBoolean("DECKHAND_DISABLE_AUTO_UPDATE"),
   mockUpdates: optionalBoolean("DECKHAND_DESKTOP_MOCK_UPDATES"),
   mockUpdateServerPort: Config.Port("DECKHAND_DESKTOP_MOCK_UPDATE_SERVER_PORT").pipe(

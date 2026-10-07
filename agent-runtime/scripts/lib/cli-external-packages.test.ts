@@ -59,14 +59,14 @@ describe("shouldBundleCliDependency", () => {
 
   // The real package is `node-gyp-build-optional-packages`, reached by prefix.
   // It is transitive to a selected dependency root, so the runtime closure test
-  // below ensures it follows that root into the sidecar.
+  // below ensures it follows that root into the packaged stage.
   it("treats prefix-matched siblings as external", () => {
     assert.strictEqual(shouldBundleCliDependency("node-gyp-build-optional-packages"), false);
   });
 });
 
 describe("selectCliRuntimeExternalDependencies", () => {
-  it("keeps only runtime-external dependency roots for the Windows sidecar", () => {
+  it("keeps only runtime-external dependency roots for the packaged stage", () => {
     assert.deepStrictEqual(
       selectCliRuntimeExternalDependencies({
         "@ff-labs/fff-node": "2.0.0",
@@ -91,10 +91,10 @@ describe("selectCliRuntimeExternalDependencies", () => {
 // An external package is loaded from the real filesystem, so its own `require`
 // also resolves from the real filesystem. If one of its dependencies was
 // bundled away instead of left external, that dependency does not follow the
-// selected root into the sidecar.
+// selected root into the packaged stage.
 //
 // Found the hard way: msgpackr-extract's node-gyp-build-optional-packages
-// required detect-libc, which was bundled. Windows was fine; WSL got
+// required detect-libc, which was bundled. The packaged backend got
 // MODULE_NOT_FOUND.
 it.layer(NodeServices.layer)("external package dependency closure", (it) => {
   // Read manifests off disk from the pnpm store rather than resolving them.
@@ -103,7 +103,7 @@ it.layer(NodeServices.layer)("external package dependency closure", (it) => {
   // by name from this file at all, and an `exports` map can refuse the
   // `/package.json` subpath outright (@ff-labs/fff-node). Both surface as "not
   // installed", which would let this test skip everything and pass while
-  // checking nothing. The store contains the dependency graph the sidecar's
+  // checking nothing. The store contains the dependency graph the stage's
   // minimal production install resolves.
   const readInstalledPackages = Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
@@ -149,8 +149,8 @@ it.layer(NodeServices.layer)("external package dependency closure", (it) => {
   // loaded by Node, so their closure genuinely does not need to be external.
   const isRuntimeExternal = isRuntimeExternalCliDependency;
 
-  // A cold walk of the pnpm store can exceed the root timeout when the Windows
-  // lane runs four filesystem-heavy workspace suites at once.
+  // A cold walk of the pnpm store can exceed the root timeout when CI runs
+  // several filesystem-heavy workspace suites at once.
   it.effect(
     "finds the runtime-external packages on disk",
     () =>
@@ -206,7 +206,7 @@ it.layer(NodeServices.layer)("external package dependency closure", (it) => {
       assert.deepStrictEqual(
         violations,
         [],
-        `these dependencies of external packages would be bundled away and fail to resolve under WSL: ${violations.join(", ")}`,
+        `these dependencies of external packages would be bundled away and fail to resolve in the packaged app: ${violations.join(", ")}`,
       );
     }),
   );

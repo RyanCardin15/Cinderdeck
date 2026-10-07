@@ -262,7 +262,6 @@ export const make = Effect.gen(function* BrowserImportMake() {
     // identifiable and each tag is handled on its own below. The success side
     // is normalized to one shape too, so the skipped tally survives either
     // engine — Firefox stores plaintext, so nothing there is ever unreadable.
-    const userDataDirectory = definition.userDataDirectory(pathContext);
     const read: Effect.Effect<
       CookieReadResult,
       ChromiumCookieReadError | FirefoxCookieReadError | SafariCookieReadError,
@@ -280,12 +279,6 @@ export const make = Effect.gen(function* BrowserImportMake() {
               cookieDatabasePath: databasePath,
               keychainService: definition.keychainService,
               keychainAccount: definition.keychainAccount,
-              linuxSecretApplication: definition.linuxSecretApplication,
-              ...(platform === "win32" && userDataDirectory !== undefined
-                ? {
-                    windowsLocalStatePath: pathContext.path.join(userDataDirectory, "Local State"),
-                  }
-                : {}),
               platform,
             });
 

@@ -58,7 +58,7 @@ describe("DesktopLocalEnvironmentAuth", () => {
         list: Effect.succeed([
           {
             id: PRIMARY_LOCAL_ENVIRONMENT_ID,
-            label: Effect.succeed("Windows"),
+            label: Effect.succeed("Local environment"),
             currentConfig: Effect.succeedSome(config),
           },
         ]),

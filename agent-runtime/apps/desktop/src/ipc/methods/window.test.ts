@@ -32,35 +32,32 @@ import {
   probeRemoteEditors,
 } from "./window.ts";
 
-const readyWslConfig: DesktopBackendManager.DesktopBackendStartConfig = {
-  executablePath: "wsl.exe",
-  args: ["-d", "Ubuntu", "--", "node", "/app/bin.mjs"],
+const readyPrimaryConfig: DesktopBackendManager.DesktopBackendStartConfig = {
+  executablePath: "/electron",
+  args: ["/app/bin.mjs", "--bootstrap-fd", "3"],
   entryPath: "/app/bin.mjs",
   cwd: "/app",
   env: {},
-  extendEnv: false,
+  extendEnv: true,
   bootstrap: {
     mode: "desktop",
     noBrowser: true,
-    port: 3774,
-    host: "0.0.0.0",
+    port: 3773,
+    host: "127.0.0.1",
     desktopBootstrapToken: "bootstrap-token",
     tailscaleServeEnabled: false,
     tailscaleServePort: 443,
   },
-  bootstrapDelivery: "stdin",
-  httpBaseUrl: new URL("http://127.0.0.1:3774"),
+  httpBaseUrl: new URL("http://127.0.0.1:3773"),
   captureOutput: true,
-  preflightFailure: Option.none(),
-  runningDistro: "Ubuntu",
 };
 
-const defaultWslInstance: DesktopBackendManager.DesktopBackendInstance = {
-  id: DesktopBackendManager.BackendInstanceId("wsl:default"),
-  label: Effect.succeed("WSL (default distro)"),
+const primaryInstance: DesktopBackendManager.DesktopBackendInstance = {
+  id: DesktopBackendManager.PRIMARY_INSTANCE_ID,
+  label: Effect.succeed("Local environment"),
   start: Effect.void,
   stop: () => Effect.void,
-  currentConfig: Effect.succeedSome(readyWslConfig),
+  currentConfig: Effect.succeedSome(readyPrimaryConfig),
   snapshot: Effect.succeed({
     desiredRunning: true,
     ready: true,
@@ -72,82 +69,32 @@ const defaultWslInstance: DesktopBackendManager.DesktopBackendInstance = {
 };
 
 describe("getLocalEnvironmentBootstraps", () => {
-  it.effect("publishes the concrete running distro without replacing the stable instance id", () =>
+  it.effect("publishes the primary backend's endpoints and bootstrap token", () =>
     Effect.gen(function* () {
       const result = yield* getLocalEnvironmentBootstraps.handler();
 
       assert.deepEqual(result, [
         {
-          id: "wsl:default",
-          label: "WSL (Ubuntu)",
-          runningDistro: "Ubuntu",
-          httpBaseUrl: "http://127.0.0.1:3774/",
-          wsBaseUrl: "ws://127.0.0.1:3774/",
+          id: "primary",
+          label: "Local environment",
+          httpBaseUrl: "http://127.0.0.1:3773/",
+          wsBaseUrl: "ws://127.0.0.1:3773/",
           bootstrapToken: "bootstrap-token",
         },
       ]);
-    }).pipe(Effect.provide(DesktopBackendPool.layerTest([defaultWslInstance]))),
+    }).pipe(Effect.provide(DesktopBackendPool.layerTest([primaryInstance]))),
   );
 
-  it.effect("publishes a pending bootstrap only while a transient retry is scheduled", () => {
-    const retryingConfig: DesktopBackendManager.DesktopBackendStartConfig = {
-      ...readyWslConfig,
-      preflightFailure: Option.some({
-        reason: "WSL probe timed out",
-        fatal: false,
-        retryLimit: 12,
-      }),
-    };
-    const retryingInstance: DesktopBackendManager.DesktopBackendInstance = {
-      ...defaultWslInstance,
-      currentConfig: Effect.succeedSome(retryingConfig),
-      snapshot: Effect.succeed({
-        desiredRunning: true,
-        ready: false,
-        activePid: Option.none(),
-        restartAttempt: 2,
-        restartScheduled: true,
-      }),
-    };
-
-    return Effect.gen(function* () {
-      const result = yield* getLocalEnvironmentBootstraps.handler();
-      assert.deepEqual(result, [
-        {
-          id: "wsl:default",
-          label: "WSL (default distro)",
-          runningDistro: null,
-          httpBaseUrl: null,
-          wsBaseUrl: null,
-        },
-      ]);
-    }).pipe(Effect.provide(DesktopBackendPool.layerTest([retryingInstance])));
-  });
-
-  it.effect("omits a bounded transient bootstrap after retries stop", () => {
-    const stoppedInstance: DesktopBackendManager.DesktopBackendInstance = {
-      ...defaultWslInstance,
-      currentConfig: Effect.succeedSome({
-        ...readyWslConfig,
-        preflightFailure: Option.some({
-          reason: "WSL probe timed out",
-          fatal: false,
-          retryLimit: 12,
-        }),
-      }),
-      snapshot: Effect.succeed({
-        desiredRunning: false,
-        ready: false,
-        activePid: Option.none(),
-        restartAttempt: 12,
-        restartScheduled: false,
-      }),
+  it.effect("omits an instance that has not resolved a start config yet", () => {
+    const pendingInstance: DesktopBackendManager.DesktopBackendInstance = {
+      ...primaryInstance,
+      currentConfig: Effect.succeedNone,
     };
 
     return Effect.gen(function* () {
       const result = yield* getLocalEnvironmentBootstraps.handler();
       assert.deepEqual(result, []);
-    }).pipe(Effect.provide(DesktopBackendPool.layerTest([stoppedInstance])));
+    }).pipe(Effect.provide(DesktopBackendPool.layerTest([pendingInstance])));
   });
 });
 
@@ -268,33 +215,31 @@ describe("pickProjectFavicon", () => {
   );
 });
 
-it.effect.skipIf(HostProcessPlatform.defaultValue() === "win32")(
-  "finds remote editors installed without PATH launchers",
-  () =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const home = yield* fs.makeTempDirectoryScoped({ prefix: "t3-remote-editors-" });
-      for (const app of ["Cursor", "Visual Studio Code", "WebStorm"]) {
-        const executable = path.join(
-          home,
-          "Applications",
-          `${app}.app`,
-          app === "WebStorm" ? "Contents/MacOS/webstorm" : "Contents/Resources/app/bin/code",
-        );
-        yield* fs.makeDirectory(path.dirname(executable), { recursive: true });
-        yield* fs.writeFileString(executable, "#!/bin/sh\n");
-        yield* fs.chmod(executable, 0o755);
-      }
-      const editors = yield* probeRemoteEditors.handler(undefined).pipe(
-        Effect.provideService(HostProcessEnvironment, {
-          HOME: home,
-          PATH: path.join(home, "empty"),
-        }),
-        Effect.provideService(HostProcessPlatform, "darwin"),
+it.effect("finds remote editors installed without PATH launchers", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const home = yield* fs.makeTempDirectoryScoped({ prefix: "t3-remote-editors-" });
+    for (const app of ["Cursor", "Visual Studio Code", "WebStorm"]) {
+      const executable = path.join(
+        home,
+        "Applications",
+        `${app}.app`,
+        app === "WebStorm" ? "Contents/MacOS/webstorm" : "Contents/Resources/app/bin/code",
       );
-      assert.include(editors, "cursor");
-      assert.include(editors, "vscode");
-      assert.notInclude(editors, "webstorm");
-    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+      yield* fs.makeDirectory(path.dirname(executable), { recursive: true });
+      yield* fs.writeFileString(executable, "#!/bin/sh\n");
+      yield* fs.chmod(executable, 0o755);
+    }
+    const editors = yield* probeRemoteEditors.handler(undefined).pipe(
+      Effect.provideService(HostProcessEnvironment, {
+        HOME: home,
+        PATH: path.join(home, "empty"),
+      }),
+      Effect.provideService(HostProcessPlatform, "darwin"),
+    );
+    assert.include(editors, "cursor");
+    assert.include(editors, "vscode");
+    assert.notInclude(editors, "webstorm");
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );

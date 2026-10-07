@@ -68,8 +68,8 @@ export function resolveRemoteOpenState(input: {
   }
   if (target._tag === "PrimaryConnectionTarget") {
     // The desktop app manages its own primary backend, so it is always on
-    // this machine even when its URL is not loopback (wsl-only mode binds
-    // the WSL2 NAT address). In a browser, a loopback primary means the
+    // this machine even when its URL is not loopback. In a browser, a
+    // loopback primary means the
     // browser runs on the serving machine; a tailnet/LAN URL means remote.
     if (input.isDesktopRenderer) {
       return LOCAL_EXEC;

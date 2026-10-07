@@ -248,9 +248,6 @@ function shouldBroadcastDownloadProgress(
 function getAutoUpdateDisabledReason(args: {
   isDevelopment: boolean;
   isPackaged: boolean;
-  platform: NodeJS.Platform;
-  appImage?: string | undefined;
-  isDebPackage: boolean;
   disabledByEnv: boolean;
   hasUpdateFeedConfig: boolean;
 }): string | null {
@@ -262,9 +259,6 @@ function getAutoUpdateDisabledReason(args: {
   }
   if (args.disabledByEnv) {
     return "Automatic updates are disabled by the DECKHAND_DISABLE_AUTO_UPDATE setting.";
-  }
-  if (args.platform === "linux" && !args.appImage && !args.isDebPackage) {
-    return "Automatic updates on Linux require the AppImage or the .deb package.";
   }
   return null;
 }
@@ -333,18 +327,6 @@ export const make = Effect.gen(function* () {
     ),
   );
 
-  // The .deb carries electron-builder's resources/package-type marker.
-  // electron-updater reads the same file and installs updates with dpkg.
-  const isDebPackage =
-    environment.platform === "linux" && environment.isPackaged
-      ? yield* fileSystem
-          .readFileString(environment.path.join(environment.resourcesPath, "package-type"))
-          .pipe(
-            Effect.map((packageType) => packageType.trim() === "deb"),
-            Effect.orElseSucceed(() => false),
-          )
-      : false;
-
   const hasUpdateFeedConfig = Ref.get(appUpdateYmlConfigRef).pipe(
     Effect.map((appUpdateYmlConfig) => Option.isSome(appUpdateYmlConfig) || config.mockUpdates),
   );
@@ -356,9 +338,6 @@ export const make = Effect.gen(function* () {
       getAutoUpdateDisabledReason({
         isDevelopment: environment.isDevelopment,
         isPackaged: environment.isPackaged,
-        platform: environment.platform,
-        appImage: Option.getOrUndefined(config.appImagePath),
-        isDebPackage,
         disabledByEnv: config.disableAutoUpdate,
         hasUpdateFeedConfig: hasFeedConfig,
       }),
@@ -631,13 +610,11 @@ export const make = Effect.gen(function* () {
 
         return yield* Effect.gen(function* () {
           yield* writeUpdateRestartMarker;
-          // Stop every backend in the pool, not just the primary. With
-          // parallel WSL + Windows backends, leaving the WSL instance up
-          // means quitAndInstall's app.quit() exits before the pool's
-          // scope cascade has a chance to run its stop finalizer, so the
-          // WSL child gets hard-killed by the OS instead of receiving
-          // SIGTERM + grace. Stops run concurrently with the same 5s
-          // budget the primary had on its own.
+          // Stop every backend in the pool, not just the primary. A
+          // backend left up when quitAndInstall's app.quit() exits misses
+          // the pool's stop finalizer and is hard-killed by the OS instead
+          // of receiving SIGTERM + grace. Stops run concurrently with a 5s
+          // budget.
           const instances = yield* pool.list;
           yield* Effect.forEach(
             instances,

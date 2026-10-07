@@ -3,7 +3,7 @@
   // Exported types are part of our contracts even before they have consumers.
   "rules": { "types": "off", "nsTypes": "off" },
   // These executables are supplied by the OS or installed separately from npm.
-  "ignoreBinaries": ["eas", "file", "mkfifo", "pkill", "pkg-config", "plutil", "sips"],
+  "ignoreBinaries": ["eas", "file", "mkfifo", "pkill", "plutil", "sips"],
   "workspaces": {
     ".": {
       "project": ["*.{js,mjs,cjs,ts,mts,cts}"],
@@ -38,10 +38,6 @@
     "apps/desktop": {
       // Electron loads these bundles by filename rather than importing them.
       "entry": [
-        "gnome-extension/extension.js!",
-        "src/electron/WindowsForegroundFocusWorker.ts!",
-        "src/snapShot/GlobalShiftShortcutWorker.ts!",
-        "src/snapShot/RegionSnapShotWorker.ts!",
         "src/snapShot/SnapShotAccessibilityWorker.ts!",
         "src/boot.ts!",
         "src/compileCache.ts!",

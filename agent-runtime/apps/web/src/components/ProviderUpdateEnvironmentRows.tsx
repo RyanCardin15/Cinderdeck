@@ -152,8 +152,8 @@ function EnvironmentUpdateRow({
 }
 
 /**
- * The launch popover's body when WSL is present: one row per local environment
- * (Windows + WSL), each with its own "update all" trigger that targets only
+ * The launch popover's body when a secondary local backend is present: one row
+ * per local environment, each with its own "update all" trigger that targets only
  * that environment's backend.
  */
 export function ProviderUpdateEnvironmentRows({

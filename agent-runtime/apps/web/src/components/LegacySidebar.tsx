@@ -75,7 +75,7 @@ import {
   type SidebarThreadPreviewCount,
   type SidebarThreadSortOrder,
 } from "@cinderdeck/contracts/settings";
-import { isDesktopLocalConnectionTarget, isWslConnectionTarget } from "../connection/desktopLocal";
+import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
 import { isElectron } from "../env";
 import { useTerminalFocus } from "../hooks/useTerminalFocus";
@@ -428,7 +428,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const isRemoteThread = thread.environmentId !== primaryEnvironmentId;
   const remoteEnvLabel = environment?.label ?? null;
   const remoteMachine = resolveEnvironmentMachineKind(environment?.serverConfig ?? null);
-  // A desktop-local secondary backend (e.g. the WSL backend) shows up as a
+  // A desktop-local secondary backend shows up as a
   // bearer environment whose connection id is prefixed "local:". It runs on the
   // user's own machine, so the cloud icon is misleading, label it "Local" and
   // suppress the cloud icon (the project header already shows a
@@ -1176,11 +1176,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     isManualProjectSorting,
     dragHandleProps,
   } = props;
-  const environmentMachine = project.allRemoteMembersAreWsl
-    ? "linux"
-    : project.allRemoteMembersAreDesktopLocal
-      ? "laptop"
-      : "cloud";
+  const environmentMachine = project.allRemoteMembersAreDesktopLocal ? "laptop" : "cloud";
   const threadSortOrder = useClientSettings<SidebarThreadSortOrder>(
     (settings) => settings.sidebarThreadSortOrder,
   );
@@ -2642,8 +2638,7 @@ const SidebarProjectListRow = memo(function SidebarProjectListRow(props: Sidebar
 
 function LocalSecondaryStatus() {
   const { environments } = useEnvironments();
-  // The desktop reports which local secondary backends (e.g. the WSL backend)
-  // exist; the hook polls because the bridge has no change event. A backend that
+  // The desktop reports which local secondary backends exist; the hook polls because the bridge has no change event. A backend that
   // is still cold-booting has no httpBaseUrl yet and isn't in the catalog, so we
   // surface "Connecting" straight from the bootstrap list and clear it once the
   // matching environment reports a connected phase.
@@ -3201,15 +3196,6 @@ export default function LegacySidebar() {
       ),
     [environments],
   );
-  const wslEnvironmentIds = useMemo(
-    () =>
-      new Set(
-        environments
-          .filter((environment) => isWslConnectionTarget(environment.entry.target))
-          .map((environment) => environment.environmentId),
-      ),
-    [environments],
-  );
   const orderedProjects = useMemo(() => {
     return orderItemsByPreferredIds({
       items: projects,
@@ -3250,12 +3236,10 @@ export default function LegacySidebar() {
       primaryEnvironmentId,
       resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,
       isDesktopLocalEnvironment: (environmentId) => desktopLocalEnvironmentIds.has(environmentId),
-      isWslEnvironment: (environmentId) => wslEnvironmentIds.has(environmentId),
     });
   }, [
     environmentLabelById,
     desktopLocalEnvironmentIds,
-    wslEnvironmentIds,
     orderedProjects,
     projectGroupingSettings,
     primaryEnvironmentId,

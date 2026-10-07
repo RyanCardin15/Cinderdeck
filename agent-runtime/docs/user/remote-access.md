@@ -175,9 +175,9 @@ devices. For server version warnings, follow [Updating Cinderdeck](./updating.md
 
 If a computer should only drive work running elsewhere, turn off its local environment. In the
 desktop app, open **Settings → Connections** and switch off **Local
-environment**. Cinderdeck restarts without a local server: no local agents or terminals run, WSL
-backends stay off, and other devices can no longer connect to this computer. Your projects,
-history, and saved connections are kept, and you keep working through pairing or Remote connections.
+environment**. Cinderdeck restarts without a local server: no local agents or terminals run, and
+other devices can no longer connect to this computer. Your projects, history, and saved connections
+are kept, and you keep working through pairing or Remote connections.
 
 Switch **Local environment** back on in the same place to restart with your previous local
 settings.

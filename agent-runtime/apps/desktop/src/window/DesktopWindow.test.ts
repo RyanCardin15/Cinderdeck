@@ -35,7 +35,6 @@ vi.mock("electron", async (importOriginal) => ({
   },
 }));
 
-import * as DesktopAssets from "../app/DesktopAssets.ts";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopState from "../app/DesktopState.ts";
@@ -119,7 +118,6 @@ function makeFakeBrowserWindow() {
     setFullScreen: vi.fn(),
     setOpacity: vi.fn(),
     setTitle: vi.fn(),
-    setTitleBarOverlay: vi.fn(),
     setWindowButtonPosition: vi.fn(),
     show: vi.fn(),
     webContents,
@@ -157,15 +155,6 @@ const desktopClientSettingsLayer = Layer.mock(DesktopClientSettings.DesktopClien
 const electronAppLayer = Layer.mock(ElectronApp.ElectronApp)({
   quit: Effect.void,
 });
-
-const desktopAssetsLayer = Layer.succeed(DesktopAssets.DesktopAssets, {
-  iconPaths: Effect.succeed({
-    ico: Option.none<string>(),
-    icns: Option.none<string>(),
-    png: Option.none<string>(),
-  }),
-  resolveResourcePath: () => Effect.succeed(Option.none<string>()),
-} satisfies DesktopAssets.DesktopAssets["Service"]);
 
 const desktopServerExposureLayer = Layer.succeed(DesktopServerExposure.DesktopServerExposure, {
   getState: Effect.die("unexpected getState"),
@@ -254,12 +243,7 @@ function makeTestLayer(input: {
     setServerExposureMode: () => Effect.die("unexpected server exposure update"),
     setTailscaleServe: () => Effect.die("unexpected Tailscale Serve update"),
     setUpdateChannel: () => Effect.die("unexpected update channel change"),
-    setWslBackendEnabled: () => Effect.die("unexpected WSL backend toggle"),
-    setWslDistro: () => Effect.die("unexpected WSL distro change"),
-    setWslOnly: () => Effect.die("unexpected WSL-only toggle"),
     setLocalEnvironmentEnabled: () => Effect.die("unexpected local environment toggle"),
-    applyWslWindowsFallback: Effect.die("unexpected WSL Windows fallback"),
-    applyWslWindowsFallbackInMemory: Effect.die("unexpected WSL Windows fallback"),
   } satisfies DesktopAppSettings.DesktopAppSettings["Service"]);
 
   const electronWindowLayer = Layer.succeed(ElectronWindow.ElectronWindow, {
@@ -285,7 +269,6 @@ function makeTestLayer(input: {
   return DesktopWindow.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
-        desktopAssetsLayer,
         desktopEnvironmentLayer,
         desktopAppSettingsLayer,
         desktopClientSettingsLayer,
@@ -329,10 +312,9 @@ function makeTestLayer(input: {
 
 // Builds a DesktopWindow over a fake ElectronWindow whose `create` returns the
 // given outcomes in order (null => simulated open failure), and whose
-// currentMainOrFirst mirrors the real fallback to the first live window (the
-// splash, before any main is registered). Reveal targets are recorded so tests
-// can assert what activation actually surfaced.
-const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWindow | null)[]) =>
+// currentMainOrFirst mirrors the real fallback to the first live window.
+// Reveal targets are recorded so tests can assert what activation surfaced.
+const makeCreateScenario = (createOutcomes: readonly (Electron.BrowserWindow | null)[]) =>
   Effect.gen(function* () {
     const createdWindows = yield* Ref.make<Electron.BrowserWindow[]>([]);
     const createCalls = yield* Ref.make(0);
@@ -400,7 +382,6 @@ const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWindow | n
     const layer = DesktopWindow.layer.pipe(
       Layer.provide(
         Layer.mergeAll(
-          desktopAssetsLayer,
           desktopEnvironmentLayer,
           DesktopAppSettings.layerTest(),
           desktopClientSettingsLayer,
@@ -1390,82 +1371,43 @@ describe("DesktopWindow", () => {
     }),
   );
 
-  it.effect(
-    "retries opening the real main on activate when a failed post-readiness open left only the splash",
-    () =>
-      Effect.gen(function* () {
-        const splash = makeFakeBrowserWindow();
-        const main = makeFakeBrowserWindow();
-        // create #1 -> splash, #2 -> fails (the pool swallows this post-readiness
-        // window-open error), #3 -> the real main on activate's retry.
-        const scenario = yield* makeSplashScenario([splash.window, null, main.window]);
-
-        yield* Effect.gen(function* () {
-          const desktopWindow = yield* DesktopWindow.DesktopWindow;
-
-          // 1. WSL-only boot shows the connecting splash.
-          yield* desktopWindow.showConnectingSplash;
-          assert.equal(yield* Ref.get(scenario.createCalls), 1);
-
-          // 2. Backend reports ready, but opening the real main fails. The pool
-          //    swallows that error in production, so handleBackendReady fails
-          //    here without a registered main window -- only the splash is open.
-          const readyExit = yield* Effect.exit(
-            desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773")),
-          );
-          assert.equal(readyExit._tag, "Failure");
-          assert.equal(yield* Ref.get(scenario.createCalls), 2);
-          assert.isTrue(Option.isNone(yield* Ref.get(scenario.mainWindow)));
-
-          // 3. Activating must not mistake the splash for the main window: it
-          //    retries the open and brings up the real main instead of leaving
-          //    the user stranded on "Connecting to WSL".
-          yield* desktopWindow.activate;
-          assert.equal(yield* Ref.get(scenario.createCalls), 3);
-          const registeredMain = yield* Ref.get(scenario.mainWindow);
-          assert.isTrue(Option.isSome(registeredMain));
-          assert.equal(Option.getOrThrow(registeredMain), main.window);
-        }).pipe(Effect.provide(scenario.layer));
-      }),
-  );
-
-  it.effect(
-    "re-reveals the connecting splash on activate while the backend is still cold-booting",
-    () =>
-      Effect.gen(function* () {
-        const splash = makeFakeBrowserWindow();
-        // Only the splash is ever created; the backend never reports ready.
-        const scenario = yield* makeSplashScenario([splash.window]);
-
-        yield* Effect.gen(function* () {
-          const desktopWindow = yield* DesktopWindow.DesktopWindow;
-
-          yield* desktopWindow.showConnectingSplash;
-          assert.equal(yield* Ref.get(scenario.createCalls), 1);
-
-          // Taskbar/dock activation during cold boot must bring the splash back
-          // rather than no-op and leave it hidden until the backend finishes.
-          yield* desktopWindow.activate;
-          assert.equal(yield* Ref.get(scenario.createCalls), 1);
-          assert.deepEqual(yield* Ref.get(scenario.revealedWindows), [splash.window]);
-        }).pipe(Effect.provide(scenario.layer));
-      }),
-  );
-
-  it.effect("does not dispatch menu actions to the splash before the backend is ready", () =>
+  it.effect("retries opening the real main on activate after a failed post-readiness open", () =>
     Effect.gen(function* () {
-      const splash = makeFakeBrowserWindow();
       const main = makeFakeBrowserWindow();
-      const scenario = yield* makeSplashScenario([splash.window, main.window]);
+      // create #1 fails (the pool swallows this post-readiness window-open
+      // error), #2 is the real main on activate's retry.
+      const scenario = yield* makeCreateScenario([null, main.window]);
 
       yield* Effect.gen(function* () {
         const desktopWindow = yield* DesktopWindow.DesktopWindow;
 
-        yield* desktopWindow.showConnectingSplash;
+        const readyExit = yield* Effect.exit(
+          desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773")),
+        );
+        assert.equal(readyExit._tag, "Failure");
+        assert.equal(yield* Ref.get(scenario.createCalls), 1);
+        assert.isTrue(Option.isNone(yield* Ref.get(scenario.mainWindow)));
+
+        yield* desktopWindow.activate;
+        assert.equal(yield* Ref.get(scenario.createCalls), 2);
+        const registeredMain = yield* Ref.get(scenario.mainWindow);
+        assert.isTrue(Option.isSome(registeredMain));
+        assert.equal(Option.getOrThrow(registeredMain), main.window);
+      }).pipe(Effect.provide(scenario.layer));
+    }),
+  );
+
+  it.effect("does not open a window for menu actions before the backend is ready", () =>
+    Effect.gen(function* () {
+      const main = makeFakeBrowserWindow();
+      const scenario = yield* makeCreateScenario([main.window]);
+
+      yield* Effect.gen(function* () {
+        const desktopWindow = yield* DesktopWindow.DesktopWindow;
+
         yield* desktopWindow.dispatchMenuAction("open-settings");
 
-        assert.equal(yield* Ref.get(scenario.createCalls), 1);
-        assert.equal(splash.send.mock.calls.length, 0);
+        assert.equal(yield* Ref.get(scenario.createCalls), 0);
         assert.equal(main.send.mock.calls.length, 0);
       }).pipe(Effect.provide(scenario.layer));
     }),
@@ -1473,14 +1415,12 @@ describe("DesktopWindow", () => {
 
   it.effect("dispatches menu actions after backend readiness when no main window exists", () =>
     Effect.gen(function* () {
-      const splash = makeFakeBrowserWindow();
       const main = makeFakeBrowserWindow();
-      const scenario = yield* makeSplashScenario([splash.window, null, main.window]);
+      const scenario = yield* makeCreateScenario([null, main.window]);
 
       yield* Effect.gen(function* () {
         const desktopWindow = yield* DesktopWindow.DesktopWindow;
 
-        yield* desktopWindow.showConnectingSplash;
         const readyExit = yield* Effect.exit(
           desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773")),
         );
@@ -1488,7 +1428,7 @@ describe("DesktopWindow", () => {
 
         yield* desktopWindow.dispatchMenuAction("open-settings");
 
-        assert.equal(yield* Ref.get(scenario.createCalls), 3);
+        assert.equal(yield* Ref.get(scenario.createCalls), 2);
         assert.deepEqual(main.send.mock.calls, [[MENU_ACTION_CHANNEL, "open-settings"]]);
       }).pipe(Effect.provide(scenario.layer));
     }),
@@ -1562,18 +1502,17 @@ describe("DesktopWindow", () => {
     }),
   );
 
-  it.effect("leaves a completed capture pending while only the connecting splash exists", () =>
+  it.effect("leaves a completed capture pending while no main window exists", () =>
     Effect.gen(function* () {
-      const splash = makeFakeBrowserWindow();
-      const scenario = yield* makeSplashScenario([splash.window]);
+      const main = makeFakeBrowserWindow();
+      const scenario = yield* makeCreateScenario([main.window]);
 
       yield* Effect.gen(function* () {
         const desktopWindow = yield* DesktopWindow.DesktopWindow;
-        yield* desktopWindow.showConnectingSplash;
         yield* desktopWindow.dispatchSnapShotEvent({ type: "ready", id: captureOne });
 
-        assert.equal(yield* Ref.get(scenario.createCalls), 1);
-        assert.equal(splash.send.mock.calls.length, 0);
+        assert.equal(yield* Ref.get(scenario.createCalls), 0);
+        assert.equal(main.send.mock.calls.length, 0);
         assert.deepEqual(yield* Ref.get(scenario.revealedWindows), []);
       }).pipe(Effect.provide(scenario.layer));
     }),

@@ -194,7 +194,7 @@ const loadPrimaryConnectionRegistration = Effect.fn(
   });
 });
 
-// A desktop-local secondary backend (e.g. a parallel WSL backend) lives on its
+// A desktop-local secondary backend lives on its
 // own loopback origin, so — unlike the same-origin primary — it authenticates
 // with a bearer token minted from the bootstrap credential the desktop issues.
 const loadSecondaryConnectionRegistration = Effect.fn(
@@ -224,11 +224,11 @@ const loadSecondaryConnectionRegistration = Effect.fn(
   }).pipe(Effect.mapError(mapRemoteEnvironmentError));
   // Keep the desktop pool's stable backend id in the connection id. The
   // descriptor environment id still scopes projects and RPC state, while the
-  // backend id lets desktop-only operations (notably the WSL folder picker)
-  // route back to the instance that owns the environment.
+  // backend id lets desktop-only operations route back to the instance that
+  // owns the environment.
   const connectionId = desktopLocalConnectionId(entry.id);
-  // Prefer the desktop's bootstrap label (it identifies the backend and distro,
-  // e.g. "WSL: Ubuntu") over the generic descriptor label, so consumers can show
+  // Prefer the desktop's bootstrap label (it identifies the backend) over the
+  // generic descriptor label, so consumers can show
   // a meaningful name without recovering it from the bootstrap list later.
   const label = entry.label || descriptor.label;
   return {

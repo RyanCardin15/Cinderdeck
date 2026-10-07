@@ -1,5 +1,5 @@
 import { isElectron } from "~/env";
-import { isMacPlatform, isWindowsPlatform, normalizeSearchText } from "~/lib/utils";
+import { isMacPlatform, normalizeSearchText } from "~/lib/utils";
 import { STATIC_KEYBINDING_COMMANDS, type KeybindingCommand } from "@cinderdeck/contracts";
 import type { EnvironmentId } from "@cinderdeck/contracts";
 import type { EnvironmentConnectionPhase } from "@cinderdeck/client-runtime/connection";
@@ -54,14 +54,12 @@ export interface SettingsSearchItem {
   readonly macOnly?: boolean;
   // Its row only renders on Windows desktop, so other desktop platforms must
   // not expose a result that points to a missing anchor.
-  readonly windowsOnly?: boolean;
   readonly cloudOnly?: boolean;
   readonly environmentOnly?: boolean;
   readonly providerSettingsOnly?: boolean;
   readonly macProviderSettingsOnly?: boolean;
   readonly localBackendManagementOnly?: boolean;
   readonly localEnvironmentOnly?: boolean;
-  readonly wslAvailableOnly?: boolean;
   /**
    * Sorts after every other match. Keybinding commands mirror rows on other
    * surfaces, so "model" must still lead with Default model, not Model Picker.
@@ -77,7 +75,6 @@ export interface SettingsSearchAvailability {
   readonly hasProviderSettingsEnvironment: boolean;
   readonly hasMacProviderSettingsEnvironment: boolean;
   readonly canManageLocalBackend: boolean;
-  readonly isWslSettingsRowVisible: boolean;
   readonly hasThreadAutoSettlement: boolean;
 }
 
@@ -877,18 +874,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     localBackendManagementOnly: true,
   },
   {
-    id: "wsl-backend",
-    title: "WSL backend",
-    to: "/settings/connections",
-    searchTerms: [
-      "windows subsystem linux distro second server projects stop windows backend restart",
-    ],
-    desktopOnly: true,
-    windowsOnly: true,
-    localBackendManagementOnly: true,
-    wslAvailableOnly: true,
-  },
-  {
     id: "t3-connect",
     localEnvironmentOnly: true,
     title: "Remote connections",
@@ -1081,7 +1066,6 @@ export function filterAvailableSettingsSearchItems(
       (!item.macProviderSettingsOnly || availability.hasMacProviderSettingsEnvironment) &&
       (!item.localBackendManagementOnly || availability.canManageLocalBackend) &&
       (!item.localEnvironmentOnly || !availability.localEnvironmentDisabled) &&
-      (!item.wslAvailableOnly || availability.isWslSettingsRowVisible) &&
       (!item.requiresThreadAutoSettlement || availability.hasThreadAutoSettlement),
   );
 }
@@ -1099,7 +1083,6 @@ export function searchSettings(
     .flatMap((item, index) => {
       if (!isElectron && item.desktopOnly === true) return [];
       if (item.macOnly && !isMacPlatform(platform)) return [];
-      if (item.windowsOnly && !isWindowsPlatform(platform)) return [];
 
       const title = normalizeSearchText(item.title);
       const fields = [
