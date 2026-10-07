@@ -89,7 +89,7 @@
   opacity: 0.5;
   cursor: default;
 }
-.panel :is(button, select, a, input):focus-visible {
+.panel :is(button, select, a, input, summary):focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 3px;
 }
@@ -290,4 +290,80 @@
 
 .connectionDetails[open] summary {
   margin-bottom: 8px;
+}
+
+.settingsPanel {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 12px;
+  background: var(--card);
+  container-type: inline-size;
+}
+.settingsPanel .status {
+  align-items: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.computerLabel {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.settingsPanel .status strong {
+  font-size: 13px;
+}
+.settingsPanel .status p {
+  font-size: 12px;
+}
+.manageWorkspaces {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+  border-radius: 4px;
+  color: var(--foreground);
+  font-size: 12px;
+  text-underline-offset: 3px;
+}
+.manageWorkspaces:hover {
+  text-decoration: underline;
+}
+.settingsPanel .connectionDetails {
+  padding: 0 16px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+.settingsPanel .connectionDetails summary {
+  padding: 12px 0;
+}
+.settingsPanel .connectionDetails[open] {
+  padding-bottom: 16px;
+}
+.settingsPanel .capabilities {
+  margin-top: 16px;
+}
+.settingsPanel .notice {
+  padding: 16px;
+}
+.settingsPanel .recovery {
+  padding: 16px;
+}
+@container (max-width: 30rem) {
+  .settingsPanel .status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .settingsPanel .status > div {
+    flex-basis: 100%;
+  }
+  .settingsPanel .facts,
+  .settingsPanel .capabilities {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settingsPanel .recovery article {
+    flex-wrap: wrap;
+  }
 }

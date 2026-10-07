@@ -24,60 +24,67 @@ export function CinderdeckConnectionPanel({
   initialEnvironmentId,
   onChoose,
   nativeHost = false,
+  variant = "setup",
 }: {
-  initialEnvironmentId?: EnvironmentId | undefined;
+  initialEnvironmentId?: EnvironmentId | null | undefined;
   onChoose?: ((selection: ConnectedWorkspaceSelection) => Promise<boolean> | void) | undefined;
   nativeHost?: boolean;
+  variant?: "setup" | "settings";
 }) {
   const { environments } = useEnvironments();
   const primary = usePrimaryEnvironmentId();
-  const [selectedID, setSelectedID] = useState<EnvironmentId | null>(
-    initialEnvironmentId ?? primary,
-  );
+  const [chosenID, setSelectedID] = useState<EnvironmentId | null>(initialEnvironmentId ?? primary);
+  const selectedID = variant === "settings" ? (initialEnvironmentId ?? null) : chosenID;
   const selected = environments.find((environment) => environment.environmentId === selectedID);
   return (
     <section
-      className={styles.panel}
+      className={`${styles.panel} ${variant === "settings" ? styles.settingsPanel : ""}`}
       aria-label={nativeHost ? "Cinderdeck workspaces" : "Cinderdeck connection"}
     >
-      <header className={styles.header}>
-        <span className={styles.identity}>
-          <FlameIcon size={20} aria-hidden /> Cinderdeck
-        </span>
-        <p>
-          {nativeHost
-            ? "Your workspaces, lanes, services and recordings are managed here. Choose a workspace to continue; choosing does not start services."
-            : "Use the native workspaces on your chosen execution computer. Choosing a workspace opens its context without starting services."}
-        </p>
-      </header>
-      <label className={styles.computer}>
-        <span>Execution computer</span>
-        <select
-          value={selectedID ?? ""}
-          onChange={(event) => {
-            const environment = environments.find(
-              (item) => item.environmentId === event.target.value,
-            );
-            setSelectedID(environment?.environmentId ?? null);
-          }}
-        >
-          <option value="">Choose a computer</option>
-          {selectedID && !selected ? (
-            <option value={selectedID}>Unavailable computer</option>
-          ) : null}
-          {environments.map((environment) => (
-            <option key={environment.environmentId} value={environment.environmentId}>
-              {environment.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      {variant === "setup" ? (
+        <>
+          <header className={styles.header}>
+            <span className={styles.identity}>
+              <FlameIcon size={20} aria-hidden /> Cinderdeck
+            </span>
+            <p>
+              {nativeHost
+                ? "Your workspaces, lanes, services and recordings are managed here. Choose a workspace to continue; choosing does not start services."
+                : "Use the native workspaces on your chosen execution computer. Choosing a workspace opens its context without starting services."}
+            </p>
+          </header>
+          <label className={styles.computer}>
+            <span>Execution computer</span>
+            <select
+              value={selectedID ?? ""}
+              onChange={(event) => {
+                const environment = environments.find(
+                  (item) => item.environmentId === event.target.value,
+                );
+                setSelectedID(environment?.environmentId ?? null);
+              }}
+            >
+              <option value="">Choose a computer</option>
+              {selectedID && !selected ? (
+                <option value={selectedID}>Unavailable computer</option>
+              ) : null}
+              {environments.map((environment) => (
+                <option key={environment.environmentId} value={environment.environmentId}>
+                  {environment.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      ) : null}
       {selected && selected.connection.phase === "connected" ? (
         <ConnectionDetails
           key={selected.environmentId}
           environmentId={selected.environmentId}
           onChoose={onChoose}
           nativeHost={nativeHost}
+          settings={variant === "settings"}
+          computerLabel={selected.label}
         />
       ) : (
         <div className={styles.notice} role="status">
@@ -104,10 +111,14 @@ function ConnectionDetails({
   environmentId,
   onChoose,
   nativeHost,
+  settings,
+  computerLabel,
 }: {
   environmentId: EnvironmentId;
   onChoose?: ((selection: ConnectedWorkspaceSelection) => Promise<boolean> | void) | undefined;
   nativeHost: boolean;
+  settings: boolean;
+  computerLabel: string;
 }) {
   const [offset, setOffset] = useState(0);
   const result = useAtomValue(workspaceView({ environmentId, input: { offset, limit: 20 } }));
@@ -213,21 +224,38 @@ function ConnectionDetails({
     <>
       <div className={styles.status} role="status">
         <div>
+          {settings ? <span className={styles.computerLabel}>{computerLabel}</span> : null}
           <strong>{presentation.title}</strong>
-          <p>{presentation.detail}</p>
+          <p>
+            {settings && view?.state === "connected"
+              ? "Workspaces, lanes, services and recordings are available on this computer."
+              : presentation.detail}
+          </p>
+          {settings ? (
+            <Link
+              className={styles.manageWorkspaces}
+              to="/settings/workspaces"
+              search={{ machine: environmentId }}
+            >
+              Manage workspaces <ArrowRightIcon size={13} aria-hidden />
+            </Link>
+          ) : null}
         </div>
         <button
           type="button"
           className={styles.secondary}
           disabled={busy !== null}
+          aria-label={settings ? "Refresh Cinderdeck connection" : undefined}
           onClick={() => void checkConnection()}
         >
           <RefreshCwIcon size={14} aria-hidden />
           {busy === "refresh"
             ? "Checking…"
-            : nativeHost
-              ? "Refresh workspaces"
-              : "Check connection"}
+            : settings
+              ? "Refresh"
+              : nativeHost
+                ? "Refresh workspaces"
+                : "Check connection"}
         </button>
       </div>
       {AsyncResult.isFailure(result) ? (
@@ -279,113 +307,117 @@ function ConnectionDetails({
           </ul>
         </details>
       ) : null}
-      <fieldset className={styles.workspaces} disabled={busy !== null}>
-        <legend>Choose a Cinderdeck workspace</legend>
-        {view?.resources.map((resource) => {
-          const available = canChooseConnectedWorkspace(view, resource);
-          const checked = selected?.workspaceID === resource.workspaceID;
-          return (
-            <label
-              key={`${resource.workspaceID}:${resource.generation}`}
-              className={styles.workspace}
-            >
-              <input
-                type="radio"
-                name={`cinderdeck-workspace-${environmentId}`}
-                checked={checked}
-                disabled={!available}
-                onChange={() => {
-                  if (view.hello)
-                    setSelection({
-                      installationID: view.hello.installationID,
-                      workspaceID: resource.workspaceID,
-                      generation: resource.generation,
-                    });
-                }}
-              />
+      {!settings ? (
+        <>
+          <fieldset className={styles.workspaces} disabled={busy !== null}>
+            <legend>Choose a Cinderdeck workspace</legend>
+            {view?.resources.map((resource) => {
+              const available = canChooseConnectedWorkspace(view, resource);
+              const checked = selected?.workspaceID === resource.workspaceID;
+              return (
+                <label
+                  key={`${resource.workspaceID}:${resource.generation}`}
+                  className={styles.workspace}
+                >
+                  <input
+                    type="radio"
+                    name={`cinderdeck-workspace-${environmentId}`}
+                    checked={checked}
+                    disabled={!available}
+                    onChange={() => {
+                      if (view.hello)
+                        setSelection({
+                          installationID: view.hello.installationID,
+                          workspaceID: resource.workspaceID,
+                          generation: resource.generation,
+                        });
+                    }}
+                  />
+                  <span>
+                    <strong>{resource.workspace?.name ?? "Unavailable workspace"}</strong>
+                    <small>
+                      {resource.workspace?.lane
+                        ? `Lane ${resource.workspace.lane.name}`
+                        : "Primary checkout"}{" "}
+                      · Cinderdeck owns this context
+                    </small>
+                  </span>
+                  <span className={styles.workspaceStatus}>
+                    {available
+                      ? resource.workspace?.definitionChanged || resource.workspace?.issues.length
+                        ? "Needs attention"
+                        : "Available"
+                      : "Unavailable"}
+                  </span>
+                </label>
+              );
+            })}
+            {view?.state === "connected" && view.resources.length === 0 ? (
+              <p>
+                {nativeHost
+                  ? "No workspaces are configured on this computer yet. You can add one from the workspace overview after setup."
+                  : "No native workspaces are available on this computer. Add a workspace there, then check the connection."}
+              </p>
+            ) : null}
+            {selection && !selected ? (
+              <p role="status">
+                Your selected workspace changed or is unavailable. Choose a workspace again.
+              </p>
+            ) : null}
+          </fieldset>
+          {view && (view.total > 20 || offset > 0) ? (
+            <nav className={styles.pagination} aria-label="Cinderdeck workspace pages">
+              <button
+                type="button"
+                disabled={offset === 0 || busy !== null}
+                onClick={() => setOffset(Math.max(0, offset - 20))}
+              >
+                Previous
+              </button>
               <span>
-                <strong>{resource.workspace?.name ?? "Unavailable workspace"}</strong>
-                <small>
-                  {resource.workspace?.lane
-                    ? `Lane ${resource.workspace.lane.name}`
-                    : "Primary checkout"}{" "}
-                  · Cinderdeck owns this context
-                </small>
+                {view.resources.length
+                  ? `${offset + 1}–${Math.min(offset + 20, view.total)} of ${view.total}`
+                  : "No workspaces on this page"}
               </span>
-              <span className={styles.workspaceStatus}>
-                {available
-                  ? resource.workspace?.definitionChanged || resource.workspace?.issues.length
-                    ? "Needs attention"
-                    : "Available"
-                  : "Unavailable"}
-              </span>
-            </label>
-          );
-        })}
-        {view?.state === "connected" && view.resources.length === 0 ? (
-          <p>
-            {nativeHost
-              ? "No workspaces are configured on this computer yet. You can add one from the workspace overview after setup."
-              : "No native workspaces are available on this computer. Add a workspace there, then check the connection."}
-          </p>
-        ) : null}
-        {selection && !selected ? (
-          <p role="status">
-            Your selected workspace changed or is unavailable. Choose a workspace again.
-          </p>
-        ) : null}
-      </fieldset>
-      {view && (view.total > 20 || offset > 0) ? (
-        <nav className={styles.pagination} aria-label="Cinderdeck workspace pages">
-          <button
-            type="button"
-            disabled={offset === 0 || busy !== null}
-            onClick={() => setOffset(Math.max(0, offset - 20))}
-          >
-            Previous
-          </button>
-          <span>
-            {view.resources.length
-              ? `${offset + 1}–${Math.min(offset + 20, view.total)} of ${view.total}`
-              : "No workspaces on this page"}
-          </span>
-          <button
-            type="button"
-            disabled={view.nextOffset === null || busy !== null}
-            onClick={() => {
-              if (view.nextOffset !== null) setOffset(view.nextOffset);
-            }}
-          >
-            Next
-          </button>
-        </nav>
+              <button
+                type="button"
+                disabled={view.nextOffset === null || busy !== null}
+                onClick={() => {
+                  if (view.nextOffset !== null) setOffset(view.nextOffset);
+                }}
+              >
+                Next
+              </button>
+            </nav>
+          ) : null}
+          {onChoose ? (
+            <button
+              type="button"
+              className={styles.primary}
+              disabled={!canChoose || busy !== null}
+              onClick={() => void choose()}
+            >
+              {busy === "choose" ? "Opening workspace…" : "Open selected workspace"}{" "}
+              <ArrowRightIcon size={14} aria-hidden />
+            </button>
+          ) : selected && canChoose && destination ? (
+            <Link
+              className={styles.primary}
+              to="/workspaces"
+              search={connectedWorkspaceSearch(destination)}
+            >
+              Open selected workspace <ArrowRightIcon size={14} aria-hidden />
+            </Link>
+          ) : (
+            <p className={styles.hint}>Select a workspace to open its overview.</p>
+          )}
+        </>
       ) : null}
       {message ? (
         <p className={styles.notice} role="status">
           {message}
         </p>
       ) : null}
-      {onChoose ? (
-        <button
-          type="button"
-          className={styles.primary}
-          disabled={!canChoose || busy !== null}
-          onClick={() => void choose()}
-        >
-          {busy === "choose" ? "Opening workspace…" : "Open selected workspace"}{" "}
-          <ArrowRightIcon size={14} aria-hidden />
-        </button>
-      ) : selected && canChoose && destination ? (
-        <Link
-          className={styles.primary}
-          to="/workspaces"
-          search={connectedWorkspaceSearch(destination)}
-        >
-          Open selected workspace <ArrowRightIcon size={14} aria-hidden />
-        </Link>
-      ) : (
-        <p className={styles.hint}>Select a workspace to open its overview.</p>
-      )}
       {pending.length || operationError ? (
         <section className={styles.recovery} aria-label="Pending Cinderdeck operations">
           <h3>Operations needing attention</h3>

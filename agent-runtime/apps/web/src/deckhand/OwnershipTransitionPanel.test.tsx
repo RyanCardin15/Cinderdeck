@@ -10,6 +10,10 @@ const commands = vi.hoisted(() => ({
   get: vi.fn(),
   list: vi.fn(),
 }));
+const selection = vi.hoisted(() => ({
+  environments: [] as unknown[],
+  threads: [] as unknown[],
+}));
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: () => ({
     state: "connected",
@@ -40,12 +44,12 @@ vi.mock("../state/use-atom-command", () => ({
   useAtomCommand: (tag: keyof typeof commands) => commands[tag],
 }));
 vi.mock("../state/environments", () => ({
-  useEnvironments: () => ({ environments: [] }),
+  useEnvironments: () => ({ environments: selection.environments }),
   usePrimaryEnvironmentId: () => null,
 }));
-vi.mock("../state/entities", () => ({ useThreadShells: () => [] }));
+vi.mock("../state/entities", () => ({ useThreadShells: () => selection.threads }));
 vi.mock("../lib/utils", () => ({ randomUUID: () => "stable-intent" }));
-import { OwnershipTransitionForm } from "./OwnershipTransitionPanel";
+import { OwnershipTransitionForm, OwnershipTransitionPanel } from "./OwnershipTransitionPanel";
 const preview: C.OwnershipPreview = {
   intent: {
     operationKey: "stable-intent",
@@ -87,6 +91,8 @@ let root: Root;
 let container: HTMLDivElement;
 beforeEach(() => {
   vi.clearAllMocks();
+  selection.environments = [];
+  selection.threads = [];
   commands.list.mockResolvedValue({
     _tag: "Success",
     value: { items: [], total: 0, nextOffset: null },
@@ -94,6 +100,47 @@ beforeEach(() => {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+});
+
+it("uses the settings computer for worktree management and only lists its conversations", async () => {
+  selection.environments = [
+    { environmentId: "computer", connection: { phase: "connected" } },
+    { environmentId: "remote", connection: { phase: "connected" } },
+  ];
+  selection.threads = [
+    {
+      id: "local-thread",
+      title: "Local conversation",
+      environmentId: "computer",
+      worktreePath: "/fixture/local",
+      deletedAt: null,
+    },
+    {
+      id: "remote-thread",
+      title: "Remote conversation",
+      environmentId: "remote",
+      worktreePath: "/fixture/remote",
+      deletedAt: null,
+    },
+  ];
+  await act(async () =>
+    root.render(<OwnershipTransitionPanel environmentId={EnvironmentId.make("remote")} embedded />),
+  );
+  expect(container.querySelectorAll("select")).toHaveLength(1);
+  expect(container.textContent).toContain("Remote conversation");
+  expect(container.textContent).not.toContain("Local conversation");
+  expect(commands.list).not.toHaveBeenCalled();
+  await act(async () => {
+    const select = container.querySelector("select")!;
+    select.value = "remote-thread";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(commands.list).toHaveBeenCalledWith({
+    environmentId: "remote",
+    input: { threadId: "remote-thread", offset: 0, limit: 20 },
+  });
+  expect(commands.preview).not.toHaveBeenCalled();
+  expect(commands.submit).not.toHaveBeenCalled();
 });
 afterEach(async () => {
   await act(async () => root.unmount());

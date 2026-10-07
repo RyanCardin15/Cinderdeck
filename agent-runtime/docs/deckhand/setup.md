@@ -1,6 +1,6 @@
 # Set up Cinderdeck
 
-Install the complete Cinderdeck app and open its main window. The native host supplies the local runtime connection. For connected work, start Cinderdeck on that execution computer, then choose **Connect to Cinderdeck** during setup or **Settings → Integrations → Cinderdeck**. Inspect the reported installation and workspace before opening it. For a remote computer, this connects to that computer’s Cinderdeck; it does not use the browser viewer’s local app.
+Install the complete Cinderdeck app and open its main window. The native host supplies the local runtime connection. For connected work, start Cinderdeck on that execution computer, then choose **Connect to Cinderdeck** during setup. Later, check **Settings → Integrations → Cinderdeck**, with the execution computer selected in the settings header. **Manage workspaces** opens its workspaces and lanes in Settings → Workspaces. For a remote computer, this connects to that computer’s Cinderdeck; it does not use the browser viewer’s local app.
 
 Sign in to your selected provider in **Settings → Providers**. Cinderdeck uses the provider’s existing CLI and authentication flow. Provider credentials stay on the execution host. Choose a configured account and model before starting work. The native host owns workspace services and lanes; its embedded shell owns conversations and feature context.
 
@@ -12,7 +12,7 @@ Open **Settings → Source Control → GitHub account** to configure GitHub on t
 
 ## Troubleshoot a connection
 
-Use **Check connection** to refresh native discovery, installation identity, protocol and capabilities. A changed installation, missing workspace or stale generation requires a deliberate current-workspace selection. Inspect the saved operation using **Check status** after a lost reply; reuse its original operation key. Restarting or creating replacement work is not evidence that the earlier operation failed.
+Use **Refresh** in Settings → Integrations, or **Check connection** during setup, to refresh native discovery, installation identity, protocol and capabilities. A changed installation, missing workspace or stale generation requires a deliberate current-workspace selection. Inspect the saved operation using **Check status** after a lost reply; reuse its original operation key. Restarting or creating replacement work is not evidence that the earlier operation failed.
 
 Agents can share a checkout without claims or writer reservations. Stop an agent when you want to end its provider process; its transcript and lane remain available.
 
@@ -49,7 +49,7 @@ Each archive read is bounded; use the returned continuation offsets. Provider MC
 
 ## Move an existing worktree into or out of a Cinderdeck lane
 
-In **Settings → Integrations → Worktree ownership**, choose the execution computer and an existing worktree conversation. Preview adoption into a base workspace, or release an existing lane while keeping its files. The preview lists affected conversations and any running-work blockers. Stop that work first, then confirm the ownership change. Single Git worktrees are supported; multi-repository transitions and projects without a separate worktree are unavailable.
+Select the execution computer in the settings header, then expand **Settings → Integrations → Worktree management** and choose an existing worktree conversation. Preview adoption into a base workspace, or release an existing lane while keeping its files. The preview lists affected conversations and any running-work blockers. Stop that work first, then confirm the ownership change. Single Git worktrees are supported; multi-repository transitions and projects without a separate worktree are unavailable.
 
 Conversations retain their original IDs and history. Pending or uncertain changes block checkout actions; open the saved receipt to recover the same operation. Disconnecting Cinderdeck never releases a lane. Adoption starts no provider, service or setup task, and release keeps the worktree files. An older Cinderdeck without managed-adoption support must be updated before adoption.
 
