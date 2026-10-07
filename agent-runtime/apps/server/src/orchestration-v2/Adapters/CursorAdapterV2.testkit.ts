@@ -18,6 +18,7 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
+import { normalizeContextHandoffText, stableStringify } from "effect-codex-app-server/replay";
 
 import * as ServerConfig from "../../config.ts";
 import * as IdAllocator from "../IdAllocator.ts";
@@ -137,33 +138,6 @@ type CursorOutgoingFrame = Extract<
   CursorAgentSdk.CursorAgentSdkProtocolLogEvent,
   { readonly direction: "outgoing" }
 >["payload"];
-
-function stableStringify(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(",")}]`;
-  }
-  if (typeof value === "object" && value !== null) {
-    const record = value as Record<string, unknown>;
-    return `{${Object.keys(record)
-      .toSorted()
-      .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
-function normalizeContextHandoffText(value: string): string {
-  if (!value.startsWith("Context handoff (")) {
-    return value;
-  }
-  const marker = "\n\nUser message:\n";
-  const markerIndex = value.indexOf(marker);
-  const headerEnd = value.indexOf(":\n");
-  if (markerIndex === -1 || headerEnd === -1 || headerEnd >= markerIndex) {
-    return value;
-  }
-  return `${value.slice(0, headerEnd + 2)}<dynamic-summary>${value.slice(markerIndex)}`;
-}
 
 function normalizeFrame(value: unknown): unknown {
   if (typeof value === "string") {

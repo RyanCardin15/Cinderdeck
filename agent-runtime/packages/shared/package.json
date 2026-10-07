@@ -132,6 +132,10 @@
       "types": "./src/String.ts",
       "import": "./src/String.ts"
     },
+    "./hash": {
+      "types": "./src/hash.ts",
+      "import": "./src/hash.ts"
+    },
     "./projectScripts": {
       "types": "./src/projectScripts.ts",
       "import": "./src/projectScripts.ts"

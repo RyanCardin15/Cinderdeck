@@ -150,7 +150,7 @@ export interface CodexAppServerReplayDriver {
 
 const encoder = new TextEncoder();
 
-function stableStringify(value: unknown): string {
+export function stableStringify(value: unknown): string {
   if (Array.isArray(value)) {
     return `[${value.map(stableStringify).join(",")}]`;
   }
@@ -164,7 +164,7 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function normalizeContextHandoffText(value: string): string {
+export function normalizeContextHandoffText(value: string): string {
   if (!value.startsWith("Context handoff (")) {
     return value;
   }

@@ -6,6 +6,7 @@ import * as Ref from "effect/Ref";
 import type * as EffectAcpSchema from "effect-acp/compat";
 import {
   deriveToolActivityPresentation,
+  extractCommandFromTitle,
   mergeToolActivityData,
 } from "@cinderdeck/shared/toolActivity";
 import { T3_MCP_TOOL_NAMES } from "@cinderdeck/shared/t3McpToolPresentation";
@@ -549,14 +550,6 @@ function normalizeCommandValue(value: unknown): string | undefined {
     }
   }
   return parts.length > 0 ? parts.join(" ") : undefined;
-}
-
-function extractCommandFromTitle(title: string | undefined): string | undefined {
-  if (!title) {
-    return undefined;
-  }
-  const match = /`([^`]+)`/.exec(title);
-  return match?.[1]?.trim() || undefined;
 }
 
 function extractToolCallCommand(

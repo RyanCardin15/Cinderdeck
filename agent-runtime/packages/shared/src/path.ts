@@ -10,6 +10,15 @@ export function isWindowsAbsolutePath(value: string): boolean {
   return isUncPath(value) || isWindowsDrivePath(value);
 }
 
+/** Joins `next` onto `base` with one `separator`, converting `/` in `next` for Windows. */
+export function joinPath(base: string, next: string, separator: "/" | "\\"): string {
+  const cleanBase = base.replace(/[\\/]+$/, "");
+  if (separator === "\\") {
+    return `${cleanBase}\\${next.replaceAll("/", "\\")}`;
+  }
+  return `${cleanBase}/${next.replace(/^\/+/, "")}`;
+}
+
 export function isExplicitRelativePath(value: string): boolean {
   return (
     value === "." ||

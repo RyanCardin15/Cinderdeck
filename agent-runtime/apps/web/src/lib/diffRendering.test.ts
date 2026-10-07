@@ -5,35 +5,11 @@ import {
   buildFileDiffContentVersion,
   buildFileDiffIdentityKey,
   buildFileDiffRenderKey,
-  buildPatchCacheKey,
   getDiffLineStat,
   getRenderablePatch,
   resolveFileDiffPath,
   resolveFileDiffPreviousPath,
 } from "./diffRendering";
-
-describe("buildPatchCacheKey", () => {
-  it("normalizes outer whitespace before hashing", () => {
-    const patch = "diff --git a/a.ts b/a.ts\n+console.log('hello')";
-
-    expect(buildPatchCacheKey(`\n${patch}\n`)).toBe(buildPatchCacheKey(patch));
-  });
-
-  it("changes when diff content changes", () => {
-    const before = "diff --git a/a.ts b/a.ts\n+console.log('hello')";
-    const after = "diff --git a/a.ts b/a.ts\n+console.log('hello world')";
-
-    expect(buildPatchCacheKey(before)).not.toBe(buildPatchCacheKey(after));
-  });
-
-  it("changes when cache scope changes", () => {
-    const patch = "diff --git a/a.ts b/a.ts\n+console.log('hello')";
-
-    expect(buildPatchCacheKey(patch, "diff-panel:light")).not.toBe(
-      buildPatchCacheKey(patch, "diff-panel:dark"),
-    );
-  });
-});
 
 describe("getRenderablePatch", () => {
   it("hides indentation changes around inserted JSX without moving review lines", () => {

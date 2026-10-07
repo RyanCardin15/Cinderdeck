@@ -1,5 +1,6 @@
 import { resolveComposerDispatchMode } from "@cinderdeck/client-runtime/state/composer-dispatch";
 import { filterComposerPullRequestMatches } from "@cinderdeck/shared/composerPullRequestMatches";
+import { replaceTextRange } from "@cinderdeck/shared/composerTrigger";
 import { EnvironmentId, MessageId, ThreadId, type AssistantCitation } from "@cinderdeck/contracts";
 import {
   collectAssistantCitations,
@@ -23,7 +24,6 @@ import {
   formatAssistantCitationForComposer,
   isCollapsedCursorAdjacentToInlineToken,
   parseStandaloneComposerSlashCommand,
-  replaceTextRange,
 } from "./composer-logic";
 import { carryDisplacedCustomAnswerIntoPrompt } from "./pendingUserInput";
 import { formatTerminalContextReference } from "./lib/terminalContext";

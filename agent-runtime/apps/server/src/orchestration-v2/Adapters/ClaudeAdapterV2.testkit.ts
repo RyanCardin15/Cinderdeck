@@ -23,6 +23,7 @@ import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import { normalizeContextHandoffText, stableStringify } from "effect-codex-app-server/replay";
 
 import * as ServerConfig from "../../config.ts";
 import {
@@ -255,33 +256,6 @@ interface ClaudeQueryRunner {
     input: ClaudeAdapterV2.ClaudeAgentSdkSubagentLookupInput,
   ) => string | null;
   readonly assertComplete: () => void;
-}
-
-function stableStringify(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(",")}]`;
-  }
-  if (typeof value === "object" && value !== null) {
-    const record = value as Record<string, unknown>;
-    return `{${Object.keys(record)
-      .toSorted()
-      .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
-function normalizeContextHandoffText(value: string): string {
-  if (!value.startsWith("Context handoff (")) {
-    return value;
-  }
-  const userMessageMarker = "\n\nUser message:\n";
-  const userMessageIndex = value.indexOf(userMessageMarker);
-  const headerEndIndex = value.indexOf(":\n");
-  if (headerEndIndex === -1 || userMessageIndex === -1 || headerEndIndex >= userMessageIndex) {
-    return value;
-  }
-  return `${value.slice(0, headerEndIndex + 2)}<dynamic-summary>${value.slice(userMessageIndex)}`;
 }
 
 function normalizeReplayFrame(value: unknown): unknown {

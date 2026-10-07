@@ -11,7 +11,7 @@ import type { ScopedThreadRef } from "@cinderdeck/contracts";
 import { useCallback, useMemo, useState, type ReactNode, type Ref } from "react";
 
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
-import { fnv1a32 } from "~/lib/diffRendering";
+import { fnv1a32 } from "@cinderdeck/shared/hash";
 import {
   buildDiffReviewComment,
   restoreDiffReviewCommentRange,

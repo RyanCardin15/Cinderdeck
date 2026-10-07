@@ -52,7 +52,7 @@ import {
   pastedTextDisposition,
   wouldTextPasteExceedLimit,
 } from "@cinderdeck/client-runtime/text-paste";
-import { serializeComposerFileLink } from "@cinderdeck/shared/composerTrigger";
+import { replaceTextRange, serializeComposerFileLink } from "@cinderdeck/shared/composerTrigger";
 import { folderDropTarget, resolveDroppedFolderPath } from "./folderDrop";
 import { createModelSelection, normalizeModelSlug } from "@cinderdeck/shared/model";
 import { USAGE_LIMITS_COMMAND } from "@cinderdeck/shared/usageLimits";
@@ -81,7 +81,6 @@ import {
   detectComposerTrigger,
   expandCollapsedComposerCursor,
   formatAssistantCitationForComposer,
-  replaceTextRange,
 } from "../../composer-logic";
 import { DISCONNECTED_COMPOSER_PLACEHOLDER } from "../../composerPlaceholder";
 import { listContinuationForEnter, listIndentForTab } from "../../composer-list-continuation";

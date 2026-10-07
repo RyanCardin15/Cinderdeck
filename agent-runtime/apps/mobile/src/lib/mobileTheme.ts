@@ -11,6 +11,7 @@ import {
   type ThemeColors,
 } from "@cinderdeck/shared/themePalettes";
 import {
+  linearToSrgb,
   STANDARD_THEME_PREVIEW_COLORS,
   type ThemePreviewColors,
 } from "@cinderdeck/shared/themePreview";
@@ -91,11 +92,6 @@ export function createMobileThemePairPatch(value: MobileThemeId) {
 }
 
 const OKLCH_PATTERN = /^oklch\(\s*([\d.]+)\s+([\d.]+)\s+(-?[\d.]+)(?:\s*\/\s*([\d.]+))?\s*\)$/;
-
-function linearToSrgb(value: number): number {
-  const converted = value <= 0.0031308 ? 12.92 * value : 1.055 * value ** (1 / 2.4) - 0.055;
-  return Math.round(Math.min(1, Math.max(0, converted)) * 255);
-}
 
 /** React Native does not accept OKLCH ColorValues, so palettes cross the app boundary as sRGB. */
 export function themeColorToNativeColor(value: string): string {

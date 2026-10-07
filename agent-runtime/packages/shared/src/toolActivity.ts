@@ -72,7 +72,7 @@ function stripTrailingExitCode(value: string | undefined): string | undefined {
   return output.length > 0 ? output : undefined;
 }
 
-function extractCommandFromTitle(title: string | undefined): string | undefined {
+export function extractCommandFromTitle(title: string | undefined): string | undefined {
   if (!title) {
     return undefined;
   }
