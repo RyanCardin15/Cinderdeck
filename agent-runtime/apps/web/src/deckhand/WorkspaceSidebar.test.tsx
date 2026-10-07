@@ -353,17 +353,20 @@ it("right-click deletes the clicked remote lane through confirmation without sel
       favorites: ["lane-a", "lane-b"],
       order: { "lanes:alpha": ["lane-b", "lane-a"] },
       expanded: { alpha: true },
+      colors: { "lane-a": "#579de5", "lane-b": "#e47880" },
     }),
   );
   await render({ workspace: "beta", context: "beta" }, resources, EnvironmentId.make("remote"));
   await rightClickLane("lane-b");
   expect(boundary.contextMenu).toHaveBeenCalledWith(
     [
+      { id: "highlight-color", label: "Highlight color…", icon: "palette" },
       {
         id: "delete-lane",
         label: "Delete lane…",
         destructive: true,
         icon: "trash",
+        separatorBefore: true,
         disabled: false,
       },
     ],
@@ -391,6 +394,9 @@ it("right-click deletes the clicked remote lane through confirmation without sel
   expect(
     readSidebarPreferences(sidebarPreferenceKey(EnvironmentId.make("remote"), "install")).favorites,
   ).toEqual(["lane-a"]);
+  expect(
+    readSidebarPreferences(sidebarPreferenceKey(EnvironmentId.make("remote"), "install")).colors,
+  ).toEqual({ "lane-a": "#579de5" });
 });
 
 it("returns to the source workspace only after the selected lane was removed", async () => {
@@ -444,7 +450,7 @@ it("blocks sidebar deletion for stale or unsupported lanes and never offers it o
   await render();
   await act(async () => button("Expand lanes for alpha").click());
   await rightClickLane("lane-a");
-  expect(boundary.contextMenu.mock.lastCall?.[0][0].disabled).toBe(true);
+  expect(boundary.contextMenu.mock.lastCall?.[0][1].disabled).toBe(true);
   expect(container.querySelector('[role="dialog"]')).toBeNull();
   await act(async () =>
     registry.set(
@@ -457,7 +463,7 @@ it("blocks sidebar deletion for stale or unsupported lanes and never offers it o
     ),
   );
   await rightClickLane("lane-a");
-  expect(boundary.contextMenu.mock.lastCall?.[0][0].disabled).toBe(true);
+  expect(boundary.contextMenu.mock.lastCall?.[0][1].disabled).toBe(true);
   await act(async () =>
     registry.set(
       native,
@@ -472,11 +478,89 @@ it("blocks sidebar deletion for stale or unsupported lanes and never offers it o
     ),
   );
   await rightClickLane("lane-a");
-  expect(boundary.contextMenu.mock.lastCall?.[0][0].disabled).toBe(true);
-  const count = boundary.contextMenu.mock.calls.length;
+  expect(boundary.contextMenu.mock.lastCall?.[0][1].disabled).toBe(true);
   await rightClickLane("alpha");
-  expect(boundary.contextMenu).toHaveBeenCalledTimes(count);
+  expect(boundary.contextMenu.mock.lastCall?.[0]).toEqual([
+    { id: "highlight-color", label: "Highlight color…", icon: "palette" },
+  ]);
   expect(boundary.submit).not.toHaveBeenCalled();
+});
+
+const highlightedRow = (id: string) =>
+  container.querySelector<HTMLDivElement>(`[data-workspace-id="${id}"] [data-highlighted]`)!;
+const chooseColor = async (name: string) =>
+  act(async () => {
+    document.body.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`)!.click();
+  });
+
+it("colors the clicked workspace and lane independently, persists on remount, and resets one row", async () => {
+  boundary.contextMenu.mockResolvedValue("highlight-color");
+  await render({ workspace: "beta", context: "beta" });
+  await act(async () => button("Expand lanes for alpha").click());
+  await act(async () => button("Favorite alpha").click());
+  await rightClickLane("alpha");
+  await chooseColor("Blue");
+  await rightClickLane("lane-b");
+  await chooseColor("Rose");
+  expect(readSidebarPreferences(key).colors).toEqual({ alpha: "#579de5", "lane-b": "#e47880" });
+  expect(highlightedRow("alpha").style.getPropertyValue("--sidebar-accent")).toBe("#579de5");
+  expect(highlightedRow("lane-b").style.getPropertyValue("--sidebar-accent")).toBe("#e47880");
+  expect(highlightedRow("lane-a").dataset.highlighted).toBe("false");
+  expect(boundary.navigate).not.toHaveBeenCalled();
+  expect(boundary.submit).not.toHaveBeenCalled();
+
+  await act(async () => root.render(null));
+  await render();
+  expect(highlightedRow("lane-b").style.getPropertyValue("--sidebar-accent")).toBe("#e47880");
+  await rightClickLane("lane-b");
+  await act(async () => {
+    [...document.body.querySelectorAll("button")]
+      .find((item) => item.textContent === "Use default")!
+      .click();
+  });
+  expect(readSidebarPreferences(key).colors).toEqual({ alpha: "#579de5" });
+  expect(readSidebarPreferences(key).favorites).toEqual(["alpha"]);
+  expect(readSidebarPreferences(key).expanded.alpha).toBe(true);
+  expect(highlightedRow("lane-b").style.getPropertyValue("--sidebar-accent")).toBe("");
+
+  await render(undefined, resources, EnvironmentId.make("remote"));
+  expect(highlightedRow("alpha").dataset.highlighted).toBe("false");
+  await render();
+  expect(highlightedRow("alpha").style.getPropertyValue("--sidebar-accent")).toBe("#579de5");
+});
+
+it("opens colors from the keyboard while offline and saves a custom color without navigation", async () => {
+  boundary.contextMenu.mockResolvedValue("highlight-color");
+  registry.set(native, AsyncResult.success({ ...view, state: "unavailable" }));
+  await render();
+  await act(async () => {
+    container.querySelector('[data-workspace-id="beta"] a')!.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "F10",
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  const input = document.body.querySelector<HTMLInputElement>(
+    'input[aria-label="Custom highlight color for beta"]',
+  )!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+      input,
+      "#123456",
+    );
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(readSidebarPreferences(key).colors).toEqual({ beta: "#123456" });
+  expect(boundary.navigate).not.toHaveBeenCalled();
+  expect(boundary.submit).not.toHaveBeenCalled();
+  await act(async () => {
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  });
+  expect(document.body.querySelector('input[type="color"]')).toBeNull();
+  expect(readSidebarPreferences(key).colors.beta).toBe("#123456");
 });
 
 it("selects in place and expands multiple workspaces independently without reopening a collapsed selection", async () => {

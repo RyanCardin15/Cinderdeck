@@ -36,6 +36,19 @@
 .row[data-reviewer="true"] .select > svg {
   color: var(--reviewer-accent);
 }
+.row[data-highlighted="true"] {
+  background: color-mix(in srgb, var(--sidebar-accent) 7%, transparent);
+  box-shadow: inset 2px 0 var(--sidebar-accent);
+}
+.row[data-highlighted="true"]:hover {
+  background: color-mix(in srgb, var(--sidebar-accent) 12%, transparent);
+}
+.row[data-highlighted="true"][data-current="true"] {
+  background: color-mix(in srgb, var(--sidebar-accent) 18%, transparent);
+}
+.row[data-highlighted="true"] .select > svg {
+  color: var(--sidebar-accent);
+}
 .select {
   flex: 1;
   display: flex;

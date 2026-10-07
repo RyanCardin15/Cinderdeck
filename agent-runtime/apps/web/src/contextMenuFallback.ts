@@ -10,6 +10,18 @@ const ICON_PATHS: Record<string, ReadonlyArray<{ tag: string; attrs: Record<stri
     { tag: "path", attrs: { d: "M10 12h4" } },
   ],
   check: [{ tag: "path", attrs: { d: "M20 6 9 17l-5-5" } }],
+  palette: [
+    {
+      tag: "path",
+      attrs: {
+        d: "M12 3a9 9 0 1 0 0 18h1.5a2.5 2.5 0 0 0 1.7-4.3 1 1 0 0 1 .7-1.7H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8Z",
+      },
+    },
+    { tag: "circle", attrs: { cx: "7.5", cy: "10", r: "0.5", fill: "currentColor" } },
+    { tag: "circle", attrs: { cx: "10", cy: "6.5", r: "0.5", fill: "currentColor" } },
+    { tag: "circle", attrs: { cx: "15", cy: "6.5", r: "0.5", fill: "currentColor" } },
+    { tag: "circle", attrs: { cx: "17.5", cy: "10", r: "0.5", fill: "currentColor" } },
+  ],
   timer: [
     { tag: "line", attrs: { x1: "10", x2: "14", y1: "2", y2: "2" } },
     { tag: "line", attrs: { x1: "12", x2: "15", y1: "14", y2: "11" } },

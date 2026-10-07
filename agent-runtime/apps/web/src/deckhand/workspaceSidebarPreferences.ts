@@ -2,13 +2,18 @@ export type WorkspaceSidebarPreferences = {
   order: Record<string, string[]>;
   favorites: string[];
   expanded: Record<string, boolean>;
+  colors: Record<string, string>;
 };
 
 const emptySidebarPreferences = (): WorkspaceSidebarPreferences => ({
   order: {},
   favorites: [],
   expanded: {},
+  colors: {},
 });
+
+export const isSidebarColor = (value: unknown): value is string =>
+  typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
 
 export function sidebarPreferenceKey(environment: string, installation: string) {
   return `cinderdeck.workspace-sidebar.v1:${JSON.stringify([environment, installation])}`;
@@ -33,6 +38,11 @@ export function readSidebarPreferences(key: string): WorkspaceSidebarPreferences
       expanded: Object.fromEntries(
         Object.entries(raw.expanded && typeof raw.expanded === "object" ? raw.expanded : {}).filter(
           (entry): entry is [string, boolean] => typeof entry[1] === "boolean",
+        ),
+      ),
+      colors: Object.fromEntries(
+        Object.entries(raw.colors && typeof raw.colors === "object" ? raw.colors : {}).filter(
+          (entry): entry is [string, string] => isSidebarColor(entry[1]),
         ),
       ),
     };

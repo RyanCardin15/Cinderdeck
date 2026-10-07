@@ -42,15 +42,33 @@ it("validates saved state and scopes it by execution computer and installation",
       order: { workspaces: ["beta", "alpha", "beta", 4] },
       favorites: ["alpha", "alpha", false],
       expanded: { alpha: false, beta: "true" },
+      colors: { alpha: "#579de5", "alpha/lane": "#ABCDEF", beta: "red", bad: 12 },
     }),
   );
   expect(readSidebarPreferences(key)).toEqual({
     order: { workspaces: ["beta", "alpha"] },
     favorites: ["alpha"],
     expanded: { alpha: false },
+    colors: { alpha: "#579de5", "alpha/lane": "#ABCDEF" },
   });
   expect(readSidebarPreferences(sidebarPreferenceKey("another", "install")).favorites).toEqual([]);
   expect(readSidebarPreferences(sidebarPreferenceKey("computer", "replacement")).order).toEqual({});
   localStorage.setItem(key, "broken JSON");
-  expect(readSidebarPreferences(key)).toEqual({ order: {}, favorites: [], expanded: {} });
+  expect(readSidebarPreferences(key)).toEqual({
+    order: {},
+    favorites: [],
+    expanded: {},
+    colors: {},
+  });
+});
+
+it("keeps older sidebar preferences while adding an empty color map", () => {
+  const key = sidebarPreferenceKey("computer", "install");
+  localStorage.setItem(key, JSON.stringify({ favorites: ["alpha"], expanded: { alpha: true } }));
+  expect(readSidebarPreferences(key)).toEqual({
+    order: {},
+    favorites: ["alpha"],
+    expanded: { alpha: true },
+    colors: {},
+  });
 });

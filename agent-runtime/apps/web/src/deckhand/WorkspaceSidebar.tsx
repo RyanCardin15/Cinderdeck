@@ -29,8 +29,8 @@ import {
   PlusIcon,
   StarIcon,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
-import type { EnvironmentId } from "@cinderdeck/contracts";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import type { ContextMenuItem, EnvironmentId } from "@cinderdeck/contracts";
 import type { AgentActivityCounts, IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
 import { managedContextsView, workspaceView } from "./state";
 import { readLocalApi } from "../localApi";
@@ -54,6 +54,7 @@ import {
 } from "./workspaceNavigation";
 import {
   orderedSidebarRows,
+  isSidebarColor,
   readSidebarPreferences,
   reorderSidebarRows,
   sidebarPreferenceKey,
@@ -61,6 +62,7 @@ import {
 } from "./workspaceSidebarPreferences";
 import styles from "./WorkspaceSidebar.module.css";
 import { isReviewerLane } from "./reviewerLane";
+import { SidebarColorPicker } from "./SidebarColorPicker";
 import reviewerStyles from "./reviewerLane.module.css";
 
 type Resource = IntegrationView["resources"][number];
@@ -187,6 +189,43 @@ function SidebarRow({
   } = useSortable({ id: resource.workspaceID });
   const favorite = state.preferences.favorites.includes(resource.workspaceID);
   const label = name(resource);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  const savedColor = state.preferences.colors[resource.workspaceID];
+  const color = isSidebarColor(savedColor) ? savedColor : undefined;
+  const changeColor = (value: string | undefined) =>
+    state.update((current) => {
+      if (value) {
+        return { ...current, colors: { ...current.colors, [resource.workspaceID]: value } };
+      }
+      const colors = { ...current.colors };
+      delete colors[resource.workspaceID];
+      return { ...current, colors };
+    });
+  const showMenu = async (position: { x: number; y: number }) => {
+    const api = readLocalApi();
+    if (!api) return;
+    const items: ContextMenuItem[] = [
+      { id: "highlight-color", label: "Highlight color…", icon: "palette" },
+    ];
+    if (onDeleteLane) {
+      items.push({
+        id: "delete-lane",
+        label: "Delete lane…",
+        destructive: true,
+        icon: "trash",
+        separatorBefore: true,
+        disabled: !deletionEnabled,
+      });
+    }
+    try {
+      const action = await api.contextMenu.show(items, position);
+      if (action === "highlight-color") setColorPickerOpen(true);
+      if (action === "delete-lane" && deletionEnabled) onDeleteLane?.(resource);
+    } catch {
+      /* Dismissing an unavailable menu leaves the row unchanged. */
+    }
+  };
   return (
     <div
       ref={setNodeRef}
@@ -195,37 +234,25 @@ function SidebarRow({
       style={{ transform: CSS.Transform.toString(transform), transition }}
     >
       <div
+        ref={rowRef}
         className={`${styles.row} ${reviewer ? reviewerStyles.reviewer : ""}`}
+        style={color ? ({ "--sidebar-accent": color } as CSSProperties) : undefined}
+        data-highlighted={!!color}
         data-reviewer={reviewer}
         data-current={selected || workspaceActive}
         data-dragging={isDragging}
-        onContextMenu={
-          onDeleteLane
-            ? (event) => {
-                const api = readLocalApi();
-                if (!api) return;
-                event.preventDefault();
-                event.stopPropagation();
-                void api.contextMenu
-                  .show(
-                    [
-                      {
-                        id: "delete-lane",
-                        label: "Delete lane…",
-                        destructive: true,
-                        icon: "trash",
-                        disabled: !deletionEnabled,
-                      },
-                    ],
-                    { x: event.clientX, y: event.clientY },
-                  )
-                  .then((action) => {
-                    if (action === "delete-lane" && deletionEnabled) onDeleteLane(resource);
-                  })
-                  .catch(() => {});
-              }
-            : undefined
-        }
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void showMenu({ x: event.clientX, y: event.clientY });
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const bounds = event.currentTarget.getBoundingClientRect();
+          void showMenu({ x: bounds.left, y: bounds.bottom });
+        }}
       >
         <button
           type="button"
@@ -317,6 +344,14 @@ function SidebarRow({
           <TooltipPopup>{`${favorite ? "Unfavorite" : "Favorite"} ${label}`}</TooltipPopup>
         </Tooltip>
       </div>
+      <SidebarColorPicker
+        open={colorPickerOpen}
+        onOpenChange={setColorPickerOpen}
+        anchor={rowRef}
+        label={label}
+        color={color}
+        onChange={changeColor}
+      />
       {children}
     </div>
   );
@@ -676,16 +711,21 @@ function WorkspaceSidebarTree({
           onClose={() => setRemovalTarget(null)}
           onRemoved={() => {
             setRemovalTarget(null);
-            state.update((current) => ({
-              ...current,
-              favorites: current.favorites.filter((id) => id !== removalTarget.workspaceID),
-              order: Object.fromEntries(
-                Object.entries(current.order).map(([group, ids]) => [
-                  group,
-                  ids.filter((id) => id !== removalTarget.workspaceID),
-                ]),
-              ),
-            }));
+            state.update((current) => {
+              const colors = { ...current.colors };
+              delete colors[removalTarget.workspaceID];
+              return {
+                ...current,
+                colors,
+                favorites: current.favorites.filter((id) => id !== removalTarget.workspaceID),
+                order: Object.fromEntries(
+                  Object.entries(current.order).map(([group, ids]) => [
+                    group,
+                    ids.filter((id) => id !== removalTarget.workspaceID),
+                  ]),
+                ),
+              };
+            });
             if (search.context === removalTarget.workspaceID) {
               const baseID = removalTarget.workspace!.lane!.sourceStackID;
               const base = bases.find((row) => row.workspaceID === baseID);
