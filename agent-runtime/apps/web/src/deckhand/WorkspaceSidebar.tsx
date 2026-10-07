@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { workspaceChatUnavailableReason } from "@cinderdeck/shared/workspaceChat";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   DndContext,
   closestCenter,
@@ -33,12 +33,18 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { EnvironmentId } from "@cinderdeck/contracts";
 import type { AgentActivityCounts, IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
 import { managedContextsView, workspaceView } from "./state";
+import { readLocalApi } from "../localApi";
+import { LaneLifecycleControls } from "./LaneLifecycleControls";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../components/ui/tooltip";
 import { useAgentObservation } from "./useAgentObservation";
 import { WorkspaceCreateLaneButton, WorkspaceSettingsButton } from "./WorkspaceSettingsButton";
 import { SessionLauncher } from "./SessionLauncher";
 import { Dialog, DialogPopup, DialogTitle, DialogDescription } from "../components/ui/dialog";
-import { overviewWorkspaceContexts, type WorkspaceSearch } from "./workspaceNavigation";
+import {
+  overviewResources,
+  overviewWorkspaceContexts,
+  type WorkspaceSearch,
+} from "./workspaceNavigation";
 import {
   orderedSidebarRows,
   readSidebarPreferences,
@@ -141,6 +147,8 @@ function SidebarRow({
   onNewSession,
   launchEnabled,
   settingsEnabled,
+  onDeleteLane,
+  deletionEnabled = false,
   children,
 }: {
   resource: Resource;
@@ -157,6 +165,8 @@ function SidebarRow({
   onNewSession: (resource: Resource) => void;
   launchEnabled: boolean;
   settingsEnabled: boolean;
+  onDeleteLane?: (resource: Resource) => void;
+  deletionEnabled?: boolean;
   children?: ReactNode;
 }) {
   const {
@@ -182,6 +192,33 @@ function SidebarRow({
         data-reviewer={reviewer}
         data-current={selected || workspaceActive}
         data-dragging={isDragging}
+        onContextMenu={
+          onDeleteLane
+            ? (event) => {
+                const api = readLocalApi();
+                if (!api) return;
+                event.preventDefault();
+                event.stopPropagation();
+                void api.contextMenu
+                  .show(
+                    [
+                      {
+                        id: "delete-lane",
+                        label: "Delete lane…",
+                        destructive: true,
+                        icon: "trash",
+                        disabled: !deletionEnabled,
+                      },
+                    ],
+                    { x: event.clientX, y: event.clientY },
+                  )
+                  .then((action) => {
+                    if (action === "delete-lane" && deletionEnabled) onDeleteLane(resource);
+                  })
+                  .catch(() => {});
+              }
+            : undefined
+        }
       >
         <button
           type="button"
@@ -338,6 +375,7 @@ function WorkspaceLanes({
   search,
   onNavigate,
   onNewSession,
+  onDeleteLane,
 }: {
   baseID: string;
   environmentId: EnvironmentId;
@@ -347,6 +385,7 @@ function WorkspaceLanes({
   search: WorkspaceSearch;
   onNavigate?: (() => void) | undefined;
   onNewSession: (resource: Resource) => void;
+  onDeleteLane: (resource: Resource) => void;
 }) {
   const [offset, setOffset] = useState(0);
   const result = useAtomValue(
@@ -362,7 +401,12 @@ function WorkspaceLanes({
   );
   const observed = Option.getOrNull(AsyncResult.value(result));
   const view = observed?.hello?.installationID === installationID ? observed : null;
-  const fresh = result._tag !== "Failure" && view?.state === "connected";
+  const observation = useAgentObservation(
+    environmentId,
+    JSON.stringify([baseID, offset]),
+    observed,
+  );
+  const fresh = result._tag !== "Failure" && !observation.stale && view?.state === "connected";
   const page = view?.workspaceContexts?.workspaceID === baseID ? view.workspaceContexts : null;
   const scoped = overviewWorkspaceContexts(view, baseID);
   // Preserve an off-page selected lane, without mixing in other catalog pages.
@@ -424,6 +468,17 @@ function WorkspaceLanes({
             onNewSession={onNewSession}
             launchEnabled={fresh && canLaunch(row)}
             settingsEnabled={fresh}
+            onDeleteLane={onDeleteLane}
+            deletionEnabled={
+              fresh &&
+              row.available &&
+              !row.workspace?.definitionChanged &&
+              !row.workspace?.issues.length &&
+              view?.hello?.capabilities.includes("operations.receipts") === true &&
+              ["operations.lane.release", "operations.lane.remove"].some((capability) =>
+                view?.hello?.capabilities.includes(capability),
+              )
+            }
           />
         )}
       </Siblings>
@@ -483,6 +538,7 @@ function WorkspaceSidebarTree({
   search,
   onNavigate,
 }: SidebarProps) {
+  const navigate = useNavigate();
   const state = useSidebarPreferences(sidebarPreferenceKey(environmentId, installationID));
   const navigationSearch = {
     ...search,
@@ -491,6 +547,7 @@ function WorkspaceSidebarTree({
   };
   const [offset, setOffset] = useState(0);
   const [launchTarget, setLaunchTarget] = useState<Resource | null>(null);
+  const [removalTarget, setRemovalTarget] = useState<Resource | null>(null);
   const catalogResult = useAtomValue(
     workspaceView({ environmentId, input: { offset, limit: 50 } }),
   );
@@ -561,6 +618,7 @@ function WorkspaceSidebarTree({
                     search={navigationSearch}
                     onNavigate={onNavigate}
                     onNewSession={setLaunchTarget}
+                    onDeleteLane={setRemovalTarget}
                   />
                 ) : null}
               </SidebarRow>
@@ -597,6 +655,42 @@ function WorkspaceSidebarTree({
           </div>
         ) : null}
       </nav>
+      {removalTarget ? (
+        <SidebarLaneRemoval
+          environmentId={environmentId}
+          installationID={installationID}
+          target={removalTarget}
+          onClose={() => setRemovalTarget(null)}
+          onRemoved={() => {
+            setRemovalTarget(null);
+            state.update((current) => ({
+              ...current,
+              favorites: current.favorites.filter((id) => id !== removalTarget.workspaceID),
+              order: Object.fromEntries(
+                Object.entries(current.order).map(([group, ids]) => [
+                  group,
+                  ids.filter((id) => id !== removalTarget.workspaceID),
+                ]),
+              ),
+            }));
+            if (search.context === removalTarget.workspaceID) {
+              const baseID = removalTarget.workspace!.lane!.sourceStackID;
+              const base = bases.find((row) => row.workspaceID === baseID);
+              void navigate({
+                to: "/workspaces",
+                search: {
+                  environment: environmentId,
+                  expectedInstallationID: installationID,
+                  workspace: baseID,
+                  context: baseID,
+                  ...(search.tab ? { tab: search.tab } : {}),
+                  ...(base ? { expectedGeneration: base.generation } : {}),
+                },
+              });
+            }
+          }}
+        />
+      ) : null}
       {launchTarget ? (
         <Dialog
           open
@@ -627,5 +721,66 @@ function WorkspaceSidebarTree({
         </Dialog>
       ) : null}
     </>
+  );
+}
+
+function SidebarLaneRemoval({
+  environmentId,
+  installationID,
+  target,
+  onClose,
+  onRemoved,
+}: {
+  environmentId: EnvironmentId;
+  installationID: string;
+  target: Resource;
+  onClose: () => void;
+  onRemoved: () => void;
+}) {
+  const result = useAtomValue(
+    workspaceView({
+      environmentId,
+      input: {
+        offset: 0,
+        limit: 1,
+        selectedWorkspaceID: target.workspace!.lane!.sourceStackID,
+        selectedContextID: target.workspaceID,
+        workspacePage: { offset: 0, limit: 1 },
+      },
+    }),
+  );
+  const observed = Option.getOrNull(AsyncResult.value(result));
+  const view = observed?.hello?.installationID === installationID ? observed : null;
+  const observation = useAgentObservation(environmentId, target.workspaceID, observed);
+  const current = overviewResources(view).find((row) => row.workspaceID === target.workspaceID);
+  const sameLane =
+    current?.generation === target.generation &&
+    current?.workspace?.lane?.sourceStackID === target.workspace?.lane?.sourceStackID;
+  const enabled =
+    result._tag !== "Failure" && !observation.stale && view?.state === "connected" && sameLane;
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogPopup>
+        <DialogTitle>Delete lane {name(target)}?</DialogTitle>
+        <DialogDescription>
+          Choose what to keep when removing this lane from Cinderdeck.
+        </DialogDescription>
+        <LaneLifecycleControls
+          environmentId={environmentId}
+          installationID={installationID}
+          resource={sameLane ? current! : target}
+          capabilities={view?.hello?.capabilities ?? []}
+          enabled={enabled}
+          mode="remove"
+          onCancel={onClose}
+          onRemoved={onRemoved}
+        />
+      </DialogPopup>
+    </Dialog>
   );
 }

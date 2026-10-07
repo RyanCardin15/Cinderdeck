@@ -20,6 +20,9 @@ type Props = {
   capabilities: readonly string[];
   enabled: boolean;
   onPending?: (pending: boolean) => void;
+  mode?: "all" | "remove";
+  onCancel?: () => void;
+  onRemoved?: () => void;
 };
 const lifecycle = (method: string): method is LifecycleMethod =>
   ["lane.setup", "lane.release", "lane.remove"].includes(method);
@@ -86,7 +89,17 @@ export function LaneLifecycleControls(props: Props) {
 }
 
 function LaneLifecyclePanel(props: Props) {
-  const { environmentId, installationID, resource, capabilities, enabled, onPending } = props;
+  const {
+    environmentId,
+    installationID,
+    resource,
+    capabilities,
+    enabled,
+    onPending,
+    mode = "all",
+    onCancel,
+    onRemoved,
+  } = props;
   const storageKey = savedKey(props);
   const [operation, setOperation] = useState(() => {
     const saved = readSaved(storageKey);
@@ -101,11 +114,13 @@ function LaneLifecyclePanel(props: Props) {
   const [recoveryError, setRecoveryError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useState(mode === "remove");
   const [deleteWorktrees, setDeleteWorktrees] = useState(false);
   const [discardIgnored, setDiscardIgnored] = useState(false);
   const mounted = useRef(true);
+  const preparing = useRef(false);
   const current = useRef(props);
+  const notifiedRemoval = useRef<string | null>(null);
   useLayoutEffect(() => {
     current.current = props;
   }, [props]);
@@ -127,6 +142,19 @@ function LaneLifecyclePanel(props: Props) {
     onPending?.(pending);
     return () => onPending?.(false);
   }, [onPending, pending]);
+  useEffect(() => {
+    if (
+      operation?.receipt?.state === "succeeded" &&
+      ["lane.release", "lane.remove"].includes(operation.input.method) &&
+      operation.input.generation === resource.generation &&
+      (operation.receipt.result?.released === resource.workspaceID ||
+        operation.receipt.result?.removed === resource.workspaceID) &&
+      notifiedRemoval.current !== operation.input.operationKey
+    ) {
+      notifiedRemoval.current = operation.input.operationKey;
+      onRemoved?.();
+    }
+  }, [operation, resource.generation, resource.workspaceID, onRemoved]);
   useEffect(() => {
     if (recovered || recoveryError || !receiptsSupported) return;
     let disposed = false;
@@ -210,7 +238,8 @@ function LaneLifecyclePanel(props: Props) {
     if (mounted.current) setBusy(false);
   };
   const begin = async (method: LifecycleMethod) => {
-    if (!ready || !supported(method)) return;
+    if (!ready || !supported(method) || preparing.current) return;
+    preparing.current = true;
     setBusy(true);
     const revision = resource.revision;
     try {
@@ -257,6 +286,8 @@ function LaneLifecyclePanel(props: Props) {
         setBusy(false);
         setMessage("The request could not be prepared. No action was sent.");
       }
+    } finally {
+      preparing.current = false;
     }
   };
   const reconcile = async () => {
@@ -295,32 +326,34 @@ function LaneLifecyclePanel(props: Props) {
     operation.input.generation === resource.generation &&
     operation.input.revision === resource.revision;
   return (
-    <section aria-label="Lane setup and removal">
-      <h3>Lane setup and removal</h3>
-      {namedLane ? (
+    <section aria-label={mode === "remove" ? "Lane removal" : "Lane setup and removal"}>
+      {mode === "all" ? <h3>Lane setup and removal</h3> : null}
+      {namedLane && mode === "all" ? (
         <p>Run this lane’s configured setup tasks, or remove it when you’re finished.</p>
       ) : null}
       {!namedLane && !operation ? <p>Select a named lane to set it up or remove it.</p> : null}
-      <div className={styles["dh-inspector-actions"]}>
-        <button
-          className={styles["dh-button"]}
-          disabled={!ready || !supported("lane.setup")}
-          onClick={() => void begin("lane.setup")}
-        >
-          Run setup
-        </button>
-        <button
-          className={styles["dh-button"]}
-          disabled={!ready || (!supported("lane.release") && !supported("lane.remove"))}
-          onClick={() => {
-            setDeleteWorktrees(false);
-            setDiscardIgnored(false);
-            setConfirming(true);
-          }}
-        >
-          Remove lane…
-        </button>
-      </div>
+      {mode === "all" ? (
+        <div className={styles["dh-inspector-actions"]}>
+          <button
+            className={styles["dh-button"]}
+            disabled={!ready || !supported("lane.setup")}
+            onClick={() => void begin("lane.setup")}
+          >
+            Run setup
+          </button>
+          <button
+            className={styles["dh-button"]}
+            disabled={!ready || (!supported("lane.release") && !supported("lane.remove"))}
+            onClick={() => {
+              setDeleteWorktrees(false);
+              setDiscardIgnored(false);
+              setConfirming(true);
+            }}
+          >
+            Remove lane…
+          </button>
+        </div>
+      ) : null}
       {!enabled && namedLane ? (
         <p>Fresh Cinderdeck state is required to change this lane.</p>
       ) : null}
@@ -386,9 +419,15 @@ function LaneLifecyclePanel(props: Props) {
               disabled={!ready || !supported(deleteWorktrees ? "lane.remove" : "lane.release")}
               onClick={() => void begin(deleteWorktrees ? "lane.remove" : "lane.release")}
             >
-              Remove {name}
+              {mode === "remove" ? "Delete" : "Remove"} {name}
             </button>
-            <button className={styles["dh-button"]} onClick={() => setConfirming(false)}>
+            <button
+              className={styles["dh-button"]}
+              onClick={() => {
+                setConfirming(false);
+                onCancel?.();
+              }}
+            >
               Cancel
             </button>
           </div>
@@ -443,6 +482,7 @@ function LaneLifecyclePanel(props: Props) {
                 setOperation(null);
                 setMessage(null);
                 setRecovered(false);
+                if (mode === "remove") setConfirming(true);
               }}
             >
               Done
