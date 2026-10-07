@@ -14,7 +14,6 @@ export function diagnosticConfiguration(env: Readonly<Record<string, string | un
     desktopProfileOverride: presence(env.DECKHAND_PROFILE_ROOT),
     upstreamDataRootIgnored: presence(env.T3CODE_HOME),
     cinderdeckSocketOverride: presence(env.DECKHAND_CINDERDECK_SOCKET),
-    analyticsConfigured: presence(env.DECKHAND_POSTHOG_KEY) && presence(env.DECKHAND_POSTHOG_HOST),
     traceExporterConfigured: presence(env.DECKHAND_OTLP_TRACES_URL),
     updateFeed: !presence(env.DECKHAND_DESKTOP_UPDATE_REPOSITORY)
       ? "unconfigured"

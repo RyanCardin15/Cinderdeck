@@ -66,7 +66,6 @@ describe("Local Cinderdeck diagnostics", () => {
       desktopProfileOverride: false,
       upstreamDataRootIgnored: false,
       cinderdeckSocketOverride: false,
-      analyticsConfigured: false,
       traceExporterConfigured: false,
       updateFeed: "unconfigured",
     });
