@@ -86,7 +86,6 @@ export class ElectronWindow extends Context.Service<
     readonly focusedMainOrFirst: Effect.Effect<Option.Option<Electron.BrowserWindow>>;
     readonly setMain: (window: Electron.BrowserWindow) => Effect.Effect<void>;
     readonly clearMain: (window: Option.Option<Electron.BrowserWindow>) => Effect.Effect<void>;
-    readonly prepareReveal: (window: Electron.BrowserWindow) => Effect.Effect<boolean>;
     readonly reveal: (window: Electron.BrowserWindow) => Effect.Effect<void>;
     readonly sendAll: (channel: string, ...args: readonly unknown[]) => Effect.Effect<void>;
     readonly destroyAll: Effect.Effect<void>;
@@ -209,10 +208,6 @@ export const make = Effect.gen(function* () {
         }
         return Option.none();
       }),
-    // macOS needs no foreground preparation: `reveal` steals focus directly.
-    // Kept as a no-op only because fixtures outside this change still
-    // implement it; remove it with them.
-    prepareReveal: () => Effect.succeed(false),
     reveal: (window) =>
       Effect.try({
         try: () => {

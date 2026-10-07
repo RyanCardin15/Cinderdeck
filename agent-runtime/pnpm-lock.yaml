@@ -142,9 +142,6 @@ importers:
       '@cinderdeck/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@cinderdeck/ssh':
-        specifier: workspace:*
-        version: link:../../packages/ssh
       '@cinderdeck/tailscale':
         specifier: workspace:*
         version: link:../../packages/tailscale

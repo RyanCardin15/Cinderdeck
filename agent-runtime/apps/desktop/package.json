@@ -20,7 +20,6 @@
     "@cinderdeck/client-runtime": "workspace:*",
     "@cinderdeck/contracts": "workspace:*",
     "@cinderdeck/shared": "workspace:*",
-    "@cinderdeck/ssh": "workspace:*",
     "@cinderdeck/tailscale": "workspace:*",
     "effect": "catalog:",
     "electron": "44.4.2",

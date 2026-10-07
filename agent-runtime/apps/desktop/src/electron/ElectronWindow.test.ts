@@ -256,9 +256,6 @@ describe("ElectronWindow", () => {
       const window = makeRevealWindow({ visible: false });
       const electronWindow = yield* ElectronWindow.ElectronWindow;
 
-      assert.isFalse(
-        yield* electronWindow.prepareReveal(window as unknown as Electron.BrowserWindow),
-      );
       yield* electronWindow.reveal(window as unknown as Electron.BrowserWindow);
 
       assert.lengthOf(window.show.mock.calls, 1);

@@ -66,7 +66,6 @@ function makeElectronWindowLayer(destroyAll: Effect.Effect<void> = Effect.void) 
     focusedMainOrFirst: Effect.die("unexpected focused window read"),
     setMain: () => Effect.void,
     clearMain: () => Effect.void,
-    prepareReveal: () => Effect.succeed(false),
     reveal: () => Effect.void,
     sendAll: () => Effect.void,
     destroyAll,
