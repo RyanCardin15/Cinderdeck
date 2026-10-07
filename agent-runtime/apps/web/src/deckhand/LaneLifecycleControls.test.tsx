@@ -146,6 +146,45 @@ const change = async (selector: string) => {
   await act(async () => (host.querySelector(selector) as HTMLInputElement).click());
 };
 
+it("opens removal directly, cancels without a request, and suppresses rapid duplicate confirmations", async () => {
+  const onCancel = vi.fn();
+  const onRemoved = vi.fn();
+  props = { ...props, mode: "remove", onCancel, onRemoved };
+  await render();
+  expect(host.textContent).not.toContain("Run setup");
+  await click("Cancel");
+  expect(onCancel).toHaveBeenCalledOnce();
+  expect(commands.submit).not.toHaveBeenCalled();
+  await act(async () => root.render(null));
+  await render();
+  await act(async () => {
+    button("Delete Retry").click();
+    button("Delete Retry").click();
+  });
+  expect(commands.submit).toHaveBeenCalledOnce();
+  expect(commands.submit.mock.calls[0]?.[0].input.method).toBe("lane.release");
+  expect(onRemoved).toHaveBeenCalledOnce();
+});
+
+it("does not delete a lane that changes while its removal request is being prepared", async () => {
+  let resolve!: (key: string) => void;
+  commands.uuid.mockImplementation(
+    () =>
+      new Promise<string>((done) => {
+        resolve = done;
+      }),
+  );
+  props = { ...props, mode: "remove", onRemoved: vi.fn() };
+  await render();
+  await click("Delete Retry");
+  props = { ...props, resource: { ...resource(), revision: "changed-revision" } };
+  await render();
+  await act(async () => resolve("delete-key"));
+  expect(commands.submit).not.toHaveBeenCalled();
+  expect(props.onRemoved).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("The lane changed");
+});
+
 it("pins setup to the exact selected lane and reports a failed setup even when the receipt succeeded", async () => {
   commands.submit.mockImplementation(
     async ({ input: request }: { input: IntegrationOperationInput }) => ({

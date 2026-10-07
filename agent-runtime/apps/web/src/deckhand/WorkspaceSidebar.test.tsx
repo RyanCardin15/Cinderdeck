@@ -15,7 +15,22 @@ const boundary = vi.hoisted(() => ({
   requests: [] as string[],
   pages: [] as { workspace: string; offset: number }[],
   launcher: vi.fn(),
+  contextMenu: vi.fn(),
+  submit: vi.fn(),
+  inspect: vi.fn(),
+  recent: vi.fn(),
+  uuid: vi.fn(),
 }));
+vi.mock("../localApi", () => ({
+  readLocalApi: () => ({ contextMenu: { show: boundary.contextMenu } }),
+}));
+vi.mock("../state/use-atom-command", () => ({
+  useAtomCommand: (command: "submit" | "inspect" | "recent") => boundary[command],
+}));
+vi.mock("../lib/runtime", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/runtime")>();
+  return { ...actual, runtime: { ...actual.runtime, runPromise: boundary.uuid } };
+});
 vi.mock("./SessionLauncher", () => ({
   SessionLauncher: (props: { onOpened: () => void }) => {
     boundary.launcher(props);
@@ -49,6 +64,9 @@ const activity = Atom.make<AsyncResult.AsyncResult<readonly ManagedContextView[]
 );
 const scopedAtoms = new Map<string, typeof native>();
 vi.mock("./state", () => ({
+  submitOperation: "submit",
+  inspectOperation: "inspect",
+  recentOperations: "recent",
   managedContextsView: () => activity,
   workspaceView: ({
     input,
@@ -260,6 +278,25 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   boundary.navigate.mockClear();
   boundary.launcher.mockClear();
+  boundary.contextMenu.mockReset().mockResolvedValue("delete-lane");
+  boundary.uuid.mockReset().mockResolvedValue("delete-key");
+  boundary.recent.mockReset().mockResolvedValue({ _tag: "Success", value: [] });
+  boundary.inspect.mockReset().mockResolvedValue({ _tag: "Failure" });
+  boundary.submit.mockReset().mockImplementation(async ({ input }) => ({
+    _tag: "Success",
+    value: {
+      id: "receipt",
+      operationKey: input.operationKey,
+      argumentHash: "a".repeat(64),
+      workspaceID: input.workspaceID,
+      generation: input.generation,
+      method: input.method,
+      state: "succeeded",
+      createdAt: view.observedAt,
+      updatedAt: view.observedAt,
+      result: { released: input.workspaceID },
+    },
+  }));
   boundary.requests = [];
   boundary.pages = [];
   scopedAtoms.clear();
@@ -279,6 +316,166 @@ afterEach(async () => {
   container.remove();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+const removalCapabilities = [
+  "operations.receipts",
+  "operations.lane.release",
+  "operations.lane.remove",
+];
+const rightClickLane = async (id: string) =>
+  act(async () => {
+    container
+      .querySelector(`[data-workspace-id="${id}"] a`)!
+      .dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          cancelable: true,
+          clientX: 24,
+          clientY: 48,
+        }),
+      );
+  });
+const clickText = async (text: string) =>
+  act(async () => {
+    [...container.querySelectorAll("button")].find((item) => item.textContent === text)!.click();
+  });
+
+it("right-click deletes the clicked remote lane through confirmation without selecting it", async () => {
+  registry.set(
+    native,
+    AsyncResult.success({ ...view, hello: { ...view.hello!, capabilities: removalCapabilities } }),
+  );
+  localStorage.setItem(
+    sidebarPreferenceKey(EnvironmentId.make("remote"), "install"),
+    JSON.stringify({
+      favorites: ["lane-a", "lane-b"],
+      order: { "lanes:alpha": ["lane-b", "lane-a"] },
+      expanded: { alpha: true },
+    }),
+  );
+  await render({ workspace: "beta", context: "beta" }, resources, EnvironmentId.make("remote"));
+  await rightClickLane("lane-b");
+  expect(boundary.contextMenu).toHaveBeenCalledWith(
+    [
+      {
+        id: "delete-lane",
+        label: "Delete lane…",
+        destructive: true,
+        icon: "trash",
+        disabled: false,
+      },
+    ],
+    { x: 24, y: 48 },
+  );
+  expect(container.textContent).toContain("Delete lane lane-b?");
+  expect(boundary.submit).not.toHaveBeenCalled();
+  expect(boundary.navigate).not.toHaveBeenCalled();
+  await clickText("Delete lane-b");
+  expect(boundary.submit).toHaveBeenCalledTimes(1);
+  expect(boundary.submit).toHaveBeenCalledWith({
+    environmentId: "remote",
+    input: {
+      operationKey: "delete-key",
+      installationID: "install",
+      workspaceID: "lane-b",
+      generation: 3,
+      revision: "revision",
+      method: "lane.release",
+      arguments: { workspace: "lane-b" },
+    },
+  });
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  expect(boundary.navigate).not.toHaveBeenCalled();
+  expect(
+    readSidebarPreferences(sidebarPreferenceKey(EnvironmentId.make("remote"), "install")).favorites,
+  ).toEqual(["lane-a"]);
+});
+
+it("returns to the source workspace only after the selected lane was removed", async () => {
+  registry.set(
+    native,
+    AsyncResult.success({ ...view, hello: { ...view.hello!, capabilities: removalCapabilities } }),
+  );
+  await render({ workspace: "alpha", context: "lane-a", tab: "services" });
+  await act(async () => button("Expand lanes for alpha").click());
+  await rightClickLane("lane-a");
+  expect(boundary.navigate).not.toHaveBeenCalled();
+  await clickText("Delete lane-a");
+  expect(boundary.navigate).toHaveBeenCalledWith({
+    to: "/workspaces",
+    search: {
+      environment: environmentId,
+      expectedInstallationID: "install",
+      expectedGeneration: 3,
+      workspace: "alpha",
+      context: "alpha",
+      tab: "services",
+    },
+  });
+});
+
+it("cancel sends no deletion and a lost reply keeps the saved lane request available", async () => {
+  registry.set(
+    native,
+    AsyncResult.success({ ...view, hello: { ...view.hello!, capabilities: removalCapabilities } }),
+  );
+  await render();
+  await act(async () => button("Expand lanes for alpha").click());
+  await rightClickLane("lane-b");
+  await clickText("Cancel");
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  expect(boundary.submit).not.toHaveBeenCalled();
+  await rightClickLane("lane-b");
+  boundary.submit.mockResolvedValue({ _tag: "Failure" });
+  await clickText("Delete lane-b");
+  expect(container.textContent).toContain("Lane removal outcome unknown");
+  expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+  expect(boundary.navigate).not.toHaveBeenCalled();
+  expect(boundary.submit).toHaveBeenCalledTimes(1);
+  expect(
+    JSON.parse(localStorage.getItem('deckhand.lane-lifecycle:["computer","install","lane-b"]')!)
+      .input.workspaceID,
+  ).toBe("lane-b");
+});
+
+it("blocks sidebar deletion for stale or unsupported lanes and never offers it on a source row", async () => {
+  await render();
+  await act(async () => button("Expand lanes for alpha").click());
+  await rightClickLane("lane-a");
+  expect(boundary.contextMenu.mock.lastCall?.[0][0].disabled).toBe(true);
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  await act(async () =>
+    registry.set(
+      native,
+      AsyncResult.success({
+        ...view,
+        state: "unavailable",
+        hello: { ...view.hello!, capabilities: removalCapabilities },
+      }),
+    ),
+  );
+  await rightClickLane("lane-a");
+  expect(boundary.contextMenu.mock.lastCall?.[0][0].disabled).toBe(true);
+  await act(async () =>
+    registry.set(
+      native,
+      AsyncResult.success({
+        ...view,
+        hello: { ...view.hello!, capabilities: removalCapabilities },
+        resources: [
+          alpha,
+          { ...laneA, workspace: { ...laneA.workspace!, definitionChanged: true } },
+        ],
+      }),
+    ),
+  );
+  await rightClickLane("lane-a");
+  expect(boundary.contextMenu.mock.lastCall?.[0][0].disabled).toBe(true);
+  const count = boundary.contextMenu.mock.calls.length;
+  await rightClickLane("alpha");
+  expect(boundary.contextMenu).toHaveBeenCalledTimes(count);
+  expect(boundary.submit).not.toHaveBeenCalled();
 });
 
 it("selects in place and expands multiple workspaces independently without reopening a collapsed selection", async () => {
