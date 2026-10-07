@@ -125,6 +125,7 @@ export const formatHeadlessServeOutput = (accessInfo: HeadlessServeAccessInfo): 
     `Connection string: ${accessInfo.connectionString}`,
     `Token: ${accessInfo.token}`,
     `Pairing URL: ${accessInfo.pairingUrl}`,
+    "Paste this link into Cinderdeck connection settings or scan it with the mobile companion.",
     "",
     renderTerminalQrCode(accessInfo.pairingUrl),
     "",

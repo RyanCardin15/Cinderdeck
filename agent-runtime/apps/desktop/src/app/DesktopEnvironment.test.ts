@@ -40,6 +40,20 @@ const makeEnvironment = (
   DesktopEnvironment.DesktopEnvironment.pipe(Effect.provide(makeEnvironmentLayer(overrides, env)));
 
 describe("DesktopEnvironment", () => {
+  it.effect("ignores ambient development URLs in the packaged Mac application", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment(
+        { isPackaged: true },
+        { VITE_DEV_SERVER_URL: "http://localhost:5733", DECKHAND_RENDERER_TOKEN: "ambient-token" },
+      );
+      assert.equal(environment.isDevelopment, false);
+      assert.equal(Option.isNone(environment.devServerUrl), true);
+      assert.equal(
+        environment.clientAssetsDir,
+        "/Applications/Cinderdeck.app/Contents/Resources/app.asar/apps/server/dist/client",
+      );
+    }),
+  );
   it("keeps packaged preview and PR titles distinct from nightly and development", () => {
     for (const appVersion of ["0.1.0-preview.20261003.3", "0.1.0-pr.42.1"]) {
       assert.deepEqual(

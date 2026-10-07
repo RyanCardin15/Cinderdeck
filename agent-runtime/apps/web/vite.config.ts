@@ -16,6 +16,7 @@ import { loadRepoEnv } from "../../scripts/lib/public-config";
 import { thirdPartyLicensesPlugin } from "../../scripts/lib/third-party-licenses";
 import { reactCompilerWorkers } from "./vite/reactCompilerWorkers";
 import { tailwindPlugins } from "./vite/tailwind";
+import { desktopRendererPlugin } from "./vite/desktopRenderer";
 
 const repoEnv = withoutUpstreamServices(loadRepoEnv());
 Object.assign(process.env, repoEnv);
@@ -63,7 +64,7 @@ const unitTestProject = {
   extends: true,
   test: {
     name: "unit",
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ["src/**/*.test.{ts,tsx}", "vite/**/*.test.ts"],
     // The web runtime suite exercises auth bootstrap, saved environments,
     // and websocket subscription lifecycles. Under the full monorepo test
     // run, those async tests can exceed Vitest's default 5s budget.
@@ -145,6 +146,7 @@ export default defineConfig(({ command }) => {
   return {
     assetsInclude: ["**/*.wasm"],
     plugins: [
+      desktopRendererPlugin(process.env.DECKHAND_RENDERER_TOKEN),
       devCompressionPlugin(),
       thirdPartyLicensesPlugin({
         bundleName: "web",

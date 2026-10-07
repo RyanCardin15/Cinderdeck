@@ -19,13 +19,13 @@ export const runServerCommand = (
   });
 
 export const startCommand = Command.make("start", { ...sharedServerCommandFlags }).pipe(
-  Command.withDescription("Run the Cinderdeck agent backend."),
+  Command.withDescription("Run the Cinderdeck API backend for desktop and companion connections."),
   Command.withHandler((flags) => runServerCommand(flags)),
 );
 
 export const serveCommand = Command.make("serve", { ...sharedServerCommandFlags }).pipe(
   Command.withDescription(
-    "Run the Cinderdeck agent backend without opening a browser and print pairing details.",
+    "Run the Cinderdeck API backend and print desktop/companion pairing details.",
   ),
   Command.withHandler((flags) =>
     runServerCommand(flags, {

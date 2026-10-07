@@ -5,12 +5,10 @@
   "scripts": {
     "prepare": "effect-tsgo patch && vp config --no-agent",
     "dev": "node scripts/dev-runner.ts dev",
-    "dev:share": "node scripts/dev-runner.ts dev --share",
     "dev:server": "node scripts/dev-runner.ts dev:server",
-    "dev:web": "node scripts/dev-runner.ts dev:web",
     "dev:desktop": "node scripts/dev-runner.ts dev:desktop",
     "migrate-dev-db": "node apps/server/scripts/migrate-dev-db.ts",
-    "start": "vp run --filter @cinderdeck/server start",
+    "start:server": "vp run --filter @cinderdeck/server start",
     "start:desktop": "vp run --filter @cinderdeck/desktop start",
     "screenshots:mobile": "node scripts/mobile-showcase.ts",
     "icons:export": "node scripts/export-brand-icons.mjs",

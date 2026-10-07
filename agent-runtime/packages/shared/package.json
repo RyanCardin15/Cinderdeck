@@ -312,6 +312,10 @@
       "types": "./src/devHome.ts",
       "import": "./src/devHome.ts"
     },
+    "./desktopRendererAccess": {
+      "types": "./src/desktopRendererAccess.ts",
+      "import": "./src/desktopRendererAccess.ts"
+    },
     "./devProxy": {
       "types": "./src/devProxy.ts",
       "import": "./src/devProxy.ts"
@@ -394,9 +398,9 @@
     "test": "vp test run --config ../../vite.config.ts --dir ."
   },
   "dependencies": {
+    "@cinderdeck/contracts": "workspace:*",
     "@noble/curves": "catalog:",
     "@noble/hashes": "catalog:",
-    "@cinderdeck/contracts": "workspace:*",
     "effect": "catalog:",
     "jose": "catalog:",
     "yaml": "catalog:"

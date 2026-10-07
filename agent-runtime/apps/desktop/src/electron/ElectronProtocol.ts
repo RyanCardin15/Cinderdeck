@@ -11,6 +11,10 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
 import * as Electron from "electron";
+import {
+  DESKTOP_RENDERER_ACCESS_HEADER,
+  hasDesktopRendererAccess,
+} from "@cinderdeck/shared/desktopRendererAccess";
 
 export const DESKTOP_HOST = "app";
 const DESKTOP_PRODUCTION_SCHEME = "deckhand";
@@ -57,7 +61,10 @@ export class ElectronProtocolUnregistrationError extends Schema.TaggedError<Elec
 export type DesktopProtocolRegistrationInput = {
   readonly scheme: string;
   readonly clerkFrontendApiHostname: string | undefined;
-} & ({ readonly targetOrigin: URL } | { readonly assetDirectory: string });
+} & (
+  | { readonly targetOrigin: URL; readonly rendererToken?: string | undefined }
+  | { readonly assetDirectory: string }
+);
 
 export class ElectronProtocol extends Context.Service<
   ElectronProtocol,
@@ -154,6 +161,7 @@ async function proxyRequest(
   request: Request,
   targetOrigin: URL,
   contentSecurityPolicy: string,
+  rendererToken: string,
 ): Promise<Response> {
   const requestUrl = new URL(request.url);
   if (requestUrl.host !== DESKTOP_HOST) {
@@ -180,6 +188,8 @@ async function proxyRequest(
   for (const name of headersToRemove) {
     headers.delete(name);
   }
+  // This credential stays in the main process and never enters renderer JS.
+  headers.set(DESKTOP_RENDERER_ACCESS_HEADER, rendererToken);
   const init: RequestInit = {
     method: request.method,
     headers,
@@ -266,6 +276,16 @@ export const make = Effect.gen(function* () {
     function* (input: DesktopProtocolRegistrationInput) {
       if (yield* Ref.get(registered)) return;
 
+      if (
+        "targetOrigin" in input &&
+        !hasDesktopRendererAccess(input.rendererToken, input.rendererToken)
+      ) {
+        return yield* new ElectronProtocolRegistrationError({
+          scheme: input.scheme,
+          cause: new Error("Start desktop development through scripts/dev-runner.ts."),
+        });
+      }
+
       const contentSecurityPolicy = makeDesktopContentSecurityPolicy(input);
 
       yield* Effect.acquireRelease(
@@ -278,7 +298,12 @@ export const make = Effect.gen(function* () {
                   contentSecurityPolicy,
                 );
               }
-              return proxyRequest(request, input.targetOrigin, contentSecurityPolicy);
+              return proxyRequest(
+                request,
+                input.targetOrigin,
+                contentSecurityPolicy,
+                input.rendererToken!,
+              );
             });
           },
           catch: (cause) => new ElectronProtocolRegistrationError({ scheme: input.scheme, cause }),

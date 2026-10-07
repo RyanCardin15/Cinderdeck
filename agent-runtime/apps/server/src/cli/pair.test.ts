@@ -24,11 +24,7 @@ import {
   persistServerRuntimeState,
   type PersistedServerRuntimeState,
 } from "../serverRuntimeState.ts";
-import {
-  DevServerNotProxiableError,
-  resolveDirectPairingBaseUrl,
-  resolveTailscaleLocalTarget,
-} from "./pair.ts";
+import { resolveDirectPairingBaseUrl, resolveTailscaleLocalTarget } from "./pair.ts";
 
 import packageJson from "../../package.json" with { type: "json" };
 
@@ -43,9 +39,9 @@ const baseState = {
 } as const satisfies PersistedServerRuntimeState;
 
 describe("pair base URL selection", () => {
-  it("pairs through the dev web origin when the server fronts a dev server", () => {
+  it("pairs through the API listener even when a private renderer URL is recorded", () => {
     expect(resolveDirectPairingBaseUrl({ ...baseState, devUrl: "http://localhost:5733/" })).toBe(
-      "http://localhost:5733/",
+      "http://localhost:3773",
     );
   });
 
@@ -58,25 +54,21 @@ describe("pair base URL selection", () => {
 });
 
 describe("pair tailscale local target", () => {
-  it("proxies the dev web port for dev servers", () => {
-    expect(resolveTailscaleLocalTarget({ ...baseState, devUrl: "http://localhost:5733/" })).toEqual(
-      { localPort: 5_733 },
-    );
-    // A dev server on a non-loopback interface must be proxied at that
-    // interface; tailscale serve defaults to 127.0.0.1 otherwise.
+  it("never exposes a private development renderer through Tailscale", () => {
+    for (const devUrl of [
+      "http://localhost:5733/",
+      "http://192.168.1.10:5733/",
+      "https://localhost:5733/",
+    ]) {
+      expect(resolveTailscaleLocalTarget({ ...baseState, devUrl })).toEqual({ localPort: 3773 });
+    }
     expect(
-      resolveTailscaleLocalTarget({ ...baseState, devUrl: "http://192.168.1.10:5733/" }),
-    ).toEqual({ localPort: 5_733, localHost: "192.168.1.10" });
-    // URL.hostname keeps IPv6 brackets, so the serve target stays valid.
-    expect(
-      resolveTailscaleLocalTarget({ ...baseState, devUrl: "http://[fd7a:115c::1]:5733/" }),
-    ).toEqual({ localPort: 5_733, localHost: "[fd7a:115c::1]" });
-  });
-
-  it("rejects HTTPS dev URLs, which tailscale serve cannot proxy", () => {
-    expect(
-      resolveTailscaleLocalTarget({ ...baseState, devUrl: "https://localhost:5733/" }),
-    ).toBeInstanceOf(DevServerNotProxiableError);
+      resolveTailscaleLocalTarget({
+        ...baseState,
+        host: "192.168.1.10",
+        devUrl: "http://localhost:5733/",
+      }),
+    ).toEqual({ localPort: 3773, localHost: "192.168.1.10" });
   });
 
   it("proxies the backend port directly otherwise", () => {
@@ -196,7 +188,7 @@ describe("t3 pair", () => {
     ),
   );
 
-  it.effect("pairs through the recorded dev web URL for dev servers", () =>
+  it.effect("pairs through the live API port despite a recorded private renderer URL", () =>
     withDescriptorServer((origin) =>
       Effect.gen(function* () {
         const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-dev-test-"));
@@ -212,7 +204,7 @@ describe("t3 pair", () => {
 
         const output = yield* captureStdout(runCli(["pair", "--base-dir", baseDir]));
 
-        assert.include(output, "Pairing URL: http://localhost:5733/pair#token=");
+        assert.include(output, `Pairing URL: http://localhost:${port}/pair#token=`);
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );

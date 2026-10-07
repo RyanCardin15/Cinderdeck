@@ -31,7 +31,7 @@ import {
   assetRouteLayer,
   attachmentUploadRouteLayer,
   serverEnvironmentHttpApiLayer,
-  staticAndDevRouteLayer,
+  desktopOnlyRouteLayer,
   browserApiCorsLayer,
   httpCompressionLayer,
   untracedRequestsLayer,
@@ -660,7 +660,7 @@ const makeRoutesLayer = Layer.mergeAll(
     OwnedPreviewRoutes.routesLayer,
     attachmentUploadRouteLayer,
     deviceHubProxyRouteLayer,
-    staticAndDevRouteLayer,
+    desktopOnlyRouteLayer,
     websocketRpcRouteLayer,
   ),
   // The MCP session registry is provided globally (shared with V2 provider

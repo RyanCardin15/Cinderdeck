@@ -34,10 +34,14 @@ const compactEnv = (env: Readonly<Record<string, string | undefined>>): Record<s
   );
 
 export const DesktopConfig = Config.all({
-  nativeHost: Config.String("CINDERDECK_NATIVE_HOST").pipe(Config.withDefault("0"), Config.map(value => value === "1")),
+  nativeHost: Config.String("CINDERDECK_NATIVE_HOST").pipe(
+    Config.withDefault("0"),
+    Config.map((value) => value === "1"),
+  ),
   deckhandProfileRoot: trimmedString("DECKHAND_PROFILE_ROOT"),
   t3Home: trimmedString("DECKHAND_HOME"),
   devServerUrl: Config.URL("VITE_DEV_SERVER_URL").pipe(Config.option),
+  devRendererToken: trimmedString("DECKHAND_RENDERER_TOKEN"),
   configuredBackendPort: Config.Port("DECKHAND_PORT").pipe(Config.option),
   commitHashOverride: trimmedString("DECKHAND_COMMIT_HASH"),
   desktopLanHostOverride: trimmedString("DECKHAND_DESKTOP_LAN_HOST"),

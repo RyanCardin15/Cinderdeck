@@ -170,7 +170,10 @@ const bootstrap = Effect.gen(function* () {
   yield* electronProtocol.registerDesktopProtocol({
     scheme: ElectronProtocol.getDesktopScheme(environment.isDevelopment),
     ...(environment.isDevelopment
-      ? { targetOrigin: Option.getOrThrow(environment.devServerUrl) }
+      ? {
+          targetOrigin: Option.getOrThrow(environment.devServerUrl),
+          rendererToken: environment.devRendererToken,
+        }
       : { assetDirectory: environment.clientAssetsDir }),
     clerkFrontendApiHostname: DesktopClerk.desktopClerkFrontendApiHostname,
   });

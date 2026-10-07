@@ -653,7 +653,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                 <DialogTitle>{isRevealValueUrl ? "Pairing link" : "Pairing code"}</DialogTitle>
                 <DialogDescription>
                   {isRevealValueUrl
-                    ? "Clipboard copy is unavailable here. Open or manually copy this full pairing URL on the device you want to connect."
+                    ? "Clipboard copy is unavailable here. Paste this pairing URL into Cinderdeck connection settings on the device you want to connect."
                     : "Clipboard copy is unavailable here. Manually copy this code into another client."}
                 </DialogDescription>
               </DialogHeader>

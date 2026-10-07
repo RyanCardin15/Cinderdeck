@@ -63,6 +63,7 @@ export class DesktopEnvironment extends Context.Service<
     readonly compileCachePath: string;
     readonly appUpdateYmlPath: string;
     readonly devServerUrl: Option.Option<URL>;
+    readonly devRendererToken?: string | undefined;
     readonly configuredBackendPort: Option.Option<number>;
     readonly commitHashOverride: Option.Option<string>;
     readonly otlpTracesUrl: Option.Option<string>;
@@ -142,7 +143,9 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const path = yield* Path.Path;
   const config = yield* DesktopConfig.DesktopConfig;
   const homeDirectory = input.homeDirectory;
-  const devServerUrl = config.devServerUrl;
+  // Installed app bundles always use their own UI assets, even when launched
+  // from a shell carrying development variables.
+  const devServerUrl = input.isPackaged ? Option.none<URL>() : config.devServerUrl;
   const isDevelopment = Option.isSome(devServerUrl);
   const appDataDirectory = Option.getOrElse(config.deckhandProfileRoot, () =>
     path.join(homeDirectory, "Library", "Application Support"),
@@ -199,6 +202,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
       ? path.join(resourcesPath, "app-update.yml")
       : path.join(input.appPath, "dev-app-update.yml"),
     devServerUrl,
+    devRendererToken: Option.getOrUndefined(config.devRendererToken),
     configuredBackendPort: config.configuredBackendPort,
     commitHashOverride: config.commitHashOverride,
     otlpTracesUrl: config.otlpTracesUrl,

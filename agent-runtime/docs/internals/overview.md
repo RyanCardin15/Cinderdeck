@@ -1,6 +1,6 @@
 # Architecture
 
-Cinderdeck keeps execution in the environment that owns the workspace. Web, desktop, and mobile
+Cinderdeck keeps execution in the environment that owns the workspace. Desktop and mobile
 clients control it over authenticated RPC. A remote client must never substitute its own filesystem,
 provider credentials, or machine state for the environment's. The desktop app bundles a server,
 but its renderer follows the same boundary.
@@ -10,7 +10,7 @@ but its renderer follows the same boundary.
 Provider processes, terminals, Git, and project files belong to the server. Shared connection and
 domain state belongs in `packages/client-runtime`; clients supply platform services and UI.
 Keeping that logic shared prevents reconnect and multi-environment behavior from diverging between
-web and mobile. See [connection runtime](./connection-runtime.md) and
+desktop and mobile. See [connection runtime](./connection-runtime.md) and
 [remote environments](./remote.md).
 
 The [RPC contract](../../packages/contracts/src/rpc.ts) is the boundary between independently
@@ -20,7 +20,7 @@ method on it. See [environment auth](./environment-auth.md).
 
 ### Pull request linking compatibility
 
-Web, desktop, mobile, and environments upgrade independently. Negotiate linking through the
+Desktop, mobile, and environments upgrade independently. Negotiate linking through the
 environment descriptor, never through a client version or an assumed coordinated release:
 
 | Environment capability                | Client behavior                                                                                                   |
@@ -44,7 +44,7 @@ See [provider constraints](./providers.md).
 ## Settings ownership
 
 Client preferences stay in the current client; environment defaults and project overrides stay
-on their owning server. The web and desktop settings target is URL state, resolved against current
+on their owning server. The desktop settings target is URL state, resolved against current
 connections and project membership. An unavailable target must not fall back to another environment.
 **All environments** is an explicit bulk edit of connected, loaded servers, not a durable global
 default or a promise to synchronize offline or future environments. Project-group targets similarly

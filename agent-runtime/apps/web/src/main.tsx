@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { createHashHistory, createBrowserHistory } from "@tanstack/react-router";
+import { createHashHistory } from "@tanstack/react-router";
 
 import "./index.css";
 
@@ -15,10 +15,14 @@ import {
 import { AppRoot } from "./AppRoot";
 import { clearChunkReloadGuard, reloadOnceForChunkLoadError } from "./lib/chunkReloadGuard";
 
+if (!isElectron) {
+  throw new Error("Open Cinderdeck in the macOS application.");
+}
+
 prepareProviderAuthDelivery();
 
 // Electron loads the app from a file-backed shell, so hash history avoids path resolution issues.
-const history = isElectron ? createHashHistory() : createBrowserHistory();
+const history = createHashHistory();
 
 const router = getRouter(history);
 
@@ -49,9 +53,7 @@ const app = <AppRoot router={router} />;
 // the bundled clerk-js out of the browser build entirely.
 const managedAuthShellModule =
   clerkPublishableKey && hasCloudPublicConfig()
-    ? isElectron
-      ? import("./components/clerk/ElectronManagedAuthShell")
-      : import("./components/clerk/BrowserManagedAuthShell")
+    ? import("./components/clerk/ElectronManagedAuthShell")
     : null;
 
 // The index.html boot splash lives inside #root, and React's first commit

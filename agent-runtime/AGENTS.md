@@ -6,7 +6,7 @@ This directory is part of the Cinderdeck super app, the private runtime of the n
 
 - Read the root README and docs/UNIFIED_APP.md. Build the complete app with ../scripts/build-unified.sh. Never install or launch a second desktop product as part of packaging.
 - Workspace packages use @cinderdeck/*. The server is @cinderdeck/server. Use the pinned Node and pnpm versions in package.json.
-- Run pnpm install --frozen-lockfile, then node scripts/dev-runner.ts dev for an isolated web/server development session. Do not bake VITE_HTTP_URL or VITE_WS_URL into dev bundles; Vite proxies same-origin API and WebSocket requests.
+- Run pnpm install --frozen-lockfile, then node scripts/dev-runner.ts dev --home-dir /absolute/disposable-state for isolated desktop runtime development. The launcher owns the private renderer credential and pins its API URLs to loopback. Browser launch and web sharing are unsupported; dev:server runs only a companion API backend. Validate the product through the complete native host bundle.
 - Internal deckhand module paths, DECKHAND_* environment variables, wire identifiers and persisted keys are compatibility details. Do not rename or migrate them merely to change displayed branding. Preserve provider protocol fixtures and all original licenses/copyright notices.
 - Never point a development server at live user data. Use an explicit --home-dir in temporary storage. The native host supplies its AgentRuntime directory; linked worktrees use their own ignored .t3 compatibility directory. Copy test data read-only into an isolated directory; never symlink it to a live store.
 - Preserve other contributors' uncommitted work. Never kill processes by name, path matching, or pkill -f. Stop only a process you captured at spawn.
@@ -15,8 +15,9 @@ This directory is part of the Cinderdeck super app, the private runtime of the n
 ## Architecture
 
 - apps/server: typed RPC, event-sourced orchestration, providers and checkpoints. Commands commit before effects run; tests await persisted events or drain the effect worker.
-- apps/web: React UI. apps/desktop: the private Electron runtime and preview runtime. apps/mobile: React Native companion.
+- apps/web: bundled desktop React UI, requiring the Electron preload bridge. apps/desktop: the private Electron runtime and preview runtime. apps/mobile: React Native companion.
 - packages/contracts: schemas and wire contracts. packages/client-runtime: shared client state and operations. packages/shared: small runtime helpers with explicit subpath imports.
+- Never serve the app shell over HTTP, redirect API requests to a web UI, or add a standalone browser entry point. Packaged renderers load bundled assets through the private desktop protocol; developer renderers require a main-process credential. Keep API, signed media, provider OAuth callbacks and mobile companion connections working.
 - Keep orchestration pure, service methods reusable by transports and MCP, and complexity at provider adapters. See docs/internals/effect-services.md and docs/internals/overview.md.
 - Check changes across relevant clients, providers, entry points, remote/local connections, and reverse actions. Native authority stays with Cinderdeck.
 - UI component variants own appearance. Avoid unnecessary animation, blocking main-thread work, unbounded logs and redundant WebSocket payloads.

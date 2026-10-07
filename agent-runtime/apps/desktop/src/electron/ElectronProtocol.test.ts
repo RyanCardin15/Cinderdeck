@@ -28,6 +28,22 @@ describe("ElectronProtocol", () => {
     unhandleMock.mockReset();
   });
 
+  it.effect("refuses a development renderer without a private launcher credential", () =>
+    Effect.gen(function* () {
+      const protocol = yield* ElectronProtocol.ElectronProtocol;
+      const error = yield* protocol
+        .registerDesktopProtocol({
+          scheme: "deckhand-dev",
+          targetOrigin: new URL("http://127.0.0.1:5733/"),
+          clerkFrontendApiHostname: undefined,
+        })
+        .pipe(Effect.flip);
+      assert.equal(error._tag, "ElectronProtocolRegistrationError");
+      assert.equal(handleMock.mock.calls.length, 0);
+      assert.equal(netFetchMock.mock.calls.length, 0);
+    }).pipe(Effect.provide(protocolLayer), Effect.scoped),
+  );
+
   it.effect("serves the bundled client from disk without a backend", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -81,6 +97,7 @@ describe("ElectronProtocol", () => {
           const protocol = yield* ElectronProtocol.ElectronProtocol;
           yield* protocol.registerDesktopProtocol({
             scheme: "deckhand-dev",
+            rendererToken: "test-desktop-renderer-token-at-least-32-characters",
             targetOrigin: new URL("http://127.0.0.1:3773/"),
             clerkFrontendApiHostname: "clerk.t3.codes",
           });
@@ -90,6 +107,7 @@ describe("ElectronProtocol", () => {
             handler!(
               new Request("deckhand-dev://app/api/health?verbose=1", {
                 headers: {
+                  "x-cinderdeck-desktop-renderer": "renderer-controlled-value",
                   accept: "application/json",
                   origin: "deckhand-dev://app",
                   referer: "deckhand-dev://app/",
@@ -125,6 +143,10 @@ describe("ElectronProtocol", () => {
       assert.equal(netFetchMock.mock.calls[0]?.[0], "http://127.0.0.1:3773/api/health?verbose=1");
       const forwardedHeaders = new Headers(netFetchMock.mock.calls[0]?.[1]?.headers);
       assert.equal(forwardedHeaders.get("accept"), "application/json");
+      assert.equal(
+        forwardedHeaders.get("x-cinderdeck-desktop-renderer"),
+        "test-desktop-renderer-token-at-least-32-characters",
+      );
       assert.isNull(forwardedHeaders.get("origin"));
       assert.isNull(forwardedHeaders.get("referer"));
       assert.isNull(forwardedHeaders.get("sec-fetch-site"));
@@ -144,6 +166,7 @@ describe("ElectronProtocol", () => {
           const protocol = yield* ElectronProtocol.ElectronProtocol;
           yield* protocol.registerDesktopProtocol({
             scheme: "deckhand",
+            rendererToken: "test-desktop-renderer-token-at-least-32-characters",
             targetOrigin: new URL("http://127.0.0.1:3773/"),
             clerkFrontendApiHostname: undefined,
           });
@@ -171,6 +194,7 @@ describe("ElectronProtocol", () => {
           const protocol = yield* ElectronProtocol.ElectronProtocol;
           yield* protocol.registerDesktopProtocol({
             scheme: "deckhand-dev",
+            rendererToken: "test-desktop-renderer-token-at-least-32-characters",
             targetOrigin: new URL("http://127.0.0.1:5733/"),
             clerkFrontendApiHostname: undefined,
           });
@@ -194,6 +218,7 @@ describe("ElectronProtocol", () => {
       const error = yield* Effect.scoped(
         protocol.registerDesktopProtocol({
           scheme: "deckhand-dev",
+          rendererToken: "test-desktop-renderer-token-at-least-32-characters",
           targetOrigin: new URL("http://127.0.0.1:3773/"),
           clerkFrontendApiHostname: undefined,
         }),
@@ -218,6 +243,7 @@ describe("ElectronProtocol", () => {
         Effect.scoped(
           protocol.registerDesktopProtocol({
             scheme: "deckhand",
+            rendererToken: "test-desktop-renderer-token-at-least-32-characters",
             targetOrigin: new URL("http://127.0.0.1:3773/"),
             clerkFrontendApiHostname: undefined,
           }),
@@ -238,6 +264,7 @@ describe("ElectronProtocol", () => {
   it("keeps executable sources host-restricted while allowing runtime network resources", () => {
     const policy = ElectronProtocol.makeDesktopContentSecurityPolicy({
       scheme: "deckhand",
+      rendererToken: "test-desktop-renderer-token-at-least-32-characters",
       targetOrigin: new URL("http://127.0.0.1:3773/"),
       clerkFrontendApiHostname: "clerk.t3.codes",
     });

@@ -27,6 +27,8 @@ Cinderdeck is a native Mac application for running your development environment.
 
 A web app, an API in another repository, a worker, a local database: bring whatever your project needs. No prescribed repositories, language, framework, or folder layout. Cinderdeck runs the commands you configure using the tools already installed on your Mac.
 
+Cinderdeck’s interface opens only in the Mac application. Its bundled renderer loads local app files; the runtime’s HTTP port carries API connections for the desktop and mobile companion and does not serve a browser version of Cinderdeck. The Browser panel is for previewing projects you develop.
+
 **Cinderdeck is an independent fork of [Snapzy](https://github.com/duongductrong/Snapzy), created by Trong Duong Duc and its contributors.** Snapzy supplied the native capture, recording, annotation, and editing foundation. Cinderdeck extends that foundation into a development workspace with configurable stacks, service orchestration, agent controls, and local clipboard history. The original [BSD 3-Clause license](LICENSE) and attribution are preserved; see [NOTICE](NOTICE).
 
 ## Services, tasks, and workflows

@@ -29,7 +29,6 @@ import * as ServerConfig from "./config.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
 import { flushCompileCache } from "./compileCache.ts";
 import * as Keybindings from "./keybindings.ts";
-import * as ExternalLauncher from "./process/externalLauncher.ts";
 import * as EffectWorker from "./orchestration-v2/EffectWorker.ts";
 import * as LegacyV1ThreadImporter from "./orchestration-v2/legacy/LegacyV1ThreadImporter.ts";
 import * as ProviderRuntimeRecovery from "./orchestration-v2/ProviderRuntimeRecoveryService.ts";
@@ -44,13 +43,7 @@ import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerSettings from "./serverSettings.ts";
 import { forkParked, forkParkedFiber } from "./serverActivation.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
-import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
-import {
-  formatHeadlessServeOutput,
-  formatHostForUrl,
-  isWildcardHost,
-  issueHeadlessServeAccessInfo,
-} from "./startupAccess.ts";
+import { formatHeadlessServeOutput, issueHeadlessServeAccessInfo } from "./startupAccess.ts";
 
 export class ServerRuntimeStartupError extends Schema.TaggedError<ServerRuntimeStartupError>()(
   "ServerRuntimeStartupError",
@@ -280,37 +273,6 @@ const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
   } satisfies AutoBootstrapWelcomeTargets;
 });
 
-const resolveStartupBrowserTarget = Effect.gen(function* () {
-  const serverConfig = yield* ServerConfig.ServerConfig;
-  const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
-  const localUrl = `http://localhost:${serverConfig.port}`;
-  const bindUrl =
-    serverConfig.host && !isWildcardHost(serverConfig.host)
-      ? `http://${formatHostForUrl(serverConfig.host)}:${serverConfig.port}`
-      : localUrl;
-  const baseTarget = serverConfig.devUrl?.toString() ?? bindUrl;
-  return serverConfig.mode === "desktop"
-    ? baseTarget
-    : yield* serverAuth.issueStartupPairingUrl(baseTarget);
-});
-
-const maybeOpenBrowser = (target: string) =>
-  Effect.gen(function* () {
-    const serverConfig = yield* ServerConfig.ServerConfig;
-    if (serverConfig.noBrowser) {
-      return;
-    }
-    const externalLauncher = yield* ExternalLauncher.ExternalLauncher;
-
-    yield* externalLauncher.launchBrowser(target).pipe(
-      Effect.catch(() =>
-        Effect.logInfo("browser auto-open unavailable", {
-          hint: `Open ${target} in your browser.`,
-        }),
-      ),
-    );
-  });
-
 const runStartupPhase = <A, E, R>(phase: string, effect: Effect.Effect<A, E, R>) =>
   effect.pipe(
     Effect.annotateSpans({ "startup.phase": phase }),
@@ -529,22 +491,15 @@ const make = (options?: StartupOptions) =>
 
       yield* forkParked(
         Effect.gen(function* () {
-          if (serverConfig.startupPresentation === "headless") {
+          // The native host opens the desktop window. Standalone backends only
+          // advertise API pairing details for desktop and companion connections.
+          if (serverConfig.mode !== "desktop") {
             yield* Effect.logDebug("startup phase: headless access info");
             const accessInfo = yield* issueHeadlessServeAccessInfo();
             yield* runStartupPhase(
               "headless.output",
               Console.log(formatHeadlessServeOutput(accessInfo)),
             );
-          } else {
-            yield* Effect.logDebug("startup phase: browser open check");
-            const startupBrowserTarget = yield* resolveStartupBrowserTarget;
-            if (serverConfig.mode !== "desktop") {
-              yield* Effect.logInfo(
-                "Authentication required. Open Cinderdeck using the pairing URL.",
-              ).pipe(Effect.annotateLogs({ pairingUrl: startupBrowserTarget }));
-            }
-            yield* runStartupPhase("browser.open", maybeOpenBrowser(startupBrowserTarget));
           }
         }),
       );

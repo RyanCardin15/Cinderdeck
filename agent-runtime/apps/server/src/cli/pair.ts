@@ -133,40 +133,14 @@ export class ServePortOccupiedError extends Schema.TaggedError<ServePortOccupied
   }
 }
 
-/** The URL a browser or phone should pair through, absent Tailscale. */
+/** The API URL encoded in a desktop/companion pairing link. */
 export const resolveDirectPairingBaseUrl = (state: PersistedServerRuntimeState): string =>
-  state.devUrl ?? resolveHeadlessConnectionString(state.host, state.port);
+  resolveHeadlessConnectionString(state.host, state.port);
 
-export class DevServerNotProxiableError extends Schema.TaggedError<DevServerNotProxiableError>()(
-  "DevServerNotProxiableError",
-  { devUrl: Schema.String },
-) {
-  override get message(): string {
-    return `Tailscale Serve can only proxy plain-HTTP local targets, and this dev server runs at ${this.devUrl}. Pair without --tailscale instead.`;
-  }
-}
-
-const isDevServerNotProxiableError = Schema.is(DevServerNotProxiableError);
-
-/**
- * The local endpoint Tailscale Serve should proxy to. Dev servers are
- * single-origin, so the web dev server's port is the one to publish; the
- * backend rides along behind Vite's proxy. Serve targets are always plain
- * HTTP, so an HTTPS dev URL cannot be proxied and is rejected.
- */
+/** Pairing always targets the API listener, never the private desktop renderer. */
 export const resolveTailscaleLocalTarget = (
   state: PersistedServerRuntimeState,
-): { readonly localPort: number; readonly localHost?: string } | DevServerNotProxiableError => {
-  if (state.devUrl !== undefined) {
-    const devUrl = new URL(state.devUrl);
-    if (devUrl.protocol !== "http:") {
-      return new DevServerNotProxiableError({ devUrl: state.devUrl });
-    }
-    const localPort = devUrl.port.length > 0 ? Number.parseInt(devUrl.port, 10) : 80;
-    return isLoopbackHost(devUrl.hostname)
-      ? { localPort }
-      : { localPort, localHost: devUrl.hostname };
-  }
+): { readonly localPort: number; readonly localHost?: string } => {
   // A server bound to one specific interface does not answer on loopback, so
   // the proxy has to target that interface directly.
   if (state.host !== undefined && !isWildcardHost(state.host) && !isLoopbackHost(state.host)) {
@@ -189,6 +163,7 @@ const formatPairOutput = (input: {
     renderTerminalQrCode(input.pairingUrl),
     "",
     `Pairing URL: ${input.pairingUrl}`,
+    "Paste this link into Cinderdeck connection settings or scan it with the mobile companion.",
     `Token: ${input.token}`,
     `Expires: ${DateTime.formatIso(input.expiresAt)}`,
     ...input.notes.flatMap((note) => ["", `Note: ${note}`]),
@@ -383,23 +358,13 @@ const resolveTailscalePairingBase = Effect.fn("pair.resolveTailscalePairingBase"
       if (existing.descriptor.environmentId !== input.target.descriptor.environmentId) {
         return yield* new ServesOtherEnvironmentError({ servePort: input.servePort });
       }
-      // Matching environment id proves the mapping reaches this server, but
-      // not through which port: for a dev server it may front the backend
-      // (whose /.well-known also answers) while /pair only renders through
-      // the web origin. Reuse as-is for regular servers; fall through and
-      // repoint our own mapping at the web port for dev servers.
-      if (input.target.state.devUrl === undefined) {
-        return { baseUrl, notes };
-      }
+      return { baseUrl, notes };
     }
     if (existing._tag === "not-a-t3-server") {
       return yield* new ServePortOccupiedError({ servePort: input.servePort });
     }
 
     const localTarget = resolveTailscaleLocalTarget(input.target.state);
-    if (isDevServerNotProxiableError(localTarget)) {
-      return yield* localTarget;
-    }
     yield* ensureTailscaleServe({
       localPort: localTarget.localPort,
       servePort: input.servePort,
@@ -509,11 +474,6 @@ export const pairCommand = Command.make("pair", {
         if (isLoopbackHost(new URL(pairingBaseUrl).hostname)) {
           notes.push(
             "This URL is only reachable from this machine. Re-run with --tailscale, or restart the server with a reachable --host.",
-          );
-        }
-        if (target.variant === "dev" && target.state.devUrl === undefined) {
-          notes.push(
-            "This dev server did not record its web URL; restart it so pairing can go through the web origin.",
           );
         }
       }

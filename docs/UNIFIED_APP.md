@@ -4,6 +4,14 @@ Cinderdeck is one regular macOS application. Open it from Finder, Spotlight, or 
 
 The native app launches a private `Contents/Resources/Cinderdeck.app/Contents/MacOS/Cinderdeck` child. This bundle is shipped inside Cinderdeck; it is not a second product to install. Its identifier is `com.ryancardin.cinderdeck.runtime`, while the outer app remains `com.ryancardin.cinderdeck` (`com.ryancardin.cinderdeck.debug` for Debug). The internal bundle does not register URL schemes. Native Cinderdeck owns updates for the entire bundle; the runtime's independent updater is disabled in native-host mode.
 
+## Desktop interface
+
+The main interface is available only inside the macOS application. Packaged builds load their bundled renderer assets through the private `deckhand://app` protocol and ignore inherited `VITE_DEV_SERVER_URL` values. The runtime's HTTP/WebSocket listener remains an API transport for desktop and companion connections. Requests for `/`, settings routes, pairing pages, or renderer files return 404; they do not serve HTML or redirect to a web development server.
+
+For isolated renderer development, `node scripts/dev-runner.ts dev --home-dir /absolute/path/to/disposable-state` starts the desktop runtime with a private Vite renderer. Each launcher generates a credential held by the Electron main process; only its private protocol proxy can request renderer files. Direct browser requests are rejected, and the interface requires the desktop preload bridge before mounting. `--browser` and `--share` are rejected. The legacy `dev:web` invocation selects desktop development. `dev:server` starts only a headless companion API backend. Development data without a selected home or worktree goes into disposable temporary storage. Pairing QR codes and links retain their compatible format as connection data to paste into Cinderdeck or scan with the companion; they do not open a browser interface. Pairing and Tailscale API exposure always target the backend port, including when old state records a renderer URL.
+
+The UI still uses React/Electron as part of the bundled Mac app. This change removes standalone browser access; it does not replace the interface with SwiftUI. Whole-app validation still requires the packaged outer application.
+
 ## Build and assemble
 
 Clone the Cinderdeck repository normally. The maintained agent runtime source is included as tracked files under `agent-runtime/`, with full history and licenses. Use Xcode 26.2 or later and Rust/Cargo. The builder installs frozen dependencies and bootstraps the supported Node toolchain inside the clone when needed. It does not fetch a different harness revision.

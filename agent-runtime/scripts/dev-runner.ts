@@ -1,15 +1,21 @@
 #!/usr/bin/env node
 
+// @effect-diagnostics nodeBuiltinImport:off -- The development launcher generates a private renderer credential.
+import * as NodeCrypto from "node:crypto";
 import * as NodeOS from "node:os";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NetService from "@cinderdeck/shared/Net";
 import { resolveGitWorktreePath, resolveWorktreeT3Home } from "@cinderdeck/shared/devHome";
-import { HostProcessEnvironment, HostProcessWorkingDirectory } from "@cinderdeck/shared/hostProcess";
+import {
+  HostProcessEnvironment,
+  HostProcessWorkingDirectory,
+} from "@cinderdeck/shared/hostProcess";
 import { resolveSpawnCommand } from "@cinderdeck/shared/shell";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Hash from "effect/Hash";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
@@ -19,7 +25,6 @@ import * as Schema from "effect/Schema";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { ChildProcess } from "effect/unstable/process";
 
-import { type DevShareError, shareDevServer, unshareDevServer } from "./lib/dev-share.ts";
 import { loadRepoEnv } from "./lib/public-config.ts";
 
 Object.assign(process.env, loadRepoEnv());
@@ -71,18 +76,18 @@ export const DEFAULT_T3_HOME = Effect.map(Effect.service(Path.Path), (path) =>
   path.join(NodeOS.homedir(), ".deckhand"),
 );
 
+const DESKTOP_DEV_ARGS = [
+  "run",
+  "--filter=@cinderdeck/desktop",
+  "--filter=@cinderdeck/web",
+  "dev",
+] as const;
 const MODE_ARGS = {
-  dev: [
-    "run",
-    "--filter=@cinderdeck/contracts",
-    "--filter=@cinderdeck/web",
-    "--filter=@cinderdeck/server",
-    "--parallel",
-    "dev",
-  ],
+  dev: DESKTOP_DEV_ARGS,
   "dev:server": ["run", "--filter=@cinderdeck/server", "dev"],
-  "dev:web": ["run", "--filter=@cinderdeck/web", "dev"],
-  "dev:desktop": ["run", "--filter=@cinderdeck/desktop", "--filter=@cinderdeck/web", "dev"],
+  // Legacy invocation now opens the desktop runtime instead of a browser app.
+  "dev:web": DESKTOP_DEV_ARGS,
+  "dev:desktop": DESKTOP_DEV_ARGS,
 } as const satisfies Record<string, ReadonlyArray<string>>;
 
 type DevMode = keyof typeof MODE_ARGS;
@@ -186,7 +191,16 @@ export class DevRunnerHostNotProxiableError extends Schema.TaggedError<DevRunner
   },
 ) {
   override get message(): string {
-    return `--host ${this.host} cannot be combined with ${this.mode}: single-origin browser dev proxies the backend at localhost, and a backend bound only to ${this.host} leaves localhost unanswered, so every proxied request fails. Use a wildcard (0.0.0.0 or ::) to serve that interface and loopback together, or --share for remote access.`;
+    return `--host ${this.host} cannot be combined with ${this.mode}: desktop development uses a private loopback renderer and backend. Use dev:server for a companion API backend bound to another interface.`;
+  }
+}
+
+export class DevRunnerDesktopOnlyError extends Schema.TaggedError<DevRunnerDesktopOnlyError>()(
+  "DevRunnerDesktopOnlyError",
+  {},
+) {
+  override get message(): string {
+    return "Cinderdeck is a desktop application. Browser launch and browser sharing are no longer supported.";
   }
 }
 
@@ -299,7 +313,6 @@ export function createDevRunnerEnv({
   serverOffset,
   webOffset,
   t3Home,
-  browser,
   autoBootstrapProjectFromCwd,
   logWebSocketEvents,
   host,
@@ -309,112 +322,45 @@ export function createDevRunnerEnv({
   return Effect.gen(function* () {
     const serverPort = port ?? BASE_SERVER_PORT + serverOffset;
     const webPort = BASE_WEB_PORT + webOffset;
-    // Precedence (--home-dir > worktree .t3 > ambient DECKHAND_HOME) is resolved
-    // by the caller; an unset t3Home here genuinely means "use the default".
     const configuredBaseDir = t3Home?.trim() || undefined;
     const resolvedBaseDir = yield* resolveBaseDir(configuredBaseDir);
-    const isDesktopMode = mode === "dev:desktop";
-
+    const isDesktopMode = mode !== "dev:server";
     const output: NodeJS.ProcessEnv = {
       ...baseEnv,
       PORT: String(webPort),
-      VITE_DEV_SERVER_URL:
-        devUrl?.toString() ??
-        `http://${isDesktopMode ? DESKTOP_DEV_LOOPBACK_HOST : "localhost"}:${webPort}`,
+      DECKHAND_PORT: String(serverPort),
+      DECKHAND_NO_BROWSER: "1",
+      VITE_DEV_SERVER_URL: devUrl?.toString() ?? `http://${DESKTOP_DEV_LOOPBACK_HOST}:${webPort}`,
+      VITE_HTTP_URL: `http://${DESKTOP_DEV_LOOPBACK_HOST}:${serverPort}`,
+      VITE_WS_URL: `ws://${DESKTOP_DEV_LOOPBACK_HOST}:${serverPort}`,
     };
+    if (configuredBaseDir !== undefined) output.DECKHAND_HOME = resolvedBaseDir;
+    else delete output.DECKHAND_HOME;
 
-    if (configuredBaseDir !== undefined) {
-      output.DECKHAND_HOME = resolvedBaseDir;
-    } else {
-      delete output.DECKHAND_HOME;
-    }
-
-    // A dev-runner server is never launcher-managed. When the shell that runs
-    // this script was itself spawned by the machine's managed t3 service (an
-    // agent working inside Cinderdeck), these leak through and the child server
-    // fails startup with "The service launcher started a different t3 version"
-    // (serviceLauncherClient.ts resolveStartup).
     delete output.T3_SERVICE_LAUNCHER_CONTEXT;
     delete output.T3_BOOT_SERVICE_UNIT;
-
-    if (!isDesktopMode) {
-      output.DECKHAND_PORT = String(serverPort);
-      // HOST is Vite's own bind address, and the desktop branch below is the
-      // only place we set it. An inherited one (an exported HOST, a container,
-      // a `HOST=0.0.0.0 npm start` habit) would otherwise reach Vite and pin
-      // its HMR socket to that address — see the `explicitHost` gate in
-      // apps/web/vite.config.ts. Over a shared origin that is invisible: the
-      // page loads and only HMR quietly dials the wrong machine.
-      delete output.HOST;
-      if (mode === "dev" || mode === "dev:web") {
-        // Browser dev is single-origin: everything (including /ws) is proxied
-        // through Vite, so the client must resolve its backend from
-        // window.location.origin rather than a baked-in localhost URL. See
-        // resolveConfiguredPrimaryTarget in apps/web/src/environments/primary/target.ts
-        // — it only defers to the origin when both of these are absent. Baking
-        // localhost here is what breaks any non-localhost origin (tailnet, LAN,
-        // phone): the remote browser dials its own machine.
-        delete output.VITE_HTTP_URL;
-        delete output.VITE_WS_URL;
-        // Deleting is not enough on its own: vite.config.ts calls loadRepoEnv,
-        // which merges `.env`/`.env.local` *under* this env, so a developer
-        // with either URL in their `.env` would get it back and silently lose
-        // single-origin mode. This states the intent positively so Vite can
-        // ignore those values rather than infer from their absence.
-        output.DECKHAND_SINGLE_ORIGIN_DEV = "1";
-      } else {
-        output.VITE_HTTP_URL = `http://localhost:${serverPort}`;
-        output.VITE_WS_URL = `ws://localhost:${serverPort}`;
-        delete output.DECKHAND_SINGLE_ORIGIN_DEV;
-      }
-    } else {
-      output.DECKHAND_PORT = String(serverPort);
-      output.VITE_HTTP_URL = `http://${DESKTOP_DEV_LOOPBACK_HOST}:${serverPort}`;
-      output.VITE_WS_URL = `ws://${DESKTOP_DEV_LOOPBACK_HOST}:${serverPort}`;
-      // Desktop pins the renderer to loopback on purpose; an ambient marker
-      // must not make Vite drop those URLs.
-      delete output.DECKHAND_SINGLE_ORIGIN_DEV;
-      delete output.DECKHAND_MODE;
-      delete output.DECKHAND_NO_BROWSER;
-      delete output.DECKHAND_HOST;
-      delete output.DECKHAND_DEV_AUTH_TOKEN;
-    }
-
-    if (!isDesktopMode && host !== undefined) {
-      output.DECKHAND_HOST = host;
-    }
-
-    if (!isDesktopMode) {
-      output.DECKHAND_NO_BROWSER = browser === true ? "0" : "1";
-    }
-
-    if (autoBootstrapProjectFromCwd !== undefined) {
-      output.DECKHAND_AUTO_BOOTSTRAP_PROJECT_FROM_CWD = autoBootstrapProjectFromCwd ? "1" : "0";
-    } else {
-      delete output.DECKHAND_AUTO_BOOTSTRAP_PROJECT_FROM_CWD;
-    }
-
-    if (logWebSocketEvents !== undefined) {
-      output.DECKHAND_LOG_WS_EVENTS = logWebSocketEvents ? "1" : "0";
-    } else {
-      delete output.DECKHAND_LOG_WS_EVENTS;
-    }
-
-    if (mode === "dev") {
-      output.DECKHAND_MODE = "web";
-      delete output.DECKHAND_DESKTOP_WS_URL;
-    }
-
-    if (mode === "dev:server" || mode === "dev:web") {
-      output.DECKHAND_MODE = "web";
-      delete output.DECKHAND_DESKTOP_WS_URL;
-    }
-
+    delete output.DECKHAND_SINGLE_ORIGIN_DEV;
+    delete output.DECKHAND_DESKTOP_WS_URL;
     if (isDesktopMode) {
       output.HOST = DESKTOP_DEV_LOOPBACK_HOST;
-      delete output.DECKHAND_DESKTOP_WS_URL;
+      // Generate for this launcher; never reuse an inherited credential.
+      output.DECKHAND_RENDERER_TOKEN = NodeCrypto.randomBytes(32).toString("hex");
+      delete output.DECKHAND_MODE;
+      delete output.DECKHAND_HOST;
+      delete output.DECKHAND_DEV_AUTH_TOKEN;
+    } else {
+      delete output.HOST;
+      delete output.DECKHAND_RENDERER_TOKEN;
+      delete output.VITE_DEV_SERVER_URL;
+      output.DECKHAND_MODE = "web"; // Compatibility name for the headless API transport.
+      output.DECKHAND_HOST = host ?? DESKTOP_DEV_LOOPBACK_HOST;
     }
-
+    if (autoBootstrapProjectFromCwd !== undefined) {
+      output.DECKHAND_AUTO_BOOTSTRAP_PROJECT_FROM_CWD = autoBootstrapProjectFromCwd ? "1" : "0";
+    } else delete output.DECKHAND_AUTO_BOOTSTRAP_PROJECT_FROM_CWD;
+    if (logWebSocketEvents !== undefined) {
+      output.DECKHAND_LOG_WS_EVENTS = logWebSocketEvents ? "1" : "0";
+    } else delete output.DECKHAND_LOG_WS_EVENTS;
     return output;
   });
 }
@@ -567,20 +513,6 @@ export function resolveModePortOffsets<R = NetService.NetService>({
     const checkPort = (checkPortAvailability ??
       defaultCheckPortAvailability) as PortAvailabilityCheck<R>;
 
-    if (mode === "dev:web") {
-      if (hasExplicitDevUrl) {
-        return { serverOffset: startOffset, webOffset: startOffset };
-      }
-
-      const webOffset = yield* findFirstAvailableOffset({
-        startOffset,
-        requireServerPort: false,
-        requireWebPort: true,
-        checkPortAvailability: checkPort,
-      });
-      return { serverOffset: startOffset, webOffset };
-    }
-
     if (mode === "dev:server") {
       if (hasExplicitServerPort) {
         return { serverOffset: startOffset, webOffset: startOffset };
@@ -622,6 +554,9 @@ interface DevRunnerCliInput {
 
 export function runDevRunnerWithInput(input: DevRunnerCliInput) {
   return Effect.gen(function* () {
+    if (input.share || input.browser === true) {
+      return yield* new DevRunnerDesktopOnlyError({});
+    }
     const { portOffset, devInstance } = yield* OffsetConfig.pipe(
       Effect.mapError(
         (cause) =>
@@ -632,11 +567,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
       ),
     );
 
-    // Single-origin browser dev proxies the backend at localhost. A wildcard
-    // bind still answers there; a specific non-loopback interface does not,
-    // which breaks every proxied request in a way that reads as "server is
-    // broken" rather than "flag combination is unsupported". Reject it up
-    // front instead. (dev:server and dev:desktop don't proxy — untouched.)
+    // Desktop development keeps its renderer and API on loopback.
     if (
       (input.mode === "dev" || input.mode === "dev:web") &&
       input.host !== undefined &&
@@ -674,7 +605,10 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
     const resolvedT3Home =
       (input.t3Home?.trim() || undefined) ??
       worktreeHome ??
-      (hostEnvironment.DECKHAND_HOME?.trim() || undefined);
+      (hostEnvironment.DECKHAND_HOME?.trim() || undefined) ??
+      (yield* (yield* FileSystem.FileSystem).makeTempDirectoryScoped({
+        prefix: "cinderdeck-desktop-dev-",
+      }));
     const env = yield* createDevRunnerEnv({
       mode: input.mode,
       baseEnv: hostEnvironment,
@@ -704,91 +638,6 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
     // surprising side effect from a command documented as inert.
     if (input.dryRun) {
       return;
-    }
-
-    const sharedWebPort = BASE_WEB_PORT + webOffset;
-    if (input.share) {
-      if (input.mode === "dev:server") {
-        yield* Effect.logInfo("[dev-runner] --share has no effect for dev:server (no web server).");
-      } else if (input.mode === "dev:desktop") {
-        // Desktop is not single-origin: the renderer gets VITE_HTTP_URL and
-        // VITE_WS_URL baked to loopback, so a tailnet visitor would load the UI
-        // and then watch it dial its own 127.0.0.1 for the backend. Worse,
-        // sharing would overwrite VITE_DEV_SERVER_URL, which is the origin
-        // Electron itself loads the renderer from. Refuse rather than hand out
-        // a URL that is broken in a way the user cannot see.
-        yield* Effect.logWarning(
-          "[dev-runner] --share is not supported for dev:desktop (the renderer is pinned to loopback). Use `dev`, which runs the whole browser stack.",
-        );
-      } else {
-        // acquireRelease, not share-then-addFinalizer: the mapping outlives this
-        // process (and reboots), so the cleanup has to be registered atomically
-        // with creating it. An interrupt landing in between would otherwise
-        // leave a mapping pointing at a port nothing is listening on.
-        //
-        // Deliberately no ownership tracking beyond that: if a second runner
-        // takes this port during a fast restart, the first's exit can briefly
-        // tear down the new mapping — visible (the URL stops working) and fixed
-        // by re-running --share. A lease protocol closing that window existed
-        // and was removed as more machinery than a dev convenience warrants.
-        //
-        // A tailnet that isn't up shouldn't stop the dev server from starting —
-        // warn, and carry on serving locally.
-        const shared = yield* Effect.acquireRelease(
-          shareDevServer({ webPort: sharedWebPort }),
-          () =>
-            // Serve config outlives this process, so a cleanup that did not
-            // take leaves a tailnet URL pointing at a port nothing serves.
-            unshareDevServer(sharedWebPort).pipe(
-              Effect.flatMap((result) =>
-                result.cleared
-                  ? Effect.void
-                  : Effect.logWarning(
-                      `[dev-runner] could not remove the tailnet mapping for port ${String(sharedWebPort)}${
-                        result.explanation ? `: ${result.explanation}` : ""
-                      }. Remove it with \`tailscale serve --https=${String(sharedWebPort)} off\`.`,
-                    ),
-              ),
-            ),
-        ).pipe(
-          Effect.tapError((error: DevShareError) =>
-            Effect.logWarning(
-              `[dev-runner] could not share on the tailnet: ${error.message}${
-                error.hint ? ` — ${error.hint}` : ""
-              }`,
-            ),
-          ),
-          Effect.option,
-          Effect.map(Option.getOrUndefined),
-        );
-
-        if (shared) {
-          // The app is reached from the tailnet origin. Vite already allows
-          // *.ts.net hosts; the backend needs the origin for credentialed
-          // requests that bypass the proxy (desktop renderer, direct calls).
-          env.DECKHAND_DEV_ALLOWED_ORIGINS = [
-            env.DECKHAND_DEV_ALLOWED_ORIGINS,
-            new URL(shared.url).origin,
-          ]
-            .filter((entry) => entry && entry.length > 0)
-            .join(",");
-          // The server builds its pairing URL from this, so the URL printed at
-          // startup is already the shareable one — no rewriting by hand. An
-          // explicit --dev-url still wins.
-          if (input.devUrl === undefined) {
-            env.VITE_DEV_SERVER_URL = shared.url;
-          }
-          // A shared origin serves a remote browser, where unbundled dev's
-          // per-module requests each pay a tailnet round trip — a cold module
-          // graph takes minutes to first paint. Bundled dev collapses that to
-          // a few chunk requests. Only defaulted, so DECKHAND_BUNDLED_DEV=0
-          // still opts a --share run back out.
-          if (env.DECKHAND_BUNDLED_DEV === undefined) {
-            env.DECKHAND_BUNDLED_DEV = "1";
-          }
-          yield* Effect.logInfo(`[dev-runner] shared on tailnet: ${shared.url}`);
-        }
-      }
     }
 
     const spawnCommand = yield* resolveSpawnCommand(
@@ -856,7 +705,7 @@ const devRunnerCli = Command.make("dev-runner", {
     Flag.map(Option.getOrUndefined),
   ),
   browser: Flag.Boolean("browser").pipe(
-    Flag.withDescription("Open a browser automatically (disabled by default for web dev)."),
+    Flag.withDescription("Legacy option; enabling browser mode is no longer supported."),
     Flag.withDefault(false),
   ),
   autoBootstrapProjectFromCwd: Flag.Boolean("auto-bootstrap-project-from-cwd").pipe(
@@ -882,7 +731,7 @@ const devRunnerCli = Command.make("dev-runner", {
   devUrl: Flag.String("dev-url").pipe(
     Flag.withSchema(Schema.URLFromString),
     Flag.withDescription(
-      "Explicit web dev URL override (forwards to VITE_DEV_SERVER_URL). Ambient VITE_DEV_SERVER_URL values are ignored so a parent dev app cannot redirect the child runner.",
+      "Private desktop renderer development URL override (forwards to VITE_DEV_SERVER_URL). Ambient VITE_DEV_SERVER_URL values are ignored so a parent dev app cannot redirect the child runner.",
     ),
     Flag.optional,
     Flag.map(Option.getOrUndefined),
@@ -892,9 +741,7 @@ const devRunnerCli = Command.make("dev-runner", {
     Flag.withDefault(false),
   ),
   share: Flag.Boolean("share").pipe(
-    Flag.withDescription(
-      "Publish the web dev server on this machine's tailnet over HTTPS (via `tailscale serve`) and print the pairing URL for it. Removed again on exit.",
-    ),
+    Flag.withDescription("Legacy option; sharing a browser app is no longer supported."),
     Flag.withDefault(false),
   ),
   runArgs: Argument.String("run-arg").pipe(
@@ -902,7 +749,7 @@ const devRunnerCli = Command.make("dev-runner", {
     Argument.variadic(),
   ),
 }).pipe(
-  Command.withDescription("Run monorepo development modes with deterministic port/env wiring."),
+  Command.withDescription("Run desktop development or a headless companion API backend."),
   Command.withHandler((input) => runDevRunnerWithInput(input)),
 );
 

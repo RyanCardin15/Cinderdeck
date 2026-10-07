@@ -1,6 +1,6 @@
 # Development
 
-Use the pinned Node and pnpm versions in package.json. From `agent-runtime/`, run `pnpm install --frozen-lockfile`, then `node scripts/dev-runner.ts dev --home-dir /absolute/path/to/disposable-state`. Read the actual ports from the dev-runner output. Leave VITE_HTTP_URL and VITE_WS_URL unset so API and WebSocket traffic stays on the browser’s origin.
+Use the pinned Node and pnpm versions in package.json. From `agent-runtime/`, run `pnpm install --frozen-lockfile`, then `node scripts/dev-runner.ts dev --home-dir /absolute/path/to/disposable-state`. This starts the private desktop runtime and a loopback renderer guarded by a per-launch main-process credential. The launcher sets the renderer and API URLs; do not open the renderer port in a browser. `--browser` and `--share` are unsupported. `dev:server` runs a headless companion API backend. Without a selected home or worktree, state is temporary.
 
 The native macOS host owns runtime storage for an installed app. Never start a development backend against that store. Linked worktrees use their own ignored `.t3` compatibility directory; an explicit `--home-dir` takes precedence. Provider authentication remains with the installed CLI.
 

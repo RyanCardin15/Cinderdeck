@@ -25,7 +25,9 @@ import * as ServerConfig from "../config.ts";
 import { expandHomePath, resolveBaseDir } from "../os-jank.ts";
 
 const modeFlag = Flag.Literals("mode", ServerConfig.RuntimeMode.literals).pipe(
-  Flag.withDescription("Runtime mode. `desktop` keeps loopback defaults unless overridden."),
+  Flag.withDescription(
+    "Transport mode. `web` is the legacy name for a headless API backend; neither mode serves a browser app.",
+  ),
   Flag.optional,
 );
 const portFlag = Flag.Int("port").pipe(
@@ -45,11 +47,13 @@ export const baseDirFlag = Flag.String("base-dir").pipe(
 );
 const devUrlFlag = Flag.String("dev-url").pipe(
   Flag.withSchema(Schema.URLFromString),
-  Flag.withDescription("Dev web URL to proxy/redirect to (equivalent to VITE_DEV_SERVER_URL)."),
+  Flag.withDescription(
+    "Legacy development URL for data isolation and API CORS; no app UI is served or redirected.",
+  ),
   Flag.optional,
 );
 const noBrowserFlag = Flag.Boolean("no-browser").pipe(
-  Flag.withDescription("Disable automatic browser opening."),
+  Flag.withDescription("Legacy compatibility flag; browser opening is always disabled."),
   Flag.optional,
 );
 const bootstrapFdFlag = Flag.Int("bootstrap-fd").pipe(
@@ -336,17 +340,10 @@ export const resolveServerConfig = (
     );
     const serverTracePath = env.traceFile ?? derivedPaths.serverTracePath;
     yield* fs.makeDirectory(path.dirname(serverTracePath), { recursive: true });
-    const startupPresentation = options?.startupPresentation ?? "browser";
-    const isHeadlessStartup = startupPresentation === "headless";
-    const noBrowser = Option.getOrElse(
-      resolveOptionPrecedence(
-        isHeadlessStartup ? Option.some(true) : Option.none(),
-        normalizedFlags.noBrowser,
-        Option.fromUndefinedOr(env.noBrowser),
-        Option.fromUndefinedOr(bootstrap?.noBrowser),
-      ),
-      () => mode === "desktop",
-    );
+    const startupPresentation = "headless" as const;
+    // Keep the legacy flags and bootstrap fields readable without allowing
+    // them to turn the private app backend into a browser entry point.
+    const noBrowser = true;
     const desktopBootstrapToken = bootstrap?.desktopBootstrapToken;
     const desktopTelemetryFd = bootstrap?.desktopTelemetryFd;
     const desktopTelemetryControlFd = bootstrap?.desktopTelemetryControlFd;
@@ -354,11 +351,11 @@ export const resolveServerConfig = (
     const autoBootstrapProjectFromCwd = Option.getOrElse(
       resolveOptionPrecedence(
         Option.fromUndefinedOr(options?.forceAutoBootstrapProjectFromCwd),
-        isHeadlessStartup ? Option.some(false) : Option.none(),
+        options?.startupPresentation === "headless" ? Option.some(false) : Option.none(),
         normalizedFlags.autoBootstrapProjectFromCwd,
         Option.fromUndefinedOr(env.autoBootstrapProjectFromCwd),
       ),
-      () => mode === "web",
+      () => false,
     );
     const logWebSocketEvents = Option.getOrElse(
       resolveOptionPrecedence(
@@ -383,7 +380,7 @@ export const resolveServerConfig = (
       ),
       () => 443,
     );
-    const staticDir = devUrl ? undefined : yield* ServerConfig.resolveStaticDir();
+    const staticDir = undefined;
     const host = Option.getOrElse(
       resolveOptionPrecedence(
         normalizedFlags.host,
