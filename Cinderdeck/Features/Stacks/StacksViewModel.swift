@@ -178,7 +178,7 @@ final class StacksViewModel: ObservableObject {
       if let url = components.url { NSWorkspace.shared.open(url) }
     } else { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: repo.path.path) }
   }
-  func edit(_ file: StackDefinitionFile) { editor = .init(file: file.file) }
+  func edit(_ file: StackDefinitionFile) { UnifiedSettingsNavigation.openWorkspace(file.id) }
   func create() { editor = .init(file: nil) }
   func deleteLane(_ file: StackDefinitionFile) {
     guard let current = files.first(where: { $0.id == file.id }), workspaceNavigation.isLane(current.id) else { return }

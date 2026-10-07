@@ -1,3 +1,4 @@
+import { NATIVE_SETTINGS_PAGES } from "../../deckhand/nativeSettingsNavigation";
 import { resolveEnvironmentMachineKind } from "@cinderdeck/contracts";
 import { useLocation } from "@tanstack/react-router";
 import { ChevronDownIcon, LayersIcon } from "lucide-react";
@@ -31,6 +32,7 @@ import {
 
 /** Pages whose every row is saved on this client; they have no scope to pick. */
 export const SETTINGS_DEVICE_ONLY_PATHS: ReadonlySet<string> = new Set([
+  ...Object.keys(NATIVE_SETTINGS_PAGES),
   "/settings/appearance",
   "/settings/snap-shot",
   "/settings/external-apps",
@@ -54,8 +56,14 @@ interface SettingsScopeMenuProps {
 export function SettingsScopeSentence() {
   const scope = useOptionalSettingsScope();
   const pathname = useLocation({ select: (location) => location.pathname });
+  const workspace = useLocation({ select: (location) => location.search.workspace });
   const { environments } = useEnvironments();
-  if (scope === null || SETTINGS_DEVICE_ONLY_PATHS.has(pathname)) return null;
+  if (
+    scope === null ||
+    SETTINGS_DEVICE_ONLY_PATHS.has(pathname) ||
+    (pathname === "/settings/workspaces" && typeof workspace === "string")
+  )
+    return null;
   const props: SettingsScopeMenuProps = {
     value: scope.search,
     singleEnvironment: scope.singleEnvironment,

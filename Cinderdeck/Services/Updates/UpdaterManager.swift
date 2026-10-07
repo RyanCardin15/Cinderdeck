@@ -79,7 +79,7 @@ final class UpdaterManager: NSObject, ObservableObject, SPUUpdaterDelegate, SPUS
         self?.apply(event)
       },
       showPreferences: {
-        AppStatusBarController.shared.openPreferencesWindow(tab: .about)
+        UnifiedSettingsNavigation.openUpdates()
       }
     )
     let updater = SPUUpdater(hostBundle: .main, applicationBundle: .main, userDriver: userDriver, delegate: self)

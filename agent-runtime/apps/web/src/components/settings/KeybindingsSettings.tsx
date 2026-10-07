@@ -1,3 +1,4 @@
+import { NativeSettingsSection } from "../../deckhand/NativeSettings";
 import {
   ChevronDownIcon,
   CircleXIcon,
@@ -1511,6 +1512,7 @@ export function KeybindingsSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <NativeSettingsSection category="shortcuts" title="Capture & desktop shortcuts" />
       <SettingsSection
         {...searchableSetting("keybindings")}
         headerAction={

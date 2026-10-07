@@ -13,6 +13,58 @@ vi.mock("@tanstack/react-router", () => ({ useNavigate: () => boundary.navigate 
 vi.mock("../state/environments", () => ({ usePrimaryEnvironmentId: () => boundary.environment }));
 import { NativeHostNavigation } from "./NativeHostNavigation";
 
+it("opens native settings in the unified page even before the environment connects", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  window.desktopBridge = {
+    onNativeHostRoute: (listener) => {
+      boundary.listener = listener;
+      return () => {
+        boundary.listener = null;
+      };
+    },
+  } as NonNullable<Window["desktopBridge"]>;
+  const root = createRoot(document.createElement("div"));
+  try {
+    await act(async () => root.render(<NativeHostNavigation />));
+    for (const [category, to, hash] of [
+      ["general", "/settings/general", "native-general"],
+      ["github", "/settings/source-control", "native-github"],
+      ["shortcuts", "/settings/keybindings", "native-shortcuts"],
+      ["dictation", "/settings/dictation", "native-dictation"],
+      ["capture", "/settings/capture", "native-capture"],
+    ]) {
+      await act(async () => boundary.listener!({ section: `settings:${category}` }));
+      expect(boundary.navigate).toHaveBeenLastCalledWith({ to, hash, search: {} });
+    }
+    await act(async () =>
+      boundary.listener!({ section: "settings:workspace", workspaceID: "alpha" }),
+    );
+    expect(boundary.navigate).toHaveBeenLastCalledWith({
+      to: "/settings/workspaces",
+      hash: "native-workspace",
+      search: { workspace: "alpha" },
+    });
+    await act(async () =>
+      boundary.listener!({ section: "settings:workspace-delete", workspaceID: "alpha" }),
+    );
+    expect(boundary.navigate).toHaveBeenLastCalledWith({
+      to: "/settings/workspaces",
+      hash: "native-workspace",
+      search: { workspace: "alpha", workspaceAction: "delete" },
+    });
+    await act(async () =>
+      boundary.listener!({ section: "settings:workspace-configuration", workspaceID: "alpha" }),
+    );
+    expect(boundary.navigate).toHaveBeenLastCalledWith({
+      to: "/settings/workspaces",
+      hash: "native-workspace",
+      search: { workspace: "alpha", workspaceAction: "configuration" },
+    });
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+
 afterEach(() => {
   boundary.navigate.mockClear();
   boundary.environment = null;

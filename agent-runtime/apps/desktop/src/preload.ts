@@ -48,6 +48,7 @@ if (clientPlatform === "darwin") {
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  nativeSettings: (command) => ipcRenderer.invoke("cinderdeck:native-settings", command),
   dictation: (command) => ipcRenderer.invoke("cinderdeck:dictation", command),
   onDictation: (listener) => {
     const wrapped = (_event: Electron.IpcRendererEvent, value: Parameters<typeof listener>[0]) =>

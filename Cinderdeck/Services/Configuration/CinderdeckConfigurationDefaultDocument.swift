@@ -57,6 +57,10 @@ enum CinderdeckConfigurationDefaultDocument {
     writer.value("recording_template", CaptureOutputKind.recording.defaultTemplate)
 
     writer.section("capture.screenshot")
+    writer.value("auto_detect_element", false)
+    writer.value("auto_detect_window", false)
+    writer.value("live_passthrough", true)
+    writer.value("include_window_shadow", true)
     writer.value("format", ImageFormatOption.png.rawValue)
     writer.value("include_cinderdeck", false)
     writer.value("show_cursor", false)
@@ -68,6 +72,7 @@ enum CinderdeckConfigurationDefaultDocument {
     writer.value("show_hints", true)
 
     writer.section("capture.ocr")
+    writer.value("link_detection", true)
     writer.value("success_notification", true)
     writer.value("selected_model", OCRModelSelection.builtIn.persistedValue)
     writer.value("custom_models", "[]")
@@ -81,6 +86,8 @@ enum CinderdeckConfigurationDefaultDocument {
 
   private static func writeRecording(_ writer: inout SimpleTOMLWriter) {
     writer.section("recording")
+    writer.value("show_time_on_menu_bar", true)
+    writer.value("hover_bar_visible", true)
     writer.value("format", VideoFormat.mov.rawValue)
     writer.value("quality", VideoQuality.high.rawValue)
     writer.value("fps", 30)
@@ -158,6 +165,7 @@ enum CinderdeckConfigurationDefaultDocument {
 
   private static func writeCloud(_ writer: inout SimpleTOMLWriter) {
     writer.section("cloud")
+    writer.value("enabled", false)
     writer.value("provider", CloudProviderType.awsS3.rawValue)
     writer.value("bucket", "")
     writer.value("region", "us-east-1")

@@ -10,7 +10,9 @@ import Foundation
 
 enum CinderdeckConfigurationShortcutCodec {
   static func exportKey(_ config: ShortcutConfig) -> String {
-    ShortcutConfig.keyCodeToString(config.keyCode)
+    let label = ShortcutConfig.keyCodeToString(config.keyCode)
+    // Keypad and uncommon hardware keys need an unambiguous representation.
+    return keyCode(for: label) == config.keyCode ? label : "KeyCode:\(config.keyCode)"
   }
 
   static func exportModifiers(_ config: ShortcutConfig) -> [String] {
@@ -55,7 +57,9 @@ enum CinderdeckConfigurationShortcutCodec {
   }
 
   private static func keyCode(for key: String) -> UInt32? {
-    switch key.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() {
+    let normalized = key.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    if normalized.hasPrefix("KEYCODE:"), let code = UInt32(normalized.dropFirst(8)), code <= 127 { return code }
+    switch normalized {
     case "0": return UInt32(kVK_ANSI_0)
     case "1": return UInt32(kVK_ANSI_1)
     case "2": return UInt32(kVK_ANSI_2)
@@ -112,6 +116,18 @@ enum CinderdeckConfigurationShortcutCodec {
     case "F18": return UInt32(kVK_F18)
     case "F19": return UInt32(kVK_F19)
     case "F20": return UInt32(kVK_F20)
+    case ";": return UInt32(kVK_ANSI_Semicolon)
+    case "'": return UInt32(kVK_ANSI_Quote)
+    case ",": return UInt32(kVK_ANSI_Comma)
+    case ".": return UInt32(kVK_ANSI_Period)
+    case "/": return UInt32(kVK_ANSI_Slash)
+    case "\\": return UInt32(kVK_ANSI_Backslash)
+    case "[": return UInt32(kVK_ANSI_LeftBracket)
+    case "]": return UInt32(kVK_ANSI_RightBracket)
+    case "-": return UInt32(kVK_ANSI_Minus)
+    case "=": return UInt32(kVK_ANSI_Equal)
+    case "`": return UInt32(kVK_ANSI_Grave)
+    case "FN": return UInt32(kVK_Function)
     case "SPACE": return UInt32(kVK_Space)
     // Named keys. Both the exported symbol and a readable word are accepted so a
     // hand-written config stays legible and export/import still round-trips.

@@ -121,6 +121,14 @@ final class CinderdeckConfigurationShortcutCodecTests: XCTestCase {
     XCTAssertNil(CinderdeckConfigurationShortcutCodec.shortcut(key: "F99", modifiers: ["command"], requireModifier: true))
   }
 
+  func testAllVirtualKeysRoundTripWithoutChangingAnExistingBinding() {
+    for code in UInt32(0)...UInt32(127) {
+      let original = ShortcutConfig(keyCode: code, modifiers: UInt32(cmdKey))
+      XCTAssertEqual(roundTrip(original), original, "Hardware key \(code) must survive unified settings edits")
+    }
+    XCTAssertNil(CinderdeckConfigurationShortcutCodec.shortcut(key: "KeyCode:128", modifiers: ["command"], requireModifier: true))
+  }
+
   // MARK: - Helpers
 
   private func f(_ keyCode: Int) -> ShortcutConfig {

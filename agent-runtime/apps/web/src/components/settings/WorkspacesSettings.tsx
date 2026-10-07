@@ -1,3 +1,5 @@
+import { NativeWorkspaceSettings } from "../../deckhand/NativeWorkspaceSettings";
+import { NativeSettingsSection } from "../../deckhand/NativeSettings";
 import { useId, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
@@ -32,15 +34,35 @@ const countLabel = (count: number, noun: string) => `${count} ${noun}${count ===
 const linkClass =
   "inline-flex shrink-0 items-center gap-1 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring";
 
-export function WorkspacesSettings() {
+export function WorkspacesSettings({
+  workspace,
+  deleting,
+  configuration,
+}: {
+  workspace?: string | undefined;
+  deleting?: boolean | undefined;
+  configuration?: boolean | undefined;
+}) {
   const { search } = useSettingsScope();
   const { environments } = useEnvironments();
   const primary = usePrimaryEnvironmentId();
   const environmentId = search.machine
     ? environments.find((item) => item.environmentId === search.machine)?.environmentId
     : primary;
+  if (workspace)
+    return (
+      <SettingsPageContainer>
+        <NativeWorkspaceSettings
+          key={`${workspace}:${deleting ? "delete" : configuration ? "configuration" : "settings"}`}
+          workspace={workspace}
+          deleting={deleting ?? false}
+          configuration={configuration ?? false}
+        />
+      </SettingsPageContainer>
+    );
   return (
     <SettingsPageContainer>
+      <NativeSettingsSection category="workspaces" title="Workspace defaults on this Mac" />
       <header className="space-y-2">
         <h2 className="text-lg font-semibold">Workspaces</h2>
         <p className="max-w-xl text-sm text-muted-foreground">

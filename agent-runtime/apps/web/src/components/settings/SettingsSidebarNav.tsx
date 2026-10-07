@@ -1,4 +1,7 @@
+import { NATIVE_SETTINGS_PAGES } from "../../deckhand/nativeSettingsNavigation";
+import { isNativeSettingsHost } from "../../deckhand/nativeSettingsPresentation";
 import {
+  Fragment,
   lazy,
   Suspense,
   useCallback,
@@ -10,6 +13,18 @@ import {
   type KeyboardEvent,
 } from "react";
 import {
+  CameraIcon,
+  VideoIcon,
+  PencilLineIcon,
+  MicIcon,
+  LayersIcon,
+  MenuIcon,
+  ClockIcon,
+  CloudUploadIcon,
+  ShieldCheckIcon,
+  DownloadIcon,
+  SlidersHorizontalIcon,
+  InfoIcon,
   AppWindowIcon,
   ArchiveIcon,
   BlocksIcon,
@@ -78,6 +93,18 @@ const T3ConnectSidebarAvatar = lazy(() =>
 const SETTINGS_SECTION_ICONS: Readonly<
   Record<SettingsPath, ComponentType<{ className?: string }>>
 > = {
+  "/settings/capture": CameraIcon,
+  "/settings/recording": VideoIcon,
+  "/settings/annotations": PencilLineIcon,
+  "/settings/dictation": MicIcon,
+  "/settings/quick-access": LayersIcon,
+  "/settings/menu-bar": MenuIcon,
+  "/settings/capture-history": ClockIcon,
+  "/settings/cloud-uploads": CloudUploadIcon,
+  "/settings/permissions": ShieldCheckIcon,
+  "/settings/updates": DownloadIcon,
+  "/settings/advanced": SlidersHorizontalIcon,
+  "/settings/about": InfoIcon,
   "/settings/workspaces": PanelsTopLeftIcon,
   "/settings/general": Settings2Icon,
   "/settings/appearance": PaletteIcon,
@@ -104,6 +131,51 @@ const SETTINGS_NAV_ITEMS: ReadonlyArray<{
   icon: SETTINGS_SECTION_ICONS[to],
 }));
 
+const SETTINGS_NAV_GROUPS: readonly { label: string; paths: readonly SettingsPath[] }[] = [
+  {
+    label: "Personalization",
+    paths: ["/settings/general", "/settings/appearance", "/settings/keybindings"],
+  },
+  {
+    label: "Workspaces & agents",
+    paths: [
+      "/settings/workspaces",
+      "/settings/projects",
+      "/settings/providers",
+      "/settings/integrations",
+      "/settings/source-control",
+      "/settings/scheduled-tasks",
+      "/settings/external-apps",
+    ],
+  },
+  {
+    label: "Capture & desktop",
+    paths: [
+      "/settings/capture",
+      "/settings/recording",
+      "/settings/annotations",
+      "/settings/dictation",
+      "/settings/quick-access",
+      "/settings/menu-bar",
+      "/settings/capture-history",
+      "/settings/cloud-uploads",
+      "/settings/snap-shot",
+    ],
+  },
+  {
+    label: "Application",
+    paths: [
+      "/settings/permissions",
+      "/settings/updates",
+      "/settings/storage",
+      "/settings/connections",
+      "/settings/archived",
+      "/settings/advanced",
+      "/settings/about",
+    ],
+  },
+];
+
 function SettingsSectionIcon({ to }: { to: SettingsPath }) {
   const Icon = SETTINGS_SECTION_ICONS[to];
   return <Icon className="mt-0.5 size-3.5 shrink-0 text-sidebar-muted-foreground/60" />;
@@ -115,7 +187,9 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const currentSearch = useLocation({ select: (location) => location.search });
   const scopeSearch = useMemo(() => validateSettingsScopeSearch(currentSearch), [currentSearch]);
   const navItems = SETTINGS_NAV_ITEMS.filter(
-    (item) => item.to !== "/settings/projects" || isSettingsOverviewVisible(scopeSearch),
+    (item) =>
+      (!Object.hasOwn(NATIVE_SETTINGS_PAGES, item.to) || isNativeSettingsHost()) &&
+      (item.to !== "/settings/projects" || isSettingsOverviewVisible(scopeSearch)),
   );
   const { isMobile, setOpenMobile, open, setOpen } = useSidebar();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -326,27 +400,39 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
               </SidebarMenu>
             ) : (
               <SidebarMenu>
-                {navItems.map((item) => {
-                  const Icon = item.icon;
-                  const isGeneralDetailPage =
-                    item.to === "/settings/general" &&
-                    pathname === "/settings/open-source-licenses";
-                  const isActive =
-                    isGeneralDetailPage ||
-                    pathname === item.to ||
-                    pathname.startsWith(`${item.to}/`);
-                  return (
-                    <SidebarMenuItem key={item.to}>
-                      <SidebarMenuButton
-                        isActive={isActive}
-                        onClick={() => handleSectionClick(item.to)}
-                      >
-                        <Icon />
-                        <span className="truncate">{item.label}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
+                {SETTINGS_NAV_GROUPS.map((group) => (
+                  <Fragment key={group.label}>
+                    <li
+                      role="presentation"
+                      className="px-2 pt-4 pb-1 text-2xs font-medium text-sidebar-muted-foreground/70"
+                    >
+                      {group.label}
+                    </li>
+                    {group.paths.flatMap((path) => {
+                      const item = navItems.find((candidate) => candidate.to === path);
+                      if (!item) return [];
+                      const Icon = item.icon;
+                      const isGeneralDetailPage =
+                        item.to === "/settings/general" &&
+                        pathname === "/settings/open-source-licenses";
+                      const isActive =
+                        isGeneralDetailPage ||
+                        pathname === item.to ||
+                        pathname.startsWith(`${item.to}/`);
+                      return (
+                        <SidebarMenuItem key={item.to}>
+                          <SidebarMenuButton
+                            isActive={isActive}
+                            onClick={() => handleSectionClick(item.to)}
+                          >
+                            <Icon />
+                            <span className="truncate">{item.label}</span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </Fragment>
+                ))}
               </SidebarMenu>
             )}
           </div>

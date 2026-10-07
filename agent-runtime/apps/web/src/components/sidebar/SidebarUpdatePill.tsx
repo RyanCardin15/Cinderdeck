@@ -1,5 +1,7 @@
 import type { DesktopUpdateState } from "@cinderdeck/contracts";
 import { TriangleAlertIcon } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { isNativeSettingsHost } from "../../deckhand/nativeSettingsPresentation";
 import { type ComponentProps, useCallback, useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { isElectron } from "../../env";
@@ -89,6 +91,7 @@ function resolveSidebarUpdatePresentation({
 }
 
 export function SidebarUpdateArchitectureWarning() {
+  if (isNativeSettingsHost()) return null;
   return isElectron ? <SidebarUpdateArchitectureWarningContent /> : null;
 }
 
@@ -109,6 +112,29 @@ function SidebarUpdateArchitectureWarningContent() {
 }
 
 export function SidebarUpdatePill() {
+  if (isNativeSettingsHost())
+    return (
+      <SidebarMenuItem className="ml-auto shrink-0">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Link
+                to="/settings/updates"
+                aria-label="Updates"
+                className="flex size-8 items-center justify-center rounded-md text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:outline-ring"
+              />
+            }
+          >
+            <DesktopUpdateStatusIcon
+              status="idle"
+              downloadPercent={null}
+              isCheckAnimating={false}
+            />
+          </TooltipTrigger>
+          <TooltipPopup side="top">Cinderdeck updates</TooltipPopup>
+        </Tooltip>
+      </SidebarMenuItem>
+    );
   return isElectron ? <SidebarUpdateControl /> : null;
 }
 

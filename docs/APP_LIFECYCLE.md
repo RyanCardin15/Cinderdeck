@@ -110,7 +110,7 @@ State machine (`SplashScreen`): `splash` → `language` → `sponsor` (only when
 - Icon customization (`MenuBarIconRenderer` + `MenuBarIconStyle`, `menuBar.iconStyle`): bundled default (occupancy-normalized), SF Symbol alternates, or custom PNG from `Application Support/Cinderdeck/MenuBarIcon/custom.png` (alpha-bounds normalized, template-rendered monochrome). The cached idle image invalidates on style or custom-file change.
 - Recording state rendering: while recording, the title shows a monospaced-digit timer (`recorder.formattedDuration`); when paused it is prefixed with `|| `; tooltip mirrors state. `setProcessing(_:)` swaps the icon for an `NSProgressIndicator` spinner (used e.g. during OCR) on Core Animation so it keeps animating.
 - Visibility: `showMenuBarIcon` pref toggles the status item (`syncStatusItemVisibility`).
-- Preferences retain regular application activation. The status-bar controller tracks window closure to remove recording exclusions. While recording, the tracked Preferences window is added to the recorder’s runtime exclusion list so Cinderdeck’s own window is not captured.
+- Settings opens in the existing unified main window and retains regular application activation. Native menu, onboarding, shortcut and deep-link entry points route into the same React settings shell; they do not create an auxiliary Preferences window. See [PREFERENCES.md](PREFERENCES.md).
 
 Known leftover: `reportProblemAction` (calls `CrashReportService.presentAlert()`) and the stored `didDetectCrash` flag exist, but **no menu item is wired to them** in `buildMenu()` — problem reporting currently lives in Preferences → About (and Preferences → General → Help). See [UPDATES.md](UPDATES.md).
 

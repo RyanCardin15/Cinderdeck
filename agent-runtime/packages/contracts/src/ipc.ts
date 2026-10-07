@@ -923,6 +923,25 @@ export interface NativeHostRoute {
   readonly workspaceID?: string;
   readonly section?: string;
 }
+
+export type NativeSettingsCategory = "general" | "appearance" | "capture" | "recording" | "annotate" | "quickAccess" | "menuBar" | "history" | "shortcuts" | "permissions" | "dictation" | "cloud" | "github" | "updates" | "advanced" | "workspaces" | "about";
+export type NativeSettingValue = string | number | boolean | readonly string[];
+export interface NativeSettingsField {
+  readonly id: string;
+  readonly value: NativeSettingValue;
+  readonly options?: readonly string[];
+  readonly optionLabels?: Readonly<Record<string, string>>;
+}
+export interface NativeSettingsSnapshot {
+  readonly category: NativeSettingsCategory;
+  readonly fields: readonly NativeSettingsField[];
+  readonly status: Readonly<Record<string, string | boolean>>;
+}
+export interface NativeSettingsCommand {
+  readonly action: "read" | "update" | "permission" | "choose-export-folder" | "check-updates" | "install-update" | "github-refresh" | "github-host" | "github-sign-in" | "github-cancel" | "cloud-save" | "cloud-unlock" | "cloud-clear" | "cloud-protection" | "ocr-key" | "dictation-key" | "dictation-test" | "dictation-stop" | "config-export" | "config-import" | "config-open" | "config-restore" | "config-grant" | "workspace-read" | "workspace-save" | "workspace-pick-folder" | "workspace-pick-file" | "workspace-review-save" | "workspace-delete" | "menu-icon-import" | "menu-icon-remove" | "menu-reset" | "history-open" | "history-clear" | "clipboard-clear" | "config-sync" | "logs-open" | "ocr-test" | "notification-allow" | "notification-open" | "shortcuts-reset" | "cloud-export" | "cloud-import";
+  readonly category: NativeSettingsCategory;
+  readonly payload?: Readonly<Record<string, unknown>>;
+}
 export interface NativeToolRequest {
   readonly surface:
     | "workspace"
@@ -956,6 +975,7 @@ export interface DictationEvent {
 }
 
 export interface DesktopBridge {
+  nativeSettings?: (command: NativeSettingsCommand) => Promise<NativeSettingsSnapshot>;
   dictation?: (command: DictationCommand) => Promise<boolean>;
   onDictation?: (listener: (event: DictationEvent) => void) => () => void;
   isNativeHost?: () => boolean;

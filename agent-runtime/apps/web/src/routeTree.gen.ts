@@ -16,21 +16,33 @@ import { Route as PairRouteImport } from './routes/pair'
 import { Route as ChatRouteImport } from './routes/_chat'
 import { Route as ChatIndexRouteImport } from './routes/_chat.index'
 import { Route as SettingsWorkspacesRouteImport } from './routes/settings.workspaces'
+import { Route as SettingsUpdatesRouteImport } from './routes/settings.updates'
 import { Route as SettingsStorageRouteImport } from './routes/settings.storage'
 import { Route as SettingsSourceControlRouteImport } from './routes/settings.source-control'
 import { Route as SettingsSnapShotRouteImport } from './routes/settings.snap-shot'
 import { Route as SettingsScheduledTasksRouteImport } from './routes/settings.scheduled-tasks'
+import { Route as SettingsRecordingRouteImport } from './routes/settings.recording'
+import { Route as SettingsQuickAccessRouteImport } from './routes/settings.quick-access'
 import { Route as SettingsProvidersRouteImport } from './routes/settings.providers'
 import { Route as SettingsProjectsRouteImport } from './routes/settings.projects'
+import { Route as SettingsPermissionsRouteImport } from './routes/settings.permissions'
 import { Route as SettingsOpenSourceLicensesRouteImport } from './routes/settings.open-source-licenses'
+import { Route as SettingsMenuBarRouteImport } from './routes/settings.menu-bar'
 import { Route as SettingsKeybindingsRouteImport } from './routes/settings.keybindings'
 import { Route as SettingsIntegrationsRouteImport } from './routes/settings.integrations'
 import { Route as SettingsGeneralRouteImport } from './routes/settings.general'
 import { Route as SettingsExternalAppsRouteImport } from './routes/settings.external-apps'
+import { Route as SettingsDictationRouteImport } from './routes/settings.dictation'
 import { Route as SettingsDiagnosticsRouteImport } from './routes/settings.diagnostics'
 import { Route as SettingsConnectionsRouteImport } from './routes/settings.connections'
+import { Route as SettingsCloudUploadsRouteImport } from './routes/settings.cloud-uploads'
+import { Route as SettingsCaptureHistoryRouteImport } from './routes/settings.capture-history'
+import { Route as SettingsCaptureRouteImport } from './routes/settings.capture'
 import { Route as SettingsArchivedRouteImport } from './routes/settings.archived'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings.appearance'
+import { Route as SettingsAnnotationsRouteImport } from './routes/settings.annotations'
+import { Route as SettingsAdvancedRouteImport } from './routes/settings.advanced'
+import { Route as SettingsAboutRouteImport } from './routes/settings.about'
 import { Route as ProjectsProjectKeyRouteImport } from './routes/projects.$projectKey'
 import { Route as ChatWorkspacesRouteImport } from './routes/_chat.workspaces'
 import { Route as ChatServicesRouteImport } from './routes/_chat.services'
@@ -76,6 +88,11 @@ const SettingsWorkspacesRoute = SettingsWorkspacesRouteImport.update({
   path: '/workspaces',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsUpdatesRoute = SettingsUpdatesRouteImport.update({
+  id: '/updates',
+  path: '/updates',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsStorageRoute = SettingsStorageRouteImport.update({
   id: '/storage',
   path: '/storage',
@@ -96,6 +113,16 @@ const SettingsScheduledTasksRoute = SettingsScheduledTasksRouteImport.update({
   path: '/scheduled-tasks',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsRecordingRoute = SettingsRecordingRouteImport.update({
+  id: '/recording',
+  path: '/recording',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsQuickAccessRoute = SettingsQuickAccessRouteImport.update({
+  id: '/quick-access',
+  path: '/quick-access',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsProvidersRoute = SettingsProvidersRouteImport.update({
   id: '/providers',
   path: '/providers',
@@ -106,12 +133,22 @@ const SettingsProjectsRoute = SettingsProjectsRouteImport.update({
   path: '/projects',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsPermissionsRoute = SettingsPermissionsRouteImport.update({
+  id: '/permissions',
+  path: '/permissions',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsOpenSourceLicensesRoute =
   SettingsOpenSourceLicensesRouteImport.update({
     id: '/open-source-licenses',
     path: '/open-source-licenses',
     getParentRoute: () => SettingsRoute,
   } as any)
+const SettingsMenuBarRoute = SettingsMenuBarRouteImport.update({
+  id: '/menu-bar',
+  path: '/menu-bar',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsKeybindingsRoute = SettingsKeybindingsRouteImport.update({
   id: '/keybindings',
   path: '/keybindings',
@@ -132,6 +169,11 @@ const SettingsExternalAppsRoute = SettingsExternalAppsRouteImport.update({
   path: '/external-apps',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsDictationRoute = SettingsDictationRouteImport.update({
+  id: '/dictation',
+  path: '/dictation',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsDiagnosticsRoute = SettingsDiagnosticsRouteImport.update({
   id: '/diagnostics',
   path: '/diagnostics',
@@ -142,6 +184,21 @@ const SettingsConnectionsRoute = SettingsConnectionsRouteImport.update({
   path: '/connections',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsCloudUploadsRoute = SettingsCloudUploadsRouteImport.update({
+  id: '/cloud-uploads',
+  path: '/cloud-uploads',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsCaptureHistoryRoute = SettingsCaptureHistoryRouteImport.update({
+  id: '/capture-history',
+  path: '/capture-history',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsCaptureRoute = SettingsCaptureRouteImport.update({
+  id: '/capture',
+  path: '/capture',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsArchivedRoute = SettingsArchivedRouteImport.update({
   id: '/archived',
   path: '/archived',
@@ -150,6 +207,21 @@ const SettingsArchivedRoute = SettingsArchivedRouteImport.update({
 const SettingsAppearanceRoute = SettingsAppearanceRouteImport.update({
   id: '/appearance',
   path: '/appearance',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsAnnotationsRoute = SettingsAnnotationsRouteImport.update({
+  id: '/annotations',
+  path: '/annotations',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsAdvancedRoute = SettingsAdvancedRouteImport.update({
+  id: '/advanced',
+  path: '/advanced',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsAboutRoute = SettingsAboutRouteImport.update({
+  id: '/about',
+  path: '/about',
   getParentRoute: () => SettingsRoute,
 } as any)
 const ProjectsProjectKeyRoute = ProjectsProjectKeyRouteImport.update({
@@ -218,21 +290,33 @@ export interface FileRoutesByFullPath {
   '/services': typeof ChatServicesRoute
   '/workspaces': typeof ChatWorkspacesRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
+  '/settings/about': typeof SettingsAboutRoute
+  '/settings/advanced': typeof SettingsAdvancedRoute
+  '/settings/annotations': typeof SettingsAnnotationsRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
+  '/settings/capture': typeof SettingsCaptureRoute
+  '/settings/capture-history': typeof SettingsCaptureHistoryRoute
+  '/settings/cloud-uploads': typeof SettingsCloudUploadsRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
+  '/settings/dictation': typeof SettingsDictationRoute
   '/settings/external-apps': typeof SettingsExternalAppsRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
+  '/settings/menu-bar': typeof SettingsMenuBarRoute
   '/settings/open-source-licenses': typeof SettingsOpenSourceLicensesRoute
+  '/settings/permissions': typeof SettingsPermissionsRoute
   '/settings/projects': typeof SettingsProjectsRoute
   '/settings/providers': typeof SettingsProvidersRoute
+  '/settings/quick-access': typeof SettingsQuickAccessRoute
+  '/settings/recording': typeof SettingsRecordingRoute
   '/settings/scheduled-tasks': typeof SettingsScheduledTasksRoute
   '/settings/snap-shot': typeof SettingsSnapShotRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/settings/storage': typeof SettingsStorageRoute
+  '/settings/updates': typeof SettingsUpdatesRoute
   '/settings/workspaces': typeof SettingsWorkspacesRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
@@ -250,21 +334,33 @@ export interface FileRoutesByTo {
   '/services': typeof ChatServicesRoute
   '/workspaces': typeof ChatWorkspacesRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
+  '/settings/about': typeof SettingsAboutRoute
+  '/settings/advanced': typeof SettingsAdvancedRoute
+  '/settings/annotations': typeof SettingsAnnotationsRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
+  '/settings/capture': typeof SettingsCaptureRoute
+  '/settings/capture-history': typeof SettingsCaptureHistoryRoute
+  '/settings/cloud-uploads': typeof SettingsCloudUploadsRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
+  '/settings/dictation': typeof SettingsDictationRoute
   '/settings/external-apps': typeof SettingsExternalAppsRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
+  '/settings/menu-bar': typeof SettingsMenuBarRoute
   '/settings/open-source-licenses': typeof SettingsOpenSourceLicensesRoute
+  '/settings/permissions': typeof SettingsPermissionsRoute
   '/settings/projects': typeof SettingsProjectsRoute
   '/settings/providers': typeof SettingsProvidersRoute
+  '/settings/quick-access': typeof SettingsQuickAccessRoute
+  '/settings/recording': typeof SettingsRecordingRoute
   '/settings/scheduled-tasks': typeof SettingsScheduledTasksRoute
   '/settings/snap-shot': typeof SettingsSnapShotRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/settings/storage': typeof SettingsStorageRoute
+  '/settings/updates': typeof SettingsUpdatesRoute
   '/settings/workspaces': typeof SettingsWorkspacesRoute
   '/': typeof ChatIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
@@ -285,21 +381,33 @@ export interface FileRoutesById {
   '/_chat/services': typeof ChatServicesRoute
   '/_chat/workspaces': typeof ChatWorkspacesRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
+  '/settings/about': typeof SettingsAboutRoute
+  '/settings/advanced': typeof SettingsAdvancedRoute
+  '/settings/annotations': typeof SettingsAnnotationsRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
+  '/settings/capture': typeof SettingsCaptureRoute
+  '/settings/capture-history': typeof SettingsCaptureHistoryRoute
+  '/settings/cloud-uploads': typeof SettingsCloudUploadsRoute
   '/settings/connections': typeof SettingsConnectionsRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
+  '/settings/dictation': typeof SettingsDictationRoute
   '/settings/external-apps': typeof SettingsExternalAppsRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
+  '/settings/menu-bar': typeof SettingsMenuBarRoute
   '/settings/open-source-licenses': typeof SettingsOpenSourceLicensesRoute
+  '/settings/permissions': typeof SettingsPermissionsRoute
   '/settings/projects': typeof SettingsProjectsRoute
   '/settings/providers': typeof SettingsProvidersRoute
+  '/settings/quick-access': typeof SettingsQuickAccessRoute
+  '/settings/recording': typeof SettingsRecordingRoute
   '/settings/scheduled-tasks': typeof SettingsScheduledTasksRoute
   '/settings/snap-shot': typeof SettingsSnapShotRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/settings/storage': typeof SettingsStorageRoute
+  '/settings/updates': typeof SettingsUpdatesRoute
   '/settings/workspaces': typeof SettingsWorkspacesRoute
   '/_chat/': typeof ChatIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
@@ -321,21 +429,33 @@ export interface FileRouteTypes {
     | '/services'
     | '/workspaces'
     | '/projects/$projectKey'
+    | '/settings/about'
+    | '/settings/advanced'
+    | '/settings/annotations'
     | '/settings/appearance'
     | '/settings/archived'
+    | '/settings/capture'
+    | '/settings/capture-history'
+    | '/settings/cloud-uploads'
     | '/settings/connections'
     | '/settings/diagnostics'
+    | '/settings/dictation'
     | '/settings/external-apps'
     | '/settings/general'
     | '/settings/integrations'
     | '/settings/keybindings'
+    | '/settings/menu-bar'
     | '/settings/open-source-licenses'
+    | '/settings/permissions'
     | '/settings/projects'
     | '/settings/providers'
+    | '/settings/quick-access'
+    | '/settings/recording'
     | '/settings/scheduled-tasks'
     | '/settings/snap-shot'
     | '/settings/source-control'
     | '/settings/storage'
+    | '/settings/updates'
     | '/settings/workspaces'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
@@ -353,21 +473,33 @@ export interface FileRouteTypes {
     | '/services'
     | '/workspaces'
     | '/projects/$projectKey'
+    | '/settings/about'
+    | '/settings/advanced'
+    | '/settings/annotations'
     | '/settings/appearance'
     | '/settings/archived'
+    | '/settings/capture'
+    | '/settings/capture-history'
+    | '/settings/cloud-uploads'
     | '/settings/connections'
     | '/settings/diagnostics'
+    | '/settings/dictation'
     | '/settings/external-apps'
     | '/settings/general'
     | '/settings/integrations'
     | '/settings/keybindings'
+    | '/settings/menu-bar'
     | '/settings/open-source-licenses'
+    | '/settings/permissions'
     | '/settings/projects'
     | '/settings/providers'
+    | '/settings/quick-access'
+    | '/settings/recording'
     | '/settings/scheduled-tasks'
     | '/settings/snap-shot'
     | '/settings/source-control'
     | '/settings/storage'
+    | '/settings/updates'
     | '/settings/workspaces'
     | '/'
     | '/$environmentId/$threadId'
@@ -387,21 +519,33 @@ export interface FileRouteTypes {
     | '/_chat/services'
     | '/_chat/workspaces'
     | '/projects/$projectKey'
+    | '/settings/about'
+    | '/settings/advanced'
+    | '/settings/annotations'
     | '/settings/appearance'
     | '/settings/archived'
+    | '/settings/capture'
+    | '/settings/capture-history'
+    | '/settings/cloud-uploads'
     | '/settings/connections'
     | '/settings/diagnostics'
+    | '/settings/dictation'
     | '/settings/external-apps'
     | '/settings/general'
     | '/settings/integrations'
     | '/settings/keybindings'
+    | '/settings/menu-bar'
     | '/settings/open-source-licenses'
+    | '/settings/permissions'
     | '/settings/projects'
     | '/settings/providers'
+    | '/settings/quick-access'
+    | '/settings/recording'
     | '/settings/scheduled-tasks'
     | '/settings/snap-shot'
     | '/settings/source-control'
     | '/settings/storage'
+    | '/settings/updates'
     | '/settings/workspaces'
     | '/_chat/'
     | '/_chat/$environmentId/$threadId'
@@ -468,6 +612,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsWorkspacesRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/updates': {
+      id: '/settings/updates'
+      path: '/updates'
+      fullPath: '/settings/updates'
+      preLoaderRoute: typeof SettingsUpdatesRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/storage': {
       id: '/settings/storage'
       path: '/storage'
@@ -496,6 +647,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsScheduledTasksRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/recording': {
+      id: '/settings/recording'
+      path: '/recording'
+      fullPath: '/settings/recording'
+      preLoaderRoute: typeof SettingsRecordingRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/quick-access': {
+      id: '/settings/quick-access'
+      path: '/quick-access'
+      fullPath: '/settings/quick-access'
+      preLoaderRoute: typeof SettingsQuickAccessRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/providers': {
       id: '/settings/providers'
       path: '/providers'
@@ -510,11 +675,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsProjectsRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/permissions': {
+      id: '/settings/permissions'
+      path: '/permissions'
+      fullPath: '/settings/permissions'
+      preLoaderRoute: typeof SettingsPermissionsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/open-source-licenses': {
       id: '/settings/open-source-licenses'
       path: '/open-source-licenses'
       fullPath: '/settings/open-source-licenses'
       preLoaderRoute: typeof SettingsOpenSourceLicensesRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/menu-bar': {
+      id: '/settings/menu-bar'
+      path: '/menu-bar'
+      fullPath: '/settings/menu-bar'
+      preLoaderRoute: typeof SettingsMenuBarRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/settings/keybindings': {
@@ -545,6 +724,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsExternalAppsRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/dictation': {
+      id: '/settings/dictation'
+      path: '/dictation'
+      fullPath: '/settings/dictation'
+      preLoaderRoute: typeof SettingsDictationRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/diagnostics': {
       id: '/settings/diagnostics'
       path: '/diagnostics'
@@ -559,6 +745,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsConnectionsRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings/cloud-uploads': {
+      id: '/settings/cloud-uploads'
+      path: '/cloud-uploads'
+      fullPath: '/settings/cloud-uploads'
+      preLoaderRoute: typeof SettingsCloudUploadsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/capture-history': {
+      id: '/settings/capture-history'
+      path: '/capture-history'
+      fullPath: '/settings/capture-history'
+      preLoaderRoute: typeof SettingsCaptureHistoryRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/capture': {
+      id: '/settings/capture'
+      path: '/capture'
+      fullPath: '/settings/capture'
+      preLoaderRoute: typeof SettingsCaptureRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/archived': {
       id: '/settings/archived'
       path: '/archived'
@@ -571,6 +778,27 @@ declare module '@tanstack/react-router' {
       path: '/appearance'
       fullPath: '/settings/appearance'
       preLoaderRoute: typeof SettingsAppearanceRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/annotations': {
+      id: '/settings/annotations'
+      path: '/annotations'
+      fullPath: '/settings/annotations'
+      preLoaderRoute: typeof SettingsAnnotationsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/advanced': {
+      id: '/settings/advanced'
+      path: '/advanced'
+      fullPath: '/settings/advanced'
+      preLoaderRoute: typeof SettingsAdvancedRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/about': {
+      id: '/settings/about'
+      path: '/about'
+      fullPath: '/settings/about'
+      preLoaderRoute: typeof SettingsAboutRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/projects/$projectKey': {
@@ -675,40 +903,64 @@ const ChatRouteChildren: ChatRouteChildren = {
 const ChatRouteWithChildren = ChatRoute._addFileChildren(ChatRouteChildren)
 
 interface SettingsRouteChildren {
+  SettingsAboutRoute: typeof SettingsAboutRoute
+  SettingsAdvancedRoute: typeof SettingsAdvancedRoute
+  SettingsAnnotationsRoute: typeof SettingsAnnotationsRoute
   SettingsAppearanceRoute: typeof SettingsAppearanceRoute
   SettingsArchivedRoute: typeof SettingsArchivedRoute
+  SettingsCaptureRoute: typeof SettingsCaptureRoute
+  SettingsCaptureHistoryRoute: typeof SettingsCaptureHistoryRoute
+  SettingsCloudUploadsRoute: typeof SettingsCloudUploadsRoute
   SettingsConnectionsRoute: typeof SettingsConnectionsRoute
   SettingsDiagnosticsRoute: typeof SettingsDiagnosticsRoute
+  SettingsDictationRoute: typeof SettingsDictationRoute
   SettingsExternalAppsRoute: typeof SettingsExternalAppsRoute
   SettingsGeneralRoute: typeof SettingsGeneralRoute
   SettingsIntegrationsRoute: typeof SettingsIntegrationsRoute
   SettingsKeybindingsRoute: typeof SettingsKeybindingsRoute
+  SettingsMenuBarRoute: typeof SettingsMenuBarRoute
   SettingsOpenSourceLicensesRoute: typeof SettingsOpenSourceLicensesRoute
+  SettingsPermissionsRoute: typeof SettingsPermissionsRoute
   SettingsProjectsRoute: typeof SettingsProjectsRoute
   SettingsProvidersRoute: typeof SettingsProvidersRoute
+  SettingsQuickAccessRoute: typeof SettingsQuickAccessRoute
+  SettingsRecordingRoute: typeof SettingsRecordingRoute
   SettingsScheduledTasksRoute: typeof SettingsScheduledTasksRoute
   SettingsSnapShotRoute: typeof SettingsSnapShotRoute
   SettingsSourceControlRoute: typeof SettingsSourceControlRoute
   SettingsStorageRoute: typeof SettingsStorageRoute
+  SettingsUpdatesRoute: typeof SettingsUpdatesRoute
   SettingsWorkspacesRoute: typeof SettingsWorkspacesRoute
 }
 
 const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsAboutRoute: SettingsAboutRoute,
+  SettingsAdvancedRoute: SettingsAdvancedRoute,
+  SettingsAnnotationsRoute: SettingsAnnotationsRoute,
   SettingsAppearanceRoute: SettingsAppearanceRoute,
   SettingsArchivedRoute: SettingsArchivedRoute,
+  SettingsCaptureRoute: SettingsCaptureRoute,
+  SettingsCaptureHistoryRoute: SettingsCaptureHistoryRoute,
+  SettingsCloudUploadsRoute: SettingsCloudUploadsRoute,
   SettingsConnectionsRoute: SettingsConnectionsRoute,
   SettingsDiagnosticsRoute: SettingsDiagnosticsRoute,
+  SettingsDictationRoute: SettingsDictationRoute,
   SettingsExternalAppsRoute: SettingsExternalAppsRoute,
   SettingsGeneralRoute: SettingsGeneralRoute,
   SettingsIntegrationsRoute: SettingsIntegrationsRoute,
   SettingsKeybindingsRoute: SettingsKeybindingsRoute,
+  SettingsMenuBarRoute: SettingsMenuBarRoute,
   SettingsOpenSourceLicensesRoute: SettingsOpenSourceLicensesRoute,
+  SettingsPermissionsRoute: SettingsPermissionsRoute,
   SettingsProjectsRoute: SettingsProjectsRoute,
   SettingsProvidersRoute: SettingsProvidersRoute,
+  SettingsQuickAccessRoute: SettingsQuickAccessRoute,
+  SettingsRecordingRoute: SettingsRecordingRoute,
   SettingsScheduledTasksRoute: SettingsScheduledTasksRoute,
   SettingsSnapShotRoute: SettingsSnapShotRoute,
   SettingsSourceControlRoute: SettingsSourceControlRoute,
   SettingsStorageRoute: SettingsStorageRoute,
+  SettingsUpdatesRoute: SettingsUpdatesRoute,
   SettingsWorkspacesRoute: SettingsWorkspacesRoute,
 }
 

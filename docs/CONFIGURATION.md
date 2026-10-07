@@ -145,12 +145,17 @@ recording_template = "Recordings/{appName}/{year}/{monthShort}/Cinderdeck_Record
 format = "png"
 include_cinderdeck = false
 show_cursor = false
+include_window_shadow = true
+live_passthrough = true
+auto_detect_window = false
+auto_detect_element = false
 freeze_area = false
 show_selection_area_overlay = true
 reverse_magnifier_zoom_direction = false
 
 [capture.ocr]
 success_notification = true
+link_detection = true
 selected_model = "builtin"
 custom_models = "[]"
 
@@ -170,6 +175,8 @@ show_cursor = true
 dim_non_selected_area = true
 highlight_clicks = false
 show_keystrokes = false
+hover_bar_visible = true
+show_time_on_menu_bar = true
 video_editor_zoom_transition_duration = 0.4
 
 [quick_access]
