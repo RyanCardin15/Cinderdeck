@@ -255,14 +255,12 @@ export const make = DesktopLifecycle.of({
       );
     });
 
-    if (environment.platform !== "win32") {
-      yield* addScopedListener(process, "SIGINT", () => {
-        quitFromSignal("SIGINT", runEffect);
-      });
-      yield* addScopedListener(process, "SIGTERM", () => {
-        quitFromSignal("SIGTERM", runEffect);
-      });
-    }
+    yield* addScopedListener(process, "SIGINT", () => {
+      quitFromSignal("SIGINT", runEffect);
+    });
+    yield* addScopedListener(process, "SIGTERM", () => {
+      quitFromSignal("SIGTERM", runEffect);
+    });
   }).pipe(Effect.withSpan("desktop.lifecycle.register")),
 });
 

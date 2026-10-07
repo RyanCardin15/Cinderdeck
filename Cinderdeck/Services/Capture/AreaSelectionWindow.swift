@@ -1121,7 +1121,7 @@ final class AreaSelectionController: NSObject {
     retainedPopoverVisibilityRefreshTask = nil
   }
 
-  func applyBackdrop(_ backdrop: AreaSelectionBackdrop, for displayID: CGDirectDisplayID, animated: Bool = false) {
+  func applyBackdrop(_ backdrop: AreaSelectionBackdrop, for displayID: CGDirectDisplayID) {
     let shouldDeferVisualBackdrop = manualSelectionStartPoint != nil
       && selectionBackdrops[displayID] == nil
     liveFallbackDisplayIDs.remove(displayID)
@@ -1138,8 +1138,7 @@ final class AreaSelectionController: NSObject {
       deferredBackdropDisplayIDs.insert(displayID)
     } else {
       deferredBackdropDisplayIDs.remove(displayID)
-      // Animate only when caller opts in and no manual drag is active.
-      window.overlayView.applyBackdrop(backdrop, animated: animated && manualSelectionStartPoint == nil)
+      window.overlayView.applyBackdrop(backdrop)
     }
     window.overlayView.setSelectionEnabled(selectionEnabled(for: displayID))
     window.overlayView.activatePendingSelectionIfNeeded()
@@ -1340,7 +1339,7 @@ final class AreaSelectionController: NSObject {
 
           guard let self, selectionSessionID == sessionID else { return }
           if let backdrop {
-            applyBackdrop(backdrop, for: displayID, animated: true)
+            applyBackdrop(backdrop, for: displayID)
           }
         }
       }
@@ -2640,7 +2639,6 @@ final class AreaSelectionOverlayView: NSView {
     return layer
   }()
 
-  private var reusableCrosshairPath = CGMutablePath()
   private var horizontalCrosshairLayer: CAShapeLayer!
   private var verticalCrosshairLayer: CAShapeLayer!
   private var selectionBorderLayer: CAShapeLayer!
@@ -2667,9 +2665,7 @@ final class AreaSelectionOverlayView: NSView {
   private let crosshairColor = NSColor.white.withAlphaComponent(0.6)
   private let selectionBorderColor = NSColor.white
   private let selectionBorderWidth: CGFloat = 2.0
-  private let crosshairIndicatorSize: CGFloat = 10.0
   private let crosshairIndicatorLineWidth: CGFloat = 1.5
-  private let crosshairIndicatorCenterRadius: CGFloat = 6.0
   private let overlayFont = NSFont.systemFont(ofSize: 12, weight: .medium)
   private var selectionEnabled = true
   /// Live-passthrough sessions drive the selection gesture from the capture event tap;
@@ -3256,28 +3252,12 @@ final class AreaSelectionOverlayView: NSView {
     CATransaction.commit()
   }
 
-  func applyBackdrop(_ backdrop: AreaSelectionBackdrop, animated: Bool = false) {
-    let shouldAnimate = animated
-      && BackdropTransitionEffect.shouldCrossfade(
-        isReapplication: currentBackdropImage != nil,
-        isVisible: backdrop.isVisible
-      )
-
-    // Frame, scale, and visibility are never animated.
+  func applyBackdrop(_ backdrop: AreaSelectionBackdrop) {
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     snapshotLayer.frame = bounds
     snapshotLayer.contentsScale = backdrop.scaleFactor
     snapshotLayer.isHidden = !backdrop.isVisible
-    CATransaction.commit()
-
-    // Contents swap: crossfade on re-apply when opted-in, hard swap otherwise.
-    CATransaction.begin()
-    if shouldAnimate {
-      BackdropTransitionEffect.addCrossfade(to: snapshotLayer)
-    } else {
-      CATransaction.setDisableActions(true)
-    }
     snapshotLayer.contents = backdrop.image
     CATransaction.commit()
 
@@ -3629,22 +3609,6 @@ final class AreaSelectionOverlayView: NSView {
 
     crosshairIndicatorLayer.isHidden = true
     updateCoordinateIndicator(at: currentMousePosition)
-  }
-
-  /// Updates and returns the reusable crosshair indicator path centered at the given point
-  private func createCrosshairIndicatorPath(at point: CGPoint) -> CGPath {
-    let size = crosshairIndicatorSize
-    reusableCrosshairPath = CGMutablePath()
-
-    // Vertical line
-    reusableCrosshairPath.move(to: CGPoint(x: point.x, y: point.y - size))
-    reusableCrosshairPath.addLine(to: CGPoint(x: point.x, y: point.y + size))
-
-    // Horizontal line
-    reusableCrosshairPath.move(to: CGPoint(x: point.x - size, y: point.y))
-    reusableCrosshairPath.addLine(to: CGPoint(x: point.x + size, y: point.y))
-
-    return reusableCrosshairPath
   }
 
   private func updateDimLayerMask(for selectionRect: CGRect) {

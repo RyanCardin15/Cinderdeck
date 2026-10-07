@@ -33,9 +33,8 @@ model search. `mod+shift+up` and `mod+shift+down` switch providers directly and 
 search. These provider shortcuts can also be changed in Settings.
 
 These shortcuts run inside the focused web or desktop client. `mod` uses Command
-on macOS and Ctrl on Windows and Linux, including GNOME, KDE Plasma, Niri, and
-Hyprland. If a custom desktop shortcut takes the same keys, choose another binding
-in Settings.
+on macOS and Ctrl in a browser on Windows or Linux. If a system shortcut takes the
+same keys, choose another binding in Settings.
 
 ## Copy pull request references
 

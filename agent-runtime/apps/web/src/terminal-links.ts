@@ -2,6 +2,7 @@ import {
   formatFilePathPosition,
   splitFilePathPosition,
 } from "@cinderdeck/client-runtime/markdown-links";
+import { joinPath } from "@cinderdeck/shared/path";
 
 import { isMacPlatform } from "./lib/utils";
 
@@ -108,14 +109,6 @@ export function isAbsolutePath(value: string): boolean {
 
 function isWindowsPathStyle(value: string): boolean {
   return isWindowsAbsolutePath(value) || /[A-Za-z]:\\/.test(value);
-}
-
-function joinPath(base: string, next: string, separator: "/" | "\\"): string {
-  const cleanBase = base.replace(/[\\/]+$/, "");
-  if (separator === "\\") {
-    return `${cleanBase}\\${next.replaceAll("/", "\\")}`;
-  }
-  return `${cleanBase}/${next.replace(/^\/+/, "")}`;
 }
 
 function inferHomeFromCwd(cwd: string): string | undefined {

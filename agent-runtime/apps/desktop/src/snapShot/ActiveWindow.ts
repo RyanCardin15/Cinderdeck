@@ -4,15 +4,12 @@ import * as NodeChildProcess from "node:child_process";
 
 import * as Schema from "effect/Schema";
 
-import { loadWindowsForegroundApi } from "../electron/WindowsForeground.ts";
-
 /**
- * The foreground window as the snapshot service needs it. `id` is the
- * CGWindowNumber on macOS and the HWND on Windows, which is what the capture
- * backends key on.
+ * The foreground window as the snapshot service needs it. `id` is the macOS
+ * CGWindowNumber, which is what the capture backend keys on.
  */
 export type ActiveWindow = {
-  readonly platform: "macos" | "windows";
+  readonly platform: "macos";
   readonly id: number;
   readonly title: string;
   readonly bounds: {
@@ -117,27 +114,7 @@ async function macActiveWindow(): Promise<ActiveWindow | undefined> {
   };
 }
 
-async function windowsActiveWindow(): Promise<ActiveWindow | undefined> {
-  const api = await loadWindowsForegroundApi();
-  const handle = api.getForegroundWindow();
-  if (handle === 0n) return undefined;
-  const bounds = api.getWindowRect(handle);
-  if (!bounds) return undefined;
-  const { processId } = api.getWindowThreadAndProcessId(handle);
-  const path = processId === 0 ? "" : api.getProcessImagePath(processId);
-  const name = path.split(/[\\/]/).pop() ?? "";
-  return {
-    platform: "windows",
-    id: Number(handle),
-    title: api.getWindowText(handle),
-    bounds,
-    owner: { name, processId, path },
-  };
-}
-
-/** Resolve the OS foreground window, or `undefined` when there is none. */
-export function activeWindow(platform: NodeJS.Platform): Promise<ActiveWindow | undefined> {
-  if (platform === "darwin") return macActiveWindow();
-  if (platform === "win32") return windowsActiveWindow();
-  return Promise.resolve(undefined);
+/** Resolve the macOS foreground window, or `undefined` when there is none. */
+export function activeWindow(): Promise<ActiveWindow | undefined> {
+  return macActiveWindow();
 }

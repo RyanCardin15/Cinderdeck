@@ -33,8 +33,8 @@ describe("DesktopAssets", () => {
       const developmentEnvironmentLayer = DesktopEnvironment.layer({
         dirname: "/repo/apps/desktop/dist-electron",
         homeDirectory: "/Users/alice",
-        platform: "linux",
-        processArch: "x64",
+        platform: "darwin",
+        processArch: "arm64",
         appVersion: "1.2.3",
         appPath: "/repo",
         isPackaged: false,
@@ -62,8 +62,7 @@ describe("DesktopAssets", () => {
 
       const icons = yield* assets.iconPaths;
 
-      assert.match(Option.getOrThrow(icons.ico), /assets\/cinderdeck\/dev\/windows\.ico$/);
-      assert.match(Option.getOrThrow(icons.png), /assets\/cinderdeck\/dev\/universal-1024\.png$/);
+      assert.match(Option.getOrThrow(icons.png), /assets\/cinderdeck\/dev\/macos-1024\.png$/);
       assert.isTrue(Option.isNone(icons.icns));
     }),
   );

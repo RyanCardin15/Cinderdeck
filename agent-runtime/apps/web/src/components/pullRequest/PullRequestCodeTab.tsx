@@ -35,9 +35,9 @@ import { areAllDiffFilesCollapsed } from "~/lib/diffCollapse";
 import { pullRequestFindingKey, type PullRequestFinding } from "./pullRequestDetail.logic";
 import { canEditPullRequestComment } from "./pullRequestEditing.logic";
 import { orderDiffFiles } from "./pullRequestFileOrder.logic";
+import { fnv1a32 } from "@cinderdeck/shared/hash";
 import {
   buildFileDiffRenderKey,
-  fnv1a32,
   getRenderablePatch,
   resolveDiffThemeName,
   resolveFileDiffPath,

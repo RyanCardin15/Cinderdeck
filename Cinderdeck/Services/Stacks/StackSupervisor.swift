@@ -477,7 +477,6 @@ final class StackSupervisor: ObservableObject {
     return StackLaneStore.defaultWorktreeRoot
   }
   func isRemovingLane(_ id: String) -> Bool { removingLanes.contains(id) }
-  var isLaneOperationRunning: Bool { laneLock.isLocked }
 
   /// The runtime a dependency refers to: a local service, or the linked service in its own workspace.
   func dependencyRuntime(_ id: String, _ name: String) -> StackServiceRuntime {

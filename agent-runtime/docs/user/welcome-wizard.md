@@ -1,7 +1,7 @@
 # Welcome wizard
 
-Cinderdeck shows a setup flow when you open a new installation or connect to the
-hosted app for the first time. Existing workspaces skip this flow.
+Cinderdeck shows a setup flow when you open a new installation for the first
+time. Existing workspaces skip this flow.
 
 ## Connect your computers
 

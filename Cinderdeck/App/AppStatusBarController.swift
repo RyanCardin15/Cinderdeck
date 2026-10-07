@@ -43,7 +43,6 @@ final class AppStatusBarController: ObservableObject {
   private var isObservingSettingsWindows = false
   private weak var trackedPreferencesWindow: NSWindow?
   private var trackedPreferencesExcludedWindowID: CGWindowID?
-  private var pendingPreferencesWindowTrackingWorkItem: DispatchWorkItem?
 
   // Processing indicator (OCR, etc.)
   private var processingSpinner: NSProgressIndicator?
@@ -975,9 +974,6 @@ final class AppStatusBarController: ObservableObject {
 
   // MARK: - Settings Scene Trigger
 
-  /// The app menu can lag behind the activation policy transition, so the
-  /// Settings menu item lookup retries a few times before falling back.
-  private static let settingsTriggerMaxAttempts = 5
   private static let settingsTriggerRetryDelay: TimeInterval = 0.1
 
   /// Physical key that macOS binds to the "Settings…" app menu item.
@@ -1186,62 +1182,6 @@ final class AppStatusBarController: ObservableObject {
     item.title = "\(base) \(childDisplay)"
     item.keyEquivalent = parentKeyEquivalent
     item.keyEquivalentModifierMask = parentConfig.menuModifierFlags
-  }
-
-  private func schedulePreferencesWindowTracking(excludingWindowNumbers existingWindowNumbers: Set<Int>) {
-    pendingPreferencesWindowTrackingWorkItem?.cancel()
-    DiagnosticLogger.shared.log(
-      .debug,
-      .preferences,
-      "Preferences window tracking scheduled",
-      context: ["existingWindows": "\(existingWindowNumbers.count)"]
-    )
-
-    let workItem = DispatchWorkItem { [weak self] in
-      self?.trackPreferencesWindow(excludingWindowNumbers: existingWindowNumbers, remainingAttempts: 12)
-    }
-    pendingPreferencesWindowTrackingWorkItem = workItem
-    DispatchQueue.main.async(execute: workItem)
-  }
-
-  private func trackPreferencesWindow(excludingWindowNumbers existingWindowNumbers: Set<Int>, remainingAttempts: Int) {
-    pendingPreferencesWindowTrackingWorkItem = nil
-
-    if let trackedPreferencesWindow, trackedPreferencesWindow.isVisible {
-      syncTrackedPreferencesWindowExclusion()
-      return
-    }
-
-    if let candidate = NSApp.windows.first(where: {
-      $0.isVisible &&
-      $0.level == .normal &&
-      $0.className != "NSStatusBarWindow" &&
-      !existingWindowNumbers.contains($0.windowNumber)
-    }) {
-      trackedPreferencesWindow = candidate
-      DiagnosticLogger.shared.log(
-        .debug,
-        .preferences,
-        "Preferences window tracked",
-        context: ["windowNumber": "\(candidate.windowNumber)"]
-      )
-      syncTrackedPreferencesWindowExclusion()
-      return
-    }
-
-    guard remainingAttempts > 1 else {
-      DiagnosticLogger.shared.log(.warning, .preferences, "Preferences window tracking timed out")
-      return
-    }
-
-    let workItem = DispatchWorkItem { [weak self] in
-      self?.trackPreferencesWindow(
-        excludingWindowNumbers: existingWindowNumbers,
-        remainingAttempts: remainingAttempts - 1
-      )
-    }
-    pendingPreferencesWindowTrackingWorkItem = workItem
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: workItem)
   }
 
   private func syncTrackedPreferencesWindowExclusion() {

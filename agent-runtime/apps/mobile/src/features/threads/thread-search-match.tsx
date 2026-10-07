@@ -1,11 +1,8 @@
 import type { EnvironmentThreadSearchMatch } from "@cinderdeck/client-runtime/state/thread-search";
+import { foldAsciiCase } from "@cinderdeck/shared/String";
 
 import { AppText as Text } from "../../components/AppText";
 import { cn } from "../../lib/cn";
-
-function foldAsciiCase(value: string): string {
-  return value.replace(/[A-Z]/g, (character) => character.toLowerCase());
-}
 
 function splitHighlightParts(text: string, query: string) {
   const normalizedText = foldAsciiCase(text);

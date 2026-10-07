@@ -67,13 +67,10 @@ struct CinderdeckMotionSpec: Equatable {
   // MARK: - Named Vocabulary
 
   static let morph = CinderdeckMotionSpec(duration: 0.42, curve: .spring(bounce: 0.45))
-  static let anticipation = CinderdeckMotionSpec(duration: 0.13, curve: .easeOut)
   static let glide = CinderdeckMotionSpec(duration: 0.45, curve: .custom(0.22, 0.9, 0.24, 1))
-  static let contentIn = CinderdeckMotionSpec(duration: 0.22, curve: .easeOut)
   static let contentOut = CinderdeckMotionSpec(duration: 0.12, curve: .easeIn)
   static let hover = CinderdeckMotionSpec(duration: 0.12, curve: .easeOut)
   static let settle = CinderdeckMotionSpec(duration: 0.4, curve: .spring(bounce: 0.22))
-  static let instant = CinderdeckMotionSpec(duration: 0, curve: .linear)
 }
 
 @MainActor

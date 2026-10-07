@@ -19,9 +19,7 @@ import type {
   BrowserImportSource,
   BrowserImportSourceId,
 } from "./browserImport.ts";
-import { AuthAccessTokenResult, AuthSessionState, AuthWebSocketTicketResult } from "./auth.ts";
 import { AdvertisedEndpoint } from "./remoteAccess.ts";
-import { ExecutionEnvironmentDescriptor } from "./environment.ts";
 import { type ClientSettings, type QuitConfirmationMode, SnapShotShortcut } from "./settings.ts";
 import type { EditorId } from "./editor.ts";
 
@@ -120,39 +118,10 @@ export const DesktopAppBrandingSchema = Schema.Struct({
   displayName: Schema.String,
 });
 
-export const DesktopSnapShotMode = Schema.Literals(["direct", "portal", "unavailable"]);
+export const DesktopSnapShotMode = Schema.Literals(["direct", "unavailable"]);
 export type DesktopSnapShotMode = typeof DesktopSnapShotMode.Type;
 
-export const DesktopCaptureExtensionState = Schema.Struct({
-  status: Schema.Literals([
-    "not-installed",
-    "disabled",
-    "enabled",
-    "restart-required",
-    "update-required",
-    "extensions-disabled",
-    "unsupported",
-    "error",
-  ]),
-  message: Schema.String,
-});
-export type DesktopCaptureExtensionState = typeof DesktopCaptureExtensionState.Type;
-
-export const DesktopCaptureHelperState = Schema.Struct({
-  status: Schema.Literals(["not-installed", "update-required", "ready", "error"]),
-  message: Schema.String,
-  feedbackAvailable: Schema.optional(Schema.Boolean),
-});
-export type DesktopCaptureHelperState = typeof DesktopCaptureHelperState.Type;
-
 export const DesktopSnapShotSetupAction = Schema.Literals([
-  "install-extension",
-  "enable-extension",
-  "disable-extension",
-  "install-kde-helper",
-  "remove-kde-helper",
-  "install-hyprland-helper",
-  "remove-hyprland-helper",
   "test-mac-capture",
   "allow-screen-recording",
   "allow-accessibility",
@@ -160,50 +129,11 @@ export const DesktopSnapShotSetupAction = Schema.Literals([
 ]);
 export type DesktopSnapShotSetupAction = typeof DesktopSnapShotSetupAction.Type;
 
-export const DesktopCaptureConfigRequest = Schema.Struct({
-  operation: Schema.Literals(["install", "remove"]),
-  chooseFile: Schema.Boolean,
-  shortcut: Schema.optional(Schema.String.check(Schema.isMaxLength(80))),
-});
-export type DesktopCaptureConfigRequest = typeof DesktopCaptureConfigRequest.Type;
-
-export const DesktopCaptureConfigPreview = Schema.Struct({
-  id: Schema.String,
-  path: Schema.String,
-  resolvedPath: Schema.String,
-  before: Schema.String,
-  after: Schema.String,
-  shortcut: Schema.String,
-  operation: Schema.Literals(["install", "remove"]),
-});
-export type DesktopCaptureConfigPreview = typeof DesktopCaptureConfigPreview.Type;
-
-export const DesktopCaptureConfigApplied = Schema.Struct({
-  backupPath: Schema.NullOr(Schema.String),
-  warning: Schema.NullOr(Schema.String),
-});
-export type DesktopCaptureConfigApplied = typeof DesktopCaptureConfigApplied.Type;
-
 export const DesktopSnapShotState = Schema.Struct({
   mode: DesktopSnapShotMode,
-  windows: Schema.optional(Schema.Boolean),
-  linuxDesktop: Schema.optional(Schema.Literals(["gnome", "kde", "niri", "hyprland"])),
-  linuxBackend: Schema.optional(
-    Schema.Literals(["screenshot-portal", "gnome-extension", "niri", "kde", "hyprland", "picker"]),
-  ),
-  linuxFeedbackAvailable: Schema.optional(Schema.Boolean),
   shortcut: SnapShotShortcut,
   shortcutRegistered: Schema.Boolean,
-  shortcutPending: Schema.optional(Schema.Boolean),
-  shortcutCanRetry: Schema.optional(Schema.Boolean),
-  shortcutLabel: Schema.optional(Schema.String),
   shortcutMessage: Schema.NullOr(Schema.String),
-  shortcutBinding: Schema.optional(Schema.String),
-  shortcutConfigPath: Schema.optional(Schema.String),
-  shortcutActionRegistered: Schema.optional(Schema.Boolean),
-  gnomeExtension: Schema.optional(DesktopCaptureExtensionState),
-  kdeHelper: Schema.optional(DesktopCaptureHelperState),
-  hyprlandHelper: Schema.optional(DesktopCaptureHelperState),
   macPermissions: Schema.optional(
     Schema.Struct({ screenRecording: Schema.Boolean, accessibility: Schema.Boolean }),
   ),
@@ -349,22 +279,18 @@ export const DesktopUpdateCheckResultSchema = Schema.Struct({
   state: DesktopUpdateStateSchema,
 });
 
-// Stable id for the Windows-native primary backend. Desktop side wraps
+// Stable id for the primary local backend. Desktop side wraps
 // this with a brand inside DesktopBackendManager; web side keeps it as
 // a plain string so the env-runtime can compare against it without
 // importing brand machinery from the desktop package.
 export const PRIMARY_LOCAL_ENVIRONMENT_ID = "primary";
 
 export interface DesktopEnvironmentBootstrap {
-  // Stable backend instance id (e.g. "primary" or "wsl:ubuntu"). The
-  // web env runtime keys local environments off this so projects
-  // routed to a specific backend reopen against the same one.
+  // Stable backend instance id (e.g. "primary"). The web env runtime
+  // keys local environments off this so projects routed to a specific
+  // backend reopen against the same one.
   id: string;
   label: string;
-  // Concrete WSL distro used by the current backend run. This stays separate
-  // from id because a default-tracking instance keeps the stable
-  // "wsl:default" IPC target while each run launches a specific distro.
-  runningDistro?: string | null;
   httpBaseUrl: string | null;
   wsBaseUrl: string | null;
   bootstrapToken?: string;
@@ -373,7 +299,6 @@ export interface DesktopEnvironmentBootstrap {
 export const DesktopEnvironmentBootstrapSchema = Schema.Struct({
   id: Schema.String,
   label: Schema.String,
-  runningDistro: Schema.optionalKey(Schema.NullOr(Schema.String)),
   httpBaseUrl: Schema.NullOr(Schema.String),
   wsBaseUrl: Schema.NullOr(Schema.String),
   bootstrapToken: Schema.optionalKey(Schema.String),
@@ -387,87 +312,6 @@ export const DesktopSshEnvironmentTargetSchema = Schema.Struct({
 });
 export type DesktopSshEnvironmentTarget = typeof DesktopSshEnvironmentTargetSchema.Type;
 
-export type DesktopSshHostSource = "ssh-config" | "known-hosts";
-export const DesktopSshHostSourceSchema = Schema.Literals(["ssh-config", "known-hosts"]);
-
-export interface DesktopDiscoveredSshHost extends DesktopSshEnvironmentTarget {
-  source: DesktopSshHostSource;
-}
-
-export const DesktopDiscoveredSshHostSchema = Schema.Struct({
-  alias: Schema.String,
-  hostname: Schema.String,
-  username: Schema.NullOr(Schema.String),
-  port: Schema.NullOr(Schema.Number),
-  source: DesktopSshHostSourceSchema,
-});
-
-export interface DesktopSshEnvironmentBootstrap {
-  target: DesktopSshEnvironmentTarget;
-  httpBaseUrl: string;
-  wsBaseUrl: string;
-  pairingToken: string | null;
-  remotePort?: number;
-  remoteServerKind?: "external" | "managed";
-}
-
-export const DesktopSshEnvironmentBootstrapSchema = Schema.Struct({
-  target: DesktopSshEnvironmentTargetSchema,
-  httpBaseUrl: Schema.String,
-  wsBaseUrl: Schema.String,
-  pairingToken: Schema.NullOr(Schema.String),
-  remotePort: Schema.optionalKey(Schema.Number),
-  remoteServerKind: Schema.optionalKey(Schema.Literals(["external", "managed"])),
-});
-
-export interface DesktopSshPasswordPromptRequest {
-  requestId: string;
-  destination: string;
-  username: string | null;
-  prompt: string;
-  expiresAt: string;
-}
-
-export const DesktopSshPasswordPromptCancelledType = "ssh-password-prompt-cancelled" as const;
-
-export const DesktopSshPasswordPromptCancelledResultSchema = Schema.Struct({
-  type: Schema.Literal(DesktopSshPasswordPromptCancelledType),
-  message: Schema.String,
-});
-
-export const DesktopSshEnvironmentEnsureOptionsSchema = Schema.Struct({
-  issuePairingToken: Schema.optionalKey(Schema.Boolean),
-});
-
-export const DesktopSshEnvironmentEnsureInputSchema = Schema.Struct({
-  target: DesktopSshEnvironmentTargetSchema,
-  options: Schema.optionalKey(DesktopSshEnvironmentEnsureOptionsSchema),
-});
-
-export const DesktopSshEnvironmentEnsureResultSchema = Schema.Union([
-  DesktopSshEnvironmentBootstrapSchema,
-  DesktopSshPasswordPromptCancelledResultSchema,
-]);
-
-export const DesktopSshHttpBaseUrlInputSchema = Schema.Struct({
-  httpBaseUrl: Schema.String,
-});
-
-export const DesktopSshBearerRequestInputSchema = Schema.Struct({
-  httpBaseUrl: Schema.String,
-  bearerToken: Schema.String,
-});
-
-export const DesktopSshBearerBootstrapInputSchema = Schema.Struct({
-  httpBaseUrl: Schema.String,
-  credential: Schema.String,
-});
-
-export const DesktopSshPasswordPromptResolutionInputSchema = Schema.Struct({
-  requestId: Schema.String,
-  password: Schema.NullOr(Schema.String),
-});
-
 export const PersistedSavedEnvironmentRecordSchema = Schema.Struct({
   environmentId: EnvironmentId,
   label: Schema.String,
@@ -475,6 +319,8 @@ export const PersistedSavedEnvironmentRecordSchema = Schema.Struct({
   httpBaseUrl: Schema.String,
   createdAt: Schema.String,
   lastConnectedAt: Schema.NullOr(Schema.String),
+  // Legacy SSH environments are no longer supported; the key is still decoded so
+  // older saved-environment files load, and migration drops those records.
   desktopSsh: Schema.optionalKey(DesktopSshEnvironmentTargetSchema),
   relayManaged: Schema.optionalKey(
     Schema.Struct({
@@ -509,17 +355,10 @@ export const DesktopServerExposureStateSchema = Schema.Struct({
 
 export interface PickFolderOptions {
   initialPath?: string | null;
-  // When set, the desktop dialog opens against the named backend's
-  // filesystem instead of the primary's. Used by callers that already
-  // know which local environment they're targeting (e.g. opening a
-  // project that lives inside WSL). Omitting it keeps the historical
-  // behavior so non-WSL users never see a different picker.
-  targetEnvironmentId?: string;
 }
 
 export const PickFolderOptionsSchema = Schema.Struct({
   initialPath: Schema.optionalKey(Schema.NullOr(Schema.String)),
-  targetEnvironmentId: Schema.optionalKey(Schema.String),
 });
 
 /**
@@ -537,48 +376,6 @@ export const PickedThemeFileSchema = Schema.Struct({
   name: Schema.String,
   size: Schema.Number,
   text: Schema.String,
-});
-
-export interface DesktopWslDistro {
-  name: string;
-  isDefault: boolean;
-  version: 1 | 2;
-}
-
-export const DesktopWslDistroSchema = Schema.Struct({
-  name: Schema.String,
-  isDefault: Schema.Boolean,
-  version: Schema.Literals([1, 2]),
-});
-
-export interface DesktopWslState {
-  // True when the user has opted the WSL backend in; the actual backend
-  // process is registered with the desktop pool independently of this
-  // flag and may take a moment to come up after the user enables it.
-  enabled: boolean;
-  // null means "track the current WSL default distro".
-  distro: string | null;
-  available: boolean;
-  // When true (and `enabled` is also true) the desktop runs only the
-  // WSL backend as the primary; the Windows-side Node backend is not
-  // started. Toggling this requires an app restart because the
-  // primary backend's spec is captured once at layer init.
-  wslOnly: boolean;
-  distros: readonly DesktopWslDistro[];
-  // Reason the dual-mode WSL backend last failed preflight (no node, wrong
-  // version, missing build tools), or null. Surfaced inline in Connections
-  // settings. Always null in wsl-only mode — that path shows a dialog and
-  // falls back to Windows instead.
-  preflightError: string | null;
-}
-
-export const DesktopWslStateSchema = Schema.Struct({
-  enabled: Schema.Boolean,
-  distro: Schema.NullOr(Schema.String),
-  available: Schema.Boolean,
-  wslOnly: Schema.Boolean,
-  distros: Schema.Array(DesktopWslDistroSchema),
-  preflightError: Schema.NullOr(Schema.String),
 });
 
 /**
@@ -1191,16 +988,9 @@ export interface DesktopBridge {
   getConnectionCatalog?: () => Promise<string | null>;
   setConnectionCatalog?: (catalog: string) => Promise<boolean>;
   clearConnectionCatalog?: () => Promise<void>;
-  discoverSshHosts: () => Promise<readonly DesktopDiscoveredSshHost[]>;
-  /** Resolves a suggested SSH alias before populating the connection form. */
-  resolveSshHost: (alias: string) => Promise<DesktopSshEnvironmentTarget>;
   requestSnapShotPermissions?: (includeAccessibility: boolean) => Promise<void>;
   getSnapShotState?: () => Promise<DesktopSnapShotState>;
   setupSnapShot?: (action: DesktopSnapShotSetupAction) => Promise<void>;
-  previewSnapShotConfig?: (
-    request: DesktopCaptureConfigRequest,
-  ) => Promise<DesktopCaptureConfigPreview | null>;
-  applySnapShotConfig?: (previewId: string) => Promise<DesktopCaptureConfigApplied>;
   checkSnapShotShortcut?: (
     shortcut: SnapShotShortcut,
   ) => Promise<DesktopSnapShotShortcutAvailability>;
@@ -1212,23 +1002,6 @@ export interface DesktopBridge {
   ) => Promise<void>;
   dismissSnapShotAnimation?: (id: DesktopSnapShotId) => Promise<void>;
   acknowledgeSnapShot?: (id: string) => Promise<void>;
-  ensureSshEnvironment: (
-    target: DesktopSshEnvironmentTarget,
-    options?: { issuePairingToken?: boolean },
-  ) => Promise<DesktopSshEnvironmentBootstrap>;
-  disconnectSshEnvironment: (target: DesktopSshEnvironmentTarget) => Promise<void>;
-  fetchSshEnvironmentDescriptor: (httpBaseUrl: string) => Promise<ExecutionEnvironmentDescriptor>;
-  bootstrapSshBearerSession: (
-    httpBaseUrl: string,
-    credential: string,
-  ) => Promise<AuthAccessTokenResult>;
-  fetchSshSessionState: (httpBaseUrl: string, bearerToken: string) => Promise<AuthSessionState>;
-  issueSshWebSocketTicket: (
-    httpBaseUrl: string,
-    bearerToken: string,
-  ) => Promise<AuthWebSocketTicketResult>;
-  onSshPasswordPrompt: (listener: (request: DesktopSshPasswordPromptRequest) => void) => () => void;
-  resolveSshPasswordPrompt: (requestId: string, password: string | null) => Promise<void>;
   getServerExposureState: () => Promise<DesktopServerExposureState>;
   setServerExposureMode: (mode: DesktopServerExposureMode) => Promise<DesktopServerExposureState>;
   setTailscaleServeEnabled: (input: {
@@ -1236,10 +1009,6 @@ export interface DesktopBridge {
     readonly port?: number;
   }) => Promise<DesktopServerExposureState>;
   getAdvertisedEndpoints: () => Promise<readonly AdvertisedEndpoint[]>;
-  getWslState: () => Promise<DesktopWslState>;
-  setWslBackendEnabled: (enabled: boolean) => Promise<DesktopWslState>;
-  setWslDistro: (distro: string | null) => Promise<DesktopWslState>;
-  setWslOnly: (enabled: boolean) => Promise<DesktopWslState>;
   pickFolder: (options?: PickFolderOptions) => Promise<string | null>;
   /** Optional while older desktop shells can host a newer web client. */
   pickProjectFavicon?: (initialPath?: string) => Promise<string | null>;

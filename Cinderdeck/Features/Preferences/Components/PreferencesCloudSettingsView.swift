@@ -179,12 +179,6 @@ struct CloudSettingsView: View {
     }
   }
 
-  // MARK: - Password Init Check
-
-  private func checkPasswordInitNeeded() {
-    // Intentionally disabled to avoid passive keychain reads when the Cloud tab opens.
-  }
-
   // MARK: - Configured State
 
   private var configuredView: some View {
@@ -1233,13 +1227,6 @@ private struct CloudCredentialFormView: View {
       && (providerType == .awsS3
         ? !region.trimmingCharacters(in: .whitespaces).isEmpty
         : !endpoint.trimmingCharacters(in: .whitespaces).isEmpty)
-  }
-
-  private var isPasswordValid: Bool {
-    // No password entered = valid (optional)
-    if protectionPassword.isEmpty { return true }
-    // If entered, must match and be >= 4 chars
-    return protectionPassword == confirmProtectionPassword && protectionPassword.count >= 4
   }
 
   private func startGoogleAuthorization() {

@@ -17,25 +17,15 @@ const NotificationBadge = Schema.Struct({
   ),
 });
 
+// The renderer still sends a rendered `image` with each badge; the macOS dock
+// shows only the count, so the image is validated and then ignored.
 export function applyNotificationBadge(
   platform: NodeJS.Platform,
-  { count, image }: typeof NotificationBadge.Type,
+  { count }: typeof NotificationBadge.Type,
 ): void {
   try {
     if (Electron.BrowserWindow.getFocusedWindow()) count = 0;
-    if (platform === "win32") {
-      const overlay = count > 0 && image ? Electron.nativeImage.createFromDataURL(image) : null;
-      for (const window of Electron.BrowserWindow.getAllWindows()) {
-        if (!window.isDestroyed()) {
-          window.setOverlayIcon(
-            overlay?.isEmpty() ? null : overlay,
-            count > 0 ? `${count} threads with new notifications` : "",
-          );
-        }
-      }
-    } else if (platform === "darwin" || platform === "linux") {
-      Electron.app.setBadgeCount(count);
-    }
+    if (platform === "darwin") Electron.app.setBadgeCount(count);
   } catch (error) {
     Effect.runSync(Effect.logWarning("Could not update notification badge", error));
   }

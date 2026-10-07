@@ -1,10 +1,10 @@
 import type { VcsStatusResult } from "@cinderdeck/contracts";
+import { requiresDefaultBranchConfirmation } from "@cinderdeck/client-runtime/state/vcs";
 import { assert, describe, it } from "vite-plus/test";
 import {
   buildGitActionProgressStages,
   buildMenuItems,
   formatGitActionElapsed,
-  requiresDefaultBranchConfirmation,
   resolveAutoFeatureBranchName,
   resolveDefaultBranchActionDialogCopy,
   resolveGitActionProgressPresentation,

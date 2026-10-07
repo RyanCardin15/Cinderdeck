@@ -83,6 +83,7 @@ import {
 import { type EnvironmentConnectionPresentation } from "@cinderdeck/client-runtime/connection";
 import { deriveThreadTitleSeed } from "@cinderdeck/client-runtime/operations";
 import {
+  sanitizeThreadErrorMessage,
   wasBootstrapThreadDeleted,
   wasBootstrapThreadNotCreated,
 } from "@cinderdeck/client-runtime/errors";
@@ -537,7 +538,6 @@ import {
   releaseDraftAttachments,
   startAttachmentUpload,
 } from "../lib/attachmentUploadQueue";
-import { sanitizeThreadErrorMessage } from "~/rpc/transportError";
 import { RightPanelSheet } from "./RightPanelSheet";
 import { previewEnvironment } from "../state/preview";
 import { clampFileAttachmentUploadBytes } from "@cinderdeck/client-runtime/state/attachments";

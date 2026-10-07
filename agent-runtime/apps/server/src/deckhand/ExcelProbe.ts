@@ -61,7 +61,7 @@ export const isRequest = (event: ProbeEvent) => event.kind === "fetch" || event.
 export const isFailure = (event: ProbeEvent) =>
   event.kind === "error" || (event.kind === "console" && event.level === "error");
 
-export function summarize(events: ReadonlyArray<ProbeEvent>): ProbeSummary {
+function summarize(events: ReadonlyArray<ProbeEvent>): ProbeSummary {
   const of = (kind: ProbeEventKind) => events.filter((event) => event.kind === kind);
   const requests = events.filter(isRequest);
   const resources = of("resource");
@@ -103,7 +103,7 @@ const kinds = new Set<string>([
 type Raw = { -readonly [K in keyof Omit<ProbeEvent, "sequence">]: ProbeEvent[K] };
 // Validates one page-reported event. Times must be plausible epoch milliseconds; URLs lose
 // credentials, queries and fragments; text is redacted like other external diagnostics.
-export function normalizeProbeEvent(client: string, raw: unknown, received: number): Raw | null {
+function normalizeProbeEvent(client: string, raw: unknown, received: number): Raw | null {
   const value = record(raw);
   const kind = string(value.k);
   if (!kinds.has(kind)) return null;

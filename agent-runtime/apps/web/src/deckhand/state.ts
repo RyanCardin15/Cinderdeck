@@ -92,10 +92,6 @@ export const previewReviewer = createEnvironmentRpcCommand(connectionAtomRuntime
   label: "deckhand:reviewer-preview",
   tag: REVIEWER_METHODS.preview,
 });
-export const launchReviewer = createEnvironmentRpcCommand(connectionAtomRuntime, {
-  label: "deckhand:reviewer-launch",
-  tag: REVIEWER_METHODS.launch,
-});
 
 export const publishLinkedWork = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "deckhand:linked-work-publish",

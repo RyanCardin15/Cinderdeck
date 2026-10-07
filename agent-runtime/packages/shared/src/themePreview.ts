@@ -87,7 +87,7 @@ function srgbToLinear(value: number): number {
   return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
 }
 
-function linearToSrgb(value: number): number {
+export function linearToSrgb(value: number): number {
   const converted = value <= 0.0031308 ? 12.92 * value : 1.055 * value ** (1 / 2.4) - 0.055;
   return Math.round(Math.min(1, Math.max(0, converted)) * 255);
 }

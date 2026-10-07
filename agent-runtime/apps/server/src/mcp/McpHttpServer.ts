@@ -789,7 +789,7 @@ export const DeviceToolkitRegistrationLive = Layer.mergeAll(
   DeviceScreenshotRegistrationLive,
 );
 
-export const DeckhandToolkitRegistrationLive = McpServer.toolkit(DeckhandToolkit).pipe(
+const DeckhandToolkitRegistrationLive = McpServer.toolkit(DeckhandToolkit).pipe(
   Layer.provide(DeckhandToolkitHandlersLive),
   Layer.provide(DeckhandMcpAccess.layer),
 );

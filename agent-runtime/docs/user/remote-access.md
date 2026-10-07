@@ -108,37 +108,13 @@ tailscale serve --https=443 off
 If that port is already in use, choose another with
 `--tailscale-serve-port`. See `t3 pair --help` for other pairing options.
 
-### Hosted web app
+### Pairing links
 
-A separately configured hosted client needs an HTTPS endpoint. It connects directly
-to your server; a hosted pairing link does not make an unreachable backend
-reachable or convert HTTP to HTTPS.
-
-For a plain HTTP LAN endpoint, use the direct pairing URL in a browser that can
-open it, or pair from the desktop app. On mobile, an IP address entered without a
-scheme uses HTTP, so include `https://` when your server uses HTTPS.
-
-## Desktop-managed SSH
-
-In the desktop app, open **Settings → Connections → Add environment**, choose
-**SSH**, and enter a host or SSH alias such as `user@example.com`. Cinderdeck starts
-or reuses a server there and opens the port forward for you. Projects, provider
-credentials, and agent work stay on the remote machine.
-
-The remote host must be Linux or an Apple Silicon Mac with `curl` or `wget`,
-`tar`, `sha256sum` or `shasum`, and [provider setup](./install.md#providers).
-The first launch downloads Cinderdeck's server to `~/.t3/runtime` on the host, so
-it takes longer than later ones.
-Provider CLIs must be on the `PATH` of a non-interactive login shell there;
-check with:
-
-```bash
-ssh user@example.com 'sh -lc "command -v claude codex"'
-```
-
-If SSH reconnecting fails after an app update, retry the launch once. Removing
-the connection stops a server that Cinderdeck launched; a server that was already
-running is left alone.
+Pairing links open the server's own address, so a link does not make an
+unreachable backend reachable or convert HTTP to HTTPS. For a plain HTTP LAN
+endpoint, use the pairing URL in a browser that can open it, or pair from the
+desktop app. On mobile, an IP address entered without a scheme uses HTTP, so
+include `https://` when your server uses HTTPS.
 
 For Antigravity's Google callback on a remote host, see
 [remote sign-in](./providers-antigravity.md#sign-in-from-a-remote-device).
@@ -199,9 +175,9 @@ devices. For server version warnings, follow [Updating Cinderdeck](./updating.md
 
 If a computer should only drive work running elsewhere, turn off its local environment. In the
 desktop app, open **Settings → Connections** and switch off **Local
-environment**. Cinderdeck restarts without a local server: no local agents or terminals run, WSL
-backends stay off, and other devices can no longer connect to this computer. Your projects,
-history, and saved connections are kept, and you keep working through pairing, Remote connections, or SSH.
+environment**. Cinderdeck restarts without a local server: no local agents or terminals run, and
+other devices can no longer connect to this computer. Your projects, history, and saved connections
+are kept, and you keep working through pairing or Remote connections.
 
 Switch **Local environment** back on in the same place to restart with your previous local
 settings.

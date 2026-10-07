@@ -100,7 +100,7 @@ function logReviewDiffDiagnostic(message: string, details?: Record<string, unkno
   console.log(`[review-sheet] ${message}`);
 }
 
-export function formatHeaderDiffSummary(
+function formatHeaderDiffSummary(
   parsedDiff: ReviewParsedDiff,
   files?: ReviewSectionItem["files"],
 ): {

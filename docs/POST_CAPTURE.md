@@ -111,8 +111,8 @@ Batch variant `handleScreenshotCaptures(urls:)`: filters missing files, delegate
 
 ## Cache and Storage Management
 
-- `CaptureStorageManager` (`Cinderdeck/Services/FileAccess/CaptureStorageManager.swift`) owns the `Application Support/Cinderdeck/Captures` cache: `calculateCacheSize()` (background enumeration) and `clearCache()`.
-- The UI lives in **Settings → History** (`PreferencesHistorySettingsView`): shows the formatted cache size and offers cache clearing. `clearCache()` refuses to run while a capture or recording is in progress (`CacheCleanupError.operationInProgress`), removes every file in the captures directory (skipping locked files), and deletes matching history records and recording metadata sidecars. See [`HISTORY.md`](HISTORY.md).
+- `CaptureStorageManager` (`Cinderdeck/Services/FileAccess/CaptureStorageManager.swift`) owns the `Application Support/Cinderdeck/Captures` cache: `calculateCacheSize()` (background enumeration) and `formattedSize(_:)`.
+- The UI lives in **Settings → History** (`PreferencesHistorySettingsView`): shows the formatted cache size. See [`HISTORY.md`](HISTORY.md).
 
 ## Key Files
 

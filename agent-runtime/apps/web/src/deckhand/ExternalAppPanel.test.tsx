@@ -62,7 +62,6 @@ vi.mock("@tanstack/react-router", () => ({
 vi.mock("../hooks/useSettings", async () => {
   const { useSyncExternalStore } = await import("react");
   return {
-    usePrimarySettingsAvailable: () => true,
     useClearScopedSettings: () => () => {},
     useProjectSettingsOverride: () => undefined,
     useClientSettings: (select?: (settings: typeof mocks.settings) => unknown) => {

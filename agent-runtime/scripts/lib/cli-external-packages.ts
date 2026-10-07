@@ -4,10 +4,10 @@
  * Two consumers derive from this list, and they must never disagree:
  *
  * - apps/server/vite.config.ts decides what stays external to the bundle.
- * - scripts/build-desktop-artifact.ts selects the runtime dependency roots for
- *   the Windows server sidecar.
+ * - scripts/build-desktop-artifact.ts selects the runtime dependency roots the
+ *   packaged app stages for the server.
  *
- * A runtime package that is external but absent from the sidecar fails as soon
+ * A runtime package that is external but absent from that stage fails as soon
  * as Node resolves it from the emitted bundle. Keeping both consumers on one
  * list prevents packaging from drifting away from the bundle boundary.
  *
@@ -25,7 +25,7 @@
  * only inside the emitted bundle and is unreachable there. This closure is
  * enforced by a test, not by inspection.
  */
-export const CLI_RUNTIME_EXTERNAL_PREFIXES = [
+const CLI_RUNTIME_EXTERNAL_PREFIXES = [
   // Cursor ships computed Webpack imports and platform helper packages.
   "@cursor/sdk",
   "node-pty",
@@ -89,7 +89,7 @@ export function shouldBundleCliDependency(id: string): boolean {
   return !isExternalCliDependency(id);
 }
 
-/** Select direct dependency roots whose runtime closure belongs in the sidecar. */
+/** Select direct dependency roots whose runtime closure belongs in the packaged stage. */
 export function selectCliRuntimeExternalDependencies(
   dependencies: Readonly<Record<string, string>>,
 ): Record<string, string> {
@@ -117,7 +117,7 @@ export function selectCliRuntimeExternalDependencies(
  * would still pass if the bundler reverted to leaving everything external: the
  * scan would see source-file regions, report nothing inlined, and the packaged
  * backends would then fail with ERR_MODULE_NOT_FOUND because those packages
- * are not in the selected sidecar closure either.
+ * are not in the selected stage closure either.
  */
 export function findInlinedExternalPackages(source: string): {
   readonly regionCount: number;

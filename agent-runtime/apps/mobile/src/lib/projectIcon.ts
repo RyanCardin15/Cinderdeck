@@ -13,7 +13,7 @@ export function countGlyphs(text: string): number {
 }
 
 /** Mirrors the automatic monogram web derives from a project name when it has no favicon. */
-export function projectMonogram(projectName: string): string {
+function projectMonogram(projectName: string): string {
   const words =
     projectName
       .normalize("NFKC")

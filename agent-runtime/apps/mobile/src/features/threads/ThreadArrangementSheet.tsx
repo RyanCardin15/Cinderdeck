@@ -146,7 +146,7 @@ function DragHandle(props: {
   );
 }
 
-export function ThreadArrangementSheet(props: { onClose: () => void }) {
+function ThreadArrangementSheet(props: { onClose: () => void }) {
   const insets = useSafeAreaInsets();
   const threads = useAtomValue(environmentThreadShells.navigationThreadShellsAtom);
   const configs = useAtomValue(environmentServerConfigsAtom);

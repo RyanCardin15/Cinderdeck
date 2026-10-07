@@ -14,7 +14,7 @@ function getPerformance(): ReviewPerformanceLike | null {
   return candidate ?? null;
 }
 
-export function isReviewPerfEnabled(): boolean {
+function isReviewPerfEnabled(): boolean {
   return typeof __DEV__ !== "undefined" ? __DEV__ : false;
 }
 

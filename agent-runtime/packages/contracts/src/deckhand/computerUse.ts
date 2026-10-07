@@ -263,7 +263,7 @@ export class ComputerUseError extends Schema.TaggedError<ComputerUseError>()("Co
 }
 
 /** Never automated: terminals and the system's credential and consent UI. */
-export const COMPUTER_USE_BLOCKED_BUNDLE_IDS: ReadonlySet<string> = new Set(
+const COMPUTER_USE_BLOCKED_BUNDLE_IDS: ReadonlySet<string> = new Set(
   [
     "com.apple.Terminal",
     "com.googlecode.iterm2",

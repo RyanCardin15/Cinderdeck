@@ -115,16 +115,4 @@ struct MockupPreset: Identifiable, Codable, Equatable, Hashable {
         perspective: 0.2,
         padding: 120
     )
-
-    /// All built-in presets
-    static let allPresets: [MockupPreset] = [
-        .flat,
-        .leftTilt,
-        .rightTilt,
-        .topView,
-        .isometricLeft,
-        .isometricRight,
-        .heroShot,
-        .dramatic
-    ]
 }

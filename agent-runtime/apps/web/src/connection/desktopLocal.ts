@@ -6,7 +6,7 @@ import {
 } from "@cinderdeck/contracts";
 
 /**
- * Desktop-local secondary backends (e.g. a parallel WSL backend) are registered
+ * Desktop-local secondary backends are registered
  * by the connection platform source as bearer connections whose id carries this
  * prefix. It is the renderer's single signal that an environment is a
  * host-managed local backend rather than a user-saved remote, SSH, or relay
@@ -30,16 +30,6 @@ export function isDesktopLocalConnectionTarget(
     target._tag === "BearerConnectionTarget" &&
     target.connectionId.startsWith(DESKTOP_LOCAL_CONNECTION_ID_PREFIX)
   );
-}
-
-export function desktopLocalBackendId(target: ConnectionTarget): string | null {
-  return isDesktopLocalConnectionTarget(target)
-    ? target.connectionId.slice(DESKTOP_LOCAL_CONNECTION_ID_PREFIX.length)
-    : null;
-}
-
-export function isWslConnectionTarget(target: ConnectionTarget): boolean {
-  return desktopLocalBackendId(target)?.startsWith("wsl:") === true;
 }
 
 export type DesktopSecondaryBootstrapsRead =
@@ -86,7 +76,6 @@ export function createDesktopSecondaryBootstrapsReader(
             previous === undefined ||
             entry.id !== previous.id ||
             entry.label !== previous.label ||
-            entry.runningDistro !== previous.runningDistro ||
             entry.httpBaseUrl !== previous.httpBaseUrl ||
             entry.wsBaseUrl !== previous.wsBaseUrl ||
             entry.bootstrapToken !== previous.bootstrapToken

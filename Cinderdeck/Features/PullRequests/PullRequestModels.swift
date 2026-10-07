@@ -69,14 +69,6 @@ nonisolated struct PullRequest: Codable, Identifiable, Sendable {
     default: return "No checks"
     }
   }
-  var reviewLabel: String {
-    switch reviewDecision {
-    case "APPROVED": return "Approved"
-    case "CHANGES_REQUESTED": return "Changes requested"
-    case "REVIEW_REQUIRED": return "Review required"
-    default: return "No review decision"
-    }
-  }
 }
 
 nonisolated struct PullRequestActivity: Codable, Identifiable, Sendable {

@@ -26,12 +26,10 @@ vi.mock("../../lib/desktopSnapShot", () => ({
 
 const recorded = vi.fn();
 const error = vi.fn();
-function render(allowModifierPairs = false, shortcutLabel?: string) {
+function render() {
   hooks.beginRender();
   return useSnapShotShortcutRecorder({
     shortcut: DEFAULT_CLIENT_SETTINGS.snapShotShortcut,
-    shortcutLabel,
-    allowModifierPairs,
     onRecord: recorded,
     onError: error,
   });
@@ -50,10 +48,10 @@ function event(key: string, code = key, extra: object = {}) {
     ...extra,
   };
 }
-async function start(allowModifierPairs = false) {
-  render(allowModifierPairs).input.props.onClick();
+async function start() {
+  render().input.props.onClick();
   await suppress.mock.results.at(-1)!.value;
-  return render(allowModifierPairs);
+  return render();
 }
 beforeEach(() => {
   hooks.reset();
@@ -81,24 +79,9 @@ it("suppresses capture while recording and uses the physical key for shifted dig
   expect(suppress).toHaveBeenLastCalledWith(false);
   expect(render().recording).toBe(false);
 });
-it("lets users replace an unrecognized desktop label without displaying guessed keys", async () => {
-  const label = "Use the shortcut assigned in desktop settings";
-  let recorder = render(false, label);
-  expect(recorder.input.props.children).toBe("Change shortcut");
-  expect(recorder.input.props["aria-label"]).toBe("Change snapshot shortcut");
-  recorder.input.props.onClick();
-  await suppress.mock.results.at(-1)!.value;
-  recorder = render(false, label);
-  expect(recorder.input.props.children).toBe("Press shortcut…");
-  recorder.input.props.onKeyDown(event("@", "Digit2", { ctrlKey: true, shiftKey: true }));
-  expect(recorded).toHaveBeenCalledWith(
-    expect.objectContaining({ key: "2", modKey: true, shiftKey: true }),
-  );
-  expect(suppress).toHaveBeenLastCalledWith(false);
-});
 it("records macOS Command without treating it as Control", async () => {
   vi.stubGlobal("navigator", { platform: "MacIntel" });
-  (await start(true)).input.props.onKeyDown(event("k", "KeyK", { metaKey: true }));
+  (await start()).input.props.onKeyDown(event("k", "KeyK", { metaKey: true }));
   expect(recorded).toHaveBeenCalledWith(expect.objectContaining({ key: "k", modKey: true }));
 });
 it.each(["Escape", "blur", "unmount"])("cancels on %s without selecting keys", async (cancel) => {
@@ -145,18 +128,8 @@ it("does not record Tab, held repeats, or modifier keys on their own", async () 
   expect(recorded).not.toHaveBeenCalled();
   expect(render().recording).toBe(true);
 });
-it("rejects modifier pairs on Wayland but accepts the next key chord", async () => {
-  const recorder = await start();
-  recorder.input.props.onKeyDown(event("Shift", "ShiftLeft", { shiftKey: true }));
-  recorder.input.props.onKeyDown(event("Shift", "ShiftRight", { shiftKey: true }));
-  expect(recorded).not.toHaveBeenCalled();
-  expect(error).toHaveBeenCalledWith(expect.stringContaining("Add a letter, number"));
-  expect(render().recording).toBe(true);
-  render().input.props.onKeyDown(event("y", "KeyY", { ctrlKey: true, altKey: true }));
-  expect(recorded).toHaveBeenCalledOnce();
-});
 it("preserves native modifier-pair recording and tracks released keys", async () => {
-  const recorder = await start(true);
+  const recorder = await start();
   recorder.input.props.onKeyDown(event("Shift", "ShiftLeft", { shiftKey: true }));
   recorder.input.props.onKeyUp(event("Shift", "ShiftLeft"));
   recorder.input.props.onKeyDown(event("Shift", "ShiftRight", { shiftKey: true }));

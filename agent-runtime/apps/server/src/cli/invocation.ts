@@ -1,9 +1,3 @@
-import * as Effect from "effect/Effect";
-
-import { HostProcessArguments } from "@cinderdeck/shared/hostProcess";
-
-import packageJson from "../../package.json" with { type: "json" };
-
 export type CliRunner = "npx" | "pnpm dlx" | "bunx";
 
 /**
@@ -64,13 +58,3 @@ export function formatCliCommand(input: {
   }
   return `${runner} ${suggestedPackageSpec(input.version)} ${input.subcommand}`;
 }
-
-/** `formatCliCommand` against this process's real entry path and version. */
-export const resolveCliCommand = (subcommand: string) =>
-  Effect.map(HostProcessArguments, (processArguments) =>
-    formatCliCommand({
-      subcommand,
-      entryPath: processArguments[1] ?? "",
-      version: packageJson.version,
-    }),
-  );

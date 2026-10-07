@@ -7,7 +7,6 @@ import {
   EditorId,
   PickedThemeFileSchema,
   PickFolderOptionsSchema,
-  PRIMARY_LOCAL_ENVIRONMENT_ID,
   REMOTE_CAPABLE_EDITOR_IDS,
   SystemSettingsPaneSchema,
   type DesktopEnvironmentBootstrap,
@@ -27,8 +26,6 @@ import * as DesktopBackendPool from "../../backend/DesktopBackendPool.ts";
 import * as DesktopLocalEnvironmentAuth from "../../backend/DesktopLocalEnvironmentAuth.ts";
 import * as DesktopEnvironment from "../../app/DesktopEnvironment.ts";
 import * as DesktopAppSettings from "../../settings/DesktopAppSettings.ts";
-import * as DesktopWslBackend from "../../wsl/DesktopWslBackend.ts";
-import * as DesktopWslEnvironment from "../../wsl/DesktopWslEnvironment.ts";
 import * as ElectronApp from "../../electron/ElectronApp.ts";
 import * as ElectronDialog from "../../electron/ElectronDialog.ts";
 import * as ElectronMenu from "../../electron/ElectronMenu.ts";
@@ -40,11 +37,6 @@ import * as MacPermissions from "../../permissions/MacPermissions.ts";
 import { safariPermissionCheck } from "../../preview/BrowserImport/SafariPermission.ts";
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
-import {
-  extractDistroFromUncPath,
-  resolveWslPickFolderDefaultPath,
-  wslUncPathToLinuxPath,
-} from "../../wsl/wslPathParsing.ts";
 
 const ContextMenuPosition = Schema.Struct({
   x: Schema.Number,
@@ -98,48 +90,13 @@ export const getLocalEnvironmentBootstraps = DesktopIpc.makeSyncIpcMethod({
     const instances = yield* pool.list;
     const bootstraps: DesktopEnvironmentBootstrap[] = [];
     for (const instance of instances) {
-      const isPrimary = instance.id === PRIMARY_LOCAL_ENVIRONMENT_ID;
       const config = yield* instance.currentConfig;
-      const snapshot = yield* instance.snapshot;
-      // A secondary backend (e.g. a parallel WSL backend) that hasn't produced
-      // a config yet (mid-registration, before its first start cycle) or that
-      // is retrying a *transient* preflight failure (WSL VM still booting, a
-      // not-yet-built linux server entry) is not listening on a port. We
-      // surface it as a *pending* bootstrap (null endpoints, no token) so the
-      // renderer can show a "Connecting…" indicator while it retries — null
-      // endpoints keep the renderer from dialing the dead port, avoiding the
-      // needless /api/auth/bootstrap/bearer error cycles a real endpoint would
-      // trigger.
-      if (Option.isNone(config) || Option.isSome(config.value.preflightFailure)) {
-        // Skip the primary (same-origin, no "connecting" affordance) and skip a
-        // secondary whose preflight failed *fatally* (no node, wrong version,
-        // missing build tools): it has stopped retrying, so an indefinite
-        // "Connecting…" would be misleading — its error is surfaced by the
-        // WSL-state UI instead.
-        const fatalPreflight =
-          Option.isSome(config) &&
-          Option.isSome(config.value.preflightFailure) &&
-          config.value.preflightFailure.value.fatal;
-        const stoppedPreflight =
-          Option.isSome(config) &&
-          Option.isSome(config.value.preflightFailure) &&
-          (!snapshot.desiredRunning || !snapshot.restartScheduled);
-        if (isPrimary || fatalPreflight || stoppedPreflight) continue;
-        bootstraps.push({
-          id: instance.id,
-          label: yield* instance.label,
-          runningDistro: null,
-          httpBaseUrl: null,
-          wsBaseUrl: null,
-        });
-        continue;
-      }
+      // An instance that has not resolved a start config yet is not listening.
+      if (Option.isNone(config)) continue;
       const { bootstrap, httpBaseUrl } = config.value;
-      const runningDistro = config.value.runningDistro ?? null;
       bootstraps.push({
         id: instance.id,
-        label: runningDistro === null ? yield* instance.label : `WSL (${runningDistro})`,
-        runningDistro,
+        label: yield* instance.label,
         httpBaseUrl: httpBaseUrl.href,
         wsBaseUrl: toWebSocketBaseUrl(httpBaseUrl),
         ...(bootstrap.desktopBootstrapToken
@@ -150,18 +107,6 @@ export const getLocalEnvironmentBootstraps = DesktopIpc.makeSyncIpcMethod({
     return bootstraps;
   }),
 });
-
-// Pull the distro selection out of a backend instance id like
-// "wsl:ubuntu". Returns null for "wsl:default", which is the sentinel
-// for "track the user's WSL default distro" and maps to the
-// wslEnv-derived default at picker time.
-function extractWslDistroFromEnvironmentId(envId: string): string | null {
-  if (!envId.startsWith(DesktopWslBackend.WSL_INSTANCE_ID_PREFIX)) {
-    return null;
-  }
-  const suffix = envId.slice(DesktopWslBackend.WSL_INSTANCE_ID_PREFIX.length);
-  return suffix === "default" || suffix.length === 0 ? null : suffix;
-}
 
 export const getLocalEnvironmentBearerToken = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.GET_LOCAL_ENVIRONMENT_BEARER_TOKEN_CHANNEL,
@@ -182,65 +127,16 @@ export const pickFolder = DesktopIpc.makeIpcMethod({
     const electronWindow = yield* ElectronWindow.ElectronWindow;
     const environment = yield* DesktopEnvironment.DesktopEnvironment;
     const appSettings = yield* DesktopAppSettings.DesktopAppSettings;
-    const wslEnvironment = yield* DesktopWslEnvironment.DesktopWslEnvironment;
     const settings = yield* appSettings.get;
     // A picked path only means something to a backend on this machine.
     if (!settings.localEnvironmentEnabled) {
       return null;
     }
-    // Three picker modes:
-    //   - targetEnvironmentId omitted: default to the primary picker. Keeps
-    //     the historical behavior unchanged for users who never enabled the
-    //     WSL backend, and is what unfamiliar callers should get out of the
-    //     box.
-    //   - targetEnvironmentId starts with "wsl:": route to the WSL picker
-    //     using the distro encoded in the id (or the user's selected
-    //     wslDistro when the id is the "wsl:default" sentinel).
-    //   - anything else (incl. PRIMARY_LOCAL_ENVIRONMENT_ID): primary picker.
-    const targetId = options?.targetEnvironmentId;
-    const wslDistroFromTarget =
-      targetId !== undefined && targetId.startsWith(DesktopWslBackend.WSL_INSTANCE_ID_PREFIX)
-        ? extractWslDistroFromEnvironmentId(targetId)
-        : null;
-    const useWsl =
-      targetId !== undefined &&
-      targetId !== PRIMARY_LOCAL_ENVIRONMENT_ID &&
-      targetId.startsWith(DesktopWslBackend.WSL_INSTANCE_ID_PREFIX);
-    // Fall back to the persisted wslDistro when the id is the
-    // "wsl:default" sentinel; the orchestrator uses the same fallback
-    // for the actual backend.
-    const wslDistro = useWsl ? (wslDistroFromTarget ?? settings.wslDistro) : null;
-    const defaultPath = useWsl
-      ? Option.fromNullishOr(
-          resolveWslPickFolderDefaultPath(
-            options,
-            { distro: wslDistro },
-            yield* wslEnvironment.listDistros,
-            Option.getOrNull(yield* wslEnvironment.getUserHome(wslDistro)),
-          ),
-        )
-      : environment.resolvePickFolderDefaultPath(options);
     const selectedPath = yield* dialog.pickFolder({
       owner: yield* electronWindow.focusedMainOrFirst,
-      defaultPath,
+      defaultPath: environment.resolvePickFolderDefaultPath(options),
     });
-    if (Option.isNone(selectedPath)) {
-      return null;
-    }
-    if (!useWsl) {
-      return selectedPath.value;
-    }
-
-    const linuxUncPath = wslUncPathToLinuxPath(selectedPath.value);
-    if (linuxUncPath !== null) {
-      return linuxUncPath;
-    }
-
-    const converted = yield* wslEnvironment.windowsToWslPath(
-      extractDistroFromUncPath(selectedPath.value) ?? wslDistro,
-      selectedPath.value,
-    );
-    return Option.getOrElse(converted, () => selectedPath.value);
+    return Option.getOrNull(selectedPath);
   }),
 });
 
@@ -386,9 +282,8 @@ export const pickThemeFiles = DesktopIpc.makeIpcMethod({
     const electronWindow = yield* ElectronWindow.ElectronWindow;
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    // The VS Code extensions directory is the same dotfolder on Windows,
-    // macOS, and Linux; when it is missing the picker opens wherever the
-    // platform would by default.
+    // The VS Code extensions directory lives in the home dotfolder; when it is
+    // missing the picker opens wherever macOS would by default.
     const extensionsDir = path.join(NodeOS.homedir(), ".vscode", "extensions");
     const defaultPath = yield* fileSystem
       .exists(extensionsDir)

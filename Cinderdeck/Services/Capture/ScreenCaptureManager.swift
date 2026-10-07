@@ -1551,17 +1551,6 @@ final class ScreenCaptureManager: ObservableObject {
     return context.makeImage() ?? baseImage
   }
 
-  /// Get list of available displays
-  func getAvailableDisplays() async -> [SCDisplay] {
-    do {
-      let content = try await SCShareableContent.current
-      return content.displays
-    } catch {
-      DiagnosticLogger.shared.log(.warning, .capture, "Failed to get available displays", context: ["error": error.localizedDescription])
-      return []
-    }
-  }
-
   /// Capture a specific area and return as CGImage (for OCR)
   func captureAreaAsImage(
     rect: CGRect,

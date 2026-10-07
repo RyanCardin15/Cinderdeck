@@ -23,8 +23,6 @@ struct PermissionsView: View {
   private let fileAccessManager = SandboxFileAccessManager.shared
 
   /// System Settings URLs
-  private let microphoneURL =
-    "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
   private let accessibilityURL =
     "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
 

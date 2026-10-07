@@ -457,11 +457,6 @@ struct AdvancedSettingsView: View {
   }
 
   @discardableResult
-  private func ensureSuggestedConfigExists(reportFailure: Bool) -> URL? {
-    ensureConfigExists(at: service.resolvedConfigFileURL, reportFailure: reportFailure)
-  }
-
-  @discardableResult
   private func ensureConfigExists(at url: URL, reportFailure: Bool) -> URL? {
     do {
       return try service.ensureConfigExists(at: url)

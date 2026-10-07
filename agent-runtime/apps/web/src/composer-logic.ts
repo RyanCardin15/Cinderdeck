@@ -4,6 +4,7 @@ import {
   serializeAssistantCitation,
   withAssistantCitationComment,
 } from "@cinderdeck/shared/assistantCitations";
+import { clampCursor, isWhitespace } from "@cinderdeck/shared/composerTrigger";
 import {
   splitPromptIntoComposerSegments,
   type ComposerPromptSegment,
@@ -71,15 +72,6 @@ export function composerSubmissionIntentForKey(input: {
 }
 
 const isInlineTokenSegment = (segment: ComposerPromptSegment): boolean => segment.type !== "text";
-
-function clampCursor(text: string, cursor: number): number {
-  if (!Number.isFinite(cursor)) return text.length;
-  return Math.max(0, Math.min(text.length, Math.floor(cursor)));
-}
-
-function isWhitespace(char: string): boolean {
-  return char === " " || char === "\n" || char === "\t" || char === "\r";
-}
 
 function tokenStartForCursor(text: string, cursor: number): number {
   let index = cursor - 1;
@@ -313,16 +305,4 @@ export function parseStandaloneComposerSlashCommand(
   const command = match[1]?.toLowerCase();
   if (command === "plan") return "plan";
   return "default";
-}
-
-export function replaceTextRange(
-  text: string,
-  rangeStart: number,
-  rangeEnd: number,
-  replacement: string,
-): { text: string; cursor: number } {
-  const safeStart = Math.max(0, Math.min(text.length, rangeStart));
-  const safeEnd = Math.max(safeStart, Math.min(text.length, rangeEnd));
-  const nextText = `${text.slice(0, safeStart)}${replacement}${text.slice(safeEnd)}`;
-  return { text: nextText, cursor: safeStart + replacement.length };
 }

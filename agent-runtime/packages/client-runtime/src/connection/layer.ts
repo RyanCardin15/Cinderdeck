@@ -39,7 +39,7 @@ export const watchDiscoveredCompatibility = Effect.fn("connection.watchDiscovere
             if (status === null || descriptor === undefined) continue;
             const environmentId = entry.environment.environmentId;
             // Discovery describes the server behind the relay route. A direct
-            // connection (the desktop's own server, a saved URL, SSH) can reach
+            // connection (the desktop's own server or a saved URL) can reach
             // a different server with the same environment id, such as a
             // preview app that shares the home directory. Its socket handshake
             // already checks the protocol.

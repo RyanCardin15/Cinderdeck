@@ -87,6 +87,10 @@
       "types": "./src/rpc/index.ts",
       "default": "./src/rpc/index.ts"
     },
+    "./background-activity-scopes": {
+      "types": "./src/backgroundActivityScopes.ts",
+      "default": "./src/backgroundActivityScopes.ts"
+    },
     "./operations": {
       "types": "./src/operations/index.ts",
       "default": "./src/operations/index.ts"

@@ -5,6 +5,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@cinderdeck/client-runtime/state/runtime";
+import { requiresDefaultBranchConfirmation } from "@cinderdeck/client-runtime/state/vcs";
 import type {
   GitRunStackedActionResult,
   GitStackedAction,
@@ -61,7 +62,6 @@ import {
   type GitActionMenuItem,
   type GitQuickAction,
   type DefaultBranchConfirmableAction,
-  requiresDefaultBranchConfirmation,
   resolveDefaultBranchActionDialogCopy,
   resolveGitActionProgressPresentation,
   resolveGitActionResultToastTiming,

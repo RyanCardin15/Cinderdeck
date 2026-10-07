@@ -163,10 +163,6 @@ struct QuickAccessCardView: View {
     return 1.0 - Double(abs(swipeOffset)) / 200.0
   }
 
-  private var captureType: CaptureType {
-    item.isVideo ? .recording : .screenshot
-  }
-
   private var isTempFile: Bool {
     TempCaptureManager.shared.isTempFile(item.url)
   }
@@ -618,16 +614,6 @@ struct QuickAccessCardView: View {
       .animation(QuickAccessAnimations.buttonReveal.delay(stagger))
   }
 
-  /// Creates drag preview for the card
-  private var dragPreview: some View {
-    Image(nsImage: item.thumbnail)
-      .resizable()
-      .aspectRatio(contentMode: .fill)
-      .frame(width: scaledWidth * 0.8, height: scaledHeight * 0.8)
-      .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-      .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
-  }
-
   private var quickAccessContextMenuEntries: [QuickAccessContextMenuEntry] {
     guard canPerformCardActions else { return [] }
 
@@ -960,18 +946,6 @@ private final class QuickAccessContextMenuAction: NSObject {
 
   func perform() {
     action()
-  }
-}
-
-// MARK: - QuickAccessItem Drag Support
-
-extension QuickAccessItem {
-  /// Creates NSItemProvider for drag & drop to external apps
-  func dragItemProvider() -> NSItemProvider {
-    let fileURL = self.url
-    let provider = NSItemProvider(contentsOf: fileURL) ?? NSItemProvider()
-    provider.suggestedName = fileURL.lastPathComponent
-    return provider
   }
 }
 

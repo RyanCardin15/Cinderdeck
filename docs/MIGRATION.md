@@ -38,4 +38,4 @@ The new identity has its own Screen Recording, Microphone, Camera, and Accessibi
 
 ## Updates
 
-Cinderdeck cannot install Snapzy’s releases. It has a separate, initially empty appcast and no upstream update key. Until its own signed updates are configured, Check for Updates opens Cinderdeck’s GitHub releases. See [release setup](RELEASES.md).
+Cinderdeck cannot install Snapzy’s releases. It uses its own signed appcast and update key, not Snapzy’s. Copies built from source before signed updates were configured must install a release once; after that Sparkle keeps them current. See [release setup](RELEASES.md).

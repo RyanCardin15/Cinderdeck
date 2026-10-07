@@ -1,8 +1,4 @@
-import {
-  connectLoopbackRedirectUri,
-  CONNECT_OAUTH_SCOPES,
-  DEFAULT_HOSTED_APP_URL,
-} from "@cinderdeck/shared/connectAuth";
+import { connectLoopbackRedirectUri, CONNECT_OAUTH_SCOPES } from "@cinderdeck/shared/connectAuth";
 import { clerkFrontendApiUrlFromPublishableKey } from "@cinderdeck/shared/relayAuth";
 import { normalizeSecureRelayUrl } from "@cinderdeck/shared/relayUrl";
 import * as Config from "effect/Config";
@@ -20,6 +16,7 @@ declare const __DECKHAND_BUILD_RELAY_CLIENT_OTLP_TRACES_TOKEN__: string | undefi
 
 const CLOUD_CLI_OAUTH_LOOPBACK_PORT = 34338;
 const CLOUD_CLI_OAUTH_SCOPES = CONNECT_OAUTH_SCOPES;
+const DEFAULT_HOSTED_APP_URL = "http://127.0.0.1:3773";
 
 function validateRelayUrl(value: string) {
   const relayUrl = normalizeSecureRelayUrl(value);

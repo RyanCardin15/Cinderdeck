@@ -21,14 +21,6 @@ enum Spacing {
 // MARK: - Sizing
 
 enum Size {
-  // Grid items (backgrounds, wallpapers, gradients)
-  static let gridItem: CGFloat = 48
-  static let gridItemSmall: CGFloat = 40
-
-  // Color swatches
-  static let colorSwatch: CGFloat = 32
-  static let colorSwatchSmall: CGFloat = 24
-
   // Corner radii
   static let radiusXs: CGFloat = 4
   static let radiusSm: CGFloat = 6
@@ -132,14 +124,12 @@ enum SidebarColors {
   static let itemSelected = Color.accentColor.opacity(0.15)
 
   // Borders
-  static let borderDefault = Color.secondary.opacity(0.3)
   static let borderHover = Color.secondary.opacity(0.5)
   static let borderSelected = Color.accentColor
 
   // Text
   static let labelPrimary = Color.primary
   static let labelSecondary = Color.secondary
-  static let labelTertiary = Color.secondary
 
   // Actions
   static let actionButton = Color.primary.opacity(0.08)

@@ -235,13 +235,6 @@ struct AnnotateBottomBarView: View {
 
   // MARK: - Mode Toggle
 
-  /// Check if any mockup transforms have been applied
-  private var hasMockupTransforms: Bool {
-    state.mockupRotationX != 0 ||
-    state.mockupRotationY != 0 ||
-    state.mockupRotationZ != 0
-  }
-
   private var modeToggle: some View {
     Picker("", selection: $state.editorMode) {
       Label(L10n.AnnotateUI.modeAnnotate, systemImage: "pencil.and.outline")

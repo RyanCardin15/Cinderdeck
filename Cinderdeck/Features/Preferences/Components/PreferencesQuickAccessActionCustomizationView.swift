@@ -219,8 +219,6 @@ private struct QuickAccessActionDragPreview: View {
 }
 
 private struct ReorderDropDelegate: DropDelegate {
-  private static let reorderMarker = "com.cinderdeck.quick-access-reorder"
-
   let targetAction: QuickAccessActionKind
   let targetIndex: Int
   let actionStore: QuickAccessActionConfigurationStore

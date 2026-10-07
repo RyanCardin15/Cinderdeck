@@ -41,7 +41,7 @@ const record = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 
-export function computerUseHelperPath(): string {
+function computerUseHelperPath(): string {
   const candidates = [
     NodePath.join(NodePath.dirname(process.execPath), `native/${HELPER}`),
     ...(process.argv[1]

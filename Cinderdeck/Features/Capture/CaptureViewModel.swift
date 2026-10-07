@@ -290,60 +290,6 @@ final class ScreenCaptureViewModel: ObservableObject, KeyboardShortcutDelegate {
     return session
   }
 
-  // MARK: - Quick Access Settings
-
-  var quickAccessEnabled: Bool {
-    get { quickAccessManager.isEnabled }
-    set { quickAccessManager.isEnabled = newValue }
-  }
-
-  var quickAccessPosition: QuickAccessPosition {
-    get { quickAccessManager.position }
-    set { quickAccessManager.setPosition(newValue) }
-  }
-
-  var quickAccessAutoDismiss: Bool {
-    get { quickAccessManager.autoDismissEnabled }
-    set { quickAccessManager.autoDismissEnabled = newValue }
-  }
-
-  var quickAccessAutoDismissDelay: TimeInterval {
-    get { quickAccessManager.autoDismissDelay }
-    set { quickAccessManager.autoDismissDelay = newValue }
-  }
-
-  // MARK: - Shortcut Management
-
-  func updateFullscreenShortcut(_ config: ShortcutConfig) {
-    shortcutManager.setFullscreenShortcut(config)
-    fullscreenShortcut = config
-  }
-
-  func updateAreaShortcut(_ config: ShortcutConfig) {
-    shortcutManager.setAreaShortcut(config)
-    areaShortcut = config
-  }
-
-  func updateRecordingShortcut(_ config: ShortcutConfig) {
-    shortcutManager.setRecordingShortcut(config)
-    recordingShortcut = config
-  }
-
-  func updatePauseResumeRecordingShortcut(_ config: ShortcutConfig?) {
-    shortcutManager.setPauseResumeRecordingShortcut(config)
-    pauseResumeRecordingShortcut = config
-  }
-
-  func updateScrollingCaptureShortcut(_ config: ShortcutConfig) {
-    shortcutManager.setScrollingCaptureShortcut(config)
-    scrollingCaptureShortcut = config
-  }
-
-  func updateObjectCutoutShortcut(_ config: ShortcutConfig) {
-    shortcutManager.setObjectCutoutShortcut(config)
-    objectCutoutShortcut = config
-  }
-
   // MARK: - KeyboardShortcutDelegate
 
   func shortcutTriggered(_ action: ShortcutAction) {
@@ -2037,16 +1983,6 @@ final class ScreenCaptureViewModel: ObservableObject, KeyboardShortcutDelegate {
           )
         }
       }
-  }
-
-  func chooseSaveDirectory() {
-    if let url = fileAccessManager.chooseExportDirectory(
-      message: L10n.Recording.chooseSaveLocationMessage,
-      prompt: L10n.PreferencesGeneral.saveHereButton,
-      directoryURL: fileAccessManager.resolvedExportDirectoryURL()
-    ) {
-      saveDirectory = url
-    }
   }
 
   // MARK: - Recording

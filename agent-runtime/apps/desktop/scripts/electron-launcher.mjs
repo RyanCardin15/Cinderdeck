@@ -119,7 +119,6 @@ export function makeDevelopmentEnvironmentScript(environment) {
     ["DECKHAND_OTLP_EXPORT_INTERVAL_MS", environment.DECKHAND_OTLP_EXPORT_INTERVAL_MS],
     ["DECKHAND_OTLP_HEADERS", environment.DECKHAND_OTLP_HEADERS],
     ["DECKHAND_OTLP_PROTOCOL", environment.DECKHAND_OTLP_PROTOCOL],
-    ["DECKHAND_DESKTOP_APP_USER_MODEL_ID", APP_BUNDLE_ID],
   ].filter((entry) => typeof entry[1] === "string" && entry[1].trim().length > 0);
   return [
     ...envEntries.map(

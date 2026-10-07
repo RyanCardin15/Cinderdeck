@@ -92,13 +92,13 @@ const cellsOf = (rect: ReadonlyArray<number>, dilate: number) => {
     for (let column = left; column <= right; column++) cells.push(row * GRID + column);
   return cells;
 };
-export function noiseMask(changes: ReadonlyArray<RepaintChange>): NoiseMask {
+function noiseMask(changes: ReadonlyArray<RepaintChange>): NoiseMask {
   const cells = new Set<number>();
   for (const change of changes)
     for (const rect of change.rects) for (const cell of cellsOf(rect, 1)) cells.add(cell);
   return { cells, coverage: cells.size / (GRID * GRID) };
 }
-export const relevantChange = (change: RepaintChange, mask: NoiseMask) =>
+const relevantChange = (change: RepaintChange, mask: NoiseMask) =>
   change.rects.some((rect) => cellsOf(rect, 0).some((cell) => !mask.cells.has(cell)));
 // When background repaints cover most of the window, repaints cannot show completion.
 const UNUSABLE_COVERAGE = 0.9;
@@ -122,11 +122,10 @@ const bounds = (changes: ReadonlyArray<RepaintChange>) => {
   const fixed = (value: number) => Math.round(value * 100) / 100;
   return { x: fixed(left), y: fixed(top), width: fixed(right - left), height: fixed(bottom - top) };
 };
-export const repaintArea = bounds;
 // Waits until a step's effects end: no relevant repaint, probe activity or outstanding
 // Office/network work for settleMs, with every probe event up to then delivered. A
 // step with `until` ends at its named mark or measure instead.
-export async function measureStep(
+async function measureStep(
   deps: BenchmarkDeps,
   plan: BenchmarkPlan,
   step: BenchmarkStep,
@@ -200,7 +199,7 @@ export async function measureStep(
   }
 }
 
-export async function sampleStep(
+async function sampleStep(
   deps: BenchmarkDeps,
   outcome: StepOutcome,
   iteration: number,
@@ -250,10 +249,7 @@ export async function sampleStep(
   };
 }
 
-export function stepStats(
-  label: string,
-  samples: ReadonlyArray<BenchmarkSample>,
-): BenchmarkStepStats {
+function stepStats(label: string, samples: ReadonlyArray<BenchmarkSample>): BenchmarkStepStats {
   const pick = (read: (sample: BenchmarkSample) => number) => distribution(samples.map(read));
   const optional = (read: (sample: BenchmarkSample) => number | null) => {
     const values = samples.flatMap((sample) => read(sample) ?? []);

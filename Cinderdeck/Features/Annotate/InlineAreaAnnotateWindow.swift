@@ -1562,10 +1562,6 @@ private enum InlineAreaChrome {
   static let divider = Color.primary.opacity(0.15)
   static let primaryText = Color.primary.opacity(0.86)
   static let secondaryText = Color.secondary.opacity(0.88)
-  static let toolbarIconForeground = Color.primary.opacity(0.85)
-  static let toolbarIconSelectedForeground = Color.primary
-  static let toolbarIconInactiveToggleForeground = Color.primary.opacity(0.5)
-  static let toolbarHoverBackground = Color.primary.opacity(0.10)
 }
 
 private struct InlineAreaPanelBorder: View {

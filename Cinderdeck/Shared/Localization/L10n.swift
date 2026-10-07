@@ -476,16 +476,6 @@ nonisolated enum L10n {
       defaultValue: "config.toml opened.",
       comment: "Toast shown after config.toml is opened"
     )
-    static let configSyncing = string(
-      "preferences-advanced.config-syncing",
-      defaultValue: "Syncing config.toml...",
-      comment: "Toast shown while Cinderdeck syncs current settings into config.toml"
-    )
-    static let configSynced = string(
-      "preferences-advanced.config-synced",
-      defaultValue: "config.toml synced.",
-      comment: "Toast shown after Cinderdeck syncs current settings into config.toml"
-    )
     static let configSyncNeedsConfirmation = string(
       "preferences-advanced.config-sync-needs-confirmation",
       defaultValue: "config.toml has external changes.",
@@ -578,51 +568,6 @@ nonisolated enum L10n {
       )
     }
 
-    static func exported(_ path: String) -> String {
-      format(
-        "preferences-advanced.exported",
-        defaultValue: "Exported config to %@",
-        comment: "Config export success message",
-        path
-      )
-    }
-
-    static func openedConfig(_ path: String) -> String {
-      format(
-        "preferences-advanced.opened-config",
-        defaultValue: "Opened config.toml from %@",
-        comment: "Config file opened success message",
-        path
-      )
-    }
-
-    static func configAccessGranted(_ path: String) -> String {
-      format(
-        "preferences-advanced.config-access-granted",
-        defaultValue: "Config folder access granted. config.toml is ready at %@",
-        comment: "Config folder access success message. %@ is the config file path.",
-        path
-      )
-    }
-
-    static func openConfigMissing(_ path: String) -> String {
-      format(
-        "preferences-advanced.open-config-missing",
-        defaultValue: "No config file exists at %@. Export a backup first, then open it here.",
-        comment: "Config file missing warning message",
-        path
-      )
-    }
-
-    static func openConfigFailed(_ path: String) -> String {
-      format(
-        "preferences-advanced.open-config-failed",
-        defaultValue: "macOS could not open %@.",
-        comment: "Config file open failure message",
-        path
-      )
-    }
-
     static let exportFailed = string(
       "preferences-advanced.export-failed",
       defaultValue: "Config export failed.",
@@ -653,15 +598,6 @@ nonisolated enum L10n {
         "preferences-advanced.import-failed-with-errors",
         defaultValue: "Config import failed with %d error(s).",
         comment: "Config import validation error summary",
-        count
-      )
-    }
-
-    static func imported(_ count: Int) -> String {
-      format(
-        "preferences-advanced.imported",
-        defaultValue: "Imported %d config setting(s).",
-        comment: "Config import success summary",
         count
       )
     }
@@ -920,11 +856,6 @@ nonisolated enum L10n {
   }
 
   enum Common {
-    static let tryItOut = string(
-      "common.try-it-out",
-      defaultValue: "Try It Out",
-      comment: "Try it out button title"
-    )
     static let next = string(
       "common.next",
       defaultValue: "Next",
@@ -1040,11 +971,6 @@ nonisolated enum L10n {
       defaultValue: "None",
       comment: "Generic none option label"
     )
-    static let more = string(
-      "common.more",
-      defaultValue: "More",
-      comment: "Generic more button title"
-    )
     static let reset = string(
       "common.reset",
       defaultValue: "Reset",
@@ -1079,11 +1005,6 @@ nonisolated enum L10n {
       "common.redo",
       defaultValue: "Redo",
       comment: "Generic redo button title"
-    )
-    static let copyToClipboard = string(
-      "common.copy-to-clipboard",
-      defaultValue: "Copy to Clipboard",
-      comment: "Generic copy to clipboard button title"
     )
     static let copiedToClipboard = string(
       "common.copied-to-clipboard",
@@ -1185,11 +1106,6 @@ nonisolated enum L10n {
       defaultValue: "Current Size",
       comment: "Generic current file size label"
     )
-    static let estimated = string(
-      "common.estimated",
-      defaultValue: "Estimated",
-      comment: "Generic estimated value label"
-    )
     static let estimatedSize = string(
       "common.estimated-size",
       defaultValue: "Estimated Size",
@@ -1240,11 +1156,6 @@ nonisolated enum L10n {
       defaultValue: "Padding",
       comment: "Generic padding setting label"
     )
-    static let inset = string(
-      "common.inset",
-      defaultValue: "Inset",
-      comment: "Generic inset setting label"
-    )
     static let shadow = string(
       "common.shadow",
       defaultValue: "Shadow",
@@ -1290,11 +1201,6 @@ nonisolated enum L10n {
       defaultValue: "Stroke",
       comment: "Generic stroke setting label"
     )
-    static let solid = string(
-      "common.solid",
-      defaultValue: "Solid",
-      comment: "Generic solid color label"
-    )
     static let free = string(
       "common.free",
       defaultValue: "Free",
@@ -1339,11 +1245,6 @@ nonisolated enum L10n {
       "common.custom",
       defaultValue: "Custom",
       comment: "Generic custom option label"
-    )
-    static let unsaved = string(
-      "common.unsaved",
-      defaultValue: "Unsaved",
-      comment: "Generic unsaved status label"
     )
     static let active = string(
       "common.active",
@@ -1413,11 +1314,6 @@ nonisolated enum L10n {
       defaultValue: "Welcome to Cinderdeck",
       comment: "Splash screen welcome title"
     )
-    static let welcomeSubtitle = string(
-      "splash.welcome-subtitle",
-      defaultValue: "Screenshot & recording, simplified.",
-      comment: "Splash screen welcome subtitle"
-    )
     static let pressEnter = string(
       "splash.press-enter",
       defaultValue: "Press Enter ↵",
@@ -1467,31 +1363,6 @@ nonisolated enum L10n {
   }
 
   enum Onboarding {
-    static let welcomeSubtitle = string(
-      "onboarding.welcome.subtitle",
-      defaultValue: "A powerful screenshot & screen recording app for macOS",
-      comment: "Welcome onboarding subtitle"
-    )
-    static let welcomeFeatureCapture = string(
-      "onboarding.welcome.feature-capture",
-      defaultValue: "Capture area or fullscreen screenshots",
-      comment: "Welcome onboarding feature highlight"
-    )
-    static let welcomeFeatureRecord = string(
-      "onboarding.welcome.feature-record",
-      defaultValue: "Record screen with audio",
-      comment: "Welcome onboarding feature highlight"
-    )
-    static let welcomeFeatureAnnotate = string(
-      "onboarding.welcome.feature-annotate",
-      defaultValue: "Annotate and edit captures",
-      comment: "Welcome onboarding feature highlight"
-    )
-    static let letsDoIt = string(
-      "onboarding.welcome.cta",
-      defaultValue: "Let's do it!",
-      comment: "Primary call to action on onboarding welcome screen"
-    )
     static let languageTitle = string(
       "onboarding.language.title",
       defaultValue: "Choose your language",
@@ -1749,32 +1620,6 @@ nonisolated enum L10n {
       "onboarding.diagnostics.privacy-note",
       defaultValue: "No personal data is collected. Nothing is sent without your action.",
       comment: "Diagnostics opt-in privacy note"
-    )
-
-    static let skipTitle = string(
-      "onboarding.skip.title",
-      defaultValue: "Skip remaining setup?",
-      comment: "Skip onboarding confirmation title"
-    )
-    static let skipDescription = string(
-      "onboarding.skip.description",
-      defaultValue: "All remaining settings will use their defaults. You can always change them later in Preferences.",
-      comment: "Skip onboarding confirmation description"
-    )
-    static let skipShortcutDefaults = string(
-      "onboarding.skip.shortcut-defaults",
-      defaultValue: "Keyboard shortcuts — system defaults",
-      comment: "List item describing what will be skipped during onboarding"
-    )
-    static let goBack = string(
-      "onboarding.skip.go-back",
-      defaultValue: "Go Back",
-      comment: "Button title to return from skip onboarding confirmation"
-    )
-    static let skipSetup = string(
-      "onboarding.skip.skip-setup",
-      defaultValue: "Skip Setup",
-      comment: "Button title to confirm skipping onboarding setup"
     )
 
     static let sponsorTitle = string(
@@ -2315,16 +2160,6 @@ nonisolated enum L10n {
       defaultValue: "Star on GitHub",
       comment: "Button label for starring on GitHub"
     )
-    static let completionJoinDiscord = string(
-      "onboarding.completion.join-discord",
-      defaultValue: "Join Discord",
-      comment: "Button label for joining Discord"
-    )
-    static let completionSponsorProject = string(
-      "onboarding.completion.sponsor-project",
-      defaultValue: "Sponsor Project",
-      comment: "Button label for sponsoring project"
-    )
     static let completionStartUsing = string(
       "onboarding.completion.start-using",
       defaultValue: "Start Using Cinderdeck",
@@ -2811,11 +2646,6 @@ nonisolated enum L10n {
       defaultValue: "Save location",
       comment: "General preferences setting title"
     )
-    static let saveLocationDescription = string(
-      "preferences-general.save-location-description",
-      defaultValue: "Where Cinderdeck stores captures",
-      comment: "General preferences setting description"
-    )
     static let chooseButton = string(
       "preferences-general.choose-button",
       defaultValue: "Choose...",
@@ -3204,16 +3034,6 @@ nonisolated enum L10n {
       defaultValue: "Unpin",
       comment: "Quick access configurable action title"
     )
-    static let primaryActionBadge = string(
-      "preferences-quick-access.badge-primary",
-      defaultValue: "Primary",
-      comment: "Quick access configurable action placement badge"
-    )
-    static let cornerActionBadge = string(
-      "preferences-quick-access.badge-corner",
-      defaultValue: "Corner",
-      comment: "Quick access configurable action placement badge"
-    )
     static let notOnCard = string(
       "preferences-quick-access.not-on-card",
       defaultValue: "Not on card",
@@ -3248,11 +3068,6 @@ nonisolated enum L10n {
       "preferences-quick-access.slot-bottom-right",
       defaultValue: "Bottom right",
       comment: "Quick access preview placement slot title"
-    )
-    static let swipeActionsSection = string(
-      "preferences-quick-access.section-swipe-actions",
-      defaultValue: "Swipe Actions",
-      comment: "Quick access preferences section title for swipe action zones"
     )
     static let swipeLeftAction = string(
       "preferences-quick-access.swipe-left-action",
@@ -3807,11 +3622,6 @@ nonisolated enum L10n {
       "preferences-capture.microphone-input-description",
       defaultValue: "Choose the built-in or external microphone used for recordings",
       comment: "Capture preferences setting description"
-    )
-    static let microphoneRequiresMacOS = string(
-      "preferences-capture.microphone-requires-macos",
-      defaultValue: "Requires macOS 15.0+",
-      comment: "Capture preferences description when microphone capture is unavailable on the current macOS version"
     )
     static let removeBackground = string(
       "preferences-capture.remove-background",
@@ -4418,30 +4228,10 @@ nonisolated enum L10n {
   }
 
   enum PreferencesAbout {
-    static let appSubtitle = string(
-      "preferences-about.app-subtitle",
-      defaultValue: "Your development control deck for macOS",
-      comment: "About screen app subtitle"
-    )
     static let madeBy = string(
       "preferences-about.made-by",
       defaultValue: "Made by",
       comment: "Label for creator attribution in About"
-    )
-    static let specialThanks = string(
-      "preferences-about.special-thanks",
-      defaultValue: "Special thanks",
-      comment: "Label for contributor thanks section in About"
-    )
-    static let allContributors = string(
-      "preferences-about.all-contributors",
-      defaultValue: "and all GitHub contributors",
-      comment: "Suffix label for GitHub contributors list"
-    )
-    static let viewAllContributors = string(
-      "preferences-about.view-all-contributors",
-      defaultValue: "View all contributors on GitHub",
-      comment: "Tooltip for GitHub contributors link"
     )
     static let seeMore = string(
       "preferences-about.see-more",
@@ -4468,45 +4258,10 @@ nonisolated enum L10n {
       defaultValue: "Check for Updates",
       comment: "Button title on the about screen"
     )
-    static let website = string(
-      "preferences-about.website",
-      defaultValue: "Website",
-      comment: "Tooltip for website link"
-    )
-    static let github = string(
-      "preferences-about.github",
-      defaultValue: "GitHub",
-      comment: "Tooltip for GitHub link"
-    )
-    static let reportBug = string(
-      "preferences-about.report-bug",
-      defaultValue: "Report a Bug",
-      comment: "Tooltip for issue reporting link"
-    )
-    static let support = string(
-      "preferences-about.support",
-      defaultValue: "Support",
-      comment: "About screen support section header"
-    )
-    static let discordCommunity = string(
-      "preferences-about.discord-community",
-      defaultValue: "Discord Community",
-      comment: "Label for Discord community link"
-    )
-    static let supportTitle = string(
-      "preferences-about.support-title",
-      defaultValue: "Support open source",
-      comment: "About screen sponsor card title"
-    )
     static let updateChannelTitle = string(
       "preferences-about.update-channel-title",
       defaultValue: "Update Channel",
       comment: "About screen update channel row title"
-    )
-    static let updateChannelDescription = string(
-      "preferences-about.update-channel-description",
-      defaultValue: "Choose which releases you receive",
-      comment: "About screen update channel row description"
     )
     static let updateChannelStable = string(
       "preferences-about.update-channel-stable",
@@ -4739,11 +4494,6 @@ nonisolated enum L10n {
       defaultValue: "Clear all history",
       comment: "Tooltip for clearing all cloud upload history"
     )
-    static let status = string(
-      "preferences-cloud-history.status",
-      defaultValue: "Status",
-      comment: "Cloud upload history filter section title"
-    )
     static let provider = string(
       "preferences-cloud-history.provider",
       defaultValue: "Provider",
@@ -4803,21 +4553,6 @@ nonisolated enum L10n {
       defaultValue: "Expired",
       comment: "Status badge shown for expired cloud uploads"
     )
-    static let copyLink = string(
-      "preferences-cloud-history.copy-link",
-      defaultValue: "Copy link",
-      comment: "Tooltip for copying a cloud upload link"
-    )
-    static let openInBrowser = string(
-      "preferences-cloud-history.open-in-browser",
-      defaultValue: "Open in browser",
-      comment: "Tooltip for opening a cloud upload in the browser"
-    )
-    static let removeFromHistory = string(
-      "preferences-cloud-history.remove-from-history",
-      defaultValue: "Remove from history",
-      comment: "Tooltip for removing a cloud upload from history"
-    )
   }
 
   enum Microphone {
@@ -4846,21 +4581,6 @@ nonisolated enum L10n {
       defaultValue: "Do Not Use Microphone",
       comment: "Microphone menu option to disable microphone capture"
     )
-    static let unavailableVersion = string(
-      "microphone.unavailable-version",
-      defaultValue: "Microphone unavailable on this macOS version",
-      comment: "Accessibility label when microphone capture is unavailable on current macOS version"
-    )
-    static let mute = string(
-      "microphone.mute",
-      defaultValue: "Mute microphone",
-      comment: "Accessibility label for muting the microphone"
-    )
-    static let unmute = string(
-      "microphone.unmute",
-      defaultValue: "Unmute microphone",
-      comment: "Accessibility label for unmuting the microphone"
-    )
     static let on = string(
       "microphone.on",
       defaultValue: "Microphone on",
@@ -4880,11 +4600,6 @@ nonisolated enum L10n {
       "microphone.choose-input",
       defaultValue: "Choose a microphone input",
       comment: "Accessibility hint for the microphone options menu button"
-    )
-    static let doubleTapToToggle = string(
-      "microphone.double-tap-toggle",
-      defaultValue: "Double-tap to toggle",
-      comment: "Accessibility hint for toggling microphone capture"
     )
     static let systemDefault = string(
       "microphone.system-default",
@@ -5906,15 +5621,6 @@ nonisolated enum L10n {
       )
     }
 
-    static func lifecycleRuleFailed(_ message: String) -> String {
-      format(
-        "cloud-settings.lifecycle-rule-failed",
-        defaultValue: "Lifecycle rule failed: %@. Ensure your credentials have lifecycle management permissions.",
-        comment: "Validation error shown when applying a cloud lifecycle rule fails. %@ is the lower-level error message.",
-        message
-      )
-    }
-
     static func configurationSavedButPasswordSetupFailed(_ message: String) -> String {
       format(
         "cloud-settings.configuration-saved-password-setup-failed",
@@ -5935,11 +5641,6 @@ nonisolated enum L10n {
       "annotate.cloud-not-configured-message",
       defaultValue: "Please set up your cloud credentials in Preferences -> Cloud before uploading.",
       comment: "Alert message shown when annotate cloud upload is unavailable because cloud is not configured"
-    )
-    static let inlineUploadFailedTitle = string(
-      "annotate.inline-upload-failed-title",
-      defaultValue: "Upload Failed",
-      comment: "Alert title shown when inline area annotate upload fails"
     )
     static let moveSelection = string(
       "annotate.move-selection",
@@ -6406,11 +6107,6 @@ nonisolated enum L10n {
       defaultValue: "Text Style",
       comment: "Section title for annotate text styling controls"
     )
-    static let textColor = string(
-      "annotate.text-color",
-      defaultValue: "Text Color",
-      comment: "Label for annotate text color controls"
-    )
     static let annotation = string(
       "annotate.annotation",
       defaultValue: "Annotation",
@@ -6435,16 +6131,6 @@ nonisolated enum L10n {
       "annotate.gaussian",
       defaultValue: "Gaussian",
       comment: "Label for gaussian blur style"
-    )
-    static let pixelatedBlurDescription = string(
-      "annotate.pixelated-blur-description",
-      defaultValue: "Pixelated blur for redacting sensitive content",
-      comment: "Description shown for the pixelated blur style"
-    )
-    static let gaussianBlurDescription = string(
-      "annotate.gaussian-blur-description",
-      defaultValue: "Smooth Gaussian blur similar to CSS filter",
-      comment: "Description shown for the gaussian blur style"
     )
     static let hexagonal = string(
       "annotate.hexagonal",
@@ -6475,36 +6161,6 @@ nonisolated enum L10n {
       "annotate.washi",
       defaultValue: "Washi",
       comment: "Label for washi cover style"
-    )
-    static let hexagonalBlurDescription = string(
-      "annotate.hexagonal-blur-description",
-      defaultValue: "Artistic hexagonal pixelation effect",
-      comment: "Description shown for the hexagonal blur style"
-    )
-    static let crystallizedBlurDescription = string(
-      "annotate.crystallized-blur-description",
-      defaultValue: "Lavender paper tape with a starry pattern",
-      comment: "Description shown for the starry tape style"
-    )
-    static let pointillismBlurDescription = string(
-      "annotate.pointillism-blur-description",
-      defaultValue: "Peach paper tape with a grid line pattern",
-      comment: "Description shown for the grid tape style"
-    )
-    static let halftoneBlurDescription = string(
-      "annotate.halftone-blur-description",
-      defaultValue: "Cream paper tape with a gingham check pattern",
-      comment: "Description shown for the gingham tape style"
-    )
-    static let tapeBlurDescription = string(
-      "annotate.tape-blur-description",
-      defaultValue: "Off-white paper tape with diagonal patterns",
-      comment: "Description shown for the tape cover style"
-    )
-    static let washiBlurDescription = string(
-      "annotate.washi-blur-description",
-      defaultValue: "Pastel teal paper tape with grid dot patterns",
-      comment: "Description shown for the washi cover style"
     )
     static let blurredBackground = string(
       "annotate.blurred-background",
@@ -6570,21 +6226,6 @@ nonisolated enum L10n {
       "annotate.curvedLeft",
       defaultValue: "Curved Left",
       comment: "Label for the curved left arrow style"
-    )
-    static let straightArrowHelp = string(
-      "annotate.straight-arrow-help",
-      defaultValue: "Direct line from start to end",
-      comment: "Helper text for the straight arrow style"
-    )
-    static let curvedRightArrowHelp = string(
-      "annotate.curved-right-arrow-help",
-      defaultValue: "Arrow curving to the right",
-      comment: "Helper text for the curved right arrow style"
-    )
-    static let curvedLeftArrowHelp = string(
-      "annotate.curved-left-arrow-help",
-      defaultValue: "Arrow curving to the left",
-      comment: "Helper text for the curved left arrow style"
     )
     static let arrowBend = string(
       "annotate.arrow-bend",
@@ -6691,21 +6332,6 @@ nonisolated enum L10n {
       defaultValue: "Reset Mockup",
       comment: "Button title for resetting mockup controls"
     )
-    static let autoBalance = string(
-      "annotate.auto-balance",
-      defaultValue: "Auto-balance",
-      comment: "Toggle label for automatically balancing canvas effects in annotate"
-    )
-    static let openSidebarForMoreControls = string(
-      "annotate.open-sidebar-for-more-controls",
-      defaultValue: "Open sidebar for more annotate controls",
-      comment: "Tooltip for opening the full annotate sidebar from the quick properties bar"
-    )
-    static let resetToDefaults = string(
-      "annotate.reset-to-defaults",
-      defaultValue: "Reset to Defaults",
-      comment: "Tooltip for resetting mockup values to defaults"
-    )
   }
 
   enum VideoEditor {
@@ -6772,11 +6398,6 @@ nonisolated enum L10n {
       defaultValue: "Exporting Video",
       comment: "Title shown in the video editor export progress overlay"
     )
-    static let zoomSettings = string(
-      "video-editor.zoom-settings",
-      defaultValue: "Zoom Settings",
-      comment: "Title shown in the zoom settings popover"
-    )
     static let zoomLevel = string(
       "video-editor.zoom-level",
       defaultValue: "Zoom Level",
@@ -6836,11 +6457,6 @@ nonisolated enum L10n {
       "video-editor.enable-zoom",
       defaultValue: "Enable Zoom",
       comment: "Context menu label for enabling a zoom segment"
-    )
-    static let editZoom = string(
-      "video-editor.edit-zoom",
-      defaultValue: "Edit Zoom",
-      comment: "Context menu label for editing a zoom segment"
     )
     static let deleteZoom = string(
       "video-editor.delete-zoom",
@@ -6906,21 +6522,6 @@ nonisolated enum L10n {
       "video-editor.speed-zoom-overlap-hint",
       defaultValue: "This region overlaps a zoom — the zoom plays at the adjusted speed.",
       comment: "Informational hint when a speed segment overlaps a zoom segment"
-    )
-    static let backgroundTab = string(
-      "video-editor.background-tab",
-      defaultValue: "Background",
-      comment: "Title for the video editor background sidebar tab"
-    )
-    static let zoomTab = string(
-      "video-editor.zoom-tab",
-      defaultValue: "Zoom",
-      comment: "Title for the video editor zoom sidebar tab"
-    )
-    static let unknownTab = string(
-      "video-editor.unknown-tab",
-      defaultValue: "Unknown",
-      comment: "Fallback title for an unknown video editor sidebar tab"
     )
     static let zoomItem = string(
       "video-editor.zoom-item",
@@ -7472,41 +7073,6 @@ nonisolated enum L10n {
       defaultValue: "Saving",
       comment: "Badge label for saving scrolling capture preview"
     )
-    static let previewPressStartToBegin = string(
-      "scrolling-capture.preview-press-start-to-begin",
-      defaultValue: "Press Start Capture to begin.",
-      comment: "Preview description shown before scrolling capture starts"
-    )
-    static let previewShowingLatestStitchedCapture = string(
-      "scrolling-capture.preview-showing-latest-stitched-capture",
-      defaultValue: "Showing the latest stitched capture.",
-      comment: "Preview description shown when the committed stitched capture is displayed"
-    )
-    static let previewMatchesStitchedCapture = string(
-      "scrolling-capture.preview-matches-stitched-capture",
-      defaultValue: "Preview matches the stitched capture.",
-      comment: "Preview description shown when the live preview matches the stitched output"
-    )
-    static let previewShowingLatestWhileLockingNewerContent = string(
-      "scrolling-capture.preview-showing-latest-while-locking-newer-content",
-      defaultValue: "Showing the latest stitched result while Cinderdeck locks newer content.",
-      comment: "Preview description shown while scrolling capture syncs newer content"
-    )
-    static let previewPausedScrollSlowly = string(
-      "scrolling-capture.preview-paused-scroll-slowly",
-      defaultValue: "Preview paused - scroll slowly so Cinderdeck can re-align.",
-      comment: "Preview description shown when scrolling capture needs recovery"
-    )
-    static let previewFinishingSavingCapture = string(
-      "scrolling-capture.preview-finishing-saving-capture",
-      defaultValue: "Finishing up - saving your capture.",
-      comment: "Preview description shown when scrolling capture is finalizing"
-    )
-    static let previewSavingCapture = string(
-      "scrolling-capture.preview-saving-capture",
-      defaultValue: "Saving your capture...",
-      comment: "Preview description shown while scrolling capture is saving"
-    )
     static let guidanceReleaseToLockArea = string(
       "scrolling-capture.guidance-release-to-lock-area",
       defaultValue: "Release to lock area",
@@ -7846,11 +7412,6 @@ nonisolated enum L10n {
       defaultValue: "Quality",
       comment: "Recording toolbar settings section title"
     )
-    static let audioSection = string(
-      "recording-toolbar.audio-section",
-      defaultValue: "Audio",
-      comment: "Recording toolbar settings section title"
-    )
     static let overlaysSection = string(
       "recording-toolbar.overlays-section",
       defaultValue: "Overlays",
@@ -7860,11 +7421,6 @@ nonisolated enum L10n {
       "recording-toolbar.system-audio",
       defaultValue: "System Audio",
       comment: "Recording toolbar setting label"
-    )
-    static let microphoneInput = string(
-      "recording-toolbar.microphone-input",
-      defaultValue: "Microphone",
-      comment: "Recording toolbar microphone input picker label"
     )
     static let highlightClicks = string(
       "recording-toolbar.highlight-clicks",
@@ -8232,11 +7788,6 @@ nonisolated enum L10n {
       defaultValue: "Choose Folder",
       comment: "Open panel prompt shown when Cinderdeck asks the user to choose a folder"
     )
-    nonisolated static let desktopPicturesAccessMessage = string(
-      "file-access.desktop-pictures-access-message",
-      defaultValue: "Select the Desktop Pictures folder to grant access",
-      comment: "Open panel message shown when Cinderdeck asks for access to the system Desktop Pictures folder"
-    )
     static let bookmarkSaveFailedTitle = string(
       "file-access.bookmark-save-failed-title",
       defaultValue: "Folder Access Not Granted",
@@ -8588,11 +8139,6 @@ nonisolated enum L10n {
       defaultValue: "Capture timed out. Please try again.",
       comment: "Error shown when the capture stream does not deliver a frame within the time limit"
     )
-    nonisolated static let selectedWindowUnavailable = string(
-      "screen-capture.selected-window-unavailable",
-      defaultValue: "The selected window is no longer available",
-      comment: "Error shown when application mode resolves a window target that disappeared before capture"
-    )
     static func applicationModeHint(_ shortcut: String) -> String {
       format(
         "screen-capture.application-mode-hint",
@@ -8882,11 +8428,6 @@ nonisolated enum L10n {
       "capture-storage.empty",
       defaultValue: "Empty",
       comment: "Label shown when the capture cache is empty"
-    )
-    static let operationInProgress = string(
-      "capture-storage.operation-in-progress",
-      defaultValue: "Cannot clear cache while a capture or recording is in progress.",
-      comment: "Error shown when cache cleanup is attempted while a capture or recording is active"
     )
   }
 
@@ -9434,16 +8975,6 @@ nonisolated enum L10n {
     static let solid = string(
       "history-background-style.solid",
       defaultValue: "Solid",
-      comment: "History background style option"
-    )
-    static let glass = string(
-      "history-background-style.glass",
-      defaultValue: "Glass",
-      comment: "History background style option"
-    )
-    static let gradient = string(
-      "history-background-style.gradient",
-      defaultValue: "Gradient",
       comment: "History background style option"
     )
   }

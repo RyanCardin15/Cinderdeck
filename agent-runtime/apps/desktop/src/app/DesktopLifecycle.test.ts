@@ -41,10 +41,8 @@ function makeElectronAppLayer(
     setPath: () => Effect.void,
     setName: () => Effect.void,
     setAboutPanelOptions: () => Effect.void,
-    setAppUserModelId: () => Effect.void,
     getAppMetrics: Effect.succeed([]),
     setAsDefaultProtocolClient: () => Effect.succeed(true),
-    setDesktopName: () => Effect.void,
     setDockIcon: () => Effect.void,
     appendCommandLineSwitch: () => Effect.void,
     removeCommandLineSwitch: () => Effect.void,
@@ -68,7 +66,6 @@ function makeElectronWindowLayer(destroyAll: Effect.Effect<void> = Effect.void) 
     focusedMainOrFirst: Effect.die("unexpected focused window read"),
     setMain: () => Effect.void,
     clearMain: () => Effect.void,
-    prepareReveal: () => Effect.succeed(false),
     reveal: () => Effect.void,
     sendAll: () => Effect.void,
     destroyAll,
@@ -88,11 +85,9 @@ function makeDesktopWindowLayer(
     revealOrCreateMain: Effect.die("unexpected window creation"),
     activate: input.activate ?? Effect.void,
     createMainIfBackendReady: Effect.void,
-    showConnectingSplash: Effect.void,
     handleBackendReady: () => Effect.void,
     handleBackendNotReady: Effect.void,
     flushMainWindowBounds: input.flushMainWindowBounds ?? Effect.void,
-    prepareCaptureReveal: Effect.void,
     dispatchMenuAction: () => Effect.void,
     dispatchSnapShotEvent: () => Effect.void,
     zoomMain: () => Effect.void,
@@ -101,7 +96,7 @@ function makeDesktopWindowLayer(
 }
 
 describe("DesktopLifecycle", () => {
-  it.effect.each(["darwin", "win32", "linux"] satisfies ReadonlyArray<NodeJS.Platform>)(
+  it.effect.each(["darwin"] satisfies ReadonlyArray<NodeJS.Platform>)(
     "lets the updater's quit event proceed on %s",
     (platform) => {
       const appListeners = new Map<string, (...args: readonly unknown[]) => void>();

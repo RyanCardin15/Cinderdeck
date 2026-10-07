@@ -106,11 +106,6 @@ final class DiagnosticLogger {
     return libraryLogs
   }
 
-  /// Path to today's log file.
-  var currentLogFileURL: URL {
-    logDirectoryURL.appendingPathComponent(logFileName(for: Date()))
-  }
-
   // MARK: - File Management
 
   private func logDateString(for date: Date) -> String {

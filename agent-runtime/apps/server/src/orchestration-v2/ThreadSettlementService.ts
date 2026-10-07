@@ -1,4 +1,5 @@
 import { resolveProjectSettings } from "@cinderdeck/shared/projectSettings";
+import { canonicalRepositoryKey } from "@cinderdeck/shared/sourceControl";
 import { visibleThreadPullRequests } from "@cinderdeck/shared/threadPullRequests";
 import {
   CommandId,
@@ -47,18 +48,6 @@ function latestMillis(values: ReadonlyArray<number | null>): number | null {
     if (latest === null || value > latest) latest = value;
   }
   return latest;
-}
-
-function canonicalRepositoryKey(key: string): string {
-  return key
-    .replace(
-      /^(?:ssh\.dev\.azure\.com|vs-ssh\.visualstudio\.com)\/v3\/([^/]+)\/([^/]+)\/([^/]+)$/u,
-      "dev.azure.com/$1/$2/_git/$3",
-    )
-    .replace(
-      /^([^.]+)\.visualstudio\.com\/(?:defaultcollection\/)?([^/]+)\/_git\/([^/]+)$/u,
-      "dev.azure.com/$1/$2/_git/$3",
-    );
 }
 
 function pullRequestMatchesProject(

@@ -502,10 +502,6 @@ struct CloudUploadHistoryView: View {
     colorScheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.64)
   }
 
-  private var chromeSurfaceShadow: Color {
-    Color.black.opacity(colorScheme == .dark ? 0.18 : 0.07)
-  }
-
   private var unselectedPillBackground: AnyShapeStyle {
     colorScheme == .dark
       ? AnyShapeStyle(Color.white.opacity(0.08))

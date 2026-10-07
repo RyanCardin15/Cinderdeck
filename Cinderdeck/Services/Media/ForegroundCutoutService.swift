@@ -113,43 +113,6 @@ final class ForegroundCutoutService {
     }
   }
 
-  /// Extract foreground objects from a screenshot/image.
-  /// - Parameters:
-  ///   - image: Source image in display pixel coordinates.
-  ///   - cropToSubject: When true, trims transparent padding around detected subject bounds.
-  func extractForeground(from image: CGImage, cropToSubject: Bool = false) async throws -> CGImage {
-    guard #available(macOS 14.0, *) else {
-      throw ForegroundCutoutError.unsupportedOS
-    }
-
-    DiagnosticLogger.shared.log(
-      .info,
-      .capture,
-      "Foreground cutout started",
-      context: ["width": "\(image.width)", "height": "\(image.height)", "crop": "\(cropToSubject)"]
-    )
-
-    do {
-      let result = try await Task.detached(priority: .userInitiated) {
-        try Self.extractForegroundSync(from: image, cropToSubject: cropToSubject)
-      }.value
-
-      DiagnosticLogger.shared.log(
-        .info,
-        .capture,
-        "Foreground cutout completed",
-        context: ["width": "\(result.width)", "height": "\(result.height)"]
-      )
-      return result
-    } catch let error as ForegroundCutoutError {
-      DiagnosticLogger.shared.logError(.capture, error, "Foreground cutout failed")
-      throw error
-    } catch {
-      DiagnosticLogger.shared.logError(.capture, error, "Foreground cutout failed")
-      throw ForegroundCutoutError.cutoutFailed(error)
-    }
-  }
-
   @available(macOS 14.0, *)
   private nonisolated static func extractForegroundSync(
     from image: CGImage,

@@ -1,9 +1,7 @@
 import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
 import * as Config from "effect/Config";
-import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
@@ -39,18 +37,6 @@ export interface SshPasswordPromptShape {
   readonly request: (
     request: SshPasswordRequest,
   ) => Effect.Effect<string | null, SshPasswordPromptError>;
-}
-
-export class SshPasswordPrompt extends Context.Service<SshPasswordPrompt, SshPasswordPromptShape>()(
-  "@cinderdeck/ssh/auth/SshPasswordPrompt",
-) {
-  static readonly disabledLayer = Layer.succeed(
-    SshPasswordPrompt,
-    SshPasswordPrompt.of({
-      isAvailable: false,
-      request: () => Effect.succeed(null),
-    }),
-  );
 }
 
 export interface SshChildEnvironmentOptions {

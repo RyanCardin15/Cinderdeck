@@ -37,10 +37,6 @@ final class ScrollingCaptureAutoScrollController {
   private(set) var rejectedStaleFrameCount = 0
   private(set) var boundaryConfirmationCount = 0
 
-  var isDriving: Bool {
-    stopReason != .cancelRequested && (phase != .idle || stopReason == .finishRequested)
-  }
-
   var suppressesManualCommitLoop: Bool {
     switch phase {
     case .idle:

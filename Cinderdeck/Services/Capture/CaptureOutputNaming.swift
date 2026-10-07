@@ -15,15 +15,6 @@ struct CaptureContext: Equatable {
 
   static let empty = CaptureContext(appName: nil, windowTitle: nil)
 
-  /// Max characters for windowTitle in filenames to prevent excessively long paths.
-  private static let maxTitleLength = 80
-
-  var sanitizedWindowTitle: String? {
-    guard let title = windowTitle, !title.isEmpty else { return nil }
-    if title.count <= Self.maxTitleLength { return title }
-    return String(title.prefix(Self.maxTitleLength))
-  }
-
   /// Creates a CaptureContext from a process ID, resolving app name from NSRunningApplication.
   static func fromPID(_ pid: Int32?, windowTitle: String? = nil) -> CaptureContext {
     guard let pid else { return CaptureContext(appName: nil, windowTitle: windowTitle) }

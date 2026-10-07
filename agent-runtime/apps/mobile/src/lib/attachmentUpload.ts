@@ -168,7 +168,7 @@ export type PrepareTurnAttachmentsResult =
  * message reference — has to agree on this one value, or the turn describes bytes that are not
  * what was actually sent and `ChatImageAttachment` rejects it.
  */
-export function composerAttachmentWireMimeType(attachment: DraftComposerAttachment): string {
+function composerAttachmentWireMimeType(attachment: DraftComposerAttachment): string {
   if (!isComposerImageAttachment(attachment)) return attachment.mimeType;
   return supportedImageWireMimeType(attachment);
 }

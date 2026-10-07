@@ -2871,11 +2871,10 @@ final class AnnotateCoreTests: XCTestCase {
   }
 
   func testMockupPresetCatalogContainsUniqueBuiltInPresets() {
-    let presets = MockupPreset.allPresets
+    let presets = DefaultPresets.all
 
     XCTAssertEqual(presets.count, 8)
     XCTAssertEqual(Set(presets.map(\.id)).count, presets.count)
-    XCTAssertEqual(DefaultPresets.all, presets)
     XCTAssertEqual(DefaultPresets.preset(named: "Hero Shot"), .heroShot)
     XCTAssertNil(DefaultPresets.preset(named: "Missing"))
   }

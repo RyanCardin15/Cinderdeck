@@ -17,7 +17,6 @@ import {
   BearerConnectionCredential,
   BearerConnectionProfile,
   type ConnectionCatalogEntry,
-  SshConnectionProfile,
 } from "./catalog.ts";
 import * as ConnectionCredentialStore from "./credentialStore.ts";
 import {
@@ -26,20 +25,14 @@ import {
   mapRemoteEnvironmentError,
   profileMissingError,
 } from "./errors.ts";
-import {
-  GitHubRoutingPermissions,
-  gitHubRoutingConnectionKey,
-} from "./githubRoutingPermissions.ts";
 import type {
   BearerConnectionTarget,
   ConnectionTarget,
   PreparedConnection,
   PrimaryConnectionTarget,
   RelayConnectionTarget,
-  SshConnectionTarget,
 } from "./model.ts";
 import { ConnectionBlockedError, type ConnectionAttemptError } from "./model.ts";
-import * as ConnectionProfileStore from "./profileStore.ts";
 import {
   appendOrchestrationProtocol,
   orchestrationProtocolCompatibilityError,
@@ -67,7 +60,6 @@ export class ConnectionResolver extends Context.Service<
 >()("@cinderdeck/client-runtime/connection/resolver/ConnectionResolver") {}
 
 const isBearerProfile = Schema.is(BearerConnectionProfile);
-const isSshProfile = Schema.is(SshConnectionProfile);
 const isBearerCredential = Schema.is(BearerConnectionCredential);
 
 function primarySocketUrl(
@@ -190,73 +182,11 @@ const makeRelayBroker = Effect.fn("clientRuntime.connection.broker.makeRelay")(f
   );
 });
 
-const makeSshBroker = Effect.fn("clientRuntime.connection.broker.makeSsh")(function* () {
-  const profiles = yield* ConnectionProfileStore.ConnectionProfileStore;
-  const ssh = yield* ClientCapabilities.SshEnvironmentGateway;
-  const remote = yield* RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization;
-
-  return Effect.fn("clientRuntime.connection.broker.ssh")(function* (
-    entry: ConnectionCatalogEntry & { readonly target: SshConnectionTarget },
-  ) {
-    const target = entry.target;
-    const profile = yield* Effect.fromOption(entry.profile, () =>
-      profileMissingError(target.connectionId),
-    );
-    if (!isSshProfile(profile)) {
-      return yield* new ConnectionBlockedError({
-        reason: "configuration",
-        detail: `Connection profile ${target.connectionId} is not an SSH connection.`,
-      });
-    }
-    if (profile.environmentId !== target.environmentId) {
-      return yield* environmentMismatchError({
-        expected: target.environmentId,
-        actual: profile.environmentId,
-      });
-    }
-    const prepared = yield* ssh.prepare({
-      connectionId: target.connectionId,
-      expectedEnvironmentId: target.environmentId,
-      target: profile.target,
-    });
-    const preparedProfile = new SshConnectionProfile({
-      connectionId: profile.connectionId,
-      environmentId: profile.environmentId,
-      label: profile.label,
-      target: prepared.bootstrap.target,
-    });
-    if (
-      gitHubRoutingConnectionKey(entry) !==
-      gitHubRoutingConnectionKey({ ...entry, profile: Option.some(preparedProfile) })
-    ) {
-      const permissions = yield* GitHubRoutingPermissions;
-      yield* permissions.forget(target.environmentId);
-    }
-    yield* profiles.put(preparedProfile);
-    const authorized = yield* remote.authorizeBearer({
-      expectedEnvironmentId: target.environmentId,
-      httpBaseUrl: prepared.bootstrap.httpBaseUrl,
-      wsBaseUrl: prepared.bootstrap.wsBaseUrl,
-      bearerToken: prepared.bearerToken,
-      connectionMethod: "ssh",
-    });
-    return {
-      environmentId: authorized.environmentId,
-      label: authorized.label,
-      httpBaseUrl: authorized.httpBaseUrl,
-      socketUrl: authorized.socketUrl,
-      httpAuthorization: authorized.httpAuthorization,
-      target,
-    } satisfies PreparedConnection;
-  });
-});
-
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
   const primary = yield* makePrimaryBroker();
   const bearer = yield* makeBearerBroker();
   const relay = yield* makeRelayBroker();
-  const ssh = yield* makeSshBroker();
   const httpClient = yield* HttpClient.HttpClient;
 
   const authorize = Effect.fn("clientRuntime.connection.broker.authorize")(function* (
@@ -275,8 +205,6 @@ export const make = Effect.gen(function* () {
           return bearer({ ...entry, target });
         case "RelayConnectionTarget":
           return relay(target);
-        case "SshConnectionTarget":
-          return ssh({ ...entry, target });
       }
     })();
     const descriptor = yield* fetchRemoteEnvironmentDescriptor({

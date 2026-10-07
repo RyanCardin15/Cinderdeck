@@ -6,6 +6,7 @@ import {
   ProjectId,
   ThreadId,
 } from "@cinderdeck/contracts";
+import { foldAsciiCase } from "@cinderdeck/shared/String";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -37,10 +38,6 @@ const SearchRow = Schema.Struct({
 
 function escapeLikePattern(value: string): string {
   return value.replaceAll("!", "!!").replaceAll("%", "!%").replaceAll("_", "!_");
-}
-
-function foldAsciiCase(value: string): string {
-  return value.replace(/[A-Z]/g, (character) => character.toLowerCase());
 }
 
 /** At most 240 characters, centred near the first match. */

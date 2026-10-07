@@ -1,3 +1,7 @@
+import {
+  backgroundScopeForSubscription,
+  stableBackgroundScopeKey,
+} from "@cinderdeck/client-runtime/background-activity-scopes";
 import { EnvironmentRegistry } from "@cinderdeck/client-runtime/connection";
 import {
   EnvironmentRpcSubscriptionObserver,
@@ -43,21 +47,6 @@ function notifyRetainedScopesChanged(): void {
     } catch {
       // A failing observer must not corrupt retained-scope lifetime.
     }
-  }
-}
-
-function stableScopeKey(environmentId: EnvironmentId, scope: BackgroundScope): string {
-  switch (scope.type) {
-    case "server-config":
-    case "diagnostics":
-      return JSON.stringify([environmentId, scope.type]);
-    case "provider-status":
-      return JSON.stringify([environmentId, scope.type, scope.instanceId ?? null]);
-    case "vcs-status":
-    case "git-refs":
-      return JSON.stringify([environmentId, scope.type, scope.cwd]);
-    case "thread":
-      return JSON.stringify([environmentId, scope.type, scope.threadId]);
   }
 }
 
@@ -109,21 +98,8 @@ function createActivityReport(
   };
 }
 
-function scopeForSubscription(
-  observation: EnvironmentRpcSubscriptionObservation,
-): BackgroundScope | null {
-  if (observation.method === WS_METHODS.subscribeResourceTelemetry) {
-    return { type: "diagnostics" };
-  }
-  if (observation.method !== WS_METHODS.subscribeVcsStatus) {
-    return null;
-  }
-  const input = observation.input as { readonly cwd?: unknown };
-  return typeof input.cwd === "string" ? { type: "vcs-status", cwd: input.cwd } : null;
-}
-
 function retainBackgroundScope(environmentId: EnvironmentId, scope: BackgroundScope): () => void {
-  const key = stableScopeKey(environmentId, scope);
+  const key = stableBackgroundScopeKey(environmentId, scope);
   const existing = retainedScopes.get(key);
   if (existing) {
     existing.refCount += 1;
@@ -146,7 +122,7 @@ function retainBackgroundScope(environmentId: EnvironmentId, scope: BackgroundSc
 export function observeBackgroundActivitySubscription(
   observation: EnvironmentRpcSubscriptionObservation,
 ): Effect.Effect<Effect.Effect<void>> {
-  const scope = scopeForSubscription(observation);
+  const scope = backgroundScopeForSubscription(observation);
   if (scope === null) {
     return Effect.succeed(Effect.void);
   }

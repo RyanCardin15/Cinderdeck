@@ -1,5 +1,4 @@
 import {
-  type DesktopSshEnvironmentTarget,
   EnvironmentId,
   type OrchestrationV2ShellSnapshot,
   ORCHESTRATION_PROTOCOL_VERSION,
@@ -20,7 +19,6 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 
-import * as ClientCapabilities from "../platform/capabilities.ts";
 import * as TokenStore from "../authorization/tokenStore.ts";
 import {
   BearerConnectionCredential,
@@ -29,7 +27,6 @@ import {
   type ConnectionRegistration,
   PrimaryConnectionRegistration,
   RelayConnectionRegistration,
-  SshConnectionProfile,
   type ConnectionCredential,
   type ConnectionProfile,
 } from "./catalog.ts";
@@ -42,7 +39,6 @@ import {
   BearerConnectionTarget,
   PrimaryConnectionTarget,
   RelayConnectionTarget,
-  SshConnectionTarget,
   type ConnectionTarget,
   type PreparedConnection,
   type SupervisorConnectionState,
@@ -110,22 +106,17 @@ const BEARER_CREDENTIAL = new BearerConnectionCredential({
   token: "bearer-token",
 });
 
-const SSH_TARGET: DesktopSshEnvironmentTarget = {
-  alias: "test",
-  hostname: "test.example.test",
-  username: "developer",
-  port: 22,
-};
-const SSH_CONNECTION = new SshConnectionTarget({
-  environmentId: EnvironmentId.make("environment-ssh"),
-  label: "SSH environment",
-  connectionId: "ssh-connection",
+const OWNED_STATE_TARGET = new BearerConnectionTarget({
+  environmentId: EnvironmentId.make("environment-owned-state"),
+  label: "Owned-state environment",
+  connectionId: "owned-state-connection",
 });
-const SSH_PROFILE = new SshConnectionProfile({
-  connectionId: SSH_CONNECTION.connectionId,
-  environmentId: SSH_CONNECTION.environmentId,
-  label: SSH_CONNECTION.label,
-  target: SSH_TARGET,
+const OWNED_STATE_PROFILE = new BearerConnectionProfile({
+  connectionId: OWNED_STATE_TARGET.connectionId,
+  environmentId: OWNED_STATE_TARGET.environmentId,
+  label: OWNED_STATE_TARGET.label,
+  httpBaseUrl: "https://owned-state.example.test",
+  wsBaseUrl: "wss://owned-state.example.test",
 });
 
 const CACHED_SNAPSHOT: OrchestrationV2ShellSnapshot = {
@@ -169,13 +160,13 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
   const storedRemoteTokens = yield* Ref.make(
     new Map([
       [
-        SSH_CONNECTION.environmentId,
+        OWNED_STATE_TARGET.environmentId,
         new TokenStore.RemoteDpopAccessToken({
-          environmentId: SSH_CONNECTION.environmentId,
-          label: SSH_CONNECTION.label,
+          environmentId: OWNED_STATE_TARGET.environmentId,
+          label: OWNED_STATE_TARGET.label,
           endpoint: {
-            httpBaseUrl: "https://ssh.example.test",
-            wsBaseUrl: "wss://ssh.example.test",
+            httpBaseUrl: "https://owned-state.example.test",
+            wsBaseUrl: "wss://owned-state.example.test",
             providerKind: "cloudflare_tunnel",
           },
           accessToken: "cached-token",
@@ -185,7 +176,6 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
       ],
     ]),
   );
-  const disconnectedSshTargets = yield* Ref.make<ReadonlyArray<DesktopSshEnvironmentTarget>>([]);
 
   const storedDisabled = yield* Ref.make<ReadonlySet<EnvironmentId>>(
     new Set(options?.initialDisabled ?? []),
@@ -218,12 +208,6 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
               return next;
             });
             return;
-          case "SshConnectionRegistration":
-            yield* Ref.update(storedProfiles, (current) => {
-              const next = new Map(current);
-              next.set(registration.profile.connectionId, registration.profile);
-              return next;
-            });
         }
       }),
     remove: (target) =>
@@ -234,7 +218,7 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
           next.delete(target.environmentId);
           return next;
         });
-        if (target._tag === "BearerConnectionTarget" || target._tag === "SshConnectionTarget") {
+        if (target._tag === "BearerConnectionTarget") {
           yield* Ref.update(storedProfiles, (current) => {
             const next = new Map(current);
             next.delete(target.connectionId);
@@ -358,11 +342,6 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
         return next;
       }),
   });
-  const sshGateway = ClientCapabilities.SshEnvironmentGateway.of({
-    provision: () => Effect.die(new Error("SSH provisioning is not used.")),
-    prepare: () => Effect.die(new Error("SSH preparation is not used.")),
-    disconnect: (target) => Ref.update(disconnectedSshTargets, (current) => [...current, target]),
-  });
   const driver = ConnectionDriver.ConnectionDriver.of({
     connect: (entry, reportProgress) =>
       Effect.gen(function* () {
@@ -406,7 +385,6 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
         Layer.succeed(ConnectionProfileStore.ConnectionProfileStore, profileStore),
         Layer.succeed(ConnectionCredentialStore.ConnectionCredentialStore, credentialStore),
         Layer.succeed(TokenStore.RemoteDpopAccessTokenStore, tokenStore),
-        Layer.succeed(ClientCapabilities.SshEnvironmentGateway, sshGateway),
         Layer.succeed(Connectivity.Connectivity, connectivity),
         Layer.succeed(
           ConnectionWakeups.ConnectionWakeups,
@@ -432,7 +410,6 @@ const makeHarness = Effect.fn("TestEnvironmentRegistry.makeHarness")(function* (
     storedCredentials,
     storedRemoteTokens,
     storedDisabled,
-    disconnectedSshTargets,
     networkStatus,
   };
 });
@@ -505,16 +482,16 @@ describe("EnvironmentRegistry", () => {
 
   it.effect("hydrates connection profiles into catalog entries", () =>
     Effect.gen(function* () {
-      const harness = yield* makeHarness([SSH_CONNECTION], [SSH_PROFILE]);
+      const harness = yield* makeHarness([BEARER_TARGET], [BEARER_PROFILE]);
 
       yield* Effect.gen(function* () {
         const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
         const entry = (yield* SubscriptionRef.get(registry.entries)).get(
-          SSH_CONNECTION.environmentId,
+          BEARER_TARGET.environmentId,
         );
 
-        expect(entry?.target).toEqual(SSH_CONNECTION);
-        expect(Option.getOrThrow(entry?.profile ?? Option.none())).toEqual(SSH_PROFILE);
+        expect(entry?.target).toEqual(BEARER_TARGET);
+        expect(Option.getOrThrow(entry?.profile ?? Option.none())).toEqual(BEARER_PROFILE);
       }).pipe(Effect.provide(harness.layer), Effect.scoped);
     }),
   );
@@ -1039,34 +1016,6 @@ describe("EnvironmentRegistry", () => {
     }),
   );
 
-  it.effect("switching an SSH environment off tears down its managed backend", () =>
-    Effect.gen(function* () {
-      const harness = yield* makeHarness([SSH_CONNECTION], [SSH_PROFILE]);
-
-      yield* Effect.gen(function* () {
-        const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
-        yield* registry.start;
-        yield* awaitConnectionState(
-          registry,
-          SSH_CONNECTION.environmentId,
-          (state) => state.phase === "connected",
-        );
-
-        yield* registry.setEnabled(SSH_CONNECTION.environmentId, false);
-        yield* awaitConnectionState(
-          registry,
-          SSH_CONNECTION.environmentId,
-          (state) => state.phase === "available",
-        );
-
-        expect(yield* Ref.get(harness.disconnectedSshTargets)).toEqual([SSH_TARGET]);
-        expect((yield* Ref.get(harness.storedTargets)).has(SSH_CONNECTION.environmentId)).toBe(
-          true,
-        );
-      }).pipe(Effect.provide(harness.layer));
-    }),
-  );
-
   it.effect("does not connect a persisted environment that was switched off", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness([RELAY_TARGET], [], [], {
@@ -1550,14 +1499,14 @@ describe("EnvironmentRegistry", () => {
     }),
   );
 
-  it.effect("removes all owned SSH state only on explicit removal", () =>
+  it.effect("removes all owned connection state only on explicit removal", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness(
-        [SSH_CONNECTION],
-        [SSH_PROFILE],
+        [OWNED_STATE_TARGET],
+        [OWNED_STATE_PROFILE],
         [
           [
-            SSH_CONNECTION.connectionId,
+            OWNED_STATE_TARGET.connectionId,
             new BearerConnectionCredential({ token: "temporary-token" }),
           ],
         ],
@@ -1566,18 +1515,17 @@ describe("EnvironmentRegistry", () => {
       yield* Effect.gen(function* () {
         const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
         yield* registry.start;
-        yield* registry.remove(SSH_CONNECTION.environmentId);
+        yield* registry.remove(OWNED_STATE_TARGET.environmentId);
 
-        expect((yield* Ref.get(harness.storedProfiles)).has(SSH_CONNECTION.connectionId)).toBe(
+        expect((yield* Ref.get(harness.storedProfiles)).has(OWNED_STATE_TARGET.connectionId)).toBe(
           false,
         );
-        expect((yield* Ref.get(harness.storedCredentials)).has(SSH_CONNECTION.connectionId)).toBe(
-          false,
-        );
-        expect((yield* Ref.get(harness.storedRemoteTokens)).has(SSH_CONNECTION.environmentId)).toBe(
-          false,
-        );
-        expect(yield* Ref.get(harness.disconnectedSshTargets)).toEqual([SSH_TARGET]);
+        expect(
+          (yield* Ref.get(harness.storedCredentials)).has(OWNED_STATE_TARGET.connectionId),
+        ).toBe(false);
+        expect(
+          (yield* Ref.get(harness.storedRemoteTokens)).has(OWNED_STATE_TARGET.environmentId),
+        ).toBe(false);
       }).pipe(Effect.provide(harness.layer));
     }),
   );

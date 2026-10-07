@@ -35,7 +35,7 @@ const encodePublication = Schema.encodeEffect(Schema.fromJsonString(C.LinkedWork
 const actorKey = (value: string) =>
   NodeCrypto.createHash("sha256").update(value).digest("hex").slice(0, 48);
 /** Only canonical links already attached by upstream orchestration are exported. */
-export function canonicalHostingLink(pr: {
+function canonicalHostingLink(pr: {
   host: string;
   repository: string;
   number: number;

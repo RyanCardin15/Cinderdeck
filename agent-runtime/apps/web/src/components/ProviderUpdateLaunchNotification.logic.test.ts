@@ -804,14 +804,14 @@ describe("provider update launch notification logic", () => {
           providers: [provider({ driver: driver("codex"), latestVersion: "1.1.0" })],
         }),
         environment({
-          environmentId: "env-wsl",
-          label: "WSL",
+          environmentId: "env-secondary",
+          label: "Secondary",
           providers: [provider({ driver: driver("codex"), latestVersion: "1.1.0" })],
         }),
       ]);
 
       expect(result.isAnySettling).toBe(false);
-      expect(result.groups.map((group) => group.label)).toEqual(["Windows", "WSL"]);
+      expect(result.groups.map((group) => group.label)).toEqual(["Windows", "Secondary"]);
       expect(result.groups.every((group) => group.candidates.length === 1)).toBe(true);
     });
 
@@ -822,12 +822,16 @@ describe("provider update launch notification logic", () => {
           isPrimary: true,
           providers: [provider({ driver: driver("codex") })],
         }),
-        environment({ environmentId: "env-wsl", connectionState: "connecting", providers: [] }),
+        environment({
+          environmentId: "env-secondary",
+          connectionState: "connecting",
+          providers: [],
+        }),
       ]);
 
       expect(result.isAnySettling).toBe(true);
       expect(
-        result.groups.find((group) => group.environmentId === ("env-wsl" as EnvironmentId))
+        result.groups.find((group) => group.environmentId === ("env-secondary" as EnvironmentId))
           ?.isSettling,
       ).toBe(true);
     });
@@ -840,7 +844,7 @@ describe("provider update launch notification logic", () => {
           providers: [provider({ driver: driver("codex") })],
         }),
         environment({
-          environmentId: "env-wsl",
+          environmentId: "env-secondary",
           providers: [
             provider({ driver: driver("codex"), advisoryStatus: "current", latestVersion: null }),
           ],
@@ -871,47 +875,21 @@ describe("provider update launch notification logic", () => {
           providers: [provider({ driver: driver("codex"), latestVersion: "1.1.0" })],
         }),
         environment({
-          environmentId: "env-wsl",
+          environmentId: "env-secondary",
           providers: [provider({ driver: driver("codex"), latestVersion: "1.1.0" })],
         }),
       ]);
       const key = localEnvironmentUpdateNotificationKey(both.groups);
       expect(key).toContain("env-windows=codex:1.1.0");
-      expect(key).toContain("env-wsl=codex:1.1.0");
+      expect(key).toContain("env-secondary=codex:1.1.0");
     });
 
     it("labels environments by platform so they are distinguishable", () => {
       expect(
-        deriveEnvironmentDisplayLabel({
-          isWsl: false,
-          wslDistro: null,
-          platformOs: "windows",
-          fallbackLabel: "Jgratton24",
-        }),
-      ).toBe("Windows");
+        deriveEnvironmentDisplayLabel({ platformOs: "darwin", fallbackLabel: "Jgratton24" }),
+      ).toBe("macOS");
       expect(
-        deriveEnvironmentDisplayLabel({
-          isWsl: true,
-          wslDistro: null,
-          platformOs: "linux",
-          fallbackLabel: "Jgratton24",
-        }),
-      ).toBe("WSL");
-      expect(
-        deriveEnvironmentDisplayLabel({
-          isWsl: true,
-          wslDistro: "ubuntu",
-          platformOs: "linux",
-          fallbackLabel: "Jgratton24",
-        }),
-      ).toBe("WSL · ubuntu");
-      expect(
-        deriveEnvironmentDisplayLabel({
-          isWsl: false,
-          wslDistro: null,
-          platformOs: undefined,
-          fallbackLabel: "My Device",
-        }),
+        deriveEnvironmentDisplayLabel({ platformOs: undefined, fallbackLabel: "My Device" }),
       ).toBe("My Device");
     });
   });
@@ -937,8 +915,8 @@ describe("provider update launch notification logic", () => {
 
   describe("resolveEnvironmentUpdateRowStatus", () => {
     const group: LocalEnvironmentUpdateGroup = {
-      environmentId: "env-wsl" as EnvironmentId,
-      label: "WSL",
+      environmentId: "env-secondary" as EnvironmentId,
+      label: "Secondary",
       isPrimary: false,
       isSettling: false,
       candidates: [updateCandidate({ driver: driver("codex"), latestVersion: "1.1.0" })],

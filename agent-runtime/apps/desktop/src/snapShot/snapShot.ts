@@ -1,8 +1,4 @@
 // @effect-diagnostics globalTimers:off -- The Electron window-blur handshake uses a native timeout outside any Effect fiber.
-// @effect-diagnostics nodeBuiltinImport:off -- This desktop-only platform check reads procfs and resolves Wayland socket paths with Node.
-
-import * as NodeFS from "node:fs";
-import * as NodePath from "node:path";
 
 import {
   SNAP_SHOT_ACCESSIBILITY_MAX_NODES,
@@ -12,7 +8,6 @@ import {
   snapShotShortcutModifierPair,
   type SnapShotAccessibilityNode,
   type SnapShotKeyChord,
-  type SnapShotModifier,
   type SnapShotShortcut,
 } from "@cinderdeck/contracts";
 
@@ -24,17 +19,6 @@ interface AccessibilityTreeNode {
 
 const MAX_ACCESSIBILITY_TREE_NODES = 10_000;
 const WINDOW_BLUR_TIMEOUT_MS = 1_000;
-
-/** Win32 virtual-key codes for the left and right key of each modifier pair. */
-export const WINDOWS_MODIFIER_PAIR_VIRTUAL_KEYS: Record<
-  SnapShotModifier,
-  readonly [number, number]
-> = {
-  shift: [0xa0, 0xa1],
-  control: [0xa2, 0xa3],
-  alt: [0xa4, 0xa5],
-  meta: [0x5b, 0x5c],
-};
 
 export function snapShotShortcutRegistrationFailureMessage(
   shortcut: SnapShotShortcut,
@@ -348,7 +332,6 @@ type AccessibleWindowElementTreeOptions = {
     descendantLocationsReliable: boolean,
   ) => void;
   readonly shouldContinue?: () => boolean;
-  readonly verifyDescendantLocations?: boolean;
 };
 
 export async function accessibleWindowElementTree(
@@ -362,12 +345,8 @@ export async function accessibleWindowElementTree(
   let truncated = false;
   let root: MutableAccessibilityNode | undefined;
   const shouldContinue = options.shouldContinue ?? (() => true);
-  let descendantLocationVaries = false;
-  let rootBounds = sourceBounds;
 
-  const descendantLocationsReliable = () =>
-    options.locationsReliable !== false &&
-    (options.verifyDescendantLocations !== true || descendantLocationVaries);
+  const descendantLocationsReliable = () => options.locationsReliable !== false;
 
   const visit = async (
     current: AccessibilityElement,
@@ -382,15 +361,6 @@ export async function accessibleWindowElementTree(
       return undefined;
     }
     const elementBounds = safeProperty(() => current.bounds);
-    if (required && elementBounds) rootBounds = elementBounds;
-    if (
-      !required &&
-      elementBounds !== null &&
-      elementBounds !== undefined &&
-      (Math.abs(elementBounds.x - rootBounds.x) > 2 || Math.abs(elementBounds.y - rootBounds.y) > 2)
-    ) {
-      descendantLocationVaries = true;
-    }
     const node = accessibilityNode(
       current,
       elementBounds,
@@ -477,35 +447,19 @@ export function findAccessibleWindow<
     readonly title: string;
     readonly sourceTitle?: string;
     readonly bounds: WindowBounds;
-    readonly clientBounds?: WindowBounds | undefined;
   },
-  matchMode: "screen-bounds" | "wayland" = "screen-bounds",
   options: { readonly allowUntitledUniqueBounds?: boolean } = {},
 ): T | undefined {
-  const normalizeTitle = (value: string) => {
-    const title = value.trim();
-    // Terminal apps can animate a leading CLI spinner between capture and AT-SPI lookup.
-    return matchMode === "wayland" ? title.replace(/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏](?:\s+|$)/u, "") : title;
-  };
+  const normalizeTitle = (value: string) => value.trim();
   const titles = new Set(
     [captured.title, captured.sourceTitle ?? ""].map(normalizeTitle).filter(Boolean),
   );
-  // Wayland accessibility providers can expose window size without a screen position.
-  const boundsKeys =
-    matchMode === "wayland"
-      ? (["width", "height"] as const)
-      : (["x", "y", "width", "height"] as const);
-  const candidateBounds =
-    matchMode === "wayland" && captured.clientBounds
-      ? [captured.bounds, captured.clientBounds]
-      : [captured.bounds];
+  const boundsKeys = ["x", "y", "width", "height"] as const;
   const matchesBounds = (window: T) => {
     const bounds = window.bounds;
     return (
       bounds !== null &&
-      candidateBounds.some((candidate) =>
-        boundsKeys.every((key) => Math.abs(bounds[key] - candidate[key]) <= 2),
-      )
+      boundsKeys.every((key) => Math.abs(bounds[key] - captured.bounds[key]) <= 2)
     );
   };
   if (titles.size > 0) {
@@ -517,8 +471,8 @@ export function findAccessibleWindow<
     if (activeMatches.length === 1) return activeMatches[0];
     if (matches.length > 1) return undefined;
   }
-  // GTK4/libadwaita often exposes the frame as an unnamed group. A PID-scoped
-  // lookup can accept the one window whose bounds match; size-only guesses cannot.
+  // Some toolkits expose the frame as an unnamed group. A PID-scoped lookup can
+  // accept the one window whose bounds match.
   if (!options.allowUntitledUniqueBounds) return undefined;
   const boundsMatches = windows.filter(
     (window) => normalizeTitle(window.name ?? "") === "" && matchesBounds(window),
@@ -581,35 +535,4 @@ export function findCaptureSource<T extends CaptureSourceLike>(
   if (!title) return undefined;
   const titleMatches = sources.filter((source) => source.name.trim() === title);
   return titleMatches.length === 1 ? titleMatches[0] : undefined;
-}
-
-export function isWaylandSession(
-  platform: NodeJS.Platform,
-  environment: NodeJS.ProcessEnv,
-): boolean {
-  if (platform !== "linux") return false;
-  if (
-    environment.XDG_SESSION_TYPE?.toLowerCase() === "wayland" ||
-    Boolean(environment.WAYLAND_DISPLAY)
-  ) {
-    return true;
-  }
-  if (environment.XDG_SESSION_TYPE?.toLowerCase() === "x11") return false;
-  const runtimeDirectory = environment.XDG_RUNTIME_DIR;
-  if (!runtimeDirectory) return false;
-  try {
-    const liveSockets = new Set(
-      NodeFS.readFileSync("/proc/net/unix", "utf8")
-        .split("\n")
-        .flatMap((line) => line.match(/\s(\/.*)$/)?.[1] ?? []),
-    );
-    return NodeFS.readdirSync(runtimeDirectory, { withFileTypes: true }).some(
-      (entry) =>
-        /^wayland-\d+$/.test(entry.name) &&
-        entry.isSocket() &&
-        liveSockets.has(NodePath.join(runtimeDirectory, entry.name)),
-    );
-  } catch {
-    return false;
-  }
 }

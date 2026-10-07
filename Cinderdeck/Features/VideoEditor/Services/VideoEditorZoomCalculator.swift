@@ -62,11 +62,6 @@ nonisolated enum ZoomCalculator {
     t < 0.5 ? 4 * t * t * t : 1 - pow(-2 * t + 2, 3) / 2
   }
 
-  /// Quadratic ease-in-out (faster than cubic)
-  static func easeInOutQuad(_ t: Double) -> Double {
-    t < 0.5 ? 2 * t * t : 1 - pow(-2 * t + 2, 2) / 2
-  }
-
   /// Linear interpolation (no easing)
   static func linear(_ t: Double) -> Double {
     t
@@ -179,11 +174,6 @@ nonisolated enum ZoomCalculator {
   ) -> ZoomSegment? {
     // Return last matching segment (priority to later segments)
     segments.filter { $0.isEnabled && $0.contains(time: time) }.last
-  }
-
-  /// Sort segments by start time
-  static func sortedByStartTime(_ segments: [ZoomSegment]) -> [ZoomSegment] {
-    segments.sorted { $0.startTime < $1.startTime }
   }
 
   /// Check if adding a zoom at given time would overlap with existing segments

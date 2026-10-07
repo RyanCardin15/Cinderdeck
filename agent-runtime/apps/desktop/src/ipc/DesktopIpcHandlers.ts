@@ -20,17 +20,6 @@ import {
   setTailscaleServeEnabled,
 } from "./methods/serverExposure.ts";
 import {
-  bootstrapSshBearerSession,
-  disconnectSshEnvironment,
-  discoverSshHosts,
-  ensureSshEnvironment,
-  fetchSshEnvironmentDescriptor,
-  fetchSshSessionState,
-  issueSshWebSocketTicket,
-  resolveSshHost,
-  resolveSshPasswordPrompt,
-} from "./methods/sshEnvironment.ts";
-import {
   checkForUpdate,
   downloadUpdate,
   getUpdateState,
@@ -60,8 +49,6 @@ import {
   dismissSnapShotAnimation,
   getSnapShotState,
   setupSnapShot,
-  previewSnapShotConfig,
-  applySnapShotConfig,
   listPendingSnapShots,
   readSnapShot,
   requestSnapShotPermissions,
@@ -70,7 +57,6 @@ import {
 } from "./methods/snapShot.ts";
 import * as PreviewIpc from "./methods/preview.ts";
 import * as AppActivationIpc from "./methods/appActivation.ts";
-import { getWslState, setWslBackendEnabled, setWslDistro, setWslOnly } from "./methods/wsl.ts";
 
 export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers")(function* () {
   const ipc = yield* DesktopIpc.DesktopIpc;
@@ -93,8 +79,6 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(getConnectionCatalog);
   yield* ipc.handle(getSnapShotState);
   yield* ipc.handle(setupSnapShot);
-  yield* ipc.handle(previewSnapShotConfig);
-  yield* ipc.handle(applySnapShotConfig);
   yield* ipc.handle(requestSnapShotPermissions);
   yield* ipc.handle(checkSnapShotShortcut);
   yield* ipc.handle(setSnapShotShortcutSuppressed);
@@ -106,25 +90,10 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(setConnectionCatalog);
   yield* ipc.handle(clearConnectionCatalog);
 
-  yield* ipc.handle(discoverSshHosts);
-  yield* ipc.handle(resolveSshHost);
-  yield* ipc.handle(ensureSshEnvironment);
-  yield* ipc.handle(disconnectSshEnvironment);
-  yield* ipc.handle(fetchSshEnvironmentDescriptor);
-  yield* ipc.handle(bootstrapSshBearerSession);
-  yield* ipc.handle(fetchSshSessionState);
-  yield* ipc.handle(issueSshWebSocketTicket);
-  yield* ipc.handle(resolveSshPasswordPrompt);
-
   yield* ipc.handle(getServerExposureState);
   yield* ipc.handle(setServerExposureMode);
   yield* ipc.handle(setTailscaleServeEnabled);
   yield* ipc.handle(getAdvertisedEndpoints);
-
-  yield* ipc.handle(getWslState);
-  yield* ipc.handle(setWslBackendEnabled);
-  yield* ipc.handle(setWslDistro);
-  yield* ipc.handle(setWslOnly);
 
   yield* ipc.handle(pickFolder);
   yield* ipc.handle(pickProjectFavicon);

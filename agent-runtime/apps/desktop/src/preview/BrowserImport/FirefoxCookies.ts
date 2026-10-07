@@ -4,8 +4,7 @@
  * Firefox stores cookies unencrypted in `cookies.sqlite`, so there is no key
  * to fetch and no consent prompt — the file is readable by anything running as
  * the user. That is Mozilla's design choice, not a control being circumvented,
- * which is why this path works identically on macOS, Windows, and Linux while
- * the Chromium one needs a per-platform credential store.
+ * which is why this path needs no keychain access while the Chromium one does.
  *
  * @module FirefoxCookies
  */

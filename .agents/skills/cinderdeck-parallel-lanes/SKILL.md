@@ -5,7 +5,7 @@ description: Run a branch of a project side by side with the original checkout u
 
 # Run branches in parallel with Cinderdeck lanes
 
-A lane runs a Cinderdeck workspace from another checkout. Each independent repository gets a Git worktree, with separate service ports, and logs. The original checkout keeps running. Address a lane by its stable ID or `<workspace>/<name>` with every command. Its name defaults to its Git branch. Optionally provide `--name "Search polish"` (MCP `create_lane` with `name`) when task context suggests a useful display name. Renaming the lane leaves the branch unchanged.
+A lane runs a Cinderdeck workspace from another checkout. Each independent repository gets a Git worktree, with separate service ports, and logs. The original checkout keeps running. Every creation or adoption request opens Cinderdeck's shared creation sheet, including requests from agents, CLI and feature launchers. Supply `--name` (MCP `name`) for a useful proposed name; otherwise the sheet supplies Lane 1, Lane 2, etc. The user can edit the name and each repository's base before creating. Cancellation creates nothing. Always use the returned stable lane ID or returned `<workspace>/<name>`; renaming leaves the Git branch unchanged.
 
 Use the `cinderdeck` CLI. If the `cinderdeck` MCP server is connected, the tools map one to one:
 
@@ -13,7 +13,7 @@ Use the `cinderdeck` CLI. If the `cinderdeck` MCP server is connected, the tools
 | --- | --- |
 | `workspace list` / `services status <ws>` | `list_workspaces` / `workspace_details` |
 | `lane list [ws]` | `list_lanes` |
-| `lane create <ws> <branch> [--name <name>]` | `create_lane` |
+| `lane create <ws> [branch]` | `create_lane` |
 | `lane adopt <ws> [name] --path <dir>` | `adopt_lane` |
 | `lane env <lane> [service] --export` | `lane_env` |
 | `lane edit <lane> --name <name>` / `--env KEY=VALUE` / `--clear-env` | `update_lane` |
@@ -26,6 +26,8 @@ Use the `cinderdeck` CLI. If the `cinderdeck` MCP server is connected, the tools
 Every command takes `--json`. Pass `--as <your name> --session <id>` on the CLI so the user can tell parallel agents apart.
 
 ## 1. Pick the path
+
+Repository defaults live in `[repos.<id>] lane_from = "main"` (or `"develop"`). Workspace settings exposes a branch picker for each isolated repository. `[lanes] from` is the fallback, then HEAD. Request `repositoryRefs` and `--from` prefill overrides in the creation sheet. The sheet shows current workspace branches as context and preserves shared folders. Use a new Git branch when choosing explicit bases. Wait for the user's creation decision; do not automatically approve the sheet for them.
 
 ```bash
 cinderdeck lane list shop          # the original checkout and existing lanes

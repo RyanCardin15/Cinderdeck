@@ -16,8 +16,6 @@ enum CinderdeckSpace {
   static let lg: CGFloat = 10
   static let xl: CGFloat = 12
   static let xxl: CGFloat = 16
-  static let xxxl: CGFloat = 20
-  static let huge: CGFloat = 24
 }
 
 enum CinderdeckGlassInk {
@@ -45,14 +43,8 @@ enum CinderdeckSurfaceGlass {
   static let specularTopColor: Color = .white.opacity(0.16)
   static let specularBottomColor: Color = .white.opacity(0.04)
 
-  static let controlSubstrateResting: CGFloat = 0.20
   static let controlSubstrateHover: CGFloat = 0.28
-  static let controlSubstratePressed: CGFloat = 0.36
 
-  static let controlStrokeResting: CGFloat = 0.08
-  static let controlStrokeHover: CGFloat = 0.22
-
-  static let fallbackSubstrateScale: CGFloat = 0.4
   static let fallbackControlSheenTop: Double = 0.10
   static let fallbackControlSheenBottom: Double = 0.02
 }
@@ -68,11 +60,9 @@ enum CinderdeckOnboardingMetrics {
   static let columnGap: CGFloat = 40
   static let headerHeight: CGFloat = 40
   static let footerHeight: CGFloat = 44
-  static let mockRadius: CGFloat = 12
 }
 
 enum CinderdeckOnboardingType {
-  static let overline: CGFloat = 10
   static let display: CGFloat = 32.5
   static let lede: CGFloat = 14.0
   static let sectionLabel: CGFloat = 10.0

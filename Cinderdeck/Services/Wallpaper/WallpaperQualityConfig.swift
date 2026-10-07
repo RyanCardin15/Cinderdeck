@@ -24,15 +24,4 @@ struct WallpaperQualityConfig {
 
   /// Blur radius for .blurred wallpaper style
   static var blurRadius: CGFloat = 20
-
-  /// Pre-compute blur on load vs real-time per-frame
-  static var usePrecomputedBlur: Bool = true
-
-  // MARK: - Debug
-
-  /// Overlay showing actual render dimensions on canvas
-  static var showDebugOverlay: Bool = false
-
-  /// Console logging of load times and memory usage
-  static var logPerformanceMetrics: Bool = false
 }

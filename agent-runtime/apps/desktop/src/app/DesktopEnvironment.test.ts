@@ -75,7 +75,6 @@ describe("DesktopEnvironment", () => {
           DECKHAND_COMMIT_HASH: " 0123456789abcdef ",
           DECKHAND_PORT: "4949",
           VITE_DEV_SERVER_URL: "http://localhost:5173",
-          DECKHAND_DEV_REMOTE_T3_SERVER_ENTRY_PATH: " /remote/server.mjs ",
           DECKHAND_OTLP_TRACES_URL: " http://127.0.0.1:4318/v1/traces ",
           DECKHAND_OTLP_METRICS_URL: " http://127.0.0.1:4318/v1/metrics ",
           DECKHAND_OTLP_LOGS_URL: " http://127.0.0.1:4318/v1/logs ",
@@ -100,20 +99,12 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.browserArtifactsDir, "/tmp/t3/userdata/browser-artifacts");
       assert.equal(environment.rootDir, "/repo");
       assert.equal(environment.appRoot, "/repo");
-      assert.equal(environment.serverRoot, "/repo");
       assert.equal(environment.backendEntryPath, "/repo/apps/server/dist/bin.mjs");
       assert.equal(environment.backendCwd, "/repo");
-      assert.equal(environment.appUserModelId, "com.ryancardin.cinderdeck.runtime.dev");
-      assert.equal(environment.linuxWmClass, "deckhand-dev");
-      assert.equal(
-        environment.linuxDesktopEntryName,
-        "com.cardinlabs.Cinderdeck.Development.desktop",
-      );
       assert.deepEqual(
         Option.map(environment.devServerUrl, (url) => url.href),
         Option.some("http://localhost:5173/"),
       );
-      assert.deepEqual(environment.devRemoteT3ServerEntryPath, Option.some("/remote/server.mjs"));
       assert.deepEqual(environment.configuredBackendPort, Option.some(4949));
       assert.deepEqual(environment.commitHashOverride, Option.some("0123456789abcdef"));
       assert.deepEqual(environment.otlpTracesUrl, Option.some("http://127.0.0.1:4318/v1/traces"));
@@ -149,38 +140,17 @@ describe("DesktopEnvironment", () => {
     }),
   );
 
-  it.effect("uses the packaged Windows server sidecar as the backend root", () =>
+  it.effect("serves the packaged backend from the app bundle", () =>
     Effect.gen(function* () {
-      const environment = yield* makeEnvironment({
-        platform: "win32",
-        isPackaged: true,
-        appPath: "/install/resources/app.asar",
-        resourcesPath: "/install/resources",
-      });
+      const environment = yield* makeEnvironment({ isPackaged: true });
 
-      assert.equal(environment.appRoot, "/install/resources/app.asar");
-      assert.equal(environment.serverRoot, "/install/resources/server.asar");
+      assert.equal(environment.appRoot, defaultInput.appPath);
       assert.equal(
         environment.backendEntryPath,
-        "/install/resources/server.asar/apps/server/dist/bin.mjs",
+        `${defaultInput.appPath}/apps/server/dist/bin.mjs`,
       );
-      assert.equal(
-        environment.clientAssetsDir,
-        "/install/resources/server.asar/apps/server/dist/client",
-      );
-    }),
-  );
-
-  it.effect("uses the stable desktop entry as the packaged Linux portal identity", () =>
-    Effect.gen(function* () {
-      const environment = yield* makeEnvironment({
-        platform: "linux",
-        isPackaged: true,
-        appPath: "/tmp/.mount_deckhand/resources/app.asar",
-        resourcesPath: "/tmp/.mount_deckhand/resources",
-      });
-
-      assert.equal(environment.linuxDesktopEntryName, "com.cardinlabs.Cinderdeck.desktop");
+      assert.equal(environment.clientAssetsDir, `${defaultInput.appPath}/apps/server/dist/client`);
+      assert.equal(environment.backendCwd, "/Users/alice");
     }),
   );
 
@@ -194,20 +164,6 @@ describe("DesktopEnvironment", () => {
 
       assert.equal(development.stateDir, "/Users/alice/.deckhand/dev");
       assert.equal(production.stateDir, "/Users/alice/.deckhand/userdata");
-    }),
-  );
-
-  it.effect("uses a configured app user model id override", () =>
-    Effect.gen(function* () {
-      const environment = yield* makeEnvironment(
-        {},
-        {
-          DECKHAND_DESKTOP_APP_USER_MODEL_ID: " com.ryancardin.cinderdeck.runtime.dev.local ",
-          VITE_DEV_SERVER_URL: "http://localhost:5173",
-        },
-      );
-
-      assert.equal(environment.appUserModelId, "com.ryancardin.cinderdeck.runtime.dev.local");
     }),
   );
 

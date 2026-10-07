@@ -2,8 +2,8 @@
 # uninstall.sh — Completely remove Cinderdeck and reset ALL related permissions
 #
 # Usage:
-#   ./scripts/uninstall.sh           # Interactive mode (asks for confirmation)
-#   ./scripts/uninstall.sh --force   # Skip confirmation
+#   ./uninstall.sh           # Interactive mode (asks for confirmation)
+#   ./uninstall.sh --force   # Skip confirmation
 #
 # What this script does:
 #   1. Kills the running app

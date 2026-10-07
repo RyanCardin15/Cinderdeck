@@ -1,6 +1,4 @@
-function foldAsciiCase(value: string): string {
-  return value.replace(/[A-Z]/g, (character) => character.toLowerCase());
-}
+import { foldAsciiCase } from "@cinderdeck/shared/String";
 
 function HighlightedSearchText(props: { text: string; query: string }) {
   const query = props.query.trim();

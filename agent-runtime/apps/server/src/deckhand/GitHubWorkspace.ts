@@ -42,7 +42,7 @@ const make = Effect.gen(function* () {
       ),
   });
 });
-export const layer = Layer.effect(GitHubWorkspace, make);
+const layer = Layer.effect(GitHubWorkspace, make);
 export const layerLive = layer.pipe(
   Layer.provide(CinderdeckClient.layer),
   Layer.provide(

@@ -9,7 +9,7 @@ import { useAgentObservation } from "./useAgentObservation";
 import { agentExecutionLabel } from "./agentPresentation";
 import styles from "./workspace.module.css";
 import sessionsStyles from "./sessions.module.css";
-export const externalSessionsView = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
+const externalSessionsView = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
   label: "deckhand:external-sessions",
   tag: EXTERNAL_SESSION_METHODS.list,
   staleTimeMs: 15000,

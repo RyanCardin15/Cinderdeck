@@ -5,7 +5,7 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstab
 import * as ServerConfig from "../config.ts";
 import * as Capture from "./OwnedPreviewCapture.ts";
 import { privateCredentialMatches } from "./OwnedPreviewAttestations.ts";
-export const PRIVATE_OWNED_PREVIEW_ROUTE = "/api/deckhand/owned-preview";
+const PRIVATE_OWNED_PREVIEW_ROUTE = "/api/deckhand/owned-preview";
 const Request = Schema.Union([
   Schema.Struct({ action: Schema.Literal("begin"), input: C.OwnedPreviewBegin }),
   Schema.Struct({ action: Schema.Literal("event"), input: C.OwnedPreviewEvent }),

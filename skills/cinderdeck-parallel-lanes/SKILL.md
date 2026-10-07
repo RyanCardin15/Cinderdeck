@@ -81,7 +81,7 @@ npm test                                              # shell sees the API's POR
 - A port warning (`bindWarning` in CLI JSON, `portWarning` in MCP results, a yellow line in `services status`) means the command ignored `$PORT` and listens elsewhere. Fix the definition (step 5) instead of working around it.
 - Record the lane in the browser with the `cinderdeck-record-session` skill, using the lane's URL and `--workspace <workspace>/<name>`.
 
-For a different feature flag, stop the lane and use `lane edit <lane> --env FEATURE_X=1` (MCP `update_lane`). The supplied environment **replaces** its lane overrides; include every override you want to keep. `--clear-env` (MCP `env: {}`) clears them. `--name` changes its address while preserving its ID, branches, worktrees, slug and ports. Omitted fields stay unchanged; restart the lane when ready.
+For a different feature flag, stop the lane and use `lane edit <lane> --env FEATURE_X=1` (MCP `update_lane`). The supplied environment **replaces** its lane overrides; include every override you want to keep. `--clear-env` (MCP `env: {}`) clears them. `--name` works while services and runs are active, and changes its address while preserving its ID, branches, worktrees, slug and ports. Click the name in the lane header for the same action. MCP `update_lane` accepts `expectedName` to protect a name changed by someone else. In the embedded harness, `t3_worktree_status` reports `laneName` and `t3_worktree_rename` renames only your current native lane. On the first session, you may replace a default branch name with a concise task name; preserve custom names and leave the default if context is insufficient. Omitted fields stay unchanged; restart after environment edits when ready.
 
 ## 4. Finish
 
@@ -103,7 +103,7 @@ cinderdeck lane release shop/agent/own                # an adopted lane: forget 
 
 ## 5. Make a workspace work in lanes
 
-Lanes derive their component definitions from the workspace file every time it loads. Change services, tasks, workflows and `[lanes]` defaults in that source file; `lane edit` only changes a stopped lane's name and environment overrides. Check a file with `cinderdeck services validate <file>` (MCP `validate_workspace`); its warnings point out values lanes cannot follow. Edit with the MCP `save_workspace_*` tools or by hand, then `services reload`.
+Lanes derive their component definitions from the workspace file every time it loads. Change services, tasks, workflows and `[lanes]` defaults in that source file; `lane edit` changes lane display names while running, and environment overrides while stopped. Check a file with `cinderdeck services validate <file>` (MCP `validate_workspace`); its warnings point out values lanes cannot follow. Edit with the MCP `save_workspace_*` tools or by hand, then `services reload`.
 
 | Symptom in a lane | Fix in the workspace file |
 | --- | --- |

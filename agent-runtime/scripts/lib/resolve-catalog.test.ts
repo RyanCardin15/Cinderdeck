@@ -12,7 +12,7 @@ describe("resolveCatalogDependencies", () => {
           "@clerk/backend": "catalog:",
           "react-dom": "catalog:react",
           "@opencode/protocol>effect": "catalog:",
-          "dbus-next>usocket": "-",
+          "some-package>optional-native": "-",
           lodash: "4.17.21",
         },
         catalog,
@@ -22,7 +22,7 @@ describe("resolveCatalogDependencies", () => {
         "@clerk/backend": "3.18.1",
         "react-dom": "19.2.0",
         "@opencode/protocol>effect": "4.0.0-rc.115",
-        "dbus-next>usocket": "-",
+        "some-package>optional-native": "-",
         lodash: "4.17.21",
       },
     );

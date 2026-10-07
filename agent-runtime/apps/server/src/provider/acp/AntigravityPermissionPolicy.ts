@@ -8,7 +8,7 @@ import type { AcpSessionModeState } from "./AcpRuntimeModel.ts";
 const PERMISSION_MODES = ["default", "auto_edit", "yolo"] as const;
 
 /** Only move toward more approval, never toward broader access. */
-export function resolveAntigravityPermissionMode(
+function resolveAntigravityPermissionMode(
   requested: string,
   modes: AcpSessionModeState | undefined,
 ): string | undefined {

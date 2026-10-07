@@ -43,8 +43,3 @@ unconstrained states. Headless servers leave unavailable power data unknown.
   cumulative counters cover the operating system's lifetime for that process.
 - Historical replay uses native samples without current Electron CPU or memory
   metrics. Merging the latest Electron values would overwrite the past.
-
-A WSL backend needs a Linux monitor even though Electron runs on Windows. Windows
-desktop packages currently supply only the Windows executable, so native process
-telemetry for the WSL backend is unavailable. The inherited Electron power feed
-still works.

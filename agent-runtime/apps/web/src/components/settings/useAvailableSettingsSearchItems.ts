@@ -4,11 +4,8 @@ import { AuthAccessWriteScope } from "@cinderdeck/contracts";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { isElectron } from "~/env";
 import { isLocalEnvironmentDisabled } from "~/localEnvironment";
-import { desktopWslStateAtom } from "~/state/desktopWslState";
 import { useEnvironments } from "~/state/environments";
-import { useEnvironmentQuery } from "~/state/query";
 import { usePrimarySessionState } from "~/environments/primary";
-import { isWslSettingsRowVisible } from "./ConnectionsSettings.logic";
 import { isProviderSettingsEnvironmentAvailable } from "./ProviderSettingsPanel.logic";
 import type { SettingsScopeSearch } from "./settingsScope";
 import {
@@ -20,9 +17,6 @@ export function useAvailableSettingsSearchItems(scopeSearch: SettingsScopeSearch
   const { environments } = useEnvironments();
   const primarySessionState = usePrimarySessionState();
   const localEnvironmentDisabled = isLocalEnvironmentDisabled();
-  const desktopWsl = useEnvironmentQuery(
-    isElectron && !localEnvironmentDisabled ? desktopWslStateAtom : null,
-  );
   const canManageLocalBackend =
     !localEnvironmentDisabled &&
     (isElectron ||
@@ -53,20 +47,9 @@ export function useAvailableSettingsSearchItems(scopeSearch: SettingsScopeSearch
             }),
         ),
         canManageLocalBackend,
-        isWslSettingsRowVisible: isWslSettingsRowVisible({
-          state: desktopWsl.data,
-          error: desktopWsl.error,
-        }),
         hasThreadAutoSettlement:
           getThreadAutoSettlementSearchAvailability(environments).eligibleEnvironmentIds.length > 0,
       }),
-    [
-      canManageLocalBackend,
-      desktopWsl.data,
-      desktopWsl.error,
-      environments,
-      localEnvironmentDisabled,
-      scopeSearch.machine,
-    ],
+    [canManageLocalBackend, environments, localEnvironmentDisabled, scopeSearch.machine],
   );
 }

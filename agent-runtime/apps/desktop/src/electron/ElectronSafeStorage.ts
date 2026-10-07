@@ -1,11 +1,9 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import * as Electron from "electron";
-import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
 
 const electronSafeStorageErrorFields = {
   cause: Schema.Defect(),
@@ -61,17 +59,14 @@ export class ElectronSafeStorage extends Context.Service<
     readonly decryptString: (
       value: Uint8Array,
     ) => Effect.Effect<string, ElectronSafeStorageDecryptError>;
-    readonly selectedStorageBackend: Effect.Effect<Option.Option<string>>;
   }
 >()("@cinderdeck/desktop/electron/ElectronSafeStorage") {}
 
 /** @public Service construction is part of the canonical Effect module API. */
-export const make = Effect.gen(function* () {
-  const platform = yield* HostProcessPlatform;
-
+export const make = Effect.sync(() =>
   // OS-backed secure storage may wait for Keychain approval. Keep that work off
   // Electron's main thread so windows, IPC, and shutdown remain responsive.
-  return ElectronSafeStorage.of({
+  ElectronSafeStorage.of({
     isEncryptionAvailable: Effect.tryPromise({
       try: () => Electron.safeStorage.isAsyncEncryptionAvailable(),
       catch: (cause) => new ElectronSafeStorageAvailabilityError({ cause }),
@@ -86,17 +81,7 @@ export const make = Effect.gen(function* () {
         try: () => Electron.safeStorage.decryptStringAsync(Buffer.from(value)),
         catch: (cause) => new ElectronSafeStorageDecryptError({ cause }),
       }).pipe(Effect.map((decrypted) => decrypted.result)),
-    selectedStorageBackend: Effect.sync(() => {
-      if (platform !== "linux") {
-        return Option.none();
-      }
-      try {
-        return Option.fromNullishOr(Electron.safeStorage.getSelectedStorageBackend());
-      } catch {
-        return Option.none();
-      }
-    }),
-  });
-});
+  }),
+);
 
 export const layer = Layer.effect(ElectronSafeStorage, make);

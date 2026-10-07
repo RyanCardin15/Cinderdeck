@@ -237,42 +237,25 @@ describe("DesktopShellEnvironment", () => {
     }),
   );
 
-  it.effect("does not apply the locale fallback on linux", () =>
+  it.effect("leaves the environment alone off macOS", () =>
     Effect.gen(function* () {
       const env: NodeJS.ProcessEnv = {
         SHELL: "/bin/zsh",
         PATH: "/usr/bin",
       };
+      const commands: string[] = [];
 
       yield* runShellEnvironment({
         env,
         platform: "linux",
-        handler: () => envOutput({ PATH: "/home/linuxbrew/.linuxbrew/bin:/usr/bin" }),
+        handler: (command) => {
+          if (command._tag === "StandardCommand") commands.push(command.command);
+          return envOutput({ PATH: "/opt/bin:/usr/bin" });
+        },
       });
 
-      assert.equal(env.LANG, undefined);
-    }),
-  );
-
-  it.effect("hydrates PATH and missing SSH_AUTH_SOCK from the login shell on linux", () =>
-    Effect.gen(function* () {
-      const env: NodeJS.ProcessEnv = {
-        SHELL: "/bin/zsh",
-        PATH: "/usr/bin",
-      };
-
-      yield* runShellEnvironment({
-        env,
-        platform: "linux",
-        handler: () =>
-          envOutput({
-            PATH: "/home/linuxbrew/.linuxbrew/bin:/usr/bin",
-            SSH_AUTH_SOCK: "/tmp/secretive.sock",
-          }),
-      });
-
-      assert.equal(env.PATH, "/home/linuxbrew/.linuxbrew/bin:/usr/bin");
-      assert.equal(env.SSH_AUTH_SOCK, "/tmp/secretive.sock");
+      assert.deepEqual(commands, []);
+      assert.deepEqual(env, { SHELL: "/bin/zsh", PATH: "/usr/bin" });
     }),
   );
 
@@ -299,114 +282,16 @@ describe("DesktopShellEnvironment", () => {
     }),
   );
 
-  it.effect("loads PowerShell profile environment on Windows", () =>
-    Effect.gen(function* () {
-      const env: NodeJS.ProcessEnv = {
-        PATH: "C:\\Windows\\System32",
-        APPDATA: "C:\\Users\\testuser\\AppData\\Roaming",
-        LOCALAPPDATA: "C:\\Users\\testuser\\AppData\\Local",
-        USERPROFILE: "C:\\Users\\testuser",
-      };
-
-      yield* runShellEnvironment({
-        env,
-        platform: "win32",
-        handler: (command) => {
-          if (command._tag !== "StandardCommand") return "";
-          const loadProfile = !command.args.includes("-NoProfile");
-          return loadProfile
-            ? envOutput({
-                PATH: "C:\\Profile\\Node;C:\\Windows\\System32",
-                FNM_DIR: "C:\\Users\\testuser\\AppData\\Roaming\\fnm",
-                FNM_MULTISHELL_PATH: "C:\\Users\\testuser\\AppData\\Local\\fnm_multishells\\123",
-              })
-            : envOutput({ PATH: 'C:\\Custom\\Bin;C:";C:\\Windows\\System32' });
-        },
-      });
-
-      assert.equal(
-        env.PATH,
-        [
-          "C:\\Profile\\Node",
-          "C:\\Windows\\System32",
-          "C:\\Users\\testuser\\AppData\\Roaming\\npm",
-          "C:\\Users\\testuser\\AppData\\Local\\Programs\\nodejs",
-          "C:\\Users\\testuser\\AppData\\Local\\Volta\\bin",
-          "C:\\Users\\testuser\\AppData\\Local\\pnpm",
-          "C:\\Users\\testuser\\.local\\bin",
-          "C:\\Users\\testuser\\.bun\\bin",
-          "C:\\Users\\testuser\\scoop\\shims",
-          "C:\\Custom\\Bin",
-          "C:",
-        ].join(";"),
-      );
-      assert.equal(env.FNM_DIR, "C:\\Users\\testuser\\AppData\\Roaming\\fnm");
-      assert.equal(
-        env.FNM_MULTISHELL_PATH,
-        "C:\\Users\\testuser\\AppData\\Local\\fnm_multishells\\123",
-      );
-    }),
-  );
-
-  it.effect("prefers login-shell desktop session hints over inherited values on linux", () =>
-    Effect.gen(function* () {
-      const env: NodeJS.ProcessEnv = {
-        SHELL: "/bin/zsh",
-        PATH: "/usr/bin",
-        XDG_CURRENT_DESKTOP: "wrong-launcher",
-        XDG_SESSION_DESKTOP: "wrong-launcher",
-      };
-
-      yield* runShellEnvironment({
-        env,
-        platform: "linux",
-        handler: () =>
-          envOutput({
-            PATH: "/home/linuxbrew/.linuxbrew/bin:/usr/bin",
-            XDG_CURRENT_DESKTOP: "KDE",
-            XDG_SESSION_DESKTOP: "KDE",
-            XDG_SESSION_TYPE: "wayland",
-          }),
-      });
-
-      assert.equal(env.XDG_CURRENT_DESKTOP, "KDE");
-      assert.equal(env.XDG_SESSION_DESKTOP, "KDE");
-      assert.equal(env.XDG_SESSION_TYPE, "wayland");
-    }),
-  );
-
-  it.effect("overrides stale dbus session addresses from the login shell", () =>
-    Effect.gen(function* () {
-      const env: NodeJS.ProcessEnv = {
-        SHELL: "/bin/zsh",
-        PATH: "/usr/bin",
-        DBUS_SESSION_BUS_ADDRESS: "unix:path=/tmp/stale-bus",
-      };
-
-      yield* runShellEnvironment({
-        env,
-        platform: "linux",
-        handler: () =>
-          envOutput({
-            PATH: "/usr/bin",
-            DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/1000/bus",
-          }),
-      });
-
-      assert.equal(env.DBUS_SESSION_BUS_ADDRESS, "unix:path=/run/user/1000/bus");
-    }),
-  );
-
   it.effect("logs command failures with safe probe context and the exact cause", () => {
     const env: NodeJS.ProcessEnv = {
-      SHELL: "/bin/bash",
+      SHELL: "/bin/zsh",
       PATH: "/usr/bin",
     };
     const cause = PlatformError.systemError({
       _tag: "PermissionDenied",
       module: "ChildProcess",
       method: "spawn",
-      pathOrDescriptor: "/bin/bash",
+      pathOrDescriptor: "/bin/zsh",
     });
     const messages: Array<unknown> = [];
     const logger = Logger.make(({ message }) => {
@@ -415,7 +300,7 @@ describe("DesktopShellEnvironment", () => {
 
     return runShellEnvironment({
       env,
-      platform: "linux",
+      platform: "darwin",
       handler: () => "",
       failure: cause,
     }).pipe(
@@ -424,9 +309,12 @@ describe("DesktopShellEnvironment", () => {
           const errors = messages
             .flatMap((message) => (Array.isArray(message) ? message : [message]))
             .filter(isDesktopShellEnvironmentCommandError);
-          assert.lengthOf(errors, 1);
-          assert.equal(errors[0]?.probe, "login-shell");
-          assert.equal(errors[0]?.executable, "bash");
+          // The login shell fails first, then the launchctl PATH fallback.
+          assert.deepEqual(
+            errors.map((error) => error.probe),
+            ["login-shell", "launchctl-path"],
+          );
+          assert.equal(errors[0]?.executable, "zsh");
           assert.equal(errors[0]?.argumentCount, 2);
           assert.notProperty(errors[0] ?? {}, "args");
           assert.equal(errors[0]?.cause, cause);

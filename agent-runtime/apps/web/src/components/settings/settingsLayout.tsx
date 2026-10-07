@@ -14,10 +14,6 @@ import {
   useState,
 } from "react";
 
-import {
-  PRIMARY_SETTINGS_UNAVAILABLE_MESSAGE,
-  usePrimarySettingsAvailable,
-} from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { WorkspacePageContainer, type WorkspacePageWidth } from "../WorkspacePageContainer";
 import { Button } from "../ui/button";
@@ -238,10 +234,10 @@ export function SettingsUnavailableGroup({
 }
 
 /**
- * One setting. `serverScoped` marks rows whose value lives in the primary
- * environment's settings.json; where there is no primary (the hosted app)
- * the control goes inert with a tooltip instead of showing an editable
- * default that would never save.
+ * One setting. `serverScoped` marks rows whose value lives in an
+ * environment's settings.json; while the selected scope has no connected
+ * environment the control goes inert with a tooltip instead of showing an
+ * editable default that would never save.
  *
  * Keep descriptions short enough for one line where possible. Allow wrapping
  * for clarity or narrow screens instead of truncating or forcing no-wrap.
@@ -279,7 +275,6 @@ export function SettingsRow({
   children?: ReactNode;
 }) {
   const targetRef = useSettingsSearchTarget<HTMLDivElement>(rowProps.id);
-  const primarySettingsAvailable = usePrimarySettingsAvailable();
   const context = useOptionalSettingsScope();
   const clearOverrides = useClearScopedSettings();
   const clearProjectOverrides = useClearProjectOverrides();
@@ -294,8 +289,7 @@ export function SettingsRow({
   const source =
     context && isProjectScope ? scopedSettingsSource(context.targets, scopedKeys) : null;
   const unavailable =
-    serverScoped &&
-    !(context ? context.connectedEnvironments.length > 0 : primarySettingsAvailable);
+    serverScoped && context !== null && context.connectedEnvironments.length === 0;
   const inheritedFrom =
     source === "environment" && context?.scope.environmentIds.length === 1
       ? (context.environments.find(
@@ -374,11 +368,7 @@ export function SettingsRow({
   // what, and picking a value applies it to every target.
   const renderedControl =
     unavailable && control
-      ? inertControl(
-          context
-            ? "Reconnect the selected environment to change this setting."
-            : PRIMARY_SETTINGS_UNAVAILABLE_MESSAGE,
-        )
+      ? inertControl("Reconnect the selected environment to change this setting.")
       : environmentWide && control
         ? inertControl("Environment-wide setting. Select an environment to change it.")
         : control;

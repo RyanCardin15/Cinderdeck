@@ -4,9 +4,8 @@
  * deep link (local editor connects over SSH) instead of exec'ing an editor
  * on the environment host.
  *
- * Host precedence: a desktop-SSH environment's real `~/.ssh/config` alias
- * beats server-advertised names; among advertised names the tailnet MagicDNS
- * name beats mDNS `<hostname>.local` (server sends them in that order).
+ * Host precedence: among server-advertised names the tailnet MagicDNS name
+ * beats mDNS `<hostname>.local` (server sends them in that order).
  */
 import type { ConnectionTarget } from "@cinderdeck/client-runtime/connection";
 import {
@@ -15,7 +14,6 @@ import {
   type EnvironmentId,
   type RemoteOpenTarget,
 } from "@cinderdeck/contracts";
-import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { useEffect, useMemo, useState } from "react";
 
@@ -25,7 +23,7 @@ import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useEnvironmentPresentation } from "~/state/presentation";
 
 export interface RemoteOpenHost {
-  readonly kind: "ssh-alias" | RemoteOpenTarget["kind"];
+  readonly kind: RemoteOpenTarget["kind"];
   readonly host: string;
 }
 
@@ -58,8 +56,6 @@ function parseHostname(url: string): string | null {
 
 export function resolveRemoteOpenState(input: {
   readonly target: ConnectionTarget | null;
-  /** Real ssh alias for desktop-SSH environments; null elsewhere. */
-  readonly sshAlias: string | null;
   /** Server-advertised hosts; undefined on servers that predate the feature. */
   readonly remoteOpenTargets: ReadonlyArray<RemoteOpenTarget> | undefined;
   /** True when running inside the desktop app's renderer. */
@@ -72,8 +68,8 @@ export function resolveRemoteOpenState(input: {
   }
   if (target._tag === "PrimaryConnectionTarget") {
     // The desktop app manages its own primary backend, so it is always on
-    // this machine even when its URL is not loopback (wsl-only mode binds
-    // the WSL2 NAT address). In a browser, a loopback primary means the
+    // this machine even when its URL is not loopback. In a browser, a
+    // loopback primary means the
     // browser runs on the serving machine; a tailnet/LAN URL means remote.
     if (input.isDesktopRenderer) {
       return LOCAL_EXEC;
@@ -86,9 +82,6 @@ export function resolveRemoteOpenState(input: {
     return LOCAL_EXEC;
   }
 
-  if (input.sshAlias !== null && input.sshAlias.length > 0) {
-    return { mode: "remote-links", host: { kind: "ssh-alias", host: input.sshAlias } };
-  }
   const advertised = input.remoteOpenTargets?.[0];
   if (advertised !== undefined) {
     return { mode: "remote-links", host: advertised };
@@ -103,13 +96,9 @@ export function useRemoteOpenResolution(environmentId: EnvironmentId | null): Re
     if (presentation === null) {
       return UNRESOLVED_REMOTE_OPEN;
     }
-    const profile = Option.getOrNull(presentation.entry.profile);
-    const sshAlias =
-      profile !== null && profile._tag === "SshConnectionProfile" ? profile.target.alias : null;
     return {
       state: resolveRemoteOpenState({
         target: presentation.entry.target,
-        sshAlias,
         remoteOpenTargets: presentation.serverConfig?.remoteOpenTargets,
         isDesktopRenderer: window.desktopBridge !== undefined,
       }),
