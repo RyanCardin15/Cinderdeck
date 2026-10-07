@@ -32,8 +32,6 @@ const bridge = vi.hoisted(() => ({
   getSnapShotState: vi.fn<() => Promise<DesktopSnapShotState>>(),
   setSnapShotShortcutSuppressed: vi.fn(),
   checkSnapShotShortcut: vi.fn(),
-  previewSnapShotConfig: vi.fn(),
-  applySnapShotConfig: vi.fn(),
   setupSnapShot: vi.fn(),
   requestSnapShotPermissions: vi.fn().mockResolvedValue(undefined),
   onMenuAction: vi.fn(),
@@ -53,8 +51,6 @@ vi.mock("../../hooks/useSettings", () => ({
 
 import { SnapShotSettings } from "./SnapShotSettings";
 import { SnapShotSetupDialog } from "./SnapShotSetupDialog";
-import { CaptureShortcutConfig } from "./CaptureShortcutConfig";
-import { SnapShotShortcutKeys } from "../desktop/SnapShotShortcutKeys";
 
 let state: DesktopSnapShotState;
 function render() {
@@ -96,14 +92,11 @@ beforeEach(() => {
   vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
   settingsStore.current = { ...DEFAULT_CLIENT_SETTINGS, snapShotEnabled: true };
   state = {
-    mode: "portal",
-    linuxBackend: "hyprland",
+    mode: "direct",
     shortcut: DEFAULT_CLIENT_SETTINGS.snapShotShortcut,
-    shortcutRegistered: false,
-    shortcutActionRegistered: true,
+    shortcutRegistered: true,
     shortcutMessage: null,
     message: null,
-    hyprlandHelper: { status: "ready", message: "Ready" },
   };
   bridge.getSnapShotState.mockImplementation(async () => state);
   bridge.setSnapShotShortcutSuppressed.mockResolvedValue(undefined);
@@ -116,111 +109,55 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-it.each(["niri", "hyprland"] as const)(
-  "reopens %s setup at Shortcut without reading config or expanding Settings",
-  async (desktop) => {
-    state = { ...state, linuxBackend: desktop };
-    const tree = await mount();
-    expect(wizard(tree)).toBeNull();
-    button(tree, "Change shortcut").onClick();
-    await finish(bridge.getSnapShotState.mock.results[1]!.value);
-    const opened = render();
-    expect(visitElements(opened, (element) => element.type === CaptureShortcutConfig)).toBeNull();
-    const dialog = wizard(opened);
-    expect(dialog?.props.initialStep).toBe("shortcut");
-    expect(bridge.previewSnapShotConfig).not.toHaveBeenCalled();
-    expect(bridge.applySnapShotConfig).not.toHaveBeenCalled();
-    await (dialog!.props.onClose as (completed: boolean) => Promise<void>)(false);
-    expect(wizard(render())).toBeNull();
-    expect(settingsStore.update).not.toHaveBeenCalled();
-    expect(settingsStore.current.snapShotEnabled).toBe(true);
-  },
-);
-it("returns to Access if the Hyprland helper needs attention before changing keys", async () => {
+it("keeps shortcut recording and saving inline", async () => {
   const tree = await mount();
-  state = { ...state, hyprlandHelper: { status: "not-installed", message: "Install helper" } };
-  button(tree, "Change shortcut").onClick();
-  await finish(bridge.getSnapShotState.mock.results[1]!.value);
-  expect(wizard(render())?.props.initialStep).toBe("access");
-  expect(bridge.previewSnapShotConfig).not.toHaveBeenCalled();
-});
-it.each(["direct", "gnome-extension", "kde"] as const)(
-  "keeps %s shortcut recording and saving inline",
-  async (backend) => {
-    state = {
-      ...state,
-      mode: backend === "direct" ? "direct" : "portal",
-      linuxBackend: backend === "direct" ? undefined : backend,
-      shortcutRegistered: true,
-      shortcutLabel: backend === "direct" ? undefined : "Press <Shift><Control>2",
-      shortcutMessage: backend === "direct" ? null : "Desktop shortcut: Press <Shift><Control>2",
-    };
-    const tree = await mount();
-    const recorder = (node: ReturnType<typeof render>) => {
-      const control = visitElements(node, (element) => "data-keybinding-capture" in element.props);
-      if (!control) throw new Error("Missing inline shortcut recorder");
-      return control.props;
-    };
-    if (backend !== "direct") {
-      expect(recorder(tree)["aria-label"]).toBe("Record snapshot shortcut, currently Ctrl+Shift+2");
-      const keycaps = visitElements(tree, (element) => element.type === SnapShotShortcutKeys);
-      expect(keycaps?.props.shortcut).toMatchObject({ key: "2", ctrlKey: true, shiftKey: true });
-      expect(
-        visitElements(tree, (element) => element.props.id === "snap-shot-shortcut")?.props.status,
-      ).toBeNull();
-    }
-    (recorder(tree).onClick as () => void)();
-    await finish(bridge.setSnapShotShortcutSuppressed.mock.results.at(-1)!.value);
-    (recorder(render()).onKeyDown as (event: object) => void)({
-      key: "y",
-      code: "KeyY",
-      ctrlKey: true,
-      altKey: true,
-      shiftKey: false,
-      metaKey: false,
-      repeat: false,
-      preventDefault: vi.fn(),
-      stopPropagation: vi.fn(),
-    });
-    await finish(bridge.checkSnapShotShortcut.mock.results[0]!.value);
-    expect(recorder(render()).size).toBe("xs");
-    expect(recorder(render())["aria-label"]).toBe("Record snapshot shortcut, currently Ctrl+Alt+Y");
-    button(render(), "Save").onClick();
-    await finish(settingsStore.update.mock.results[0]!.value);
-    expect(settingsStore.update).toHaveBeenCalledWith({
-      snapShotShortcut: expect.objectContaining({ key: "y", modKey: true, altKey: true }),
-    });
-    expect(wizard(render())).toBeNull();
-    expect(bridge.previewSnapShotConfig).not.toHaveBeenCalled();
-  },
-);
-
-it("turns capture on directly on Windows without opening setup", async () => {
-  settingsStore.current = { ...settingsStore.current, snapShotEnabled: false };
-  state = { ...state, mode: "direct", linuxBackend: undefined, windows: true };
-  const tree = await mount();
-  const toggle = visitElements(
-    tree,
-    (element) => element.props["aria-label"] === "Enable snapshots",
-  );
-  if (!toggle) throw new Error("Missing capture toggle");
-  (toggle.props.onCheckedChange as (checked: boolean) => void)(true);
-  await finish(settingsStore.update.mock.results[0]!.value);
-  expect(settingsStore.update).toHaveBeenCalledWith({ snapShotEnabled: true });
-  expect(wizard(renderWithEffects())).toBeNull();
-  expect(
-    visitElements(renderWithEffects(), (element) => element.props.children === "Manage capture"),
-  ).toBeNull();
-});
-
-it("keeps the approved desktop shortcut when recording is cancelled in setup", async () => {
-  state = {
-    ...state,
-    linuxBackend: "gnome-extension",
-    gnomeExtension: { status: "enabled", message: "Ready" },
-    shortcutRegistered: true,
-    shortcutLabel: "Press <Control><Alt>8",
+  const recorder = (node: ReturnType<typeof render>) => {
+    const control = visitElements(node, (element) => "data-keybinding-capture" in element.props);
+    if (!control) throw new Error("Missing inline shortcut recorder");
+    return control.props;
   };
+  expect(
+    visitElements(tree, (element) => element.props.id === "snap-shot-shortcut")?.props.status,
+  ).toBe("Shortcut saved.");
+  (recorder(tree).onClick as () => void)();
+  await finish(bridge.setSnapShotShortcutSuppressed.mock.results.at(-1)!.value);
+  (recorder(render()).onKeyDown as (event: object) => void)({
+    key: "y",
+    code: "KeyY",
+    ctrlKey: true,
+    altKey: true,
+    shiftKey: false,
+    metaKey: false,
+    repeat: false,
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn(),
+  });
+  await finish(bridge.checkSnapShotShortcut.mock.results[0]!.value);
+  expect(recorder(render()).size).toBe("xs");
+  expect(recorder(render())["aria-label"]).toBe("Record snapshot shortcut, currently Ctrl+Alt+Y");
+  button(render(), "Save").onClick();
+  await finish(settingsStore.update.mock.results[0]!.value);
+  expect(settingsStore.update).toHaveBeenCalledWith({
+    snapShotShortcut: expect.objectContaining({ key: "y", modKey: true, altKey: true }),
+  });
+  expect(wizard(render())).toBeNull();
+});
+
+function useSavedShortcut() {
+  const shortcut = {
+    key: "8",
+    modKey: false,
+    ctrlKey: true,
+    altKey: true,
+    shiftKey: false,
+    metaKey: false,
+  };
+  settingsStore.current = { ...settingsStore.current, snapShotShortcut: shortcut };
+  state = { ...state, shortcut, shortcutRegistered: true };
+}
+
+it("keeps the saved shortcut when recording is cancelled in setup", async () => {
+  useSavedShortcut();
   const tree = await mount();
   button(tree, "Manage capture").onClick();
   await finish(bridge.getSnapShotState.mock.results[1]!.value);
@@ -246,63 +183,8 @@ it("keeps the approved desktop shortcut when recording is cancelled in setup", a
   expect(bridge.checkSnapShotShortcut).not.toHaveBeenCalled();
 });
 
-function usePortalShortcut(shortcutCanRetry: boolean) {
-  const shortcut = {
-    key: "2",
-    modKey: false,
-    ctrlKey: true,
-    altKey: false,
-    shiftKey: true,
-    metaKey: false,
-  };
-  settingsStore.current = { ...settingsStore.current, snapShotShortcut: shortcut };
-  state = {
-    ...state,
-    linuxBackend: "gnome-extension",
-    gnomeExtension: { status: "enabled", message: "Ready" },
-    shortcut,
-    linuxFeedbackAvailable: true,
-    shortcutRegistered: true,
-    shortcutCanRetry,
-  };
-}
-
-it("keeps older portal shortcuts editable without offering unsupported permissions", async () => {
-  usePortalShortcut(false);
-  const tree = await mount();
-  expect(() => button(tree, "Shortcut permissions")).toThrow("Missing button");
-  expect(bridge.setupSnapShot).not.toHaveBeenCalled();
-  const recorder = visitElements(tree, (element) => "data-keybinding-capture" in element.props);
-  (recorder!.props.onClick as () => void)();
-  await finish(bridge.setSnapShotShortcutSuppressed.mock.results.at(-1)!.value);
-  expect(
-    visitElements(render(), (element) => "data-keybinding-capture" in element.props)?.props
-      .children,
-  ).toBe("Press shortcut…");
-});
-
-it("shows permission errors once in a toast and allows retrying", async () => {
-  usePortalShortcut(true);
-  bridge.setupSnapShot.mockRejectedValueOnce(new Error("The desktop service disconnected."));
-  button(await mount(), "Shortcut permissions").onClick();
-  await finish(bridge.setupSnapShot.mock.results[0]!.value.catch(() => undefined));
-  const tree = renderWithEffects();
-  expect(toastManager.add).toHaveBeenCalledExactlyOnceWith({
-    type: "error",
-    title: "Couldn't open shortcut permissions",
-    description: "The desktop service disconnected.",
-  });
-  expect(visitElements(tree, (element) => element.props.role === "alert")).toBeNull();
-  expect(state.shortcutRegistered).toBe(true);
-  button(renderWithEffects(), "Shortcut permissions").onClick();
-  await finish(bridge.setupSnapShot.mock.results[1]!.value);
-  renderWithEffects();
-  expect(bridge.setupSnapShot).toHaveBeenCalledTimes(2);
-  expect(toastManager.add).toHaveBeenCalledTimes(1);
-});
-
 it("keeps a failed preference unchanged and reports the save error in a toast", async () => {
-  usePortalShortcut(true);
+  useSavedShortcut();
   const flash = (tree: ReturnType<typeof render>) => {
     const control = visitElements(
       tree,
@@ -327,7 +209,7 @@ it("keeps a failed preference unchanged and reports the save error in a toast", 
 });
 
 it("keeps setup errors in the wizard and does not toast them after closing it", async () => {
-  usePortalShortcut(true);
+  useSavedShortcut();
   button(await mount(), "Manage capture").onClick();
   await finish(bridge.getSnapShotState.mock.results[1]!.value);
   bridge.setupSnapShot.mockRejectedValueOnce(new Error("The desktop service disconnected."));

@@ -915,10 +915,8 @@ export const make = Effect.gen(function* () {
         action === "allow-accessibility" ? "accessibility" : "screen-recording",
         owner,
       );
-    } else if (action === "retry-shortcut") {
-      yield* applySettings(yield* Ref.get(settingsRef), null, true);
     } else {
-      return yield* new DesktopSnapShotSetupError({ action, reason: "unsupported-session" });
+      yield* applySettings(yield* Ref.get(settingsRef), null, true);
     }
   }, configurationMutex.withPermits(1));
 

@@ -142,13 +142,17 @@ describe("window capture IPC", () => {
   it.effect("allows capture setup only from the trusted main renderer", () => {
     const actions: string[] = [];
     return Effect.gen(function* () {
-      yield* setupSnapShot.handler("install-extension", { sender: { id: 7 } });
-      assert.deepEqual(actions, ["install-extension"]);
+      yield* setupSnapShot.handler("test-mac-capture", { sender: { id: 7 } });
+      assert.deepEqual(actions, ["test-mac-capture"]);
       const rejected = yield* Effect.exit(
-        setupSnapShot.handler("enable-extension", { sender: { id: 8 } }),
+        setupSnapShot.handler("retry-shortcut", { sender: { id: 8 } }),
       );
       assert(Exit.isFailure(rejected));
-      assert.deepEqual(actions, ["install-extension"]);
+      const unknownAction = yield* Effect.exit(
+        setupSnapShot.handler("install-extension", { sender: { id: 7 } }),
+      );
+      assert(Exit.isFailure(unknownAction));
+      assert.deepEqual(actions, ["test-mac-capture"]);
     }).pipe(
       Effect.provide(
         Layer.mergeAll(

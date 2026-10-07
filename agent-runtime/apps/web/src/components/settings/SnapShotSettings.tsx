@@ -1,6 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
 import {
-  isModifierPairShortcut,
   type ClientSettingsPatch,
   type DesktopSnapShotShortcutAvailability,
   type DesktopSnapShotState,
@@ -27,9 +26,6 @@ import {
   snapShotSetupButtonLabel,
   snapShotUnavailableMessage,
   snapShotSoundPatch,
-  snapShotFeedbackUnavailableMessage,
-  snapShotDescription,
-  snapShotAccessibilityUnavailableMessage,
   snapShotSetupComplete,
   type SnapShotSoundSelection,
 } from "./SnapShotSettings.logic";
@@ -91,10 +87,8 @@ export function SnapShotSettings() {
   const stateRequestIdRef = useRef(0);
   const unavailableMessage = snapShotUnavailableMessage(Boolean(bridge));
   const captureAvailable = Boolean(bridge) && state !== null && state.mode !== "unavailable";
-  const feedbackUnavailable = snapShotFeedbackUnavailableMessage(state);
   const savedShortcut = settings.snapShotShortcut;
-  const managedShortcut = state?.linuxBackend === "niri" || state?.linuxBackend === "hyprland";
-  const shortcutChanged = !managedShortcut && !sameSnapShotShortcut(candidate, savedShortcut);
+  const shortcutChanged = !sameSnapShotShortcut(candidate, savedShortcut);
   const displayShortcut = shortcutChanged ? candidate : (state?.shortcut ?? savedShortcut);
   const candidateConflict = shortcutChanged
     ? snapShotKeybindingConflict(candidate, keybindings)
@@ -248,9 +242,7 @@ export function SnapShotSettings() {
     input: shortcutInput,
   } = useSnapShotShortcutRecorder({
     shortcut: displayShortcut,
-    shortcutLabel: !shortcutChanged ? state?.shortcutLabel : undefined,
     disabled: setupBusy,
-    allowModifierPairs: state?.mode !== "portal",
     onRecord: (shortcut) => void checkShortcut(shortcut),
     onStart: () => {
       shortcutCheckIdRef.current++;
@@ -270,11 +262,7 @@ export function SnapShotSettings() {
           ? shortcutCheck.availability.available
             ? "Ready to save."
             : shortcutCheck.availability.message
-          : state?.mode === "portal" &&
-              !state.shortcutLabel &&
-              isModifierPairShortcut(displayShortcut)
-            ? "Try a shortcut such as Ctrl+Shift+2."
-            : snapShotShortcutStatus(state);
+          : snapShotShortcutStatus(state);
 
   const openSetup = async (requested: CaptureSetupStep | "resume" = "resume") => {
     if (!state || setupBusy) return;
@@ -359,7 +347,7 @@ export function SnapShotSettings() {
     setSetupBusy(true);
     try {
       const saved = await save({ snapShotShortcut: candidate });
-      return Boolean(saved?.shortcutRegistered || saved?.shortcutPending);
+      return Boolean(saved?.shortcutRegistered);
     } finally {
       setSetupBusy(false);
     }
@@ -371,7 +359,7 @@ export function SnapShotSettings() {
         <SettingsUnavailableGroup message={unavailableMessage}>
           <SettingsRow
             {...searchableSetting("snap-shot-enabled")}
-            description={snapShotDescription(state)}
+            description="Capture a window and attach it to your current draft."
             status={
               bridge
                 ? setupBusy && !wizard
@@ -398,7 +386,6 @@ export function SnapShotSettings() {
                   aria-label="Enable snapshots"
                   onCheckedChange={(checked) => {
                     if (!checked) void save({ snapShotEnabled: false });
-                    else if (state?.windows) void save({ snapShotEnabled: true });
                     else void openSetup();
                   }}
                 />
@@ -410,16 +397,10 @@ export function SnapShotSettings() {
               <SettingsRow
                 {...searchableSetting("snap-shot-accessibility")}
                 description="Include text and controls when the app makes them available."
-                status={snapShotAccessibilityUnavailableMessage(state)}
                 control={
                   <Switch
-                    checked={
-                      !snapShotAccessibilityUnavailableMessage(state) &&
-                      settings.snapShotIncludeAccessibility
-                    }
-                    disabled={
-                      !captureAvailable || Boolean(snapShotAccessibilityUnavailableMessage(state))
-                    }
+                    checked={settings.snapShotIncludeAccessibility}
+                    disabled={!captureAvailable}
                     aria-label="Include app text in snapshots"
                     onCheckedChange={(checked) => void saveIncludeAccessibility(checked)}
                   />
@@ -427,62 +408,36 @@ export function SnapShotSettings() {
               />
               <SettingsRow
                 {...searchableSetting("snap-shot-shortcut")}
-                description={
-                  state?.linuxBackend === "picker"
-                    ? "Choose a window to capture from any app."
-                    : "Capture the window you're using without switching apps."
-                }
-                status={managedShortcut ? undefined : shortcutStatus}
+                description="Capture the window you're using without switching apps."
+                status={shortcutStatus}
                 control={
-                  managedShortcut ? (
-                    <Button
-                      size="xs"
-                      variant="outline"
-                      disabled={setupBusy}
-                      onClick={() => void openSetup("shortcut")}
-                    >
-                      Change shortcut
-                    </Button>
-                  ) : (
-                    <>
-                      {shortcutInput}
-                      {shortcutChanged ? (
-                        <>
-                          <Button
-                            size="xs"
-                            disabled={!canSaveShortcut || setupBusy}
-                            onClick={() => void saveShortcut()}
-                          >
-                            {setupBusy ? "Saving…" : "Save"}
-                          </Button>
-                          <Button
-                            size="xs"
-                            variant="ghost"
-                            disabled={setupBusy}
-                            onClick={() => {
-                              stopRecording();
-                              shortcutCheckIdRef.current++;
-                              setCandidate(savedShortcut);
-                              setShortcutCheck({ status: "idle", availability: null });
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        </>
-                      ) : state?.mode === "portal" &&
-                        state.shortcutCanRetry !== false &&
-                        !isModifierPairShortcut(savedShortcut) ? (
+                  <>
+                    {shortcutInput}
+                    {shortcutChanged ? (
+                      <>
+                        <Button
+                          size="xs"
+                          disabled={!canSaveShortcut || setupBusy}
+                          onClick={() => void saveShortcut()}
+                        >
+                          {setupBusy ? "Saving…" : "Save"}
+                        </Button>
                         <Button
                           size="xs"
                           variant="ghost"
-                          disabled={setupBusy || state.shortcutPending}
-                          onClick={() => void setup("retry-shortcut")}
+                          disabled={setupBusy}
+                          onClick={() => {
+                            stopRecording();
+                            shortcutCheckIdRef.current++;
+                            setCandidate(savedShortcut);
+                            setShortcutCheck({ status: "idle", availability: null });
+                          }}
                         >
-                          Shortcut permissions
+                          Cancel
                         </Button>
-                      ) : null}
-                    </>
-                  )
+                      </>
+                    ) : null}
+                  </>
                 }
               />
               <SettingsRow
@@ -548,11 +503,10 @@ export function SnapShotSettings() {
               <SettingsRow
                 {...searchableSetting("snap-shot-flash")}
                 description="Show a gentle cue on the captured window."
-                status={feedbackUnavailable}
                 control={
                   <Switch
-                    checked={!feedbackUnavailable && settings.snapShotFlash}
-                    disabled={!captureAvailable || Boolean(feedbackUnavailable)}
+                    checked={settings.snapShotFlash}
+                    disabled={!captureAvailable}
                     aria-label="Flash captured window"
                     onCheckedChange={(checked) => void save({ snapShotFlash: checked })}
                   />
@@ -561,11 +515,10 @@ export function SnapShotSettings() {
               <SettingsRow
                 {...searchableSetting("snap-shot-animations")}
                 description="Animate captured windows into your draft."
-                status={feedbackUnavailable}
                 control={
                   <Switch
-                    checked={!feedbackUnavailable && settings.snapShotAnimations}
-                    disabled={!captureAvailable || Boolean(feedbackUnavailable)}
+                    checked={settings.snapShotAnimations}
+                    disabled={!captureAvailable}
                     aria-label="Animate snapshots"
                     onCheckedChange={(checked) => void save({ snapShotAnimations: checked })}
                   />
