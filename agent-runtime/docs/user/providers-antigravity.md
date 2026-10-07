@@ -6,6 +6,10 @@ which models and account access are available through this agent.
 
 ## Set up Antigravity
 
+Antigravity appears in **Settings > Providers** even before installation or sign-in,
+including when it is disabled. The list shows every built-in provider supported by
+the selected environment.
+
 On web or desktop, open **Settings > Providers**, choose the environment that runs
 your project, and enable Antigravity. Install its runtime there, then choose
 **Sign in** and complete the browser sign-in. Wait for Cinderdeck to confirm

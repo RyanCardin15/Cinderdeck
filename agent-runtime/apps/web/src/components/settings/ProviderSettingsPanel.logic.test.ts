@@ -1,14 +1,133 @@
-import { AuthOrchestrationOperateScope, EnvironmentId } from "@cinderdeck/contracts";
+import {
+  AuthOrchestrationOperateScope,
+  EnvironmentId,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  resolveProviderInstanceEnabled,
+  type ServerSettings,
+} from "@cinderdeck/contracts";
+import { DEFAULT_SERVER_SETTINGS } from "@cinderdeck/contracts/settings";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildProviderEnvironmentOptions,
+  buildProviderSettingsInstanceRows,
   classifyProviderEnvironmentAccess,
   isProviderSettingsEnvironmentAvailable,
   resolvePrimaryOperateAccess,
   resolveRemoteOperateAccess,
   resolveSelectedProviderEnvironmentId,
 } from "./ProviderSettingsPanel.logic";
+
+describe("provider settings instance list", () => {
+  const defaultIds = ["codex", "claudeAgent", "cursor", "grok", "opencode", "antigravity", "pi"];
+
+  it("shows every built-in provider on a fresh environment without installed or authenticated snapshots", () => {
+    const rows = buildProviderSettingsInstanceRows(DEFAULT_SERVER_SETTINGS);
+
+    expect(rows.map((row) => row.instanceId)).toEqual(defaultIds);
+    expect(rows.every((row) => row.isDefault && !row.isDirty)).toBe(true);
+    const antigravity = rows.find((row) => row.driver === "antigravity")!;
+    expect(resolveProviderInstanceEnabled(antigravity.instance)).toBe(false);
+    // Moving enabled to the envelope must let the setup switch turn it on.
+    expect(resolveProviderInstanceEnabled({ ...antigravity.instance, enabled: true })).toBe(true);
+    expect(DEFAULT_SERVER_SETTINGS.providerInstances).toEqual({});
+  });
+
+  it("keeps all providers visible after every default slot is explicitly disabled", () => {
+    const providerInstances = Object.fromEntries(
+      defaultIds.map((id) => [
+        id,
+        { driver: ProviderDriverKind.make(id), enabled: false, config: {} },
+      ]),
+    );
+    const rows = buildProviderSettingsInstanceRows({
+      ...DEFAULT_SERVER_SETTINGS,
+      providerInstances,
+    });
+
+    expect(rows.map((row) => row.instanceId)).toEqual(defaultIds);
+    expect(rows.every((row) => !resolveProviderInstanceEnabled(row.instance))).toBe(true);
+  });
+
+  it("preserves explicit configuration, custom instances, registry agents, and unknown drivers", () => {
+    const antigravity = ProviderInstanceId.make("antigravity");
+    const customId = ProviderInstanceId.make("antigravity_work");
+    const registryId = ProviderInstanceId.make("cursor_cli");
+    const forkId = ProviderInstanceId.make("fork_agent");
+    const providerInstances = {
+      [customId]: {
+        driver: ProviderDriverKind.make("antigravity"),
+        displayName: "Work account",
+        enabled: false,
+        config: { binaryPath: "/test/bin/agy" },
+      },
+      [antigravity]: {
+        driver: ProviderDriverKind.make("antigravity"),
+        enabled: false,
+        config: { binaryPath: "/test/bin/personal-agy" },
+      },
+      [registryId]: {
+        driver: ProviderDriverKind.make("acpRegistry"),
+        enabled: false,
+        config: { agentId: "cursor", commandPath: "agent" },
+      },
+      [forkId]: { driver: ProviderDriverKind.make("forkDriver"), enabled: false, config: {} },
+    };
+    const rows = buildProviderSettingsInstanceRows({
+      ...DEFAULT_SERVER_SETTINGS,
+      providerInstances,
+    });
+
+    expect(rows.map((row) => row.instanceId)).toEqual([
+      ...defaultIds.slice(0, 6),
+      customId,
+      "pi",
+      registryId,
+      forkId,
+    ]);
+    const defaultRow = rows.find((row) => row.instanceId === antigravity)!;
+    expect(defaultRow.instance).toBe(providerInstances[antigravity]);
+    expect(defaultRow).toMatchObject({ isDefault: true, isDirty: true });
+    for (const instanceId of [customId, registryId, forkId]) {
+      const row = rows.find((candidate) => candidate.instanceId === instanceId)!;
+      expect(row.instance).toBe(providerInstances[instanceId]);
+      expect(row.isDefault).toBe(false);
+    }
+  });
+
+  it("keeps disabled providers visible after resetting their configuration to defaults", () => {
+    const rows = buildProviderSettingsInstanceRows({
+      ...DEFAULT_SERVER_SETTINGS,
+      providers: {
+        ...DEFAULT_SERVER_SETTINGS.providers,
+        antigravity: {
+          ...DEFAULT_SERVER_SETTINGS.providers.antigravity,
+          binaryPath: "/test/bin/agy",
+        },
+      },
+    });
+    expect(rows.find((row) => row.driver === "antigravity")).toMatchObject({ isDirty: true });
+
+    const resetRows = buildProviderSettingsInstanceRows(DEFAULT_SERVER_SETTINGS);
+    expect(resetRows.find((row) => row.driver === "antigravity")).toMatchObject({ isDirty: false });
+    expect(resetRows.map((row) => row.instanceId)).toEqual(rows.map((row) => row.instanceId));
+  });
+
+  it("preserves custom instances when an older environment lacks their driver's legacy slot", () => {
+    const { antigravity: _unsupported, ...providers } = DEFAULT_SERVER_SETTINGS.providers;
+    const customId = ProviderInstanceId.make("antigravity_work");
+    const rows = buildProviderSettingsInstanceRows({
+      providers: providers as ServerSettings["providers"],
+      providerInstances: {
+        [customId]: { driver: ProviderDriverKind.make("antigravity"), enabled: false, config: {} },
+      },
+    });
+
+    expect(rows.some((row) => row.instanceId === "antigravity")).toBe(false);
+    expect(rows.find((row) => row.instanceId === customId)).toMatchObject({ isDefault: false });
+  });
+});
 
 const primaryId = EnvironmentId.make("primary");
 const relayId = EnvironmentId.make("relay");
