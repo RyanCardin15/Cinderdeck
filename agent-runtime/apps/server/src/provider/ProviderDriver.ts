@@ -30,6 +30,7 @@ import type {
   ProviderDriverKind,
   ProviderInstanceEnvironment,
   ProviderInstanceId,
+  ProviderMcpServer,
   ServerProvider,
 } from "@cinderdeck/contracts";
 import type * as Effect from "effect/Effect";
@@ -89,6 +90,14 @@ export interface ProviderInstance {
     ProviderConsumeResetCreditOutcome,
     ProviderDriverError
   >;
+  /**
+   * Lists the MCP servers this provider would load for `cwd`, with their
+   * tools. Starts the servers, so it runs only on an explicit user request.
+   * Absent when the provider cannot report its MCP servers.
+   */
+  readonly listMcpServers?: (input: {
+    readonly cwd: string | undefined;
+  }) => Effect.Effect<ReadonlyArray<ProviderMcpServer>, ProviderDriverError>;
   readonly orchestrationAdapter: ProviderAdapterV2Shape;
   readonly textGeneration: TextGeneration["Service"];
   readonly auth?: ProviderAuthController;

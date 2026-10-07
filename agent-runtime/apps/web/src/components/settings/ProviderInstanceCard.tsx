@@ -5,6 +5,7 @@ import { Spinner } from "~/components/ui/spinner";
 import {
   AlertTriangleIcon,
   ArrowUpCircleIcon,
+  ChevronDownIcon,
   CopyIcon,
   DownloadIcon,
   LockIcon,
@@ -45,6 +46,7 @@ import { DraftInput } from "../ui/draft-input";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
+import { Tabs, TabsCount, TabsList, TabsPanel, TabsTab } from "../ui/tabs";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type { DriverOption, ProviderEnvironmentFieldDefinition } from "./providerDriverMeta";
 import { deriveProviderSettingsFields, ProviderSettingsForm } from "./ProviderSettingsForm";
@@ -478,6 +480,11 @@ interface ProviderInstanceCardProps {
   readonly mode: "list" | "editor";
   readonly selected?: boolean | undefined;
   readonly onSelect?: (() => void) | undefined;
+  /** List rows that open their editor inline (narrow layouts) show a disclosure chevron. */
+  readonly expandable?: boolean | undefined;
+  /** The editor's open tab; the caller keeps it so switching providers keeps the tab. */
+  readonly editorTab?: ProviderEditorTab | undefined;
+  readonly onEditorTabChange?: ((tab: ProviderEditorTab) => void) | undefined;
   readonly readOnly?: boolean | undefined;
   readonly onUpdate: (nextInstance: ProviderInstanceConfig) => void;
   /**
@@ -497,6 +504,8 @@ interface ProviderInstanceCardProps {
   readonly headerAction?: ReactNode | undefined;
   readonly setup?: ReactNode;
   readonly runtime?: ReactNode;
+  /** The editor's MCP servers section; rendered after the models. */
+  readonly mcp?: ReactNode;
   readonly hiddenModels: ReadonlyArray<string>;
   readonly favoriteModels: ReadonlyArray<string>;
   readonly modelOrder: ReadonlyArray<string>;
@@ -516,6 +525,8 @@ interface ProviderInstanceCardProps {
       }>
     | undefined;
 }
+
+export type ProviderEditorTab = "overview" | "models" | "mcp";
 
 const EMPTY_ACP_PROJECTS: NonNullable<ProviderInstanceCardProps["acpProjects"]> = [];
 
@@ -546,12 +557,16 @@ export function ProviderInstanceCard({
   mode,
   selected = false,
   onSelect,
+  expandable = false,
+  editorTab = "overview",
+  onEditorTabChange,
   readOnly = false,
   onUpdate,
   onDelete,
   headerAction,
   setup,
   runtime,
+  mcp,
   hiddenModels,
   favoriteModels,
   modelOrder,
@@ -785,8 +800,8 @@ export function ProviderInstanceCard({
             type="button"
             className="pointer-events-auto absolute inset-0 cursor-pointer rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={onSelect}
-            aria-label={`Select ${displayName}`}
-            aria-pressed={selected}
+            aria-label={expandable ? `${displayName} settings` : `Select ${displayName}`}
+            {...(expandable ? { "aria-expanded": selected } : { "aria-pressed": selected })}
           />
           {titleIconNode}
           <span className="min-w-0 flex-1">
@@ -865,6 +880,15 @@ export function ProviderInstanceCard({
             aria-label={`Enable ${displayName}`}
           />
         </span>
+        {expandable ? (
+          <ChevronDownIcon
+            aria-hidden
+            className={cn(
+              "-mr-1 size-4 shrink-0 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none",
+              selected && "rotate-180",
+            )}
+          />
+        ) : null}
       </div>
     );
   }
@@ -1083,126 +1107,155 @@ export function ProviderInstanceCard({
         />
       </SettingsSection>
 
-      {liveProvider?.runtimeModeAdjustments?.length ? (
-        <SettingsSection title="Access policy">
-          {liveProvider.runtimeModeAdjustments.map((adjustment) => (
-            <SettingsRow
-              key={adjustment.mode}
-              title={
-                {
-                  "approval-required": "Supervised",
-                  "auto-accept-edits": "Auto-accept edits",
-                  auto: "Auto",
-                  "full-access": "Full access",
-                }[adjustment.mode]
-              }
-              description={adjustment.description}
-            />
-          ))}
-        </SettingsSection>
-      ) : null}
+      <Tabs
+        value={
+          (editorTab === "models" && driverOption === undefined) || (editorTab === "mcp" && !mcp)
+            ? "overview"
+            : editorTab
+        }
+        onValueChange={(value) => onEditorTabChange?.(value as ProviderEditorTab)}
+      >
+        <TabsList aria-label={`${displayName} settings`}>
+          <TabsTab value="overview">Overview</TabsTab>
+          {driverOption !== undefined ? (
+            <TabsTab value="models">
+              Models
+              {modelsForDisplay.length > 0 ? (
+                <TabsCount>{modelsForDisplay.length}</TabsCount>
+              ) : null}
+            </TabsTab>
+          ) : null}
+          {mcp ? <TabsTab value="mcp">MCP servers</TabsTab> : null}
+        </TabsList>
 
-      {setup || environmentFields.length > 0 ? (
-        <SettingsSection title="Setup">
-          {setup}
-          <div
+        <TabsPanel value="overview">
+          {liveProvider?.runtimeModeAdjustments?.length ? (
+            <SettingsSection title="Access policy">
+              {liveProvider.runtimeModeAdjustments.map((adjustment) => (
+                <SettingsRow
+                  key={adjustment.mode}
+                  title={
+                    {
+                      "approval-required": "Supervised",
+                      "auto-accept-edits": "Auto-accept edits",
+                      auto: "Auto",
+                      "full-access": "Full access",
+                    }[adjustment.mode]
+                  }
+                  description={adjustment.description}
+                />
+              ))}
+            </SettingsSection>
+          ) : null}
+
+          {setup || environmentFields.length > 0 ? (
+            <SettingsSection title="Setup">
+              {setup}
+              <div
+                inert={readOnly}
+                aria-disabled={readOnly || undefined}
+                className={readOnly ? "opacity-50 select-none" : undefined}
+              >
+                {environmentFields.length > 0 ? (
+                  <>
+                    {environmentFields.map((field) => (
+                      <ProviderEnvironmentFieldRow
+                        key={field.name}
+                        field={field}
+                        variable={readProviderEnvironmentVariable(instance.environment, field.name)}
+                        idPrefix={`provider-instance-${instanceId}`}
+                        onCommit={updateEnvironmentField}
+                        onRemove={removeEnvironmentField}
+                      />
+                    ))}
+                  </>
+                ) : null}
+              </div>
+            </SettingsSection>
+          ) : null}
+
+          {instance.driver === "codex" && readCodexSetupMode(instance.config) === "managed" ? (
+            <div
+              inert={readOnly}
+              aria-disabled={readOnly || undefined}
+              className={readOnly ? "opacity-50 select-none" : undefined}
+            >
+              <FoldedSettingsSection
+                key={instanceId}
+                id={`provider-instance-${instanceId}-runtime`}
+                title="Runtime"
+                headerPlacement="outside"
+              >
+                {runtime ?? runtimeFields}
+              </FoldedSettingsSection>
+            </div>
+          ) : !driverOption || deriveProviderSettingsFields(driverOption).length > 0 ? (
+            <SettingsSection
+              title="Runtime"
+              inert={readOnly}
+              aria-disabled={readOnly || undefined}
+              className={readOnly ? "opacity-50 select-none" : undefined}
+            >
+              {runtimeFields}
+            </SettingsSection>
+          ) : null}
+
+          <SettingsSection
+            title="Environment"
             inert={readOnly}
             aria-disabled={readOnly || undefined}
             className={readOnly ? "opacity-50 select-none" : undefined}
           >
-            {environmentFields.length > 0 ? (
-              <>
-                {environmentFields.map((field) => (
-                  <ProviderEnvironmentFieldRow
-                    key={field.name}
-                    field={field}
-                    variable={readProviderEnvironmentVariable(instance.environment, field.name)}
-                    idPrefix={`provider-instance-${instanceId}`}
-                    onCommit={updateEnvironmentField}
-                    onRemove={removeEnvironmentField}
-                  />
-                ))}
-              </>
-            ) : null}
-          </div>
-        </SettingsSection>
-      ) : null}
-
-      {instance.driver === "codex" && readCodexSetupMode(instance.config) === "managed" ? (
-        <div
-          inert={readOnly}
-          aria-disabled={readOnly || undefined}
-          className={readOnly ? "opacity-50 select-none" : undefined}
-        >
-          <FoldedSettingsSection
-            key={instanceId}
-            id={`provider-instance-${instanceId}-runtime`}
-            title="Runtime"
-            headerPlacement="outside"
-          >
-            {runtime ?? runtimeFields}
-          </FoldedSettingsSection>
-        </div>
-      ) : !driverOption || deriveProviderSettingsFields(driverOption).length > 0 ? (
-        <SettingsSection
-          title="Runtime"
-          inert={readOnly}
-          aria-disabled={readOnly || undefined}
-          className={readOnly ? "opacity-50 select-none" : undefined}
-        >
-          {runtimeFields}
-        </SettingsSection>
-      ) : null}
-
-      <SettingsSection
-        title="Environment"
-        inert={readOnly}
-        aria-disabled={readOnly || undefined}
-        className={readOnly ? "opacity-50 select-none" : undefined}
-      >
-        <ProviderEnvironmentSection
-          environment={genericEnvironment}
-          onChange={updateGenericEnvironment}
-        />
-        {environmentId !== undefined && liveProvider?.driver === "acpRegistry" ? (
-          <AcpSessionManagementSection
-            environmentId={environmentId}
-            instanceId={instanceId}
-            provider={liveProvider}
-            projects={acpProjects}
-            readOnly={readOnly}
-          />
-        ) : null}
-      </SettingsSection>
-
-      {driverOption !== undefined ? (
-        <SettingsSection
-          title="Models"
-          inert={readOnly}
-          aria-disabled={readOnly || undefined}
-          className={readOnly ? "opacity-50 select-none" : undefined}
-        >
-          <div className="px-3 py-3 sm:px-4">
-            <p className="mb-3 text-xs text-muted-foreground">
-              Favorites, visibility, and ordering are saved on this device. Custom models are saved
-              on the selected environment.
-            </p>
-            <ProviderModelsSection
-              instanceId={instanceId}
-              driverKind={driverKind}
-              models={modelsForDisplay}
-              customModels={customModels}
-              hiddenModels={hiddenModels}
-              favoriteModels={favoriteModels}
-              modelOrder={modelOrder}
-              onChange={updateCustomModels}
-              onHiddenModelsChange={onHiddenModelsChange}
-              onFavoriteModelsChange={onFavoriteModelsChange}
-              onModelOrderChange={onModelOrderChange}
+            <ProviderEnvironmentSection
+              environment={genericEnvironment}
+              onChange={updateGenericEnvironment}
             />
-          </div>
-        </SettingsSection>
-      ) : null}
+            {environmentId !== undefined && liveProvider?.driver === "acpRegistry" ? (
+              <AcpSessionManagementSection
+                environmentId={environmentId}
+                instanceId={instanceId}
+                provider={liveProvider}
+                projects={acpProjects}
+                readOnly={readOnly}
+              />
+            ) : null}
+          </SettingsSection>
+        </TabsPanel>
+
+        {driverOption !== undefined ? (
+          <TabsPanel value="models">
+            <SettingsSection
+              title="Models"
+              hideTitle
+              inert={readOnly}
+              aria-disabled={readOnly || undefined}
+              className={readOnly ? "opacity-50 select-none" : undefined}
+            >
+              <div className="px-3 py-3 sm:px-4">
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Favorites, visibility, and ordering are saved on this device. Custom models are
+                  saved on the selected environment.
+                </p>
+                <ProviderModelsSection
+                  instanceId={instanceId}
+                  driverKind={driverKind}
+                  models={modelsForDisplay}
+                  customModels={customModels}
+                  hiddenModels={hiddenModels}
+                  favoriteModels={favoriteModels}
+                  modelOrder={modelOrder}
+                  onChange={updateCustomModels}
+                  onHiddenModelsChange={onHiddenModelsChange}
+                  onFavoriteModelsChange={onFavoriteModelsChange}
+                  onModelOrderChange={onModelOrderChange}
+                />
+              </div>
+            </SettingsSection>
+          </TabsPanel>
+        ) : null}
+
+        {mcp ? <TabsPanel value="mcp">{mcp}</TabsPanel> : null}
+      </Tabs>
     </>
   );
 }

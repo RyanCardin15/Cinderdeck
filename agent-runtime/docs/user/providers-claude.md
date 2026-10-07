@@ -72,6 +72,17 @@ can still be started by you. Invoke those one per message: Claude directly runs
 only the last named skill and may try to start earlier ones through its Skill
 tool, which refuses skills reserved for manual invocation.
 
+## MCP servers
+
+Settings > Providers > Claude > MCP servers lists the servers Claude Code loads
+from your user, project and claude.ai configuration, with each one's status and
+tools. Opening the section or pressing refresh connects to every server, so it
+can take a few seconds. Servers that need sign-in show how to sign in; run
+`/mcp` in Claude Code, then refresh.
+
+Turn a server or a single tool off to keep it out of new Claude sessions in
+Cinderdeck. Claude's own configuration files are not changed.
+
 ## OpenRouter
 
 Create a Claude instance with its own config directory, such as

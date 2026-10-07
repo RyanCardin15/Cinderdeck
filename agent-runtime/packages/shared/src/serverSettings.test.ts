@@ -795,3 +795,28 @@ describe("serverSettings helpers", () => {
     expect(resolved.pauseWhenOnBattery).toBe(false);
   });
 });
+
+describe("providerMcpPreferences patches", () => {
+  it("replaces one instance's preferences and removes them with null", () => {
+    const codex = ProviderInstanceId.make("codex");
+    const claude = ProviderInstanceId.make("claudeAgent");
+    const written = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      providerMcpPreferences: {
+        [codex]: { disabledServers: ["github"], disabledTools: {} },
+        [claude]: { disabledServers: [], disabledTools: { linear: ["delete_issue"] } },
+      },
+    });
+    const replaced = applyServerSettingsPatch(written, {
+      providerMcpPreferences: { [codex]: { disabledServers: [], disabledTools: { a: ["b"] } } },
+    });
+    expect(replaced.providerMcpPreferences[codex]).toEqual({
+      disabledServers: [],
+      disabledTools: { a: ["b"] },
+    });
+    expect(replaced.providerMcpPreferences[claude]).toEqual(written.providerMcpPreferences[claude]);
+    const removed = applyServerSettingsPatch(replaced, {
+      providerMcpPreferences: { [codex]: null },
+    });
+    expect(Object.keys(removed.providerMcpPreferences)).toEqual([claude]);
+  });
+});

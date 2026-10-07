@@ -656,6 +656,46 @@ describe("CodexAdapterV2 process spawning", () => {
     }
   });
 
+  it("layers the user's MCP preferences beside Cinderdeck's own server", () => {
+    const threadId = ThreadId.make("thread-codex-mcp-preferences");
+    McpProviderSession.setMcpProviderSession({
+      environmentId: EnvironmentId.make("environment-codex-mcp-preferences"),
+      threadId,
+      providerSessionId: "mcp-session-codex-preferences",
+      providerInstanceId: ProviderInstanceId.make("codex"),
+      endpoint: "http://127.0.0.1:43123/mcp",
+      authorizationHeader: "Bearer secret-codex-token",
+      browserToolsAvailable: true,
+    });
+
+    try {
+      const params = CodexAdapterV2.codexThreadRuntimeParams({
+        threadId,
+        mcpServerOverrides: {
+          github: { enabled: false },
+          linear: { disabled_tools: ["delete_issue"] },
+          // A user server cannot replace Cinderdeck's credentialed entry.
+          deckhand: { enabled: false },
+        },
+      });
+      assert.deepEqual(params.config.mcp_servers, {
+        github: { enabled: false },
+        linear: { disabled_tools: ["delete_issue"] },
+        deckhand: {
+          url: "http://127.0.0.1:43123/mcp",
+          http_headers: { Authorization: "Bearer secret-codex-token" },
+        },
+      });
+    } finally {
+      McpProviderSession.clearMcpProviderSession(threadId);
+    }
+
+    assert.deepEqual(
+      CodexAdapterV2.codexThreadRuntimeParams({ threadId: null, mcpServerOverrides: {} }).config,
+      CodexAdapterV2.CODEX_THREAD_CONFIG,
+    );
+  });
+
   it.effect("resolves Windows command shims through the shared spawn policy", () =>
     Effect.gen(function* () {
       const command = yield* CodexAdapterV2.makeCodexAppServerSpawnCommand({

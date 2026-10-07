@@ -45,6 +45,7 @@ import * as ResetCreditCoordinator from "../Layers/resetCreditCoordinator.ts";
 import {
   checkCodexProviderStatus,
   makePendingCodexProvider,
+  probeCodexMcpServers,
   probeCodexSkillsForCwd,
   withCodexAppServerClient,
 } from "../Layers/CodexProvider.ts";
@@ -73,6 +74,7 @@ import {
 } from "./CodexHomeLayout.ts";
 import { makeManagedCodexProvider } from "./CodexManagedProvider.ts";
 import * as CodexInstallation from "../CodexInstallation.ts";
+import { makeReadProviderMcpPreferences, MCP_LIST_TIMEOUT } from "../providerMcp.ts";
 import * as ServerSecretStore from "../../auth/ServerSecretStore.ts";
 import * as ServerEnvironment from "../../environment/ServerEnvironment.ts";
 const decodeCodexSettings = Schema.decodeSync(CodexSettings);
@@ -200,7 +202,10 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
           enabled,
           config,
         },
-        { onUsageLimits: (update) => snapshot.applyUsageLimits(update) },
+        {
+          onUsageLimits: (update) => snapshot.applyUsageLimits(update),
+          readMcpPreferences: makeReadProviderMcpPreferences(serverSettings, instanceId),
+        },
       ).pipe(
         Effect.mapError(
           (cause) =>
@@ -366,6 +371,28 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
             ),
           );
 
+      const listMcpServers: NonNullable<ProviderInstance["listMcpServers"]> = ({ cwd }) =>
+        probeCodexMcpServers({
+          binaryPath: effectiveConfig.binaryPath,
+          homePath: effectiveConfig.homePath,
+          launchArgs: resolveCodexLaunchArgs(effectiveConfig.launchArgs, processEnv),
+          cwd: cwd ?? process.cwd(),
+          environment: processEnv,
+        }).pipe(
+          Effect.scoped,
+          Effect.timeout(MCP_LIST_TIMEOUT),
+          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+          Effect.mapError(
+            (cause) =>
+              new ProviderDriverError({
+                driver: DRIVER_KIND,
+                instanceId,
+                detail: "Codex could not list its MCP servers.",
+                cause,
+              }),
+          ),
+        );
+
       return {
         instanceId,
         driverKind: DRIVER_KIND,
@@ -375,6 +402,7 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
         enabled,
         snapshot,
         snapshotForCwd,
+        listMcpServers,
         consumeResetCredit,
         orchestrationAdapter,
         textGeneration,

@@ -46,6 +46,7 @@ import {
 } from "../providerSnapshot.ts";
 import { expandHomePath } from "../../pathExpansion.ts";
 import { makeUnavailableUsageLimits } from "../providerUsageLimits.ts";
+import { codexMcpServersFromStatus, readCodexMcpServerConfigs } from "../providerMcp.ts";
 import {
   codexRateLimitsFailureMessage,
   codexRateLimitsToLimits,
@@ -500,6 +501,47 @@ export const probeCodexSkillsForCwd = Effect.fn("probeCodexSkillsForCwd")(functi
   const { client } = yield* withCodexAppServerClient(input);
   const skillsResponse = yield* client.request("skills/list", { cwds: [input.cwd] });
   return parseCodexSkillsListResponse(skillsResponse, input.cwd);
+});
+
+const MCP_STATUS_PAGE_LIMIT = 20;
+
+/**
+ * Lists the MCP servers Codex loads for `cwd`. Codex connects to each server
+ * to read its tools, so this is slow for remote servers and only runs on an
+ * explicit request. Reads the config first so servers and tools disabled in
+ * Codex's own config are reported as such.
+ */
+export const probeCodexMcpServers = Effect.fn("probeCodexMcpServers")(function* (input: {
+  readonly binaryPath: string;
+  readonly homePath?: string | undefined;
+  readonly launchArgs?: string | undefined;
+  readonly cwd: string;
+  readonly environment?: NodeJS.ProcessEnv | undefined;
+}) {
+  const { client } = yield* withCodexAppServerClient(input);
+  const configs = yield* client.request("config/read", { cwd: input.cwd }).pipe(
+    Effect.map((response) => readCodexMcpServerConfigs(response.config)),
+    Effect.catch((cause) =>
+      Effect.logDebug("Codex config read failed; MCP config flags unknown.", { cause }).pipe(
+        Effect.as({}),
+      ),
+    ),
+  );
+  const entries: Array<CodexSchema.V2ListMcpServerStatusResponse__McpServerStatus> = [];
+  let cursor: string | null | undefined = undefined;
+  do {
+    const response: CodexSchema.V2ListMcpServerStatusResponse = yield* client.request(
+      "mcpServerStatus/list",
+      {
+        detail: "toolsAndAuthOnly",
+        limit: MCP_STATUS_PAGE_LIMIT,
+        ...(cursor ? { cursor } : {}),
+      },
+    );
+    entries.push(...response.data);
+    cursor = response.nextCursor;
+  } while (cursor);
+  return codexMcpServersFromStatus(entries, configs);
 });
 
 const emptyCodexModelsFromSettings = (codexSettings: CodexSettings): ServerProvider["models"] =>

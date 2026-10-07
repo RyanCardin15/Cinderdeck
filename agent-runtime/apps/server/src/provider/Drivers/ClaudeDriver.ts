@@ -41,7 +41,9 @@ import {
   checkClaudeProviderStatus,
   makePendingClaudeProvider,
   probeClaudeCapabilities,
+  probeClaudeMcpServers,
 } from "../Layers/ClaudeProvider.ts";
+import { makeReadProviderMcpPreferences, MCP_LIST_TIMEOUT } from "../providerMcp.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import * as ModelManifest from "../ModelManifest.ts";
 import { resolveClaudeModelCatalog } from "../ClaudeModelCatalog.ts";
@@ -174,7 +176,11 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
           enabled,
           config,
         },
-        { scopedLimitNames, onUsageLimits: (update) => snapshot.applyUsageLimits(update) },
+        {
+          scopedLimitNames,
+          onUsageLimits: (update) => snapshot.applyUsageLimits(update),
+          readMcpPreferences: makeReadProviderMcpPreferences(serverSettings, instanceId),
+        },
       ).pipe(
         Effect.mapError(
           (cause) =>
@@ -358,6 +364,20 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
                 Effect.provideService(FileSystem.FileSystem, fileSystem),
                 Effect.provideService(Path.Path, path),
               ),
+        listMcpServers: ({ cwd }) =>
+          probeClaudeMcpServers(effectiveConfig, processEnv, cwd).pipe(
+            Effect.timeout(MCP_LIST_TIMEOUT),
+            Effect.provideService(Path.Path, path),
+            Effect.mapError(
+              (cause) =>
+                new ProviderDriverError({
+                  driver: DRIVER_KIND,
+                  instanceId,
+                  detail: "Claude could not list its MCP servers.",
+                  cause,
+                }),
+            ),
+          ),
         orchestrationAdapter,
         textGeneration,
         consumeResetCredit,

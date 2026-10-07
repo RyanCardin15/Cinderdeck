@@ -513,6 +513,34 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
     assert.deepEqual(overrides, { allowedTools: ["Read"] });
   });
 
+  it("removes the user's disabled MCP tools with or without an MCP session", () => {
+    const disallowedMcpTools = ["mcp__github", "mcp__linear__delete_issue"];
+    assert.deepEqual(
+      ClaudeAdapterV2.claudeMcpQueryOverrides({
+        threadId: ThreadId.make("thread-claude-no-mcp-disallowed"),
+        readOnlySandbox: false,
+        disallowedMcpTools,
+      }),
+      { disallowedTools: disallowedMcpTools },
+    );
+
+    const threadId = ThreadId.make("thread-claude-mcp-disallowed");
+    withMcpSession(threadId, () => {
+      assert.deepEqual(
+        ClaudeAdapterV2.claudeMcpQueryOverrides({
+          threadId,
+          readOnlySandbox: false,
+          disallowedMcpTools,
+        }),
+        {
+          allowedTools: [ClaudeAdapterV2.CLAUDE_T3_MCP_TOOL_WILDCARD],
+          disallowedTools: disallowedMcpTools,
+          mcpServers: T3_MCP_SERVERS,
+        },
+      );
+    });
+  });
+
   it("pre-approves all deckhand tools when attaching an MCP session without an allowlist", () => {
     const threadId = ThreadId.make("thread-claude-mcp-no-allowlist");
     withMcpSession(threadId, () => {

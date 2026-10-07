@@ -12,6 +12,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
+import * as Schedule from "effect/Schedule";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { createModelCapabilities } from "@cinderdeck/shared/model";
 import { resolveSpawnCommand } from "@cinderdeck/shared/shell";
@@ -36,6 +37,7 @@ import {
 } from "../providerSnapshot.ts";
 import { resolveClaudeSdkExecutablePath } from "../Drivers/ClaudeExecutable.ts";
 import { makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
+import { claudeMcpServersFromStatus } from "../providerMcp.ts";
 import { discoverClaudeSkills } from "../Drivers/ClaudeSkills.ts";
 import { makeUnavailableUsageLimits } from "../providerUsageLimits.ts";
 import {
@@ -654,5 +656,73 @@ export const makePendingClaudeProvider = (
       },
     });
   });
+
+const MCP_STATUS_POLL_INTERVAL = "250 millis";
+const MCP_STATUS_SETTLE_TIMEOUT = "20 seconds";
+
+/**
+ * Lists the MCP servers a Claude session in `cwd` would load. Unlike the
+ * capability probe this keeps the user's MCP config, so Claude connects to
+ * every server; it only runs on an explicit request. Hooks stay disabled and
+ * the prompt never yields, so nothing reaches the API.
+ */
+export const probeClaudeMcpServers = (
+  claudeSettings: ClaudeSettings,
+  environment: NodeJS.ProcessEnv | undefined,
+  cwd: string | undefined,
+) => {
+  const abort = new AbortController();
+  return Effect.gen(function* () {
+    const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, environment);
+    const executablePath = yield* resolveClaudeSdkExecutablePath(
+      claudeSettings.binaryPath,
+      claudeEnvironment,
+    );
+    const q = yield* Effect.tryPromise(async () => {
+      const q = claudeQuery({
+        // oxlint-disable-next-line require-yield
+        prompt: (async function* (): AsyncGenerator<SDKUserMessage> {
+          await waitForAbortSignal(abort.signal);
+        })(),
+        options: {
+          persistSession: false,
+          pathToClaudeCodeExecutable: executablePath,
+          abortController: abort,
+          settingSources: [...CLAUDE_CAPABILITIES_PROBE_SETTING_SOURCES],
+          settings: { disableAllHooks: true },
+          allowedTools: [],
+          env: {
+            ...claudeEnvironment,
+            FORCE_CODE_TERMINAL: undefined,
+            CLAUDE_CODE_AUTO_CONNECT_IDE: "0",
+            CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL: "1",
+          },
+          ...(cwd ? { cwd } : {}),
+          stderr: () => {},
+        },
+      });
+      await q.initializationResult();
+      return q;
+    });
+    const readStatus = Effect.tryPromise(() => q.mcpServerStatus());
+    // Servers connect in the background; wait until none is pending so a slow
+    // server is not reported as stuck, then report whatever state remains.
+    const settled = yield* readStatus.pipe(
+      Effect.repeat({
+        until: (servers) => !servers.some((server) => server.status === "pending"),
+        schedule: Schedule.spaced(MCP_STATUS_POLL_INTERVAL),
+      }),
+      Effect.timeoutOption(MCP_STATUS_SETTLE_TIMEOUT),
+    );
+    const statuses = Option.isSome(settled) ? settled.value : yield* readStatus;
+    return claudeMcpServersFromStatus(statuses);
+  }).pipe(
+    Effect.ensuring(
+      Effect.sync(() => {
+        if (!abort.signal.aborted) abort.abort();
+      }),
+    ),
+  );
+};
 
 export { probeClaudeCapabilities };

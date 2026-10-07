@@ -53,6 +53,7 @@ import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as NodeCrypto from "node:crypto";
 
 import * as DateTime from "effect/DateTime";
+import * as NodeOS from "node:os";
 import * as Duration from "effect/Duration";
 import * as Encoding from "effect/Encoding";
 import * as Effect from "effect/Effect";
@@ -3491,6 +3492,49 @@ const makeWsRpcLayer = (
               return { outcome };
             }),
             { "rpc.aggregate": "provider" },
+          ),
+        [WS_METHODS.providerMcpList]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.providerMcpList,
+            Effect.gen(function* () {
+              const instance = yield* providerInstances.getInstance(input.instanceId);
+              if (instance === undefined) {
+                return yield* new ProviderSetupError({
+                  instanceId: input.instanceId,
+                  operation: "list-mcp-servers",
+                  detail: "Provider instance not found.",
+                });
+              }
+              const checkedAt = DateTime.formatIso(yield* DateTime.now);
+              if (instance.listMcpServers === undefined) {
+                return { instanceId: input.instanceId, supported: false, servers: [], checkedAt };
+              }
+              // Listing starts the user's MCP servers; a disabled provider must not.
+              if (!instance.enabled) {
+                return yield* new ProviderSetupError({
+                  instanceId: input.instanceId,
+                  operation: "list-mcp-servers",
+                  detail: "Turn this provider on to see its MCP servers.",
+                });
+              }
+              const servers = yield* instance
+                // Without a project, list the user-level servers rather than
+                // whatever project the server process happens to run in.
+                .listMcpServers({ cwd: input.cwd ?? NodeOS.homedir() })
+                .pipe(
+                  Effect.mapError(
+                    (error) =>
+                      new ProviderSetupError({
+                        instanceId: input.instanceId,
+                        operation: "list-mcp-servers",
+                        detail: error.detail,
+                        cause: error,
+                      }),
+                  ),
+                );
+              return { instanceId: input.instanceId, supported: true, servers, checkedAt };
+            }),
+            { "rpc.aggregate": "provider", instanceId: input.instanceId },
           ),
         [WS_METHODS.providerAuthStart]: (input) =>
           observeRpcEffect(

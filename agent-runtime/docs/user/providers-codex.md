@@ -92,6 +92,18 @@ in the thread on web, desktop, or mobile. Some tools offer access for one reques
 the current session, or permanently. See [Permission modes](./permission-modes.md)
 for command and file approvals.
 
+## MCP servers
+
+Settings > Providers > Codex > MCP servers lists the servers in your Codex
+configuration, with each one's status and tools. Opening the section or pressing
+refresh connects to every server, so it can take a few seconds. Sign in to a
+server that needs it with `codex mcp login <name>`, then refresh.
+
+Turn a server or a single tool off to keep it out of Codex threads that start or
+resume afterwards. Cinderdeck applies the change per thread and does not edit
+`config.toml`. Servers and tools turned off in `config.toml` stay off and show a
+lock.
+
 ## Codex says I hit a usage limit
 
 When Codex stops on a usage limit, the thread names the window that ran out and

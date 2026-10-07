@@ -1,4 +1,5 @@
 import { SettingsGroup } from "./SettingsGroup";
+import { ProviderMcpSection } from "./ProviderMcpSection";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { useAtomValue } from "@effect/atom-react";
 import { connectionStatusTitle } from "@cinderdeck/client-runtime/connection";
@@ -27,7 +28,7 @@ import * as Arr from "effect/Array";
 import * as Duration from "effect/Duration";
 import * as Result from "effect/Result";
 import { PlusIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { isDesktopLocalConnectionTarget } from "../../connection/desktopLocal";
 import { isElectron } from "../../env";
@@ -84,7 +85,8 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { AddProviderInstanceDialog } from "./AddProviderInstanceDialog";
 import { ExpandableText } from "./ExpandableText";
-import { ProviderInstanceCard } from "./ProviderInstanceCard";
+import { ProviderInstanceCard, type ProviderEditorTab } from "./ProviderInstanceCard";
+import { useElementWidth } from "../../hooks/useElementWidth";
 import { UsageProviderSettings } from "./UsageProviderSettings";
 import { ProviderSetupSection, readAntigravityAuthMethod } from "./ProviderSetupSection";
 import { ProviderAuthenticationSection } from "./ProviderAuthenticationSection";
@@ -183,6 +185,14 @@ function providerEnvironmentDetail(environment: EnvironmentPresentation): string
 
 // Shared by the editor grid and the placeholder states so switching devices
 // never changes the card's footprint.
+function remToPx(rem: number): number {
+  const rootFontSize =
+    typeof document === "undefined"
+      ? 16
+      : Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+  return rem * (rootFontSize || 16);
+}
+
 const providerCardHeightClassName =
   "@min-[48rem]/providers:h-[min(44rem,calc(100dvh-11rem))] @min-[48rem]/providers:min-h-[32rem]";
 
@@ -637,6 +647,14 @@ export function EnvironmentProviderSettings({
   const [selectedInstanceId, setSelectedInstanceId] = useState<ProviderInstanceId | null>(
     targetInstanceId ?? null,
   );
+  // Kept here so moving between providers stays on the same tab.
+  const [editorTab, setEditorTab] = useState<ProviderEditorTab>("overview");
+  // Below the two-column breakpoint the providers become an accordion: a
+  // provider's settings open directly beneath its row instead of after the
+  // whole list. Measured rather than a container query so the editor mounts
+  // in exactly one place.
+  const [setProvidersLayoutElement, providersLayoutWidth] = useElementWidth<HTMLDivElement>();
+  const stacked = providersLayoutWidth !== null && providersLayoutWidth < remToPx(48);
   const [updatingProviderInstanceIds, setUpdatingProviderInstanceIds] = useState<
     ReadonlySet<ProviderInstanceId>
   >(() => new Set());
@@ -784,6 +802,9 @@ export function EnvironmentProviderSettings({
   const selectedRow =
     rows.find((row) => row.instanceId === selectedInstanceId) ??
     (targetInstanceMissing ? null : (rows[0] ?? null));
+  // The accordion starts closed; only an explicit selection opens a provider.
+  const expandedRow = rows.find((row) => row.instanceId === selectedInstanceId) ?? null;
+  const activeRow = stacked ? expandedRow : selectedRow;
 
   const updateProviderInstance = async (
     row: InstanceRow,
@@ -957,9 +978,32 @@ export function EnvironmentProviderSettings({
         driverOption={driverOption}
         liveProvider={liveProvider}
         mode={mode}
-        selected={mode === "list" && selectedRow?.instanceId === row.instanceId}
-        onSelect={mode === "list" ? () => setSelectedInstanceId(row.instanceId) : undefined}
+        selected={mode === "list" && activeRow?.instanceId === row.instanceId}
+        expandable={mode === "list" && stacked}
+        onSelect={
+          mode === "list"
+            ? () =>
+                setSelectedInstanceId((current) =>
+                  stacked && current === row.instanceId ? null : row.instanceId,
+                )
+            : undefined
+        }
+        editorTab={editorTab}
+        onEditorTabChange={setEditorTab}
         readOnly={readOnly}
+        mcp={
+          mode === "editor" ? (
+            <ProviderMcpSection
+              key={`${environmentId}:${row.instanceId}:mcp`}
+              environmentId={environmentId}
+              instanceId={row.instanceId}
+              driver={row.driver}
+              providerLabel={resetLabel}
+              providerEnabled={resolveProviderInstanceEnabled(row.instance)}
+              readOnly={readOnly}
+            />
+          ) : undefined
+        }
         runtime={
           mode === "editor" &&
           row.driver === "codex" &&
@@ -1168,6 +1212,7 @@ export function EnvironmentProviderSettings({
           </SettingsGroup>
         ) : null}
         <SettingsGroup
+          ref={setProvidersLayoutElement}
           divided={false}
           className={cn(
             providerCardHeightClassName,
@@ -1181,24 +1226,41 @@ export function EnvironmentProviderSettings({
               className="@min-[48rem]/providers:min-h-0 @min-[48rem]/providers:flex-1"
             >
               <div className="divide-y divide-border/50">
-                {rows.map((row) => renderProviderInstance(row, "list"))}
+                {rows.map((row) => (
+                  <Fragment key={row.instanceId}>
+                    {renderProviderInstance(row, "list")}
+                    {stacked && expandedRow?.instanceId === row.instanceId ? (
+                      <div className="space-y-6 bg-background/50 px-1 pt-4 pb-6 sm:px-2">
+                        {renderProviderInstance(row, "editor")}
+                      </div>
+                    ) : null}
+                  </Fragment>
+                ))}
               </div>
             </ScrollArea>
           </div>
 
-          <div className="min-w-0 @min-[48rem]/providers:min-h-0">
-            {selectedRow ? (
-              <ScrollArea scrollFade chainVerticalScroll className="@min-[48rem]/providers:h-full">
-                <div className="space-y-6 p-4">{renderProviderInstance(selectedRow, "editor")}</div>
-              </ScrollArea>
-            ) : (
-              <div className="p-6 text-sm text-muted-foreground">
-                {targetInstanceMissing
-                  ? "This provider instance is no longer available on this device."
-                  : "No providers configured."}
-              </div>
-            )}
-          </div>
+          {providersLayoutWidth === null || stacked ? null : (
+            <div className="min-w-0 @min-[48rem]/providers:min-h-0">
+              {selectedRow ? (
+                <ScrollArea
+                  scrollFade
+                  chainVerticalScroll
+                  className="@min-[48rem]/providers:h-full"
+                >
+                  <div className="space-y-6 p-4">
+                    {renderProviderInstance(selectedRow, "editor")}
+                  </div>
+                </ScrollArea>
+              ) : (
+                <div className="p-6 text-sm text-muted-foreground">
+                  {targetInstanceMissing
+                    ? "This provider instance is no longer available on this device."
+                    : "No providers configured."}
+                </div>
+              )}
+            </div>
+          )}
         </SettingsGroup>
       </SettingsSection>
 

@@ -94,6 +94,11 @@ import * as Stream from "effect/Stream";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { resolveClaudeSdkExecutablePath } from "../../provider/Drivers/ClaudeExecutable.ts";
 import { planClaudeSkillDispatch } from "../../provider/Drivers/ClaudeSkillDispatch.ts";
+import {
+  claudeDisallowedMcpTools,
+  readNoProviderMcpPreferences,
+  type ReadProviderMcpPreferences,
+} from "../../provider/providerMcp.ts";
 import { discoverClaudeSkills } from "../../provider/Drivers/ClaudeSkills.ts";
 import { compileClaudeModelSelection } from "../../claudeModelOptions.ts";
 import * as ServerConfig from "../../config.ts";
@@ -953,19 +958,29 @@ export function claudeMcpQueryOverrides(input: {
   readonly threadId: ThreadId;
   readonly readOnlySandbox: boolean;
   readonly allowedTools?: ReadonlyArray<string>;
+  /** `mcp__…` rules for the MCP servers and tools the user turned off. */
+  readonly disallowedMcpTools?: ReadonlyArray<string>;
 }): {
   readonly allowedTools?: ReadonlyArray<string>;
+  readonly disallowedTools?: ReadonlyArray<string>;
   readonly mcpServers?: ClaudeQueryOptions["mcpServers"];
 } {
+  const disallowed =
+    input.disallowedMcpTools === undefined || input.disallowedMcpTools.length === 0
+      ? {}
+      : { disallowedTools: input.disallowedMcpTools };
   const session = McpProviderSession.readMcpProviderSession(input.threadId);
   if (session === undefined) {
-    return input.allowedTools === undefined ? {} : { allowedTools: input.allowedTools };
+    return input.allowedTools === undefined
+      ? disallowed
+      : { allowedTools: input.allowedTools, ...disallowed };
   }
   const mcpAllowedTools = input.readOnlySandbox
     ? CLAUDE_READ_ONLY_T3_MCP_ALLOWED_TOOLS
     : [CLAUDE_T3_MCP_TOOL_WILDCARD];
   return {
     allowedTools: Array.from(new Set([...(input.allowedTools ?? []), ...mcpAllowedTools])),
+    ...disallowed,
     mcpServers: {
       [McpProviderSession.APP_MCP_SERVER_NAME]: {
         type: "http",
@@ -1553,6 +1568,8 @@ export function claudeEffectiveQueryPolicyKey(
     readonly mcpServers?: ClaudeQueryOptions["mcpServers"];
   },
 ): string {
+  // MCP preferences are left out on purpose: changing one must not replace a
+  // live process (and its background work); they apply when one next opens.
   return JSON.stringify({
     runtimePolicy: claudeRuntimeQueryPolicyKey({
       ...queryPolicy,
@@ -2912,6 +2929,8 @@ export interface ClaudeAdapterV2Options {
   readonly queryRunner: ClaudeAgentSdkQueryRunnerShape;
   readonly scopedLimitNames?: Ref.Ref<ClaudeScopedLimitNames>;
   readonly onUsageLimits?: ServerProviderShape["applyUsageLimits"];
+  /** The user's MCP server and tool preferences, read when a query opens. */
+  readonly readMcpPreferences?: ReadProviderMcpPreferences;
   /** Sink for wake-turn continuation requests; defaults to dropping them. */
   readonly continuationRequests?: {
     readonly offer: (
@@ -6841,8 +6860,12 @@ export function makeClaudeAdapterV2(
           nativeThreadId: string,
         ) {
           const queryPolicy = claudeRuntimeQueryPolicyForRuntimePolicy(turnInput.runtimePolicy);
+          const mcpPreferences = yield* (
+            adapterOptions.readMcpPreferences ?? readNoProviderMcpPreferences
+          );
           const mcpOverrides = claudeMcpQueryOverrides({
             threadId: turnInput.threadId,
+            disallowedMcpTools: claudeDisallowedMcpTools(mcpPreferences),
             readOnlySandbox:
               sandboxPolicyKindForClaudeRuntimePolicy(turnInput.runtimePolicy) === "readOnly",
             ...(queryPolicy.allowedTools === undefined
@@ -7692,7 +7715,10 @@ export type ClaudeAdapterV2DriverEnv =
 export const createClaudeAdapterV2 = Effect.fn("ClaudeAdapterV2Driver.create")(
   function* (
     input: ProviderAdapterDriverCreateInput<ClaudeSettings>,
-    hooks: Pick<ClaudeAdapterV2Options, "scopedLimitNames" | "onUsageLimits"> = {},
+    hooks: Pick<
+      ClaudeAdapterV2Options,
+      "scopedLimitNames" | "onUsageLimits" | "readMcpPreferences"
+    > = {},
   ) {
     const { instanceId, environment, enabled, config } = input;
     const fileSystem = yield* FileSystem.FileSystem;

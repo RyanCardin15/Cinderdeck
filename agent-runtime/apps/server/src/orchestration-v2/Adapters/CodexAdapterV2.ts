@@ -18,6 +18,12 @@ import type { ServerProviderShape } from "../../provider/Services/ServerProvider
 import type { CodexEffectiveRuntime } from "../../provider/CodexManagedRuntime.ts";
 import { buildCodexInitializeParams } from "../../provider/Layers/CodexProvider.ts";
 import {
+  codexMcpServerOverrides,
+  readCodexMcpServerConfigs,
+  readNoProviderMcpPreferences,
+  type ReadProviderMcpPreferences,
+} from "../../provider/providerMcp.ts";
+import {
   codexRateLimitsToUpdate,
   mergeCodexRateLimits,
   codexUsageLimitResetAt,
@@ -27,6 +33,7 @@ import {
   CodexSettings,
   defaultInstanceIdForDriver,
   isOrchestrationV2WorkActive,
+  isProviderMcpPreferencesEmpty,
   ProviderDriverKind,
   type ProviderSetupError,
 } from "@cinderdeck/contracts";
@@ -1218,6 +1225,8 @@ export function codexThreadRuntimeParams(input: {
   readonly threadId: ThreadId | null;
   readonly modelSelection?: { readonly model: string };
   readonly runtimePolicy?: ProviderAdapterV2RuntimePolicy;
+  /** The user's disabled MCP servers and tools, from `codexMcpServerOverrides`. */
+  readonly mcpServerOverrides?: Readonly<Record<string, Schema.Json>>;
 }): {
   readonly cwd?: string;
   readonly model?: string;
@@ -1227,6 +1236,15 @@ export function codexThreadRuntimeParams(input: {
 } {
   const mcpSession =
     input.threadId === null ? undefined : McpProviderSession.readMcpProviderSession(input.threadId);
+  const mcpServers: Record<string, Schema.Json> = { ...input.mcpServerOverrides };
+  if (mcpSession !== undefined) {
+    mcpServers[McpProviderSession.APP_MCP_SERVER_NAME] = {
+      url: mcpSession.endpoint,
+      http_headers: {
+        Authorization: mcpSession.authorizationHeader,
+      },
+    };
+  }
   return {
     ...(input.runtimePolicy?.cwd == null ? {} : { cwd: input.runtimePolicy.cwd }),
     ...(input.modelSelection === undefined ? {} : { model: input.modelSelection.model }),
@@ -1235,18 +1253,7 @@ export function codexThreadRuntimeParams(input: {
       : {}),
     config: {
       ...CODEX_THREAD_CONFIG,
-      ...(mcpSession === undefined
-        ? {}
-        : {
-            mcp_servers: {
-              [McpProviderSession.APP_MCP_SERVER_NAME]: {
-                url: mcpSession.endpoint,
-                http_headers: {
-                  Authorization: mcpSession.authorizationHeader,
-                },
-              },
-            },
-          }),
+      ...(Object.keys(mcpServers).length === 0 ? {} : { mcp_servers: mcpServers }),
     },
   };
 }
@@ -1466,7 +1473,10 @@ export type CodexAdapterV2DriverEnv =
 
 export const createCodexAdapterV2 = (
   { instanceId, environment, enabled, config }: ProviderAdapterDriverCreateInput<CodexSettings>,
-  hooks: Pick<CodexAdapterV2Options, "onUsageLimits" | "resolveRuntime"> = {},
+  hooks: Pick<
+    CodexAdapterV2Options,
+    "onUsageLimits" | "resolveRuntime" | "readMcpPreferences"
+  > = {},
 ) =>
   Effect.gen(function* () {
     const clientFactory = yield* CodexAppServerClientFactory;
@@ -1549,6 +1559,8 @@ export interface CodexAdapterV2Options {
   readonly environment: NodeJS.ProcessEnv;
   readonly clientFactory: CodexAppServerClientFactoryShape;
   readonly onUsageLimits?: ServerProviderShape["applyUsageLimits"];
+  /** The user's MCP server and tool preferences, read when a thread starts or resumes. */
+  readonly readMcpPreferences?: ReadProviderMcpPreferences;
   /**
    * Resolves launch settings when each session opens, replacing `settings` and
    * `environment`. Managed ChatGPT sign-in uses it to launch the Cinderdeck-installed
@@ -1663,6 +1675,26 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
           yield* client.notify("initialized", undefined);
           yield* Ref.set(initialized, true);
         });
+        // Read per thread so a toggle applies the next time a thread starts or
+        // resumes. The user's own `disabled_tools` are read only when needed.
+        const mcpServerOverrides = (
+          adapterOptions.readMcpPreferences ?? readNoProviderMcpPreferences
+        ).pipe(
+          Effect.flatMap((preferences) =>
+            isProviderMcpPreferencesEmpty(preferences)
+              ? Effect.succeed({})
+              : client
+                  .request(
+                    "config/read",
+                    input.runtimePolicy.cwd == null ? {} : { cwd: input.runtimePolicy.cwd },
+                  )
+                  .pipe(
+                    Effect.map((response) => readCodexMcpServerConfigs(response.config)),
+                    Effect.orElseSucceed(() => ({})),
+                    Effect.map((configs) => codexMcpServerOverrides(preferences, configs)),
+                  ),
+          ),
+        );
         const now = yield* DateTime.now;
         const session = providerSession({
           providerSessionId: input.providerSessionId,
@@ -5457,13 +5489,15 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             }),
           ensureThread: (threadInput) =>
             ensureInitialized.pipe(
-              Effect.andThen(
+              Effect.andThen(mcpServerOverrides),
+              Effect.flatMap((mcpOverrides) =>
                 client.request(
                   "thread/start",
                   codexThreadRuntimeParams({
                     threadId: threadInput.threadId,
                     modelSelection: threadInput.modelSelection,
                     runtimePolicy: sessionPolicy(threadInput.runtimePolicy)!,
+                    mcpServerOverrides: mcpOverrides,
                   }),
                 ),
               ),
@@ -5491,12 +5525,14 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
               const nativeThreadId = yield* getNativeThreadId(threadInput.providerThread);
 
               const response = yield* ensureInitialized.pipe(
-                Effect.andThen(
+                Effect.andThen(mcpServerOverrides),
+                Effect.flatMap((mcpOverrides) =>
                   // excludeTurns is not in the generated request schema yet.
                   client.raw.request("thread/resume", {
                     threadId: nativeThreadId,
                     excludeTurns: true,
                     ...codexThreadRuntimeParams({
+                      mcpServerOverrides: mcpOverrides,
                       threadId: threadInput.threadId ?? threadInput.providerThread.appThreadId,
                       ...(threadInput.modelSelection === undefined
                         ? {}
@@ -6220,10 +6256,12 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
               // process. After a restart or idle release, load it the same way
               // the next turn would before reverting.
               if (!loaded) {
+                const mcpOverrides = yield* mcpServerOverrides;
                 yield* client.raw.request("thread/resume", {
                   threadId,
                   excludeTurns: true,
                   ...codexThreadRuntimeParams({
+                    mcpServerOverrides: mcpOverrides,
                     threadId: threadInput.providerThread.appThreadId,
                     modelSelection: input.modelSelection,
                     runtimePolicy: sessionPolicy(input.runtimePolicy)!,
@@ -6266,13 +6304,15 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
               const threadId = yield* getNativeThreadId(threadInput.sourceProviderThread);
               const boundary = yield* resolveCodexForkBoundary(threadInput);
               const response = yield* ensureInitialized.pipe(
-                Effect.andThen(
+                Effect.andThen(mcpServerOverrides),
+                Effect.flatMap((mcpOverrides) =>
                   client.request("thread/fork", {
                     threadId,
                     ...(boundary.lastTurnId === undefined
                       ? {}
                       : { lastTurnId: boundary.lastTurnId }),
                     ...codexThreadRuntimeParams({
+                      mcpServerOverrides: mcpOverrides,
                       threadId: threadInput.targetThreadId,
                       ...(threadInput.modelSelection === undefined
                         ? {}

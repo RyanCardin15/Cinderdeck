@@ -12,8 +12,10 @@ import { createCodexAdapterV2 } from "../../orchestration-v2/Adapters/CodexAdapt
 import {
   checkCodexProviderStatus,
   makePendingCodexProvider,
+  probeCodexMcpServers,
   probeCodexSkillsForCwd,
 } from "../Layers/CodexProvider.ts";
+import { makeReadProviderMcpPreferences, MCP_LIST_TIMEOUT } from "../providerMcp.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import { type ProviderDriverCreateInput, type ProviderInstance } from "../ProviderDriver.ts";
@@ -220,6 +222,7 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
   const orchestrationAdapter = yield* createCodexAdapterV2(input, {
     onUsageLimits: (update) => snapshot.applyUsageLimits(update),
     resolveRuntime: runtime.resolve,
+    readMcpPreferences: makeReadProviderMcpPreferences(settings, instanceId),
   }).pipe(
     Effect.mapError(
       (cause) =>
@@ -269,6 +272,30 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
     orchestrationAdapter,
     textGeneration,
     auth: runtime.auth.controller,
+    listMcpServers: ({ cwd }) =>
+      resolveRuntime.pipe(
+        Effect.flatMap((effective) =>
+          probeCodexMcpServers({
+            binaryPath: effective.config.binaryPath,
+            homePath: effective.config.homePath,
+            launchArgs: effective.config.launchArgs,
+            cwd: cwd ?? process.cwd(),
+            environment: effective.environment,
+          }),
+        ),
+        Effect.scoped,
+        Effect.timeout(MCP_LIST_TIMEOUT),
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+        Effect.mapError(
+          (cause) =>
+            new ProviderDriverError({
+              driver: DRIVER,
+              instanceId,
+              detail: "Codex could not list its MCP servers.",
+              cause,
+            }),
+        ),
+      ),
     snapshotForCwd: (cwd: string) =>
       enabled
         ? resolveRuntime.pipe(
