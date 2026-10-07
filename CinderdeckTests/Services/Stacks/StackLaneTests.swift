@@ -968,6 +968,91 @@ final class StackLaneTests: XCTestCase {
     try await supervisor.removeLane(lane.id, actor: codex)
   }
 
+  // MARK: Bounded multi-repository creation
+
+  private func gatedRepositories(_ count: Int) async throws -> (StackDefinition, [URL]) {
+    var source = StackDefinition(id: "parallel", name: "Parallel", file: definitions.appendingPathComponent("parallel.toml"), root: root, shell: "/bin/sh")
+    var gates: [URL] = []
+    for index in 0..<count {
+      let path = root.appendingPathComponent("parallel-\(index)")
+      _ = try await StackLaneStore.git(["clone", repo.path, path.path], at: root)
+      let gate = root.appendingPathComponent("gate-\(index)")
+      try FileManager.default.createDirectory(at: gate, withIntermediateDirectories: true)
+      let hook = path.appendingPathComponent(".git/hooks/post-checkout")
+      try """
+      #!/bin/sh
+      touch '\(gate.appendingPathComponent("started").path)'
+      while [ ! -f '\(gate.appendingPathComponent("release").path)' ]; do sleep 0.01; done
+      """.write(to: hook, atomically: true, encoding: .utf8)
+      try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: hook.path)
+      gates.append(gate)
+      source.repos.append(.init(id: "repo\(index)", path: path, laneFrom: "main"))
+    }
+    return (source, gates)
+  }
+
+  private func releaseGates(_ gates: [URL]) {
+    for gate in gates { FileManager.default.createFile(atPath: gate.appendingPathComponent("release").path, contents: Data()) }
+  }
+
+  func testIndependentCheckoutsOverlapWithAtMostFourWorkers() async throws {
+    let (source, gates) = try await gatedRepositories(6)
+    defer { releaseGates(gates) }
+    let directory = supervisor.lanesDirectory, worktreeRoot = supervisor.worktreeRoot
+    let creation = Task { try await StackLaneStore.create(source: source, request: .init(branch: "bounded"), owner: codex,
+      directory: directory, worktreeRoot: worktreeRoot, occupiedPorts: []) }
+    let deadline = Date().addingTimeInterval(10)
+    while gates.prefix(4).contains(where: { !FileManager.default.fileExists(atPath: $0.appendingPathComponent("started").path) }), Date() < deadline {
+      try await Task.sleep(nanoseconds: 10_000_000)
+    }
+    XCTAssertTrue(gates.prefix(4).allSatisfy { FileManager.default.fileExists(atPath: $0.appendingPathComponent("started").path) }, "Independent checkouts must overlap")
+    XCTAssertTrue(gates.suffix(2).allSatisfy { !FileManager.default.fileExists(atPath: $0.appendingPathComponent("started").path) }, "Never start more than four checkouts")
+    releaseGates(gates)
+    let result = try await creation.value
+    XCTAssertEqual(result.record.worktrees.count, 6)
+    XCTAssertEqual(result.record.ready, true)
+  }
+
+  func testCancellationDrainsCheckoutWorkersBeforeRollback() async throws {
+    let (source, gates) = try await gatedRepositories(4)
+    defer { releaseGates(gates) }
+    let directory = supervisor.lanesDirectory, worktreeRoot = supervisor.worktreeRoot
+    let creation = Task { try await StackLaneStore.create(source: source, request: .init(branch: "cancel-workers"), owner: codex,
+      directory: directory, worktreeRoot: worktreeRoot, occupiedPorts: []) }
+    let deadline = Date().addingTimeInterval(10)
+    while gates.contains(where: { !FileManager.default.fileExists(atPath: $0.appendingPathComponent("started").path) }), Date() < deadline {
+      try await Task.sleep(nanoseconds: 10_000_000)
+    }
+    XCTAssertTrue(gates.allSatisfy { FileManager.default.fileExists(atPath: $0.appendingPathComponent("started").path) })
+    creation.cancel()
+    do { _ = try await creation.value; XCTFail("Expected cancellation") } catch {}
+    releaseGates(gates)
+    XCTAssertTrue(try StackLaneStore.records(in: directory).isEmpty)
+    for repo in source.repos {
+      let checkouts = try await StackLaneStore.checkouts(repo.path)
+      XCTAssertEqual(checkouts.count, 1)
+      let branch = try await StackLaneStore.git(["branch", "--show-current"], at: repo.path)
+      XCTAssertEqual(branch, "main")
+    }
+  }
+
+  func testParallelFailureRetainsChangedPartialWorktreeAndCleansOtherDestinations() async throws {
+    let (source, gates) = try await gatedRepositories(4)
+    releaseGates(gates)
+    let hook = source.repos[0].path.appendingPathComponent(".git/hooks/post-checkout")
+    try "#!/bin/sh\nprintf 'keep me' > user-added.txt\nexit 1\n".write(to: hook, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: hook.path)
+    do {
+      _ = try await StackLaneStore.create(source: source, request: .init(branch: "partial"), owner: codex,
+        directory: supervisor.lanesDirectory, worktreeRoot: supervisor.worktreeRoot, occupiedPorts: [])
+      XCTFail("Expected checkout hook failure")
+    } catch { XCTAssertTrue(error.localizedDescription.contains("recovery record kept"), error.localizedDescription) }
+    let record = try XCTUnwrap(StackLaneStore.records(in: supervisor.lanesDirectory).first)
+    XCTAssertEqual(record.ready, false)
+    XCTAssertEqual(try String(contentsOf: record.worktrees[0].path.appendingPathComponent("user-added.txt"), encoding: .utf8), "keep me")
+    for tree in record.worktrees.dropFirst() { XCTAssertFalse(FileManager.default.fileExists(atPath: tree.path.path)) }
+  }
+
   // MARK: Redesigned lanes
 
   func testFourRepositoryDefaultsAndOneOffOverridesPinTheCorrectCommits() async throws {

@@ -8,6 +8,43 @@ struct LaneCreationOptions: Sendable {
   var start: Bool
 }
 
+/// Foreground branch reads must not wait behind GitService's full status scans
+/// or network fetches. Read only local metadata, with four commands in flight.
+private actor LaneBranchReader {
+  static let shared = LaneBranchReader()
+  private var active = 0
+  private var waiters: [CheckedContinuation<Void, Never>] = []
+  private func acquire() async {
+    if active < StackLaneStore.repositoryConcurrency { active += 1; return }
+    await withCheckedContinuation { waiters.append($0) }
+  }
+  private func release() {
+    if waiters.isEmpty { active -= 1 } else { waiters.removeFirst().resume() }
+  }
+  func branches(at path: URL) async throws -> [GitBranch] {
+    await acquire(); defer { release() }
+    try Task.checkCancellation()
+    let output = try await StackLaneStore.git(["for-each-ref", "--sort=-committerdate", "--format=%(refname)%00%(upstream:short)%00%(subject)", "refs/heads", "refs/remotes"], at: path)
+    return output.split(separator: "\n").compactMap { line in
+      let fields = line.components(separatedBy: "\0")
+      guard fields.count >= 3 else { return nil }
+      let ref = fields[0], remote = ref.hasPrefix("refs/remotes/")
+      guard !remote || !ref.hasSuffix("/HEAD") else { return nil }
+      let short = String(ref.dropFirst(remote ? "refs/remotes/".count : "refs/heads/".count))
+      let name = remote ? short.split(separator: "/", maxSplits: 1).dropFirst().joined(separator: "/") : short
+      return GitBranch(name: name, reference: ref, isRemote: remote, upstream: fields[1].isEmpty ? nil : fields[1], subject: fields[2])
+    }
+  }
+  func currentBranch(at path: URL) async throws -> String {
+    await acquire(); defer { release() }
+    try Task.checkCancellation()
+    let branch = try await StackLaneStore.gitResult(["symbolic-ref", "--quiet", "--short", "HEAD"], at: path)
+    if branch.status == 0 { return branch.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    let commit = try await StackLaneStore.git(["rev-parse", "--short", "HEAD"], at: path)
+    return "Detached (\(commit))"
+  }
+}
+
 /// Reads local branch references only. Selecting a base never switches the workspace.
 struct LaneBaseBranchPicker: View {
   let path: URL
@@ -33,7 +70,7 @@ struct LaneBaseBranchPicker: View {
     .help(problem ?? (loading ? "Reading branches…" : "Start the lane from this branch's committed code."))
     .task(id: path) {
       loading = true; problem = nil
-      do { branches = try await GitService.shared.branches(at: path) }
+      do { branches = try await LaneBranchReader.shared.branches(at: path) }
       catch { problem = "Could not read branches: \(error.localizedDescription)" }
       loading = false
     }
@@ -265,10 +302,12 @@ private struct LaneCreationSheet: View {
       .disabled(working)
       .task {
         nameFocused = true
-        for repo in repos {
-          do { current[repo.id] = try await GitService.shared.status(at: repo.path).branchLabel }
-          catch { current[repo.id] = repo.laneMode == .shared ? "Shared folder" : "Unavailable" }
+        let labels = try? await StackLaneStore.mapRepositories(repos) { repo in
+          let branch = (try? await LaneBranchReader.shared.currentBranch(at: repo.path))
+            ?? (repo.laneMode == .shared ? "Shared folder" : "Unavailable")
+          return (repo.id, branch)
         }
+        if let labels, !Task.isCancelled { current = Dictionary(uniqueKeysWithValues: labels) }
       }
   }
 

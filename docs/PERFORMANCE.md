@@ -81,3 +81,77 @@ The XCTest regression suites cover stable merge/tail ordering including timestam
 The audit also inspected history search/thumbnail caching, recording buffer configuration, process/socket transport, and existing PR concurrency tests. History search already runs off the main thread and thumbnails have bounded memory caching. This change does not alter recording quality, frame rate, encoder selection, capture permissions, or media export algorithms.
 
 Cold thumbnail bursts, GPU-heavy recording/export, and end-to-end Release frame pacing still need dedicated hardware workloads before changing their concurrency or quality budgets. Existing timestamp service-log cursors retain their public format; this is not a new lossless streaming protocol. Log files remain the full-output source when bounded in-memory history is insufficient.
+
+
+## Lane creation: October 6, 2026
+
+Multi-repository lane creation previously discovered, planned and materialized
+repositories serially. The creation sheet also requested full working-tree status
+just to display the current branch, competing with Git monitoring and network
+fetches on the same per-repository queue.
+
+Creation now runs off the main actor, deduplicates repository discovery, combines
+root/common-directory reads, and reuses fresh branch metadata within one request.
+Repository discovery and planning have at most four operations in flight.
+Independent repository checkouts and submodule initialization have at most four
+workers; repositories sharing a Git common directory remain serialized. Explicit
+base commits are pinned before mutation and use Git's atomic `-b` guard without
+repeating remote queries and revision resolution.
+
+The sheet and workspace-settings branch selectors read only local references.
+Current-branch labels use `symbolic-ref` (including unborn branches) or the detached
+HEAD commit, without scanning working-tree files or waiting behind background
+status/fetch work. Foreground branch reads also have a four-command limit.
+
+Active checkout workers finish or acknowledge cancellation before rollback.
+Recovery inspections/removals run in an awaited uncancelled task so cancellation
+cannot bypass cleanup. Modified partial worktrees retain their recovery record;
+reused/adopted worktrees and original checkouts are preserved.
+
+### Measurements
+
+An Apple M4 Max running macOS 26.3 and Xcode 26.3 created five lanes from four
+real disposable repositories containing 2,500 tracked files each (10,000 total).
+Both builds were Debug on the same machine. Fixture generation, assertion reads,
+and teardown are outside the timed creation operation. No network, submodules,
+checkout hooks or setup commands were present. Baseline: merged lane-creation
+implementation at `339e37e44582fbe1ace9ec227587dd1e94aa7c75`.
+
+| Four-repository creation | Median | Maximum of five samples |
+| --- | ---: | ---: |
+| Before | 1,789.270 ms | 1,937.809 ms |
+| Final candidate, after builds/checks finished | 732.357 ms | 759.560 ms |
+
+The final median was **59% lower (2.44 times faster)**. Two earlier candidate runs
+had medians of 776.481 ms and 1,014.228 ms, showing variation with host workload.
+These are fixture measurements, not a latency guarantee for personal repositories.
+Large checkouts, custom checkout hooks, recursive submodule downloads, configured
+file copies and optional setup/install commands can still dominate elapsed time.
+
+### Verification and reproduction
+
+- 68 selected XCTest tests passed (67 lane regressions plus the opt-in benchmark).
+  New gate-based tests prove independent checkouts overlap with a four-worker cap,
+  cancellation drains workers before cleanup, and failure preserves hook-created
+  files while cleaning the other owned destinations. Timing is never a CI threshold.
+- Native Debug and Release builds passed. `scripts/build-unified.sh` assembled and
+  verified the Debug app with the previously verified, unchanged bundled runtime.
+- Manual UI creation in the uniquely identified disposable app showed all four
+  current branches and configured bases, listed branches, accepted a one-time base
+  override, and created a named lane. All 10,000 files and exact selected commits
+  were verified on disk. Original branches and saved defaults were unchanged.
+
+```sh
+TEST_RUNNER_CINDERDECK_LANE_PERFORMANCE_AUDIT=1 xcodebuild test \
+  -project Cinderdeck.xcodeproj -scheme Cinderdeck -configuration Debug \
+  -destination 'platform=macOS' -derivedDataPath .build/development \
+  -only-testing:CinderdeckTests/StackLaneCreationPerformanceTests \
+  -only-testing:CinderdeckTests/StackLaneTests \
+  -parallel-testing-enabled NO COMPILER_INDEX_STORE_ENABLE=NO \
+  'OTHER_SWIFT_FLAGS=$(inherited) -Xllvm -sil-disable-pass=PerfInliner' \
+  CODE_SIGNING_ALLOWED=NO
+```
+
+Set `TEST_RUNNER_CINDERDECK_LANE_PERFORMANCE_FILES` to change the number of files
+per repository. The benchmark prints all five samples and verifies lane readiness,
+repository count, pinned commits and unchanged original branches.

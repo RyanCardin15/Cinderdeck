@@ -6,7 +6,7 @@ Cinderdeck ships as one native macOS app with a private bundled runtime. `agent-
 
 This doc mirrors the current Cinderdeck codebase and runtime ownership. Keep it in sync with source, not with intended architecture.
 
-Workspace performance: `StackCommandRunner` waits on kernel process-exit notifications with cancellation and deadline cleanup. `LogBuffer` uses a heap merge with a bounded reverse traversal for recent output; `StackSupervisor` moves large merges off the main actor. `StackLogFilter` retains search matches only for current line IDs. `StacksViewModel` rebuilds its indexed `WorkspaceNavigation` snapshot when definitions change, and the execution map draws static connections separately from animated activity. Agent inventory supports `list_workspaces(detail: false)`. Measurements and verification are in [PERFORMANCE.md](PERFORMANCE.md).
+Workspace performance: `StackCommandRunner` waits on kernel process-exit notifications with cancellation and deadline cleanup. `LogBuffer` uses a heap merge with a bounded reverse traversal for recent output; `StackSupervisor` moves large merges off the main actor. `StackLogFilter` retains search matches only for current line IDs. `StacksViewModel` rebuilds its indexed `WorkspaceNavigation` snapshot when definitions change, and the execution map draws static connections separately from animated activity. Agent inventory supports `list_workspaces(detail: false)`. Lane creation uses bounded repository workers off the main actor; repositories sharing Git metadata stay serialized, and foreground branch selectors read local metadata without full status scans. Measurements and verification are in [PERFORMANCE.md](PERFORMANCE.md).
 
 ## Feature Docs
 

@@ -297,6 +297,42 @@ nonisolated enum StackLaneStore {
     return result
   }
 
+  // MARK: Bounded repository work
+
+  static let repositoryConcurrency = 4
+
+  /// Preserve input order and cancel/drain readers on error. No long-lived Git
+  /// cache: every creation sees fresh roots, branches and worktree ownership.
+  static func mapRepositories<Input: Sendable, Output: Sendable>(_ inputs: [Input],
+    operation: @escaping @Sendable (Input) async throws -> Output) async throws -> [Output] {
+    try await withThrowingTaskGroup(of: (Int, Output).self) { group in
+      var next = 0, values = [Output?](repeating: nil, count: inputs.count)
+      while next < min(repositoryConcurrency, inputs.count) {
+        let index = next
+        group.addTask { try Task.checkCancellation(); return (index, try await operation(inputs[index])) }
+        next += 1
+      }
+      for try await (index, value) in group {
+        values[index] = value
+        if next < inputs.count {
+          let index = next
+          group.addTask { try Task.checkCancellation(); return (index, try await operation(inputs[index])) }
+          next += 1
+        }
+      }
+      return values.map { $0! }
+    }
+  }
+
+  private struct RepositoryMetadata: Sendable { let root: URL; let common: URL }
+  private static func repositoryMetadata(_ path: URL) async -> RepositoryMetadata? {
+    guard let output = try? await git(["rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir"], at: path) else { return nil }
+    let values = output.split(separator: "\n")
+    guard values.count == 2 else { return nil }
+    return RepositoryMetadata(root: URL(fileURLWithPath: String(values[0])).resolvingSymlinksInPath().standardizedFileURL,
+      common: URL(fileURLWithPath: String(values[1])).resolvingSymlinksInPath().standardizedFileURL)
+  }
+
   // MARK: Creation
 
   struct Creation: Sendable {
@@ -306,7 +342,7 @@ nonisolated enum StackLaneStore {
 
   /// Creates or adopts worktrees and journals the record before any Git change, so an
   /// interrupted creation stays discoverable. `occupiedPorts` must include every port in use.
-  static func create(source: StackDefinition, request: StackLaneRequest, owner: StackActor, directory: URL,
+  @concurrent static func create(source: StackDefinition, request: StackLaneRequest, owner: StackActor, directory: URL,
     worktreeRoot: URL, occupiedPorts: Set<Int>) async throws -> Creation {
     guard source.lane == nil else { throw StackError.message("Create lanes from the original stack, not from another lane.") }
     var warnings: [String] = []
@@ -326,10 +362,17 @@ nonisolated enum StackLaneStore {
       candidates.append(("tasks.\(task.id)", task.directory))
     }
     let sharedRoots = source.repos.filter { $0.laneMode == .shared }.map { $0.path.resolvingSymlinksInPath().standardizedFileURL }
+    let paths = Array(Set(candidates.map { $0.1.resolvingSymlinksInPath().standardizedFileURL }
+      .filter { path in !sharedRoots.contains(where: { relative(path, to: $0) != nil }) })).sorted { $0.path < $1.path }
+    let metadata = try await mapRepositories(paths) { await repositoryMetadata($0) }
+    var rootByPath: [URL: URL] = [:], commonByRoot: [URL: URL] = [:]
+    for (path, repo) in zip(paths, metadata) {
+      if let repo { rootByPath[path] = repo.root; commonByRoot[repo.root] = repo.common }
+    }
     for (label, path) in candidates {
       let resolved = path.resolvingSymlinksInPath().standardizedFileURL
       if sharedRoots.contains(where: { relative(resolved, to: $0) != nil }) { continue }
-      guard let root = await topLevel(resolved) else { outside.append(label); continue }
+      guard let root = rootByPath[resolved] else { outside.append(label); continue }
       if !roots.contains(root) { roots.append(root) }
     }
     if !outside.isEmpty {
@@ -347,9 +390,7 @@ nonisolated enum StackLaneStore {
     if let path = request.adoptPath {
       guard let top = await topLevel(path) else { throw StackError.message("\(path.path) is not inside a Git worktree.") }
       guard let common = await commonDirectory(top) else { throw StackError.message("Cannot read the Git folder of \(top.path).") }
-      var match: URL?
-      for root in roots where await commonDirectory(root) == common { match = root; break }
-      guard let root = match else {
+      guard let root = roots.first(where: { commonByRoot[$0] == common }) else {
         throw StackError.message("\(top.path) is not a worktree of any repository in \(source.name): " + roots.map(\.path).joined(separator: ", "))
       }
       guard top != root else { throw StackError.message("\(top.path) is the original checkout. Adopt a separate worktree, or create a lane.") }
@@ -387,6 +428,12 @@ nonisolated enum StackLaneStore {
     }
     var starts: [URL: String] = [:]
     var repositoryRefs: [String: String] = [:]
+    let branchForLookup = branch
+    let localBranches = try await mapRepositories(roots) { root in
+      try await git(["for-each-ref", "--format=%(refname)", "refs/heads/" + branchForLookup], at: root)
+        .components(separatedBy: "\n").contains("refs/heads/" + branchForLookup)
+    }
+    let hasLocalBranch = Dictionary(uniqueKeysWithValues: zip(roots, localBranches))
     do {
       var refs = request.repositoryRefs
       if request.from == nil {
@@ -397,7 +444,8 @@ nonisolated enum StackLaneStore {
       for (id, ref) in refs.sorted(by: { $0.key < $1.key }) {
         guard !id.isEmpty, id.utf8.count <= 160, !ref.isEmpty, ref.utf8.count <= 200,
           !ref.hasPrefix("-"), !ref.contains("\0"), !ref.contains("\n"), !ref.contains("\r"),
-          let repo = source.repo(id), repo.laneMode == .worktree, let root = await topLevel(repo.path), roots.contains(root) else {
+          let repo = source.repo(id), repo.laneMode == .worktree,
+          let root = rootByPath[repo.path.resolvingSymlinksInPath().standardizedFileURL], roots.contains(root) else {
           throw StackError.message("Choose a valid start revision for an isolated repository in this workspace: \(id).")
         }
         if adopted?.source == root { continue }
@@ -405,8 +453,7 @@ nonisolated enum StackLaneStore {
         if let previous = starts[root], previous != commit {
           throw StackError.message("Repository aliases request different start revisions for \(root.path).")
         }
-        let local = try await git(["for-each-ref", "--format=%(refname)", "refs/heads/" + branch], at: root)
-          .components(separatedBy: "\n").contains("refs/heads/" + branch)
+        let local = hasLocalBranch[root] == true
         if local && request.repositoryRefs[id] == nil { continue }
         guard !local else { throw StackError.message("Branch \(branch) already exists in \(id). Explicit repository start revisions create a new branch.") }
         starts[root] = commit
@@ -419,8 +466,7 @@ nonisolated enum StackLaneStore {
         }
         let commit = try await git(["rev-parse", "--verify", "--quiet", ref + "^{commit}"], at: root)
         if let previous = starts[root], previous != commit { throw StackError.message("Repository aliases request different start revisions for \(root.path).") }
-        let local = try await git(["for-each-ref", "--format=%(refname)", "refs/heads/" + branch], at: root)
-          .components(separatedBy: "\n").contains("refs/heads/" + branch)
+        let local = hasLocalBranch[root] == true
         guard !local else { throw StackError.message("Branch \(branch) already exists in \(root.lastPathComponent). Choose a new lane branch.") }
         starts[root] = commit
       }
@@ -431,24 +477,26 @@ nonisolated enum StackLaneStore {
     // Where each repository's worktree comes from.
     // A custom adopted lane name is a display/address choice, not a Git branch.
     let worktreeBranch = adopted?.branch ?? branch
-    enum Plan { case create, reuse(StackLaneWorktree), adopt }
-    var plans: [URL: Plan] = [:]
-    for root in roots {
-      if adopted?.source == root { plans[root] = .adopt; continue }
+    enum Plan: Sendable { case create, reuse(StackLaneWorktree), adopt }
+    let adoptedSource = adopted?.source
+    if let root = roots.first(where: { $0 != adoptedSource }) {
       _ = try await git(["check-ref-format", "refs/heads/" + worktreeBranch], at: root)
+    }
+    let planned = try await mapRepositories(roots) { root -> Plan in
+      if adoptedSource == root { return .adopt }
       let checkouts = try await checkouts(root)
       if let (path, _) = checkouts.first(where: { $0.value == worktreeBranch }) {
         if path == root {
           throw StackError.message("Branch \(worktreeBranch) is checked out in the original checkout \(root.path). Choose a different lane branch.")
         }
-        // Another workspace's lane already has this branch: share its worktree.
         if let shared = existing.lazy.flatMap(\.worktrees).first(where: { samePath($0.path, path) }) {
-          plans[root] = .reuse(shared); continue
+          return .reuse(shared)
         }
         throw StackError.message("Branch \(worktreeBranch) is already checked out in \(path.path). Adopt that worktree with `cinderdeck lane adopt \(source.id) --path \(path.path)`, or choose a different lane branch.")
       }
-      plans[root] = .create
+      return .create
     }
+    let plans = Dictionary(uniqueKeysWithValues: zip(roots, planned))
 
     // Identity, folder and ports.
     let slug = uniqueSlug(StackLaneInfo.slug(for: branch), source: source.id, existing: existing,
@@ -495,19 +543,52 @@ nonisolated enum StackLaneStore {
     }
     // Journal before Git mutations so a crash never leaves an undiscoverable worktree.
     try write(record, in: directory)
-    var created: [StackLaneWorktree] = []
     do {
+      try Task.checkCancellation()
       try FileManager.default.createDirectory(at: laneDirectory, withIntermediateDirectories: true)
-      for (index, tree) in worktrees.enumerated() {
-        if case .create = plans[tree.source] {
-          try await addWorktree(tree, branch: worktreeBranch, from: starts[tree.source] ?? info.from, explicitStart: starts[tree.source] != nil)
-          created.append(tree)
+      // Worktrees sharing Git metadata stay serial. Independent repositories use
+      // at most four workers; finish active workers before attempting rollback.
+      let treeSnapshot = worktrees, startSnapshot = starts, fallbackStart = info.from
+      let groups = Dictionary(grouping: worktrees.indices, by: { commonByRoot[worktrees[$0].source] ?? worktrees[$0].source })
+        .values.map { $0.sorted() }.sorted { $0[0] < $1[0] }
+      struct Outcome: Sendable { let index: Int; let tree: StackLaneWorktree; let error: Error? }
+      let materialized = await withTaskGroup(of: [Outcome].self) { group in
+        var next = 0, finished: [Outcome] = [], failed = false
+        func enqueue(_ indices: [Int]) {
+          group.addTask {
+            var results: [Outcome] = []
+            for index in indices {
+              var tree = treeSnapshot[index]
+              do {
+                try Task.checkCancellation()
+                if case .create = plans[tree.source] {
+                  try await addWorktree(tree, branch: worktreeBranch, from: startSnapshot[tree.source] ?? fallbackStart, explicitStart: startSnapshot[tree.source] != nil)
+                }
+                tree.baseCommit = try? await git(["rev-parse", "HEAD"], at: tree.path)
+                try Task.checkCancellation()
+                if case .create = plans[tree.source], FileManager.default.fileExists(atPath: tree.path.appendingPathComponent(".gitmodules").path) {
+                  _ = try await git(["submodule", "update", "--init", "--recursive"], at: tree.path, timeout: 600)
+                }
+                results.append(Outcome(index: index, tree: tree, error: nil))
+              } catch {
+                results.append(Outcome(index: index, tree: tree, error: error))
+                break
+              }
+            }
+            return results
+          }
         }
-        worktrees[index].baseCommit = try? await git(["rev-parse", "HEAD"], at: tree.path)
-        if case .create = plans[tree.source], FileManager.default.fileExists(atPath: tree.path.appendingPathComponent(".gitmodules").path) {
-          _ = try await git(["submodule", "update", "--init", "--recursive"], at: tree.path, timeout: 600)
+        while next < min(repositoryConcurrency, groups.count) { enqueue(groups[next]); next += 1 }
+        for await outcomes in group {
+          finished += outcomes
+          failed = failed || outcomes.contains { $0.error != nil }
+          if !failed && !Task.isCancelled && next < groups.count { enqueue(groups[next]); next += 1 }
         }
+        return finished.sorted { $0.index < $1.index }
       }
+      for outcome in materialized { worktrees[outcome.index] = outcome.tree }
+      if let failure = materialized.compactMap(\.error).first { throw failure }
+      try Task.checkCancellation()
       record.worktrees = worktrees
       // CWDs may not exist on an older branch, or may resolve through an escaping symlink.
       let isolated = source.services.filter { mode(of: $0, in: source, worktrees: worktrees) == .isolate }.map { ($0.id, $0.directory) }
@@ -534,24 +615,39 @@ nonisolated enum StackLaneStore {
       try write(record, in: directory)
       return Creation(record: record, warnings: warnings)
     } catch {
-      var cleanupFailed = false
-      for tree in created.reversed() where FileManager.default.fileExists(atPath: tree.path.path) {
-        do {
-          for file in record.copied where relativeEntry(file.path, to: tree.path) != nil { try? FileManager.default.removeItem(at: file.path) }
-          let inspection = try await inspect(tree, copied: [])
-          guard inspection.changes.isEmpty, inspection.ignored.isEmpty else { throw StackError.message("Files were added") }
-          _ = try await git(["worktree", "remove", "--", tree.path.path], at: tree.source)
-        } catch { cleanupFailed = true }
-      }
-      if !cleanupFailed {
-        try? FileManager.default.removeItem(at: manifest(id: id, in: directory))
-        _ = rmdir(directory.appendingPathComponent(id).path)
-        removeEmptyFolders(from: laneDirectory, upTo: laneRoot(settings: settings, default: worktreeRoot, source: source))
-      }
+      // The journal owns these unique destination paths. Inspect even a failed
+      // checkout: Git can leave a registered partial worktree on cancellation.
+      let destinations = worktrees.filter { if case .create = plans[$0.source] { return true }; return false }
+      let cleanupRecord = record, cleanupRoot = laneRoot(settings: settings, default: worktreeRoot, source: source)
+      // Cancellation must terminate checkout workers, but not cancel the Git
+      // inspections/removals needed to recover their owned destinations.
+      let cleanupFailed = await Task.detached {
+        await rollback(destinations, record: cleanupRecord, directory: directory, laneDirectory: laneDirectory, laneRoot: cleanupRoot)
+      }.value
       throw StackError.message(error.localizedDescription + (cleanupFailed
         ? " Lane recovery record kept at \(directory.appendingPathComponent(id).path)."
         : " No source checkout was changed; any newly created branches were kept."))
     }
+  }
+
+  private static func rollback(_ destinations: [StackLaneWorktree], record: StackLaneRecord, directory: URL,
+    laneDirectory: URL, laneRoot: URL) async -> Bool {
+    var cleanupFailed = destinations.contains { FileManager.default.fileExists(atPath: $0.path.path)
+      && !FileManager.default.fileExists(atPath: $0.path.appendingPathComponent(".git").path) }
+    for tree in destinations.reversed() where FileManager.default.fileExists(atPath: tree.path.appendingPathComponent(".git").path) {
+      do {
+        for file in record.copied where relativeEntry(file.path, to: tree.path) != nil { try? FileManager.default.removeItem(at: file.path) }
+        let inspection = try await inspect(tree, copied: [])
+        guard inspection.changes.isEmpty, inspection.ignored.isEmpty else { throw StackError.message("Files were added") }
+        _ = try await git(["worktree", "remove", "--", tree.path.path], at: tree.source)
+      } catch { cleanupFailed = true }
+    }
+    if !cleanupFailed {
+      try? FileManager.default.removeItem(at: manifest(id: record.id, in: directory))
+      _ = rmdir(directory.appendingPathComponent(record.id).path)
+      removeEmptyFolders(from: laneDirectory, upTo: laneRoot)
+    }
+    return cleanupFailed
   }
 
   static func laneRoot(settings: StackLaneSettings?, default root: URL, source: StackDefinition) -> URL {
@@ -570,6 +666,12 @@ nonisolated enum StackLaneStore {
 
   /// Local branch → check it out. Only on a remote → track it. Otherwise branch from `from` (default HEAD).
   private static func addWorktree(_ tree: StackLaneWorktree, branch: String, from: String?, explicitStart: Bool = false) async throws {
+    if explicitStart {
+      // -b is the atomic branch-existence guard. Bases were pinned before the
+      // journal; querying remotes and resolving the same commit again is waste.
+      _ = try await git(["worktree", "add", "--no-track", "-b", branch, "--", tree.path.path, from ?? "HEAD"], at: tree.source)
+      return
+    }
     let local = try await git(["for-each-ref", "--format=%(refname)", "refs/heads/" + branch], at: tree.source)
       .components(separatedBy: "\n").contains("refs/heads/" + branch)
     if local {
