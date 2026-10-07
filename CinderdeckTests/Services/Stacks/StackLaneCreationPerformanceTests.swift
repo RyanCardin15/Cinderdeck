@@ -4,6 +4,45 @@ import XCTest
 
 /// Real disposable repositories; timings are observations, never CI thresholds.
 final class StackLaneCreationPerformanceTests: XCTestCase {
+  func testModalRepositoryDiscoveryPerformance() async throws {
+    guard ProcessInfo.processInfo.environment["CINDERDECK_LANE_PERFORMANCE_AUDIT"] == "1" else {
+      throw XCTSkip("Set TEST_RUNNER_CINDERDECK_LANE_PERFORMANCE_AUDIT=1 to collect timings")
+    }
+    let root = try StackTestSupport.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    var source = StackDefinition(id: "modal", name: "Modal", file: root.appendingPathComponent("modal.toml"), root: root, shell: "/bin/sh")
+    for repoIndex in 0..<4 {
+      let repo = root.appendingPathComponent("repo-\(repoIndex)")
+      try FileManager.default.createDirectory(at: repo.appendingPathComponent(".git"), withIntermediateDirectories: true)
+      source.repos.append(.init(id: "repo\(repoIndex)", path: repo))
+      for command in 0..<16 {
+        let folder = repo.appendingPathComponent("packages/\(command)/src")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        source.services.append(.init(id: "service-\(repoIndex)-\(command)", command: "true", directory: folder))
+        source.tasks.append(.init(id: "task-\(repoIndex)-\(command)", name: "Fixture", command: "true", directory: folder))
+      }
+    }
+    // The former body rediscovered the display list, empty state and button
+    // eligibility on each edit. This measures discovery only, not frame pacing.
+    var samples: [Double] = []
+    for _ in 0..<10 {
+      let start = Date()
+      let implicit = WorkspaceSetupModel.laneRepositories(in: source).filter { candidate in
+        !source.repos.contains { WorkspaceDiscovery.repositoryRoot(containing: $0.path) == candidate.path }
+      }
+      XCTAssertTrue(implicit.isEmpty)
+      XCTAssertFalse(WorkspaceSetupModel.laneRepositories(in: source).isEmpty)
+      XCTAssertFalse(WorkspaceSetupModel.laneRepositories(in: source).isEmpty)
+      samples.append(Date().timeIntervalSince(start) * 1000)
+    }
+    let start = Date()
+    let snapshot = await LaneCreationRepositories.read(source)
+    let snapshotMS = Date().timeIntervalSince(start) * 1000
+    XCTAssertEqual(snapshot.repositories.count, 4)
+    XCTAssertTrue(snapshot.hasIsolatedRepositories)
+    print("LANE_MODAL_DISCOVERY repos=4 services=64 tasks=64 legacy_per_edit_median_ms=\(samples.sorted()[5]) one_time_snapshot_ms=\(snapshotMS)")
+  }
+
   func testMultiRepositoryCreationPerformance() async throws {
     guard ProcessInfo.processInfo.environment["CINDERDECK_LANE_PERFORMANCE_AUDIT"] == "1" else {
       throw XCTSkip("Set TEST_RUNNER_CINDERDECK_LANE_PERFORMANCE_AUDIT=1 to collect timings")

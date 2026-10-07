@@ -21,11 +21,15 @@ final class StackLaneCoordinator {
   }
 
   /// Creates (or adopts) a lane, then runs its setup when the workspace defines one.
-  func create(stack id: String, request: StackLaneRequest, actor: StackActor, setup: Bool = true) async throws -> Creation {
-    let created = try await supervisor.createLane(stack: id, request: request, actor: actor)
+  func create(stack id: String, request: StackLaneRequest, actor: StackActor, setup: Bool = true,
+    progress: StackLaneProgressHandler? = nil) async throws -> Creation {
+    let created = try await supervisor.createLane(stack: id, request: request, actor: actor, progress: progress)
     var result = Creation(file: created.file, warnings: created.warnings)
     if let reference = created.file.definition?.laneSettings?.setup {
-      if setup { result.setup = await runSetup(created.file.id, actor: actor, operationID: request.integrationOperationID) }
+      if setup {
+        progress?(.runningSetup(reference))
+        result.setup = await runSetup(created.file.id, actor: actor, operationID: request.integrationOperationID)
+      }
       else {
         let skipped = StackLaneSetupState(status: .skipped, reference: reference, detail: "Skipped at creation. Run it with lane setup.")
         supervisor.setLaneSetup(created.file.id, skipped)

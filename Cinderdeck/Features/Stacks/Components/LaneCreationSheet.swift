@@ -6,11 +6,12 @@ struct LaneCreationOptions: Sendable {
   var request: StackLaneRequest
   var setup: Bool
   var start: Bool
+  var progress: StackLaneProgressHandler? = nil
 }
 
 /// Foreground branch reads must not wait behind GitService's full status scans
 /// or network fetches. Read only local metadata, with four commands in flight.
-private actor LaneBranchReader {
+actor LaneBranchReader {
   static let shared = LaneBranchReader()
   private var active = 0
   private var waiters: [CheckedContinuation<Void, Never>] = []
@@ -24,15 +25,15 @@ private actor LaneBranchReader {
   func branches(at path: URL) async throws -> [GitBranch] {
     await acquire(); defer { release() }
     try Task.checkCancellation()
-    let output = try await StackLaneStore.git(["for-each-ref", "--sort=-committerdate", "--format=%(refname)%00%(upstream:short)%00%(subject)", "refs/heads", "refs/remotes"], at: path)
+    // The picker only displays names. Commit-date sorting and subjects read a
+    // commit object for every branch, which is costly in large repositories.
+    let output = try await StackLaneStore.git(["for-each-ref", "--sort=refname", "--format=%(refname)", "refs/heads", "refs/remotes"], at: path)
     return output.split(separator: "\n").compactMap { line in
-      let fields = line.components(separatedBy: "\0")
-      guard fields.count >= 3 else { return nil }
-      let ref = fields[0], remote = ref.hasPrefix("refs/remotes/")
+      let ref = String(line), remote = ref.hasPrefix("refs/remotes/")
       guard !remote || !ref.hasSuffix("/HEAD") else { return nil }
       let short = String(ref.dropFirst(remote ? "refs/remotes/".count : "refs/heads/".count))
       let name = remote ? short.split(separator: "/", maxSplits: 1).dropFirst().joined(separator: "/") : short
-      return GitBranch(name: name, reference: ref, isRemote: remote, upstream: fields[1].isEmpty ? nil : fields[1], subject: fields[2])
+      return GitBranch(name: name, reference: ref, isRemote: remote, upstream: nil, subject: "")
     }
   }
   func currentBranch(at path: URL) async throws -> String {
@@ -157,6 +158,10 @@ private struct LaneCreationSheet: View {
   @State private var branch: String
   @State private var bases: [String: String]
   @State private var current: [String: String] = [:]
+  @State private var repositorySnapshot: LaneCreationRepositories?
+  @State private var creationProgress = LaneCreationProgressState()
+  @State private var creationStarted: Date?
+  private let branchSuffix: String
   @State private var runSetup: Bool
   @State private var startServices: Bool
   @State private var adopting: Bool
@@ -176,8 +181,9 @@ private struct LaneCreationSheet: View {
     var number = 1
     while existing.contains(where: { $0.caseInsensitiveCompare("Lane \(number)") == .orderedSame }) { number += 1 }
     let proposedName = options.request.name ?? "Lane \(number)"
+    branchSuffix = UUID().uuidString.prefix(6).lowercased()
     _name = State(initialValue: proposedName)
-    _branch = State(initialValue: options.request.branch.isEmpty ? Self.newBranch(proposedName) : options.request.branch)
+    _branch = State(initialValue: options.request.branch.isEmpty ? Self.newBranch(proposedName, suffix: branchSuffix) : options.request.branch)
     _branchWasEdited = State(initialValue: !options.request.branch.isEmpty)
     _runSetup = State(initialValue: options.setup)
     _startServices = State(initialValue: options.start)
@@ -186,31 +192,12 @@ private struct LaneCreationSheet: View {
     _copyFiles = State(initialValue: options.request.copy.joined(separator: "\n"))
     _environment = State(initialValue: options.request.environment.sorted(by: { $0.key < $1.key }).map { "\($0.key)=\($0.value)" }.joined(separator: "\n"))
     _advanced = State(initialValue: options.request.adoptPath != nil)
-    let repos = Self.repositories(source)
-    _bases = State(initialValue: Dictionary(uniqueKeysWithValues: repos.map { repo in
-      (repo.id, options.request.repositoryRefs[repo.id] ?? options.request.from ?? repo.laneFrom ?? source.laneSettings?.from ?? "HEAD")
-    }))
+    _bases = State(initialValue: [:])
   }
 
-  private static func newBranch(_ name: String) -> String { "codex/" + StackLaneInfo.slug(for: name) + "-" + UUID().uuidString.prefix(6).lowercased() }
-  private static func repositories(_ source: StackDefinition) -> [RepoDefinition] {
-    let explicit = source.repos
-    let implicit = WorkspaceSetupModel.laneRepositories(in: source).filter { candidate in
-      !explicit.contains(where: { WorkspaceDiscovery.repositoryRoot(containing: $0.path) == candidate.path })
-    }
-    var result = explicit
-    for var repo in implicit {
-      if result.contains(where: { $0.id == repo.id }) {
-        var suffix = 2
-        while result.contains(where: { $0.id == "\(repo.id)-\(suffix)" }) { suffix += 1 }
-        repo = RepoDefinition(id: "\(repo.id)-\(suffix)", path: repo.path)
-      }
-      result.append(repo)
-    }
-    return result
+  private static func newBranch(_ name: String, suffix: String) -> String {
+    "codex/" + StackLaneInfo.slug(for: name) + "-" + suffix
   }
-  private var repos: [RepoDefinition] { Self.repositories(source) }
-  private var isolated: [RepoDefinition] { WorkspaceSetupModel.laneRepositories(in: source) }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -220,7 +207,7 @@ private struct LaneCreationSheet: View {
         Text("Lane name").font(.callout.weight(.semibold))
         TextField("Lane name", text: $name).textFieldStyle(.roundedBorder)
           .accessibilityIdentifier("lane.creation.name").focused($nameFocused)
-          .onChange(of: name) { value in if !branchWasEdited { branch = Self.newBranch(value) } }
+          .onChange(of: name) { value in if !branchWasEdited { branch = Self.newBranch(value, suffix: branchSuffix) } }
       }
       HStack {
         Text("REPOSITORIES").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
@@ -228,43 +215,21 @@ private struct LaneCreationSheet: View {
         Text("CURRENT WORKSPACE BRANCH").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
       }
       ScrollView {
-        VStack(alignment: .leading, spacing: 10) {
-          ForEach(repos) { repo in
-            VStack(alignment: .leading, spacing: 8) {
-              HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 3) {
-                  Label(repo.id, systemImage: "folder").font(.callout.weight(.semibold))
-                  Text(repo.path.path).font(.caption).foregroundStyle(.secondary)
-                    .lineLimit(1).truncationMode(.middle).help(repo.path.path)
-                }
-                Spacer()
-                Label(current[repo.id] ?? "Reading…", systemImage: "arrow.triangle.branch")
-                  .font(.caption.monospaced()).foregroundStyle(.secondary)
-                  .textSelection(.enabled).frame(maxWidth: 250, alignment: .trailing)
-              }
-              if repo.laneMode == .shared {
-                Text("Shared folder · uses the workspace's existing checkout").font(.caption).foregroundStyle(.secondary)
-              } else {
-                HStack {
-                  Text(adopting ? "Base for additional worktrees" : "Start from").font(.caption).foregroundStyle(.secondary)
-                  LaneBaseBranchPicker(path: repo.path, selection: Binding(
-                    get: { bases[repo.id] ?? "HEAD" }, set: { bases[repo.id] = $0 }), label: "Base branch for \(repo.id)")
-                    .accessibilityIdentifier("lane.creation.base.\(repo.id)")
-                  Spacer()
-                }
-              }
-            }.padding(12).background(DeckStyle.surface, in: RoundedRectangle(cornerRadius: 10))
-          }
-          if isolated.isEmpty { Text("Add a Git repository to this workspace and choose Isolate in lanes in workspace settings.").foregroundStyle(.secondary) }
+        if let repositorySnapshot {
+          LaneCreationRepositoryList(snapshot: repositorySnapshot, current: current, adopting: adopting,
+            progress: creationProgress.repositories, selectedBases: bases, bases: $bases).equatable()
+        } else {
+          ProgressView("Reading repositories…").frame(maxWidth: .infinity, alignment: .leading)
         }
       }.frame(minHeight: 140, maxHeight: .infinity)
       DisclosureGroup("Lane options", isExpanded: $advanced) {
         VStack(alignment: .leading, spacing: 10) {
           HStack {
             Text("Git branch").font(.caption)
-            TextField("New branch", text: $branch).textFieldStyle(.roundedBorder)
+            TextField("New branch", text: Binding(get: { branch }, set: {
+              branchWasEdited = true; branch = $0
+            })).textFieldStyle(.roundedBorder)
               .accessibilityIdentifier("lane.creation.branch")
-              .onChange(of: branch) { _ in if nameFocused == false { branchWasEdited = true } }
           }
           Toggle("Use an existing worktree", isOn: $adopting)
             .onChange(of: adopting) { value in runSetup = !value && source.laneSettings?.setup != nil }
@@ -291,18 +256,35 @@ private struct LaneCreationSheet: View {
       if let error { Text(error).font(.callout).foregroundStyle(.red).textSelection(.enabled).fixedSize(horizontal: false, vertical: true) }
       Divider()
       HStack {
-        if working { ProgressView().controlSize(.small); Text("Creating lane…").font(.caption).foregroundStyle(.secondary) }
+        if working {
+          ProgressView().controlSize(.small)
+          VStack(alignment: .leading, spacing: 2) {
+            Text(creationProgress.label).lineLimit(2)
+            if let creationStarted {
+              TimelineView(.periodic(from: creationStarted, by: 1)) { context in
+                Text("Elapsed \(Int(max(0, context.date.timeIntervalSince(creationStarted))))s")
+              }
+            }
+          }.font(.caption).foregroundStyle(.secondary)
+            .accessibilityIdentifier("lane.creation.progress")
+        }
         Spacer()
         Button("Cancel", action: onCancel).buttonStyle(DeckButtonStyle()).keyboardShortcut(.cancelAction)
         Button("Create lane") { submit() }.buttonStyle(DeckButtonStyle(prominent: true)).keyboardShortcut(.defaultAction)
-          .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isolated.isEmpty)
+          .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || repositorySnapshot?.hasIsolatedRepositories != true)
           .accessibilityIdentifier("lane.creation.create")
       }
     }.padding(24).frame(width: 780, height: 700).background(DeckStyle.canvas)
       .disabled(working)
       .task {
         nameFocused = true
-        let labels = try? await StackLaneStore.mapRepositories(repos) { repo in
+        let snapshot = await LaneCreationRepositories.read(source)
+        guard !Task.isCancelled else { return }
+        bases = Dictionary(uniqueKeysWithValues: snapshot.repositories.map { repo in
+          (repo.id, options.request.repositoryRefs[repo.id] ?? options.request.from ?? repo.laneFrom ?? source.laneSettings?.from ?? "HEAD")
+        })
+        repositorySnapshot = snapshot
+        let labels = try? await StackLaneStore.mapRepositories(snapshot.repositories) { repo in
           let branch = (try? await LaneBranchReader.shared.currentBranch(at: repo.path))
             ?? (repo.laneMode == .shared ? "Shared folder" : "Unavailable")
           return (repo.id, branch)
@@ -312,8 +294,9 @@ private struct LaneCreationSheet: View {
   }
 
   private func submit() {
-    guard !working else { return }
+    guard !working, let repositorySnapshot else { return }
     working = true; error = nil
+    creationStarted = Date(); creationProgress = LaneCreationProgressState()
     Task { @MainActor in
       defer { working = false }
       do {
@@ -333,14 +316,15 @@ private struct LaneCreationSheet: View {
         let adoptedRoot = choices.request.adoptPath.flatMap { WorkspaceDiscovery.repositoryRoot(containing: $0) }
         var adoptedCommon: String?
         if let adoptedRoot { adoptedCommon = try await StackLaneStore.git(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: adoptedRoot) }
-        for repo in repos where repo.laneMode == .worktree {
-          guard let root = WorkspaceDiscovery.repositoryRoot(containing: repo.path) else { continue }
+        for repo in repositorySnapshot.repositories where repo.laneMode == .worktree {
+          guard let root = repositorySnapshot.roots[repo.id] else { continue }
           if let adoptedCommon, try await StackLaneStore.git(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: root) == adoptedCommon { continue }
           let ref = bases[repo.id] ?? "HEAD"
           if adopting || source.repo(repo.id) == nil { choices.request.rootRefs[root] = ref }
           else { choices.request.repositoryRefs[repo.id] = ref }
         }
         choices.setup = runSetup; choices.start = startServices
+        choices.progress = { creationProgress.receive($0) }
         try await create(choices)
       } catch { self.error = error.localizedDescription }
     }

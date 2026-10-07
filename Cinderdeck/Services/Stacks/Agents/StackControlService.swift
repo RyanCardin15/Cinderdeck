@@ -363,6 +363,7 @@ final class StackControlService: ObservableObject {
     }
     if let present = laneCreationPresenter, let definition = source.definition {
       return try await present(definition, options) { [self] approved in
+        approved.progress?(.loadingWorkspace)
         await supervisor.reloadDefinitions()
         guard supervisor.definition(source.id) == definition else {
           throw StackControlError(code: "stale_revision", message: "Workspace settings changed while this sheet was open. Cancel and open New lane again to review the new defaults.")
@@ -380,7 +381,7 @@ final class StackControlService: ObservableObject {
     let created: StackLaneCoordinator.Creation
     do {
       created = try await lanes.create(stack: source.id, request: request, actor: actor,
-        setup: options.setup)
+        setup: options.setup, progress: options.progress)
     } catch let refusal as StackLaneStore.StartRevisionRefusal {
       throw StackControlError.invalid(refusal.message)
     }
@@ -406,6 +407,7 @@ final class StackControlService: ObservableObject {
       return respond(.object(["workspace": try JSONValue(encoding: stackSnapshot(supervisor.files.first { $0.id == file.id } ?? file))]))
     }
     let supervisor = supervisor
+    options.progress?(.startingServices)
     let timedOut = await settle(file, params: params) { await supervisor.start(stack: file.id, actor: actor) }
     return respond(await actionResult(file, timedOut: timedOut, waited: params["wait"]?.boolValue ?? true))
   }
