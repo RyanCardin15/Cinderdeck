@@ -1,5 +1,4 @@
-import type { DesktopSshEnvironmentTarget, EnvironmentMachineKind } from "@cinderdeck/contracts";
-import * as Option from "effect/Option";
+import type { EnvironmentMachineKind } from "@cinderdeck/contracts";
 import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
@@ -7,27 +6,15 @@ import type { EnvironmentPresentation } from "~/state/environments";
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 
-export function formatDesktopSshTarget(target: DesktopSshEnvironmentTarget): string {
-  const authority = target.username ? `${target.username}@${target.hostname}` : target.hostname;
-  return target.port ? `${authority}:${target.port}` : authority;
-}
-
 /**
  * How this client reaches a machine, printed first in every environment row so
- * Remote connections, SSH, WSL, and plain remote links are told apart without a legend.
+ * Remote connections, WSL, and plain remote links are told apart without a legend.
  */
 export function environmentTransportLabel(environment: EnvironmentPresentation): string {
   const { entry } = environment;
   if (entry.target._tag === "PrimaryConnectionTarget") return "This machine";
   if (environment.relayManaged) return "Remote connections";
   if (isDesktopLocalConnectionTarget(entry.target)) return "WSL";
-  if (
-    entry.target._tag === "SshConnectionTarget" &&
-    Option.isSome(entry.profile) &&
-    entry.profile.value._tag === "SshConnectionProfile"
-  ) {
-    return `SSH ${formatDesktopSshTarget(entry.profile.value.target)}`;
-  }
   return environment.displayUrl ?? "Remote link";
 }
 

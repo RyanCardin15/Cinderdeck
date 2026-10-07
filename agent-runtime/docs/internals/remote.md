@@ -2,7 +2,7 @@
 
 Each connection joins a client to one environment over HTTP and WebSocket. The
 environment owns providers, execution, files, and durable state. Direct access,
-Tailscale, SSH, and Remote connections change how the client reaches that server; they do
+Tailscale, and Remote connections change how the client reaches that server; they do
 not introduce another execution model. See
 [remote access](../user/remote-access.md) for setup.
 
@@ -43,14 +43,6 @@ Tailscale supplies an endpoint for ordinary pairing, so it needs no separate
 environment type. Authentication remains the environment's responsibility for
 every route. See [environment authentication](./environment-auth.md) .
 
-SSH can launch a server as well as forward a port. Desktop main owns that
-lifecycle because it can spawn SSH and handle authentication prompts. The
-renderer uses the forwarded endpoint through the shared connection runtime.
-[SSH cleanup](../../packages/ssh/src/tunnel.ts) stops a remote server only if the
-launcher owns it; a server it discovered already running must survive a client
-disconnect. Reconnection restores the forward before opening the application
-transport.
-
 Remote servers can outlive several client releases. Clients must use advertised
 capabilities and handle their absence, rather than assume their own version
 describes the server. Process replacement belongs to the launcher's
@@ -64,7 +56,7 @@ Desktop normally launches its own primary server, but the desktop setting `local
 no local state is deleted. On the next start the main process skips port selection, server exposure,
 and the primary and WSL backends, and opens the window right away. The renderer sees this through
 `desktopBridge.getLocalEnvironmentEnabled()`: `readPrimaryEnvironmentTarget` returns null, so primary
-auth and platform-managed discovery are skipped and only saved environments (pairing, relay, SSH)
+auth and platform-managed discovery are skipped and only saved environments (pairing, relay)
 connect. This is possible because the desktop renderer is not served by the backend: the `t3code://`
 scheme serves the bundled client from disk (Vite in development) and API traffic always goes to the
 environment's own URL.

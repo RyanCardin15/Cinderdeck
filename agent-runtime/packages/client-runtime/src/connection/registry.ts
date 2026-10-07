@@ -12,13 +12,11 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 
-import * as ClientCapabilities from "../platform/capabilities.ts";
 import {
   type ConnectionCatalogEntry,
   type ConnectionRegistration,
   type PlatformConnectionRegistration,
   type PrimaryConnectionRegistration,
-  SshConnectionProfile,
   connectionRegistrationCatalogEntry,
 } from "./catalog.ts";
 import * as ConnectionCredentialStore from "./credentialStore.ts";
@@ -39,8 +37,6 @@ import {
   GitHubRoutingPermissions,
   gitHubRoutingConnectionKey,
 } from "./githubRoutingPermissions.ts";
-
-const isSshConnectionProfile = Schema.is(SshConnectionProfile);
 
 function unsupportedState(
   entry: ConnectionCatalogEntry,
@@ -172,7 +168,6 @@ export const make = Effect.gen(function* () {
   const connectivity = yield* Connectivity.Connectivity;
   const driver = yield* ConnectionDriver.ConnectionDriver;
   const wakeups = yield* ConnectionWakeups.ConnectionWakeups;
-  const ssh = yield* ClientCapabilities.SshEnvironmentGateway;
   const persistedTargets = yield* storage.list;
   const disabledEnvironmentIds = new Set(yield* storage.listDisabled);
   const initialEntries = new Map(
@@ -180,7 +175,7 @@ export const make = Effect.gen(function* () {
       persistedTargets,
       Effect.fn("EnvironmentRegistry.loadCatalogEntry")(function* (target) {
         const profile =
-          target._tag === "BearerConnectionTarget" || target._tag === "SshConnectionTarget"
+          target._tag === "BearerConnectionTarget"
             ? yield* profiles.get(target.connectionId)
             : Option.none();
         return [
@@ -675,10 +670,6 @@ export const make = Effect.gen(function* () {
           });
         }
         const target = (yield* getEntry(environmentId)).target;
-        const profile =
-          target._tag === "BearerConnectionTarget" || target._tag === "SshConnectionTarget"
-            ? yield* profiles.get(target.connectionId)
-            : Option.none();
 
         yield* githubRoutingPermissions.forget(environmentId);
         yield* registrations.remove(target);
@@ -707,22 +698,6 @@ export const make = Effect.gen(function* () {
           ],
           { concurrency: "unbounded", discard: true },
         );
-
-        if (
-          target._tag === "SshConnectionTarget" &&
-          Option.isSome(profile) &&
-          isSshConnectionProfile(profile.value)
-        ) {
-          yield* ssh.disconnect(profile.value.target).pipe(
-            Effect.tapError((error) =>
-              Effect.logWarning("Could not disconnect the managed SSH environment.", {
-                environmentId,
-                error,
-              }),
-            ),
-            Effect.ignore,
-          );
-        }
       }),
     );
   });
@@ -795,24 +770,6 @@ export const make = Effect.gen(function* () {
           yield* enabled ? lease.supervisor.connect : lease.supervisor.disconnect;
         } else if (enabled) {
           yield* createServiceScope(next);
-        }
-        // The supervisor only owns the RPC session. A managed SSH backend and
-        // its tunnel outlive it, so switching off tears those down as well.
-        if (
-          !enabled &&
-          entry.target._tag === "SshConnectionTarget" &&
-          Option.isSome(entry.profile) &&
-          isSshConnectionProfile(entry.profile.value)
-        ) {
-          yield* ssh.disconnect(entry.profile.value.target).pipe(
-            Effect.tapError((error) =>
-              Effect.logWarning("Could not disconnect the switched-off SSH environment.", {
-                environmentId,
-                error,
-              }),
-            ),
-            Effect.ignore,
-          );
         }
       }),
     );

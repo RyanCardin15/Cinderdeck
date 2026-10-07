@@ -1,5 +1,3 @@
-import * as NodeCrypto from "node:crypto";
-
 import type { DesktopSshEnvironmentTarget } from "@cinderdeck/contracts";
 import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
 import * as Duration from "effect/Duration";
@@ -68,17 +66,6 @@ export function parseSshResolveOutput(alias: string, stdout: string): DesktopSsh
   };
 }
 
-export function targetConnectionKey(target: DesktopSshEnvironmentTarget): string {
-  return `${target.alias}\u0000${target.hostname}\u0000${target.username ?? ""}\u0000${target.port ?? ""}`;
-}
-
-export function remoteStateKey(target: DesktopSshEnvironmentTarget): string {
-  return NodeCrypto.createHash("sha256")
-    .update(targetConnectionKey(target))
-    .digest("hex")
-    .slice(0, 16);
-}
-
 function buildSshHostSpec(target: DesktopSshEnvironmentTarget): string {
   const destination = target.alias.trim() || target.hostname.trim();
   if (destination.length === 0) {
@@ -87,7 +74,7 @@ function buildSshHostSpec(target: DesktopSshEnvironmentTarget): string {
   return target.username ? `${target.username}@${destination}` : destination;
 }
 
-export const buildSshHostSpecEffect = (
+const buildSshHostSpecEffect = (
   target: DesktopSshEnvironmentTarget,
 ): Effect.Effect<string, SshInvalidTargetError> =>
   Effect.try({
@@ -121,9 +108,7 @@ export function getLastNonEmptyOutputLine(stdout: string): string | null {
   );
 }
 
-export const collectProcessOutput = <E>(
-  stream: Stream.Stream<Uint8Array, E>,
-): Effect.Effect<string, E> =>
+const collectProcessOutput = <E>(stream: Stream.Stream<Uint8Array, E>): Effect.Effect<string, E> =>
   stream.pipe(
     Stream.decodeText(),
     Stream.runFold(
@@ -320,45 +305,6 @@ export const runSshCommand = Effect.fn("ssh/command.runSshCommand")(function* (
             });
           }),
       }),
-    ),
-  );
-});
-
-export const resolveSshTarget = Effect.fn("ssh/command.resolveSshTarget")(function* (
-  alias: string,
-): Effect.fn.Return<
-  DesktopSshEnvironmentTarget,
-  SshCommandError | SshInvalidTargetError,
-  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path
-> {
-  const trimmedAlias = alias.trim();
-  if (trimmedAlias.length === 0) {
-    return yield* new SshInvalidTargetError({ message: "SSH host alias is required." });
-  }
-
-  yield* Effect.logDebug("ssh.target.resolve.start", { alias: trimmedAlias });
-  return yield* runSshCommand(
-    {
-      alias: trimmedAlias,
-      hostname: trimmedAlias,
-      username: null,
-      port: null,
-    },
-    { preHostArgs: ["-G"] },
-  ).pipe(
-    Effect.map((result) => parseSshResolveOutput(trimmedAlias, result.stdout)),
-    Effect.tap((target) =>
-      Effect.logDebug("ssh.target.resolve.succeeded", sshTargetLogFields(target)),
-    ),
-    Effect.catch((cause) =>
-      Effect.logDebug("ssh.target.resolve.fallback", { alias: trimmedAlias, cause }).pipe(
-        Effect.as({
-          alias: trimmedAlias,
-          hostname: trimmedAlias,
-          username: null,
-          port: null,
-        }),
-      ),
     ),
   );
 });

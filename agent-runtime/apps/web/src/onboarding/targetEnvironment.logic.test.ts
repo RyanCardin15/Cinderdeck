@@ -2,7 +2,6 @@ import {
   BearerConnectionTarget,
   PrimaryConnectionTarget,
   RelayConnectionTarget,
-  SshConnectionTarget,
 } from "@cinderdeck/client-runtime/connection";
 import { EnvironmentId } from "@cinderdeck/contracts";
 import { describe, expect, it } from "vite-plus/test";
@@ -61,19 +60,6 @@ const pairedRemote = {
     }),
   },
   label: "Direct computer",
-} as const;
-
-const sshEnvironment = {
-  environmentId: EnvironmentId.make("ssh-remote"),
-  connection: { phase: "connected" },
-  entry: {
-    target: new SshConnectionTarget({
-      environmentId: EnvironmentId.make("ssh-remote"),
-      label: "SSH computer",
-      connectionId: "ssh-remote",
-    }),
-  },
-  label: "SSH computer",
 } as const;
 
 const desktopLocalEnvironment = {
@@ -160,17 +146,11 @@ describe("resolveOnboardingTargetEnvironment", () => {
     ).toBe(newerRelay);
   });
 
-  it("ignores direct, SSH, and desktop-managed connections in Connect mode", () => {
+  it("ignores direct and desktop-managed connections in Connect mode", () => {
     expect(
       resolveOnboardingTargetEnvironment({
         mode: "connect",
-        environments: [
-          primaryEnvironment,
-          olderRelay,
-          pairedRemote,
-          sshEnvironment,
-          desktopLocalEnvironment,
-        ],
+        environments: [primaryEnvironment, olderRelay, pairedRemote, desktopLocalEnvironment],
         primaryEnvironment,
         pairedEnvironmentId: null,
       }),
@@ -181,7 +161,7 @@ describe("resolveOnboardingTargetEnvironment", () => {
     expect(
       resolveOnboardingTargetEnvironment({
         mode: "connect",
-        environments: [primaryEnvironment, pairedRemote, sshEnvironment, desktopLocalEnvironment],
+        environments: [primaryEnvironment, pairedRemote, desktopLocalEnvironment],
         primaryEnvironment,
         pairedEnvironmentId: null,
       }),
@@ -203,9 +183,7 @@ describe("resolveOnboardingTargetEnvironment", () => {
 describe("isOnboardingRelayEnvironment", () => {
   it("includes only Remote connections relay targets", () => {
     expect(
-      [olderRelay, pairedRemote, sshEnvironment, desktopLocalEnvironment].filter(
-        isOnboardingRelayEnvironment,
-      ),
+      [olderRelay, pairedRemote, desktopLocalEnvironment].filter(isOnboardingRelayEnvironment),
     ).toEqual([olderRelay]);
   });
 });

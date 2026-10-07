@@ -10,15 +10,12 @@ import {
   BearerConnectionProfile,
   BearerConnectionRegistration,
   RelayConnectionRegistration,
-  SshConnectionProfile,
-  SshConnectionRegistration,
 } from "../connection/catalog.ts";
 import {
   BearerConnectionTarget,
   ConnectionTransientError,
   PrimaryConnectionTarget,
   RelayConnectionTarget,
-  SshConnectionTarget,
 } from "../connection/model.ts";
 import {
   GitHubRoutingPermissions,
@@ -129,7 +126,7 @@ describe("ConnectionCatalogDocument", () => {
     }),
   );
 
-  it.effect("requires explicit trust for primary, relay, and SSH connections independently", () =>
+  it.effect("requires explicit trust for primary and relay connections independently", () =>
     Effect.gen(function* () {
       const permissions = yield* makeGitHubRoutingPermissions({
         read: Effect.succeed([]),
@@ -147,22 +144,6 @@ describe("ConnectionCatalogDocument", () => {
           enabled: true,
         },
         { target: RELAY_TARGET, profile: Option.none(), enabled: true },
-        {
-          enabled: true,
-          target: new SshConnectionTarget({
-            environmentId: ENVIRONMENT_ID,
-            label: "SSH",
-            connectionId: "ssh-1",
-          }),
-          profile: Option.some(
-            new SshConnectionProfile({
-              environmentId: ENVIRONMENT_ID,
-              label: "SSH",
-              connectionId: "ssh-1",
-              target: { alias: "work", hostname: "work.example.test", username: "maria", port: 22 },
-            }),
-          ),
-        },
       ];
       for (const entry of entries) {
         expect(yield* permissions.get(entry)).toBe("off");
@@ -385,30 +366,33 @@ describe("ConnectionCatalogDocument", () => {
     expect(removeConnectionFromCatalog(disabled, BEARER_TARGET).disabledEnvironmentIds).toEqual([]);
   });
 
-  it("persists the normalized SSH profile beside its target", () => {
-    const target = new SshConnectionTarget({
-      environmentId: ENVIRONMENT_ID,
-      label: "SSH",
-      connectionId: "ssh-1",
+  it("drops saved SSH environments, which are no longer supported, and keeps other records", () => {
+    const decoded = decodeCatalogDocument({
+      schemaVersion: 1,
+      targets: [
+        {
+          _tag: "SshConnectionTarget",
+          environmentId: "environment-ssh",
+          label: "SSH",
+          connectionId: "ssh-1",
+        },
+        Schema.encodeSync(BearerConnectionTarget)(BEARER_TARGET),
+      ],
+      profiles: [
+        {
+          _tag: "SshConnectionProfile",
+          environmentId: "environment-ssh",
+          label: "SSH",
+          connectionId: "ssh-1",
+          target: { alias: "devbox", hostname: "devbox.example.test", username: null, port: 22 },
+        },
+        Schema.encodeSync(BearerConnectionProfile)(BEARER_PROFILE),
+      ],
+      credentials: [],
+      remoteDpopTokens: [],
     });
-    const profile = new SshConnectionProfile({
-      connectionId: target.connectionId,
-      environmentId: target.environmentId,
-      label: target.label,
-      target: {
-        alias: "devbox",
-        hostname: "devbox.example.test",
-        username: "developer",
-        port: 22,
-      },
-    });
-    const document = registerConnectionInCatalog(
-      EMPTY_CONNECTION_CATALOG_DOCUMENT,
-      new SshConnectionRegistration({ target, profile }),
-    );
 
-    expect(document.targets).toEqual([target]);
-    expect(document.profiles).toEqual([profile]);
-    expect(document.credentials).toEqual([]);
+    expect(decoded.targets).toEqual([BEARER_TARGET]);
+    expect(decoded.profiles).toEqual([BEARER_PROFILE]);
   });
 });

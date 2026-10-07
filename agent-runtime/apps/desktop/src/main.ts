@@ -11,14 +11,11 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeOS from "node:os";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 
 import * as Electron from "electron";
 
 import * as NetService from "@cinderdeck/shared/Net";
 import { HostProcessArchitecture, HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
-import type { RemoteT3RunnerOptions } from "@cinderdeck/ssh/tunnel";
-import serverPackageJson from "../../server/package.json" with { type: "json" };
 
 import * as DesktopIpc from "./ipc/DesktopIpc.ts";
 import * as ElectronApp from "./electron/ElectronApp.ts";
@@ -55,8 +52,6 @@ import * as DesktopAppSettings from "./settings/DesktopAppSettings.ts";
 import * as DesktopPreReadyFileSystem from "./app/DesktopPreReadyFileSystem.ts";
 import * as DesktopPreReadyPlatform from "./app/DesktopPreReadyPlatform.ts";
 import * as DesktopShellEnvironment from "./shell/DesktopShellEnvironment.ts";
-import * as DesktopSshEnvironment from "./ssh/DesktopSshEnvironment.ts";
-import * as DesktopSshPasswordPrompts from "./ssh/DesktopSshPasswordPrompts.ts";
 import * as DesktopState from "./app/DesktopState.ts";
 import * as DesktopTelemetryPublisher from "./telemetry/DesktopTelemetryPublisher.ts";
 import * as DesktopUpdates from "./updates/DesktopUpdates.ts";
@@ -87,31 +82,6 @@ const desktopEnvironmentLayer = Layer.unwrap(
   }),
 );
 
-// The remote runs the exact release this app is on, from its self-contained
-// archive, so it needs neither Node nor npm. Development points the remote at
-// a source checkout instead so the two sides can be iterated together.
-const resolveDesktopSshCliRunner = (
-  environment: DesktopEnvironment.DesktopEnvironment["Service"],
-): RemoteT3RunnerOptions => {
-  const devRemoteEntryPath = Option.getOrUndefined(environment.devRemoteT3ServerEntryPath);
-  if (environment.isDevelopment && devRemoteEntryPath !== undefined) {
-    return {
-      nodeScriptPath: devRemoteEntryPath,
-      nodeEngineRange: serverPackageJson.engines.node,
-    };
-  }
-  return { archiveVersion: environment.appVersion };
-};
-
-const desktopSshEnvironmentLayer = Layer.unwrap(
-  Effect.gen(function* () {
-    const environment = yield* DesktopEnvironment.DesktopEnvironment;
-    return DesktopSshEnvironment.layer({
-      resolveCliRunner: Effect.succeed(resolveDesktopSshCliRunner(environment)),
-    });
-  }),
-);
-
 const electronLayer = Layer.mergeAll(
   ElectronApp.layer,
   ElectronDialog.layer,
@@ -136,10 +106,6 @@ const desktopFoundationLayer = Layer.mergeAll(
   DesktopAssets.layer,
   DesktopObservability.layer,
 ).pipe(Layer.provideMerge(desktopEnvironmentLayer));
-
-const desktopSshLayer = desktopSshEnvironmentLayer.pipe(
-  Layer.provideMerge(DesktopSshPasswordPrompts.layer()),
-);
 
 const desktopServerExposureLayer = DesktopServerExposure.layer.pipe(
   Layer.provideMerge(DesktopNetworkInterfaces.layer),
@@ -198,7 +164,6 @@ const desktopApplicationLayer = Layer.mergeAll(
   DesktopApplicationMenu.layer,
   DesktopLinuxUrlHandler.layer,
   DesktopShellEnvironment.layer,
-  desktopSshLayer,
 ).pipe(
   Layer.provideMerge(desktopSnapShotLayer),
   Layer.provideMerge(DesktopUpdates.layer),

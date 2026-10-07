@@ -1,4 +1,4 @@
-import { EnvironmentId } from "@cinderdeck/contracts";
+import { EnvironmentId, ForwardCompatibleArray } from "@cinderdeck/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -19,8 +19,10 @@ export type StoredConnectionCredential = typeof StoredConnectionCredential.Type;
 
 export const ConnectionCatalogDocument = Schema.Struct({
   schemaVersion: Schema.Literal(1),
-  targets: Schema.Array(PersistedConnectionTarget),
-  profiles: Schema.Array(ConnectionProfile),
+  // Entries this build cannot decode (such as the removed SSH environments)
+  // are dropped rather than failing the whole catalog.
+  targets: ForwardCompatibleArray(PersistedConnectionTarget),
+  profiles: ForwardCompatibleArray(ConnectionProfile),
   credentials: Schema.Array(StoredConnectionCredential),
   remoteDpopTokens: Schema.Array(TokenStore.RemoteDpopAccessToken),
   githubRoutingPermissions: Schema.optionalKey(Schema.Array(StoredGitHubRoutingPermission)),
@@ -65,7 +67,6 @@ function connectionIdOf(target: ConnectionTarget): string | null {
     case "RelayConnectionTarget":
       return null;
     case "BearerConnectionTarget":
-    case "SshConnectionTarget":
       return target.connectionId;
   }
 }
@@ -138,15 +139,6 @@ export function registerConnectionInCatalog(
           connectionId: registration.target.connectionId,
           credential: registration.credential,
         }),
-      };
-    case "SshConnectionRegistration":
-      return {
-        ...next,
-        profiles: replaceCatalogValue(
-          next.profiles,
-          (value) => value.connectionId,
-          registration.profile,
-        ),
       };
   }
 }

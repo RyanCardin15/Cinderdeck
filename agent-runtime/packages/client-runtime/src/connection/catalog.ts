@@ -1,4 +1,4 @@
-import { DesktopSshEnvironmentTargetSchema, EnvironmentId } from "@cinderdeck/contracts";
+import { EnvironmentId } from "@cinderdeck/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
@@ -6,7 +6,6 @@ import {
   BearerConnectionTarget,
   PrimaryConnectionTarget,
   RelayConnectionTarget,
-  SshConnectionTarget,
   type ConnectionTarget,
 } from "./model.ts";
 
@@ -25,15 +24,7 @@ export class BearerConnectionProfile extends Schema.TaggedClass<BearerConnection
   },
 ) {}
 
-export class SshConnectionProfile extends Schema.TaggedClass<SshConnectionProfile>()(
-  "SshConnectionProfile",
-  {
-    ...ConnectionProfileBase,
-    target: DesktopSshEnvironmentTargetSchema,
-  },
-) {}
-
-export const ConnectionProfile = Schema.Union([BearerConnectionProfile, SshConnectionProfile]);
+export const ConnectionProfile = Schema.Union([BearerConnectionProfile]);
 export type ConnectionProfile = typeof ConnectionProfile.Type;
 
 export interface ConnectionCatalogEntry {
@@ -80,18 +71,9 @@ export class BearerConnectionRegistration extends Schema.TaggedClass<BearerConne
   },
 ) {}
 
-export class SshConnectionRegistration extends Schema.TaggedClass<SshConnectionRegistration>()(
-  "SshConnectionRegistration",
-  {
-    target: SshConnectionTarget,
-    profile: SshConnectionProfile,
-  },
-) {}
-
 export const ConnectionRegistration = Schema.Union([
   RelayConnectionRegistration,
   BearerConnectionRegistration,
-  SshConnectionRegistration,
 ]);
 export type ConnectionRegistration = typeof ConnectionRegistration.Type;
 
@@ -122,7 +104,6 @@ export function connectionRegistrationCatalogEntry(
         enabled: true,
       };
     case "BearerConnectionRegistration":
-    case "SshConnectionRegistration":
       return {
         target: registration.target,
         profile: Option.some(registration.profile),

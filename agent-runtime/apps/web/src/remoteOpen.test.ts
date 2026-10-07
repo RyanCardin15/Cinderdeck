@@ -2,7 +2,6 @@ import {
   BearerConnectionTarget,
   PrimaryConnectionTarget,
   RelayConnectionTarget,
-  SshConnectionTarget,
 } from "@cinderdeck/client-runtime/connection";
 import { buildRemoteOpenUrl, EnvironmentId } from "@cinderdeck/contracts";
 import { describe, expect, it } from "vite-plus/test";
@@ -29,7 +28,6 @@ describe("resolveRemoteOpenState", () => {
     expect(
       resolveRemoteOpenState({
         target: primaryTarget("http://127.0.0.1:8000"),
-        sshAlias: null,
         isDesktopRenderer: false,
         remoteOpenTargets: TAILSCALE_TARGETS,
       }),
@@ -40,7 +38,6 @@ describe("resolveRemoteOpenState", () => {
     expect(
       resolveRemoteOpenState({
         target: primaryTarget("https://sol.tail1234.ts.net"),
-        sshAlias: null,
         isDesktopRenderer: false,
         remoteOpenTargets: TAILSCALE_TARGETS,
       }),
@@ -56,7 +53,6 @@ describe("resolveRemoteOpenState", () => {
     expect(
       resolveRemoteOpenState({
         target: primaryTarget("http://172.29.112.1:14369"),
-        sshAlias: null,
         isDesktopRenderer: true,
         remoteOpenTargets: TAILSCALE_TARGETS,
       }),
@@ -71,26 +67,10 @@ describe("resolveRemoteOpenState", () => {
           label: "WSL (Ubuntu)",
           connectionId: "local:wsl-1",
         }),
-        sshAlias: null,
         isDesktopRenderer: false,
         remoteOpenTargets: TAILSCALE_TARGETS,
       }),
     ).toEqual({ mode: "local-exec" });
-  });
-
-  it("prefers the desktop SSH alias over server-advertised hosts", () => {
-    expect(
-      resolveRemoteOpenState({
-        target: new SshConnectionTarget({
-          environmentId,
-          label: "sol",
-          connectionId: "ssh-1",
-        }),
-        sshAlias: "sol",
-        isDesktopRenderer: true,
-        remoteOpenTargets: TAILSCALE_TARGETS,
-      }),
-    ).toEqual({ mode: "remote-links", host: { kind: "ssh-alias", host: "sol" } });
   });
 
   it("reports unavailable when a remote environment advertises no hosts", () => {
@@ -98,7 +78,6 @@ describe("resolveRemoteOpenState", () => {
       expect(
         resolveRemoteOpenState({
           target: new RelayConnectionTarget({ environmentId, label: "sol" }),
-          sshAlias: null,
           isDesktopRenderer: false,
           remoteOpenTargets,
         }),
@@ -110,7 +89,6 @@ describe("resolveRemoteOpenState", () => {
     expect(
       resolveRemoteOpenState({
         target: null,
-        sshAlias: null,
         isDesktopRenderer: false,
         remoteOpenTargets: undefined,
       }),

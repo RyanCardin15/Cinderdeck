@@ -172,26 +172,6 @@ const capabilitiesLayer = Layer.effectContext(
           scopes: AuthStandardClientScopes,
         }),
       ),
-      Context.add(
-        ClientCapabilities.SshEnvironmentGateway,
-        ClientCapabilities.SshEnvironmentGateway.of({
-          provision: () =>
-            Effect.fail(
-              new ConnectionBlockedError({
-                reason: "unsupported",
-                detail: "SSH environments are only available in the desktop app.",
-              }),
-            ),
-          prepare: () =>
-            Effect.fail(
-              new ConnectionBlockedError({
-                reason: "unsupported",
-                detail: "SSH environments are only available in the desktop app.",
-              }),
-            ),
-          disconnect: () => Effect.void,
-        }),
-      ),
     );
   }),
 );
