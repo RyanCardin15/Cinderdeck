@@ -13,6 +13,29 @@
   font-weight: 650;
   margin: 0 0 8px;
 }
+.embedded {
+  padding: 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+  container-type: inline-size;
+}
+.embedded > p:first-child {
+  margin-top: 0;
+}
+.embedded > .fields {
+  grid-template-columns: minmax(0, 1fr);
+}
+.embedded select,
+.embedded input {
+  font-size: 12px;
+}
+@container (max-width: 30rem) {
+  .form .fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .panel p {
   color: var(--muted-foreground);
   margin: 8px 0 16px;

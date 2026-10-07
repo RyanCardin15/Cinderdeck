@@ -1,0 +1,135 @@
+.content {
+  container-type: inline-size;
+  display: grid;
+  gap: 12px;
+}
+.intro,
+.notice {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+.intro {
+  padding: 0 16px 4px;
+}
+.notice {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.group,
+.client,
+.options {
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 12px;
+  background: var(--card);
+}
+.clients {
+  display: grid;
+  gap: 12px;
+}
+.client {
+  padding: 16px;
+}
+.client h3 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.setupRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+}
+.setupRow + .setupRow {
+  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+.setupRow > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-width: 0;
+}
+.setupRow > button {
+  flex-shrink: 0;
+}
+.label {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.path {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+.details {
+  margin-top: 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.details summary,
+.options summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: 5px;
+}
+.details summary::-webkit-details-marker,
+.options summary::-webkit-details-marker {
+  display: none;
+}
+.details[open] > summary > svg,
+.options[open] > summary > svg {
+  transform: rotate(90deg);
+}
+.details p {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+.options > summary {
+  padding: 14px 16px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.options[open] > summary {
+  border-bottom: 1px solid var(--border);
+  border-radius: 12px 12px 0 0;
+}
+.skillList {
+  padding: 0 16px 16px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.skillList ul {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+}
+.skillList p {
+  margin: 0;
+}
+.content summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+@container (min-width: 42rem) {
+  .clients {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container (max-width: 24rem) {
+  .setupRow > div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

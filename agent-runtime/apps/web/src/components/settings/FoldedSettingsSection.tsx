@@ -31,9 +31,9 @@ export function FoldedSettingsSection({
   const targetRef = useSettingsSearchTarget<HTMLElement>(id);
   // A search jump lands inside the fold, so open it before the scroll runs.
   const [openedForTarget, setOpenedForTarget] = useState<string | null>(null);
-  if (searchTargetId === id && openedForTarget !== id) {
-    setOpenedForTarget(id);
-    if (!open) setOpen(true);
+  if (searchTargetId !== openedForTarget) {
+    setOpenedForTarget(searchTargetId);
+    if (searchTargetId === id && !open) setOpen(true);
   }
 
   if (headerPlacement === "outside") {

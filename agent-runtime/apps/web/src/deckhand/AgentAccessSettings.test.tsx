@@ -107,3 +107,91 @@ it("explains an older Cinderdeck that cannot set up agents", async () => {
   expect(container.querySelector('[role="status"]')!.textContent).toContain("Update Cinderdeck");
   expect(button("Connect MCP")).toBeUndefined();
 });
+
+it("shows loading without offering an installation based on unknown status", async () => {
+  boundary.command.mockReturnValue(new Promise(() => {}));
+  await act(async () => root.render(<AgentAccessSettings environmentId={environmentId} />));
+  expect(container.textContent).toContain("Checking agent setup");
+  expect(button("Install CLI")).toBeUndefined();
+});
+
+it("installs skills for the named agent and preserves user-managed copies", async () => {
+  const current = status(true);
+  boundary.command
+    .mockResolvedValueOnce({ _tag: "Success", value: { ok: true, detail: "", status: current } })
+    .mockResolvedValueOnce({
+      _tag: "Success",
+      value: {
+        ok: true,
+        detail: "Kept your copy",
+        status: {
+          ...current,
+          clients: [
+            { ...current.clients[0], skills: { state: "yours", detail: "User-managed skills" } },
+          ],
+        },
+      },
+    });
+  await act(async () => root.render(<AgentAccessSettings environmentId={environmentId} />));
+  await act(async () => button("Install skills")!.click());
+  expect(boundary.command).toHaveBeenLastCalledWith({
+    environmentId,
+    input: { action: "skills", agent: "claude" },
+  });
+  expect(container.textContent).toContain("Your copy");
+  expect(button("Install skills")).toBeUndefined();
+});
+
+it("disables setup when a refresh fails instead of acting on the last observed status", async () => {
+  boundary.command
+    .mockResolvedValueOnce({
+      _tag: "Success",
+      value: { ok: true, detail: "", status: status(false) },
+    })
+    .mockResolvedValueOnce({
+      _tag: "Failure",
+      cause: Cause.fail(new DeckhandRpcError({ reason: "unavailable" })),
+    });
+  await act(async () => root.render(<AgentAccessSettings environmentId={environmentId} />));
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('[aria-label="Refresh MCP and skills status"]')!
+      .click(),
+  );
+  expect(button("Connect MCP")!.disabled).toBe(true);
+  expect(container.textContent).toContain("last observed");
+});
+
+it("drops a previous computer's late setup response when settings switches computers", async () => {
+  let finish!: (value: unknown) => void;
+  boundary.command
+    .mockResolvedValueOnce({
+      _tag: "Success",
+      value: { ok: true, detail: "", status: status(false) },
+    })
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    )
+    .mockResolvedValueOnce({
+      _tag: "Success",
+      value: { ok: true, detail: "", status: status(false) },
+    });
+  await act(async () =>
+    root.render(<AgentAccessSettings key="local" environmentId={environmentId} />),
+  );
+  await act(async () => button("Connect MCP")!.click());
+  await act(async () =>
+    root.render(<AgentAccessSettings key="remote" environmentId={"remote" as EnvironmentId} />),
+  );
+  await act(async () =>
+    finish({
+      _tag: "Success",
+      value: { ok: true, detail: "Old computer connected", status: status(true) },
+    }),
+  );
+  expect(container.textContent).toContain("MCP not set up");
+  expect(boundary.toast).not.toHaveBeenCalled();
+});

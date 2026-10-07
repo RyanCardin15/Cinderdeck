@@ -6,20 +6,17 @@ import type {
 } from "@cinderdeck/contracts/deckhand/rpc";
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
-import { RefreshCwIcon } from "lucide-react";
+import { ChevronRightIcon, RefreshCwIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
 import { toastManager } from "../components/ui/toast";
-import {
-  SettingsRow,
-  SettingsSection,
-  SettingsUnavailableGroup,
-} from "../components/settings/settingsLayout";
+import { SettingsRow, SettingsSection } from "../components/settings/settingsLayout";
 import { useAtomCommand } from "../state/use-atom-command";
 import { agentAccessRequest } from "./agentAccessState";
+import styles from "./agentAccessSettings.module.css";
 
 export const AGENT_ACCESS_SETTINGS_ID = "cinderdeck-agent-access";
 
@@ -61,6 +58,13 @@ export function AgentAccessSettings({ environmentId }: { environmentId: Environm
   const [pending, setPending] = useState<Pending | null>(null);
   const [instructions, setInstructions] = useState(true);
   const busy = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const run = useCallback(
     async (input: AgentAccessInput, key: Pending) => {
@@ -69,6 +73,7 @@ export function AgentAccessSettings({ environmentId }: { environmentId: Environm
       setPending(key);
       try {
         const response = await command({ environmentId, input });
+        if (!mounted.current) return;
         if (response._tag === "Failure") {
           const failure = Option.getOrNull(Cause.findErrorOption(response.cause));
           const unsupported =
@@ -91,7 +96,7 @@ export function AgentAccessSettings({ environmentId }: { environmentId: Environm
         }
       } finally {
         busy.current = false;
-        setPending(null);
+        if (mounted.current) setPending(null);
       }
     },
     [command, environmentId],
@@ -103,7 +108,7 @@ export function AgentAccessSettings({ environmentId }: { environmentId: Environm
     if (environmentId) void run({ action: "status" }, "status");
   }, [environmentId, run]);
 
-  const disabled = pending !== null || status === null;
+  const disabled = pending !== null || status === null || problem !== null || !environmentId;
   const message = !environmentId
     ? "Connect to an execution computer to set up MCP and skills."
     : (problem ?? undefined);
@@ -112,6 +117,7 @@ export function AgentAccessSettings({ environmentId }: { environmentId: Environm
     <SettingsSection
       id={AGENT_ACCESS_SETTINGS_ID}
       title="MCP & skills"
+      variant="plain"
       headerAction={
         environmentId ? (
           <Button
@@ -126,135 +132,186 @@ export function AgentAccessSettings({ environmentId }: { environmentId: Environm
         ) : null
       }
     >
-      <SettingsUnavailableGroup message={message}>
-        <SettingsRow
-          title="Command-line tool"
-          description="The cinderdeck command that MCP clients, the Claude Code mod and scripts run."
-          status={status?.cli.installed ? <code>{status.cli.path}</code> : undefined}
-          control={
-            status?.cli.installed ? (
-              <Badge variant="success">Installed</Badge>
-            ) : (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={disabled}
-                onClick={() => void run({ action: "cli" }, "cli")}
-              >
-                {pending === "cli" ? "Installing…" : "Install"}
-              </Button>
-            )
-          }
-        />
-        {(status?.clients ?? []).map((client) => {
-          const skillsAction = installAction(client.skills);
-          return (
-            <SettingsRow
-              key={client.id}
-              title={client.name}
-              description={
-                client.mcpConfigured
-                  ? `MCP server registered · ${client.skills.detail}`
-                  : `MCP via ${client.mcpLocation} · ${client.skills.detail}`
-              }
-              status={
-                <span className="flex flex-wrap items-center gap-1.5">
-                  {client.mcpConfigured ? (
-                    <Badge variant="success">MCP connected</Badge>
+      <div className={styles.content}>
+        <p className={styles.intro}>
+          Let external coding agents use your workspaces, logs and recordings through MCP. Install
+          skills to teach them how to use those tools.
+        </p>
+        {message ? (
+          <p className={styles.notice} role="status">
+            {message}
+          </p>
+        ) : null}
+        {status && problem ? (
+          <p className={styles.intro}>
+            Setup shown below was last observed. Refresh to check its current state.
+          </p>
+        ) : null}
+        {environmentId && !status && !problem ? (
+          <p className={styles.notice} role="status">
+            Checking agent setup…
+          </p>
+        ) : null}
+        {status ? (
+          <>
+            <div className={styles.group}>
+              <SettingsRow
+                title="Command-line tool"
+                description="Required for MCP connections, scripts and the Claude Code mod."
+                status={
+                  status.cli.installed ? (
+                    <code className={styles.path}>{status.cli.path}</code>
                   ) : (
-                    <Badge variant="outline">MCP not set up</Badge>
-                  )}
-                  {installBadge(client.skills, { missing: "No skills" })}
-                </span>
-              }
-              control={
-                <>
-                  <Button
-                    size="sm"
-                    variant={client.mcpConfigured ? "ghost" : "outline"}
-                    disabled={disabled}
-                    onClick={() =>
-                      void run(
-                        { action: "mcp", agent: client.id, instructions },
-                        `mcp:${client.id}`,
-                      )
-                    }
-                  >
-                    {pending === `mcp:${client.id}`
-                      ? "Connecting…"
-                      : client.mcpConfigured
-                        ? "Reconnect"
-                        : "Connect MCP"}
-                  </Button>
-                  {skillsAction ? (
+                    "Install once on this computer."
+                  )
+                }
+                control={
+                  status.cli.installed ? (
+                    <Badge variant="success">Installed</Badge>
+                  ) : (
                     <Button
                       size="sm"
                       variant="outline"
                       disabled={disabled}
-                      onClick={() =>
-                        void run({ action: "skills", agent: client.id }, `skills:${client.id}`)
-                      }
+                      onClick={() => void run({ action: "cli" }, "cli")}
                     >
-                      {pending === `skills:${client.id}` ? "Installing…" : `${skillsAction} skills`}
+                      {pending === "cli" ? "Installing…" : "Install CLI"}
                     </Button>
-                  ) : null}
-                </>
-              }
-            />
-          );
-        })}
-        {status?.claudeMod ? (
-          <SettingsRow
-            title="Claude Code mod"
-            description="A Cinderdeck status line, a /cinderdeck pane to restart services and read logs, and alerts when a service fails."
-            status={
-              <span className="flex flex-wrap items-center gap-1.5">
-                {installBadge(status.claudeMod, { missing: "Not installed" })}
-                <span>{status.claudeMod.detail}</span>
-              </span>
-            }
-            control={
-              installAction(status.claudeMod) ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={disabled}
-                  onClick={() => void run({ action: "mod" }, "mod")}
-                >
-                  {pending === "mod" ? "Installing…" : installAction(status.claudeMod)}
-                </Button>
-              ) : null
-            }
-          />
+                  )
+                }
+              />
+            </div>
+            <div className={styles.clients}>
+              {status.clients.map((client) => {
+                const skillsAction = installAction(client.skills);
+                return (
+                  <section
+                    key={client.id}
+                    className={styles.client}
+                    aria-label={`${client.name} setup`}
+                  >
+                    <h3>{client.name}</h3>
+                    <div className={styles.setupRow}>
+                      <div>
+                        <span className={styles.label}>MCP connection</span>
+                        <Badge variant={client.mcpConfigured ? "success" : "outline"}>
+                          {client.mcpConfigured ? "MCP connected" : "MCP not set up"}
+                        </Badge>
+                      </div>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        disabled={disabled}
+                        aria-label={`${client.mcpConfigured ? "Reconnect" : "Connect MCP for"} ${client.name}`}
+                        onClick={() =>
+                          void run(
+                            { action: "mcp", agent: client.id, instructions },
+                            `mcp:${client.id}`,
+                          )
+                        }
+                      >
+                        {pending === `mcp:${client.id}`
+                          ? "Connecting…"
+                          : client.mcpConfigured
+                            ? "Reconnect"
+                            : "Connect MCP"}
+                      </Button>
+                    </div>
+                    <div className={styles.setupRow}>
+                      <div>
+                        <span className={styles.label}>Skills</span>
+                        {installBadge(client.skills, { missing: "Not installed" })}
+                      </div>
+                      {skillsAction ? (
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          disabled={disabled}
+                          aria-label={`${skillsAction} skills for ${client.name}`}
+                          onClick={() =>
+                            void run({ action: "skills", agent: client.id }, `skills:${client.id}`)
+                          }
+                        >
+                          {pending === `skills:${client.id}`
+                            ? "Installing…"
+                            : `${skillsAction} skills`}
+                        </Button>
+                      ) : null}
+                    </div>
+                    <details className={styles.details}>
+                      <summary>
+                        <ChevronRightIcon size={13} aria-hidden />
+                        Setup details
+                      </summary>
+                      <p>
+                        MCP: <span className={styles.path}>{client.mcpLocation}</span>
+                      </p>
+                      <p>{client.skills.detail}</p>
+                    </details>
+                  </section>
+                );
+              })}
+            </div>
+            {status.claudeMod ? (
+              <div className={styles.group}>
+                <SettingsRow
+                  title="Claude Code mod"
+                  description="Add a status line, service controls, logs and failure alerts inside Claude Code."
+                  status={
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      {installBadge(status.claudeMod, { missing: "Not installed" })}
+                    </span>
+                  }
+                  control={
+                    installAction(status.claudeMod) ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={disabled}
+                        onClick={() => void run({ action: "mod" }, "mod")}
+                      >
+                        {pending === "mod"
+                          ? "Installing…"
+                          : `${installAction(status.claudeMod)} mod`}
+                      </Button>
+                    ) : null
+                  }
+                />
+              </div>
+            ) : null}
+            <details className={styles.options}>
+              <summary>
+                <ChevronRightIcon size={14} aria-hidden />
+                Setup options &amp; included skills
+              </summary>
+              <SettingsRow
+                title="Usage notes"
+                description="Add Cinderdeck instructions to Codex’s AGENTS.md or Claude Code’s CLAUDE.md when connecting MCP."
+                control={
+                  <Switch
+                    checked={instructions}
+                    disabled={disabled}
+                    aria-label="Add Cinderdeck usage notes when connecting MCP"
+                    onCheckedChange={setInstructions}
+                  />
+                }
+              />
+              <div className={styles.skillList}>
+                <p>Restart your agent after setup. Skills you manage yourself are kept.</p>
+                <ul>
+                  {status.skills.map((skill) => (
+                    <li key={skill.name}>
+                      <code className={styles.path}>{skill.name}</code>
+                      <p>{skill.summary}</p>
+                    </li>
+                  ))}
+                </ul>
+                {status.claudeMod ? <p>{status.claudeMod.detail}</p> : null}
+              </div>
+            </details>
+          </>
         ) : null}
-        <SettingsRow
-          title="Usage notes"
-          description="When connecting Codex or Claude Code, also add Cinderdeck instructions to ~/.codex/AGENTS.md or ~/.claude/CLAUDE.md."
-          control={
-            <Switch
-              checked={instructions}
-              disabled={status === null}
-              aria-label="Add Cinderdeck usage notes when connecting MCP"
-              onCheckedChange={(checked) => setInstructions(checked)}
-            />
-          }
-        />
-        {status && status.skills.length > 0 ? (
-          <SettingsRow
-            title="Bundled skills"
-            description="Installed into each agent's standard skills folder. Copies you manage yourself are never replaced. Restart the agent after changes."
-            status={
-              <ul className="space-y-1">
-                {status.skills.map((skill) => (
-                  <li key={skill.name}>
-                    <code className="text-foreground">{skill.name}</code> · {skill.summary}
-                  </li>
-                ))}
-              </ul>
-            }
-          />
-        ) : null}
-      </SettingsUnavailableGroup>
+      </div>
     </SettingsSection>
   );
 }
