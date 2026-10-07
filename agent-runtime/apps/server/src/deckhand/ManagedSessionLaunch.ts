@@ -989,6 +989,9 @@ const make = Effect.gen(function* () {
               branch: input.branch,
               ...(input.name !== undefined ? { name: input.name } : {}),
               repositoryRefs: input.repositoryRefs,
+              ...(input.repositoryModes !== undefined
+                ? { repositoryModes: input.repositoryModes }
+                : {}),
               ...(record.nativeReviewer ? { reviewer: true } : {}),
               setup: input.setup,
               start: input.start,

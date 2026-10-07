@@ -1,5 +1,11 @@
 import Foundation
 
+/// Per-lane checkout choices; workspace TOML keeps its existing shared/worktree defaults.
+nonisolated enum StackLaneRepositoryMode: String, Codable, Sendable, CaseIterable {
+  case worktree, reference
+  var laneMode: StackRepoLaneMode { self == .worktree ? .worktree : .shared }
+}
+
 nonisolated struct StackLaneInfo: Codable, Equatable, Sendable {
   var sourceStackID: String
   var name: String
@@ -17,6 +23,10 @@ nonisolated struct StackLaneInfo: Codable, Equatable, Sendable {
   var from: String?
   /// Explicit repository start commits, pinned before lane creation.
   var repositoryRefs: [String: String] = [:]
+  /// Checkout choices for this lane, independent of future workspace defaults.
+  var repositoryModes: [String: StackLaneRepositoryMode] = [:]
+  /// Implicit Git roots selected as references in the creation sheet.
+  var referenceRoots: [URL] = []
   /// Set with `[lanes] hosts = true`: `<slug>.<workspace>.localhost`.
   var host: String?
   /// A lane created before lanes followed their source keeps its saved definition until unpinned.
@@ -61,7 +71,7 @@ nonisolated struct StackLaneInfo: Codable, Equatable, Sendable {
 
 extension StackLaneInfo {
   nonisolated enum CodingKeys: String, CodingKey {
-    case sourceStackID, name, owner, createdAt, directory, ports, slug, environment, from, repositoryRefs, host, pinned, adopted
+    case sourceStackID, name, owner, createdAt, directory, ports, slug, environment, from, repositoryRefs, repositoryModes, referenceRoots, host, pinned, adopted
   }
   nonisolated init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -75,6 +85,8 @@ extension StackLaneInfo {
     environment = try c.decodeIfPresent([String: String].self, forKey: .environment) ?? [:]
     from = try c.decodeIfPresent(String.self, forKey: .from)
     repositoryRefs = try c.decodeIfPresent([String: String].self, forKey: .repositoryRefs) ?? [:]
+    repositoryModes = try c.decodeIfPresent([String: StackLaneRepositoryMode].self, forKey: .repositoryModes) ?? [:]
+    referenceRoots = try c.decodeIfPresent([URL].self, forKey: .referenceRoots) ?? []
     host = try c.decodeIfPresent(String.self, forKey: .host)
     pinned = try c.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
     adopted = try c.decodeIfPresent(Bool.self, forKey: .adopted) ?? false
@@ -175,9 +187,11 @@ nonisolated struct StackLaneRequest: Sendable {
   var from: String?
   /// Repository IDs whose new branch must start at this exact revision.
   var repositoryRefs: [String: String] = [:]
+  var repositoryModes: [String: StackLaneRepositoryMode] = [:]
   var environment: [String: String] = [:]
   /// Bases reviewed in the native sheet for implicit repositories used by commands.
   var rootRefs: [URL: String] = [:]
+  var referenceRoots: [URL] = []
   var copy: [String] = []
   /// Adopt an existing worktree instead of creating one for its repository.
   var adoptPath: URL?

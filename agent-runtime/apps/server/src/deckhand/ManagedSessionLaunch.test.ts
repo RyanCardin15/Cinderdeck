@@ -285,6 +285,7 @@ const fixture = Effect.gen(function* () {
             intentInput.reviewerContext ? 1 : 0,
           );
           assert.equal(request.arguments.reviewer, intentInput.reviewerContext ? true : undefined);
+          assert.deepEqual(request.arguments.repositoryModes, intentInput.repositoryModes);
           const approvedBranch =
             mode === "reviewed" ? "codex/reviewed-feature" : String(request.arguments.branch);
           const resource = structuredClone(resources.get("lane")!);
@@ -381,6 +382,27 @@ const creationInput = (key = "create-one") =>
   });
 
 describe("connected lane and session creation", () => {
+  it.live("preserves repository checkout choices through durable managed creation", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture;
+      const native = f.nativeCreation("ready");
+      const layer = serviceLayer.pipe(
+        Layer.provide(f.external((request) => Effect.succeed(accepted(request)), native.hub)),
+      );
+      const chosen = decodeCreationInputSync({
+        ...creationInput("checkout-modes"),
+        repositoryModes: { frontend: "worktree" },
+      });
+      yield* Effect.gen(function* () {
+        const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
+        const created = yield* service.create("actor", chosen);
+        assert.equal(created.state, "accepted");
+        assert.deepEqual(yield* service.create("actor", chosen), created);
+      }).pipe(Effect.provide(layer));
+      assert.equal(native.creations(), 1);
+    }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+
   it.live.each(["ready", "native_shape", "reviewed"] as const)(
     "commits intent before Git, launches returned checkout, and replays requests (%s)",
     (mode) =>

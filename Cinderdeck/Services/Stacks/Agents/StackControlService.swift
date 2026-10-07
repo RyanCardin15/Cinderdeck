@@ -14,7 +14,7 @@ final class StackControlService: ObservableObject {
     return service
   }()
 
-  /// Test instances inject a reviewer or exercise the operation without application UI.
+  /// Used only by the explicit manual creation entry point. Tool requests never present UI.
   var laneCreationPresenter: ((StackDefinition, LaneCreationOptions,
     @escaping @MainActor (LaneCreationOptions) async throws -> JSONValue) async throws -> JSONValue)?
 
@@ -316,18 +316,43 @@ final class StackControlService: ObservableObject {
     return file
   }
 
-  private func createLane(_ params: JSONValue, adopt: Bool, actor: StackActor, operationID: String? = nil) async throws -> JSONValue {
+  /// Manual New lane actions opt into the sheet; socket, CLI and MCP creation execute directly.
+  func presentLaneCreation(params: JSONValue, actor: StackActor = .user) async throws -> JSONValue {
+    try await createLane(params, adopt: false, actor: actor, presentSheet: true)
+  }
+
+  private func createLane(_ params: JSONValue, adopt: Bool, actor: StackActor, operationID: String? = nil,
+    presentSheet: Bool = false) async throws -> JSONValue {
     let source = try workspaceFile(params)
     guard source.lane == nil else { throw StackControlError.invalid("Create lanes from the original workspace, not from lane \(source.name).") }
     var request = StackLaneRequest(branch: params["branch"]?.stringValue ?? (adopt ? params["name"]?.stringValue : nil) ?? "")
     request.name = params["name"]?.stringValue
     request.integrationOperationID = operationID
+    if let modes = params["repositoryModes"] {
+      guard let values = modes.objectValue, values.count <= 64 else {
+        throw StackControlError.invalid("repositoryModes must map repository IDs to worktree or reference")
+      }
+      for (id, value) in values {
+        guard source.definition?.repo(id) != nil, let text = value.stringValue,
+          let mode = StackLaneRepositoryMode(rawValue: text) else {
+          throw StackControlError.invalid("repositoryModes.\(id) must select a workspace repository as worktree or reference")
+        }
+        request.repositoryModes[id] = mode
+      }
+    }
     if adopt {
       let path = params["path"]?.stringValue ?? actor.cwd
       guard let path, !path.isEmpty else { throw StackControlError.invalid("Pass path: the worktree to adopt") }
       request.adoptPath = URL(fileURLWithPath: (path as NSString).expandingTildeInPath).standardizedFileURL
-    } else if request.branch.isEmpty && laneCreationPresenter == nil {
-      throw StackControlError.invalid("Pass a branch name for the new lane.")
+    } else if request.branch.isEmpty && !presentSheet {
+      if request.name == nil {
+        let existing = try StackLaneStore.records(in: supervisor.lanesDirectory)
+          .filter { $0.info.sourceStackID == source.id }.map { $0.info.name }
+        var number = 1
+        while existing.contains(where: { $0.caseInsensitiveCompare("Lane \(number)") == .orderedSame }) { number += 1 }
+        request.name = "Lane \(number)"
+      }
+      request.branch = "codex/" + StackLaneInfo.slug(for: request.name!) + "-" + UUID().uuidString.prefix(6).lowercased()
     }
     if let refs = params["repositoryRefs"] {
       guard !adopt, let values = refs.objectValue, values.count <= 64 else {
@@ -353,7 +378,9 @@ final class StackControlService: ObservableObject {
       // The review launcher already inspected and saved every committed head.
       // Durable integration intake pins those choices; the general lane sheet
       // must not offer to replace them with another branch or revision.
-      let repositories = source.definition?.repos.filter { $0.laneMode == .worktree } ?? []
+      let repositories = source.definition?.repos.filter {
+        (request.repositoryModes[$0.id]?.laneMode ?? $0.laneMode) == .worktree
+      } ?? []
       guard !adopt, operationID != nil, !options.start, !repositories.isEmpty,
         Set(request.repositoryRefs.keys) == Set(repositories.map(\.id)),
         request.repositoryRefs.values.allSatisfy({ $0.range(of: "^[0-9a-f]{40,64}$", options: .regularExpression) != nil }) else {
@@ -361,7 +388,10 @@ final class StackControlService: ObservableObject {
       }
       return try await createApprovedLane(source, options: options, params: params, actor: actor, reviewed: true)
     }
-    if let present = laneCreationPresenter, let definition = source.definition {
+    if presentSheet {
+      guard let present = laneCreationPresenter, let definition = source.definition else {
+        throw StackControlError(code: "unsupported_capability", message: "The lane creation sheet is unavailable")
+      }
       return try await present(definition, options) { [self] approved in
         approved.progress?(.loadingWorkspace)
         await supervisor.reloadDefinitions()

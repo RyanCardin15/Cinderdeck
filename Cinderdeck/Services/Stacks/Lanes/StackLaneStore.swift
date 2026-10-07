@@ -117,6 +117,27 @@ nonisolated enum StackLaneStore {
 
   // MARK: Derivation
 
+  static func applyingRepositoryModes(_ original: StackDefinition, modes: [String: StackLaneRepositoryMode],
+    referenceRoots: [URL]) -> StackDefinition {
+    var source = original
+    source.repos = source.repos.map { repo in
+      var repo = repo
+      if let mode = modes[repo.id] { repo.laneMode = mode.laneMode }
+      if referenceRoots.contains(where: { relative(repo.path, to: $0) != nil }) { repo.laneMode = .shared }
+      return repo
+    }
+    // An explicit reference also excludes commands that discover this same
+    // repository without naming it through `repo`.
+    source.services = source.services.map { service in
+      var service = service
+      if service.laneMode != .off, referenceRoots.contains(where: { relative(service.directory, to: $0) != nil }) {
+        service.laneMode = .shared
+      }
+      return service
+    }
+    return source
+  }
+
   static func portKey(_ service: String, _ port: String = "") -> String { port.isEmpty ? service : service + "." + port }
   static func taskPortKey(_ task: String, _ port: String = "") -> String { "task:" + portKey(task, port) }
 
@@ -155,13 +176,14 @@ nonisolated enum StackLaneStore {
   /// The lane's definition: the current source with folders, ports, modes and lane values applied.
   /// Templates are rendered later, together with every other workspace.
   static func derive(_ record: StackLaneRecord, source: StackDefinition) -> (definition: StackDefinition, issues: [StackDefinitionIssue], missingPorts: [String]) {
+    let source = applyingRepositoryModes(source, modes: record.info.repositoryModes, referenceRoots: record.info.referenceRoots)
     var issues: [StackDefinitionIssue] = []
     let info = record.info
     let trees = record.worktrees
     let ports = info.ports
     let missing = requiredPortKeys(source, worktrees: trees).filter { ports[$0] == nil }
     var definition = StackDefinition(id: record.id, name: source.name + " · " + info.name, file: source.file,
-      root: remap(source.root, worktrees: trees) ?? trees.first?.path ?? info.directory, shell: source.shell,
+      root: remap(source.root, worktrees: trees) ?? trees.first?.path ?? (trees.isEmpty ? source.root : info.directory), shell: source.shell,
       restartOnBranchChange: source.restartOnBranchChange, environment: source.environment, secrets: source.secrets)
     definition.rawEnvironment = source.rawEnvironment
     definition.laneSettings = source.laneSettings
@@ -185,6 +207,12 @@ nonisolated enum StackLaneStore {
         used.insert(id)
         return .init(id: id, path: tree.path)
       }
+    }
+    for root in info.referenceRoots where !definition.repos.contains(where: { relative($0.path, to: root) != nil }) {
+      var id = root.lastPathComponent
+      var suffix = 2
+      while definition.repos.contains(where: { $0.id == id }) { id = "\(root.lastPathComponent)-\(suffix)"; suffix += 1 }
+      definition.repos.append(.init(id: id, path: root, laneMode: .shared))
     }
     var services: [ServiceDefinition] = []
     for original in source.services {
@@ -233,7 +261,8 @@ nonisolated enum StackLaneStore {
     definition.services = services
     definition.tasks = source.tasks.map { original in
       var task = original
-      if original.repo.flatMap(source.repo)?.laneMode != .shared {
+      if original.repo.flatMap(source.repo)?.laneMode != .shared,
+        !info.referenceRoots.contains(where: { relative(original.directory, to: $0) != nil }) {
         task.directory = remap(original.directory, worktrees: trees) ?? original.directory
       }
       if task.repo == nil { task.repo = definition.repos.first { relative(task.directory, to: $0.path) != nil }?.id }
@@ -346,6 +375,33 @@ nonisolated enum StackLaneStore {
     worktreeRoot: URL, occupiedPorts: Set<Int>, progress: StackLaneProgressHandler? = nil) async throws -> Creation {
     await progress?(.checkingRepositories)
     guard source.lane == nil else { throw StackError.message("Create lanes from the original stack, not from another lane.") }
+    guard request.repositoryModes.count <= 64,
+      request.repositoryModes.keys.allSatisfy({ source.repo($0) != nil }) else {
+      throw StackError.message("repositoryModes must select repository IDs in this workspace (at most 64).")
+    }
+    var referenceRoots = request.referenceRoots.map { $0.resolvingSymlinksInPath().standardizedFileURL }
+    let selections = try await mapRepositories(request.repositoryModes.sorted { $0.key < $1.key }) { item in
+      let repo = source.repo(item.key)!
+      let path = repo.path.resolvingSymlinksInPath().standardizedFileURL
+      let gitRoot = await topLevel(repo.path)
+      guard item.value != .worktree || gitRoot != nil else {
+        throw StackError.message("\(item.key) is outside Git. Choose Reference to use its existing folder.")
+      }
+      // A folder already configured as shared may be inside another repository;
+      // preserving that default must not turn the entire outer repo into a reference.
+      let root = item.value == .reference && repo.laneMode == .shared ? path : gitRoot ?? path
+      return (root, item.value)
+    }
+    var selectedRoots: [URL: StackLaneRepositoryMode] = [:]
+    for (root, mode) in selections {
+      if let previous = selectedRoots[root], previous != mode {
+        throw StackError.message("Repository aliases must use the same checkout mode: \(root.path).")
+      }
+      selectedRoots[root] = mode
+      if mode == .reference { referenceRoots.append(root) }
+    }
+    referenceRoots = Array(Set(referenceRoots)).sorted { $0.path < $1.path }
+    let source = applyingRepositoryModes(source, modes: request.repositoryModes, referenceRoots: referenceRoots)
     var warnings: [String] = []
     let existing = try records(in: directory)
     let settings = source.laneSettings
@@ -362,7 +418,7 @@ nonisolated enum StackLaneStore {
       if let repo = task.repo.flatMap(source.repo), repo.laneMode == .shared { continue }
       candidates.append(("tasks.\(task.id)", task.directory))
     }
-    let sharedRoots = source.repos.filter { $0.laneMode == .shared }.map { $0.path.resolvingSymlinksInPath().standardizedFileURL }
+    let sharedRoots = source.repos.filter { $0.laneMode == .shared }.map { $0.path.resolvingSymlinksInPath().standardizedFileURL } + referenceRoots
     let paths = Array(Set(candidates.map { $0.1.resolvingSymlinksInPath().standardizedFileURL }
       .filter { path in !sharedRoots.contains(where: { relative(path, to: $0) != nil }) })).sorted { $0.path < $1.path }
     let metadata = try await mapRepositories(paths) { await repositoryMetadata($0) }
@@ -379,7 +435,7 @@ nonisolated enum StackLaneStore {
     if !outside.isEmpty {
       warnings.append("Outside Git, so shared with the original checkout: " + outside.joined(separator: ", ") + ".")
     }
-    guard !roots.isEmpty || request.adoptPath != nil else { throw StackError.message("A lane needs at least one Git repository.") }
+    guard !roots.isEmpty || !referenceRoots.isEmpty || request.adoptPath != nil else { throw StackError.message("A lane needs at least one repository or reference.") }
     roots.sort { $0.path < $1.path }
     for root in roots where roots.contains(where: { $0 != root && relative(root, to: $0) != nil }) {
       throw StackError.message("Nested repositories are not supported in lanes. Define independent repository roots, or mark the inner one lane = \"shared\".")
@@ -544,6 +600,8 @@ nonisolated enum StackLaneStore {
     var info = StackLaneInfo(sourceStackID: source.id, name: name, owner: owner, createdAt: Date(), directory: laneDirectory,
       ports: ports, slug: slug, environment: request.environment, from: request.from ?? settings?.from)
     info.repositoryRefs = repositoryRefs
+    info.repositoryModes = request.repositoryModes
+    info.referenceRoots = referenceRoots
     info.adopted = worktrees.contains { !$0.managed }
     var record = StackLaneRecord(id: id, info: info, worktrees: worktrees, ready: false)
     record.integrationOperationID = request.integrationOperationID
@@ -681,25 +739,28 @@ nonisolated enum StackLaneStore {
     return slug
   }
 
+  /// Large repositories and checkout hooks get four minutes for each checkout.
+  private static let worktreeCheckoutTimeout: TimeInterval = 240
+
   /// Local branch → check it out. Only on a remote → track it. Otherwise branch from `from` (default HEAD).
   private static func addWorktree(_ tree: StackLaneWorktree, branch: String, from: String?, explicitStart: Bool = false) async throws {
     if explicitStart {
       // -b is the atomic branch-existence guard. Bases were pinned before the
       // journal; querying remotes and resolving the same commit again is waste.
-      _ = try await git(["worktree", "add", "--no-track", "-b", branch, "--", tree.path.path, from ?? "HEAD"], at: tree.source)
+      _ = try await git(["worktree", "add", "--no-track", "-b", branch, "--", tree.path.path, from ?? "HEAD"], at: tree.source, timeout: worktreeCheckoutTimeout)
       return
     }
     let local = try await git(["for-each-ref", "--format=%(refname)", "refs/heads/" + branch], at: tree.source)
       .components(separatedBy: "\n").contains("refs/heads/" + branch)
     if local {
       guard !explicitStart else { throw StackError.message("The new lane branch was created by another operation. Refresh before retrying.") }
-      _ = try await git(["worktree", "add", "--", tree.path.path, branch], at: tree.source)
+      _ = try await git(["worktree", "add", "--", tree.path.path, branch], at: tree.source, timeout: worktreeCheckoutTimeout)
       return
     }
     let remotes = try await git(["for-each-ref", "--format=%(refname:short)", "refs/remotes/*/" + branch], at: tree.source)
       .components(separatedBy: "\n").filter { !$0.isEmpty && !$0.hasSuffix("/HEAD") }
     if !explicitStart, let remote = remotes.first(where: { $0.hasPrefix("origin/") }) ?? (remotes.count == 1 ? remotes.first : nil) {
-      _ = try await git(["worktree", "add", "--track", "-b", branch, "--", tree.path.path, remote], at: tree.source)
+      _ = try await git(["worktree", "add", "--track", "-b", branch, "--", tree.path.path, remote], at: tree.source, timeout: worktreeCheckoutTimeout)
       return
     }
     if !explicitStart, remotes.count > 1 {
@@ -709,7 +770,7 @@ nonisolated enum StackLaneStore {
     guard (try? await git(["rev-parse", "--verify", "--quiet", start + "^{commit}"], at: tree.source)) != nil else {
       throw StackError.message("\(start) does not exist in \(tree.source.path). Fetch it or choose another start point.")
     }
-    _ = try await git(["worktree", "add", "--no-track", "-b", branch, "--", tree.path.path, start], at: tree.source)
+    _ = try await git(["worktree", "add", "--no-track", "-b", branch, "--", tree.path.path, start], at: tree.source, timeout: worktreeCheckoutTimeout)
   }
 
   // MARK: Copy and link

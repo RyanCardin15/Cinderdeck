@@ -122,6 +122,10 @@ final class StackLaneTests: XCTestCase {
 
   func testDurableLifecycleRoutesSetupReleaseAdoptionAndMissingCleanupThroughNativeOwner() async throws {
     try await load()
+    control.laneCreationPresenter = { _, _, _ in
+      XCTFail("Durable tool creation and adoption must not present a sheet")
+      throw StackControlError(code: "cancelled", message: "Unexpected sheet")
+    }
     let source = try String(contentsOf: definitions.appendingPathComponent("shop.toml"))
     try await write(source + """
 
@@ -1055,6 +1059,54 @@ final class StackLaneTests: XCTestCase {
 
   // MARK: Redesigned lanes
 
+  func testToolCreationExecutesRequestedChoicesWithoutPresentingTheManualSheet() async throws {
+    try await load()
+    control.laneCreationPresenter = { _, _, _ in
+      XCTFail("CLI and MCP requests must execute without a modal, including user-attributed calls")
+      throw StackControlError(code: "cancelled", message: "Unexpected sheet")
+    }
+    let result = try await control.handle("lane.create", params: .object([
+      "workspace": .string("shop"), "name": .string("Review context"),
+      "repositoryModes": .object(["app": .string("reference")]),
+      "start": .bool(false), "setup": .bool(false),
+    ]), actor: codex)
+    XCTAssertEqual(result["workspace"]?["lane"]?["name"]?.stringValue, "Review context")
+    XCTAssertNil(result["creationReviewed"])
+    let reference = try XCTUnwrap(StackLaneStore.records(in: supervisor.lanesDirectory).first)
+    XCTAssertEqual(reference.info.repositoryModes, ["app": .reference])
+    XCTAssertTrue(reference.worktrees.isEmpty)
+
+    let named = try await control.handle("lane.create", params: .object([
+      "workspace": .string("shop"), "name": .string("Search polish"),
+      "repositoryRefs": .object(["app": .string("main")]),
+      "start": .bool(false), "setup": .bool(false),
+    ]), actor: .user)
+    let namedID = try XCTUnwrap(named["workspace"]?["id"]?.stringValue)
+    let namedRecord = try XCTUnwrap(StackLaneStore.record(id: namedID, in: supervisor.lanesDirectory))
+    XCTAssertEqual(namedRecord.info.name, "Search polish")
+    XCTAssertTrue(namedRecord.worktrees.first?.branch?.hasPrefix("codex/search-polish-") == true)
+    let head = try await StackLaneStore.git(["rev-parse", "main"], at: repo)
+    XCTAssertEqual(namedRecord.info.repositoryRefs, ["app": head])
+    let primaryBranch = try await StackLaneStore.git(["branch", "--show-current"], at: repo)
+    XCTAssertEqual(primaryBranch, "main")
+
+    for number in 1...2 {
+      let result = try await control.handle("lane.create", params: .object([
+        "workspace": .string("shop"), "start": .bool(false), "setup": .bool(false),
+      ]), actor: codex)
+      let id = try XCTUnwrap(result["workspace"]?["id"]?.stringValue)
+      let record = try XCTUnwrap(StackLaneStore.record(id: id, in: supervisor.lanesDirectory))
+      XCTAssertEqual(record.info.name, "Lane \(number)")
+      XCTAssertTrue(record.worktrees.first?.branch?.hasPrefix("codex/lane-\(number)-") == true)
+    }
+    let receipt = try await durableLane("lane.create", workspace: "shop", arguments: [
+      "branch": .string("codex/managed-direct"), "start": .bool(false), "setup": .bool(false),
+    ])
+    XCTAssertEqual(receipt.state, "succeeded", receipt.error?.localizedDescription ?? "")
+    XCTAssertEqual(try StackLaneStore.records(in: supervisor.lanesDirectory).count, 5,
+      "Durable retries must reuse the lane instead of creating another")
+  }
+
   func testFourRepositoryDefaultsAndOneOffOverridesPinTheCorrectCommits() async throws {
     var source = StackDefinition(id: "suite", name: "Suite", file: definitions.appendingPathComponent("suite.toml"), root: root, shell: "/bin/sh")
     var mainHeads: [String: String] = [:]
@@ -1087,7 +1139,7 @@ final class StackLaneTests: XCTestCase {
     }
   }
 
-  func testAgentCreationReviewsTheProposedNameBeforeEffectsAndCancellationCreatesNothing() async throws {
+  func testManualCreationReviewsTheProposedNameBeforeEffectsAndCancellationCreatesNothing() async throws {
     try await load()
     control.laneCreationPresenter = { source, options, create in
       XCTAssertEqual(source.id, "shop")
@@ -1100,13 +1152,13 @@ final class StackLaneTests: XCTestCase {
       approved.request.repositoryRefs = ["app": "main"]
       return try await create(approved)
     }
-    let result = try await control.handle("lane.create", params: .object(["workspace": .string("shop"), "name": .string("Agent proposal"), "start": .bool(false), "setup": .bool(false)]), actor: codex)
+    let result = try await control.presentLaneCreation(params: .object(["workspace": .string("shop"), "name": .string("Agent proposal"), "start": .bool(false), "setup": .bool(false)]))
     XCTAssertEqual(result["workspace"]?["lane"]?["name"]?.stringValue, "Reviewed name")
     XCTAssertEqual(result["creationReviewed"]?.boolValue, true)
     XCTAssertEqual(result["createdBranch"]?.stringValue, "reviewed")
     control.laneCreationPresenter = { _, _, _ in throw StackControlError(code: "cancelled", message: "Cancelled") }
     do {
-      _ = try await control.handle("lane.create", params: .object(["workspace": .string("shop"), "branch": .string("cancelled")]), actor: codex)
+      _ = try await control.presentLaneCreation(params: .object(["workspace": .string("shop"), "branch": .string("cancelled")]))
       XCTFail("Expected cancellation")
     } catch { XCTAssertEqual((error as? StackControlError)?.code, "cancelled") }
     XCTAssertEqual(try StackLaneStore.records(in: supervisor.lanesDirectory).count, 1)
@@ -1289,6 +1341,138 @@ final class StackLaneTests: XCTestCase {
       XCTAssertEqual(try StackLaneStore.records(in: supervisor.lanesDirectory).count, count)
     }
     try await supervisor.removeLane(id, actor: codex)
+  }
+
+  func testReviewLaneCreatesOnlyOneOfFourWorktreesAndKeepsReferencesAfterReload() async throws {
+    try await load()
+    var source = try XCTUnwrap(supervisor.definition("shop"))
+    var references: [URL] = []
+    for id in ["api", "mobile", "docs"] {
+      let path = root.appendingPathComponent(id)
+      _ = try await StackLaneStore.git(["clone", repo.path, path.path], at: root)
+      references.append(path)
+      source.repos.append(.init(id: id, path: path, laneFrom: "does-not-exist"))
+      source.services.append(.init(id: id, command: "true", repo: id, directory: path, port: 4000 + references.count))
+      source.tasks.append(.init(id: id, name: id, command: "pwd", directory: path))
+    }
+    var request = StackLaneRequest(branch: "review-one")
+    request.repositoryModes = ["app": .worktree, "api": .reference, "mobile": .reference, "docs": .reference]
+    request.repositoryRefs = ["app": "HEAD"]
+    let original = source
+    let record = try await StackLaneStore.create(source: source, request: request, owner: codex,
+      directory: supervisor.lanesDirectory, worktreeRoot: supervisor.worktreeRoot, occupiedPorts: []).record
+    XCTAssertEqual(record.worktrees.count, 1)
+    XCTAssertEqual(source, original, "Per-lane choices must not edit workspace defaults")
+    let saved = try XCTUnwrap(StackLaneStore.record(id: record.id, in: supervisor.lanesDirectory))
+    XCTAssertEqual(saved.info.repositoryModes, request.repositoryModes)
+    let lane = StackLaneStore.derive(saved, source: source)
+    XCTAssertTrue(lane.issues.isEmpty, "Intentional references must not be reported as missing worktrees")
+    XCTAssertEqual(lane.definition.repos.count, 4)
+    XCTAssertEqual(Set(lane.definition.links.map(\.id)), ["api", "mobile", "docs"])
+    for (id, path) in zip(["api", "mobile", "docs"], references) {
+      XCTAssertEqual(lane.definition.repo(id)?.path, path)
+      XCTAssertEqual(lane.definition.repo(id)?.laneMode, .shared)
+      XCTAssertEqual(lane.definition.tasks.first { $0.id == id }?.directory, path)
+      let branches = try await StackLaneStore.git(["branch", "--list", "review-one"], at: path)
+      XCTAssertTrue(branches.isEmpty, "A reference must not get a lane branch")
+      let trees = try await StackLaneStore.checkouts(path)
+      XCTAssertEqual(trees.count, 1)
+    }
+    // Later workspace-default changes do not replace the saved lane choices.
+    source.repos[0].laneMode = .shared
+    XCTAssertNotEqual(StackLaneStore.derive(saved, source: source).definition.repo("app")?.path, repo)
+    _ = try await StackLaneStore.remove(saved, in: supervisor.lanesDirectory, others: [], options: .init())
+    for path in references { XCTAssertTrue(FileManager.default.fileExists(atPath: path.path)) }
+  }
+
+  func testLaneCanOverrideSharedDefaultToWorktreeAndUseImplicitRepositoryAsReference() async throws {
+    try await load()
+    var source = try XCTUnwrap(supervisor.definition("shop"))
+    source.repos[0].laneMode = .shared
+    let implicit = root.appendingPathComponent("implicit")
+    _ = try await StackLaneStore.git(["clone", repo.path, implicit.path], at: root)
+    source.tasks.append(.init(id: "implicit", name: "Implicit", command: "pwd", directory: implicit))
+    var request = StackLaneRequest(branch: "override-shared")
+    request.repositoryModes = ["app": .worktree]
+    request.referenceRoots = [implicit]
+    let record = try await StackLaneStore.create(source: source, request: request, owner: codex,
+      directory: supervisor.lanesDirectory, worktreeRoot: supervisor.worktreeRoot, occupiedPorts: []).record
+    XCTAssertEqual(record.worktrees.count, 1)
+    let lane = StackLaneStore.derive(record, source: source).definition
+    XCTAssertNotEqual(lane.repo("app")?.path, repo)
+    XCTAssertEqual(lane.repo("implicit")?.path, implicit.resolvingSymlinksInPath())
+    XCTAssertEqual(lane.tasks.first { $0.id == "implicit" }?.directory, implicit)
+    _ = try await StackLaneStore.remove(record, in: supervisor.lanesDirectory, others: [], options: .init())
+  }
+
+  func testDurableReferenceOnlyLaneDoesNotCreateBranchesOrWorktrees() async throws {
+    try await load()
+    let receipt = try await durableLane("lane.create", workspace: "shop", arguments: ["branch": .string("context-only"),
+      "repositoryModes": .object(["app": .string("reference")]), "start": .bool(false), "setup": .bool(false)])
+    XCTAssertEqual(receipt.state, "succeeded", receipt.error?.message ?? "")
+    let id = try XCTUnwrap(receipt.result?["workspace"]?["id"]?.stringValue)
+    let record = try XCTUnwrap(StackLaneStore.record(id: id, in: supervisor.lanesDirectory))
+    XCTAssertTrue(record.worktrees.isEmpty)
+    await supervisor.reloadDefinitions()
+    let lane = try XCTUnwrap(supervisor.definition(id))
+    XCTAssertEqual(lane.repo("app")?.path.path, repo.path)
+    XCTAssertEqual(lane.root.path, repo.path)
+    XCTAssertTrue(lane.services.isEmpty)
+    XCTAssertEqual(lane.links.map(\.id), ["api"])
+    let branches = try await StackLaneStore.git(["branch", "--list", "context-only"], at: repo)
+    XCTAssertTrue(branches.isEmpty)
+    try await supervisor.removeLane(id, actor: codex)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: repo.path))
+  }
+
+  func testRepositoryModesRefuseInvalidAliasesAndReferenceStartsBeforeEffects() async throws {
+    try await load()
+    let source = try XCTUnwrap(supervisor.definition("shop"))
+    for modes in [JSONValue.array([]), .object(["app": .string("shared")]), .object(["unknown": .string("reference")]), .object(["app": .bool(true)])] {
+      do {
+        _ = try await control.handle("lane.create", params: .object(["workspace": .string("shop"), "branch": .string("refused"),
+          "repositoryModes": modes, "start": .bool(false), "setup": .bool(false)]), actor: codex)
+        XCTFail("Accepted invalid checkout choices")
+      } catch {}
+    }
+    var request = StackLaneRequest(branch: "refused")
+    request.repositoryModes = ["app": .reference]; request.repositoryRefs = ["app": "HEAD"]
+    do {
+      _ = try await StackLaneStore.create(source: source, request: request, owner: codex,
+        directory: supervisor.lanesDirectory, worktreeRoot: supervisor.worktreeRoot, occupiedPorts: [])
+      XCTFail("Accepted a revision for a reference")
+    } catch { XCTAssertTrue(error is StackLaneStore.StartRevisionRefusal) }
+    var aliases = source
+    aliases.repos.append(.init(id: "alias", path: repo))
+    request.repositoryRefs = [:]; request.repositoryModes = ["app": .worktree, "alias": .reference]
+    do {
+      _ = try await StackLaneStore.create(source: aliases, request: request, owner: codex,
+        directory: supervisor.lanesDirectory, worktreeRoot: supervisor.worktreeRoot, occupiedPorts: [])
+      XCTFail("Accepted conflicting alias modes")
+    } catch { XCTAssertTrue(error.localizedDescription.contains("aliases")) }
+    XCTAssertTrue(try StackLaneStore.records(in: supervisor.lanesDirectory).isEmpty)
+  }
+
+  func testAdoptionCanReferenceOtherRepositoriesWithoutCreatingTheirBranches() async throws {
+    try await load()
+    var source = try XCTUnwrap(supervisor.definition("shop"))
+    let other = root.appendingPathComponent("other")
+    _ = try await StackLaneStore.git(["clone", repo.path, other.path], at: root)
+    source.repos.append(.init(id: "other", path: other))
+    let external = root.appendingPathComponent("external")
+    _ = try await StackLaneStore.git(["worktree", "add", "-b", "adopt-one", external.path], at: repo)
+    var request = StackLaneRequest(branch: "", adoptPath: external)
+    request.repositoryModes = ["app": .worktree, "other": .reference]
+    let record = try await StackLaneStore.create(source: source, request: request, owner: codex,
+      directory: supervisor.lanesDirectory, worktreeRoot: supervisor.worktreeRoot, occupiedPorts: []).record
+    XCTAssertEqual(record.worktrees.count, 1)
+    XCTAssertEqual(record.worktrees.first?.path, external.resolvingSymlinksInPath())
+    XCTAssertEqual(record.worktrees.first?.managed, false)
+    let branches = try await StackLaneStore.git(["branch", "--list", "adopt-one"], at: other)
+    XCTAssertTrue(branches.isEmpty)
+    XCTAssertEqual(StackLaneStore.derive(record, source: source).definition.repo("other")?.path, other)
+    _ = try await StackLaneStore.remove(record, in: supervisor.lanesDirectory, others: [], options: .init())
+    XCTAssertTrue(FileManager.default.fileExists(atPath: external.path))
   }
 
   func testRemoteOnlyBranchIsTrackedAndNewBranchesStartAtFrom() async throws {

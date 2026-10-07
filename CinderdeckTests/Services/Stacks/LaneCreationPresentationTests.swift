@@ -28,6 +28,11 @@ final class LaneCreationPresentationTests: XCTestCase {
     XCTAssertEqual(snapshot.repositories[1].laneMode, .shared)
     XCTAssertEqual(snapshot.roots["api"], explicit.resolvingSymlinksInPath())
     XCTAssertEqual(snapshot.roots["api-2"], implicit.resolvingSymlinksInPath())
+    XCTAssertEqual(snapshot.modes(prefilling: [:]), ["api": .worktree, "shared": .reference, "api-2": .worktree])
+    XCTAssertEqual(snapshot.modes(prefilling: ["api": .reference])["api"], .reference,
+      "Manual checkout choices must preserve the supplied overrides")
+    XCTAssertEqual(snapshot.modes(prefilling: ["shared": .worktree])["shared"], .worktree,
+      "A lane can override a repository's shared workspace default")
 
     try FileManager.default.removeItem(at: implicit.appendingPathComponent(".git"))
     XCTAssertEqual(snapshot.repositories.count, 3, "Editing the sheet uses its existing snapshot")
@@ -107,7 +112,7 @@ final class LaneCreationPresentationTests: XCTestCase {
     do {
       await supervisor.reloadDefinitions()
       await control.workspaceRunner.recover()
-      let result = try await control.handle("lane.create", params: .object(["workspace": .string("progress"), "start": .bool(false)]), actor: .user)
+      let result = try await control.presentLaneCreation(params: .object(["workspace": .string("progress"), "start": .bool(false)]))
       XCTAssertEqual(result["setup"]?["status"]?.stringValue, "succeeded", result["setup"]?["detail"]?.stringValue ?? "No setup detail")
       let lane = try XCTUnwrap(supervisor.definition(result["workspace"]?["id"]?.stringValue ?? ""))
       XCTAssertTrue(FileManager.default.fileExists(atPath: lane.root.appendingPathComponent("setup-finished.txt").path))
@@ -136,5 +141,34 @@ final class LaneCreationPresentationTests: XCTestCase {
     state.receive(.runningSetup("task:prepare"))
     XCTAssertTrue(state.label.contains("task:prepare"))
     XCTAssertEqual(state.repositories[b], "Ready", "Setup does not erase repository progress")
+  }
+
+  func testAllCheckoutRoutesCanFinishBeyondTheFormerSixtySecondTimeout() async throws {
+    let root = try StackTestSupport.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    var source = StackDefinition(id: "slow", name: "Slow", file: root.appendingPathComponent("definitions/slow.toml"), root: root, shell: "/bin/sh")
+    for index in 0..<4 {
+      let repo = root.appendingPathComponent("repo\(index)")
+      _ = try await StackLaneStore.git(["init", "-b", "main", repo.path], at: root)
+      _ = try await StackLaneStore.git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "fixture"], at: repo)
+      if index == 1 { _ = try await StackLaneStore.git(["branch", "slow-checkout"], at: repo) }
+      if index == 2 {
+        _ = try await StackLaneStore.git(["remote", "add", "origin", repo.path], at: repo)
+        _ = try await StackLaneStore.git(["update-ref", "refs/remotes/origin/slow-checkout", "HEAD"], at: repo)
+      }
+      let hook = repo.appendingPathComponent(".git/hooks/post-checkout")
+      try "#!/bin/sh\nsleep 65\nprintf ready > hook-finished.txt\n".write(to: hook, atomically: true, encoding: .utf8)
+      try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: hook.path)
+      source.repos.append(.init(id: "repo\(index)", path: repo))
+    }
+    var request = StackLaneRequest(branch: "slow-checkout")
+    request.repositoryRefs = ["repo3": "main"]
+    let creation = try await StackLaneStore.create(source: source, request: request, owner: .user,
+      directory: root.appendingPathComponent("definitions/.lanes"), worktreeRoot: root.appendingPathComponent("worktrees"), occupiedPorts: [])
+    XCTAssertEqual(creation.record.ready, true)
+    XCTAssertEqual(creation.record.worktrees.count, 4)
+    for tree in creation.record.worktrees {
+      XCTAssertEqual(try String(contentsOf: tree.path.appendingPathComponent("hook-finished.txt"), encoding: .utf8), "ready")
+    }
   }
 }

@@ -113,6 +113,8 @@ env.API_URL = "{{url.api}}"
 
 `{{port.…}}` and `{{url.…}}` fill in each service's port, so the same file also runs branches side by side in [worktree lanes](docs/STACKS.md#parallel-worktree-lanes).
 
+A **lane** groups repository worktrees and primary-checkout references, with its own logs and ports for isolated services. Create a **New worktree** or adopt an **Existing worktree** from the Lanes view, `cinderdeck lane`, or MCP. In the manual creation sheet, choose **New worktree** or **Reference** for each repository. CLI and MCP requests apply those choices directly without a modal; each worktree checkout allows four minutes. References use the primary checkout without creating a branch; choices are saved for this lane and keep workspace defaults for next time. Each lane reserves a block of ten ports starting at 20000, and `{{port.web}}` resolves to the right one everywhere. The **Lane map** shows what every checkout owns, runs, and shares.
+
 Saving a definition reloads it. Starting services is explicit. Git is optional; a service can use `cwd` instead of a repository. Dependencies and runtimes are installed by you, not by importing a stack. [Read the full stack guide](docs/STACKS.md).
 
 ## Terminal and coding agents

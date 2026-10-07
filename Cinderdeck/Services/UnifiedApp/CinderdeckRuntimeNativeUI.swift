@@ -22,8 +22,8 @@ enum CinderdeckRuntimeNativeUI {
       if LaneCreationWindowController.shared.focusIfPresented() { return }
       Task { @MainActor in
         do {
-          _ = try await StackControlService.shared.handle("lane.create",
-            params: .object(["workspace": .string(id), "start": .bool(false)]), actor: .user)
+          _ = try await StackControlService.shared.presentLaneCreation(
+            params: .object(["workspace": .string(id), "start": .bool(false)]))
         } catch {
           if (error as? StackControlError)?.code != "cancelled" {
             let alert = NSAlert(); alert.messageText = "Could not create lane"; alert.informativeText = error.localizedDescription

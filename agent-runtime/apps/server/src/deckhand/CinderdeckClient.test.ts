@@ -582,6 +582,42 @@ describe("same-host Cinderdeck bridge", () => {
         assert.equal((yield* client.submit(connection, input)).state, "succeeded");
         assert.equal(submissions, 1);
         assert.deepEqual(receivedArguments, input.arguments);
+        const withModes = {
+          ...input,
+          arguments: { ...input.arguments, repositoryModes: { app: "worktree", api: "reference" } },
+        };
+        assert.equal(
+          (yield* client.submit(connection, withModes).pipe(Effect.flip)).reason,
+          "unsupported_capability",
+        );
+        assert.equal(submissions, 1);
+        capabilities.push("operations.lane.create.repositoryModes");
+        const modesConnection = yield* client.connect(socketPath, {
+          channel: "development",
+          clientID: "actor",
+        });
+        for (const repositoryModes of [
+          null,
+          [],
+          { app: 42 },
+          { app: "shared" },
+          { "": "reference" },
+          Object.fromEntries(Array.from({ length: 65 }, (_, i) => [`repo-${i}`, "reference"])),
+        ]) {
+          assert.equal(
+            (yield* client
+              .submit(modesConnection, {
+                ...withModes,
+                arguments: { ...withModes.arguments, repositoryModes },
+              })
+              .pipe(Effect.flip)).reason,
+            "invalid_request",
+          );
+          assert.equal(submissions, 1);
+        }
+        assert.equal((yield* client.submit(modesConnection, withModes)).state, "succeeded");
+        assert.equal(submissions, 2);
+        assert.deepEqual(receivedArguments, withModes.arguments);
       }).pipe(Effect.scoped, Effect.provide(TestLayer)),
   );
   it.effect(

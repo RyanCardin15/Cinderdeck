@@ -86,6 +86,20 @@ final class CinderdeckMCPServerTests: XCTestCase {
     ] { XCTAssertThrowsError(try CinderdeckMCPServer.validate(tool, arguments), tool) }
   }
 
+  func testRepositoryModesValidateAndReachCreationAndAdoption() throws {
+    let modes: JSONValue = .object(["app": .string("worktree"), "api": .string("reference")])
+    for tool in ["create_lane", "adopt_lane"] {
+      let arguments: [String: JSONValue] = ["workspace": .string("shop"), "repositoryModes": modes]
+      let request = try AgentToolCLI.request(name: tool, arguments: arguments)
+      XCTAssertEqual(request.1["repositoryModes"], modes)
+      for invalid in [JSONValue.array([]), .object(["app": .string("shared")]), .object(["app": .bool(true)]),
+        .object(Dictionary(uniqueKeysWithValues: (0..<65).map { ("repo-\($0)", .string("reference")) }))] {
+        var bad = arguments; bad["repositoryModes"] = invalid
+        XCTAssertThrowsError(try AgentToolCLI.request(name: tool, arguments: bad))
+      }
+    }
+  }
+
   func testAdoptionAndReleaseAcceptTheOptionsAvailableInTheLaneCLI() throws {
     let adoption: [String: JSONValue] = [
       "workspace": .string("shop"), "path": .string("/tmp/pr-worktree"), "name": .string("review/pr-123"),

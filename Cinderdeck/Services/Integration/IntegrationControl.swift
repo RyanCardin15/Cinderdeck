@@ -43,7 +43,7 @@ nonisolated struct IntegrationHello: Encodable, Sendable {
   let executionHostID: String
   let channel: String
   let runtimeEpoch: String
-  let capabilities = ["github.workspace", "projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.create.reviewer", "operations.lane.adopt", "operations.lane.update", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.contexts", "recordings.library", "runs.library", "runs.detail", "runs.failures", "builds.declared", "linked-work.projection", "linked-work.lane-transfer", "agents.setup"]
+  let capabilities = ["github.workspace", "projection.snapshot", "projection.events", "operations.lane.create", "operations.lane.create.repositoryRefs", "operations.lane.create.repositoryModes", "operations.lane.create.reviewer", "operations.lane.adopt", "operations.lane.update", "operations.lane.setup", "operations.lane.release", "operations.lane.remove", "operations.services", "operations.receipts", "operations.receipts.wait", "checkout.contexts", "recordings.library", "runs.library", "runs.detail", "runs.failures", "builds.declared", "linked-work.projection", "linked-work.lane-transfer", "agents.setup"]
   let maximumFrameBytes = StackControlSocketServer.maximumFrameBytes
   let maximumPageSize = 500
   let maximumWaitMs = 25_000
@@ -203,16 +203,22 @@ extension StackControlService {
     }
     let allowed: Set<String>
     if input.method == "lane.create" {
-      allowed = ["workspace", "branch", "name", "from", "repositoryRefs", "start", "setup", "reviewer"]
+      allowed = ["workspace", "branch", "name", "from", "repositoryRefs", "repositoryModes", "start", "setup", "reviewer"]
       let decoded: IntegrationLaneOperation = try decodeIntegration(input.arguments)
+      guard decoded.repositoryModes.map({ $0.count <= 64 && $0.keys.allSatisfy({ bounded($0, 160) }) }) ?? true else {
+        throw StackControlError.invalid("Invalid repository checkout modes")
+      }
       if let name = decoded.name { try validateLaneName(name) }
       guard decoded.repositoryRefs.map({ $0.count <= 64 && $0.allSatisfy({ bounded($0.key, 160) && bounded($0.value, 200) && !$0.value.hasPrefix("-") && !$0.value.contains("\0") && !$0.value.contains("\n") && !$0.value.contains("\r") }) }) ?? true else {
         throw StackControlError.invalid("Invalid repository start revisions")
       }
       guard bounded(decoded.branch, 200), decoded.from.map({ bounded($0, 200) }) ?? true else { throw StackControlError.invalid("Invalid lane branch or source") }
     } else if input.method == "lane.adopt" {
-      allowed = ["workspace", "path", "name", "from", "start", "setup"]
+      allowed = ["workspace", "path", "name", "from", "repositoryModes", "start", "setup"]
       let decoded: IntegrationLaneAdoption = try decodeIntegration(input.arguments)
+      guard decoded.repositoryModes.map({ $0.count <= 64 && $0.keys.allSatisfy({ bounded($0, 160) }) }) ?? true else {
+        throw StackControlError.invalid("Invalid repository checkout modes")
+      }
       guard bounded(decoded.path, 4096), decoded.path.hasPrefix("/"), !decoded.path.contains("\0"), !decoded.path.contains("\n"),
         decoded.name.map({ bounded($0, 200) }) ?? true,
         decoded.from.map({ bounded($0, 200) }) ?? true else { throw StackControlError.invalid("Adoption requires an absolute worktree path and bounded name/source") }
@@ -343,6 +349,7 @@ nonisolated private struct IntegrationLaneOperation: Decodable {
   let name: String?
   let from: String?
   let repositoryRefs: [String: String]?
+  let repositoryModes: [String: StackLaneRepositoryMode]?
   let start: Bool?
   let setup: Bool?
   let reviewer: Bool?
@@ -360,6 +367,7 @@ nonisolated private struct IntegrationLaneAdoption: Decodable {
   let path: String
   let name: String?
   let from: String?
+  let repositoryModes: [String: StackLaneRepositoryMode]?
   let start: Bool?
   let setup: Bool?
 }

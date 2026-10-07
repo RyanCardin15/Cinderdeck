@@ -45,11 +45,11 @@ struct StackLanesView: View {
       }.frame(height: 280)
       Divider()
       HStack {
-        Text("Create a lane with a name and a base branch for each repository.")
+        Text("Choose a name, worktrees or references, and repository base branches.")
           .font(.callout).foregroundStyle(.secondary)
         Spacer()
         Button("New lane…") { create() }.buttonStyle(DeckButtonStyle(prominent: true))
-          .disabled(working || source?.definition == nil || isolatedRepositories.isEmpty)
+          .disabled(working || source?.definition == nil || (source?.definition?.repos.isEmpty != false && isolatedRepositories.isEmpty))
           .accessibilityIdentifier("stacks.createLane")
       }
       ForEach(warnings, id: \.self) { Text($0).font(.caption).foregroundColor(.orange) }
@@ -232,8 +232,8 @@ struct StackLanesView: View {
     Task {
       defer { working = false }
       do {
-        let result = try await StackControlService.shared.handle("lane.create",
-          params: .object(["workspace": .string(sourceID), "start": .bool(false)]), actor: .user)
+        let result = try await StackControlService.shared.presentLaneCreation(
+          params: .object(["workspace": .string(sourceID), "start": .bool(false)]))
         warnings = result["warnings"]?.stringsValue ?? []
         if result["setup"]?["status"]?.stringValue == "failed" {
           error = "The lane was created, but setup failed. Read its setup run before starting services."

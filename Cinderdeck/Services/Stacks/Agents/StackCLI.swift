@@ -44,8 +44,8 @@ nonisolated enum StackCLI {
     subscript(name: String) -> String? { values[name] }
   }
 
-  private static let valueFlags: Set<String> = ["timeout", "lines", "n", "grep", "note", "ttl", "repo", "as", "session", "port", "pid", "dir", "dirty", "limit", "from", "repo-from", "path", "name", "env", "copy"]
-  private static let listFlags: Set<String> = ["env", "copy", "repo-from"]
+  private static let valueFlags: Set<String> = ["timeout", "lines", "n", "grep", "note", "ttl", "repo", "as", "session", "port", "pid", "dir", "dirty", "limit", "from", "repo-from", "repo-mode", "path", "name", "env", "copy"]
+  private static let listFlags: Set<String> = ["env", "copy", "repo-from", "repo-mode"]
 
   static func parse(_ arguments: [String]) -> Options {
     var options = Options()
@@ -347,12 +347,12 @@ nonisolated enum StackCLI {
     case "create", "adopt":
       let adopting = command == "adopt"
       if adopting {
-        guard (1...2).contains(args.count) else { throw StackControlError.invalid("Usage: cinderdeck lane adopt <workspace> [name] [--path <worktree>] [--setup] [--no-start]") }
+        guard (1...2).contains(args.count) else { throw StackControlError.invalid("Usage: cinderdeck lane adopt <workspace> [name] [--path <worktree>] [--repo-mode <repo>=worktree|reference] [--setup] [--no-start]") }
         params["path"] = .string(options["path"] ?? FileManager.default.currentDirectoryPath)
         if args.count == 2 { params["name"] = .string(args[1]) }
         params["setup"] = .bool(options.has("setup"))
       } else {
-        guard (1...2).contains(args.count) else { throw StackControlError.invalid("Usage: cinderdeck lane create <workspace> [branch] [--name <name>] [--from <ref>] [--repo-from <repo>=<ref>] [--env KEY=VALUE] [--copy <pattern>] [--no-setup] [--no-start] [--no-wait]; opens the lane creation sheet") }
+        guard (1...2).contains(args.count) else { throw StackControlError.invalid("Usage: cinderdeck lane create <workspace> [branch] [--name <name>] [--from <ref>] [--repo-from <repo>=<ref>] [--repo-mode <repo>=worktree|reference] [--env KEY=VALUE] [--copy <pattern>] [--no-setup] [--no-start] [--no-wait]; creates directly without a modal") }
         if args.count == 2 { params["branch"] = .string(args[1]) }
         if let name = options["name"] { params["name"] = .string(name) }
         params["setup"] = .bool(!options.has("no-setup"))
@@ -368,6 +368,17 @@ nonisolated enum StackCLI {
         repositoryRefs[id] = .string(ref)
       }
       if !repositoryRefs.isEmpty { params["repositoryRefs"] = .object(repositoryRefs) }
+      var repositoryModes: [String: JSONValue] = [:]
+      for pair in options.lists["repo-mode"] ?? [] {
+        guard let equals = pair.firstIndex(of: "="), equals != pair.startIndex,
+          let mode = StackLaneRepositoryMode(rawValue: String(pair[pair.index(after: equals)...])) else {
+          throw StackControlError.invalid("--repo-mode takes <repo>=worktree or <repo>=reference")
+        }
+        let id = String(pair[..<equals])
+        guard repositoryModes[id] == nil else { throw StackControlError.invalid("Duplicate --repo-mode for \(id)") }
+        repositoryModes[id] = .string(mode.rawValue)
+      }
+      if !repositoryModes.isEmpty { params["repositoryModes"] = .object(repositoryModes) }
       var environment: [String: JSONValue] = [:]
       for pair in options.lists["env"] ?? [] {
         guard let equals = pair.firstIndex(of: "="), equals != pair.startIndex else { throw StackControlError.invalid("--env takes KEY=VALUE (\(pair))") }
@@ -631,9 +642,9 @@ nonisolated enum StackCLI {
     cinderdeck services agent-help                    Instructions to paste into AGENTS.md
 
   WORKTREE LANES
-    cinderdeck lane create <workspace> [branch]       Review a new lane in Cinderdeck (--name suggests a name; --repo-from <repo>=<ref> suggests a repository base)
+    cinderdeck lane create <workspace> [branch]       Create directly without a modal (--name sets its name; omit branch for a generated codex/ branch; --repo-from <repo>=<ref> sets a base; repeat --repo-mode <repo>=worktree|reference to choose checkouts). Each checkout allows four minutes.
       --from <ref>  --env KEY=VALUE  --copy <glob>    Start point, lane-only variables, extra files to copy
-      --name <name>                                 Proposed lane display name (default: numbered lane)
+      --name <name>                                 Lane display name (default: branch, or numbered lane when branch is omitted)
       --no-setup  --no-start                          Skip [lanes] setup, or create without starting
     cinderdeck lane adopt <workspace> [name]          Use an existing worktree (--path, default: here)
       --setup  --no-start                            Setup is off by default; name required for detached HEAD

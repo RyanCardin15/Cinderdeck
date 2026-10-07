@@ -81,6 +81,7 @@ import {
   IntegrationEvents,
   IntegrationOperationInput,
   IntegrationRepositoryStartRefs,
+  IntegrationRepositoryModes,
   IntegrationOperationReceipt,
 } from "./integration.ts";
 
@@ -216,6 +217,7 @@ export const ManagedCreateInput = Schema.Struct({
   objective: TrimmedNonEmptyString.check(Schema.isMaxLength(16000)),
   branch: Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(200)),
   repositoryRefs: IntegrationRepositoryStartRefs,
+  repositoryModes: Schema.optionalKey(IntegrationRepositoryModes),
   setup: Schema.Boolean,
   start: Schema.Boolean,
 });

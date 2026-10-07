@@ -364,6 +364,7 @@ const make = Effect.gen(function* () {
       ),
     );
   const decodeRepositoryRefs = Schema.decodeUnknownEffect(Contracts.IntegrationRepositoryStartRefs);
+  const decodeRepositoryModes = Schema.decodeUnknownEffect(Contracts.IntegrationRepositoryModes);
   const decodeOperationInput = Schema.decodeUnknownEffect(Contracts.IntegrationOperationInput);
   const decodeReceipt = Schema.decodeUnknownEffect(Contracts.IntegrationOperationReceipt);
   const submit: CinderdeckClient["Service"]["submit"] = (connection, input) =>
@@ -382,6 +383,18 @@ const make = Effect.gen(function* () {
             Object.hasOwn(validated.arguments, "repositoryRefs")
               ? requiredCapability(connection, "operations.lane.create.repositoryRefs").pipe(
                   Effect.andThen(decodeRepositoryRefs(validated.arguments.repositoryRefs)),
+                  Effect.mapError((cause) =>
+                    isBridgeError(cause) ? cause : new BridgeError({ reason: "invalid_request" }),
+                  ),
+                  Effect.asVoid,
+                )
+              : Effect.void,
+          ),
+          Effect.andThen(() =>
+            ["lane.create", "lane.adopt"].includes(validated.method) &&
+            Object.hasOwn(validated.arguments, "repositoryModes")
+              ? requiredCapability(connection, "operations.lane.create.repositoryModes").pipe(
+                  Effect.andThen(decodeRepositoryModes(validated.arguments.repositoryModes)),
                   Effect.mapError((cause) =>
                     isBridgeError(cause) ? cause : new BridgeError({ reason: "invalid_request" }),
                   ),

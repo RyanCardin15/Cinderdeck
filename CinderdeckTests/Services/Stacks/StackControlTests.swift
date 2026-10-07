@@ -39,6 +39,9 @@ final class StackControlTests: XCTestCase {
     XCTAssertTrue(options.has("follow"))
     XCTAssertNil(StackCLI.runIfRequested(["/Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck"]))
     XCTAssertNil(StackCLI.runIfRequested(["/Applications/Cinderdeck.app/Contents/MacOS/Cinderdeck", "-NSDocumentRevisionsDebugMode", "YES"]))
+    let lane = StackCLI.parse(["lane", "create", "demo", "review", "--repo-mode", "app=worktree", "--repo-mode=api=reference"])
+    XCTAssertEqual(lane.positionals, ["lane", "create", "demo", "review"])
+    XCTAssertEqual(lane.lists["repo-mode"], ["app=worktree", "api=reference"])
   }
 
   func testAppNamesFromProcessPaths() {

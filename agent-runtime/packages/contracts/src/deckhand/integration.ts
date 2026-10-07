@@ -74,6 +74,16 @@ export const IntegrationRepositoryStartRefs = Schema.Record(
   ),
 ).check(Schema.isMaxProperties(64));
 export type IntegrationRepositoryStartRefs = typeof IntegrationRepositoryStartRefs.Type;
+export const IntegrationRepositoryModes = Schema.Record(
+  Schema.String,
+  Schema.Literals(["worktree", "reference"]),
+).check(
+  Schema.isMaxProperties(64),
+  Schema.isPropertyNames(
+    Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(160)),
+  ),
+);
+export type IntegrationRepositoryModes = typeof IntegrationRepositoryModes.Type;
 export const IntegrationWorkspace = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
@@ -89,6 +99,7 @@ export const IntegrationWorkspace = Schema.Struct({
         ports: Schema.Record(Schema.String, Schema.Int),
         from: Schema.optionalKey(Schema.NullOr(Schema.String)),
         repositoryRefs: Schema.optionalKey(IntegrationRepositoryStartRefs),
+        repositoryModes: Schema.optionalKey(IntegrationRepositoryModes),
         pinned: Schema.optionalKey(Schema.Boolean),
         adopted: Schema.optionalKey(Schema.Boolean),
       }),

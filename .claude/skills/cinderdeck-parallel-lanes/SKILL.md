@@ -5,7 +5,7 @@ description: Run a branch of a project side by side with the original checkout u
 
 # Run branches in parallel with Cinderdeck lanes
 
-A lane runs a Cinderdeck workspace from another checkout. Each independent repository gets a Git worktree, with separate service ports, and logs. The original checkout keeps running. Every creation or adoption request opens Cinderdeck's shared creation sheet, including requests from agents, CLI and feature launchers. Supply `--name` (MCP `name`) for a useful proposed name; otherwise the sheet supplies Lane 1, Lane 2, etc. The user can edit the name and each repository's base before creating. Cancellation creates nothing. Always use the returned stable lane ID or returned `<workspace>/<name>`; renaming leaves the Git branch unchanged.
+A lane runs a Cinderdeck workspace from another checkout. Choose a new Git worktree for each repository that needs isolated changes. Other repositories can stay as references to the primary checkout, with no checkout or branch creation. Worktrees have separate service ports and logs. The original checkout keeps running. Agent, CLI, MCP and managed feature creation or adoption execute directly without opening a modal or waiting for manual confirmation. Supply `--name` (MCP `name`) for a useful lane name. Omit the branch for a generated `codex/` branch; omit both branch and name for Lane 1, Lane 2, etc. Manual **New lane** actions use the creation sheet, where the user can edit the name and each repository's checkout and base. Cancelling that sheet creates nothing. Each worktree checkout allows four minutes; setup and submodule initialization retain their separate budgets. Always use the returned stable lane ID or returned `<workspace>/<name>`; renaming leaves the Git branch unchanged.
 
 Use the `cinderdeck` CLI. If the `cinderdeck` MCP server is connected, the tools map one to one:
 
@@ -27,7 +27,7 @@ Every command takes `--json`. Pass `--as <your name> --session <id>` on the CLI 
 
 ## 1. Pick the path
 
-Repository defaults live in `[repos.<id>] lane_from = "main"` (or `"develop"`). Workspace settings exposes a branch picker for each isolated repository. `[lanes] from` is the fallback, then HEAD. Request `repositoryRefs` and `--from` prefill overrides in the creation sheet. The sheet shows current workspace branches as context and preserves shared folders. Use a new Git branch when choosing explicit bases. Wait for the user's creation decision; do not automatically approve the sheet for them.
+Repository defaults live in `[repos.<id>] lane_from = "main"` (or `"develop"`). Workspace settings exposes a branch picker for each isolated repository. `[lanes] from` is the fallback, then HEAD. Tool `repositoryRefs`, CLI `--repo-from` and `--from` apply overrides directly. The manual sheet shows current workspace branches as context and preserves shared folders. Use a new Git branch when choosing explicit bases. Agents create the lane themselves through the tools and use the returned result to continue.
 
 ```bash
 cinderdeck lane list shop          # the original checkout and existing lanes
@@ -54,8 +54,11 @@ cinderdeck lane adopt shop review/pr-123 --path "$PWD" --env FEATURE_X=1
 ```
 
 - `create` makes the worktrees, copies the files listed in `[lanes] copy` (such as `.env`), runs `[lanes] setup` (such as `npm ci`), then starts the services and waits until they are ready. Pass `--no-start` to prepare first, or `--no-setup` to skip setup.
+- Choose each repository's checkout through the tool arguments, or **New worktree** / **Reference** in the manual creation sheet. Workspace settings supply the defaults; choices are saved for this lane only. References use primary-checkout files as context; do not edit them or run checks that modify those files.
+- CLI: repeat `--repo-mode app=worktree --repo-mode api=reference`; MCP: `repositoryModes: {app: "worktree", api: "reference"}` on `create_lane` or `adopt_lane`. Omitted repos keep their workspace defaults. The adopted repository must remain a worktree.
+- For a code review, inspect the changed repository set first. If a workspace has four repositories and only one has changes under review, create a worktree only for that repository and explicitly select references for the other three. Supply `repositoryRefs` only for the worktree repositories.
 - For independent repository revisions, repeat `--repo-from app=<commit> --repo-from api=origin/main` (MCP `repositoryRefs: {app: "<commit>", api: "origin/main"}`). Each selected branch must be new. Cinderdeck resolves the references to commits before creating anything, refuses conflicting aliases and leaves unselected repositories on their normal defaults. Never pass a commit from one repository as the global `--from` for another.
-- `adopt` does not run setup unless you pass `--setup`. Other repositories of the workspace get worktrees on the same branch.
+- `adopt` does not run setup unless you pass `--setup`. Other repositories selected as worktrees use the same branch; select references for repositories needed only as context.
 - An optional adopted lane name changes its address, not its Git branch. Other repositories use the adopted worktree's actual branch. Use **Existing worktree** in the Lanes panel for the same flow; its Open menu targets the actual repositories.
 - A detached HEAD needs an explicit name (for example `review/pr-123`). If other repositories need worktrees too, they use that name as their branch. `--from`, `--env` and `--copy` also work with adoption (MCP `from`, `env`, `copy`); copying only touches newly created worktrees of other repositories, leaving the adopted folder alone.
 - Workspaces using the same repository and branch share files, though their services and ports are separate. Use different branches for independent edits. Adopted or released worktrees stay external even when another workspace borrows them.

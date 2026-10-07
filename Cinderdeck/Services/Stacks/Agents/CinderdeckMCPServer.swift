@@ -64,6 +64,12 @@ nonisolated enum CinderdeckMCPServer {
 
   private static let repro = property("string", "Repro id (or unique prefix) from start_repro_recording or list_repros. Defaults to the latest.")
   private static let reproTime = property("string", "Seconds or mm:ss.sss on the video, or first_error, last_error, end, marker:<label>")
+  private static let repositoryModes: JSONValue = .object([
+    "type": .string("object"), "maxProperties": .number(64),
+    "propertyNames": .object(["type": .string("string"), "minLength": .number(1), "maxLength": .number(160)]),
+    "additionalProperties": .object(["type": .string("string"), "enum": .array([.string("worktree"), .string("reference")])]),
+    "description": .string("Repository ID to checkout choice for this lane. worktree creates an isolated checkout; reference uses the primary checkout without creating a worktree or branch. Omitted repositories keep workspace defaults. For a review changing one of four repos, select worktree for that repo and reference for the other three. References are context; keep their primary files untouched.")
+  ])
 
   // MARK: Tools
 
@@ -218,10 +224,11 @@ nonisolated enum CinderdeckMCPServer {
       "Original checkouts and their parallel worktree lanes: ports and URLs, owner, folders, service state, setup status, shared services, and whether each lane's branch was merged or its upstream deleted.",
       ["workspace": workspace]),
     tool("create_lane", "Create a lane", .additive,
-      "Open Cinderdeck's shared lane creation sheet. The user reviews the proposed name and each repository's base branch before worktrees are created; cancellation creates nothing. Omit branch/name for generated defaults. repositoryRefs and from prefill the bases; otherwise repos.<id>.lane_from, [lanes] from, then HEAD apply. Run setup and start services on unique ports after creation unless disabled. Use the returned stable workspace ID and name because the user may edit the proposal. If the branch is already in your own worktree, use adopt_lane, which opens the same sheet.",
-      ["workspace": workspace, "branch": property("string", "Proposed new Git branch; omit for a generated branch"),
+      "Create a lane directly without opening a modal or waiting for manual confirmation. Omit branch for a generated codex/ branch; omit both branch and name for a numbered lane. repositoryModes selects worktree/reference per repository for this lane; repositoryRefs and from select the bases; otherwise repos.<id>.lane_from, [lanes] from, then HEAD apply. Each worktree checkout allows four minutes. Run setup and start services on unique ports after creation unless disabled. Use the returned stable workspace ID and name. If the branch is already in your own worktree, use adopt_lane.",
+      ["workspace": workspace, "branch": property("string", "Git branch to check out or create; omit for a generated branch"),
         "name": property("string", "Optional lane display name, independent of the branch; 1–100 characters"),
         "from": property("string", "Start point for a new branch, e.g. origin/main (default: [lanes] from, else HEAD)"),
+        "repositoryModes": repositoryModes,
         "repositoryRefs": .object(["type": .string("object"), "maxProperties": .number(64), "propertyNames": .object(["type": .string("string"), "minLength": .number(1), "maxLength": .number(160)]),
           "additionalProperties": .object(["type": .string("string"), "minLength": .number(1), "maxLength": .number(200), "pattern": .string("^(?!-)(?![\\s\\S]*[\\u0000\\n\\r])[\\s\\S]+$")]),
           "description": .string("Repository ID to start revision for a new branch, e.g. {app: commitSHA}. Each selected branch must be new; revisions are pinned before effects and override from only for that repository. Other repositories keep their defaults.")]),
@@ -231,8 +238,9 @@ nonisolated enum CinderdeckMCPServer {
         "start": property("boolean", "Start services after creation (default true)"), "wait": wait,
         "timeout": waitTimeout], required: ["workspace"]),
     tool("adopt_lane", "Adopt a worktree as a lane", .additive,
-      "Run an existing Git worktree (for example the one you are working in) as a lane of a workspace, with its own ports. Cinderdeck never deletes an adopted worktree, even when another workspace shares it. Other repos use the worktree's actual branch or stay shared; an optional lane name only changes its address. A detached HEAD requires a name; that name is also the branch for other repos when no branch can be inferred. Setup is off by default. Copy options affect only newly created worktrees, leaving adopted and reused folders alone.",
+      "Run an existing Git worktree (for example the one you are working in) as a lane of a workspace, with its own ports, directly without a modal. Cinderdeck never deletes an adopted worktree, even when another workspace shares it. Other repos use the worktree's actual branch or stay shared; an optional lane name only changes its address. A detached HEAD requires a name; that name is also the branch for other repos when no branch can be inferred. Setup is off by default. Copy options affect only newly created worktrees, leaving adopted and reused folders alone. Each new worktree checkout allows four minutes.",
       ["workspace": workspace, "path": property("string", "Worktree folder (default: your current folder)"),
+        "repositoryModes": repositoryModes,
         "name": property("string", "Lane name (default: the worktree's branch; required for detached HEAD)"),
         "from": property("string", "Start point for new branches in other repos (default: [lanes] from, else HEAD)"),
         "env": laneEnvironment,
