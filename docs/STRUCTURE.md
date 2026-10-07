@@ -203,7 +203,6 @@ Cinderdeck/
   Common/
     Components/
 
-  Config/
   Resources/
     Localization/
       Shared/
@@ -219,21 +218,20 @@ CinderdeckTests/
     Capture/
       *Tests.swift
   Features/
-    Capture/
     Annotate/
-    VideoEditor/
-    QuickAccess/
-  Shared/
-    Extensions/
-  Helpers/
-  Fixtures/
-
-CinderdeckUITests/
-  Features/
+    History/
     Onboarding/
     Preferences/
-    Annotate/
+    PullRequests/
     QuickAccess/
+    Recording/
+    VideoEditor/
+    Workspaces/
+  Shared/
+    Extensions/
+  App/
+  Helpers/
+  Fixtures/
 ```
 
 ## Feature Roots
@@ -350,7 +348,6 @@ the app source folder and Xcode can bind each root to the correct target.
 - **CinderdeckTests** — Unit Testing Bundle. Mirrors the `Cinderdeck/` source tree by
   domain, for example `CinderdeckTests/Services/Capture/*Tests.swift` tests
   `Cinderdeck/Services/Capture/*`.
-- **CinderdeckUITests** — planned UI Testing Bundle for end-to-end user flows.
 
 Current Xcode project contract:
 
@@ -408,7 +405,6 @@ Directory structure mirrors the app: `CinderdeckTests/Services/Cloud/AWSV4Signer
 | Onboarding or app startup | `App/`, `Features/Splash/`, `Features/Onboarding/`, `docs/APP_LIFECYCLE.md` |
 | Shortcuts and conflicts | `Services/Shortcuts/`, `Features/Shortcuts/`, `docs/SHORTCUTS.md` |
 | Unit tests for services | `CinderdeckTests/Services/`, `CinderdeckTests/Helpers/` |
-| UI tests for user flows | `CinderdeckUITests/Features/` |
 | Test fixtures and mocks | `CinderdeckTests/Helpers/`, `CinderdeckTests/Fixtures/` |
 
 ## Current Behavior Clarifications

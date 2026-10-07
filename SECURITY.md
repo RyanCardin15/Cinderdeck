@@ -24,7 +24,7 @@ Cloud and OCR credentials are stored in the macOS Keychain under Cinderdeck iden
 
 ## Updates
 
-Automatic updates are disabled until Cinderdeck’s own signed feed is configured. The app rejects upstream Snapzy’s feed and signing key. Manual update checks open Cinderdeck’s releases. A new release must use the matching Cinderdeck EdDSA key and the expected bundle identity.
+Sparkle installs updates only from Cinderdeck’s own signed feed (`appcast.xml` on `main`). The app rejects upstream Snapzy’s feed and signing key. Every update must carry a signature from the matching Cinderdeck EdDSA key and the expected bundle identity. See [release setup](docs/RELEASES.md).
 
 ## Contributors
 

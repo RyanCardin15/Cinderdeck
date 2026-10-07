@@ -627,7 +627,7 @@ jobs:
             "$RELEASE_NOTES_HTML" \
             "$CHANNEL"
 
-      # Homebrew cask and README track stable releases only — skipped for beta
+      # The Homebrew cask tracks stable releases only — skipped for beta
       - name: Update Homebrew cask
         if: steps.version.outputs.is_beta != 'true'
         run: |
@@ -635,12 +635,6 @@ jobs:
           SHA="${{ steps.sha256.outputs.sha256 }}"
           sed -e "s/__VERSION__/${VERSION}/g" -e "s/__SHA256__/${SHA}/g" \
             Casks/cinderdeck.rb.template > Casks/cinderdeck.rb
-
-      - name: Update README install version
-        if: steps.version.outputs.is_beta != 'true'
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          sed -i '' "s|/Cinderdeck/v[0-9][0-9.]*\/install.sh|/Cinderdeck/v${VERSION}/install.sh|g" README.md
 
       - name: Update docs version stamps
         run: |

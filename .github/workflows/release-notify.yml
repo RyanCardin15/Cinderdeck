@@ -128,38 +128,3 @@ jobs:
           else
             echo "::warning::Discord notification failed (HTTP $HTTP_STATUS)"
           fi
-
-  # ──────────────────────────────────────────────
-  # Add more channels below. Each channel is a
-  # separate job that runs in parallel.
-  #
-  # Example — Slack:
-  #
-  # slack:
-  #   needs: prepare
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Send Slack notification
-  #       env:
-  #         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-  #         VERSION: ${{ needs.prepare.outputs.version }}
-  #         RELEASE_URL: ${{ needs.prepare.outputs.release_url }}
-  #         BODY: ${{ needs.prepare.outputs.body }}
-  #       run: |
-  #         ...
-  #
-  # Example — Telegram:
-  #
-  # telegram:
-  #   needs: prepare
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Send Telegram notification
-  #       env:
-  #         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-  #         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-  #         VERSION: ${{ needs.prepare.outputs.version }}
-  #         BODY: ${{ needs.prepare.outputs.body }}
-  #       run: |
-  #         ...
-  # ──────────────────────────────────────────────
