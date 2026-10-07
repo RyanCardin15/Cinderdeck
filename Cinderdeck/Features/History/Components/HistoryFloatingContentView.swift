@@ -486,13 +486,6 @@ struct HistoryFloatingContentView: View {
     }
   }
 
-  private var expandedTrailingControls: some View {
-    HStack(spacing: 8) {
-      expandedTimeFilters
-      expandedControls
-    }
-  }
-
   private var expandedControls: some View {
     HStack(spacing: 6) {
       pullRequestsButton(size: 34)

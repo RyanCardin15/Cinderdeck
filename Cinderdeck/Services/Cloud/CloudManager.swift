@@ -239,14 +239,6 @@ final class CloudManager: ObservableObject {
     )
   }
 
-  /// Load masked access key for display (e.g. "AKIA••••WXYZ")
-  func maskedAccessKey() -> String {
-    guard let key = loadFromKeychain(item: .accessKey, context: "maskedAccessKey") else {
-      return isConfigured ? DisplayStrings.storedSecurely : DisplayStrings.hidden
-    }
-    return accessKeySummary(for: key)
-  }
-
   /// Refresh non-sensitive cloud summary for UI display without forcing a keychain read.
   func refreshCloudSummaryForDisplay() {
     cachedConfiguration = loadConfiguration()
@@ -310,16 +302,6 @@ final class CloudManager: ObservableObject {
   /// Save the Google Drive refresh token
   func saveGoogleRefreshToken(_ token: String) throws {
     try saveToKeychain(item: .googleRefreshToken, value: token)
-  }
-
-  /// Load the Google Drive Client ID
-  func loadGoogleClientId() -> String {
-    loadFromKeychain(item: .googleClientId, context: "loadGoogleClientId") ?? ""
-  }
-
-  /// Load the Google Drive Client Secret
-  func loadGoogleClientSecret() -> String {
-    loadFromKeychain(item: .googleClientSecret, context: "loadGoogleClientSecret") ?? ""
   }
 
   /// Create an in-memory snapshot of the current cloud configuration for transfer export.

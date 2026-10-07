@@ -219,9 +219,6 @@ nonisolated struct StackLaunchDefinition: Codable, Equatable, Sendable {
   let stack: StackDefinition
   let service: ServiceDefinition
 
-  /// Variables Cinderdeck adds for the environment contract, in the base checkout and in lanes.
-  static let managedPrefixes = ["CINDERDECK_", "SNAPZY_"]
-
   func environment(shell: [String: String], secrets: [String: String]) -> [String: String] {
     var result = shell.merging(stack.environment) { _, value in value }
       .merging(service.environment) { _, value in value }

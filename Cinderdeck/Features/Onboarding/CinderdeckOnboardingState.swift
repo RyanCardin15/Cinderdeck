@@ -78,7 +78,6 @@ final class CinderdeckOnboardingState: ObservableObject {
   @Published var hasAreaSelection: Bool = false
   @Published var selectedTool: MockAnnotateTool? = nil
   @Published var annotationItems: [MockAnnotateItem] = []
-  @Published var isSimulatingSelection: Bool = false
 
   // Step 2: Screen Recording & Video Editor Lifecycle State
   @Published var step2Stage: Step2WorkflowStage = .readyToRecord

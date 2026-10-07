@@ -51,7 +51,6 @@ final class RecordingAnnotationShortcutConfig: ObservableObject {
 
   static let defaultModifier: AnnotationShortcutModifier = .shift
   static let defaultHoldDuration: TimeInterval = 0.3
-  static let durationPresets: [TimeInterval] = [0.3, 0.5, 1.0, 1.5, 2.0]
 
   static let minHoldDuration: TimeInterval = 0.1
   static let maxHoldDuration: TimeInterval = 5.0

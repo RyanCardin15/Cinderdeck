@@ -28,11 +28,6 @@ final class HistoryWindowController {
     NSApp.activate(ignoringOtherApps: true)
   }
 
-  func hideWindow() {
-    DiagnosticLogger.shared.log(.debug, .history, "History window hide requested")
-    HistoryFloatingManager.shared.hide()
-  }
-
   func copyToClipboard(_ records: [CaptureHistoryRecord]) {
     let existingRecords = records.filter(\.fileExists)
     guard !existingRecords.isEmpty else {

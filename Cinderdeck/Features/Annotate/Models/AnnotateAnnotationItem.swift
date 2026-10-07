@@ -371,14 +371,6 @@ nonisolated enum ArrowStyle: String, CaseIterable, Identifiable, Equatable {
     }
   }
 
-  var helperText: String {
-    switch self {
-    case .straight: L10n.AnnotateUI.straightArrowHelp
-    case .curvedRight: L10n.AnnotateUI.curvedRightArrowHelp
-    case .curvedLeft: L10n.AnnotateUI.curvedLeftArrowHelp
-    }
-  }
-
   init?(rawValue: String) {
     switch rawValue {
     case "straight": self = .straight
@@ -552,11 +544,6 @@ nonisolated struct ArrowGeometry: Equatable {
     let outlineWidth: CGFloat
     /// How far the head base is pulled back along the tangent (barb depth).
     let sweepBack: CGFloat
-
-    /// Max half-width used for hit testing / selection padding.
-    var maxHalfWidth: CGFloat {
-      max(shaftBaseWidth, headWidth) / 2
-    }
   }
 
   /// Shared dimension model so geometry, rendering, and hit-testing stay in sync.
@@ -1058,35 +1045,6 @@ nonisolated struct ArrowGeometry: Equatable {
     }
   }
 
-  private static func inferredBendDirection(
-    start: CGPoint,
-    end: CGPoint,
-    style: ArrowStyle,
-    controlPoint: CGPoint?
-  ) -> ArrowBendDirection {
-    guard style.supportsBendDirection,
-          let controlPoint else {
-      return .primary
-    }
-
-    switch style {
-    case .straight:
-      return .primary
-
-    case .curvedRight, .curvedLeft:
-      let dx = end.x - start.x
-      let dy = end.y - start.y
-      let length = hypot(dx, dy)
-      guard length > 0.0001 else { return .primary }
-
-      let mid = CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
-      let normal = CGPoint(x: -dy / length, y: dx / length)
-      let offsetFromMidpoint = CGPoint(x: controlPoint.x - mid.x, y: controlPoint.y - mid.y)
-      let side = offsetFromMidpoint.x * normal.x + offsetFromMidpoint.y * normal.y
-      return side < 0 ? .alternate : .primary
-    }
-  }
-
   private static func controlPointPreservingRelativeShape(
     _ controlPoint: CGPoint,
     oldStart: CGPoint,
@@ -1135,12 +1093,6 @@ nonisolated struct ArrowGeometry: Equatable {
       x: mid.x + normal.x * offset,
       y: mid.y + normal.y * offset
     )
-  }
-
-  private static func distanceSquared(from lhs: CGPoint, to rhs: CGPoint) -> CGFloat {
-    let dx = lhs.x - rhs.x
-    let dy = lhs.y - rhs.y
-    return dx * dx + dy * dy
   }
 
   private static func mirroredControlPoint(_ controlPoint: CGPoint, start: CGPoint, end: CGPoint) -> CGPoint {

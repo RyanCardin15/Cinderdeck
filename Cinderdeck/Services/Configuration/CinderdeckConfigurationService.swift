@@ -282,11 +282,6 @@ final class CinderdeckConfigurationService {
   }
 
   @discardableResult
-  func ensureSuggestedConfigExists() throws -> URL {
-    try ensureConfigExists(at: resolvedConfigFileURL)
-  }
-
-  @discardableResult
   func ensureConfigExists(at url: URL) throws -> URL {
     let access = beginAccessingConfigFile(url)
     defer { access.stop() }

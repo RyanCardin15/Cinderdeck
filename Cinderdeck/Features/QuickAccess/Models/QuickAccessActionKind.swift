@@ -7,11 +7,6 @@
 
 import Foundation
 
-enum QuickAccessActionDisplayStyle: String, Codable {
-  case primary
-  case corner
-}
-
 enum QuickAccessActionSurface: Equatable {
   case overlay
   case contextMenu
@@ -47,10 +42,6 @@ enum QuickAccessActionSlot: String, CaseIterable, Codable, Hashable, Identifiabl
     .bottomLeading: .edit,
     .bottomTrailing: .uploadToCloud,
   ]
-
-  var isCenterSlot: Bool {
-    Self.centerSlots.contains(self)
-  }
 
   var settingsTitle: String {
     switch self {
@@ -93,15 +84,6 @@ enum QuickAccessActionKind: String, CaseIterable, Codable, Hashable, Identifiabl
 
   static let defaultEnabledActions = Set(defaultOrder)
 
-  var displayStyle: QuickAccessActionDisplayStyle {
-    switch self {
-    case .copy, .saveOrOpen:
-      return .primary
-    case .dismiss, .delete, .edit, .uploadToCloud, .pinToScreen:
-      return .corner
-    }
-  }
-
   var settingsTitle: String {
     switch self {
     case .copy:
@@ -118,15 +100,6 @@ enum QuickAccessActionKind: String, CaseIterable, Codable, Hashable, Identifiabl
       return L10n.AnnotateUI.uploadToCloud
     case .pinToScreen:
       return L10n.PreferencesQuickAccess.pinToScreenAction
-    }
-  }
-
-  var settingsPlacementTitle: String {
-    switch displayStyle {
-    case .primary:
-      return L10n.PreferencesQuickAccess.primaryActionBadge
-    case .corner:
-      return L10n.PreferencesQuickAccess.cornerActionBadge
     }
   }
 

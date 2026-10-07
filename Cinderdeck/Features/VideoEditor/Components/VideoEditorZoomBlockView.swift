@@ -17,10 +17,7 @@ enum ZoomColors {
   // Semantic colors
   static let disabled = Color(NSColor.disabledControlTextColor)
   static let selected = Color.white
-  static let handleHighlight = Color.white.opacity(0.8)
 
   // Additional semantic colors for consistency
   static var background: Color { Color(NSColor.controlBackgroundColor) }
-  static var secondaryLabel: Color { Color(NSColor.secondaryLabelColor) }
-  static var tertiaryLabel: Color { Color(NSColor.tertiaryLabelColor) }
 }

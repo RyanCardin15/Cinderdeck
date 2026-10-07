@@ -84,16 +84,6 @@ final class PostCaptureActionHandlerTests: XCTestCase {
     )
   }
 
-  private func writeTestImage(to url: URL, width: Int = 100, height: Int = 100) throws {
-    guard let image = TestImageFactory.solidColor(width: width, height: height) else {
-      XCTFail("Failed to create test image")
-      return
-    }
-    let bitmapRep = NSBitmapImageRep(cgImage: image)
-    let pngData = bitmapRep.representation(using: .png, properties: [:])
-    try pngData?.write(to: url)
-  }
-
   private func imagePixelSize(at url: URL) -> CGSize? {
     guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
           let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],

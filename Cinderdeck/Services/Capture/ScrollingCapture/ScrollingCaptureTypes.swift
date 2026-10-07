@@ -72,15 +72,6 @@ enum ScrollingCapturePreviewTruthState: Equatable {
       return L10n.ScrollingCapture.badgeSaving
     }
   }
-
-  var prefersLiveViewport: Bool {
-    switch self {
-    case .liveSynced, .liveAhead:
-      return true
-    default:
-      return false
-    }
-  }
 }
 
 enum ScrollingCaptureSelectionGuidanceTone {
@@ -464,34 +455,8 @@ final class ScrollingCaptureSessionModel: ObservableObject {
     )
   }
 
-  var isShowingLiveViewport: Bool {
-    phase == .capturing
-      && previewImage == nil
-      && previewTruthState.prefersLiveViewport
-      && livePreviewImage != nil
-  }
-
   var activePreviewImage: CGImage? {
     previewImage ?? livePreviewImage
-  }
-
-  var previewTruthDescription: String {
-    switch previewTruthState {
-    case .ready:
-      return L10n.ScrollingCapture.previewPressStartToBegin
-    case .committedOnly:
-      return L10n.ScrollingCapture.previewShowingLatestStitchedCapture
-    case .liveSynced:
-      return L10n.ScrollingCapture.previewMatchesStitchedCapture
-    case .liveAhead:
-      return L10n.ScrollingCapture.previewShowingLatestWhileLockingNewerContent
-    case .pausedRecovery:
-      return L10n.ScrollingCapture.previewPausedScrollSlowly
-    case .finalizing:
-      return L10n.ScrollingCapture.previewFinishingSavingCapture
-    case .saving:
-      return L10n.ScrollingCapture.previewSavingCapture
-    }
   }
 
   var selectionGuidance: ScrollingCaptureSelectionGuidance {

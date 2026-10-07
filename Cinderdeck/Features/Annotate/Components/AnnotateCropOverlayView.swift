@@ -13,7 +13,6 @@ struct CropOverlayView: View {
   let scale: CGFloat
   let canvasBounds: CGRect
 
-  private let handleSize: CGFloat = 12
   private let cornerHandleLength: CGFloat = 20
 
   /// Whether crop is being actively edited (vs just previewing applied crop)

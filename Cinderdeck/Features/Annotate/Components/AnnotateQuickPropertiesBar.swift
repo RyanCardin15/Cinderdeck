@@ -117,13 +117,6 @@ private enum QuickPropertiesDensity {
     }
   }
 
-  var toolPickerWidth: CGFloat {
-    switch self {
-    case .regular: return 148
-    case .compact: return 124
-    }
-  }
-
   var sliderWidth: CGFloat {
     switch self {
     case .regular: return 96

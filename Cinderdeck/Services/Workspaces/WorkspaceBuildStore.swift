@@ -87,9 +87,6 @@ final class WorkspaceBuildStore {
   }
   func output(_ id: String) -> URL { directory.appendingPathComponent(id).appendingPathComponent("artifacts") }
   func artifact(_ receipt: WorkspaceBuildReceipt) -> URL { output(receipt.id).appendingPathComponent(receipt.adapter.artifactName) }
-  func readArtifact(_ receipt: WorkspaceBuildReceipt) throws -> Data {
-    try WorkspaceBuildArtifactFiles.read(root: directory, name: receipt.id + "/artifacts/" + receipt.adapter.artifactName)
-  }
   func writeManifest(_ id: String) throws {
     guard let receipt = current(id) else { throw StackControlError.notFound("Build receipt is unavailable") }
     let file = directory.appendingPathComponent(id).appendingPathComponent("manifest.json")

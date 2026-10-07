@@ -841,10 +841,6 @@ final class AnnotateState: ObservableObject {
     selectedCanvasPresetId != nil && isSelectedCanvasPresetDirty
   }
 
-  var canDeleteSelectedCanvasPreset: Bool {
-    selectedCanvasPresetId != nil
-  }
-
   var isCanvasPresetLimitReached: Bool {
     canvasPresets.count >= Self.canvasPresetLimit
   }
@@ -907,7 +903,6 @@ final class AnnotateState: ObservableObject {
     isDefaultCanvasPresetAutoApplied = false
 
     previewPadding = nil
-    previewInset = nil
     previewShadowIntensity = nil
     previewCornerRadius = nil
   }
@@ -1057,14 +1052,6 @@ final class AnnotateState: ObservableObject {
   }
 
   @discardableResult
-  func deleteSelectedCanvasPreset() -> Bool {
-    guard let selectedCanvasPresetId else {
-      return false
-    }
-    return deleteCanvasPreset(id: selectedCanvasPresetId)
-  }
-
-  @discardableResult
   func deleteCanvasPreset(id: UUID) -> Bool {
     let isDeletingSelectedPreset = selectedCanvasPresetId == id
 
@@ -1208,13 +1195,11 @@ final class AnnotateState: ObservableObject {
 
   /// Preview values during slider drag - nil when not dragging
   @Published var previewPadding: CGFloat?
-  @Published var previewInset: CGFloat?
   @Published var previewShadowIntensity: CGFloat?
   @Published var previewCornerRadius: CGFloat?
 
   /// Effective values for canvas rendering (preview overrides actual during drag)
   var effectivePadding: CGFloat { previewPadding ?? padding }
-  var effectiveInset: CGFloat { previewInset ?? inset }
   var effectiveShadowIntensity: CGFloat { previewShadowIntensity ?? shadowIntensity }
   var effectiveCornerRadius: CGFloat { previewCornerRadius ?? cornerRadius }
 
@@ -1227,7 +1212,6 @@ final class AnnotateState: ObservableObject {
   /// Original image dimensions (points, not pixels)
   var imageWidth: CGFloat { effectiveSourceImage?.size.width ?? Self.defaultCanvasWidth }
   var imageHeight: CGFloat { effectiveSourceImage?.size.height ?? Self.defaultCanvasHeight }
-  var imageAspectRatio: CGFloat { imageWidth / imageHeight }
   var sourceImageBounds: CGRect {
     CGRect(origin: .zero, size: CGSize(width: imageWidth, height: imageHeight))
   }
@@ -3941,30 +3925,6 @@ final class AnnotateState: ObservableObject {
     return bounds
   }
 
-  /// Get selected annotation if it's a text type
-  var selectedTextAnnotation: AnnotationItem? {
-    guard let annotation = selectedAnnotation,
-          case .text = annotation.type else {
-      return nil
-    }
-    return annotation
-  }
-
-  /// Get selected annotation (any type)
-  var selectedAnnotation: AnnotationItem? {
-    guard selectedAnnotationIds.count == 1,
-          let id = selectedAnnotationIds.first else { return nil }
-    return annotations.first { $0.id == id }
-  }
-
-  var selectedArrowAnnotation: AnnotationItem? {
-    guard let annotation = selectedAnnotation,
-          case .arrow = annotation.type else {
-      return nil
-    }
-    return annotation
-  }
-
   private var selectedArrowAnnotations: [AnnotationItem] {
     selectedAnnotations.filter { annotation in
       if case .arrow = annotation.type { return true }
@@ -5769,15 +5729,6 @@ nonisolated enum AnnotateTextLayout {
       width: contentWidth,
       height: drawHeight
     )
-  }
-
-  static func measuredHeight(text: String, font: NSFont, constrainedWidth: CGFloat) -> CGFloat {
-    bounds(
-      text: text,
-      font: font,
-      origin: .zero,
-      constrainedWidth: constrainedWidth
-    ).height
   }
 
   static func textEditorInset(scale: CGFloat, presentation: TextPresentation = .plain, fontSize: CGFloat = 16) -> NSSize {

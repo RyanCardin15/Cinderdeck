@@ -40,14 +40,6 @@ nonisolated struct AutoFocusSettings: Equatable, Sendable {
     return String(format: "%.1fx", zoomLevel)
   }
 
-  var followSpeedDisplayValue: String {
-    "\(Int((followSpeed * 100).rounded()))%"
-  }
-
-  var focusMarginDisplayValue: String {
-    "\(Int((focusMargin * 100).rounded()))%"
-  }
-
   static func clampZoomLevel(_ value: CGFloat) -> CGFloat {
     Swift.min(Swift.max(value, zoomRange.lowerBound), zoomRange.upperBound)
   }

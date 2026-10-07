@@ -329,10 +329,6 @@ enum ExportDimensionPreset: String, CaseIterable, Identifiable {
     }
   }
 
-  var isAspectRatioPreset: Bool {
-    aspectRatio != nil
-  }
-
   /// Display label showing dimensions when available
   func displayLabel(for naturalSize: CGSize) -> String {
     // Guard against invalid dimensions (before video loads)

@@ -21,7 +21,6 @@ enum ToolbarConstants {
   static let horizontalPadding: CGFloat = 10
   static let verticalPadding: CGFloat = 6
   static let hoverAnimation: Animation = .easeInOut(duration: 0.15)
-  static let pressAnimation: Animation = .easeInOut(duration: 0.1)
 }
 
 // MARK: - Recording Toolbar Divider

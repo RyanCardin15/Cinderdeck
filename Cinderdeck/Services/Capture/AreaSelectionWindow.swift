@@ -2639,7 +2639,6 @@ final class AreaSelectionOverlayView: NSView {
     return layer
   }()
 
-  private var reusableCrosshairPath = CGMutablePath()
   private var horizontalCrosshairLayer: CAShapeLayer!
   private var verticalCrosshairLayer: CAShapeLayer!
   private var selectionBorderLayer: CAShapeLayer!
@@ -2666,9 +2665,7 @@ final class AreaSelectionOverlayView: NSView {
   private let crosshairColor = NSColor.white.withAlphaComponent(0.6)
   private let selectionBorderColor = NSColor.white
   private let selectionBorderWidth: CGFloat = 2.0
-  private let crosshairIndicatorSize: CGFloat = 10.0
   private let crosshairIndicatorLineWidth: CGFloat = 1.5
-  private let crosshairIndicatorCenterRadius: CGFloat = 6.0
   private let overlayFont = NSFont.systemFont(ofSize: 12, weight: .medium)
   private var selectionEnabled = true
   /// Live-passthrough sessions drive the selection gesture from the capture event tap;
@@ -3612,22 +3609,6 @@ final class AreaSelectionOverlayView: NSView {
 
     crosshairIndicatorLayer.isHidden = true
     updateCoordinateIndicator(at: currentMousePosition)
-  }
-
-  /// Updates and returns the reusable crosshair indicator path centered at the given point
-  private func createCrosshairIndicatorPath(at point: CGPoint) -> CGPath {
-    let size = crosshairIndicatorSize
-    reusableCrosshairPath = CGMutablePath()
-
-    // Vertical line
-    reusableCrosshairPath.move(to: CGPoint(x: point.x, y: point.y - size))
-    reusableCrosshairPath.addLine(to: CGPoint(x: point.x, y: point.y + size))
-
-    // Horizontal line
-    reusableCrosshairPath.move(to: CGPoint(x: point.x - size, y: point.y))
-    reusableCrosshairPath.addLine(to: CGPoint(x: point.x + size, y: point.y))
-
-    return reusableCrosshairPath
   }
 
   private func updateDimLayerMask(for selectionRect: CGRect) {

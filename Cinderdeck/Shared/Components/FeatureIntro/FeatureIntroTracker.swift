@@ -30,13 +30,4 @@ public final class FeatureIntroTracker {
       defaults.set(seenCampaigns, forKey: storageKey)
     }
   }
-  
-  /// Clears out old campaigns from the array, keeping only the active ones.
-  /// This acts as a garbage collection mechanism.
-  public func clearOldCampaigns(keeping activeIds: [String]) {
-    guard let seenCampaigns = defaults.stringArray(forKey: storageKey) else { return }
-    
-    let activeSeenCampaigns = seenCampaigns.filter { activeIds.contains($0) }
-    defaults.set(activeSeenCampaigns, forKey: storageKey)
-  }
 }

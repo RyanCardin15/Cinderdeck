@@ -122,7 +122,7 @@ flowchart TD
 | `saving` | Saving | Writing the final image |
 
 - Lag is computed from live-publish vs last-committed timestamps with a 90ms tolerance (`previewCommitLagMs`); `liveAhead` occurrences feed session metrics.
-- The rail prioritizes the stitched preview image; the raw live viewport shows only while no committed preview exists and the truth state prefers it (`prefersLiveViewport`).
+- While live preview is active (`isUsingLivePreview` with a `livePreviewImage`), commits skip rendering the merged image and the runtime state reports `previewing`.
 
 ## Finish and Save
 

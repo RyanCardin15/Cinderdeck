@@ -705,10 +705,6 @@ final class ScreenRecordingManager: NSObject, ObservableObject {
     label: "com.ryancardin.cinderdeck.recording.audio",
     qos: .userInteractive
   )
-  private let microphoneProcessingQueue = DispatchQueue(
-    label: "com.ryancardin.cinderdeck.recording.microphone",
-    qos: .userInteractive
-  )
 
   private struct RecordingAudioNormalizationResult {
     let outputURL: URL?

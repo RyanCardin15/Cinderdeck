@@ -608,41 +608,4 @@ class ZoomVideoCompositorClass: NSObject, AVVideoCompositing {
     return scaled.cropped(to: CGRect(x: offsetX, y: offsetY, width: targetSize.width, height: targetSize.height))
       .transformed(by: CGAffineTransform(translationX: -offsetX, y: -offsetY))
   }
-
-  private func applyZoom(
-    to sourceBuffer: CVPixelBuffer,
-    zoomLevel: CGFloat,
-    center: CGPoint,
-    renderSize _: CGSize
-  ) -> CVPixelBuffer? {
-    // Create CIImage from source buffer
-    let sourceImage = CIImage(cvPixelBuffer: sourceBuffer)
-    let sourceExtent = sourceImage.extent
-
-    // Calculate crop rect
-    let cropRect = ZoomCalculator.calculateCropRect(
-      center: center,
-      zoomLevel: zoomLevel,
-      frameSize: CGSize(width: sourceExtent.width, height: sourceExtent.height)
-    )
-
-    // Crop the image
-    let croppedImage = sourceImage.cropped(to: cropRect)
-
-    // Scale back to original size
-    let scaleX = sourceExtent.width / cropRect.width
-    let scaleY = sourceExtent.height / cropRect.height
-    let scaledImage = croppedImage
-      .transformed(by: CGAffineTransform(translationX: -cropRect.origin.x, y: -cropRect.origin.y))
-      .transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
-
-    // Create output buffer
-    guard let renderContext else { return nil }
-    guard let outputBuffer = renderContext.newPixelBuffer() else { return nil }
-
-    // Render to output buffer
-    ciContext.render(scaledImage, to: outputBuffer)
-
-    return outputBuffer
-  }
 }

@@ -288,7 +288,6 @@ final class VideoEditorState: ObservableObject {
     didSet { editorSettingsDidChange() }
   }
   @Published var backgroundAlignment: ImageAlignment = .center
-  @Published var backgroundAspectRatio: AspectRatioOption = .auto
 
   // MARK: - Export State
 
@@ -357,10 +356,6 @@ final class VideoEditorState: ObservableObject {
 
   var autoZoomSegmentCount: Int {
     zoomSegments.filter(\.isAutoMode).count
-  }
-
-  var hasAutoZoomSegments: Bool {
-    autoZoomSegmentCount > 0
   }
 
   var currentTime: CMTime {
@@ -709,11 +704,6 @@ final class VideoEditorState: ObservableObject {
     if recordUndo && CMTimeCompare(oldValue, clampedEnd) != 0 {
       recordAction(.trimEnd(old: oldValue, new: clampedEnd))
     }
-  }
-
-  func resetTrim() {
-    trimStart = .zero
-    trimEnd = duration
   }
 
   // MARK: - Frame Extraction
@@ -1296,20 +1286,10 @@ final class VideoEditorState: ObservableObject {
     ZoomCalculator.activeSegment(at: time, in: zoomSegments)
   }
 
-  /// Get any zoom segment at a given time (including disabled - for UI interaction)
-  func zoomSegment(at time: TimeInterval) -> ZoomSegment? {
-    zoomSegments.filter { $0.contains(time: time) }.last
-  }
-
   /// Get the currently selected zoom segment
   var selectedZoomSegment: ZoomSegment? {
     guard let id = selectedZoomId else { return nil }
     return zoomSegments.first { $0.id == id }
-  }
-
-  /// Toggle zoom track visibility
-  func toggleZoomTrackVisibility() {
-    isZoomTrackVisible.toggle()
   }
 
   /// Toggle video info sidebar visibility
