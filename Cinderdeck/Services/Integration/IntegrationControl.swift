@@ -172,7 +172,9 @@ extension StackControlService {
         throw StackControlError(code: "stale_revision", message: "The selected native checkout changed during lookup.")
       }
       contexts.append(.init(workspaceID: id, generation: resource.generation, revision: resource.revision,
-        available: resource.available && resource.workspace?.definitionChanged != true && resource.workspace?.issues.isEmpty == true, repos: repos, physicalIDs: physicalIDs))
+        // Running services on an older definition and warnings do not change checkout folders.
+        available: resource.available && resource.workspace?.issues.allSatisfy({ !$0.hasPrefix("error: ") }) == true,
+        repos: repos, physicalIDs: physicalIDs))
     }
     return try JSONValue(encoding: IntegrationCheckoutLookup(installationID: journal.installationID,
       runtimeEpoch: journal.runtimeEpoch, contexts: contexts))
@@ -251,7 +253,13 @@ extension StackControlService {
     guard let resource = projection.resources.first, resource.available || cleanup else {
       throw StackControlError(code: "resource_missing", message: "This workspace is no longer available")
     }
-    guard resource.generation == input.generation, resource.revision == input.revision else {
+    // The revision hashes the whole live snapshot (service phases, dirty counts,
+    // ahead/behind), so it changes constantly. Lane and service operations
+    // validate their own preconditions (repository IDs, dirty worktrees, running
+    // dependents) against live state; the generation still pins the workspace.
+    // Definition edits and runs keep exact optimistic concurrency.
+    let live = input.method.hasPrefix("lane.") || input.method.hasPrefix("services.")
+    guard resource.generation == input.generation, live || resource.revision == input.revision else {
       throw StackControlError(code: "stale_revision", message: "The workspace changed. Refresh and review the operation before submitting it")
     }
   }
@@ -287,7 +295,11 @@ extension StackControlService {
           // some worktrees were removed. Leave uncertainty for lost results or
           // interrupted processes so the user can retry cleanup after a refusal.
           let cleanupFailed = !resultReturned && ["lane.remove", "lane.release"].contains(input.method)
-          let state = !cleanupFailed && effectsStarted && (resultReturned || !refusedBeforeEffects.contains(failure.code)) ? "unknown_outcome" : "failed"
+          // Creation journals its record before Git effects and deletes it only
+          // after a clean rollback. No record means nothing remains: retryable.
+          let rolledBack = !resultReturned && ["lane.create", "lane.adopt"].contains(input.method)
+            && (try? StackLaneStore.records(in: self.supervisor.lanesDirectory))?.contains { $0.integrationOperationID == receipt.id } == false
+          let state = !cleanupFailed && !rolledBack && effectsStarted && (resultReturned || !refusedBeforeEffects.contains(failure.code)) ? "unknown_outcome" : "failed"
           do { _ = try await operations.transition(key: input.operationKey, actor: actor, state: state, error: failure) }
           catch { DiagnosticLogger.shared.log(.warning, .system, "Integration operation outcome could not be saved") }
         }

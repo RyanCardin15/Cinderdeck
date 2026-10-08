@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { IntegrationRepositoryModes } from "./deckhand/integration.ts";
 
 /**
  * Input for the `t3_worktree_handoff` MCP tool.
@@ -48,6 +49,12 @@ export const WorktreeMcpHandoffInput = Schema.Struct({
     ).annotate({
       description:
         "Absolute filesystem path. Cinderdeck chooses new lane folders; use path with adoptExisting to attach an existing worktree. Standalone sessions may specify the new worktree path.",
+    }),
+  ),
+  repositoryModes: Schema.optional(
+    IntegrationRepositoryModes.annotate({
+      description:
+        'Cinderdeck workspaces with several repositories: repository ID to "worktree" (isolated checkout on the lane branch) or "reference" (the original checkout, read-only context). The conversation\'s own repository is always a worktree. Omitted repositories keep their workspace defaults. Example: {"api": "worktree", "docs": "reference"}. t3_worktree_status lists repository IDs.',
     }),
   ),
   runSetupScript: Schema.optional(
@@ -124,6 +131,20 @@ export const WorktreeMcpStatusResult = Schema.Struct({
   defaultStartFromOrigin: Schema.Boolean.annotate({
     description: "Server default used by t3_worktree_handoff when startFromOrigin is omitted.",
   }),
+  repositories: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        id: Schema.String,
+        path: Schema.String,
+        branch: Schema.String,
+        laneDefault: Schema.optionalKey(Schema.Literals(["worktree", "reference"])),
+        current: Schema.Boolean,
+      }),
+    ).annotate({
+      description:
+        "Cinderdeck workspace repositories. Pass their IDs in t3_worktree_handoff repositoryModes; laneDefault applies when omitted. current marks this conversation's repository.",
+    }),
+  ),
 });
 export type WorktreeMcpStatusResult = typeof WorktreeMcpStatusResult.Type;
 

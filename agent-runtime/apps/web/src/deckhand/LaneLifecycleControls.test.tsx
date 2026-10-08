@@ -192,12 +192,46 @@ it("does not delete a lane that changes while its removal request is being prepa
   props = { ...props, mode: "remove", onRemoved: vi.fn() };
   await render();
   await click("Remove lane");
-  props = { ...props, resource: { ...resource(), revision: "changed-revision" } };
+  // The connection went stale while the key was prepared.
+  props = { ...props, enabled: false };
   await render();
   await act(async () => resolve("delete-key"));
   expect(commands.submit).not.toHaveBeenCalled();
   expect(props.onRemoved).not.toHaveBeenCalled();
   expect(document.body.textContent).toContain("The lane changed");
+  // A replaced lane (new generation) remounts the panel; the old request is dropped.
+  props = { ...props, enabled: true };
+  await render();
+  await click("Remove lane");
+  props = { ...props, resource: { ...resource("lane-a", 8), revision: "changed-revision" } };
+  await render();
+  await act(async () => resolve("delete-key-2"));
+  expect(commands.submit).not.toHaveBeenCalled();
+});
+
+it("admits a lane action when only live status changed and submits the latest revision", async () => {
+  let resolve!: (key: string) => void;
+  commands.uuid.mockImplementation(
+    () =>
+      new Promise<string>((done) => {
+        resolve = done;
+      }),
+  );
+  props = { ...props, mode: "remove", onRemoved: vi.fn() };
+  await render();
+  await click("Remove lane");
+  // Same generation; dirty counts or service phases changed the live revision.
+  props = { ...props, resource: { ...resource(), revision: "status-tick-revision" } };
+  await render();
+  await act(async () => resolve("delete-key"));
+  expect(commands.submit).toHaveBeenCalledOnce();
+  expect(commands.submit.mock.calls[0]?.[0].input).toMatchObject({
+    operationKey: "delete-key",
+    generation: 7,
+    revision: "status-tick-revision",
+    method: "lane.release",
+  });
+  expect(document.body.textContent).not.toContain("The lane changed");
 });
 
 it("allows removal of an incomplete unavailable lane while keeping setup disabled", async () => {
@@ -342,7 +376,7 @@ it("defaults removal to preserved worktrees and requires explicit choices for ma
   ).toBe(true);
 });
 
-it("never admits stale, unsupported, changed-definition or primary-checkout lifecycle actions", async () => {
+it("never admits stale, unsupported, misconfigured or primary-checkout lifecycle actions", async () => {
   props = { ...props, enabled: false };
   await render();
   await click("Run setup");
@@ -353,7 +387,17 @@ it("never admits stale, unsupported, changed-definition or primary-checkout life
   props = {
     ...props,
     capabilities,
+    // Services still running an older definition never block setup; only errors do.
     resource: { ...resource(), workspace: { ...resource().workspace!, definitionChanged: true } },
+  };
+  await render();
+  expect(button("Run setup").disabled).toBe(false);
+  props = {
+    ...props,
+    resource: {
+      ...resource(),
+      workspace: { ...resource().workspace!, issues: ["error: Lane worktree is missing"] },
+    },
   };
   await render();
   expect(button("Run setup").disabled).toBe(true);

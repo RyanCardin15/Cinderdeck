@@ -53,7 +53,8 @@ struct WorkspaceLaneMapView: View {
             WorkspaceLaneMapCanvas(graph: visible, layout: layout, sourceID: sourceID, laneIDs: lanes.map(\.workspaceID),
               selection: selection, connected: connected, zoom: zoom, select: choose,
               removableLanes: Set(model.files.filter { $0.lane != nil && !model.isBusy($0.id) }.map(\.id)),
-              deleteLane: { id in if let file = model.files.first(where: { $0.id == id }) { model.deleteLane(file) } })
+              deleteLane: { id in if let file = model.files.first(where: { $0.id == id }) { model.deleteLane(file) } },
+              newLane: { id in if let file = model.files.first(where: { $0.id == id }) { model.newLane(from: file) } })
               .background(WorkspaceMapScrollTarget(request: jump, frame: jump.flatMap { layout.frames[$0.node] }, zoom: zoom))
               .padding(8)
           }.accessibilityIdentifier("workspace.map.canvas")

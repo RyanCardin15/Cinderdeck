@@ -691,7 +691,7 @@ function ScopedWorkspaceLaneMap({
                 <span className={styles.kind}>
                   {node.kind}
                   {node.reviewer ? " · Reviewer" : ""}
-                  {node.shared ? " · shared" : ""}
+                  {node.shared ? (node.kind === "repository" ? " · reference" : " · shared") : ""}
                 </span>
                 <strong>{node.title}</strong>
                 <span className={styles.subtitle}>{node.subtitle}</span>

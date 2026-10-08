@@ -745,7 +745,8 @@ it("checks a new scope's journal even while retaining a terminal operation", asy
   await changeSelect("Workspace", "other");
   await render();
   expect(boundary.recent).toHaveBeenCalledWith({ environmentId, input: {} });
-  expect(button("New lane").disabled).toBe(true);
+  // Unrelated service operations never block opening the native lane sheet.
+  expect(button("New lane").disabled).toBe(false);
   await act(async () =>
     complete({
       _tag: "Success",
@@ -757,7 +758,7 @@ it("checks a new scope's journal even while retaining a terminal operation", asy
       ],
     }),
   );
-  expect(button("New lane").disabled).toBe(true);
+  expect(button("New lane").disabled).toBe(false);
   boundary.inspect.mockClear();
   await act(async () => button("Check operation").click());
   expect(boundary.inspect).toHaveBeenCalledWith({

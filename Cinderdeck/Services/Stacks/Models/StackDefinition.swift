@@ -101,6 +101,8 @@ nonisolated struct StackLaneSettings: Codable, Equatable, Sendable {
   var hosts = false
   var environment: [String: String] = [:]
   var rawEnvironment: [String: String] = [:]
+  /// Prefix for generated lane branches; `[lanes] branch_prefix`.
+  var branchPrefix: String?
 }
 
 nonisolated struct StackDefinition: Codable, Equatable, Identifiable, Sendable {
@@ -218,6 +220,9 @@ nonisolated enum StackError: LocalizedError {
 nonisolated struct StackLaunchDefinition: Codable, Equatable, Sendable {
   let stack: StackDefinition
   let service: ServiceDefinition
+
+  /// Variables Cinderdeck adds for the environment contract, in the base checkout and in lanes.
+  static let managedPrefixes = ["CINDERDECK_", "SNAPZY_"]
 
   func environment(shell: [String: String], secrets: [String: String]) -> [String: String] {
     var result = shell.merging(stack.environment) { _, value in value }

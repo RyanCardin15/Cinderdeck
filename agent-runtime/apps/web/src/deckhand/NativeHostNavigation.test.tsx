@@ -99,6 +99,12 @@ it("opens the overview by default after the native computer becomes available, r
       to: "/workspaces",
       search: { environment: "local-owner", context: "lane", tab: "services" },
     });
+    // Native lane creation routes to the new lane's overview, not its services.
+    await act(async () => boundary.listener!({ workspaceID: "new-lane", section: "overview" }));
+    expect(boundary.navigate).toHaveBeenLastCalledWith({
+      to: "/workspaces",
+      search: { environment: "local-owner", context: "new-lane", tab: "overview" },
+    });
     await act(async () => boundary.listener!({ workspaceID: "lane", section: "recordings" }));
     expect(boundary.navigate).toHaveBeenLastCalledWith({
       to: "/workspaces",

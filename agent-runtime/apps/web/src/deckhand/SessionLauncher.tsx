@@ -1,5 +1,5 @@
 import { NewChatLauncher, type NewChatLauncherProps } from "./NewChatLauncher";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { EnvironmentId } from "@cinderdeck/contracts";
 import * as Contracts from "@cinderdeck/contracts/deckhand/rpc";
@@ -22,6 +22,17 @@ import {
 } from "./state";
 import styles from "./workspace.module.css";
 import sessionStyles from "./sessions.module.css";
+import {
+  LANE_CHECKOUT_MODES,
+  branchPresence,
+  defaultLaneBranch,
+  defaultLaneName,
+  laneBranchPrefix,
+  laneBranchSlug,
+  type LaneCheckoutMode,
+} from "./laneCreation";
+import { useLaneBranchRefs } from "./laneBranchRefs";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 
 type Resource = Contracts.IntegrationView["resources"][number];
 type Choice = typeof Contracts.ManagedLaunchOption.Type;
@@ -65,6 +76,8 @@ export function SessionLauncher(
       onResume?: () => void;
       onLane: (id: string) => void;
       onPending: (pending: boolean) => void;
+      /** Names of the source workspace's existing lanes, for the "Lane N" default. */
+      existingLaneNames?: ReadonlyArray<string>;
     };
   },
 ) {
@@ -106,12 +119,13 @@ function SessionSetupLauncher({
     onResume?: () => void;
     onLane: (id: string) => void;
     onPending: (pending: boolean) => void;
+    existingLaneNames?: ReadonlyArray<string>;
   };
 }) {
   const navigate = useNavigate();
   const isCreation = creation !== undefined;
   const id = useId();
-  const branchInput = useRef<HTMLInputElement>(null);
+  const nameInput = useRef<HTMLInputElement>(null);
   const launcher = useRef<HTMLElement>(null);
   const launchButton = useRef<HTMLButtonElement>(null);
   const focusRequest = useRef<"open" | "close" | null>(null);
@@ -134,8 +148,14 @@ function SessionSetupLauncher({
     Contracts.ManagedLaunchInput | Contracts.ManagedCreateInput | null
   >(initial.request);
   const initialCreation = isCreationInput(initial.request) ? initial.request : null;
-  const [branch, setBranch] = useState(initialCreation?.branch ?? "");
+  // null follows the lane name; any edit (including clearing) stops following it.
+  const [branchOverride, setBranchOverride] = useState<string | null>(
+    initialCreation?.branch ?? null,
+  );
   const [laneName, setLaneName] = useState(initialCreation?.name ?? "");
+  const [modeOverrides, setModeOverrides] = useState<Readonly<{ [id: string]: LaneCheckoutMode }>>(
+    initialCreation?.repositoryModes ?? {},
+  );
   const [repositoryRefs, setRepositoryRefs] = useState<Readonly<{ [id: string]: string }>>(
     initialCreation?.repositoryRefs ?? {},
   );
@@ -147,6 +167,41 @@ function SessionSetupLauncher({
   const [formOpen, setFormOpen] = useState(initial.request !== null || initial.error);
   const optionsGeneration = useRef(0);
   const repositoryID = saved?.repositoryID ?? resource.workspace?.repos[0]?.id ?? "";
+  const repos = resource.workspace?.repos ?? [];
+  // The session runs in repositoryID, so that repository is always isolated.
+  const modeFor = (repo: (typeof repos)[number]): LaneCheckoutMode =>
+    repo.id === repositoryID
+      ? "worktree"
+      : (modeOverrides[repo.id] ?? repo.laneDefault ?? "worktree");
+  const worktreeRepos = isCreation ? repos.filter((repo) => modeFor(repo) === "worktree") : [];
+  const defaultName = useMemo(
+    () => defaultLaneName(creation?.existingLaneNames ?? []),
+    [creation?.existingLaneNames],
+  );
+  const effectiveName = laneName.trim() || defaultName;
+  const prefix = laneBranchPrefix(resource);
+  const { refs: branchRefs, pending: branchRefsPending } = useLaneBranchRefs(
+    environmentId,
+    worktreeRepos,
+    branchOverride?.trim() || `${prefix}${laneBranchSlug(effectiveName)}`,
+  );
+  const presenceIn = (repoID: string, name: string) =>
+    branchPresence(branchRefs.get(repoID) ?? [], name);
+  const autoBranch = defaultLaneBranch(prefix, effectiveName, (name) =>
+    worktreeRepos.some((repo) => presenceIn(repo.id, name) !== null),
+  );
+  const branch = branchOverride?.trim() || autoBranch;
+  // A generated branch is numbered past existing ones; wait for that read before creating.
+  const branchUnsettled = isCreation && !saved && !branchOverride?.trim() && branchRefsPending;
+  const branchSuggestions = [
+    ...new Set(
+      worktreeRepos.flatMap((repo) =>
+        (branchRefs.get(repo.id) ?? []).map((ref) =>
+          ref.isRemote && ref.remoteName ? ref.name.slice(ref.remoteName.length + 1) : ref.name,
+        ),
+      ),
+    ),
+  ].slice(0, 50);
   const [instanceId, setInstanceId] = useState<string>(saved?.modelSelection.instanceId ?? "");
   const [model, setModel] = useState(saved?.modelSelection.model ?? "");
   const [title, setTitle] = useState(saved?.title ?? "");
@@ -173,7 +228,7 @@ function SessionSetupLauncher({
     ? creation.visible || saved !== null || initial.error
     : formOpen || saved !== null;
   useEffect(() => {
-    if (isCreation && creation.visible) branchInput.current?.focus();
+    if (isCreation && creation.visible) nameInput.current?.focus();
   }, [isCreation, creation?.visible]);
   useEffect(() => {
     if (isCreation) return;
@@ -271,6 +326,7 @@ function SessionSetupLauncher({
       !enabled ||
       initial.error ||
       review !== null ||
+      branchUnsettled ||
       (!saved && (optionsError || !optionsLoaded))
     )
       return;
@@ -294,12 +350,17 @@ function SessionSetupLauncher({
           access,
           ...(isCreation
             ? {
-                branch: branch.trim(),
-                ...(laneName.trim() ? { name: laneName.trim() } : {}),
+                branch,
+                name: effectiveName,
+                repositoryModes: Object.fromEntries(repos.map((repo) => [repo.id, modeFor(repo)])),
+                // Start points apply only to worktrees that create a new branch.
                 repositoryRefs: Object.fromEntries(
-                  Object.entries(repositoryRefs)
-                    .filter(([, ref]) => ref.trim())
-                    .map(([repo, ref]) => [repo, ref.trim()]),
+                  worktreeRepos
+                    .filter(
+                      (repo) =>
+                        presenceIn(repo.id, branch) === null && repositoryRefs[repo.id]?.trim(),
+                    )
+                    .map((repo) => [repo.id, repositoryRefs[repo.id]!.trim()]),
                 ),
                 setup,
                 start,
@@ -493,7 +554,7 @@ function SessionSetupLauncher({
       </header>
       <p className={sessionStyles.scopeNote}>
         {isCreation
-          ? `Create a lane in ${resource.workspace?.name ?? resource.workspaceID}, then start its agent with all workspace folders. Repository and service sharing follow the workspace definition.`
+          ? `Create a lane in ${resource.workspace?.name ?? resource.workspaceID}, then start its agent with all workspace folders. Each repository is a Worktree on the lane branch or a Reference to its original checkout.`
           : "Choose a provider and purpose. Keep analysis alongside your feature sessions, or give one session permission to implement changes."}
       </p>
       {initial.error ? (
@@ -537,49 +598,108 @@ function SessionSetupLauncher({
         >
           {isCreation ? (
             <>
-              <label htmlFor={`${id}-lane-name`}>Lane name (optional)</label>
+              <label htmlFor={`${id}-lane-name`}>Lane name</label>
               <input
+                ref={nameInput}
                 id={`${id}-lane-name`}
                 value={laneName}
-                placeholder="Default: branch"
+                placeholder={defaultName}
                 maxLength={100}
                 onChange={(event) => setLaneName(event.target.value)}
               />
-              <label htmlFor={`${id}-branch`}>New lane branch</label>
+              <label htmlFor={`${id}-branch`}>Branch</label>
               <input
-                ref={branchInput}
                 id={`${id}-branch`}
-                required
                 maxLength={200}
-                placeholder="fix/payment-retry"
-                value={branch}
-                onChange={(event) => setBranch(event.target.value)}
+                list={`${id}-branch-suggestions`}
+                placeholder={autoBranch}
+                value={branchOverride ?? autoBranch}
+                onChange={(event) => setBranchOverride(event.target.value)}
               />
-              <details className={styles["dh-revision-fields"]}>
-                <summary>Repository start revisions</summary>
-                <p>
-                  A workspace can include several repositories and regular folders. Leave blank to
-                  use each repository’s workspace default. Enter a branch, tag or commit to override
-                  it.
-                </p>
-                {resource.workspace?.repos.map((repo) => (
-                  <div key={repo.id}>
-                    <label htmlFor={`${id}-ref-${repo.id}`}>{repo.id}</label>
-                    <input
-                      id={`${id}-ref-${repo.id}`}
-                      maxLength={200}
-                      placeholder="Workspace default"
-                      value={repositoryRefs[repo.id] ?? ""}
-                      onChange={(event) =>
-                        setRepositoryRefs((current) => ({
-                          ...current,
-                          [repo.id]: event.target.value,
-                        }))
-                      }
-                    />
-                  </div>
+              <datalist id={`${id}-branch-suggestions`}>
+                {branchSuggestions.map((name) => (
+                  <option key={name} value={name} />
                 ))}
-              </details>
+              </datalist>
+              <div className={styles["dh-lane-repos"]} role="group" aria-label="Repositories">
+                {repos.map((repo) => {
+                  const mode = modeFor(repo);
+                  const presence = mode === "worktree" ? presenceIn(repo.id, branch) : null;
+                  return (
+                    <div key={repo.id} className={styles["dh-lane-repo"]}>
+                      <span id={`${id}-repo-${repo.id}`}>
+                        <strong>{repo.id}</strong>
+                        <small>
+                          {LANE_CHECKOUT_MODES.find((item) => item.mode === mode)?.description}
+                        </small>
+                      </span>
+                      <div
+                        className={styles["dh-lane-segmented"]}
+                        role="radiogroup"
+                        aria-labelledby={`${id}-repo-${repo.id}`}
+                      >
+                        {LANE_CHECKOUT_MODES.map((item) => {
+                          const choice = (
+                            <button
+                              key={item.mode}
+                              type="button"
+                              role="radio"
+                              aria-checked={mode === item.mode}
+                              aria-label={`${repo.id}: ${item.label}`}
+                              disabled={repo.id === repositoryID && item.mode === "reference"}
+                              onClick={() =>
+                                setModeOverrides((current) => ({
+                                  ...current,
+                                  [repo.id]: item.mode,
+                                }))
+                              }
+                            >
+                              {item.label}
+                            </button>
+                          );
+                          // The session repository can never be a Reference; explain why.
+                          return repo.id === repositoryID && item.mode === "reference" ? (
+                            <Tooltip key={item.mode}>
+                              <TooltipTrigger render={choice} />
+                              <TooltipPopup>
+                                The agent session runs in this repository, so it needs its own
+                                worktree.
+                              </TooltipPopup>
+                            </Tooltip>
+                          ) : (
+                            choice
+                          );
+                        })}
+                      </div>
+                      {mode === "worktree" ? (
+                        presence ? (
+                          <p className={styles["dh-lane-note"]}>
+                            {presence === "local"
+                              ? "Existing branch — checked out as-is"
+                              : "Remote branch — tracked"}
+                          </p>
+                        ) : (
+                          <>
+                            <label htmlFor={`${id}-ref-${repo.id}`}>Start from</label>
+                            <input
+                              id={`${id}-ref-${repo.id}`}
+                              maxLength={200}
+                              placeholder="Workspace default"
+                              value={repositoryRefs[repo.id] ?? ""}
+                              onChange={(event) =>
+                                setRepositoryRefs((current) => ({
+                                  ...current,
+                                  [repo.id]: event.target.value,
+                                }))
+                              }
+                            />
+                          </>
+                        )
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
               <label className={styles["dh-check-field"]}>
                 <input
                   type="checkbox"
@@ -780,12 +900,12 @@ function SessionSetupLauncher({
                 !enabled ||
                 initial.error ||
                 review !== null ||
+                branchUnsettled ||
                 (isCreation &&
                   record?.state === "failed" &&
                   "launch" in record &&
                   !record.launch &&
                   ["succeeded", "failed"].includes(record.receipt?.state ?? "")) ||
-                (isCreation && !saved && !branch.trim()) ||
                 (!saved &&
                   (optionsError ||
                     !optionsLoaded ||
@@ -881,11 +1001,12 @@ function SessionSetupLauncher({
               disabled={busy}
               onClick={() => {
                 if (!clearSaved()) return;
-                setBranch("");
+                setBranchOverride(null);
+                setLaneName("");
                 setTitle("");
                 setObjective("");
                 setMessage(
-                  "The previous result remains in workspace history. Enter a new branch and objective for another feature.",
+                  "The previous result remains in workspace history. Enter a new objective for another feature.",
                 );
               }}
             >

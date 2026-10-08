@@ -167,10 +167,13 @@ struct StackLaneRemovalView: View {
   }
 }
 
+/// New lane for any workspace or lane (its original workspace), and Delete for lanes.
 struct StackLaneDeletionMenu: View {
   let file: StackDefinitionFile
   @ObservedObject var model: StacksViewModel
   var body: some View {
+    Button("New lane…") { model.newLane(from: file) }
+      .disabled(model.supervisor.isBootstrapping).accessibilityIdentifier("workspace.lane.new.\(file.id)")
     if model.workspaceNavigation.isLane(file.id) {
       Button("Delete lane…", role: .destructive) { model.deleteLane(file) }
         .disabled(model.isBusy(file.id)).accessibilityIdentifier("workspace.lane.delete.\(file.id)")

@@ -56,6 +56,8 @@ import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { WorkspaceLaneMap } from "./WorkspaceLaneMap";
 import { NativeWorkspaceTools } from "./NativeWorkspaceTools";
 import { WorkspaceCreateLaneButton } from "./WorkspaceSettingsButton";
+import { laneCreationBlockedReason } from "./laneCreation";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 import {
   workspaceView,
   managedContextsView,
@@ -71,7 +73,10 @@ import { isReviewerLane } from "./reviewerLane";
 import reviewerStyles from "./reviewerLane.module.css";
 import agents from "./workspaceAgents.module.css";
 import native from "./nativeWorkspace.module.css";
-import { workspaceChatUnavailableReason } from "@cinderdeck/shared/workspaceChat";
+import {
+  blockingWorkspaceIssue,
+  workspaceChatUnavailableReason,
+} from "@cinderdeck/shared/workspaceChat";
 import { WorkspaceSections } from "./WorkspaceSections";
 import { LaneName } from "./LaneName";
 import { WorkspaceRefreshButton } from "./WorkspaceRefreshButton";
@@ -88,12 +93,13 @@ const label = (state: IntegrationView["state"]) =>
     unauthorized: "Connection refused",
     unsupported: "Cinderdeck requires macOS",
   })[state];
+// Warnings and services still running an older definition never block lanes,
+// chats or service controls; restarting services is how those changes apply.
 const actionable = (resource: Resource) =>
   resource.available &&
   resource.workspace !== null &&
   resource.workspace !== undefined &&
-  !resource.workspace.issues.length &&
-  !resource.workspace.definitionChanged;
+  !blockingWorkspaceIssue(resource.workspace.issues);
 const terminal = (receipt: IntegrationOperationReceipt) =>
   !["pending", "running"].includes(receipt.state);
 export function WorkspaceOverview() {
@@ -475,6 +481,22 @@ function ConnectedWorkspace({
     "operations.lane.create.repositoryRefs",
     "operations.receipts.wait",
   ].every((capability) => view?.hello?.capabilities.includes(capability));
+  // One gate for the native sheet and the web form; warnings and changed service
+  // definitions never block lane creation.
+  const laneBlockedReason = laneCreationBlockedReason({
+    fresh: nativeCurrent && !savedContextChanged,
+    resource: activeBase,
+    capabilities: view?.hello?.capabilities,
+    pending: featurePending,
+  });
+  const featureBlockedReason =
+    laneBlockedReason ??
+    (canCreateFeature ? null : "This Cinderdeck version cannot create features from here.");
+  const existingLaneNames = contexts.flatMap((resource) =>
+    resource.workspace?.lane && resource.workspace.lane.sourceStackID === activeBase?.workspaceID
+      ? [resource.workspace.lane.name]
+      : [],
+  );
   const reconcile = useCallback(async () => {
     if (!operation) return;
     const selectionVersion = selectionVersionRef.current;
@@ -674,36 +696,36 @@ function ConnectedWorkspace({
                 <GitBranchIcon size={14} /> Lanes
               </summary>
               <div className={native.menu}>
-                <button
-                  ref={newFeatureButton}
-                  className={`${styles["dh-button"]} ${styles["dh-accent"]}`}
-                  disabled={
-                    !enabled ||
-                    !activeBase ||
-                    !actionable(activeBase) ||
-                    featurePending ||
-                    !canCreateFeature
-                  }
-                  onClick={() => {
-                    setFeatureCreating(true);
-                  }}
-                >
-                  <PlusIcon size={17} />
-                  New feature
-                </button>
+                <Tooltip>
+                  <TooltipTrigger
+                    type="button"
+                    render={
+                      <button
+                        ref={newFeatureButton}
+                        className={`${styles["dh-button"]} ${styles["dh-accent"]}`}
+                        disabled={featureBlockedReason !== null}
+                      />
+                    }
+                    disabled={featureBlockedReason !== null}
+                    onClick={() => {
+                      setFeatureCreating(true);
+                    }}
+                  >
+                    <PlusIcon size={17} />
+                    New feature
+                  </TooltipTrigger>
+                  <TooltipPopup>
+                    {featureBlockedReason ?? "Create a lane and launch its agent"}
+                  </TooltipPopup>
+                </Tooltip>
                 {activeBase ? (
                   <WorkspaceCreateLaneButton
                     environmentId={environmentId}
                     workspaceID={activeBase.workspaceID}
                     label="Create lane"
                     showLabel
-                    enabled={
-                      enabled &&
-                      !featurePending &&
-                      !featureCreating &&
-                      actionable(activeBase) &&
-                      view?.hello?.capabilities.includes("operations.lane.create") === true
-                    }
+                    enabled={laneBlockedReason === null}
+                    disabledReason={laneBlockedReason}
                   />
                 ) : null}
                 <Link to="/workspaces" search={{ ...tabSearch, tab: "lane-map" }}>
@@ -853,6 +875,7 @@ function ConnectedWorkspace({
                 closeFeature();
               },
               onPending: setFeaturePending,
+              existingLaneNames,
             }}
           />
         ) : null}
@@ -1358,7 +1381,7 @@ function LaneRow({
           <p role="status" className={styles["dh-attention-text"]}>
             {!resource.available
               ? "Context removed"
-              : (resource.workspace?.issues[0] ?? "Workspace definition changed")}
+              : (resource.workspace?.issues[0] ?? "Restart services to apply settings")}
           </p>
         ) : null}
       </div>

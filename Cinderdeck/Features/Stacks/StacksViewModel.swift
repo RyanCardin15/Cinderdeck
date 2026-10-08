@@ -180,6 +180,29 @@ final class StacksViewModel: ObservableObject {
   }
   func edit(_ file: StackDefinitionFile) { UnifiedSettingsNavigation.openWorkspace(file.id) }
   func create() { editor = .init(file: nil) }
+  /// Opens the lane creation window for `file`'s original workspace and selects the new lane.
+  func newLane(from file: StackDefinitionFile) {
+    let source = file.lane?.sourceStackID ?? file.id
+    guard files.contains(where: { $0.id == source && $0.lane == nil }) else { return }
+    if LaneCreationWindowController.shared.focusIfPresented() { return }
+    Task { @MainActor in
+      do {
+        let result = try await StackControlService.shared.presentLaneCreation(
+          params: .object(["workspace": .string(source), "start": .bool(false)]))
+        if let id = result["workspace"]?["id"]?.stringValue { select(id) }
+        var notes = result["warnings"]?.stringsValue ?? []
+        if result["setup"]?["status"]?.stringValue == "failed" {
+          notes.append("The lane was created, but setup failed. Read its setup run before starting services.")
+        }
+        if !notes.isEmpty { Self.alert("Lane created", notes.joined(separator: "\n")) }
+      } catch {
+        if (error as? StackControlError)?.code != "cancelled" { Self.alert("Could not create lane", error.localizedDescription) }
+      }
+    }
+  }
+  private static func alert(_ title: String, _ text: String) {
+    let alert = NSAlert(); alert.messageText = title; alert.informativeText = text; alert.runModal()
+  }
   func deleteLane(_ file: StackDefinitionFile) {
     guard let current = files.first(where: { $0.id == file.id }), workspaceNavigation.isLane(current.id) else { return }
     laneRemoval = .init(file: current)

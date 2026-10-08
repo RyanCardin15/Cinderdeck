@@ -568,8 +568,24 @@ const make = Effect.gen(function* () {
               Effect.orElseSucceed(() => undefined),
             )
           : undefined;
+      // Repository IDs and defaults let an agent choose worktrees and references in one handoff.
+      const native =
+        managed?.checkout.kind === "primary" && Option.isSome(workspaceBackend)
+          ? yield* workspaceBackend.value.context(managed.workspace.ownerId).pipe(
+              Effect.map((target) => target.resource.workspace?.repos),
+              Effect.orElseSucceed(() => undefined),
+            )
+          : undefined;
+      const repositories = native?.map((repo) => ({
+        id: repo.id,
+        path: repo.path,
+        branch: repo.branch,
+        ...(repo.laneDefault ? { laneDefault: repo.laneDefault } : {}),
+        current: repo.physicalID === managedRepository?.physicalId,
+      }));
       const result: WorktreeMcpStatusResult = {
         ...(laneName !== undefined ? { laneName } : {}),
+        ...(repositories?.length ? { repositories } : {}),
         attached: managed
           ? managed.checkout.kind === "lane"
           : projection.thread.worktreePath !== null,

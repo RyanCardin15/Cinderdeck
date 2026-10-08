@@ -63,6 +63,8 @@ export const IntegrationRepository = Schema.Struct({
   changedFiles: NonNegativeInt,
   ahead: Schema.Int,
   behind: Schema.Int,
+  /** Original workspaces only: the checkout new lanes use unless repositoryModes overrides it. */
+  laneDefault: Schema.optionalKey(Schema.Literals(["worktree", "reference"])),
 });
 export const IntegrationRepositoryStartRefs = Schema.Record(
   Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(160)),
@@ -106,6 +108,8 @@ export const IntegrationWorkspace = Schema.Struct({
     ),
   ),
   definitionChanged: Schema.Boolean,
+  /** Original workspaces only: prefix for generated lane branches ([lanes] branch_prefix). */
+  laneBranchPrefix: Schema.optionalKey(Schema.String),
   issues: Schema.Array(Schema.String),
   services: Schema.Array(IntegrationService),
   repos: Schema.Array(IntegrationRepository),

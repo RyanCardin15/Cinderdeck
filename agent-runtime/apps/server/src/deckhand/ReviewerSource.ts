@@ -1,4 +1,5 @@
 import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
+import { blockingWorkspaceIssue } from "@cinderdeck/shared/workspaceChat";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -89,10 +90,8 @@ export const resolveReviewerSource = (input: {
       !source.resource.workspace ||
       !primary.resource.workspace ||
       primary.resource.workspace.lane ||
-      source.resource.workspace.definitionChanged ||
-      primary.resource.workspace.definitionChanged ||
-      source.resource.workspace.issues.length ||
-      primary.resource.workspace.issues.length
+      blockingWorkspaceIssue(source.resource.workspace.issues) ||
+      blockingWorkspaceIssue(primary.resource.workspace.issues)
     )
       return yield* new ReviewerSourceError({ reason: "stale_context" });
     const native = source.resource.workspace;

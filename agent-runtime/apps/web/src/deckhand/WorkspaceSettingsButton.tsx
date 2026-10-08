@@ -13,6 +13,8 @@ type WorkspaceButtonProps = {
   enabled: boolean;
   compact?: boolean;
   showLabel?: boolean;
+  /** Shown instead of the generic connection hint when the button is disabled. */
+  disabledReason?: string | null;
 };
 export function WorkspaceSettingsButton(props: WorkspaceButtonProps) {
   return <WorkspaceToolButton {...props} surface="workspace-editor" />;
@@ -33,6 +35,7 @@ function WorkspaceToolButton({
   enabled,
   compact = false,
   showLabel = false,
+  disabledReason,
   surface,
   mode,
 }: WorkspaceButtonProps & {
@@ -79,7 +82,7 @@ function WorkspaceToolButton({
   const tooltip = !available
     ? "Open workspace tools in Cinderdeck on this workspace's Mac"
     : !enabled
-      ? "Refresh the workspace connection to open workspace tools"
+      ? (disabledReason ?? "Refresh the workspace connection to open workspace tools")
       : label;
   return (
     <Tooltip>
