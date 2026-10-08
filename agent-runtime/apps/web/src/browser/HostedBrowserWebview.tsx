@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { previewBridge } from "~/components/preview/previewBridge";
 import { usePreviewBridge } from "~/components/preview/usePreviewBridge";
 import { useClientSettingsHydrated } from "~/hooks/useSettings";
+import { Spinner } from "~/components/ui/spinner";
 import { cn, isMacPlatform } from "~/lib/utils";
 
 import { resolveBrowserSurfacePanelRect, useBrowserSurfaceStore } from "./browserSurfaceStore";
@@ -41,6 +42,8 @@ interface ElectronWebview extends HTMLElement {
   getWebContentsId: () => number;
   executeJavaScript: (code: string, userGesture?: boolean) => Promise<unknown>;
 }
+
+const BROWSER_COOKIE_STARTUP_WAIT_MS = 3_000;
 
 declare global {
   interface HTMLElementTagNameMap {
@@ -74,10 +77,15 @@ export function HostedBrowserWebview(props: {
   } = props;
   const clientSettingsHydrated = useClientSettingsHydrated();
   const config = usePreviewWebviewConfig(threadRef.environmentId, profileId);
-  const [initialSrc] = useState(() => initialUrl ?? "about:blank");
+  const [initialSrc, setInitialSrc] = useState<string | null>(null);
   const tabLeaseRef = useRef<AcquiredDesktopTab | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const webviewRef = useRef<ElectronWebview | null>(null);
+  const registeredWebviewRef = useRef<ElectronWebview | null>(null);
+  const pendingCookieReloadRef = useRef(false);
+  const lastCookieReloadTaskRef = useRef<ReturnType<
+    typeof refreshBrowserCookiesWithFeedback
+  > | null>(null);
   const crashRecoveryRef = useRef<WebviewCrashRecoveryState>(INITIAL_WEBVIEW_CRASH_RECOVERY_STATE);
   const [aspectRatioLocked, setAspectRatioLocked] = useState(false);
   const presentation = useBrowserSurfaceStore(
@@ -107,21 +115,65 @@ export function HostedBrowserWebview(props: {
   const [preparedCookieScope, setPreparedCookieScope] = useState<string | null>(null);
   const preparedCookieScopeRef = useRef<string | null>(null);
   const cookiesReady = preparedCookieScope === cookieScope;
+  const surfaceReady = clientSettingsHydrated && config !== null;
 
-  // Hydrate the saved source and refresh before the first page request, including
-  // restored/agent-created tabs. A failed refresh still releases the guest.
+  const flushCookieReload = useCallback(() => {
+    if (!pendingCookieReloadRef.current) return;
+    const webview = webviewRef.current;
+    if (!webview || registeredWebviewRef.current !== webview) return;
+    pendingCookieReloadRef.current = false;
+    void previewBridge?.refresh(runtimeTabId).catch(() => undefined);
+  }, [runtimeTabId]);
+  const reloadWithRefreshedCookies = useCallback(
+    (task: ReturnType<typeof refreshBrowserCookiesWithFeedback>) => {
+      // Opening a retained panel can share the initial, still-pending refresh.
+      // Its completion should only reload this guest once.
+      if (lastCookieReloadTaskRef.current === task) return;
+      lastCookieReloadTaskRef.current = task;
+      pendingCookieReloadRef.current = true;
+      flushCookieReload();
+    },
+    [flushCookieReload],
+  );
+
+  // Give the source a short head start, then use the existing session while a
+  // slow read or permission prompt finishes. Cookie refresh must not prevent
+  // the browser from opening. A late success reloads the registered guest.
   useEffect(() => {
     if (!clientSettingsHydrated) return;
     let disposed = false;
-    void refreshBrowserCookiesWithFeedback(threadRef.environmentId, profileId).then(() => {
-      if (disposed) return;
+    let released = false;
+    const release = () => {
+      if (disposed || released) return;
+      released = true;
       preparedCookieScopeRef.current = cookieScope;
       setPreparedCookieScope(cookieScope);
-    });
+    };
+    const timeout = window.setTimeout(release, BROWSER_COOKIE_STARTUP_WAIT_MS);
+    const refresh = refreshBrowserCookiesWithFeedback(threadRef.environmentId, profileId);
+    void refresh.then(
+      (result) => {
+        window.clearTimeout(timeout);
+        if (disposed) return;
+        if (released && result && result.imported > 0) reloadWithRefreshedCookies(refresh);
+        else release();
+      },
+      () => {
+        window.clearTimeout(timeout);
+        release();
+      },
+    );
     return () => {
       disposed = true;
+      window.clearTimeout(timeout);
     };
-  }, [clientSettingsHydrated, cookieScope, threadRef.environmentId, profileId]);
+  }, [
+    clientSettingsHydrated,
+    cookieScope,
+    threadRef.environmentId,
+    profileId,
+    reloadWithRefreshedCookies,
+  ]);
 
   // Guests remain mounted when their panel closes. Refresh that retained tab
   // when it becomes visible again, then reload so the page uses the new login.
@@ -133,10 +185,9 @@ export function HostedBrowserWebview(props: {
     )
       return;
     let disposed = false;
-    void refreshBrowserCookiesWithFeedback(threadRef.environmentId, profileId).then((result) => {
-      if (!disposed && result && result.imported > 0 && webviewRef.current) {
-        void previewBridge?.refresh(runtimeTabId).catch(() => undefined);
-      }
+    const refresh = refreshBrowserCookiesWithFeedback(threadRef.environmentId, profileId);
+    void refresh.then((result) => {
+      if (!disposed && result && result.imported > 0) reloadWithRefreshedCookies(refresh);
     });
     return () => {
       disposed = true;
@@ -147,7 +198,7 @@ export function HostedBrowserWebview(props: {
     threadRef.environmentId,
     profileId,
     presentation.visible,
-    runtimeTabId,
+    reloadWithRefreshedCookies,
   ]);
 
   useEffect(() => {
@@ -162,16 +213,22 @@ export function HostedBrowserWebview(props: {
   }, [clientSettingsHydrated, runtimeTabId]);
 
   const [webviewGeneration, setWebviewGeneration] = useState(0);
-  const [recoverySrc, setRecoverySrc] = useState(initialSrc);
+  const [recoverySrc, setRecoverySrc] = useState(initialUrl ?? "about:blank");
   const latestUrlRef = useRef(initialUrl);
 
   useEffect(() => {
     latestUrlRef.current = initialUrl;
   }, [initialUrl]);
 
-  const setWebviewRef = useCallback((node: HTMLElement | null) => {
-    webviewRef.current = node as ElectronWebview | null;
-  }, []);
+  const setWebviewRef = useCallback(
+    (node: HTMLElement | null) => {
+      webviewRef.current = node as ElectronWebview | null;
+      // Freeze src when the guest actually attaches, using the URL from this
+      // commit. Afterward the desktop bridge owns navigation and history.
+      if (node) setInitialSrc((current) => current ?? initialUrl ?? "about:blank");
+    },
+    [initialUrl],
+  );
 
   useEffect(() => {
     const webview = webviewRef.current;
@@ -192,6 +249,9 @@ export function HostedBrowserWebview(props: {
           const webContentsId = webview.getWebContentsId();
           if (Number.isInteger(webContentsId) && webContentsId > 0) {
             await bridge.registerWebview(runtimeTabId, webContentsId);
+            if (disposed || webviewRef.current !== webview) return;
+            registeredWebviewRef.current = webview;
+            flushCookieReload();
           }
         } catch {
           // did-attach/dom-ready will retry if the guest was not ready yet.
@@ -206,7 +266,7 @@ export function HostedBrowserWebview(props: {
       recoveryTimeout = setTimeout(() => {
         recoveryTimeout = null;
         if (!disposed) {
-          setRecoverySrc(latestUrlRef.current ?? initialSrc);
+          setRecoverySrc(latestUrlRef.current ?? initialSrc ?? "about:blank");
           setWebviewGeneration((generation) => generation + 1);
         }
       }, recovery.delayMs);
@@ -226,13 +286,22 @@ export function HostedBrowserWebview(props: {
     register();
     return () => {
       disposed = true;
+      if (registeredWebviewRef.current === webview) registeredWebviewRef.current = null;
       if (recoveryTimeout !== null) clearTimeout(recoveryTimeout);
       webview.removeEventListener("did-attach", register);
       webview.removeEventListener("dom-ready", register);
       webview.removeEventListener("render-process-gone", recoverGuest);
       webview.removeEventListener("focus", dismissHostPopups);
     };
-  }, [clientSettingsHydrated, cookiesReady, config, initialSrc, runtimeTabId, webviewGeneration]);
+  }, [
+    clientSettingsHydrated,
+    cookiesReady,
+    config,
+    initialSrc,
+    runtimeTabId,
+    webviewGeneration,
+    flushCookieReload,
+  ]);
 
   const active = presentation.visible && presentation.rect !== null;
   const lastRect = presentation.rect;
@@ -307,9 +376,10 @@ export function HostedBrowserWebview(props: {
   }, [layout, runtimeTabId]);
 
   useEffect(() => {
+    if (!surfaceReady) return;
     const frameId = window.requestAnimationFrame(syncContentPresentation);
     return () => window.cancelAnimationFrame(frameId);
-  }, [syncContentPresentation]);
+  }, [syncContentPresentation, surfaceReady]);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -317,7 +387,7 @@ export function HostedBrowserWebview(props: {
     wrapper.scrollTo({ left: 0, top: 0 });
   }, [runtimeTabId, viewport._tag, viewportHeight, viewportWidth]);
 
-  if (!clientSettingsHydrated || !cookiesReady || !config) return null;
+  if (!surfaceReady || !config) return null;
 
   const renderingActive = active || backgroundActivity || pictureInPicture || recordingActive;
   const wrapperStyle = resolveHostedBrowserWebviewWrapperStyle({
@@ -332,6 +402,20 @@ export function HostedBrowserWebview(props: {
     rect: lastRect,
     hiddenSize,
   });
+
+  if (!cookiesReady) {
+    return (
+      <div ref={wrapperRef} className="fixed overflow-hidden bg-muted/35" style={wrapperStyle}>
+        <div
+          role="status"
+          className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground"
+        >
+          <Spinner size="md" aria-hidden />
+          Updating saved sign-in…
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -361,7 +445,7 @@ export function HostedBrowserWebview(props: {
           // boolean, but react-dom drops boolean values for unrecognized attributes,
           // so the literal string has to be spread past the type.
           {...({ allowpopups: "true" } as unknown as { readonly allowpopups?: boolean })}
-          src={webviewGeneration === 0 ? initialSrc : recoverySrc}
+          src={webviewGeneration === 0 ? (initialSrc ?? initialUrl ?? "about:blank") : recoverySrc}
           partition={config.partition}
           webpreferences={config.webPreferences}
           {...(config.preloadUrl ? { preload: config.preloadUrl } : {})}

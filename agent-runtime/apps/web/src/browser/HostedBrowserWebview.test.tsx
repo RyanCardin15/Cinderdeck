@@ -39,6 +39,7 @@ vi.mock("~/components/preview/previewBridge", () => ({
 }));
 
 vi.mock("~/components/ui/toast", () => ({ toastManager: { add: mocks.addToast } }));
+vi.mock("~/lib/visibleAnimation", () => ({ observeVisibleAnimation: () => undefined }));
 
 vi.mock("~/components/preview/usePreviewBridge", () => ({
   usePreviewBridge: () => undefined,
@@ -111,6 +112,189 @@ afterEach(async () => {
 });
 
 describe("HostedBrowserWebview settings hydration", () => {
+  it("attaches to the latest requested URL after cookie preparation and then preserves navigation", async () => {
+    const refresh = deferred<Awaited<ReturnType<DesktopPreviewBridge["importBrowserCookies"]>>>();
+    const threadRef = {
+      environmentId: EnvironmentId.make("cookie-navigation"),
+      threadId: ThreadId.make("cookie-navigation-thread"),
+    };
+    mocks.getClientSettings.mockResolvedValue({
+      ...DEFAULT_CLIENT_SETTINGS,
+      browserCookieSources: [
+        {
+          environmentId: threadRef.environmentId,
+          targetProfileId: "default",
+          sourceId: "chrome",
+          sourceName: "Chrome",
+          sourceProfileDirectory: "Default",
+          sourceProfileName: "Personal",
+        },
+      ],
+    });
+    mocks.importBrowserCookies.mockReturnValueOnce(refresh.promise);
+    const view = (url: string | null) => (
+      <HostedBrowserWebview
+        threadRef={threadRef}
+        tabId="navigation-tab"
+        runtimeTabId="runtime-navigation-tab"
+        initialUrl={url}
+        viewport={FILL_PREVIEW_VIEWPORT}
+        pictureInPicture={false}
+        profileId={undefined}
+        zoomFactor={1}
+      />
+    );
+    await act(async () => {
+      renderer = create(view(null), {
+        createNodeMock: (element) =>
+          element.type === "webview"
+            ? Object.assign(new EventTarget(), { getWebContentsId: () => 45 })
+            : { scrollTo: () => undefined },
+      });
+      await ensureClientSettingsHydrated();
+    });
+    await act(() => renderer!.update(view("https://example.com/requested")));
+    await act(async () => {
+      refresh.resolve({ imported: 1, skipped: 0, skippedDomains: [] });
+      await refresh.promise;
+    });
+    expect(renderer!.root.findByType("webview").props.src).toBe("https://example.com/requested");
+    await act(() => renderer!.update(view("https://example.com/next-page")));
+    expect(renderer!.root.findByType("webview").props.src).toBe("https://example.com/requested");
+  });
+
+  it("opens with saved cookies after a slow refresh and reloads only after the guest registers", async () => {
+    vi.useFakeTimers();
+    const refresh = deferred<Awaited<ReturnType<DesktopPreviewBridge["importBrowserCookies"]>>>();
+    const registration = deferred<void>();
+    const threadRef = {
+      environmentId: EnvironmentId.make("cookie-slow"),
+      threadId: ThreadId.make("cookie-slow-thread"),
+    };
+    mocks.getClientSettings.mockResolvedValue({
+      ...DEFAULT_CLIENT_SETTINGS,
+      browserCookieSources: [
+        {
+          environmentId: threadRef.environmentId,
+          targetProfileId: "default",
+          sourceId: "chrome",
+          sourceName: "Chrome",
+          sourceProfileDirectory: "Default",
+          sourceProfileName: "Personal",
+        },
+      ],
+    });
+    mocks.importBrowserCookies.mockReturnValueOnce(refresh.promise);
+    mocks.registerWebview.mockReturnValueOnce(registration.promise);
+    const guest = vi.fn(() => Object.assign(new EventTarget(), { getWebContentsId: () => 43 }));
+    await act(async () => {
+      renderer = create(
+        <HostedBrowserWebview
+          threadRef={threadRef}
+          tabId="slow-tab"
+          runtimeTabId="runtime-slow-tab"
+          initialUrl="https://example.com"
+          viewport={FILL_PREVIEW_VIEWPORT}
+          pictureInPicture={false}
+          profileId={undefined}
+          zoomFactor={1}
+        />,
+        {
+          createNodeMock: (element) =>
+            element.type === "webview" ? guest() : { scrollTo: () => undefined },
+        },
+      );
+      await ensureClientSettingsHydrated();
+    });
+    expect(guest).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTimeAsync(3_000));
+    expect(guest).toHaveBeenCalledOnce();
+    expect(renderer!.root.findByType("webview").props.src).toBe("https://example.com");
+    expect(mocks.registerWebview).toHaveBeenCalledWith("runtime-slow-tab", 43);
+    await act(async () => {
+      refresh.resolve({ imported: 1, skipped: 0, skippedDomains: [] });
+      await refresh.promise;
+    });
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    await act(async () => {
+      registration.resolve();
+      await registration.promise;
+    });
+    expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith("runtime-slow-tab");
+    expect(mocks.importBrowserCookies).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+  });
+
+  it("reloads once when reopening shares a slow initial refresh, and ignores completion after closing", async () => {
+    vi.useFakeTimers();
+    const refresh = deferred<Awaited<ReturnType<DesktopPreviewBridge["importBrowserCookies"]>>>();
+    const closedRefresh =
+      deferred<Awaited<ReturnType<DesktopPreviewBridge["importBrowserCookies"]>>>();
+    const threadRef = {
+      environmentId: EnvironmentId.make("cookie-shared-startup"),
+      threadId: ThreadId.make("cookie-shared-startup-thread"),
+    };
+    mocks.getClientSettings.mockResolvedValue({
+      ...DEFAULT_CLIENT_SETTINGS,
+      browserCookieSources: [
+        {
+          environmentId: threadRef.environmentId,
+          targetProfileId: "default",
+          sourceId: "chrome",
+          sourceName: "Chrome",
+          sourceProfileDirectory: "Default",
+          sourceProfileName: "Personal",
+        },
+      ],
+    });
+    mocks.importBrowserCookies.mockReturnValueOnce(refresh.promise);
+    const runtimeTabId = "runtime-shared-startup";
+    const owner = Symbol("panel");
+    const store = useBrowserSurfaceStore.getState();
+    store.claim(runtimeTabId, owner, false);
+    await act(async () => {
+      renderer = create(
+        <HostedBrowserWebview
+          threadRef={threadRef}
+          tabId="shared-startup-tab"
+          runtimeTabId={runtimeTabId}
+          initialUrl="https://example.com"
+          viewport={FILL_PREVIEW_VIEWPORT}
+          pictureInPicture={false}
+          profileId={undefined}
+          zoomFactor={1}
+        />,
+        {
+          createNodeMock: (element) =>
+            element.type === "webview"
+              ? Object.assign(new EventTarget(), { getWebContentsId: () => 44 })
+              : { scrollTo: () => undefined },
+        },
+      );
+      await ensureClientSettingsHydrated();
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(3_000));
+    const rect = { x: 0, y: 0, width: 800, height: 600 };
+    await act(() => store.present(runtimeTabId, owner, rect, true, 0, 30));
+    await act(async () => {
+      refresh.resolve({ imported: 1, skipped: 0, skippedDomains: [] });
+      await refresh.promise;
+    });
+    expect(mocks.importBrowserCookies).toHaveBeenCalledOnce();
+    expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith(runtimeTabId);
+    mocks.importBrowserCookies.mockReturnValueOnce(closedRefresh.promise);
+    await act(() => store.present(runtimeTabId, owner, rect, false, 0, 30));
+    await act(() => store.present(runtimeTabId, owner, rect, true, 0, 30));
+    await act(() => renderer!.unmount());
+    renderer = undefined;
+    await act(async () => {
+      closedRefresh.resolve({ imported: 1, skipped: 0, skippedDomains: [] });
+      await closedRefresh.promise;
+    });
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+  });
+
   it("refreshes before the first request and refreshes a retained tab when reopened", async () => {
     const refresh = deferred<Awaited<ReturnType<DesktopPreviewBridge["importBrowserCookies"]>>>();
     const threadRef = {
