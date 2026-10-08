@@ -89,7 +89,10 @@ import {
   resolveEmbeddedTerminalContent,
   type AcpClientTerminals,
 } from "../../provider/acp/AcpClientTerminals.ts";
-import { ACP_SESSION_MODE_OPTION_ID } from "../../provider/acp/AcpSessionConfig.ts";
+import {
+  ACP_SESSION_MODE_OPTION_ID,
+  acpConfigValueFromChoiceId,
+} from "../../provider/acp/AcpSessionConfig.ts";
 import * as AcpSessionRuntime from "../../provider/acp/AcpSessionRuntime.ts";
 import {
   cinderdeckAcpPromptWithInstructions,
@@ -319,6 +322,27 @@ export interface AcpAdapterV2Flavor {
     toolCall: AcpToolCallState,
   ) => AcpAdapterV2SubagentUpdate | undefined;
   /**
+   * Subagent spawns and ends announced as their own session updates (Cursor
+   * `subagent_spawned` / `subagent_state_update`), on the parent session.
+   */
+  readonly extractSubagentSessionUpdate?: (
+    notification: EffectAcpSchema.SessionNotification,
+  ) => AcpAdapterV2SubagentSessionUpdate | undefined;
+  /**
+   * The agent reports subagent frames under child session ids it never links
+   * to their spawn (Copilot sync `task`). An unknown child session binds to the
+   * only running subagent without one. While several are open its frames wait;
+   * each spawn that finishes takes the session that went quiet first.
+   */
+  readonly bindUnannouncedChildSessions?: boolean;
+  /**
+   * Tools the parent waits on while subagents work (Copilot sync `task`,
+   * blocking `read_agent`). The agent streams subagent replies on the root
+   * session without attribution, so root text that arrives while one runs, or
+   * right after child activity, is a subagent's and never the parent's.
+   */
+  readonly isSubagentWaitTool?: (toolCall: AcpToolCallState) => boolean;
+  /**
    * Optional Grok-style rewrite before tool projection (e.g. keep monitor start
    * ACKs in the running state until stream end).
    */
@@ -476,6 +500,16 @@ export interface AcpAdapterV2SubagentUpdate {
    */
   readonly suppressNormalTool?: boolean;
 }
+
+/** Subagent lifecycle carried on a session update outside the ACP schema. */
+export type AcpAdapterV2SubagentSessionUpdate =
+  | { readonly kind: "spawned"; readonly update: AcpAdapterV2SubagentUpdate }
+  | {
+      readonly kind: "finished";
+      readonly childSessionId: string;
+      readonly status: "completed" | "failed" | "cancelled" | "interrupted";
+      readonly result: string | null;
+    };
 
 export interface AcpAdapterV2Options {
   readonly instanceId: ProviderInstanceId;
@@ -1126,6 +1160,11 @@ interface ActiveAcpTurn {
   readonly subagents: Map<string, ActiveAcpSubagent>;
   readonly subagentsBySessionId: Map<string, ActiveAcpSubagent>;
   readonly pendingSubagentNotifications: Map<string, Array<EffectAcpSchema.SessionNotification>>;
+  /** Order of the latest frame from each child session, for unannounced binding. */
+  readonly childSessionActivity: Map<string, number>;
+  childActivitySeq: number;
+  /** The latest frame came from a subagent, not the parent. */
+  lastFrameFromChild: boolean;
   /** Background monitor/task id → toolCallId for synthetic root text updates. */
   readonly toolCallIdsByBackgroundTaskId: Map<string, string>;
   /**
@@ -1354,6 +1393,8 @@ interface ActiveAcpSubagent {
   readonly assistantMessages: Map<string, string>;
   readonly childItemOrdinals: Map<string, number>;
   nextChildOrdinal: number;
+  /** Splits unattributed reply text into one message per stretch between tools. */
+  streamSegment: number;
   /**
    * Whether a terminal carryover status has been projected to events.
    * Completed roots project post-settle terminals immediately while their
@@ -1363,6 +1404,23 @@ interface ActiveAcpSubagent {
    * hasPendingBackgroundWork until projection lands.
    */
   terminalStatusProjected: boolean;
+}
+
+const MAX_PENDING_CHILD_SESSION_NOTIFICATIONS = 256;
+
+/** Frames that show a subagent's work: its tools and its reply. */
+function acpIsChildActivityUpdate(update: EffectAcpSchema.SessionUpdate): boolean {
+  switch (update.sessionUpdate) {
+    case "tool_call":
+    case "tool_call_update":
+      return true;
+    case "agent_message_chunk":
+      return acpContentBlockDisplayText(update.content) !== undefined;
+    case "agent_message":
+      return update.content !== undefined;
+    default:
+      return false;
+  }
 }
 
 function acpSubagentStatusIsTerminal(status: OrchestrationV2Subagent["status"]): boolean {
@@ -1622,7 +1680,9 @@ export function makeAcpAdapterV2(
           yield* Ref.make<AcpSessionRuntime.AcpSessionRuntimeStartResult | null>(null);
         const activeSelection = yield* Ref.make<ModelSelection | null>(null);
         const activeInteractionMode = yield* Ref.make<ProviderInteractionMode | null>(null);
-        const promptInstructionStates = yield* Ref.make(new Map<string, CinderdeckAcpInstructionState>());
+        const promptInstructionStates = yield* Ref.make(
+          new Map<string, CinderdeckAcpInstructionState>(),
+        );
         const runtimeRestartRequired = yield* Ref.make(false);
         const runtimeTeardownState = yield* Ref.make<AcpRuntimeTeardownState>({ _tag: "Idle" });
         const runtimeCallbackGeneration = yield* Ref.make(0);
@@ -2580,6 +2640,41 @@ export function makeAcpAdapterV2(
           });
         });
 
+        /**
+         * Root text a subagent streamed without attribution. The parent cannot
+         * speak while it waits on a subagent tool, and child activity marks the
+         * text that follows as the child's. With one subagent open it joins that
+         * subagent's reply; with several it is dropped, since each spawn result
+         * carries its reply.
+         */
+        const routeUnattributedSubagentOutput = Effect.fnUntraced(function* (
+          context: ActiveAcpTurn,
+          update: Extract<
+            EffectAcpSchema.SessionUpdate,
+            { readonly sessionUpdate: "agent_message_chunk" | "agent_thought_chunk" }
+          >,
+        ) {
+          const isSubagentWaitTool = flavor.isSubagentWaitTool;
+          if (isSubagentWaitTool === undefined) return false;
+          const running = [...context.subagents.values()].filter((subagent) =>
+            acpSubagentStatusBlocksTurnSettlement(subagent.task.status),
+          );
+          const [only] = running;
+          if (only === undefined) return false;
+          const parentWaiting = [...context.tools.values()].some((tool) => {
+            const status = toolStatus(tool.status);
+            return (status === "pending" || status === "running") && isSubagentWaitTool(tool);
+          });
+          if (!parentWaiting && !context.lastFrameFromChild) return false;
+          if (update.sessionUpdate === "agent_message_chunk" && running.length === 1) {
+            const text = acpContentBlockDisplayText(update.content);
+            if (text !== undefined) {
+              yield* emitSubagentAssistant(only, text, "append", `stream:${only.streamSegment}`);
+            }
+          }
+          return true;
+        });
+
         const projectSubagentNotification = Effect.fnUntraced(function* (
           subagent: ActiveAcpSubagent,
           notification: EffectAcpSchema.SessionNotification,
@@ -2602,18 +2697,63 @@ export function makeAcpAdapterV2(
           }
         });
 
+        // `let` breaks the cycle with emitSubagent, which replays buffered frames.
+        let projectChildSessionNotification: (
+          context: ActiveAcpTurn,
+          subagent: ActiveAcpSubagent,
+          notification: EffectAcpSchema.SessionNotification,
+        ) => Effect.Effect<void> = () => Effect.void;
+
+        const unboundRunningSubagents = (context: ActiveAcpTurn) =>
+          [...context.subagents.values()].filter(
+            (subagent) =>
+              subagent.childSessionId === null &&
+              acpSubagentStatusBlocksTurnSettlement(subagent.task.status),
+          );
+
         const emitSubagent = Effect.fnUntraced(function* (
           context: ActiveAcpTurn,
-          update: AcpAdapterV2SubagentUpdate,
+          incoming: AcpAdapterV2SubagentUpdate,
         ) {
           // Hydration tools (get_command_or_subagent_output) use a new toolCallId
           // but reference the child via subagent_id / task id.
           const existing =
-            context.subagents.get(update.nativeTaskId) ??
-            (update.childSessionId !== null
-              ? context.subagentsBySessionId.get(update.childSessionId)
+            context.subagents.get(incoming.nativeTaskId) ??
+            (incoming.childSessionId !== null
+              ? context.subagentsBySessionId.get(incoming.childSessionId)
               : undefined);
-          const updateIsTerminal = acpSubagentStatusIsTerminal(update.status);
+          const updateIsTerminal = acpSubagentStatusIsTerminal(incoming.status);
+          let update = incoming;
+          if (
+            flavor.bindUnannouncedChildSessions === true &&
+            existing !== undefined &&
+            existing.childSessionId === null &&
+            update.childSessionId === null &&
+            updateIsTerminal
+          ) {
+            // A finishing subagent takes the child session that went quiet
+            // first, provided every open subagent has produced frames.
+            const pending = [...context.pendingSubagentNotifications.keys()];
+            if (pending.length > 0 && pending.length >= unboundRunningSubagents(context).length) {
+              const quietest = pending.toSorted(
+                (left, right) =>
+                  (context.childSessionActivity.get(left) ?? 0) -
+                  (context.childSessionActivity.get(right) ?? 0),
+              )[0];
+              if (quietest !== undefined) update = { ...update, childSessionId: quietest };
+            }
+          }
+          if (
+            existing !== undefined &&
+            !updateIsTerminal &&
+            existing.task.status === update.status &&
+            (update.childSessionId === null || existing.childSessionId !== null) &&
+            (update.result === null || update.result === existing.task.result) &&
+            (update.model === null || existing.task.model !== null)
+          ) {
+            // Nothing changed (e.g. a blocking read of a running subagent).
+            return;
+          }
           if (
             existing !== undefined &&
             acpSubagentStatusIsTerminal(existing.task.status) &&
@@ -2679,6 +2819,7 @@ export function makeAcpAdapterV2(
               result: null,
               startedAt: now,
             }),
+            model: existing?.task.model ?? update.model,
             status: taskStatus,
             result: update.result ?? existing?.task.result ?? null,
             completedAt: acpSubagentStatusIsTerminal(taskStatus) ? now : null,
@@ -2697,6 +2838,7 @@ export function makeAcpAdapterV2(
             assistantMessages: new Map(),
             childItemOrdinals: new Map(),
             nextChildOrdinal: 101,
+            streamSegment: 0,
             terminalStatusProjected: false,
           };
           subagent.task = task;
@@ -2785,7 +2927,7 @@ export function makeAcpAdapterV2(
             context.pendingSubagentNotifications.delete(childSessionId);
             yield* Effect.forEach(
               buffered,
-              (notification) => projectSubagentNotification(subagent, notification),
+              (notification) => projectChildSessionNotification(context, subagent, notification),
               { concurrency: 1, discard: true },
             );
           }
@@ -2879,6 +3021,120 @@ export function makeAcpAdapterV2(
           });
           if (acpSubagentStatusIsTerminal(taskStatus)) {
             subagent.terminalStatusProjected = true;
+            if (flavor.bindUnannouncedChildSessions === true) {
+              yield* bindLastUnannouncedChildSession(context);
+            }
+          }
+        });
+
+        /** Binds an unknown child session when exactly one subagent can own it. */
+        const bindUnannouncedChildSession = Effect.fnUntraced(function* (
+          context: ActiveAcpTurn,
+          sessionId: string,
+        ) {
+          if (flavor.bindUnannouncedChildSessions !== true) return undefined;
+          const candidates = unboundRunningSubagents(context);
+          const [candidate] = candidates;
+          if (candidate === undefined || candidates.length !== 1) return undefined;
+          const otherPending = [...context.pendingSubagentNotifications.keys()].some(
+            (pending) => pending !== sessionId,
+          );
+          if (otherPending) return undefined;
+          yield* emitSubagent(context, {
+            nativeTaskId: candidate.task.nativeTaskRef?.nativeId ?? String(candidate.task.id),
+            prompt: candidate.task.prompt,
+            title: candidate.task.title,
+            model: candidate.task.model,
+            status: candidate.task.status === "pending" ? "pending" : "running",
+            childSessionId: sessionId,
+            result: null,
+            suppressNormalTool: true,
+          });
+          return context.subagentsBySessionId.get(sessionId);
+        });
+
+        // Once elimination leaves one open subagent and one waiting session, they match.
+        const bindLastUnannouncedChildSession = (context: ActiveAcpTurn): Effect.Effect<void> => {
+          const pending = [...context.pendingSubagentNotifications.keys()];
+          const [sessionId] = pending;
+          return sessionId === undefined || pending.length !== 1
+            ? Effect.void
+            : bindUnannouncedChildSession(context, sessionId).pipe(Effect.asVoid);
+        };
+
+        const applySubagentSessionUpdate = Effect.fnUntraced(function* (
+          context: ActiveAcpTurn,
+          sessionUpdate: AcpAdapterV2SubagentSessionUpdate,
+        ) {
+          if (sessionUpdate.kind === "finished") {
+            yield* finishSubagentFromNotice(sessionUpdate);
+            return;
+          }
+          if (context.finalized) return;
+          yield* emitSubagent(context, sessionUpdate.update);
+          yield* rearmDeferredFinalize(context);
+        });
+
+        projectChildSessionNotification = Effect.fnUntraced(function* (
+          context: ActiveAcpTurn,
+          subagent: ActiveAcpSubagent,
+          notification: EffectAcpSchema.SessionNotification,
+        ) {
+          const update = notification.update;
+          if (update.sessionUpdate !== "tool_call" && update.sessionUpdate !== "tool_call_update") {
+            yield* projectSubagentNotification(subagent, notification);
+            return;
+          }
+          const extractSubagentUpdate = flavor.extractSubagentUpdate;
+          if (extractSubagentUpdate === undefined) return;
+          const nativeTaskId = subagent.task.nativeTaskRef?.nativeId ?? String(subagent.task.id);
+          // Reply text after a tool belongs to a new message.
+          subagent.streamSegment += 1;
+          for (const event of parseSessionUpdateEvent(notification).events) {
+            if (event._tag !== "ToolCallUpdated") continue;
+            const toolCall = flavor.normalizeToolCall?.(event.toolCall) ?? event.toolCall;
+            const subagentUpdate = extractSubagentUpdate(toolCall);
+            if (subagentUpdate !== undefined) {
+              if (
+                subagentUpdate.nativeTaskId === nativeTaskId ||
+                subagentUpdate.childSessionId === notification.sessionId
+              ) {
+                yield* emitSubagent(context, subagentUpdate);
+              }
+              continue;
+            }
+            const key = `${nativeTaskId}:tool:${toolCall.toolCallId}`;
+            const merged = mergeToolCallState(context.tools.get(key), toolCall);
+            context.tools.set(key, merged);
+            const now = yield* DateTime.now;
+            const status = toolStatus(merged.status);
+            const startedAt = context.toolStartedAt.get(key) ?? now;
+            context.toolStartedAt.set(key, startedAt);
+            const ordinal = resolveSubagentChildOrdinal(subagent, key);
+            yield* emitProviderEvent({
+              type: "turn_item.updated",
+              driver,
+              turnItem: {
+                id: providerTurnItemId(key),
+                threadId: subagent.childThreadId,
+                runId: null,
+                nodeId: subagent.childRootNodeId,
+                providerThreadId: subagent.task.providerThreadId,
+                providerTurnId: null,
+                nativeItemRef: { driver, nativeId: key, strength: "strong" },
+                parentItemId: null,
+                ordinal,
+                status,
+                title: merged.title ?? merged.kind ?? "Tool",
+                startedAt,
+                completedAt: completedAtForStatus(status, now),
+                updatedAt: now,
+                type: "dynamic_tool",
+                toolName: merged.title ?? merged.kind ?? "Tool",
+                input: merged.data.rawInput ?? null,
+                output: merged.data.rawOutput ?? merged.data.content ?? null,
+              },
+            });
           }
         });
 
@@ -4047,6 +4303,16 @@ export function makeAcpAdapterV2(
             }
             return;
           }
+          const subagentSessionUpdate = flavor.extractSubagentSessionUpdate?.(notification);
+          if (subagentSessionUpdate !== undefined) {
+            if (subagentSessionUpdate.kind === "finished") {
+              // Ends a subagent in the open turn or in a settled turn's carryover.
+              yield* finishSubagentFromNotice(subagentSessionUpdate);
+            } else if (context !== null && !context.finalized) {
+              yield* applySubagentSessionUpdate(context, subagentSessionUpdate);
+            }
+            return;
+          }
           if (
             context?.finalized === true &&
             (yield* applyFinalizedActiveTurnSubagentTerminal(context, notification))
@@ -4266,75 +4532,26 @@ export function makeAcpAdapterV2(
             // Finalize may have completed during the activeSessionId yield.
             if (context.finalized) return;
             if (flavor.extractSubagentUpdate === undefined) return;
-            const subagent = context.subagentsBySessionId.get(notification.sessionId);
-            if (
-              update.sessionUpdate === "tool_call" ||
-              update.sessionUpdate === "tool_call_update"
-            ) {
-              if (subagent === undefined) return;
-              const nativeTaskId =
-                subagent.task.nativeTaskRef?.nativeId ?? String(subagent.task.id);
-              for (const event of parseSessionUpdateEvent(notification).events) {
-                if (event._tag !== "ToolCallUpdated") continue;
-                const toolCall = flavor.normalizeToolCall?.(event.toolCall) ?? event.toolCall;
-                const subagentUpdate = flavor.extractSubagentUpdate(toolCall);
-                if (subagentUpdate !== undefined) {
-                  if (
-                    subagentUpdate.nativeTaskId === nativeTaskId ||
-                    subagentUpdate.childSessionId === notification.sessionId
-                  ) {
-                    yield* emitSubagent(context, subagentUpdate);
-                  }
-                  continue;
-                }
-                const key = `${nativeTaskId}:tool:${toolCall.toolCallId}`;
-                const merged = mergeToolCallState(context.tools.get(key), toolCall);
-                context.tools.set(key, merged);
-                const now = yield* DateTime.now;
-                const status = toolStatus(merged.status);
-                const startedAt = context.toolStartedAt.get(key) ?? now;
-                context.toolStartedAt.set(key, startedAt);
-                const ordinal = resolveSubagentChildOrdinal(subagent, key);
-                yield* emitProviderEvent({
-                  type: "turn_item.updated",
-                  driver,
-                  turnItem: {
-                    id: providerTurnItemId(key),
-                    threadId: subagent.childThreadId,
-                    runId: null,
-                    nodeId: subagent.childRootNodeId,
-                    providerThreadId: subagent.task.providerThreadId,
-                    providerTurnId: null,
-                    nativeItemRef: { driver, nativeId: key, strength: "strong" },
-                    parentItemId: null,
-                    ordinal,
-                    status,
-                    title: merged.title ?? merged.kind ?? "Tool",
-                    startedAt,
-                    completedAt: completedAtForStatus(status, now),
-                    updatedAt: now,
-                    type: "dynamic_tool",
-                    toolName: merged.title ?? merged.kind ?? "Tool",
-                    input: merged.data.rawInput ?? null,
-                    output: merged.data.rawOutput ?? merged.data.content ?? null,
-                  },
-                });
-              }
+            const sessionUpdate = flavor.extractSubagentSessionUpdate?.(notification);
+            if (sessionUpdate !== undefined) {
+              yield* applySubagentSessionUpdate(context, sessionUpdate);
               return;
             }
-            const isDisplayableAssistantUpdate =
-              (update.sessionUpdate === "agent_message_chunk" &&
-                acpContentBlockDisplayText(update.content) !== undefined) ||
-              (update.sessionUpdate === "agent_message" && update.content !== undefined);
-            if (!isDisplayableAssistantUpdate) {
-              return;
-            }
+            if (!acpIsChildActivityUpdate(update)) return;
+            context.lastFrameFromChild = true;
+            context.childActivitySeq += 1;
+            context.childSessionActivity.set(notification.sessionId, context.childActivitySeq);
+            const subagent =
+              context.subagentsBySessionId.get(notification.sessionId) ??
+              (yield* bindUnannouncedChildSession(context, notification.sessionId));
             if (subagent !== undefined) {
-              yield* projectSubagentNotification(subagent, notification);
+              yield* projectChildSessionNotification(context, subagent, notification);
               return;
             }
             const buffered = context.pendingSubagentNotifications.get(notification.sessionId) ?? [];
-            buffered.push(notification);
+            if (buffered.length < MAX_PENDING_CHILD_SESSION_NOTIFICATIONS) {
+              buffered.push(notification);
+            }
             context.pendingSubagentNotifications.set(notification.sessionId, buffered);
             return;
           }
@@ -4371,6 +4588,21 @@ export function makeAcpAdapterV2(
             acpRootSessionUpdateIngestsOutput(notification)
           ) {
             yield* emitProviderRetry(context, "completed");
+          }
+          if (flavor.isSubagentWaitTool !== undefined) {
+            if (
+              update.sessionUpdate === "agent_message_chunk" ||
+              update.sessionUpdate === "agent_thought_chunk"
+            ) {
+              if (yield* routeUnattributedSubagentOutput(context, update)) return;
+            } else if (
+              update.sessionUpdate === "tool_call" ||
+              update.sessionUpdate === "tool_call_update" ||
+              update.sessionUpdate === "user_message_chunk" ||
+              update.sessionUpdate === "plan"
+            ) {
+              context.lastFrameFromChild = false;
+            }
           }
           switch (update.sessionUpdate) {
             case "state_update": {
@@ -5126,7 +5358,7 @@ export function makeAcpAdapterV2(
 
         const finishSubagentFromNotice = Effect.fnUntraced(function* (notice: {
           readonly childSessionId: string;
-          readonly status: "completed" | "failed" | "cancelled";
+          readonly status: "completed" | "failed" | "cancelled" | "interrupted";
           readonly result: string | null;
         }) {
           const context = yield* Ref.get(activeTurn);
@@ -5143,7 +5375,7 @@ export function makeAcpAdapterV2(
             yield* recordWakeReport(notice.childSessionId, {
               kind: "subagent",
               label: known.task.title ?? known.task.prompt,
-              outcome: notice.status,
+              outcome: notice.status === "interrupted" ? "cancelled" : notice.status,
               childThreadId: known.childThreadId,
             });
           }
@@ -5481,12 +5713,16 @@ export function makeAcpAdapterV2(
           if (clientFileSystem !== undefined) {
             yield* targetRuntime.handleReadTextFile((request) =>
               clientPolicyContext.pipe(
-                Effect.flatMap(({ policy }) => clientFileSystem.readTextFile(request, policy.cwd, policy)),
+                Effect.flatMap(({ policy }) =>
+                  clientFileSystem.readTextFile(request, policy.cwd, policy),
+                ),
               ),
             );
             yield* targetRuntime.handleWriteTextFile((request) =>
               clientPolicyContext.pipe(
-                Effect.flatMap(({ policy }) => clientFileSystem.writeTextFile(request, policy.cwd, policy)),
+                Effect.flatMap(({ policy }) =>
+                  clientFileSystem.writeTextFile(request, policy.cwd, policy),
+                ),
               ),
             );
           }
@@ -6191,8 +6427,12 @@ export function makeAcpAdapterV2(
               },
             );
           }
-          for (const selection of configSelections) {
-            if (!availableConfigIds.has(selection.id)) continue;
+          for (const storedSelection of configSelections) {
+            if (!availableConfigIds.has(storedSelection.id)) continue;
+            const selection =
+              typeof storedSelection.value === "string"
+                ? { ...storedSelection, value: acpConfigValueFromChoiceId(storedSelection.value) }
+                : storedSelection;
             // Tuning knobs degrade instead of failing the session open: agents
             // advertise the union of values across models but can reject a
             // per-model invalid one at set time (codex-acp advertises "ultra"
@@ -6850,6 +7090,9 @@ export function makeAcpAdapterV2(
               subagents: new Map(),
               subagentsBySessionId: new Map(),
               pendingSubagentNotifications: new Map(),
+              childSessionActivity: new Map(),
+              childActivitySeq: 0,
+              lastFrameFromChild: false,
               toolCallIdsByBackgroundTaskId: new Map(),
               persistentBackgroundTaskIds: new Set(),
               awaitingBackgroundHydration: new Set(),

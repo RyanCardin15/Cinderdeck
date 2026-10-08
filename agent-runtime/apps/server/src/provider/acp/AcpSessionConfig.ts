@@ -16,6 +16,21 @@ import type { AcpSessionModeState } from "./AcpRuntimeModel.ts";
 
 /** Synthetic descriptor ID for agents that expose modes outside config options. */
 export const ACP_SESSION_MODE_OPTION_ID = "_t3/session-mode";
+/**
+ * Stands in for an empty select value, which choice ids cannot hold. Copilot's
+ * agent selector offers its default agent as `""`; without this the choice
+ * vanished and the composer forced a custom agent.
+ */
+export const ACP_EMPTY_CHOICE_ID = "_t3/empty";
+
+/** The ACP value a stored choice id selects. */
+export function acpConfigValueFromChoiceId(choiceId: string): string {
+  return choiceId === ACP_EMPTY_CHOICE_ID ? "" : choiceId;
+}
+
+function choiceIdFromConfigValue(value: string): string {
+  return value === "" ? ACP_EMPTY_CHOICE_ID : value;
+}
 
 const MAX_OPTION_DESCRIPTORS = 16;
 const MAX_OPTION_CHOICES = 64;
@@ -44,7 +59,7 @@ function selectChoices(
   const seen = new Set<string>();
   const choices: Array<ProviderOptionChoice> = [];
   for (const candidate of candidates) {
-    const id = boundedOpaqueValue(candidate.value, MAX_TEXT_LENGTH);
+    const id = boundedOpaqueValue(choiceIdFromConfigValue(candidate.value), MAX_TEXT_LENGTH);
     if (id === undefined || seen.has(id)) continue;
     seen.add(id);
     const description = boundedText(candidate.description, MAX_DESCRIPTION_LENGTH);
@@ -101,14 +116,12 @@ export function acpProviderOptionDescriptors(input: {
     if (option.category === "thought_level") {
       mirroredModeChoiceSets.push(new Set(choices.map((choice) => choice.id)));
     }
-    const currentValue = option.currentValue;
+    const currentValue = choiceIdFromConfigValue(option.currentValue);
     descriptors.push({
       ...base,
       type: "select",
       options: choices,
-      ...(currentValue && choices.some((choice) => choice.id === currentValue)
-        ? { currentValue }
-        : {}),
+      ...(choices.some((choice) => choice.id === currentValue) ? { currentValue } : {}),
     });
     if (descriptors.length === MAX_OPTION_DESCRIPTORS) return descriptors;
   }

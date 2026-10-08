@@ -38,6 +38,190 @@ import { isCursorCancellationError, loggedCursorAgentOptions } from "./CursorAge
 
 const decodeCursorSettings = Schema.decodeEffect(CursorSettings);
 
+const runCursorTurnWithUpdates = (input: {
+  readonly prefix: string;
+  readonly updates: ReadonlyArray<InteractionUpdate>;
+}) =>
+  Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const workspace = yield* fileSystem.makeTempDirectoryScoped({ prefix: `${input.prefix}-` });
+    const instanceId = ProviderInstanceId.make("cursor");
+    const threadId = ThreadId.make(`${input.prefix}-thread`);
+    const modelSelection = { instanceId, model: "composer-2.5" };
+    const runtimePolicy = ProviderAdapterV2RuntimePolicy.make({
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      cwd: workspace,
+    });
+    const adapter = makeCursorAdapterV2({
+      instanceId,
+      settings: yield* decodeCursorSettings({}),
+      environment: { HOME: workspace },
+      fileSystem,
+      path,
+      idAllocator: yield* IdAllocator.IdAllocatorV2,
+      serverConfig: yield* ServerConfig.ServerConfig.pipe(
+        Effect.provide(ServerConfig.layerTest(workspace, { prefix: `${input.prefix}-config-` })),
+      ),
+      runner: {
+        assertComplete: Effect.void,
+        open: () =>
+          Effect.succeed({
+            agentId: `native-${input.prefix}`,
+            listMessages: Effect.succeed([]),
+            close: Effect.void,
+            send: (sendInput) =>
+              Effect.gen(function* () {
+                for (const update of input.updates) {
+                  yield* sendInput.onDelta!(update).pipe(Effect.orDie);
+                }
+                return {
+                  agentId: `native-${input.prefix}`,
+                  runId: `native-${input.prefix}-run`,
+                  wait: Effect.succeed({
+                    id: `native-${input.prefix}-run`,
+                    requestId: "native-request",
+                    status: "finished" as const,
+                    model: { id: "composer-2.5" },
+                    durationMs: 1,
+                  }),
+                  cancel: Effect.void,
+                };
+              }),
+          }),
+      },
+    });
+    const runtime = yield* adapter.openSession({
+      threadId,
+      providerSessionId: ProviderSessionId.make(`${input.prefix}-session`),
+      modelSelection,
+      runtimePolicy,
+    });
+    const providerThread = yield* runtime.ensureThread({ threadId, modelSelection, runtimePolicy });
+    const now = yield* DateTime.now;
+    yield* runtime.startTurn({
+      threadId,
+      providerThread,
+      modelSelection,
+      runtimePolicy,
+      runId: RunId.make(`${input.prefix}-run`),
+      runOrdinal: 1,
+      providerTurnOrdinal: 1,
+      attemptId: RunAttemptId.make(`${input.prefix}-attempt`),
+      rootNodeId: NodeId.make(`${input.prefix}-root`),
+      appThread: {
+        id: threadId,
+        projectId: ProjectId.make(`${input.prefix}-project`),
+        createdBy: "user",
+        creationSource: "web",
+        title: "Cursor subagents",
+        providerInstanceId: instanceId,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        activeProviderThreadId: providerThread.id,
+        lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
+        forkedFrom: null,
+        createdAt: now,
+        updatedAt: now,
+        archivedAt: null,
+        settledOverride: null,
+        settledAt: null,
+        lastVisitedAt: null,
+        deletedAt: null,
+      },
+      message: {
+        messageId: MessageId.make(`${input.prefix}-message`),
+        createdBy: "user",
+        creationSource: "web",
+        text: "Delegate the work.",
+        attachments: [],
+      },
+    });
+    const events = yield* runtime.events.pipe(
+      Stream.takeUntil((event) => event.type === "turn.terminal"),
+      Stream.runCollect,
+    );
+    return Array.from(events);
+  });
+
+type CollectedEvent = Effect.Success<ReturnType<typeof runCursorTurnWithUpdates>>[number];
+
+const turnItemEvents = (events: ReadonlyArray<CollectedEvent>, threadId: string) =>
+  events.flatMap((event, index) =>
+    event.type === "turn_item.updated" && event.turnItem.threadId === threadId
+      ? [{ index, turnItem: event.turnItem }]
+      : [],
+  );
+
+const latestTurnItems = (events: ReadonlyArray<CollectedEvent>, threadId: string) => {
+  const latest = new Map<
+    string,
+    Extract<CollectedEvent, { type: "turn_item.updated" }>["turnItem"]
+  >();
+  for (const { turnItem } of turnItemEvents(events, threadId)) {
+    latest.set(turnItem.id, turnItem);
+  }
+  return Array.from(latest.values()).toSorted((left, right) => left.ordinal - right.ordinal);
+};
+
+const backgroundTaskUpdates: ReadonlyArray<InteractionUpdate> = [
+  {
+    type: "tool-call-started",
+    modelCallId: "model-call",
+    callId: "bg-task",
+    toolCall: {
+      type: "task",
+      args: {
+        description: "Audit",
+        prompt: "Audit the repository.",
+        subagentType: { kind: "unspecified" },
+        agentId: "bg-agent",
+        mode: "unspecified",
+      },
+    },
+  },
+  {
+    type: "tool-call-completed",
+    modelCallId: "model-call",
+    callId: "bg-task",
+    toolCall: {
+      type: "task",
+      args: {
+        description: "Audit",
+        prompt: "Audit the repository.",
+        subagentType: { kind: "unspecified" },
+        agentId: "bg-agent",
+        mode: "unspecified",
+      },
+      result: {
+        status: "success",
+        value: {
+          agentId: "bg-agent",
+          isBackground: true,
+          backgroundReason: "agentRequest",
+          conversationSteps: [],
+          resultSuffix: "Agent bg-agent is running in the background.",
+        },
+      },
+    },
+  },
+  {
+    type: "tool-call-delta",
+    modelCallId: "model-call",
+    callId: "bg-task",
+    taskUpdate: {
+      type: "tool-call-started",
+      modelCallId: "child-model-call",
+      callId: "bg-read",
+      toolCall: { type: "read", args: { path: "/repo/README.md" } },
+    },
+  },
+];
+
 describe("CursorAdapterV2", () => {
   it.effect.each([
     { status: "finished", model: undefined },
@@ -839,6 +1023,187 @@ describe("CursorAdapterV2", () => {
     assert.isFalse(isCursorCancellationError(new Error("request failed")));
     assert.isFalse(isCursorCancellationError(null));
   });
+
+  it.effect(
+    "projects recorded Cursor subagent activity live and settles it without duplicate child rows",
+    () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const transcript = yield* fileSystem.readFileString(
+          new URL("../testkit/fixtures/subagent/cursor_transcript.ndjson", import.meta.url)
+            .pathname,
+        );
+        const updates = transcript
+          .split("\n")
+          .filter((line) => line.trim().length > 0)
+          .flatMap((line) => {
+            const entry = JSON.parse(line) as {
+              readonly type: string;
+              readonly frame?: { readonly type: string; readonly update?: InteractionUpdate };
+            };
+            return entry.type === "emit_inbound" &&
+              entry.frame?.type === "interaction.update" &&
+              entry.frame.update !== undefined
+              ? [entry.frame.update]
+              : [];
+          });
+        const events = yield* runCursorTurnWithUpdates({ prefix: "cursor-live-subagent", updates });
+
+        const subagentRows = events.flatMap((event, index) =>
+          event.type === "subagent.updated" ? [{ index, subagent: event.subagent }] : [],
+        );
+        const subagentIds = Array.from(new Set(subagentRows.map((row) => row.subagent.id)));
+        assert.lengthOf(subagentIds, 2);
+        for (const subagentId of subagentIds) {
+          const rows = subagentRows.filter((row) => row.subagent.id === subagentId);
+          const final = rows.at(-1)!.subagent;
+          assert.equal(final.status, "completed");
+          const childThreadId = final.childThreadId!;
+          const completedAt = rows.find((row) => row.subagent.status === "completed")!.index;
+          const childEvents = turnItemEvents(events, childThreadId);
+
+          // The child thread shows the subagent's reply and tool call while it runs.
+          assert.isTrue(
+            childEvents.some(
+              ({ index, turnItem }) =>
+                index < completedAt && turnItem.type === "assistant_message" && turnItem.streaming,
+            ),
+          );
+          assert.isTrue(
+            childEvents.some(
+              ({ index, turnItem }) =>
+                index < completedAt &&
+                turnItem.type === "dynamic_tool" &&
+                turnItem.status === "completed",
+            ),
+          );
+
+          // Every child row keeps one ordinal, so completion updates rows in place.
+          const ordinals = new Map<string, Set<number>>();
+          for (const { turnItem } of childEvents) {
+            ordinals.set(
+              turnItem.id,
+              (ordinals.get(turnItem.id) ?? new Set()).add(turnItem.ordinal),
+            );
+          }
+          for (const values of ordinals.values()) {
+            assert.equal(values.size, 1);
+          }
+
+          const childItems = latestTurnItems(events, childThreadId);
+          assert.deepEqual(
+            childItems.map((item) => item.type),
+            ["user_message", "assistant_message", "dynamic_tool", "assistant_message"],
+          );
+          for (const item of childItems) {
+            assert.equal(item.status, "completed");
+            if (item.type === "assistant_message") assert.isFalse(item.streaming);
+          }
+          const finalReply = childItems.at(-1);
+          assert.include(
+            finalReply?.type === "assistant_message" ? finalReply.text : "",
+            "## Summary",
+          );
+          assert.include(final.result ?? "", "## Summary");
+        }
+      }).pipe(Effect.scoped, Effect.provide(Layer.merge(NodeServices.layer, IdAllocator.layer))),
+  );
+
+  it.effect("keeps a background Cursor task working until the turn ends without its outcome", () =>
+    Effect.gen(function* () {
+      const events = yield* runCursorTurnWithUpdates({
+        prefix: "cursor-background-subagent",
+        updates: backgroundTaskUpdates,
+      });
+      const rows = events.flatMap((event) =>
+        event.type === "subagent.updated" ? [event.subagent] : [],
+      );
+      // The launch acknowledgement is not a result.
+      const acknowledged = rows[1]!;
+      assert.equal(acknowledged.status, "running");
+      assert.isNull(acknowledged.completedAt);
+      assert.isNull(acknowledged.result);
+      assert.isString(acknowledged.progress);
+      assert.isFalse(rows.some((row) => row.status === "completed"));
+
+      // Child activity after the launch still reaches the child thread.
+      const childThreadId = acknowledged.childThreadId!;
+      assert.isTrue(
+        latestTurnItems(events, childThreadId).some((item) => item.type === "dynamic_tool"),
+      );
+
+      // Cursor never reported the outcome before the turn ended.
+      const final = rows.at(-1)!;
+      assert.equal(final.status, "idle");
+      assert.isNotNull(final.completedAt);
+      assert.isNull(final.result);
+      assert.isUndefined(final.progress);
+    }).pipe(Effect.scoped, Effect.provide(Layer.merge(NodeServices.layer, IdAllocator.layer))),
+  );
+
+  it.effect("settles a background Cursor task from the call that awaits its agent", () =>
+    Effect.gen(function* () {
+      const awaitArgs = {
+        description: "",
+        prompt: "",
+        resume: "bg-agent",
+        subagentType: { kind: "unspecified" },
+        mode: "unspecified" as const,
+      };
+      const events = yield* runCursorTurnWithUpdates({
+        prefix: "cursor-awaited-subagent",
+        updates: [
+          ...backgroundTaskUpdates,
+          {
+            type: "tool-call-started",
+            modelCallId: "model-call",
+            callId: "await-task",
+            toolCall: { type: "task", args: awaitArgs },
+          },
+          {
+            type: "tool-call-completed",
+            modelCallId: "model-call",
+            callId: "await-task",
+            toolCall: {
+              type: "task",
+              args: awaitArgs,
+              result: {
+                status: "success",
+                value: {
+                  agentId: "bg-agent",
+                  isBackground: false,
+                  backgroundReason: "unspecified",
+                  conversationSteps: [
+                    { assistantMessage: { text: "The audit found no problems." } },
+                  ],
+                },
+              },
+            },
+          },
+        ],
+      });
+      const rows = events.flatMap((event) =>
+        event.type === "subagent.updated" ? [event.subagent] : [],
+      );
+      assert.lengthOf(new Set(rows.map((row) => row.id)), 1);
+      assert.lengthOf(
+        events.filter((event) => event.type === "app_thread.created"),
+        1,
+      );
+      const final = rows.at(-1)!;
+      assert.equal(final.status, "completed");
+      assert.equal(final.prompt, "Audit the repository.");
+      assert.equal(final.result, "The audit found no problems.");
+      assert.isUndefined(final.progress);
+      const childItems = latestTurnItems(events, final.childThreadId!);
+      assert.isTrue(
+        childItems.some(
+          (item) =>
+            item.type === "assistant_message" && item.text === "The audit found no problems.",
+        ),
+      );
+    }).pipe(Effect.scoped, Effect.provide(Layer.merge(NodeServices.layer, IdAllocator.layer))),
+  );
 
   it("preserves failed nested read calls when Cursor omits their path", () => {
     assert.deepEqual(

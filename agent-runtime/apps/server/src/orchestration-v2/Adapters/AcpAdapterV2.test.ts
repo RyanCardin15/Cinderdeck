@@ -1,4 +1,14 @@
 import {
+  extractCopilotSubagentUpdate,
+  isCopilotSubagentWaitTool,
+  normalizeCopilotSessionUpdate,
+} from "./CopilotAcp.ts";
+import {
+  CURSOR_ACP_CLIENT_CAPABILITIES_META,
+  extractCursorSubagentSessionUpdate,
+  extractCursorSubagentUpdate,
+} from "./CursorAcp.ts";
+import {
   normalizeDevinSessionUpdate,
   normalizeDevinToolCall,
   extractDevinSubagentUpdate,
@@ -14379,5 +14389,427 @@ describe("acpPostSettleMonitorPromptShouldSuppress", () => {
     assert.isFalse(
       acpPostSettleMonitorPromptShouldSuppress({ taskId: "task-failed", status: "failed" }),
     );
+  });
+});
+
+describe("ACP registry subagent flavors", () => {
+  type Frame = { readonly sessionId?: string; readonly update: unknown };
+
+  const runScriptedTurn = (input: {
+    readonly name: string;
+    readonly flavor: Partial<AcpAdapterV2Flavor>;
+    readonly frames: ReadonlyArray<Frame>;
+  }) =>
+    Effect.gen(function* () {
+      const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const path = yield* Path.Path;
+      const mockAgentPath = yield* path.fromFileUrl(
+        new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
+      );
+      type Runtime = AcpSessionRuntime.AcpSessionRuntime["Service"];
+      let handler: Parameters<Runtime["handleSessionUpdate"]>[0] | undefined;
+      const instanceId = ProviderInstanceId.make(`${input.name}-replay`);
+      const adapter = makeAcpAdapterV2({
+        instanceId,
+        crypto: yield* Crypto.Crypto,
+        fileSystem: yield* FileSystem.FileSystem,
+        idAllocator: yield* IdAllocator.IdAllocatorV2,
+        serverConfig: yield* ServerConfig.ServerConfig,
+        selfInvocation: yield* resolveSelfInvocation(),
+        flavor: {
+          driver: ACP_TEST_DRIVER,
+          capabilities: AcpProviderCapabilitiesV2,
+          ...input.flavor,
+          makeRuntime: makeMockRuntime({
+            childProcessSpawner,
+            mockAgentPath,
+            wrapRuntime: (runtime) => ({
+              ...runtime,
+              handleSessionUpdate: (next) =>
+                Effect.sync(() => {
+                  handler = next;
+                }).pipe(Effect.andThen(runtime.handleSessionUpdate(next))),
+              prompt: () =>
+                Effect.gen(function* () {
+                  assert.isDefined(handler);
+                  for (const frame of input.frames) {
+                    yield* handler!({
+                      sessionId: frame.sessionId ?? "mock-session-1",
+                      update: frame.update as EffectAcpSchema.SessionUpdate,
+                    });
+                  }
+                  return { stopReason: "end_turn" as const };
+                }),
+            }),
+          }),
+        },
+      });
+      const threadId = ThreadId.make(`${input.name}-parent`);
+      const modelSelection = { instanceId, model: "default" };
+      const runtimePolicy = ProviderAdapterV2RuntimePolicy.make({
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        cwd: process.cwd(),
+      });
+      const runtime = yield* adapter.openSession({
+        threadId,
+        providerSessionId: ProviderSessionId.make(`${input.name}-session`),
+        modelSelection,
+        runtimePolicy,
+      });
+      const providerThread = yield* runtime.ensureThread({
+        threadId,
+        modelSelection,
+        runtimePolicy,
+      });
+      yield* runtime.startTurn(
+        makeTurnInput({
+          threadId,
+          providerThread,
+          instanceId,
+          runtimePolicy,
+          now: yield* DateTime.now,
+        }),
+      );
+      const events = Array.from(
+        yield* runtime.events.pipe(
+          Stream.takeUntil((event) => event.type === "turn.terminal"),
+          Stream.runCollect,
+        ),
+      );
+      const items = events.flatMap((event) =>
+        event.type === "turn_item.updated" ? [event.turnItem] : [],
+      );
+      const latestTasks = new Map(
+        events.flatMap((event) =>
+          event.type === "subagent.updated" ? [[event.subagent.id, event.subagent] as const] : [],
+        ),
+      );
+      const latestItems = new Map(items.map((item) => [item.id, item] as const));
+      const itemsIn = (childThreadId: ThreadId | null | undefined) =>
+        [...latestItems.values()].filter((item) => item.threadId === childThreadId);
+      const textOf = (item: (typeof items)[number]) =>
+        item.type === "assistant_message" ? item.text : undefined;
+      return { threadId, tasks: [...latestTasks.values()], itemsIn, textOf };
+    });
+
+  const copilotFlavor = {
+    normalizeSessionUpdate: normalizeCopilotSessionUpdate,
+    extractSubagentUpdate: extractCopilotSubagentUpdate,
+    bindUnannouncedChildSessions: true,
+    isSubagentWaitTool: isCopilotSubagentWaitTool,
+  } satisfies Partial<AcpAdapterV2Flavor>;
+  const copilotChild = (agentId: string) => ({ "github.com/copilot": { agentId } });
+  const text = (value: string) => ({
+    sessionUpdate: "agent_message_chunk",
+    content: { type: "text", text: value },
+  });
+
+  // Shapes recorded from Copilot CLI 1.0.91 (`copilot --acp`), two parallel sync spawns.
+  it.effect("routes parallel Copilot sync subagents to their own child threads", () =>
+    Effect.gen(function* () {
+      const spawn = (toolCallId: string, file: string) => ({
+        sessionUpdate: "tool_call",
+        toolCallId,
+        title: `Report ${file} contents`,
+        kind: "other",
+        status: "pending",
+        rawInput: {
+          description: `Report ${file} contents`,
+          name: `read-${file}`,
+          agent_type: "explore",
+          mode: "sync",
+          prompt: `Report the contents of ${file}.`,
+        },
+      });
+      const read = (toolCallId: string, agentId: string, file: string) => [
+        {
+          sessionUpdate: "tool_call",
+          toolCallId,
+          title: `Viewing ${file}`,
+          kind: "read",
+          status: "pending",
+          rawInput: { path: file },
+          _meta: copilotChild(agentId),
+        },
+        {
+          sessionUpdate: "tool_call_update",
+          toolCallId,
+          status: "completed",
+          rawOutput: { content: `export const ${file[0]} = 1;\n` },
+          _meta: copilotChild(agentId),
+        },
+      ];
+      const done = (toolCallId: string, reply: string) => ({
+        sessionUpdate: "tool_call_update",
+        toolCallId,
+        status: "completed",
+        content: [{ type: "content", content: { type: "text", text: reply } }],
+      });
+      const result = yield* runScriptedTurn({
+        name: "copilot-parallel",
+        flavor: copilotFlavor,
+        frames: [
+          { update: spawn("call-a", "a.ts") },
+          { update: spawn("call-b", "b.ts") },
+          ...read("child-read-b", "agent-b", "b.ts").map((update) => ({ update })),
+          ...read("child-read-a", "agent-a", "a.ts").map((update) => ({ update })),
+          // Both replies stream on the root session with no attribution.
+          { update: text("export const b = 2;") },
+          { update: text("export const a = 1;") },
+          { update: done("call-b", "export const b = 2;") },
+          { update: done("call-a", "export const a = 1;") },
+          { update: text("a.ts exports a and b.ts exports b.") },
+        ],
+      });
+
+      assert.deepEqual(
+        result.itemsIn(result.threadId).flatMap((item) => result.textOf(item) ?? []),
+        ["a.ts exports a and b.ts exports b."],
+      );
+      assert.isFalse(result.itemsIn(result.threadId).some((item) => item.type === "dynamic_tool"));
+      const byTitle = new Map(result.tasks.map((task) => [task.title, task] as const));
+      for (const file of ["a.ts", "b.ts"]) {
+        const task = byTitle.get(`Report ${file} contents`);
+        assert.equal(task?.status, "completed");
+        assert.equal(task?.result, `export const ${file[0]} = ${file === "a.ts" ? 1 : 2};`);
+        const childTools = result
+          .itemsIn(task?.childThreadId)
+          .filter((item) => item.type === "dynamic_tool");
+        assert.deepEqual(
+          childTools.map((item) => (item.type === "dynamic_tool" ? item.input : undefined)),
+          [{ path: file }],
+        );
+      }
+    }).pipe(Effect.provide(testLayer), Effect.scoped),
+  );
+
+  // Shapes recorded from Copilot CLI 1.0.91: background spawn, then a blocking read_agent.
+  it.effect("streams a background Copilot subagent's reply into its child thread", () =>
+    Effect.gen(function* () {
+      const agentId = "70256fac-4398-4e43-b260-7f3c368e9af7";
+      const result = yield* runScriptedTurn({
+        name: "copilot-background",
+        flavor: copilotFlavor,
+        frames: [
+          {
+            update: {
+              sessionUpdate: "tool_call",
+              toolCallId: "call-spawn",
+              title: "Read a.ts contents",
+              kind: "other",
+              status: "pending",
+              rawInput: {
+                description: "Read a.ts contents",
+                prompt: "Report the contents of a.ts.",
+                agent_type: "explore",
+                name: "Read a.ts",
+                mode: "background",
+              },
+            },
+          },
+          {
+            update: {
+              sessionUpdate: "tool_call_update",
+              toolCallId: "call-spawn",
+              status: "completed",
+              content: [
+                {
+                  type: "content",
+                  content: {
+                    type: "text",
+                    text: `Agent started in background with agent_id: ${agentId}. You'll be notified when it completes.`,
+                  },
+                },
+              ],
+            },
+          },
+          { update: text("Launched it; waiting.") },
+          {
+            update: {
+              sessionUpdate: "tool_call",
+              toolCallId: "call-read-agent",
+              title: "read_agent",
+              kind: "read",
+              status: "pending",
+              rawInput: { agent_id: agentId, wait: true, timeout: 180 },
+            },
+          },
+          {
+            update: {
+              sessionUpdate: "tool_call",
+              toolCallId: "child-view",
+              title: "Viewing a.ts",
+              kind: "read",
+              status: "pending",
+              rawInput: { path: "a.ts" },
+              _meta: copilotChild(agentId),
+            },
+          },
+          {
+            update: {
+              sessionUpdate: "tool_call_update",
+              toolCallId: "child-view",
+              status: "completed",
+              rawOutput: { content: "export const a = 1;\n" },
+              _meta: copilotChild(agentId),
+            },
+          },
+          { update: text("Contents:\n") },
+          { update: text("export const a = 1;") },
+          {
+            update: {
+              sessionUpdate: "tool_call_update",
+              toolCallId: "call-read-agent",
+              status: "completed",
+              content: [
+                {
+                  type: "content",
+                  content: {
+                    type: "text",
+                    text: `Agent is idle (waiting for messages). agent_id: ${agentId}, agent_type: explore, status: idle, description: Read a.ts contents, elapsed: 4s, total_turns: 1\n\n[Turn 0]\nContents:\nexport const a = 1;`,
+                  },
+                },
+              ],
+            },
+          },
+          { update: text("a.ts contains `export const a = 1;`.") },
+        ],
+      });
+
+      assert.deepEqual(
+        result.itemsIn(result.threadId).flatMap((item) => result.textOf(item) ?? []),
+        ["Launched it; waiting.", "a.ts contains `export const a = 1;`."],
+      );
+      assert.deepEqual(
+        result
+          .itemsIn(result.threadId)
+          .flatMap((item) => (item.type === "dynamic_tool" ? [item.title] : [])),
+        [],
+      );
+      const [task] = result.tasks;
+      assert.equal(result.tasks.length, 1);
+      assert.equal(task?.status, "completed");
+      assert.equal(task?.result, "Contents:\nexport const a = 1;");
+      const child = result.itemsIn(task?.childThreadId);
+      assert.deepEqual(
+        child.filter((item) => item.type === "dynamic_tool").map((item) => item.title),
+        ["Read a.ts"],
+      );
+      assert.deepEqual(
+        child.flatMap((item) => result.textOf(item) ?? []),
+        ["Contents:\nexport const a = 1;"],
+      );
+    }).pipe(Effect.provide(testLayer), Effect.scoped),
+  );
+
+  // Shapes from Cursor CLI 2026.10.01 (`agent acp`) with the `subagents` capability.
+  it.effect("projects Cursor subagent sessions into child threads", () =>
+    Effect.gen(function* () {
+      const childSessionId = "cursor-agent-1";
+      const result = yield* runScriptedTurn({
+        name: "cursor-subagent",
+        flavor: {
+          clientCapabilitiesMeta: CURSOR_ACP_CLIENT_CAPABILITIES_META,
+          extractSubagentUpdate: extractCursorSubagentUpdate,
+          extractSubagentSessionUpdate: extractCursorSubagentSessionUpdate,
+        },
+        frames: [
+          {
+            update: {
+              sessionUpdate: "tool_call",
+              toolCallId: "task-1",
+              title: "Task: Read a.ts",
+              kind: "other",
+              status: "pending",
+              rawInput: {
+                _toolName: "task",
+                prompt: "Report the contents of a.ts.",
+                description: "Read a.ts",
+                subagentType: "explore",
+              },
+            },
+          },
+          {
+            update: {
+              sessionUpdate: "subagent_spawned",
+              subagentSessionId: childSessionId,
+              name: "explore",
+              task: "Report the contents of a.ts.",
+              capabilities: {},
+              _meta: {
+                cursor: { toolCallId: "task-1", agentId: childSessionId, model: "composer-2.5" },
+              },
+            },
+          },
+          {
+            sessionId: childSessionId,
+            update: {
+              sessionUpdate: "tool_call",
+              toolCallId: "child-read",
+              title: "Read a.ts",
+              kind: "read",
+              status: "completed",
+              rawInput: { path: "a.ts" },
+            },
+          },
+          { sessionId: childSessionId, update: text("export const a = 1;") },
+          {
+            update: {
+              sessionUpdate: "subagent_state_update",
+              subagentSessionId: childSessionId,
+              state: "completed",
+              _meta: { cursor: { toolCallId: "task-1", agentId: childSessionId } },
+            },
+          },
+          {
+            update: {
+              sessionUpdate: "tool_call_update",
+              toolCallId: "task-1",
+              status: "completed",
+              rawOutput: { durationMs: 1200, isBackground: false },
+            },
+          },
+          { update: text("Done.") },
+        ],
+      });
+
+      assert.isFalse(result.itemsIn(result.threadId).some((item) => item.type === "dynamic_tool"));
+      const [task] = result.tasks;
+      assert.equal(result.tasks.length, 1);
+      assert.equal(task?.status, "completed");
+      assert.equal(task?.title, "Read a.ts");
+      assert.equal(task?.model, "composer-2.5");
+      assert.equal(task?.result, "export const a = 1;");
+      const child = result.itemsIn(task?.childThreadId);
+      assert.deepEqual(
+        child.filter((item) => item.type === "dynamic_tool").map((item) => item.title),
+        ["Read a.ts"],
+      );
+      assert.deepEqual(
+        child.flatMap((item) => result.textOf(item) ?? []),
+        ["export const a = 1;"],
+      );
+    }).pipe(Effect.provide(testLayer), Effect.scoped),
+  );
+
+  it("reads Cursor subagent updates in both raw and schema-wrapped form", () => {
+    const raw = {
+      sessionUpdate: "subagent_state_update",
+      subagentSessionId: "child",
+      state: "disconnected",
+    };
+    for (const update of [
+      raw,
+      { sessionUpdate: "_t3_unknown", originalSessionUpdate: raw.sessionUpdate, raw },
+    ]) {
+      assert.deepEqual(
+        extractCursorSubagentSessionUpdate({
+          sessionId: "root",
+          update: update as EffectAcpSchema.SessionUpdate,
+        }),
+        { kind: "finished", childSessionId: "child", status: "interrupted", result: null },
+      );
+    }
   });
 });

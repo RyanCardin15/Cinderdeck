@@ -805,6 +805,15 @@ interface ActiveCursorSubagent {
   readonly turnItemOrdinal: number;
   nextChildOrdinal: number;
   resultProjected: boolean;
+  /** Cursor acknowledged a background launch; its outcome arrives later, if at all. */
+  background: boolean;
+  // Child-thread rows keyed by native id. Live taskUpdate frames and the
+  // completion replay from conversationSteps resolve the same ids, so the
+  // replay updates live rows in place instead of appending duplicates.
+  readonly childOrdinals: Map<string, number>;
+  readonly childTools: Map<string, ActiveCursorToolCall>;
+  readonly childMessages: Array<ActiveCursorTextSegment>;
+  currentChildMessage: ActiveCursorTextSegment | null;
 }
 
 interface ActiveCursorTextSegment {
@@ -828,6 +837,9 @@ interface ActiveCursorTurn {
   readonly itemOrdinals: Map<string, number>;
   readonly tools: Map<string, ActiveCursorToolCall>;
   readonly subagents: Map<string, ActiveCursorSubagent>;
+  // Await calls (task with resume and no prompt) mapped to the background
+  // task they wait on, so their result settles that task's row.
+  readonly subagentAliases: Map<string, string>;
   readonly assistant: ActiveCursorTextStream;
   readonly assistantReply: CursorTransportFailure;
   readonly reasoning: ActiveCursorTextStream;
@@ -1481,6 +1493,90 @@ export function makeCursorAdapterV2(
           });
         });
 
+        const childTarget = (subagent: ActiveCursorSubagent): CursorProjectionTarget => ({
+          threadId: subagent.childThreadId,
+          runId: null,
+          rootNodeId: subagent.childRootNodeId,
+          parentNodeId: subagent.childRootNodeId,
+          providerThreadId: null,
+          providerTurnId: null,
+        });
+
+        const childToolNativeId = (taskCallId: string, nestedCallId: string | number) =>
+          `${taskCallId}:child-tool:${nestedCallId}`;
+
+        const resolveChildOrdinal = (subagent: ActiveCursorSubagent, nativeItemId: string) => {
+          const existing = subagent.childOrdinals.get(nativeItemId);
+          if (existing !== undefined) {
+            return existing;
+          }
+          subagent.nextChildOrdinal += 1;
+          subagent.childOrdinals.set(nativeItemId, subagent.nextChildOrdinal);
+          return subagent.nextChildOrdinal;
+        };
+
+        const emitChildMessage = Effect.fnUntraced(function* (
+          subagent: ActiveCursorSubagent,
+          segment: ActiveCursorTextSegment,
+          completed: boolean,
+        ) {
+          if (segment.text.length === 0) {
+            return;
+          }
+          const now = yield* DateTime.now;
+          const artifacts = makeSubagentConversationArtifacts({
+            messageId: idAllocator.derive.messageFromProviderItem({
+              driver: CursorAgentSdk.CURSOR_PROVIDER,
+              nativeItemId: segment.nativeItemId,
+            }),
+            turnItemId: idAllocator.derive.turnItemFromProviderItem({
+              driver: CursorAgentSdk.CURSOR_PROVIDER,
+              nativeItemId: segment.nativeItemId,
+            }),
+            threadId: subagent.childThreadId,
+            rootNodeId: subagent.childRootNodeId,
+            providerThreadId: null,
+            providerTurnId: null,
+            nativeItemRef: {
+              driver: CursorAgentSdk.CURSOR_PROVIDER,
+              nativeId: segment.nativeItemId,
+              strength: "weak",
+            },
+            role: "assistant",
+            text: segment.text,
+            ordinal: resolveChildOrdinal(subagent, segment.nativeItemId),
+            now,
+          });
+          if (artifacts.turnItem.type !== "assistant_message") {
+            return;
+          }
+          yield* emitProviderEvent({
+            type: "message.updated",
+            driver: CursorAgentSdk.CURSOR_PROVIDER,
+            message: { ...artifacts.message, streaming: !completed, createdAt: segment.startedAt },
+          });
+          yield* emitProviderEvent({
+            type: "turn_item.updated",
+            driver: CursorAgentSdk.CURSOR_PROVIDER,
+            turnItem: {
+              ...artifacts.turnItem,
+              status: completed ? "completed" : "running",
+              streaming: !completed,
+              startedAt: segment.startedAt,
+              completedAt: completed ? now : null,
+            },
+          });
+        });
+
+        const completeChildMessage = Effect.fnUntraced(function* (subagent: ActiveCursorSubagent) {
+          const segment = subagent.currentChildMessage;
+          if (segment === null) {
+            return;
+          }
+          subagent.currentChildMessage = null;
+          yield* emitChildMessage(subagent, segment, true);
+        });
+
         const emitSubagent = Effect.fnUntraced(function* (input: {
           readonly context: ActiveCursorTurn;
           readonly callId: string;
@@ -1489,8 +1585,12 @@ export function makeCursorAdapterV2(
           readonly status?: OrchestrationV2Subagent["status"];
         }) {
           const args = input.toolCall.args;
-          const result =
+          const outcome =
             input.toolCall.result?.status === "success" ? input.toolCall.result.value : undefined;
+          // A background launch only acknowledges the task. The subagent keeps
+          // working, and the acknowledgement carries none of its output.
+          const backgroundAck = input.completed && outcome?.isBackground === true;
+          const result = backgroundAck ? undefined : outcome;
           const existing = input.context.subagents.get(input.callId);
           if (
             existing !== undefined &&
@@ -1504,8 +1604,12 @@ export function makeCursorAdapterV2(
             (input.completed
               ? cursorToolFailed(input.toolCall)
                 ? "failed"
-                : "completed"
+                : backgroundAck
+                  ? "running"
+                  : "completed"
               : "running");
+          const settled = !isOrchestrationV2WorkActive(status);
+          const background = backgroundAck || (existing?.background ?? false);
           const resultText = [
             ...assistantTextsFromConversationSteps(result?.conversationSteps ?? []),
             ...(result?.resultSuffix === undefined ? [] : [result.resultSuffix]),
@@ -1531,8 +1635,14 @@ export function makeCursorAdapterV2(
               driver: CursorAgentSdk.CURSOR_PROVIDER,
               nativeThreadId: `${input.context.run.runId}:task:${input.callId}`,
             });
+          const previousTask =
+            existing === undefined
+              ? undefined
+              : (({ progress: _progress, ...rest }: OrchestrationV2Subagent) => rest)(
+                  existing.task,
+                );
           const task: OrchestrationV2Subagent = {
-            ...(existing?.task ?? {
+            ...(previousTask ?? {
               id: nodeId,
               threadId: input.context.input.threadId,
               runId: input.context.input.runId,
@@ -1560,8 +1670,9 @@ export function makeCursorAdapterV2(
               strength: "strong" as const,
             },
             status,
+            ...(background && !settled ? { progress: "Running in background" } : {}),
             result: resultText.length === 0 ? (existing?.task.result ?? null) : resultText,
-            completedAt: input.completed ? (existing?.task.completedAt ?? now) : null,
+            completedAt: settled ? (existing?.task.completedAt ?? now) : null,
             updatedAt: now,
           };
           const subagent: ActiveCursorSubagent = {
@@ -1580,6 +1691,11 @@ export function makeCursorAdapterV2(
               existing?.turnItemOrdinal ?? (yield* resolveItemOrdinal(input.context, nativeItemId)),
             nextChildOrdinal: existing?.nextChildOrdinal ?? 100,
             resultProjected: existing?.resultProjected ?? false,
+            background,
+            childOrdinals: existing?.childOrdinals ?? new Map(),
+            childTools: existing?.childTools ?? new Map(),
+            childMessages: existing?.childMessages ?? [],
+            currentChildMessage: existing?.currentChildMessage ?? null,
           };
           input.context.subagents.set(input.callId, subagent);
 
@@ -1714,34 +1830,58 @@ export function makeCursorAdapterV2(
               providerInstanceId: task.providerInstanceId,
               childThreadId,
               prompt: task.prompt,
+              ...(task.progress === undefined ? {} : { progress: task.progress }),
               result: task.result,
             },
           });
 
-          if (input.completed && !subagent.resultProjected) {
+          if (settled && !subagent.resultProjected) {
+            yield* completeChildMessage(subagent);
+            const target = childTarget(subagent);
             for (const [index, nestedTool] of toolCallsFromConversationSteps(
               result?.conversationSteps ?? [],
             ).entries()) {
-              const callId = `${nativeItemId}:child-tool:${nestedTool.callId || index + 1}`;
-              const startedAt = task.startedAt ?? now;
+              const callId = childToolNativeId(nativeItemId, nestedTool.callId || index + 1);
+              const live = subagent.childTools.get(callId);
+              // Cursor already completed this call live, with its full payload.
+              if (live === undefined && subagent.childOrdinals.has(callId)) continue;
+              subagent.childTools.delete(callId);
               const active: ActiveCursorToolCall = {
                 callId,
                 toolCall: nestedTool.toolCall,
-                target: {
-                  threadId: childThreadId,
-                  runId: null,
-                  rootNodeId: childRootNodeId,
-                  parentNodeId: childRootNodeId,
-                  providerThreadId: null,
-                  providerTurnId: null,
-                },
-                ordinal: ++subagent.nextChildOrdinal,
-                startedAt,
-                streamedOutput: "",
+                target,
+                ordinal: live?.ordinal ?? resolveChildOrdinal(subagent, callId),
+                startedAt: live?.startedAt ?? task.startedAt ?? now,
+                streamedOutput: live?.streamedOutput ?? "",
               };
               yield* emitToolArtifacts({ active, completed: true });
             }
-            if (task.result !== null && task.result.length > 0) {
+            // Calls Cursor started but never completed end with the task.
+            for (const tool of subagent.childTools.values()) {
+              yield* emitToolArtifacts({
+                active: tool,
+                completed: true,
+                ...(status === "interrupted" || status === "failed" || status === "cancelled"
+                  ? { unfinishedStatus: status }
+                  : {}),
+              });
+            }
+            subagent.childTools.clear();
+            if (subagent.childMessages.length > 0) {
+              // The child thread already shows the streamed replies. The final
+              // conversation steps are authoritative when they line up with them.
+              const stepTexts = assistantTextsFromConversationSteps(
+                result?.conversationSteps ?? [],
+              );
+              if (stepTexts.length === subagent.childMessages.length) {
+                for (const [index, segment] of subagent.childMessages.entries()) {
+                  const text = stepTexts[index];
+                  if (text === undefined || text === segment.text) continue;
+                  segment.text = text;
+                  yield* emitChildMessage(subagent, segment, true);
+                }
+              }
+            } else if (task.result !== null && task.result.length > 0) {
               const resultNativeId = `${nativeItemId}:result`;
               const resultArtifacts = makeSubagentConversationArtifacts({
                 messageId: idAllocator.derive.messageFromProviderItem({
@@ -1763,7 +1903,7 @@ export function makeCursorAdapterV2(
                 },
                 role: "assistant",
                 text: task.result,
-                ordinal: ++subagent.nextChildOrdinal,
+                ordinal: resolveChildOrdinal(subagent, resultNativeId),
                 now,
               });
               yield* emitProviderEvent({
@@ -1780,6 +1920,116 @@ export function makeCursorAdapterV2(
             subagent.resultProjected = true;
           }
         });
+
+        /**
+         * Live child activity. Cursor streams the subagent's own updates as
+         * tool-call-delta frames on the task call, one level deep.
+         */
+        const handleTaskUpdate = Effect.fnUntraced(function* (
+          context: ActiveCursorTurn,
+          update: Extract<InteractionUpdate, { readonly type: "tool-call-delta" }>,
+        ) {
+          const subagent = context.subagents.get(
+            context.subagentAliases.get(update.callId) ?? update.callId,
+          );
+          if (subagent === undefined || !isOrchestrationV2WorkActive(subagent.task.status)) {
+            return;
+          }
+          const taskUpdate = update.taskUpdate;
+          switch (taskUpdate.type) {
+            case "text-delta": {
+              if (taskUpdate.text.length === 0) {
+                return;
+              }
+              let segment = subagent.currentChildMessage;
+              if (segment === null) {
+                segment = {
+                  nativeItemId: `${subagent.callId}:child-message:${subagent.childMessages.length + 1}`,
+                  startedAt: yield* DateTime.now,
+                  text: "",
+                };
+                subagent.childMessages.push(segment);
+                subagent.currentChildMessage = segment;
+              }
+              segment.text += taskUpdate.text;
+              yield* emitChildMessage(subagent, segment, false);
+              return;
+            }
+            case "tool-call-started":
+            case "tool-call-completed": {
+              yield* completeChildMessage(subagent);
+              const callId = childToolNativeId(subagent.callId, taskUpdate.callId);
+              const completed = taskUpdate.type === "tool-call-completed";
+              let active = subagent.childTools.get(callId);
+              if (active === undefined) {
+                // A completed call never reopens.
+                if (subagent.childOrdinals.has(callId)) {
+                  return;
+                }
+                active = {
+                  callId,
+                  toolCall: taskUpdate.toolCall,
+                  target: childTarget(subagent),
+                  ordinal: resolveChildOrdinal(subagent, callId),
+                  startedAt: yield* DateTime.now,
+                  streamedOutput: "",
+                };
+                subagent.childTools.set(callId, active);
+              }
+              active.toolCall = taskUpdate.toolCall;
+              yield* emitToolArtifacts({ active, completed });
+              if (completed) {
+                subagent.childTools.delete(callId);
+              }
+              return;
+            }
+            case "thinking-delta":
+            case "thinking-completed":
+            case "step-completed":
+              yield* completeChildMessage(subagent);
+              return;
+            default:
+              return;
+          }
+        });
+
+        const taskAgentId = (subagent: ActiveCursorSubagent) =>
+          (subagent.toolCall.result?.status === "success"
+            ? subagent.toolCall.result.value.agentId
+            : undefined) ?? subagent.toolCall.args.agentId;
+
+        /**
+         * Cursor reports a background task's outcome through a later task call
+         * that resumes the task's agent with no prompt (an await or status
+         * check). Such a call belongs to the background task's row.
+         */
+        const awaitedBackgroundSubagent = (
+          context: ActiveCursorTurn,
+          callId: string,
+          toolCall: Extract<ToolCall, { readonly type: "task" }>,
+        ): ActiveCursorSubagent | undefined => {
+          const aliased = context.subagentAliases.get(callId);
+          if (aliased !== undefined) {
+            return context.subagents.get(aliased);
+          }
+          if (context.subagents.has(callId)) {
+            return undefined;
+          }
+          const resume = toolCall.args.resume?.trim();
+          if (!resume || toolCall.args.prompt.trim().length > 0) {
+            return undefined;
+          }
+          for (const candidate of context.subagents.values()) {
+            if (
+              candidate.background &&
+              isOrchestrationV2WorkActive(candidate.task.status) &&
+              taskAgentId(candidate) === resume
+            ) {
+              return candidate;
+            }
+          }
+          return undefined;
+        };
 
         const handleToolUpdate = Effect.fnUntraced(function* (
           context: ActiveCursorTurn,
@@ -1811,8 +2061,21 @@ export function makeCursorAdapterV2(
                 failed: completed && cursorToolFailed(toolCall),
               });
               return;
-            case "task":
+            case "task": {
               if (update.type === "partial-tool-call") {
+                return;
+              }
+              const awaited = awaitedBackgroundSubagent(context, update.callId, toolCall);
+              if (awaited !== undefined) {
+                context.subagentAliases.set(update.callId, awaited.callId);
+                if (completed && isOrchestrationV2WorkActive(awaited.task.status)) {
+                  yield* emitSubagent({
+                    context,
+                    callId: awaited.callId,
+                    toolCall: { ...awaited.toolCall, result: toolCall.result },
+                    completed: true,
+                  });
+                }
                 return;
               }
               yield* emitSubagent({
@@ -1822,6 +2085,7 @@ export function makeCursorAdapterV2(
                 completed,
               });
               return;
+            }
             default: {
               const active = yield* ensureToolStarted(context, update.callId, toolCall);
               active.toolCall = toolCall;
@@ -1885,6 +2149,9 @@ export function makeCursorAdapterV2(
               yield* completeAssistant(context);
               yield* completeReasoning(context);
               yield* handleToolUpdate(context, update);
+              return;
+            case "tool-call-delta":
+              yield* handleTaskUpdate(context, update);
               return;
             case "step-completed":
             case "turn-ended":
@@ -1952,8 +2219,8 @@ export function makeCursorAdapterV2(
           }
           input.context.tools.clear();
           // This interaction stops delivering updates at finalization. Tasks
-          // without a completion have an unknown outcome. Background launch
-          // acknowledgements have already settled their rows.
+          // without a completion, including background tasks whose outcome
+          // never arrived, have an unknown outcome.
           for (const subagent of input.context.subagents.values()) {
             if (!isOrchestrationV2WorkActive(subagent.task.status)) continue;
             yield* emitSubagent({
@@ -2214,6 +2481,7 @@ export function makeCursorAdapterV2(
               itemOrdinals: new Map(),
               tools: new Map(),
               subagents: new Map(),
+              subagentAliases: new Map(),
               assistant: {
                 current: null,
                 nextSegment: 0,

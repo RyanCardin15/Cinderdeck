@@ -128,7 +128,17 @@ reports but does not run or stop their terminals.
 
 Registry agents can schedule work and use Cinderdeck's MCP tools. Child-task presentation depends on what
 the agent exposes: ACP has no portable native subagent-lineage contract, so richer delegation views
-remain agent-specific.
+remain agent-specific. Devin, Copilot CLI, and Cursor CLI subagents appear as read-only child
+threads with their tools, reply, and status:
+
+- **Copilot CLI** streams every subagent's frames on the parent session. Its tools are matched to the
+  subagent by Copilot's agent ID. Its reply streams into the child thread when only one subagent is
+  running; when several run at once, each child thread shows the reply that its `task` call returns.
+  Copilot doesn't link a foreground subagent's agent ID to the `task` call that started it, so with
+  parallel foreground subagents Cinderdeck matches them by the order they finish.
+- **Cursor CLI** runs each subagent as its own ACP session when the client asks for it, so Cinderdeck
+  routes those sessions to child threads directly. Background subagents stay running until Cursor
+  reports their end.
 
 ## Checkpoints
 

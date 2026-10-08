@@ -39,8 +39,9 @@ The adapter supports:
 - image attachments;
 - interruption, queued app messages, and orchestrator-owned interrupt/restart steering;
 - provider conversation snapshots through `Agent.messages.list()`;
-- Cursor `task` subagents, projected as read-only child app threads with their tool activity and
-  final result.
+- Cursor `task` subagents, projected as read-only child app threads whose tool activity and reply
+  stream in while they run. A background task stays running until a later `task` call awaits it in
+  the same turn; otherwise it ends idle when the turn ends.
 
 The public SDK does not currently expose native agent fork, conversation rollback, active steering,
 or interactive approval callbacks. Direct active steering is advertised as unsupported, while V2

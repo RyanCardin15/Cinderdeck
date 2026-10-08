@@ -1,8 +1,39 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { ACP_SESSION_MODE_OPTION_ID, acpProviderOptionDescriptors } from "./AcpSessionConfig.ts";
+import {
+  ACP_SESSION_MODE_OPTION_ID,
+  acpConfigValueFromChoiceId,
+  acpProviderOptionDescriptors,
+} from "./AcpSessionConfig.ts";
 
 describe("acpProviderOptionDescriptors", () => {
+  // Copilot CLI 1.0.93 advertises its default agent as an empty value.
+  it("keeps an empty-valued choice selectable and round-trips it", () => {
+    const [agent] = acpProviderOptionDescriptors({
+      configOptions: [
+        {
+          id: "agent",
+          name: "Agent",
+          category: "_agent",
+          type: "select",
+          currentValue: "",
+          options: [
+            { value: "", name: "Copilot", description: "Default Copilot agent" },
+            { value: "reviewer", name: "reviewer", description: "Reviews code" },
+          ],
+        },
+      ],
+      modeState: undefined,
+    });
+    expect(agent?.type).toBe("select");
+    if (agent?.type !== "select") return;
+    const [defaultAgent, reviewer] = agent.options;
+    expect(defaultAgent?.label).toBe("Copilot");
+    expect(agent.currentValue).toBe(defaultAgent?.id);
+    expect(acpConfigValueFromChoiceId(defaultAgent?.id ?? "")).toBe("");
+    expect(acpConfigValueFromChoiceId(reviewer?.id ?? "")).toBe("reviewer");
+  });
+
   it("maps non-model select options and excludes model and collaboration categories", () => {
     const descriptors = acpProviderOptionDescriptors({
       configOptions: [

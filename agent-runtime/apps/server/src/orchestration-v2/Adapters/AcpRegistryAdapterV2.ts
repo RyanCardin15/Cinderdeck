@@ -1,4 +1,14 @@
 import {
+  extractCopilotSubagentUpdate,
+  isCopilotSubagentWaitTool,
+  normalizeCopilotSessionUpdate,
+} from "./CopilotAcp.ts";
+import {
+  CURSOR_ACP_CLIENT_CAPABILITIES_META,
+  extractCursorSubagentSessionUpdate,
+  extractCursorSubagentUpdate,
+} from "./CursorAcp.ts";
+import {
   normalizeDevinSessionUpdate,
   normalizeDevinToolCall,
   extractDevinSubagentUpdate,
@@ -128,6 +138,9 @@ export function registerMistralVibeAcpExtensions(context: AcpAdapterV2ExtensionC
       }),
   );
 }
+// Copilot CLI and Cursor CLI subagents (approved by the maintainer, 2026-10-08):
+// each agent reports its subagents in its own way (CopilotAcp.ts, CursorAcp.ts).
+// The gates are marked in makeAcpRegistryAdapterV2.
 // ─── End per-agent exceptions (Devin's gates are marked in makeAcpRegistryAdapterV2) ───
 
 export function acpRegistryPromptFailure(agentId: string, cause: unknown) {
@@ -202,8 +215,8 @@ export function makeAcpRegistryAdapterV2(options: AcpRegistryAdapterV2Options) {
     driver: ACP_REGISTRY_PROVIDER,
     capabilities: AcpProviderCapabilitiesV2,
     promptFailure: (cause) => acpRegistryPromptFailure(options.settings.agentId, cause),
-    // Per-agent exceptions (Mistral Vibe, Devin): see the note above
-    // registerMistralVibeAcpExtensions before adding any more.
+    // Per-agent exceptions (Mistral Vibe, Devin, Copilot, Cursor): see the note
+    // above registerMistralVibeAcpExtensions before adding any more.
     ...(options.settings.agentId === "mistral-vibe"
       ? { registerExtensions: registerMistralVibeAcpExtensions }
       : {}),
@@ -216,6 +229,21 @@ export function makeAcpRegistryAdapterV2(options: AcpRegistryAdapterV2Options) {
           normalizeSessionUpdate: normalizeDevinSessionUpdate,
           normalizeToolCall: normalizeDevinToolCall,
           extractSubagentUpdate: extractDevinSubagentUpdate,
+        }
+      : {}),
+    ...(options.settings.agentId === "github-copilot-cli"
+      ? {
+          normalizeSessionUpdate: normalizeCopilotSessionUpdate,
+          extractSubagentUpdate: extractCopilotSubagentUpdate,
+          bindUnannouncedChildSessions: true,
+          isSubagentWaitTool: isCopilotSubagentWaitTool,
+        }
+      : {}),
+    ...(options.settings.agentId === "cursor"
+      ? {
+          clientCapabilitiesMeta: CURSOR_ACP_CLIENT_CAPABILITIES_META,
+          extractSubagentUpdate: extractCursorSubagentUpdate,
+          extractSubagentSessionUpdate: extractCursorSubagentSessionUpdate,
         }
       : {}),
     makeRuntime: options.makeRuntime ?? makeAcpRegistryRuntime(options),

@@ -617,7 +617,9 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
         ],
         mcpServers: T3_MCP_SERVERS,
       });
-      assert.isFalse(overrides.allowedTools?.includes(ClaudeAdapterV2.CLAUDE_CINDERDECK_MCP_TOOL_WILDCARD));
+      assert.isFalse(
+        overrides.allowedTools?.includes(ClaudeAdapterV2.CLAUDE_CINDERDECK_MCP_TOOL_WILDCARD),
+      );
     });
   });
 
@@ -6497,6 +6499,521 @@ describe("ClaudeAdapterV2 background wake turns", () => {
 
         assert.equal(subagentEvents().at(-1)?.subagent.status, "cancelled");
         assert.isFalse(yield* harness.hasPendingBackgroundWork);
+      }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+    ),
+  );
+
+  const subagentRows = (events: ReadonlyArray<ProviderAdapterV2Event>, taskId: string) =>
+    events.flatMap((event) =>
+      event.type === "turn_item.updated" &&
+      event.turnItem.type === "subagent" &&
+      event.turnItem.nativeItemRef?.nativeId === taskId
+        ? [event.turnItem]
+        : [],
+    );
+  const subagentNodes = (events: ReadonlyArray<ProviderAdapterV2Event>, taskId: string) =>
+    events.flatMap((event) =>
+      event.type === "node.updated" &&
+      event.node.kind === "subagent" &&
+      event.node.nativeItemRef?.nativeId === taskId
+        ? [event.node]
+        : [],
+    );
+  const taskUpdatedFrame = (input: {
+    readonly taskId: string;
+    readonly patch: Record<string, unknown>;
+    readonly uuid: string;
+  }) =>
+    claudeSdkFrame({
+      type: "system",
+      subtype: "task_updated",
+      task_id: input.taskId,
+      patch: input.patch,
+      uuid: input.uuid,
+      session_id: WAKE_NATIVE_SESSION,
+    });
+
+  it.effect("keeps a background subagent's row in its launch turn when a wake turn ends it", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const harness = yield* makeWakeHarness;
+        const now = yield* DateTime.now;
+        const taskId = "task-row-launch-turn";
+        const toolUseId = "toolu_row_launch_turn";
+        yield* harness.runtime.startTurn(
+          makeClaudeTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: harness.providerThread,
+            now,
+            attemptId: RunAttemptId.make("attempt-row-launch-1"),
+            text: "Audit the commits in the background.",
+            attachments: [],
+          }),
+        );
+        yield* Queue.offer(
+          harness.sdkMessages,
+          makeSubagentTaskStartedFrame({
+            taskId,
+            toolUseId,
+            uuid: "00000000-0000-4000-8000-000000000a01",
+          }),
+        );
+        yield* Queue.offer(
+          harness.sdkMessages,
+          makeResultFrame({ uuid: "00000000-0000-4000-8000-000000000a02", result: "Started." }),
+        );
+        yield* awaitUntil(() => harness.terminalEvents().length === 1, "launch turn terminal");
+        const launchTurnId = harness.terminalEvents()[0]!.providerTurnId;
+
+        // The subagent ends while the root is idle; the wake turn drains its end.
+        yield* Queue.offer(
+          harness.sdkMessages,
+          makeSubagentNotificationFrame({
+            taskId,
+            toolUseId,
+            summary: "AUDITED",
+            uuid: "00000000-0000-4000-8000-000000000a03",
+          }),
+        );
+        yield* awaitUntil(() => harness.continuationRequests.length === 1, "subagent wake");
+        yield* Queue.offer(
+          harness.sdkMessages,
+          makeResultFrame({ uuid: "00000000-0000-4000-8000-000000000a04", result: "Audited." }),
+        );
+        yield* harness.runtime.startTurn(
+          makeClaudeTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: harness.providerThread,
+            now,
+            attemptId: RunAttemptId.make("attempt-row-launch-2"),
+            text: "Background task completed.",
+            attachments: [],
+            providerTurnOrdinal: 2,
+            messageCreatedBy: "agent",
+            messageCreationSource: "provider",
+          }),
+        );
+        yield* awaitUntil(() => harness.terminalEvents().length === 2, "wake turn terminal");
+        assert.notEqual(harness.terminalEvents()[1]!.providerTurnId, launchTurnId);
+
+        // The card groups rows by provider turn: the finished row stays with
+        // the subagents launched beside it.
+        const rows = subagentRows(harness.events, taskId);
+        assert.equal(rows.at(-1)?.status, "completed");
+        assert.deepEqual([...new Set(rows.map((row) => row.providerTurnId))], [launchTurnId]);
+        const nodes = subagentNodes(harness.events, taskId);
+        assert.equal(nodes.at(-1)?.status, "completed");
+        assert.deepEqual([...new Set(nodes.map((node) => node.providerTurnId))], [launchTurnId]);
+      }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+    ),
+  );
+
+  it.effect("never shows workflow, MCP or housekeeping tasks as subagents", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const harness = yield* makeWakeHarness;
+        const now = yield* DateTime.now;
+        const userTurn = (attempt: string, providerTurnOrdinal: number) =>
+          harness.runtime.startTurn(
+            makeClaudeTestTurnInput({
+              threadId: harness.threadId,
+              providerThread: harness.providerThread,
+              now,
+              attemptId: RunAttemptId.make(attempt),
+              text: "Go on.",
+              attachments: [],
+              providerTurnOrdinal,
+            }),
+          );
+        const started = (taskId: string, fields: Record<string, unknown>, uuid: string) =>
+          claudeSdkFrame({
+            type: "system",
+            subtype: "task_started",
+            task_id: taskId,
+            tool_use_id: `toolu_${taskId}`,
+            description: `Task ${taskId}`,
+            ...fields,
+            uuid,
+            session_id: WAKE_NATIVE_SESSION,
+          });
+        const progress = (taskId: string, uuid: string) =>
+          claudeSdkFrame({
+            type: "system",
+            subtype: "task_progress",
+            task_id: taskId,
+            tool_use_id: `toolu_${taskId}`,
+            description: `Working on ${taskId}`,
+            usage: { total_tokens: 1, tool_uses: 1, duration_ms: 1 },
+            uuid,
+            session_id: WAKE_NATIVE_SESSION,
+          });
+        const ended = (taskId: string, uuid: string) =>
+          claudeSdkFrame({
+            type: "system",
+            subtype: "task_notification",
+            task_id: taskId,
+            tool_use_id: `toolu_${taskId}`,
+            status: "completed",
+            output_file: `/tmp/${taskId}.output`,
+            summary: `${taskId} done`,
+            uuid,
+            session_id: WAKE_NATIVE_SESSION,
+          });
+
+        yield* userTurn("attempt-non-subagent-tasks-1", 1);
+        for (const frame of [
+          started(
+            "workflow-task",
+            { task_type: "local_workflow", workflow_name: "spec" },
+            "00000000-0000-4000-8000-000000000b01",
+          ),
+          started(
+            "mcp-task",
+            { task_type: "mcp_task", is_backgrounded: true },
+            "00000000-0000-4000-8000-000000000b02",
+          ),
+          started(
+            "housekeeping-task",
+            { task_type: "local_agent", skip_transcript: true, ambient: true },
+            "00000000-0000-4000-8000-000000000b03",
+          ),
+          progress("workflow-task", "00000000-0000-4000-8000-000000000b04"),
+          progress("housekeeping-task", "00000000-0000-4000-8000-000000000b05"),
+          makeResultFrame({ uuid: "00000000-0000-4000-8000-000000000b06", result: "Started." }),
+        ]) {
+          yield* Queue.offer(harness.sdkMessages, frame);
+        }
+        yield* awaitUntil(() => harness.terminalEvents().length === 1, "first turn terminal");
+
+        // A later turn never saw those tasks start.
+        yield* userTurn("attempt-non-subagent-tasks-2", 2);
+        for (const frame of [
+          progress("workflow-task", "00000000-0000-4000-8000-000000000b07"),
+          progress("mcp-task", "00000000-0000-4000-8000-000000000b08"),
+          ended("workflow-task", "00000000-0000-4000-8000-000000000b09"),
+          ended("mcp-task", "00000000-0000-4000-8000-000000000b0a"),
+          makeResultFrame({ uuid: "00000000-0000-4000-8000-000000000b0b", result: "Done." }),
+        ]) {
+          yield* Queue.offer(harness.sdkMessages, frame);
+        }
+        yield* awaitUntil(() => harness.terminalEvents().length === 2, "second turn terminal");
+
+        assert.deepEqual(
+          harness.events.flatMap((event) =>
+            event.type === "subagent.updated" ||
+            event.type === "app_thread.created" ||
+            (event.type === "turn_item.updated" && event.turnItem.type === "subagent")
+              ? [event.type]
+              : [],
+          ),
+          [],
+        );
+      }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+    ),
+  );
+
+  it.effect("names a subagent Claude moved to the background in the wake its end causes", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const harness = yield* makeWakeHarness;
+        const now = yield* DateTime.now;
+        const taskId = "task-moved-to-background";
+        const toolUseId = "toolu_moved_to_background";
+        const userTurn = (attempt: string, providerTurnOrdinal: number) =>
+          harness.runtime.startTurn(
+            makeClaudeTestTurnInput({
+              threadId: harness.threadId,
+              providerThread: harness.providerThread,
+              now,
+              attemptId: RunAttemptId.make(attempt),
+              text: "Go on.",
+              attachments: [],
+              providerTurnOrdinal,
+            }),
+          );
+
+        yield* userTurn("attempt-moved-to-background-1", 1);
+        yield* Queue.offer(
+          harness.sdkMessages,
+          claudeSdkFrame({
+            ...makeSubagentTaskStartedFrame({
+              taskId,
+              toolUseId,
+              uuid: "00000000-0000-4000-8000-000000000c01",
+            }),
+            is_backgrounded: false,
+          }),
+        );
+        yield* Queue.offer(
+          harness.sdkMessages,
+          taskUpdatedFrame({
+            taskId,
+            patch: { is_backgrounded: true },
+            uuid: "00000000-0000-4000-8000-000000000c02",
+          }),
+        );
+        yield* Queue.offer(
+          harness.sdkMessages,
+          makeResultFrame({ uuid: "00000000-0000-4000-8000-000000000c03", result: "Moved on." }),
+        );
+        yield* awaitUntil(() => harness.terminalEvents().length === 1, "first turn terminal");
+
+        // It ends during the user's next turn; Claude's wake comes after it.
+        yield* userTurn("attempt-moved-to-background-2", 2);
+        yield* Queue.offer(
+          harness.sdkMessages,
+          makeSubagentNotificationFrame({
+            taskId,
+            toolUseId,
+            summary: "AUDITED",
+            uuid: "00000000-0000-4000-8000-000000000c04",
+          }),
+        );
+        yield* Queue.offer(
+          harness.sdkMessages,
+          makeResultFrame({ uuid: "00000000-0000-4000-8000-000000000c05", result: "Answered." }),
+        );
+        yield* awaitUntil(() => harness.terminalEvents().length === 2, "second turn terminal");
+        yield* Queue.offer(harness.sdkMessages, wakeTurnInit);
+        yield* awaitUntil(() => harness.continuationRequests.length === 1, "subagent wake");
+
+        assert.equal(
+          harness.continuationRequests[0]?.notification?.summary,
+          'Subagent "Audit recent commits" finished',
+        );
+      }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+    ),
+  );
+
+  it.effect("ends an idle background subagent Claude killed and still wakes for its end", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const harness = yield* makeWakeHarness;
+        const now = yield* DateTime.now;
+        const taskId = "task-killed-while-idle";
+        const toolUseId = "toolu_killed_while_idle";
+        yield* harness.runtime.startTurn(
+          makeClaudeTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: harness.providerThread,
+            now,
+            attemptId: RunAttemptId.make("attempt-killed-while-idle"),
+            text: "Audit the commits in the background.",
+            attachments: [],
+          }),
+        );
+        yield* Queue.offer(
+          harness.sdkMessages,
+          makeSubagentTaskStartedFrame({
+            taskId,
+            toolUseId,
+            uuid: "00000000-0000-4000-8000-000000000d01",
+          }),
+        );
+        yield* Queue.offer(
+          harness.sdkMessages,
+          makeResultFrame({ uuid: "00000000-0000-4000-8000-000000000d02", result: "Started." }),
+        );
+        yield* awaitUntil(() => harness.terminalEvents().length === 1, "launch turn terminal");
+        const launchTurnId = harness.terminalEvents()[0]!.providerTurnId;
+        assert.isTrue(yield* harness.hasPendingBackgroundWork);
+
+        yield* harness.offerAndWait(
+          taskUpdatedFrame({
+            taskId,
+            patch: { status: "killed", end_time: 1 },
+            uuid: "00000000-0000-4000-8000-000000000d03",
+          }),
+        );
+        yield* awaitUntil(
+          () => subagentRows(harness.events, taskId).at(-1)?.status === "cancelled",
+          "subagent cancelled",
+        );
+        const row = subagentRows(harness.events, taskId).at(-1);
+        assert.equal(row?.status, "cancelled");
+        assert.equal(row?.providerTurnId, launchTurnId);
+        assert.equal(subagentNodes(harness.events, taskId).at(-1)?.status, "cancelled");
+        assert.isFalse(yield* harness.hasPendingBackgroundWork);
+        assert.lengthOf(harness.continuationRequests, 0);
+
+        // Claude's own report of the end still wakes the root.
+        yield* Queue.offer(
+          harness.sdkMessages,
+          claudeSdkFrame({
+            ...makeSubagentNotificationFrame({
+              taskId,
+              toolUseId,
+              summary: "Agent was stopped.",
+              uuid: "00000000-0000-4000-8000-000000000d04",
+            }),
+            status: "stopped",
+          }),
+        );
+        yield* awaitUntil(() => harness.continuationRequests.length === 1, "subagent wake");
+        assert.equal(
+          harness.continuationRequests[0]?.notification?.summary,
+          'Subagent "Audit recent commits" was stopped',
+        );
+      }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+    ),
+  );
+
+  it.effect("fails a subagent row when Claude reports the subagent failed", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const harness = yield* makeWakeHarness;
+        const now = yield* DateTime.now;
+        const taskId = "task-failed-in-turn";
+        const error = "The subagent hit an API error.";
+        yield* harness.runtime.startTurn(
+          makeClaudeTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: harness.providerThread,
+            now,
+            attemptId: RunAttemptId.make("attempt-failed-in-turn"),
+            text: "Audit the commits.",
+            attachments: [],
+          }),
+        );
+        yield* harness.offerAndWait(
+          claudeSdkFrame({
+            ...makeSubagentTaskStartedFrame({
+              taskId,
+              toolUseId: "toolu_failed_in_turn",
+              uuid: "00000000-0000-4000-8000-000000000e01",
+            }),
+            is_backgrounded: false,
+          }),
+        );
+        yield* harness.offerAndWait(
+          taskUpdatedFrame({
+            taskId,
+            patch: { status: "failed", error, end_time: 1 },
+            uuid: "00000000-0000-4000-8000-000000000e02",
+          }),
+        );
+        yield* awaitUntil(
+          () => subagentRows(harness.events, taskId).at(-1)?.status === "failed",
+          "subagent failed",
+        );
+
+        const row = subagentRows(harness.events, taskId).at(-1);
+        assert.equal(row?.status, "failed");
+        assert.equal(row?.result, error);
+        const childThreadId = row?.childThreadId;
+        assert.include(
+          harness.events.flatMap((event) =>
+            event.type === "message.updated" &&
+            event.message.role === "assistant" &&
+            event.message.threadId === childThreadId
+              ? [event.message.text]
+              : [],
+          ),
+          error,
+        );
+      }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+    ),
+  );
+
+  it.effect("interrupts a background subagent whose CLI process exits while the root is idle", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const harness = yield* makeWakeHarness;
+        const now = yield* DateTime.now;
+        const taskId = "task-process-exited";
+        yield* harness.runtime.startTurn(
+          makeClaudeTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: harness.providerThread,
+            now,
+            attemptId: RunAttemptId.make("attempt-process-exited"),
+            text: "Audit the commits in the background.",
+            attachments: [],
+          }),
+        );
+        yield* Queue.offer(
+          harness.sdkMessages,
+          makeSubagentTaskStartedFrame({
+            taskId,
+            toolUseId: "toolu_process_exited",
+            uuid: "00000000-0000-4000-8000-000000000f01",
+          }),
+        );
+        yield* Queue.offer(
+          harness.sdkMessages,
+          makeResultFrame({ uuid: "00000000-0000-4000-8000-000000000f02", result: "Started." }),
+        );
+        yield* awaitUntil(() => harness.terminalEvents().length === 1, "launch turn terminal");
+        assert.isTrue(yield* harness.hasPendingBackgroundWork);
+
+        // The CLI process ends on its own; nothing will report the subagent's end.
+        yield* Queue.shutdown(harness.sdkMessages);
+        yield* awaitUntil(
+          () => subagentRows(harness.events, taskId).at(-1)?.status === "interrupted",
+          "subagent interrupted",
+        );
+        assert.equal(subagentNodes(harness.events, taskId).at(-1)?.status, "interrupted");
+        assert.isFalse(yield* harness.hasPendingBackgroundWork);
+      }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+    ),
+  );
+
+  it.effect("shows a subagent's approved tool call in the subagent's thread", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const harness = yield* makeWakeHarness;
+        const now = yield* DateTime.now;
+        const taskId = "task-subagent-tool-approval";
+        const toolUseId = "toolu_subagent_tool_approval";
+        const bashToolUseId = "toolu_subagent_bash_approval";
+        yield* harness.runtime.startTurn(
+          makeClaudeTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: harness.providerThread,
+            now,
+            attemptId: RunAttemptId.make("attempt-subagent-tool-approval"),
+            text: "Audit the commits.",
+            attachments: [],
+          }),
+        );
+        yield* harness.offerAndWait(
+          makeSubagentTaskStartedFrame({
+            taskId,
+            toolUseId,
+            uuid: "00000000-0000-4000-8000-000000001001",
+          }),
+        );
+        // Claude asks about the subagent's tool before its frame is handled.
+        const canUseTool = harness.getOpenedOptions()?.canUseTool;
+        assert.isFunction(canUseTool);
+        yield* Effect.promise(() =>
+          canUseTool!(
+            "Bash",
+            { command: "git log -5" },
+            {
+              signal: new AbortController().signal,
+              toolUseID: bashToolUseId,
+              requestId: "request-subagent-bash-approval",
+              agentID: taskId,
+            },
+          ),
+        );
+        for (const frame of makeSubagentAssistantFrames({
+          parentToolUseId: toolUseId,
+          uuid: "00000000-0000-4000-8000-000000001002",
+          bashToolUseId,
+        })) {
+          yield* Queue.offer(harness.sdkMessages, frame);
+        }
+        yield* Queue.offer(
+          harness.sdkMessages,
+          makeResultFrame({ uuid: "00000000-0000-4000-8000-000000001003", result: "Audited." }),
+        );
+        yield* awaitUntil(() => harness.terminalEvents().length === 1, "turn terminal");
+
+        const { childThreadId, toolThreadIds } = subagentRouting(harness.events, [bashToolUseId]);
+        assert.isDefined(childThreadId);
+        assert.deepEqual([...(toolThreadIds.get(bashToolUseId) ?? [])], [childThreadId]);
       }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
     ),
   );
