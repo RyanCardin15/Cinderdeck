@@ -802,7 +802,7 @@ const reconcileDesiredCloudLinkWith = Effect.fn("environment.cloud.reconcileDesi
           onNone: () =>
             Effect.fail(
               new EnvironmentHttpUnauthorizedError({
-                message: "Run `t3 connect link` to authorize this environment.",
+                message: "Authorize this environment in Cinderdeck Settings → Connections.",
               }),
             ),
           onSome: Effect.succeed,
@@ -1154,7 +1154,7 @@ export const pendingServiceUpdateExists = Effect.gen(function* () {
 });
 
 // A pending update alone is not proof a replacement server is coming: an
-// explicit launcher stop (`t3 service uninstall`, `systemctl stop`,
+// explicit launcher stop (`private runtime service uninstall`, `systemctl stop`,
 // `launchctl bootout`) during
 // the pending window also tears this server down. The launcher marks that case
 // just before it signals the child, so pending + no marker is the handoff.

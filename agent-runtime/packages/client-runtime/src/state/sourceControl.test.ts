@@ -35,12 +35,12 @@ const TARGET = new PrimaryConnectionTarget({
 const PUBLISH_RESULT: SourceControlPublishRepositoryResult = {
   repository: {
     provider: "github",
-    nameWithOwner: "t3tools/t3code",
-    url: "https://github.com/t3tools/t3code",
-    sshUrl: "git@github.com:t3tools/t3code.git",
+    nameWithOwner: "fixture/cinderdeck",
+    url: "https://github.com/fixture/cinderdeck",
+    sshUrl: "git@github.com:fixture/cinderdeck.git",
   },
   remoteName: "origin",
-  remoteUrl: "git@github.com:t3tools/t3code.git",
+  remoteUrl: "git@github.com:fixture/cinderdeck.git",
   branch: "main",
   upstreamBranch: "origin/main",
   status: "pushed",
@@ -139,7 +139,7 @@ describe("source control environment atoms", () => {
             input: {
               cwd: "/repo",
               provider: "github",
-              repository: "t3tools/t3code",
+              repository: "fixture/cinderdeck",
               visibility: "private",
             },
           }),
@@ -155,7 +155,7 @@ describe("source control environment atoms", () => {
             input: {
               cwd: "/repo",
               provider: "github",
-              repository: "t3tools/t3code",
+              repository: "fixture/cinderdeck",
               visibility: "private",
             },
           }),

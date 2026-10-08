@@ -861,7 +861,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  DECKHAND_OTLP_HEADERS: "authorization=Basic%20abc%3D%3D,x-tenant=t3",
+                  DECKHAND_OTLP_HEADERS: "authorization=Basic%20abc%3D%3D,x-tenant=cinderdeck",
                 },
               }),
             ),
@@ -872,7 +872,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
 
       expect(resolved.otlpTracesExport.headers).toEqual({
         authorization: "Basic abc==",
-        "x-tenant": "t3",
+        "x-tenant": "cinderdeck",
       });
     }),
   );
@@ -904,7 +904,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  DECKHAND_OTLP_HEADERS: "authorization=Bearer abc==, x-tenant=t3",
+                  DECKHAND_OTLP_HEADERS: "authorization=Bearer abc==, x-tenant=cinderdeck",
                   DECKHAND_OTLP_TRACES_URL: "http://collector.internal:4318",
                 },
               }),
@@ -916,7 +916,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
 
       expect(resolved.otlpTracesExport.headers).toEqual({
         authorization: "Bearer abc==",
-        "x-tenant": "t3",
+        "x-tenant": "cinderdeck",
       });
       expect(resolved.otlpTracesUrl).toBe("http://collector.internal:4318");
     }),

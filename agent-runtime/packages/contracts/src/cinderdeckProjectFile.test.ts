@@ -1,13 +1,13 @@
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
-import { T3ProjectFile, type T3ProjectFile as T3ProjectFileType } from "./t3ProjectFile.ts";
+import { CinderdeckProjectFile, type CinderdeckProjectFile as CinderdeckProjectFileType } from "./cinderdeckProjectFile.ts";
 
-const decode = Schema.decodeUnknownSync(T3ProjectFile as never) as (
+const decode = Schema.decodeUnknownSync(CinderdeckProjectFile as never) as (
   input: unknown,
-) => T3ProjectFileType;
+) => CinderdeckProjectFileType;
 
-describe("T3ProjectFile", () => {
+describe("CinderdeckProjectFile", () => {
   it("decodes a full project file", () => {
     const decoded = decode({
       $schema: "https://t3.codes/schema/t3.json",

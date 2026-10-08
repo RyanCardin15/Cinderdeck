@@ -33,7 +33,7 @@ describe("Local Cinderdeck diagnostics", () => {
             DECKHAND_PROFILE_ROOT: root,
             T3CODE_HOME: secret,
             DECKHAND_OTLP_TRACES_URL: secret,
-            DECKHAND_DESKTOP_UPDATE_REPOSITORY: "pingdotgg/t3code",
+            DECKHAND_DESKTOP_UPDATE_REPOSITORY: "example/cinderdeck",
             OPENAI_API_KEY: secret,
           },
         });

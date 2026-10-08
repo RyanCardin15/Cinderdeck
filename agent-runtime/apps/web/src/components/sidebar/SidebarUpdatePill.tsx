@@ -121,7 +121,7 @@ export function SidebarUpdatePill() {
               <Link
                 to="/settings/updates"
                 aria-label="Updates"
-                className="flex size-8 items-center justify-center rounded-md text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                className="flex size-8 items-center justify-center rounded-md text-sidebar-muted-foreground hover:bg-accent hover:text-sidebar-foreground focus-visible:outline-2 focus-visible:outline-ring"
               />
             }
           >

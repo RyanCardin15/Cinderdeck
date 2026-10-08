@@ -99,7 +99,7 @@ describe("ElectronProtocol", () => {
             scheme: "deckhand-dev",
             rendererToken: "test-desktop-renderer-token-at-least-32-characters",
             targetOrigin: new URL("http://127.0.0.1:3773/"),
-            clerkFrontendApiHostname: "clerk.t3.codes",
+            clerkFrontendApiHostname: "clerk.abc.test",
           });
           assert.isDefined(handler);
 
@@ -119,7 +119,7 @@ describe("ElectronProtocol", () => {
           assert.equal(yield* Effect.promise(() => response.text()), "ok");
           assert.include(
             response.headers.get("content-security-policy") ?? "",
-            "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://clerk.t3.codes https://challenges.cloudflare.com",
+            "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://clerk.abc.test https://challenges.cloudflare.com",
           );
           assert.include(
             response.headers.get("content-security-policy") ?? "",
@@ -266,7 +266,7 @@ describe("ElectronProtocol", () => {
       scheme: "deckhand",
       rendererToken: "test-desktop-renderer-token-at-least-32-characters",
       targetOrigin: new URL("http://127.0.0.1:3773/"),
-      clerkFrontendApiHostname: "clerk.t3.codes",
+      clerkFrontendApiHostname: "clerk.abc.test",
     });
     const directives = Object.fromEntries(
       policy.split("; ").map((directive) => {
@@ -279,7 +279,7 @@ describe("ElectronProtocol", () => {
       "'self'",
       "'unsafe-inline'",
       "'wasm-unsafe-eval'",
-      "https://clerk.t3.codes",
+      "https://clerk.abc.test",
       "https://challenges.cloudflare.com",
     ]);
     assert.deepEqual(directives["connect-src"], [

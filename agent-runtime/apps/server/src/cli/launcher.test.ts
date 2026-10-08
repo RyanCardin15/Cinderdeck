@@ -23,7 +23,7 @@ it.layer(NodeServices.layer)("t3 launcher path", (it) => {
       yield* fs.writeFileString(launcher, "");
 
       const bare = yield* resolveLauncherPath.pipe(
-        Effect.provideService(HostProcessInvokedAs, "t3"),
+        Effect.provideService(HostProcessInvokedAs, "cinderdeck"),
         Effect.provideService(HostProcessEnvironment, {
           PATH: `${path.join(root, "missing")}:${path.join(root, "bin")}`,
         }),
@@ -35,7 +35,7 @@ it.layer(NodeServices.layer)("t3 launcher path", (it) => {
         Effect.provideService(HostProcessWorkingDirectory, root),
       );
       const absent = yield* resolveLauncherPath.pipe(
-        Effect.provideService(HostProcessInvokedAs, "t3"),
+        Effect.provideService(HostProcessInvokedAs, "cinderdeck"),
         Effect.provideService(HostProcessEnvironment, { PATH: path.join(root, "missing") }),
         Effect.provideService(HostProcessWorkingDirectory, root),
       );

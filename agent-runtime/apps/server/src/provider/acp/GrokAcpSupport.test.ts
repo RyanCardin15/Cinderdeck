@@ -85,7 +85,7 @@ describe("buildGrokAcpSpawnInput", () => {
       cwd: "/tmp/project",
       env: {
         XAI_API_KEY: "secret",
-        GROK_OAUTH2_REFERRER: "t3code",
+        GROK_OAUTH2_REFERRER: "cinderdeck",
       },
     });
   });

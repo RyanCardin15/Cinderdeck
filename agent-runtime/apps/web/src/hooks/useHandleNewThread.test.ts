@@ -143,8 +143,8 @@ vi.mock("../lib/chatThreadActions", async (importOriginal) => ({
   hasExplicitComposerModelSelection: () => false,
   resolveNewThreadModelSelectionOverride: () => null,
 }));
-vi.mock("../lib/t3ProjectFileDefaults", () => ({
-  readT3ProjectFile: () => testState.projectFileRead,
+vi.mock("../lib/cinderdeckProjectFileDefaults", () => ({
+  readCinderdeckProjectFile: () => testState.projectFileRead,
 }));
 vi.mock("../lib/utils", () => ({
   newDraftId: () => "draft-delayed",

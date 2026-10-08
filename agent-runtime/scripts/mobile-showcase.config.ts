@@ -106,7 +106,7 @@ const config: ShowcaseConfig = {
       platform: "ios",
       // A disposable device lands on the newest runtime, whose default lock
       // screen wallpaper suits both appearances; a stock one may be older.
-      simulator: "T3 Showcase iPhone 17 Pro Max",
+      simulator: "Cinderdeck Showcase iPhone 17 Pro Max",
       simulatorDeviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max",
       appearance: "dark",
       theme: DEFAULT_SHOWCASE_THEME,
@@ -123,7 +123,7 @@ const config: ShowcaseConfig = {
     {
       id: "iphone-6.5",
       platform: "ios",
-      simulator: "T3 Showcase iPhone 14 Plus",
+      simulator: "Cinderdeck Showcase iPhone 14 Plus",
       simulatorDeviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-14-Plus",
       appearance: "dark",
       theme: DEFAULT_SHOWCASE_THEME,

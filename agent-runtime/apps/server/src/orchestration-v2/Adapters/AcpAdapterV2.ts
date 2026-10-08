@@ -92,9 +92,9 @@ import {
 import { ACP_SESSION_MODE_OPTION_ID } from "../../provider/acp/AcpSessionConfig.ts";
 import * as AcpSessionRuntime from "../../provider/acp/AcpSessionRuntime.ts";
 import {
-  t3AcpPromptWithInstructions,
-  type T3AcpInstructionState,
-} from "../../provider/T3OrchestrationInstructions.ts";
+  cinderdeckAcpPromptWithInstructions,
+  type CinderdeckAcpInstructionState,
+} from "../../provider/CinderdeckOrchestrationInstructions.ts";
 import { buildRuntimeInstructions } from "../../provider/RuntimeInstructions.ts";
 import * as IdAllocator from "../IdAllocator.ts";
 import { type ProviderContinuationRequest } from "../ProviderContinuationRequests.ts";
@@ -1622,7 +1622,7 @@ export function makeAcpAdapterV2(
           yield* Ref.make<AcpSessionRuntime.AcpSessionRuntimeStartResult | null>(null);
         const activeSelection = yield* Ref.make<ModelSelection | null>(null);
         const activeInteractionMode = yield* Ref.make<ProviderInteractionMode | null>(null);
-        const promptInstructionStates = yield* Ref.make(new Map<string, T3AcpInstructionState>());
+        const promptInstructionStates = yield* Ref.make(new Map<string, CinderdeckAcpInstructionState>());
         const runtimeRestartRequired = yield* Ref.make(false);
         const runtimeTeardownState = yield* Ref.make<AcpRuntimeTeardownState>({ _tag: "Idle" });
         const runtimeCallbackGeneration = yield* Ref.make(0);
@@ -6619,14 +6619,14 @@ export function makeAcpAdapterV2(
           const instructionState = {
             interactionMode: turnInput.runtimePolicy.interactionMode,
             hasT3Mcp: acpMcpServers(turnInput.threadId, self).length > 0,
-          } satisfies T3AcpInstructionState;
+          } satisfies CinderdeckAcpInstructionState;
           const previousInstructionState = (yield* Ref.get(promptInstructionStates)).get(sessionId);
           const messageText = providerMessageTextWithAttachmentPaths({
             text: turnInput.message.text,
             attachments: turnInput.message.attachments,
             attachmentsDir: serverConfig.attachmentsDir,
           });
-          const text = t3AcpPromptWithInstructions({
+          const text = cinderdeckAcpPromptWithInstructions({
             prompt: messageText,
             state: instructionState,
             ...(previousInstructionState === undefined

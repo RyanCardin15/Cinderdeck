@@ -142,7 +142,7 @@ describe("DesktopClerk", () => {
       });
       // runSync throws if the layer ever suspends, which would let Electron emit
       // ready before the bridge exists. main.ts provides the same FileSystem.
-      // oxlint-disable-next-line deckhand/no-manual-effect-runtime-in-tests -- The assertion IS that the layer builds synchronously; it.effect would mask a regression to async.
+      // oxlint-disable-next-line cinderdeck/no-manual-effect-runtime-in-tests -- The assertion IS that the layer builds synchronously; it.effect would mask a regression to async.
       Effect.runSync(
         Effect.scoped(
           Layer.build(
@@ -288,7 +288,7 @@ it.effect(
       assert.equal(loadURL.mock.calls.length, 0);
       assert.equal(event.preventDefault.mock.calls.length, 0);
       listeners.get("second-instance")!({}, [
-        "t3",
+        "cinderdeck",
         "deckhand-dev://app/settings/providers?instanceId=work&code=never-forward",
       ]);
       yield* Effect.promise(() => revealed.promise);
@@ -331,7 +331,7 @@ it.effect.each(["startup", "open-url"] as const)(
       }).toString();
       const request = {
         authorizationUrl: authorize.toString(),
-        returnUrl: "https://app.t3.codes/welcome#agents:remote-one",
+        returnUrl: "http://localhost:5173/welcome#agents:remote-one",
         environmentId: EnvironmentId.make("remote-one"),
         instanceId: ProviderInstanceId.make("work"),
         flowId: "flow-one",
@@ -378,7 +378,7 @@ it.effect.each(["startup", "open-url"] as const)(
         assert.strictEqual(delivery?.returnUrl, request.returnUrl);
       }).pipe(
         Effect.provide(makeDesktopClerkLayer(true, [], "darwin", undefined, shell)),
-        Effect.provideService(HostProcessArguments, entry === "startup" ? ["t3", link] : ["t3"]),
+        Effect.provideService(HostProcessArguments, entry === "startup" ? ["cinderdeck", link] : ["cinderdeck"]),
         Effect.provideService(ElectronApp.ElectronApp, electronApp),
         Effect.provideService(
           ElectronWindow.ElectronWindow,

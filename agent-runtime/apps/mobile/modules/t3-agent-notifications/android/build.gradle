@@ -3,7 +3,7 @@ plugins {
   id 'expo-module-gradle-plugin'
 }
 
-group = 'com.t3tools.agentnotifications'
+group = 'com.cardinlabs.cinderdeck.agentnotifications'
 version = '0.0.0'
 
 android {

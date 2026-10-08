@@ -41,7 +41,7 @@ describe("resolveMediaSource", () => {
       });
     });
 
-    it.each(["data:image/png;base64,AAAA", "blob:https://app.t3.codes/id"])(
+    it.each(["data:image/png;base64,AAAA", "blob:https://app.abc.test/id"])(
       "loads %s directly",
       (href) => {
         expect(resolveMediaSource(href, { threadId, imageEmbed: true })).toMatchObject({

@@ -9,10 +9,10 @@ import {
   type ThreadId,
 } from "@cinderdeck/contracts";
 import {
-  resolveT3McpToolDefinition,
-  type T3McpToolDefinition,
-  type T3McpToolSummaryAction,
-} from "@cinderdeck/shared/t3McpToolPresentation";
+  resolveCinderdeckMcpToolDefinition,
+  type CinderdeckMcpToolDefinition,
+  type CinderdeckMcpToolSummaryAction,
+} from "@cinderdeck/shared/cinderdeckMcpToolPresentation";
 import { classifyMarkdownImageSource } from "@cinderdeck/client-runtime/markdown-images";
 import { resolveMediaSource } from "@cinderdeck/client-runtime/media-source";
 import { parseChangeRequestUrl } from "@cinderdeck/shared/changeRequestUrl";
@@ -22,10 +22,10 @@ import { classifyToolActivity } from "@cinderdeck/shared/toolActivity";
 import { toolOutputIndicatesFailure } from "@cinderdeck/shared/toolOutput";
 
 import {
-  summarizeT3ToolCalls,
-  t3ToolResultIndicatesFailure,
-  type T3ToolSummaryCall,
-} from "@cinderdeck/client-runtime/t3ToolSummary";
+  summarizeCinderdeckToolCalls,
+  cinderdeckToolResultIndicatesFailure,
+  type CinderdeckToolSummaryCall,
+} from "@cinderdeck/client-runtime/cinderdeckToolSummary";
 
 export type WorkLogToolLifecycleStatus = RuntimeItemStatus | "stopped" | "idle";
 
@@ -122,7 +122,7 @@ function workEntryToolName(
     return `${data.server}.${data.tool}`;
   }
   if (typeof data?.toolName === "string") return data.toolName;
-  return resolveT3McpToolDefinition(entry.toolTitle) ? entry.toolTitle : entry.label;
+  return resolveCinderdeckMcpToolDefinition(entry.toolTitle) ? entry.toolTitle : entry.label;
 }
 
 function workEntryToolOutput(
@@ -135,8 +135,8 @@ function workEntryToolOutput(
     : (data?.output ?? data?.result ?? data?.rawOutput ?? data?.content);
 }
 
-function resolveT3McpToolPresentation(
-  definition: T3McpToolDefinition | null,
+function resolveCinderdeckMcpToolPresentation(
+  definition: CinderdeckMcpToolDefinition | null,
   status: string | undefined,
   data?: unknown,
 ) {
@@ -200,11 +200,11 @@ export function resolveWorkEntryToolPresentation(
   >,
   fallbackStatus?: "inProgress" | "completed",
 ) {
-  const definition = resolveT3McpToolDefinition(workEntryToolName(entry));
+  const definition = resolveCinderdeckMcpToolDefinition(workEntryToolName(entry));
   const status = entry.toolLifecycleStatus ?? fallbackStatus;
-  return resolveT3McpToolPresentation(
+  return resolveCinderdeckMcpToolPresentation(
     definition,
-    definition && t3ToolResultIndicatesFailure(workEntryToolOutput(entry)) ? "failed" : status,
+    definition && cinderdeckToolResultIndicatesFailure(workEntryToolOutput(entry)) ? "failed" : status,
     entry.toolData,
   );
 }
@@ -370,8 +370,8 @@ function workEntryIndicatesToolFailureFromOutput(
   }
   if (!workLogEntryIsToolLike(entry)) return false;
   if (
-    resolveT3McpToolDefinition(workEntryToolName(entry)) &&
-    t3ToolResultIndicatesFailure(workEntryToolOutput(entry))
+    resolveCinderdeckMcpToolDefinition(workEntryToolName(entry)) &&
+    cinderdeckToolResultIndicatesFailure(workEntryToolOutput(entry))
   ) {
     return true;
   }
@@ -574,7 +574,7 @@ function toolGroupActionLabel(action: ToolGroupAction, count: number): string {
   }
 }
 
-function t3ToolSummaryCall(entry: WorkLogPresentationEntry): T3ToolSummaryCall {
+function cinderdeckToolSummaryCall(entry: WorkLogPresentationEntry): CinderdeckToolSummaryCall {
   const item = entry.structuredPayload;
   const data =
     entry.toolData !== null && typeof entry.toolData === "object"
@@ -597,7 +597,7 @@ function t3ToolSummaryCall(entry: WorkLogPresentationEntry): T3ToolSummaryCall {
   };
 }
 
-function summaryActionPriority(action: ToolGroupAction | T3McpToolSummaryAction): number {
+function summaryActionPriority(action: ToolGroupAction | CinderdeckMcpToolSummaryAction): number {
   switch (action) {
     case "command":
     case "edit":
@@ -652,16 +652,16 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEnt
   }
   entries = toolEntries;
   const groups = new Map<
-    ToolGroupAction | T3McpToolSummaryAction,
+    ToolGroupAction | CinderdeckMcpToolSummaryAction,
     {
       action: ToolGroupAction;
-      t3Action: T3McpToolSummaryAction | null;
+      t3Action: CinderdeckMcpToolSummaryAction | null;
       entries: WorkLogPresentationEntry[];
     }
   >();
   const sources = new Map<string, ToolActivitySource>();
   for (const entry of entries) {
-    const t3Action = resolveT3McpToolDefinition(workEntryToolName(entry))?.summaryAction ?? null;
+    const t3Action = resolveCinderdeckMcpToolDefinition(workEntryToolName(entry))?.summaryAction ?? null;
     if (entry.toolSource && t3Action === null) {
       sources.set(entry.toolSource.key, entry.toolSource);
       continue;
@@ -677,7 +677,7 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEnt
     count: group.entries.length,
     priority: summaryActionPriority(action),
     ...(group.t3Action
-      ? summarizeT3ToolCalls(group.t3Action, group.entries.map(t3ToolSummaryCall))
+      ? summarizeCinderdeckToolCalls(group.t3Action, group.entries.map(cinderdeckToolSummaryCall))
       : {
           label: toolGroupActionLabel(
             group.action,
@@ -708,7 +708,7 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEnt
   const sourcedCount = entries.filter(
     (entry) =>
       entry.toolSource !== undefined &&
-      resolveT3McpToolDefinition(workEntryToolName(entry)) === null,
+      resolveCinderdeckMcpToolDefinition(workEntryToolName(entry)) === null,
   ).length;
   const remainingCount =
     entries.length - sourcedCount - selected.reduce((count, group) => count + group.count, 0);

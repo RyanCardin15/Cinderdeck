@@ -10,14 +10,14 @@ import {
   AlertDialogTitle,
 } from "../ui/alert-dialog";
 import { Button, InlineButton } from "../ui/button";
-import { useT3ConnectAccountPage } from "./T3ConnectAccountPages";
+import { useCinderdeckConnectionAccountPage } from "./CinderdeckConnectionAccountPages";
 
 /**
  * Confirms removing a Remote connections environment from this device. Removal here
  * leaves the account registration (and its host space) in place, so the dialog
  * says so and links to the account page where it can be deregistered.
  */
-export function RemoveT3ConnectEnvironmentDialog({
+export function RemoveCinderdeckConnectionEnvironmentDialog({
   environmentLabel,
   onCancel,
   onConfirm,
@@ -27,7 +27,7 @@ export function RemoveT3ConnectEnvironmentDialog({
   readonly onCancel: () => void;
   readonly onConfirm: () => void;
 }) {
-  const accountPage = useT3ConnectAccountPage();
+  const accountPage = useCinderdeckConnectionAccountPage();
   // Keep the label through the close animation.
   const [shownLabel, setShownLabel] = useState(environmentLabel);
   if (environmentLabel !== null && environmentLabel !== shownLabel) setShownLabel(environmentLabel);

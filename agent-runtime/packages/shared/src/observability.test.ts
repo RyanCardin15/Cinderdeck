@@ -618,13 +618,13 @@ describe("OtlpHeadersFromString", () => {
   it.each([
     {
       name: "decodes percent-encoded values",
-      input: "authorization=Basic%20abc%3D%3D,x-tenant=t3",
-      expected: { authorization: "Basic abc==", "x-tenant": "t3" },
+      input: "authorization=Basic%20abc%3D%3D,x-tenant=cinderdeck",
+      expected: { authorization: "Basic abc==", "x-tenant": "cinderdeck" },
     },
     {
       name: "ignores whitespace around separators",
-      input: "authorization=Basic%20abc%3D%3D, x-tenant = t3 ,",
-      expected: { authorization: "Basic abc==", "x-tenant": "t3" },
+      input: "authorization=Basic%20abc%3D%3D, x-tenant = cinderdeck ,",
+      expected: { authorization: "Basic abc==", "x-tenant": "cinderdeck" },
     },
     {
       name: "keeps literal equals signs inside a value",

@@ -39,7 +39,7 @@ import * as ProjectEnrichmentService from "../project/ProjectEnrichmentService.t
 import * as ProjectFaviconResolver from "../project/ProjectFaviconResolver.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as RepositoryIdentityResolver from "../project/RepositoryIdentityResolver.ts";
-import * as T3ProjectFileLoader from "../project/T3ProjectFileLoader.ts";
+import * as CinderdeckProjectFileLoader from "../project/CinderdeckProjectFileLoader.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import {
   ProjectLiveServerDeclaredResponseError,
@@ -94,7 +94,7 @@ const readProjects = (baseDir: string) =>
       Layer.provideMerge(ProjectEnrichmentService.layer),
       Layer.provideMerge(RepositoryIdentityResolver.layer),
       Layer.provideMerge(ProjectFaviconResolver.layer),
-      Layer.provideMerge(T3ProjectFileLoader.layer),
+      Layer.provideMerge(CinderdeckProjectFileLoader.layer),
       Layer.provideMerge(WorkspacePaths.layer),
       Layer.provideMerge(SqlitePersistence.layerConfig),
       Layer.provideMerge(NodeServices.layer),

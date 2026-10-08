@@ -20,7 +20,7 @@ describe("electron development launcher", () => {
     const environmentScript = makeDevelopmentEnvironmentScript({
       VITE_DEV_SERVER_URL: "http://127.0.0.1:8526",
       DECKHAND_PORT: "16566",
-      DECKHAND_HOME: "/tmp/t3",
+      DECKHAND_HOME: "/tmp/cinderdeck",
       DECKHAND_OTLP_PROTOCOL: "http/protobuf",
     });
 
@@ -50,7 +50,7 @@ describe("electron development launcher", () => {
     assert.notInclude(script, "VITE_DEV_SERVER_URL");
     assert.include(
       script,
-      "exec '/repo/node_modules/electron/Electron' --t3code-dev-root='/repo/apps/desktop' '/repo/apps/desktop/dist-electron/main.cjs' \"$@\"",
+      "exec '/repo/node_modules/electron/Electron' --cinderdeck-dev-root='/repo/apps/desktop' '/repo/apps/desktop/dist-electron/main.cjs' \"$@\"",
     );
   });
 

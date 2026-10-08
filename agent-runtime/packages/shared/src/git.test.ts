@@ -14,23 +14,23 @@ import {
 
 describe("normalizeGitRemoteUrl", () => {
   it("canonicalizes equivalent GitHub remotes across protocol variants", () => {
-    expect(normalizeGitRemoteUrl("git@github.com:T3Tools/T3Code.git")).toBe(
-      "github.com/t3tools/t3code",
+    expect(normalizeGitRemoteUrl("git@github.com:Fixture/Cinderdeck.git")).toBe(
+      "github.com/fixture/cinderdeck",
     );
-    expect(normalizeGitRemoteUrl("https://github.com/T3Tools/T3Code.git")).toBe(
-      "github.com/t3tools/t3code",
+    expect(normalizeGitRemoteUrl("https://github.com/Fixture/Cinderdeck.git")).toBe(
+      "github.com/fixture/cinderdeck",
     );
-    expect(normalizeGitRemoteUrl("ssh://git@github.com/T3Tools/T3Code")).toBe(
-      "github.com/t3tools/t3code",
+    expect(normalizeGitRemoteUrl("ssh://git@github.com/Fixture/Cinderdeck")).toBe(
+      "github.com/fixture/cinderdeck",
     );
   });
 
   it("preserves nested group paths for providers like GitLab", () => {
-    expect(normalizeGitRemoteUrl("git@gitlab.com:T3Tools/platform/T3Code.git")).toBe(
-      "gitlab.com/t3tools/platform/t3code",
+    expect(normalizeGitRemoteUrl("git@gitlab.com:Fixture/platform/Cinderdeck.git")).toBe(
+      "gitlab.com/fixture/platform/cinderdeck",
     );
-    expect(normalizeGitRemoteUrl("https://gitlab.com/T3Tools/platform/T3Code.git")).toBe(
-      "gitlab.com/t3tools/platform/t3code",
+    expect(normalizeGitRemoteUrl("https://gitlab.com/Fixture/platform/Cinderdeck.git")).toBe(
+      "gitlab.com/fixture/platform/cinderdeck",
     );
   });
 
@@ -53,34 +53,34 @@ describe("normalizeGitRemoteUrl", () => {
   });
 
   it("gives an Azure DevOps repository the same key over SSH as over HTTPS", () => {
-    expect(normalizeGitRemoteUrl("git@ssh.dev.azure.com:v3/T3Tools/Platform/T3Code")).toBe(
-      "dev.azure.com/t3tools/platform/_git/t3code",
+    expect(normalizeGitRemoteUrl("git@ssh.dev.azure.com:v3/Fixture/Platform/Cinderdeck")).toBe(
+      "dev.azure.com/fixture/platform/_git/cinderdeck",
     );
-    expect(normalizeGitRemoteUrl("ssh://git@ssh.dev.azure.com:22/v3/T3Tools/Platform/T3Code")).toBe(
-      "dev.azure.com/t3tools/platform/_git/t3code",
+    expect(normalizeGitRemoteUrl("ssh://git@ssh.dev.azure.com:22/v3/Fixture/Platform/Cinderdeck")).toBe(
+      "dev.azure.com/fixture/platform/_git/cinderdeck",
     );
     expect(
-      normalizeGitRemoteUrl("https://T3Tools@dev.azure.com/T3Tools/Platform/_git/T3Code"),
-    ).toBe("dev.azure.com/t3tools/platform/_git/t3code");
+      normalizeGitRemoteUrl("https://Fixture@dev.azure.com/Fixture/Platform/_git/Cinderdeck"),
+    ).toBe("dev.azure.com/fixture/platform/_git/cinderdeck");
   });
 
   it("puts the organization back in the host on the name dev.azure.com replaced", () => {
     expect(
-      normalizeGitRemoteUrl("T3Tools@vs-ssh.visualstudio.com:v3/T3Tools/Platform/T3Code"),
-    ).toBe("t3tools.visualstudio.com/platform/_git/t3code");
-    expect(normalizeGitRemoteUrl("https://T3Tools.visualstudio.com/Platform/_git/T3Code")).toBe(
-      "t3tools.visualstudio.com/platform/_git/t3code",
+      normalizeGitRemoteUrl("Fixture@vs-ssh.visualstudio.com:v3/Fixture/Platform/Cinderdeck"),
+    ).toBe("fixture.visualstudio.com/platform/_git/cinderdeck");
+    expect(normalizeGitRemoteUrl("https://Fixture.visualstudio.com/Platform/_git/Cinderdeck")).toBe(
+      "fixture.visualstudio.com/platform/_git/cinderdeck",
     );
   });
 
   it("leaves an Azure SSH host it cannot read as the path it was given", () => {
     // Not `v3`, and not four segments: rewriting either would invent a repository that the web
     // spelling has no name for, so the remote stands as it arrived.
-    expect(normalizeGitRemoteUrl("git@ssh.dev.azure.com:v4/T3Tools/Platform/T3Code")).toBe(
-      "ssh.dev.azure.com/v4/t3tools/platform/t3code",
+    expect(normalizeGitRemoteUrl("git@ssh.dev.azure.com:v4/Fixture/Platform/Cinderdeck")).toBe(
+      "ssh.dev.azure.com/v4/fixture/platform/cinderdeck",
     );
-    expect(normalizeGitRemoteUrl("git@ssh.dev.azure.com:v3/T3Tools/T3Code")).toBe(
-      "ssh.dev.azure.com/v3/t3tools/t3code",
+    expect(normalizeGitRemoteUrl("git@ssh.dev.azure.com:v3/Fixture/Cinderdeck")).toBe(
+      "ssh.dev.azure.com/v3/fixture/cinderdeck",
     );
   });
 });
@@ -93,12 +93,12 @@ describe("parseOriginUrlFromGitConfig", () => {
       '[remote "upstream"]',
       "\turl = https://github.com/other/repo.git",
       '[remote "origin"]',
-      "\turl = git@github.com:pingdotgg/t3code.git",
+      "\turl = git@github.com:example/cinderdeck.git",
       "\tfetch = +refs/heads/*:refs/remotes/origin/*",
       '[branch "main"]',
       "\tremote = origin",
     ].join("\n");
-    expect(parseOriginUrlFromGitConfig(config)).toBe("git@github.com:pingdotgg/t3code.git");
+    expect(parseOriginUrlFromGitConfig(config)).toBe("git@github.com:example/cinderdeck.git");
   });
 
   it("strips inline comments and quotes from the url value", () => {
@@ -154,14 +154,14 @@ describe("parseOriginUrlFromGitConfig", () => {
 describe("parseGitHubRepositoryNameWithOwnerFromRemoteUrl", () => {
   it("extracts the owner and repository from common GitHub remote shapes", () => {
     expect(
-      parseGitHubRepositoryNameWithOwnerFromRemoteUrl("git@github.com:T3Tools/T3Code.git"),
-    ).toBe("T3Tools/T3Code");
+      parseGitHubRepositoryNameWithOwnerFromRemoteUrl("git@github.com:Fixture/Cinderdeck.git"),
+    ).toBe("Fixture/Cinderdeck");
     expect(
-      parseGitHubRepositoryNameWithOwnerFromRemoteUrl("https://github.com/T3Tools/T3Code.git"),
-    ).toBe("T3Tools/T3Code");
+      parseGitHubRepositoryNameWithOwnerFromRemoteUrl("https://github.com/Fixture/Cinderdeck.git"),
+    ).toBe("Fixture/Cinderdeck");
     expect(
-      parseGitHubRepositoryNameWithOwnerFromRemoteUrl("ssh://github.com/T3Tools/T3Code.git"),
-    ).toBe("T3Tools/T3Code");
+      parseGitHubRepositoryNameWithOwnerFromRemoteUrl("ssh://github.com/Fixture/Cinderdeck.git"),
+    ).toBe("Fixture/Cinderdeck");
   });
 });
 
@@ -308,7 +308,7 @@ describe("formatGeneratedBranchName", () => {
     expect(
       formatGeneratedBranchName("feat/Add Search", {
         mode: "semantic",
-        prefix: "t3code",
+        prefix: "cinderdeck",
         instructions: "",
       }),
     ).toBe("feat/add-search");

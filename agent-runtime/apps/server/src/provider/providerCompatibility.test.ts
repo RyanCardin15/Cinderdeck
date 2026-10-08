@@ -26,7 +26,7 @@ import {
 const driver = ProviderDriverKind.make("codex");
 const policy: ProviderCompatibilityPolicy = {
   driver,
-  t3CodeRange: ">=0.0.42 <0.1.0",
+  cinderdeckCodeRange: ">=0.0.42 <0.1.0",
   recommendedVersion: "2.0.0",
   recommendedRange: ">=2.0.0 <3.0.0",
   ranges: [
@@ -112,14 +112,14 @@ describe("provider compatibility", () => {
       ["1.14.19", "graceful"],
       ["1.14.18", "broken"],
     ] as const) {
-      for (const t3CodeVersion of [V2_RELEASE, "0.0.46-preview.20261002.2598"]) {
+      for (const cinderdeckVersion of [V2_RELEASE, "0.0.46-preview.20261002.2598"]) {
         const advisory = resolveProviderCompatibility(
           ModelManifest.BUNDLED_MODEL_MANIFEST.compatibility,
           opencode,
           version,
-          t3CodeVersion,
+          cinderdeckVersion,
         );
-        assert.strictEqual(advisory?.status, expected, `OpenCode ${version} on ${t3CodeVersion}`);
+        assert.strictEqual(advisory?.status, expected, `OpenCode ${version} on ${cinderdeckVersion}`);
         assert.strictEqual(advisory?.recommendedRange, ">=2.0.18");
       }
     }
@@ -144,7 +144,7 @@ describe("provider compatibility", () => {
     const cursor = ProviderDriverKind.make("cursor");
     const cursorPolicy: ProviderCompatibilityPolicy = {
       driver: cursor,
-      t3CodeRange: policy.t3CodeRange,
+      cinderdeckCodeRange: policy.cinderdeckCodeRange,
       ranges: [
         { range: "<2026.05.09", status: "unsupported" },
         { range: ">=2026.05.09", status: "supported" },
@@ -234,7 +234,7 @@ describe("provider compatibility", () => {
     assert.strictEqual(supported.status, "error");
     assert.strictEqual(supported.message, "Authentication failed");
     assert.strictEqual(
-      applyProviderCompatibility(supported, [{ ...policy, t3CodeRange: ">=9.0.0" }], [policy])
+      applyProviderCompatibility(supported, [{ ...policy, cinderdeckCodeRange: ">=9.0.0" }], [policy])
         .compatibilityAdvisory?.status,
       "broken",
     );
@@ -256,7 +256,7 @@ describe("provider compatibility", () => {
     assert.doesNotThrow(() => decode(policy));
     const prefixed = decode({
       ...policy,
-      t3CodeRange: ">=v0.0.42 <v0.1",
+      cinderdeckCodeRange: ">=v0.0.42 <v0.1",
       recommendedRange: "^v2",
       ranges: [{ range: ">=v2.0 <v3", status: "supported" }],
     });
@@ -269,7 +269,7 @@ describe("provider compatibility", () => {
       "unknown",
     );
     for (const invalid of [
-      { ...policy, t3CodeRange: "*" },
+      { ...policy, cinderdeckCodeRange: "*" },
       { ...policy, recommendedVersion: "3.0.0" },
       { ...policy, ranges: [{ range: ">=2.0.0 garbage", status: "supported" }] },
       { ...policy, recommendedVersion: "2.0.0; echo unsafe" },

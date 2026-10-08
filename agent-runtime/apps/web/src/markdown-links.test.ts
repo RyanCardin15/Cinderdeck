@@ -188,7 +188,7 @@ describe("resolveMarkdownFileLinkTarget", () => {
     expect(
       resolveMarkdownFileLinkMeta(
         "file:///C:/Users/mike/dev-stuff/cinderdeck/apps/web/src/session-logic.ts#L501",
-        "C:/Users/mike/dev-stuff/t3code",
+        "C:/Users/mike/dev-stuff/cinderdeck",
       ),
     ).toMatchObject({
       displayPath: "cinderdeck/apps/web/src/session-logic.ts:501",
@@ -238,7 +238,7 @@ describe("resolveMarkdownFileLinkTarget", () => {
     expect(
       resolveMarkdownFileLinkMeta(
         "/C:/Users/mike/dev-stuff/cinderdeck/apps/web/src/components/chat/MessagesTimeline.virtualization.browser.tsx",
-        "C:/Users/mike/dev-stuff/t3code",
+        "C:/Users/mike/dev-stuff/cinderdeck",
       ),
     ).toMatchObject({
       displayPath:
@@ -257,11 +257,11 @@ describe("resolveMarkdownFileLinkTarget", () => {
   it("does not classify a case-distinct POSIX sibling as a workspace file", () => {
     expect(
       resolveMarkdownFileLinkMeta(
-        "/tmp/t3code-case-test/project/probe.txt",
-        "/tmp/t3code-case-test/Project",
+        "/tmp/cinderdeck-case-test/project/probe.txt",
+        "/tmp/cinderdeck-case-test/Project",
       ),
     ).toMatchObject({
-      displayPath: "/tmp/t3code-case-test/project/probe.txt",
+      displayPath: "/tmp/cinderdeck-case-test/project/probe.txt",
       workspaceRelativePath: null,
     });
   });

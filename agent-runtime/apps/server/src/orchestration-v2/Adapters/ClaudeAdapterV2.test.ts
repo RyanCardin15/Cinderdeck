@@ -473,7 +473,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
       headers: {
         Authorization: "Bearer secret-claude-token",
       },
-      timeout: ClaudeAdapterV2.CLAUDE_T3_MCP_TOOL_TIMEOUT_MS,
+      timeout: ClaudeAdapterV2.CLAUDE_CINDERDECK_MCP_TOOL_TIMEOUT_MS,
     },
   } as const;
 
@@ -537,7 +537,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
           disallowedMcpTools,
         }),
         {
-          allowedTools: [ClaudeAdapterV2.CLAUDE_T3_MCP_TOOL_WILDCARD],
+          allowedTools: [ClaudeAdapterV2.CLAUDE_CINDERDECK_MCP_TOOL_WILDCARD],
           disallowedTools: disallowedMcpTools,
           mcpServers: T3_MCP_SERVERS,
         },
@@ -555,7 +555,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
       });
 
       assert.deepEqual(overrides, {
-        allowedTools: [ClaudeAdapterV2.CLAUDE_T3_MCP_TOOL_WILDCARD],
+        allowedTools: [ClaudeAdapterV2.CLAUDE_CINDERDECK_MCP_TOOL_WILDCARD],
         mcpServers: T3_MCP_SERVERS,
       });
     });
@@ -594,7 +594,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
         );
         assert.isFalse(overrides.allowedTools?.includes("mcp__deckhand__computer_script"));
         assert.isFalse(
-          overrides.allowedTools?.includes(ClaudeAdapterV2.CLAUDE_T3_MCP_TOOL_WILDCARD),
+          overrides.allowedTools?.includes(ClaudeAdapterV2.CLAUDE_CINDERDECK_MCP_TOOL_WILDCARD),
         );
       });
     },
@@ -617,7 +617,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
         ],
         mcpServers: T3_MCP_SERVERS,
       });
-      assert.isFalse(overrides.allowedTools?.includes(ClaudeAdapterV2.CLAUDE_T3_MCP_TOOL_WILDCARD));
+      assert.isFalse(overrides.allowedTools?.includes(ClaudeAdapterV2.CLAUDE_CINDERDECK_MCP_TOOL_WILDCARD));
     });
   });
 
@@ -766,7 +766,7 @@ describe("ClaudeAdapterV2 native protocol logging", () => {
             headers: {
               Authorization: "Bearer secret-claude-token",
             },
-            timeout: ClaudeAdapterV2.CLAUDE_T3_MCP_TOOL_TIMEOUT_MS,
+            timeout: ClaudeAdapterV2.CLAUDE_CINDERDECK_MCP_TOOL_TIMEOUT_MS,
           },
         },
       });

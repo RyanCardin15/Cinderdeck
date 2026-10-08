@@ -474,7 +474,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const stageResourcesDir = yield* fs.makeTempDirectoryScoped({
-          prefix: "t3code-dmg-background-",
+          prefix: "cinderdeck-dmg-background-",
         });
         const dmgDir = path.join(stageResourcesDir, "dmg");
         yield* fs.makeDirectory(dmgDir, { recursive: true });
@@ -525,7 +525,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const stageResourcesDir = yield* fs.makeTempDirectoryScoped({
-          prefix: "t3code-dmg-background-missing-",
+          prefix: "cinderdeck-dmg-background-missing-",
         });
 
         const error = yield* stageDesktopDmgBackground(stageResourcesDir, "latest", false).pipe(
@@ -542,7 +542,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it("derives macOS passkey signing configuration from the Clerk publishable key", () => {
     const configuration = resolveMacPasskeySigningConfiguration({
       DECKHAND_APPLE_TEAM_ID: "abc1234567",
-      DECKHAND_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
+      DECKHAND_MACOS_PROVISIONING_PROFILE: "/tmp/cinderdeck.provisionprofile",
       DECKHAND_CLERK_PUBLISHABLE_KEY: `pk_test_${btoa("example.clerk.accounts.dev$")}`,
     });
 
@@ -550,14 +550,14 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       appId: "com.ryancardin.cinderdeck.runtime",
       teamId: "ABC1234567",
       rpDomains: ["example.clerk.accounts.dev"],
-      provisioningProfilePath: "/tmp/t3code.provisionprofile",
+      provisioningProfilePath: "/tmp/cinderdeck.provisionprofile",
     });
   });
 
   it("normalizes explicit macOS passkey RP domains and renders required entitlements", () => {
     const configuration = resolveMacPasskeySigningConfiguration({
       DECKHAND_APPLE_TEAM_ID: "ABC1234567",
-      DECKHAND_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
+      DECKHAND_MACOS_PROVISIONING_PROFILE: "/tmp/cinderdeck.provisionprofile",
       DECKHAND_CLERK_PASSKEY_RP_DOMAINS:
         " Clerk.Example.com,example.clerk.accounts.dev,clerk.example.com ",
     });
@@ -597,7 +597,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "https://domain-user:domain-secret@example.clerk.accounts.dev/path?token=query-secret";
     const invalidDomainError = captureError({
       DECKHAND_APPLE_TEAM_ID: "ABC1234567",
-      DECKHAND_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
+      DECKHAND_MACOS_PROVISIONING_PROFILE: "/tmp/cinderdeck.provisionprofile",
       DECKHAND_CLERK_PASSKEY_RP_DOMAINS: unsafeDomain,
     });
     assert.instanceOf(invalidDomainError, InvalidMacPasskeyRpDomainError);
@@ -615,14 +615,14 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       () =>
         resolveMacPasskeySigningConfiguration({
           DECKHAND_APPLE_TEAM_ID: "ABC1234567",
-          DECKHAND_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
+          DECKHAND_MACOS_PROVISIONING_PROFILE: "/tmp/cinderdeck.provisionprofile",
           DECKHAND_CLERK_PASSKEY_RP_DOMAINS: "example.clerk.accounts.dev:8443",
         }),
       /Invalid passkey RP domain/u,
     );
     const invalidPublishableKeyError = captureError({
       DECKHAND_APPLE_TEAM_ID: "ABC1234567",
-      DECKHAND_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
+      DECKHAND_MACOS_PROVISIONING_PROFILE: "/tmp/cinderdeck.provisionprofile",
       DECKHAND_CLERK_PUBLISHABLE_KEY: "pk_test_%",
     });
     assert.instanceOf(invalidPublishableKeyError, InvalidMacPasskeyPublishableKeyError);
@@ -658,14 +658,14 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     Effect.gen(function* () {
       const config = yield* createBuildConfig("dmg", "1.2.3", true, {
         entitlementsPath: "/tmp/entitlements.mac.plist",
-        provisioningProfilePath: "/tmp/t3code.provisionprofile",
+        provisioningProfilePath: "/tmp/cinderdeck.provisionprofile",
       });
 
       const mac = config.mac as Record<string, unknown>;
       assert.equal(config.appId, "com.ryancardin.cinderdeck.runtime");
       assert.equal(config.artifactName, "Cinderdeck-${version}-${arch}.${ext}");
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
-      assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
+      assert.equal(mac.provisioningProfile, "/tmp/cinderdeck.provisionprofile");
       assert.match(String(mac.sign), /[\\/]scripts[\\/]sign-macos\.ts$/);
       assert.deepStrictEqual(mac.protocols, []);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),

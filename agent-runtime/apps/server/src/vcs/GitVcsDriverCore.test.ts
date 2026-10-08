@@ -3015,47 +3015,47 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         yield* initRepoWithCommit(cwd);
         const driver = yield* GitVcsDriver.GitVcsDriver;
 
-        yield* git(cwd, ["remote", "add", "origin", "https://github.com/pingdotgg/t3code.git"]);
+        yield* git(cwd, ["remote", "add", "origin", "https://github.com/example/cinderdeck.git"]);
 
         const reusedForSsh = yield* driver.ensureRemote({
           cwd,
-          preferredName: "pingdotgg",
-          url: "git@github.com:pingdotgg/t3code.git",
+          preferredName: "example",
+          url: "git@github.com:example/cinderdeck.git",
         });
         assert.equal(reusedForSsh, "origin");
 
         const reusedForSshScheme = yield* driver.ensureRemote({
           cwd,
-          preferredName: "pingdotgg",
-          url: "ssh://git@github.com/pingdotgg/t3code",
+          preferredName: "example",
+          url: "ssh://git@github.com/example/cinderdeck",
         });
         assert.equal(reusedForSshScheme, "origin");
 
         const reusedForBareSshScheme = yield* driver.ensureRemote({
           cwd,
-          preferredName: "pingdotgg",
-          url: "ssh://github.com/pingdotgg/t3code",
+          preferredName: "example",
+          url: "ssh://github.com/example/cinderdeck",
         });
         assert.equal(reusedForBareSshScheme, "origin");
 
         const reusedForSshPort = yield* driver.ensureRemote({
           cwd,
-          preferredName: "pingdotgg",
-          url: "ssh://git@github.com:22/pingdotgg/t3code",
+          preferredName: "example",
+          url: "ssh://git@github.com:22/example/cinderdeck",
         });
         assert.equal(reusedForSshPort, "origin");
 
         const reusedForSshWithPort = yield* driver.ensureRemote({
           cwd,
-          preferredName: "pingdotgg",
-          url: "ssh://git@github.com:22/pingdotgg/t3code.git",
+          preferredName: "example",
+          url: "ssh://git@github.com:22/example/cinderdeck.git",
         });
         assert.equal(reusedForSshWithPort, "origin");
 
         const addedForFork = yield* driver.ensureRemote({
           cwd,
           preferredName: "octocat",
-          url: "git@github.com:octocat/t3code.git",
+          url: "git@github.com:octocat/cinderdeck.git",
         });
         assert.equal(addedForFork, "octocat");
         assert.equal(yield* git(cwd, ["remote"]), "octocat\norigin");

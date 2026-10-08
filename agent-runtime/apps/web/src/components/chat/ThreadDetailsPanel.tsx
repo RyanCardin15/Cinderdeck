@@ -8,7 +8,7 @@ import type {
 import { AlertTriangleIcon, XIcon } from "lucide-react";
 
 import type { DraftId } from "../../composerDraftStore";
-import { useT3ProjectFileScripts } from "../../hooks/useT3ProjectFileScripts";
+import { useCinderdeckProjectFileScripts } from "../../hooks/useCinderdeckProjectFileScripts";
 import {
   shouldShowEnvironmentIndicator,
   type EnvMode,
@@ -78,7 +78,7 @@ export interface ThreadDetailsPanelProps extends Pick<
 }
 
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
-  const fileScripts = useT3ProjectFileScripts(
+  const fileScripts = useCinderdeckProjectFileScripts(
     props.environmentId,
     props.activeProjectScripts ? props.gitCwd : null,
   );

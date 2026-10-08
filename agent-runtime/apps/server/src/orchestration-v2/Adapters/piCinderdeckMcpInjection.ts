@@ -9,7 +9,7 @@ import {
   T3_MCP_BEARER_ENV,
   T3_MCP_URL_ENV,
   T3_PI_RUNTIME_MODE_ENV,
-} from "./piT3McpExtensionSource.ts";
+} from "./piCinderdeckMcpExtensionSource.ts";
 
 const RESERVED_PI_LAUNCH_ARGUMENTS = new Set([
   "--continue",
@@ -230,7 +230,7 @@ function withoutToolSelectionArgs(args: ReadonlyArray<string>): ReadonlyArray<st
   return filtered;
 }
 
-function piT3McpExtensionDestPath(cacheDir: string): string {
+function piCinderdeckMcpExtensionDestPath(cacheDir: string): string {
   return `${cacheDir.replace(/\\/g, "/")}/${PI_T3_MCP_EXTENSION_FILENAME}`;
 }
 
@@ -239,7 +239,7 @@ export const materializePiT3McpExtension = Effect.fn("materializePiT3McpExtensio
 ) {
   const fs = yield* FileSystem.FileSystem;
   yield* fs.makeDirectory(cacheDir, { recursive: true });
-  const dest = piT3McpExtensionDestPath(cacheDir);
+  const dest = piCinderdeckMcpExtensionDestPath(cacheDir);
   const existing = yield* fs.readFileString(dest).pipe(Effect.orElseSucceed(() => ""));
   if (existing !== PI_T3_MCP_EXTENSION_SOURCE) {
     yield* fs.writeFileString(dest, PI_T3_MCP_EXTENSION_SOURCE);

@@ -6,10 +6,10 @@ import { APP_MCP_SERVER_NAME } from "../../mcp/McpProviderSession.ts";
  * `--extension`. It is written to a cache path at session open so packaged
  * AppImage builds do not need a sibling .ts file next to the bundled server.
  *
- * Do not import t3code modules from the string body. The Pi process resolves
+ * Do not import runtime modules from the string body. The Pi process resolves
  * `@earendil-works/pi-coding-agent` and `typebox` from the user's pi install.
  */
-import { T3_CODE_ORCHESTRATION_INSTRUCTIONS } from "../../provider/T3OrchestrationInstructions.ts";
+import { CINDERDECK_ORCHESTRATION_INSTRUCTIONS } from "../../provider/CinderdeckOrchestrationInstructions.ts";
 
 export const PI_T3_MCP_EXTENSION_FILENAME = "pi-t3-mcp-extension.ts";
 
@@ -32,7 +32,7 @@ const MCP_TOOL_PREFIX = ${JSON.stringify(`mcp__${APP_MCP_SERVER_NAME}__`)};
 const URL_ENV = ${JSON.stringify(T3_MCP_URL_ENV)};
 const TOKEN_ENV = ${JSON.stringify(T3_MCP_BEARER_ENV)};
 const RUNTIME_MODE_ENV = ${JSON.stringify(T3_PI_RUNTIME_MODE_ENV)};
-const ORCHESTRATION_INSTRUCTIONS = ${JSON.stringify(T3_CODE_ORCHESTRATION_INSTRUCTIONS.trim())};
+const ORCHESTRATION_INSTRUCTIONS = ${JSON.stringify(CINDERDECK_ORCHESTRATION_INSTRUCTIONS.trim())};
 const PROTOCOL = "2025-06-18";
 const READ_ONLY_TOOLS = new Set(["read", "grep", "find", "ls"]);
 const FILE_CHANGE_TOOLS = new Set(${JSON.stringify(PI_FILE_CHANGE_TOOLS)});

@@ -1368,7 +1368,7 @@ function stageMacIcons(stageResourcesDir: string, sourcePng: string, verbose: bo
     }
 
     const tmpRoot = yield* fs.makeTempDirectoryScoped({
-      prefix: "t3code-icon-build-",
+      prefix: "cinderdeck-icon-build-",
     });
 
     const iconPngPath = path.join(stageResourcesDir, "icon.png");

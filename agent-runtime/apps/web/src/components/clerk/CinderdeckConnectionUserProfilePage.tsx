@@ -38,7 +38,7 @@ function endpointLabel(environment: RelayClientEnvironmentRecord): string {
     : "Activity publishing only";
 }
 
-export function T3ConnectEnvironmentRow(props: {
+export function CinderdeckConnectionEnvironmentRow(props: {
   readonly environment: RelayClientEnvironmentRecord;
   readonly confirmationOpen: boolean;
   readonly mutationPending: boolean;
@@ -110,7 +110,7 @@ export function T3ConnectEnvironmentRow(props: {
   );
 }
 
-export function T3ConnectUserProfilePage() {
+export function CinderdeckConnectionUserProfilePage() {
   const environmentsState = useManagedRelayEnvironments();
   const deregisterEnvironment = useAtomCommand(deregisterManagedRelayEnvironmentCommand, {
     reportFailure: false,
@@ -220,7 +220,7 @@ export function T3ConnectUserProfilePage() {
         ) : environments.length > 0 ? (
           <ul className="border-t">
             {environments.map((environment) => (
-              <T3ConnectEnvironmentRow
+              <CinderdeckConnectionEnvironmentRow
                 key={environment.environmentId}
                 environment={environment}
                 confirmationOpen={confirmingEnvironmentId === environment.environmentId}

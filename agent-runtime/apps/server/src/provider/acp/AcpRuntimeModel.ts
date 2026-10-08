@@ -3,13 +3,15 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
-import type * as EffectAcpSchema from "effect-acp/compat";
+import * as Schema from "effect/Schema";
+import * as EffectAcpSchema from "effect-acp/compat";
+import * as EffectAcpSchemaV1 from "effect-acp/schema-v1";
 import {
   deriveToolActivityPresentation,
   extractCommandFromTitle,
   mergeToolActivityData,
 } from "@cinderdeck/shared/toolActivity";
-import { T3_MCP_TOOL_NAMES } from "@cinderdeck/shared/t3McpToolPresentation";
+import { CINDERDECK_MCP_TOOL_NAMES } from "@cinderdeck/shared/cinderdeckMcpToolPresentation";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import type {
   OrchestrationV2ProviderThreadNativeMetadata,
@@ -21,39 +23,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isSessionModelState(value: unknown): value is EffectAcpSchema.SessionModelState {
-  if (!isRecord(value) || typeof value.currentModelId !== "string") {
-    return false;
-  }
-  if (!Array.isArray(value.availableModels)) {
-    return false;
-  }
-  return value.availableModels.every(
-    (model) =>
-      isRecord(model) &&
-      typeof model.modelId === "string" &&
-      typeof model.name === "string" &&
-      (model.description === undefined ||
-        model.description === null ||
-        typeof model.description === "string"),
-  );
-}
-
-function isSessionModeState(value: unknown): value is EffectAcpSchema.SessionModeState {
-  if (!isRecord(value) || typeof value.currentModeId !== "string") {
-    return false;
-  }
-  if (!Array.isArray(value.availableModes)) {
-    return false;
-  }
-  return value.availableModes.every(
-    (mode) =>
-      isRecord(mode) &&
-      typeof mode.id === "string" &&
-      typeof mode.name === "string" &&
-      (mode.description === undefined || typeof mode.description === "string"),
-  );
-}
+// Initialize metadata uses the v1 mode schema, including nullable descriptions.
+const isSessionModelState = Schema.is(EffectAcpSchema.SessionModelState);
+const isSessionModeState = Schema.is(EffectAcpSchemaV1.SessionModeState);
 
 export interface AcpSessionMode {
   readonly id: string;
@@ -1079,14 +1051,14 @@ function acpMcpFallbackInput(value: string | undefined): Record<string, unknown>
  * sessions use Cinderdeck. Loose matches still require the known tool inventory.
  */
 const APP_MCP_TITLE_CALL =
-  /^(?:mcp[-_]{1,2})?(?<server>deckhand|t3[-_ ]?code)[-_.:/ ]{1,3}(?<tool>[A-Za-z0-9][A-Za-z0-9_.-]*)(?::.*)?$/i;
+  /^(?:mcp[-_]{1,2})?(?<server>cinderdeck|deckhand|t3[-_ ]?code)[-_.:/ ]{1,3}(?<tool>[A-Za-z0-9][A-Za-z0-9_.-]*)(?::.*)?$/i;
 
 /** Gemini and qwen use "<tool> (<server> MCP Server)"; Auggie uses a suffix. */
 const APP_MCP_TITLE_SUFFIX_CALL =
-  /^(?<tool>[A-Za-z0-9][A-Za-z0-9_.-]*?)(?: \((?<server>deckhand|t3[-_ ]?code) MCP Server\)(?::|$)|[-_.](?<suffixServer>deckhand|t3[-_ ]?code)$)/i;
+  /^(?<tool>[A-Za-z0-9][A-Za-z0-9_.-]*?)(?: \((?<server>cinderdeck|deckhand|t3[-_ ]?code) MCP Server\)(?::|$)|[-_.](?<suffixServer>cinderdeck|deckhand|t3[-_ ]?code)$)/i;
 
 function appMcpOrigin(server: string): string | undefined {
-  if (/^deckhand$/i.test(server)) return McpProviderSession.APP_MCP_SERVER_NAME;
+  if (/^(?:cinderdeck|deckhand)$/i.test(server)) return McpProviderSession.APP_MCP_SERVER_NAME;
   if (/^t3[-_ ]?code$/i.test(server)) return "t3-code";
   return undefined;
 }
@@ -1096,7 +1068,7 @@ function appMcpOrigin(server: string): string | undefined {
  * names; Kimi additionally appends ": <raw args json>". Safe only because the
  * match is gated on the known Cinderdeck tool inventory.
  */
-const T3_MCP_BARE_TITLE_CALL = /^(?<tool>[A-Za-z0-9_]+)(?::\s|$)/;
+const CINDERDECK_MCP_BARE_TITLE_CALL = /^(?<tool>[A-Za-z0-9_]+)(?::\s|$)/;
 
 /**
  * Best-effort recovery of MCP identity from a generic ACP tool call.
@@ -1152,7 +1124,7 @@ export function extractMcpToolCallIdentity(
   // qwen's serverId asserts the origin, so a known tool suffix suffices even
   // if its prefix format changes.
   if (metaOrigin !== undefined && metaToolName.length > 0) {
-    for (const knownTool of T3_MCP_TOOL_NAMES) {
+    for (const knownTool of CINDERDECK_MCP_TOOL_NAMES) {
       const boundary = metaToolName.length - knownTool.length - 1;
       if (
         metaToolName === knownTool ||
@@ -1175,9 +1147,9 @@ export function extractMcpToolCallIdentity(
     const match =
       APP_MCP_TITLE_CALL.exec(trimmed) ??
       APP_MCP_TITLE_SUFFIX_CALL.exec(trimmed) ??
-      T3_MCP_BARE_TITLE_CALL.exec(trimmed);
+      CINDERDECK_MCP_BARE_TITLE_CALL.exec(trimmed);
     const candidateTool = match?.groups?.tool;
-    if (candidateTool !== undefined && T3_MCP_TOOL_NAMES.has(candidateTool)) {
+    if (candidateTool !== undefined && CINDERDECK_MCP_TOOL_NAMES.has(candidateTool)) {
       return {
         server:
           metaOrigin ??

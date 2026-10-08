@@ -135,20 +135,20 @@ describe("pullRequestCandidateUrlFromReferenceAutolink", () => {
   it("turns GitHub's shared issue route into a pull request candidate", () => {
     expect(
       pullRequestCandidateUrlFromReferenceAutolink(
-        "https://github.com/pingdotgg/t3code/issues/8600#issuecomment-1",
+        "https://github.com/example/cinderdeck/issues/8600#issuecomment-1",
       ),
-    ).toBe("https://github.com/pingdotgg/t3code/pull/8600#issuecomment-1");
+    ).toBe("https://github.com/example/cinderdeck/pull/8600#issuecomment-1");
   });
 
   it("does not reinterpret other issue hosts or malformed references", () => {
     expect(
       pullRequestCandidateUrlFromReferenceAutolink(
-        "https://gitlab.com/pingdotgg/t3code/-/issues/8600",
+        "https://gitlab.com/example/cinderdeck/-/issues/8600",
       ),
     ).toBeNull();
     expect(
       pullRequestCandidateUrlFromReferenceAutolink(
-        "https://github.com/pingdotgg/t3code/issues/not-a-number",
+        "https://github.com/example/cinderdeck/issues/not-a-number",
       ),
     ).toBeNull();
   });
@@ -157,16 +157,16 @@ describe("pullRequestCandidateUrlFromReferenceAutolink", () => {
 describe("matchesLinkedPullRequestUrl", () => {
   const linkedPullRequest = {
     projectId: ProjectId.make("project-1"),
-    repository: "pingdotgg/t3code",
+    repository: "example/cinderdeck",
     number: 42,
-    url: "https://github.com/pingdotgg/t3code/pull/42",
+    url: "https://github.com/example/cinderdeck/pull/42",
   };
 
   it("matches the same pull request without looking up its project", () => {
     expect(
       matchesLinkedPullRequestUrl(
         linkedPullRequest,
-        "https://github.com/PingDotGG/T3Code/pull/42/files",
+        "https://github.com/Example/Cinderdeck/pull/42/files",
       ),
     ).toBe(true);
   });
@@ -188,7 +188,7 @@ describe("matchesLinkedPullRequestUrl", () => {
     expect(
       matchesLinkedPullRequestUrl(
         linkedPullRequest,
-        "https://github.com:8443/pingdotgg/t3code/pull/42",
+        "https://github.com:8443/example/cinderdeck/pull/42",
       ),
     ).toBe(true);
   });
@@ -204,12 +204,12 @@ describe("matchesLinkedPullRequestUrl", () => {
 
   it("rejects a different pull request or host", () => {
     expect(
-      matchesLinkedPullRequestUrl(linkedPullRequest, "https://github.com/pingdotgg/t3code/pull/43"),
+      matchesLinkedPullRequestUrl(linkedPullRequest, "https://github.com/example/cinderdeck/pull/43"),
     ).toBe(false);
     expect(
       matchesLinkedPullRequestUrl(
         linkedPullRequest,
-        "https://github.example.com/pingdotgg/t3code/pull/42",
+        "https://github.example.com/example/cinderdeck/pull/42",
       ),
     ).toBe(false);
   });
@@ -228,9 +228,9 @@ describe("shouldOpenPullRequestExternally", () => {
 
 describe("parseChangeRequestUrl", () => {
   it("reads a GitHub pull request", () => {
-    expect(parseChangeRequestUrl("https://github.com/T3Tools/T3Code/pull/123")).toEqual({
+    expect(parseChangeRequestUrl("https://github.com/Fixture/Cinderdeck/pull/123")).toEqual({
       host: "github.com",
-      repository: "t3tools/t3code",
+      repository: "fixture/cinderdeck",
       number: 123,
     });
   });
@@ -245,10 +245,10 @@ describe("parseChangeRequestUrl", () => {
 
   it("reads a GitLab merge request, nested groups and all", () => {
     expect(
-      parseChangeRequestUrl("https://gitlab.com/t3tools/platform/cinderdeck/-/merge_requests/42"),
+      parseChangeRequestUrl("https://gitlab.com/fixture/platform/cinderdeck/-/merge_requests/42"),
     ).toEqual({
       host: "gitlab.com",
-      repository: "t3tools/platform/t3code",
+      repository: "fixture/platform/cinderdeck",
       number: 42,
     });
   });
@@ -276,22 +276,22 @@ describe("parseChangeRequestUrl", () => {
       parseChangeRequestUrl("https://dev.azure.com/acme/platform/_git/cinderdeck/pullrequest/17"),
     ).toEqual({
       host: "dev.azure.com",
-      repository: "acme/platform/_git/t3code",
+      repository: "acme/platform/_git/cinderdeck",
       number: 17,
     });
     expect(
       parseChangeRequestUrl("https://acme.visualstudio.com/platform/_git/cinderdeck/pullrequest/17"),
     ).toEqual({
       host: "acme.visualstudio.com",
-      repository: "platform/_git/t3code",
+      repository: "platform/_git/cinderdeck",
       number: 17,
     });
   });
 
   it("survives trailing segments, a trailing slash and a query string", () => {
-    expect(parseChangeRequestUrl("https://github.com/t3tools/cinderdeck/pull/123/files?w=1")).toEqual({
+    expect(parseChangeRequestUrl("https://github.com/fixture/cinderdeck/pull/123/files?w=1")).toEqual({
       host: "github.com",
-      repository: "t3tools/t3code",
+      repository: "fixture/cinderdeck",
       number: 123,
     });
     expect(
@@ -300,27 +300,27 @@ describe("parseChangeRequestUrl", () => {
     expect(
       parseChangeRequestUrl("https://bitbucket.org/team/repo/pull-requests/5/commits"),
     ).toEqual({ host: "bitbucket.org", repository: "team/repo", number: 5 });
-    expect(parseChangeRequestUrl("https://github.com/t3tools/cinderdeck/pull/123/")).toEqual({
+    expect(parseChangeRequestUrl("https://github.com/fixture/cinderdeck/pull/123/")).toEqual({
       host: "github.com",
-      repository: "t3tools/t3code",
+      repository: "fixture/cinderdeck",
       number: 123,
     });
   });
 
   it("claims nothing it cannot be sure of, so the link goes to the browser", () => {
     for (const link of [
-      "https://github.com/t3tools/cinderdeck/issues/123",
-      "https://github.com/t3tools/cinderdeck/commit/0a1b2c3",
-      "https://github.com/t3tools/t3code",
-      "https://github.com/t3tools/cinderdeck/pull/abc",
-      "https://gitlab.com/t3tools/cinderdeck/-/snippets/12",
-      "https://gitlab.com/t3tools/cinderdeck/-/issues/12",
+      "https://github.com/fixture/cinderdeck/issues/123",
+      "https://github.com/fixture/cinderdeck/commit/0a1b2c3",
+      "https://github.com/fixture/cinderdeck",
+      "https://github.com/fixture/cinderdeck/pull/abc",
+      "https://gitlab.com/fixture/cinderdeck/-/snippets/12",
+      "https://gitlab.com/fixture/cinderdeck/-/issues/12",
       // A path shape that means nothing off its own host.
       "https://blog.example.test/2026/updates/pull/3",
       // A lookalike is deliberately not fought here: `github.com.evil.test` reads as a GitHub
       // Enterprise install and there is no way to tell it from one. It is `findProjectForChange
       // Request` that refuses it, because no project in the workspace is checked out from it.
-      "javascript:alert(1)//github.com/t3tools/cinderdeck/pull/1",
+      "javascript:alert(1)//github.com/fixture/cinderdeck/pull/1",
       "not a url",
     ]) {
       expect(parseChangeRequestUrl(link), link).toBeNull();
@@ -462,20 +462,20 @@ describe("findProjectForChangeRequest", () => {
 
   it("matches a nested GitLab group by the whole path below the host", () => {
     // The server identifies a repository by `displayName`, which keeps every group segment; the
-    // two-segment owner/name form would look for `t3tools/t3code` and find nothing.
+    // two-segment owner/name form would look for `fixture/cinderdeck` and find nothing.
     const projects = [
       project({
-        canonicalKey: "gitlab.com/t3tools/platform/t3code",
+        canonicalKey: "gitlab.com/fixture/platform/cinderdeck",
         provider: "gitlab",
-        displayName: "t3tools/platform/t3code",
-        owner: "t3tools",
-        name: "t3code",
+        displayName: "fixture/platform/cinderdeck",
+        owner: "fixture",
+        name: "cinderdeck",
       }),
     ];
     expect(
       findProjectForChangeRequest(projects, {
         host: "gitlab.com",
-        repository: "t3tools/platform/t3code",
+        repository: "fixture/platform/cinderdeck",
         number: 42,
       }),
     ).toBe(projects[0]);
@@ -484,16 +484,16 @@ describe("findProjectForChangeRequest", () => {
   it("keeps two hosts apart, so an Enterprise link does not open the public one", () => {
     const projects = [
       project({
-        canonicalKey: "github.com/pingdotgg/t3code",
+        canonicalKey: "github.com/example/cinderdeck",
         provider: "github",
-        owner: "pingdotgg",
-        name: "t3code",
+        owner: "example",
+        name: "cinderdeck",
       }),
     ];
     expect(
       findProjectForChangeRequest(projects, {
         host: "github.acme.test",
-        repository: "pingdotgg/t3code",
+        repository: "example/cinderdeck",
         number: 1,
       }),
     ).toBeUndefined();
@@ -506,20 +506,20 @@ describe("findProjectForChangeRequest", () => {
     //
     // Derived from the SSH remote the way the server derives it rather than written out, so the
     // day that normalization stops reaching the web spelling this fails here too.
-    const canonicalKey = normalizeGitRemoteUrl("git@ssh.dev.azure.com:v3/T3Tools/Platform/T3Code");
+    const canonicalKey = normalizeGitRemoteUrl("git@ssh.dev.azure.com:v3/Fixture/Platform/Cinderdeck");
     const projects = [
       project({
         canonicalKey,
         provider: "azure-devops",
         displayName: canonicalKey.split("/").slice(1).join("/"),
-        owner: "t3tools",
-        name: "t3code",
+        owner: "fixture",
+        name: "cinderdeck",
       }),
     ];
     expect(
       findProjectForChangeRequest(projects, {
         host: "dev.azure.com",
-        repository: "t3tools/platform/_git/t3code",
+        repository: "fixture/platform/_git/cinderdeck",
         number: 1,
       }),
     ).toBe(projects[0]);
@@ -528,16 +528,16 @@ describe("findProjectForChangeRequest", () => {
   it("claims nothing for a lookalike host, which is what keeps a link a link", () => {
     const projects = [
       project({
-        canonicalKey: "github.com/pingdotgg/t3code",
+        canonicalKey: "github.com/example/cinderdeck",
         provider: "github",
-        owner: "pingdotgg",
-        name: "t3code",
+        owner: "example",
+        name: "cinderdeck",
       }),
     ];
     expect(
       findProjectForChangeRequest(projects, {
         host: "github.com-evil.test",
-        repository: "pingdotgg/t3code",
+        repository: "example/cinderdeck",
         number: 1,
       }),
     ).toBeUndefined();

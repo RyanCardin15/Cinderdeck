@@ -2,7 +2,7 @@
 
 This repository builds one Cinderdeck macOS super app and its mobile companion. Native code is in `Cinderdeck/`; the embedded agent/chat/preview runtime and companion are in `agent-runtime/`. Start with README.md, docs/UNIFIED_APP.md and docs/STRUCTURE.md; follow agent-runtime/AGENTS.md for runtime changes.
 
-Use `scripts/build-unified.sh` to build the complete app. Native Cinderdeck owns app identity, capture permissions, services, lanes, logs, recordings and Sparkle updates. The Cinderdeck runtime is a private bundled child with no separate product release. Do not reintroduce the former T3 website, relay deployment, installers or upstream patch policy. Preserve licenses, original copyright notices, protocol fixtures and compatibility storage keys.
+Use `scripts/build-unified.sh` to build the complete app. Native Cinderdeck owns app identity, capture permissions, services, lanes, logs, recordings and Sparkle updates. The Cinderdeck runtime is a private bundled child with no separate product release. Do not reintroduce the former vendor website, relay deployment, installers or upstream patch policy. Preserve licenses, original copyright notices, protocol fixtures and compatibility storage keys.
 
 GitHub Actions is disabled for this project. Do not add hosted workflows. Run checks locally and follow docs/RELEASES.md for manual whole-app release preparation and publication.
 

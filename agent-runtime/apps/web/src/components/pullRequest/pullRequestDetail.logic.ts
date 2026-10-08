@@ -133,7 +133,7 @@ export function pullRequestCheckoutCommand(
       ) {
         return null;
       }
-      return `git clone --single-branch --branch ${headBranch} https://bitbucket.org/${headRepositoryNameWithOwner}.git t3code-pr-${number}`;
+      return `git clone --single-branch --branch ${headBranch} https://bitbucket.org/${headRepositoryNameWithOwner}.git cinderdeck-pr-${number}`;
     }
     case "unknown":
       return null;

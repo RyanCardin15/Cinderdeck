@@ -307,7 +307,6 @@ function NativeShortcuts({
                                 <label
                                   key={modifier}
                                   className={styles.shortcutModifier}
-                                  title={settingLabel(modifier)}
                                 >
                                   <input
                                     type="checkbox"
@@ -726,7 +725,7 @@ function NativeSettingsForm({
                       <div className={styles.actions}>
                         <span
                           className="max-w-64 truncate text-xs text-muted-foreground"
-                          title={String(field.value)}
+                          aria-label={String(field.value)}
                         >
                           {String(field.value)}
                         </span>

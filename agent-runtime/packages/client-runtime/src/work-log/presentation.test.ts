@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { ThreadId, TurnItemId, type OrchestrationV2TurnItem } from "@cinderdeck/contracts";
 import * as DateTime from "effect/DateTime";
-import { T3_MCP_TOOL_NAMES } from "@cinderdeck/shared/t3McpToolPresentation";
+import { CINDERDECK_MCP_TOOL_NAMES } from "@cinderdeck/shared/cinderdeckMcpToolPresentation";
 
 import {
   commandDetailRepeatsCommand,
@@ -270,7 +270,7 @@ describe("summarizeToolGroup", () => {
 
 describe("resolveWorkEntryToolPresentation", () => {
   it("presents and summarizes every Cinderdeck tool using the same structured identity", () => {
-    for (const tool of T3_MCP_TOOL_NAMES) {
+    for (const tool of CINDERDECK_MCP_TOOL_NAMES) {
       const entry: WorkLogPresentationEntry = {
         id: tool,
         createdAt: "2026-09-19T00:00:00.000Z",

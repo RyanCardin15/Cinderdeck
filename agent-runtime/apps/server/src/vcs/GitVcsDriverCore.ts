@@ -20,7 +20,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import {
   GitCommandError,
-  T3_PROJECT_FILE_NAME,
+  CINDERDECK_PROJECT_FILE_NAME,
   type ReviewDiffFileContentsInput,
   type ReviewDiffPreviewInput,
   type ReviewDiffFileStat,
@@ -31,7 +31,7 @@ import { dedupeRemoteBranchesWithLocalMatches, normalizeGitRemoteUrl } from "@ci
 import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
 import { compactTraceAttributes } from "@cinderdeck/shared/observability";
 import { decodeJsonResult } from "@cinderdeck/shared/schemaJson";
-import { parseT3ProjectFile } from "@cinderdeck/shared/t3ProjectFile";
+import { parseCinderdeckProjectFile } from "@cinderdeck/shared/cinderdeckProjectFile";
 import { resolveProjectFileBackedSetting } from "@cinderdeck/shared/projectSettings";
 import { gitCommandDuration, gitCommandsTotal, withMetrics } from "../observability/Metrics.ts";
 import * as GitVcsDriver from "./GitVcsDriver.ts";
@@ -580,7 +580,7 @@ const createTrace2Monitor = Effect.fnUntraced(function* (
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const traceFilePath = yield* fs.makeTempFileScoped({
-    prefix: `t3code-git-trace2-${process.pid}-`,
+    prefix: `cinderdeck-git-trace2-${process.pid}-`,
     suffix: ".json",
   });
   const hookStartByChildKey = new Map<string, { hookName: string; startedAtMs: number }>();
@@ -872,6 +872,9 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
               cwd: commandInput.cwd,
               env: {
                 ...process.env,
+                // Status polling runs beside the user's own git commands; without this,
+                // `git status` takes index.lock to save its refreshed index.
+                GIT_OPTIONAL_LOCKS: "0",
                 ...input.env,
                 ...trace2Monitor.env,
               },
@@ -1811,10 +1814,12 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     const statusCacheKey = repositoryPaths?.gitCommonDir;
     const [numstatStdout, defaultBranch, hasPrimaryRemote] = yield* Effect.all(
       [
+        // Plumbing, because porcelain `git diff` rewrites the index even with
+        // GIT_OPTIONAL_LOCKS=0. -M keeps porcelain's rename detection.
         executeGitWithStableDiagnostics(
           "GitVcsDriver.statusDetails.numstat",
           cwd,
-          ["diff", "HEAD", "--numstat", "--"],
+          ["diff-index", "-M", "--numstat", "HEAD", "--"],
           { allowNonZeroExit: true },
         ).pipe(
           Effect.flatMap((result) => {
@@ -1823,7 +1828,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
               return Effect.map(
                 Effect.all([
                   runGitStdout("GitVcsDriver.statusDetails.numstat.unborn", cwd, [
-                    "diff",
+                    "diff-files",
                     "--numstat",
                   ]),
                   runGitStdout("GitVcsDriver.statusDetails.numstat.unborn.staged", cwd, [
@@ -1856,9 +1861,9 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
                 ...gitCommandContext({
                   operation: "GitVcsDriver.statusDetails.numstat",
                   cwd,
-                  args: ["diff", "HEAD", "--numstat", "--"],
+                  args: ["diff-index", "-M", "--numstat", "HEAD", "--"],
                 }),
-                detail: "git diff HEAD --numstat failed.",
+                detail: "git diff-index HEAD --numstat failed.",
                 exitCode: result.exitCode,
                 stdoutLength: result.stdout.length,
                 stderrLength: result.stderr.length,
@@ -2405,7 +2410,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       ? indexValue.trim()
       : path.resolve(cwd, indexValue.trim());
     const tempIndexPath = yield* fileSystem.makeTempFileScoped({
-      prefix: `t3code-review-index-${process.pid}-`,
+      prefix: `cinderdeck-review-index-${process.pid}-`,
     });
     const indexExists = yield* fileSystem.exists(indexPath);
     if (indexExists) {
@@ -3251,10 +3256,10 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
               options?.submodules != null
                 ? null
                 : yield* fileSystem
-                    .readFileString(path.join(worktreePath, T3_PROJECT_FILE_NAME))
+                    .readFileString(path.join(worktreePath, CINDERDECK_PROJECT_FILE_NAME))
                     .pipe(
                       Effect.flatMap((contents) => {
-                        const file = parseT3ProjectFile(contents);
+                        const file = parseCinderdeckProjectFile(contents);
                         return file === null
                           ? Effect.logWarning(
                               "t3.json is invalid; initializing submodules recursively",

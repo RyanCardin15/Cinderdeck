@@ -52,9 +52,9 @@ it.effect("normalizes the hosted app URL to an absolute origin", () =>
   Effect.gen(function* () {
     assert.equal(
       yield* hostedAppUrlConfig.pipe(
-        provideEnv({ DECKHAND_HOSTED_APP_URL: "https://nightly.app.t3.codes" }),
+        provideEnv({ DECKHAND_HOSTED_APP_URL: "https://nightly.app.abc.test" }),
       ),
-      "https://nightly.app.t3.codes",
+      "https://nightly.app.abc.test",
     );
     assert.equal(
       yield* hostedAppUrlConfig.pipe(
@@ -68,10 +68,10 @@ it.effect("normalizes the hosted app URL to an absolute origin", () =>
 it.effect("rejects malformed or insecure hosted app URLs", () =>
   Effect.gen(function* () {
     for (const value of [
-      "app.t3.codes",
-      "http://app.t3.codes",
-      "https://app.t3.codes/nested",
-      "https://app.t3.codes?alias=true",
+      "app.abc.test",
+      "http://app.abc.test",
+      "https://app.abc.test/nested",
+      "https://app.abc.test?alias=true",
     ]) {
       const result = yield* hostedAppUrlConfig.pipe(
         provideEnv({ DECKHAND_HOSTED_APP_URL: value }),

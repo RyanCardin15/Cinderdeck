@@ -53,7 +53,7 @@ import {
   rewriteCursorSkillMentions,
 } from "../../provider/Drivers/CursorSkills.ts";
 import { mergeProviderInstanceEnvironment } from "../../provider/ProviderInstanceEnvironment.ts";
-import { t3OrchestrationPromptForFirstRun } from "../../provider/T3OrchestrationInstructions.ts";
+import { cinderdeckOrchestrationPromptForFirstRun } from "../../provider/CinderdeckOrchestrationInstructions.ts";
 import { buildRuntimeInstructions } from "../../provider/RuntimeInstructions.ts";
 import * as IdAllocator from "../IdAllocator.ts";
 import { makeProviderFailure } from "../ProviderFailure.ts";
@@ -2104,7 +2104,7 @@ export function makeCursorAdapterV2(
                 .map((skill) => skill.name),
             );
           }
-          const userText = t3OrchestrationPromptForFirstRun({
+          const userText = cinderdeckOrchestrationPromptForFirstRun({
             prompt: providerMessageTextWithAttachmentPaths({
               text:
                 cursorSkillNames === undefined

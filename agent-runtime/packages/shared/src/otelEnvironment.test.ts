@@ -299,8 +299,8 @@ describe("OtelEnvironment", () => {
       {
         name: "headers are comma-separated pairs with percent-encoded values",
         env: { ...ENDPOINT, OTEL_EXPORTER_OTLP_HEADERS: "api-key=a%20b,tenant=t3" },
-        traces: { protocol: "http/protobuf", headers: { "api-key": "a b", tenant: "t3" } },
-        logs: { protocol: "http/protobuf", headers: { "api-key": "a b", tenant: "t3" } },
+        traces: { protocol: "http/protobuf", headers: { "api-key": "a b", tenant: "cinderdeck" } },
+        logs: { protocol: "http/protobuf", headers: { "api-key": "a b", tenant: "cinderdeck" } },
         warnings: [],
       },
       {
@@ -392,7 +392,7 @@ describe("OtelEnvironment", () => {
   describe("resolveSignalEndpoint", () => {
     const t3Export = {
       protocol: "http/json",
-      headers: { "x-key": "t3" },
+      headers: { "x-key": "cinderdeck" },
       exportIntervalMs: 5_000,
     } as const;
     const withLogs = (logs: OtelEnvironment.OtelSignal, disabled = false) => ({
@@ -492,7 +492,7 @@ describe("OtelEnvironment", () => {
           ConfigProvider.fromEnv({ env: { OTEL_RESOURCE_ATTRIBUTES: raw } }),
         );
         const otel = yield* OtelEnvironment.load.pipe(Effect.provide(env));
-        const resource = yield* OtlpResource.fromConfig({ serviceName: "t3" }).pipe(
+        const resource = yield* OtlpResource.fromConfig({ serviceName: "cinderdeck" }).pipe(
           Effect.provide(
             Layer.provide(OtelEnvironment.layerResourceAttributes(otel.resourceAttributes), env),
           ),

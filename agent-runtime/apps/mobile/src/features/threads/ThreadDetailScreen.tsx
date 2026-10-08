@@ -21,7 +21,7 @@ import type {
   ProviderInteractionMode,
   RuntimeMode,
   RuntimeRequestId,
-  ServerConfig as T3ServerConfig,
+  ServerConfig as CinderdeckServerConfig,
   ThreadId,
   UsageLimitsReport,
 } from "@cinderdeck/contracts";
@@ -189,7 +189,7 @@ export interface ThreadDetailScreenProps {
   readonly selectedThreadQueueCount: number;
   readonly queuedMessages: ReadonlyArray<QueuedThreadMessage>;
   readonly dispatchingMessageId: MessageId | null;
-  readonly serverConfig: T3ServerConfig | null;
+  readonly serverConfig: CinderdeckServerConfig | null;
   readonly layoutVariant?: LayoutVariant;
   readonly usesAutomaticContentInsets?: boolean;
   readonly onHeaderMaterialVisibilityChange?: (visible: boolean) => void;
