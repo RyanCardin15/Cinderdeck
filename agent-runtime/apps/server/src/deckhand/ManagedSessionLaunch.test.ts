@@ -540,7 +540,7 @@ describe("connected lane and session creation", () => {
           const service = yield* ManagedSessionLaunch.ManagedSessionLaunch;
           assert.equal(
             (yield* service
-              .create("actor", { ...creationInput(), revision: "old" })
+              .create("actor", { ...creationInput(), generation: creationInput().generation + 1 })
               .pipe(Effect.flip)).reason,
             "stale_context",
           );

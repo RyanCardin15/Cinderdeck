@@ -20,6 +20,21 @@ const commands = vi.hoisted(() => ({
   defaultModel: null as import("@cinderdeck/contracts").ModelSelection | null,
   planEnabled: false,
   nextOperation: 0,
+  refs: {} as { [repo: string]: import("@cinderdeck/contracts").VcsRef[] },
+  refQueries: [] as string[],
+}));
+vi.mock("./laneBranchRefs", () => ({
+  useLaneBranchRefs: (
+    _environmentId: string,
+    repos: ReadonlyArray<{ id: string }>,
+    query: string,
+  ) => {
+    commands.refQueries.push(query);
+    return {
+      refs: new Map(repos.map((repo) => [repo.id, commands.refs[repo.id] ?? []])),
+      pending: false,
+    };
+  },
 }));
 vi.mock("./state", () => ({
   createSession: "create",
@@ -162,6 +177,8 @@ beforeEach(() => {
   commands.defaultModel = null;
   commands.planEnabled = false;
   commands.nextOperation = 0;
+  commands.refs = {};
+  commands.refQueries = [];
   useChatDefaultsStore.setState({ preferences: {}, lastModes: {}, repositories: {} });
   useComposerDraftStore.setState({
     stickyActiveProvider: null,
@@ -195,7 +212,13 @@ afterEach(async () => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
-async function render(current = resource, creation = true, visible = true, enabled = true) {
+async function render(
+  current = resource,
+  creation = true,
+  visible = true,
+  enabled = true,
+  existingLaneNames: ReadonlyArray<string> = [],
+) {
   await act(async () =>
     root.render(
       <SessionLauncher
@@ -203,10 +226,40 @@ async function render(current = resource, creation = true, visible = true, enabl
         installationID="installation"
         resource={current}
         enabled={enabled}
-        {...(creation ? { creation: { visible, onClose: vi.fn(), onLane, onPending } } : {})}
+        {...(creation
+          ? { creation: { visible, onClose: vi.fn(), onLane, onPending, existingLaneNames } }
+          : {})}
       />,
     ),
   );
+}
+const ref = (name: string, remoteName?: string): import("@cinderdeck/contracts").VcsRef => ({
+  name,
+  current: false,
+  isDefault: false,
+  worktreePath: null,
+  ...(remoteName ? { isRemote: true, remoteName } : { isRemote: false }),
+});
+async function setInput(selector: string, value: string) {
+  const control = container.querySelector<HTMLInputElement>(selector);
+  expect(control, selector).not.toBeNull();
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(control, value);
+    control!.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+function mode(repo: string, label: "Worktree" | "Reference") {
+  const element = container.querySelector<HTMLButtonElement>(
+    `button[aria-label="${repo}: ${label}"]`,
+  );
+  expect(element, `${repo}: ${label}`).not.toBeNull();
+  return element!;
+}
+async function fillAgent() {
+  await change("Provider account", "codex");
+  await change("Model", "gpt-test");
+  await change("Feature title", "New feature");
+  await change("Objective", "Read the checkout");
 }
 function button(label: string) {
   const element = [...container.querySelectorAll("button")].find(
@@ -254,7 +307,9 @@ it("saves the complete reviewed request before dispatch and opens only the accep
     expect(JSON.parse(localStorage.getItem(storageKey)!)).toEqual(input);
     expect(input).toMatchObject({
       repositoryID: "app",
+      name: "Lane 1",
       branch: "fix/new",
+      repositoryModes: { app: "worktree", api: "worktree" },
       repositoryRefs: { api: "origin/release" },
       setup: true,
       start: false,
@@ -264,12 +319,9 @@ it("saves the complete reviewed request before dispatch and opens only the accep
     return success(creationRecord("accepted", { launch: acceptedLaunch, laneID: "created-lane" }));
   });
   await render();
-  await change("New lane branch", "fix/new");
-  await change("api", "origin/release");
-  await change("Provider account", "codex");
-  await change("Model", "gpt-test");
-  await change("Feature title", "New feature");
-  await change("Objective", "Read the checkout");
+  await change("Branch", "fix/new");
+  await setInput('input[id$="-ref-api"]', "origin/release");
+  await fillAgent();
   await click("Create lane and launch agent");
   expect(commands.create).toHaveBeenCalledTimes(1);
   expect(commands.launch).not.toHaveBeenCalled();
@@ -278,6 +330,69 @@ it("saves the complete reviewed request before dispatch and opens only the accep
     params: { environmentId, threadId: "thread" },
   });
   expect(localStorage.getItem(storageKey)).toBeNull();
+});
+
+it("creates a lane with every default: next free name, prefixed unique branch and repository modes", async () => {
+  commands.refs = { app: [ref("feat/lane-3"), ref("main")] };
+  const current = {
+    ...resource,
+    workspace: {
+      ...resource.workspace!,
+      laneBranchPrefix: "feat/",
+      repos: resource.workspace!.repos.map((repo) =>
+        repo.id === "api" ? { ...repo, laneDefault: "reference" as const } : repo,
+      ),
+    },
+  };
+  commands.create.mockResolvedValue(success(creationRecord("unknown_outcome")));
+  await render(current, true, true, true, ["Lane 1", "lane 2", "Review"]);
+  const name = container.querySelector<HTMLInputElement>('input[id$="-lane-name"]')!;
+  const branch = container.querySelector<HTMLInputElement>('input[id$="-branch"]')!;
+  expect(name.value).toBe("");
+  expect(name.placeholder).toBe("Lane 3");
+  // feat/lane-3 already exists in the app worktree, so the default moves to -2.
+  expect(branch.value).toBe("feat/lane-3-2");
+  expect(commands.refQueries.at(-1)).toBe("feat/lane-3");
+  // The session repository can never be a Reference.
+  expect(mode("app", "Reference").disabled).toBe(true);
+  expect(mode("app", "Worktree").getAttribute("aria-checked")).toBe("true");
+  expect(mode("api", "Reference").getAttribute("aria-checked")).toBe("true");
+  expect(container.querySelector('input[id$="-ref-api"]')).toBeNull();
+  expect(container.textContent).toContain("Original checkout, read-only context");
+  await fillAgent();
+  await click("Create lane and launch agent");
+  expect(commands.create).toHaveBeenCalledTimes(1);
+  expect(commands.create.mock.calls[0]?.[0].input).toMatchObject({
+    name: "Lane 3",
+    branch: "feat/lane-3-2",
+    repositoryModes: { app: "worktree", api: "reference" },
+    repositoryRefs: {},
+  });
+});
+
+it("follows the lane name until the branch is edited and ignores start points for existing branches", async () => {
+  commands.refs = { app: [ref("main")], api: [ref("origin/main", "origin")] };
+  await render();
+  await change("Lane name", "Payment Retry!");
+  const branch = () => container.querySelector<HTMLInputElement>('input[id$="-branch"]')!;
+  expect(branch().value).toBe("lane/payment-retry");
+  await setInput('input[id$="-ref-app"]', "v1.0");
+  await change("Branch", "main");
+  await change("Lane name", "Other");
+  expect(branch().value).toBe("main");
+  expect(container.textContent).toContain("Existing branch — checked out as-is");
+  expect(container.textContent).toContain("Remote branch — tracked");
+  expect(container.querySelector('input[id$="-ref-app"]')).toBeNull();
+  await act(async () => mode("api", "Reference").click());
+  expect(container.textContent).not.toContain("Remote branch — tracked");
+  await fillAgent();
+  await click("Create lane and launch agent");
+  expect(commands.create.mock.calls[0]?.[0].input).toMatchObject({
+    name: "Other",
+    branch: "main",
+    repositoryModes: { app: "worktree", api: "reference" },
+    repositoryRefs: {},
+  });
 });
 
 it("restores a saved request after a changed generation and keeps inspection read-only", async () => {
@@ -379,7 +494,7 @@ it("refuses transport dispatch when storage is corrupt or cannot save the new op
   });
   localStorage.clear();
   await render();
-  await change("New lane branch", "fix/new");
+  await change("Branch", "fix/new");
   await change("Provider account", "codex");
   await change("Model", "gpt-test");
   await change("Feature title", "Feature");

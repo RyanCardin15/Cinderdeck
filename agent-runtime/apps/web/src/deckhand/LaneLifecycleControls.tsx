@@ -3,6 +3,7 @@ import type { EnvironmentId } from "@cinderdeck/contracts";
 import type { IntegrationView, OperationRecord } from "@cinderdeck/contracts/deckhand/rpc";
 import { OperationRecord as OperationRecordSchema } from "@cinderdeck/contracts/deckhand/rpc";
 import type { IntegrationOperationInput } from "@cinderdeck/contracts/deckhand/integration";
+import { blockingWorkspaceIssue } from "@cinderdeck/shared/workspaceChat";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -217,10 +218,7 @@ function LaneLifecyclePanel(props: Props) {
   const namedLane = Boolean(resource.workspace?.lane);
   const cleanupReady = enabled && namedLane && receiptsSupported && recovered && !recoveryError;
   const sourceReady =
-    cleanupReady &&
-    resource.available &&
-    !resource.workspace?.definitionChanged &&
-    !resource.workspace?.issues.length;
+    cleanupReady && resource.available && !blockingWorkspaceIssue(resource.workspace?.issues ?? []);
   const ready = sourceReady && !pending;
   const removalReady = cleanupReady && !pending;
   const methodReady = (method: LifecycleMethod) =>
@@ -258,7 +256,9 @@ function LaneLifecyclePanel(props: Props) {
     if (!methodReady(method) || pending || !supported(method) || preparing.current) return;
     preparing.current = true;
     setBusy(true);
-    const revision = resource.revision;
+    // The revision hashes the whole live snapshot (dirty counts, service phases), so any status
+    // tick would change it. Native validates lifecycle operations by generation.
+    const generation = resource.generation;
     try {
       const operationKey = await runtime.runPromise(
         Crypto.Crypto.pipe(Effect.flatMap((crypto) => crypto.randomUUIDv4)),
@@ -267,13 +267,12 @@ function LaneLifecyclePanel(props: Props) {
       const latest = current.current;
       if (
         !latest.enabled ||
-        latest.resource.revision !== revision ||
-        latest.resource.generation !== resource.generation ||
+        latest.resource.workspaceID !== resource.workspaceID ||
+        latest.resource.generation !== generation ||
         !latest.resource.workspace?.lane ||
         (method === "lane.setup" &&
           (!latest.resource.available ||
-            latest.resource.workspace?.definitionChanged ||
-            latest.resource.workspace?.issues.length)) ||
+            blockingWorkspaceIssue(latest.resource.workspace?.issues ?? []))) ||
         !latest.capabilities.includes(`operations.${method}`) ||
         !latest.capabilities.includes("operations.receipts")
       ) {
@@ -285,8 +284,8 @@ function LaneLifecyclePanel(props: Props) {
         operationKey,
         installationID,
         workspaceID: resource.workspaceID,
-        generation: resource.generation,
-        revision,
+        generation,
+        revision: latest.resource.revision,
         method,
         arguments: {
           workspace: resource.workspaceID,

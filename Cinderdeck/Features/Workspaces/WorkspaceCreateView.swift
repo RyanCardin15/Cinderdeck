@@ -160,16 +160,16 @@ struct WorkspaceSetupView: View {
           }
           Spacer()
           if WorkspaceDiscovery.repositoryRoot(containing: repo.path) != nil {
-            Picker("Lane behavior for \(repo.id)", selection: $repo.laneMode) {
-              Text("Isolate in each lane").tag(StackRepoLaneMode.worktree)
-              Text("Shared across lanes").tag(StackRepoLaneMode.shared)
+            Picker("New lanes use \(repo.id) as", selection: $repo.laneMode) {
+              Text("Worktree").tag(StackRepoLaneMode.worktree)
+              Text("Reference").tag(StackRepoLaneMode.shared)
             }.labelsHidden().frame(width: 190)
           } else {
-            Text("Shared folder").font(.caption).foregroundStyle(.secondary)
+            Text("Reference (not in Git)").font(.caption).foregroundStyle(.secondary)
           }
         }
       }
-      Text("A lane creates a worktree for each isolated Git repository. Shared repositories and regular folders use their original files. A workspace without Git can still run services and tasks.")
+      Text("Defaults for new lanes. Worktree: an isolated checkout on the lane branch. Reference: the original checkout, used as read-only context; regular folders are always references. Each lane can change these when it is created.")
         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
       if model.repositories.contains(where: { $0.laneMode == .worktree }) {
         Toggle("Copy .env and .env.local into new lanes", isOn: $model.copyEnvironmentFiles).font(.callout)

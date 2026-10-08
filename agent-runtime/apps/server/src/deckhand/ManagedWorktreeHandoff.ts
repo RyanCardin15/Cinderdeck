@@ -8,6 +8,7 @@ import {
   type WorktreeMcpHandoffResult,
 } from "@cinderdeck/contracts";
 import * as C from "@cinderdeck/contracts/deckhand";
+import { blockingWorkspaceIssue } from "@cinderdeck/shared/workspaceChat";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -104,13 +105,12 @@ export const layer = Layer.effect(
               return yield* fail(
                 "The conversation's primary workspace is no longer available. Check its folders in workspace settings before moving it.",
               );
-            if (sourceWorkspace.definitionChanged)
+            // Running services on an older definition never affect a new lane: it
+            // derives its own definition. Only configuration errors block it.
+            const issue = blockingWorkspaceIssue(sourceWorkspace.issues);
+            if (issue)
               return yield* fail(
-                "The workspace has unapplied settings: running services still use an older definition. Refresh the definition in workspace settings, then restart services from Services before moving this conversation.",
-              );
-            if (sourceWorkspace.issues.length)
-              return yield* fail(
-                "The workspace has configuration issues. Resolve them in workspace settings before moving this conversation.",
+                `Fix the workspace before moving this conversation: ${issue.replace(/^error: /, "")}`,
               );
             // A workspace reload can advance its generation while retaining the
             // exact checkout. Verify physical identity below and submit the live
@@ -150,20 +150,60 @@ export const layer = Layer.effect(
             const baseRef = input.baseRef ?? selected.branch ?? selected.commit;
             if (!baseRef)
               return yield* fail("Choose a baseRef for this checkout.", "invalid_request");
-            const operationKey = id("chat-lane", [
-              scope.threadId,
-              checkout.id,
-              input.branch,
-              ...(input.name !== undefined ? [input.name] : []),
-              input.baseRef ?? null,
-              input.path ?? null,
-              input.adoptExisting ?? false,
-              input.startFromOrigin ?? false,
-              input.runSetupScript ?? true,
-            ]);
+            const selectedRepoID = sourceWorkspace.repos[selectedIndex]!.id;
+            const repoIDs = sourceWorkspace.repos.map((repo) => repo.id);
+            const unknownRepos = Object.keys(input.repositoryModes ?? {}).filter(
+              (key) => !repoIDs.includes(key),
+            );
+            if (unknownRepos.length)
+              return yield* fail(
+                `repositoryModes names unknown repositories (${unknownRepos.join(", ")}). Repository IDs: ${repoIDs.join(", ")}.`,
+                "invalid_request",
+              );
+            if (input.repositoryModes?.[selectedRepoID] === "reference")
+              return yield* fail(
+                `This conversation works in ${selectedRepoID}, so it must be a worktree in the new lane.`,
+                "invalid_request",
+              );
+            // The conversation's own repository always needs a worktree to move into;
+            // other repositories keep their workspace defaults unless chosen here.
+            const repositoryModes = source.hello.capabilities.includes(
+              "operations.lane.create.repositoryModes",
+            )
+              ? { ...input.repositoryModes, [selectedRepoID]: "worktree" as const }
+              : undefined;
+            const keyFor = (attempt: number) =>
+              id("chat-lane", [
+                scope.threadId,
+                checkout.id,
+                input.branch,
+                ...(input.name !== undefined ? [input.name] : []),
+                input.baseRef ?? null,
+                input.path ?? null,
+                input.adoptExisting ?? false,
+                input.startFromOrigin ?? false,
+                input.runSetupScript ?? true,
+                ...(input.repositoryModes
+                  ? [Object.entries(input.repositoryModes).sort(([a], [b]) => a.localeCompare(b))]
+                  : []),
+                ...(attempt ? [attempt] : []),
+              ]);
             const actorID = `chat-${NodeCrypto.createHash("sha256").update(scope.threadId).digest("hex").slice(0, 40)}`;
-            const previous =
+            // A request refused before any effect, or a creation that rolled back,
+            // must not poison the same request forever: retry it under a new key.
+            let operationKey = keyFor(0);
+            let previous =
               yield* sql`SELECT operation_key FROM deckhand_operations WHERE operation_key=${operationKey}`;
+            for (let attempt = 1; previous.length && attempt < 20; attempt++) {
+              const prior = yield* backend.operation(actorID, operationKey, 0).pipe(
+                Effect.map((receipt) => receipt.state === "failed"),
+                Effect.catch((error) => Effect.succeed(error.reason === "operation_refused")),
+              );
+              if (!prior) break;
+              operationKey = keyFor(attempt);
+              previous =
+                yield* sql`SELECT operation_key FROM deckhand_operations WHERE operation_key=${operationKey}`;
+            }
             let receipt;
             if (previous.length) {
               receipt = yield* backend.operation(actorID, operationKey, 25000);
@@ -205,6 +245,7 @@ export const layer = Layer.effect(
                       }),
                   start: false,
                   setup: input.runSetupScript ?? true,
+                  ...(repositoryModes ? { repositoryModes } : {}),
                   ...(input.adoptExisting
                     ? { path: input.path }
                     : input.baseRef || input.startFromOrigin
@@ -227,7 +268,7 @@ export const layer = Layer.effect(
                 !["succeeded", "skipped"].includes(receipt.result.setup.status))
             )
               return yield* fail(
-                `Lane handoff ${receipt.state}. The conversation has not moved. Retry the same request to inspect operation ${operationKey}; any created lane is retained.`,
+                `Lane handoff ${receipt.state}${receipt.error?.message ? `: ${receipt.error.message}` : ""}. The conversation has not moved. ${receipt.state === "failed" ? "Fix the cause and retry; nothing was kept." : `Retry the same request to inspect operation ${operationKey}; any created lane is retained.`}`,
                 ["pending", "running", "unknown_outcome"].includes(receipt.state)
                   ? "handoff_in_progress"
                   : "operation_failed",
@@ -246,8 +287,7 @@ export const layer = Layer.effect(
               (reviewed &&
                 (!receipt.result?.createdBranch ||
                   lane.lane.directory !== reviewedLane?.lane?.directory)) ||
-              lane.definitionChanged ||
-              lane.issues.length ||
+              blockingWorkspaceIssue(lane.issues) ||
               lane.repos.length !== sourceWorkspace.repos.length
             )
               return yield* fail(

@@ -221,6 +221,10 @@ struct WorkspaceView: View {
           .accessibilityIdentifier("workspace.dragReference")
         Button { model.lanesSheet = true } label: { Label("Lanes", systemImage: "arrow.triangle.branch") }
           .accessibilityIdentifier("stacks.lanes")
+        Button { model.newLane(from: file) } label: { Image(systemName: "plus.rectangle.on.rectangle") }
+          .help("New lane (⇧⌘N)").accessibilityLabel("New lane")
+          .keyboardShortcut("n", modifiers: [.command, .shift])
+          .accessibilityIdentifier("workspace.newLane")
         Button { model.edit(file) } label: { Image(systemName: "slider.horizontal.3") }
           .help(file.lane == nil ? "Edit workspace" : "Edit source workspace")
           .accessibilityLabel(file.lane == nil ? "Edit workspace" : "Edit source workspace")

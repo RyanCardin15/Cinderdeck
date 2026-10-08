@@ -11,6 +11,7 @@ struct WorkspaceLaneMapCanvas: View {
   let select: (WorkspaceLaneGraph.ID) -> Void
   let removableLanes: Set<String>
   let deleteLane: (String) -> Void
+  var newLane: ((String) -> Void)? = nil
   @Environment(\.colorScheme) private var scheme
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -88,6 +89,9 @@ struct WorkspaceLaneMapCanvas: View {
             dimmed: connected.map { !$0.contains(node.id) } ?? false,
             connectionCount: connectionCounts[node.id] ?? 0, select: { select(node.id) })
             .contextMenu {
+              if let newLane, !node.isSharedResource {
+                Button("New lane…") { newLane(node.workspaceID) }
+              }
               if node.isLane, removableLanes.contains(node.workspaceID) {
                 Button("Delete lane…", role: .destructive) { deleteLane(node.workspaceID) }
                   .accessibilityIdentifier("workspace.lane.delete.\(node.workspaceID)")

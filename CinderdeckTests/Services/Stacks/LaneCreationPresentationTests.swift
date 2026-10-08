@@ -116,7 +116,7 @@ final class LaneCreationPresentationTests: XCTestCase {
       XCTAssertEqual(result["setup"]?["status"]?.stringValue, "succeeded", result["setup"]?["detail"]?.stringValue ?? "No setup detail")
       let lane = try XCTUnwrap(supervisor.definition(result["workspace"]?["id"]?.stringValue ?? ""))
       XCTAssertTrue(FileManager.default.fileExists(atPath: lane.root.appendingPathComponent("setup-finished.txt").path))
-      XCTAssertEqual(events.first, .loadingWorkspace)
+      XCTAssertEqual(events.first, .checkingRepositories)
       XCTAssertEqual(events.suffix(3), [.savingLane, .loadingWorkspace, .runningSetup("task:prepare")])
       await control.workspaceRunner.cancelAll()
       await supervisor.shutdownMonitoring()
@@ -125,6 +125,30 @@ final class LaneCreationPresentationTests: XCTestCase {
       await supervisor.shutdownMonitoring()
       throw error
     }
+  }
+
+  func testGeneratedNamesSkipTakenBranchesAndBranchRulesMatchGit() {
+    XCTAssertEqual(StackLaneInfo.proposedName(existing: ["lane 1", "Lane 3"]), "Lane 2")
+    XCTAssertEqual(StackLaneInfo.proposedBranch(name: "Search polish", prefix: nil, taken: []), "lane/search-polish")
+    XCTAssertEqual(StackLaneInfo.proposedBranch(name: "Search polish", prefix: "feature/",
+      taken: ["feature/search-polish", "feature/search-polish-2"]), "feature/search-polish-3")
+    XCTAssertEqual(StackLaneInfo.proposedBranch(name: "Lane 1", prefix: "", taken: []), "lane-1")
+    for valid in ["lane/search", "fix/payment-retry", "a.b"] { XCTAssertNil(StackLaneInfo.branchProblem(valid), valid) }
+    for invalid in ["", "-x", "a..b", "a b", "a/", "a.lock", "x/.hidden", "a~1", "a:b", "@"] {
+      XCTAssertNotNil(StackLaneInfo.branchProblem(invalid), invalid)
+    }
+  }
+
+  func testBranchCatalogClassifiesLocalRemoteAndNewBranches() {
+    let catalog = LaneBranchCatalog(locals: ["main", "lane/a"], remotes: ["origin/main", "origin/feature/x", "upstream/y"])
+    XCTAssertEqual(catalog.state(of: "lane/a"), .local)
+    XCTAssertEqual(catalog.state(of: "feature/x"), .remote)
+    XCTAssertEqual(catalog.state(of: "y"), .remote)
+    XCTAssertEqual(catalog.state(of: "lane/b"), .new)
+    XCTAssertEqual(catalog.names, ["main", "lane/a", "feature/x", "y"])
+    let merged = LaneBranchCatalog.merged([catalog, LaneBranchCatalog(locals: ["dev"], remotes: ["origin/main"])])
+    XCTAssertEqual(merged.locals, ["dev", "lane/a", "main"])
+    XCTAssertEqual(merged.remotes.count, 3)
   }
 
   func testProgressRetainsConcurrentRepositoryStatesDuringSubmodulesAndSetup() {

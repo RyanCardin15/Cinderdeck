@@ -219,8 +219,8 @@ export function NativeWorkspaceSettings({
                           changeFolder(index, { lane: event.target.value as Folder["lane"] })
                         }
                       >
-                        <option value="worktree">Independent worktree</option>
-                        <option value="shared">Shared checkout</option>
+                        <option value="worktree">Worktree</option>
+                        <option value="shared">Reference</option>
                       </select>
                     </label>
                     {folder.lane === "worktree" ? (

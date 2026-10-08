@@ -1103,6 +1103,9 @@ final class StackLaneTests: XCTestCase {
       XCTAssertEqual(checkouts.count, 1)
       let branch = try await StackLaneStore.git(["branch", "--show-current"], at: repo.path)
       XCTAssertEqual(branch, "main")
+      // The empty branch this attempt created is removed so a retry can reuse the name.
+      let leftover = try await StackLaneStore.git(["for-each-ref", "refs/heads/cancel-workers"], at: repo.path)
+      XCTAssertEqual(leftover, "")
     }
   }
 
@@ -1150,7 +1153,7 @@ final class StackLaneTests: XCTestCase {
     let namedID = try XCTUnwrap(named["workspace"]?["id"]?.stringValue)
     let namedRecord = try XCTUnwrap(StackLaneStore.record(id: namedID, in: supervisor.lanesDirectory))
     XCTAssertEqual(namedRecord.info.name, "Search polish")
-    XCTAssertTrue(namedRecord.worktrees.first?.branch?.hasPrefix("codex/search-polish-") == true)
+    XCTAssertEqual(namedRecord.worktrees.first?.branch, "lane/search-polish")
     let head = try await StackLaneStore.git(["rev-parse", "main"], at: repo)
     XCTAssertEqual(namedRecord.info.repositoryRefs, ["app": head])
     let primaryBranch = try await StackLaneStore.git(["branch", "--show-current"], at: repo)
@@ -1163,7 +1166,7 @@ final class StackLaneTests: XCTestCase {
       let id = try XCTUnwrap(result["workspace"]?["id"]?.stringValue)
       let record = try XCTUnwrap(StackLaneStore.record(id: id, in: supervisor.lanesDirectory))
       XCTAssertEqual(record.info.name, "Lane \(number)")
-      XCTAssertTrue(record.worktrees.first?.branch?.hasPrefix("codex/lane-\(number)-") == true)
+      XCTAssertEqual(record.worktrees.first?.branch, "lane/lane-\(number)")
     }
     let receipt = try await durableLane("lane.create", workspace: "shop", arguments: [
       "branch": .string("codex/managed-direct"), "start": .bool(false), "setup": .bool(false),
@@ -1171,6 +1174,59 @@ final class StackLaneTests: XCTestCase {
     XCTAssertEqual(receipt.state, "succeeded", receipt.error?.localizedDescription ?? "")
     XCTAssertEqual(try StackLaneStore.records(in: supervisor.lanesDirectory).count, 5,
       "Durable retries must reuse the lane instead of creating another")
+  }
+
+  func testAgentCreationIsIdempotentResolvesLaneSourcesAndNamesValidRepositories() async throws {
+    try await load()
+    let params: [String: JSONValue] = ["workspace": .string("shop"), "branch": .string("agent/search"),
+      "name": .string("Search"), "start": .bool(false), "setup": .bool(false)]
+    let first = try await control.handle("lane.create", params: .object(params), actor: codex)
+    let id = try XCTUnwrap(first["workspace"]?["id"]?.stringValue)
+    let again = try await control.handle("lane.create", params: .object(params), actor: codex)
+    XCTAssertEqual(again["workspace"]?["id"]?.stringValue, id)
+    XCTAssertTrue(again["note"]?.stringValue?.contains("already exists") == true)
+    XCTAssertEqual(try StackLaneStore.records(in: supervisor.lanesDirectory).count, 1)
+
+    let fromLane = try await control.handle("lane.create", params: .object([
+      "workspace": .string(id), "branch": .string("agent/other"), "start": .bool(false), "setup": .bool(false),
+    ]), actor: codex)
+    XCTAssertEqual(fromLane["workspace"]?["lane"]?["sourceStackID"]?.stringValue, "shop")
+    XCTAssertTrue(fromLane["warnings"]?.arrayValue?.contains { $0.stringValue?.contains("original workspace") == true } == true)
+
+    do {
+      _ = try await control.handle("lane.create", params: .object([
+        "workspace": .string("shop"), "repositoryModes": .object(["nope": .string("reference")]),
+      ]), actor: codex)
+      XCTFail("Accepted an unknown repository")
+    } catch { XCTAssertTrue(error.localizedDescription.contains("Repository IDs: app"), error.localizedDescription) }
+  }
+
+  func testBranchPrefixAndRememberedChoicesBecomeWorkspaceDefaults() async throws {
+    try await load()
+    let file = definitions.appendingPathComponent("shop.toml")
+    try (try String(contentsOf: file, encoding: .utf8) + "\n[lanes]\nbranch_prefix = \"feat/\"\n").write(to: file, atomically: true, encoding: .utf8)
+    await supervisor.reloadDefinitions()
+    XCTAssertEqual(supervisor.definition("shop")?.laneSettings?.branchPrefix, "feat/")
+    _ = try await StackLaneStore.git(["branch", "feat/checkout"], at: repo)
+    let created = try await control.handle("lane.create", params: .object([
+      "workspace": .string("shop"), "name": .string("Checkout"), "start": .bool(false), "setup": .bool(false),
+    ]), actor: codex)
+    let id = try XCTUnwrap(created["workspace"]?["id"]?.stringValue)
+    XCTAssertEqual(try StackLaneStore.record(id: id, in: supervisor.lanesDirectory)?.worktrees.first?.branch, "feat/checkout-2",
+      "A generated branch never reuses an existing one")
+    let shop = try XCTUnwrap(supervisor.files.first { $0.id == "shop" })
+    XCTAssertEqual(control.stackSnapshot(shop).laneBranchPrefix, "feat/")
+    XCTAssertEqual(control.stackSnapshot(shop).repos.first?.laneDefault, .worktree)
+
+    var request = StackLaneRequest(branch: "unused")
+    request.repositoryModes = ["app": .reference]
+    try await LaneCreationDefaults.save(request, source: "shop", supervisor: supervisor)
+    XCTAssertEqual(supervisor.definition("shop")?.repo("app")?.laneMode, .shared)
+    request.repositoryModes = ["app": .worktree]
+    request.repositoryRefs = ["app": "main"]
+    try await LaneCreationDefaults.save(request, source: "shop", supervisor: supervisor)
+    XCTAssertEqual(supervisor.definition("shop")?.repo("app")?.laneMode, .worktree)
+    XCTAssertEqual(supervisor.definition("shop")?.repo("app")?.laneFrom, "main")
   }
 
   func testFourRepositoryDefaultsAndOneOffOverridesPinTheCorrectCommits() async throws {

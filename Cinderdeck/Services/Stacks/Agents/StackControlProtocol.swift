@@ -122,6 +122,8 @@ nonisolated struct StackRepoSnapshot: Codable, Sendable {
   let upstream: String?
   let operation: String?
   let error: String?
+  /// For original workspaces: the checkout a new lane uses unless repositoryModes overrides it.
+  var laneDefault: StackLaneRepositoryMode? = nil
 }
 
 nonisolated struct StackSnapshot: Codable, Sendable {
@@ -140,6 +142,8 @@ nonisolated struct StackSnapshot: Codable, Sendable {
   var laneStatus: StackLaneStatusSnapshot? = nil
   /// Services this workspace uses but does not run.
   var links: [StackServiceLink]? = nil
+  /// Original workspaces only: prefix for generated lane branches.
+  var laneBranchPrefix: String? = nil
 }
 
 nonisolated struct StacksSnapshot: Codable, Sendable {

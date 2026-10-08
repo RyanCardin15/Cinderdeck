@@ -68,6 +68,8 @@ export function NativeHostNavigation() {
         search: { involvement: "all", state: "open", environmentId: environment },
       });
     } else {
+      // A lane workspace ID (e.g. after native lane creation) selects that lane; the
+      // overview resolves its source workspace from the lane's sourceStackID.
       void navigate({
         to: "/workspaces",
         search: {
@@ -75,8 +77,8 @@ export function NativeHostNavigation() {
           ...(target.workspaceID ? { context: target.workspaceID } : {}),
           tab: (target.section ?? "").toLowerCase().includes("agent")
             ? "agents"
-            : target.section === "lane-map"
-              ? "lane-map"
+            : target.section === "lane-map" || target.section === "overview"
+              ? target.section
               : target.workspaceID
                 ? "services"
                 : "overview",

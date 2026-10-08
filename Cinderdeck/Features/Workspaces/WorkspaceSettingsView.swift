@@ -100,10 +100,11 @@ struct WorkspaceSettingsView: View {
             HStack {
               pathRow(folder.path, icon: "folder")
               Spacer()
-              Picker("Lane behavior for \(folder.id)", selection: $folder.laneMode) {
-                Text("Isolate in lanes").tag(StackRepoLaneMode.worktree)
-                Text("Shared folder").tag(StackRepoLaneMode.shared)
+              Picker("New lanes use \(folder.id) as", selection: $folder.laneMode) {
+                Text("Worktree").tag(StackRepoLaneMode.worktree)
+                Text("Reference").tag(StackRepoLaneMode.shared)
               }.labelsHidden().frame(width: 155)
+                .help("Default for new lanes. Worktree: isolated checkout on the lane branch. Reference: original checkout, read-only context.")
               Button { folders.removeAll { $0.id == folder.id } } label: { Image(systemName: "minus.circle") }
                 .buttonStyle(.plain).accessibilityLabel("Remove folder \(folder.path.path)")
             }

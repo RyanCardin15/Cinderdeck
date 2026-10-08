@@ -22,12 +22,13 @@ nonisolated enum StackAgentGuide {
   invokes any operation with the same schema. cinderdeck workspace --help lists common shortcuts.
   Parallel branches: create_lane makes an isolated Git worktree copy of a workspace on a branch (tracking a remote-only branch), \
   executes directly without a modal, runs [lanes] setup and starts it on unique ports, leaving the original running. \
-  Each worktree checkout allows four minutes. Select repositoryModes per repo: \
-  worktree for changes, reference for primary-checkout context with no new worktree or branch. For a code review changing \
+  One lane = one feature: every worktree repo gets the same branch (existing branches are checked out, remote-only ones tracked). \
+  Running services, tasks or unapplied settings in the source never block creation. Select repositoryModes per repo \
+  (IDs and [new lanes: …] defaults in list_workspaces): worktree for changes, reference for primary-checkout context with no new worktree or branch. For a code review changing \
   one of four repos, only that repo needs a worktree; reference the other three and keep their files untouched. Already in \
   your own worktree? adopt_lane runs it as a lane without moving it, with setup off by default. Pass name for a detached HEAD \
   and env for lane-only feature flags. Use its stable id or <workspace>/<name> with every tool. \
-  update_lane changes a stopped lane's name or environment overrides ({} clears); ids, branches, folders, slug and ports stay. \
+  update_lane renames a lane (even while running) or replaces a stopped lane's environment overrides ({} clears); ids, branches, folders, slug and ports stay. \
   Edit the source workspace for component definitions and lane defaults. Adopted/released worktrees stay external across sharing; \
   release_lane forgets a lane while keeping its worktrees. Different workspaces on the same branch share files; use distinct branches for independent edits. \
   Services read PORT, CINDERDECK_PORT_<SERVICE> and CINDERDECK_URL_<SERVICE>; definition values written as {{port.api}} or \
@@ -84,6 +85,7 @@ nonisolated enum StackAgentGuide {
   # [services.db] lane = "shared" runs one database for every lane.
   # [lanes]
   # copy = [".env"]               # untracked files copied from the original checkout
+  # branch_prefix = "lane/"       # generated lane branches are lane/<name>
   # setup = "task:install"        # runs after the worktrees are created, before start
   # teardown = "task:drop-db"     # runs before removal
   """
@@ -104,12 +106,12 @@ nonisolated enum StackAgentGuide {
       - `logs <workspace> [service] -n 200 [--grep regex] [-f]`
       - `ports` — who owns each listening port (Cinderdeck service, or which app/terminal started it)
       - `switch <workspace> <branch> [--repo id] [--stash|--carry]`, `git <workspace>`, `branches <workspace>`
-    - Parallel work: `\(command) lane create <workspace> [branch] [--name "Search polish"] [--from origin/main]` creates, sets up and starts directly without a modal; omit branch for a generated codex/ branch
-      - `--repo-from <repo>=<ref>` pins a new branch in that repository; repeat for independent repositories. Other repos keep their defaults. Existing local branches or conflicting aliases are refused before creation
+    - Parallel work: `\(command) lane create <workspace> [branch] [--name "Search polish"] [--from origin/main]` creates, sets up and starts directly without a modal; omit branch for a generated `lane/<name>` branch (`[lanes] branch_prefix` changes the prefix)
+      - `--repo-from <repo>=<ref>` pins a new branch in that repository; repeat for independent repositories. Other repos keep their defaults. Only for a new branch: omit it to check out an existing branch. Conflicting aliases are refused before creation
       - Already in your own worktree: `\(command) lane adopt <workspace> [name] --env FEATURE_X=1` runs it as a lane; setup is off unless `--setup`, and a detached HEAD requires a name. Cinderdeck never deletes the adopted folder
       - `\(command) lane list [workspace]` / `\(command) lane remove <lane>` (branches are kept; `--discard-ignored` also deletes ignored files, changed copies and copied directories — ask first)
       - Repeat `--repo-mode <repo>=worktree` or `--repo-mode <repo>=reference` (MCP `repositoryModes`). For a review changing one of four repos, create a worktree only for that repo and use primary-checkout references for the other three; keep reference files untouched
-      - Tool requests apply names, checkout choices and bases directly. Omit branch for a generated codex/ branch, and omit both branch and name for Lane 1, Lane 2, etc. Manual New lane actions use the sheet. Use the returned stable lane ID or `<workspace>/<name>` with every command
+      - With no name or branch, lanes are numbered Lane 1, Lane 2, etc. Repeating a create with the same name and branch returns the existing lane. Use the returned stable lane ID or `<workspace>/<name>` with every command
       - Configure repository defaults with `[repos.<id>] lane_from = "main"` (or `"develop"`); `[lanes] from` remains the workspace fallback
       - `\(command) lane edit <lane> --name <name>` or `--env KEY=VALUE` renames a lane while running; env edits require stopping and replaces all overrides, `--clear-env` clears them
       - `eval "$(\(command) lane env <lane> <service> --export)"` gives your shell that service's `PORT`, own env, and workspace ports/URLs; omit the service for workspace-wide values. Run tests from its actual worktree folder, or use `workspace task <lane> <task> --wait`

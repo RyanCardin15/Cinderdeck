@@ -68,7 +68,7 @@ nonisolated enum CinderdeckMCPServer {
     "type": .string("object"), "maxProperties": .number(64),
     "propertyNames": .object(["type": .string("string"), "minLength": .number(1), "maxLength": .number(160)]),
     "additionalProperties": .object(["type": .string("string"), "enum": .array([.string("worktree"), .string("reference")])]),
-    "description": .string("Repository ID to checkout choice for this lane. worktree creates an isolated checkout; reference uses the primary checkout without creating a worktree or branch. Omitted repositories keep workspace defaults. For a review changing one of four repos, select worktree for that repo and reference for the other three. References are context; keep their primary files untouched.")
+    "description": .string("Repository ID to checkout choice for this lane. worktree creates an isolated checkout on the lane branch; reference uses the original checkout read-only, with no worktree or branch. Omitted repositories keep their workspace default, shown as [new lanes: worktree|reference] next to each repo in list_workspaces/workspace_details. Example for a change touching api and web but not docs: {\"api\": \"worktree\", \"web\": \"worktree\", \"docs\": \"reference\"}. References are context; keep their files untouched.")
   ])
 
   // MARK: Tools
@@ -224,14 +224,14 @@ nonisolated enum CinderdeckMCPServer {
       "Original checkouts and their parallel worktree lanes: ports and URLs, owner, folders, service state, setup status, shared services, and whether each lane's branch was merged or its upstream deleted.",
       ["workspace": workspace]),
     tool("create_lane", "Create a lane", .additive,
-      "Create a lane directly without opening a modal or waiting for manual confirmation. Omit branch for a generated codex/ branch; omit both branch and name for a numbered lane. repositoryModes selects worktree/reference per repository for this lane; repositoryRefs and from select the bases; otherwise repos.<id>.lane_from, [lanes] from, then HEAD apply. Each worktree checkout allows four minutes. Run setup and start services on unique ports after creation unless disabled. Use the returned stable workspace ID and name. If the branch is already in your own worktree, use adopt_lane.",
+      "Create a lane (one feature, one branch) in a single call, without a modal. Every worktree repository gets the same branch: an existing local branch is checked out, a remote-only branch is tracked, otherwise a new branch starts from repositoryRefs.<id>, from, repos.<id>.lane_from, [lanes] from, then HEAD. repositoryModes picks worktree or reference per repository (repository IDs and defaults: list_workspaces). Omit branch for a generated lane/<name> branch ([lanes] branch_prefix); omit branch and name for a numbered lane. Running services, tasks or unapplied settings in the source never block creation. Repeating the same name and branch returns the existing lane. Setup runs and services start on unique ports unless disabled. Use the returned workspace id. If the branch is already checked out in your own worktree, use adopt_lane.",
       ["workspace": workspace, "branch": property("string", "Git branch to check out or create; omit for a generated branch"),
         "name": property("string", "Optional lane display name, independent of the branch; 1–100 characters"),
         "from": property("string", "Start point for a new branch, e.g. origin/main (default: [lanes] from, else HEAD)"),
         "repositoryModes": repositoryModes,
         "repositoryRefs": .object(["type": .string("object"), "maxProperties": .number(64), "propertyNames": .object(["type": .string("string"), "minLength": .number(1), "maxLength": .number(160)]),
           "additionalProperties": .object(["type": .string("string"), "minLength": .number(1), "maxLength": .number(200), "pattern": .string("^(?!-)(?![\\s\\S]*[\\u0000\\n\\r])[\\s\\S]+$")]),
-          "description": .string("Repository ID to start revision for a new branch, e.g. {app: commitSHA}. Each selected branch must be new; revisions are pinned before effects and override from only for that repository. Other repositories keep their defaults.")]),
+          "description": .string("Repository ID to start revision for a new branch, e.g. {app: \"origin/main\"} or a commit. Only for worktree repositories, and only when the branch does not exist there yet; revisions are pinned before effects and override from for that repository. Omit to check out an existing branch.")]),
         "env": laneEnvironment,
         "copy": property("array", "Extra untracked files to copy from each original checkout, e.g. [\".env.local\"]", items: "string"),
         "setup": property("boolean", "Run the workspace's [lanes] setup before starting (default true)"),
@@ -723,6 +723,7 @@ nonisolated enum CinderdeckMCPServer {
     if !workspace.repos.isEmpty {
       object["repos"] = .array(workspace.repos.map { repo -> JSONValue in
         var text = "\(repo.id): \(repo.branch)"
+        if let mode = repo.laneDefault { text += " [new lanes: \(mode.rawValue)]" }
         if repo.dirty { text += " (\(repo.changedFiles) changed)" }
         if repo.ahead > 0 { text += " ↑\(repo.ahead)" }
         if repo.behind > 0 { text += " ↓\(repo.behind)" }

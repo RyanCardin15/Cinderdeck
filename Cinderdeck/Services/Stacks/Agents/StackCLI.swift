@@ -642,7 +642,7 @@ nonisolated enum StackCLI {
     cinderdeck services agent-help                    Instructions to paste into AGENTS.md
 
   WORKTREE LANES
-    cinderdeck lane create <workspace> [branch]       Create directly without a modal (--name sets its name; omit branch for a generated codex/ branch; --repo-from <repo>=<ref> sets a base; repeat --repo-mode <repo>=worktree|reference to choose checkouts). Each checkout allows four minutes.
+    cinderdeck lane create <workspace> [branch]       Create directly without a modal (--name sets its name; omit branch for a generated lane/<name> branch; --repo-from <repo>=<ref> sets a base; repeat --repo-mode <repo>=worktree|reference to choose checkouts). Each checkout allows four minutes.
       --from <ref>  --env KEY=VALUE  --copy <glob>    Start point, lane-only variables, extra files to copy
       --name <name>                                 Lane display name (default: branch, or numbered lane when branch is omitted)
       --no-setup  --no-start                          Skip [lanes] setup, or create without starting
