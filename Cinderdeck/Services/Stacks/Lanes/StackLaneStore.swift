@@ -289,8 +289,14 @@ nonisolated enum StackLaneStore {
     return trim ? result.text.trimmingCharacters(in: .whitespacesAndNewlines) : result.text
   }
 
-  static func gitResult(_ arguments: [String], at path: URL, timeout: TimeInterval = 60) async throws -> StackCommandResult {
-    var environment = ProcessInfo.processInfo.environment
+  static func gitResult(_ arguments: [String], at path: URL, timeout: TimeInterval = 60,
+    environment base: [String: String] = ProcessInfo.processInfo.environment) async throws -> StackCommandResult {
+    var environment = base
+    // Finder-launched apps lack the login shell's PATH. Git invokes helpers and
+    // checkout filters (including git-lfs) through PATH even with an absolute Git executable.
+    if let shell = try? await ShellEnvironmentResolver.shared.resolve(shell: base["SHELL"] ?? "/bin/zsh") {
+      environment["PATH"] = shell["PATH"] ?? base["PATH"]
+    }
     environment["GIT_TERMINAL_PROMPT"] = "0"
     environment["GIT_OPTIONAL_LOCKS"] = "0"
     return try await StackCommandRunner.run("/usr/bin/git", StackCommandRunner.gitArguments(arguments),
@@ -943,10 +949,15 @@ nonisolated enum StackLaneStore {
     guard !options.keepWorktrees else { return [] }
     var ignored: [StackLaneIgnoredEntry] = []
     for tree in removable(record, others: others) {
-      let inspection = try await inspect(tree, copied: record.copied)
+      let inspection: Inspection
+      do { inspection = try await inspect(tree, copied: record.copied) }
+      catch {
+        throw StackControlError(code: "cleanup_check_failed", message:
+          "Cannot verify files in \(tree.path.path): \(error.localizedDescription). Remove the lane with Keep worktrees and their files (CLI: lane release) to keep these files safely.")
+      }
       guard inspection.changes.isEmpty else {
         let sample = inspection.changes.prefix(5).joined(separator: ", ")
-        throw StackControlError(code: "dirty", message: "Lane has local changes in \(tree.path.path): \(sample)\(inspection.changes.count > 5 ? ", …" : ""). Commit or move them before removal.")
+        throw StackControlError(code: "dirty", message: "Lane has local changes in \(tree.path.path): \(sample)\(inspection.changes.count > 5 ? ", …" : ""). Commit or move them before deleting worktrees, or remove the lane with Keep worktrees and their files (CLI: lane release).")
       }
       ignored += inspection.ignored
     }

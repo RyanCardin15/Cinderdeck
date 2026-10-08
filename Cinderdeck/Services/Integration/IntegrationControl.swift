@@ -283,7 +283,11 @@ extension StackControlService {
         } catch {
           let failure = (error as? StackControlError) ?? StackControlError(code: "failed", message: error.localizedDescription)
           let refusedBeforeEffects: Set<String> = ["invalid_params", "not_found", "busy", "stale_revision", "resource_missing", "unsupported_capability"]
-          let state = effectsStarted && (resultReturned || !refusedBeforeEffects.contains(failure.code)) ? "unknown_outcome" : "failed"
+          // A caught cleanup error is a completed, failed attempt, even when
+          // some worktrees were removed. Leave uncertainty for lost results or
+          // interrupted processes so the user can retry cleanup after a refusal.
+          let cleanupFailed = !resultReturned && ["lane.remove", "lane.release"].contains(input.method)
+          let state = !cleanupFailed && effectsStarted && (resultReturned || !refusedBeforeEffects.contains(failure.code)) ? "unknown_outcome" : "failed"
           do { _ = try await operations.transition(key: input.operationKey, actor: actor, state: state, error: failure) }
           catch { DiagnosticLogger.shared.log(.warning, .system, "Integration operation outcome could not be saved") }
         }
@@ -325,9 +329,18 @@ extension StackControlService {
       ]), error: receipt.error)
     } else if receipt.state == "unknown_outcome", ["lane.remove", "lane.release"].contains(receipt.method) {
       let record = try StackLaneStore.record(id: receipt.workspaceID, in: supervisor.lanesDirectory)
-      receipt = try await operations.transition(key: key, actor: actor, state: "unknown_outcome", result: .object([
+      let journal = try integrationStore()
+      try await journal.reconcile(snapshot().workspaces, sourceRevision: integrationRevision())
+      let resource = try await journal.snapshot(workspaceID: receipt.workspaceID, limit: 1).resources.first
+      let incomplete = record != nil && resource?.generation == receipt.generation
+      // An interrupted removal cannot still be running in this host. A remaining
+      // record proves cleanup is incomplete, allowing a fresh reviewed attempt.
+      // Absence does not prove that this operation performed the removal.
+      receipt = try await operations.transition(key: key, actor: actor, state: incomplete ? "failed" : "unknown_outcome", result: .object([
         "resourceAvailable": .bool(record != nil),
-        "reconciliation": .string("Lane record presence was inspected; absence alone does not prove this operation removed or released its worktrees"),
+        "reconciliation": .string(!incomplete
+          ? "Lane record presence was inspected; absence alone does not prove this operation removed or released its worktrees"
+          : "The lane record remains. Cleanup did not finish; some worktrees may already be gone. Review the current lane and retry, or keep its files."),
       ]), error: receipt.error)
     } else if receipt.state == "unknown_outcome", receipt.method.hasPrefix("services."),
       let file = supervisor.files.first(where: { $0.id == receipt.workspaceID }) {

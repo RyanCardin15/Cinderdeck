@@ -519,9 +519,6 @@ function WorkspaceLanes({
             onDeleteLane={onDeleteLane}
             deletionEnabled={
               fresh &&
-              row.available &&
-              !row.workspace?.definitionChanged &&
-              !row.workspace?.issues.length &&
               view?.hello?.capabilities.includes("operations.receipts") === true &&
               ["operations.lane.release", "operations.lane.remove"].some((capability) =>
                 view?.hello?.capabilities.includes(capability),

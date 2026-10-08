@@ -67,6 +67,22 @@ final class StackEnvironmentAndSecretsTests: XCTestCase {
     XCTAssertEqual(environment["STACK_FALLBACK"], "yes")
   }
 
+  func testLaneGitFindsExternalHelpersUsingLoginShellPath() async throws {
+    let root = try StackTestSupport.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let bin = root.appendingPathComponent("bin")
+    try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+    let helper = bin.appendingPathComponent("git-lfs")
+    try "#!/bin/sh\nprintf 'helper-found:%s' \"$GIT_TERMINAL_PROMPT\"\n".write(to: helper, atomically: true, encoding: .utf8)
+    let shell = root.appendingPathComponent("fixture-shell")
+    try "#!/bin/sh\nprintf '\\0CINDERDECK_ENV_BEGIN\\0PATH=\(bin.path):/usr/bin:/bin\\0'\n".write(to: shell, atomically: true, encoding: .utf8)
+    for file in [helper, shell] { try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: file.path) }
+    let result = try await StackLaneStore.gitResult(["-c", "alias.lfs-fixture=!git-lfs fixture", "lfs-fixture"], at: root,
+      environment: ["PATH": "/usr/bin:/bin", "SHELL": shell.path])
+    XCTAssertEqual(result.status, 0, result.errorText)
+    XCTAssertEqual(result.text, "helper-found:0")
+  }
+
   func testKeychainRoundTripUpdateAndDeleteOnlyOwnFixture() throws {
     let store = StackSecretsStore()
     let name = "Cinderdeck-Test-\(UUID().uuidString)"

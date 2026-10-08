@@ -153,7 +153,9 @@ actor IntegrationOperations {
   func transition(key: String, actor: StackActor, state: String, result: JSONValue? = nil, error: StackControlError? = nil) throws -> IntegrationOperationReceipt {
     var receipt = try get(key: key, actor: actor)
     let allowed: [String: Set<String>] = ["pending": ["running"], "running": ["succeeded", "failed", "unknown_outcome"], "unknown_outcome": ["unknown_outcome"]]
-    guard allowed[receipt.state]?.contains(state) == true else { throw StackControlError(code: "operation_state_changed", message: "This operation's outcome is already terminal.") }
+    let incompleteCleanup = receipt.state == "unknown_outcome" && state == "failed"
+      && ["lane.remove", "lane.release"].contains(receipt.method) && result?["resourceAvailable"]?.boolValue == true
+    guard allowed[receipt.state]?.contains(state) == true || incompleteCleanup else { throw StackControlError(code: "operation_state_changed", message: "This operation's outcome is already terminal.") }
     if let result, try StackControlCoding.encoder().encode(result).count > 3 * 1024 * 1024 {
       throw StackControlError(code: "result_too_large", message: "The operation result exceeds its bounded receipt.")
     }

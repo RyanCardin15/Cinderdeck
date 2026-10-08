@@ -200,6 +200,61 @@ it("does not delete a lane that changes while its removal request is being prepa
   expect(document.body.textContent).toContain("The lane changed");
 });
 
+it("allows removal of an incomplete unavailable lane while keeping setup disabled", async () => {
+  const broken = resource();
+  props = {
+    ...props,
+    resource: {
+      ...broken,
+      available: false,
+      workspace: {
+        ...broken.workspace!,
+        definitionChanged: true,
+        issues: ["Lane creation did not finish: git-lfs not found"],
+      },
+    },
+  };
+  await render();
+  expect(button("Run setup").disabled).toBe(true);
+  expect(button("Remove lane…").disabled).toBe(false);
+  await click("Remove lane…");
+  await click("Remove lane");
+  expect(commands.submit).toHaveBeenCalledOnce();
+  expect(commands.submit.mock.calls[0]?.[0].input).toMatchObject({
+    workspaceID: broken.workspaceID,
+    generation: broken.generation,
+    revision: broken.revision,
+    method: "lane.release",
+    arguments: { workspace: broken.workspaceID },
+  });
+});
+
+it("can retry a failed worktree deletion by removing the lane and keeping its files", async () => {
+  props = { ...props, mode: "remove" };
+  commands.submit.mockImplementationOnce(
+    async ({ input: request }: { input: IntegrationOperationInput }) => ({
+      _tag: "Success",
+      value: {
+        ...receipt(request, "failed"),
+        error: { code: "cleanup_check_failed", message: "git-lfs not found" },
+      },
+    }),
+  );
+  await render();
+  await change('input[type="radio"]:not(:checked)');
+  await click("Delete lane & worktrees");
+  expect(document.body.textContent).toContain("git-lfs not found");
+  await click("Try removal again");
+  commands.uuid.mockResolvedValue("retry-key");
+  await click("Remove lane");
+  expect(commands.submit).toHaveBeenCalledTimes(2);
+  expect(commands.submit.mock.calls[1]?.[0].input).toMatchObject({
+    operationKey: "retry-key",
+    method: "lane.release",
+    arguments: { workspace: "lane-a" },
+  });
+});
+
 it("keeps the removal dialog open through request preparation and its saved result", async () => {
   let resolve!: (key: string) => void;
   commands.uuid.mockImplementation(

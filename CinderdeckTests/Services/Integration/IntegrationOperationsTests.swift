@@ -47,6 +47,33 @@ final class IntegrationOperationsTests: XCTestCase {
     XCTAssertEqual(inspected.state, "unknown_outcome")
     XCTAssertEqual(inspected.result?["createdWorkspaceID"], .string("lane"))
   }
+
+  func testInterruptedCleanupCanFailAfterRemainingRecordInspectionWithoutReplaying() async throws {
+    let root = try StackTestSupport.temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let actor = StackActor(kind: .agent, name: "Deckhand", session: "cleanup")
+    let request = IntegrationOperationInput(operationKey: "cleanup", installationID: "fixture", workspaceID: "payment",
+      generation: 1, revision: "revision", method: "lane.remove", arguments: .object(["workspace": .string("payment")]))
+    let store = try IntegrationOperations(directory: root)
+    let original = try await store.begin(request, actor: actor).0
+    _ = try await store.transition(key: request.operationKey, actor: actor, state: "running")
+    let restarted = try IntegrationOperations(directory: root)
+    for state in ["succeeded", "running", "failed"] {
+      do {
+        _ = try await restarted.transition(key: request.operationKey, actor: actor, state: state,
+          result: .object(["resourceAvailable": .bool(false)]))
+        XCTFail("An absent record must not change the uncertain outcome to \(state)")
+      } catch { XCTAssertEqual((error as? StackControlError)?.code, "operation_state_changed") }
+    }
+    let inspected = try await restarted.transition(key: request.operationKey, actor: actor, state: "failed",
+      result: .object(["resourceAvailable": .bool(true)]))
+    XCTAssertEqual(inspected.id, original.id)
+    XCTAssertEqual(inspected.state, "failed")
+    let duplicate = try await restarted.begin(request, actor: actor)
+    XCTAssertFalse(duplicate.1)
+    XCTAssertEqual(duplicate.0.state, "failed")
+    XCTAssertEqual(duplicate.0.id, original.id)
+  }
   func testReceiptWaitObservesCommittedTerminalWithoutRepeatingEffectsAndReleasesObservers() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("deckhand-wait-\(UUID())")
     defer { try? FileManager.default.removeItem(at: root) }

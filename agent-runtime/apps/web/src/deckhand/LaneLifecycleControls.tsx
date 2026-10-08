@@ -215,16 +215,16 @@ function LaneLifecyclePanel(props: Props) {
 
   const name = resource.workspace?.lane?.name ?? resource.workspace?.name ?? "this lane";
   const namedLane = Boolean(resource.workspace?.lane);
+  const cleanupReady = enabled && namedLane && receiptsSupported && recovered && !recoveryError;
   const sourceReady =
-    enabled &&
+    cleanupReady &&
     resource.available &&
-    namedLane &&
     !resource.workspace?.definitionChanged &&
-    !resource.workspace?.issues.length &&
-    receiptsSupported &&
-    recovered &&
-    !recoveryError;
+    !resource.workspace?.issues.length;
   const ready = sourceReady && !pending;
+  const removalReady = cleanupReady && !pending;
+  const methodReady = (method: LifecycleMethod) =>
+    method === "lane.setup" ? sourceReady : cleanupReady;
   const supported = (method: LifecycleMethod) => capabilities.includes(`operations.${method}`);
   const accept = (record: OperationRecord) => {
     // Persist using the original scope even if this panel was unmounted by a lane switch.
@@ -255,7 +255,7 @@ function LaneLifecyclePanel(props: Props) {
     if (mounted.current) setBusy(false);
   };
   const begin = async (method: LifecycleMethod) => {
-    if (!ready || !supported(method) || preparing.current) return;
+    if (!methodReady(method) || pending || !supported(method) || preparing.current) return;
     preparing.current = true;
     setBusy(true);
     const revision = resource.revision;
@@ -268,9 +268,12 @@ function LaneLifecyclePanel(props: Props) {
       if (
         !latest.enabled ||
         latest.resource.revision !== revision ||
-        !latest.resource.available ||
-        latest.resource.workspace?.definitionChanged ||
-        latest.resource.workspace?.issues.length ||
+        latest.resource.generation !== resource.generation ||
+        !latest.resource.workspace?.lane ||
+        (method === "lane.setup" &&
+          (!latest.resource.available ||
+            latest.resource.workspace?.definitionChanged ||
+            latest.resource.workspace?.issues.length)) ||
         !latest.capabilities.includes(`operations.${method}`) ||
         !latest.capabilities.includes("operations.receipts")
       ) {
@@ -396,7 +399,9 @@ function LaneLifecyclePanel(props: Props) {
             <button
               className={styles["dh-button"]}
               disabled={
-                busy || !sourceReady || !supported(operation.input.method as LifecycleMethod)
+                busy ||
+                !methodReady(operation.input.method as LifecycleMethod) ||
+                !supported(operation.input.method as LifecycleMethod)
               }
               onClick={() => void send(operation)}
             >
@@ -405,21 +410,38 @@ function LaneLifecyclePanel(props: Props) {
           ) : null}
         </>
       ) : (
-        <button
-          className={styles["dh-button"]}
-          disabled={busy}
-          onClick={() => {
-            save(storageKey, null);
-            setOperation(null);
-            setMessage(null);
-            setRecovered(false);
-            setRemovalOpen(false);
-            setConfirming(false);
-            if (mode === "remove") onCancel?.();
-          }}
-        >
-          Done
-        </button>
+        <>
+          {operation.receipt?.state === "failed" && operation.input.method !== "lane.setup" ? (
+            <Button
+              variant="outline"
+              disabled={!removalReady}
+              onClick={() => {
+                setDeleteWorktrees(false);
+                setDiscardIgnored(false);
+                setConfirming(true);
+                setRemovalOpen(true);
+                setMessage(null);
+              }}
+            >
+              Try removal again
+            </Button>
+          ) : null}
+          <button
+            className={styles["dh-button"]}
+            disabled={busy}
+            onClick={() => {
+              save(storageKey, null);
+              setOperation(null);
+              setMessage(null);
+              setRecovered(false);
+              setRemovalOpen(false);
+              setConfirming(false);
+              if (mode === "remove") onCancel?.();
+            }}
+          >
+            Done
+          </button>
+        </>
       )}
     </div>
   ) : null;
@@ -498,7 +520,7 @@ function LaneLifecyclePanel(props: Props) {
           </Button>
           <Button
             variant="destructive"
-            disabled={!ready || !supported(deleteWorktrees ? "lane.remove" : "lane.release")}
+            disabled={!removalReady || !supported(deleteWorktrees ? "lane.remove" : "lane.release")}
             onClick={() => void begin(deleteWorktrees ? "lane.remove" : "lane.release")}
           >
             {busy ? "Removing…" : deleteWorktrees ? "Delete lane & worktrees" : "Remove lane"}
@@ -530,7 +552,7 @@ function LaneLifecyclePanel(props: Props) {
             </Button>
             <Button
               variant="outline"
-              disabled={!ready || (!supported("lane.release") && !supported("lane.remove"))}
+              disabled={!removalReady || (!supported("lane.release") && !supported("lane.remove"))}
               onClick={() => {
                 setDeleteWorktrees(false);
                 setDiscardIgnored(false);

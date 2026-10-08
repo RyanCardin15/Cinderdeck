@@ -93,7 +93,7 @@ struct StackLaneRemovalView: View {
         if !removed {
           Button(working ? "Removing…" : keepWorktrees || entryOnly ? "Remove lane" : "Delete lane & worktrees", role: .destructive) { remove() }
             .buttonStyle(.borderedProminent).tint(DeckStyle.danger)
-            .disabled(checking || working || error != nil || (!keepWorktrees && !ignored.isEmpty && !discardIgnored))
+            .disabled(checking || working || (!keepWorktrees && error != nil) || (!keepWorktrees && !ignored.isEmpty && !discardIgnored))
             .accessibilityIdentifier("stacks.laneRemoval.confirm")
         }
       }.controlSize(.large).padding(.horizontal, 24).padding(.vertical, 16).background(DeckStyle.inset)
@@ -142,9 +142,10 @@ struct StackLaneRemovalView: View {
   }
 
   private func remove() {
-    guard !working, !checking, error == nil,
+    guard !working, !checking, keepWorktrees || error == nil,
       keepWorktrees || ignored.isEmpty || discardIgnored else { return }
     working = true
+    error = nil
     let options = StackLaneRemovalOptions(discardIgnored: discardIgnored, keepWorktrees: keepWorktrees, deleteLogs: deleteLogs)
     Task {
       defer { working = false }

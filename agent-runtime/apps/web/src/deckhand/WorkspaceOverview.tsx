@@ -1190,7 +1190,7 @@ function ConnectedWorkspace({
                   installationID={view.hello.installationID}
                   resource={selected}
                   capabilities={view.hello.capabilities}
-                  enabled={nativeActionsEnabled && actionable(selected)}
+                  enabled={nativeActionsEnabled}
                   onPending={setLifecyclePending}
                 />
               ) : null}

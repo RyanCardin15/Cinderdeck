@@ -803,6 +803,72 @@ final class StackLaneTests: XCTestCase {
     XCTAssertTrue(supervisor.files.first { $0.id == "damaged" }?.issues.contains { $0.severity == .error } == true)
   }
 
+  func testMissingLFSFailedCreationCanBeRemovedWithoutDeletingPartialCheckout() async throws {
+    try await load()
+    // Do not inherit this Mac's LFS filter while committing the fixture.
+    for (key, value) in [("process", ""), ("clean", "cat"), ("smudge", "cat"), ("required", "false")] {
+      _ = try await StackLaneStore.git(["config", "filter.lfs." + key, value], at: repo)
+    }
+    try "tracked.txt filter=lfs\n".write(to: repo.appendingPathComponent(".gitattributes"), atomically: true, encoding: .utf8)
+    try await commitAll("LFS fixture attributes", at: repo)
+    // Fail late in checkout, after files exist. Early smudge failures can be
+    // cleaned by Git itself; a failing hook leaves a checkout needing recovery.
+    let missingHelper = "cinderdeck-missing-git-lfs-\(UUID().uuidString)"
+    let hook = repo.appendingPathComponent(".git/hooks/post-checkout")
+    try """
+    #!/bin/sh
+    printf 'keep this work' > recovery-notes.txt
+    printf 'partial checkout change\\n' >> tracked.txt
+    /usr/bin/git config filter.lfs.process '\(missingHelper) filter-process'
+    /usr/bin/git config filter.lfs.required true
+    \(missingHelper) filter-process
+    """.write(to: hook, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: hook.path)
+    do {
+      _ = try await supervisor.createLane(stack: "shop", branch: "missing-lfs", actor: codex)
+      XCTFail("Expected checkout filter failure")
+    } catch { XCTAssertTrue(error.localizedDescription.contains("not found"), error.localizedDescription) }
+    let record = try XCTUnwrap(StackLaneStore.records(in: supervisor.lanesDirectory).first)
+    XCTAssertEqual(record.ready, false)
+    XCTAssertNil(supervisor.definition(record.id))
+    let tree = try XCTUnwrap(record.worktrees.first)
+    let userFile = tree.path.appendingPathComponent("recovery-notes.txt")
+    XCTAssertEqual(try String(contentsOf: userFile, encoding: .utf8), "keep this work")
+    let deletion = try await durableLane("lane.remove", workspace: record.id)
+    XCTAssertEqual(deletion.state, "failed", "A known failure must not permanently block release")
+    XCTAssertTrue(["cleanup_check_failed", "dirty"].contains(deletion.error?.code ?? ""))
+    XCTAssertNotNil(try StackLaneStore.record(id: record.id, in: supervisor.lanesDirectory))
+    let release = try await durableLane("lane.release", workspace: record.id)
+    XCTAssertEqual(release.state, "succeeded", release.error?.localizedDescription ?? "")
+    XCTAssertNil(try StackLaneStore.record(id: record.id, in: supervisor.lanesDirectory))
+    XCTAssertNil(supervisor.files.first { $0.id == record.id })
+    XCTAssertEqual(try String(contentsOf: userFile, encoding: .utf8), "keep this work")
+    XCTAssertEqual(try String(contentsOf: repo.appendingPathComponent("tracked.txt"), encoding: .utf8), "original\n")
+  }
+
+  func testInterruptedRemovalWithRemainingRecordAllowsFreshRelease() async throws {
+    try await load()
+    let lane = try await supervisor.createLane(stack: "shop", branch: "interrupted-kept", actor: codex)
+    let tree = try XCTUnwrap(lane.definition?.root)
+    let snapshot = try await control.handle("integration.snapshot", params: .object(["workspaceID": .string(lane.id)]), actor: codex).decode(IntegrationSnapshot.self)
+    let resource = try XCTUnwrap(snapshot.resources.first)
+    let input = IntegrationOperationInput(operationKey: "interrupted-kept", installationID: snapshot.installationID,
+      workspaceID: lane.id, generation: resource.generation, revision: resource.revision, method: "lane.remove",
+      arguments: .object(["workspace": .string(lane.id)]))
+    let operations = try IntegrationOperations(directory: control.integrationDirectory)
+    _ = try await operations.begin(input, actor: codex)
+    _ = try await operations.transition(key: input.operationKey, actor: codex, state: "running")
+    let inspected = try await control.handle("integration.operation.get", params: .object([
+      "installationID": .string(snapshot.installationID), "operationKey": .string(input.operationKey),
+    ]), actor: codex).decode(IntegrationOperationReceipt.self)
+    XCTAssertEqual(inspected.state, "failed")
+    XCTAssertEqual(inspected.result?["resourceAvailable"]?.boolValue, true)
+    let release = try await durableLane("lane.release", workspace: lane.id)
+    XCTAssertEqual(release.state, "succeeded")
+    XCTAssertTrue(FileManager.default.fileExists(atPath: tree.path))
+    XCTAssertNil(supervisor.files.first { $0.id == lane.id })
+  }
+
   func testSwitchToAnotherLanesBranchDoesNotStopServicesOrStashChanges() async throws {
     try await load()
     await supervisor.start(stack: "shop", actor: codex)

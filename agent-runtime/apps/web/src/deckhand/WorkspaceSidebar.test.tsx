@@ -342,62 +342,83 @@ const clickText = async (text: string) =>
     [...container.querySelectorAll("button")].find((item) => item.textContent === text)!.click();
   });
 
-it("right-click deletes the clicked remote lane through confirmation without selecting it", async () => {
-  registry.set(
-    native,
-    AsyncResult.success({ ...view, hello: { ...view.hello!, capabilities: removalCapabilities } }),
-  );
-  localStorage.setItem(
-    sidebarPreferenceKey(EnvironmentId.make("remote"), "install"),
-    JSON.stringify({
-      favorites: ["lane-a", "lane-b"],
-      order: { "lanes:alpha": ["lane-b", "lane-a"] },
-      expanded: { alpha: true },
-      colors: { "lane-a": "#579de5", "lane-b": "#e47880" },
-    }),
-  );
-  await render({ workspace: "beta", context: "beta" }, resources, EnvironmentId.make("remote"));
-  await rightClickLane("lane-b");
-  expect(boundary.contextMenu).toHaveBeenCalledWith(
-    [
-      { id: "highlight-color", label: "Highlight color…", icon: "palette" },
-      {
-        id: "delete-lane",
-        label: "Delete lane…",
-        destructive: true,
-        icon: "trash",
-        separatorBefore: true,
-        disabled: false,
+it.each([false, true])(
+  "right-click deletes the clicked remote lane even when broken=%s without selecting it",
+  async (broken) => {
+    const rows = resources.map((row) =>
+      broken && row.workspaceID === "lane-b"
+        ? {
+            ...row,
+            available: false,
+            workspace: {
+              ...row.workspace!,
+              definitionChanged: true,
+              issues: ["Lane creation did not finish"],
+            },
+          }
+        : row,
+    );
+    registry.set(
+      native,
+      AsyncResult.success({
+        ...view,
+        resources: rows,
+        hello: { ...view.hello!, capabilities: removalCapabilities },
+      }),
+    );
+    localStorage.setItem(
+      sidebarPreferenceKey(EnvironmentId.make("remote"), "install"),
+      JSON.stringify({
+        favorites: ["lane-a", "lane-b"],
+        order: { "lanes:alpha": ["lane-b", "lane-a"] },
+        expanded: { alpha: true },
+        colors: { "lane-a": "#579de5", "lane-b": "#e47880" },
+      }),
+    );
+    await render({ workspace: "beta", context: "beta" }, rows, EnvironmentId.make("remote"));
+    await rightClickLane("lane-b");
+    expect(boundary.contextMenu).toHaveBeenCalledWith(
+      [
+        { id: "highlight-color", label: "Highlight color…", icon: "palette" },
+        {
+          id: "delete-lane",
+          label: "Delete lane…",
+          destructive: true,
+          icon: "trash",
+          separatorBefore: true,
+          disabled: false,
+        },
+      ],
+      { x: 24, y: 48 },
+    );
+    expect(container.textContent).toContain("Remove lane “lane-b”?");
+    expect(boundary.submit).not.toHaveBeenCalled();
+    expect(boundary.navigate).not.toHaveBeenCalled();
+    await clickText("Remove lane");
+    expect(boundary.submit).toHaveBeenCalledTimes(1);
+    expect(boundary.submit).toHaveBeenCalledWith({
+      environmentId: "remote",
+      input: {
+        operationKey: "delete-key",
+        installationID: "install",
+        workspaceID: "lane-b",
+        generation: 3,
+        revision: "revision",
+        method: "lane.release",
+        arguments: { workspace: "lane-b" },
       },
-    ],
-    { x: 24, y: 48 },
-  );
-  expect(container.textContent).toContain("Remove lane “lane-b”?");
-  expect(boundary.submit).not.toHaveBeenCalled();
-  expect(boundary.navigate).not.toHaveBeenCalled();
-  await clickText("Remove lane");
-  expect(boundary.submit).toHaveBeenCalledTimes(1);
-  expect(boundary.submit).toHaveBeenCalledWith({
-    environmentId: "remote",
-    input: {
-      operationKey: "delete-key",
-      installationID: "install",
-      workspaceID: "lane-b",
-      generation: 3,
-      revision: "revision",
-      method: "lane.release",
-      arguments: { workspace: "lane-b" },
-    },
-  });
-  expect(container.querySelector('[role="dialog"]')).toBeNull();
-  expect(boundary.navigate).not.toHaveBeenCalled();
-  expect(
-    readSidebarPreferences(sidebarPreferenceKey(EnvironmentId.make("remote"), "install")).favorites,
-  ).toEqual(["lane-a"]);
-  expect(
-    readSidebarPreferences(sidebarPreferenceKey(EnvironmentId.make("remote"), "install")).colors,
-  ).toEqual({ "lane-a": "#579de5" });
-});
+    });
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(boundary.navigate).not.toHaveBeenCalled();
+    expect(
+      readSidebarPreferences(sidebarPreferenceKey(EnvironmentId.make("remote"), "install"))
+        .favorites,
+    ).toEqual(["lane-a"]);
+    expect(
+      readSidebarPreferences(sidebarPreferenceKey(EnvironmentId.make("remote"), "install")).colors,
+    ).toEqual({ "lane-a": "#579de5" });
+  },
+);
 
 it("returns to the source workspace only after the selected lane was removed", async () => {
   registry.set(
@@ -446,7 +467,7 @@ it("cancel sends no deletion and a lost reply keeps the saved lane request avail
   ).toBe("lane-b");
 });
 
-it("blocks sidebar deletion for stale or unsupported lanes and never offers it on a source row", async () => {
+it("blocks deletion on stale connections but permits changed lanes and never offers it on a source row", async () => {
   await render();
   await act(async () => button("Expand lanes for alpha").click());
   await rightClickLane("lane-a");
@@ -478,7 +499,8 @@ it("blocks sidebar deletion for stale or unsupported lanes and never offers it o
     ),
   );
   await rightClickLane("lane-a");
-  expect(boundary.contextMenu.mock.lastCall?.[0][1].disabled).toBe(true);
+  expect(boundary.contextMenu.mock.lastCall?.[0][1].disabled).toBe(false);
+  await clickText("Cancel");
   await rightClickLane("alpha");
   expect(boundary.contextMenu.mock.lastCall?.[0]).toEqual([
     { id: "highlight-color", label: "Highlight color…", icon: "palette" },
