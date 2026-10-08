@@ -66,7 +66,7 @@ export const WorktreeMcpHandoffInput = Schema.Struct({
   continuationPrompt: Schema.optional(
     TrimmedNonEmptyString.check(Schema.isMaxLength(120_000)).annotate({
       description:
-        "Message queued as the thread's next turn after the handoff. The handoff detaches the current provider session, so pass the remaining work here to automatically resume inside the worktree; omit it to stop after the handoff and wait for the next message.",
+        "Message queued as the thread's next turn after the handoff. The handoff detaches the current provider session, so pass the remaining work here to automatically resume inside the worktree; omit it to stop after the handoff and wait for the next message. Write it yourself as a brief of the remaining work (goal, findings so far, constraints, what done looks like). Never paste the user's message, and leave out any request to create or move to a lane, worktree or thread: the turn it starts already runs in the lane, so such a request would create another lane. A copy of the user's message is rejected.",
     }),
   ),
 });

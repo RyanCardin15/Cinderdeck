@@ -8,6 +8,15 @@ import * as ManagedCheckoutGuard from "./ManagedCheckoutGuard.ts";
 import { workspaceContextText } from "./WorkspaceSessionContext.ts";
 const isCheckoutError = Schema.is(ManagedCheckoutGuard.ManagedCheckoutError);
 
+// Prefixed to each turn. A lane conversation's history still holds the request
+// that created its lane; without this, a turn may act on it again.
+const workspaceGuidance = (current: ManagedCheckoutGuard.ManagedContext | null) =>
+  current?.access !== "write" || !current.folders
+    ? ""
+    : current.laneName !== undefined
+      ? `This conversation already runs in its own Cinderdeck lane${current.laneName ? ` “${current.laneName}”` : ""}. Any earlier request to create or move to a new lane is already done: do the work here. Do not create, adopt or hand off to another lane, or launch a thread in a new worktree, unless the user's newest message asks for an additional lane.\n\n`
+      : "This conversation is linked to a Cinderdeck workspace. When starting new-branch work from a primary checkout, use t3_worktree_handoff instead of switching the primary checkout in the shell, unless the user explicitly requests an in-place branch switch. To move this conversation into a worktree, use t3_worktree_handoff; it creates a native lane and transfers the conversation. For an existing worktree or lane, pass adoptExisting: true, its path and branch. Pass continuationPrompt with your own brief of the remaining task, not the user's message and not the request to create a lane, to resume there. Do not use shell git worktree add or cd as a conversation handoff; they do not move its binding.\n\n";
+
 /** Keep provider protocols upstream. Validate checkout identity and read-only policy at provider boundaries. */
 export const layer = Layer.effect(
   ProviderAdapterRegistry.ProviderAdapterRegistryV2,
@@ -163,9 +172,7 @@ export const layer = Layer.effect(
                               message: {
                                 ...request.message,
                                 text:
-                                  (current?.access === "write" && current.folders
-                                    ? "This conversation is linked to a Cinderdeck workspace. When starting new-branch work from a primary checkout, use t3_worktree_handoff instead of switching the primary checkout in the shell, unless the user explicitly requests an in-place branch switch. To move this conversation into a worktree, use t3_worktree_handoff; it creates a native lane and transfers the conversation. For an existing worktree, pass adoptExisting: true, its path and branch. Pass continuationPrompt with the remaining task to resume there. Do not use shell git worktree add or cd as a conversation handoff; they do not move its binding.\n\n"
-                                    : "") +
+                                  workspaceGuidance(current) +
                                   workspaceContextText(policy(request.runtimePolicy, current)) +
                                   request.message.text,
                               },

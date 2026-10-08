@@ -4,6 +4,7 @@ import {
   ProjectId,
   ProviderInstanceId,
   ThreadId,
+  type OrchestrationV2ThreadProjection,
   type OrchestrationV2ThreadShell,
 } from "@cinderdeck/contracts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -21,6 +22,8 @@ import * as ManagedProjectFolders from "../../../project/ManagedProjectFolders.t
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { ProjectHandlersLive } from "./handlers.ts";
 import { ProjectToolkit } from "./tools.ts";
+
+const userRequest = "Audit the change in a new thread on its own lane.";
 
 it.effect("attributes a launched thread's first message to the calling thread", () =>
   Effect.gen(function* () {
@@ -52,6 +55,10 @@ it.effect("attributes a launched thread's first message to the calling thread", 
       }),
       Layer.mock(ThreadManagement.ThreadManagementService)({
         getThreadShell: () => Effect.succeed(caller),
+        getThreadRecords: () =>
+          Effect.succeed({
+            messages: [{ createdBy: "user", text: userRequest }],
+          } as unknown as OrchestrationV2ThreadProjection),
       }),
       Layer.mock(ThreadLaunch.ThreadLaunchService)({
         launch: (input) => {
@@ -81,6 +88,15 @@ it.effect("attributes a launched thread's first message to the calling thread", 
       .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(dependencies));
     expect(result.at(-1)?.result).toMatchObject({ projectId, modelSelection });
     expect(launchedSender).toBe(sourceThreadId);
+
+    // A forwarded user request still asks for a new thread, so the launched
+    // agent would launch yet another one.
+    launchedSender = undefined;
+    const echoed = yield* toolkit
+      .handle("t3_thread_launch", { title: "Audit", message: `  ${userRequest}\n` })
+      .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(dependencies));
+    expect(echoed.at(-1)?.result).toMatchObject({ code: "invalid_request" });
+    expect(launchedSender).toBeUndefined();
   }),
 );
 
@@ -114,6 +130,10 @@ it.effect("launches a scratch thread into the Scratch project", () =>
       }),
       Layer.mock(ThreadManagement.ThreadManagementService)({
         getThreadShell: () => Effect.succeed(caller),
+        getThreadRecords: () =>
+          Effect.succeed({
+            messages: [{ createdBy: "user", text: userRequest }],
+          } as unknown as OrchestrationV2ThreadProjection),
       }),
       Layer.mock(ThreadLaunch.ThreadLaunchService)({
         launch: (input) => {

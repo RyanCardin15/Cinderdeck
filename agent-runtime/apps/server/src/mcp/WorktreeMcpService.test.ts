@@ -85,6 +85,7 @@ const project: Project = {
 } as Project;
 
 interface HarnessOptions {
+  readonly userMessages?: ReadonlyArray<string>;
   readonly thread?: ThreadFixture | null;
   readonly threadReadError?: "projection" | "dispatch";
   readonly capabilities?: ReadonlySet<McpInvocationContext.McpCapability>;
@@ -135,7 +136,14 @@ const makeHarness = (options: HarnessOptions = {}) => {
         : ["dev", "feature/taken", "feature/taken-idle"],
     ),
   );
-  const getThreadRecords = vi.fn((id: ThreadId) => {
+  // Counts binding reads only; the continuation check reads message history.
+  let threadReads = 0;
+  const getThreadRecords = vi.fn((id: ThreadId, fields: ReadonlyArray<string>) => {
+    if (fields.includes("messages"))
+      return Effect.succeed({
+        messages: (options.userMessages ?? []).map((text) => ({ createdBy: "user", text })),
+      } as unknown as ReturnType<typeof makeProjection>);
+    threadReads++;
     if (options.threadReadError === "dispatch") {
       return Effect.fail(
         new OrchestratorDispatchError({
@@ -144,7 +152,7 @@ const makeHarness = (options: HarnessOptions = {}) => {
         }),
       ) as never;
     }
-    if (options.threadReadFailsOnRecheck === true && getThreadRecords.mock.calls.length > 1) {
+    if (options.threadReadFailsOnRecheck === true && threadReads > 1) {
       return Effect.fail(
         new OrchestratorDispatchError({
           commandId: CommandId.make("command:test:recheck"),
@@ -152,20 +160,12 @@ const makeHarness = (options: HarnessOptions = {}) => {
         }),
       ) as never;
     }
-    if (
-      options.threadAttachedOnRecheck === true &&
-      getThreadRecords.mock.calls.length > 1 &&
-      thread !== null
-    ) {
+    if (options.threadAttachedOnRecheck === true && threadReads > 1 && thread !== null) {
       return Effect.succeed(
         makeProjection({ ...thread, worktreePath: "/worktrees/project/raced" }),
       );
     }
-    if (
-      options.threadArchivedOnRecheck === true &&
-      getThreadRecords.mock.calls.length > 1 &&
-      thread !== null
-    ) {
+    if (options.threadArchivedOnRecheck === true && threadReads > 1 && thread !== null) {
       return Effect.succeed(makeProjection({ ...thread, archivedAt: "2026-01-02T00:00:00.000Z" }));
     }
     return id === threadId && thread !== null
@@ -490,6 +490,22 @@ describe("t3_worktree_handoff", () => {
       );
     });
   });
+
+  it.effect(
+    "rejects a continuation that repeats the user's request before creating anything",
+    () => {
+      const userRequest = "Fix the login redirect bug. Do this in a new lane please.";
+      const harness = makeHarness({ userMessages: ["Earlier unrelated message", userRequest] });
+      return Effect.gen(function* () {
+        const exit = yield* Effect.exit(
+          runHandoff(harness, { branch: "feature/echo", continuationPrompt: userRequest }),
+        );
+        expectTypedFailure(exit, { code: "invalid_request" });
+        expect(harness.dispatch).not.toHaveBeenCalled();
+        expect(harness.sendToThread).not.toHaveBeenCalled();
+      });
+    },
+  );
 
   it.effect("reports a continuation failure without failing the handoff", () => {
     const harness = makeHarness({ continuation: "fails" });

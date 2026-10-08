@@ -57,6 +57,28 @@ export const layer = Layer.effect(
           () => backend.context(workspaceID),
         ),
       );
+    // A lane made earlier (create_lane, the lane sheet, or a handoff that did
+    // not finish moving) already owns its worktree and branch. Native creation
+    // and adoption both refuse it, so the conversation moves into it instead.
+    const existingLane = (
+      ownerId: string,
+      repoID: string,
+      match: (repo: { physicalID?: string | null; branch: string }) => boolean,
+    ) =>
+      Effect.gen(function* () {
+        for (let offset = 0, total = 1; offset < total; offset += 100) {
+          const page = yield* backend.inventory({ offset, limit: 100 });
+          total = page.total;
+          const found = page.resources.find(
+            (resource) =>
+              resource.available &&
+              resource.workspace?.lane?.sourceStackID === ownerId &&
+              resource.workspace.repos.some((repo) => repo.id === repoID && match(repo)),
+          );
+          if (found) return found.workspaceID;
+        }
+        return undefined;
+      }).pipe(Effect.orElseSucceed(() => undefined));
     return ManagedWorktreeHandoff.of({
       handoff: (scope, input) =>
         locks.withLock(
@@ -204,8 +226,27 @@ export const layer = Layer.effect(
               previous =
                 yield* sql`SELECT operation_key FROM deckhand_operations WHERE operation_key=${operationKey}`;
             }
-            let receipt;
-            if (previous.length) {
+            // An operation of this request (possibly still running) owns its lane;
+            // only a request with none may move into a lane made some other way.
+            const adoptedPhysicalId =
+              input.adoptExisting && !previous.length
+                ? yield* identities.resolve(input.path!).pipe(
+                    Effect.map((repo) => repo.physicalId),
+                    Effect.orElseSucceed(() => undefined),
+                  )
+                : undefined;
+            const existingLaneID =
+              previous.length || (input.adoptExisting && !adoptedPhysicalId)
+                ? undefined
+                : yield* existingLane(workspace.ownerId, selectedRepoID, (repo) =>
+                    input.adoptExisting
+                      ? repo.physicalID === adoptedPhysicalId
+                      : repo.branch === input.branch,
+                  );
+            let receipt: Effect.Success<ReturnType<typeof backend.operation>> | undefined;
+            if (existingLaneID) {
+              // Nothing to create; verification below checks the lane's identity.
+            } else if (previous.length) {
               receipt = yield* backend.operation(actorID, operationKey, 25000);
             } else {
               let ref = baseRef;
@@ -259,33 +300,37 @@ export const layer = Layer.effect(
               if (["pending", "running", "unknown_outcome"].includes(receipt.state))
                 receipt = yield* backend.operation(actorID, operationKey, 25000);
             }
-            const laneID = receipt.result?.createdWorkspaceID ?? receipt.result?.workspace?.id;
+            const laneID =
+              existingLaneID ??
+              receipt?.result?.createdWorkspaceID ??
+              receipt?.result?.workspace?.id;
+            // A failed setup script leaves a usable lane; it must not strand the
+            // conversation in the primary checkout. It is reported below instead.
             if (
-              receipt.state !== "succeeded" ||
               !laneID ||
-              receipt.result?.creationReady === false ||
-              (receipt.result?.setup &&
-                !["succeeded", "skipped"].includes(receipt.result.setup.status))
+              (!existingLaneID &&
+                (receipt?.state !== "succeeded" || receipt.result?.creationReady === false))
             )
               return yield* fail(
-                `Lane handoff ${receipt.state}${receipt.error?.message ? `: ${receipt.error.message}` : ""}. The conversation has not moved. ${receipt.state === "failed" ? "Fix the cause and retry; nothing was kept." : `Retry the same request to inspect operation ${operationKey}; any created lane is retained.`}`,
-                ["pending", "running", "unknown_outcome"].includes(receipt.state)
+                `Lane handoff ${receipt?.state ?? "failed"}${receipt?.error?.message ? `: ${receipt.error.message}` : ""}. The conversation has not moved. ${receipt?.state === "failed" ? "Fix the cause and retry; nothing was kept." : `Retry the same request to inspect operation ${operationKey}. If the lane was created, pass adoptExisting with its worktree path and branch to move into it.`}`,
+                receipt && ["pending", "running", "unknown_outcome"].includes(receipt.state)
                   ? "handoff_in_progress"
                   : "operation_failed",
               );
             const target = yield* readContext(laneID);
             const lane = target.resource.workspace;
-            const reviewed = receipt.result?.creationReviewed === true;
-            const reviewedLane = reviewed ? receipt.result?.workspace : undefined;
+            const reviewed = receipt?.result?.creationReviewed === true;
+            const reviewedLane = reviewed ? receipt?.result?.workspace : undefined;
             if (
               target.hello.installationID !== workspace.environmentId ||
               !target.resource.available ||
               !lane?.lane ||
               lane.lane.sourceStackID !== workspace.ownerId ||
-              lane.lane.name !==
-                (reviewed ? reviewedLane?.lane?.name : (input.name ?? input.branch)) ||
+              (!existingLaneID &&
+                lane.lane.name !==
+                  (reviewed ? reviewedLane?.lane?.name : (input.name ?? input.branch))) ||
               (reviewed &&
-                (!receipt.result?.createdBranch ||
+                (!receipt?.result?.createdBranch ||
                   lane.lane.directory !== reviewedLane?.lane?.directory)) ||
               blockingWorkspaceIssue(lane.issues) ||
               lane.repos.length !== sourceWorkspace.repos.length
@@ -303,7 +348,7 @@ export const layer = Layer.effect(
             if (
               !destination ||
               destination.physicalId === selected.physicalId ||
-              destination.branch !== (reviewed ? receipt.result?.createdBranch : input.branch) ||
+              destination.branch !== (reviewed ? receipt?.result?.createdBranch : input.branch) ||
               physical.some((repo, index) => {
                 const originalIndex = sourceWorkspace.repos.findIndex(
                   (item) => item.id === lane.repos[index]!.id,
@@ -322,6 +367,18 @@ export const layer = Layer.effect(
               return yield* fail(
                 "Lane repository identity changed. The conversation has not moved.",
               );
+            const setupStatus = receipt?.result?.setup?.status;
+            const setupScript: WorktreeMcpHandoffResult["setupScript"] =
+              existingLaneID || input.runSetupScript === false || setupStatus === "skipped"
+                ? { status: "skipped" }
+                : setupStatus === "succeeded"
+                  ? { status: "completed" }
+                  : setupStatus
+                    ? {
+                        status: "failed",
+                        detail: receipt?.result?.setup?.detail ?? `Setup ${setupStatus}.`,
+                      }
+                    : { status: "no-script" };
             const checkoutId = C.CheckoutBindingId.make(
               id("checkout", [
                 workspace.id,
@@ -413,16 +470,9 @@ export const layer = Layer.effect(
                       ] ?? baseRef)
                     : baseRef,
                   startedFromOrigin: input.startFromOrigin ?? false,
-                  setupScript: {
-                    status:
-                      input.runSetupScript === false || receipt.result?.setup?.status === "skipped"
-                        ? "skipped"
-                        : receipt.result?.setup?.status === "succeeded"
-                          ? "completed"
-                          : "no-script",
-                  },
+                  setupScript,
                   continuation,
-                  note: "Conversation moved to its Cinderdeck lane with history preserved. The old provider detaches; subsequent turns, files, diffs and lane controls use the new checkout. Existing terminal processes and recordings retain their original context. Uncommitted primary-checkout files remain in place.",
+                  note: `Conversation moved to ${existingLaneID ? `existing lane “${lane.lane!.name}”` : "its Cinderdeck lane"} with history preserved. The old provider detaches; subsequent turns, files, diffs and lane controls use the new checkout. Existing terminal processes and recordings retain their original context. Uncommitted primary-checkout files remain in place.${setupScript.status === "failed" ? " The lane's setup failed; fix it from the lane (run_lane_setup) before relying on its services." : ""}`,
                 } satisfies WorktreeMcpHandoffResult;
               }),
             );
