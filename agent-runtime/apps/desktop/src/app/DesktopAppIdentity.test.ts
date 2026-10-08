@@ -168,7 +168,7 @@ describe("DesktopAppIdentity", () => {
       }),
       {
         legacyPathExists: true,
-        environment: { env: { VITE_DEV_SERVER_URL: "http://localhost:5173" } },
+        environment: { isPackaged: false, env: { VITE_DEV_SERVER_URL: "http://localhost:5173" } },
       },
     ),
   );
@@ -198,7 +198,7 @@ describe("DesktopAppIdentity", () => {
       }),
       {
         legacyPathProbeError: cause,
-        environment: { env: { VITE_DEV_SERVER_URL: "http://localhost:5173" } },
+        environment: { isPackaged: false, env: { VITE_DEV_SERVER_URL: "http://localhost:5173" } },
       },
     );
   });

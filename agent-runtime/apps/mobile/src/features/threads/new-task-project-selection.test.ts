@@ -56,14 +56,20 @@ function makeScope(projects: ReadonlyArray<EnvironmentProject>): HomeProjectScop
 
 describe("getProjectScopeSelectionTarget", () => {
   it("keeps the current environment when it hosts the selected logical project", () => {
-    const projects = [makeProject("cinderdeck-mac", "mac"), makeProject("cinderdeck-server", "server")];
+    const projects = [
+      makeProject("cinderdeck-mac", "mac"),
+      makeProject("cinderdeck-server", "server"),
+    ];
     expect(getProjectScopeSelectionTarget(makeScope(projects), EnvironmentId.make("server"))).toBe(
       projects[1],
     );
   });
 
   it("falls back to the representative when the current environment does not host the project", () => {
-    const projects = [makeProject("cinderdeck-mac", "mac"), makeProject("cinderdeck-server", "server")];
+    const projects = [
+      makeProject("cinderdeck-mac", "mac"),
+      makeProject("cinderdeck-server", "server"),
+    ];
     expect(getProjectScopeSelectionTarget(makeScope(projects), EnvironmentId.make("other"))).toBe(
       projects[0],
     );
@@ -72,7 +78,9 @@ describe("getProjectScopeSelectionTarget", () => {
 
 describe("resolveEnvironmentProjectMatch", () => {
   it("follows the same repository onto the target machine", () => {
-    const selected = makeProject("cinderdeck", "mac", { repositoryKey: "github.com/fixture/cinderdeck" });
+    const selected = makeProject("cinderdeck", "mac", {
+      repositoryKey: "github.com/fixture/cinderdeck",
+    });
     const target = [
       makeProject("other", "server", { repositoryKey: "github.com/fixture/other" }),
       makeProject("cinderdeck-clone", "server", { repositoryKey: "github.com/fixture/cinderdeck" }),
@@ -112,7 +120,9 @@ describe("resolveEnvironmentProjectMatch", () => {
   });
 
   it("falls back to the first project on the target so the draft has a key to carry over to", () => {
-    const selected = makeProject("cinderdeck", "mac", { repositoryKey: "github.com/fixture/cinderdeck" });
+    const selected = makeProject("cinderdeck", "mac", {
+      repositoryKey: "github.com/fixture/cinderdeck",
+    });
     const target = [makeProject("unrelated", "server"), makeProject("also-unrelated", "server")];
     expect(resolveEnvironmentProjectMatch(target, selected)).toBe(target[0]);
     expect(resolveEnvironmentProjectMatch([], selected)).toBeNull();
@@ -136,7 +146,11 @@ describe("resolveDraftProjectSelection", () => {
   });
 
   it("selects one logical project even when it has multiple physical workspaces", () => {
-    const projects = [makeProject("cinderdeck"), makeProject("cinderdeck-2"), makeProject("cinderdeck-3")];
+    const projects = [
+      makeProject("cinderdeck"),
+      makeProject("cinderdeck-2"),
+      makeProject("cinderdeck-3"),
+    ];
     expect(resolveDraftProjectSelection(null, projects, [makeScope(projects)])).toEqual({
       kind: "select",
       project: projects[0],
@@ -167,7 +181,7 @@ describe("filterProjectScopes", () => {
   });
 
   it("matches logical names and workspace names or paths without case sensitivity", () => {
-    expect(filterProjectScopes(scopes, "  Cinderdeck CODE ")).toEqual([code]);
+    expect(filterProjectScopes(scopes, "  CINDERDECK ")).toEqual([code]);
     expect(filterProjectScopes(scopes, "DESKTOP")).toEqual([code]);
     expect(filterProjectScopes(scopes, "REMOTE-WORKSPACE")).toEqual([code]);
     expect(filterProjectScopes(scopes, "documentation")).toEqual([docs]);

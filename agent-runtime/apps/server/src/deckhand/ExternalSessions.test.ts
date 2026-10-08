@@ -194,7 +194,7 @@ describe("ExternalSessions", () => {
         interrupt: false,
         resume: false,
         approvals: false,
-        });
+      });
       const sql = yield* SqlClient.SqlClient;
       assert.equal((yield* sql`SELECT id FROM deckhand_sessions`).length, 0);
       assert.deepEqual(
@@ -498,6 +498,7 @@ describe("ExternalSessions", () => {
       yield* sql`DROP TABLE deckhand_owned_preview_proofs`;
       yield* sql`DROP TABLE deckhand_owned_preview_captures`;
       yield* sql`DROP TABLE deckhand_verification_scenarios`;
+      yield* sql`DROP TABLE deckhand_checkout_transfers`;
       yield* sql`DROP TABLE deckhand_external_sessions`;
       yield* sql`DROP TABLE IF EXISTS deckhand_verification_attempts`;
       yield* sql`DELETE FROM deckhand_schema`;

@@ -427,6 +427,7 @@ describe("Cinderdeck schema migration", () => {
         yield* sql`DROP TABLE IF EXISTS deckhand_verification_scenarios`;
         yield* sql`DROP TABLE IF EXISTS deckhand_verification_attempts`;
         yield* sql`DROP TABLE IF EXISTS deckhand_external_sessions`;
+        yield* sql`DROP TABLE deckhand_checkout_transfers`;
         yield* sql`DROP TABLE deckhand_attention_dispositions`;
         yield* sql`DROP INDEX deckhand_attention_source`;
         yield* sql`DROP INDEX deckhand_attention_page`;
@@ -460,7 +461,8 @@ describe("Cinderdeck schema migration", () => {
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
         yield* Migrations.migrate;
-        yield* sql`DELETE FROM deckhand_schema WHERE version=17`;
+        yield* sql`DROP TABLE deckhand_checkout_transfers`;
+        yield* sql`DELETE FROM deckhand_schema WHERE version>=17`;
         yield* sql`INSERT OR IGNORE INTO deckhand_schema VALUES (16)`;
         // Old held and uncertain ownership must both disappear on upgrade.
         yield* sql`CREATE TABLE deckhand_writer_scope (state TEXT)`;
@@ -484,7 +486,9 @@ describe("Cinderdeck schema migration", () => {
         }>`SELECT state,original_input_json,record_json FROM deckhand_reviewer_queue`)[0]!;
         assert.equal(review.state, "queued");
         assert.deepEqual(
-          yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))(review.record_json),
+          yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))(
+            review.record_json,
+          ),
           {
             state: "queued",
             detail: null,

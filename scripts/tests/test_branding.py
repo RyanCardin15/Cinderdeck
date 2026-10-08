@@ -37,6 +37,19 @@ class BrandingTests(unittest.TestCase):
         self.assertEqual(branding.violations("agent-runtime/apps/server/src/orchestration-v2/testkit/fixtures/simple/codex_transcript.ndjson", '{"input":"T3 Code"}'), [])
         self.assertTrue(branding.violations("agent-runtime/apps/server/src/NewService.ts", 'const label = "T3 Code"'))
 
+    def test_replay_exception_is_only_the_original_identity_comparison(self):
+        path = "agent-runtime/packages/effect-codex-app-server/src/replay.ts"
+        line = 'const legacyClient = clientInfo.name === "T3 Code" && clientInfo.title === "T3 Code";'
+        self.assertEqual(branding.violations(path, line), [])
+        self.assertTrue(branding.violations(path, 'const label = "T3 Code";'))
+        self.assertTrue(branding.violations(path, line + ' const label = "T3 Code";'))
+
+    def test_source_attribution_fixture_does_not_allow_other_vendor_urls(self):
+        path = "agent-runtime/scripts/lib/third-party-licenses.test.ts"
+        self.assertEqual(branding.violations(path, '"https://github.com/Yash-Singh1/ghostty/tree/t3code/custom-io-ordered-feed",'), [])
+        self.assertTrue(branding.violations(path, '"https://github.com/pingdotgg/t3code",'))
+        self.assertTrue(branding.violations(path, 'const label = "T3 Code";'))
+
     def test_oauth_exception_does_not_allow_new_labels(self):
         path = "agent-runtime/apps/server/src/provider/acp/GrokAcpSupport.ts"
         self.assertEqual(branding.violations(path, 'const CINDERDECK_OAUTH_REFERRER = "t3code";'), [])

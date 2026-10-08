@@ -1594,6 +1594,10 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           yield* writeTextFile(cwd, "tab\tand\nnewline.txt", "unusual path\n");
         }
         yield* git(cwd, ["add", "."]);
+        if ((yield* HostProcessPlatform) !== "win32") {
+          const fs = yield* FileSystem.FileSystem;
+          yield* fs.chmod(`${cwd}/mode-only.sh`, 0o755);
+        }
         yield* git(cwd, ["update-index", "--chmod=+x", "mode-only.sh"]);
         yield* git(cwd, ["commit", "-m", "rename and add files"]);
         const preview = yield* driver.getReviewDiffPreview({
@@ -3249,7 +3253,10 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
 
         assert.equal(yield* git(worktreePath, ["rev-parse", "HEAD"]), remoteHead);
         assert.equal(
-          yield* driver.readConfigValue(worktreePath, "branch.cinderdeck/fetched-origin.gh-merge-base"),
+          yield* driver.readConfigValue(
+            worktreePath,
+            "branch.cinderdeck/fetched-origin.gh-merge-base",
+          ),
           initialBranch,
         );
         assert.equal(

@@ -1,6 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - Compiles and runs the native dependency regression directly.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
+import * as NodeModule from "node:module";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
@@ -26,7 +27,11 @@ describe.skipIf(NodeOS.platform() !== "darwin")(
       const manager = NodePath.join(directory, "NotificationCenterManager.swift");
       NodeFS.writeFileSync(
         manager,
-        source.replace(/^import (ExpoModulesCore|UserNotifications)\n/gm, ""),
+        // Only replace the OS optional-delegate boundary. The registry and
+        // dependency's backported Mutex compile unchanged with ThreadSanitizer.
+        source
+          .replace(/^import (ExpoModulesCore|UserNotifications)\n/gm, "")
+          .replaceAll(".userNotificationCenter?(", ".userNotificationCenter("),
       );
       NodeChildProcess.execFileSync(
         "swiftc",
@@ -35,6 +40,14 @@ describe.skipIf(NodeOS.platform() !== "darwin")(
           "5",
           "-sanitize=thread",
           manager,
+          NodePath.join(
+            NodePath.dirname(
+              NodeModule.createRequire(
+                NodeModule.createRequire(import.meta.url).resolve("expo/package.json"),
+              ).resolve("expo-modules-core/package.json"),
+            ),
+            "ios/Utilities/Mutex.swift",
+          ),
           NodeURL.fileURLToPath(
             new URL("./fixtures/NotificationCenterManagerRegression.swift", import.meta.url),
           ),

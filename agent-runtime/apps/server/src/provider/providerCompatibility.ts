@@ -26,7 +26,7 @@ const VersionRange = TrimmedNonEmptyString.pipe(
 );
 const Policy = Schema.Struct({
   driver: TrimmedNonEmptyString,
-  cinderdeckCodeRange: VersionRange,
+  t3CodeRange: VersionRange,
   recommendedRange: Schema.optionalKey(VersionRange),
   recommendedVersion: Schema.optionalKey(StableVersion),
   ranges: Schema.Array(
@@ -63,7 +63,8 @@ export function resolveProviderCompatibility(
   cinderdeckVersion = packageJson.version,
 ): ServerProviderCompatibilityAdvisory | undefined {
   const policy = policies?.find(
-    (entry) => entry.driver === driver && satisfiesSemverRange(cinderdeckVersion, entry.cinderdeckCodeRange),
+    (entry) =>
+      entry.driver === driver && satisfiesSemverRange(cinderdeckVersion, entry.t3CodeRange),
   );
   if (!policy) return undefined;
   const unprefixed = version?.replace(/^v/, "");

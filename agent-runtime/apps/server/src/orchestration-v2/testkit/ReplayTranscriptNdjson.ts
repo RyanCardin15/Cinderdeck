@@ -93,6 +93,77 @@ export function materializeReplayTranscriptWorkspace(
   };
 }
 
+/** Materializes explicitly selected test thread options without rewriting recorded frames. */
+export function materializeReplayTranscriptCodexThreadOptions(
+  transcript: ProviderReplayTranscript,
+  options: { readonly cwd?: string; readonly model?: string; readonly readOnly?: boolean },
+): ProviderReplayTranscript {
+  return {
+    ...transcript,
+    entries: transcript.entries.map((entry) => {
+      if (entry.type !== "expect_outbound") return entry;
+      const frame = entry.frame;
+      if (
+        typeof frame !== "object" ||
+        frame === null ||
+        !("method" in frame) ||
+        !("params" in frame) ||
+        typeof frame.params !== "object" ||
+        frame.params === null
+      )
+        return entry;
+      if (frame.method === "turn/start" && options.readOnly === true) {
+        const params: Record<string, unknown> = { ...frame.params };
+        const sandbox = params.sandboxPolicy;
+        if (
+          typeof sandbox === "object" &&
+          sandbox !== null &&
+          "type" in sandbox &&
+          sandbox.type === "readOnly" &&
+          "networkAccess" in sandbox &&
+          sandbox.networkAccess === false
+        ) {
+          // Current Codex's readOnly schema encodes only the sandbox variant.
+          const { networkAccess: _, ...policy } = sandbox;
+          params.sandboxPolicy = policy;
+        }
+        const mode = params.collaborationMode;
+        if (
+          typeof mode === "object" &&
+          mode !== null &&
+          "mode" in mode &&
+          mode.mode === "plan" &&
+          "settings" in mode &&
+          typeof mode.settings === "object" &&
+          mode.settings !== null &&
+          "developer_instructions" in mode.settings &&
+          mode.settings.developer_instructions ===
+            "You are in Plan mode. Prefer request_user_input for clarifying questions. When presenting a complete plan, wrap it in <proposed_plan> and </proposed_plan>."
+        ) {
+          // Codex supplies this plan guidance itself now. Preserve any nonstandard instructions.
+          const { developer_instructions: _, ...settings } = mode.settings;
+          params.collaborationMode = { ...mode, settings };
+        }
+        return { ...entry, frame: { ...frame, params } };
+      }
+      if (!["thread/start", "thread/resume", "thread/fork"].includes(String(frame.method)))
+        return entry;
+      return {
+        ...entry,
+        frame: {
+          ...frame,
+          params: {
+            ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+            ...(options.model === undefined ? {} : { model: options.model }),
+            ...(options.readOnly === true ? { sandbox: "read-only", approvalPolicy: "never" } : {}),
+            ...frame.params,
+          },
+        },
+      };
+    }),
+  };
+}
+
 /** Adds current runtime context to legacy prompt expectations, keeping outbound matching exact. */
 export function materializeReplayTranscriptRuntimeInstructions(
   transcript: ProviderReplayTranscript,

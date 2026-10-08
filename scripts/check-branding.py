@@ -68,6 +68,12 @@ def exemption(path: str, line: str) -> str | None:
         return "historical client names"
     if path == "agent-runtime/apps/desktop/src/preview/BrowserSession.test.ts" and 'T3Code(Alpha)/0.0.33 Chrome/146.0.7680.216 Electron/41.5.0 Safari/537.36' in line:
         return "historical user-agent compatibility fixture"
+    if path == "agent-runtime/scripts/lib/third-party-licenses.test.ts" and line.strip() == '"https://github.com/Yash-Singh1/ghostty/tree/t3code/custom-io-ordered-feed",':
+        return "exact bundled terminal source attribution fixture"
+    if path == "agent-runtime/apps/server/src/provider/acp/GrokAcpSupport.test.ts" and line.strip() == 'GROK_OAUTH2_REFERRER: "t3code",':
+        return "provider OAuth client referrer fixture"
+    if path == "agent-runtime/packages/effect-codex-app-server/src/replay.ts" and line.strip() == 'const legacyClient = clientInfo.name === "T3 Code" && clientInfo.title === "T3 Code";':
+        return "original provider recording client identity comparison"
     if path in LEGAL_FILES or "Copyright " in line or re.match(r"\s*s\.author\s*=", line):
         return "legal attribution"
     if path in LEGAL_LINES and line.strip() == LEGAL_LINES[path]:

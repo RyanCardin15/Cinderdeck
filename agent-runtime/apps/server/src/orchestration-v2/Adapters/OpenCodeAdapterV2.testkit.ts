@@ -60,7 +60,8 @@ export class OpenCodeReplayMismatchError extends Schema.TaggedError<OpenCodeRepl
   },
 ) {
   override get message(): string {
-    return `OpenCode replay frame mismatch at cursor ${this.cursor} in scenario ${this.scenario}.`;
+    const encode = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+    return `OpenCode replay frame mismatch at cursor ${this.cursor} in scenario ${this.scenario}. Expected ${encode(this.expected)}, received ${encode(this.actual)}.`;
   }
 }
 

@@ -45,7 +45,7 @@ describe("Local Cinderdeck diagnostics", () => {
           { name: "statev2.sqlite", state: "present" },
         );
         assert.deepEqual(report.providers, []);
-        assert.equal(report.configuration.updateFeed, "upstream_refused");
+        assert.equal(report.configuration.updateFeed, "configured_not_verified");
         assert.equal(report.integration.state, "not_contacted");
         assert.equal(yield* fs.readFileString(path.join(store, "statev2.sqlite")), secret);
         assert.isFalse(yield* fs.exists(path.join(store, "client-settings.json")));

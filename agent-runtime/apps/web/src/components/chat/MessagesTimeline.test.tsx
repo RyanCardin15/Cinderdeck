@@ -734,7 +734,7 @@ describe("MessagesTimeline", () => {
     expect(fadedMarkup).toContain("topbar-scroll-fade");
   });
 
-  it("keeps assistant changed-files headers sticky below the thread header", () => {
+  it("keeps assistant changed-files controls inside their message", () => {
     const assistantMessageId = MessageId.make("message-assistant-with-files");
     const runId = RunId.make("run-with-files");
     const markup = renderToStaticMarkup(
@@ -776,7 +776,8 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain("sticky top-2 z-10");
+    expect(markup).toContain("data-changed-files-header");
+    expect(markup).not.toContain("sticky top-2 z-10");
     expect(markup).not.toContain("self-start");
     expect(markup).toContain("whitespace-nowrap");
     expect(markup).toContain("size-3");
@@ -2236,8 +2237,8 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    // The Cinderdeck wordmark replaces the generic tool icon for Cinderdeck MCP calls.
-    expect(markup).toContain('viewBox="15.5309 37 94.3941 56.96"');
+    // The Cinderdeck ember replaces the generic tool icon for Cinderdeck MCP calls.
+    expect(markup).toContain('viewBox="0 0 32 36"');
     expect(markup).toContain("Read a Cinderdeck thread");
     expect(markup).not.toContain("mcp__t3-code__t3_thread_read");
   });
@@ -2280,7 +2281,9 @@ describe("MessagesTimeline", () => {
     );
 
     expect(markup).toContain("cinderdeck/apps/web/src/session-logic.ts");
-    expect(markup).not.toContain("C:/Users/mike/dev-stuff/cinderdeck/apps/web/src/session-logic.ts");
+    expect(markup).not.toContain(
+      "C:/Users/mike/dev-stuff/cinderdeck/apps/web/src/session-logic.ts",
+    );
   });
 
   it("renders review comment contexts as structured cards instead of raw tags", () => {

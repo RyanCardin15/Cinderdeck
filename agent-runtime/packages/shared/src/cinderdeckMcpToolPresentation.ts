@@ -322,6 +322,10 @@ const CINDERDECK_MCP_TOOLS: Readonly<Record<string, CinderdeckMcpToolDefinition>
     ["Hand off", "Handing off", "Handed off", "thread to a git worktree"],
     "worktree-handoff",
   ),
+  t3_worktree_rename: tool(
+    ["Rename", "Renaming", "Renamed", "a workspace branch"],
+    "worktree-handoff",
+  ),
   t3_worktree_status: tool(["Get", "Getting", "Got", "thread worktree status"], "worktree-status"),
   preview_status: tool(["Get", "Getting", "Got", "preview browser status"], "browser", "browser"),
   preview_open: tool(
@@ -473,7 +477,9 @@ const CINDERDECK_MCP_TOOLS: Readonly<Record<string, CinderdeckMcpToolDefinition>
  * The Cinderdeck orchestration tool inventory, used to gate loose name matching on
  * both the server (ACP MCP identity recovery) and the client (logo branding).
  */
-export const CINDERDECK_MCP_TOOL_NAMES: ReadonlySet<string> = new Set(Object.keys(CINDERDECK_MCP_TOOLS));
+export const CINDERDECK_MCP_TOOL_NAMES: ReadonlySet<string> = new Set(
+  Object.keys(CINDERDECK_MCP_TOOLS),
+);
 
 function normalizeCinderdeckMcpToolLabel(value: string): string {
   return value.replace(/\s+(?:complete|completed)\s*$/i, "").trim();
@@ -519,7 +525,9 @@ export function resolveCinderdeckMcpToolDefinition(
   toolName: string | null | undefined,
 ): CinderdeckMcpToolDefinition | null {
   const name = toolName == null ? null : resolveCinderdeckMcpToolName(toolName);
-  return name !== null && Object.hasOwn(CINDERDECK_MCP_TOOLS, name) ? CINDERDECK_MCP_TOOLS[name]! : null;
+  return name !== null && Object.hasOwn(CINDERDECK_MCP_TOOLS, name)
+    ? CINDERDECK_MCP_TOOLS[name]!
+    : null;
 }
 
 export function resolveCinderdeckMcpToolPresentation(

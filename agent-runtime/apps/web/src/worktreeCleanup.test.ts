@@ -89,14 +89,14 @@ describe("formatWorktreePathForDisplay", () => {
     const result = formatWorktreePathForDisplay(
       "/Users/julius/.t3/worktrees/cinderdeck-mvp/cinderdeck-4e609bb8",
     );
-    expect(result).toBe("deckhand-4e609bb8");
+    expect(result).toBe("cinderdeck-4e609bb8");
   });
 
   it("normalizes windows separators before selecting the final segment", () => {
     const result = formatWorktreePathForDisplay(
       "C:\\Users\\julius\\.t3\\worktrees\\cinderdeck-mvp\\cinderdeck-4e609bb8",
     );
-    expect(result).toBe("deckhand-4e609bb8");
+    expect(result).toBe("cinderdeck-4e609bb8");
   });
 
   it("uses the final segment even when outside ~/.t3/worktrees", () => {

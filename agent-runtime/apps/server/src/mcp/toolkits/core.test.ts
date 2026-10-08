@@ -69,7 +69,7 @@ it("publishes unique tool names with reference-free object-root inputs", () => {
         definition?.labels.every((label) => label.trim().length > 0),
         tool.name,
       ).toBe(true);
-      for (const name of [tool.name, `mcp__t3-code__${tool.name}`, `Cinderdeck-code.${tool.name}`]) {
+      for (const name of [tool.name, `mcp__t3-code__${tool.name}`, `cinderdeck.${tool.name}`]) {
         expect(resolveCinderdeckMcpToolPresentation(name)?.logo, name).toBe("t3-code");
         expect(resolveCinderdeckMcpToolSummaryAction(name), name).not.toBeNull();
       }
