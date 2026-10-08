@@ -6,6 +6,7 @@ import * as Claims from "../../../orchestration-v2/AttachmentClaims.ts";
 import * as Project from "../../../project/ProjectService.ts";
 import * as ManagedProjectFolders from "../../../project/ManagedProjectFolders.ts";
 import * as Repositories from "../../../sourceControl/SourceControlRepositoryService.ts";
+import { briefEchoesCaller, echoedBriefMessage } from "../../agentBrief.ts";
 import { newCommandId, readCaller, readMutationCaller, unavailable } from "../../threadAccess.ts";
 import { ProjectToolkit } from "./tools.ts";
 
@@ -40,11 +41,18 @@ const mutation = Effect.gen(function* () {
 export const ProjectHandlersLive = ProjectToolkit.toLayer({
   t3_thread_launch: (input) =>
     Effect.gen(function* () {
-      const { caller, scope } = yield* readMutationCaller();
+      const { caller, scope, threads } = yield* readMutationCaller();
       if (caller.runtimeMode !== "full-access" || caller.interactionMode !== "default")
         return yield* new OrchestratorMcpFailure({
           code: "capability_denied",
           message: "Project launches require a full-access/default calling thread.",
+        });
+      // A forwarded user request still asks for a new thread or lane, so the
+      // launched agent would launch another one with the same message.
+      if (input.message && (yield* briefEchoesCaller(threads, scope.threadId, input.message)))
+        return yield* new OrchestratorMcpFailure({
+          code: "invalid_request",
+          message: echoedBriefMessage("message"),
         });
       const commandId = yield* newCommandId();
       const threadId = ThreadId.make(commandId);

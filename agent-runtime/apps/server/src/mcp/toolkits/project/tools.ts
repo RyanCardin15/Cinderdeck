@@ -124,7 +124,7 @@ const ThreadLaunchTool = Tool.make("t3_thread_launch", {
     message: Schema.optional(
       Schema.String.check(Schema.isMaxLength(120000)).annotate({
         description:
-          "First task prompt, delivered after workspace preparation. Omit message and attachments to create an idle thread.",
+          "First task prompt, delivered after workspace preparation. Write it yourself as a self-contained brief (goal, relevant findings, constraints, what done looks like). Never paste the user's message, and leave out requests to create a thread, lane or worktree: the new agent already runs in the chosen workspace and would otherwise create another. A copy of the user's message is rejected. Omit message and attachments to create an idle thread.",
       }),
     ),
     attachments: Schema.optional(Schema.Array(McpAttachmentInput).check(Schema.isMaxLength(8))),

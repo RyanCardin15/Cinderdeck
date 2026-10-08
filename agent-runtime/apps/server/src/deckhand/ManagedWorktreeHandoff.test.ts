@@ -63,6 +63,8 @@ const fixture = (
     sourceFailures?: number;
     targetFailures?: number;
     reviewed?: boolean;
+    setupFailed?: boolean;
+    listedLane?: boolean;
     sourceTransform?: (context: NativeContext) => NativeContext;
   } = {},
 ) =>
@@ -180,6 +182,7 @@ const fixture = (
     let submittedGeneration: number | undefined;
     let submittedRefs: unknown;
     let submittedModes: unknown;
+    let laneListed = options.listedLane ?? false;
     const hello = yield* Schema.decodeUnknownEffect(I.IntegrationHello)({
       protocolVersion: 1,
       installationID: "installation",
@@ -245,6 +248,11 @@ const fixture = (
       }).pipe(Effect.orDie);
     let receipt: I.IntegrationOperationReceipt;
     const native = Layer.mock(Backend.WorkspaceBackend)({
+      inventory: () =>
+        Effect.gen(function* () {
+          const resources = laneListed ? [(yield* resource(true)).resource] : [];
+          return { total: resources.length, resources } as unknown as Rpc.IntegrationView;
+        }),
       context: (name) =>
         Effect.gen(function* () {
           const lane = name === "lane";
@@ -288,8 +296,12 @@ const fixture = (
               createdWorkspaceID: "lane",
               workspace: (yield* resource(true)).resource.workspace,
               creationReady: true,
+              ...(options.setupFailed
+                ? { setup: { status: "failed", detail: "npm install failed", updatedAt: "now" } }
+                : {}),
             },
           });
+          laneListed = true;
           yield* sql`INSERT INTO deckhand_operations(operation_key,environment_id,actor_id,argument_hash,resource_generation,state,record_json) VALUES(${input.operationKey},'installation',${_actor},'hash',1,'pending','{}')`;
           return receipt;
         }).pipe(Effect.orDie),
@@ -683,6 +695,33 @@ describe("Cinderdeck conversation lane handoff", () => {
       assert.equal(f.created(), 0);
       assert.equal(f.adopted(), 1);
       assert.equal((yield* f.current.forThread(threadId))?.checkout.kind, "lane");
+    }).pipe(Effect.provide(base), Effect.scoped),
+  );
+  it.effect.each([
+    {
+      name: "adopting its worktree",
+      input: (lanePath: string) => ({ adoptExisting: true, path: lanePath }),
+    },
+    { name: "requesting its branch", input: () => ({}) },
+  ])("moves into a lane created earlier when $name", ({ input }) =>
+    Effect.gen(function* () {
+      const f = yield* fixture({ listedLane: true });
+      yield* f.git(["worktree", "add", "-b", "feature/task", f.lanePath]);
+      const result = yield* f.run({ ...input(f.lanePath), continuationPrompt: "Continue" });
+      assert.ok(result);
+      assert.equal(f.created(), 0);
+      assert.equal(f.adopted(), 0);
+      assert.equal((yield* f.current.forThread(threadId))?.checkout.laneId, "lane");
+      assert.equal(f.continuationPath(), result.worktreePath);
+    }).pipe(Effect.provide(base), Effect.scoped),
+  );
+  it.effect("moves the conversation when lane setup fails and reports the failure", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture({ setupFailed: true });
+      const result = yield* f.run({ runSetupScript: true });
+      assert.ok(result);
+      assert.deepEqual(result.setupScript, { status: "failed", detail: "npm install failed" });
+      assert.equal((yield* f.current.forThread(threadId))?.checkout.laneId, "lane");
     }).pipe(Effect.provide(base), Effect.scoped),
   );
   it.effect("does not turn a pending native creation into a completed chat transfer", () =>

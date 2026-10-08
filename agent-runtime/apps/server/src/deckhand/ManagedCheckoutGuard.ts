@@ -38,6 +38,8 @@ export interface ManagedContext {
   readonly access?: "read_only" | "write";
   readonly folders?: ReadonlyArray<string>;
   readonly files?: ReadonlyArray<string>;
+  /** Set when the conversation runs in a native Cinderdeck lane. */
+  readonly laneName?: string;
 }
 const decodeSession = Schema.decodeEffect(Schema.fromJsonString(Contracts.SessionBinding));
 const isCheckoutError = Schema.is(ManagedCheckoutError);
@@ -143,6 +145,7 @@ const make = Effect.gen(function* () {
         return yield* fail("wrong_checkout");
       let folders: ReadonlyArray<string> | undefined;
       let files: ReadonlyArray<string> | undefined;
+      let laneName: string | undefined;
       if (target.backend === "cinderdeck") {
         if (target.nativeGeneration === undefined) return yield* fail("stale_binding");
         const native = yield* hub
@@ -175,6 +178,7 @@ const make = Effect.gen(function* () {
           ]),
         ];
         files = native.resource.workspace?.files ?? [];
+        if (target.kind === "lane") laneName = native.resource.workspace?.lane?.name ?? "";
       }
       return {
         cwd: checkout.success.root,
@@ -182,6 +186,7 @@ const make = Effect.gen(function* () {
         access: readOnly ? ("read_only" as const) : ("write" as const),
         ...(folders === undefined ? {} : { folders }),
         ...(files === undefined ? {} : { files }),
+        ...(laneName === undefined ? {} : { laneName }),
       };
     }).pipe(Effect.mapError(storage(threadId)));
   return ManagedCheckoutGuard.of({ connected, resolve });

@@ -23,6 +23,7 @@ import * as ProjectService from "../project/ProjectService.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as VcsStatusBroadcaster from "../vcs/VcsStatusBroadcaster.ts";
+import { briefEchoesCaller, echoedBriefMessage } from "./agentBrief.ts";
 import type { McpInvocationScope } from "./McpInvocationContext.ts";
 import * as ManagedWorktreeHandoff from "../deckhand/ManagedWorktreeHandoff.ts";
 import * as WorkspaceBackend from "../deckhand/WorkspaceBackend.ts";
@@ -451,6 +452,13 @@ const make = Effect.gen(function* () {
   const handoff: WorktreeMcpService["Service"]["handoff"] = Effect.fn("WorktreeMcpService.handoff")(
     function* (scope, input) {
       yield* requireCapability(scope);
+      // The continuation re-enters this conversation inside the lane; a copied
+      // user request would ask for yet another lane there.
+      if (
+        input.continuationPrompt !== undefined &&
+        (yield* briefEchoesCaller(threadManagement, scope.threadId, input.continuationPrompt))
+      )
+        return yield* failure("invalid_request", echoedBriefMessage("continuationPrompt"));
       // uninterruptibleMask: the guard acquisition and the registration of the
       // releasing finalizer happen with no interruptible gap in between. An
       // interrupt landing between a bare add() and the start of an ensured
