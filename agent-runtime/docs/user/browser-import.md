@@ -8,11 +8,12 @@ Open **Settings → Integrations → Browser profiles → Add profile**, then ch
 other browser windows open; Cinderdeck reads a consistent snapshot of saved cookies.
 
 After a successful import, Cinderdeck remembers the exact source browser and profile for that
-environment and destination profile. It refreshes cookies when you open a new Browser tab or
-reopen an existing tab in the agent side panel. New tabs wait briefly for the refresh; if it takes
-longer, the page opens with its saved cookies and reloads once the refresh finishes. You can enter
-a URL during the refresh, and that URL loads when the browser opens. Reopened tabs reload after
-a successful refresh.
+environment and destination profile. It automatically refreshes cookies when you open a new browser
+instance or recover a browser instance after its connection is lost. Switching chats, reopening
+the same Browser panel, and resizing it keep the current cookies and page without a refresh.
+New and recovering instances wait briefly for the refresh; if it takes longer, the page opens with
+its saved cookies and reloads once the refresh finishes. You can enter a URL during the refresh,
+and that URL loads when the browser opens.
 Use **Refresh cookies now** in the Browser panel menu or the profile's Settings menu to refresh
 manually. **Stop refreshing from source** keeps the current cookies and disconnects the source.
 Clearing cookies or removing a profile also disconnects its source, so opening the panel will not

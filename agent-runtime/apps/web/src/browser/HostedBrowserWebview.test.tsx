@@ -225,11 +225,9 @@ describe("HostedBrowserWebview settings hydration", () => {
     vi.useRealTimers();
   });
 
-  it("reloads once when reopening shares a slow initial refresh, and ignores completion after closing", async () => {
+  it("keeps a pending initial refresh across chat switches and ignores completion after closing", async () => {
     vi.useFakeTimers();
     const refresh = deferred<Awaited<ReturnType<DesktopPreviewBridge["importBrowserCookies"]>>>();
-    const closedRefresh =
-      deferred<Awaited<ReturnType<DesktopPreviewBridge["importBrowserCookies"]>>>();
     const threadRef = {
       environmentId: EnvironmentId.make("cookie-shared-startup"),
       threadId: ThreadId.make("cookie-shared-startup-thread"),
@@ -276,26 +274,21 @@ describe("HostedBrowserWebview settings hydration", () => {
     await act(async () => vi.advanceTimersByTimeAsync(3_000));
     const rect = { x: 0, y: 0, width: 800, height: 600 };
     await act(() => store.present(runtimeTabId, owner, rect, true, 0, 30));
+    expect(mocks.importBrowserCookies).toHaveBeenCalledOnce();
+    await act(() => store.present(runtimeTabId, owner, rect, false, 0, 30));
+    await act(() => store.present(runtimeTabId, owner, rect, true, 0, 30));
+    expect(mocks.importBrowserCookies).toHaveBeenCalledOnce();
+    await act(() => renderer!.unmount());
+    renderer = undefined;
     await act(async () => {
       refresh.resolve({ imported: 1, skipped: 0, skippedDomains: [] });
       await refresh.promise;
     });
-    expect(mocks.importBrowserCookies).toHaveBeenCalledOnce();
-    expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith(runtimeTabId);
-    mocks.importBrowserCookies.mockReturnValueOnce(closedRefresh.promise);
-    await act(() => store.present(runtimeTabId, owner, rect, false, 0, 30));
-    await act(() => store.present(runtimeTabId, owner, rect, true, 0, 30));
-    await act(() => renderer!.unmount());
-    renderer = undefined;
-    await act(async () => {
-      closedRefresh.resolve({ imported: 1, skipped: 0, skippedDomains: [] });
-      await closedRefresh.promise;
-    });
-    expect(mocks.refresh).toHaveBeenCalledOnce();
+    expect(mocks.refresh).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 
-  it("refreshes before the first request and refreshes a retained tab when reopened", async () => {
+  it("refreshes a new instance once and preserves the guest through chat switches and panel reopening", async () => {
     const refresh = deferred<Awaited<ReturnType<DesktopPreviewBridge["importBrowserCookies"]>>>();
     const threadRef = {
       environmentId: EnvironmentId.make("cookie-source"),
@@ -353,20 +346,91 @@ describe("HostedBrowserWebview settings hydration", () => {
     expect(mocks.refresh).not.toHaveBeenCalled();
     await act(() => store.present(runtimeTabId, owner, rect, false, 0, 30));
     await act(async () => store.present(runtimeTabId, owner, rect, true, 0, 30));
-    expect(mocks.importBrowserCookies).toHaveBeenCalledTimes(2);
-    expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith(runtimeTabId);
-    // Size changes while visible are not another panel opening.
+    expect(mocks.importBrowserCookies).toHaveBeenCalledOnce();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    // Resizing and returning to the same instance keep its cookies and page.
     await act(() => store.present(runtimeTabId, owner, { ...rect, width: 900 }, true, 0, 30));
-    expect(mocks.importBrowserCookies).toHaveBeenCalledTimes(2);
-    // A failed later refresh keeps the existing guest and reports the reason.
-    mocks.importBrowserCookies.mockRejectedValueOnce(
-      new Error("Importing cookies from chrome failed: needsKeychainApproval."),
-    );
+    await act(() => store.present(runtimeTabId, owner, rect, false, 0, 30));
+    await act(async () => store.present(runtimeTabId, owner, rect, true, 0, 30));
     await act(() => store.present(runtimeTabId, owner, rect, false, 0, 30));
     await act(async () => store.present(runtimeTabId, owner, rect, true, 0, 30));
     expect(guest).toHaveBeenCalledOnce();
-    expect(mocks.refresh).toHaveBeenCalledOnce();
-    expect(mocks.addToast).toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
+    expect(mocks.importBrowserCookies).toHaveBeenCalledOnce();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    expect(mocks.addToast).not.toHaveBeenCalled();
+  });
+
+  it("refreshes before recovering a lost browser guest and when opening a separate instance", async () => {
+    vi.useFakeTimers();
+    const recoveryRefresh =
+      deferred<Awaited<ReturnType<DesktopPreviewBridge["importBrowserCookies"]>>>();
+    const threadRef = {
+      environmentId: EnvironmentId.make("cookie-recovery"),
+      threadId: ThreadId.make("cookie-recovery-thread"),
+    };
+    mocks.getClientSettings.mockResolvedValue({
+      ...DEFAULT_CLIENT_SETTINGS,
+      browserCookieSources: [
+        {
+          environmentId: threadRef.environmentId,
+          targetProfileId: "default",
+          sourceId: "chrome",
+          sourceName: "Chrome",
+          sourceProfileDirectory: "Default",
+          sourceProfileName: "Personal",
+        },
+      ],
+    });
+    mocks.importBrowserCookies
+      .mockResolvedValueOnce({ imported: 1, skipped: 0, skippedDomains: [] })
+      .mockReturnValueOnce(recoveryRefresh.promise);
+    const guests: EventTarget[] = [];
+    const guest = vi.fn(() => {
+      const id = 50 + guests.length;
+      const node = Object.assign(new EventTarget(), { getWebContentsId: () => id });
+      guests.push(node);
+      return node;
+    });
+    const view = (runtimeTabId: string) => (
+      <HostedBrowserWebview
+        key={runtimeTabId}
+        threadRef={threadRef}
+        tabId="recovery-tab"
+        runtimeTabId={runtimeTabId}
+        initialUrl="https://example.com"
+        viewport={FILL_PREVIEW_VIEWPORT}
+        pictureInPicture={false}
+        profileId={undefined}
+        zoomFactor={1}
+      />
+    );
+    await act(async () => {
+      renderer = create(view("runtime-recovery"), {
+        createNodeMock: (element) =>
+          element.type === "webview" ? guest() : { scrollTo: () => undefined },
+      });
+      await ensureClientSettingsHydrated();
+    });
+    expect(guest).toHaveBeenCalledOnce();
+    await act(() => {
+      guests[0]!.dispatchEvent(new Event("render-process-gone"));
+      guests[0]!.dispatchEvent(new Event("render-process-gone"));
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(250));
+    expect(mocks.importBrowserCookies).toHaveBeenCalledTimes(2);
+    expect(guest).toHaveBeenCalledOnce();
+    await act(async () => {
+      recoveryRefresh.resolve({ imported: 1, skipped: 0, skippedDomains: [] });
+      await recoveryRefresh.promise;
+    });
+    expect(guest).toHaveBeenCalledTimes(2);
+    expect(renderer!.root.findByType("webview").props.src).toBe("https://example.com");
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    await act(async () => renderer!.update(view("runtime-separate-instance")));
+    expect(mocks.importBrowserCookies).toHaveBeenCalledTimes(3);
+    expect(guest).toHaveBeenCalledTimes(3);
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 
   it("loads the existing cookies when the initial refresh fails", async () => {

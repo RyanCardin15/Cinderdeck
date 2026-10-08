@@ -1084,7 +1084,7 @@ function BrowserProfilesSetting({ disabled }: { readonly disabled: boolean }) {
   return (
     <SettingsRow
       {...searchableSetting("browser-profiles")}
-      description="Profiles separate cookies and logins. Imported profiles refresh from their source when the Browser panel opens. Incognito data is cleared when the app closes."
+      description="Profiles separate cookies and logins. Imported profiles refresh when a new browser opens or reconnects. Incognito data is cleared when the app closes."
       control={
         <Menu onOpenChange={(open) => open && loadSources()}>
           <MenuTrigger

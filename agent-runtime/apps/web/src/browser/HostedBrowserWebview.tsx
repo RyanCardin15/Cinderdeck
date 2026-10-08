@@ -78,14 +78,12 @@ export function HostedBrowserWebview(props: {
   const clientSettingsHydrated = useClientSettingsHydrated();
   const config = usePreviewWebviewConfig(threadRef.environmentId, profileId);
   const [initialSrc, setInitialSrc] = useState<string | null>(null);
+  const [webviewGeneration, setWebviewGeneration] = useState(0);
   const tabLeaseRef = useRef<AcquiredDesktopTab | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const webviewRef = useRef<ElectronWebview | null>(null);
   const registeredWebviewRef = useRef<ElectronWebview | null>(null);
   const pendingCookieReloadRef = useRef(false);
-  const lastCookieReloadTaskRef = useRef<ReturnType<
-    typeof refreshBrowserCookiesWithFeedback
-  > | null>(null);
   const crashRecoveryRef = useRef<WebviewCrashRecoveryState>(INITIAL_WEBVIEW_CRASH_RECOVERY_STATE);
   const [aspectRatioLocked, setAspectRatioLocked] = useState(false);
   const presentation = useBrowserSurfaceStore(
@@ -108,13 +106,16 @@ export function HostedBrowserWebview(props: {
   const recordingActive = useActiveBrowserRecordingTabIds().has(runtimeTabId);
   usePreviewBridge({ threadRef, tabId, runtimeTabId });
 
-  const cookieScope = JSON.stringify([
+  // A retained guest stays connected when its chat or panel is hidden. Only
+  // a new instance or crash replacement needs automatic cookie preparation.
+  const cookiePreparationKey = JSON.stringify([
     threadRef.environmentId,
     profileId ?? DEFAULT_BROWSER_PROFILE_ID,
+    runtimeTabId,
+    webviewGeneration,
   ]);
-  const [preparedCookieScope, setPreparedCookieScope] = useState<string | null>(null);
-  const preparedCookieScopeRef = useRef<string | null>(null);
-  const cookiesReady = preparedCookieScope === cookieScope;
+  const [preparedCookieKey, setPreparedCookieKey] = useState<string | null>(null);
+  const cookiesReady = preparedCookieKey === cookiePreparationKey;
   const surfaceReady = clientSettingsHydrated && config !== null;
 
   const flushCookieReload = useCallback(() => {
@@ -124,30 +125,19 @@ export function HostedBrowserWebview(props: {
     pendingCookieReloadRef.current = false;
     void previewBridge?.refresh(runtimeTabId).catch(() => undefined);
   }, [runtimeTabId]);
-  const reloadWithRefreshedCookies = useCallback(
-    (task: ReturnType<typeof refreshBrowserCookiesWithFeedback>) => {
-      // Opening a retained panel can share the initial, still-pending refresh.
-      // Its completion should only reload this guest once.
-      if (lastCookieReloadTaskRef.current === task) return;
-      lastCookieReloadTaskRef.current = task;
-      pendingCookieReloadRef.current = true;
-      flushCookieReload();
-    },
-    [flushCookieReload],
-  );
 
   // Give the source a short head start, then use the existing session while a
   // slow read or permission prompt finishes. Cookie refresh must not prevent
   // the browser from opening. A late success reloads the registered guest.
   useEffect(() => {
     if (!clientSettingsHydrated) return;
+    pendingCookieReloadRef.current = false;
     let disposed = false;
     let released = false;
     const release = () => {
       if (disposed || released) return;
       released = true;
-      preparedCookieScopeRef.current = cookieScope;
-      setPreparedCookieScope(cookieScope);
+      setPreparedCookieKey(cookiePreparationKey);
     };
     const timeout = window.setTimeout(release, BROWSER_COOKIE_STARTUP_WAIT_MS);
     const refresh = refreshBrowserCookiesWithFeedback(threadRef.environmentId, profileId);
@@ -155,8 +145,10 @@ export function HostedBrowserWebview(props: {
       (result) => {
         window.clearTimeout(timeout);
         if (disposed) return;
-        if (released && result && result.imported > 0) reloadWithRefreshedCookies(refresh);
-        else release();
+        if (released && result && result.imported > 0) {
+          pendingCookieReloadRef.current = true;
+          flushCookieReload();
+        } else release();
       },
       () => {
         window.clearTimeout(timeout);
@@ -169,36 +161,10 @@ export function HostedBrowserWebview(props: {
     };
   }, [
     clientSettingsHydrated,
-    cookieScope,
+    cookiePreparationKey,
     threadRef.environmentId,
     profileId,
-    reloadWithRefreshedCookies,
-  ]);
-
-  // Guests remain mounted when their panel closes. Refresh that retained tab
-  // when it becomes visible again, then reload so the page uses the new login.
-  useEffect(() => {
-    if (
-      !clientSettingsHydrated ||
-      !presentation.visible ||
-      preparedCookieScopeRef.current !== cookieScope
-    )
-      return;
-    let disposed = false;
-    const refresh = refreshBrowserCookiesWithFeedback(threadRef.environmentId, profileId);
-    void refresh.then((result) => {
-      if (!disposed && result && result.imported > 0) reloadWithRefreshedCookies(refresh);
-    });
-    return () => {
-      disposed = true;
-    };
-  }, [
-    clientSettingsHydrated,
-    cookieScope,
-    threadRef.environmentId,
-    profileId,
-    presentation.visible,
-    reloadWithRefreshedCookies,
+    flushCookieReload,
   ]);
 
   useEffect(() => {
@@ -212,7 +178,6 @@ export function HostedBrowserWebview(props: {
     };
   }, [clientSettingsHydrated, runtimeTabId]);
 
-  const [webviewGeneration, setWebviewGeneration] = useState(0);
   const [recoverySrc, setRecoverySrc] = useState(initialUrl ?? "about:blank");
   const latestUrlRef = useRef(initialUrl);
 

@@ -556,7 +556,7 @@ function DoneStep({
         </DialogTitle>
         <DialogDescription>
           {imported > 0
-            ? `Added to ${targetName} for ${destinationEnvironmentName}. Cookies refresh from this source when you open the Browser panel.${skipped > 0 ? ` ${cookieResultCount(skipped)} skipped.` : ""}`
+            ? `Added to ${targetName} for ${destinationEnvironmentName}. Cookies refresh from this source when a new browser opens or reconnects.${skipped > 0 ? ` ${cookieResultCount(skipped)} skipped.` : ""}`
             : skipped > 0
               ? `No cookies were imported for ${destinationEnvironmentName}.`
               : `There were no cookies to import for ${destinationEnvironmentName}.`}
