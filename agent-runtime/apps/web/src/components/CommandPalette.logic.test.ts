@@ -75,12 +75,12 @@ describe("buildCommandPaletteProjectMetadata", () => {
         {
           environmentId: localEnvironmentId,
           title: "Cinderdeck",
-          workspaceRoot: "/Users/theo/Projects/t3code",
+          workspaceRoot: "/Users/theo/Projects/cinderdeck",
         },
         {
           environmentId: remoteEnvironmentId,
-          title: "t3code",
-          workspaceRoot: "/srv/t3code",
+          title: "cinderdeck",
+          workspaceRoot: "/srv/cinderdeck",
         },
       ],
       locationByEnvironmentId: locations,
@@ -88,10 +88,10 @@ describe("buildCommandPaletteProjectMetadata", () => {
 
     expect(metadata.searchTerms).toEqual([
       "Cinderdeck",
-      "/Users/theo/Projects/t3code",
+      "/Users/theo/Projects/cinderdeck",
       "Local",
-      "t3code",
-      "/srv/t3code",
+      "cinderdeck",
+      "/srv/cinderdeck",
       "Build box",
     ]);
     expect(metadata.environmentLabels).toEqual(["Local", "Build box"]);
@@ -103,7 +103,7 @@ describe("buildCommandPaletteProjectMetadata", () => {
       projectSearchItems: [
         {
           kind: "action",
-          value: "project:t3code",
+          value: "project:cinderdeck",
           title: "Cinderdeck",
           searchTerms: metadata.searchTerms,
           icon: null,
@@ -121,12 +121,12 @@ describe("buildCommandPaletteProjectMetadata", () => {
         {
           environmentId: remoteEnvironmentId,
           title: "Cinderdeck",
-          workspaceRoot: "/srv/t3code",
+          workspaceRoot: "/srv/cinderdeck",
         },
         {
           environmentId: remoteEnvironmentId,
           title: "Cinderdeck worktree",
-          workspaceRoot: "/srv/t3code-feature",
+          workspaceRoot: "/srv/cinderdeck-feature",
         },
       ],
       locationByEnvironmentId: locations,
@@ -142,12 +142,12 @@ describe("buildCommandPaletteProjectMetadata", () => {
         {
           environmentId: remoteEnvironmentId,
           title: "Cinderdeck",
-          workspaceRoot: "/srv/t3code",
+          workspaceRoot: "/srv/cinderdeck",
         },
         {
           environmentId: secondRemoteEnvironmentId,
           title: "Cinderdeck mirror",
-          workspaceRoot: "/srv/mirror/t3code",
+          workspaceRoot: "/srv/mirror/cinderdeck",
         },
       ],
       locationByEnvironmentId: new Map([
@@ -165,7 +165,7 @@ describe("buildCommandPaletteProjectMetadata", () => {
         {
           environmentId: remoteEnvironmentId,
           title: "Cinderdeck",
-          workspaceRoot: "/srv/t3code",
+          workspaceRoot: "/srv/cinderdeck",
         },
       ],
       locationByEnvironmentId: new Map(),
@@ -781,8 +781,8 @@ describe("filterPinnedBrowseEntries", () => {
 it.each([
   "#10839",
   "10839",
-  "pingdotgg/t3code#10839",
-  "https://github.com/pingdotgg/t3code/pull/10839",
+  "example/cinderdeck#10839",
+  "https://github.com/example/cinderdeck/pull/10839",
 ])("finds linked threads from PR query %s", (query) => {
   const items = buildThreadActionItems({
     threads: [
@@ -791,9 +791,9 @@ it.each([
         pullRequests: [
           {
             host: "github.com",
-            repository: "pingdotgg/t3code",
+            repository: "example/cinderdeck",
             number: 10839,
-            url: "https://github.com/pingdotgg/t3code/pull/10839",
+            url: "https://github.com/example/cinderdeck/pull/10839",
             source: "manual",
             linkedAt: "2026-09-08T00:00:00Z",
             snapshot: null,

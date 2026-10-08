@@ -117,10 +117,10 @@ export const make = (config: ServerConfig["Service"]) => ServerConfig.of(config)
  * logs report the same service identity to the collector.
  */
 export const otlpResource = (config: ServerConfig["Service"]) => ({
-  serviceName: "deckhand-server",
+  serviceName: "cinderdeck-server",
   attributes: {
-    "service.namespace": "deckhand",
-    "service.runtime": "t3-server",
+    "service.namespace": "cinderdeck",
+    "service.runtime": "cinderdeck-runtime",
     "service.mode": config.mode,
   },
 });

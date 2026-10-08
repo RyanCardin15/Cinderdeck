@@ -73,18 +73,18 @@ it("links and unlinks a pull request through thread.metadata.update (#8160)", ()
     threadId: "thread-1",
     linkedPullRequest: {
       projectId: "project-1",
-      repository: "pingdotgg/t3code",
+      repository: "example/cinderdeck",
       number: 8160,
-      url: "https://github.com/pingdotgg/t3code/pull/8160",
+      url: "https://github.com/example/cinderdeck/pull/8160",
     },
   });
   assert.deepStrictEqual(
     (linked as Extract<typeof linked, { type: "thread.metadata.update" }>).linkedPullRequest,
     {
       projectId: "project-1",
-      repository: "pingdotgg/t3code",
+      repository: "example/cinderdeck",
       number: 8160,
-      url: "https://github.com/pingdotgg/t3code/pull/8160",
+      url: "https://github.com/example/cinderdeck/pull/8160",
     },
   );
   const unlinked = decode({

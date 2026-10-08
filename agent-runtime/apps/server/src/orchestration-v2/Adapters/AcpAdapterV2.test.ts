@@ -2052,7 +2052,7 @@ describe("AcpAdapterV2", () => {
             name: "deckhand",
             command: process.execPath,
             args: [
-              process.argv[1] === undefined ? "t3" : NodePath.resolve(process.argv[1]),
+              process.argv[1] === undefined ? "cinderdeck" : NodePath.resolve(process.argv[1]),
               "acp-mcp-bridge",
             ],
             env: [

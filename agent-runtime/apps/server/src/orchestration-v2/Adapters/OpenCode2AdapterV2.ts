@@ -76,7 +76,7 @@ import {
 } from "../../provider/opencodeRuntime.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import { buildRuntimeInstructions } from "../../provider/RuntimeInstructions.ts";
-import { t3OrchestrationSystemPrompt } from "../../provider/T3OrchestrationInstructions.ts";
+import { cinderdeckOrchestrationSystemPrompt } from "../../provider/CinderdeckOrchestrationInstructions.ts";
 import { SKILL_MENTION_PATTERN } from "@cinderdeck/shared/composerInlineTokens";
 import { getModelSelectionStringOptionValue, modelSelectionsEqual } from "@cinderdeck/shared/model";
 import { causeErrorTag } from "@cinderdeck/shared/observability";
@@ -3271,7 +3271,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
       }
       const instructions = [
         buildRuntimeInstructions({ harness: "OpenCode", model: turnInput.modelSelection.model }),
-        t3OrchestrationSystemPrompt(state.mcp !== undefined),
+        cinderdeckOrchestrationSystemPrompt(state.mcp !== undefined),
       ]
         .filter((part) => part !== undefined && part.length > 0)
         .join("\n\n");

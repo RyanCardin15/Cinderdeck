@@ -43,10 +43,10 @@ import {
 } from "@cinderdeck/contracts";
 import type { ThreadRunSummary } from "@cinderdeck/client-runtime/state/shell";
 import {
-  resolveT3McpToolDefinition,
-  resolveT3McpToolPresentation,
-  type T3McpToolPresentation,
-} from "@cinderdeck/shared/t3McpToolPresentation";
+  resolveCinderdeckMcpToolDefinition,
+  resolveCinderdeckMcpToolPresentation,
+  type CinderdeckMcpToolPresentation,
+} from "@cinderdeck/shared/cinderdeckMcpToolPresentation";
 import { compactDynamicToolOutput } from "@cinderdeck/shared/toolOutput";
 import { dynamicToolTitle } from "@cinderdeck/shared/toolActivity";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
@@ -614,8 +614,8 @@ function workGroupId(timelineEntryId: string): string {
   return `work-group:${timelineEntryId}`;
 }
 
-export type TimelineToolPresentation = T3McpToolPresentation;
-export const resolveTimelineToolPresentation = resolveT3McpToolPresentation;
+export type TimelineToolPresentation = CinderdeckMcpToolPresentation;
+export const resolveTimelineToolPresentation = resolveCinderdeckMcpToolPresentation;
 
 function expandedWorkGroupRow(
   groupId: string,
@@ -1152,7 +1152,7 @@ function withoutSubagentDelegationRows(entries: ReadonlyArray<TimelineEntry>) {
       item?.type !== "dynamic_tool" ||
       item.runId === null ||
       (item.status !== "running" && item.status !== "completed") ||
-      resolveT3McpToolDefinition(item.toolName)?.summaryAction !== "delegate"
+      resolveCinderdeckMcpToolDefinition(item.toolName)?.summaryAction !== "delegate"
     )
       return true;
     const output = compactDynamicToolOutput(item.output);

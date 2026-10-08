@@ -83,7 +83,7 @@ export function DictationButton({
         onPointerDown={(event) => event.preventDefault()}
         onClick={() => void command(state === "recording" ? "stop" : "start")}
       >
-        {state === "recording" ? <SquareIcon className="text-red-500" /> : <MicIcon />}
+        {state === "recording" ? <SquareIcon className="text-destructive" /> : <MicIcon />}
       </Button>
       {busy && (
         <>

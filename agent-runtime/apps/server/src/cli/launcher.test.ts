@@ -12,30 +12,30 @@ import {
 
 import { resolveLauncherPath } from "./launcher.ts";
 
-it.layer(NodeServices.layer)("t3 launcher path", (it) => {
+it.layer(NodeServices.layer)("Cinderdeck launcher path", (it) => {
   it.effect("finds the launcher a bare command name resolved to on PATH", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-update-" });
-      const launcher = path.join(root, "bin/t3");
+      const launcher = path.join(root, "bin/cinderdeck");
       yield* fs.makeDirectory(path.dirname(launcher), { recursive: true });
       yield* fs.writeFileString(launcher, "");
 
       const bare = yield* resolveLauncherPath.pipe(
-        Effect.provideService(HostProcessInvokedAs, "t3"),
+        Effect.provideService(HostProcessInvokedAs, "cinderdeck"),
         Effect.provideService(HostProcessEnvironment, {
           PATH: `${path.join(root, "missing")}:${path.join(root, "bin")}`,
         }),
         Effect.provideService(HostProcessWorkingDirectory, root),
       );
       const relative = yield* resolveLauncherPath.pipe(
-        Effect.provideService(HostProcessInvokedAs, "./bin/t3"),
+        Effect.provideService(HostProcessInvokedAs, "./bin/cinderdeck"),
         Effect.provideService(HostProcessEnvironment, { PATH: "" }),
         Effect.provideService(HostProcessWorkingDirectory, root),
       );
       const absent = yield* resolveLauncherPath.pipe(
-        Effect.provideService(HostProcessInvokedAs, "t3"),
+        Effect.provideService(HostProcessInvokedAs, "cinderdeck"),
         Effect.provideService(HostProcessEnvironment, { PATH: path.join(root, "missing") }),
         Effect.provideService(HostProcessWorkingDirectory, root),
       );

@@ -1,12 +1,12 @@
 /**
- * T3ProjectFileLoader - Effect service that loads the checked-in `t3.json`
+ * CinderdeckProjectFileLoader - Effect service that loads the checked-in `t3.json`
  * project file from a workspace root.
  *
  * Loading is best-effort: a missing file resolves to `Option.none`, and
  * unreadable or invalid files are logged and treated as absent so callers
  * can fall back to their defaults.
  *
- * @module T3ProjectFileLoader
+ * @module CinderdeckProjectFileLoader
  */
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -16,13 +16,13 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
-import { T3_PROJECT_FILE_NAME, type T3ProjectFile } from "@cinderdeck/contracts";
-import { T3ProjectFileFromJson } from "@cinderdeck/shared/t3ProjectFile";
+import { CINDERDECK_PROJECT_FILE_NAME, type CinderdeckProjectFile } from "@cinderdeck/contracts";
+import { CinderdeckProjectFileFromJson } from "@cinderdeck/shared/cinderdeckProjectFile";
 
-const decodeT3ProjectFileJson = Schema.decodeEffect(T3ProjectFileFromJson);
+const decodeCinderdeckProjectFileJson = Schema.decodeEffect(CinderdeckProjectFileFromJson);
 
-export class T3ProjectFileLoadError extends Schema.TaggedError<T3ProjectFileLoadError>()(
-  "T3ProjectFileLoadError",
+export class CinderdeckProjectFileLoadError extends Schema.TaggedError<CinderdeckProjectFileLoadError>()(
+  "CinderdeckProjectFileLoadError",
   {
     operation: Schema.Literals(["read", "decode"]),
     workspaceRoot: Schema.String,
@@ -31,13 +31,13 @@ export class T3ProjectFileLoadError extends Schema.TaggedError<T3ProjectFileLoad
   },
 ) {
   override get message(): string {
-    return `Failed to ${this.operation} ${T3_PROJECT_FILE_NAME} at ${this.filePath}.`;
+    return `Failed to ${this.operation} ${CINDERDECK_PROJECT_FILE_NAME} at ${this.filePath}.`;
   }
 }
 
 /** Service tag for t3.json project file loading. */
-export class T3ProjectFileLoader extends Context.Service<
-  T3ProjectFileLoader,
+export class CinderdeckProjectFileLoader extends Context.Service<
+  CinderdeckProjectFileLoader,
   {
     /**
      * Load and decode `t3.json` at the workspace root.
@@ -45,11 +45,11 @@ export class T3ProjectFileLoader extends Context.Service<
      * Never fails: missing, unreadable, or invalid files resolve to
      * `Option.none` (invalid files are logged as warnings).
      */
-    readonly load: (workspaceRoot: string) => Effect.Effect<Option.Option<T3ProjectFile>>;
+    readonly load: (workspaceRoot: string) => Effect.Effect<Option.Option<CinderdeckProjectFile>>;
   }
->()("@cinderdeck/server/project/T3ProjectFileLoader") {}
+>()("@cinderdeck/server/project/CinderdeckProjectFileLoader") {}
 
-const logT3ProjectFileLoadError = (error: T3ProjectFileLoadError) =>
+const logCinderdeckProjectFileLoadError = (error: CinderdeckProjectFileLoadError) =>
   Effect.logWarning(error).pipe(
     Effect.annotateLogs({
       operation: error.operation,
@@ -64,17 +64,17 @@ export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
-  const load: T3ProjectFileLoader["Service"]["load"] = Effect.fn("T3ProjectFileLoader.load")(
+  const load: CinderdeckProjectFileLoader["Service"]["load"] = Effect.fn("CinderdeckProjectFileLoader.load")(
     function* (workspaceRoot) {
-      const filePath = path.join(workspaceRoot, T3_PROJECT_FILE_NAME);
+      const filePath = path.join(workspaceRoot, CINDERDECK_PROJECT_FILE_NAME);
       const raw = yield* fileSystem.readFileString(filePath).pipe(
         Effect.asSome,
         Effect.catchTags({
           PlatformError: (error) =>
             error.reason._tag === "NotFound"
               ? Effect.succeed(Option.none<string>())
-              : logT3ProjectFileLoadError(
-                  new T3ProjectFileLoadError({
+              : logCinderdeckProjectFileLoadError(
+                  new CinderdeckProjectFileLoadError({
                     operation: "read",
                     workspaceRoot,
                     filePath,
@@ -84,26 +84,26 @@ export const make = Effect.gen(function* () {
         }),
       );
       if (Option.isNone(raw)) {
-        return Option.none<T3ProjectFile>();
+        return Option.none<CinderdeckProjectFile>();
       }
-      return yield* decodeT3ProjectFileJson(raw.value).pipe(
+      return yield* decodeCinderdeckProjectFileJson(raw.value).pipe(
         Effect.asSome,
         Effect.catchTags({
           SchemaError: (error) =>
-            logT3ProjectFileLoadError(
-              new T3ProjectFileLoadError({
+            logCinderdeckProjectFileLoadError(
+              new CinderdeckProjectFileLoadError({
                 operation: "decode",
                 workspaceRoot,
                 filePath,
                 cause: error,
               }),
-            ).pipe(Effect.as(Option.none<T3ProjectFile>())),
+            ).pipe(Effect.as(Option.none<CinderdeckProjectFile>())),
         }),
       );
     },
   );
 
-  return T3ProjectFileLoader.of({ load });
+  return CinderdeckProjectFileLoader.of({ load });
 });
 
-export const layer = Layer.effect(T3ProjectFileLoader, make);
+export const layer = Layer.effect(CinderdeckProjectFileLoader, make);

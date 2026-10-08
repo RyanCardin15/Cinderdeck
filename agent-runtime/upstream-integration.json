@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "upstreamRepository": "https://github.com/pingdotgg/t3code",
+  "integratedThrough": "31a9da179ed0763335f05681c577474aec5d2309",
+  "baselineEvidence": {
+    "mergeCommit": "0b76d9c77e5f3c6a2ed05ca3084475620ccd2a6a",
+    "importCommit": "2e03c86badbbec46597ea644cb0aece25866584c",
+    "historicalMetadataCommit": "17877ebbea4790b5f0ecad9bf8599619f0387be3",
+    "historicalMetadataPath": "docs/deckhand/upstream-patches.json"
+  },
+  "examinedTarget": "0647c481017f25ddff2ec1dff68ef3944489b6db",
+  "ports": [
+    {
+      "commit": "f391794a35c604d57e166a3ab48d56fc6e4e469a",
+      "behavior": "Classify literal workspace filenames for previews"
+    },
+    {
+      "commit": "e65063ccf6ce83aa33d10521aeaf929210f0ff04",
+      "behavior": "Terminate clone options before repository input"
+    },
+    {
+      "commit": "447046b589140a50a4a782453133da83ff77e85e",
+      "behavior": "Avoid optional index writes during Git status polling"
+    },
+    {
+      "commit": "27ab45593fdcaffe718c1fa54dcbb2df4bd769a2",
+      "behavior": "Decode nullable ACP mode descriptions"
+    },
+    {
+      "commit": "24e4b62c883eb67251bdfb07d2bf22cfd3987820",
+      "behavior": "Drain remaining worker items after an item fails"
+    },
+    {
+      "commit": "e6abc01788eef557c214a086999b3fd635b69f71",
+      "behavior": "Recognize versioned JetBrains macOS application bundles"
+    }
+  ],
+  "coverage": "Selected independent ports only. integratedThrough remains the last complete historical baseline; examinedTarget is not a claim of complete incorporation.",
+  "pending": "Review remaining changes across the Effect 4 stable migration, server service/layer reorganization and browser ownership relocation before selecting additional ports. Upstream hosted accounts, product release and deployment surfaces are excluded from Cinderdeck."
+}

@@ -124,7 +124,7 @@ import {
 } from "../../provider/Layers/claudeUsageLimits.ts";
 import type { ServerProviderShape } from "../../provider/Services/ServerProvider.ts";
 import { mergeProviderInstanceEnvironment } from "../../provider/ProviderInstanceEnvironment.ts";
-import { T3_CODE_ORCHESTRATION_INSTRUCTIONS } from "../../provider/T3OrchestrationInstructions.ts";
+import { CINDERDECK_ORCHESTRATION_INSTRUCTIONS } from "../../provider/CinderdeckOrchestrationInstructions.ts";
 import { buildRuntimeInstructions } from "../../provider/RuntimeInstructions.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as IdAllocator from "../IdAllocator.ts";
@@ -903,7 +903,7 @@ export function makeClaudeQueryOptions(input: {
       preset: "claude_code" as const,
       append:
         buildRuntimeInstructions({ harness: "Claude Code" }) +
-        (input.mcpServers === undefined ? "" : T3_CODE_ORCHESTRATION_INSTRUCTIONS),
+        (input.mcpServers === undefined ? "" : CINDERDECK_ORCHESTRATION_INSTRUCTIONS),
     },
     ...(Object.keys(extraArgs).length === 0 ? {} : { extraArgs }),
   };
@@ -917,7 +917,7 @@ export function makeClaudeQueryOptions(input: {
   return input.cwd === null ? withDirectories : { ...withDirectories, cwd: input.cwd };
 }
 
-export const CLAUDE_T3_MCP_TOOL_WILDCARD = `mcp__${McpProviderSession.APP_MCP_SERVER_NAME}__*`;
+export const CLAUDE_CINDERDECK_MCP_TOOL_WILDCARD = `mcp__${McpProviderSession.APP_MCP_SERVER_NAME}__*`;
 
 // Must stay in sync with the Tool.Readonly annotations on OrchestratorToolkit;
 // ClaudeAdapterV2.test.ts cross-checks this list against the toolkit.
@@ -946,7 +946,7 @@ export const CLAUDE_READ_ONLY_T3_MCP_ALLOWED_TOOLS: ReadonlyArray<string> = [
 // delegate_task mode=wait) legitimately block for up to an hour
 // (MAX_WAIT_TIMEOUT_MS in OrchestratorMcpService), so the budget sits just
 // above that and the server's own wait timeout is what ends a long call.
-export const CLAUDE_T3_MCP_TOOL_TIMEOUT_MS = 65 * 60 * 1_000;
+export const CLAUDE_CINDERDECK_MCP_TOOL_TIMEOUT_MS = 65 * 60 * 1_000;
 
 // allowedTools skips the SDK permission callback. Only an unrestricted effective
 // policy may preapprove every managed tool, including arbitrary computer_script
@@ -975,7 +975,7 @@ export function claudeMcpQueryOverrides(input: {
   }
   const mcpAllowedTools =
     !input.readOnlySandbox && input.permissionMode === "bypassPermissions"
-      ? [CLAUDE_T3_MCP_TOOL_WILDCARD]
+      ? [CLAUDE_CINDERDECK_MCP_TOOL_WILDCARD]
       : CLAUDE_READ_ONLY_T3_MCP_ALLOWED_TOOLS;
   return {
     allowedTools: Array.from(new Set([...(input.allowedTools ?? []), ...mcpAllowedTools])),
@@ -987,7 +987,7 @@ export function claudeMcpQueryOverrides(input: {
         headers: {
           Authorization: session.authorizationHeader,
         },
-        timeout: CLAUDE_T3_MCP_TOOL_TIMEOUT_MS,
+        timeout: CLAUDE_CINDERDECK_MCP_TOOL_TIMEOUT_MS,
       },
     },
   };

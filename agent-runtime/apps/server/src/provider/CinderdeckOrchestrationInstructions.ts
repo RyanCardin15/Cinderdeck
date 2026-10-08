@@ -1,7 +1,7 @@
 import { APP_MCP_SERVER_NAME } from "../mcp/McpProviderSession.ts";
 import type { ProviderInteractionMode } from "@cinderdeck/contracts";
 
-export const T3_CODE_ORCHESTRATION_INSTRUCTIONS = `
+export const CINDERDECK_ORCHESTRATION_INSTRUCTIONS = `
 
 ## Cinderdeck orchestration
 
@@ -35,7 +35,7 @@ Tool names may include a harness-normalized MCP prefix, such as \`mcp__${APP_MCP
 ACP fallback: some ACP agents accept the injected MCP server but fail to expose its tools. When the Cinderdeck tools are absent and \`T3_ACP_MCP_NODE\` is present, call the same tools through the terminal: \`ELECTRON_RUN_AS_NODE=1 "$T3_ACP_MCP_NODE" \${T3_ACP_MCP_ENTRYPOINT:+"$T3_ACP_MCP_ENTRYPOINT"} acp-mcp-call orchestrator_capabilities '{}'\` (\`T3_ACP_MCP_ENTRYPOINT\` is unset when Cinderdeck runs as a standalone executable). Delegate with \`acp-mcp-call delegate_task '{"task":"...","target":{"providerInstanceId":"...","model":"..."},"mode":"async","clientRequestId":"..."}'\`. This is the supported Cinderdeck transport fallback, not an ordinary shell-based substitute for delegation.
 `;
 
-export const T3_CODE_BROWSER_TOOL_INSTRUCTIONS = `
+export const CINDERDECK_BROWSER_TOOL_INSTRUCTIONS = `
 
 ## Cinderdeck collaborative browser
 
@@ -46,15 +46,15 @@ For browser work, first call \`preview_status\`. If no automation-capable previe
 Do not switch to global browser skills, Chrome, Node REPL browser automation, standalone Playwright, or agent-browser merely because the preview is initially closed or a first call fails. Use an alternative browser system only when the Cinderdeck preview tools are absent, the user explicitly requests another browser, or \`preview_open\` returns an explicit unsupported/unavailable error. A failed Cinderdeck preview tool call should be inspected and retried with corrected arguments when the error is actionable.
 `;
 
-const T3_CODE_ACP_DEFAULT_MODE_INSTRUCTIONS = `## Cinderdeck interaction mode: Default
+const CINDERDECK_ACP_DEFAULT_MODE_INSTRUCTIONS = `## Cinderdeck interaction mode: Default
 
 Prefer making reasonable assumptions and carrying out the user's request. Ask a concise question only when a missing user decision would materially change the result. Treat this mode as active until Cinderdeck supplies a different interaction-mode instruction.`;
 
-const T3_CODE_ACP_PLAN_MODE_INSTRUCTIONS = `## Cinderdeck interaction mode: Plan
+const CINDERDECK_ACP_PLAN_MODE_INSTRUCTIONS = `## Cinderdeck interaction mode: Plan
 
 Investigate with read-only actions and do not edit files or otherwise execute the implementation. Resolve discoverable facts before asking questions. When the requirements are decision complete, return a concrete implementation plan and do not start implementing it. Treat this mode as active until Cinderdeck supplies a different interaction-mode instruction.`;
 
-export interface T3AcpInstructionState {
+export interface CinderdeckAcpInstructionState {
   readonly interactionMode: ProviderInteractionMode;
   readonly hasT3Mcp: boolean;
 }
@@ -63,10 +63,10 @@ export interface T3AcpInstructionState {
  * ACP has no system/developer prompt field, so send Cinderdeck-owned context in the
  * first user prompt and whenever the available tools or interaction mode change.
  */
-export function t3AcpPromptWithInstructions(input: {
+export function cinderdeckAcpPromptWithInstructions(input: {
   readonly prompt: string;
-  readonly state: T3AcpInstructionState;
-  readonly previousState?: T3AcpInstructionState;
+  readonly state: CinderdeckAcpInstructionState;
+  readonly previousState?: CinderdeckAcpInstructionState;
 }): string {
   // Native slash commands must remain at the start of the prompt.
   if (input.prompt.trimStart().startsWith("/")) return input.prompt;
@@ -78,10 +78,10 @@ export function t3AcpPromptWithInstructions(input: {
   }
   const instructions = [
     input.state.interactionMode === "plan"
-      ? T3_CODE_ACP_PLAN_MODE_INSTRUCTIONS
-      : T3_CODE_ACP_DEFAULT_MODE_INSTRUCTIONS,
+      ? CINDERDECK_ACP_PLAN_MODE_INSTRUCTIONS
+      : CINDERDECK_ACP_DEFAULT_MODE_INSTRUCTIONS,
     ...(input.state.hasT3Mcp
-      ? [T3_CODE_BROWSER_TOOL_INSTRUCTIONS.trim(), T3_CODE_ORCHESTRATION_INSTRUCTIONS.trim()]
+      ? [CINDERDECK_BROWSER_TOOL_INSTRUCTIONS.trim(), CINDERDECK_ORCHESTRATION_INSTRUCTIONS.trim()]
       : []),
   ];
   return `<t3_code_instructions>\n${instructions.join("\n\n")}\n</t3_code_instructions>\n\n<user_request>\n${input.prompt}\n</user_request>`;
@@ -92,20 +92,20 @@ export function t3AcpPromptWithInstructions(input: {
  * context in the first prompt. Keep the wrapper explicit so it cannot be
  * mistaken for text authored by the user.
  */
-function prependT3OrchestrationInstructions(prompt: string): string {
-  return `<t3_code_orchestration_instructions>${T3_CODE_ORCHESTRATION_INSTRUCTIONS.trim()}</t3_code_orchestration_instructions>\n\n<user_request>\n${prompt}\n</user_request>`;
+function prependCinderdeckOrchestrationInstructions(prompt: string): string {
+  return `<t3_code_orchestration_instructions>${CINDERDECK_ORCHESTRATION_INSTRUCTIONS.trim()}</t3_code_orchestration_instructions>\n\n<user_request>\n${prompt}\n</user_request>`;
 }
 
-export function t3OrchestrationPromptForFirstRun(input: {
+export function cinderdeckOrchestrationPromptForFirstRun(input: {
   readonly prompt: string;
   readonly runOrdinal: number;
   readonly hasT3Mcp: boolean;
 }): string {
   return input.runOrdinal === 1 && input.hasT3Mcp
-    ? prependT3OrchestrationInstructions(input.prompt)
+    ? prependCinderdeckOrchestrationInstructions(input.prompt)
     : input.prompt;
 }
 
-export function t3OrchestrationSystemPrompt(hasT3Mcp: boolean): string | undefined {
-  return hasT3Mcp ? T3_CODE_ORCHESTRATION_INSTRUCTIONS : undefined;
+export function cinderdeckOrchestrationSystemPrompt(hasT3Mcp: boolean): string | undefined {
+  return hasT3Mcp ? CINDERDECK_ORCHESTRATION_INSTRUCTIONS : undefined;
 }

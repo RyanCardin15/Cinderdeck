@@ -144,9 +144,9 @@
       "types": "./src/projectSettings.ts",
       "import": "./src/projectSettings.ts"
     },
-    "./t3ProjectFile": {
-      "types": "./src/t3ProjectFile.ts",
-      "import": "./src/t3ProjectFile.ts"
+    "./cinderdeckProjectFile": {
+      "types": "./src/cinderdeckProjectFile.ts",
+      "import": "./src/cinderdeckProjectFile.ts"
     },
     "./orchestrationTiming": {
       "types": "./src/orchestrationTiming.ts",
@@ -352,9 +352,9 @@
       "types": "./src/orchestrationV2Timeline.ts",
       "import": "./src/orchestrationV2Timeline.ts"
     },
-    "./t3McpToolPresentation": {
-      "types": "./src/t3McpToolPresentation.ts",
-      "import": "./src/t3McpToolPresentation.ts"
+    "./cinderdeckMcpToolPresentation": {
+      "types": "./src/cinderdeckMcpToolPresentation.ts",
+      "import": "./src/cinderdeckMcpToolPresentation.ts"
     },
     "./Array": {
       "types": "./src/Array.ts",

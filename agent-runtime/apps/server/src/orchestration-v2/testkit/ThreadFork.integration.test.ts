@@ -31,6 +31,7 @@ import { runOrchestratorV2ProviderReplayScenario } from "./ProviderReplayHarness
 import {
   decodeProviderReplayNdjson,
   materializeReplayTranscriptWorkspace,
+  materializeReplayTranscriptCodexThreadOptions,
 } from "./ReplayTranscriptNdjson.ts";
 
 const CODEX_MODEL_SELECTION = {
@@ -465,7 +466,10 @@ describe("orchestration V2 thread fork", () => {
         ),
       );
       const transcript = yield* CodexOrchestratorReplayHarness.decodeTranscript(
-        materializeReplayTranscriptWorkspace(rawTranscript, cwd),
+        materializeReplayTranscriptCodexThreadOptions(
+          materializeReplayTranscriptWorkspace(rawTranscript, cwd),
+          { cwd, model: CODEX_MODEL_SELECTION.model, readOnly: true },
+        ),
       );
 
       const materialized = yield* Effect.gen(function* () {

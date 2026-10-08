@@ -47,16 +47,16 @@ const invocation = (
 
 function makeProject(
   repositoryIdentity: OrchestrationProjectShell["repositoryIdentity"] = {
-    canonicalKey: "github.com/t3tools/t3code",
+    canonicalKey: "github.com/fixture/cinderdeck",
     locator: {
       source: "git-remote",
       remoteName: "origin",
-      remoteUrl: "git@github.com:T3Tools/T3Code.git",
+      remoteUrl: "git@github.com:Fixture/Cinderdeck.git",
     },
     provider: "github",
-    displayName: "T3Tools/T3Code",
-    owner: "T3Tools",
-    name: "T3Code",
+    displayName: "Fixture/Cinderdeck",
+    owner: "Fixture",
+    name: "Cinderdeck",
   },
 ): OrchestrationProjectShell {
   return {
@@ -101,9 +101,9 @@ function makeLink(
   const { headBranch, baseBranch, ...rest } = overrides;
   return {
     host: "github.com",
-    repository: "t3tools/t3code",
+    repository: "fixture/cinderdeck",
     number,
-    url: `https://github.com/t3tools/cinderdeck/pull/${number}`,
+    url: `https://github.com/fixture/cinderdeck/pull/${number}`,
     source: "manual",
     linkedAt: "2026-08-10T00:00:00.000Z",
     snapshot:
@@ -200,13 +200,13 @@ describe("pull request toolkit handlers", () => {
     Effect.gen(function* () {
       const harness = yield* makeHarness();
       const result = yield* harness.call("link_pull_request", {
-        url: "https://github.com/T3Tools/T3Code/pull/123/files",
+        url: "https://github.com/Fixture/Cinderdeck/pull/123/files",
       });
       expect(result).toEqual({
         host: "github.com",
-        repository: "t3tools/t3code",
+        repository: "fixture/cinderdeck",
         number: 123,
-        url: "https://github.com/T3Tools/T3Code/pull/123/files",
+        url: "https://github.com/Fixture/Cinderdeck/pull/123/files",
         alreadyLinked: false,
       });
       expect(yield* Ref.get(harness.commands)).toMatchObject([
@@ -214,7 +214,7 @@ describe("pull request toolkit handlers", () => {
           type: "thread.pull-request.link",
           threadId: THREAD_ID,
           host: "github.com",
-          repository: "t3tools/t3code",
+          repository: "fixture/cinderdeck",
           number: 123,
           source: "agent",
         },
@@ -226,7 +226,7 @@ describe("pull request toolkit handlers", () => {
     Effect.gen(function* () {
       const harness = yield* makeHarness();
       const result = yield* harness.call("watch_pull_request", {
-        url: "https://github.com/t3tools/cinderdeck/pull/9",
+        url: "https://github.com/fixture/cinderdeck/pull/9",
       });
       // The harness thread never changes, so the result reports what it still holds.
       expect(result).toMatchObject({ number: 9, watching: false, wasWatching: false });
@@ -235,7 +235,7 @@ describe("pull request toolkit handlers", () => {
           type: "thread.pull-request.watch",
           number: 9,
           watching: true,
-          link: { url: "https://github.com/t3tools/cinderdeck/pull/9", source: "agent" },
+          link: { url: "https://github.com/fixture/cinderdeck/pull/9", source: "agent" },
         },
       ]);
     }),
@@ -262,11 +262,11 @@ describe("pull request toolkit handlers", () => {
         ]),
       });
       const error = yield* harness
-        .call("watch_pull_request", { repository: "t3tools/t3code", number: 1 })
+        .call("watch_pull_request", { repository: "fixture/cinderdeck", number: 1 })
         .pipe(Effect.flip);
       expect(error).toMatchObject({ _tag: "PullRequestNotOpenError", state: "merged" });
       expect(
-        yield* harness.call("unwatch_pull_request", { repository: "t3tools/t3code", number: 3 }),
+        yield* harness.call("unwatch_pull_request", { repository: "fixture/cinderdeck", number: 3 }),
       ).toMatchObject({ wasWatching: true });
       expect(yield* Ref.get(harness.commands)).toMatchObject([
         { type: "thread.pull-request.watch", number: 3, watching: false },
@@ -278,14 +278,14 @@ describe("pull request toolkit handlers", () => {
     Effect.gen(function* () {
       const harness = yield* makeHarness();
       const result = yield* harness.call("link_pull_request", {
-        repository: "T3Tools/Other",
+        repository: "Fixture/Other",
         number: 7,
       });
       expect(result).toEqual({
         host: "github.com",
-        repository: "t3tools/other",
+        repository: "fixture/other",
         number: 7,
-        url: "https://github.com/t3tools/other/pull/7",
+        url: "https://github.com/fixture/other/pull/7",
         alreadyLinked: false,
       });
     }),
@@ -357,7 +357,7 @@ describe("pull request toolkit handlers", () => {
       expect(error).toMatchObject({ _tag: "PullRequestTargetIncompleteError" });
       const unknown = yield* harness
         .call("link_pull_request", {
-          url: "https://github.com/t3tools/cinderdeck/issues/1?token=private-value",
+          url: "https://github.com/fixture/cinderdeck/issues/1?token=private-value",
         })
         .pipe(Effect.flip);
       expect(unknown).toMatchObject({ _tag: "PullRequestUrlInvalidError" });
@@ -374,7 +374,7 @@ describe("pull request toolkit handlers", () => {
           command.type === "thread.pull-request.link" ? "already linked" : null,
       });
       const result = yield* harness.call("link_pull_request", {
-        url: "https://github.com/t3tools/cinderdeck/pull/123",
+        url: "https://github.com/fixture/cinderdeck/pull/123",
       });
       expect(result.alreadyLinked).toBe(true);
     }),
@@ -390,17 +390,17 @@ describe("pull request toolkit handlers", () => {
             : null,
       });
       const linked = yield* harness.call("unlink_pull_request", {
-        repository: "t3tools/t3code",
+        repository: "fixture/cinderdeck",
         number: 5,
       });
       expect(linked).toEqual({
         host: "github.com",
-        repository: "t3tools/t3code",
+        repository: "fixture/cinderdeck",
         number: 5,
         wasLinked: true,
       });
       const missing = yield* harness.call("unlink_pull_request", {
-        url: "https://github.com/t3tools/cinderdeck/pull/9",
+        url: "https://github.com/fixture/cinderdeck/pull/9",
       });
       expect(missing.wasLinked).toBe(false);
       expect(yield* Ref.get(harness.commands)).toMatchObject([
@@ -414,7 +414,7 @@ describe("pull request toolkit handlers", () => {
       makeThread([
         makeLink(42, {
           host: "forge.example",
-          url: "http://forge.example:3000/t3tools/cinderdeck/pulls/42",
+          url: "http://forge.example:3000/fixture/cinderdeck/pulls/42",
         }),
       ]),
     );
@@ -444,9 +444,9 @@ describe("pull request toolkit handlers", () => {
       expect(result.pullRequests.map((entry) => entry.number)).toEqual([3, 1, 2, 10]);
       expect(result.pullRequests[0]).toEqual({
         host: "github.com",
-        repository: "t3tools/t3code",
+        repository: "fixture/cinderdeck",
         number: 3,
-        url: "https://github.com/t3tools/cinderdeck/pull/3",
+        url: "https://github.com/fixture/cinderdeck/pull/3",
         source: "agent",
         watching: false,
         state: "open",
@@ -477,7 +477,7 @@ describe("listThreadPullRequests", () => {
       kind: "native" as const,
       id: "stack-1",
       number: 1,
-      url: "https://github.com/t3tools/cinderdeck/stack/1",
+      url: "https://github.com/fixture/cinderdeck/stack/1",
       base: "main",
       layers: [
         { number: 1, headBranch: "a", state: "open" as const },

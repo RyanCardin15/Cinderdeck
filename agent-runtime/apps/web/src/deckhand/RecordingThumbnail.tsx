@@ -111,7 +111,7 @@ export function RecordingThumbnail({
       ref={node}
       className={`${styles.frame} ${className ?? ""}`}
       style={{ padding: 0, height: duration === undefined ? "100%" : 58 }}
-      title={unavailable ? "Thumbnail unavailable" : undefined}
+      aria-label={unavailable ? "Thumbnail unavailable" : undefined}
     >
       {url ? (
         <img

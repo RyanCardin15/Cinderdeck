@@ -6,13 +6,13 @@ import { ProjectScriptIcon } from "./project.ts";
 import type { ProjectScopedServerSettingKey, ServerSettings } from "./settings.ts";
 
 /** File name of the checked-in Cinderdeck project file, resolved at the workspace root. */
-export const T3_PROJECT_FILE_NAME = "t3.json";
+export const CINDERDECK_PROJECT_FILE_NAME = "t3.json";
 
-/** Public URL of the published JSON Schema for {@link T3ProjectFile}. */
-export const T3_PROJECT_FILE_SCHEMA_URL = "https://raw.githubusercontent.com/RyanCardin15/Cinderdeck/main/agent-runtime/packages/contracts/project.schema.json";
+/** Public URL of the published JSON Schema for {@link CinderdeckProjectFile}. */
+export const CINDERDECK_PROJECT_FILE_SCHEMA_URL = "https://raw.githubusercontent.com/RyanCardin15/Cinderdeck/main/agent-runtime/packages/contracts/project.schema.json";
 
-const T3_PROJECT_FILE_PATH_MAX_LENGTH = 512;
-const T3_PROJECT_FILE_MAX_SCRIPTS = 50;
+const CINDERDECK_PROJECT_FILE_PATH_MAX_LENGTH = 512;
+const CINDERDECK_PROJECT_FILE_MAX_SCRIPTS = 50;
 
 // Annotations go on the encoded (string) side so they survive into the
 // published JSON Schema; decoding still trims and re-validates non-emptiness.
@@ -25,7 +25,7 @@ const trimmedNonEmpty = (annotations: { readonly description: string }, maxLengt
   return encoded.pipe(Schema.decodeTo(encoded, SchemaTransformation.trim()));
 };
 
-export const T3ProjectFileScript = Schema.Struct({
+export const CinderdeckProjectFileScript = Schema.Struct({
   name: trimmedNonEmpty({
     description: "Display name for the script, shown in the Cinderdeck scripts menu.",
   }),
@@ -64,12 +64,12 @@ export const T3ProjectFileScript = Schema.Struct({
 }).annotate({
   description: "A project script that team members can import into Cinderdeck.",
 });
-export type T3ProjectFileScript = typeof T3ProjectFileScript.Type;
+export type CinderdeckProjectFileScript = typeof CinderdeckProjectFileScript.Type;
 
-export const T3ProjectFile = Schema.Struct({
+export const CinderdeckProjectFile = Schema.Struct({
   $schema: Schema.optionalKey(
     Schema.String.annotate({
-      description: `URL of the JSON Schema for this file, typically "${T3_PROJECT_FILE_SCHEMA_URL}".`,
+      description: `URL of the JSON Schema for this file, typically "${CINDERDECK_PROJECT_FILE_SCHEMA_URL}".`,
     }),
   ),
   iconPath: Schema.optionalKey(
@@ -78,7 +78,7 @@ export const T3ProjectFile = Schema.Struct({
         description:
           'Workspace-relative path to the project icon (e.g. "assets/logo.svg"). Checked before Cinderdeck\'s built-in icon locations.',
       },
-      T3_PROJECT_FILE_PATH_MAX_LENGTH,
+      CINDERDECK_PROJECT_FILE_PATH_MAX_LENGTH,
     ),
   ),
   defaultThreadEnvMode: Schema.optionalKey(
@@ -94,18 +94,18 @@ export const T3ProjectFile = Schema.Struct({
     }),
   ),
   scripts: Schema.optionalKey(
-    Schema.Array(T3ProjectFileScript)
+    Schema.Array(CinderdeckProjectFileScript)
       .annotate({
         description: "Project scripts shared with everyone who opens this repository in Cinderdeck.",
       })
-      .check(Schema.isMaxLength(T3_PROJECT_FILE_MAX_SCRIPTS)),
+      .check(Schema.isMaxLength(CINDERDECK_PROJECT_FILE_MAX_SCRIPTS)),
   ),
 }).annotate({
   title: "Cinderdeck project file",
   description:
     "Checked-in project configuration for Cinderdeck (t3.json at the repository root). See the Cinderdeck repository for documentation.",
 });
-export type T3ProjectFile = typeof T3ProjectFile.Type;
+export type CinderdeckProjectFile = typeof CinderdeckProjectFile.Type;
 
 /**
  * Settings a repository can also declare in t3.json. A key here must be
@@ -122,12 +122,12 @@ export const PROJECT_FILE_BACKED_SETTINGS = {
 } as const satisfies {
   readonly [K in ProjectScopedServerSettingKey]?: {
     readonly field: {
-      readonly [F in keyof T3ProjectFile]: T3ProjectFile[F] extends
+      readonly [F in keyof CinderdeckProjectFile]: CinderdeckProjectFile[F] extends
         | Exclude<ServerSettings[K], null>
         | undefined
         ? F
         : never;
-    }[keyof T3ProjectFile];
+    }[keyof CinderdeckProjectFile];
     readonly builtIn: Exclude<ServerSettings[K], null>;
   };
 };

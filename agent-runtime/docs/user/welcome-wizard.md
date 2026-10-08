@@ -5,26 +5,9 @@ time. Existing workspaces skip this flow.
 
 ## Connect your computers
 
-Select one or more computers to set up. If you opened Cinderdeck directly from a
-server or the desktop app, that computer is already connected and selected.
-It is identified by its name, which may differ from the device running your
-browser.
+The native Cinderdeck app owns the execution computer and launches its private runtime. Open the complete app before continuing setup. Use **Settings → Connections → Pairing links** to connect a mobile companion over your private network or tailnet; see [companion access](./remote-access.md).
 
-You can add more computers before continuing:
-
-- **Remote connections** connects computers that are signed in to your account.
-  [Install the CLI](./install.md#command-line) and run `t3 connect` on each
-  computer you want to add, then start Cinderdeck or run `t3 serve` so the
-  computer stays available.
-- **Add a computer** connects directly to a server on your network or tailnet.
-  Start the server with `t3 serve`, then run `t3 pair --tailscale` and paste
-  the pairing link. You can also run `t3 serve --host <address>` and use
-  `t3 pair` when the server is already reachable on your network.
-
-Saved computers and computers discovered through Remote connections are selected by
-default. Uncheck any you do not want to set up; this does not disconnect them.
-Continue when your selected computers are connected. Setup checks
-agents across the selected computers, then offers project import grouped by computer.
+The runtime's provider and project setup applies to the selected execution computer. It uses that computer's provider home and authentication.
 
 If Cinderdeck cannot confirm the workspace during startup, the setup flow shows
 **Still connecting** instead of opening the app. Select **Reload** to try again.

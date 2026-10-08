@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 import sys
+import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNTIME = ROOT / "agent-runtime"
@@ -64,4 +65,5 @@ for license_path in (ROOT / "LICENSE", RUNTIME / "LICENSE", ROOT / "NOTICE"):
 if errors:
     print("\n".join(errors), file=sys.stderr)
     sys.exit(1)
+subprocess.run([sys.executable, str(ROOT / "scripts/check-branding.py")], check=True)
 print(f"Cinderdeck repository boundaries and {len(packages)} workspace packages verified.")

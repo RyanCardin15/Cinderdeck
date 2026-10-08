@@ -209,7 +209,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
     }
     if (capability === null) {
       return yield* failWith(
-        "Remote updates require the Cinderdeck background service. Run `t3 service install` on the server machine.",
+        "Update Cinderdeck on the execution computer using its native app update controls.",
       );
     }
 

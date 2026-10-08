@@ -135,13 +135,17 @@ const make = Effect.gen(function* () {
     title: string,
     sequence: number,
     objective?: string,
+    cachedShell?: OrchestrationV2ThreadShell | null,
   ) =>
     sql
       .withTransaction(
         Effect.gen(function* () {
           // Canonical control reads and their durable event watermark share one SQLite
           // transaction. No transcript is copied and a timer never advances session state.
-          const shell = yield* projections.getThreadShell(binding.threadId);
+          const shell =
+            cachedShell === undefined
+              ? yield* projections.getThreadShell(binding.threadId)
+              : cachedShell;
           if (!shell) return yield* new ManagedSessionsError({ reason: "source_unavailable" });
           const records = yield* projections.getThreadRecords(binding.threadId, [
             "providerThreads",
@@ -455,7 +459,15 @@ const make = Effect.gen(function* () {
           );
           const sessions = yield* Effect.forEach(group.slice(0, 4), (row) =>
             decodeBinding(row.record_json).pipe(
-              Effect.flatMap((binding) => readCurrent(binding, row.title, sequence, row.objective)),
+              Effect.flatMap((binding) =>
+                readCurrent(
+                  binding,
+                  row.title,
+                  sequence,
+                  row.objective,
+                  shells.get(binding.threadId),
+                ),
+              ),
             ),
           );
           return {

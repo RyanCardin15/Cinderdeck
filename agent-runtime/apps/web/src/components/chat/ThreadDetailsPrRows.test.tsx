@@ -22,9 +22,9 @@ function link(
 ): ThreadPullRequestLink {
   return {
     host: "github.com",
-    repository: "pingdotgg/t3code",
+    repository: "example/cinderdeck",
     number,
-    url: `https://github.com/pingdotgg/t3code/pull/${number}`,
+    url: `https://github.com/example/cinderdeck/pull/${number}`,
     source: "manual",
     linkedAt: updatedAt,
     snapshot: {

@@ -156,7 +156,6 @@ function LaneNameEditor({ environmentId, installationID, resource, enabled }: Pr
           type="button"
           className={styles.name}
           disabled={!ready}
-          title="Click to rename lane"
           aria-label={`Rename lane ${displayName}`}
           onClick={() => {
             setDraft(displayName);

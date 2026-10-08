@@ -1,43 +1,43 @@
 import { assert, describe, it } from "@effect/vitest";
 
 import {
-  T3_CODE_ORCHESTRATION_INSTRUCTIONS,
-  t3AcpPromptWithInstructions,
-  t3OrchestrationPromptForFirstRun,
-  t3OrchestrationSystemPrompt,
-} from "./T3OrchestrationInstructions.ts";
+  CINDERDECK_ORCHESTRATION_INSTRUCTIONS,
+  cinderdeckAcpPromptWithInstructions,
+  cinderdeckOrchestrationPromptForFirstRun,
+  cinderdeckOrchestrationSystemPrompt,
+} from "./CinderdeckOrchestrationInstructions.ts";
 
 describe("Cinderdeck orchestration provider instructions", () => {
   it("distinguishes delegated subagents from ordinary top-level threads", () => {
-    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "Use `delegate_task`");
-    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "ordinary top-level Cinderdeck conversations");
-    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "Never use them merely");
-    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "cross-provider");
-    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "call `delegate_task` again");
+    assert.include(CINDERDECK_ORCHESTRATION_INSTRUCTIONS, "Use `delegate_task`");
+    assert.include(CINDERDECK_ORCHESTRATION_INSTRUCTIONS, "ordinary top-level Cinderdeck conversations");
+    assert.include(CINDERDECK_ORCHESTRATION_INSTRUCTIONS, "Never use them merely");
+    assert.include(CINDERDECK_ORCHESTRATION_INSTRUCTIONS, "cross-provider");
+    assert.include(CINDERDECK_ORCHESTRATION_INSTRUCTIONS, "call `delegate_task` again");
     assert.include(
-      T3_CODE_ORCHESTRATION_INSTRUCTIONS,
+      CINDERDECK_ORCHESTRATION_INSTRUCTIONS,
       "Do not use `t3_thread_send` on `childThreadId`",
     );
   });
 
   it("names the injected Cinderdeck MCP server consistently for lazy direct calls without renaming wire tool IDs", () => {
-    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "The `deckhand` MCP server");
+    assert.include(CINDERDECK_ORCHESTRATION_INSTRUCTIONS, "The `deckhand` MCP server");
     assert.include(
-      T3_CODE_ORCHESTRATION_INSTRUCTIONS,
+      CINDERDECK_ORCHESTRATION_INSTRUCTIONS,
       "tools.mcp__deckhand__orchestrator_capabilities({})",
     );
-    assert.notInclude(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "mcp__t3_code__");
-    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "`t3_thread_launch`");
+    assert.notInclude(CINDERDECK_ORCHESTRATION_INSTRUCTIONS, "mcp__t3_code__");
+    assert.include(CINDERDECK_ORCHESTRATION_INSTRUCTIONS, "`t3_thread_launch`");
   });
   it("documents structured schedules instead of JSON strings", () => {
-    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "structured object, never as JSON text");
-    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, '"everyMs":3600000');
-    assert.include(T3_CODE_ORCHESTRATION_INSTRUCTIONS, "bindToCurrentThread=false");
+    assert.include(CINDERDECK_ORCHESTRATION_INSTRUCTIONS, "structured object, never as JSON text");
+    assert.include(CINDERDECK_ORCHESTRATION_INSTRUCTIONS, '"everyMs":3600000');
+    assert.include(CINDERDECK_ORCHESTRATION_INSTRUCTIONS, "bindToCurrentThread=false");
   });
 
   it("injects prompt fallback only for an MCP-enabled first run", () => {
     const prompt = "Inspect the repository.";
-    const injected = t3OrchestrationPromptForFirstRun({
+    const injected = cinderdeckOrchestrationPromptForFirstRun({
       prompt,
       runOrdinal: 1,
       hasT3Mcp: true,
@@ -46,22 +46,22 @@ describe("Cinderdeck orchestration provider instructions", () => {
     assert.include(injected, "<t3_code_orchestration_instructions>");
     assert.include(injected, `<user_request>\n${prompt}\n</user_request>`);
     assert.equal(
-      t3OrchestrationPromptForFirstRun({ prompt, runOrdinal: 2, hasT3Mcp: true }),
+      cinderdeckOrchestrationPromptForFirstRun({ prompt, runOrdinal: 2, hasT3Mcp: true }),
       prompt,
     );
     assert.equal(
-      t3OrchestrationPromptForFirstRun({ prompt, runOrdinal: 1, hasT3Mcp: false }),
+      cinderdeckOrchestrationPromptForFirstRun({ prompt, runOrdinal: 1, hasT3Mcp: false }),
       prompt,
     );
   });
 
   it("only exposes the system prompt when the Cinderdeck MCP server is attached", () => {
-    assert.equal(t3OrchestrationSystemPrompt(false), undefined);
-    assert.equal(t3OrchestrationSystemPrompt(true), T3_CODE_ORCHESTRATION_INSTRUCTIONS);
+    assert.equal(cinderdeckOrchestrationSystemPrompt(false), undefined);
+    assert.equal(cinderdeckOrchestrationSystemPrompt(true), CINDERDECK_ORCHESTRATION_INSTRUCTIONS);
   });
 
   it("gives ACP sessions provider-neutral mode, browser, and orchestration guidance", () => {
-    const injected = t3AcpPromptWithInstructions({
+    const injected = cinderdeckAcpPromptWithInstructions({
       prompt: "Inspect the repository.",
       state: { interactionMode: "default", hasT3Mcp: true },
     });
@@ -77,18 +77,18 @@ describe("Cinderdeck orchestration provider instructions", () => {
     const defaultState = { interactionMode: "default", hasT3Mcp: true } as const;
 
     assert.equal(
-      t3AcpPromptWithInstructions({ prompt, state: defaultState, previousState: defaultState }),
+      cinderdeckAcpPromptWithInstructions({ prompt, state: defaultState, previousState: defaultState }),
       prompt,
     );
     assert.include(
-      t3AcpPromptWithInstructions({
+      cinderdeckAcpPromptWithInstructions({
         prompt,
         state: { ...defaultState, interactionMode: "plan" },
         previousState: defaultState,
       }),
       "Cinderdeck interaction mode: Plan",
     );
-    const withoutMcp = t3AcpPromptWithInstructions({
+    const withoutMcp = cinderdeckAcpPromptWithInstructions({
       prompt,
       state: { interactionMode: "default", hasT3Mcp: false },
     });

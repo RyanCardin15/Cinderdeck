@@ -276,3 +276,5 @@ automatically. HTML previews cannot access your Cinderdeck session.
 
 On mobile, select a PDF attachment or link to open it. iOS uses the native viewer;
 Android opens a compatible installed file viewer.
+
+Workspace file previews classify literal filenames. Characters such as `?` and `#` are part of the filename, rather than URL query or fragment delimiters; the actual filename must end in a supported extension.

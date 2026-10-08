@@ -33,7 +33,7 @@ describe("Local Cinderdeck diagnostics", () => {
             DECKHAND_PROFILE_ROOT: root,
             T3CODE_HOME: secret,
             DECKHAND_OTLP_TRACES_URL: secret,
-            DECKHAND_DESKTOP_UPDATE_REPOSITORY: "pingdotgg/t3code",
+            DECKHAND_DESKTOP_UPDATE_REPOSITORY: "example/cinderdeck",
             OPENAI_API_KEY: secret,
           },
         });
@@ -45,7 +45,7 @@ describe("Local Cinderdeck diagnostics", () => {
           { name: "statev2.sqlite", state: "present" },
         );
         assert.deepEqual(report.providers, []);
-        assert.equal(report.configuration.updateFeed, "upstream_refused");
+        assert.equal(report.configuration.updateFeed, "configured_not_verified");
         assert.equal(report.integration.state, "not_contacted");
         assert.equal(yield* fs.readFileString(path.join(store, "statev2.sqlite")), secret);
         assert.isFalse(yield* fs.exists(path.join(store, "client-settings.json")));

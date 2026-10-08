@@ -77,11 +77,61 @@ const labelled = (entry: ProviderReplayEntry, label: string): ProviderReplayEntr
  */
 const mcpRules = (name: string) => [
   { action: "t3-code-*", resource: "*", effect: "deny" },
-  { action: `t3-code-thread_${name}_*`, resource: "*", effect: "allow" },
+  { action: "deckhand-*", resource: "*", effect: "deny" },
+  { action: `deckhand-thread_${name}_*`, resource: "*", effect: "allow" },
 ];
 const FULL_ACCESS = [{ action: "*", resource: "*", effect: "allow" }];
 /** Full access for the thread named `name`. */
-const t3Rules = (name: string) => [...FULL_ACCESS, ...mcpRules(name)];
+const cinderdeckRules = (name: string) => [...FULL_ACCESS, ...mcpRules(name)];
+
+// Old recordings omit the owned MCP namespace denial. Keep every other permission exact.
+const materializeRecordedMcpRules = (entries: ReadonlyArray<ProviderReplayEntry>) =>
+  entries.map((entry) => {
+    if (entry.type !== "expect_outbound" || typeof entry.frame !== "object" || entry.frame === null)
+      return entry;
+    const frame = entry.frame;
+    if (
+      !("type" in frame) ||
+      !["session.create", "session.update"].includes(String(frame.type)) ||
+      !("input" in frame) ||
+      typeof frame.input !== "object" ||
+      frame.input === null ||
+      !("permissions" in frame.input) ||
+      !Array.isArray(frame.input.permissions)
+    )
+      return entry;
+    const permissions: ReadonlyArray<unknown> = frame.input.permissions;
+    return {
+      ...entry,
+      frame: {
+        ...frame,
+        input: {
+          ...frame.input,
+          permissions: permissions.flatMap((rule) => {
+            if (
+              typeof rule !== "object" ||
+              rule === null ||
+              !("action" in rule) ||
+              typeof rule.action !== "string"
+            )
+              return [rule];
+            if (rule.action === "t3-code-*" && "effect" in rule && rule.effect === "deny")
+              return [rule, { ...rule, action: "deckhand-*" }];
+            if (
+              rule.action.startsWith("t3-code-thread_") &&
+              "effect" in rule &&
+              rule.effect === "allow"
+            )
+              return [
+                { ...rule, action: rule.action.replace("t3-code-thread_", "deckhand-thread_") },
+              ];
+            return [rule];
+          }),
+        },
+      },
+    };
+  });
+
 /** Paths the build and plan agents allow for themselves, as 2.0.18 lists them. */
 const BUILD_PATHS = [
   {
@@ -221,7 +271,7 @@ const catalogModel = (id: string, name: string) => ({
 const createdSession = (
   directory: string,
   name: string,
-  permissions: ReadonlyArray<unknown> = t3Rules(name),
+  permissions: ReadonlyArray<unknown> = cinderdeckRules(name),
   // Only a mode that narrows Full access reads the agents' own path rules.
   narrows = false,
 ): ReadonlyArray<ProviderReplayEntry> => [
@@ -348,7 +398,7 @@ describe("OpenCode 2 through the orchestrator", () => {
             ...answeredPrompt("FIRST"),
             // The next turn resumes the session at its new selection.
             out("session.get", { sessionID: SESSION }),
-            reply("session.get", sessionInfo(cwd, t3Rules(name))),
+            reply("session.get", sessionInfo(cwd, cinderdeckRules(name))),
             out("session.switchModel", {
               sessionID: SESSION,
               model: { providerID: "opencode", id: "mimo-v2.6-flash-free" },
@@ -401,7 +451,7 @@ describe("OpenCode 2 through the orchestrator", () => {
           ...answeredPrompt("FIRST"),
           ...directoryModels(after),
           out("session.get", { sessionID: SESSION }),
-          reply("session.get", sessionInfo(before, t3Rules(name))),
+          reply("session.get", sessionInfo(before, cinderdeckRules(name))),
           // The worktree change detached the thread, so its session is loaded afresh.
           ...noOpenRequests,
           out("session.move", { sessionID: SESSION, directory: after }),
@@ -456,7 +506,7 @@ describe("OpenCode 2 through the orchestrator", () => {
             ]),
           ),
           ...noOpenRequests,
-          out("session.update", { sessionID: SESSION, permissions: t3Rules(name) }),
+          out("session.update", { sessionID: SESSION, permissions: cinderdeckRules(name) }),
           reply("session.update", null),
           out("session.move", { sessionID: SESSION, directory: after }),
           reply("session.move", null),
@@ -531,7 +581,7 @@ describe("OpenCode 2 through the orchestrator", () => {
           ...answeredPrompt("FIRST"),
           // A mode change detaches nothing: the same session is resumed with the new rules.
           out("session.get", { sessionID: SESSION }),
-          reply("session.get", sessionInfo(cwd, t3Rules(name))),
+          reply("session.get", sessionInfo(cwd, cinderdeckRules(name))),
           out("agent.list", "<any>"),
           reply("agent.list", agentList(cwd)),
           out("session.update", { sessionID: SESSION, permissions: autoEditRules(name) }),
@@ -540,7 +590,7 @@ describe("OpenCode 2 through the orchestrator", () => {
           // Back to Full access: the narrowing rules go.
           out("session.get", { sessionID: SESSION }),
           reply("session.get", sessionInfo(cwd, autoEditRules(name))),
-          out("session.update", { sessionID: SESSION, permissions: t3Rules(name) }),
+          out("session.update", { sessionID: SESSION, permissions: cinderdeckRules(name) }),
           reply("session.update", null),
           ...answeredPrompt("THIRD"),
         ],
@@ -578,7 +628,7 @@ describe("OpenCode 2 through the orchestrator", () => {
           ...answeredPrompt("PLANNED"),
           out("session.get", { sessionID: SESSION }),
           reply("session.get", sessionInfo(cwd, planRules(name))),
-          out("session.update", { sessionID: SESSION, permissions: t3Rules(name) }),
+          out("session.update", { sessionID: SESSION, permissions: cinderdeckRules(name) }),
           reply("session.update", null),
           out("session.switchAgent", { sessionID: SESSION, agent: "build" }),
           reply("session.switchAgent", null),
@@ -612,9 +662,10 @@ describe("OpenCode 2 through the orchestrator", () => {
       );
       // The recording scrubbed its directory to `<work>`; the fork it answers
       // runs where its source does, which is this test's workspace.
-      const transcript = yield* OpenCode2OrchestratorReplayHarness.decodeTranscript(
-        withDirectory(recorded, cwd),
-      );
+      const transcript = yield* OpenCode2OrchestratorReplayHarness.decodeTranscript({
+        ...withDirectory(recorded, cwd),
+        entries: materializeRecordedMcpRules(withDirectory(recorded, cwd).entries),
+      });
       const source = threadCommands({ name, worktreePath: cwd });
       const target = ThreadId.make(`thread:${name}:target`);
       const [one, two] = [source.message("one"), source.message("two")];
@@ -1149,7 +1200,7 @@ describe("OpenCode 2 through the orchestrator", () => {
         const projection = yield* runScenario({
           name,
           threadId: thread.threadId,
-          entries: recorded.entries,
+          entries: materializeRecordedMcpRules(recorded.entries),
           commands: [
             thread.create,
             thread.interactionMode("mode-plan", "plan"),

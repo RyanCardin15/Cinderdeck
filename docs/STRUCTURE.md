@@ -2,7 +2,7 @@
 
 Workspaces now groups **Services, Tasks, Workflows, and Runs** in a dedicated window. Existing Stacks definitions and service controls remain compatible. See [WORKSPACES.md](WORKSPACES.md) for the task/workflow model, editors, lifecycle, and agent API.
 
-Cinderdeck ships as one native macOS app with a private bundled runtime. `agent-runtime/` contains its agent backend, React UI, Electron preview shell, shared contracts, and mobile companion. See [UNIFIED_APP.md](UNIFIED_APP.md) for complete-app builds and ownership boundaries. The runtime is maintained directly; there is no standalone T3 release or upstream subtree maintenance process.
+Cinderdeck ships as one native macOS app with a private bundled runtime. `agent-runtime/` contains its agent backend, React UI, Electron preview shell, shared contracts, and mobile companion. See [UNIFIED_APP.md](UNIFIED_APP.md) for complete-app builds and ownership boundaries. The runtime is maintained directly; there is no standalone vendor release or upstream subtree maintenance process.
 
 This doc mirrors the current Cinderdeck codebase and runtime ownership. Keep it in sync with source, not with intended architecture.
 

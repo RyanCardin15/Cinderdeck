@@ -14,7 +14,7 @@ describe("isLegalDocumentUrl", () => {
   });
 
   it.each([
-    "https://t3.codes/download",
+    "https://abc.test/download",
     "https://example.com/legal",
     "javascript:alert(1)",
     "not-a-url",

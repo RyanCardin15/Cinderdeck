@@ -37,6 +37,7 @@ import {
 import { checkpointWorkspace } from "./ReplayFixtureWorkspace.ts";
 import {
   materializeReplayTranscriptRuntimeInstructions,
+  materializeReplayTranscriptCodexThreadOptions,
   materializeReplayTranscriptWorkspace,
   readProviderReplayTranscript,
 } from "./ReplayTranscriptNdjson.ts";
@@ -99,9 +100,19 @@ const runFixtureProvider = Effect.fn("runOrchestratorReplayFixture")(function* <
   );
   const fixtureInput = input.buildInput();
   const workspace = yield* checkpointWorkspace(input.fixtureName, fixtureInput.workspaceFiles);
+  const sandboxPolicy = input.driver.runtimePolicyOverride?.sandboxPolicy;
+  const readOnly =
+    input.driver.runtimePolicyOverride?.approvalPolicy === "never" &&
+    typeof sandboxPolicy === "object" &&
+    sandboxPolicy !== null &&
+    "type" in sandboxPolicy &&
+    sandboxPolicy.type === "readOnly";
   const transcript = yield* input.harness.decodeTranscript(
     input.driver.driver === "codex"
-      ? materializeReplayTranscriptWorkspace(replayTranscript, workspace)
+      ? materializeReplayTranscriptCodexThreadOptions(
+          materializeReplayTranscriptWorkspace(replayTranscript, workspace),
+          { readOnly },
+        )
       : replayTranscript,
   );
   const materialized = yield* materializeFixtureInput({

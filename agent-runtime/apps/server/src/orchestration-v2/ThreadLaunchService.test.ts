@@ -1120,7 +1120,7 @@ it.effect("names the worktree itself when the client provides no branch", () =>
       yield* waitUntil(() => Effect.sync(() => harness.createWorktree.mock.calls.length === 1));
       assert.match(
         harness.createWorktree.mock.calls[0]?.[0]?.newRefName ?? "",
-        /^t3code\/[0-9a-f]{8}$/u,
+        /^cinderdeck\/[0-9a-f]{8}$/u,
       );
       yield* waitUntil(() =>
         threads
@@ -1252,7 +1252,7 @@ it.effect("renames a temporary branch on an existing worktree to a generated nam
           message: "Build the feature",
           workspace: {
             type: "existing_worktree",
-            worktreePath: "/repo-worktrees/t3code-abcd1234",
+            worktreePath: "/repo-worktrees/cinderdeck-abcd1234",
             branch: "cinderdeck/abcd1234",
           },
         }),
@@ -1263,7 +1263,7 @@ it.effect("renames a temporary branch on an existing worktree to a generated nam
           .pipe(Effect.map((projection) => projection.thread.branch === "generated-branch")),
       );
       assert.deepEqual(harness.renameBranch.mock.calls[0]?.[0], {
-        cwd: "/repo-worktrees/t3code-abcd1234",
+        cwd: "/repo-worktrees/cinderdeck-abcd1234",
         oldBranch: "cinderdeck/abcd1234",
         newBranch: "generated-branch",
       });

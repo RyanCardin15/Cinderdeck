@@ -576,7 +576,7 @@ describe("GitHubCli.layer", () => {
             JSON.stringify({
               number: 42,
               title: "Add PR thread creation",
-              url: "https://github.com/pingdotgg/codething-mvp/pull/42",
+              url: "https://github.com/example/codething-mvp/pull/42",
               baseRefName: "main",
               headRefName: "feature/pr-threads",
               state: "OPEN",
@@ -604,7 +604,7 @@ describe("GitHubCli.layer", () => {
       assert.deepStrictEqual(result, {
         number: 42,
         title: "Add PR thread creation",
-        url: "https://github.com/pingdotgg/codething-mvp/pull/42",
+        url: "https://github.com/example/codething-mvp/pull/42",
         baseRefName: "main",
         headRefName: "feature/pr-threads",
         state: "open",
@@ -641,7 +641,7 @@ describe("GitHubCli.layer", () => {
             JSON.stringify({
               number: 42,
               title: "  Add PR thread creation  \n",
-              url: " https://github.com/pingdotgg/codething-mvp/pull/42 ",
+              url: " https://github.com/example/codething-mvp/pull/42 ",
               baseRefName: " main ",
               headRefName: "\tfeature/pr-threads\t",
               state: "OPEN",
@@ -667,7 +667,7 @@ describe("GitHubCli.layer", () => {
       assert.deepStrictEqual(result, {
         number: 42,
         title: "Add PR thread creation",
-        url: "https://github.com/pingdotgg/codething-mvp/pull/42",
+        url: "https://github.com/example/codething-mvp/pull/42",
         baseRefName: "main",
         headRefName: "feature/pr-threads",
         state: "open",
@@ -690,14 +690,14 @@ describe("GitHubCli.layer", () => {
               {
                 number: 0,
                 title: "invalid",
-                url: "https://github.com/pingdotgg/codething-mvp/pull/0",
+                url: "https://github.com/example/codething-mvp/pull/0",
                 baseRefName: "main",
                 headRefName: "feature/invalid",
               },
               {
                 number: 43,
                 title: "  Valid PR  ",
-                url: " https://github.com/pingdotgg/codething-mvp/pull/43 ",
+                url: " https://github.com/example/codething-mvp/pull/43 ",
                 baseRefName: " main ",
                 headRefName: " feature/pr-list ",
                 headRepository: {
@@ -722,7 +722,7 @@ describe("GitHubCli.layer", () => {
         {
           number: 43,
           title: "Valid PR",
-          url: "https://github.com/pingdotgg/codething-mvp/pull/43",
+          url: "https://github.com/example/codething-mvp/pull/43",
           baseRefName: "main",
           headRefName: "feature/pr-list",
           state: "open",
@@ -746,7 +746,7 @@ describe("GitHubCli.layer", () => {
               {
                 number: 2829,
                 title: "Codex turn mapping",
-                url: "https://github.com/pingdotgg/codething-mvp/pull/2829",
+                url: "https://github.com/example/codething-mvp/pull/2829",
                 baseRefName: "main",
                 headRefName: "cinderdeck/codex-turn-mapping",
                 state: "OPEN",
@@ -758,7 +758,7 @@ describe("GitHubCli.layer", () => {
                 },
                 headRepositoryOwner: {
                   id: "MDEyOk9yZ2FuaXphdGlvbjg5MTkxNzI3",
-                  login: "pingdotgg",
+                  login: "example",
                 },
               },
             ]),
@@ -776,15 +776,15 @@ describe("GitHubCli.layer", () => {
         {
           number: 2829,
           title: "Codex turn mapping",
-          url: "https://github.com/pingdotgg/codething-mvp/pull/2829",
+          url: "https://github.com/example/codething-mvp/pull/2829",
           baseRefName: "main",
           headRefName: "cinderdeck/codex-turn-mapping",
           state: "open",
           closedAt: null,
           mergedAt: null,
           isCrossRepository: false,
-          headRepositoryNameWithOwner: "pingdotgg/codething-mvp",
-          headRepositoryOwnerLogin: "pingdotgg",
+          headRepositoryNameWithOwner: "example/codething-mvp",
+          headRepositoryOwnerLogin: "example",
         },
       ]);
     }).pipe(Effect.provide(layer)),

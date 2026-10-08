@@ -30,7 +30,7 @@ const T3_FILE_ICON_SPRITE = `
   </symbol>
 </svg>`;
 
-export const T3_PIERRE_ICONS = {
+export const CINDERDECK_PIERRE_ICONS = {
   set: "complete",
   colored: true,
   spriteSheet: T3_FILE_ICON_SPRITE,
@@ -46,7 +46,7 @@ export const T3_PIERRE_ICONS = {
   ),
 } satisfies FileTreeIcons;
 
-const completeIconResolver = createFileTreeIconResolver(T3_PIERRE_ICONS);
+const completeIconResolver = createFileTreeIconResolver(CINDERDECK_PIERRE_ICONS);
 
 const LANGUAGE_EXTENSION_ALIASES: Record<string, string> = {
   bash: "sh",

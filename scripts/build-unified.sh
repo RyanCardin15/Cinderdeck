@@ -373,11 +373,21 @@ PY
 }
 sign_tree() {
   local tree=$1 skip=${2:-} electron_tree=${3:-0} item description
+  # Xcode's Debug launcher is a stub for Cinderdeck.debug.dylib and
+  # __preview.dylib. Sign those sibling libraries before codesign inspects
+  # the launcher, regardless of directory enumeration order.
+  while IFS= read -r -d '' item; do
+    if [[ -n "$skip" ]]; then case "$item" in "$skip"|"$skip"/*) continue ;; esac; fi
+    [[ -f "$item" && ! -L "$item" && "$item" == *.dylib ]] || continue
+    description=$(file -b "$item")
+    [[ "$description" != *Mach-O* ]] || sign_item "$item"
+  done < <(find "$tree" -depth -print0)
   # -depth visits children before enclosing bundles. Never follow framework symlinks.
   while IFS= read -r -d '' item; do
     [[ "$item" != "$STAGED_APP" ]] || continue
     if [[ -n "$skip" ]]; then case "$item" in "$skip"|"$skip"/*) continue ;; esac; fi
     if [[ -f "$item" && ! -L "$item" ]]; then
+      [[ "$item" != *.dylib ]] || continue
       description=$(file -b "$item")
       [[ "$description" != *Mach-O* ]] || sign_item "$item"
     elif [[ -d "$item" && ! -L "$item" ]]; then

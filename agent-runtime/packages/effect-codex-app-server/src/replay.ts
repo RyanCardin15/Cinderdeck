@@ -177,7 +177,7 @@ export function normalizeContextHandoffText(value: string): string {
   return `${value.slice(0, headerEndIndex + 2)}<dynamic-summary>${value.slice(userMessageIndex)}`;
 }
 
-function normalizeReplayFrame(value: unknown): unknown {
+export function normalizeReplayFrame(value: unknown): unknown {
   if (typeof value === "string") {
     return normalizeContextHandoffText(value);
   }
@@ -200,10 +200,15 @@ function normalizeReplayFrame(value: unknown): unknown {
   ) {
     const params = normalized.params as Record<string, unknown>;
     if (typeof params.clientInfo === "object" && params.clientInfo !== null) {
+      const clientInfo = params.clientInfo as Record<string, unknown>;
+      // Preserve original recordings while mapping only their exact legacy
+      // name/title pair to the owned client. Other protocol fields still match.
+      const legacyClient = clientInfo.name === "T3 Code" && clientInfo.title === "T3 Code";
       normalized.params = {
         ...params,
         clientInfo: {
-          ...(params.clientInfo as Record<string, unknown>),
+          ...clientInfo,
+          ...(legacyClient ? { name: "Cinderdeck", title: "Cinderdeck" } : {}),
           version: "<ignored>",
         },
       };

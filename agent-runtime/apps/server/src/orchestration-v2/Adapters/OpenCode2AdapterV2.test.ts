@@ -79,10 +79,10 @@ const mcpRules = [
   { action: "deckhand-*", resource: "*", effect: "deny" },
   { action: "deckhand-thread_opencode2-adapter_*", resource: "*", effect: "allow" },
 ];
-const t3Rules = [{ action: "*", resource: "*", effect: "allow" }, ...mcpRules];
+const cinderdeckRules = [{ action: "*", resource: "*", effect: "allow" }, ...mcpRules];
 const sessionInfo = (overrides: Record<string, unknown> = {}) => ({
   id: SESSION,
-  permissions: t3Rules,
+  permissions: cinderdeckRules,
   projectID: "global",
   model: { id: "big-pickle", providerID: "opencode", variant: "default" },
   cost: 0,
@@ -1548,7 +1548,7 @@ describe("OpenCode2 adapter", () => {
           }),
         ),
         ...noOpenRequests,
-        out("session.update", { sessionID: SESSION, permissions: t3Rules }),
+        out("session.update", { sessionID: SESSION, permissions: cinderdeckRules }),
         reply("session.update", null),
       ]);
       yield* runtime.resumeThread({
@@ -2682,7 +2682,7 @@ describe("OpenCode2 adapter", () => {
         const server = "deckhand-thread_opencode2-adapter";
         const { runtime, thread } = yield* resumed([
           // Registered for the session's directory under the thread's own name;
-          // the session's rules allow only this name's tools (see `t3Rules`).
+          // the session's rules allow only this name's tools (see `cinderdeckRules`).
           out("mcp.add", {
             server,
             "location[directory]": WORK,
@@ -2823,7 +2823,7 @@ describe("OpenCode2 adapter", () => {
         out("session.create", {
           location: { directory: custom },
           model: { providerID: "opencode", id: "big-pickle" },
-          permissions: t3Rules,
+          permissions: cinderdeckRules,
         }),
         replyData("session.create", sessionInfo({ location: { directory: custom } })),
         out("session.prompt", { sessionID: SESSION, text: "<any>" }),

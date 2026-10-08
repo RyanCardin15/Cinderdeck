@@ -35,7 +35,7 @@ message) are fine next to the service; the capability itself is the method.
 
 One module per service, in this order: imports, errors and schemas, the `Context.Service` tag with
 its interface inline, `make`, then `layer`. [`WorkspacePaths.ts`](../../apps/server/src/workspace/WorkspacePaths.ts)
-and [`T3ProjectFileLoader.ts`](../../apps/server/src/project/T3ProjectFileLoader.ts) are good
+and [`CinderdeckProjectFileLoader.ts`](../../apps/server/src/project/CinderdeckProjectFileLoader.ts) are good
 references.
 
 ```ts

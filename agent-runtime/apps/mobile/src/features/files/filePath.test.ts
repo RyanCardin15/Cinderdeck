@@ -48,16 +48,16 @@ describe("file preview types", () => {
 describe("fileHeaderSubtitle", () => {
   it("places a workspace file under its project", () => {
     expect(
-      fileHeaderSubtitle("t3code", "apps/mobile/src/features/threads/fileChipMenu.test.ts"),
-    ).toBe("t3code · apps/mobile/src/features/threads");
+      fileHeaderSubtitle("cinderdeck", "apps/mobile/src/features/threads/fileChipMenu.test.ts"),
+    ).toBe("cinderdeck · apps/mobile/src/features/threads");
   });
 
   it("shows only the directory for a host file outside the workspace", () => {
     // It is not under the project, so naming the project there would be a lie.
-    expect(fileHeaderSubtitle("t3code", "/tmp/report.md")).toBe("/tmp");
+    expect(fileHeaderSubtitle("cinderdeck", "/tmp/report.md")).toBe("/tmp");
   });
 
   it("shows only the project for a file at the workspace root", () => {
-    expect(fileHeaderSubtitle("t3code", "README.md")).toBe("t3code");
+    expect(fileHeaderSubtitle("cinderdeck", "README.md")).toBe("cinderdeck");
   });
 });

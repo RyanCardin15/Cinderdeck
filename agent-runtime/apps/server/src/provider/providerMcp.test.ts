@@ -25,14 +25,14 @@ const codexEntry = (overrides: Partial<CodexMcpStatusEntry> & { name: string }) 
   }) satisfies CodexMcpStatusEntry;
 
 const CODEX_TRANSPORT_ERROR =
-  "MCP startup failed: handshaking with MCP server failed: Send message error Transport [codex_rmcp_client::event_notification_transport::EventNotificationTransport<rmcp::transport::worker::WorkerTransport<rmcp::transport::streamable_http_client::StreamableHttpClientWorker<codex_rmcp_client::http_client_adapter::StreamableHttpClientAdapter>>>] error: Client error: HTTP request failed: error sending request for url (https://example.invalid/mcp), when send initialize request: Send message error Transport [codex_rmcp_client::x::Y] error";
+  "MCP startup failed: handshaking with MCP server failed: Send message error Transport [codex_rmcp_client::event_notification_transport::EventNotificationTransport<rmcp::transport::worker::WorkerTransport<rmcp::transport::streamable_http_client::StreamableHttpClientWorker<codex_rmcp_client::http_client_adapter::StreamableHttpClientAdapter>>>] error: Client error: HTTP request failed: error sending request for url (https://abc.test/mcp), when send initialize request: Send message error Transport [codex_rmcp_client::x::Y] error";
 
 describe("codexMcpServersFromStatus", () => {
   const configs = readCodexMcpServerConfigs({
     mcp_servers: {
       fake: { command: "node", enabled: true, disabled_tools: ["echo"] },
       off: { command: "node", enabled: false },
-      remote: { url: "https://example.invalid/mcp", enabled: true },
+      remote: { url: "https://abc.test/mcp", enabled: true },
     },
   });
 
@@ -42,7 +42,7 @@ describe("codexMcpServersFromStatus", () => {
         codexEntry({
           name: "remote",
           authStatus: "unknown",
-          httpOrigin: "https://example.invalid",
+          httpOrigin: "https://abc.test",
           toolsError: CODEX_TRANSPORT_ERROR,
         }),
         codexEntry({
@@ -82,9 +82,9 @@ describe("codexMcpServersFromStatus", () => {
       {
         name: "remote",
         status: "failed",
-        origin: "example.invalid",
+        origin: "abc.test",
         error:
-          "MCP startup failed: handshaking with MCP server failed: Send message error Transport error: Client error: HTTP request failed: error sending request for url (https://example.invalid/mcp)",
+          "MCP startup failed: handshaking with MCP server failed: Send message error Transport error: Client error: HTTP request failed: error sending request for url (https://abc.test/mcp)",
         tools: [],
       },
     ]);
@@ -135,8 +135,8 @@ describe("claudeMcpServersFromStatus", () => {
       {
         name: "remote",
         status: "failed",
-        error: "getaddrinfo ENOTFOUND example.invalid",
-        config: { type: "http", url: "https://example.invalid/mcp" },
+        error: "getaddrinfo ENOTFOUND abc.test",
+        config: { type: "http", url: "https://abc.test/mcp" },
         scope: "user",
         source: "user",
       },
@@ -182,8 +182,8 @@ describe("claudeMcpServersFromStatus", () => {
         name: "remote",
         status: "failed",
         source: "user",
-        origin: "example.invalid",
-        error: "getaddrinfo ENOTFOUND example.invalid",
+        origin: "abc.test",
+        error: "getaddrinfo ENOTFOUND abc.test",
         tools: [],
       },
     ]);

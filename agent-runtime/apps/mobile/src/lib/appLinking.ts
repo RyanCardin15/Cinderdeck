@@ -12,6 +12,7 @@ export function shouldHandleAppLink(url: string): boolean {
   return (
     !url.includes("expo-development-client") &&
     !url.includes("://expo-sharing") &&
+    !/^cinderdeck-companion(-dev|-preview)?:\/*$/.test(url) &&
     !/^t3code(-dev|-preview)?:\/*$/.test(url)
   );
 }

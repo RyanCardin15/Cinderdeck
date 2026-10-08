@@ -247,8 +247,8 @@ const browserSessionLayer = Layer.succeed(
 const environmentLayer = Layer.succeed(
   DesktopEnvironment.DesktopEnvironment,
   DesktopEnvironment.DesktopEnvironment.of({
-    browserArtifactsDir: "/tmp/t3/dev/browser-artifacts",
-    dirname: "/tmp/t3/desktop",
+    browserArtifactsDir: "/tmp/cinderdeck/dev/browser-artifacts",
+    dirname: "/tmp/cinderdeck/desktop",
     path: {
       join: (...parts: ReadonlyArray<string>) => parts.join("/"),
     },
@@ -2309,7 +2309,7 @@ describe("PreviewManager", () => {
         const artifact = yield* manager.captureScreenshot("tab_1");
 
         expect(capturePage).toHaveBeenCalledOnce();
-        expect(mkdir).toHaveBeenCalledWith("/tmp/t3/dev/browser-artifacts");
+        expect(mkdir).toHaveBeenCalledWith("/tmp/cinderdeck/dev/browser-artifacts");
         expect(writeFile).toHaveBeenCalledWith(artifact.path, png);
         expect(artifact).toMatchObject({
           tabId: "tab_1",
@@ -3372,7 +3372,7 @@ describe("PreviewManager", () => {
             show: false,
             skipTaskbar: true,
             webPreferences: expect.objectContaining({
-              preload: "/tmp/t3/desktop/preview-pip-preload.cjs",
+              preload: "/tmp/cinderdeck/desktop/preview-pip-preload.cjs",
               backgroundThrottling: false,
             }),
           }),
@@ -4078,19 +4078,19 @@ describe("PreviewManager", () => {
   effectIt.effect("reveals only files inside the configured browser artifact directory", () =>
     withManager((manager) =>
       Effect.gen(function* () {
-        yield* manager.revealArtifact("/tmp/t3/dev/browser-artifacts/browser-screenshot-test.png");
+        yield* manager.revealArtifact("/tmp/cinderdeck/dev/browser-artifacts/browser-screenshot-test.png");
 
         expect(showItemInFolder).toHaveBeenCalledWith(
-          "/tmp/t3/dev/browser-artifacts/browser-screenshot-test.png",
+          "/tmp/cinderdeck/dev/browser-artifacts/browser-screenshot-test.png",
         );
-        const exit = yield* Effect.exit(manager.revealArtifact("/tmp/t3/dev/settings.json"));
+        const exit = yield* Effect.exit(manager.revealArtifact("/tmp/cinderdeck/dev/settings.json"));
         expect(Exit.isFailure(exit)).toBe(true);
         if (Exit.isSuccess(exit)) return;
         const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
         expect(error).toMatchObject({
           _tag: "PreviewArtifactPathOutsideDirectoryError",
-          artifactPath: "/tmp/t3/dev/settings.json",
-          artifactDirectory: "/tmp/t3/dev/browser-artifacts",
+          artifactPath: "/tmp/cinderdeck/dev/settings.json",
+          artifactDirectory: "/tmp/cinderdeck/dev/browser-artifacts",
         });
         expect("cause" in error).toBe(false);
       }),
@@ -4100,7 +4100,7 @@ describe("PreviewManager", () => {
   effectIt.effect("copies screenshot artifacts to the system clipboard", () =>
     withManager((manager) =>
       Effect.gen(function* () {
-        const artifactPath = "/tmp/t3/dev/browser-artifacts/browser-screenshot-test.png";
+        const artifactPath = "/tmp/cinderdeck/dev/browser-artifacts/browser-screenshot-test.png";
 
         yield* manager.copyArtifactToClipboard(artifactPath);
 
@@ -4110,15 +4110,15 @@ describe("PreviewManager", () => {
         });
         expect(writeClipboard).toHaveBeenCalledOnce();
         const exit = yield* Effect.exit(
-          manager.copyArtifactToClipboard("/tmp/t3/dev/settings.json"),
+          manager.copyArtifactToClipboard("/tmp/cinderdeck/dev/settings.json"),
         );
         expect(Exit.isFailure(exit)).toBe(true);
         if (Exit.isSuccess(exit)) return;
         const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
         expect(error).toMatchObject({
           _tag: "PreviewArtifactPathOutsideDirectoryError",
-          artifactPath: "/tmp/t3/dev/settings.json",
-          artifactDirectory: "/tmp/t3/dev/browser-artifacts",
+          artifactPath: "/tmp/cinderdeck/dev/settings.json",
+          artifactDirectory: "/tmp/cinderdeck/dev/browser-artifacts",
         });
         expect("cause" in error).toBe(false);
 
@@ -4745,11 +4745,11 @@ describe("PreviewManager", () => {
         yield* manager.automationEvaluate("tab_1", { expression: "42" });
         const startedAt = (1_790_844_530_500).toString(36);
         expect(download()).toHaveBeenCalledWith(
-          `/tmp/t3/dev/browser-artifacts/browser-download-${startedAt}-0-chart.png`,
+          `/tmp/cinderdeck/dev/browser-artifacts/browser-download-${startedAt}-0-chart.png`,
         );
         // Same name, same millisecond: still a separate file.
         expect(download()).toHaveBeenCalledWith(
-          `/tmp/t3/dev/browser-artifacts/browser-download-${startedAt}-1-chart.png`,
+          `/tmp/cinderdeck/dev/browser-artifacts/browser-download-${startedAt}-1-chart.png`,
         );
 
         humanInput?.({}, { kind: "pointer", x: 10, y: 10, button: 0 });

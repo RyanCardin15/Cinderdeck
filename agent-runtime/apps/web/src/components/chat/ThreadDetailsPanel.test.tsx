@@ -1,16 +1,16 @@
-import type { EnvironmentId, T3ProjectFileScript, ThreadId } from "@cinderdeck/contracts";
+import type { EnvironmentId, CinderdeckProjectFileScript, ThreadId } from "@cinderdeck/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PopoverCreateHandle } from "../ui/popover";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const testState = vi.hoisted(() => ({
-  useT3ProjectFileScripts: vi.fn(),
+  useCinderdeckProjectFileScripts: vi.fn(),
   projectScriptsControl: vi.fn(),
 }));
 
-vi.mock("../../hooks/useT3ProjectFileScripts", () => ({
-  useT3ProjectFileScripts: (...args: ReadonlyArray<unknown>) =>
-    testState.useT3ProjectFileScripts(...args),
+vi.mock("../../hooks/useCinderdeckProjectFileScripts", () => ({
+  useCinderdeckProjectFileScripts: (...args: ReadonlyArray<unknown>) =>
+    testState.useCinderdeckProjectFileScripts(...args),
 }));
 vi.mock("../BranchToolbar", () => ({
   BranchToolbar: () => null,
@@ -36,7 +36,7 @@ import { ThreadDetailsPanel, type ThreadDetailsPanelProps } from "./ThreadDetail
 
 describe("ThreadDetailsPanel", () => {
   beforeEach(() => {
-    testState.useT3ProjectFileScripts.mockReset();
+    testState.useCinderdeckProjectFileScripts.mockReset();
     testState.projectScriptsControl.mockReset();
   });
 
@@ -49,8 +49,8 @@ describe("ThreadDetailsPanel", () => {
         command: "vp check",
         icon: "test",
       },
-    ] satisfies ReadonlyArray<T3ProjectFileScript>;
-    testState.useT3ProjectFileScripts.mockReturnValue(fileScripts);
+    ] satisfies ReadonlyArray<CinderdeckProjectFileScript>;
+    testState.useCinderdeckProjectFileScripts.mockReturnValue(fileScripts);
 
     const props: ThreadDetailsPanelProps = {
       anchor: { current: null },
@@ -84,7 +84,7 @@ describe("ThreadDetailsPanel", () => {
 
     renderToStaticMarkup(<ThreadDetailsPanel {...props} />);
 
-    expect(testState.useT3ProjectFileScripts).toHaveBeenCalledWith(environmentId, gitCwd);
+    expect(testState.useCinderdeckProjectFileScripts).toHaveBeenCalledWith(environmentId, gitCwd);
     expect(testState.projectScriptsControl).toHaveBeenCalledWith(
       expect.objectContaining({
         displayMode: "panel",

@@ -91,8 +91,8 @@ import {
   buildPiRpcLaunch,
   materializePiT3McpExtension,
   resolvePiLaunchArgs,
-} from "./piT3McpInjection.ts";
-import { PI_FILE_CHANGE_TOOLS } from "./piT3McpExtensionSource.ts";
+} from "./piCinderdeckMcpInjection.ts";
+import { PI_FILE_CHANGE_TOOLS } from "./piCinderdeckMcpExtensionSource.ts";
 
 export const PI_PROVIDER = ProviderDriverKind.make("pi");
 const PI_DRIVER_KIND = PI_PROVIDER;

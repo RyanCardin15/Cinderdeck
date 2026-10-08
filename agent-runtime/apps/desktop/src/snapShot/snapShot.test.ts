@@ -362,9 +362,9 @@ describe("findAccessibleWindow", () => {
 
   it("keeps exact title matching", () => {
     expect(
-      findAccessibleWindow([{ name: "⠙ t3code", bounds: captured.bounds }], {
+      findAccessibleWindow([{ name: "⠙ cinderdeck", bounds: captured.bounds }], {
         ...captured,
-        title: "⠋ t3code",
+        title: "⠋ cinderdeck",
       }),
     ).toBeUndefined();
   });

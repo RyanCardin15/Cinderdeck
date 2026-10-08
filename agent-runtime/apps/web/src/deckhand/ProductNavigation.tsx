@@ -154,7 +154,6 @@ export function ProductNavigation({
             className={styles.toggle}
             onClick={sidebar.toggle}
             aria-label={sidebar.collapsed ? "Expand main sidebar" : "Collapse main sidebar"}
-            title={sidebar.collapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-expanded={!sidebar.collapsed}
           >
             {sidebar.collapsed ? <PanelLeftOpenIcon size={17} /> : <PanelLeftCloseIcon size={17} />}
@@ -195,7 +194,7 @@ export function ProductNavigation({
           aria-valuemin={PRODUCT_SIDEBAR_MIN_WIDTH}
           aria-valuemax={PRODUCT_SIDEBAR_MAX_WIDTH}
           aria-valuenow={sidebar.width}
-          title="Drag to resize. Double-click to reset."
+          aria-description="Drag to resize. Double-click to reset."
           {...resize}
           onDoubleClick={sidebar.reset}
           onKeyDown={(event) => {

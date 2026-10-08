@@ -1,17 +1,17 @@
 import {
-  T3_PROJECT_FILE_NAME,
+  CINDERDECK_PROJECT_FILE_NAME,
   type EnvironmentId,
-  type T3ProjectFile,
-  type T3ProjectFileScript,
+  type CinderdeckProjectFile,
+  type CinderdeckProjectFileScript,
 } from "@cinderdeck/contracts";
-import { parseT3ProjectFile } from "@cinderdeck/shared/t3ProjectFile";
+import { parseCinderdeckProjectFile } from "@cinderdeck/shared/cinderdeckProjectFile";
 import { useMemo } from "react";
 
 import { useProjectFileQuery } from "~/components/files/projectFilesQueryState";
 
-const NO_SCRIPTS: ReadonlyArray<T3ProjectFileScript> = [];
+const NO_SCRIPTS: ReadonlyArray<CinderdeckProjectFileScript> = [];
 
-export interface T3ProjectFileState {
+export interface CinderdeckProjectFileState {
   /**
    * - `valid`: t3.json exists and decoded.
    * - `invalid`: t3.json exists but fails to decode (the server then ignores
@@ -21,19 +21,19 @@ export interface T3ProjectFileState {
    */
   status: "loading" | "missing" | "invalid" | "valid";
   /** The decoded file when status is `valid`, null otherwise. */
-  file: T3ProjectFile | null;
-  scripts: ReadonlyArray<T3ProjectFileScript>;
+  file: CinderdeckProjectFile | null;
+  scripts: ReadonlyArray<CinderdeckProjectFileScript>;
 }
 
 /**
  * Decoded state of the project's checked-in `t3.json`, including whether the
  * file exists but is broken — which the runtime otherwise swallows silently.
  */
-export function useT3ProjectFileState(
+export function useCinderdeckProjectFileState(
   environmentId: EnvironmentId,
   cwd: string | null,
-): T3ProjectFileState {
-  const query = useProjectFileQuery(environmentId, cwd ?? "", T3_PROJECT_FILE_NAME, cwd !== null);
+): CinderdeckProjectFileState {
+  const query = useProjectFileQuery(environmentId, cwd ?? "", CINDERDECK_PROJECT_FILE_NAME, cwd !== null);
   const contents = query.data && !query.data.truncated ? query.data.contents : null;
   const isPending = query.isPending;
   return useMemo(() => {
@@ -44,7 +44,7 @@ export function useT3ProjectFileState(
         scripts: NO_SCRIPTS,
       } as const;
     }
-    const file = parseT3ProjectFile(contents);
+    const file = parseCinderdeckProjectFile(contents);
     if (file === null) {
       return { status: "invalid", file: null, scripts: NO_SCRIPTS } as const;
     }
@@ -57,9 +57,9 @@ export function useT3ProjectFileState(
  * scripts menu for import. Missing, truncated, or invalid files resolve to
  * an empty list.
  */
-export function useT3ProjectFileScripts(
+export function useCinderdeckProjectFileScripts(
   environmentId: EnvironmentId,
   cwd: string | null,
-): ReadonlyArray<T3ProjectFileScript> {
-  return useT3ProjectFileState(environmentId, cwd).scripts;
+): ReadonlyArray<CinderdeckProjectFileScript> {
+  return useCinderdeckProjectFileState(environmentId, cwd).scripts;
 }

@@ -235,6 +235,28 @@ class LocalSigningTests(unittest.TestCase):
         self.assertNotEqual(self.run_installer().returncode, 0)
         self.assert_no_install_side_effects()
 
+    def test_debug_libraries_are_signed_before_the_native_launcher(self):
+        app = self.directory / "Debug fixture.app"
+        macos = app / "Contents/MacOS"
+        macos.mkdir(parents=True)
+        # A launcher-first traversal exposed the unsigned preview library.
+        paths = [macos / name for name in ["Cinderdeck", "Cinderdeck.debug.dylib", "__preview.dylib"]]
+        for path in paths:
+            path.touch()
+        script = (ROOT / "scripts/build-unified.sh").read_text()
+        function = script[script.index("sign_tree() {"):script.index("printf 'Signing internal runtime")]
+        prefix = r'''
+set -euo pipefail
+STAGED_APP="$1"
+find() { printf '%s\0' "$1/Contents/MacOS/Cinderdeck" "$1/Contents/MacOS/Cinderdeck.debug.dylib" "$1/Contents/MacOS/__preview.dylib" "$1"; }
+file() { printf 'Mach-O 64-bit arm64\n'; }
+sign_item() { printf '%s\n' "$1"; }
+'''
+        result = subprocess.run(["bash", "-c", prefix + function + '\nsign_tree "$STAGED_APP"', "fixture", str(app)], text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        signed = result.stdout.splitlines()
+        self.assertEqual(signed, [str(paths[1]), str(paths[2]), str(paths[0])])
+
     def run_cleanup(self, *, installed=True, archive_failure=False):
         staging = self.directory / 'staging'
         previous = staging / 'previous.app'

@@ -716,7 +716,7 @@ it.effect.each(["darwin"] as const)(
     const t3 = {
       id: 42,
       title: "Cinderdeck",
-      appIdentifier: "com.t3tools.T3Code.desktop",
+      appIdentifier: "com.fixture.Cinderdeck.desktop",
       owner: { name: "Cinderdeck", processId: 123 },
       bounds,
       png: Buffer.from([1, 2, 3]),

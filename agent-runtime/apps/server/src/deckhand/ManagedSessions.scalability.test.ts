@@ -308,7 +308,7 @@ describe("bounded context scalability", () => {
         assert.equal(connected[0]!.total, 6);
         assert.equal(connected[0]!.sessions.length, 4);
         assert.equal(fixture.count.nativeResources, updates.length);
-        assert.equal(fixture.count.shells, updates.length * 400);
+        assert.equal(fixture.count.shells, updates.length * 600);
         assert.equal(fixture.count.records, updates.length * 400);
       }).pipe(Effect.provide(fixture.layer));
     },
@@ -326,7 +326,9 @@ describe("bounded context scalability", () => {
           const rows = yield* service.contexts(page(offset));
           assert.equal(rows.length, 100);
           assert.equal(fixture.count.watermarks - before.watermarks, 1);
-          assert.equal(fixture.count.shells - before.shells, 400);
+          // Six lightweight shells count older activity; only four provider
+          // summaries load, without reading the same shell again.
+          assert.equal(fixture.count.shells - before.shells, 600);
           assert.equal(fixture.count.records - before.records, 400);
           assert.equal(fixture.count.nativeResources - before.nativeResources, 1);
           for (const row of rows) {
@@ -369,7 +371,7 @@ describe("bounded context scalability", () => {
         .pipe(Stream.take(2), Stream.runCollect);
       assert.equal(updates.length, 2);
       assert.equal(fixture.count.watermarks, 3);
-      assert.equal(fixture.count.shells, 800);
+      assert.equal(fixture.count.shells, 1200);
       assert.equal(fixture.count.records, 800);
       assert.equal(fixture.count.nativeResources, 2);
       assert.equal(fixture.count.eventStreams, 1);

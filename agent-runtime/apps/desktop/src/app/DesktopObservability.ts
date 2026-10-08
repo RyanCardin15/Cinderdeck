@@ -626,9 +626,9 @@ const telemetryLayer = Layer.unwrap(
     const environment = yield* DesktopEnvironment.DesktopEnvironment;
     const endpoints = yield* resolveOtlpEndpoints;
     const resource = {
-      serviceName: "deckhand-desktop",
+      serviceName: "cinderdeck-desktop",
       attributes: {
-        "service.namespace": "deckhand",
+        "service.namespace": "cinderdeck",
         "service.runtime": "desktop",
         "service.mode": environment.isDevelopment ? "development" : "packaged",
       },

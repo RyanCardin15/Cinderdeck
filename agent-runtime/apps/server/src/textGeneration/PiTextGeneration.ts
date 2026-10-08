@@ -18,7 +18,7 @@ import { makePiRpcConnection, parsePiModelSlug } from "../orchestration-v2/Adapt
 import {
   buildPiRpcLaunch,
   resolvePiLaunchArgs,
-} from "../orchestration-v2/Adapters/piT3McpInjection.ts";
+} from "../orchestration-v2/Adapters/piCinderdeckMcpInjection.ts";
 import * as TextGeneration from "./TextGeneration.ts";
 import {
   buildBranchNamePrompt,

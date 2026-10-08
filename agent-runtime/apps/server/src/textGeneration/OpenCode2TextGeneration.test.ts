@@ -11,7 +11,7 @@ import * as OpenCode2TextGeneration from "./OpenCode2TextGeneration.ts";
 import { OPENCODE2_TITLE_GENERATION } from "./OpenCode2TextGeneration.fixture.ts";
 
 const layer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3code-opencode2-text-generation-test-",
+  prefix: "cinderdeck-opencode2-text-generation-test-",
 }).pipe(Layer.provideMerge(NodeServices.layer));
 
 it.layer(layer)("OpenCode2TextGeneration", (it) => {
