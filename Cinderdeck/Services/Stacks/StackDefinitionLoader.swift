@@ -189,7 +189,7 @@ nonisolated enum StackDefinitionLoader {
   static func readLaneSettings(_ root: [String: SimpleTOMLValue], into stack: inout StackDefinition, reader: inout StackDefinitionReader) {
     guard root["lanes"] != nil else { return }
     let table = reader.table(root, "lanes")
-    reader.warnUnknown(table, allowed: ["dir", "from", "copy", "link", "setup", "teardown", "hosts", "env"], at: "lanes")
+    reader.warnUnknown(table, allowed: ["dir", "from", "copy", "link", "setup", "teardown", "hosts", "env", "branch_prefix"], at: "lanes")
     var settings = StackLaneSettings()
     settings.directory = reader.string(table, "dir", at: "lanes")
     settings.from = reader.string(table, "from", at: "lanes")
@@ -208,6 +208,12 @@ nonisolated enum StackDefinitionLoader {
       let known = parts.count == 2 && (parts[0] == "task" ? stack.task(parts[1]) != nil : parts[0] == "workflow" && stack.workflow(parts[1]) != nil)
       if !known { reader.error("lanes.\(key) must name an existing task:<id> or workflow:<id> (\(reference))") }
       if key == "setup" { settings.setup = reference } else { settings.teardown = reference }
+    }
+    if let prefix = reader.string(table, "branch_prefix", at: "lanes") {
+      if prefix.count > 60 || prefix.hasPrefix("-") || prefix.hasPrefix("/") || prefix.contains("..")
+        || prefix.rangeOfCharacter(from: CharacterSet(charactersIn: " ~^:?*[\\").union(.controlCharacters)) != nil {
+        reader.error("lanes.branch_prefix must be a short Git branch prefix such as \"lane/\" or \"\"")
+      } else { settings.branchPrefix = prefix }
     }
     settings.hosts = reader.bool(table, "hosts", at: "lanes") ?? false
     settings.environment = reader.strings(table, "env", at: "lanes")

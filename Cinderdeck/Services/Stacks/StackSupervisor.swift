@@ -477,6 +477,7 @@ final class StackSupervisor: ObservableObject {
     return StackLaneStore.defaultWorktreeRoot
   }
   func isRemovingLane(_ id: String) -> Bool { removingLanes.contains(id) }
+  var isLaneOperationRunning: Bool { laneLock.isLocked }
 
   /// The runtime a dependency refers to: a local service, or the linked service in its own workspace.
   func dependencyRuntime(_ id: String, _ name: String) -> StackServiceRuntime {
@@ -551,6 +552,17 @@ final class StackSupervisor: ObservableObject {
     return result
   }
 
+  /// Definition reloads and source checkouts/pulls are short; wait for them instead of refusing.
+  private func waitForSourceUpdate(_ id: String, timeout: Duration = .seconds(60)) async throws {
+    let deadline = ContinuousClock.now + timeout
+    while let operation = states[id]?.operation, operation.hasPrefix("Updating") {
+      guard ContinuousClock.now < deadline else {
+        throw StackControlError(code: "busy", message: "\(id) is still \(operation.lowercased()). Try again when it finishes.")
+      }
+      try await Task.sleep(for: .milliseconds(100))
+    }
+  }
+
   func createLane(stack id: String, branch: String, actor: StackActor) async throws -> StackDefinitionFile {
     try await createLane(stack: id, request: .init(branch: branch), actor: actor).file
   }
@@ -558,11 +570,18 @@ final class StackSupervisor: ObservableObject {
   func createLane(stack id: String, request: StackLaneRequest, actor: StackActor,
     progress: StackLaneProgressHandler? = nil) async throws -> LaneCreation {
     guard !isBootstrapping else { throw StackError.message("Cinderdeck is still reconnecting to running services. Try again in a moment.") }
+    // A lane is built from the current definition and new worktrees. Running,
+    // starting or stopping services in the source never affect it; only a
+    // definition reload or a checkout/pull in the source repositories must finish first.
+    try await waitForSourceUpdate(id)
     await laneLock.acquire()
     let creation: StackLaneStore.Creation
     do {
-      guard states[id]?.operation == nil, let source = definition(id) else { throw StackError.message("This stack needs a valid definition and must finish its current operation") }
-      guard definition(id) == source else { throw StackControlError(code: "stale_revision", message: "The source workspace changed before lane creation.") }
+      guard let source = definition(id) else {
+        let problems = files.first { $0.id == id }?.issues.filter { $0.severity == .error }.map(\.message) ?? []
+        throw StackError.message(problems.isEmpty ? "Workspace \(id) has no valid definition. Fix it in workspace settings, then create the lane."
+          : "Fix workspace \(id) before creating a lane: " + problems.joined(separator: "; "))
+      }
       creation = try await StackLaneStore.create(source: source, request: request, owner: actor,
         directory: lanesDirectory, worktreeRoot: worktreeRoot, occupiedPorts: occupiedPorts(), progress: progress)
     } catch {

@@ -179,6 +179,7 @@ const fixture = (
     let targetReads = 0;
     let submittedGeneration: number | undefined;
     let submittedRefs: unknown;
+    let submittedModes: unknown;
     const hello = yield* Schema.decodeUnknownEffect(I.IntegrationHello)({
       protocolVersion: 1,
       installationID: "installation",
@@ -190,6 +191,7 @@ const fixture = (
       maximumWaitMs: 25000,
       capabilities: [
         "operations.lane.create.repositoryRefs",
+        "operations.lane.create.repositoryModes",
         "operations.receipts.wait",
         ...(options.legacyHost ? [] : ["linked-work.lane-transfer"]),
       ],
@@ -257,6 +259,7 @@ const fixture = (
           created++;
           submittedGeneration = input.generation;
           submittedRefs = input.arguments.repositoryRefs;
+          submittedModes = input.arguments.repositoryModes;
           yield* git([
             "worktree",
             "add",
@@ -398,6 +401,7 @@ const fixture = (
       targetReads: () => targetReads,
       submittedGeneration: () => submittedGeneration,
       submittedRefs: () => submittedRefs,
+      submittedModes: () => submittedModes,
       reloadWorkspace: () => {
         generation++;
       },
@@ -426,6 +430,28 @@ describe("Cinderdeck conversation lane handoff", () => {
       const result = yield* f.run({ baseRef: "main" });
       assert.ok(result);
       assert.deepEqual(f.submittedRefs(), { repo: "main" });
+    }).pipe(Effect.provide(base), Effect.scoped),
+  );
+  it.effect("always isolates the conversation's own repository", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture();
+      assert.ok(yield* f.run());
+      assert.deepEqual(f.submittedModes(), { repo: "worktree" });
+    }).pipe(Effect.provide(base), Effect.scoped),
+  );
+  it.effect.each([
+    { modes: { docs: "reference" as const }, message: "Repository IDs: repo" },
+    { modes: { repo: "reference" as const }, message: "must be a worktree" },
+  ])("refuses repositoryModes $modes before creating a lane", ({ modes, message }) =>
+    Effect.gen(function* () {
+      const f = yield* fixture();
+      const result = yield* f.run({ repositoryModes: modes }).pipe(Effect.result);
+      assert.equal(result._tag, "Failure");
+      if (result._tag === "Failure") {
+        assert.equal("code" in result.failure ? result.failure.code : undefined, "invalid_request");
+        assert.include(result.failure.message, message);
+      }
+      assert.equal(f.created(), 0);
     }).pipe(Effect.provide(base), Effect.scoped),
   );
   it.effect("moves an older conversation using the live workspace generation", () =>
@@ -503,24 +529,16 @@ describe("Cinderdeck conversation lane handoff", () => {
       }),
     },
     {
-      name: "unapplied settings",
-      message: "unapplied settings",
+      name: "configuration errors",
+      message: "Missing repository folder",
       transform: (context: NativeContext) => ({
         ...context,
         resource: {
           ...context.resource,
-          workspace: { ...context.resource.workspace!, definitionChanged: true },
-        },
-      }),
-    },
-    {
-      name: "configuration issues",
-      message: "configuration issues",
-      transform: (context: NativeContext) => ({
-        ...context,
-        resource: {
-          ...context.resource,
-          workspace: { ...context.resource.workspace!, issues: ["Missing repository folder"] },
+          workspace: {
+            ...context.resource.workspace!,
+            issues: ["error: Missing repository folder"],
+          },
         },
       }),
     },
@@ -554,6 +572,28 @@ describe("Cinderdeck conversation lane handoff", () => {
       if (result._tag === "Failure") assert.include(result.failure.message, invalid.message);
       assert.equal(f.created(), 0);
       assert.equal((yield* f.current.forThread(threadId))?.checkout.id, "primary");
+    }).pipe(Effect.provide(base), Effect.scoped),
+  );
+
+  it.effect("creates a lane while source services run an older definition or report warnings", () =>
+    Effect.gen(function* () {
+      const f = yield* fixture({
+        generation: 7,
+        sourceTransform: (context: NativeContext) => ({
+          ...context,
+          resource: {
+            ...context.resource,
+            workspace: {
+              ...context.resource.workspace!,
+              definitionChanged: true,
+              issues: ["warning: Outside Git, so shared with the original checkout: tasks.lint."],
+            },
+          },
+        }),
+      });
+      const result = yield* f.run().pipe(Effect.result);
+      assert.equal(result._tag, "Success");
+      assert.equal(f.created(), 1);
     }).pipe(Effect.provide(base), Effect.scoped),
   );
 

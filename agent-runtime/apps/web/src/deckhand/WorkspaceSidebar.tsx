@@ -38,6 +38,7 @@ import { LaneLifecycleControls } from "./LaneLifecycleControls";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../components/ui/tooltip";
 import { useAgentObservation } from "./useAgentObservation";
 import { WorkspaceCreateLaneButton, WorkspaceSettingsButton } from "./WorkspaceSettingsButton";
+import { laneCreationBlockedReason } from "./laneCreation";
 import { SessionLauncher } from "./SessionLauncher";
 import {
   Dialog,
@@ -471,6 +472,12 @@ function WorkspaceLanes({
     name,
   );
   const summaries = useSidebarAgentActivity(environmentId, installationID, lanes);
+  const base = [...scoped, ...resources].find((row) => row.workspaceID === baseID);
+  const createBlockedReason = laneCreationBlockedReason({
+    fresh,
+    resource: base,
+    capabilities: view?.hello?.capabilities,
+  });
   return (
     <div className={styles.lanes}>
       <div className={styles.laneHeading}>
@@ -478,9 +485,10 @@ function WorkspaceLanes({
         <WorkspaceCreateLaneButton
           environmentId={environmentId}
           workspaceID={baseID}
-          label={`Create lane in ${view?.resources.find((row) => row.workspaceID === baseID)?.workspace?.name ?? baseID}`}
+          label={`Create lane in ${base?.workspace?.name ?? baseID}`}
           compact
-          enabled={fresh && view?.hello?.capabilities.includes("operations.lane.create") === true}
+          enabled={createBlockedReason === null}
+          disabledReason={createBlockedReason}
         />
       </div>
       {view && !fresh && lanes.length > 0 ? (

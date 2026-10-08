@@ -92,6 +92,8 @@ const encodeCheckouts = Schema.encodeSync(
   Schema.fromJsonString(Schema.Array(Contracts.PhysicalCheckout)),
 );
 const isLaunchError = Schema.is(ManagedLaunchError);
+/** About ten seconds for a new lane's Git status to settle before launching into it. */
+const HYDRATION_ATTEMPTS = 40;
 const bindingID = (kind: string, parts: ReadonlyArray<string | number>) =>
   `${kind}:${NodeCrypto.createHash("sha256").update(JSON.stringify(parts)).digest("hex")}`;
 
@@ -645,8 +647,7 @@ const make = Effect.gen(function* () {
         (receipt.result?.creationReady === true ||
           (receipt.result?.creationReady === undefined &&
             !!receipt.result?.workspace?.lane &&
-            !receipt.result.workspace.definitionChanged &&
-            !receipt.result.workspace.issues.length));
+            !blockingWorkspaceIssue(receipt.result.workspace.issues)));
       return yield* saveCreation({
         ...record,
         receipt,
@@ -801,7 +802,8 @@ const make = Effect.gen(function* () {
       let initialPhysical: string | null = null;
       let initialGeneration: number | null = null;
       let readyRevision: string | null = null;
-      for (let attempt = 0; attempt < 8; attempt++) {
+      // Large repositories can take seconds to report their branch after creation.
+      for (let attempt = 0; attempt < HYDRATION_ATTEMPTS; attempt++) {
         const target: Effect.Success<ReturnType<typeof backend.context>> = yield* backend
           .context(record.laneID)
           .pipe(Effect.mapError(() => error(input.operationKey, "stale_context")));
@@ -815,8 +817,7 @@ const make = Effect.gen(function* () {
           workspace.lane.sourceStackID !== input.workspaceID ||
           workspace.lane.name !== created.lane.name ||
           workspace.lane.directory !== created.lane.directory ||
-          workspace.definitionChanged ||
-          workspace.issues.length ||
+          blockingWorkspaceIssue(workspace.issues) ||
           workspace.repos.length !== created.repos.length ||
           new Set(workspace.repos.map((repo) => repo.id)).size !== workspace.repos.length ||
           (initialGeneration !== null && target.resource.generation !== initialGeneration)
@@ -854,7 +855,7 @@ const make = Effect.gen(function* () {
         );
         if (hydrated && readyRevision === target.resource.revision) return target;
         readyRevision = hydrated ? target.resource.revision : null;
-        if (attempt < 7) yield* Effect.sleep("150 millis");
+        if (attempt < HYDRATION_ATTEMPTS - 1) yield* Effect.sleep("250 millis");
       }
       return yield* error(input.operationKey, "stale_context");
     });
@@ -875,11 +876,11 @@ const make = Effect.gen(function* () {
             source.hello.installationID !== input.installationID ||
             !source.resource.available ||
             source.resource.generation !== input.generation ||
-            (!input.reviewerContext && source.resource.revision !== input.revision) ||
             !workspace ||
             workspace.lane ||
-            workspace.definitionChanged ||
-            workspace.issues.length ||
+            // A lane derives its own definition from the current one; running
+            // services, dirty files and warnings in the source never block it.
+            blockingWorkspaceIssue(workspace.issues) ||
             !workspace.repos.some((repo) => repo.id === input.repositoryID) ||
             !source.hello.capabilities.includes("operations.lane.create.repositoryRefs") ||
             !source.hello.capabilities.includes("operations.receipts.wait")
@@ -960,12 +961,10 @@ const make = Effect.gen(function* () {
           if (
             source.hello.installationID !== input.installationID ||
             source.resource.generation !== input.generation ||
-            source.resource.revision !== input.revision ||
             !source.resource.available ||
             !source.resource.workspace ||
             source.resource.workspace.lane ||
-            source.resource.workspace.definitionChanged ||
-            source.resource.workspace.issues.length
+            blockingWorkspaceIssue(source.resource.workspace.issues)
           )
             return yield* error(input.operationKey, "stale_context");
           const record = yield* reserveFeatureContext(
@@ -1087,10 +1086,7 @@ const make = Effect.gen(function* () {
         resource.generation !== saved.input.generation ||
         !resource.available ||
         !workspace ||
-        (input.kind === "creation" && workspace.definitionChanged) ||
-        (input.kind === "creation"
-          ? workspace.issues.length
-          : blockingWorkspaceIssue(workspace.issues)) ||
+        blockingWorkspaceIssue(workspace.issues) ||
         !workspace.repos.length ||
         workspace.repos.length > 64 ||
         new Set(workspace.repos.map((repo) => repo.id)).size !== workspace.repos.length ||

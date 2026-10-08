@@ -59,6 +59,31 @@ nonisolated struct StackLaneInfo: Codable, Equatable, Sendable {
     return trimmed.isEmpty ? "lane" : trimmed
   }
   static func ident(for slug: String) -> String { slug.replacingOccurrences(of: "-", with: "_") }
+
+  /// Generated lane branches use `[lanes] branch_prefix`, else this.
+  static let defaultBranchPrefix = "lane/"
+  /// The first free "Lane N" among a workspace's lane names.
+  static func proposedName(existing: [String]) -> String {
+    var number = 1
+    while existing.contains(where: { $0.caseInsensitiveCompare("Lane \(number)") == .orderedSame }) { number += 1 }
+    return "Lane \(number)"
+  }
+  /// `<prefix><slug>`, numbered past `taken` so a generated name never reuses an existing branch.
+  static func proposedBranch(name: String, prefix: String?, taken: Set<String>) -> String {
+    let base = (prefix ?? defaultBranchPrefix) + slug(for: name)
+    var branch = base, number = 2
+    while taken.contains(branch) { branch = "\(base)-\(number)"; number += 1 }
+    return branch
+  }
+  /// Git's own branch-name rules, checked before submit for inline feedback.
+  static func branchProblem(_ branch: String) -> String? {
+    if branch.isEmpty { return "Enter a branch name." }
+    let invalid = branch.hasPrefix("-") || branch.hasPrefix("/") || branch.hasSuffix("/") || branch.hasSuffix(".")
+      || branch.hasSuffix(".lock") || branch.contains("..") || branch.contains("//") || branch.contains("@{") || branch == "@"
+      || branch.rangeOfCharacter(from: CharacterSet(charactersIn: " ~^:?*[\\").union(.controlCharacters)) != nil
+      || branch.split(separator: "/").contains { $0.hasPrefix(".") }
+    return invalid ? "Git branch names cannot contain spaces, ~ ^ : ? * [ \\, \"..\", or start with - or /." : nil
+  }
   static func hostLabel(_ id: String) -> String {
     let label = id.lowercased().replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
       .trimmingCharacters(in: CharacterSet(charactersIn: "-"))

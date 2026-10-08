@@ -95,6 +95,7 @@ final class StackControlService: ObservableObject {
     for runtime in state.services.values {
       if let service = runtime.launchDefinition?.service, !services.contains(where: { $0.id == service.id }) { services.append(service) }
     }
+    let declared = file.definition?.repos ?? []
     let repos = file.definition.map { definition in
       definition.repos.isEmpty ? [RepoDefinition(id: "workspace", path: definition.root, laneMode: .shared)] : definition.repos
     } ?? []
@@ -132,9 +133,13 @@ final class StackControlService: ObservableObject {
         return StackRepoSnapshot(physicalID: checkout?.physicalID,
           repositoryPhysicalID: try? checkout?.repositoryPhysicalID(), id: repo.id, path: repo.path.path, branch: status.branchLabel, dirty: status.isDirty,
           changedFiles: status.changedFiles, ahead: status.ahead, behind: status.behind, upstream: status.upstream,
-          operation: status.operation, error: status.error)
+          operation: status.operation, error: status.error,
+          laneDefault: file.lane == nil && declared.contains(repo) ? (repo.laneMode == .shared ? .reference : .worktree) : nil)
       }, lane: file.lane)
     snapshot.root = file.definition?.root.path
+    if file.lane == nil, let definition = file.definition {
+      snapshot.laneBranchPrefix = definition.laneSettings?.branchPrefix ?? StackLaneInfo.defaultBranchPrefix
+    }
     snapshot.files = file.definition?.files.map(\.path)
     if let lane = file.lane {
       let git = supervisor.laneGitStates[file.id]
@@ -323,8 +328,16 @@ final class StackControlService: ObservableObject {
 
   private func createLane(_ params: JSONValue, adopt: Bool, actor: StackActor, operationID: String? = nil,
     presentSheet: Bool = false) async throws -> JSONValue {
-    let source = try workspaceFile(params)
-    guard source.lane == nil else { throw StackControlError.invalid("Create lanes from the original workspace, not from lane \(source.name).") }
+    var source = try workspaceFile(params)
+    var notes: [String] = []
+    if let lane = source.lane {
+      // Lanes always branch from the original workspace; resolve it instead of refusing.
+      guard let original = supervisor.files.first(where: { $0.id == lane.sourceStackID && $0.lane == nil }) else {
+        throw StackControlError.invalid("Create lanes from the original workspace; \(lane.sourceStackID) is unavailable.")
+      }
+      notes.append("Created from \(original.id), the original workspace of lane \(lane.name).")
+      source = original
+    }
     var request = StackLaneRequest(branch: params["branch"]?.stringValue ?? (adopt ? params["name"]?.stringValue : nil) ?? "")
     request.name = params["name"]?.stringValue
     request.integrationOperationID = operationID
@@ -332,10 +345,12 @@ final class StackControlService: ObservableObject {
       guard let values = modes.objectValue, values.count <= 64 else {
         throw StackControlError.invalid("repositoryModes must map repository IDs to worktree or reference")
       }
+      let valid = source.definition?.repos.map(\.id) ?? []
       for (id, value) in values {
         guard source.definition?.repo(id) != nil, let text = value.stringValue,
           let mode = StackLaneRepositoryMode(rawValue: text) else {
-          throw StackControlError.invalid("repositoryModes.\(id) must select a workspace repository as worktree or reference")
+          throw StackControlError.invalid("repositoryModes.\(id) must be \"worktree\" or \"reference\" for a repository of \(source.id). "
+            + (valid.isEmpty ? "This workspace declares no [repos]; omit repositoryModes." : "Repository IDs: " + valid.joined(separator: ", ") + "."))
         }
         request.repositoryModes[id] = mode
       }
@@ -346,13 +361,11 @@ final class StackControlService: ObservableObject {
       request.adoptPath = URL(fileURLWithPath: (path as NSString).expandingTildeInPath).standardizedFileURL
     } else if request.branch.isEmpty && !presentSheet {
       if request.name == nil {
-        let existing = try StackLaneStore.records(in: supervisor.lanesDirectory)
-          .filter { $0.info.sourceStackID == source.id }.map { $0.info.name }
-        var number = 1
-        while existing.contains(where: { $0.caseInsensitiveCompare("Lane \(number)") == .orderedSame }) { number += 1 }
-        request.name = "Lane \(number)"
+        request.name = StackLaneInfo.proposedName(existing: try StackLaneStore.records(in: supervisor.lanesDirectory)
+          .filter { $0.info.sourceStackID == source.id }.map { $0.info.name })
       }
-      request.branch = "codex/" + StackLaneInfo.slug(for: request.name!) + "-" + UUID().uuidString.prefix(6).lowercased()
+      request.branch = StackLaneInfo.proposedBranch(name: request.name!, prefix: source.definition?.laneSettings?.branchPrefix,
+        taken: await existingBranches(source.definition))
     }
     if let refs = params["repositoryRefs"] {
       guard !adopt, let values = refs.objectValue, values.count <= 64 else {
@@ -371,7 +384,9 @@ final class StackControlService: ObservableObject {
       }
     }
     request.copy = params["copy"]?.stringsValue ?? []
-    try requireIdle(source)
+    // Lane creation never touches the source's services or runs, so a running
+    // task, starting services or an unapplied definition must not refuse it.
+    // The supervisor waits for a definition reload or source checkout to finish.
     let options = LaneCreationOptions(request: request, setup: params["setup"]?.boolValue ?? !adopt,
       start: params["start"]?.boolValue ?? true)
     if params["reviewer"]?.boolValue == true {
@@ -386,27 +401,70 @@ final class StackControlService: ObservableObject {
         request.repositoryRefs.values.allSatisfy({ $0.range(of: "^[0-9a-f]{40,64}$", options: .regularExpression) != nil }) else {
         throw StackControlError.invalid("Reviewer lanes require a durable operation and exact committed heads for every isolated repository")
       }
-      return try await createApprovedLane(source, options: options, params: params, actor: actor, reviewed: true)
+      return try await createApprovedLane(source, options: options, params: params, actor: actor, reviewed: true, notes: notes)
     }
     if presentSheet {
       guard let present = laneCreationPresenter, let definition = source.definition else {
         throw StackControlError(code: "unsupported_capability", message: "The lane creation sheet is unavailable")
       }
       return try await present(definition, options) { [self] approved in
-        approved.progress?(.loadingWorkspace)
+        approved.progress?(.checkingRepositories)
         await supervisor.reloadDefinitions()
-        guard supervisor.definition(source.id) == definition else {
-          throw StackControlError(code: "stale_revision", message: "Workspace settings changed while this sheet was open. Cancel and open New lane again to review the new defaults.")
+        // Choices are keyed by repository; other settings apply to the lane as it follows its source.
+        guard let current = supervisor.definition(source.id) else {
+          throw StackControlError(code: "stale_revision", message: "\(source.name) no longer has a valid definition. Fix it in workspace settings, then create the lane.")
         }
-        try requireIdle(source)
-        return try await createApprovedLane(source, options: approved, params: params, actor: actor, reviewed: true)
+        guard current.repos == definition.repos else {
+          throw StackControlError(code: "stale_revision", message: "The workspace's repositories changed while this sheet was open. Cancel and open New lane again to review them.")
+        }
+        var result = try await createApprovedLane(source, options: approved, params: params, actor: actor, reviewed: true, notes: notes)
+        if approved.rememberDefaults {
+          do { try await LaneCreationDefaults.save(approved.request, source: source.id, supervisor: supervisor) }
+          catch {
+            let warning = JSONValue.string("The lane was created, but its choices were not saved as defaults: \(error.localizedDescription)")
+            if var object = result.objectValue {
+              object["warnings"] = .array((object["warnings"]?.arrayValue ?? []) + [warning])
+              result = .object(object)
+            }
+          }
+        }
+        return result
       }
     }
-    return try await createApprovedLane(source, options: options, params: params, actor: actor, reviewed: false)
+    // Repeating a direct request returns the lane it already created instead of failing.
+    if !adopt, operationID == nil, let existing = existingLane(source, name: params["name"]?.stringValue, branch: params["branch"]?.stringValue ?? "") {
+      var object = (try JSONValue(encoding: stackSnapshot(existing))).objectValue.map { ["workspace": JSONValue.object($0)] } ?? [:]
+      object["note"] = .string("Lane \(existing.lane?.reference ?? existing.id) already exists on this branch; nothing was created. Start or inspect it with that id.")
+      return .object(object)
+    }
+    return try await createApprovedLane(source, options: options, params: params, actor: actor, reviewed: false, notes: notes)
+  }
+
+  /// Local and remote branch names across the workspace's repositories, for generated names.
+  private func existingBranches(_ definition: StackDefinition?) async -> Set<String> {
+    let paths = definition?.repos.filter { $0.laneMode == .worktree }.map(\.path) ?? definition.map { [$0.root] } ?? []
+    let lists = (try? await StackLaneStore.mapRepositories(paths) { path in
+      ((try? await StackLaneStore.git(["for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes"], at: path)) ?? "")
+        .split(separator: "\n").map { line -> String in
+          // refs/heads/<branch> and refs/remotes/<remote>/<branch> → <branch>
+          line.split(separator: "/").dropFirst(line.hasPrefix("refs/remotes/") ? 3 : 2).joined(separator: "/")
+        }
+    }) ?? []
+    return Set(lists.flatMap { $0 })
+  }
+
+  /// A lane of `source` with the requested name whose worktrees are on the requested branch.
+  private func existingLane(_ source: StackDefinitionFile, name: String?, branch: String) -> StackDefinitionFile? {
+    let name = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? branch
+    guard !name.isEmpty else { return nil }
+    return supervisor.files.first { file in
+      guard let lane = file.lane, lane.sourceStackID == source.id, lane.name.caseInsensitiveCompare(name) == .orderedSame else { return false }
+      return branch.isEmpty || file.laneWorktrees.contains { $0.branch == branch }
+    }
   }
 
   private func createApprovedLane(_ source: StackDefinitionFile, options: LaneCreationOptions,
-    params: JSONValue, actor: StackActor, reviewed: Bool) async throws -> JSONValue {
+    params: JSONValue, actor: StackActor, reviewed: Bool, notes: [String] = []) async throws -> JSONValue {
     let request = options.request
     let created: StackLaneCoordinator.Creation
     do {
@@ -423,7 +481,7 @@ final class StackControlService: ObservableObject {
         extra["createdBranch"] = .string(branch)
       }
     }
-    if !created.warnings.isEmpty { extra["warnings"] = .array(created.warnings.map(JSONValue.string)) }
+    if !(notes + created.warnings).isEmpty { extra["warnings"] = .array((notes + created.warnings).map(JSONValue.string)) }
     if let setup = created.setup { extra["setup"] = (try? JSONValue(encoding: setup)) ?? .null }
     func respond(_ value: JSONValue) -> JSONValue {
       guard var object = value.objectValue else { return value }

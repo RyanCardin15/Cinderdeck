@@ -9,7 +9,7 @@ local checkout.
 
 | Flow | Result |
 | --- | --- |
-| Create or adopt through the panel | Choose New worktree or Existing worktree; adoption offers a folder picker and optional name. Setup defaults off for adoption. Both use the same control API as CLI/MCP and show setup/start failures. |
+| Create or adopt through the panel | Choose New lane… (or Use an existing worktree under More options); adoption offers a folder picker and optional name. Setup defaults off for adoption. Both use the same control API as CLI/MCP and show setup/start failures. |
 | Open an adopted or shared lane | Cards show actual repository paths. Open targets those repositories in Finder or an editor, with separate choices for multiple repositories. Cards and controls remain visible. |
 | Adopt with a custom name | The name changes the lane's address; other repositories use the adopted worktree's actual branch. |
 | Share an adopted worktree across workspaces | Borrowing keeps its external ownership, so removing its last lane cannot delete the worktree. |
@@ -52,7 +52,7 @@ present before this audit was preserved.
 
 ## Common usage
 
-Select the workspace and open **Lanes**. Use **New worktree** for another branch,
+Select the workspace and open **Lanes**. Use **New lane…** for another branch,
 or **Existing worktree** for a checkout an agent or editor already created.
 Enable setup for dependency installation, then start the lane's services. Use the
 displayed URLs or `lane env` when testing; open the repository through its card.

@@ -11,6 +11,8 @@ struct StackLanesView: View {
   @State private var error: String?
   @State private var warnings: [String] = []
   @State private var removal: StackLaneRemovalRequest?
+  /// Repository discovery walks the filesystem; it runs off the main actor once per source.
+  @State private var hasLaneRepositories = true
 
   init(viewModel: StacksViewModel) {
     self.viewModel = viewModel
@@ -27,10 +29,6 @@ struct StackLanesView: View {
     guard let sourceID else { return [] }
     return [source].compactMap { $0 } + viewModel.workspaceNavigation.lanes(for: sourceID)
   }
-  private var isolatedRepositories: [RepoDefinition] {
-    guard let definition = source?.definition else { return [] }
-    return WorkspaceSetupModel.laneRepositories(in: definition)
-  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -45,11 +43,13 @@ struct StackLanesView: View {
       }.frame(height: 280)
       Divider()
       HStack {
-        Text("Choose a name, worktrees or references, and repository base branches.")
+        Text("One lane per feature: pick which repositories get a worktree and which stay a reference.")
           .font(.callout).foregroundStyle(.secondary)
         Spacer()
         Button("New lane…") { create() }.buttonStyle(DeckButtonStyle(prominent: true))
-          .disabled(working || source?.definition == nil || (source?.definition?.repos.isEmpty != false && isolatedRepositories.isEmpty))
+          .keyboardShortcut("n", modifiers: [.command, .shift])
+          .disabled(working || source?.definition == nil || !hasLaneRepositories)
+          .help(hasLaneRepositories ? "New lane (⇧⌘N)" : "Add a Git repository to this workspace before creating a lane.")
           .accessibilityIdentifier("stacks.createLane")
       }
       ForEach(warnings, id: \.self) { Text($0).font(.caption).foregroundColor(.orange) }
@@ -57,6 +57,11 @@ struct StackLanesView: View {
     }
     .padding(24).frame(width: 900, height: 445)
     .task { await supervisor.refreshLaneGitStates(lanes.filter { $0.lane != nil }.map(\.id)) }
+    .task(id: source?.definition?.repos) {
+      guard let definition = source?.definition else { return }
+      if !definition.repos.isEmpty { hasLaneRepositories = true; return }
+      hasLaneRepositories = await LaneCreationRepositories.read(definition).hasIsolatedRepositories
+    }
     .sheet(item: $removal) { StackLaneRemovalView(request: $0, viewModel: viewModel) }
   }
 
@@ -226,22 +231,11 @@ struct StackLanesView: View {
 
   // MARK: Actions
 
+  /// Closes this sheet and opens the creation window, so only one window is in front.
   private func create() {
-    guard let sourceID else { return }
-    working = true; error = nil; warnings = []
-    Task {
-      defer { working = false }
-      do {
-        let result = try await StackControlService.shared.presentLaneCreation(
-          params: .object(["workspace": .string(sourceID), "start": .bool(false)]))
-        warnings = result["warnings"]?.stringsValue ?? []
-        if result["setup"]?["status"]?.stringValue == "failed" {
-          error = "The lane was created, but setup failed. Read its setup run before starting services."
-        }
-      } catch {
-        if (error as? StackControlError)?.code != "cancelled" { self.error = error.localizedDescription }
-      }
-    }
+    guard let source else { return }
+    dismiss()
+    viewModel.newLane(from: source)
   }
 
   private func retrySetup(_ file: StackDefinitionFile) {

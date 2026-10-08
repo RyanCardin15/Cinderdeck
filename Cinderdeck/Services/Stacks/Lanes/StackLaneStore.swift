@@ -299,7 +299,7 @@ nonisolated enum StackLaneStore {
     }
     environment["GIT_TERMINAL_PROMPT"] = "0"
     environment["GIT_OPTIONAL_LOCKS"] = "0"
-    return try await StackCommandRunner.run("/usr/bin/git", StackCommandRunner.gitArguments(arguments),
+    return try await StackCommandRunner.run("/usr/bin/git", ["-c", "color.ui=false"] + arguments,
       directory: path, environment: environment, timeout: timeout)
   }
 
@@ -492,11 +492,14 @@ nonisolated enum StackLaneStore {
     var starts: [URL: String] = [:]
     var repositoryRefs: [String: String] = [:]
     let branchForLookup = branch
-    let localBranches = try await mapRepositories(roots) { root in
-      try await git(["for-each-ref", "--format=%(refname)", "refs/heads/" + branchForLookup], at: root)
-        .components(separatedBy: "\n").contains("refs/heads/" + branchForLookup)
+    let branchRefs = try await mapRepositories(roots) { root in
+      try await git(["for-each-ref", "--format=%(refname)", "refs/heads/" + branchForLookup, "refs/remotes/*/" + branchForLookup], at: root)
+        .components(separatedBy: "\n").filter { !$0.isEmpty }
     }
-    let hasLocalBranch = Dictionary(uniqueKeysWithValues: zip(roots, localBranches))
+    let hasLocalBranch = Dictionary(uniqueKeysWithValues: zip(roots, branchRefs.map { $0.contains("refs/heads/" + branchForLookup) }))
+    // An existing local or remote branch is checked out (or tracked) as-is, so
+    // workspace default start points never apply to it.
+    let hasBranch = Dictionary(uniqueKeysWithValues: zip(roots, branchRefs.map { !$0.isEmpty }))
     do {
       var refs = request.repositoryRefs
       if request.from == nil {
@@ -518,28 +521,37 @@ nonisolated enum StackLaneStore {
       // Pin independent repositories together, without moving validation past
       // the journal or changing the alias/conflicting-base safety checks.
       let commits = try await mapRepositories(requested) { item in
-        try await git(["rev-parse", "--verify", "--quiet", item.ref + "^{commit}"], at: item.root)
+        do { return try await git(["rev-parse", "--verify", "--quiet", item.ref + "^{commit}"], at: item.root) }
+        catch { throw StackError.message("\(item.ref) does not exist in \(item.id). Fetch it, use origin/\(item.ref), or choose another start point.") }
       }
       for (item, commit) in zip(requested, commits) {
         let id = item.id, root = item.root
         if let previous = starts[root], previous != commit {
           throw StackError.message("Repository aliases request different start revisions for \(root.path).")
         }
-        let local = hasLocalBranch[root] == true
-        if local && request.repositoryRefs[id] == nil { continue }
-        guard !local else { throw StackError.message("Branch \(branch) already exists in \(id). Explicit repository start revisions create a new branch.") }
+        if request.repositoryRefs[id] == nil && hasBranch[root] == true { continue }
+        guard hasLocalBranch[root] != true else {
+          throw StackError.message("Branch \(branch) already exists in \(id). Leave its start point at the default to check that branch out, or choose a new branch name.")
+        }
         starts[root] = commit
         repositoryRefs[id] = commit
       }
-      for (root, ref) in request.rootRefs {
+      let rootRefs = request.rootRefs.sorted { $0.key.path < $1.key.path }
+      for (root, ref) in rootRefs {
         guard roots.contains(root), adopted?.source != root, !ref.isEmpty, ref.utf8.count <= 200,
           !ref.hasPrefix("-"), !ref.contains(where: { $0.isNewline || $0 == "\0" }) else {
           throw StackError.message("Choose a valid start revision for \(root.lastPathComponent).")
         }
-        let commit = try await git(["rev-parse", "--verify", "--quiet", ref + "^{commit}"], at: root)
+      }
+      let rootCommits = try await mapRepositories(rootRefs) { item in
+        do { return try await git(["rev-parse", "--verify", "--quiet", item.value + "^{commit}"], at: item.key) }
+        catch { throw StackError.message("\(item.value) does not exist in \(item.key.lastPathComponent). Fetch it or choose another start point.") }
+      }
+      for ((root, _), commit) in zip(rootRefs, rootCommits) {
         if let previous = starts[root], previous != commit { throw StackError.message("Repository aliases request different start revisions for \(root.path).") }
-        let local = hasLocalBranch[root] == true
-        guard !local else { throw StackError.message("Branch \(branch) already exists in \(root.lastPathComponent). Choose a new lane branch.") }
+        guard hasLocalBranch[root] != true else {
+          throw StackError.message("Branch \(branch) already exists in \(root.lastPathComponent). Leave its start point at the default to check that branch out, or choose a new branch name.")
+        }
         starts[root] = commit
       }
     } catch {
@@ -699,20 +711,22 @@ nonisolated enum StackLaneStore {
       // The journal owns these unique destination paths. Inspect even a failed
       // checkout: Git can leave a registered partial worktree on cancellation.
       let destinations = worktrees.filter { if case .create = plans[$0.source] { return true }; return false }
+      let newBranches = destinations.filter { hasLocalBranch[$0.source] != true }.map(\.source)
       let cleanupRecord = record, cleanupRoot = laneRoot(settings: settings, default: worktreeRoot, source: source)
       // Cancellation must terminate checkout workers, but not cancel the Git
       // inspections/removals needed to recover their owned destinations.
       let cleanupFailed = await Task.detached {
-        await rollback(destinations, record: cleanupRecord, directory: directory, laneDirectory: laneDirectory, laneRoot: cleanupRoot)
+        await rollback(destinations, record: cleanupRecord, directory: directory, laneDirectory: laneDirectory, laneRoot: cleanupRoot,
+          newBranch: worktreeBranch, createdIn: newBranches)
       }.value
       throw StackError.message(error.localizedDescription + (cleanupFailed
         ? " Lane recovery record kept at \(directory.appendingPathComponent(id).path)."
-        : " No source checkout was changed; any newly created branches were kept."))
+        : " No source checkout was changed. Retry when ready."))
     }
   }
 
   private static func rollback(_ destinations: [StackLaneWorktree], record: StackLaneRecord, directory: URL,
-    laneDirectory: URL, laneRoot: URL) async -> Bool {
+    laneDirectory: URL, laneRoot: URL, newBranch: String, createdIn roots: [URL]) async -> Bool {
     var cleanupFailed = destinations.contains { FileManager.default.fileExists(atPath: $0.path.path)
       && !FileManager.default.fileExists(atPath: $0.path.appendingPathComponent(".git").path) }
     for tree in destinations.reversed() where FileManager.default.fileExists(atPath: tree.path.appendingPathComponent(".git").path) {
@@ -724,6 +738,15 @@ nonisolated enum StackLaneStore {
       } catch { cleanupFailed = true }
     }
     if !cleanupFailed {
+      // A retry must not trip over the branch this attempt created. Delete it
+      // only when it is checked out nowhere and every commit is on another ref.
+      for root in roots {
+        let ref = "refs/heads/" + newBranch
+        guard (try? await git(["rev-parse", "--verify", "--quiet", ref], at: root)) != nil,
+          let checkouts = try? await checkouts(root), !checkouts.values.contains(newBranch),
+          let unique = try? await git(["rev-list", "-n", "1", ref, "--not", "--exclude=" + ref, "--all"], at: root), unique.isEmpty else { continue }
+        _ = try? await git(["branch", "-D", "--", newBranch], at: root)
+      }
       try? FileManager.default.removeItem(at: manifest(id: record.id, in: directory))
       _ = rmdir(directory.appendingPathComponent(record.id).path)
       removeEmptyFolders(from: laneDirectory, upTo: laneRoot)

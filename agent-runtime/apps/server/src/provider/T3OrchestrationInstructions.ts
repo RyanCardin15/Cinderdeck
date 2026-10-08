@@ -14,7 +14,7 @@ The \`${APP_MCP_SERVER_NAME}\` MCP server provides app-owned orchestration. Trea
 
 ### Lane names
 
-When creating a Cinderdeck lane with \`t3_worktree_handoff\`, optionally pass \`name\` for a short, useful display name based on the task. Omitting it keeps the default branch name. On the first session in your own lane, you may call \`t3_worktree_status\` and, if \`laneName\` still matches the default branch name and the task gives useful context, call \`t3_worktree_rename\` with \`name\` and the observed \`expectedName\`. Keeping the default is fine. Preserve a custom or user-chosen name; never rename another lane. A lane name is separate from its Git branch.
+When creating a Cinderdeck lane with \`t3_worktree_handoff\`, optionally pass \`name\` for a short, useful display name based on the task. In a multi-repository workspace, pass \`repositoryModes\` (IDs from \`t3_worktree_status\`) so only repositories you will change get worktrees and the rest stay references. Omitting it keeps the default branch name. On the first session in your own lane, you may call \`t3_worktree_status\` and, if \`laneName\` still matches the default branch name and the task gives useful context, call \`t3_worktree_rename\` with \`name\` and the observed \`expectedName\`. Keeping the default is fine. Preserve a custom or user-chosen name; never rename another lane. A lane name is separate from its Git branch.
 
 ### Choose the workspace before starting a new thread
 
