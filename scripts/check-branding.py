@@ -8,6 +8,9 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 BRAND = re.compile(r"\bT3\s+Code\b|\bT3Code\b|[>\"\x27]T3[<\"\x27]|\bt3\s+(?:serve|connect|pair|service|update|app|project)\b|@t3tools/|\bcom\.t3tools\b|\b(?:[\w-]+\.)*t3\.(?:codes|gg)\b|\bpingdotgg/t3code\b", re.I)
 BARE_BRAND = re.compile(r"\bT3\b")
+INTERNAL_BRAND = re.compile(r"\bT3[A-Z][a-z][A-Za-z0-9_]*\b")
+# Exact native registration names and wrappers outside their ABI source folders.
+NATIVE_REFERENCES = re.compile(r"\b(?:T3AgentNotifications|T3ComposerEditor|T3KeyboardCommands|T3NativeControls|T3NativeFilePresentation|T3NativePresentation|T3NativeVideoPresentation|T3ReviewDiffSurface|T3ReviewDiffView|T3SelectableMarkdownText|T3ShowcaseReadyScene|T3ShowcaseScene|T3TerminalNative|T3TerminalSurface|T3WidgetExpiry)\b")
 # These are data and API identifiers, never product labels. Limit exceptions to tokens,
 # rather than excluding the source files that also contain user-facing strings.
 COMPATIBILITY = re.compile(
@@ -66,7 +69,7 @@ def exemption(path: str, line: str) -> str | None:
         return "historical client names"
     if path == "CinderdeckTests/Services/Stacks/StackControlTests.swift" and line.strip() == 'for name in ["Deckhand", "T3", "T3 Code", "Cinderdeck"] {':
         return "historical client names"
-    if path == "agent-runtime/apps/desktop/src/preview/BrowserSession.test.ts" and 'T3Code(Alpha)/0.0.33 Chrome/146.0.7680.216 Electron/41.5.0 Safari/537.36' in line:
+    if path == "agent-runtime/apps/desktop/src/preview/BrowserSession.test.ts" and line.strip() == '"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) T3Code(Alpha)/0.0.33 Chrome/146.0.7680.216 Electron/41.5.0 Safari/537.36";':
         return "historical user-agent compatibility fixture"
     if path == "agent-runtime/scripts/lib/third-party-licenses.test.ts" and line.strip() == '"https://github.com/Yash-Singh1/ghostty/tree/t3code/custom-io-ordered-feed",':
         return "exact bundled terminal source attribution fixture"
@@ -110,7 +113,12 @@ def violations(path: str, content: str) -> list[tuple[int, str]]:
             candidate = candidate.replace("# t3code: repair cached CocoaPods UUID allocation before SPM integration", "")
         if path.startswith("agent-runtime/apps/mobile/modules/") or path.startswith("agent-runtime/apps/mobile/src/native/"):
             candidate = re.sub(r"T3(?:AgentNotifications|ComposerEditor|KeyboardCommands|MarkdownText|Markdown|ReviewDiff|Terminal|NativeControls)[A-Za-z0-9_]*", "", candidate)
-        if BRAND.search(candidate) or BARE_BRAND.search(candidate):
+        # Documentation links must retain registered native module filenames.
+        internal_candidate = re.sub(r"(?<=/ios/)T3Native(?:VideoPresentation|FilePresentation|Presentation)(?=\.swift)", "", candidate)
+        native_source = path.startswith(("agent-runtime/apps/mobile/modules/", "agent-runtime/apps/mobile/src/native/"))
+        if path.startswith("agent-runtime/apps/mobile/") or path in {"agent-runtime/vite.config.ts", "agent-runtime/scripts/mobile-showcase.ts"}:
+            internal_candidate = NATIVE_REFERENCES.sub("", internal_candidate)
+        if BRAND.search(candidate) or BARE_BRAND.search(candidate) or (not native_source and INTERNAL_BRAND.search(internal_candidate)):
             findings.append((number, line.strip()[:200]))
     return findings
 
@@ -124,7 +132,7 @@ def path_violations(path: str) -> bool:
             return False  # Expo/Fabric module and native ABI source paths.
     if path.startswith("agent-runtime/apps/mobile/src/native/"):
         return False  # Native module import wrappers preserve their registered names.
-    return bool(re.search(r"(?:T3Code|t3code|@t3tools|(?:^|/)t3-)", path, re.I))
+    return bool(re.search(r"(?:T3Code|t3code|@t3tools|(?:^|/)t3-)", path, re.I) or INTERNAL_BRAND.search(path))
 
 
 def main() -> int:

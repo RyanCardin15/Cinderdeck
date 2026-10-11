@@ -8,6 +8,7 @@ import {
 } from "@cinderdeck/contracts";
 import { collectComposerInlineTokens } from "@cinderdeck/shared/composerInlineTokens";
 import {
+  ATTACHMENT_ONLY_BOOTSTRAP_PROMPT,
   collectComposerContextReferences,
   formatComposerContextReference,
   projectComposerContextForProvider,
@@ -207,6 +208,23 @@ describe("mobile composer context", () => {
 });
 
 describe("host context compatibility", () => {
+  it.each([true, false])(
+    "sends an image-only prompt and keeps the image (inline host: %s)",
+    (supportsInline) => {
+      const context: OrchestrationMessageContext = { version: 1, records: [image] };
+      const reference = formatComposerContextReference(image);
+      expect(serializeComposerMessageForServer(reference, context, supportsInline)).toEqual({
+        text: ATTACHMENT_ONLY_BOOTSTRAP_PROMPT,
+        ...(supportsInline ? { context } : {}),
+      });
+      const withProse = `${reference} what is this?`;
+      expect(serializeComposerMessageForServer(withProse, context, true)).toEqual({
+        text: withProse,
+        context,
+      });
+    },
+  );
+
   it.each(["existing-thread", "new-task"])("serializes %s sends for an older host", (path) => {
     const pr = pullRequestComposerContext(
       {
