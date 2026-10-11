@@ -8,7 +8,7 @@
     "historicalMetadataCommit": "17877ebbea4790b5f0ecad9bf8599619f0387be3",
     "historicalMetadataPath": "docs/deckhand/upstream-patches.json"
   },
-  "examinedTarget": "0647c481017f25ddff2ec1dff68ef3944489b6db",
+  "examinedTarget": "8d199b4f7b918079161d5f43e0146c099301be08",
   "ports": [
     {
       "commit": "f391794a35c604d57e166a3ab48d56fc6e4e469a",
@@ -33,6 +33,26 @@
     {
       "commit": "e6abc01788eef557c214a086999b3fd635b69f71",
       "behavior": "Recognize versioned JetBrains macOS application bundles"
+    },
+    {
+      "commit": "8d199b4f7b918079161d5f43e0146c099301be08",
+      "behavior": "Ask providers to respond to image-only mobile messages using the shared desktop prompt"
+    },
+    {
+      "commit": "a0066d5cb7d18abd786c1c23bf835f898490fd37",
+      "behavior": "Use valid Electron User-Agent tokens while preserving native-owned Cinderdeck display identity"
+    },
+    {
+      "commit": "adbecdac7b6f1a167cc389b3d5fe5be8ec70afdf",
+      "behavior": "Accept successful fast-forward pulls whose output exceeds the capture cap"
+    },
+    {
+      "commit": "7f0b789380f95032a55c777817cde8b49e2dae5a",
+      "behavior": "Skip terminal history parsing for plain output without pending control sequences"
+    },
+    {
+      "commit": "6fa0dd8ccabfee961ba01ea92267eded7d07cc51",
+      "behavior": "Skip overly deep Cursor skill trees without hiding other discovered skills"
     }
   ],
   "coverage": "Selected independent ports only. integratedThrough remains the last complete historical baseline; examinedTarget is not a claim of complete incorporation.",

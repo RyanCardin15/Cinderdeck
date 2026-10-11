@@ -12,6 +12,18 @@ class BrandingTests(unittest.TestCase):
         for value in ('<h1>T3 Code</h1>', '<strong>T3</strong>', '"T3Code"', '"@t3tools/web"', '"https://app.t3.codes"'):
             self.assertTrue(branding.violations("agent-runtime/apps/web/src/NewPanel.tsx", value), value)
 
+    def test_rejects_ordinary_symbols_and_paths(self):
+        self.assertTrue(branding.violations("agent-runtime/apps/mobile/scripts/new.mts", 'name: "T3DeviceStream"'))
+        self.assertTrue(branding.path_violations("agent-runtime/apps/web/src/T3PreviewPanel.tsx"))
+        self.assertEqual(branding.violations("agent-runtime/apps/mobile/src/features/terminal/nativeTerminalModule.ts", 'const name = "T3TerminalSurface";'), [])
+        self.assertTrue(branding.violations("agent-runtime/apps/mobile/src/features/terminal/nativeTerminalModule.ts", 'const name = "T3TerminalSurface"; const brand = "T3DeviceStream";'))
+
+    def test_user_agent_fixture_does_not_exempt_adjacent_branding(self):
+        path = "agent-runtime/apps/desktop/src/preview/BrowserSession.test.ts"
+        fixture = '"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) T3Code(Alpha)/0.0.33 Chrome/146.0.7680.216 Electron/41.5.0 Safari/537.36";'
+        self.assertEqual(branding.violations(path, fixture), [])
+        self.assertTrue(branding.violations(path, fixture + ' const brand = "T3 Code";'))
+
     def test_compatibility_tokens_do_not_exempt_other_copy(self):
         self.assertEqual(branding.violations("agent-runtime/packages/client-runtime/src/store.ts", 'const key = "t3code:renderer-state:v8";'), [])
         self.assertTrue(branding.violations("agent-runtime/packages/client-runtime/src/store.ts", 'const key = "t3code:renderer-state:v8"; const label = "T3 Code";'))

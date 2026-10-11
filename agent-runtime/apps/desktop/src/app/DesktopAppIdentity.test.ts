@@ -215,7 +215,7 @@ describe("DesktopAppIdentity", () => {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
         yield* identity.configure;
 
-        assert.deepEqual(calls.setName, ["Cinderdeck (Alpha)"]);
+        assert.deepEqual(calls.setName, ["Cinderdeck Alpha"]);
         assert.equal(calls.setAboutPanelOptions[0]?.applicationName, "Cinderdeck (Alpha)");
         assert.equal(calls.setAboutPanelOptions[0]?.applicationVersion, "1.2.3");
         assert.equal(calls.setAboutPanelOptions[0]?.version, "0123456789ab");
@@ -252,6 +252,40 @@ describe("DesktopAppIdentity", () => {
       );
     },
   );
+  it.effect.each([
+    { stage: "Alpha", environment: {} },
+    { stage: "Preview", environment: { appVersion: "0.0.43-preview.20260929.2428" } },
+    {
+      stage: "Nightly",
+      environment: { appVersion: "0.0.43-nightly.20260929.2428" },
+    },
+    {
+      stage: "Dev",
+      environment: { isPackaged: false, env: { VITE_DEV_SERVER_URL: "http://localhost:5173" } },
+    },
+  ])("uses a valid native User-Agent product name for $stage", ({ stage, environment }) => {
+    const calls: ElectronAppCalls = {
+      setAboutPanelOptions: [],
+      setDockIcon: [],
+      setName: [],
+    };
+
+    return withIdentity(
+      Effect.gen(function* () {
+        const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
+        yield* identity.configure;
+
+        const runtimeName = calls.setName[0];
+        assert.isDefined(runtimeName);
+        assert.equal(runtimeName, `Cinderdeck ${stage}`);
+        // RFC 9110's token grammar, after Electron removes ASCII spaces.
+        assert.match(runtimeName.replaceAll(" ", ""), /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/);
+        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, `Cinderdeck (${stage})`);
+      }),
+      { calls, environment },
+    );
+  });
+
   it.effect("sets the dock icon only when running unpackaged", () => {
     const calls: ElectronAppCalls = {
       setAboutPanelOptions: [],
