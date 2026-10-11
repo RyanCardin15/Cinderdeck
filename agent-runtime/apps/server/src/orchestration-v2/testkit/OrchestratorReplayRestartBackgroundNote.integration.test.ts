@@ -116,8 +116,10 @@ const readRestartTranscript = Effect.fn("readRestartTranscript")(function* (
     ...recorded,
     entries: [
       ...recorded.entries.slice(0, rootResult + 1),
-      // The server dies here, with the background subagent still running.
-      { type: "runtime_exit", status: "success" },
+      // The server stops while the provider query is still open. A runtime_exit
+      // frame would model the provider process exiting first, which correctly
+      // interrupts its subagents before server recovery can cancel them.
+      // Keep this stream waiting at the next open until the first scope closes.
       {
         type: "expect_outbound",
         label: "query.open:resume",
