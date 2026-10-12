@@ -49,7 +49,7 @@ export function CinderdeckConnectionPanel({
             </span>
             <p>
               {nativeHost
-                ? "Your workspaces, lanes, services and recordings are managed here. Choose a workspace to continue; choosing does not start services."
+                ? "Your workspaces, sessions, services and recordings are managed here. Choose a workspace to continue; choosing does not start services."
                 : "Use the native workspaces on your chosen execution computer. Choosing a workspace opens its context without starting services."}
             </p>
           </header>
@@ -228,7 +228,7 @@ function ConnectionDetails({
           <strong>{presentation.title}</strong>
           <p>
             {settings && view?.state === "connected"
-              ? "Workspaces, lanes, services and recordings are available on this computer."
+              ? "Workspaces, sessions, services and recordings are available on this computer."
               : presentation.detail}
           </p>
           {settings ? (
@@ -311,47 +311,44 @@ function ConnectionDetails({
         <>
           <fieldset className={styles.workspaces} disabled={busy !== null}>
             <legend>Choose a Cinderdeck workspace</legend>
-            {view?.resources.map((resource) => {
-              const available = canChooseConnectedWorkspace(view, resource);
-              const checked = selected?.workspaceID === resource.workspaceID;
-              return (
-                <label
-                  key={`${resource.workspaceID}:${resource.generation}`}
-                  className={styles.workspace}
-                >
-                  <input
-                    type="radio"
-                    name={`cinderdeck-workspace-${environmentId}`}
-                    checked={checked}
-                    disabled={!available}
-                    onChange={() => {
-                      if (view.hello)
-                        setSelection({
-                          installationID: view.hello.installationID,
-                          workspaceID: resource.workspaceID,
-                          generation: resource.generation,
-                        });
-                    }}
-                  />
-                  <span>
-                    <strong>{resource.workspace?.name ?? "Unavailable workspace"}</strong>
-                    <small>
-                      {resource.workspace?.lane
-                        ? `Lane ${resource.workspace.lane.name}`
-                        : "Primary checkout"}{" "}
-                      · Cinderdeck owns this context
-                    </small>
-                  </span>
-                  <span className={styles.workspaceStatus}>
-                    {available
-                      ? resource.workspace?.definitionChanged || resource.workspace?.issues.length
-                        ? "Needs attention"
-                        : "Available"
-                      : "Unavailable"}
-                  </span>
-                </label>
-              );
-            })}
+            {view?.resources
+              .filter((resource) => !resource.workspace?.lane)
+              .map((resource) => {
+                const available = canChooseConnectedWorkspace(view, resource);
+                const checked = selected?.workspaceID === resource.workspaceID;
+                return (
+                  <label
+                    key={`${resource.workspaceID}:${resource.generation}`}
+                    className={styles.workspace}
+                  >
+                    <input
+                      type="radio"
+                      name={`cinderdeck-workspace-${environmentId}`}
+                      checked={checked}
+                      disabled={!available}
+                      onChange={() => {
+                        if (view.hello)
+                          setSelection({
+                            installationID: view.hello.installationID,
+                            workspaceID: resource.workspaceID,
+                            generation: resource.generation,
+                          });
+                      }}
+                    />
+                    <span>
+                      <strong>{resource.workspace?.name ?? "Unavailable workspace"}</strong>
+                      <small>{resource.workspace?.root}</small>
+                    </span>
+                    <span className={styles.workspaceStatus}>
+                      {available
+                        ? resource.workspace?.definitionChanged || resource.workspace?.issues.length
+                          ? "Needs attention"
+                          : "Available"
+                        : "Unavailable"}
+                    </span>
+                  </label>
+                );
+              })}
             {view?.state === "connected" && view.resources.length === 0 ? (
               <p>
                 {nativeHost

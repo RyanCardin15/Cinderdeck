@@ -36,7 +36,7 @@ struct WorkspaceSetupView: View {
             }
             commandList(.service, title: "Services", detail: "Stay running, such as development servers and databases.")
             commandList(.task, title: "Tasks", detail: "Run once, such as tests and builds. Tasks are saved for you to run later.")
-            laneDefaults
+            repositoryLocations
             checks
             VStack(alignment: .leading, spacing: 6) {
               DeckSectionLabel(title: "Discovery notes")
@@ -148,38 +148,18 @@ struct WorkspaceSetupView: View {
     }
   }
 
-  private var laneDefaults: some View {
+  private var repositoryLocations: some View {
     VStack(alignment: .leading, spacing: 8) {
-      DeckSectionLabel(title: "Repositories & lane defaults")
-      ForEach($model.repositories) { $repo in
-        HStack {
-          VStack(alignment: .leading, spacing: 3) {
-            Label(repo.id, systemImage: WorkspaceDiscovery.repositoryRoot(containing: repo.path) == nil ? "folder" : "arrow.triangle.branch")
-              .font(.callout.weight(.medium))
-            Text(repo.path.path).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).help(repo.path.path)
-          }
-          Spacer()
-          if WorkspaceDiscovery.repositoryRoot(containing: repo.path) != nil {
-            Picker("New lanes use \(repo.id) as", selection: $repo.laneMode) {
-              Text("Worktree").tag(StackRepoLaneMode.worktree)
-              Text("Reference").tag(StackRepoLaneMode.shared)
-            }.labelsHidden().frame(width: 190)
-          } else {
-            Text("Reference (not in Git)").font(.caption).foregroundStyle(.secondary)
-          }
+      DeckSectionLabel(title: "Repository folders")
+      ForEach(model.repositories) { repo in
+        VStack(alignment: .leading, spacing: 3) {
+          Label(repo.id, systemImage: "folder").font(.callout.weight(.medium))
+          Text(repo.path.path).font(.caption.monospaced()).foregroundStyle(.secondary)
+            .lineLimit(1).truncationMode(.middle).help(repo.path.path)
         }
       }
-      Text("Defaults for new lanes. Worktree: an isolated checkout on the lane branch. Reference: the original checkout, used as read-only context; regular folders are always references. Each lane can change these when it is created.")
+      Text("Sessions use these folders. Choose a separate Git worktree in a session when you need independent files.")
         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-      if model.repositories.contains(where: { $0.laneMode == .worktree }) {
-        Toggle("Copy .env and .env.local into new lanes", isOn: $model.copyEnvironmentFiles).font(.callout)
-        Picker("Lane setup task", selection: $model.setupTask) {
-          Text("None").tag("")
-          ForEach(model.commands.filter { $0.kind == .task && $0.selected }) { command in Text(command.title).tag(command.id) }
-        }
-        Text("Setup runs before lane services start. Environment files are copied only when selected; their values stay out of this screen.")
-          .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-      }
     }
   }
 

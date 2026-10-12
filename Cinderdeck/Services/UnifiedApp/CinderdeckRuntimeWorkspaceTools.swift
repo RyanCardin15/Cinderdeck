@@ -64,7 +64,7 @@ final class CinderdeckRuntimeWorkspaceTools: NSWindowController, NSWindowDelegat
       model.create()
     case "workspace-branches":
       guard let file, request.mode == nil, let definition = file.definition, !definition.repos.isEmpty else {
-        throw StackControlError.invalid("Branch switching requires an exact workspace or lane with repositories and no mode")
+        throw StackControlError.invalid("Branch switching requires an exact workspace with repositories and no mode")
       }
       guard !model.isBusy(file.id) else {
         throw StackControlError(code: "busy", message: "Wait for this workspace's current operation to finish before switching branches.")
@@ -81,7 +81,7 @@ final class CinderdeckRuntimeWorkspaceTools: NSWindowController, NSWindowDelegat
     case "execution-map":
       guard let file, request.mode == nil else { throw StackControlError.invalid("Execution map requires an exact workspace and no mode") }
       model.select(file.id)
-      model.requestedSection = .laneMap
+      model.requestedSection = .services
       window.title = "Execution map — \(file.name) — Cinderdeck"
       presentedRequest = request
       activate()

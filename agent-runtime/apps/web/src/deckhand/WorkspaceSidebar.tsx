@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { workspaceChatUnavailableReason } from "@cinderdeck/shared/workspaceChat";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import {
   DndContext,
   closestCenter,
@@ -21,8 +21,6 @@ import * as Option from "effect/Option";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
-  CircleDotIcon,
-  PlayIcon,
   FolderGit2Icon,
   GitBranchIcon,
   GripVerticalIcon,
@@ -31,14 +29,12 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { ContextMenuItem, EnvironmentId } from "@cinderdeck/contracts";
-import type { AgentActivityCounts, IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
-import { managedContextsView, workspaceView } from "./state";
+import type { IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
+import { workspaceView } from "./state";
 import { readLocalApi } from "../localApi";
-import { LaneLifecycleControls } from "./LaneLifecycleControls";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../components/ui/tooltip";
 import { useAgentObservation } from "./useAgentObservation";
-import { WorkspaceCreateLaneButton, WorkspaceSettingsButton } from "./WorkspaceSettingsButton";
-import { laneCreationBlockedReason } from "./laneCreation";
+import { WorkspaceSettingsButton } from "./WorkspaceSettingsButton";
 import { SessionLauncher } from "./SessionLauncher";
 import {
   Dialog,
@@ -48,11 +44,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "../components/ui/dialog";
-import {
-  overviewResources,
-  overviewWorkspaceContexts,
-  type WorkspaceSearch,
-} from "./workspaceNavigation";
+import { type WorkspaceSearch } from "./workspaceNavigation";
 import {
   orderedSidebarRows,
   isSidebarColor,
@@ -62,13 +54,14 @@ import {
   type WorkspaceSidebarPreferences,
 } from "./workspaceSidebarPreferences";
 import styles from "./WorkspaceSidebar.module.css";
-import { isReviewerLane } from "./reviewerLane";
 import { SidebarColorPicker } from "./SidebarColorPicker";
-import reviewerStyles from "./reviewerLane.module.css";
+import { WorkspaceSessions } from "./WorkspaceSessions";
+import { useParams } from "@tanstack/react-router";
+import { useProjects, useThreadShells } from "../state/entities";
+import { workspaceProjectIDs } from "./sessionWorkspaceRows";
 
 type Resource = IntegrationView["resources"][number];
 const workspaceGroup = "workspaces";
-const laneGroup = (id: string) => `lanes:${id}`;
 const name = (row: Resource) => row.workspace?.lane?.name ?? row.workspace?.name ?? row.workspaceID;
 const canLaunch = (row: Resource) => workspaceChatUnavailableReason(row) === null;
 
@@ -151,14 +144,10 @@ function SidebarRow({
   workspaceActive,
   expanded,
   onExpand,
-  activity,
-  reviewer = false,
   onNavigate,
   onNewSession,
   launchEnabled,
   settingsEnabled,
-  onDeleteLane,
-  deletionEnabled = false,
   children,
 }: {
   resource: Resource;
@@ -169,14 +158,10 @@ function SidebarRow({
   workspaceActive?: boolean;
   expanded?: boolean;
   onExpand?: () => void;
-  activity?: AgentActivityCounts | undefined;
-  reviewer?: boolean;
   onNavigate?: (() => void) | undefined;
   onNewSession: (resource: Resource) => void;
   launchEnabled: boolean;
   settingsEnabled: boolean;
-  onDeleteLane?: (resource: Resource) => void;
-  deletionEnabled?: boolean;
   children?: ReactNode;
 }) {
   const {
@@ -209,20 +194,9 @@ function SidebarRow({
     const items: ContextMenuItem[] = [
       { id: "highlight-color", label: "Highlight color…", icon: "palette" },
     ];
-    if (onDeleteLane) {
-      items.push({
-        id: "delete-lane",
-        label: "Delete lane…",
-        destructive: true,
-        icon: "trash",
-        separatorBefore: true,
-        disabled: !deletionEnabled,
-      });
-    }
     try {
       const action = await api.contextMenu.show(items, position);
       if (action === "highlight-color") setColorPickerOpen(true);
-      if (action === "delete-lane" && deletionEnabled) onDeleteLane?.(resource);
     } catch {
       /* Dismissing an unavailable menu leaves the row unchanged. */
     }
@@ -236,10 +210,9 @@ function SidebarRow({
     >
       <div
         ref={rowRef}
-        className={`${styles.row} ${reviewer ? reviewerStyles.reviewer : ""}`}
+        className={styles.row}
         style={color ? ({ "--sidebar-accent": color } as CSSProperties) : undefined}
         data-highlighted={!!color}
-        data-reviewer={reviewer}
         data-current={selected || workspaceActive}
         data-dragging={isDragging}
         onContextMenu={(event) => {
@@ -270,7 +243,7 @@ function SidebarRow({
             type="button"
             className={styles.control}
             aria-expanded={expanded}
-            aria-label={`${expanded ? "Collapse" : "Expand"} lanes for ${label}`}
+            aria-label={`${expanded ? "Collapse" : "Expand"} sessions for ${label}`}
             onClick={onExpand}
           >
             {expanded ? <ChevronDownIcon size={14} /> : <ChevronRightIcon size={14} />}
@@ -281,7 +254,7 @@ function SidebarRow({
           to="/workspaces"
           search={{
             ...(search.environment ? { environment: search.environment } : {}),
-            tab: resource.workspace?.lane ? (search.tab ?? "agents") : "agents",
+            tab: "agents",
             workspace: baseID,
             context: resource.workspaceID,
             ...(search.expectedInstallationID
@@ -295,8 +268,6 @@ function SidebarRow({
         >
           {onExpand ? <FolderGit2Icon size={15} /> : <GitBranchIcon size={14} />}
           <span className={styles.label}>{label}</span>
-          {reviewer ? <span className={reviewerStyles.badge}>Reviewer</span> : null}
-          <AgentBadges activity={activity} label={label} />
         </Link>
         <Tooltip>
           <TooltipTrigger
@@ -358,216 +329,6 @@ function SidebarRow({
   );
 }
 
-function AgentBadges({
-  activity,
-  label,
-}: {
-  activity?: AgentActivityCounts | undefined;
-  label: string;
-}) {
-  if (!activity || activity.unavailable) return null;
-  return (
-    <span className={styles.badges}>
-      {activity.running > 0 ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={<span />}
-            className={`${styles.badge} ${styles.running}`}
-            aria-label={`${label}: ${activity.running} ${activity.running === 1 ? "agent" : "agents"} running`}
-          >
-            <PlayIcon size={9} fill="currentColor" aria-hidden />
-            {activity.running}
-          </TooltipTrigger>
-          <TooltipPopup>{`${activity.running} ${activity.running === 1 ? "agent" : "agents"} running`}</TooltipPopup>
-        </Tooltip>
-      ) : null}
-      {activity.review > 0 ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={<span />}
-            className={`${styles.badge} ${styles.review}`}
-            aria-label={`${label}: ${activity.review} ${activity.review === 1 ? "agent needs" : "agents need"} review`}
-          >
-            <CircleDotIcon size={10} aria-hidden />
-            {activity.review}
-          </TooltipTrigger>
-          <TooltipPopup>{`${activity.review} ${activity.review === 1 ? "agent needs" : "agents need"} review`}</TooltipPopup>
-        </Tooltip>
-      ) : null}
-    </span>
-  );
-}
-
-function useSidebarAgentActivity(
-  environmentId: EnvironmentId,
-  installationID: string,
-  rows: readonly Resource[],
-) {
-  const contexts = rows
-    .map((row) => ({ workspaceID: row.workspaceID, generation: row.generation }))
-    .sort((a, b) => a.workspaceID.localeCompare(b.workspaceID));
-  const scope = JSON.stringify([installationID, contexts]);
-  const result = useAtomValue(
-    managedContextsView({ environmentId, input: { installationID, contexts } }),
-  );
-  const summaries = Option.getOrNull(AsyncResult.value(result));
-  const observation = useAgentObservation(environmentId, scope, summaries);
-  return result._tag === "Failure" || observation.stale ? null : summaries;
-}
-
-function WorkspaceLanes({
-  baseID,
-  environmentId,
-  installationID,
-  resources,
-  state,
-  search,
-  onNavigate,
-  onNewSession,
-  onDeleteLane,
-}: {
-  baseID: string;
-  environmentId: EnvironmentId;
-  installationID: string;
-  resources: readonly Resource[];
-  state: SidebarState;
-  search: WorkspaceSearch;
-  onNavigate?: (() => void) | undefined;
-  onNewSession: (resource: Resource) => void;
-  onDeleteLane: (resource: Resource) => void;
-}) {
-  const [offset, setOffset] = useState(0);
-  const result = useAtomValue(
-    workspaceView({
-      environmentId,
-      input: {
-        offset: 0,
-        limit: 1,
-        selectedWorkspaceID: baseID,
-        workspacePage: { offset, limit: 50 },
-      },
-    }),
-  );
-  const observed = Option.getOrNull(AsyncResult.value(result));
-  const view = observed?.hello?.installationID === installationID ? observed : null;
-  const observation = useAgentObservation(
-    environmentId,
-    JSON.stringify([baseID, offset]),
-    observed,
-  );
-  const fresh = result._tag !== "Failure" && !observation.stale && view?.state === "connected";
-  const page = view?.workspaceContexts?.workspaceID === baseID ? view.workspaceContexts : null;
-  const scoped = overviewWorkspaceContexts(view, baseID);
-  // Preserve an off-page selected lane, without mixing in other catalog pages.
-  const pinned = resources.filter((row) => row.workspaceID === search.context);
-  const candidates = page ? [...scoped, ...pinned] : [...scoped, ...resources];
-  const seen = new Set<string>();
-  const lanes = orderedSidebarRows(
-    candidates.filter((row) => {
-      if (row.workspace?.lane?.sourceStackID !== baseID || seen.has(row.workspaceID)) return false;
-      seen.add(row.workspaceID);
-      return true;
-    }),
-    state.preferences.order[laneGroup(baseID)] ?? [],
-    name,
-  );
-  const summaries = useSidebarAgentActivity(environmentId, installationID, lanes);
-  const base = [...scoped, ...resources].find((row) => row.workspaceID === baseID);
-  const createBlockedReason = laneCreationBlockedReason({
-    fresh,
-    resource: base,
-    capabilities: view?.hello?.capabilities,
-  });
-  return (
-    <div className={styles.lanes}>
-      <div className={styles.laneHeading}>
-        <span>{fresh && lanes.length === 0 ? "No lanes" : "Lanes"}</span>
-        <WorkspaceCreateLaneButton
-          environmentId={environmentId}
-          workspaceID={baseID}
-          label={`Create lane in ${base?.workspace?.name ?? baseID}`}
-          compact
-          enabled={createBlockedReason === null}
-          disabledReason={createBlockedReason}
-        />
-      </div>
-      {view && !fresh && lanes.length > 0 ? (
-        <p className={styles.notice} role="status">
-          Last observed lanes
-        </p>
-      ) : null}
-      <Siblings rows={lanes} group={laneGroup(baseID)} state={state}>
-        {(row) => (
-          <SidebarRow
-            key={row.workspaceID}
-            resource={row}
-            baseID={baseID}
-            state={state}
-            search={search}
-            selected={search.context === row.workspaceID}
-            activity={
-              fresh
-                ? summaries?.find(
-                    (item) =>
-                      item.workspaceID === row.workspaceID && item.generation === row.generation,
-                  )?.agentActivity
-                : undefined
-            }
-            reviewer={isReviewerLane(
-              row,
-              summaries?.find(
-                (item) =>
-                  item.workspaceID === row.workspaceID && item.generation === row.generation,
-              ),
-            )}
-            onNavigate={onNavigate}
-            onNewSession={onNewSession}
-            launchEnabled={fresh && canLaunch(row)}
-            settingsEnabled={fresh}
-            onDeleteLane={onDeleteLane}
-            deletionEnabled={
-              fresh &&
-              view?.hello?.capabilities.includes("operations.receipts") === true &&
-              ["operations.lane.release", "operations.lane.remove"].some((capability) =>
-                view?.hello?.capabilities.includes(capability),
-              )
-            }
-          />
-        )}
-      </Siblings>
-      {!lanes.length && !fresh ? (
-        <p className={styles.notice} role="status">
-          {fresh
-            ? "No lanes"
-            : AsyncResult.isInitial(result)
-              ? "Loading lanes…"
-              : "Lane list unavailable"}
-        </p>
-      ) : null}
-      {page && (offset > 0 || page.nextOffset !== null) ? (
-        <div className={styles.pages}>
-          <button
-            type="button"
-            disabled={offset === 0}
-            aria-label={`Previous lanes for ${baseID}`}
-            onClick={() => setOffset(Math.max(0, offset - 50))}
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            disabled={page.nextOffset === null}
-            aria-label={`Next lanes for ${baseID}`}
-            onClick={() => setOffset(page.nextOffset ?? offset)}
-          >
-            Next
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 type SidebarProps = {
   environmentId: EnvironmentId;
   installationID: string;
@@ -591,7 +352,15 @@ function WorkspaceSidebarTree({
   search,
   onNavigate,
 }: SidebarProps) {
-  const navigate = useNavigate();
+  const params = useParams({ strict: false });
+  const projects = useProjects();
+  const threads = useThreadShells();
+  const selectedThread = threads.find(
+    (thread) =>
+      thread.environmentId === environmentId &&
+      "threadId" in params &&
+      thread.id === params.threadId,
+  );
   const state = useSidebarPreferences(sidebarPreferenceKey(environmentId, installationID));
   const navigationSearch = {
     ...search,
@@ -600,13 +369,18 @@ function WorkspaceSidebarTree({
   };
   const [offset, setOffset] = useState(0);
   const [launchTarget, setLaunchTarget] = useState<Resource | null>(null);
-  const [removalTarget, setRemovalTarget] = useState<Resource | null>(null);
   const catalogResult = useAtomValue(
     workspaceView({ environmentId, input: { offset, limit: 50 } }),
   );
   const observed = Option.getOrNull(AsyncResult.value(catalogResult));
   const catalog = observed?.hello?.installationID === installationID ? observed : null;
-  const catalogFresh = catalogResult._tag !== "Failure" && catalog?.state === "connected";
+  const observation = useAgentObservation(
+    environmentId,
+    `sidebar:${installationID}:${offset}`,
+    observed,
+  );
+  const catalogFresh =
+    catalogResult._tag !== "Failure" && !observation.stale && catalog?.state === "connected";
   const candidates = catalog
     ? [...catalog.resources, ...resources.filter((row) => row.workspaceID === search.workspace)]
     : resources;
@@ -620,14 +394,24 @@ function WorkspaceSidebarTree({
     state.preferences.order[workspaceGroup] ?? [],
     name,
   );
-  const summaries = useSidebarAgentActivity(environmentId, installationID, bases);
+  const activeWorkspaceID =
+    search.workspace ??
+    (selectedThread
+      ? bases.find((base) =>
+          workspaceProjectIDs(environmentId, base, candidates, projects).has(
+            selectedThread.projectId,
+          ),
+        )?.workspaceID
+      : undefined);
   return (
     <>
       <div className={styles.heading}>Workspaces</div>
-      <nav className={styles.tree} aria-label="Workspaces and lanes">
+      <nav className={styles.tree} aria-label="Workspaces and sessions">
         <Siblings rows={bases} group={workspaceGroup} state={state}>
           {(base) => {
-            const expanded = state.preferences.expanded[base.workspaceID] ?? false;
+            const expanded =
+              state.preferences.expanded[base.workspaceID] ??
+              activeWorkspaceID === base.workspaceID;
             return (
               <SidebarRow
                 key={base.workspaceID}
@@ -636,19 +420,10 @@ function WorkspaceSidebarTree({
                 state={state}
                 search={navigationSearch}
                 selected={
-                  search.workspace === base.workspaceID &&
+                  activeWorkspaceID === base.workspaceID &&
                   (!search.context || search.context === base.workspaceID)
                 }
-                workspaceActive={search.workspace === base.workspaceID}
-                activity={
-                  catalogFresh
-                    ? summaries?.find(
-                        (item) =>
-                          item.workspaceID === base.workspaceID &&
-                          item.generation === base.generation,
-                      )?.workspaceAgentActivity
-                    : undefined
-                }
+                workspaceActive={activeWorkspaceID === base.workspaceID}
                 expanded={expanded}
                 onNavigate={onNavigate}
                 onNewSession={setLaunchTarget}
@@ -662,16 +437,14 @@ function WorkspaceSidebarTree({
                 }
               >
                 {expanded ? (
-                  <WorkspaceLanes
-                    baseID={base.workspaceID}
+                  <WorkspaceSessions
                     environmentId={environmentId}
                     installationID={installationID}
-                    resources={resources}
-                    state={state}
-                    search={navigationSearch}
+                    resource={base}
+                    resources={candidates}
+                    selectedThreadId={"threadId" in params ? params.threadId : undefined}
                     onNavigate={onNavigate}
-                    onNewSession={setLaunchTarget}
-                    onDeleteLane={setRemovalTarget}
+                    compact
                   />
                 ) : null}
               </SidebarRow>
@@ -708,47 +481,6 @@ function WorkspaceSidebarTree({
           </div>
         ) : null}
       </nav>
-      {removalTarget ? (
-        <SidebarLaneRemoval
-          environmentId={environmentId}
-          installationID={installationID}
-          target={removalTarget}
-          onClose={() => setRemovalTarget(null)}
-          onRemoved={() => {
-            setRemovalTarget(null);
-            state.update((current) => {
-              const colors = { ...current.colors };
-              delete colors[removalTarget.workspaceID];
-              return {
-                ...current,
-                colors,
-                favorites: current.favorites.filter((id) => id !== removalTarget.workspaceID),
-                order: Object.fromEntries(
-                  Object.entries(current.order).map(([group, ids]) => [
-                    group,
-                    ids.filter((id) => id !== removalTarget.workspaceID),
-                  ]),
-                ),
-              };
-            });
-            if (search.context === removalTarget.workspaceID) {
-              const baseID = removalTarget.workspace!.lane!.sourceStackID;
-              const base = bases.find((row) => row.workspaceID === baseID);
-              void navigate({
-                to: "/workspaces",
-                search: {
-                  environment: environmentId,
-                  expectedInstallationID: installationID,
-                  workspace: baseID,
-                  context: baseID,
-                  ...(search.tab ? { tab: search.tab } : {}),
-                  ...(base ? { expectedGeneration: base.generation } : {}),
-                },
-              });
-            }
-          }}
-        />
-      ) : null}
       {launchTarget ? (
         <Dialog
           open
@@ -760,8 +492,7 @@ function WorkspaceSidebarTree({
             <DialogHeader>
               <DialogTitle>New session in {name(launchTarget)}</DialogTitle>
               <DialogDescription>
-                {launchTarget.workspace?.lane ? "Lane folders" : "Workspace folders"} · opens with
-                your chat defaults.
+                Workspace folders · opens with your chat defaults.
               </DialogDescription>
             </DialogHeader>
             <DialogPanel>
@@ -783,64 +514,5 @@ function WorkspaceSidebarTree({
         </Dialog>
       ) : null}
     </>
-  );
-}
-
-function SidebarLaneRemoval({
-  environmentId,
-  installationID,
-  target,
-  onClose,
-  onRemoved,
-}: {
-  environmentId: EnvironmentId;
-  installationID: string;
-  target: Resource;
-  onClose: () => void;
-  onRemoved: () => void;
-}) {
-  const [working, setWorking] = useState(false);
-  const result = useAtomValue(
-    workspaceView({
-      environmentId,
-      input: {
-        offset: 0,
-        limit: 1,
-        selectedWorkspaceID: target.workspace!.lane!.sourceStackID,
-        selectedContextID: target.workspaceID,
-        workspacePage: { offset: 0, limit: 1 },
-      },
-    }),
-  );
-  const observed = Option.getOrNull(AsyncResult.value(result));
-  const view = observed?.hello?.installationID === installationID ? observed : null;
-  const observation = useAgentObservation(environmentId, target.workspaceID, observed);
-  const current = overviewResources(view).find((row) => row.workspaceID === target.workspaceID);
-  const sameLane =
-    current?.generation === target.generation &&
-    current?.workspace?.lane?.sourceStackID === target.workspace?.lane?.sourceStackID;
-  const enabled =
-    result._tag !== "Failure" && !observation.stale && view?.state === "connected" && sameLane;
-  return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open && !working) onClose();
-      }}
-    >
-      <DialogPopup showCloseButton={!working}>
-        <LaneLifecycleControls
-          environmentId={environmentId}
-          installationID={installationID}
-          resource={sameLane ? current! : target}
-          capabilities={view?.hello?.capabilities ?? []}
-          enabled={enabled}
-          mode="remove"
-          onCancel={onClose}
-          onRemoved={onRemoved}
-          onWorking={setWorking}
-        />
-      </DialogPopup>
-    </Dialog>
   );
 }

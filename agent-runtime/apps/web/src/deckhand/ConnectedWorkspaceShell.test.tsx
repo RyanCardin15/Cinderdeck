@@ -14,12 +14,12 @@ vi.mock("../state/query", () => ({
 vi.mock("./state", () => ({ workspaceView: () => null }));
 vi.mock("./useAgentObservation", () => ({ useAgentObservation: () => ({ stale: false }) }));
 vi.mock("./ProductNavigation", () => ({
-  ProductNavigation: () => {
+  ProductNavigation: ({ workspaceSearch }: { workspaceSearch?: unknown }) => {
     useEffect(() => {
       mounts.navigation++;
     }, []);
     return (
-      <aside aria-label="Cinderdeck navigation">
+      <aside aria-label="Cinderdeck navigation" data-search={JSON.stringify(workspaceSearch)}>
         <button>Workspace</button>
       </aside>
     );
@@ -170,14 +170,12 @@ it("keeps navigation, conversation DOM, focus and draft mounted through context 
   input.focus();
   await render(context);
   await render(null, true);
-  expect(container.textContent).toContain("Sessions: review-lane");
-  expect(container.querySelector<HTMLButtonElement>("button:disabled")?.textContent).toBe(
-    "Settings",
-  );
+  expect(container.querySelector('aside[aria-label="Sessions"]')).toBeNull();
+  expect(container.querySelector("header")).toBeNull();
   await render({ ...context, checkout: { ...context.checkout, laneId: "another-lane" } });
-  expect(container.textContent).toContain("Sessions: another-lane");
+  expect(container.querySelector('aside[aria-label="Sessions"]')).toBeNull();
   await render(null);
-  expect(container.textContent).toContain("All sessions");
+  expect(container.querySelector("textarea")).not.toBeNull();
   expect(container.querySelector("aside")).toBe(navigation);
   expect(container.querySelector("textarea")).toBe(input);
   expect(document.activeElement).toBe(input);
@@ -190,21 +188,19 @@ it("clears retained context on errors, resolved absence, or a different computer
   expect(container.textContent).not.toContain("Sessions: review-lane");
   await render(context);
   await render(null, false);
-  expect(container.textContent).toContain("All sessions");
+  expect(container.querySelector("textarea")).not.toBeNull();
   await render(null, true);
   expect(container.textContent).not.toContain("Sessions: review-lane");
 });
 
-it("returns a removed lane's workspace breadcrumb to all saved conversations", async () => {
+it("keeps a removed checkout's navigation on its source workspace without a duplicate header", async () => {
   await render({ ...context, checkout: { ...context.checkout, laneName: "Release polish" } });
-  const breadcrumb = [...container.querySelectorAll("header a")].find(
-    (link) => link.textContent === "Payment",
-  )!;
-  expect(JSON.parse(breadcrumb.getAttribute("data-search")!)).toEqual({
+  const navigation = container.querySelector('aside[aria-label="Cinderdeck navigation"]')!;
+  expect(JSON.parse(navigation.getAttribute("data-search")!)).toMatchObject({
     environment: "remote-computer",
     workspace: "primary-workspace",
     tab: "agents",
     expectedInstallationID: "native-installation",
   });
-  expect(container.querySelector("header strong")?.textContent).toBe("Release polish");
+  expect(container.querySelector("header")).toBeNull();
 });

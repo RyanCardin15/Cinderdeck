@@ -1,7 +1,8 @@
 import SwiftUI
 
 enum WorkspaceSection: String, CaseIterable {
-  case services = "Services", tasks = "Tasks", workflows = "Workflows", laneMap = "Lane map", runs = "Runs", recordings = "Recordings", linkedWork = "Agents & linked work"
+  case services = "Services", tasks = "Tasks", workflows = "Workflows", laneMap = "Lane map", runs = "Runs", recordings = "Recordings", linkedWork = "Sessions"
+  static var allCases: [WorkspaceSection] { [.services, .tasks, .workflows, .runs, .recordings, .linkedWork] }
   var icon: String {
     switch self {
     case .services: return "server.rack"
@@ -10,7 +11,7 @@ enum WorkspaceSection: String, CaseIterable {
     case .laneMap: return "arrow.triangle.branch"
     case .runs: return "play.rectangle"
     case .recordings: return "record.circle"
-    case .linkedWork: return "person.2.badge.gearshape"
+    case .linkedWork: return "bubble.left.and.bubble.right"
     }
   }
   static func initialSection(_ workspace: StackDefinition) -> WorkspaceSection {
@@ -73,14 +74,14 @@ struct WorkspaceView: View {
           }
           if model.selectedWorkspaceID != file.id, section != .laneMap {
             HStack {
-              Label(file.lane.map { "Lane: \($0.name)" } ?? "Lane workspace", systemImage: "arrow.triangle.branch")
+              Label(file.lane.map { "Checkout: \($0.name)" } ?? "Saved checkout", systemImage: "arrow.triangle.branch")
               Spacer()
               if let source = navigation.workspaces.first(where: { $0.id == model.selectedWorkspaceID }) {
                 Button("Back to \(source.name)") { model.select(source.id) }
               }
             }.font(.callout)
             if file.lane != nil {
-              Text("Edit the source workspace to change services, tasks, or workflows. Pinned lanes keep their saved definition until unpinned.")
+              Text("Edit the source workspace to change services, tasks, or workflows. Saved checkouts retain their service definitions.")
                 .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
             }
           }
@@ -111,7 +112,7 @@ struct WorkspaceView: View {
             }
           case .tasks: tasks(file)
           case .workflows: workflows(file)
-          case .laneMap: WorkspaceLaneMapView(model: model, runner: runner)
+          case .laneMap: WorkspaceLinkedWorkView(workspaceID: file.lane?.sourceStackID ?? file.id)
           case .runs: runs
           case .recordings: WorkspaceReprosView(file: file, recorder: .shared, controller: .shared, runner: runner)
           case .linkedWork: WorkspaceLinkedWorkView(workspaceID: file.id)
@@ -174,27 +175,8 @@ struct WorkspaceView: View {
         .help("Drag a workspace reference to an editor or chat")
       VStack(alignment: .leading, spacing: 5) {
         DeckSectionLabel(title: file.lane == nil ? "Workspace" : "Worktree lane")
-        if let lane = file.lane {
-          if renamingLane {
-            HStack {
-              TextField("Lane name", text: $laneNameDraft).textFieldStyle(.roundedBorder)
-                .focused($laneNameFocused).onSubmit { saveLaneName(file) }
-                .onExitCommand { if !savingLaneName { renamingLane = false } }
-              Button("Save") { saveLaneName(file) }.disabled(savingLaneName)
-              Button("Cancel") { renamingLane = false }.disabled(savingLaneName)
-            }.disabled(savingLaneName)
-          } else {
-            Button {
-              laneNameDraft = lane.name; laneNameExpected = lane.name
-              renamingLane = true; laneNameFocused = true
-            } label: { Text(lane.name).font(DeckStyle.title).lineLimit(2) }
-              .buttonStyle(.plain).help("Click to rename lane")
-              .accessibilityLabel("Rename lane \(lane.name)")
-          }
-        } else {
-          Text(file.name).font(DeckStyle.title).lineLimit(2).help(file.name)
-            .workspaceReferenceDrag(file, model: model).accessibilityAddTraits(.isHeader)
-        }
+        Text(file.name).font(DeckStyle.title).lineLimit(2).help(file.name)
+          .workspaceReferenceDrag(file, model: model).accessibilityAddTraits(.isHeader)
         Text((workspace?.root.path ?? file.file.path)
           .replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path + "/", with: "~/"))
           .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
@@ -219,12 +201,6 @@ struct WorkspaceView: View {
           .help("Drag a workspace reference to an editor or chat")
           .accessibilityLabel("Drag workspace reference")
           .accessibilityIdentifier("workspace.dragReference")
-        Button { model.lanesSheet = true } label: { Label("Lanes", systemImage: "arrow.triangle.branch") }
-          .accessibilityIdentifier("stacks.lanes")
-        Button { model.newLane(from: file) } label: { Image(systemName: "plus.rectangle.on.rectangle") }
-          .help("New lane (⇧⌘N)").accessibilityLabel("New lane")
-          .keyboardShortcut("n", modifiers: [.command, .shift])
-          .accessibilityIdentifier("workspace.newLane")
         Button { model.edit(file) } label: { Image(systemName: "slider.horizontal.3") }
           .help(file.lane == nil ? "Edit workspace" : "Edit source workspace")
           .accessibilityLabel(file.lane == nil ? "Edit workspace" : "Edit source workspace")
@@ -274,22 +250,8 @@ struct WorkspaceView: View {
               Button("Clear search") { search = "" }.buttonStyle(DeckButtonStyle(compact: true))
             }.padding(.vertical, 24)
           }
-          ForEach(navigation.workspaces.filter { matches($0) || navigation.lanes(for: $0.id).contains(where: matches) }) { file in
-            VStack(spacing: 4) {
-              sidebarRow(file, isWorkspace: true)
-              if expandedWorkspaces.contains(file.id) || !search.isEmpty {
-                ForEach(navigation.lanes(for: file.id).filter { search.isEmpty || matches(file) || matches($0) }) { lane in
-                  sidebarRow(lane, isWorkspace: false).padding(.leading, 16)
-                }
-              }
-            }
-          }
-          if !navigation.unattachedLanes.isEmpty {
-            DeckSectionLabel(title: "Unattached lanes")
-              .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
-            ForEach(navigation.unattachedLanes.filter(matches)) { file in
-              sidebarRow(file, isWorkspace: false)
-            }
+          ForEach(navigation.workspaces.filter(matches)) { file in
+            sidebarRow(file, isWorkspace: true)
           }
         }
       }
@@ -307,7 +269,7 @@ struct WorkspaceView: View {
   }
 
   private func sidebarRow(_ file: StackDefinitionFile, isWorkspace: Bool) -> some View {
-    let laneCount = isWorkspace ? navigation.lanes(for: file.id).count : 0
+    let laneCount = 0
     let selected = model.selectedStackID == file.id
     let source = navigation.workspaceID(for: file.id) ?? file.id
     let tint = WorkspaceLaneMapStyle.tint(file.id, source: source, lanes: navigation.lanes(for: source).map(\.id), isReviewer: file.lane?.isReviewer == true)
@@ -365,9 +327,6 @@ struct WorkspaceView: View {
     .contextMenu {
       WorkspaceReferenceCopyButton(file: file, model: model)
       Divider()
-      Button("Show lane map") { model.select(file.id); section = .laneMap }
-      StackLaneAttachmentMenu(file: file, model: model)
-      StackLaneDeletionMenu(file: file, model: model)
       if isWorkspace {
         Button("Edit workspace…") { model.edit(file) }
         Divider()

@@ -2113,3 +2113,49 @@ describe("durable reviewer scheduling", () => {
     }).pipe(Effect.provide(baseLayer), Effect.scoped),
   );
 });
+
+describe("ordinary session admission", () => {
+  it.effect(
+    "resumes saved sessions with changed native generations, offline tools and a different valid checkout",
+    () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const external = f.external((request) => Effect.succeed(accepted(request)));
+        const launch = yield* ManagedSessionLaunch.ManagedSessionLaunch.pipe(
+          Effect.provide(serviceLayer.pipe(Layer.provide(external))),
+        );
+        const record = yield* launch.launch("actor", {
+          ...input("ordinary-resume"),
+          deferStart: true,
+        });
+        assert.equal(record.state, "accepted");
+        const dependencies = yield* Effect.context<
+          FileSystem.FileSystem | Path.Path | ProcessRunner.ProcessRunner | SqlClient.SqlClient
+        >();
+        const layer = ManagedCheckoutGuard.layer.pipe(
+          Layer.provide(Relationships.layer),
+          Layer.provide(CheckoutIdentity.layer),
+          Layer.provide(f.hubLayer),
+          Layer.provide(Layer.succeedContext(dependencies)),
+        );
+        yield* Effect.gen(function* () {
+          const guard = yield* ManagedCheckoutGuard.ManagedCheckoutGuard;
+          f.resources.get("lane")!.generation++;
+          assert.equal((yield* guard.resolve(record.threadId, f.lane))?.access, "write");
+          f.resources.delete("lane");
+          assert.equal(
+            (yield* guard.resolve(record.threadId, f.lane))?.cwd,
+            yield* f.fs.realPath(f.lane),
+          );
+          assert.equal(
+            (yield* guard.resolve(record.threadId, f.source))?.cwd,
+            yield* f.fs.realPath(f.source),
+          );
+          assert.equal(
+            (yield* guard.resolve(ThreadId.make("ordinary-unbound"), f.lane))?.cwd,
+            yield* f.fs.realPath(f.lane),
+          );
+        }).pipe(Effect.provide(layer));
+      }).pipe(Effect.provide(baseLayer), Effect.scoped),
+  );
+});

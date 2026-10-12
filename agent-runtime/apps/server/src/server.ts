@@ -509,15 +509,6 @@ const ProviderInstallationRefreshLive = Layer.effectDiscard(
 );
 
 const RuntimeCoreDependenciesBaseLive = Layer.mergeAll(
-  Layer.effectDiscard(
-    Effect.gen(function* () {
-      const policy = yield* GitMutationPolicy.GitMutationPolicy;
-      if (!policy.managed)
-        return yield* Effect.die(
-          new Error("Cinderdeck checkout mutation policy is missing from the server runtime."),
-        );
-    }),
-  ),
   AgentAwarenessRelay.layer,
   ThreadSettlementWorkerLive,
   Layer.effectDiscard(StorageCleanup.make.pipe(Effect.flatMap((service) => service.start()))).pipe(

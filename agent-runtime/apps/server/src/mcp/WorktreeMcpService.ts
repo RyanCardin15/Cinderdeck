@@ -25,9 +25,6 @@ import * as ServerSettings from "../serverSettings.ts";
 import * as VcsStatusBroadcaster from "../vcs/VcsStatusBroadcaster.ts";
 import { briefEchoesCaller, echoedBriefMessage } from "./agentBrief.ts";
 import type { McpInvocationScope } from "./McpInvocationContext.ts";
-import * as ManagedWorktreeHandoff from "../deckhand/ManagedWorktreeHandoff.ts";
-import * as WorkspaceBackend from "../deckhand/WorkspaceBackend.ts";
-import * as CurrentCheckout from "../deckhand/CurrentCheckout.ts";
 
 export class WorktreeMcpService extends Context.Service<
   WorktreeMcpService,
@@ -72,9 +69,6 @@ const make = Effect.gen(function* () {
   const gitWorkflow = yield* GitWorkflowService.GitWorkflowService;
   const setupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
-  const managedHandoff = yield* Effect.serviceOption(ManagedWorktreeHandoff.ManagedWorktreeHandoff);
-  const workspaceBackend = yield* Effect.serviceOption(WorkspaceBackend.WorkspaceBackend);
-  const currentCheckout = yield* Effect.serviceOption(CurrentCheckout.CurrentCheckout);
 
   // Serializes handoffs per thread: two concurrent calls could otherwise both
   // pass the worktreePath === null check and each create a worktree, leaving
@@ -144,25 +138,12 @@ const make = Effect.gen(function* () {
     scope: McpInvocationScope,
     input: WorktreeMcpHandoffInput,
   ) {
-    if (Option.isSome(managedHandoff)) {
-      const result = yield* managedHandoff.value.handoff(scope, input);
-      if (result) return result;
-    }
-    if (input.adoptExisting)
+    if (input.repositoryModes)
       return yield* failure(
         "invalid_request",
-        "Adopting an existing worktree requires a Cinderdeck workspace conversation.",
+        "Per-repository lane modes are retired. Move this session's repository with a worktree path and branch.",
       );
-    const alreadyInWorktree = (worktreePath: string) =>
-      failure(
-        "already_in_worktree",
-        `Thread '${scope.threadId}' is already attached to worktree '${worktreePath}'.`,
-      );
-
     const projection = yield* loadThread(scope);
-    if (projection.thread.worktreePath !== null) {
-      return yield* alreadyInWorktree(projection.thread.worktreePath);
-    }
     // An archived thread would accept the binding but refuse the continuation
     // message (and any other follow-up), so reject the handoff outright.
     if (projection.thread.archivedAt !== null) {
@@ -173,7 +154,7 @@ const make = Effect.gen(function* () {
     }
 
     const project = yield* loadProject(scope, projection.thread.projectId);
-    const projectCwd = project.workspaceRoot;
+    const projectCwd = projection.thread.worktreePath ?? project.workspaceRoot;
 
     if (input.path !== undefined && !path.isAbsolute(input.path)) {
       return yield* failure(
@@ -204,7 +185,7 @@ const make = Effect.gen(function* () {
     const localBranchNames = yield* gitWorkflow
       .listLocalBranchNames(projectCwd)
       .pipe(asOperationFailed("Unable to list branches"));
-    if (localBranchNames.includes(input.branch)) {
+    if (!input.adoptExisting && localBranchNames.includes(input.branch)) {
       const existingRef = yield* gitWorkflow
         .listRefs({ cwd: projectCwd, query: input.branch, refKind: "local" })
         .pipe(
@@ -238,7 +219,7 @@ const make = Effect.gen(function* () {
     const startFromOrigin = input.startFromOrigin ?? (yield* readDefaultStartFromOrigin);
 
     let worktreeBaseRef = baseRef;
-    if (startFromOrigin) {
+    if (startFromOrigin && !input.adoptExisting) {
       yield* gitWorkflow
         .fetchRemote({ cwd: projectCwd, remoteName: "origin" })
         .pipe(asOperationFailed("Unable to fetch origin"));
@@ -264,17 +245,38 @@ const make = Effect.gen(function* () {
     // request's connection and interrupt the fiber).
     return yield* Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
-        const worktree = yield* restore(
-          gitWorkflow
-            .createWorktree({
-              cwd: projectCwd,
-              refName: worktreeBaseRef,
-              newRefName: input.branch,
-              baseRefName: baseRef,
-              path: input.path ?? null,
+        const worktree = input.adoptExisting
+          ? yield* Effect.gen(function* () {
+              if (!input.path)
+                return yield* failure(
+                  "invalid_request",
+                  "Select the absolute path of the existing worktree.",
+                );
+              const inventory = yield* gitWorkflow
+                .listRefs({ cwd: projectCwd, query: input.branch, refKind: "local" })
+                .pipe(asOperationFailed("Unable to list worktrees"));
+              const existing = inventory.refs.find(
+                (item) =>
+                  item.worktreePath === input.path && item.name === input.branch && !item.isRemote,
+              );
+              if (!existing)
+                return yield* failure(
+                  "invalid_request",
+                  "The selected path and branch do not match an existing worktree in this repository.",
+                );
+              return { worktree: { path: input.path, refName: existing.name } };
             })
-            .pipe(asOperationFailed("Unable to create the worktree")),
-        );
+          : yield* restore(
+              gitWorkflow
+                .createWorktree({
+                  cwd: projectCwd,
+                  refName: worktreeBaseRef,
+                  newRefName: input.branch,
+                  baseRefName: baseRef,
+                  path: input.path ?? null,
+                })
+                .pipe(asOperationFailed("Unable to create the worktree")),
+            );
         const worktreePath = worktree.worktree.path;
 
         // Shared shape for "the handoff already succeeded, so report the failure
@@ -292,19 +294,21 @@ const make = Effect.gen(function* () {
         // suspend: build the rollback only if cleanup actually runs. Removing
         // the worktree must succeed before deleting its freshly created branch;
         // otherwise the branch may still be checked out there.
-        const removeCreatedWorktree = Effect.suspend(() =>
-          gitWorkflow.removeWorktree({ cwd: projectCwd, path: worktreePath, force: true }).pipe(
-            Effect.andThen(
-              Effect.suspend(() =>
-                gitWorkflow.deleteLocalBranch({
-                  cwd: projectCwd,
-                  refName: worktree.worktree.refName,
-                  force: true,
-                }),
+        const removeCreatedWorktree = input.adoptExisting
+          ? Effect.void
+          : Effect.suspend(() =>
+              gitWorkflow.removeWorktree({ cwd: projectCwd, path: worktreePath, force: true }).pipe(
+                Effect.andThen(
+                  Effect.suspend(() =>
+                    gitWorkflow.deleteLocalBranch({
+                      cwd: projectCwd,
+                      refName: worktree.worktree.refName,
+                      force: true,
+                    }),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ).pipe(Effect.ignoreCause({ log: true }));
+            ).pipe(Effect.ignoreCause({ log: true }));
 
         const recheckAndBind = Effect.gen(function* () {
           // The projection was read before the potentially slow git work
@@ -312,9 +316,11 @@ const make = Effect.gen(function* () {
           // attached the thread in the meantime. Re-check before committing so
           // the race cannot leave a second, untracked worktree.
           const recheck = yield* loadThread(scope);
-          if (recheck.thread.worktreePath !== null) {
-            return yield* alreadyInWorktree(recheck.thread.worktreePath);
-          }
+          if (recheck.thread.worktreePath !== projection.thread.worktreePath)
+            return yield* failure(
+              "already_in_worktree",
+              "This session moved to another checkout while the worktree was being prepared.",
+            );
           // Mirror the up-front archived check: the thread may have been
           // archived during the slow git work, and an archived thread must
           // not be bound to a fresh worktree it can never use.
@@ -330,8 +336,9 @@ const make = Effect.gen(function* () {
               commandId: ids.commandId,
               threadId: scope.threadId,
               branch: worktree.worktree.refName,
+              ...(input.name ? { title: input.name } : {}),
               worktreePath,
-              expectedWorktreePath: null,
+              expectedWorktreePath: projection.thread.worktreePath,
             })
             .pipe(
               Effect.catchCause((cause) =>
@@ -436,7 +443,7 @@ const make = Effect.gen(function* () {
           worktreePath,
           branch: worktree.worktree.refName,
           baseRef,
-          startedFromOrigin: startFromOrigin,
+          startedFromOrigin: !input.adoptExisting && startFromOrigin,
           setupScript,
           continuation,
           note:
@@ -483,68 +490,14 @@ const make = Effect.gen(function* () {
     },
   );
 
-  const rename: WorktreeMcpService["Service"]["rename"] = Effect.fn("WorktreeMcpService.rename")(
-    function* (scope, input) {
-      yield* requireCapability(scope);
-      yield* loadThread(scope);
-      if (Option.isNone(currentCheckout) || Option.isNone(workspaceBackend))
-        return yield* failure(
-          "invalid_request",
-          "Lane naming requires a Cinderdeck workspace conversation.",
-        );
-      const managed = yield* currentCheckout.value
-        .forThread(scope.threadId)
-        .pipe(asOperationFailed("Unable to resolve current lane"));
-      if (!managed || managed.checkout.kind !== "lane" || !managed.checkout.laneId)
-        return yield* failure("invalid_request", "This conversation is not in a worktree lane.");
-      if (managed.session.desiredAccess !== "write" || managed.session.role !== "writer")
-        return yield* failure(
-          "capability_denied",
-          "Only a writable parent conversation can rename its lane.",
-        );
-      const target = yield* workspaceBackend.value
-        .context(managed.checkout.laneId)
-        .pipe(asOperationFailed("Unable to read current lane"));
-      if (
-        target.hello.installationID !== managed.workspace.environmentId ||
-        !target.resource.workspace?.lane ||
-        !target.resource.available ||
-        target.resource.generation !== managed.checkout.nativeGeneration
-      )
-        return yield* failure(
-          "invalid_request",
-          "The lane context changed. Refresh before naming it.",
-        );
-      const operationKey = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
-      const actorID = `chat-${scope.threadId}`;
-      let receipt = yield* workspaceBackend.value
-        .submit(actorID, {
-          operationKey,
-          installationID: target.hello.installationID,
-          workspaceID: target.resource.workspaceID,
-          generation: target.resource.generation,
-          revision: target.resource.revision,
-          method: "lane.update",
-          arguments: {
-            workspace: target.resource.workspaceID,
-            name: input.name,
-            expectedName: input.expectedName,
-          },
-        })
-        .pipe(asOperationFailed("Unable to rename lane"));
-      if (receipt.state === "pending" || receipt.state === "running")
-        receipt = yield* workspaceBackend.value
-          .operation(actorID, operationKey, 25000)
-          .pipe(asOperationFailed("Unable to inspect rename"));
-      if (receipt.state !== "succeeded")
-        return yield* failure(
-          "operation_failed",
-          receipt.error?.message ??
-            `Rename ${receipt.state}; inspect operation ${operationKey} before retrying.`,
-        );
-      return { name: receipt.result?.workspace?.lane?.name ?? input.name };
-    },
-  );
+  // Retain the old wire method for clients that have not updated yet.
+  const rename: WorktreeMcpService["Service"]["rename"] = () =>
+    Effect.fail(
+      failure(
+        "invalid_request",
+        "Lane names are retired. Rename the session with the thread metadata tool.",
+      ),
+    );
 
   const status: WorktreeMcpService["Service"]["status"] = Effect.fn("WorktreeMcpService.status")(
     function* (scope) {
@@ -553,55 +506,16 @@ const make = Effect.gen(function* () {
       const project = yield* loadProject(scope, projection.thread.projectId);
 
       const defaultStartFromOrigin = yield* readDefaultStartFromOrigin;
-      const managed = Option.isSome(currentCheckout)
-        ? yield* currentCheckout.value
-            .forThread(scope.threadId)
-            .pipe(asOperationFailed("Unable to resolve current lane"))
-        : null;
-      const managedRepository = managed?.checkout.repositories.find(
-        (repo) => repo.root === projection.thread.worktreePath,
-      );
-      const liveStatus = managed
-        ? yield* gitWorkflow
-            .localStatus({ cwd: projection.thread.worktreePath ?? project.workspaceRoot })
-            .pipe(Effect.option)
-        : Option.none();
-
-      const laneName =
-        managed?.checkout.kind === "lane" &&
-        Option.isSome(workspaceBackend) &&
-        managed.checkout.laneId
-          ? yield* workspaceBackend.value.context(managed.checkout.laneId).pipe(
-              Effect.map((target) => target.resource.workspace?.lane?.name),
-              Effect.orElseSucceed(() => undefined),
-            )
-          : undefined;
-      // Repository IDs and defaults let an agent choose worktrees and references in one handoff.
-      const native =
-        managed?.checkout.kind === "primary" && Option.isSome(workspaceBackend)
-          ? yield* workspaceBackend.value.context(managed.workspace.ownerId).pipe(
-              Effect.map((target) => target.resource.workspace?.repos),
-              Effect.orElseSucceed(() => undefined),
-            )
-          : undefined;
-      const repositories = native?.map((repo) => ({
-        id: repo.id,
-        path: repo.path,
-        branch: repo.branch,
-        ...(repo.laneDefault ? { laneDefault: repo.laneDefault } : {}),
-        current: repo.physicalID === managedRepository?.physicalId,
-      }));
+      const local = yield* gitWorkflow
+        .localStatus({ cwd: projection.thread.worktreePath ?? project.workspaceRoot })
+        .pipe(Effect.option);
       const result: WorktreeMcpStatusResult = {
-        ...(laneName !== undefined ? { laneName } : {}),
-        ...(repositories?.length ? { repositories } : {}),
-        attached: managed
-          ? managed.checkout.kind === "lane"
-          : projection.thread.worktreePath !== null,
-        worktreePath: managed?.checkout.kind === "primary" ? null : projection.thread.worktreePath,
+        attached: projection.thread.worktreePath !== null,
+        worktreePath: projection.thread.worktreePath,
         branch:
-          Option.isSome(liveStatus) && liveStatus.value.isRepo
-            ? liveStatus.value.refName
-            : (managedRepository?.branch ?? projection.thread.branch),
+          Option.isSome(local) && local.value.isRepo
+            ? local.value.refName
+            : projection.thread.branch,
         projectWorkspaceRoot: project.workspaceRoot,
         defaultStartFromOrigin,
       };

@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { Link } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as Option from "effect/Option";
 import type { EnvironmentId } from "@cinderdeck/contracts";
@@ -8,6 +8,7 @@ import { workspaceView } from "./state";
 import { overviewResources, type WorkspaceSearch } from "./workspaceNavigation";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { useEnvironmentQuery } from "../state/query";
+import { useProjects, useThreadShells } from "../state/entities";
 import styles from "./WorkspaceSidebar.module.css";
 
 /** App-wide views use the same native catalog as the selected workspace view. */
@@ -39,6 +40,9 @@ function ConnectedWorkspaces({
   environmentId: EnvironmentId;
   search: WorkspaceSearch;
 }) {
+  const params = useParams({ strict: false });
+  const threads = useThreadShells();
+  const projects = useProjects();
   const result = useAtomValue(workspaceView({ environmentId, input: { offset: 0, limit: 50 } }));
   const view = Option.getOrNull(AsyncResult.value(result));
   // The catalog stays subscribed as selection changes. Supplement it with the
@@ -69,6 +73,25 @@ function ConnectedWorkspaces({
       ].map((resource) => [resource.workspaceID, resource]),
     ).values(),
   ];
+  const thread = threads.find(
+    (item) =>
+      item.environmentId === environmentId && "threadId" in params && item.id === params.threadId,
+  );
+  const project = projects.find(
+    (item) => item.environmentId === environmentId && item.id === thread?.projectId,
+  );
+  const owner =
+    project &&
+    resources.find(
+      (row) =>
+        !row.workspace?.lane &&
+        (row.workspace?.root === project?.workspaceRoot ||
+          row.workspace?.repos.some((repo) => repo.path === project?.workspaceRoot)),
+    );
+  const navigationSearch =
+    !search.workspace && owner
+      ? { ...search, workspace: owner.workspaceID, context: owner.workspaceID }
+      : search;
   return (
     <section aria-label="Workspace navigator">
       {view?.hello ? (
@@ -82,7 +105,7 @@ function ConnectedWorkspaces({
             environmentId={environmentId}
             installationID={view.hello.installationID}
             resources={resources}
-            search={{ ...search, environment: environmentId }}
+            search={{ ...navigationSearch, environment: environmentId }}
           />
         </>
       ) : (

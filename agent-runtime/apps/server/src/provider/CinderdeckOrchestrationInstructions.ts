@@ -12,9 +12,9 @@ The \`${APP_MCP_SERVER_NAME}\` MCP server provides app-owned orchestration. Trea
 - For every Cinderdeck delegated review round, call \`delegate_task\` again. Include the original brief, prior findings, responses, and unresolved objections in each new task prompt. Track each round by its own \`taskId\`. Use a distinct \`clientRequestId\` per round, stable across retries of that round. Do not use \`t3_thread_send\` on \`childThreadId\` to continue a delegated review.
 - \`schedule_task\` creates persistent recurring work in the app scheduler. Pass \`schedule\` as a structured object, never as JSON text: \`{"type":"interval","everyMs":3600000}\` for an interval, or \`{"type":"fixed_time","timeOfDay":"09:00","weekdays":[1,2,3,4,5]}\` for a wall-clock schedule. By default runs return to the current thread; set \`bindToCurrentThread=false\` only when the user wants a fresh thread for every run. After scheduling, report the returned cadence and next run time.
 
-### Lane names
+### Workspaces and sessions
 
-When creating a Cinderdeck lane with \`t3_worktree_handoff\`, optionally pass \`name\` for a short, useful display name based on the task. In a multi-repository workspace, pass \`repositoryModes\` (IDs from \`t3_worktree_status\`) so only repositories you will change get worktrees and the rest stay references. Omitting it keeps the default branch name. On the first session in your own lane, you may call \`t3_worktree_status\` and, if \`laneName\` still matches the default branch name and the task gives useful context, call \`t3_worktree_rename\` with \`name\` and the observed \`expectedName\`. Keeping the default is fine. Preserve a custom or user-chosen name; never rename another lane. A lane name is separate from its Git branch.
+A workspace groups ordinary sessions. Sessions can share a checkout without claims, reservations, or lane ownership. Use the existing checkout unless the task needs a separate Git worktree. Worktrees are optional folders, not lanes.
 
 ### Choose the workspace before starting a new thread
 
@@ -26,11 +26,11 @@ For independent implementation or a PR stack in its own worktree, use \`t3_threa
 
 For stacked work, set \`baseRef\` to the intended parent branch and \`startFromOrigin:false\` to use its local commits. Use \`startFromOrigin:true\` when you intend to fetch and start from origin. Uncommitted edits are not copied. Use \`t3_worktree_list\` to discover existing checkout paths. Project, model selection, and modes inherit unless supplied; launch requires a full-access/default caller.
 
-\`t3_thread_launch\` is the single-thread launch tool. Use \`create_threads\` only for a batch of threads intentionally sharing the caller's checkout: it always inherits the caller's project, branch, and worktree and has no workspace override. Asking an agent to run \`git worktree add\` or \`cd\` in its prompt does not update Cinderdeck's thread binding. Select the workspace in the launch call instead. \`t3_worktree_handoff\` moves the calling thread, not another thread, and creates a native lane for a Cinderdeck primary-checkout conversation. Use adoptExisting with path and branch to adopt an existing worktree. It cannot move a conversation that is already in a lane. To move into a lane that already exists, pass adoptExisting with its worktree path and branch. Shell Git commands do not transfer the conversation; always use the handoff tool and pass continuationPrompt to resume the task there.
+\`t3_thread_launch\` is the single-thread launch tool. Use \`create_threads\` only for a batch of threads intentionally sharing the caller's checkout. \`t3_worktree_handoff\` moves the calling session into an ordinary Git worktree. Use adoptExisting with its absolute path and branch to use an existing worktree. Shell \`cd\` does not change the conversation's working directory.
 
-### Write your own prompt for a new lane or thread
+### Write your own prompt for a new session
 
-\`continuationPrompt\` and the \`t3_thread_launch\` \`message\` must be your own brief of the work: the goal, what you have learned, constraints, and what done looks like. Never paste the user's message. Leave out the request to create a lane, worktree or thread; it is already handled, and repeating it makes the receiving agent create another lane. Cinderdeck rejects a copy of the user's message.
+\`continuationPrompt\` and the \`t3_thread_launch\` \`message\` must describe the goal, findings, constraints, and completion criteria. Leave out the already handled request to create a session or worktree. Cinderdeck rejects a copy of the user's message.
 
 \`t3_thread_launch\` has no idempotency key. Retain its returned threadId and inspect it with \`t3_thread_read\` / \`t3_thread_wait\`; preparation can still be running after acceptance. If a launch fails or its response is lost, inspect \`t3_thread_list\` before retrying, since a thread may already exist.
 

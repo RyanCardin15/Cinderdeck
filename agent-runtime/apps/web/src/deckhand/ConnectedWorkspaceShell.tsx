@@ -1,8 +1,3 @@
-import { WorkspaceSettingsButton, WorkspaceBranchesButton } from "./WorkspaceSettingsButton";
-import { SessionLauncher } from "./SessionLauncher";
-import { workspaceChatUnavailableReason } from "@cinderdeck/shared/workspaceChat";
-import { useAtomValue } from "@effect/atom-react";
-import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import type { ScopedThreadRef } from "@cinderdeck/contracts";
 import type { ThreadContextView } from "@cinderdeck/contracts/deckhand/rpc";
@@ -11,14 +6,9 @@ import { useEnvironmentQuery } from "../state/query";
 import { useNavigationSnapshot } from "./useNavigationSnapshot";
 import { workspaceView } from "./state";
 import { overviewResources, connectedWorkspaceSearch } from "./workspaceNavigation";
-import { SessionList } from "./SessionList";
 import { useAgentObservation } from "./useAgentObservation";
-import { environmentServerConfigsAtom } from "../state/server";
-import { deriveProviderInstanceEntries } from "../providerInstances";
 import styles from "./connectedShell.module.css";
 import native from "./nativeWorkspace.module.css";
-import { LaneName } from "./LaneName";
-import { WorkspaceSections } from "./WorkspaceSections";
 
 /** Shares the operational navigator around the existing single ChatView. */
 export function ConnectedWorkspaceShell({
@@ -81,24 +71,15 @@ export function ConnectedWorkspaceShell({
     view?.state !== "connected" ||
     !sameInstallation;
   const stale = suppliedStale || contextObservation.stale || treeStale;
-  const connected = !stale && context?.nativeConnection === "connected";
   const resources = overviewResources(sameInstallation ? view : null);
-  const config = useAtomValue(environmentServerConfigsAtom);
-  const providers = deriveProviderInstanceEntries(
-    (threadRef ? config.get(threadRef.environmentId)?.providers : undefined) ?? [],
-  );
   const currentResource = resources.find(
-    (resource) =>
-      resource.workspaceID === contextID &&
-      resource.generation === context?.checkout.nativeGeneration,
+    (resource) => resource.workspaceID === baseID && resource.available,
   );
+  const connected = !stale && currentResource?.available === true;
   const search =
     threadRef && context
       ? connectedWorkspaceSearch(threadRef.environmentId, context, "agents")
       : undefined;
-  const current =
-    context?.native?.workspace?.lane?.name ??
-    (context?.checkout.laneId ? (context.checkout.laneName ?? context.feature.title) : "Primary");
   return (
     <div
       className={`${styles.shell} ${native.workspace}`}
@@ -121,106 +102,12 @@ export function ConnectedWorkspaceShell({
           : {})}
       />
       <div className={styles.main}>
-        {context && threadRef && search ? (
-          <header className={styles.header}>
-            <div>
-              <Link
-                to="/workspaces"
-                search={{
-                  environment: threadRef.environmentId,
-                  workspace: context.workspace.ownerId,
-                  tab: "agents",
-                  expectedInstallationID: context.workspace.environmentId,
-                }}
-              >
-                {context.workspace.name}
-              </Link>
-              <span> / </span>
-              <strong>
-                {currentResource?.workspace?.lane && view?.hello ? (
-                  <LaneName
-                    environmentId={threadRef.environmentId}
-                    installationID={view.hello.installationID}
-                    resource={currentResource}
-                    enabled={
-                      connected && view.hello.capabilities.includes("operations.lane.update")
-                    }
-                  />
-                ) : (
-                  current
-                )}
-              </strong>
-              <WorkspaceBranchesButton
-                environmentId={threadRef.environmentId}
-                workspaceID={context.checkout.laneId ?? context.workspace.ownerId}
-                label={`Switch branch in ${context.workspace.name} / ${current}`}
-                enabled={connected && !!currentResource?.workspace?.repos.length}
-                showLabel
-              />
-              <WorkspaceSettingsButton
-                environmentId={threadRef.environmentId}
-                workspaceID={context.workspace.ownerId}
-                label={`Workspace settings for ${context.workspace.name}`}
-                enabled={connected}
-                showLabel
-              />
-            </div>
-            <WorkspaceSections search={search} />
-          </header>
-        ) : null}
-        <div className={styles.body}>
-          <aside
-            className={context ? styles.sessions : styles.fallbackSessions}
-            aria-label={settings ? "Settings categories" : "Sessions"}
-          >
-            {context && threadRef && search ? (
-              <>
-                {context.requestedThreadId &&
-                context.requestedThreadId !== context.session.threadId ? (
-                  <p className={styles.helperNotice}>
-                    Viewing a helper task.{" "}
-                    <Link
-                      to="/$environmentId/$threadId"
-                      params={{
-                        environmentId: threadRef.environmentId,
-                        threadId: context.session.threadId,
-                      }}
-                    >
-                      Return to its parent session
-                    </Link>
-                  </p>
-                ) : null}
-                {currentResource ? (
-                  <SessionLauncher
-                    key={`chat:${threadRef.environmentId}:${context.workspace.environmentId}:${contextID}:${currentResource.generation}`}
-                    compact
-                    environmentId={threadRef.environmentId}
-                    installationID={context.workspace.environmentId}
-                    resource={currentResource}
-                    enabled={connected && workspaceChatUnavailableReason(currentResource) === null}
-                    disabledReason={workspaceChatUnavailableReason(currentResource) ?? undefined}
-                  />
-                ) : (
-                  <Link className={styles.newSession} to="/workspaces" search={search}>
-                    New chat
-                  </Link>
-                )}
-                <SessionList
-                  compact
-                  environmentId={threadRef.environmentId}
-                  installationID={context.workspace.environmentId}
-                  workspaceID={context.checkout.laneId ?? context.workspace.ownerId}
-                  generation={context.checkout.nativeGeneration!}
-                  providers={providers}
-                  contextLabel={current}
-                  selectedThreadId={threadRef.threadId}
-                  showExternal={false}
-                />
-              </>
-            ) : (
-              fallbackSidebar
-            )}
-          </aside>
+        <div className={styles.body} data-settings={settings && !!fallbackSidebar}>
+          {settings && fallbackSidebar ? (
+            <aside className={styles.fallbackSessions} aria-label="Settings categories">
+              {fallbackSidebar}
+            </aside>
+          ) : null}
           <div className={styles.conversation}>{children}</div>
         </div>
       </div>

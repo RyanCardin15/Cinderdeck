@@ -155,7 +155,7 @@ nonisolated enum CinderdeckMCPServer {
         "revision": property("string", "Revision returned by workspace_definition; refuses if the file changed")],
       required: ["workspace"], idempotent: true),
     tool("delete_workspace", "Remove a workspace", .destructive,
-      "Remove only the workspace definition. Keeps project folders, Git branches, service logs and run history. Refuses active services/runs, remaining lanes, dependent workspace references. Remove or release lanes first. Never removes a lane or project directory.",
+      "Remove only the workspace definition. Keeps project folders, Git branches, service logs and run history. Refuses active services/runs and dependent workspace references. Legacy checkout records do not reserve the source definition. Keeps historical checkout records and project directories.",
       ["workspace": workspace, "revision": property("string", "Optional revision from workspace_definition to refuse a changed definition")],
       required: ["workspace"]),
     tool("create_workspace", "Create a workspace", .additive,
@@ -211,7 +211,7 @@ nonisolated enum CinderdeckMCPServer {
     tool("list_branches", "List branches", .read, "Recent, local, and remote branches for a workspace's repos.",
       ["workspace": workspace, "repo": property("string", "One repo id")], required: ["workspace"]),
     tool("switch_branch", "Switch branch", .destructive,
-      "Check out a branch in one repo, or in every repo of a workspace that has it. Stops affected running services first and restarts them after. For parallel work, prefer create_lane.",
+      "Check out a branch in one repo, or in every repo of a workspace that has it. Stops affected running services first and restarts them after. Sessions share ordinary checkouts; use an optional Git worktree for independent files.",
       ["workspace": workspace, "branch": property("string", "Branch name, or origin/name for a remote branch"),
         "repo": property("string", "Only this repo; omit for all repos that have the branch"),
         "dirty": property("string", "What to do with uncommitted changes (default fail)", values: ["fail", "stash", "carry"])],
@@ -389,9 +389,10 @@ nonisolated enum CinderdeckMCPServer {
   ]
 
   static let tools: [Tool] = workspaceTools + serviceTools + runTools + definitionTools + gitAndLaneTools + prTools + reproTools
+  private static let retiredLaneTools: Set<String> = ["list_lanes", "create_lane", "adopt_lane", "update_lane", "remove_lane", "release_lane", "run_lane_setup", "unpin_lane", "lane_env", "prune_lanes"]
   private static let toolsByName = Dictionary(uniqueKeysWithValues: tools.map { ($0.name, $0) })
 
-  static var toolDescriptions: [JSONValue] { tools.map(describe) }
+  static var toolDescriptions: [JSONValue] { tools.filter { !retiredLaneTools.contains($0.name) }.map(describe) }
 
   private static func describe(_ tool: Tool) -> JSONValue {
     var schema: [String: JSONValue] = ["type": .string("object"), "properties": .object(tool.properties), "additionalProperties": .bool(false)]

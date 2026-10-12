@@ -82,6 +82,26 @@ final class GitServiceIntegrationTests: XCTestCase {
     let recent = try await git.recentBranches(at: clone)
     XCTAssertEqual(recent.first, "feat/remote-only")
   }
+  func testRootWorkspaceMonitorsItsBranchWithoutDeclaredRepositories() async throws {
+    let definitions = root.appendingPathComponent("stacks")
+    try FileManager.default.createDirectory(at: definitions, withIntermediateDirectories: true)
+    try "name = \"Root workspace\"\nroot = \"\(clone.path)\"\n"
+      .write(to: definitions.appendingPathComponent("root.toml"), atomically: true, encoding: .utf8)
+    let defaults = UserDefaults(suiteName: "RootWorkspaceGit-\(UUID())")!
+    defaults.set(definitions.path, forKey: PreferencesKeys.stacksDirectory)
+    let supervisor = StackSupervisor(store: nil, defaults: defaults, git: git, logRoot: root.appendingPathComponent("logs"))
+    defer { supervisor.gitMonitor.stop() }
+    await supervisor.reloadDefinitions()
+    let folder = try XCTUnwrap(supervisor.definition("root")?.root)
+    XCTAssertTrue(supervisor.definition("root")?.repos.isEmpty == true)
+    for _ in 0..<50 where supervisor.gitMonitor.statuses[folder]?.branch != "main" {
+      try await Task.sleep(nanoseconds: 100_000_000)
+    }
+    XCTAssertEqual(supervisor.gitMonitor.statuses[folder]?.branch, "main")
+    let control = StackControlService(supervisor: supervisor)
+    XCTAssertEqual(control.stackSnapshot(try XCTUnwrap(supervisor.files.first)).repos.first?.branch, "main")
+    await supervisor.shutdownMonitoring()
+  }
   func testMergeInProgressBlocksSwitchAndKeepsChanges() async throws {
     let oid = try await run(["rev-parse", "HEAD"], at: clone).trimmingCharacters(in: .whitespacesAndNewlines)
     try (oid + "\n").write(to: clone.appendingPathComponent(".git/MERGE_HEAD"), atomically: true, encoding: .utf8)

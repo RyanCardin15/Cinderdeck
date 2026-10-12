@@ -25,6 +25,7 @@ final class CinderdeckMCPServerTests: XCTestCase {
 
   func testAgentClaimToolsAndOverridesAreRemoved() throws {
     let names = Set(CinderdeckMCPServer.toolDescriptions.compactMap { $0["name"]?.stringValue })
+    for name in ["create_lane", "adopt_lane", "list_lanes", "update_lane", "remove_lane", "release_lane", "lane_env"] { XCTAssertFalse(names.contains(name)) }
     XCTAssertFalse(names.contains("claim_workspace"))
     XCTAssertFalse(names.contains("release_workspace"))
     for name in ["claim_workspace", "release_workspace"] {

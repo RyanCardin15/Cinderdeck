@@ -28,8 +28,7 @@ export function presentCinderdeckConnection(
     },
     connected: {
       title: nativeHost ? "Workspaces ready" : "Cinderdeck connected",
-      detail:
-        "Cinderdeck manages these workspaces, lanes, services and recordings alongside your agents.",
+      detail: "Open sessions in your workspaces and manage their services and recordings here.",
     },
     reconnecting: {
       title: "Reconnecting to Cinderdeck",

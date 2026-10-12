@@ -159,7 +159,7 @@ it("shows both computers and keeps earlier workspace pages while navigating the 
 });
 it("filters attention and restores archived agents on request, preserving disconnected status", async () => {
   await render();
-  const select = container.querySelector<HTMLSelectElement>('select[aria-label="Agent status"]')!;
+  const select = container.querySelector<HTMLSelectElement>('select[aria-label="Session status"]')!;
   await act(async () => {
     select.value = "attention";
     select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -188,18 +188,18 @@ it("collapses inactive and empty workspaces and lets each workspace expand indep
   expect(container.textContent).not.toContain("Idle conversation");
   expect(
     container
-      .querySelector('button[aria-label="Expand agents for Alpha"]')
+      .querySelector('button[aria-label="Expand sessions for Alpha"]')
       ?.getAttribute("aria-expanded"),
   ).toBe("false");
-  await toggleWorkspace("Expand agents for Alpha");
+  await toggleWorkspace("Expand sessions for Alpha");
   expect(container.textContent).toContain("Idle conversation");
   expect(
-    container.querySelector('button[aria-label="Expand agents for Remote workspace"]'),
+    container.querySelector('button[aria-label="Expand sessions for Remote workspace"]'),
   ).not.toBeNull();
-  await toggleWorkspace("Collapse agents for Alpha");
+  await toggleWorkspace("Collapse sessions for Alpha");
   expect(container.textContent).not.toContain("Idle conversation");
-  await toggleWorkspace("Expand agents for Remote workspace");
-  expect(container.textContent).toContain("No agents here yet.");
+  await toggleWorkspace("Expand sessions for Remote workspace");
+  expect(container.textContent).toContain("No sessions here yet.");
 });
 
 it("automatically shows only active agents and allows revealing other conversations", async () => {
@@ -207,11 +207,11 @@ it("automatically shows only active agents and allows revealing other conversati
   await render();
   expect(container.textContent).toContain("Needs approval");
   expect(container.textContent).not.toContain("Idle conversation");
-  await click("Show all 2 agents");
+  await click("Show all 2 sessions");
   expect(container.textContent).toContain("Idle conversation");
-  await click("Show active agents only");
+  await click("Show active sessions only");
   expect(container.textContent).not.toContain("Idle conversation");
-  await toggleWorkspace("Collapse agents for Alpha");
+  await toggleWorkspace("Collapse sessions for Alpha");
   mocks.threads = mocks.threads.map((item) => ({ ...item, updatedAt: "2026-10-06T01:00:00Z" }));
   await render();
   expect(container.textContent).not.toContain("Needs approval");
@@ -246,5 +246,7 @@ it("reveals idle search matches without requiring a workspace expansion", async 
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
   expect(container.textContent).toContain("Find this conversation");
-  expect(container.querySelector('button[aria-label="Collapse agents for Alpha"]')).not.toBeNull();
+  expect(
+    container.querySelector('button[aria-label="Collapse sessions for Alpha"]'),
+  ).not.toBeNull();
 });

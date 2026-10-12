@@ -15,26 +15,7 @@ enum CinderdeckRuntimeNativeUI {
     }
     switch request.surface {
     case "workspace-lane-create":
-      guard let id = request.workspaceID, request.mode == nil,
-        let file = StackSupervisor.shared.files.first(where: { $0.id == id }), file.lane == nil else {
-        throw StackControlError.invalid("Create a lane from an exact source workspace, with no mode")
-      }
-      if LaneCreationWindowController.shared.focusIfPresented() { return }
-      Task { @MainActor in
-        do {
-          let result = try await StackControlService.shared.presentLaneCreation(
-            params: .object(["workspace": .string(id), "start": .bool(false)]))
-          // Show the new lane in the shell that asked for it.
-          if let lane = result["workspace"]?["id"]?.stringValue {
-            _ = CinderdeckRuntimeController.shared.show(workspaceID: lane, section: "overview")
-          }
-        } catch {
-          if (error as? StackControlError)?.code != "cancelled" {
-            let alert = NSAlert(); alert.messageText = "Could not create lane"; alert.informativeText = error.localizedDescription
-            alert.runModal()
-          }
-        }
-      }
+      throw StackControlError(code: "unsupported_capability", message: "Lanes are retired. Open a new session from the workspace in Cinderdeck.")
     case "agent-access":
       // Older shells still ask for the native sheet; the setup now lives in the shell's own settings.
       guard request.workspaceID == nil, request.mode == nil else { throw StackControlError.invalid("Agent access does not accept a workspace or mode") }
@@ -48,7 +29,7 @@ enum CinderdeckRuntimeNativeUI {
       try CinderdeckRuntimeWorkspaceTools.shared.open(request)
     case "workspace", "lane-map":
       guard request.mode == nil else { throw StackControlError.invalid("This surface does not accept a mode") }
-      WorkspaceWindowController.shared.show(workspace: request.workspaceID, section: request.surface == "lane-map" ? .laneMap : nil)
+      WorkspaceWindowController.shared.show(workspace: request.workspaceID, section: request.surface == "lane-map" ? .linkedWork : nil)
     case "history":
       guard request.mode == nil else { throw StackControlError.invalid("History does not accept a mode") }
       if HistoryFloatingManager.shared.selectedSection == .stacks {

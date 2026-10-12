@@ -1,4 +1,4 @@
-# Workspaces: services, tasks, and workflows
+# Workspaces: sessions, services, tasks, and workflows
 
 A workspace can contain one repository, several independent repositories, regular folders, or a mix. Services and tasks keep their own working folders; Git is optional.
 
@@ -16,25 +16,22 @@ A **workspace** groups a project's folders, environment, and reusable commands:
 - **Services** stay running: APIs, development servers, workers, databases. Start, stop, restart, readiness, automatic crash recovery, Git controls, and separate service terminals retain their existing behavior.
 - **Tasks** run once: tests, builds, linting, migrations, or scripts. Exit 0 succeeds; any other exit code fails. Tasks never restart automatically. Output, start/end times, duration, and exit code are recorded.
 - **Workflows** run an ordered sequence of task and service actions. Start waits for readiness; a task must succeed before the next step runs. A failure or cancellation skips remaining steps.
-- **Lane map** opens an execution map with color-coded checkout bands, service dependencies, active workflows, and a separate rail for shared resources. Select a checkout to highlight what it uses, switch to **Used by** to trace a service's consumers, or choose **Focus** to hide unrelated blocks. Search by lane, branch, command, PID, or port; use the clickable overview, zoom, and **Fit width** to navigate. The inspector exposes actual process identities, launch commands, ports, owners, warnings, logs, and checkout/run navigation. Animated connectors indicate running processes and honor Reduce Motion; solid arrows show ownership/step order and dashed arrows show dependencies. Long workflows stack vertically. The map covers Cinderdeck-managed services and run steps.
 - **Runs** shows live progress and past results for the selected workspace. Select a step to filter output, search the log, copy text, cancel an active run, or run again using the current definition.
 - **Recordings** lists screen recordings saved with this workspace's logs, each with a `.log` file stamped with video times. **Record with Logs** records the screen, or records a task or workflow run with each step marked. It also sets which workspaces toolbar recordings capture. See [REPROS.md](REPROS.md).
 
-Workspaces with lanes have a disclosure button in the sidebar. Expand it to see each lane and the current branch for every repository; search also matches branch names. Unavailable Git status is labeled, and saved branch fallbacks are marked “last known.”
+Expand a workspace in the main sidebar to open its sessions directly. The workspace's **+** opens a new chat using its saved defaults. Sessions share ordinary checkouts without claims or reservations. Search, pin, rename, archive and delete operate on the conversation itself. Saved sessions from removed checkouts remain accessible; **Show older sessions** loads additional history.
 
-Choose **Delete workspace…** in the workspace header or **Settings → Workspaces**. The same action is always visible at the bottom of **Workspace settings**, and in the native workspace’s right-click menu. Confirm the named workspace to remove its definition from Cinderdeck; project folders and files, Git branches, logs, and saved run results are kept. Active services/runs, existing lanes, and references from other workspaces block deletion with an explanation. If settings changed after the window opened, reopen them before confirming deletion. Unsaved settings are discarded only when deletion succeeds. Right-click a lane in the sidebar or execution map and choose **Delete lane…** to open its removal confirmation, including for broken or unfinished lanes. It keeps worktrees by default; choose **Delete managed worktrees** to delete eligible folders. If Git cannot inspect a broken checkout, keeping its files still lets you remove the lane. The native confirmation lists ignored files and offers optional log deletion; Git branches and adopted worktrees are kept, and worktree changes or active runs block worktree deletion. The **Lanes** view also offers release while keeping worktrees. The same menu offers **Show lane map**.
+The workspace section bar contains Sessions, Services, Tasks, Workflows, Runs, Recordings and Pull requests. Conversations use one session shell and the persistent workspace tree. Choose an optional Git worktree when independent changes need separate files; this does not create a lane or reserve service ports.
 
-Agents can use any workspace, lane, repository, or checkout without claiming or reserving it. Actor identity records who performed an action. Running-work and Git data protections still apply.
+**Delete workspace…** removes only its definition and keeps project files, Git branches, logs and saved run results. Active services/runs and dependent definitions remain protected. Historical checkout records do not reserve the source definition; their files and saved conversations are kept.
 
 ## Create and edit
 
-Under **Lanes without a workspace**, right-click a lane and choose **Add to workspace…** to pick its workspace, or **Delete lane…** to remove it. Adding a managed lane requires a workspace using its original repositories and keeps its ID, worktrees, branches, and assigned ports. Standalone lane definitions keep their commands and save their sidebar membership as `workspace = "workspace-id"` in TOML. Stop lane services and runs before changing membership. Unreadable lane records must be repaired before attachment; deleting an unreadable record or standalone entry removes only its saved entry and keeps project files and worktrees.
-
 First launch opens **Add a workspace**. The same setup is available from **+** in Workspaces. Choose a local repository or folder and select **Discover commands**. Cinderdeck reads manifests without running project scripts, proposes services and test/build tasks, and checks the selected commands against your login-shell tools and live TCP ports.
 
-Use **Add folders…** to include repositories or folders from different locations, or select a parent folder to discover the repositories beneath it. Review **Repositories & lane defaults** to choose which Git repositories get separate worktrees and which stay shared. Regular folders stay shared. Nested Git repositories require an explicit shared choice before saving. You can also choose a lane setup task and opt into copying `.env` and `.env.local`, without editing TOML.
+Use **Add folders…** to include repositories or folders from different locations, or select a parent folder to discover the repositories beneath it. Review the detected repository folders. Sessions use the workspace folders without lane setup choices.
 
-**Settings → Workspaces** lists your workspaces and opens creation or **Workspace settings**. The workspace header's settings button opens the same visual editor. Add or remove folders, choose their lane behavior, rename the workspace, and add individual reference files with **Add files…**. The original files and folders stay in place. **Edit definition…** opens the TOML editor for commands and advanced options. Saving refuses concurrent edits and invalid references, including removing a folder still used by a service or task.
+**Settings → Workspaces** lists your workspaces and opens creation or **Workspace settings**. The workspace header's settings button opens the same visual editor. Add or remove folders, rename the workspace, and add individual reference files with **Add files…**. The original files and folders stay in place. **Edit definition…** opens the TOML editor for commands and advanced options. Saving refuses concurrent edits and invalid references, including removing a folder still used by a service or task.
 
 **Refresh** in Workspaces, Services, and the settings workspace list shows progress and confirms the result or explains a connection failure. **Refresh definition** in the workspace settings and TOML editors reloads saved definitions from disk and preserves unsaved edits. Native **Settings → Workspaces → Refresh workspaces** reloads all definitions. If services still use an older definition, settings explains that they need a restart and provides **Open Services**; use **Restart** there to apply the saved settings before retrying a conversation move. Refresh itself keeps services running. Refresh animations respect Reduce Motion.
 
@@ -54,11 +51,9 @@ If you have been using a service for a build or test command, stop it, open **Ta
 
 Saving a form does not run any command. If another editor changed the file while a form was open, saving fails with an explanation instead of overwriting those edits.
 
-## Adding a lane
+## Optional worktrees
 
-Open **Lanes** for a workspace, choose a new branch or an existing worktree, and review the repositories that will be isolated. A new lane uses the branch across the workspace's isolated Git repositories. Shared repositories and regular folders keep their original files; their services are shared with the original workspace. Workspaces containing only regular folders can run services and tasks, but branch lanes need an isolated Git repository.
-
-Use **More lane options** for extra files to copy and environment overrides for that lane. Enter one relative path or glob per line and one `KEY=value` per line. Workspace copy defaults still apply. Setup and starting services are optional. Adopted worktrees are kept when a lane is removed. See the [lane guide](STACKS.md#parallel-worktree-lanes) for branch selection and cleanup behavior.
+Sessions use the current checkout by default. A new conversation can select a worktree through `t3_thread_launch` with `workspaceStrategy`. `t3_worktree_handoff` moves the current conversation to a new or existing Git worktree and can queue a continuation message. No native lane is created. Service ports and processes remain workspace configuration; separate worktrees do not automatically isolate them.
 
 ## Existing stacks
 
@@ -151,10 +146,6 @@ MCP tools: `list_workspaces`, `workspace_details`, `run_workspace_task`, `run_wo
 
 Both interfaces can create and edit components, with the same validation and stale-file protection as the forms: `create_workspace` (name and project folder), `save_workspace_service`, `save_workspace_task` (`from_service` moves a stopped service to Tasks), `save_workspace_workflow`, and `delete_workspace_item`. Saving creates or updates one component and keeps every setting the call omits. Nothing starts on save, invalid results are refused without touching the file, component edits belong to the source workspace. `open_workspace` shows a workspace and section to the user.
 
-Lane creation accepts an optional display name: `lane create shop feature/search --name "Search polish"`, or MCP `create_lane` with `name: "Search polish"`. Omit it to keep the branch name. The Lanes and New lane forms offer the same option. Native managed agent creation and `t3_worktree_handoff` also accept `name`. Inside a lane, `t3_worktree_status` returns its current `laneName`; a writable parent agent can use `t3_worktree_rename` with that `expectedName` to rename only its own lane. First-session guidance permits choosing a task name while the default branch name remains, and preserves custom names.
-
-For a lane with independent repositories, use `lane create <workspace> <new-branch> --repo-from app=<commit> --repo-from api=origin/main`, or MCP `create_lane` with `repositoryRefs: {"app": "<commit>", "api": "origin/main"}`. Each selected branch must be new. Cinderdeck pins each revision before creating worktrees, keeps other repositories on their normal defaults, and reports the resolved commits in the lane's `repositoryRefs`. Missing/shared repositories, existing local branches and conflicting aliases are refused. This option applies to creation; adoption preserves the existing checkout.
-
 ### Complete definition and lifecycle controls
 
 `workspace_definition` (`workspace definition <id>`) returns the authored TOML, file path and a content `revision`. `save_workspace` can patch `name` and/or `folder`, or replace the whole `source` with that revision. Complete source replacement supports **every definition setting**: repositories and their lane modes, workspace environment, secret references, shell, service restart/stop settings, task ports, lane setup/teardown/copy/link/host defaults, and component additions, edits and removals. It also repairs invalid definitions. It does not read secret values from Keychain.
@@ -167,9 +158,9 @@ cinderdeck workspace delete-item shop workflow verify
 cinderdeck workspace remove shop --revision <revision>
 ```
 
-A full save or metadata edit requires stopped services and finished/cancelled runs in the workspace and its lanes. It validates references across workspaces before writing, and refuses a stale revision. Changing the display name keeps the workspace id. Changing the folder re-resolves relative paths. Nothing starts automatically. `delete_workspace` removes just the definition, requires stopped work, refuses remaining lanes or dependent workspace references, and keeps project folders, branches, logs and saved run results.
+A full save or metadata edit requires stopped services and finished/cancelled runs in the workspace and its lanes. It validates references across workspaces before writing, and refuses a stale revision. Changing the display name keeps the workspace id. Changing the folder re-resolves relative paths. Nothing starts automatically. `delete_workspace` removes just the definition, requires stopped work, refuses active work or dependent workspace references, and keeps project folders, branches, logs and saved run results.
 
-`update_lane` (`lane edit <lane> --name <name>`) renames a lane even while its services or tasks run. Click the lane name at the top of the workspace or conversation to edit it; Enter or Save commits, and Escape or Cancel discards the draft. Renaming keeps its stable id, worktrees, branches, slug and ports, while its `<workspace>/<name>` reference changes. Names must be unique within the workspace and contain 1–100 characters without control characters. Pass `expectedName` to refuse an edit if someone has renamed it since you read it. Environment edits (`--env KEY=VALUE` repeated, or `--clear-env`) still require a stopped, unpinned lane; values replace the override set and omitted fields stay unchanged. Existing process environments keep their launch values until the next start. Explicit `{{lane.name}}` templates may therefore show a configuration-change warning after a rename. `remove_lane` and `release_lane` retain their existing worktree protections; release keeps all worktrees.
+Legacy lane configuration and CLI methods remain readable for older checkouts and scripts. They are not offered in the session interface or the advertised MCP catalog. Internal storage keys and historical records are retained.
 
 ### One operation catalog for CLI and MCP
 
@@ -177,7 +168,7 @@ A full save or metadata edit requires stopped services and finished/cancelled ru
 cinderdeck tools                         # Full JSON catalog and schemas; no app connection needed
 cinderdeck tools save_workspace_service  # All accepted settings for one operation
 cinderdeck call list_workspaces --arguments '{"detail":false}'  # Compact inventory
-cinderdeck call update_lane --arguments '{"workspace":"shop/review","env":{"MODE":"review"}}'
+cinderdeck call workspace_details --arguments '{"workspace":"shop"}'
 cinderdeck call save_workspace --file ./arguments.json
 ```
 

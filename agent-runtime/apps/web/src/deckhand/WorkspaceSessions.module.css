@@ -1,0 +1,125 @@
+.sessions {
+  min-width: 0;
+}
+.list {
+  display: grid;
+  gap: 3px;
+}
+.session {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  color: var(--foreground);
+  border-radius: 7px;
+  text-decoration: none;
+}
+.session:hover {
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.session[aria-current="page"] {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.session:focus-visible,
+.more:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+.session > svg {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+.identity {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+.age,
+.empty,
+.more {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.empty {
+  padding: 6px 12px;
+}
+.compact {
+  margin-left: 17px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+}
+.compact .session {
+  padding: 7px 8px;
+  gap: 8px;
+}
+.compact .title {
+  font-size: 12px;
+}
+.status {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--primary);
+}
+.status[data-status="working"] {
+  background: light-dark(#15713c, #86dca4);
+}
+.status[data-status="attention"] {
+  background: light-dark(#a96c0d, #f5c76b);
+}
+.status[data-status="failed"] {
+  background: var(--destructive);
+}
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 16px 0;
+  flex-wrap: wrap;
+}
+.search {
+  flex: 1;
+  min-width: 150px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 12px;
+  color: var(--muted-foreground);
+}
+.search input {
+  width: 100%;
+  outline: none;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 13px;
+}
+.search:focus-within {
+  border-color: var(--primary);
+}
+.archive {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.more {
+  background: transparent;
+  border: 0;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.more:hover {
+  color: var(--foreground);
+}

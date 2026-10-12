@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { ThreadId, type EnvironmentId, type ContextMenuItem } from "@cinderdeck/contracts";
-import type { ManagedSessionView } from "@cinderdeck/contracts/deckhand/rpc";
 import { settlePromise, squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
 import { threadRuntimeCanArchive } from "@cinderdeck/client-runtime/state/models";
 import { useThreadActions } from "../hooks/useThreadActions";
@@ -23,6 +22,12 @@ import {
   DialogPanel,
   DialogFooter,
 } from "../components/ui/dialog";
+
+export type SessionActionTarget = {
+  binding: { threadId: string };
+  title: string;
+  archived: boolean;
+};
 
 type Action =
   | "open"
@@ -46,7 +51,7 @@ export function useSessionActions(environmentId: EnvironmentId) {
   const updateMetadata = useAtomCommand(threadEnvironment.updateMetadata, { reportFailure: false });
   const confirmArchive = useClientSettings((settings) => settings.confirmThreadArchive);
   const confirmDelete = useClientSettings((settings) => settings.confirmThreadDelete);
-  const [rename, setRename] = useState<ManagedSessionView | null>(null);
+  const [rename, setRename] = useState<SessionActionTarget | null>(null);
   const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const lifetime = useRef(true);
@@ -64,7 +69,7 @@ export function useSessionActions(environmentId: EnvironmentId) {
       description: error instanceof Error ? error.message : "Please try again.",
     });
   const showMenu = async (
-    session: ManagedSessionView,
+    session: SessionActionTarget,
     position: { x: number; y: number },
     enabled: boolean,
   ) => {

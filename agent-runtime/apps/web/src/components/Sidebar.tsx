@@ -1,6 +1,5 @@
 import { ProductNavigation } from "../deckhand/ProductNavigation";
 import { useLaneSessionContext } from "../deckhand/LaneSessionContext";
-import { ConnectedLaneSidebar } from "../deckhand/ConnectedLaneSidebar";
 import { useAgentObservation } from "../deckhand/useAgentObservation";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "./ThreadHoverCard";
 import { CollapsibleSectionHeader } from "./ui/collapsible-section-header";
@@ -4705,18 +4704,7 @@ export default function Sidebar() {
                 ? "Saved workspace context"
                 : connectedContext.data.workspace.name,
           }}
-        >
-          <ConnectedLaneSidebar
-            threadRef={routeThreadRef}
-            providers={
-              routeThreadRef
-                ? Array.from(
-                    providerEntriesByEnvironment.get(routeThreadRef.environmentId)?.values() ?? [],
-                  )
-                : []
-            }
-          />
-        </ProductNavigation>
+        />
       </div>
     );
   }

@@ -1,6 +1,6 @@
 import { NativeWorkspaceSettings } from "../../deckhand/NativeWorkspaceSettings";
 import { NativeSettingsSection } from "../../deckhand/NativeSettings";
-import { useId, useState } from "react";
+import { useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import type { EnvironmentId } from "@cinderdeck/contracts";
@@ -66,8 +66,7 @@ export function WorkspacesSettings({
       <header className="space-y-2">
         <h2 className="text-lg font-semibold">Workspaces</h2>
         <p className="max-w-xl text-sm text-muted-foreground">
-          Manage your project folders and files. Each workspace keeps its parallel lanes together
-          below.
+          Manage the project folders, files, and settings used by your sessions.
         </p>
       </header>
       {environmentId ? (
@@ -126,7 +125,6 @@ function WorkspaceList({ environmentId, local }: { environmentId: EnvironmentId;
             key={`${view?.hello?.installationID}:${item.workspaceID}:${item.generation}`}
             resource={item}
             environmentId={environmentId}
-            installationID={view?.hello?.installationID}
             connected={connected}
             local={local}
           />
@@ -141,7 +139,7 @@ function WorkspaceList({ environmentId, local }: { environmentId: EnvironmentId;
           <p className="mt-1 text-sm text-muted-foreground">
             {offset > 0
               ? "Go back to see your remaining workspaces."
-              : "Add a workspace to choose its folders and files. Lanes will appear inside it."}
+              : "Add a workspace to choose its folders and files, then open a session."}
           </p>
         </div>
       ) : null}
@@ -159,18 +157,14 @@ function WorkspaceList({ environmentId, local }: { environmentId: EnvironmentId;
 function WorkspaceCard({
   resource,
   environmentId,
-  installationID,
   connected,
   local,
 }: {
   resource: Resource;
   environmentId: EnvironmentId;
-  installationID: string | undefined;
   connected: boolean;
   local: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const lanesID = useId();
   const workspace = resource.workspace!;
   const files = workspace.files ?? [];
   const enabled = connected && resource.available;
@@ -247,165 +241,16 @@ function WorkspaceCard({
           ) : null}
         </ul>
       </details>
-      <div className="border-t border-border/50 bg-muted/15">
-        <button
-          type="button"
-          aria-expanded={expanded}
-          aria-controls={lanesID}
-          aria-label={`${expanded ? "Collapse" : "Expand"} lanes for ${workspace.name}`}
-          onClick={() => setExpanded(!expanded)}
-          className="flex w-full cursor-pointer items-center gap-2 px-4 py-3 text-left text-xs font-medium hover:bg-muted/30 focus-visible:outline-2 focus-visible:outline-ring"
+      <div className="border-t border-border/50 px-4 py-3">
+        <Link
+          to="/workspaces"
+          search={{ environment: environmentId, workspace: resource.workspaceID, tab: "agents" }}
+          className={linkClass}
         >
-          <ChevronRightIcon
-            className={`size-3.5 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`}
-            aria-hidden
-          />
-          <GitBranchIcon className="size-3.5 text-muted-foreground" aria-hidden />
-          Lanes
-          <span className="ml-auto font-normal text-muted-foreground">
-            {expanded ? "Hide" : "Show lanes"}
-          </span>
-        </button>
-        <div id={lanesID} hidden={!expanded}>
-          {expanded ? (
-            <WorkspaceLanes
-              environmentId={environmentId}
-              resource={resource}
-              installationID={installationID}
-              connected={enabled}
-            />
-          ) : null}
-        </div>
+          Open sessions <ArrowUpRightIcon className="size-3.5" aria-hidden />
+        </Link>
       </div>
     </section>
-  );
-}
-
-function WorkspaceLanes({
-  environmentId,
-  resource,
-  installationID,
-  connected,
-}: {
-  environmentId: EnvironmentId;
-  resource: Resource;
-  installationID: string | undefined;
-  connected: boolean;
-}) {
-  const [offset, setOffset] = useState(0);
-  const result = useAtomValue(
-    workspaceView({
-      environmentId,
-      input: {
-        offset: 0,
-        limit: 1,
-        selectedWorkspaceID: resource.workspaceID,
-        workspacePage: { offset, limit: pageSize },
-      },
-    }),
-  );
-  const observed = Option.getOrNull(AsyncResult.value(result));
-  const observation = useAgentObservation(
-    environmentId,
-    `settings-lanes:${resource.workspaceID}:${offset}`,
-    observed,
-  );
-  const view = observed?.hello?.installationID === installationID ? observed : null;
-  const page =
-    view?.workspaceContexts?.workspaceID === resource.workspaceID ? view.workspaceContexts : null;
-  const source = view?.selectedResources?.find((item) => item.workspaceID === resource.workspaceID);
-  const fresh =
-    connected &&
-    source?.generation === resource.generation &&
-    result._tag !== "Failure" &&
-    view?.state === "connected" &&
-    !observation.stale;
-  const lanes =
-    page?.resources.filter(
-      (item) => item.workspace?.lane?.sourceStackID === resource.workspaceID,
-    ) ?? [];
-  return (
-    <div className="space-y-3 border-t border-border/40 px-4 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-        <p>
-          {page ? countLabel(page.laneCount, "lane") : "Parallel checkouts"} · Settings inherited
-          from this workspace
-        </p>
-        {fresh ? (
-          <Link
-            to="/workspaces"
-            search={{
-              environment: environmentId,
-              workspace: resource.workspaceID,
-              context: resource.workspaceID,
-              tab: "lane-map",
-              ...(installationID ? { expectedInstallationID: installationID } : {}),
-              expectedGeneration: resource.generation,
-            }}
-            className={linkClass}
-          >
-            Manage lanes <ArrowUpRightIcon className="size-3" aria-hidden />
-          </Link>
-        ) : null}
-      </div>
-      {!fresh ? (
-        <p role="status" className="text-xs text-muted-foreground">
-          {AsyncResult.isInitial(result)
-            ? "Loading lanes…"
-            : "Reconnect to refresh lanes. Any lanes shown are last observed."}
-        </p>
-      ) : null}
-      <ul className="ml-1 space-y-1 border-l border-border pl-3">
-        {lanes.map((lane) => {
-          const name = lane.workspace!.lane!.name;
-          const branches = [
-            ...new Set(lane.workspace!.repos.map((repo) => repo.branch).filter(Boolean)),
-          ];
-          return (
-            <li key={lane.workspaceID} className="flex items-center gap-3 rounded-md px-2 py-2">
-              <GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-              <div className="min-w-0 flex-1 text-xs">
-                <p className="break-words font-medium">{name}</p>
-                <p className="mt-0.5 break-words text-muted-foreground">
-                  {branches.join(" · ") || "No branch information"}
-                </p>
-              </div>
-              {fresh && lane.available ? (
-                <Link
-                  to="/workspaces"
-                  aria-label={`Open lane ${name}`}
-                  className={linkClass}
-                  search={{
-                    environment: environmentId,
-                    workspace: resource.workspaceID,
-                    context: lane.workspaceID,
-                    tab: "overview",
-                    ...(installationID ? { expectedInstallationID: installationID } : {}),
-                    expectedGeneration: lane.generation,
-                  }}
-                >
-                  Open <ArrowUpRightIcon className="size-3" aria-hidden />
-                </Link>
-              ) : (
-                <span className="text-xs text-muted-foreground">Unavailable</span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      {fresh && page?.laneCount === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          No lanes yet. Create one from the lane map when you need a parallel checkout.
-        </p>
-      ) : null}
-      <PageControls
-        offset={offset}
-        nextOffset={page?.nextOffset ?? null}
-        enabled={fresh}
-        label={`lanes for ${resource.workspace?.name}`}
-        onChange={setOffset}
-      />
-    </div>
   );
 }
 

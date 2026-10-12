@@ -609,6 +609,7 @@ function NativeSettingsForm({
   if (!host) return null;
   const groups = new Map<string, NativeSettingsField[]>();
   for (const field of snapshot?.fields ?? []) {
+    if (field.id === "stacks.lanes_directory") continue;
     if (
       category === "menuBar" &&
       ["menu_bar.hidden_items", "menu_bar.item_order"].includes(field.id)

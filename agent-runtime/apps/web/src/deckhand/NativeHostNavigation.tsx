@@ -77,11 +77,13 @@ export function NativeHostNavigation() {
           ...(target.workspaceID ? { context: target.workspaceID } : {}),
           tab: (target.section ?? "").toLowerCase().includes("agent")
             ? "agents"
-            : target.section === "lane-map" || target.section === "overview"
-              ? target.section
-              : target.workspaceID
-                ? "services"
-                : "overview",
+            : target.section === "lane-map"
+              ? "agents"
+              : target.section === "overview"
+                ? "overview"
+                : target.workspaceID
+                  ? "services"
+                  : "overview",
         },
       });
     }

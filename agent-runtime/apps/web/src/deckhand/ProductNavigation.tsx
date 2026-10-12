@@ -79,13 +79,13 @@ export function ProductNavigation({
       </Link>
       <Link
         to="/workspaces"
-        title="Agents"
+        title="Sessions"
         search={{ tab: "agents" }}
         className={current === "conversations" ? styles.current : ""}
         aria-current={current === "conversations" ? "page" : undefined}
       >
         <MessagesSquareIcon size={18} />
-        <span>Agents</span>
+        <span>Sessions</span>
       </Link>
       <Link
         title="Pull requests"

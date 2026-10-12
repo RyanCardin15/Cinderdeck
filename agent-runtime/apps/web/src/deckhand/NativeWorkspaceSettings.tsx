@@ -158,7 +158,7 @@ export function NativeWorkspaceSettings({
       <header className={styles.header}>
         <div>
           <h2>{text(snapshot, "name") || "Workspace settings"}</h2>
-          <p>Folders, lane defaults, and review instructions for this workspace.</p>
+          <p>Folders, files, and review instructions for this workspace.</p>
         </div>
         <span className={styles.badge}>This Mac</span>
       </header>
@@ -208,36 +208,6 @@ export function NativeWorkspaceSettings({
                 {draft.folders.map((folder, index) => (
                   <div key={folder.id} className={styles.model}>
                     <p className="break-all text-xs font-mono">{folder.path}</p>
-                    <label>
-                      Lane checkout
-                      <select
-                        className={styles.field}
-                        aria-label={`Lane checkout for ${folder.id}`}
-                        value={folder.lane}
-                        disabled={pending || advanced || reviewDirty}
-                        onChange={(event) =>
-                          changeFolder(index, { lane: event.target.value as Folder["lane"] })
-                        }
-                      >
-                        <option value="worktree">Worktree</option>
-                        <option value="shared">Reference</option>
-                      </select>
-                    </label>
-                    {folder.lane === "worktree" ? (
-                      <label>
-                        Start from
-                        <input
-                          className={styles.field}
-                          aria-label={`Starting revision for ${folder.id}`}
-                          placeholder="Workspace default"
-                          disabled={pending || advanced || reviewDirty}
-                          value={folder.laneFrom}
-                          onChange={(event) =>
-                            changeFolder(index, { laneFrom: event.target.value })
-                          }
-                        />
-                      </label>
-                    ) : null}
                     <Button
                       variant="ghost"
                       size="xs"
@@ -329,8 +299,7 @@ export function NativeWorkspaceSettings({
               Advanced workspace configuration
             </summary>
             <p className={styles.note}>
-              Edit services, tasks, workflows, and lane preparation here. Stop services and active
-              runs before saving.
+              Edit services, tasks, and workflows here. Stop services and active runs before saving.
             </p>
             {!advanced && definitionDirty ? (
               <p className={styles.note}>
@@ -361,7 +330,7 @@ export function NativeWorkspaceSettings({
             <div className={styles.feedback}>
               <p>
                 Remove {text(snapshot, "name") || "this workspace"} from Cinderdeck? Project folders
-                and files remain on disk. Services must be stopped and lanes removed first.
+                and files remain on disk. Stop services before removing the workspace.
               </p>
               <div className={styles.actions}>
                 <Button

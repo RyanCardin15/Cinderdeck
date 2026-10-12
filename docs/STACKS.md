@@ -128,7 +128,9 @@ Commands, environment values and `ready.http` can contain `{{…}}` values. They
 
 Services must remain in the foreground. A daemon that calls `setsid`, or `docker compose up -d`, escapes normal group ownership. Use `docker compose up` without `-d` and configure ports so surviving listeners can be identified. Cinderdeck does not otherwise manage containers. The console is read-only; commands that require terminal input need to be configured for unattended development use.
 
-## Parallel worktree lanes
+## Parallel worktree lanes (legacy compatibility)
+
+The current app uses ordinary sessions directly under workspaces. This section documents older checkout records and scripts; new sessions use optional ordinary Git worktrees without native lanes.
 
 Use a lane when agents need different branches running at the same time:
 

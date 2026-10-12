@@ -340,13 +340,23 @@ final class StackLaneTests: XCTestCase {
     XCTAssertEqual(resolved.id, id)
     _ = try await control.handle("lane.update", params: .object(["workspace": .string(id), "env": .object([:])]), actor: codex)
     XCTAssertEqual(try StackLaneStore.record(id: id, in: supervisor.lanesDirectory)?.info.environment, [:])
-    do { _ = try await control.handle("workspace.delete", params: .object(["workspace": .string("shop")]), actor: codex); XCTFail("Has lanes") }
-    catch { XCTAssertEqual((error as? StackControlError)?.code, "in_use") }
     await supervisor.start(stack: id)
     do { _ = try await control.handle("lane.update", params: update, actor: codex); XCTFail("Running") }
     catch { XCTAssertEqual((error as? StackControlError)?.code, "busy") }
     await supervisor.stop(stack: id)
     _ = try await control.handle("lane.remove", params: .object(["workspace": .string(id)]), actor: codex)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: repo.appendingPathComponent("tracked.txt").path))
+  }
+
+  func testLegacyCheckoutsDoNotReserveTheirSourceWorkspaceDefinition() async throws {
+    try await load()
+    let created = try await control.handle("lane.create", params: .object(["workspace": .string("shop"),
+      "branch": .string("legacy/history"), "start": .bool(false)]), actor: codex)
+    let id = try XCTUnwrap(created["workspace"]?["id"]?.stringValue)
+    let record = try XCTUnwrap(StackLaneStore.record(id: id, in: supervisor.lanesDirectory))
+    _ = try await control.handleWorkspaceLifecycle("workspace.delete", params: .object(["workspace": .string("shop")]), actor: codex)
+    XCTAssertNotNil(try StackLaneStore.record(id: id, in: supervisor.lanesDirectory))
+    for checkout in record.worktrees { XCTAssertTrue(FileManager.default.fileExists(atPath: checkout.path.path)) }
     XCTAssertTrue(FileManager.default.fileExists(atPath: repo.appendingPathComponent("tracked.txt").path))
   }
 
@@ -432,10 +442,8 @@ final class StackLaneTests: XCTestCase {
     XCTAssertEqual(navigation.workspaceID(for: "legacy"), "shop")
     XCTAssertFalse(navigation.isUnattached("legacy"))
     XCTAssertEqual(reloaded.first { $0.id == "legacy" }?.definition?.root.path, project.path)
-    do {
-      _ = try await control.handleWorkspaceLifecycle("workspace.delete", params: .object(["workspace": .string("shop")]), actor: codex)
-      XCTFail("Deleted a workspace with an attached lane definition")
-    } catch { XCTAssertEqual((error as? StackControlError)?.code, "in_use") }
+    _ = try await control.handleWorkspaceLifecycle("workspace.delete", params: .object(["workspace": .string("shop")]), actor: codex)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: marker.path))
     try await control.removeLaneEntry("legacy", actor: codex)
     XCTAssertFalse(supervisor.files.contains { $0.id == "legacy" })
     XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), "work")

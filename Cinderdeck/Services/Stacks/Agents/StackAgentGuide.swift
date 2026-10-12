@@ -9,35 +9,20 @@ nonisolated enum StackAgentGuide {
   What you start appears in the user's Cinderdeck window, attributed to you.
   Services: list_workspaces → start_services (waits until ready and returns crash output) → read_service_logs to debug. \
   Prefer this over running dev servers in your own terminal, and call list_ports before starting one yourself. \
-  Workspaces and lanes are available to all agents. Agent identity attributes actions without reserving a checkout.
+  Workspaces are available to all agents. Agent identity attributes actions without reserving a checkout.
   Tasks and workflows: run_workspace_task and run_workspace_workflow return a run id immediately. wait_for_workspace_run \
   returns the result with the failing step's output; workspace_run_status and workspace_run_logs read progress. A wait that \
   ends first is not a failure: wait again, never start the run again. cancel_workspace_run stops a run.
   Definitions: create_workspace, save_workspace_service, save_workspace_task, save_workspace_workflow, and delete_workspace_item \
   edit a workspace's TOML file with validation; nothing starts on save. workspace_definition returns complete source and its \
-  revision; save_workspace patches name/folder or replaces source with that revision to change any setting (repos, lane defaults, \
-  shell, environment and components). Stop the workspace and its lanes first. delete_workspace removes only its definition, \
-  keeping project files and saved runs; remove/release lanes first. Active work and dependent references are protected. \
+  revision; save_workspace patches name/folder or replaces source with that revision to change any setting (repos, \
+  shell, environment and components). Stop active workspace services and runs first. delete_workspace removes only its definition, \
+  keeping project files and saved runs;  Active work and dependent references are protected. \
   CLI agents: cinderdeck tools lists this same catalog; cinderdeck call <tool-name> --arguments '<json>' or --file <args.json> \
   invokes any operation with the same schema. cinderdeck workspace --help lists common shortcuts.
-  Parallel branches: create_lane makes an isolated Git worktree copy of a workspace on a branch (tracking a remote-only branch), \
-  executes directly without a modal, runs [lanes] setup and starts it on unique ports, leaving the original running. \
-  One lane = one feature: every worktree repo gets the same branch (existing branches are checked out, remote-only ones tracked). \
-  Running services, tasks or unapplied settings in the source never block creation. Select repositoryModes per repo \
-  (IDs and [new lanes: …] defaults in list_workspaces): worktree for changes, reference for primary-checkout context with no new worktree or branch. For a code review changing \
-  one of four repos, only that repo needs a worktree; reference the other three and keep their files untouched. Already in \
-  your own worktree? adopt_lane runs it as a lane without moving it, with setup off by default. Pass name for a detached HEAD \
-  and env for lane-only feature flags. Use its stable id or <workspace>/<name> with every tool. \
-  update_lane renames a lane (even while running) or replaces a stopped lane's environment overrides ({} clears); ids, branches, folders, slug and ports stay. \
-  Edit the source workspace for component definitions and lane defaults. Adopted/released worktrees stay external across sharing; \
-  release_lane forgets a lane while keeping its worktrees. Different workspaces on the same branch share files; use distinct branches for independent edits. \
-  Services read PORT, CINDERDECK_PORT_<SERVICE> and CINDERDECK_URL_<SERVICE>; definition values written as {{port.api}} or \
-  {{url.api}} resolve per lane. lane_env gives workspace ports and URLs for your shell; pass service for its PORT and own env. \
-  Run commands in the actual repo folders returned by list_lanes, or use configured tasks/workflows. Services marked shared (databases) \
-  run once in the original checkout. remove_lane checks local changes and running dependents, stops services before teardown, \
-  keeps branches, and needs discard_ignored=true to delete ignored files or copied directories (ask the user first). \
-  switch_branch changes the original checkout and refuses \
-  uncommitted work unless dirty=stash or dirty=carry.
+  Workspaces group ordinary agent sessions. Open a chat with the workspace's plus button. Sessions share checkouts \
+  without claims or reservations. Optional Git worktrees provide separate files; use t3_thread_launch with workspaceStrategy \
+  or t3_worktree_handoff from a built-in session. Run checks in the actual session folder or configured tasks/workflows.
   Repros record the screen with every service and task log on the video timeline, to reproduce bugs or test UI end to end: \
   start_repro_recording (window_id from list_repro_windows records exactly one window, followed if it moves; workspace plus \
   task or workflow records a run; workspaces adds other workspaces' output, such as its backend; logs=false records no workspace output) → drive the app → mark_repro at each step, with \
@@ -69,7 +54,7 @@ nonisolated enum StackAgentGuide {
   depends_on = ["db"]
   port = 4000
   ready.http = "{{url.api}}/health"   # or ready.log = "listening"
-  env.DATABASE_URL = "postgres://localhost:{{port.db}}/app{{lane.ident:+_}}{{lane.ident}}"
+  env.DATABASE_URL = "postgres://localhost:{{port.db}}/app"
 
   [tasks.test]                    # finite command: exit 0 succeeds
   repo = "api"
@@ -81,13 +66,6 @@ nonisolated enum StackAgentGuide {
   steps = ["start:api", "task:test"]
   cleanup_services = true
 
-  # Optional: how parallel worktree lanes are prepared. {{…}} values resolve per lane.
-  # [services.db] lane = "shared" runs one database for every lane.
-  # [lanes]
-  # copy = [".env"]               # untracked files copied from the original checkout
-  # branch_prefix = "lane/"       # generated lane branches are lane/<name>
-  # setup = "task:install"        # runs after the worktrees are created, before start
-  # teardown = "task:drop-db"     # runs before removal
   """
 
   static func instructions(command: String) -> String {
@@ -106,16 +84,8 @@ nonisolated enum StackAgentGuide {
       - `logs <workspace> [service] -n 200 [--grep regex] [-f]`
       - `ports` — who owns each listening port (Cinderdeck service, or which app/terminal started it)
       - `switch <workspace> <branch> [--repo id] [--stash|--carry]`, `git <workspace>`, `branches <workspace>`
-    - Parallel work: `\(command) lane create <workspace> [branch] [--name "Search polish"] [--from origin/main]` creates, sets up and starts directly without a modal; omit branch for a generated `lane/<name>` branch (`[lanes] branch_prefix` changes the prefix)
-      - `--repo-from <repo>=<ref>` pins a new branch in that repository; repeat for independent repositories. Other repos keep their defaults. Only for a new branch: omit it to check out an existing branch. Conflicting aliases are refused before creation
-      - Already in your own worktree: `\(command) lane adopt <workspace> [name] --env FEATURE_X=1` runs it as a lane; setup is off unless `--setup`, and a detached HEAD requires a name. Cinderdeck never deletes the adopted folder
-      - `\(command) lane list [workspace]` / `\(command) lane remove <lane>` (branches are kept; `--discard-ignored` also deletes ignored files, changed copies and copied directories — ask first)
-      - Repeat `--repo-mode <repo>=worktree` or `--repo-mode <repo>=reference` (MCP `repositoryModes`). For a review changing one of four repos, create a worktree only for that repo and use primary-checkout references for the other three; keep reference files untouched
-      - With no name or branch, lanes are numbered Lane 1, Lane 2, etc. Repeating a create with the same name and branch returns the existing lane. Use the returned stable lane ID or `<workspace>/<name>` with every command
-      - Configure repository defaults with `[repos.<id>] lane_from = "main"` (or `"develop"`); `[lanes] from` remains the workspace fallback
-      - `\(command) lane edit <lane> --name <name>` or `--env KEY=VALUE` renames a lane while running; env edits require stopping and replaces all overrides, `--clear-env` clears them
-      - `eval "$(\(command) lane env <lane> <service> --export)"` gives your shell that service's `PORT`, own env, and workspace ports/URLs; omit the service for workspace-wide values. Run tests from its actual worktree folder, or use `workspace task <lane> <task> --wait`
-      - `\(command) lane release <lane>` stops and forgets a lane while keeping its worktrees; removal and release require running dependents to stop first
+    - Sessions: workspaces group ordinary chats, with no claims or reservations. Optional Git worktrees keep independent \
+      changes in separate folders. Built-in sessions use `t3_thread_launch` with `workspaceStrategy` or `t3_worktree_handoff`.
     - Live state without any call: `\(StackControlPaths.state.path)`; log files: `~/Library/Logs/Cinderdeck/Stacks/<workspace>/<service>.log`
     - Definitions are TOML files in `~/.config/cinderdeck/stacks/`. Edit them with the MCP `save_workspace_*` tools, or by hand and \
       validate with `\(command) services validate <file>`.

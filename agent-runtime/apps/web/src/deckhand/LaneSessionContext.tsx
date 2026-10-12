@@ -1,8 +1,6 @@
 import { LinkedWorkContext } from "./LinkedWorkContext";
 import { PreviewCaptureControl } from "./PreviewCaptureControl";
 import { RecordingContextSummary } from "./RecordingContextSummary";
-import { ReviewerLauncher } from "./ReviewerLauncher";
-import { ManagedSessionControl } from "./ManagedSessionControl";
 import { PullRequestGlyph } from "../components/pullRequest/pullRequestIcons";
 import { Link } from "@tanstack/react-router";
 import type { ScopedThreadRef } from "@cinderdeck/contracts";
@@ -84,14 +82,12 @@ export function LaneSessionContext({
     scopedRepositories.find((repo) => repo.root === workingDirectory) ?? scopedRepositories[0];
   const workspaceSearch = connectedWorkspaceSearch(threadRef.environmentId, context);
   return (
-    <section className={styles.context} aria-label="Connected lane controls">
+    <section className={styles.context} aria-label="Workspace controls">
       <div className={styles.titleRow}>
         <div className={styles.heading}>
           <div className={styles.metadata}>
             <Link to="/workspaces" search={workspaceSearch}>
-              {context.checkout.kind === "lane"
-                ? (native?.name ?? `Lane · ${context.checkout.laneId ?? "Saved checkout"}`)
-                : `${context.workspace.name} · Primary checkout`}
+              {context.workspace.name}
             </Link>
             <span aria-label={repository?.root}>
               <GitBranchIcon aria-hidden size={15} />
@@ -105,9 +101,9 @@ export function LaneSessionContext({
                   ? "Workspace connected"
                   : "Workspace unavailable"}
             </span>
-            <span className={styles.role}>
-              {context.session.role} · {context.session.desiredAccess.replaceAll("_", " ")}
-            </span>
+            {context.session.desiredAccess === "read_only" ? (
+              <span className={styles.role}>Read only</span>
+            ) : null}
           </div>
         </div>
         {previewService && previewAvailable ? (
@@ -125,12 +121,12 @@ export function LaneSessionContext({
         <p className={styles.warning} role="status">
           <CircleAlertIcon aria-hidden size={14} />
           {inherited
-            ? "Helper task in this parent’s lane. Managed checkout actions belong to the parent session."
+            ? "Helper task in this workspace."
             : "Saved conversation context. Reconnect Cinderdeck to inspect current services."}
         </p>
       ) : null}
       <div className={styles.tools}>
-        <nav className={styles.views} aria-label="Lane tools">
+        <nav className={styles.views} aria-label="Workspace tools">
           <button
             type="button"
             onClick={onOpenPullRequests}
@@ -213,22 +209,7 @@ export function LaneSessionContext({
           ) : null}
         </nav>
         <div className={styles.panelActions} aria-label="Repository panels">
-          <ManagedSessionControl threadRef={threadRef} context={context} enabled={connected} />
           <LinkedWorkContext key={context.checkout.id} threadRef={threadRef} enabled={connected} />
-          {context.session.role === "writer" ? (
-            <ReviewerLauncher
-              key={`${threadRef.environmentId}:${threadRef.threadId}`}
-              threadRef={threadRef}
-              providerSessionId={
-                context.session.role === "writer" ? context.session.providerSessionId : null
-              }
-              enabled={
-                connected &&
-                context.checkout.state === "ready" &&
-                context.feature.status === "active"
-              }
-            />
-          ) : null}
           <AddPanelMenu {...panelMenu} />
           {previewService && !previewAvailable ? (
             <span

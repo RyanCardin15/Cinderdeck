@@ -6,7 +6,7 @@
 <p align="center"><strong>Your development control deck for macOS.</strong><br />Your projects. Your commands. One place to run them.</p>
 
 <p align="center">
-  <a href="docs/STACKS.md">Set up a stack</a> ·
+  <a href="docs/WORKSPACES.md">Set up a workspace</a> ·
   <a href="docs/BUILD.md">Build the app</a> ·
   <a href="docs/README.md">Documentation</a> ·
   <a href="https://github.com/RyanCardin15/Cinderdeck/issues">Issues</a>
@@ -19,11 +19,13 @@
 
 https://github.com/user-attachments/assets/9e735333-ee19-4961-9b5e-feed4f1fff4e
 
+The showcase includes the earlier lane interface. The current app lists ordinary sessions beneath workspaces.
+
 <p align="center">
   <a href="https://raw.githubusercontent.com/RyanCardin15/Cinderdeck/main/assets/cinderdeck-promo.mp4">Download the MP4</a> · <a href="promo/README.md">Edit or render the showcase</a>
 </p>
 
-Cinderdeck is a native Mac application for running your development environment. Group any set of projects into a stack, define how each service starts, and manage them together from the menu bar, a terminal, or your coding agent.
+Cinderdeck is a native Mac application for working in sessions and running your development environment. Group project folders into a workspace, open conversations directly beneath it, and manage its services from the app, a terminal, or your coding agent.
 
 A web app, an API in another repository, a worker, a local database: bring whatever your project needs. No prescribed repositories, language, framework, or folder layout. Cinderdeck runs the commands you configure using the tools already installed on your Mac.
 
@@ -31,9 +33,13 @@ Cinderdeck’s interface opens only in the Mac application. Its bundled renderer
 
 **Cinderdeck is an independent fork of [Snapzy](https://github.com/duongductrong/Snapzy), created by Trong Duong Duc and its contributors.** Snapzy supplied the native capture, recording, annotation, and editing foundation. Cinderdeck extends that foundation into a development workspace with configurable stacks, service orchestration, agent controls, and local clipboard history. The original [BSD 3-Clause license](LICENSE) and attribution are preserved; see [NOTICE](NOTICE).
 
+## Workspace sessions
+
+Every workspace lists its sessions directly. Open a saved conversation or start another one in the same checkout. Sessions do not claim or reserve folders, and there are no lane creation or ownership controls. Use an ordinary Git worktree when a task needs a separate branch and files. Saved conversations from older checkouts remain accessible under their source workspace.
+
 ## Services, tasks, and workflows
 
-Agents can use the same workspace, lane, or checkout without claims or reservations. Use separate branches when independent edits need separate files.
+Agents can use the same workspace or checkout without claims or reservations. Use separate worktrees when independent edits need separate files.
 
 Open **Workspaces…** from the menu bar. A workspace contains **Services** that keep running, **Tasks** that finish with a result, and **Workflows** that coordinate both. Run tests, builds, or migrations; inspect each step's logs and exit status; cancel a run; and keep completed results across relaunches. Agents use the same controls through the CLI and MCP.
 
@@ -78,7 +84,7 @@ Built with SwiftUI and AppKit. Local configuration, local history, no Cinderdeck
 
 ## One app, one repository
 
-This repository includes the complete native app and its agent harness in `agent-runtime/`. A normal clone includes both, without submodules or a second checkout. The default build and local installer produce one Cinderdeck app with agents, previews, Workspaces, lanes, pull requests, capture and history. The bundled runtime ships inside Cinderdeck and updates with it.
+This repository includes the complete native app and its agent harness in `agent-runtime/`. A normal clone includes both, without submodules or a second checkout. The default build and local installer produce one Cinderdeck app with sessions, previews, workspaces, pull requests, capture and history. The bundled runtime ships inside Cinderdeck and updates with it.
 
 ## Start with your own projects
 
@@ -111,9 +117,7 @@ ready.port = 3000
 env.API_URL = "{{url.api}}"
 ```
 
-`{{port.…}}` and `{{url.…}}` fill in each service's port, so the same file also runs branches side by side in [worktree lanes](docs/STACKS.md#parallel-worktree-lanes).
-
-A **lane** groups repository worktrees and primary-checkout references, with its own logs and ports for isolated services. Create a **New worktree** or adopt an **Existing worktree** from the Lanes view, `cinderdeck lane`, or MCP. In the manual creation sheet, choose **New worktree** or **Reference** for each repository. CLI and MCP requests apply those choices directly without a modal; each worktree checkout allows four minutes. References use the primary checkout without creating a branch; choices are saved for this lane and keep workspace defaults for next time. Each lane reserves a block of ten ports starting at 20000, and `{{port.web}}` resolves to the right one everywhere. The **Lane map** shows what every checkout owns, runs, and shares.
+`{{port.…}}` and `{{url.…}}` fill in each service's configured port. Services remain workspace tools; sessions can use the workspace folders directly or move to an optional Git worktree. Worktree handoffs do not allocate service ports. [Legacy lane definitions and CLI compatibility](docs/STACKS.md#parallel-worktree-lanes) remain available for saved history and existing scripts.
 
 Saving a definition reloads it. Starting services is explicit. Git is optional; a service can use `cwd` instead of a repository. Dependencies and runtimes are installed by you, not by importing a stack. [Read the full stack guide](docs/STACKS.md).
 

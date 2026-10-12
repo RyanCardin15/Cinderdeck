@@ -33,9 +33,6 @@ struct WorkspaceSettingsView: View {
     if supervisor.states[workspaceID]?.isActive == true || runner.activeRun(workspaceID) != nil {
       return "Stop this workspace's services and finish or cancel its active runs before deleting."
     }
-    if supervisor.files.contains(where: { $0.lane?.sourceStackID == workspaceID || $0.parentWorkspaceID == workspaceID }) {
-      return "Remove or release this workspace's lanes before deleting."
-    }
     return nil
   }
 
@@ -74,7 +71,7 @@ struct WorkspaceSettingsView: View {
               .font(.caption).foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 8) {
               DeckSectionLabel(title: "Code Review Skill")
-              Text("Isolated review chats use these workspace instructions. Customize them here or open a session to view and edit the skill.")
+              Text("Review sessions use these workspace instructions. Customize them here or open a session to view and edit the skill.")
                 .font(.caption).foregroundStyle(.secondary)
               Text(WorkspaceCodeReviewSkill.file(root: definition.root).path)
                 .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
@@ -100,24 +97,9 @@ struct WorkspaceSettingsView: View {
             HStack {
               pathRow(folder.path, icon: "folder")
               Spacer()
-              Picker("New lanes use \(folder.id) as", selection: $folder.laneMode) {
-                Text("Worktree").tag(StackRepoLaneMode.worktree)
-                Text("Reference").tag(StackRepoLaneMode.shared)
-              }.labelsHidden().frame(width: 155)
-                .help("Default for new lanes. Worktree: isolated checkout on the lane branch. Reference: original checkout, read-only context.")
               Button { folders.removeAll { $0.id == folder.id } } label: { Image(systemName: "minus.circle") }
                 .buttonStyle(.plain).accessibilityLabel("Remove folder \(folder.path.path)")
             }
-              if folder.laneMode == .worktree {
-                HStack {
-                  Text("New lanes start from").font(.caption).foregroundStyle(.secondary)
-                  LaneBaseBranchPicker(path: folder.path, selection: Binding(
-                    get: { folder.laneFrom ?? definition?.laneSettings?.from ?? "HEAD" },
-                    set: { folder.laneFrom = $0 == (definition?.laneSettings?.from ?? "HEAD") ? nil : $0 }),
-                    label: "Default lane base for \(folder.id)")
-                  Spacer()
-                }
-              }
             }.padding(10).background(DeckStyle.surface, in: RoundedRectangle(cornerRadius: 8))
           }
           if folders.isEmpty { Text("The primary folder is used when no additional folders are configured.").font(.caption).foregroundStyle(.secondary) }

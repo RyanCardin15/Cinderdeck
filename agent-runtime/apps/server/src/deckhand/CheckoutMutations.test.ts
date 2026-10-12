@@ -234,7 +234,7 @@ describe("checkout mutations across Git and files", () => {
     },
   );
   it.effect(
-    "native ownership survives removed Git metadata; nested paths and aliases cannot initialize it as standalone",
+    "ordinary sessions can initialize folders despite saved native checkout metadata",
     () => {
       let cached: Rpc.IntegrationView = {
         state: "unavailable",
@@ -290,11 +290,8 @@ describe("checkout mutations across Git and files", () => {
         yield* fs.makeDirectory(nested);
         yield* fs.symlink(nested, alias);
         for (const cwd of [repo, nested, alias]) {
-          const result = yield* driver
-            .execute({ operation: "initialize", cwd, args: ["init"] })
-            .pipe(Effect.flip);
-          assert.include(result.message, "ownership could not be verified");
-          assert.isFalse(yield* fs.exists(cwd + "/.git"));
+          yield* driver.execute({ operation: "initialize", cwd, args: ["init"] });
+          assert.isTrue(yield* fs.exists(cwd + "/.git"));
         }
         assert.equal(yield* fs.readFileString(repo + "/tracked.txt"), "baseline");
         cached = { ...cached, total: 0, resources: [] };
@@ -324,10 +321,6 @@ describe("checkout mutations across Git and files", () => {
         yield* sql`INSERT INTO deckhand_workspaces(id, environment_id, backend, owner_id, generation, revision, record_json)
         VALUES ('workspace', 'native', 'cinderdeck', 'native', 1, 1, ${yield* encodeWorkspace(workspace)})`;
         yield* sql`INSERT INTO deckhand_checkouts(id, workspace_id, revision, record_json) VALUES ('saved-native', 'workspace', 1, ${yield* encodeCheckout(binding)})`;
-        assert.equal(
-          (yield* backend.inspect({ cwd: alias, sharedRefs: true }).pipe(Effect.flip)).reason,
-          "unavailable",
-        );
         // A string-prefix neighbour is unrelated; ordinary standalone initialization stays available.
         const neighbour = repo + "-other";
         yield* fs.makeDirectory(neighbour);
@@ -427,7 +420,7 @@ describe("checkout mutations across Git and files", () => {
     },
   );
   it.effect(
-    "switches a real branch after a settings generation changes, but rejects a replaced native checkout",
+    "switches ordinary session branches independently of native settings and saved ownership",
     () => {
       let contexts: ReadonlyArray<Contracts.IntegrationCheckoutContext> = [];
       return Effect.gen(function* () {
@@ -483,18 +476,12 @@ describe("checkout mutations across Git and files", () => {
         );
         // The same workspace name/generation is insufficient when its checkout changed.
         contexts = [{ ...contexts[0]!, physicalIDs: ["different-physical-checkout"] }];
-        const result = yield* driver
-          .execute({
-            operation: "GitVcsDriver.switchRef.checkout",
-            cwd: repo,
-            args: ["checkout", "main", "--"],
-          })
-          .pipe(Effect.flip);
-        assert.include(result.message, "saved workspace no longer matches");
-        assert.equal(
-          (yield* git(repo, ["branch", "--show-current"])).stdout.trim(),
-          "feature/settings-reload",
-        );
+        yield* driver.execute({
+          operation: "GitVcsDriver.switchRef.checkout",
+          cwd: repo,
+          args: ["checkout", "main", "--"],
+        });
+        assert.equal((yield* git(repo, ["branch", "--show-current"])).stdout.trim(), "main");
       }).pipe(
         Effect.provide(
           testLayer({
@@ -510,93 +497,84 @@ describe("checkout mutations across Git and files", () => {
     },
   );
 
-  it.effect(
-    "switches branches past a forgotten saved lane while protecting registered, damaged and replaced checkouts",
-    () => {
-      let contexts: ReadonlyArray<Contracts.IntegrationCheckoutContext> = [];
-      return Effect.gen(function* () {
-        const { root, repo, git, identity } = yield* fixture;
-        const fs = yield* FileSystem.FileSystem;
-        const identities = yield* CheckoutIdentity.CheckoutIdentity;
-        const sql = yield* SqlClient.SqlClient;
-        const backend = yield* WorkspaceBackend.WorkspaceBackend;
-        const driver = yield* GitVcsDriver.makeVcsDriverShape();
-        const lane = root + "/old lane";
-        yield* git(repo, ["worktree", "add", "-b", "old-lane", lane]);
-        const linked = yield* identities.resolve(lane);
-        yield* saveNativeCheckout("primary", [identity], "primary");
-        yield* saveNativeCheckout("old-lane", [linked], "lane");
-        contexts = [
-          {
-            workspaceID: "owner-primary",
-            generation: 2,
-            revision: "live",
-            available: true,
-            repos: ["app"],
-            physicalIDs: [identity.physicalId],
-          },
-        ];
-        yield* git(repo, ["branch", "feature/forgotten-lane"]);
-        yield* fs.remove(lane, { recursive: true });
-        // Missing files are insufficient: Git still owns the lane registration.
-        assert.equal(
-          (yield* backend.inspect({ cwd: repo, sharedRefs: true }).pipe(Effect.flip)).reason,
-          "stale_binding",
-        );
-        yield* sql`INSERT INTO deckhand_ownership_transitions(id, actor_id, physical_id, original_json, record_json)
-          VALUES ('move', 'actor', ${linked.physicalId}, '{}', '{"state":"pending"}')`;
-        assert.equal(
-          (yield* backend.inspect({ cwd: repo, sharedRefs: true }).pipe(Effect.flip)).reason,
-          "uncertain",
-        );
-        yield* sql`UPDATE deckhand_ownership_transitions SET record_json='{"state":"completed"}' WHERE id='move'`;
-        yield* git(repo, ["worktree", "prune", "--expire", "now"]);
-        yield* driver.execute({
-          operation: "GitVcsDriver.switchRef.checkout",
-          cwd: repo,
-          args: ["checkout", "feature/forgotten-lane", "--"],
-        });
-        assert.equal(
-          (yield* git(repo, ["branch", "--show-current"])).stdout.trim(),
-          "feature/forgotten-lane",
-        );
-        const inspected = yield* backend.inspect({ cwd: repo, sharedRefs: true });
-        assert.deepEqual(inspected?.physicalIDs, [identity.physicalId]);
-        assert.equal(inspected?.backend, "cinderdeck");
-        const saved = yield* sql`SELECT id FROM deckhand_current_checkouts WHERE id='old-lane'`;
-        assert.equal(saved.length, 1, "historical lane bindings remain saved");
-
-        yield* fs.makeDirectory(lane);
-        yield* fs.writeFileString(lane + "/.git", "damaged");
-        assert.equal(
-          (yield* backend.inspect({ cwd: repo, sharedRefs: true }).pipe(Effect.flip)).reason,
-          "stale_binding",
-        );
-        yield* fs.remove(lane, { recursive: true });
-        const replacement = yield* fixture;
-        yield* fs.rename(replacement.repo, lane);
-        const result = yield* driver
-          .execute({
-            operation: "GitVcsDriver.switchRef.checkout",
-            cwd: repo,
-            args: ["checkout", "main", "--"],
-          })
-          .pipe(Effect.flip);
-        assert.include(result.message, "saved workspace no longer matches");
-        assert.equal(
-          (yield* git(repo, ["branch", "--show-current"])).stdout.trim(),
-          "feature/forgotten-lane",
-        );
-      }).pipe(
-        Effect.provide(
-          testLayer({
-            checkoutContexts: () =>
-              Effect.succeed({ installationID: "native", runtimeEpoch: "epoch", contexts }),
-          }),
-        ),
+  it.effect("ordinary Git branch switching is independent of legacy checkout registrations", () => {
+    let contexts: ReadonlyArray<Contracts.IntegrationCheckoutContext> = [];
+    return Effect.gen(function* () {
+      const { root, repo, git, identity } = yield* fixture;
+      const fs = yield* FileSystem.FileSystem;
+      const identities = yield* CheckoutIdentity.CheckoutIdentity;
+      const sql = yield* SqlClient.SqlClient;
+      const backend = yield* WorkspaceBackend.WorkspaceBackend;
+      const driver = yield* GitVcsDriver.makeVcsDriverShape();
+      const lane = root + "/old lane";
+      yield* git(repo, ["worktree", "add", "-b", "old-lane", lane]);
+      const linked = yield* identities.resolve(lane);
+      yield* saveNativeCheckout("primary", [identity], "primary");
+      yield* saveNativeCheckout("old-lane", [linked], "lane");
+      contexts = [
+        {
+          workspaceID: "owner-primary",
+          generation: 2,
+          revision: "live",
+          available: true,
+          repos: ["app"],
+          physicalIDs: [identity.physicalId],
+        },
+      ];
+      yield* git(repo, ["branch", "feature/forgotten-lane"]);
+      yield* fs.remove(lane, { recursive: true });
+      // Missing files are insufficient: Git still owns the lane registration.
+      assert.equal(
+        (yield* backend.inspect({ cwd: repo, sharedRefs: true }).pipe(Effect.flip)).reason,
+        "stale_binding",
       );
-    },
-  );
+      yield* sql`INSERT INTO deckhand_ownership_transitions(id, actor_id, physical_id, original_json, record_json)
+          VALUES ('move', 'actor', ${linked.physicalId}, '{}', '{"state":"pending"}')`;
+      assert.equal(
+        (yield* backend.inspect({ cwd: repo, sharedRefs: true }).pipe(Effect.flip)).reason,
+        "uncertain",
+      );
+      yield* sql`UPDATE deckhand_ownership_transitions SET record_json='{"state":"completed"}' WHERE id='move'`;
+      yield* git(repo, ["worktree", "prune", "--expire", "now"]);
+      yield* driver.execute({
+        operation: "GitVcsDriver.switchRef.checkout",
+        cwd: repo,
+        args: ["checkout", "feature/forgotten-lane", "--"],
+      });
+      assert.equal(
+        (yield* git(repo, ["branch", "--show-current"])).stdout.trim(),
+        "feature/forgotten-lane",
+      );
+      const inspected = yield* backend.inspect({ cwd: repo, sharedRefs: true });
+      assert.deepEqual(inspected?.physicalIDs, [identity.physicalId]);
+      assert.equal(inspected?.backend, "cinderdeck");
+      const saved = yield* sql`SELECT id FROM deckhand_current_checkouts WHERE id='old-lane'`;
+      assert.equal(saved.length, 1, "historical lane bindings remain saved");
+
+      yield* fs.makeDirectory(lane);
+      yield* fs.writeFileString(lane + "/.git", "damaged");
+      assert.equal(
+        (yield* backend.inspect({ cwd: repo, sharedRefs: true }).pipe(Effect.flip)).reason,
+        "stale_binding",
+      );
+      yield* fs.remove(lane, { recursive: true });
+      const replacement = yield* fixture;
+      yield* fs.rename(replacement.repo, lane);
+      yield* driver.execute({
+        operation: "GitVcsDriver.switchRef.checkout",
+        cwd: repo,
+        args: ["checkout", "main", "--"],
+      });
+      assert.equal((yield* git(repo, ["branch", "--show-current"])).stdout.trim(), "main");
+    }).pipe(
+      Effect.provide(
+        testLayer({
+          checkoutContexts: () =>
+            Effect.succeed({ installationID: "native", runtimeEpoch: "epoch", contexts }),
+        }),
+      ),
+    );
+  });
 
   it.effect(
     "keeps native ownership checks for the remaining repository in a partially forgotten lane",
@@ -625,10 +603,10 @@ describe("checkout mutations across Git and files", () => {
           },
         ];
         const inspected = yield* backend.inspect({ cwd: repo, sharedRefs: true });
-        assert.sameMembers([...inspected!.physicalIDs], [
-          identity.physicalId,
-          remainingIdentity.physicalId,
-        ]);
+        assert.sameMembers(
+          [...inspected!.physicalIDs],
+          [identity.physicalId, remainingIdentity.physicalId],
+        );
         assert.equal(inspected?.backend, "standalone");
         contexts = [];
         assert.equal(
@@ -682,7 +660,7 @@ describe("checkout mutations across Git and files", () => {
   );
 
   it.effect(
-    "pending ownership in a sibling worktree blocks shared refs until that operation finishes",
+    "pending legacy ownership in a sibling worktree does not lock ordinary session Git operations",
     () =>
       Effect.gen(function* () {
         const { root, repo, git } = yield* fixture;
@@ -695,11 +673,12 @@ describe("checkout mutations across Git and files", () => {
         const linked = yield* identities.resolve(lane);
         yield* sql`INSERT INTO deckhand_ownership_transitions(id, actor_id, physical_id, original_json, record_json)
         VALUES ('move', 'actor', ${linked.physicalId}, '{}', '{"state":"pending"}')`;
-        const result = yield* driver
-          .execute({ operation: "switch", cwd: repo, args: ["checkout", "other", "--"] })
-          .pipe(Effect.flip);
-        assert.include(result.message, "still pending");
-        assert.equal((yield* git(repo, ["branch", "--show-current"])).stdout.trim(), "main");
+        yield* driver.execute({
+          operation: "switch",
+          cwd: repo,
+          args: ["checkout", "other", "--"],
+        });
+        assert.equal((yield* git(repo, ["branch", "--show-current"])).stdout.trim(), "other");
         yield* sql`UPDATE deckhand_ownership_transitions SET record_json='{"state":"completed"}' WHERE id='move'`;
         yield* driver.execute({
           operation: "switch",

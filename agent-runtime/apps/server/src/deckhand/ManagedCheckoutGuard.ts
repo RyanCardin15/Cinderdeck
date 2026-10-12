@@ -9,7 +9,6 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as CheckoutIdentity from "./CheckoutIdentity.ts";
 import * as IntegrationHub from "./IntegrationHub.ts";
 import * as Relationships from "./Relationships.ts";
-import * as CurrentCheckout from "./CurrentCheckout.ts";
 import * as Migrations from "./Migrations.ts";
 import { resolveWorkspaceFolder } from "./WorkspaceFolderIdentity.ts";
 
@@ -61,13 +60,6 @@ const make = Effect.gen(function* () {
   const resolveFolder = (path: string) =>
     resolveWorkspaceFolder(identity, path).pipe(Effect.provideService(FileSystem.FileSystem, fs));
   const relationships = yield* Relationships.Relationships;
-  const ownershipDependencies = yield* Effect.context<
-    SqlClient.SqlClient | Relationships.Relationships
-  >();
-  const currentCheckout = (id: string) =>
-    CurrentCheckout.resolveCurrentCheckout(id).pipe(Effect.provide(ownershipDependencies));
-  const assertOwnership = (id: string) =>
-    CurrentCheckout.assertPhysicalAvailable(id).pipe(Effect.provide(ownershipDependencies));
   const hub = yield* IntegrationHub.IntegrationHub;
   const session = (threadId: ThreadId) =>
     Effect.gen(function* () {
@@ -84,7 +76,8 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const binding = yield* session(threadId);
       return (
-        binding !== null && (yield* currentCheckout(binding.checkoutId)).backend === "cinderdeck"
+        binding !== null &&
+        (yield* relationships.checkout(binding.checkoutId)).backend === "cinderdeck"
       );
     }).pipe(Effect.mapError(storage(threadId)));
   const resolve = (threadId: ThreadId, cwd: string | null) =>
@@ -106,79 +99,42 @@ const make = Effect.gen(function* () {
         // a connected checkout identity.
         return null;
       }
-      yield* assertOwnership(checkout.success.physicalId);
-      if (binding === null) {
-        const managed =
-          yield* sql`SELECT origin_id FROM deckhand_current_checkouts WHERE json_extract(record_json,'$.backend')='cinderdeck' AND EXISTS(SELECT 1 FROM json_each(record_json,'$.repositories') repo WHERE json_extract(repo.value,'$.physicalId')=${checkout.success.physicalId}) LIMIT 1`;
-        if (managed.length) return yield* fail("missing");
-        return {
-          cwd: checkout.success.root,
-          physicalId: checkout.success.physicalId,
-        };
-      }
-      const target = yield* currentCheckout(binding.checkoutId);
-      const workspace = yield* relationships.workspace(target.workspaceId);
-      if (
-        target.state !== "ready" ||
-        workspace.state !== "active" ||
-        target.workspaceGeneration !== workspace.generation ||
-        target.environmentId !== workspace.environmentId ||
-        !binding.repositoryScope?.length
-      )
-        return yield* fail("stale_binding");
-      // Admission only accepts the persisted, enforced observer contract. The
-      // provider wrapper separately checks the actual adapter before effects.
-      const readOnly = binding.desiredAccess === "read_only";
-      if (
-        (readOnly && (binding.role !== "observer" || !binding.capabilities.enforcedReadOnly)) ||
-        (binding.role === "observer" && !readOnly)
-      )
+      const readOnly = binding?.desiredAccess === "read_only";
+      if (readOnly && !binding.capabilities.enforcedReadOnly)
         return yield* fail("unsupported_access");
-      if (!binding.repositoryScope.includes(checkout.success.physicalId))
-        return yield* fail("wrong_checkout");
-      const wanted = target.repositories.filter((repo) =>
-        binding.repositoryScope?.includes(repo.physicalId),
-      );
-      if (wanted.length !== binding.repositoryScope.length) return yield* fail("stale_binding");
-      const physical = yield* Effect.forEach(wanted, (repo) => resolveFolder(repo.root));
-      if (physical.some((repo, index) => repo.physicalId !== wanted[index]?.physicalId))
-        return yield* fail("wrong_checkout");
       let folders: ReadonlyArray<string> | undefined;
       let files: ReadonlyArray<string> | undefined;
-      let laneName: string | undefined;
-      if (target.backend === "cinderdeck") {
-        if (target.nativeGeneration === undefined) return yield* fail("stale_binding");
-        const native = yield* hub
-          .resource(target.kind === "lane" ? (target.laneId ?? "") : workspace.ownerId)
-          .pipe(
-            Effect.mapError(
-              (cause) =>
-                new ManagedCheckoutError({
-                  threadId,
-                  reason: cause.reason === "unavailable" ? "unavailable" : "stale_binding",
-                  cause,
-                }),
-            ),
-          );
-        if (
-          native.hello.installationID !== workspace.environmentId ||
-          native.resource.generation !== target.nativeGeneration
-        )
-          return yield* fail("stale_binding");
-        const actual = yield* Effect.forEach(native.resource.workspace?.repos ?? [], (repo) =>
-          resolveFolder(repo.path),
+      if (binding) {
+        const target = yield* relationships.checkout(binding.checkoutId);
+        const workspace = yield* relationships.workspace(target.workspaceId);
+        // Legacy bindings provide folder context, never checkout reservations.
+        // A thread can resume in its selected folder even while native tools are offline.
+        const native =
+          target.backend === "cinderdeck"
+            ? yield* hub
+                .resource(target.laneId ?? workspace.ownerId)
+                .pipe(Effect.orElseSucceed(() => null))
+            : null;
+        const paths =
+          native?.hello.installationID === workspace.environmentId
+            ? [
+                native.resource.workspace?.root,
+                ...(native.resource.workspace?.repos.map((repo) => repo.path) ?? []),
+              ]
+            : target.repositories.map((repo) => repo.root);
+        // A thread moved to another worktree uses that checkout rather than reintroducing old folders.
+        const canonical = yield* Effect.forEach(
+          paths.filter((path): path is string => !!path),
+          (path) => fs.realPath(path).pipe(Effect.orElseSucceed(() => path)),
         );
-        if (physical.some((repo) => !actual.some((item) => item.physicalId === repo.physicalId)))
-          return yield* fail("wrong_checkout");
-        // Membership comes from the live native definition, including shared folders in lanes.
-        folders = [
-          ...new Set([
-            ...(native.resource.workspace?.root ? [native.resource.workspace.root] : []),
-            ...(native.resource.workspace?.repos.map((repo) => repo.path) ?? []),
-          ]),
-        ];
-        files = native.resource.workspace?.files ?? [];
-        if (target.kind === "lane") laneName = native.resource.workspace?.lane?.name ?? "";
+        if (canonical.includes(checkout.success.root)) {
+          const existing = yield* Effect.filter(
+            paths.filter((path): path is string => !!path),
+            (path) => fs.exists(path),
+          );
+          folders = [...new Set(existing)];
+          files = native?.resource.workspace?.files;
+        }
       }
       return {
         cwd: checkout.success.root,
@@ -186,7 +142,6 @@ const make = Effect.gen(function* () {
         access: readOnly ? ("read_only" as const) : ("write" as const),
         ...(folders === undefined ? {} : { folders }),
         ...(files === undefined ? {} : { files }),
-        ...(laneName === undefined ? {} : { laneName }),
       };
     }).pipe(Effect.mapError(storage(threadId)));
   return ManagedCheckoutGuard.of({ connected, resolve });

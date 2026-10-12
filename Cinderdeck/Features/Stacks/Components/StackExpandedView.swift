@@ -32,18 +32,13 @@ struct StackExpandedView: View {
         HStack(spacing: 6) {
           StackStateBadge(label: file.definition == nil ? "Degraded" : state.label, since: state.isActive ? state.startedAt : nil)
           if let operation = state.operation { StackChip(systemImage: "hourglass", text: operation + "…", tint: .orange) }
-          Text(file.lane == nil ? file.file.lastPathComponent : "Lane snapshot")
+          Text(file.lane == nil ? file.file.lastPathComponent : "Saved checkout")
             .font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary.opacity(0.8)).lineLimit(1)
             .onTapGesture { if file.lane == nil { viewModel.openInEditor(file) } }
-            .help(file.lane == nil ? file.file.path : "Created from \(file.file.lastPathComponent); recreate the lane to apply template changes")
+            .help(file.lane == nil ? file.file.path : "Created from \(file.file.lastPathComponent); edit the source workspace to update services")
         }
       }
       Spacer(minLength: 6)
-      if showsWorkspaceName {
-        Button { viewModel.lanesSheet = true } label: { Label("Lanes", systemImage: "arrow.triangle.branch") }
-          .buttonStyle(StackPillButtonStyle())
-          .accessibilityIdentifier("stacks.lanes")
-      }
       Button { viewModel.showLogs(stack: file.id, service: nil) } label: {
         Label("Terminal", systemImage: "terminal")
       }

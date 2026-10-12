@@ -79,8 +79,8 @@ export function AgentsOverview() {
         <header className={styles.heading}>
           <div>
             <span className={styles.eyebrow}>Across your workspaces</span>
-            <h1>Agents</h1>
-            <p>Every workspace, every conversation. Pick up where your agents left off.</p>
+            <h1>Sessions</h1>
+            <p>Every workspace, every conversation. Pick up where you left off.</p>
           </div>
           <Link to="/inbox" className={styles.attentionLink}>
             {attentionCount} {attentionCount === 1 ? "needs attention" : "need attention"}{" "}
@@ -92,18 +92,18 @@ export function AgentsOverview() {
             <SearchIcon size={16} />
             <input
               type="search"
-              aria-label="Search workspaces and agents"
-              placeholder="Search workspaces and agents…"
+              aria-label="Search workspaces and sessions"
+              placeholder="Search workspaces and sessions…"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
           <select
-            aria-label="Agent status"
+            aria-label="Session status"
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
           >
-            <option value="all">All agents</option>
+            <option value="all">All sessions</option>
             <option value="attention">Needs attention</option>
             <option value="working">Working</option>
           </select>
@@ -118,12 +118,12 @@ export function AgentsOverview() {
         </div>
         {!ready ? (
           <p role="status" className={styles.notice}>
-            Synchronizing agents… Saved status may be out of date.
+            Synchronizing sessions… Saved status may be out of date.
           </p>
         ) : null}
         {archived && (archive.error || archive.isLoading) ? (
           <p role="status" className={styles.notice}>
-            {archive.error ?? "Loading archived agents…"}
+            {archive.error ?? "Loading archived sessions…"}
           </p>
         ) : null}
         {environments.map((environment) => (
@@ -219,13 +219,13 @@ function ComputerAgents({
         group.threads.length,
     );
   return (
-    <section className={styles.computer} aria-label={`${environment.label} agents`}>
+    <section className={styles.computer} aria-label={`${environment.label} sessions`}>
       <div className={styles.computerHeading}>
         <h2>{environment.label}</h2>
         <span>
           {connected ? "Connected" : "Last observed"} · {groups.length}{" "}
           {groups.length === 1 ? "workspace" : "workspaces"} · {threads.length}{" "}
-          {threads.length === 1 ? "agent" : "agents"}
+          {threads.length === 1 ? "session" : "sessions"}
         </span>
       </div>
       {!connected || result._tag === "Failure" ? (
@@ -293,12 +293,12 @@ function WorkspaceAgents({
   }, [hasActiveAgents, revealMatches]);
   const visibleThreads = showAll || revealMatches ? group.threads : activeThreads;
   return (
-    <section className={styles.workspace} aria-label={`${group.label} agents`}>
+    <section className={styles.workspace} aria-label={`${group.label} sessions`}>
       <header className={styles.workspaceHeading}>
         <button
           type="button"
           className={styles.workspaceToggle}
-          aria-label={`${expanded ? "Collapse" : "Expand"} agents for ${group.label}`}
+          aria-label={`${expanded ? "Collapse" : "Expand"} sessions for ${group.label}`}
           aria-expanded={expanded}
           aria-controls={contentId}
           onClick={() => {
@@ -311,7 +311,7 @@ function WorkspaceAgents({
           <span className={styles.workspaceLabel}>
             <span className={styles.workspaceName}>{group.label}</span>
             <span>
-              {group.threads.length} {group.threads.length === 1 ? "agent" : "agents"}
+              {group.threads.length} {group.threads.length === 1 ? "session" : "sessions"}
               {activeThreads.length ? ` · ${activeThreads.length} active` : ""}
               {group.resources.length > 1 ? ` · ${group.resources.length} checkouts` : ""}
             </span>
@@ -372,7 +372,7 @@ function WorkspaceAgents({
               ))}
             {!group.threads.length ? (
               <p className={styles.notice}>
-                No agents here yet. Open the workspace to start a conversation.
+                No sessions here yet. Open the workspace to start a conversation.
               </p>
             ) : null}
             {!revealMatches &&
@@ -383,7 +383,9 @@ function WorkspaceAgents({
                 className={styles.showAgents}
                 onClick={() => setShowAll(!showAll)}
               >
-                {showAll ? "Show active agents only" : `Show all ${group.threads.length} agents`}
+                {showAll
+                  ? "Show active sessions only"
+                  : `Show all ${group.threads.length} sessions`}
               </button>
             ) : null}
             {expanded && installation && showExternal && group.resources.length ? (

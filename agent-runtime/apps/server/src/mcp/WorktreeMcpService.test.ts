@@ -388,32 +388,35 @@ const runStatus = (harness: ReturnType<typeof makeHarness>) =>
   }).pipe(Effect.provide(harness.layer));
 
 describe("t3_worktree_handoff", () => {
-  it.effect("routes a primary checkout with a saved directory through native lane handoff", () => {
-    const harness = makeHarness({ thread: { worktreePath: workspaceRoot, branch: "main" } });
-    const expected = {
-      worktreePath: "/native/lane",
-      branch: "feature/task",
-      baseRef: "main",
-      startedFromOrigin: false,
-      setupScript: { status: "skipped" as const },
-      continuation: { status: "skipped" as const },
-      note: "Moved",
-    };
-    const handoff = vi.fn(() => Effect.succeed(expected));
-    const linked = {
-      ...harness,
-      layer: harness.layer.pipe(
-        Layer.provide(Layer.succeed(ManagedWorktreeHandoff.ManagedWorktreeHandoff, { handoff })),
-      ),
-    };
-    return Effect.gen(function* () {
-      const result = yield* runHandoff(linked, { branch: "feature/task" });
-      expect(result).toEqual(expected);
-      expect(handoff).toHaveBeenCalledWith(harness.scope, { branch: "feature/task" });
-      expect(harness.createWorktree).not.toHaveBeenCalled();
-      expect(harness.dispatch).not.toHaveBeenCalled();
-    });
-  });
+  it.effect(
+    "uses ordinary worktrees even when a legacy native handoff service is installed",
+    () => {
+      const harness = makeHarness({ thread: { worktreePath: workspaceRoot, branch: "main" } });
+      const expected = {
+        worktreePath: "/native/lane",
+        branch: "feature/task",
+        baseRef: "main",
+        startedFromOrigin: false,
+        setupScript: { status: "skipped" as const },
+        continuation: { status: "skipped" as const },
+        note: "Moved",
+      };
+      const handoff = vi.fn(() => Effect.succeed(expected));
+      const linked = {
+        ...harness,
+        layer: harness.layer.pipe(
+          Layer.provide(Layer.succeed(ManagedWorktreeHandoff.ManagedWorktreeHandoff, { handoff })),
+        ),
+      };
+      return Effect.gen(function* () {
+        const result = yield* runHandoff(linked, { branch: "feature/task" });
+        expect(result.worktreePath).toBe("/worktrees/project/feature/task");
+        expect(handoff).not.toHaveBeenCalled();
+        expect(harness.createWorktree).toHaveBeenCalled();
+        expect(harness.dispatch).toHaveBeenCalled();
+      });
+    },
+  );
 
   it.effect("creates a worktree from the current branch and re-points the thread", () => {
     const harness = makeHarness();
@@ -592,17 +595,16 @@ describe("t3_worktree_handoff", () => {
     });
   });
 
-  it.effect("fails when the thread is already attached to a worktree", () => {
+  it.effect("can move a session from one worktree to another", () => {
     const harness = makeHarness({
       thread: { branch: "feature/existing", worktreePath: "/worktrees/project/existing" },
     });
     return Effect.gen(function* () {
-      const exit = yield* Effect.exit(runHandoff(harness, { branch: "feature/second" }));
-      expectTypedFailure(exit, {
-        _tag: "WorktreeMcpFailure",
-        code: "already_in_worktree",
-      });
-      expect(harness.createWorktree).not.toHaveBeenCalled();
+      const result = yield* runHandoff(harness, { branch: "feature/second" });
+      expect(result.worktreePath).toBe("/worktrees/project/feature/second");
+      expect(harness.dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ expectedWorktreePath: "/worktrees/project/existing" }),
+      );
     });
   });
 
@@ -912,7 +914,7 @@ describe("t3_worktree_handoff", () => {
 
   it.effect("releases the per-thread guard after a failed handoff", () => {
     const harness = makeHarness({
-      thread: { worktreePath: "/worktrees/project/existing" },
+      dispatchFails: true,
     });
     return Effect.gen(function* () {
       const service = yield* resolveService(harness);
@@ -920,12 +922,12 @@ describe("t3_worktree_handoff", () => {
       const first = yield* Effect.exit(
         service.handoff(harness.scope, { branch: "feature/guard-1" }),
       );
-      expectTypedFailure(first, { _tag: "WorktreeMcpFailure", code: "already_in_worktree" });
+      expectTypedFailure(first, { _tag: "WorktreeMcpFailure", code: "operation_failed" });
       // A leaked guard would surface as handoff_in_progress here.
       const second = yield* Effect.exit(
         service.handoff(harness.scope, { branch: "feature/guard-2" }),
       );
-      expectTypedFailure(second, { _tag: "WorktreeMcpFailure", code: "already_in_worktree" });
+      expectTypedFailure(second, { _tag: "WorktreeMcpFailure", code: "operation_failed" });
     });
   });
 
@@ -1024,7 +1026,7 @@ describe("t3_worktree_status", () => {
       expect(result).toEqual({
         attached: false,
         worktreePath: null,
-        branch: null,
+        branch: "dev",
         projectWorkspaceRoot: workspaceRoot,
         defaultStartFromOrigin: true,
       });
@@ -1043,7 +1045,7 @@ describe("t3_worktree_status", () => {
       expect(result).toMatchObject({
         attached: true,
         worktreePath: "/worktrees/project/existing",
-        branch: "feature/existing",
+        branch: "dev",
         defaultStartFromOrigin: false,
       });
     });
@@ -1168,21 +1170,15 @@ describe("t3_worktree_rename", () => {
         expectedName: "feature/search",
       });
     }).pipe(Effect.provide(harness.layer));
-  it.effect("pins a rename to its own native lane and preserves the observed name guard", () => {
-    const harness = namedHarness();
+  it.effect("retires lane naming without submitting native operations", () => {
+    const h = namedHarness();
     return Effect.gen(function* () {
-      expect(yield* rename(harness)).toEqual({ name: "Search polish" });
-      expect(harness.context).toHaveBeenCalledWith("own-lane");
-      expect(harness.submit.mock.calls[0]?.[1]).toMatchObject({
-        workspaceID: "own-lane",
-        generation: 7,
-        revision: "revision",
-        installationID: "installation",
-        method: "lane.update",
-        arguments: { workspace: "own-lane", name: "Search polish", expectedName: "feature/search" },
-      });
+      const exit = yield* Effect.exit(rename(h));
+      expectTypedFailure(exit, { _tag: "WorktreeMcpFailure", code: "invalid_request" });
+      expect(h.submit).not.toHaveBeenCalled();
     });
   });
+
   it.effect("refuses primary checkouts and read-only sessions before submitting", () =>
     Effect.gen(function* () {
       for (const harness of [namedHarness("primary"), namedHarness("lane", "read_only")]) {

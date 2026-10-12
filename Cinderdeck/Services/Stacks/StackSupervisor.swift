@@ -173,7 +173,11 @@ final class StackSupervisor: ObservableObject {
         watcher?.stop(); watchedDirectory = directory
         watcher = StackDefinitionWatcher(directory: directory) { [weak self] in Task { @MainActor in await self?.reloadDefinitions() } }
       }
-      gitMonitor.configure(files.compactMap(\.definition).flatMap(\.repos))
+      gitMonitor.configure(files.compactMap(\.definition).flatMap { definition in
+        definition.repos.isEmpty
+          ? [RepoDefinition(id: "workspace", path: definition.root, laneMode: .shared)]
+          : definition.repos
+      })
       gitMonitor.setAutoFetch(minutes: defaults.integer(forKey: PreferencesKeys.stacksAutoFetchMinutes))
     } catch {
       if generation == reloadGeneration, !Task.isCancelled { errorMessage = "Cannot load stacks: \(error.localizedDescription)" }

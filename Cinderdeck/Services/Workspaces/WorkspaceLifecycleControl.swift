@@ -23,11 +23,6 @@ extension StackControlService {
         throw StackControlError(code: "stale_definition", message: "Workspace changed. Read workspace_definition again before saving or removing it.")
       }
       let records = try StackLaneStore.records(in: supervisor.lanesDirectory).filter { $0.info.sourceStackID == file.id }
-      let children = try StackDefinitionLoader.loadDirectory(supervisor.definitionsDirectory).filter { $0.parentWorkspaceID == file.id }
-      if deleted, !records.isEmpty || !children.isEmpty {
-        throw StackControlError(code: "in_use", message: "Remove or release this workspace's lanes first: "
-          + (records.map { $0.info.reference } + children.map(\.name)).joined(separator: ", "))
-      }
       for lane in records {
 
         try requireStoppedForDefinition(lane.id)
@@ -81,7 +76,7 @@ extension StackControlService {
   func requireStoppedForDefinition(_ id: String) throws {
     guard !supervisor.isBootstrapping, !supervisor.isRemovingLane(id), supervisor.states[id]?.operation == nil,
       workspaceRunner.activeRun(id) == nil, supervisor.activeWorkspaceRun?(id) != true, supervisor.states[id]?.isActive != true else {
-      throw StackControlError(code: "busy", message: "Stop services and finish or cancel active runs in \(id) before changing its definition or lane settings.")
+      throw StackControlError(code: "busy", message: "Stop services and finish or cancel active runs in \(id) before changing its definition.")
     }
   }
 
@@ -100,6 +95,9 @@ extension StackControlService {
     }
     let after = StackWorkspaceResolver.resolve(afterBases + (try StackLaneStore.files(in: supervisor.lanesDirectory, sources: afterBases)))
     for candidate in after {
+      // Retain historical checkout records when their source workspace is removed.
+      // They never reserve the source definition; files and saved session history stay.
+      if source == nil, candidate.lane?.sourceStackID == file.id { continue }
       let old = Set(before.first { $0.id == candidate.id }?.issues.filter { $0.severity == .error }.map(\.message) ?? [])
       let errors = candidate.issues.filter { $0.severity == .error && (candidate.id == file.id || !old.contains($0.message)) }
       if !errors.isEmpty {

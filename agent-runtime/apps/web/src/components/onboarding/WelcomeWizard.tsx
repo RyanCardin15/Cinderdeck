@@ -403,7 +403,7 @@ function ConnectionStep({
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold">Use native workspaces</span>
           <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
-            Manage workspaces, lanes, services and recordings on your selected computer.
+            Open sessions and manage workspace services and recordings on your selected computer.
           </span>
         </span>
         <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -577,7 +577,8 @@ function ConnectAccountOption({
               Open Cinderdeck on each computer you want to connect.
             </p>
             <p className="mt-3 text-xs text-muted-foreground">
-              Configure its remote connection in Settings → Connections, then select it above. Keep Cinderdeck running.
+              Configure its remote connection in Settings → Connections, then select it above. Keep
+              Cinderdeck running.
             </p>
           </div>
         </CollapsiblePanel>
@@ -691,7 +692,8 @@ function PairingForm({
             </p>
 
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              In Settings → Connections, choose Create link under Pairing links, then paste the link here.
+              In Settings → Connections, choose Create link under Pairing links, then paste the link
+              here.
             </p>
           </CollapsiblePanel>
         </Collapsible>

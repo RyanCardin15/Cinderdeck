@@ -539,13 +539,13 @@ nonisolated enum StackCLI {
       if index > 0 { print("") }
       let started = stack.services.compactMap(\.startedAt).min()
       var header = paint(stack.name, .bold) + paint("  (\(stack.id))", .dim) + "  " + stack.state
-      if let lane = stack.lane { header += "  lane " + lane.reference + " · " + lane.owner.label }
+      if let lane = stack.lane { header += "  saved checkout " + lane.reference + " · " + lane.owner.label }
       if let started { header += paint("  up " + age(started), .dim) }
       if let operation = stack.operation { header += paint("  " + operation + "…", .yellow) }
       print(header)
       for issue in stack.issues { print("  " + paint(issue, .yellow)) }
       if let status = stack.laneStatus {
-        var line = "  " + paint("lane", .dim) + " " + status.directory
+        var line = "  " + paint("checkout", .dim) + " " + status.directory
         if status.pinned { line += paint("  pinned", .yellow) }
         if status.adopted { line += paint("  adopted", .dim) }
         if status.merged == true { line += paint("  merged", .green) }
@@ -641,29 +641,10 @@ nonisolated enum StackCLI {
                                                     --mod the Claude Code mod: status line and /cinderdeck)
     cinderdeck services agent-help                    Instructions to paste into AGENTS.md
 
-  WORKTREE LANES
-    cinderdeck lane create <workspace> [branch]       Create directly without a modal (--name sets its name; omit branch for a generated lane/<name> branch; --repo-from <repo>=<ref> sets a base; repeat --repo-mode <repo>=worktree|reference to choose checkouts). Each checkout allows four minutes.
-      --from <ref>  --env KEY=VALUE  --copy <glob>    Start point, lane-only variables, extra files to copy
-      --name <name>                                 Lane display name (default: branch, or numbered lane when branch is omitted)
-      --no-setup  --no-start                          Skip [lanes] setup, or create without starting
-    cinderdeck lane adopt <workspace> [name]          Use an existing worktree (--path, default: here)
-      --setup  --no-start                            Setup is off by default; name required for detached HEAD
-      --from <ref>  --env KEY=VALUE  --copy <glob>    Copy/from apply to new worktrees of other repos
-    cinderdeck lane edit <lane> --name <name>          Rename a lane, including while running; id, branches and folders stay
-    cinderdeck lane edit <lane> --env KEY=VALUE        Replace stopped lane overrides; --clear-env clears them
-    cinderdeck lane list [workspace]                  Original checkout and lanes, with setup and merge state
-    cinderdeck lane env <lane> [service] --export     Resolved ports, URLs and variables for your shell
-      Pass a service for its PORT and own env; otherwise returns workspace-wide values.
-    cinderdeck lane setup <lane>                      Run [lanes] setup again
-    cinderdeck lane remove <lane>                     Stop, tear down, remove worktrees; keep branches
-      --discard-ignored                             Discard ignored files, changed copies and copied folders
-      --force-teardown                              Remove even if teardown fails; tracked changes stay protected
-    cinderdeck lane release <lane>                    Forget the lane but keep its worktrees
-      --delete-logs                                 Delete saved service logs on remove or release
-    cinderdeck lane prune [workspace] --dry-run       Remove lanes whose branches were merged
-    cinderdeck lane unpin <lane>                      Make an older lane follow its source definition
-    Use the lane's stable id or <workspace>/<name> with services status|logs|start|stop|restart.
-    Stop running dependents before removing or releasing their lane (in_use).
+  SESSIONS
+    Open sessions directly under a workspace in the Cinderdeck app.
+    Optional Git worktrees use ordinary Git commands or the session's t3_worktree_handoff tool.
+    The legacy lane CLI is retained for older checkout records and scripts.
 
   MORE
     cinderdeck workspace --help                       Tasks, workflows, and runs

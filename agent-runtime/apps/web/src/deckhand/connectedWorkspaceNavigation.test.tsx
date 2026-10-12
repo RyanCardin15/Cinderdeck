@@ -182,7 +182,8 @@ it.each(["lane", "primary"] as const)(
       expect(savedWorkspaceMatches(saved, "replacement-installation", 7)).toBe(false);
     }
     expect(returns.filter((link) => link.search?.tab === "agents")).toHaveLength(1);
-    expect(header).toContain(kind === "lane" ? "Lane · review-lane" : "Payment · Primary checkout");
+    expect(header).toContain("Payment");
+    expect(header).not.toContain("Lane · review-lane");
     expect(header).toContain("Manage services in workspace");
     expect(returns.filter((link) => link.search?.tab === "services")).toHaveLength(1);
     expect(sidebar).toContain(kind === "lane" ? "Lane · review-lane" : "Primary checkout");

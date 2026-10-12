@@ -289,7 +289,7 @@ it("lets a connection recheck recover a failed receipt listing", async () => {
   expect(container.textContent).toContain("original-operation");
 });
 
-it("opens a chosen lane under its source workspace and retains original generation for recovery", async () => {
+it("offers source workspaces while retaining original checkout generation for recovery", async () => {
   const lane = {
     ...resource,
     workspaceID: "lane-api",
@@ -306,21 +306,22 @@ it("opens a chosen lane under its source workspace and retains original generati
       },
     },
   };
-  mocks.view = { ...connected, resources: [lane] };
+  mocks.view = { ...connected, resources: [resource, lane] };
   mocks.recent.mockResolvedValue({
     _tag: "Success",
     value: [{ ...pending, input: { ...pending.input, workspaceID: "lane-api", generation: 3 } }],
   });
   const onChoose = vi.fn().mockResolvedValue(true);
   await render({ onChoose });
+  expect(container.querySelectorAll("input[type=radio]")).toHaveLength(1);
   await chooseWorkspace();
   await act(async () => button("Open selected workspace").click());
   expect(onChoose).toHaveBeenCalledWith({
     environmentId,
     baseWorkspaceID: "alpha",
-    contextID: "lane-api",
+    contextID: "alpha",
     expectedInstallationID: "native-installation",
-    expectedGeneration: 4,
+    expectedGeneration: resource.generation,
   });
   const recovery = [...container.querySelectorAll("a")].find((link) =>
     link.textContent?.includes("Review workspace"),

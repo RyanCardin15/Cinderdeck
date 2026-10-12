@@ -5,7 +5,6 @@ import type { EnvironmentId, NativeToolRequest } from "@cinderdeck/contracts";
 import {
   FolderPlusIcon,
   PencilLineIcon,
-  WorkflowIcon,
   SettingsIcon,
   GitBranchIcon,
   SparklesIcon,
@@ -95,7 +94,7 @@ export function NativeWorkspaceTools({
             </TooltipTrigger>
             <TooltipPopup>
               {local
-                ? "Switch branches in the selected workspace or lane"
+                ? "Switch branches in the selected workspace"
                 : "Open branch tools in Cinderdeck on this workspace's Mac"}
             </TooltipPopup>
           </Tooltip>
@@ -185,18 +184,6 @@ export function NativeWorkspaceTools({
           {workspaceID && workspaceID !== sourceWorkspaceID
             ? "Edit source workspace"
             : "Edit workspace"}
-        </button>
-      ) : null}
-      {workspaceID ? (
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => {
-            void request({ surface: "execution-map", workspaceID });
-          }}
-        >
-          <WorkflowIcon size={15} aria-hidden />
-          Native execution map
         </button>
       ) : null}
       {!available || !enabled ? (

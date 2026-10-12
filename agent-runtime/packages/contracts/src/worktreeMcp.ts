@@ -18,13 +18,12 @@ export const WorktreeMcpHandoffInput = Schema.Struct({
       Schema.isPattern(/^[^\x00-\x1f\x7f-\x9f]+$/),
     ),
   ).annotate({
-    description:
-      "Optional Cinderdeck lane display name; defaults to the branch. Independent of Git branches and folders.",
+    description: "Optional title for the session after moving it. Independent of its Git branch.",
   }),
   adoptExisting: Schema.optional(
     Schema.Boolean.annotate({
       description:
-        "For Cinderdeck conversations, adopt the existing worktree at path as a native lane and move this conversation there. Requires path and its exact branch; omit baseRef and startFromOrigin.",
+        "Move this session to the existing worktree at path. Requires path and its exact branch; omit baseRef and startFromOrigin.",
     }),
   ),
   branch: TrimmedNonEmptyString.annotate({
@@ -48,13 +47,13 @@ export const WorktreeMcpHandoffInput = Schema.Struct({
       Schema.isPattern(/^(?:[A-Za-z]:[\\/]|[\\/])/),
     ).annotate({
       description:
-        "Absolute filesystem path. Cinderdeck chooses new lane folders; use path with adoptExisting to attach an existing worktree. Standalone sessions may specify the new worktree path.",
+        "Absolute filesystem path for the new worktree, or an existing checkout when adoptExisting is true.",
     }),
   ),
   repositoryModes: Schema.optional(
     IntegrationRepositoryModes.annotate({
       description:
-        'Cinderdeck workspaces with several repositories: repository ID to "worktree" (isolated checkout on the lane branch) or "reference" (the original checkout, read-only context). The conversation\'s own repository is always a worktree. Omitted repositories keep their workspace defaults. Example: {"api": "worktree", "docs": "reference"}. t3_worktree_status lists repository IDs.',
+        "Legacy compatibility field. Per-repository lane modes are retired; omit this field. A handoff moves only the session's project repository.",
     }),
   ),
   runSetupScript: Schema.optional(
@@ -66,7 +65,7 @@ export const WorktreeMcpHandoffInput = Schema.Struct({
   continuationPrompt: Schema.optional(
     TrimmedNonEmptyString.check(Schema.isMaxLength(120_000)).annotate({
       description:
-        "Message queued as the thread's next turn after the handoff. The handoff detaches the current provider session, so pass the remaining work here to automatically resume inside the worktree; omit it to stop after the handoff and wait for the next message. Write it yourself as a brief of the remaining work (goal, findings so far, constraints, what done looks like). Never paste the user's message, and leave out any request to create or move to a lane, worktree or thread: the turn it starts already runs in the lane, so such a request would create another lane. A copy of the user's message is rejected.",
+        "Brief of the remaining work queued as the session's next turn after it moves. The current provider detaches. Omit to wait for the next user message. Include the goal, findings and constraints; do not repeat the already handled request to create a session or worktree.",
     }),
   ),
 });

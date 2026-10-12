@@ -184,67 +184,26 @@ afterEach(async () => {
   delete window.desktopBridge;
   vi.unstubAllGlobals();
 });
-it("nests lanes under their owner, loads them on demand, and opens their exact checkout", async () => {
+it("opens sessions from each workspace without lane management", async () => {
   await render();
-  expect(boundary.requests[0]).toMatchObject({ workspacesOnly: true, offset: 0 });
-  expect(boundary.requests.some((input) => input.selectedWorkspaceID)).toBe(false);
-  expect(container.querySelectorAll("section")).toHaveLength(2);
-  await click("Expand lanes for alpha");
-  const alphaCard = container.querySelector('section[aria-label="alpha"]')!;
-  expect(alphaCard.textContent).toContain("lane-a");
-  expect(alphaCard.textContent).not.toContain("lane-b");
-  await act(async () =>
-    container.querySelector<HTMLAnchorElement>('a[aria-label="Open lane lane-a"]')!.click(),
-  );
+  const card = container.querySelector('section[aria-label="alpha"]')!;
+  const link = [...card.querySelectorAll("a")].find((item) =>
+    item.textContent?.includes("Open sessions"),
+  )!;
+  expect(link).toBeDefined();
+  await act(async () => link.click());
   expect(boundary.navigate).toHaveBeenCalledWith(
-    expect.objectContaining({
-      workspace: "alpha",
-      context: "lane-a",
-      expectedInstallationID: "install",
-      expectedGeneration: 3,
-    }),
+    expect.objectContaining({ workspace: "alpha", tab: "agents" }),
   );
-  await click("Expand lanes for beta");
-  await click("Collapse lanes for alpha");
-  expect(container.querySelector('a[aria-label="Open lane lane-a"]')).toBeNull();
-  expect(container.querySelector('a[aria-label="Open lane lane-b"]')).not.toBeNull();
-  await click("Workspace settings for beta");
-  expect(openNativeTool).toHaveBeenCalledWith({ surface: "workspace-editor", workspaceID: "beta" });
+  expect(container.querySelector('[aria-label="Expand lanes for alpha"]')).toBeNull();
 });
-it("pages lanes independently without losing other workspace cards", async () => {
-  setPage("alpha:0", scoped(alpha, [laneA], 20));
-  setPage("alpha:20", scoped(alpha, [resource("lane-later", "alpha")]));
+it("disables workspace editing while native state is stale", async () => {
   await render();
-  await click("Expand lanes for alpha");
-  await click("Next lanes for alpha");
-  expect(container.querySelector('a[aria-label="Open lane lane-later"]')).not.toBeNull();
-  expect(container.querySelector('a[aria-label="Open lane lane-a"]')).toBeNull();
-  expect(container.querySelectorAll("section")).toHaveLength(2);
-  await click("Previous lanes for alpha");
-  expect(container.querySelector('a[aria-label="Open lane lane-a"]')).not.toBeNull();
-});
-it("disables stale editing and navigation and rejects another installation's lanes", async () => {
-  await render();
-  await click("Expand lanes for alpha");
   boundary.stale = true;
   await act(async () => registry.set(catalog, AsyncResult.success({ ...view })));
   expect(button("Workspace settings for alpha").disabled).toBe(true);
-  expect(container.querySelector('a[aria-label="Open lane lane-a"]')).toBeNull();
   await click("Workspace settings for alpha");
   expect(openNativeTool).not.toHaveBeenCalled();
-  boundary.stale = false;
-  await act(async () =>
-    registry.set(
-      pages.get("alpha:0")!,
-      AsyncResult.success({
-        ...scoped(alpha, [laneA]),
-        hello: { ...view.hello!, installationID: "replacement" },
-      }),
-    ),
-  );
-  expect(container.querySelector('section[aria-label="alpha"]')!.textContent).not.toContain(
-    "lane-a",
-  );
 });
 it("keeps workspace pagination separate from lane pages", async () => {
   registry.set(catalog, AsyncResult.success({ ...view, total: 21, nextOffset: 20 }));
