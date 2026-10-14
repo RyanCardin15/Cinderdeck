@@ -525,7 +525,7 @@ describe("Cinderdeck integration hub", () => {
       }).pipe(Effect.provide(TestLayer), Effect.scoped),
   );
   it.effect(
-    "initializes fresh storage and guards the exact lane generation and physical repository before connected execution",
+    "initializes fresh storage and resolves ordinary sessions across native generation changes while enforcing read-only access",
     () =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
@@ -659,14 +659,14 @@ describe("Cinderdeck integration hub", () => {
           );
           generation = 8;
           assert.equal(
-            (yield* guard.resolve(binding.threadId, root).pipe(Effect.flip)).reason,
-            "stale_binding",
+            (yield* guard.resolve(binding.threadId, root))?.physicalId,
+            physical.physicalId,
           );
           generation = 7;
           available = false;
           assert.equal(
-            (yield* guard.resolve(binding.threadId, root).pipe(Effect.flip)).reason,
-            "stale_binding",
+            (yield* guard.resolve(binding.threadId, root))?.physicalId,
+            physical.physicalId,
           );
           available = true;
           assert.equal(
@@ -682,9 +682,16 @@ describe("Cinderdeck integration hub", () => {
             capabilities: { ...binding.capabilities, enforcedReadOnly: true },
           };
           yield* store.putSession(reviewer, null);
+          assert.equal((yield* guard.resolve(reviewer.threadId, root))?.access, "read_only");
+          const unsupportedReviewer = {
+            ...reviewer,
+            id: Contracts.SessionBindingId.make("unsupported-review"),
+            threadId: ThreadId.make("unsupported-review"),
+            capabilities: { ...reviewer.capabilities, enforcedReadOnly: false },
+          };
           assert.equal(
-            (yield* guard.resolve(reviewer.threadId, root).pipe(Effect.flip)).reason,
-            "unsupported_access",
+            (yield* store.putSession(unsupportedReviewer, null).pipe(Effect.flip)).reason,
+            "wrong_context",
           );
           assert.equal((yield* store.session(binding.id)).checkoutId, checkout.id);
         }).pipe(Effect.provide(guardLayer));

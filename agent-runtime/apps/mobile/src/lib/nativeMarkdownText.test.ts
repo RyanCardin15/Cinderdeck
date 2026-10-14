@@ -199,10 +199,10 @@ describe("nativeMarkdownTextRuns", () => {
     const node: MarkdownNode = {
       type: "document",
       children: [
-        { type: "image", href: String.raw`C:\Users\me.t3_build\shot.png` },
+        { type: "image", href: String.raw`C:\Users\me.fixture_build\shot.png` },
         { type: "link", href: String.raw`C:\Users\me.claude\settings.json` },
         { type: "link", href: "https://example.com/a.b" },
-        { type: "image", href: String.raw`\wsl.localhost\Ubuntu.t3\ref.png` },
+        { type: "image", href: String.raw`\wsl.localhost\Ubuntu.fixture\ref.png` },
       ],
     };
 
@@ -219,15 +219,15 @@ describe("nativeMarkdownTextRuns", () => {
   it("leaves a Windows path as parsed when two written paths could have produced it", () => {
     const markdown = [
       String.raw`\`![example](C:\Users\me\.t3\shot.png)\``,
-      String.raw`![real](C:\Users\me.t3\shot.png)`,
+      String.raw`![real](C:\Users\me.fixture\shot.png)`,
     ].join("\n\n");
     const node: MarkdownNode = {
       type: "document",
-      children: [{ type: "image", href: String.raw`C:\Users\me.t3\shot.png` }],
+      children: [{ type: "image", href: String.raw`C:\Users\me.fixture\shot.png` }],
     };
 
     expect(nativeMarkdownWithAuthoredWindowsPaths(node, markdown).children?.[0]?.href).toBe(
-      String.raw`C:\Users\me.t3\shot.png`,
+      String.raw`C:\Users\me.fixture\shot.png`,
     );
   });
 

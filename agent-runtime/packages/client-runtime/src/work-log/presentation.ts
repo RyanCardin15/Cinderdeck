@@ -204,7 +204,9 @@ export function resolveWorkEntryToolPresentation(
   const status = entry.toolLifecycleStatus ?? fallbackStatus;
   return resolveCinderdeckMcpToolPresentation(
     definition,
-    definition && cinderdeckToolResultIndicatesFailure(workEntryToolOutput(entry)) ? "failed" : status,
+    definition && cinderdeckToolResultIndicatesFailure(workEntryToolOutput(entry))
+      ? "failed"
+      : status,
     entry.toolData,
   );
 }
@@ -655,29 +657,33 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEnt
     ToolGroupAction | CinderdeckMcpToolSummaryAction,
     {
       action: ToolGroupAction;
-      t3Action: CinderdeckMcpToolSummaryAction | null;
+      cinderdeckAction: CinderdeckMcpToolSummaryAction | null;
       entries: WorkLogPresentationEntry[];
     }
   >();
   const sources = new Map<string, ToolActivitySource>();
   for (const entry of entries) {
-    const t3Action = resolveCinderdeckMcpToolDefinition(workEntryToolName(entry))?.summaryAction ?? null;
-    if (entry.toolSource && t3Action === null) {
+    const cinderdeckAction =
+      resolveCinderdeckMcpToolDefinition(workEntryToolName(entry))?.summaryAction ?? null;
+    if (entry.toolSource && cinderdeckAction === null) {
       sources.set(entry.toolSource.key, entry.toolSource);
       continue;
     }
     const action = toolGroupAction(entry);
-    const key = t3Action ?? action;
+    const key = cinderdeckAction ?? action;
     const group = groups.get(key);
     if (group) group.entries.push(entry);
-    else groups.set(key, { action, t3Action, entries: [entry] });
+    else groups.set(key, { action, cinderdeckAction, entries: [entry] });
   }
   const summaries = [...groups].map(([action, group], index) => ({
     index,
     count: group.entries.length,
     priority: summaryActionPriority(action),
-    ...(group.t3Action
-      ? summarizeCinderdeckToolCalls(group.t3Action, group.entries.map(cinderdeckToolSummaryCall))
+    ...(group.cinderdeckAction
+      ? summarizeCinderdeckToolCalls(
+          group.cinderdeckAction,
+          group.entries.map(cinderdeckToolSummaryCall),
+        )
       : {
           label: toolGroupActionLabel(
             group.action,

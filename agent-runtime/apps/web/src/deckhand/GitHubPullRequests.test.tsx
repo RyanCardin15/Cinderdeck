@@ -25,6 +25,8 @@ vi.mock("../state/environments", () => ({
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
 }));
+// The workspace navigator has its own subscription tests; these exercise account views.
+vi.mock("./ProductWorkspaces", () => ({ ProductWorkspaces: () => null }));
 vi.mock("./NativeToolsSettings", () => ({
   NativeToolsMenu: () => null,
   NativeGitHubSettingsButton: () => <button>Configure GitHub account</button>,

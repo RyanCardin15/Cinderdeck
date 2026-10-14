@@ -1,6 +1,9 @@
 import { NATIVE_SETTINGS_SEARCH_ITEMS } from "../../deckhand/nativeSettingsSearch";
 import { isNativeSettingsHost } from "../../deckhand/nativeSettingsPresentation";
-import { NATIVE_SETTINGS_PAGES, type NativeSettingsPath } from "../../deckhand/nativeSettingsNavigation";
+import {
+  NATIVE_SETTINGS_PAGES,
+  type NativeSettingsPath,
+} from "../../deckhand/nativeSettingsNavigation";
 import { isElectron } from "~/env";
 import { isMacPlatform, normalizeSearchText } from "~/lib/utils";
 import { STATIC_KEYBINDING_COMMANDS, type KeybindingCommand } from "@cinderdeck/contracts";
@@ -88,7 +91,9 @@ export interface SettingsSearchAvailability {
  * subtitles both render from this record, so each label exists once.
  */
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
-  ...Object.fromEntries(Object.entries(NATIVE_SETTINGS_PAGES).map(([path, page]) => [path, page.title])) as Record<NativeSettingsPath, string>,
+  ...(Object.fromEntries(
+    Object.entries(NATIVE_SETTINGS_PAGES).map(([path, page]) => [path, page.title]),
+  ) as Record<NativeSettingsPath, string>),
   "/settings/workspaces": "Workspaces",
   "/settings/projects": "Project",
   "/settings/general": "General",
@@ -139,7 +144,15 @@ const KEYBINDING_SEARCH_ITEMS = STATIC_KEYBINDING_COMMANDS.toSorted((left, right
  */
 export const SETTINGS_SEARCH_ITEMS = [
   ...NATIVE_SETTINGS_SEARCH_ITEMS,
-  ...Object.entries(NATIVE_SETTINGS_PAGES).map(([path, page]) => ({ id: `native-${page.category}`, title: page.title, to: path as NativeSettingsPath, searchTerms: [page.description], desktopOnly: true, macOnly: true, nativeHostOnly: true })),
+  ...Object.entries(NATIVE_SETTINGS_PAGES).map(([path, page]) => ({
+    id: `native-${page.category}`,
+    title: page.title,
+    to: path as NativeSettingsPath,
+    searchTerms: [page.description],
+    desktopOnly: true,
+    macOnly: true,
+    nativeHostOnly: true,
+  })),
   {
     id: "workspace-locations",
     title: "Workspace folders and files",
@@ -161,7 +174,9 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Import Cinderdeck history",
     to: "/settings/storage",
     targetId: "storage-history-import",
-    searchTerms: ["previous conversations archive import t3 history database snapshot migration"],
+    searchTerms: [
+      "previous conversations archive import historical history database snapshot migration",
+    ],
     scope: "environment",
   },
   {
@@ -942,7 +957,10 @@ export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
 const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item] as const));
 
 const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
-  ...Object.fromEntries(Object.keys(NATIVE_SETTINGS_PAGES).map((path) => [path, null])) as Record<NativeSettingsPath, null>,
+  ...(Object.fromEntries(Object.keys(NATIVE_SETTINGS_PAGES).map((path) => [path, null])) as Record<
+    NativeSettingsPath,
+    null
+  >),
   "/settings/workspaces": null,
   "/settings/projects": "project",
   "/settings/general": null,

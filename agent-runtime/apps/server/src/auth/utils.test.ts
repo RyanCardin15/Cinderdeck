@@ -86,7 +86,7 @@ describe("session cookie isolation", () => {
       mode: "web",
       port: 3773,
       host: "192.168.1.50",
-      instanceKey: "/srv/t3-one",
+      instanceKey: "/srv/cinderdeck-one",
       environmentId: "environment-one",
       development: false,
     });
@@ -94,7 +94,7 @@ describe("session cookie isolation", () => {
       mode: "web",
       port: 5775,
       host: "192.168.1.50",
-      instanceKey: "/srv/t3-two",
+      instanceKey: "/srv/cinderdeck-two",
       environmentId: "environment-two",
       development: false,
     });
@@ -109,7 +109,7 @@ describe("session cookie isolation", () => {
       mode: "web",
       port: 8080,
       host: "0.0.0.0",
-      instanceKey: "/srv/t3",
+      instanceKey: "/srv/cinderdeck",
       environmentId: "environment-one",
       development: false,
     });
@@ -117,7 +117,7 @@ describe("session cookie isolation", () => {
       mode: "web",
       port: 9090,
       host: "app.example.com",
-      instanceKey: "/srv/t3",
+      instanceKey: "/srv/cinderdeck",
       environmentId: "environment-one",
       development: false,
     });

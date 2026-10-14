@@ -88,13 +88,13 @@ export function ProjectActionsSettings() {
   // A project's t3.json can declare actions to import. Read it from the
   // representative checkout; the imported action still fans out.
   const representativeMember = target?.projectId ? memberById.get(target.projectId) : undefined;
-  const t3File = useCinderdeckProjectFileState(
+  const projectFile = useCinderdeckProjectFileState(
     representativeMember?.environmentId ?? EnvironmentId.make("none"),
     representativeMember?.workspaceRoot ?? null,
   );
   const importableScripts = useMemo(
     () =>
-      t3File.scripts.filter(
+      projectFile.scripts.filter(
         (fileScript) =>
           !scripts.some(
             (script) =>
@@ -102,7 +102,7 @@ export function ProjectActionsSettings() {
               script.name.toLowerCase() === fileScript.name.toLowerCase(),
           ),
       ),
-    [scripts, t3File.scripts],
+    [scripts, projectFile.scripts],
   );
   const importFileScript = useCallback(
     async (fileScript: CinderdeckProjectFileScript) => {
@@ -206,7 +206,7 @@ export function ProjectActionsSettings() {
           onEdit={(script) => setRequest(editorRequestForScript(script, keybindings))}
         />
       )}
-      {t3File.status === "invalid" ? (
+      {projectFile.status === "invalid" ? (
         <SettingsRow
           title="Project file is invalid"
           description="A project file exists in this checkout but fails to parse, so every action and icon it declares is ignored. Check the JSON syntax and icon values."

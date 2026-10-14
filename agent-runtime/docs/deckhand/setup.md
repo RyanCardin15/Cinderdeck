@@ -38,7 +38,7 @@ Read historical conversations in the same panel. Long messages continue through 
 The local CLI delegates to the same importer. Use an explicit destination data root and a stable copy key; reusing the key recovers the same copy. Paths must be absolute and contain no symlink components.
 
 ```sh
-node apps/server/dist/bin.mjs history-import copy --base-dir /absolute/deckhand-data --source /absolute/t3/userdata/statev2.sqlite --operation-key previous-t3-history
+node apps/server/dist/bin.mjs history-import copy --base-dir /absolute/deckhand-data --source /absolute/previous-runtime/userdata/statev2.sqlite --operation-key previous-runtime-history
 node apps/server/dist/bin.mjs history-import list --base-dir /absolute/deckhand-data
 node apps/server/dist/bin.mjs history-import threads <import-id> --base-dir /absolute/deckhand-data
 node apps/server/dist/bin.mjs history-import messages <import-id> <original-thread-id> --base-dir /absolute/deckhand-data

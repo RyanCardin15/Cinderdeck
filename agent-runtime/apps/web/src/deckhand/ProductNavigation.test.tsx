@@ -63,7 +63,7 @@ it("opens app-wide views from a lane without carrying its saved context pins", a
       root.render(<ProductNavigation current="services" workspaceSearch={scope} />),
     );
     for (const [label, to, search] of [
-      ["Agents", "/workspaces", { tab: "agents" }],
+      ["Sessions", "/workspaces", { tab: "agents" }],
       ["Overview", "/workspaces", { environment: "remote", tab: "overview" }],
       ["Services & runs", "/services", { environment: "remote" }],
       ["Recordings", "/recordings", { environment: "remote" }],
@@ -84,7 +84,7 @@ it("opens app-wide views from a lane without carrying its saved context pins", a
       ),
     );
     await act(async () =>
-      [...container.querySelectorAll("a")].find((item) => item.textContent === "Agents")!.click(),
+      [...container.querySelectorAll("a")].find((item) => item.textContent === "Sessions")!.click(),
     );
     expect(boundary.navigate).toHaveBeenLastCalledWith({
       to: "/workspaces",

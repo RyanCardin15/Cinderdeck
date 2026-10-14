@@ -155,7 +155,7 @@ describe("pi Cinderdeck MCP injection", () => {
       const mcpDest = yield* materializePiT3McpExtension(cacheDir);
       assert.isTrue(mcpDest.endsWith(PI_T3_MCP_EXTENSION_FILENAME));
       const mcpSource = yield* fs.readFileString(mcpDest);
-      assert.include(mcpSource, "export default async function t3McpExtension");
+      assert.include(mcpSource, "export default async function cinderdeckMcpExtension");
       assert.include(mcpSource, "before_agent_start");
       assert.include(mcpSource, 'pi.on("tool_call"');
       assert.include(mcpSource, "Allow ${event.toolName}?");

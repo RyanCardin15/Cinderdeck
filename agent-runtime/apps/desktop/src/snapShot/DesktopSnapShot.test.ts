@@ -713,7 +713,7 @@ it.effect.each(["darwin"] as const)(
       shouldRenderRichAnimation: true,
     });
     const bounds = { x: 10, y: 20, width: 800, height: 600 };
-    const t3 = {
+    const cinderdeck = {
       id: 42,
       title: "Cinderdeck",
       appIdentifier: "com.fixture.Cinderdeck.desktop",
@@ -723,7 +723,7 @@ it.effect.each(["darwin"] as const)(
     };
     focusedWindowMock.mockReturnValue({
       getBounds: () => bounds,
-      getTitle: () => t3.title,
+      getTitle: () => cinderdeck.title,
       isDestroyed: () => false,
       isMinimized: () => false,
       isVisible: () => true,
@@ -731,10 +731,10 @@ it.effect.each(["darwin"] as const)(
       restore: vi.fn(),
     });
     const images: Uint8Array[] = [];
-    activeWindowMock.mockReset().mockResolvedValue({ ...t3, platform: "macos" });
+    activeWindowMock.mockReset().mockResolvedValue({ ...cinderdeck, platform: "macos" });
     macCaptureMock.mockReset().mockImplementation(async () => {
-      images.push(t3.png);
-      return { source: { name: t3.title }, png: t3.png };
+      images.push(cinderdeck.png);
+      return { source: { name: cinderdeck.title }, png: cinderdeck.png };
     });
     const readAccessibility = accessibilityProcessReadMock.getMockImplementation()!;
     accessibilityProcessReadMock.mockImplementation(({ active }) => ({
@@ -763,10 +763,13 @@ it.effect.each(["darwin"] as const)(
         yield* Effect.promise(trigger);
 
         const saved = yield* decodePendingMetadata(metadata);
-        assert.equal(saved.source.windowTitle, t3.title);
-        assert.equal(saved.source.appName, t3.owner.name);
-        assert.equal(saved.source.accessibleText, `Window from process ${t3.owner.processId}`);
-        assert.deepEqual(images, [t3.png]);
+        assert.equal(saved.source.windowTitle, cinderdeck.title);
+        assert.equal(saved.source.appName, cinderdeck.owner.name);
+        assert.equal(
+          saved.source.accessibleText,
+          `Window from process ${cinderdeck.owner.processId}`,
+        );
+        assert.deepEqual(images, [cinderdeck.png]);
       }),
     ).pipe(
       Effect.provide(
