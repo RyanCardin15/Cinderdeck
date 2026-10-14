@@ -2,8 +2,15 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { AsyncResult } from "effect/unstable/reactivity";
+import * as DateTime from "effect/DateTime";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
-import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@cinderdeck/contracts";
+import {
+  EnvironmentId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+  type OrchestrationV2ThreadShell,
+} from "@cinderdeck/contracts";
 import type { ManagedSessionView, IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
 import type { SessionShell } from "./sessionWorkspaceRows";
 
@@ -13,6 +20,8 @@ const boundary = vi.hoisted(() => ({
   requests: [] as { offset: number }[],
   menu: vi.fn(),
   connected: true,
+  archiveThreads: [] as OrchestrationV2ThreadShell[],
+  archiveRequests: [] as EnvironmentId[][],
 }));
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => boundary.result }));
 vi.mock("./state", () => ({
@@ -33,7 +42,15 @@ vi.mock("../state/environments", () => ({
   }),
 }));
 vi.mock("../lib/archivedThreadsState", () => ({
-  useArchivedThreadSnapshots: () => ({ snapshots: [], error: null }),
+  useArchivedThreadSnapshots: (ids: EnvironmentId[]) => {
+    boundary.archiveRequests.push(ids);
+    return {
+      snapshots: ids.length
+        ? [{ environmentId: ids[0], snapshot: { projects: [], threads: boundary.archiveThreads } }]
+        : [],
+      error: null,
+    };
+  },
 }));
 vi.mock("./useSessionActions", () => ({
   useSessionActions: () => ({ showMenu: boundary.menu, renameDialog: null }),
@@ -99,6 +116,11 @@ const ordinary: SessionShell = {
   projectId: ProjectId.make("project"),
   id: ThreadId.make("ordinary"),
   title: "Ordinary conversation",
+  lineage: {
+    rootThreadId: ThreadId.make("ordinary"),
+    parentThreadId: null,
+    relationshipToParent: null,
+  },
   providerInstanceId: ProviderInstanceId.make("codex"),
   createdAt: "2026-10-12T12:00:00Z",
   updatedAt: "2026-10-12T12:00:00Z",
@@ -109,6 +131,49 @@ const ordinary: SessionShell = {
   hasPendingApprovals: false,
   hasPendingUserInput: false,
   hasActionableProposedPlan: false,
+};
+const child = (id: string, parent = "ordinary"): SessionShell => ({
+  ...ordinary,
+  id: ThreadId.make(id),
+  title: id,
+  createdAt: "2026-10-14T12:00:00Z",
+  lineage: {
+    rootThreadId: ordinary.id,
+    parentThreadId: ThreadId.make(parent),
+    relationshipToParent: "subagent",
+  },
+});
+const archivedShell: OrchestrationV2ThreadShell = {
+  id: ordinary.id,
+  projectId: ordinary.projectId,
+  title: "Archived main",
+  providerInstanceId: ordinary.providerInstanceId,
+  modelSelection: { instanceId: ordinary.providerInstanceId, model: "fixture-model" },
+  runtimeMode: "full-access",
+  interactionMode: "default",
+  branch: null,
+  worktreePath: null,
+  activeProviderThreadId: null,
+  lineage: ordinary.lineage,
+  forkedFrom: null,
+  createdBy: "user",
+  creationSource: "web",
+  latestRunId: null,
+  activeRunId: null,
+  status: "idle",
+  pendingRuntimeRequest: null,
+  latestVisibleMessage: null,
+  latestUserMessageAt: null,
+  hasActionableProposedPlan: false,
+  itemCount: 0,
+  visibleItemCount: 0,
+  createdAt: DateTime.makeUnsafe(ordinary.createdAt),
+  updatedAt: DateTime.makeUnsafe(ordinary.updatedAt),
+  archivedAt: DateTime.makeUnsafe("2026-10-13T00:00:00Z"),
+  settledOverride: null,
+  settledAt: null,
+  lastVisitedAt: null,
+  deletedAt: null,
 };
 let root: Root;
 let container: HTMLDivElement;
@@ -134,6 +199,8 @@ beforeEach(() => {
   boundary.threads = [ordinary];
   boundary.requests = [];
   boundary.connected = true;
+  boundary.archiveThreads = [];
+  boundary.archiveRequests = [];
   boundary.menu.mockReset();
   container = document.createElement("div");
   host = document.createElement("div");
@@ -295,4 +362,131 @@ it("opens highlight controls from the keyboard without triggering workspace menu
   expect(
     document.querySelector('[aria-label="Highlight color for Ordinary conversation"]'),
   ).not.toBeNull();
+});
+
+it("nests and collapses sub-agents while preserving their navigation and independent colors", async () => {
+  boundary.result = AsyncResult.success([]);
+  boundary.threads = [ordinary, child("Inspector"), child("Verifier", "Inspector")];
+  boundary.menu.mockImplementation((_session, _position, _enabled, appearance) =>
+    appearance.onHighlight(),
+  );
+  const onNavigate = vi.fn();
+  await render({ onNavigate });
+  const main = container.querySelector('[data-session-id="ordinary"]')!.closest("li")!;
+  const inspector = main.querySelector('ul [data-session-id="Inspector"]')!;
+  expect(inspector.closest("li")!.querySelector('ul [data-session-id="Verifier"]')).not.toBeNull();
+  expect(inspector.textContent).toContain("Sub-agent");
+  const toggle = main.querySelector("button")!;
+  await act(async () => toggle.click());
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  expect(main.querySelector("ul")!.hidden).toBe(true);
+  expect(onNavigate).not.toHaveBeenCalled();
+  await act(async () => toggle.click());
+  const link = inspector.querySelector("a")!;
+  await act(async () => link.click());
+  expect(onNavigate).toHaveBeenCalledOnce();
+  await act(async () =>
+    link.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })),
+  );
+  expect(boundary.menu).toHaveBeenCalledWith(
+    expect.objectContaining({ binding: { threadId: "Inspector" } }),
+    expect.anything(),
+    true,
+    expect.anything(),
+  );
+  await act(async () =>
+    (document.querySelector('button[aria-label="Blue"]') as HTMLButtonElement).click(),
+  );
+  expect(
+    readSidebarPreferences(sidebarPreferenceKey("local", "installation")).sessionColors,
+  ).toEqual({ Inspector: "#579de5" });
+  expect(main.querySelector('a[href="/sessions/ordinary"]')?.getAttribute("data-highlighted")).toBe(
+    "false",
+  );
+  await act(async () => root.render(null));
+  await render({ selectedThreadId: "Inspector" });
+  expect(container.querySelector('a[href="/sessions/Inspector"]')?.getAttribute("style")).toContain(
+    "#579de5",
+  );
+  expect(
+    container.querySelector('a[href="/sessions/Inspector"]')?.getAttribute("aria-current"),
+  ).toBe("page");
+});
+
+it("limits main sessions instead of sub-agents and reveals an older selected child", async () => {
+  boundary.result = AsyncResult.success([]);
+  boundary.threads = [
+    ...Array.from({ length: 12 }, (_, index) => ({
+      ...ordinary,
+      id: ThreadId.make(`main-${index}`),
+      createdAt: new Date(Date.UTC(2026, 9, index + 1)).toISOString(),
+    })),
+    ...Array.from({ length: 15 }, (_, index) => child(`child-${index}`, "main-11")),
+    child("older-selected", "main-0"),
+  ];
+  await render({ selectedThreadId: undefined });
+  expect(container.querySelectorAll("nav > ul > li")).toHaveLength(10);
+  expect(container.querySelectorAll('nav a[href^="/sessions/child-"]')).toHaveLength(15);
+  expect(container.querySelector('a[href="/sessions/main-2"]')).not.toBeNull();
+  expect(container.querySelector('a[href="/sessions/main-0"]')).toBeNull();
+  await render({ selectedThreadId: "older-selected" });
+  const selected = container.querySelector('a[href="/sessions/older-selected"]')!;
+  expect(selected.getAttribute("aria-current")).toBe("page");
+  expect(selected.closest("ul")!.hidden).toBe(false);
+  expect(container.querySelector('a[href="/sessions/main-0"]')).not.toBeNull();
+});
+
+it("opens ancestor groups when selection changes or search matches a nested child", async () => {
+  boundary.result = AsyncResult.success([]);
+  boundary.threads = [
+    ordinary,
+    child("Inspector"),
+    child("Verifier", "Inspector"),
+    child("Sibling"),
+  ];
+  await render({ compact: false });
+  const main = container.querySelector('[data-session-id="ordinary"]')!.closest("li")!;
+  const toggle = main.querySelector("button")!;
+  await act(async () => toggle.click());
+  await render({ compact: false, selectedThreadId: "Verifier" });
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  await act(async () => toggle.click());
+  const input = container.querySelector('input[aria-label="Search sessions"]')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+      input,
+      "Verifier",
+    );
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(container.querySelectorAll("nav a")).toHaveLength(3);
+  expect(container.querySelector('a[href="/sessions/ordinary"]')).not.toBeNull();
+  expect(container.querySelector('a[href="/sessions/Inspector"]')).not.toBeNull();
+  expect(container.querySelector('a[href="/sessions/Sibling"]')).toBeNull();
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  expect(main.querySelector("ul")!.hidden).toBe(false);
+});
+
+it("loads archived parents only when needed and retains them as context for active children", async () => {
+  boundary.result = AsyncResult.success([]);
+  await render({ compact: false });
+  expect(boundary.archiveRequests.at(-1)).toEqual([]);
+  boundary.archiveThreads = [
+    archivedShell,
+    {
+      ...archivedShell,
+      id: ThreadId.make("unrelated-archive"),
+    },
+  ];
+  boundary.threads = [child("Active inspector")];
+  await render({ compact: false, selectedThreadId: "Active inspector" });
+  expect(boundary.archiveRequests.at(-1)).toEqual([environmentId]);
+  const main = container.querySelector('[data-session-id="ordinary"]')!.closest("li")!;
+  expect(main.textContent).toContain("Archived");
+  expect(main.querySelector('ul a[href="/sessions/Active inspector"]')).not.toBeNull();
+  expect(container.querySelector('a[href="/sessions/unrelated-archive"]')).toBeNull();
+  await act(async () =>
+    (container.querySelector('input[type="checkbox"]') as HTMLInputElement).click(),
+  );
+  expect(container.querySelector('a[href="/sessions/unrelated-archive"]')).not.toBeNull();
 });

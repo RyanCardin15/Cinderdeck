@@ -121,6 +121,7 @@ const source = () => {
     shells: new Map<ThreadId, OrchestrationV2ThreadShell>(),
     shell: {
       id: threadId,
+      lineage: { rootThreadId: threadId, parentThreadId: null, relationshipToParent: null },
       createdAt: DateTime.makeUnsafe("2026-10-01T00:00:00Z"),
       providerInstanceId: instanceId,
       status: "running",
@@ -183,6 +184,38 @@ const source = () => {
   return { state, layer };
 };
 describe("managed session provider projection", () => {
+  it.effect("retains canonical parent relationships in saved and archived session history", () =>
+    Effect.gen(function* () {
+      const f = source();
+      const lineage = {
+        rootThreadId: ThreadId.make("parent"),
+        parentThreadId: ThreadId.make("parent"),
+        relationshipToParent: "subagent" as const,
+      };
+      f.state.shell = {
+        ...f.state.shell!,
+        lineage,
+        archivedAt: DateTime.makeUnsafe("2026-10-05T00:00:00Z"),
+      };
+      yield* Effect.gen(function* () {
+        yield* seed;
+        const service = yield* ManagedSessions.ManagedSessions;
+        const rows = yield* service.list(scope);
+        assert.deepEqual(rows[0]!.lineage, lineage);
+        assert.isTrue(rows[0]!.archived);
+        const binding = rows[0]!.binding;
+        const [selected] = yield* service
+          .subscribeThread({
+            ...scope,
+            sessionID: binding.id,
+            threadID: binding.threadId,
+            checkoutID: binding.checkoutId,
+          })
+          .pipe(Stream.take(1), Stream.runCollect);
+        assert.deepEqual(selected?.lineage, lineage);
+      }).pipe(Effect.provide(f.layer()));
+    }).pipe(Effect.provide(baseLayer)),
+  );
   it.effect(
     "removes deleted sessions before pagination and overview counts while keeping archives restorable",
     () =>

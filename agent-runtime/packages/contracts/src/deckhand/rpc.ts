@@ -67,6 +67,7 @@ import { ProviderInstanceId } from "../providerInstance.ts";
 import { ModelSelection } from "../modelSelection.ts";
 import { ThreadPullRequestLink } from "../threadPullRequest.ts";
 import { RuntimeMode, ProviderInteractionMode } from "../providerPolicy.ts";
+import { OrchestrationV2AppThreadLineage } from "../orchestrationV2.ts";
 import { EnvironmentAuthorizationError } from "../auth.ts";
 import {
   ThreadId,
@@ -276,6 +277,7 @@ export const ManagedSessionView = Schema.Struct({
   binding: SessionBinding,
   title: Schema.String,
   createdAt: Schema.optionalKey(Schema.String),
+  lineage: Schema.optionalKey(OrchestrationV2AppThreadLineage),
   objective: Schema.optionalKey(Schema.String),
   pullRequests: Schema.optionalKey(Schema.Array(ThreadPullRequestLink)),
   source: Schema.Literals(["current", "unavailable"]),

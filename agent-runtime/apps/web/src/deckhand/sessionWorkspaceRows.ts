@@ -11,6 +11,7 @@ export type SessionShell = Pick<
   | "projectId"
   | "id"
   | "title"
+  | "lineage"
   | "providerInstanceId"
   | "createdAt"
   | "updatedAt"
@@ -27,6 +28,8 @@ type Resource = IntegrationView["resources"][number];
 export type WorkspaceSession = {
   id: string;
   title: string;
+  parentThreadId: string | null;
+  isSubagent: boolean;
   providerInstanceId: string;
   createdAt: string;
   updatedAt: string;
@@ -84,6 +87,11 @@ export function workspaceSessions(
     result.set(session.binding.threadId, {
       id: session.binding.threadId,
       title: session.title,
+      parentThreadId:
+        session.lineage?.relationshipToParent === "subagent"
+          ? session.lineage.parentThreadId
+          : null,
+      isSubagent: session.lineage?.relationshipToParent === "subagent",
       providerInstanceId: session.binding.providerInstanceId,
       createdAt: session.createdAt ?? "",
       updatedAt: "",
@@ -109,6 +117,9 @@ export function workspaceSessions(
     result.set(thread.id, {
       id: thread.id,
       title: thread.title,
+      parentThreadId:
+        thread.lineage.relationshipToParent === "subagent" ? thread.lineage.parentThreadId : null,
+      isSubagent: thread.lineage.relationshipToParent === "subagent",
       providerInstanceId: thread.providerInstanceId,
       createdAt: thread.createdAt,
       updatedAt: thread.updatedAt,

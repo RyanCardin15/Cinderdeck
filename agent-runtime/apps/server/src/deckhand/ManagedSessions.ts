@@ -191,6 +191,7 @@ const make = Effect.gen(function* () {
             binding: next,
             title: shell.title || title,
             createdAt: DateTime.formatIso(shell.createdAt),
+            lineage: shell.lineage,
             ...(objective !== undefined ? { objective } : {}),
             pullRequests: shell.pullRequests ?? [],
             source: "current" as const,

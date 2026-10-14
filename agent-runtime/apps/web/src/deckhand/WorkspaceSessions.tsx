@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
-import { MessageSquareIcon, PinIcon, SearchIcon } from "lucide-react";
+import { BotIcon, ChevronRightIcon, MessageSquareIcon, PinIcon, SearchIcon } from "lucide-react";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as Option from "effect/Option";
 import { ThreadId, type EnvironmentId } from "@cinderdeck/contracts";
@@ -16,6 +16,12 @@ import { formatRelativeTimeLabel } from "../timestampFormat";
 import { managedSessionsView, threadContextView } from "./state";
 import { useSessionActions } from "./useSessionActions";
 import { workspaceSessions, type WorkspaceSession } from "./sessionWorkspaceRows";
+import {
+  filterWorkspaceSessionTree,
+  sessionTreeContains,
+  workspaceSessionTree,
+  type WorkspaceSessionNode,
+} from "./workspaceSessionTree";
 import { SidebarColorPicker } from "./SidebarColorPicker";
 import { sidebarPreferenceKey } from "./workspaceSidebarPreferences";
 import { useWorkspaceSidebarPreferences } from "./useWorkspaceSidebarPreferences";
@@ -60,7 +66,41 @@ function SessionRows({
   const [history, setHistory] = useState<readonly ManagedSessionView[]>([]);
   const [query, setQuery] = useState("");
   const [archived, setArchived] = useState(false);
-  const archive = useArchivedThreadSnapshots(archived ? [environmentId] : []);
+  const result = useAtomValue(
+    managedSessionsView({
+      environmentId,
+      input: {
+        installationID,
+        workspaceID: resource.workspaceID,
+        generation: resource.generation,
+        scope: "workspace",
+        offset,
+        limit: sessionPageSize,
+      },
+    }),
+  );
+  const page = Option.getOrNull(AsyncResult.value(result));
+  const currentIDs = new Set(
+    currentThreads
+      .filter((thread) => thread.environmentId === environmentId)
+      .map((thread) => thread.id),
+  );
+  const missingParent = (lineage: ManagedSessionView["lineage"]) =>
+    lineage?.relationshipToParent === "subagent" &&
+    lineage.parentThreadId !== null &&
+    !currentIDs.has(lineage.parentThreadId);
+  // Load archive metadata lazily for an active child's parent or an exact archived link.
+  const needsAncestors =
+    currentThreads.some(
+      (thread) => thread.environmentId === environmentId && missingParent(thread.lineage),
+    ) ||
+    [...history, ...(page ?? [])].some(
+      (session) =>
+        (!session.archived || session.binding.threadId === selectedThreadId) &&
+        missingParent(session.lineage),
+    ) ||
+    (!!selectedThreadId && !currentIDs.has(ThreadId.make(selectedThreadId)));
+  const archive = useArchivedThreadSnapshots(archived || needsAncestors ? [environmentId] : []);
   const projects = [
     ...archive.snapshots.flatMap(({ environmentId: id, snapshot }) =>
       snapshot.projects.map((project) => scopeProject(id, project)),
@@ -77,20 +117,6 @@ function SessionRows({
       ].map((thread) => [`${thread.environmentId}:${thread.id}`, thread]),
     ).values(),
   ];
-  const result = useAtomValue(
-    managedSessionsView({
-      environmentId,
-      input: {
-        installationID,
-        workspaceID: resource.workspaceID,
-        generation: resource.generation,
-        scope: "workspace",
-        offset,
-        limit: sessionPageSize,
-      },
-    }),
-  );
-  const page = Option.getOrNull(AsyncResult.value(result));
   useEffect(() => {
     if (!page) return;
     setHistory((previous) => {
@@ -106,6 +132,9 @@ function SessionRows({
       ? threadContextView({ environmentId, input: { threadId: ThreadId.make(selectedThreadId) } })
       : null,
   ).data;
+  const selectedSaved =
+    page?.find((session) => session.binding.threadId === selectedThreadId) ??
+    history.find((session) => session.binding.threadId === selectedThreadId);
   const exact =
     selected &&
     selected.workspace.ownerId === resource.workspaceID &&
@@ -113,17 +142,15 @@ function SessionRows({
     selected.session.threadId === selectedThreadId
       ? [
           {
+            ...selectedSaved,
             binding: selected.session,
-            createdAt:
-              page?.find((session) => session.binding.threadId === selectedThreadId)?.createdAt ??
-              history.find((session) => session.binding.threadId === selectedThreadId)?.createdAt ??
-              selected.feature.createdAt,
+            createdAt: selectedSaved?.createdAt ?? selected.feature.createdAt,
             title:
               threads.find(
                 (thread) =>
                   thread.environmentId === environmentId && thread.id === selectedThreadId,
               )?.title ?? selected.feature.title,
-            archived: false,
+            archived: selectedSaved?.archived ?? false,
             source: "current" as const,
           },
         ]
@@ -134,13 +161,17 @@ function SessionRows({
     ).values(),
   ];
   const all = workspaceSessions(environmentId, resource, resources, projects, threads, saved);
-  const sessions = all.filter(
-    (session) =>
-      (archived || !session.archived || session.id === selectedThreadId) &&
-      (!query.trim() ||
-        session.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())),
-  );
+  const sessions = filterWorkspaceSessionTree(workspaceSessionTree(all), {
+    archived,
+    query,
+    selectedThreadId,
+  });
   const visibleSessions = compact ? sessions.slice(0, sidebarSessionLimit) : sessions;
+  // An exact conversation link must remain visible even outside the newest groups.
+  const selectedGroup = sessions.find((node) => sessionTreeContains(node, selectedThreadId));
+  if (compact && selectedGroup && !visibleSessions.includes(selectedGroup)) {
+    visibleSessions.push(selectedGroup);
+  }
   const connected = environment?.connection.phase === "connected";
   return (
     <section
@@ -170,28 +201,31 @@ function SessionRows({
           </label>
         </div>
       ) : null}
-      <nav className={styles.list} aria-label="Workspace sessions">
-        {visibleSessions.map((session) => (
-          <SessionRow
-            key={session.id}
-            session={session}
-            environmentId={environmentId}
-            selected={session.id === selectedThreadId}
-            compact={compact}
-            connected={connected}
-            onNavigate={onNavigate}
-            showMenu={showMenu}
-            color={sidebar.preferences.sessionColors[session.id]}
-            onColorChange={(color) =>
-              sidebar.update((current) => {
-                const sessionColors = { ...current.sessionColors };
-                if (color) sessionColors[session.id] = color;
-                else delete sessionColors[session.id];
-                return { ...current, sessionColors };
-              })
-            }
-          />
-        ))}
+      <nav aria-label="Workspace sessions">
+        <ul className={styles.list}>
+          {visibleSessions.map((node) => (
+            <SessionBranch
+              key={node.session.id}
+              node={node}
+              environmentId={environmentId}
+              selectedThreadId={selectedThreadId}
+              searching={!!query.trim()}
+              compact={compact}
+              connected={connected}
+              onNavigate={onNavigate}
+              showMenu={showMenu}
+              colors={sidebar.preferences.sessionColors}
+              onColorChange={(id, color) =>
+                sidebar.update((current) => {
+                  const sessionColors = { ...current.sessionColors };
+                  if (color) sessionColors[id] = color;
+                  else delete sessionColors[id];
+                  return { ...current, sessionColors };
+                })
+              }
+            />
+          ))}
+        </ul>
       </nav>
       {!sessions.length ? (
         <p className={styles.empty} role="status">
@@ -242,6 +276,80 @@ function SessionRows({
   );
 }
 
+function SessionBranch(props: {
+  node: WorkspaceSessionNode;
+  environmentId: EnvironmentId;
+  selectedThreadId: string | undefined;
+  searching: boolean;
+  compact: boolean;
+  connected: boolean;
+  onNavigate: (() => void) | undefined;
+  showMenu: ReturnType<typeof useSessionActions>["showMenu"];
+  colors: Readonly<Record<string, string>>;
+  onColorChange: (id: string, color: string | undefined) => void;
+}) {
+  const { node, selectedThreadId, searching } = props;
+  const childrenId = useId();
+  const containsSelected = node.children.some((child) =>
+    sessionTreeContains(child, selectedThreadId),
+  );
+  const [disclosure, setDisclosure] = useState({
+    expanded: true,
+    selectedThreadId,
+    containsSelected,
+  });
+  if (
+    disclosure.selectedThreadId !== selectedThreadId ||
+    disclosure.containsSelected !== containsSelected
+  ) {
+    setDisclosure({
+      expanded: containsSelected || disclosure.expanded,
+      selectedThreadId,
+      containsSelected,
+    });
+  }
+  const open = searching || disclosure.expanded;
+  return (
+    <li className={styles.branch}>
+      <SessionRow
+        {...props}
+        session={node.session}
+        selected={node.session.id === selectedThreadId}
+        color={props.colors[node.session.id]}
+        onColorChange={(color) => props.onColorChange(node.session.id, color)}
+        disclosure={
+          node.children.length ? (
+            <button
+              type="button"
+              className={styles.disclosure}
+              aria-label={`${open ? "Collapse" : "Expand"} sub-agents for ${node.session.title || "New session"}`}
+              aria-expanded={open}
+              aria-controls={childrenId}
+              disabled={searching}
+              onClick={(event) => {
+                event.stopPropagation();
+                setDisclosure({ ...disclosure, expanded: !open });
+              }}
+            >
+              <ChevronRightIcon size={12} aria-hidden />
+            </button>
+          ) : (
+            <span className={styles.disclosureSpace} aria-hidden />
+          )
+        }
+        childCount={node.children.length}
+      />
+      {node.children.length ? (
+        <ul id={childrenId} className={`${styles.list} ${styles.children}`} hidden={!open}>
+          {node.children.map((child) => (
+            <SessionBranch key={child.session.id} {...props} node={child} />
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  );
+}
+
 function SessionRow({
   session,
   environmentId,
@@ -252,6 +360,8 @@ function SessionRow({
   showMenu,
   color,
   onColorChange,
+  disclosure,
+  childCount,
 }: {
   session: WorkspaceSession;
   environmentId: EnvironmentId;
@@ -262,6 +372,8 @@ function SessionRow({
   showMenu: ReturnType<typeof useSessionActions>["showMenu"];
   color: string | undefined;
   onColorChange: (color: string | undefined) => void;
+  disclosure: React.ReactNode;
+  childCount: number;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
@@ -274,6 +386,7 @@ function SessionRow({
     );
   return (
     <div ref={rowRef} className={styles.row} data-session-id={session.id}>
+      {disclosure}
       <Link
         to="/$environmentId/$threadId"
         params={buildThreadRouteParams({ environmentId, threadId: ThreadId.make(session.id) })}
@@ -295,7 +408,11 @@ function SessionRow({
           void openMenu({ x: rect.left, y: rect.bottom });
         }}
       >
-        <MessageSquareIcon size={14} aria-hidden />
+        {session.isSubagent ? (
+          <BotIcon size={14} aria-hidden />
+        ) : (
+          <MessageSquareIcon size={14} aria-hidden />
+        )}
         <span className={styles.identity}>
           <span className={styles.title}>{session.title || "New session"}</span>
           {!compact && session.createdAt ? (
@@ -305,6 +422,12 @@ function SessionRow({
             </span>
           ) : null}
         </span>
+        {session.isSubagent ? <span className={styles.kind}>Sub-agent</span> : null}
+        {childCount ? (
+          <span className={styles.count} aria-label={`${childCount} sub-agents`}>
+            {childCount}
+          </span>
+        ) : null}
         {session.pinned ? <PinIcon size={11} aria-label="Pinned" /> : null}
         {connected && session.status !== "idle" ? (
           <i

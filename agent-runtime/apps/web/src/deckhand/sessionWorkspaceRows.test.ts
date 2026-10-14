@@ -27,6 +27,7 @@ const thread = (id: string, updatedAt = "2026-10-12T12:00:00Z"): SessionShell =>
   projectId: project.id,
   environmentId,
   title: id,
+  lineage: { rootThreadId: ThreadId.make(id), parentThreadId: null, relationshipToParent: null },
   providerInstanceId: ProviderInstanceId.make("codex"),
   createdAt: updatedAt,
   updatedAt,
@@ -57,6 +58,33 @@ it("includes ordinary threads and saved sessions from removed checkouts without 
   expect(workspaceSessions(environmentId, resource, [], [], [], [saved])[0]?.title).toBe(
     "Saved checkout chat",
   );
+});
+it("uses canonical sub-agent lineage and keeps forks independent, including saved history", () => {
+  const parent = ThreadId.make("parent");
+  const lineage = {
+    rootThreadId: parent,
+    parentThreadId: parent,
+    relationshipToParent: "subagent" as const,
+  };
+  const rows = workspaceSessions(
+    environmentId,
+    resource,
+    [],
+    [project],
+    [
+      { ...thread("child"), lineage },
+      { ...thread("fork"), lineage: { ...lineage, relationshipToParent: "fork" } },
+      { ...thread("remote"), environmentId: EnvironmentId.make("remote"), lineage },
+    ],
+    [{ ...saved, lineage }],
+  );
+  expect(
+    rows.map(({ id, parentThreadId, isSubagent }) => ({ id, parentThreadId, isSubagent })),
+  ).toEqual([
+    { id: "child", parentThreadId: "parent", isSubagent: true },
+    { id: "fork", parentThreadId: null, isSubagent: false },
+    { id: "saved", parentThreadId: "parent", isSubagent: true },
+  ]);
 });
 it("keeps projects and computers separate and removes deleted sessions even from retained history", () => {
   const rows = workspaceSessions(
