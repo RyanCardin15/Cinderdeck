@@ -45,7 +45,7 @@ class BrandingTests(unittest.TestCase):
         self.assertTrue(branding.violations(path, 'let label = "T3 Code"'))
 
     def test_lowercase_identifiers_help_and_demo_urls_are_rejected(self):
-        for text in ('const t3 = {};', 'const t3Panel = {};', '"Run t3 theme set"', '"https://demo.t3.sh"'):
+        for text in ('const t3 = {};', 'const t3Panel = {};', '"t3dotgg/fleet"', '"t3chat"', '"Run t3 theme set"', '"https://demo.t3.sh"'):
             self.assertTrue(branding.violations("agent-runtime/apps/web/src/NewPanel.tsx", text))
 
     def test_protocol_tokens_and_exact_legacy_lines_do_not_exempt_adjacent_branding(self):

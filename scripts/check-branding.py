@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parent.parent
-BRAND = re.compile(r"\bT3\s+Code\b|\bT3Code\b|[>\"\x27]T3[<\"\x27]|\bt3\s+(?:serve|connect|pair|service|update|app|project)\b|@t3tools/|\bcom\.t3tools\b|\b(?:[\w-]+\.)*t3\.(?:codes|gg)\b|\bpingdotgg/t3code\b", re.I)
+BRAND = re.compile(r"\bt3dotgg\b|\bt3chat\b|\bT3\s+Code\b|\bT3Code\b|[>\"\x27]T3[<\"\x27]|\bt3\s+(?:serve|connect|pair|service|update|app|project)\b|@t3tools/|\bcom\.t3tools\b|\b(?:[\w-]+\.)*t3\.(?:codes|gg)\b|\bpingdotgg/t3code\b", re.I)
 BARE_BRAND = re.compile(r"\bT3\b", re.I)
 INTERNAL_BRAND = re.compile(r"\b(?:T3|t3)[A-Z][a-z][A-Za-z0-9_]*\b")
 # Exact native registration names and wrappers outside their ABI source folders.
