@@ -159,10 +159,21 @@ final class CinderdeckRuntimeController: ObservableObject {
     }
   }
 
-  /// Return from a native auxiliary tool without changing its saved route.
+  /// Reveal the owned window without changing its saved route, including
+  /// while its renderer is loading. The inherited pipe queues startup requests.
   func activateOwnedWindow() {
-    guard running, ready, !stopping else { return }
-    try? send(CinderdeckRuntimeMessage(type: "activate"))
+    guard running, !stopping else { return }
+    do { try send(CinderdeckRuntimeMessage(type: "activate")) }
+    catch {
+      DiagnosticLogger.shared.log(.warning, .lifecycle, "Could not activate the unified window")
+    }
+  }
+
+  /// Hide both processes as one macOS application. Dock/app-switcher activation
+  /// later reveals the same owned window through the ordinary activation path.
+  func hideOwnedWindow() {
+    guard running, !stopping else { return }
+    try? send(CinderdeckRuntimeMessage(type: "hide"))
   }
 
   private func send(_ message: CinderdeckRuntimeMessage) throws {
@@ -203,6 +214,24 @@ final class CinderdeckRuntimeController: ObservableObject {
         lastError = "The agent window could not receive its route."
         let alert = NSAlert(); alert.messageText = "The workspace could not open"; alert.informativeText = error.localizedDescription; alert.runModal()
       }
+      return
+    }
+    if line == Data("CINDERDECK_RUNTIME_HIDE_OTHERS".utf8) {
+      guard !stopping else { return }
+      let ownedPID = process?.processIdentifier
+      for application in NSWorkspace.shared.runningApplications
+        where application.activationPolicy == .regular
+          && application.processIdentifier != getpid()
+          && application.processIdentifier != ownedPID {
+        application.hide()
+      }
+      return
+    }
+    if line == Data("CINDERDECK_RUNTIME_HIDE".utf8) {
+      guard !stopping, !NSApp.isHidden else { return }
+      // The accessory runtime otherwise leaves its regular native owner active,
+      // which immediately focuses it again. Hide the owner as well.
+      NSApp.hide(nil)
       return
     }
     if line == Data("CINDERDECK_RUNTIME_QUIT_REQUEST".utf8) {

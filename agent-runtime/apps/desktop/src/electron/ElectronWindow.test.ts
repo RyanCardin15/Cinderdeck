@@ -59,6 +59,28 @@ describe("ElectronWindow", () => {
     getFocusedWindowMock.mockReset();
   });
 
+  it.effect("restores and focuses the hidden macOS main window on activation", () =>
+    Effect.gen(function* () {
+      const operations: string[] = [];
+      appFocusMock.mockImplementation(() => operations.push("app-focus"));
+      const window = {
+        ...makeRevealWindow({ visible: false }),
+        isMinimized: vi.fn(() => true),
+        isVisible: vi.fn(() => false),
+        restore: vi.fn(() => operations.push("restore")),
+        show: vi.fn(() => operations.push("show")),
+        focus: vi.fn(() => operations.push("focus")),
+      } as unknown as Electron.BrowserWindow;
+      const electronWindow = yield* ElectronWindow.ElectronWindow;
+
+      yield* electronWindow.reveal(window);
+
+      assert.deepEqual(operations, ["restore", "show", "app-focus", "focus"]);
+      assert.deepEqual(appFocusMock.mock.calls, [[{ steal: true }]]);
+      assert.lengthOf(browserWindowMock.mock.calls, 0);
+    }).pipe(Effect.provide(testLayer("darwin"))),
+  );
+
   it.effect("preserves schema-safe creation context and the Electron cause", () =>
     Effect.gen(function* () {
       const cause = new Error("native BrowserWindow construction failed");
@@ -116,7 +138,10 @@ describe("ElectronWindow", () => {
       assert.isFalse("icon" in error.options);
       assert.isFalse("spellcheck" in error.options.webPreferences);
       assert.strictEqual(error.cause, cause);
-      assert.equal(error.message, 'Failed to create Electron BrowserWindow "Cinderdeck" (1100x780).');
+      assert.equal(
+        error.message,
+        'Failed to create Electron BrowserWindow "Cinderdeck" (1100x780).',
+      );
       assert.notInclude(error.message, cause.message);
       assert.deepEqual(browserWindowMock.mock.calls, [[options]]);
     }).pipe(Effect.provide(TestLayer)),

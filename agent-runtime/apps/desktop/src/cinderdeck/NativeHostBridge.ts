@@ -41,6 +41,16 @@ export function delegateQuitToNative(event: Electron.Event): boolean {
   return true;
 }
 
+export function hideOwnedApplication(): void {
+  process.stdout.write("CINDERDECK_RUNTIME_HIDE\n");
+  Electron.app.hide();
+}
+
+export function hideOtherApplications(): void {
+  // The owner excludes both of our processes from Hide Others.
+  process.stdout.write("CINDERDECK_RUNTIME_HIDE_OTHERS\n");
+}
+
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -91,7 +101,9 @@ export const install = Effect.gen(function* () {
   let latestRoute: NativeHostRoute | null = {};
   let input = "";
   let pendingQuit = false;
-  const settings = new NativeSettingsRequests((line) => { process.stdout.write(line); });
+  const settings = new NativeSettingsRequests((line) => {
+    process.stdout.write(line);
+  });
   const main = async () => Option.getOrNull(await run(windows.main));
   const trusted = async (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) => {
     const window = await main();
@@ -150,8 +162,13 @@ export const install = Effect.gen(function* () {
         quit();
         continue;
       }
+      if (value.type === "hide" && Object.keys(value).length === 1) {
+        Electron.app.hide();
+        continue;
+      }
       if (value.type === "activate" && Object.keys(value).length === 1) {
-        void run(desktop.ensureMain).catch(() => undefined);
+        // The native Dock icon must reveal and focus an existing window too.
+        void run(desktop.activate).catch(() => undefined);
         continue;
       }
       if (value.type === "dictation") {
@@ -186,7 +203,8 @@ export const install = Effect.gen(function* () {
   });
 
   Electron.ipcMain.handle("cinderdeck:native-settings", async (event, value: unknown) => {
-    if (!(await trusted(event)) || !isNativeSettingsCommand(value)) throw new Error("Invalid native settings request.");
+    if (!(await trusted(event)) || !isNativeSettingsCommand(value))
+      throw new Error("Invalid native settings request.");
     return settings.request(value, crypto.randomUUID());
   });
 

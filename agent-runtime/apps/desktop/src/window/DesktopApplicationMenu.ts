@@ -1,3 +1,4 @@
+import { hideOwnedApplication, hideOtherApplications } from "../cinderdeck/NativeHostBridge.ts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -170,8 +171,23 @@ export const make = Effect.gen(function* () {
           { type: "separator" },
           { role: "services" },
           { type: "separator" },
-          { role: "hide", label: `Hide ${environment.displayName}` },
-          { role: "hideOthers" },
+          ...(environment.nativeHost
+            ? [
+                {
+                  label: `Hide ${environment.displayName}`,
+                  accelerator: "Command+H",
+                  click: hideOwnedApplication,
+                },
+                {
+                  label: "Hide Others",
+                  accelerator: "Command+Alt+H",
+                  click: hideOtherApplications,
+                },
+              ]
+            : [
+                { role: "hide" as const, label: `Hide ${environment.displayName}` },
+                { role: "hideOthers" as const },
+              ]),
           { role: "unhide" },
           { type: "separator" },
           { role: "quit", label: `Quit ${environment.displayName}` },

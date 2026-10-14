@@ -165,6 +165,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
     guard didFinishLaunching else { return true }
+    if let blockingWindow = AppWindowActivationPolicy.blockingWindow(
+      modalWindow: sender.modalWindow, windows: sender.windows
+    ) {
+      blockingWindow.makeKeyAndOrderFront(nil)
+      return false
+    }
     if CinderdeckRuntimeController.shared.configured {
       if CinderdeckRuntimeController.shared.running {
         CinderdeckRuntimeController.shared.activateOwnedWindow()
@@ -177,14 +183,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     return false
   }
 
-  func applicationDidBecomeActive(_ notification: Notification) {
+  func applicationWillHide(_ notification: Notification) {
     guard didFinishLaunching else { return }
-    // Dock and app-switcher activation target the native host. Keep auxiliary
-    // native tools in focus when they are open; otherwise reveal the main window.
-    let hasNativeWindow = NSApp.windows.contains {
-      $0.isVisible && $0.level == .normal && $0.className != "NSStatusBarWindow"
-    }
-    guard !hasNativeWindow else { return }
+    CinderdeckRuntimeController.shared.hideOwnedWindow()
+  }
+
+  func applicationDidBecomeActive(_ notification: Notification) {
+    guard didFinishLaunching, !NSApp.isHidden else { return }
+    // A covered native window is still "visible" to AppKit. Only an actual
+    // key native window or a modal interaction should suppress runtime focus.
+    guard AppWindowActivationPolicy.shouldActivateRuntime(
+      keyWindow: NSApp.keyWindow, modalWindow: NSApp.modalWindow, windows: NSApp.windows
+    ) else { return }
     if CinderdeckRuntimeController.shared.running {
       CinderdeckRuntimeController.shared.activateOwnedWindow()
     } else {

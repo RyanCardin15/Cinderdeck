@@ -1,3 +1,12 @@
+import { expect, vi } from "vite-plus/test";
+const { hideOwnedMock, hideOthersMock } = vi.hoisted(() => ({
+  hideOwnedMock: vi.fn(),
+  hideOthersMock: vi.fn(),
+}));
+vi.mock("../cinderdeck/NativeHostBridge.ts", () => ({
+  hideOwnedApplication: hideOwnedMock,
+  hideOtherApplications: hideOthersMock,
+}));
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
@@ -100,6 +109,7 @@ const configureMenu = (
   selectedAction: Deferred.Deferred<string>,
   applicationMenuTemplate: Deferred.Deferred<readonly Electron.MenuItemConstructorOptions[]>,
   environment: Partial<DesktopEnvironment.MakeDesktopEnvironmentInput> = {},
+  nativeHost = false,
 ) =>
   Effect.gen(function* () {
     const menu = yield* DesktopApplicationMenu.DesktopApplicationMenu;
@@ -114,7 +124,12 @@ const configureMenu = (
         Layer.provideMerge(electronAppLayer),
         Layer.provideMerge(
           DesktopEnvironment.layer({ ...environmentInput, ...environment }).pipe(
-            Layer.provide(Layer.mergeAll(NodeServices.layer, DesktopConfig.layerTest({}))),
+            Layer.provide(
+              Layer.mergeAll(
+                NodeServices.layer,
+                DesktopConfig.layerTest(nativeHost ? { CINDERDECK_NATIVE_HOST: "1" } : {}),
+              ),
+            ),
           ),
         ),
       ),
@@ -276,3 +291,25 @@ describe("DesktopApplicationMenu", () => {
     }),
   );
 });
+
+it.effect("routes macOS Hide and Hide Others through the native application owner", () =>
+  Effect.gen(function* () {
+    hideOwnedMock.mockClear();
+    hideOthersMock.mockClear();
+    const action = yield* Deferred.make<string>();
+    const menuResult = yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
+    yield* configureMenu(action, menuResult, { platform: "darwin" }, true);
+    const template = yield* Deferred.await(menuResult);
+    const appMenu = template.find((item) => item.label === "Cinderdeck");
+    if (!appMenu || !Array.isArray(appMenu.submenu))
+      throw new Error("Missing macOS application menu");
+    const hide = appMenu.submenu.find((item) => item.label === "Hide Cinderdeck");
+    const others = appMenu.submenu.find((item) => item.label === "Hide Others");
+    expect(hide?.accelerator).toBe("Command+H");
+    expect(others?.accelerator).toBe("Command+Alt+H");
+    hide?.click?.({} as Electron.MenuItem, undefined, {} as Electron.KeyboardEvent);
+    others?.click?.({} as Electron.MenuItem, undefined, {} as Electron.KeyboardEvent);
+    expect(hideOwnedMock).toHaveBeenCalledTimes(1);
+    expect(hideOthersMock).toHaveBeenCalledTimes(1);
+  }),
+);

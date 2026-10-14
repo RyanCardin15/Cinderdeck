@@ -7,7 +7,7 @@ Current as of HEAD (`v1.1.0`, build 201, macOS 13.0+ deployment target).
 ## Platform shape
 
 - Regular application: `INFOPLIST_KEY_LSUIElement = NO` in both configurations. Native Cinderdeck owns the Dock icon and app-switcher entry; its private runtime is an accessory app. Closing auxiliary windows keeps the host’s `.regular` activation policy.
-- `@main` entry: `CinderdeckApp` in `Cinderdeck/App/CinderdeckApp.swift` — declares only a `Settings` scene hosting `PreferencesView`, tinted by `ThemeManager.shared.systemAppearance`. All other windows are AppKit-driven.
+- `@main` entry: `CinderdeckApp` in `Cinderdeck/App/CinderdeckApp.swift` declares a `Settings` scene with an empty placeholder. Its replacement Settings command opens the unified main-window route; it does not present a second Preferences window. Native auxiliary windows remain AppKit-driven.
 - `CinderdeckApp.init()` calls `AppIdentityManager.shared.refresh()` before anything else.
 - Bundle IDs: `com.ryancardin.cinderdeck` (release), `com.ryancardin.cinderdeck.debug` (debug) — see `AppBundleIdentity` in `Cinderdeck/Services/AppIdentity/AppIdentityManager.swift`.
 - Not sandboxed: `ENABLE_APP_SANDBOX = NO` and `Cinderdeck/Cinderdeck.entitlements` contains no `com.apple.security.app-sandbox` key. Hardened runtime is enabled. The declared entitlements still matter for specific subsystems (see below).
@@ -37,7 +37,10 @@ flowchart TD
 - Sandbox-off migration failure loops a critical modal: **Try Again** (retry), **Start Fresh…** (confirm, then `skipMigration()`; old sandbox data is left untouched), **Quit Cinderdeck**.
 - Database failure loops: **Try Repair** (`DatabaseManager.attemptRepair()`), **Reset Database…** (moves files into `DatabaseRecovery-<timestamp>` then `retryInitialization()`), **Quit Cinderdeck**.
 - AppleEvents arriving before the coordinator exists are queued in `pendingDeepLinkURLs` and flushed after launch; same for cold-launch "Open With" file URLs (`pendingOpenFileURLs`).
-- `applicationShouldHandleReopen`: activates the running main window without changing its route, or starts it again if its runtime exited. Native-only builds open Workspaces. `applicationDidBecomeActive` forwards app-switcher activation to the owned main window when no native auxiliary window is visible.
+- `applicationShouldHandleReopen`: brings an active native modal dialog or sheet parent forward; otherwise activates the running main window without changing its route, or starts it again if its runtime exited. Native-only builds open Workspaces.
+- `applicationDidBecomeActive` uses `AppWindowActivationPolicy`: a visible, genuinely key native window retains keyboard focus, and modal dialogs/sheets block transfer to the runtime. A covered native window alone does not suppress app-switcher activation (`NSWindow.isVisible` stays true when obscured).
+- Runtime focus requests use `DesktopWindow.activate`, which reveals/restores an existing main window instead of merely ensuring it exists. The native controller sends these requests while the renderer is loading as well as after it is ready; the inherited pipe queues startup messages. Dock activation does not send a navigation route.
+- Hosted macOS Hide and Hide Others menu commands delegate to the native owner. Hiding a native window/application also hides the owned runtime through the parent pipe. Hide Others excludes the captured runtime process and native host, so the two halves cannot hide each other. Automatic activation while the host is hidden is ignored.
 - `application(_:open:)`: file URLs routed to `AnnotateManager.shared.openAnnotation(url:)` (Finder "Open With" / Dock drop); non-file URLs ignored here (deep links flow through the AppleEvent handler).
 - `applicationWillTerminate`: removes the AppleEvent handler, forwards to `AppCoordinator.applicationWillTerminate()`.
 
