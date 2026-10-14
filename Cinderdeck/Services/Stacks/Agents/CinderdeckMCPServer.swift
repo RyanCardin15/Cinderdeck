@@ -33,7 +33,7 @@ nonisolated enum CinderdeckMCPServer {
 
   // MARK: Shared arguments
 
-  private static let workspace = property("string", "Workspace id or name, or a lane id or <workspace>/<name> (see list_workspaces)")
+  private static let workspace = property("string", "Workspace id or name from list_workspaces. Saved checkout ids remain accepted for compatibility.")
   private static let wait = property("boolean", "Wait until services are ready (default true)")
   private static let waitTimeout = property("number", "Seconds to wait (default 180, max 900)")
   private static let runID = property("string", "Run UUID returned when the task or workflow started")
@@ -76,13 +76,13 @@ nonisolated enum CinderdeckMCPServer {
   private static let workspaceTools: [Tool] = [
     tool("list_workspaces", "List workspaces", .read,
       "Every workspace with its services, tasks, workflows and active run. Start here. Use detail=false for a compact inventory, then workspace_details for the workspace you need.",
-      ["detail": property("boolean", "Include service status, URLs, PIDs, lanes and Git state (default true; false returns a compact inventory)")]),
+      ["detail": property("boolean", "Include service status, URLs, PIDs, saved checkout context and Git state (default true; false returns a compact inventory)")]),
     tool("workspace_details", "Workspace details", .read,
       "One workspace in full: services (phase, pid, port, url, owner, log file, command, cwd), repos, task and workflow definitions, and its 20 most recent runs.",
       ["workspace": workspace], required: ["workspace"]),
     tool("open_workspace", "Show a workspace to the user", .additive,
       "Open Cinderdeck's Workspaces window on a workspace and section so the user can look. Brings Cinderdeck to the front: use it only when the user wants to see something.",
-      ["workspace": workspace, "section": property("string", "Section to show", values: ["services", "tasks", "workflows", "lane map", "runs", "recordings"])],
+      ["workspace": workspace, "section": property("string", "Section to show", values: ["sessions", "services", "tasks", "workflows", "runs", "recordings"])],
       idempotent: true),
   ]
 
@@ -92,7 +92,7 @@ nonisolated enum CinderdeckMCPServer {
       ["workspace": workspace, "services": property("array", "Only these services (and nothing else)", items: "string"),
         "wait": wait, "timeout": waitTimeout], required: ["workspace"], idempotent: true),
     tool("stop_services", "Stop services", .destructive,
-      "Stop a workspace's services, or only some, in reverse dependency order. Stops whole process groups. Refuses (in_use) when running lanes or other workspaces use them, unless force=true.",
+      "Stop a workspace's services, or only some, in reverse dependency order. Stops whole process groups. Refuses (in_use) when other running workspace or saved checkout services depend on them, unless force=true.",
       ["workspace": workspace, "services": property("array", "Only these services", items: "string"),
         "force": property("boolean", "Stop even when running workspaces depend on these services"),
         "wait": property("boolean", "Wait until they have stopped (default true)"), "timeout": waitTimeout],
@@ -145,10 +145,10 @@ nonisolated enum CinderdeckMCPServer {
 
   private static let definitionTools: [Tool] = [
     tool("workspace_definition", "Read workspace definition", .read,
-      "Read the complete authored TOML and its revision, including repos, lane defaults, environment and every component setting. Also works for invalid definitions so they can be repaired. Does not read Keychain secret values. Read before save_workspace.",
+      "Read the complete authored TOML and its revision, including repos, environment, every component setting and retained compatibility fields. Also works for invalid definitions so they can be repaired. Does not read Keychain secret values. Read before save_workspace.",
       ["workspace": workspace], required: ["workspace"]),
     tool("save_workspace", "Edit a workspace", .destructive,
-      "Rename a workspace or change its project folder, preserving all other settings. Or replace the complete TOML source with revision from workspace_definition to edit any setting, repo, lane defaults or components. Refuses stale revisions and new broken references. Stop services and runs in this workspace and its lanes first. Keeps the workspace id and nothing starts.",
+      "Rename a workspace or change its project folder, preserving all other settings. Or replace the complete TOML source with revision from workspace_definition to edit settings, repos or components. Refuses stale revisions and new broken references. Stop services and runs in this workspace and its saved checkout contexts first. Keeps the workspace id and nothing starts.",
       ["workspace": workspace, "name": property("string", "New display name; workspace id stays the same"),
         "folder": property("string", "New project folder, absolute or ~/…; relative repo and command folders follow it"),
         "source": property("string", "Complete TOML; mutually exclusive with name/folder. Requires revision"),
@@ -174,8 +174,8 @@ nonisolated enum CinderdeckMCPServer {
         "env": environment, "autostart": property("boolean", "Start with the whole workspace (default true)"),
         "add_repo": property("boolean", "For a new service in a Git working tree without repo, track its branch (default true)"),
         "ports": .object(["type": .string("object"), "additionalProperties": .object(["type": .string("number")]),
-          "description": .string("Extra named ports, e.g. {\"hmr\": 24678}; replaces the existing set. Lanes assign their own values.")]),
-        "lane": property("string", "In worktree lanes: isolate (own copy, default), shared (use the original checkout's), or off; \"\" resets", values: ["isolate", "shared", "off", ""]),
+          "description": .string("Extra configured named ports, e.g. {\"hmr\": 24678}; replaces the existing set. Session worktrees do not allocate ports automatically.")]),
+        "lane": property("string", "Legacy saved checkout setting; omit for ordinary sessions. isolate, shared or off preserves older definitions; \"\" resets", values: ["isolate", "shared", "off", ""]),
         ],
       required: ["workspace", "service"], idempotent: true),
     tool("save_workspace_task", "Save a task", .destructive,
@@ -460,7 +460,10 @@ nonisolated enum CinderdeckMCPServer {
     }
     let missing = tool.required.filter { arguments[$0] == nil || arguments[$0] == .null }
     guard missing.isEmpty else { throw StackControlError.invalid("Missing \(missing.joined(separator: ", ")) for \(name)") }
-    for (key, value) in arguments { try validateValue(value, schema: tool.properties[key]!, path: key) }
+    for (key, value) in arguments {
+      let normalized = name == "open_workspace" && key == "section" && value == .string("lane map") ? JSONValue.string("sessions") : value
+      try validateValue(normalized, schema: tool.properties[key]!, path: key)
+    }
   }
 
   private static func validateValue(_ value: JSONValue, schema: JSONValue, path: String) throws {
@@ -534,7 +537,9 @@ nonisolated enum CinderdeckMCPServer {
     switch tool {
     case "list_workspaces": return ("workspace.list", ["detail": params["detail"] ?? .bool(true)], 30)
     case "workspace_details": return ("workspace.get", params, 30)
-    case "open_workspace": return ("workspace.open", params, 30)
+    case "open_workspace":
+      if params["section"] == .string("lane map") { params["section"] = .string("sessions") }
+      return ("workspace.open", params, 30)
     case "run_workspace_task": return ("workspace.task.run", params, 30)
     case "run_workspace_workflow": return ("workspace.workflow.run", params, 30)
     case "wait_for_workspace_run":
@@ -668,7 +673,7 @@ nonisolated enum CinderdeckMCPServer {
     case "workspace_guide":
       var object = result.objectValue ?? [:]
       object["cli"] = .string(StackCLI.preferredCommandPath())
-      object["rules"] = .string("One TOML file per workspace; the file name is its id. Services must run in the foreground. Use double-quoted strings, [services.<id>], [tasks.<id>] and [workflows.<id>] tables, and dotted keys (ready.port, env.NAME). No inline tables, arrays of tables, or multiline strings. Write ports and URLs as {{port.<service>}} / {{url.<service>}} (also {{port.<service>.<name>}} for ports.<name>, {{url.<workspace>:<service>}}, {{lane.slug}}, {{lane.ident}}, {{repo.<id>}}) so values follow each worktree lane; literal localhost ports keep pointing at the original checkout. A [lanes] table sets copy (.env files), setup and teardown (task:<id> or workflow:<id>), from, env and hosts; lane = \"shared\" or \"off\" on a service or repo controls whether lanes run their own copy.")
+      object["rules"] = .string("One TOML file per workspace; the file name is its id. Services must run in the foreground. Use double-quoted strings, [services.<id>], [tasks.<id>] and [workflows.<id>] tables, and dotted keys (ready.port, env.NAME). No inline tables, arrays of tables, or multiline strings. Use {{port.<service>}} / {{url.<service>}} for configured service ports and URLs, {{port.<service>.<name>}} for ports.<name>, {{url.<workspace>:<service>}} for another workspace's service, and {{repo.<id>}} for repository paths. Sessions use the workspace checkout or an optional ordinary Git worktree. Moving a session does not change service folders or allocate ports. Retained [lanes] settings and lane variables are compatibility fields for older saved checkouts; preserve them when editing existing definitions.")
       object["socket"] = nil
       return JSONValue.object(object).compactString()
     default:
@@ -724,7 +729,6 @@ nonisolated enum CinderdeckMCPServer {
     if !workspace.repos.isEmpty {
       object["repos"] = .array(workspace.repos.map { repo -> JSONValue in
         var text = "\(repo.id): \(repo.branch)"
-        if let mode = repo.laneDefault { text += " [new lanes: \(mode.rawValue)]" }
         if repo.dirty { text += " (\(repo.changedFiles) changed)" }
         if repo.ahead > 0 { text += " ↑\(repo.ahead)" }
         if repo.behind > 0 { text += " ↓\(repo.behind)" }

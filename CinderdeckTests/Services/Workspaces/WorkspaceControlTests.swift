@@ -14,6 +14,7 @@ final class WorkspaceControlTests: XCTestCase {
       (["save-workflow", "shop", "verify", "--data", "{\"steps\":[\"task:test\"]}"], "save_workspace_workflow", ["workspace": .string("shop"), "workflow": .string("verify"), "steps": .array([.string("task:test")])]),
       (["delete-item", "shop", "service", "api"], "delete_workspace_item", ["workspace": .string("shop"), "kind": .string("service"), "id": .string("api")]),
       (["open", "shop", "--section", "tasks"], "open_workspace", ["workspace": .string("shop"), "section": .string("tasks")]),
+      (["open", "shop", "--section", "sessions"], "open_workspace", ["workspace": .string("shop"), "section": .string("sessions")]),
     ] {
       let cli = try WorkspaceCLI.request(WorkspaceCLI.parse(args))
       let mcp = try AgentToolCLI.request(name: tool, arguments: params)

@@ -119,7 +119,7 @@ export const DeckhandToolkit = Toolkit.make(
     ...base,
     dependencies: [...base.dependencies, External.ExternalSessions],
     description:
-      "List up to 50 reported external sessions for this exact calling lane. Reported capabilities and execution are registrant reports, not provider-authenticated provenance. A stale lease means last seen, never finished.",
+      "List up to 50 reported external sessions for the calling session's saved native workspace context. Reported capabilities and execution are registrant reports, not provider-authenticated provenance. A stale lease means last seen, never finished.",
     parameters: Schema.Struct({
       limit: X.ExternalSessionList.fields.limit,
       includeArchived: X.ExternalSessionList.fields.includeArchived,
@@ -132,7 +132,7 @@ export const DeckhandToolkit = Toolkit.make(
     ...base,
     dependencies: [...base.dependencies, Recordings.Recordings],
     description:
-      "List available native capture windows for explicit target selection in this lane. Listing does not start capture.",
+      "List available native capture windows for explicit target selection through this session's native installation. Listing does not start capture.",
     success: Schema.Array(R.RecordingWindow),
   })
     .annotate(Tool.Readonly, true)
@@ -141,7 +141,7 @@ export const DeckhandToolkit = Toolkit.make(
     ...base,
     dependencies: [...base.dependencies, Recordings.Recordings],
     description:
-      "Explicitly start recording the selected native window, with logs scoped to this calling lane. Requires active provider ownership and an original durable operationKey. Get user agreement for browser/computer capture when applicable.",
+      "Explicitly start recording the selected native window, with logs scoped to this session's saved native workspace context. Requires the active provider session and an original durable operationKey. Get user agreement for browser/computer capture when applicable.",
     parameters: Schema.Struct({
       windowID: R.RecordingStart.fields.windowID,
       title: R.RecordingStart.fields.title,
@@ -193,7 +193,7 @@ export const DeckhandToolkit = Toolkit.make(
   Tool.make("deckhand_context", {
     ...base,
     description:
-      "Read this calling agent's managed lane and current native service context. No cross-workspace selection.",
+      "Read the calling session's saved checkout and current native workspace service context. Sessions do not claim or reserve checkouts. No cross-workspace selection.",
     success: ThreadContextView,
   })
     .annotate(Tool.Readonly, true)
@@ -202,7 +202,7 @@ export const DeckhandToolkit = Toolkit.make(
     ...base,
     dependencies: [...base.dependencies, ManagedSessions.ManagedSessions, Hub.IntegrationHub],
     description:
-      "Read one page of real PR associations from this calling agent's exact current managed workspace/lane, including historical contributors. Defaults offset 0, limit 20; offset is bounded to 10000 and limit to 50. No caller-selected workspace, project or native identity. Returns total/nextOffset; does not refresh hosting status or write to a PR.",
+      "Read one page of real PR associations from the calling session's saved native workspace context, including historical contributors. Defaults offset 0, limit 20; offset is bounded to 10000 and limit to 50. No caller-selected workspace, project or native identity. Returns total/nextOffset; does not refresh hosting status or write to a PR.",
     parameters: ContextPullRequestsParameters,
     success: ContextPullRequestsPage,
   })
@@ -212,7 +212,7 @@ export const DeckhandToolkit = Toolkit.make(
     ...base,
     dependencies: [...base.dependencies, Runs.Runs],
     description:
-      "Read actual services, readiness, task/workflow definitions and recent runs for this agent's lane.",
+      "Read actual services, readiness, task/workflow definitions and recent runs in the calling session's saved native workspace context.",
     success: U.RunsOverview,
   })
     .annotate(Tool.Readonly, true)
@@ -221,7 +221,7 @@ export const DeckhandToolkit = Toolkit.make(
     ...base,
     dependencies: [...base.dependencies, Runs.Runs],
     description:
-      "Read one exact retained run in the calling lane: named steps, actual results and immutable source provenance. Missing runs stay unavailable; they never imply success.",
+      "Read one exact retained run in the calling session's saved native workspace context: named steps, actual results and immutable source provenance. Missing runs stay unavailable; they never imply success.",
     parameters: Schema.Struct({
       runID: U.RunGetInput.fields.runID,
       stepOffset: Schema.optionalKey(U.RunGetInput.fields.stepOffset),
@@ -235,7 +235,7 @@ export const DeckhandToolkit = Toolkit.make(
     ...base,
     dependencies: [...base.dependencies, Runs.Runs],
     description:
-      "Read compact bounded failed/interrupted run inventory and positive matching-rerun resolutions in this calling lane. Optional exact runIDs revalidate up to 100 retained causes. Absence or truncated inventory never means resolved.",
+      "Read compact bounded failed/interrupted run inventory and positive matching-rerun resolutions in the calling session's saved native workspace context. Optional exact runIDs revalidate up to 100 retained causes. Absence or truncated inventory never means resolved.",
     parameters: Schema.Struct({ runIDs: U.RunFailuresInput.fields.runIDs }),
     success: U.RunFailures,
   })
@@ -245,7 +245,7 @@ export const DeckhandToolkit = Toolkit.make(
     ...base,
     dependencies: [...base.dependencies, Attempts.VerificationAttempts],
     description:
-      "Pin a freshly read PR head against this calling thread's clean feature checkout and declared service/build/check definitions. Read only. Canonical repo, physical checkout, installation and generation must match; no caller-selected lane or feature.",
+      "Pin a freshly read PR head against this calling thread's clean feature checkout and declared service/build/check definitions. Read only. Canonical repo, physical checkout, installation and generation must match; no caller-selected workspace context or feature.",
     parameters: Schema.Struct({
       reference: V.AttemptPreviewInput.fields.reference,
       serviceID: V.AttemptPreviewInput.fields.serviceID,
@@ -268,7 +268,7 @@ export const DeckhandToolkit = Toolkit.make(
     ...base,
     dependencies: [...base.dependencies, Attempts.VerificationAttempts],
     description:
-      "Recover one saved attempt belonging to this provider session and its exact current lane. Native read reconciliation never replays build/launch/check effects. Full verification remains incomplete without trusted capture target attestation.",
+      "Recover one saved attempt belonging to this provider session and its exact saved native workspace context. Native read reconciliation never replays build/launch/check effects. Full verification remains incomplete without trusted capture target attestation.",
     parameters: V.AttemptLookup,
     success: V.VerificationAttempt,
   })
@@ -298,7 +298,7 @@ export const DeckhandToolkit = Toolkit.make(
   Tool.make("deckhand_run_logs", {
     ...base,
     dependencies: [...base.dependencies, Runs.Runs],
-    description: "Read bounded actual output from a run in this lane.",
+    description: "Read bounded actual output from a run in this session's saved native workspace context.",
     parameters: Schema.Struct({
       runID: U.RunLogInput.fields.runID,
       stepID: U.RunLogInput.fields.stepID,
@@ -311,7 +311,7 @@ export const DeckhandToolkit = Toolkit.make(
     ...base,
     dependencies: [...base.dependencies, Recordings.Recordings],
     description:
-      "List real recordings in this agent's lane, including immutable capture provenance.",
+      "List real recordings in this session's saved native workspace context, including immutable capture provenance.",
     success: Schema.Array(R.Recording),
   })
     .annotate(Tool.Readonly, true)
@@ -329,7 +329,7 @@ export const DeckhandToolkit = Toolkit.make(
   Tool.make("deckhand_recording_logs", {
     ...base,
     dependencies: [...base.dependencies, Recordings.Recordings],
-    description: "Read bounded synchronized recording logs in the current lane.",
+    description: "Read bounded synchronized recording logs in this session's saved native workspace context.",
     parameters: Schema.Struct({
       recordingID: R.RecordingIdentity.fields.recordingID,
       around: R.RecordingLogInput.fields.around,
@@ -370,7 +370,7 @@ export const DeckhandToolkit = Toolkit.make(
     ...base,
     dependencies: [...base.dependencies, Hub.IntegrationHub],
     description:
-      "Explicitly start/stop/restart local services or start/cancel/rerun a task/workflow in this lane. Supply the current revision from deckhand_services_runs and a durable operationKey. Reuse the original key and arguments after uncertainty, then inspect. Native validation enforces argument shape and dependencies. No hosted writes or lane deletion.",
+      "Explicitly start/stop/restart local services or start/cancel/rerun a task/workflow in this session's saved native workspace context. Supply the current revision from deckhand_services_runs and a durable operationKey. Reuse the original key and arguments after uncertainty, then inspect. Native validation enforces argument shape and dependencies. No hosted writes or workspace deletion.",
     parameters: Schema.Struct({
       operationKey: I.IntegrationOperationInput.fields.operationKey,
       revision: I.IntegrationOperationInput.fields.revision,

@@ -35,6 +35,21 @@ final class CinderdeckMCPServerTests: XCTestCase {
     XCTAssertNoThrow(try CinderdeckMCPServer.validate("stop_services", ["workspace": .string("shop"), "force": .bool(true)]))
   }
 
+  func testWorkspaceOpeningRoutesSessionsAndLegacySectionToTheCurrentUI() throws {
+    let described = try XCTUnwrap(CinderdeckMCPServer.toolDescriptions.first { $0["name"] == .string("open_workspace") })
+    XCTAssertTrue(described["inputSchema"]?["properties"]?["section"]?["enum"]?.stringsValue?.contains("sessions") == true)
+    XCTAssertFalse(described["inputSchema"]?["properties"]?["section"]?["enum"]?.stringsValue?.contains("lane map") == true)
+    for section in ["sessions", "lane map"] {
+      let request = try AgentToolCLI.request(name: "open_workspace", arguments: ["workspace": .string("shop"), "section": .string(section)])
+      XCTAssertEqual(request.0, "workspace.open")
+      XCTAssertEqual(request.1["section"], .string("sessions"))
+      let native = try XCTUnwrap(WorkspaceSection.allCases.first { $0.rawValue.lowercased() == request.1["section"]?.stringValue })
+      XCTAssertEqual(native, .linkedWork)
+      XCTAssertEqual(native.runtimeSection, "agents")
+    }
+    XCTAssertThrowsError(try AgentToolCLI.request(name: "open_workspace", arguments: ["section": .string("unknown")]))
+  }
+
   func testArgumentsPassThroughToTheControlAPI() throws {
     let arguments: [String: JSONValue] = ["workspace": .string("shop"), "services": .array([.string("api")]), "timeout": .number(60)]
     let start = try CinderdeckMCPServer.request(for: "start_services", arguments)

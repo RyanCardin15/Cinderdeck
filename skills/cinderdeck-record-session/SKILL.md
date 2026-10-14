@@ -79,7 +79,7 @@ cinderdeck repro start --window-id 4312 --title "Checkout with saved card" --max
 
 With `--no-logs`, workspace output is not recorded, but your marks and `repro append` lines still are. Headless/CDP capture also retains automatic browser logs. If the user said "no workspace" or "just the video", use it and describe the retained evidence accurately.
 
-**Recording a worktree lane** (a branch running beside the original checkout; see the `cinderdeck-parallel-lanes` skill): pass the lane as the workspace, `--workspace shop/agent/codex-1`, and add the original workspace too (`--workspace shop/agent/codex-1,shop`) when the lane uses its shared services such as a database. Open the **lane's** URL, not the port in the definition: take it from `cinderdeck lane list shop --json` (each service's `url`) or `cinderdeck lane env shop/agent/codex-1 --export` (`CINDERDECK_URL_<SERVICE>`). With `[lanes] hosts = true` the URL is `http://<lane>.<workspace>.localhost:<port>`, so filter `repro windows` by the lane name or port instead of `localhost`.
+**Recording a session using a Git worktree:** choose the workspace whose services supply the logs, such as `--workspace shop`; add any other workspace whose API or database the flow uses. Sessions and worktrees are not separate log scopes and do not automatically allocate service ports. Read `workspace_details` for configured service URLs. If you start a preview in the worktree yourself, use its actual URL and capture window/page, and append its output with `repro append` when Cinderdeck does not manage it.
 
 ## 3. Record, and mark every action
 
@@ -160,7 +160,7 @@ cinderdeck repro run shop e2e --workflow --wait             # a workflow (start:
 
 - [ ] `repro status` is idle, and the chosen capture backend's prerequisites are available
 - [ ] The target window is visible and selected by id, or the browser endpoint and recorded page id are confirmed
-- [ ] Workspace logs match the request: `--workspace`, the default, or `--no-logs` (for a lane: the lane, plus its source when it uses shared services)
+- [ ] Workspace logs match the request: `--workspace`, the default, or `--no-logs`; separately started worktree preview output is appended when needed
 - [ ] `--title` and `--max` are set
 - [ ] A mark before every action, and `--pass` or `--fail` after every check
 - [ ] Browser console and network errors captured automatically (headless/CDP), or appended for screen/window recordings

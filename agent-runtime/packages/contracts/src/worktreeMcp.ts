@@ -141,7 +141,7 @@ export const WorktreeMcpStatusResult = Schema.Struct({
       }),
     ).annotate({
       description:
-        "Cinderdeck workspace repositories. Pass their IDs in t3_worktree_handoff repositoryModes; laneDefault applies when omitted. current marks this conversation's repository.",
+        "Saved native workspace repository context. current marks this session's repository, which is the only repository moved by t3_worktree_handoff. laneDefault is retained compatibility metadata and does not control session worktrees; omit repositoryModes.",
     }),
   ),
 });

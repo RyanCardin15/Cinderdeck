@@ -1,14 +1,19 @@
 ---
 name: cinderdeck-code-review
-description: Review committed changes in an isolated Cinderdeck lane.
+description: Review committed changes in a Cinderdeck session, using an optional Git worktree to keep the source checkout untouched.
 ---
 
 Review the committed changes against the intended base branch in each repository with changes under review.
-When creating a review lane, inspect which repositories changed first. If only one of four
-repositories has changes, create a worktree only for that repository and select Reference
-for the other three (MCP repositoryModes, CLI --repo-mode). Use their primary checkouts
-as read-only context; do not edit them or run checks that modify their files.
-Supply repositoryRefs only for repositories selected as worktrees.
+Inspect which repositories changed before choosing review folders. Reuse a suitable existing
+checkout when reading code. If checks need separate files, use an ordinary Git worktree for
+each repository under review and keep other repositories as read-only context.
+In the current session, use `t3_worktree_handoff`; use `adoptExisting` with an absolute path
+and matching branch to select an existing worktree. Supply a self-contained `continuationPrompt`
+with the review goal, findings and constraints to resume after the provider detaches.
+Use `t3_thread_launch` only when the user asks for a separate conversation, with a `worktree`
+or `existing_worktree` workspace strategy. Omit the retired `repositoryModes` field.
+Worktrees do not automatically allocate service ports. Inspect `workspace_details` for the
+configured services and run checks from the actual review folder.
 Read repository instructions and the surrounding code before assessing a change.
 Determine the base from the pull request or repository's default branch; if ambiguous, ask.
 Find actionable correctness bugs, regressions, security issues, and missing tests.

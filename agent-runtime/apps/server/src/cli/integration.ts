@@ -43,7 +43,7 @@ const call = Command.make("call", {
 );
 export const integrationCommand = Command.make("integration").pipe(
   Command.withDescription(
-    "Inspect and explicitly control the current provider session's managed Cinderdeck lane through Cinderdeck's authenticated MCP service.",
+    "Inspect and explicitly control the current provider session's saved native workspace context through Cinderdeck's authenticated MCP service. Sessions do not reserve checkouts.",
   ),
   Command.withSubcommands([tools, call]),
 );

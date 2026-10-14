@@ -35,7 +35,8 @@ extension StackControlService {
       let file = try params["workspace"].map { _ in try workspaceFile(params) }
       var section: WorkspaceSection?
       if let raw = params["section"]?.stringValue, !raw.isEmpty {
-        guard let value = WorkspaceSection.allCases.first(where: { $0.rawValue.caseInsensitiveCompare(raw) == .orderedSame }) else {
+        let requested = raw.caseInsensitiveCompare("lane map") == .orderedSame ? "sessions" : raw
+        guard let value = WorkspaceSection.allCases.first(where: { $0.rawValue.caseInsensitiveCompare(requested) == .orderedSame }) else {
           throw StackControlError.invalid("section must be one of " + WorkspaceSection.allCases.map { $0.rawValue.lowercased() }.joined(separator: ", "))
         }
         section = value

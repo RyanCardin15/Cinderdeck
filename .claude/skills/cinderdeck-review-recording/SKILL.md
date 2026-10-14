@@ -86,9 +86,9 @@ Only delete a recording when the user asks, using the exact full id: `cinderdeck
 
 For headless/CDP recordings, `browser` and `network` sources are collected automatically. A browser disconnect preserves available evidence and adds a failed recording check. Only the selected page is recorded; do not assume a popup or another tab appears in the video. Use the same frame, log, editor, and export tools as for screen recordings.
 
-## Deckhand managed agent context
+## Cinderdeck session context
 
-Inside a Deckhand-managed agent terminal, use the provider-scoped Deckhand tools to preserve that conversation's saved lane and native installation identity. `deckhand integration tools` prints the current input schemas. The same MCP tool names work directly when the provider exposes the injected server.
+Inside a Cinderdeck agent session with saved native workspace context, use the provider-scoped tools to read that workspace's recordings and preserve their installation identity. `deckhand integration tools` prints the current input schemas; the CLI and `deckhand_*` tool identifiers remain for compatibility. The same MCP tool names work directly when the provider exposes the injected server. Sessions can share a checkout without claiming it.
 
 ```sh
 deckhand integration call deckhand_context '{}'
@@ -99,7 +99,7 @@ deckhand integration call deckhand_evidence_prepare '{"recordingID":"<recording-
 deckhand integration call deckhand_evidence_get '{"recordingID":"<recording-id>","preparationID":"<receipt-id>"}'
 ```
 
-These commands require the agent terminal's injected endpoint and credential environment variables. Do not print or copy credentials into prompts or arguments. Unavailable saved context is a refusal, not permission to select another workspace. Preparation is an explicit local write; retain its original operation key after interruption. Ready bundle assets include real video, frames, logs and provenance with SHA256 hashes. Keep video by default.
+These commands require the agent terminal's injected endpoint and credential environment variables. Do not print or copy credentials into prompts or arguments. When saved native context is unavailable, use the general Cinderdeck recording tools with an explicitly chosen workspace and recording instead. Do not retarget a provider-scoped request to another context. Preparation is an explicit local write; retain its original operation key after interruption. Ready bundle assets include real video, frames, logs and provenance with SHA256 hashes. Keep video by default.
 
 `deckhand_evidence_read` reads one ready asset in base64 chunks of at most 64 KiB, scoped to the same provider session that prepared it. Reconstruct bytes and verify the complete SHA256 before consuming an asset. A preparation receipt, chunk read or composer draft does not prove provider attachment acceptance. Review the actual supported attachments in the PR Verification draft before sending.
 

@@ -2,7 +2,7 @@
 
 ## Open a new, dedicated browser window
 
-Open the window, let the page load, then find it with `cinderdeck repro windows` and record it by id. The examples use `http://localhost:3000`; for a worktree lane use its own URL from `cinderdeck lane env <workspace>/<branch> --export` (`CINDERDECK_URL_<SERVICE>`), since lanes run on assigned ports. The recording follows the window if it moves, but set its size up front, because the video keeps the size from the start.
+Open the window, let the page load, then find it with `cinderdeck repro windows` and record it by id. The examples use `http://localhost:3000`; replace it with the actual preview URL. Read `workspace_details` for managed service URLs. A session's optional Git worktree does not allocate ports or start a separate service instance. The recording follows the window if it moves, but set its size up front, because the video keeps the size from the start.
 
 **Google Chrome in a separate instance.** A fresh profile keeps it away from the user's tabs:
 
@@ -16,7 +16,7 @@ cinderdeck repro start --window-id <id> --title "…" --max 180
 ```
 
 - If the user has a Chrome window on the same page, compare `pid`, `frame`, and `order` in the listing to tell them apart. The instance you just opened is normally frontmost.
-- When you're done, quit only the instance you started. Find it by its unique `--user-data-dir`, for example `pkill -f "$PROFILE"`. Never quit the user's browser.
+- When you're done, quit only the instance you started using its tracked process or automation handle. Do not stop browsers by name or path matching.
 
 **Safari:**
 
@@ -67,7 +67,7 @@ For a headed browser script run as a workspace task, stdout becomes part of the 
 ```js
 import { chromium } from 'playwright';
 
-// Inside a workspace task, CINDERDECK_URL_<SERVICE> is the right URL in the original checkout and in every lane.
+// A workspace task receives configured service URLs. BASE_URL can select a separately started worktree preview.
 const base = process.env.BASE_URL ?? process.env.CINDERDECK_URL_WEB ?? 'http://localhost:3000';
 const browser = await chromium.launch({ headless: false });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
@@ -109,7 +109,7 @@ cinderdeck repro run shop browser-session --title "Checkout flow" --wait
 cinderdeck repro frame --at first_error,end
 ```
 
-To record the same flow on a worktree lane, pass the lane as the workspace: `cinderdeck repro run shop/agent/codex-1 browser-session --wait`. The task runs in the lane's folder, and `CINDERDECK_URL_WEB` points at the lane's `web`.
+For a flow using an optional Git worktree, verify the task's configured `cwd` or `repo` and the actual preview URL before starting it. `repro run shop browser-session --wait` runs the workspace's configured task; moving a session to a worktree does not change that task's folder or ports. To run the script yourself from the worktree, start a recording with the needed workspace logs and pipe the script's output to `repro append`.
 
 For a headless Cinderdeck recording on macOS, connect the task to the browser Cinderdeck launches, as below. Cinderdeck must be running; Linux CI remains outside this recorder.
 

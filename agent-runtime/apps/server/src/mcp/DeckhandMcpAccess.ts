@@ -62,7 +62,7 @@ export const layer = Layer.effect(
             return yield* new OrchestratorMcpFailure({
               code: "invalid_request",
               message:
-                "This thread has no available managed Cinderdeck lane. Reconnect or bind a lane in Cinderdeck.",
+                "This session has no connected native Cinderdeck workspace context. Use the general workspace tools with an explicit workspace, or reconnect this session's saved context in Cinderdeck.",
             });
           return {
             actor: `mcp:${scope.providerSessionId}`,
