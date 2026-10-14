@@ -1039,6 +1039,7 @@ function codexErrorInfoCode(value: unknown): string | null {
 }
 
 interface ActiveCodexTurnContext {
+  directUserMessageIds?: Set<string>;
   latestProviderFailure?: {
     readonly nativeMessage: string;
     readonly failure: OrchestrationV2ProviderFailure;
@@ -2638,6 +2639,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
               type: "app_thread.created",
               driver: CODEX_PROVIDER,
               appThread: childThread,
+              parentRunId: input.context.input.runId,
             });
             yield* emitProviderEvent({
               type: "node.updated",
@@ -3164,6 +3166,10 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             if (context.subagent === null || context.providerTurnOrdinal === 1) {
               return false;
             }
+            // The ordinary composer already persisted this exact user message.
+            // Preserve provider-originated nudges, but do not render our echo twice.
+            if (item.clientId != null && context.directUserMessageIds?.has(item.clientId))
+              return true;
             const text = codexUserMessageText(item.content);
             if (text.length === 0) {
               return false;
@@ -5703,7 +5709,14 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
               }
 
               const codexInput = yield* toCodexInput(turnInput);
+              if (activeTurn.subagent !== null) {
+                activeTurn.directUserMessageIds ??= new Set();
+                activeTurn.directUserMessageIds.add(turnInput.message.messageId);
+              }
               yield* client.request("turn/steer", {
+                ...(activeTurn.subagent === null
+                  ? {}
+                  : { clientUserMessageId: turnInput.message.messageId }),
                 expectedTurnId: activeTurn.nativeTurnId,
                 input: codexInput,
                 threadId,

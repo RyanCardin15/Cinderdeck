@@ -1518,7 +1518,15 @@ export const layerWithOptions = (
               ),
             ),
           steerTurn: (input) =>
-            observeActivity(providerSessionId, touchActivity(providerSessionId)).pipe(
+            observeActivity(
+              providerSessionId,
+              ensureThreadAttached({
+                providerSessionId,
+                threadId: input.threadId,
+                providerInstanceId: runtime.instanceId,
+              }),
+            ).pipe(
+              Effect.andThen(observeActivity(providerSessionId, touchActivity(providerSessionId))),
               Effect.andThen(runtime.steerTurn(input)),
             ),
           interruptTurn: (input) =>

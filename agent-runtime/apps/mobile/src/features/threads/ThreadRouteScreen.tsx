@@ -1007,6 +1007,7 @@ function ThreadRouteContent(
           isCompacting={composer.isCompacting}
           runlessWorkActive={composer.runlessWorkActive}
           providerSubagentStatus={composer.providerSubagentStatus}
+          canMessageProviderSubagent={composer.canMessageProviderSubagent}
           creationState={creationState}
           setupWorkingStartedAt={
             composer.activeWorkStartedAt !== null &&

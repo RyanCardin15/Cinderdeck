@@ -443,6 +443,19 @@ export function isProviderNativeSubagentThread(
   return thread.lineage.relationshipToParent === "subagent" && thread.creationSource === "provider";
 }
 
+/** Codex native children retain an independently addressable conversation. */
+export function canMessageProviderNativeSubagentThread(
+  thread: Pick<OrchestrationV2AppThread, "activeProviderThreadId">,
+  providerThreads: ReadonlyArray<OrchestrationV2ProviderThread>,
+): boolean {
+  return providerThreads.some(
+    (candidate) =>
+      candidate.id === thread.activeProviderThreadId &&
+      candidate.driver === "codex" &&
+      candidate.nativeThreadRef?.strength === "strong",
+  );
+}
+
 export const OrchestrationV2RunStatus = Schema.Literals([
   "preparing",
   "queued",
@@ -520,6 +533,8 @@ export const OrchestrationV2Run = Schema.Struct({
   activeAttemptId: Schema.NullOr(RunAttemptId),
   status: OrchestrationV2RunStatus,
   queuePosition: Schema.optional(Schema.NullOr(PositiveInt)),
+  /** Native Codex child work adopted into the regular controls and queue lifecycle. */
+  nativeSubagentTurnId: Schema.optional(ProviderTurnId),
   /** Restart recovery holds the queue until the user explicitly resumes it. */
   queueHeld: Schema.optional(Schema.Boolean),
   requestedAt: Schema.DateTimeUtc,

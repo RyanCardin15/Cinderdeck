@@ -55,6 +55,7 @@ import {
   CommandId,
   DEFAULT_MODEL,
   isProviderNativeSubagentThread,
+  canMessageProviderNativeSubagentThread,
   type ChatAttachment as ContractChatAttachment,
   type EnvironmentId,
   type MessageId,
@@ -4083,7 +4084,13 @@ export default function ChatView(props: ChatViewProps) {
   // A provider-native subagent cannot take messages: a status bar replaces the
   // composer and its strips. Its approvals and questions are asked on the
   // top-level parent thread.
-  const showProviderSubagentBar = isProviderSubagent;
+  const showProviderSubagentBar =
+    isProviderSubagent &&
+    (serverProjection === null ||
+      !canMessageProviderNativeSubagentThread(
+        serverProjection.thread,
+        serverProjection.providerThreads,
+      ));
   const composerMounted = !showProviderSubagentBar;
   const providerSubagentModels = selectedProviderEntry?.models ?? EMPTY_PROVIDER_MODELS;
   // Providers can report a dated id or alias (claude-haiku-4-5-20251001).

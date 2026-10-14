@@ -95,7 +95,12 @@ export function assertSubagentOutput(
     assert.equal(childProjection.thread.lineage.parentThreadId, projection.thread.id);
     assert.equal(childProjection.thread.lineage.relationshipToParent, "subagent");
     assert.equal(childProjection.thread.activeProviderThreadId, providerThread.id);
-    assert.lengthOf(childProjection.runs, 0);
+    assert.lengthOf(childProjection.runs, 1);
+    assert.isTrue(
+      childProjection.runs.every(
+        (run) => run.status === "completed" && run.nativeSubagentTurnId !== undefined,
+      ),
+    );
     assert.lengthOf(childProjection.providerThreads, 1);
     assert.lengthOf(childProjection.providerTurns, 1);
     assertTurnItemTypes(childProjection, [

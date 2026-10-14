@@ -379,6 +379,7 @@ export function routeProviderEvent(
       }
       const isOwnedSubagent =
         !state.rootTurnEnded &&
+        (event.parentRunId === undefined || event.parentRunId === input.runId) &&
         event.appThread.lineage.relationshipToParent === "subagent" &&
         event.appThread.lineage.parentThreadId !== null &&
         ownsThread(event.appThread.lineage.parentThreadId);
@@ -394,12 +395,22 @@ export function routeProviderEvent(
       ];
     }
     case "provider_thread.updated": {
+      if (
+        event.providerThread.appThreadId !== input.threadId &&
+        event.providerThread.firstRunOrdinal !== null
+      )
+        return [false, state];
       const belongs =
         state.ownedProviderThreadIds.has(event.providerThread.id) ||
         (event.providerThread.appThreadId !== null && ownsThread(event.providerThread.appThreadId));
       return belongs ? [true, addProviderThread(event.providerThread.id)] : [false, state];
     }
     case "provider_turn.updated": {
+      if (
+        event.providerTurn.runAttemptId !== null &&
+        event.providerTurn.runAttemptId !== input.attemptId
+      )
+        return [false, state];
       const isRoot = event.providerTurn.runAttemptId === input.attemptId;
       const belongs =
         isRoot ||
@@ -410,18 +421,31 @@ export function routeProviderEvent(
       return belongs ? [true, addProviderTurn(event.providerTurn.id, isRoot)] : [false, state];
     }
     case "node.updated": {
-      const belongs = ownsRun(event.node.runId) || ownsChildThread(event.node.threadId);
+      const belongs =
+        ownsRun(event.node.runId) ||
+        (event.node.runId === null && ownsChildThread(event.node.threadId));
       if (!belongs || event.node.providerThreadId === null) {
         return [belongs, state];
       }
       return [true, addProviderThread(event.node.providerThreadId)];
     }
     case "subagent.updated":
-      return [ownsRun(event.subagent.runId) || ownsChildThread(event.subagent.threadId), state];
+      return [
+        ownsRun(event.subagent.runId) ||
+          (event.subagent.runId === null && ownsChildThread(event.subagent.threadId)),
+        state,
+      ];
     case "message.updated":
-      return [ownsRun(event.message.runId) || ownsChildThread(event.message.threadId), state];
+      return [
+        ownsRun(event.message.runId) ||
+          (event.message.runId === null && ownsChildThread(event.message.threadId)),
+        state,
+      ];
     case "turn_item.updated": {
-      if (ownsRun(event.turnItem.runId) || ownsChildThread(event.turnItem.threadId)) {
+      if (
+        ownsRun(event.turnItem.runId) ||
+        (event.turnItem.runId === null && ownsChildThread(event.turnItem.threadId))
+      ) {
         return [true, state];
       }
       const inheritedRunId = state.inheritedBackgroundTurnItems.get(event.turnItem.id);
@@ -443,7 +467,11 @@ export function routeProviderEvent(
       return [true, { ...state, inheritedBackgroundTurnItems }];
     }
     case "plan.updated":
-      return [ownsRun(event.plan.runId) || ownsChildThread(event.plan.threadId), state];
+      return [
+        ownsRun(event.plan.runId) ||
+          (event.plan.runId === null && ownsChildThread(event.plan.threadId)),
+        state,
+      ];
     case "runtime_request.updated":
       return [
         (event.threadId !== undefined && ownsChildThread(event.threadId)) ||
@@ -992,6 +1020,7 @@ export const layer: Layer.Layer<
             });
           const trackChildLifecycle = (event: ProviderAdapterV2Event, deliverable: boolean) =>
             Effect.gen(function* () {
+              if (!deliverable) return;
               const routing = yield* Ref.get(eventRouting);
               if (event.type === "provider_turn.updated") {
                 const isRoot =

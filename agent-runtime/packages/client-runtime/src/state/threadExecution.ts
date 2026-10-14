@@ -107,10 +107,9 @@ export function deriveThreadActivityRun(
 }
 
 /**
- * Provider-native subagent threads never get app runs: their work is a runless
- * root turn whose status follows the subagent. Returns when that work started
- * while it is still active, so clients can show the same working state (and
- * timer) as a run. Stop, queue, and steer stay run-only.
+ * Native tasks without independently addressable turns retain runless work.
+ * Codex child turns are adopted into app runs and use normal controls. This
+ * fallback gives other native tasks their working state and timer.
  */
 export function deriveRunlessWorkStartedAt(
   projection: OrchestrationV2ThreadProjection,

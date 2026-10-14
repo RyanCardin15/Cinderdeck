@@ -148,8 +148,9 @@ export interface ThreadDetailScreenProps {
   readonly activeWorkStartedAt: string | null;
   /** The live work is a provider-native subagent's runless root turn. */
   readonly runlessWorkActive?: boolean;
-  /** Set on a provider-native subagent thread, which shows status instead of a composer. */
+  /** Status for native tasks that do not expose direct chat controls. */
   readonly providerSubagentStatus?: ProviderSubagentStatus | null;
+  readonly canMessageProviderSubagent?: boolean;
   readonly isCompacting: boolean;
   /**
    * The server has not created this thread yet. "preparing" runs while the
@@ -370,8 +371,10 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   });
   const agentsSegment = resolveSubagentPillSegment(turnSubagents);
   const composerEditorRef = useRef<ComposerEditorHandle>(null);
-  // A provider-native subagent shows status instead of a composer.
-  const isProviderSubagent = isProviderNativeSubagentThread(props.selectedThread.source);
+  // Native tasks without direct controls retain their status bar.
+  const isProviderSubagent =
+    isProviderNativeSubagentThread(props.selectedThread.source) &&
+    !props.canMessageProviderSubagent;
   // Entering edit mode from the queue sheet should land in a ready composer,
   // not require a second tap on a composer already holding the message.
   const editingRunId = props.queuedRunEdit?.runId ?? null;

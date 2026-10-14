@@ -781,6 +781,25 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ? input.preferred
       : null;
 
+  // Native helpers initially belong to their parent's process. Their first
+  // user-started turn resumes the same native conversation in a child-owned
+  // process, preserving native host policy/MCP/Stop isolation. Later turns
+  // can retain that child's own process as ordinary chats do.
+  const preferredChildSession = (
+    projection: Pick<OrchestrationV2ThreadProjection, "thread" | "runs">,
+    providerThread: OrchestrationV2ProviderThread | undefined,
+  ) =>
+    isProviderNativeSubagentThread(projection.thread) &&
+    providerThread?.driver === "codex" &&
+    !projection.runs.some(
+      (run) =>
+        run.nativeSubagentTurnId === undefined &&
+        run.startedAt !== null &&
+        run.providerThreadId === providerThread.id,
+    )
+      ? undefined
+      : providerThread?.providerSessionId;
+
   const providerSessionIdFor = (input: {
     readonly adapter: ProviderAdapterV2Shape;
     readonly providerInstanceId: ProviderInstanceId;
@@ -1525,7 +1544,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               !switchPlan?.releaseProviderSessionIds.includes(
                 queuedProviderThread.providerSessionId,
               )
-                ? queuedProviderThread.providerSessionId
+                ? preferredChildSession(projection, queuedProviderThread)
                 : null,
           }),
         ),
@@ -4056,7 +4075,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             adapter: targetAdapter,
             providerInstanceId: input.modelSelection.instanceId,
             threadId: input.command.threadId,
-            preferredProviderSessionId: existingTargetProviderThread?.providerSessionId,
+            preferredProviderSessionId: preferredChildSession(
+              input.projection,
+              existingTargetProviderThread,
+            ),
           }),
         );
         const targetProviderThreadBase: OrchestrationV2ProviderThread =
@@ -5134,7 +5156,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             adapter,
             providerInstanceId: modelSelection.instanceId,
             threadId: command.threadId,
-            preferredProviderSessionId: activeProviderThread?.providerSessionId,
+            preferredProviderSessionId: preferredChildSession(projection, activeProviderThread),
           }),
         );
         const providerThreadId =
@@ -5520,7 +5542,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           threadId: command.threadId,
           preferredProviderSessionId: canResumeAcrossInstances
             ? undefined
-            : targetProviderThread?.providerSessionId,
+            : preferredChildSession(projection, targetProviderThread),
         }),
       );
       const existingProviderSession = projection.providerSessions.find(
@@ -9434,9 +9456,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         yield* dispatchProviderSessionDetach(command, events, effects);
         break;
       case "message.dispatch": {
-        // The provider owns a native subagent's conversation, so a sent
-        // message has nowhere to go. Answers to a subagent's questions never
-        // target it either: adapters ask them on the top-level parent thread.
+        // Codex exposes a real independently addressable child thread. Other
+        // native tasks still route their questions through their parent.
         const thread = yield* projectionStore
           .getThread(command.threadId)
           .pipe(
@@ -9445,10 +9466,21 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             ),
           );
         if (isProviderNativeSubagentThread(thread)) {
-          return yield* new OrchestratorSubagentThreadReadOnlyError({
-            commandId: command.commandId,
-            threadId: command.threadId,
-          });
+          const context = yield* mapDispatchError(command)(
+            projectionStore.getThreadProviderContext(command.threadId, thread.providerInstanceId),
+          );
+          const nativeThread = context.providerThreads.find(
+            (candidate) => candidate.id === thread.activeProviderThreadId,
+          );
+          if (
+            nativeThread?.driver !== "codex" ||
+            nativeThread.nativeThreadRef?.strength !== "strong"
+          ) {
+            return yield* new OrchestratorSubagentThreadReadOnlyError({
+              commandId: command.commandId,
+              threadId: command.threadId,
+            });
+          }
         }
         yield* dispatchMessage(command, events, effects);
         break;

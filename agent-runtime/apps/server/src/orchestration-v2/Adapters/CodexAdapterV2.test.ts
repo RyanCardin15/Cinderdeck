@@ -6291,6 +6291,79 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     ],
   });
 
+  it.effect("addresses steering to the native child's exact thread and turn", () =>
+    Effect.gen(function* () {
+      const childReady = yield* Deferred.make<void>();
+      const childStartIndex = resumeSubagentTranscript.entries.findIndex(
+        (entry) =>
+          entry.type === "emit_inbound" && entry.label === `turn/started/${RESUME_CHILD_TURN_1}`,
+      );
+      const transcript = makeCodexReplayTranscript({
+        scenario: "native-child-direct-steering",
+        entries: [
+          ...resumeSubagentTranscript.entries.slice(0, childStartIndex + 1),
+          {
+            type: "expect_outbound",
+            label: "child/steer",
+            frame: {
+              id: 4,
+              method: "turn/steer",
+              params: {
+                threadId: RESUME_CHILD_THREAD,
+                expectedTurnId: RESUME_CHILD_TURN_1,
+                clientUserMessageId: "message:direct-child-steer",
+                input: [{ type: "text", text: "Inspect the second file too" }],
+              },
+            },
+          },
+          {
+            type: "emit_inbound",
+            label: "child/steer",
+            frame: { id: 4, result: { turnId: RESUME_CHILD_TURN_1 } },
+          },
+        ],
+      });
+      const harness = yield* makeCodexReplayHarness(transcript, (event) =>
+        event.type === "provider_turn.updated" &&
+        event.providerTurn.nativeTurnRef?.nativeId === RESUME_CHILD_TURN_1
+          ? Deferred.succeed(childReady, undefined)
+          : Effect.void,
+      );
+      const rootInput = makeCodexTestTurnInput({
+        threadId: harness.threadId,
+        providerThread: harness.providerThread,
+        now: yield* DateTime.now,
+        attemptId: RunAttemptId.make("child-steering-parent"),
+        text: RESUME_PROMPT,
+      });
+      yield* harness.runtime.startTurn(rootInput);
+      yield* Deferred.await(childReady);
+      const childThread = harness.events.find(
+        (event): event is Extract<ProviderAdapterV2Event, { type: "provider_thread.updated" }> =>
+          event.type === "provider_thread.updated" &&
+          event.providerThread.nativeThreadRef?.nativeId === RESUME_CHILD_THREAD,
+      )!.providerThread;
+      const turn = harness.events.find(
+        (event): event is Extract<ProviderAdapterV2Event, { type: "provider_turn.updated" }> =>
+          event.type === "provider_turn.updated" &&
+          event.providerTurn.nativeTurnRef?.nativeId === RESUME_CHILD_TURN_1,
+      )!.providerTurn;
+      yield* harness.runtime.steerTurn({
+        threadId: childThread.appThreadId!,
+        runId: RunId.make("adopted-child-run"),
+        providerThread: childThread,
+        providerTurnId: turn.id,
+        message: {
+          ...rootInput.message,
+          messageId: MessageId.make("message:direct-child-steer"),
+          text: "Inspect the second file too",
+        },
+      });
+      assert.notEqual(childThread.id, harness.providerThread.id);
+      assert.notEqual(turn.nativeTurnRef?.nativeId, RESUME_NATIVE_TURN);
+    }).pipe(Effect.scoped, Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+  );
+
   it.effect.each([
     { name: "Sol", model: "gpt-5.6-sol" },
     { name: "Fable", model: "gpt-5.6-fable" },

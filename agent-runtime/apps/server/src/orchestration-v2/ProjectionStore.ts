@@ -239,6 +239,7 @@ export interface ProjectionProviderControlTarget {
   readonly providerTurnId: ProviderTurnId;
   readonly attemptId?: RunAttemptId;
   readonly messageId?: MessageId;
+  readonly includeRun?: boolean;
 }
 
 export type ProjectionRuntimeRecoveryState = Pick<
@@ -4183,7 +4184,10 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 ? undefined
                 : yield* decodeMessagePayload(messageRows[0].payload_json);
             let run: OrchestrationV2Run | undefined;
-            if (target.messageId !== undefined && providerTurn !== undefined) {
+            if (
+              (target.messageId !== undefined || target.includeRun === true) &&
+              providerTurn !== undefined
+            ) {
               const rows =
                 yield* sql<PayloadRow>`SELECT payload_json FROM orchestration_v2_projection_runs
             WHERE thread_id = ${threadId} AND json_extract(payload_json, '$.activeAttemptId') IS ${providerTurn.runAttemptId}
@@ -5791,7 +5795,8 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
                 ? undefined
                 : projection.messages.find((message) => message.id === target.messageId),
             run:
-              target.messageId === undefined || providerTurn === undefined
+              (target.messageId === undefined && target.includeRun !== true) ||
+              providerTurn === undefined
                 ? undefined
                 : projection.runs.find((run) => run.activeAttemptId === providerTurn.runAttemptId),
           };

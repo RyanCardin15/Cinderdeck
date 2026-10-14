@@ -88,7 +88,9 @@ export function assertSubagentV2NestedOutput(
   assert.equal(firstProjection.thread.lineage.parentThreadId, rootProjection.thread.id);
   assert.equal(firstProjection.thread.lineage.relationshipToParent, "subagent");
   assert.equal(firstProjection.thread.lineage.rootThreadId, rootProjection.thread.id);
-  assert.lengthOf(firstProjection.runs, 0);
+  assert.lengthOf(firstProjection.runs, 1);
+  assert.equal(firstProjection.runs[0]?.status, "completed");
+  assert.isDefined(firstProjection.runs[0]?.nativeSubagentTurnId);
   assert.lengthOf(firstProjection.providerTurns, 1);
   assertTurnItemTypes(firstProjection, ["subagent", "assistant_message"]);
 
@@ -105,7 +107,9 @@ export function assertSubagentV2NestedOutput(
   assert.equal(secondProjection.thread.lineage.parentThreadId, firstProjection.thread.id);
   assert.equal(secondProjection.thread.lineage.relationshipToParent, "subagent");
   assert.equal(secondProjection.thread.lineage.rootThreadId, rootProjection.thread.id);
-  assert.lengthOf(secondProjection.runs, 0);
+  assert.lengthOf(secondProjection.runs, 1);
+  assert.equal(secondProjection.runs[0]?.status, "completed");
+  assert.isDefined(secondProjection.runs[0]?.nativeSubagentTurnId);
   assert.lengthOf(secondProjection.providerTurns, 1);
   assertTurnItemTypes(secondProjection, ["subagent", "assistant_message"]);
 
@@ -122,7 +126,9 @@ export function assertSubagentV2NestedOutput(
   assert.equal(thirdProjection.thread.lineage.parentThreadId, secondProjection.thread.id);
   assert.equal(thirdProjection.thread.lineage.relationshipToParent, "subagent");
   assert.equal(thirdProjection.thread.lineage.rootThreadId, rootProjection.thread.id);
-  assert.lengthOf(thirdProjection.runs, 0);
+  assert.lengthOf(thirdProjection.runs, 1);
+  assert.equal(thirdProjection.runs[0]?.status, "completed");
+  assert.isDefined(thirdProjection.runs[0]?.nativeSubagentTurnId);
   assert.lengthOf(thirdProjection.providerTurns, 1);
   assert.lengthOf(thirdProjection.subagents, 0);
   assertTurnItemTypes(thirdProjection, ["assistant_message"]);

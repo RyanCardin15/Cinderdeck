@@ -1159,10 +1159,9 @@ export function assertNoExtraAppRunsForProviderChildren(input: {
 }
 
 /**
- * Provider-native subagent threads have no runs; clients show them working
- * from the child's runless root turn. Pin that contract for every recorded
- * native subagent: the child hangs off the subagent node, every root turn is
- * runless, the root turn is live before the child's first item, and its
+ * Native tasks retain their child identity and working root turn. Addressable
+ * Codex turns also have app runs for direct controls; other providers remain
+ * runless. The root turn is live before the child's first item, and its
  * activity mirrors the subagent's (including a resume re-opening it).
  */
 export function assertProviderNativeSubagentRootTurns(result: OrchestratorV2ScenarioResult) {
@@ -1178,10 +1177,17 @@ export function assertProviderNativeSubagentRootTurns(result: OrchestratorV2Scen
       assert.isDefined(child, `missing child thread for subagent ${subagent.id}`);
       assert.equal(child.thread.creationSource, "provider");
       assert.deepEqual(child.thread.forkedFrom, { type: "node", nodeId: subagent.id });
-      assert.lengthOf(child.runs, 0);
       const roots = child.nodes.filter((node) => node.kind === "root_turn");
       assert.isNotEmpty(roots, `child ${childThreadId} must have a root turn`);
-      for (const root of roots) assert.isNull(root.runId);
+      if (subagent.driver !== "codex") {
+        assert.lengthOf(child.runs, 0);
+        for (const root of roots) assert.isNull(root.runId);
+      } else {
+        for (const run of child.runs) {
+          assert.isDefined(run.nativeSubagentTurnId);
+          assert.isTrue(roots.some((root) => root.id === run.rootNodeId && root.runId === run.id));
+        }
+      }
 
       // One run ingests a child thread at a time, so no update is stored by two.
       const runByChildUpdate = new Map<string, string | undefined>();

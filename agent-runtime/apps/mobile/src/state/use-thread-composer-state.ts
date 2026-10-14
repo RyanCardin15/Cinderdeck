@@ -22,6 +22,7 @@ import {
   type ProviderInteractionMode,
   type RuntimeMode,
   type ThreadId,
+  canMessageProviderNativeSubagentThread,
 } from "@cinderdeck/contracts";
 import { safeErrorLogAttributes } from "@cinderdeck/client-runtime/errors";
 import { clampFileAttachmentUploadBytes } from "@cinderdeck/client-runtime/state/attachments";
@@ -1046,6 +1047,12 @@ export function useThreadComposerState() {
     activeWorkStartedAt,
     runlessWorkActive,
     providerSubagentStatus,
+    canMessageProviderSubagent:
+      selectedThreadProjection?.projection != null &&
+      canMessageProviderNativeSubagentThread(
+        selectedThreadProjection.projection.thread,
+        selectedThreadProjection.projection.providerThreads,
+      ),
     isCompacting,
     draftMessage,
     draftAttachments,

@@ -1,5 +1,8 @@
 import {
   NodeId,
+  MessageId,
+  isProviderNativeSubagentThread,
+  canMessageProviderNativeSubagentThread,
   CommandId,
   OrchestrationV2DomainEvent,
   OrchestrationV2StoredEvent,
@@ -312,17 +315,210 @@ export const layer: Layer.Layer<
       },
     );
 
+    // Native Codex turns are already running in the parent's provider session.
+    // Adopt their durable turn identity instead of starting a second turn. This
+    // makes the ordinary steer/interrupt effects and terminal queue promotion
+    // work for the child, while the adapter keeps reporting results to its parent.
+    const projectNativeChildEvents = Effect.fn("ProviderEventIngestor.projectNativeChildEvents")(
+      function* (
+        input: ProviderEventIngestInput,
+        events: ReadonlyArray<OrchestrationV2DomainEvent>,
+      ) {
+        const target = events[0];
+        if (target === undefined || input.event.driver !== "codex") return events;
+        const thread = yield* projections.getThread(target.threadId);
+        if (!isProviderNativeSubagentThread(thread)) return events;
+        const result: Array<OrchestrationV2DomainEvent> = [];
+        const append = (
+          type: OrchestrationV2DomainEvent["type"],
+          payload: OrchestrationV2DomainEvent["payload"],
+          runId: RunId,
+        ) => makeDomainEvent(input, { type, payload, threadId: thread.id, runId });
+        for (const event of events) {
+          if (event.type === "provider-turn.updated" && event.payload.runAttemptId === null) {
+            const turn = event.payload;
+            const records = yield* projections.getThreadRecords(
+              thread.id,
+              ["runs", "attempts", "providerThreads", "messages"],
+              { messageRoles: ["user"] },
+            );
+            if (!canMessageProviderNativeSubagentThread(thread, records.providerThreads)) {
+              result.push(event);
+              continue;
+            }
+            let run = records.runs.find((candidate) => candidate.nativeSubagentTurnId === turn.id);
+            let attempt = records.attempts.find(
+              (candidate) => candidate.id === run?.activeAttemptId,
+            );
+            const providerThread = records.providerThreads.find(
+              (candidate) => candidate.id === turn.providerThreadId,
+            );
+            if (run === undefined && turn.status === "running" && providerThread !== undefined) {
+              const ordinal =
+                records.runs.reduce((max, candidate) => Math.max(max, candidate.ordinal), 0) + 1;
+              const runId = idAllocator.derive.run({ threadId: thread.id, ordinal });
+              const attemptId = idAllocator.derive.runAttempt({ runId, attemptOrdinal: 1 });
+              run = {
+                id: runId,
+                threadId: thread.id,
+                ordinal,
+                providerInstanceId: thread.providerInstanceId,
+                modelSelection: thread.modelSelection,
+                providerThreadId: turn.providerThreadId,
+                userMessageId:
+                  records.messages.at(-1)?.id ??
+                  MessageId.make(`message:native-subagent:${turn.id}`),
+                rootNodeId: turn.nodeId,
+                activeAttemptId: attemptId,
+                status: "running",
+                nativeSubagentTurnId: turn.id,
+                requestedAt: turn.startedAt ?? event.occurredAt,
+                startedAt: turn.startedAt ?? event.occurredAt,
+                completedAt: null,
+                checkpointId: null,
+                contextHandoffId: null,
+              };
+              attempt = {
+                id: attemptId,
+                runId,
+                attemptOrdinal: 1,
+                rootNodeId: turn.nodeId,
+                providerInstanceId: thread.providerInstanceId,
+                providerThreadId: turn.providerThreadId,
+                providerTurnId: turn.id,
+                nativeThreadId: providerThread.nativeThreadRef?.nativeId ?? undefined,
+                reason: "initial" as const,
+                status: "running" as const,
+                startedAt: run.startedAt,
+                completedAt: null,
+              };
+              result.push(yield* append("run.created", run, runId));
+              result.push(yield* append("run-attempt.updated", attempt, runId));
+              result.push(
+                yield* append(
+                  "provider-thread.updated",
+                  {
+                    ...providerThread,
+                    firstRunOrdinal: providerThread.firstRunOrdinal ?? ordinal,
+                    lastRunOrdinal: ordinal,
+                  },
+                  runId,
+                ),
+              );
+            }
+            if (run === undefined || attempt === undefined) {
+              result.push(event);
+              continue;
+            }
+            result.push({
+              ...event,
+              runId: run.id,
+              payload: { ...turn, runAttemptId: attempt.id },
+            });
+            if (
+              ["completed", "interrupted", "failed", "cancelled"].includes(turn.status) &&
+              (run.status === "running" || run.status === "waiting")
+            ) {
+              const status = turn.status as "completed" | "interrupted" | "failed" | "cancelled";
+              const completedAt = turn.completedAt ?? event.occurredAt;
+              result.push(
+                yield* append("run-attempt.updated", { ...attempt, status, completedAt }, run.id),
+              );
+              result.push(yield* append("run.updated", { ...run, status, completedAt }, run.id));
+            }
+            continue;
+          }
+          if (event.type === "provider-thread.updated") {
+            // Late native snapshots cannot erase ownership of a queued/direct turn.
+            const context = yield* projections.getThreadProviderContext(
+              thread.id,
+              thread.providerInstanceId,
+            );
+            const current = context.providerThreads.find(
+              (candidate) => candidate.id === event.payload.id,
+            );
+            result.push(
+              current === undefined
+                ? event
+                : {
+                    ...event,
+                    payload: {
+                      ...event.payload,
+                      providerSessionId: current.providerSessionId,
+                      ownerNodeId: current.ownerNodeId,
+                      firstRunOrdinal: current.firstRunOrdinal,
+                      lastRunOrdinal: current.lastRunOrdinal,
+                    },
+                  },
+            );
+            continue;
+          }
+          if (event.type === "node.updated" || event.type === "turn-item.updated") {
+            const payload = event.payload;
+            const providerTurnId = payload.providerTurnId;
+            const providerThreadId = payload.providerThreadId;
+            if (payload.runId === null && providerThreadId != null && providerTurnId != null) {
+              const context = yield* projections.getProviderControlContext(thread.id, {
+                providerThreadId,
+                providerTurnId,
+                includeRun: true,
+              });
+              if (
+                context.run !== undefined &&
+                context.run.nativeSubagentTurnId === providerTurnId
+              ) {
+                result.push({
+                  ...event,
+                  runId: context.run.id,
+                  payload: {
+                    ...payload,
+                    runId: context.run.id,
+                    ...(event.type === "node.updated"
+                      ? { countsForRun: event.payload.kind === "root_turn" }
+                      : {}),
+                  },
+                } as OrchestrationV2DomainEvent);
+                continue;
+              }
+            }
+          }
+          result.push(event);
+        }
+        return result;
+      },
+    );
+
     const normalize: ProviderEventIngestorV2Shape["normalize"] = (input) =>
       Effect.gen(function* () {
         switch (input.event.type) {
-          case "app_thread.created":
-            return [
-              yield* makeDomainEvent(input, {
-                type: "thread.created",
-                threadId: input.event.appThread.id,
-                payload: input.event.appThread,
-              }),
-            ];
+          case "app_thread.created": {
+            const child = input.event.appThread;
+            const created = yield* makeDomainEvent(input, {
+              type: "thread.created",
+              threadId: child.id,
+              payload: child,
+            });
+            if (input.event.driver !== "codex" || !isProviderNativeSubagentThread(child))
+              return [created];
+            // The child shares the parent's live process. Persist that binding
+            // with its creation so all clients see the real queue/steer capabilities.
+            const parent = yield* projections.getThreadRecords(input.threadId, [
+              "providerSessions",
+            ]);
+            const session = parent.providerSessions.find(
+              (candidate) => candidate.id === input.providerSessionId,
+            );
+            return session === undefined
+              ? [created]
+              : [
+                  created,
+                  yield* makeDomainEvent(input, {
+                    type: "provider-session.attached",
+                    threadId: child.id,
+                    payload: session,
+                  }),
+                ];
+          }
           case "provider_session.updated":
             return [
               yield* makeDomainEvent(input, {
@@ -474,9 +670,36 @@ export const layer: Layer.Layer<
 
     return ProviderEventIngestorV2.of({
       normalize,
-      ingestNormalized: (input) =>
-        Effect.gen(function* () {
-          const events = yield* normalize(input);
+      ingestNormalized: (input) => {
+        const nativeTarget =
+          input.event.driver === "codex"
+            ? (() => {
+                switch (input.event.type) {
+                  case "provider_turn.updated":
+                    return input.event.providerTurn.runAttemptId === null
+                      ? (input.event.threadId ?? input.threadId)
+                      : null;
+                  case "provider_thread.updated":
+                    return input.event.providerThread.appThreadId !== input.threadId
+                      ? input.event.providerThread.appThreadId
+                      : null;
+                  case "node.updated":
+                    return input.event.node.runId === null ? input.event.node.threadId : null;
+                  case "message.updated":
+                    return input.event.message.runId === null ? input.event.message.threadId : null;
+                  case "turn_item.updated":
+                    return input.event.turnItem.runId === null
+                      ? input.event.turnItem.threadId
+                      : null;
+                  default:
+                    return null;
+                }
+              })()
+            : null;
+        const publish = Effect.gen(function* () {
+          const normalized = yield* normalize(input);
+          const events =
+            nativeTarget === null ? normalized : yield* projectNativeChildEvents(input, normalized);
           if (events.length === 0) {
             return [];
           }
@@ -516,7 +739,18 @@ export const layer: Layer.Layer<
             })
             .pipe(Effect.mapError(mapWriteError));
           return result.storedEvents;
-        }).pipe(
+        });
+        return (
+          nativeTarget === null ? publish : threadCommands.withLock(nativeTarget, publish)
+        ).pipe(
+          Effect.mapError(
+            (cause) =>
+              new ProviderEventPublishError({
+                providerSessionId: input.providerSessionId,
+                eventCount: 1,
+                cause,
+              }),
+          ),
           Effect.flatMap((storedEvents) =>
             storedEvents.length === 0 || input.event.type !== "subagent.updated"
               ? Effect.succeed(storedEvents)
@@ -532,7 +766,8 @@ export const layer: Layer.Layer<
                   ),
                 ),
           ),
-        ),
+        );
+      },
     });
   }),
 );
