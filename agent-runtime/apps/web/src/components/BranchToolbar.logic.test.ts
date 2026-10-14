@@ -33,19 +33,19 @@ describe("resolvePreviousWorktreeSeed", () => {
         threads: [
           {
             branch: "cinderdeck/older",
-            worktreePath: "/repo/.cinderdeck/worktrees/older",
+            worktreePath: "/repo/.t3/worktrees/older",
             updatedAt: "2026-07-20T00:00:00.000Z",
           },
           {
             branch: "cinderdeck/newer",
-            worktreePath: "/repo/.cinderdeck/worktrees/newer",
+            worktreePath: "/repo/.t3/worktrees/newer",
             updatedAt: "2026-07-22T00:00:00.000Z",
           },
           { branch: "main", worktreePath: null, updatedAt: "2026-07-23T00:00:00.000Z" },
         ],
         currentWorktreePath: null,
       }),
-    ).toEqual({ branch: "cinderdeck/newer", worktreePath: "/repo/.cinderdeck/worktrees/newer" });
+    ).toEqual({ branch: "cinderdeck/newer", worktreePath: "/repo/.t3/worktrees/newer" });
   });
 
   it("skips the worktree the composer already points at", () => {
@@ -54,11 +54,11 @@ describe("resolvePreviousWorktreeSeed", () => {
         threads: [
           {
             branch: "cinderdeck/current",
-            worktreePath: "/repo/.cinderdeck/worktrees/current",
+            worktreePath: "/repo/.t3/worktrees/current",
             updatedAt: "2026-07-22T00:00:00.000Z",
           },
         ],
-        currentWorktreePath: "/repo/.cinderdeck/worktrees/current",
+        currentWorktreePath: "/repo/.t3/worktrees/current",
       }),
     ).toBeNull();
   });
@@ -78,25 +78,25 @@ describe("resolvePreviousWorktreeSeed", () => {
         threads: [
           {
             branch: "cinderdeck/archived",
-            worktreePath: "/repo/.cinderdeck/worktrees/archived",
+            worktreePath: "/repo/.t3/worktrees/archived",
             updatedAt: "2026-07-23T00:00:00.000Z",
             archivedAt: "2026-07-23T01:00:00.000Z",
           },
           {
             branch: "cinderdeck/garbage-timestamp",
-            worktreePath: "/repo/.cinderdeck/worktrees/garbage",
+            worktreePath: "/repo/.t3/worktrees/garbage",
             updatedAt: "not-a-date",
           },
           {
             branch: "cinderdeck/live",
-            worktreePath: "/repo/.cinderdeck/worktrees/live",
+            worktreePath: "/repo/.t3/worktrees/live",
             updatedAt: "2026-07-21T00:00:00.000Z",
             archivedAt: null,
           },
         ],
         currentWorktreePath: null,
       }),
-    ).toEqual({ branch: "cinderdeck/live", worktreePath: "/repo/.cinderdeck/worktrees/live" });
+    ).toEqual({ branch: "cinderdeck/live", worktreePath: "/repo/.t3/worktrees/live" });
   });
 });
 
@@ -116,7 +116,7 @@ describe("resolveDraftEnvModeAfterBranchChange", () => {
     expect(
       resolveDraftEnvModeAfterBranchChange({
         nextWorktreePath: null,
-        currentWorktreePath: "/repo/.cinderdeck/worktrees/feature-a",
+        currentWorktreePath: "/repo/.t3/worktrees/feature-a",
         effectiveEnvMode: "worktree",
       }),
     ).toBe("local");
@@ -135,7 +135,7 @@ describe("resolveDraftEnvModeAfterBranchChange", () => {
   it("uses worktree mode when selecting a ref already attached to a worktree", () => {
     expect(
       resolveDraftEnvModeAfterBranchChange({
-        nextWorktreePath: "/repo/.cinderdeck/worktrees/feature-a",
+        nextWorktreePath: "/repo/.t3/worktrees/feature-a",
         currentWorktreePath: null,
         effectiveEnvMode: "local",
       }),
@@ -332,7 +332,7 @@ describe("resolveLocalCheckoutBranchMismatch", () => {
     expect(
       resolveLocalCheckoutBranchMismatch({
         effectiveEnvMode: "worktree",
-        activeWorktreePath: "/repo/.cinderdeck/worktrees/feature-thread",
+        activeWorktreePath: "/repo/.t3/worktrees/feature-thread",
         activeThreadBranch: "feature/thread",
         currentGitBranch: "feature/current",
       }),
@@ -499,7 +499,7 @@ describe("resolveEffectiveEnvMode", () => {
   it("treats draft threads already attached to a worktree as current-checkout mode", () => {
     expect(
       resolveEffectiveEnvMode({
-        activeWorktreePath: "/repo/.cinderdeck/worktrees/feature-a",
+        activeWorktreePath: "/repo/.t3/worktrees/feature-a",
         hasServerThread: false,
         draftThreadEnvMode: "worktree",
       }),
@@ -548,7 +548,7 @@ describe("resolveCurrentWorkspaceLabel", () => {
   });
 
   it("describes the active checkout as a worktree when one is attached", () => {
-    expect(resolveCurrentWorkspaceLabel("/repo/.cinderdeck/worktrees/feature-a")).toBe(
+    expect(resolveCurrentWorkspaceLabel("/repo/.t3/worktrees/feature-a")).toBe(
       "Current worktree",
     );
   });
@@ -560,7 +560,7 @@ describe("resolveLockedWorkspaceLabel", () => {
   });
 
   it("uses a shorter label for an attached worktree", () => {
-    expect(resolveLockedWorkspaceLabel("/repo/.cinderdeck/worktrees/feature-a", "worktree")).toBe(
+    expect(resolveLockedWorkspaceLabel("/repo/.t3/worktrees/feature-a", "worktree")).toBe(
       "Worktree",
     );
   });
@@ -572,7 +572,7 @@ describe("resolveLockedWorkspaceLabel", () => {
 
 describe("resolveWorkspaceDisplayName", () => {
   it("returns the final folder for POSIX and Windows paths", () => {
-    expect(resolveWorkspaceDisplayName("/repo/.cinderdeck/worktrees/feature-a")).toBe("feature-a");
+    expect(resolveWorkspaceDisplayName("/repo/.t3/worktrees/feature-a")).toBe("feature-a");
     expect(resolveWorkspaceDisplayName("C:\\code\\project\\feature-b\\")).toBe("feature-b");
   });
 
@@ -710,15 +710,15 @@ describe("resolveBranchSelectionTarget", () => {
     expect(
       resolveBranchSelectionTarget({
         activeProjectCwd: "/repo",
-        activeWorktreePath: "/repo/.cinderdeck/worktrees/feature-a",
+        activeWorktreePath: "/repo/.t3/worktrees/feature-a",
         refName: {
           isDefault: false,
-          worktreePath: "/repo/.cinderdeck/worktrees/feature-b",
+          worktreePath: "/repo/.t3/worktrees/feature-b",
         },
       }),
     ).toEqual({
-      checkoutCwd: "/repo/.cinderdeck/worktrees/feature-b",
-      nextWorktreePath: "/repo/.cinderdeck/worktrees/feature-b",
+      checkoutCwd: "/repo/.t3/worktrees/feature-b",
+      nextWorktreePath: "/repo/.t3/worktrees/feature-b",
       reuseExistingWorktree: true,
     });
   });
@@ -727,7 +727,7 @@ describe("resolveBranchSelectionTarget", () => {
     expect(
       resolveBranchSelectionTarget({
         activeProjectCwd: "/repo",
-        activeWorktreePath: "/repo/.cinderdeck/worktrees/feature-a",
+        activeWorktreePath: "/repo/.t3/worktrees/feature-a",
         refName: {
           isDefault: true,
           worktreePath: "/repo",
@@ -744,7 +744,7 @@ describe("resolveBranchSelectionTarget", () => {
     expect(
       resolveBranchSelectionTarget({
         activeProjectCwd: "/repo",
-        activeWorktreePath: "/repo/.cinderdeck/worktrees/feature-a",
+        activeWorktreePath: "/repo/.t3/worktrees/feature-a",
         refName: {
           isDefault: true,
           worktreePath: null,
@@ -761,15 +761,15 @@ describe("resolveBranchSelectionTarget", () => {
     expect(
       resolveBranchSelectionTarget({
         activeProjectCwd: "/repo",
-        activeWorktreePath: "/repo/.cinderdeck/worktrees/feature-a",
+        activeWorktreePath: "/repo/.t3/worktrees/feature-a",
         refName: {
           isDefault: false,
           worktreePath: null,
         },
       }),
     ).toEqual({
-      checkoutCwd: "/repo/.cinderdeck/worktrees/feature-a",
-      nextWorktreePath: "/repo/.cinderdeck/worktrees/feature-a",
+      checkoutCwd: "/repo/.t3/worktrees/feature-a",
+      nextWorktreePath: "/repo/.t3/worktrees/feature-a",
       reuseExistingWorktree: false,
     });
   });
