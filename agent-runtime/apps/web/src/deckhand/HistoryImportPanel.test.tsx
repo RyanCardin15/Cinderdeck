@@ -143,7 +143,7 @@ it("copies only after explicit action on the selected computer and shows failed 
   const input = element.querySelector("input")!;
   await act(async () => {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
-    setter.call(input, "/owned/t3/statev2.sqlite");
+    setter.call(input, "/owned/fixture/statev2.sqlite");
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
   expect(commands.copy).not.toHaveBeenCalled();
@@ -161,7 +161,10 @@ it("copies only after explicit action on the selected computer and shows failed 
   await act(async () => button("Copy Cinderdeck history").click());
   expect(commands.copy).toHaveBeenCalledWith({
     environmentId: "chosen-computer",
-    input: { operationKey: "explicit-copy-key", sourceDatabasePath: "/owned/t3/statev2.sqlite" },
+    input: {
+      operationKey: "explicit-copy-key",
+      sourceDatabasePath: "/owned/fixture/statev2.sqlite",
+    },
   });
   expect(element.textContent).toContain("This Cinderdeck schema is not supported.");
   expect(commands.threads).not.toHaveBeenCalled();

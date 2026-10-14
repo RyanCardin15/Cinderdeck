@@ -21,8 +21,8 @@ export function launcherOwnsVersionsDir(
 
 /**
  * The path the executable was started through. Node keeps the shell's
- * spelling in argv0: a launcher symlink or `./t3` resolves against the
- * working directory, while a bare `t3` was found on PATH and has to be
+ * spelling in argv0: a launcher symlink or `./cinderdeck` resolves against the
+ * working directory, while a bare `cinderdeck` was found on PATH and has to be
  * looked up there again, or the launcher symlink is never seen.
  */
 export const resolveLauncherPath = Effect.gen(function* () {

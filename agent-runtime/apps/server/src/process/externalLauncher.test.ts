@@ -465,7 +465,7 @@ it.effect.skipIf(windowsHost)(
         const editors = yield* launcher.resolveAvailableEditors();
         yield* launcher.launchEditor({
           editor: "file-manager",
-          cwd: "/home/t3/workspace/media/clip.mp4",
+          cwd: "/home/fixture/workspace/media/clip.mp4",
           reveal: true,
         });
         return { kind, editors };
@@ -495,7 +495,7 @@ it.effect.skipIf(windowsHost)(
       const decodedCommand = Buffer.from(encodedCommand, "base64").toString("utf16le");
       assert.equal(
         decodedCommand,
-        "$ProgressPreference = 'SilentlyContinue'; Start-Process 'explorer.exe' -ArgumentList ('/select,\"' + '\\\\wsl.localhost\\Ubuntu-24.04\\home\\t3\\workspace\\media\\clip.mp4' + '\"')",
+        "$ProgressPreference = 'SilentlyContinue'; Start-Process 'explorer.exe' -ArgumentList ('/select,\"' + '\\\\wsl.localhost\\Ubuntu-24.04\\home\\fixture\\workspace\\media\\clip.mp4' + '\"')",
       );
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
@@ -557,7 +557,7 @@ it.effect.skipIf(windowsHost)(
         const revealKind = yield* launcher.resolveFileManagerRevealKind();
         yield* launcher.launchEditor({
           editor: "file-manager",
-          cwd: "/home/t3/workspace/media/clip.mp4",
+          cwd: "/home/fixture/workspace/media/clip.mp4",
           reveal: true,
         });
         return revealKind;
@@ -585,7 +585,7 @@ it.effect.skipIf(windowsHost)(
       assert.equal(kind, "files");
       const launch = spawnedCommands.find((command) => command.command === "xdg-open");
       assert.ok(launch);
-      assert.deepEqual(launch.args, ["/home/t3/workspace/media"]);
+      assert.deepEqual(launch.args, ["/home/fixture/workspace/media"]);
       assert.isUndefined(spawnedCommands.find((command) => command.command === "explorer.exe"));
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
@@ -613,7 +613,7 @@ it.effect.skipIf(windowsHost)(
         const kind = yield* launcher.resolveFileManagerRevealKind();
         yield* launcher.launchEditor({
           editor: "file-manager",
-          cwd: "/home/t3/workspace/media/clip.mp4",
+          cwd: "/home/fixture/workspace/media/clip.mp4",
           reveal: true,
         });
         return { editors, kind };
@@ -642,7 +642,7 @@ it.effect.skipIf(windowsHost)(
       assert.equal(result.kind, "files");
       const launch = spawnedCommands.find((command) => command.command === "xdg-open");
       assert.ok(launch);
-      assert.deepEqual(launch.args, ["/home/t3/workspace/media"]);
+      assert.deepEqual(launch.args, ["/home/fixture/workspace/media"]);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 
@@ -664,7 +664,7 @@ it.effect.skipIf(windowsHost)(
         const launcher = yield* ExternalLauncher.ExternalLauncher;
         yield* launcher.launchEditor({
           editor: "file-manager",
-          cwd: '/home/t3/work "quoted"/clip.mp4',
+          cwd: '/home/fixture/work "quoted"/clip.mp4',
           reveal: true,
         });
       }).pipe(
@@ -687,7 +687,9 @@ it.effect.skipIf(windowsHost)(
       // opens the parent directory instead of misparsing a /select argument.
       assert.ok(spawned);
       assert.equal(spawned.command, "explorer.exe");
-      assert.deepEqual(spawned.args, ['\\\\wsl.localhost\\Ubuntu-24.04\\home\\t3\\work "quoted"']);
+      assert.deepEqual(spawned.args, [
+        '\\\\wsl.localhost\\Ubuntu-24.04\\home\\fixture\\work "quoted"',
+      ]);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 

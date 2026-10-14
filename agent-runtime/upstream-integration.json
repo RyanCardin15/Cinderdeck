@@ -8,7 +8,7 @@
     "historicalMetadataCommit": "17877ebbea4790b5f0ecad9bf8599619f0387be3",
     "historicalMetadataPath": "docs/deckhand/upstream-patches.json"
   },
-  "examinedTarget": "8d199b4f7b918079161d5f43e0146c099301be08",
+  "examinedTarget": "3213a0c77b4ba8e37a361b884d1035eb8dfd76d1",
   "ports": [
     {
       "commit": "f391794a35c604d57e166a3ab48d56fc6e4e469a",
@@ -53,6 +53,34 @@
     {
       "commit": "6fa0dd8ccabfee961ba01ea92267eded7d07cc51",
       "behavior": "Skip overly deep Cursor skill trees without hiding other discovered skills"
+    },
+    {
+      "commit": "27839622efccb65982fd297847973fdedf6365aa",
+      "behavior": "Preserve generated branch namespaces and resolve Git ref namespace collisions"
+    },
+    {
+      "commit": "5e5c52b7a70c16734e42faa072248a597e1333ee",
+      "behavior": "Keep distinct pull-request checks with overlapping workflow and job names"
+    },
+    {
+      "commit": "8569ce962a072cfd3943519f81645d6e51d8a03f",
+      "behavior": "Avoid quadratic scans of incomplete Markdown links in the desktop helper"
+    },
+    {
+      "commit": "7ab28a3b2e8837bb919c9b83b4b463b6ebf85c4a",
+      "behavior": "Reuse a collator when sorting desktop review files"
+    },
+    {
+      "commit": "aef0e9ca401acb40057a286a19de8768809db960",
+      "behavior": "Preserve leading and trailing whitespace in Git action and working-tree file paths"
+    },
+    {
+      "commit": "2625327090115a630d97ff61257758c577589de7",
+      "behavior": "Show imminent usage resets consistently on desktop and companion"
+    },
+    {
+      "commit": "58d253231d83f669a2cdfefa5fe479751d22c582",
+      "behavior": "Round context token counts consistently at the million boundary"
     }
   ],
   "coverage": "Selected independent ports only. integratedThrough remains the last complete historical baseline; examinedTarget is not a claim of complete incorporation.",

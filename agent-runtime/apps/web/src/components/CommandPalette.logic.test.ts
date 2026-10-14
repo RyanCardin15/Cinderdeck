@@ -347,7 +347,7 @@ describe("buildProjectActionItems", () => {
     const project = makeProject({ title: "fleet", workspaceRoot: "/Users/theo/Code/p/fleet" });
     const iconTitles: string[] = [];
     const [item] = buildProjectActionItems({
-      projects: [{ ...project, displayName: "t3dotgg/fleet" }],
+      projects: [{ ...project, displayName: "fixture/fleet" }],
       valuePrefix: "project",
       icon: (candidate) => {
         iconTitles.push(candidate.title);
@@ -356,9 +356,9 @@ describe("buildProjectActionItems", () => {
       runProject: async () => undefined,
     });
 
-    expect(item?.title).toBe("t3dotgg/fleet");
+    expect(item?.title).toBe("fixture/fleet");
     expect(item?.searchTerms).toEqual(
-      expect.arrayContaining(["t3dotgg/fleet", "fleet", "/Users/theo/Code/p/fleet"]),
+      expect.arrayContaining(["fixture/fleet", "fleet", "/Users/theo/Code/p/fleet"]),
     );
     expect(iconTitles).toEqual(["fleet"]);
   });

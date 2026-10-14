@@ -18,7 +18,7 @@ async function loadRequestHook(): Promise<RequestHook> {
       "async function",
     ),
   );
-  await NodeVM.runInNewContext(`${source}\nt3McpExtension(pi)`, {
+  await NodeVM.runInNewContext(`${source}\ncinderdeckMcpExtension(pi)`, {
     process: { env: {} },
     pi: { on: (name: string, handler: RequestHook) => handlers.set(name, handler) },
   });
@@ -78,7 +78,7 @@ describe("Pi Cinderdeck MCP identity", () => {
         "async function",
       ),
     );
-    await NodeVM.runInNewContext(`${source}\nt3McpExtension(pi)`, {
+    await NodeVM.runInNewContext(`${source}\ncinderdeckMcpExtension(pi)`, {
       process: {
         env: { T3_MCP_URL: "http://fixture.invalid/mcp", T3_MCP_BEARER_TOKEN: "fixture-token" },
       },

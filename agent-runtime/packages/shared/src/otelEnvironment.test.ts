@@ -42,34 +42,44 @@ describe("OtelEnvironment", () => {
       warnings: [specIgnored("yes")],
     },
     // DECKHAND_OTEL_SDK_DISABLED takes Config.Boolean's values, case-insensitively.
-    { name: "t3 1", env: { DECKHAND_OTEL_SDK_DISABLED: "1" }, disabled: true, warnings: [T3_OFF] },
     {
-      name: "t3 TRUE",
+      name: "cinderdeck 1",
+      env: { DECKHAND_OTEL_SDK_DISABLED: "1" },
+      disabled: true,
+      warnings: [T3_OFF],
+    },
+    {
+      name: "cinderdeck TRUE",
       env: { DECKHAND_OTEL_SDK_DISABLED: "TRUE" },
       disabled: true,
       warnings: [T3_OFF],
     },
-    { name: "t3 n", env: { DECKHAND_OTEL_SDK_DISABLED: "n" }, disabled: false, warnings: [] },
     {
-      name: "t3 false overrides spec true",
+      name: "cinderdeck n",
+      env: { DECKHAND_OTEL_SDK_DISABLED: "n" },
+      disabled: false,
+      warnings: [],
+    },
+    {
+      name: "cinderdeck false overrides spec true",
       env: { DECKHAND_OTEL_SDK_DISABLED: "false", OTEL_SDK_DISABLED: "true" },
       disabled: false,
       warnings: [],
     },
     {
-      name: "blank t3 falls through",
+      name: "blank cinderdeck falls through",
       env: { DECKHAND_OTEL_SDK_DISABLED: "  ", OTEL_SDK_DISABLED: "true" },
       disabled: true,
       warnings: [SPEC_OFF],
     },
     {
-      name: "unreadable t3 warns and falls through",
+      name: "unreadable cinderdeck warns and falls through",
       env: { DECKHAND_OTEL_SDK_DISABLED: "maybe", OTEL_SDK_DISABLED: "true" },
       disabled: true,
       warnings: ["DECKHAND_OTEL_SDK_DISABLED=maybe is not a yes or a no and was ignored", SPEC_OFF],
     },
     {
-      name: "bad spec value still warns when t3 answered",
+      name: "bad spec value still warns when cinderdeck answered",
       env: { DECKHAND_OTEL_SDK_DISABLED: "false", OTEL_SDK_DISABLED: "yes" },
       disabled: false,
       warnings: [specIgnored("yes")],
@@ -390,7 +400,7 @@ describe("OtelEnvironment", () => {
   });
 
   describe("resolveSignalEndpoint", () => {
-    const t3Export = {
+    const cinderdeckExport = {
       protocol: "http/json",
       headers: { "x-key": "cinderdeck" },
       exportIntervalMs: 5_000,
@@ -409,19 +419,19 @@ describe("OtelEnvironment", () => {
       {
         name: "DECKHAND_OTLP_*_URL wins over an OTEL endpoint",
         otel: withLogs(otelExport),
-        t3Url: "http://t3:4318/v1/logs",
-        expected: { url: "http://t3:4318/v1/logs", export: t3Export },
+        cinderdeckUrl: "http://cinderdeck:4318/v1/logs",
+        expected: { url: "http://cinderdeck:4318/v1/logs", export: cinderdeckExport },
       },
       {
         name: "DECKHAND_OTLP_*_URL wins over a signal the OTEL variables turned off",
         otel: withLogs(OtelEnvironment.OtelSignal.Off()),
-        t3Url: "http://t3:4318/v1/logs",
-        expected: { url: "http://t3:4318/v1/logs", export: t3Export },
+        cinderdeckUrl: "http://cinderdeck:4318/v1/logs",
+        expected: { url: "http://cinderdeck:4318/v1/logs", export: cinderdeckExport },
       },
       {
         name: "an OTEL endpoint brings its headers and protocol over the fallback",
         otel: withLogs(otelExport),
-        t3Url: " ",
+        cinderdeckUrl: " ",
         expected: {
           url: "http://otel:4318/v1/logs",
           export: {
@@ -434,27 +444,27 @@ describe("OtelEnvironment", () => {
       {
         name: "a signal the OTEL variables turned off does not fall through",
         otel: withLogs(OtelEnvironment.OtelSignal.Off()),
-        t3Url: undefined,
+        cinderdeckUrl: undefined,
         expected: undefined,
       },
       {
         name: "an unset signal takes the first non-blank fallback",
         otel: withLogs(OtelEnvironment.OtelSignal.Unset()),
-        t3Url: undefined,
-        expected: { url: "http://settings:4318/v1/logs", export: t3Export },
+        cinderdeckUrl: undefined,
+        expected: { url: "http://settings:4318/v1/logs", export: cinderdeckExport },
       },
       {
         name: "the kill switch wins over everything",
         otel: withLogs(otelExport, true),
-        t3Url: "http://t3:4318/v1/logs",
+        cinderdeckUrl: "http://cinderdeck:4318/v1/logs",
         expected: undefined,
       },
-    ])("$name", ({ otel, t3Url, expected }) => {
+    ])("$name", ({ otel, cinderdeckUrl, expected }) => {
       assert.deepStrictEqual(
         OtelEnvironment.resolveSignalEndpoint(
           otel,
           "logs",
-          { url: t3Url, export: t3Export },
+          { url: cinderdeckUrl, export: cinderdeckExport },
           "",
           "http://settings:4318/v1/logs",
         ),
@@ -466,17 +476,26 @@ describe("OtelEnvironment", () => {
   it.effect("an exporter of none keeps the Settings endpoint from re-enabling its signal", () =>
     Effect.gen(function* () {
       const otel = yield* load({ OTEL_LOGS_EXPORTER: "none" });
-      const t3 = {
+      const cinderdeck = {
         url: undefined,
         export: { protocol: "http/json", headers: undefined, exportIntervalMs: 10_000 },
       } as const;
       assert.strictEqual(
-        OtelEnvironment.resolveSignalEndpoint(otel, "logs", t3, "http://settings:4318/v1/logs"),
+        OtelEnvironment.resolveSignalEndpoint(
+          otel,
+          "logs",
+          cinderdeck,
+          "http://settings:4318/v1/logs",
+        ),
         undefined,
       );
       assert.strictEqual(
-        OtelEnvironment.resolveSignalEndpoint(otel, "traces", t3, "http://settings:4318/v1/traces")
-          ?.url,
+        OtelEnvironment.resolveSignalEndpoint(
+          otel,
+          "traces",
+          cinderdeck,
+          "http://settings:4318/v1/traces",
+        )?.url,
         "http://settings:4318/v1/traces",
       );
     }),

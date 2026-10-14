@@ -1,5 +1,5 @@
 /**
- * `dist/bin.mjs` of the `t3` npm package: the entry point boot-service
+ * `dist/bin.mjs` of the historical runtime npm package: the entry point boot-service
  * launchers installed before 0.0.41 run with Node to start a new version they
  * just npm-installed. It forwards everything (arguments, stdio, the IPC
  * channel the launcher talks over, signals, exit status) to the platform
@@ -24,7 +24,7 @@ const child = spawn(executable, process.argv.slice(2), {
 });
 const fail = (error) => {
   if (!error) return;
-  process.stderr.write("t3: " + error.message + "\\n");
+  process.stderr.write("Cinderdeck runtime: " + error.message + "\\n");
   child.kill("SIGTERM");
   process.exitCode = 1;
 };

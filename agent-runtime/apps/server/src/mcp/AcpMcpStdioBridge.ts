@@ -12,7 +12,7 @@ import * as Stream from "effect/Stream";
  * Stdio-to-HTTP bridge for Cinderdeck's MCP endpoint.
  *
  * ACP agents must support stdio MCP servers, while optional http/sse support
- * is unevenly implemented. `t3 acp-mcp-bridge` runs as the stdio MCP server an
+ * is unevenly implemented. `cinderdeck-agent acp-mcp-bridge` runs as the stdio MCP server an
  * ACP agent spawns and forwards each JSON-RPC line to Cinderdeck's authenticated
  * streamable-HTTP endpoint: single JSON responses and SSE streams are written
  * back as newline-delimited JSON-RPC, notification acknowledgements (202/204)
@@ -161,7 +161,9 @@ export function callAcpMcpTool(
         if (!response.ok) {
           yield* discardResponseBody(response);
           return yield* Effect.fail(
-            new AcpMcpBridgeError(`Cinderdeck MCP endpoint responded with HTTP ${response.status}.`),
+            new AcpMcpBridgeError(
+              `Cinderdeck MCP endpoint responded with HTTP ${response.status}.`,
+            ),
           );
         }
         const payloads = yield* Stream.runCollect(responsePayloads(response));
@@ -359,7 +361,7 @@ export function runAcpMcpStdioBridge(options: AcpMcpStdioBridgeOptions): Effect.
 }
 
 /**
- * Argv runner for `t3 acp-mcp-bridge` and `t3 acp-mcp-call`, shared by the
+ * Argv runner for `cinderdeck-agent acp-mcp-bridge` and `cinderdeck-agent acp-mcp-call`, shared by the
  * fast-path dispatch in bin.ts and the full CLI's command handlers. Kept free
  * of heavy imports: these commands run on the ACP first-message critical path.
  */

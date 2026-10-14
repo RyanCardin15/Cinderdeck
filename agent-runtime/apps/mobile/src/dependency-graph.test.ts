@@ -22,7 +22,7 @@ import { describe, expect, it } from "vite-plus/test";
  *    all platforms, including dynamic imports, and may only shrink: when you
  *    remove one of these imports, lower the constant in the same PR.
  *
- * Runs in CI as part of the `Test` job (`vp run --filter '!t3' test` picks up
+ * Runs with the local runtime test suite (`vp test run` picks up
  * the `@cinderdeck/mobile` package test task).
  */
 

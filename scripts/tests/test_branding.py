@@ -44,6 +44,28 @@ class BrandingTests(unittest.TestCase):
         self.assertEqual(branding.violations(path, 'class T3TerminalNative {}'), [])
         self.assertTrue(branding.violations(path, 'let label = "T3 Code"'))
 
+    def test_lowercase_identifiers_help_and_demo_urls_are_rejected(self):
+        for text in ('const t3 = {};', 'const t3Panel = {};', '"t3dotgg/fleet"', '"t3chat"', '"Run t3 theme set"', '"https://demo.t3.sh"'):
+            self.assertTrue(branding.violations("agent-runtime/apps/web/src/NewPanel.tsx", text))
+
+    def test_protocol_tokens_and_exact_legacy_lines_do_not_exempt_adjacent_branding(self):
+        path = "agent-runtime/packages/contracts/src/environmentHttp.ts"
+        self.assertEqual(branding.violations(path, '"/.well-known/t3/environment"'), [])
+        self.assertTrue(branding.violations(path, '"/.well-known/t3/environment"; const t3 = {};'))
+        path = "agent-runtime/apps/server/src/cli/launcher.ts"
+        line = 'const shimPath = path.join(directory, "t3.cmd");'
+        self.assertEqual(branding.violations(path, line), [])
+        self.assertTrue(branding.violations(path, line + ' const brand = "t3";'))
+
+    def test_legal_looking_text_cannot_hide_product_copy(self):
+        path = "agent-runtime/apps/web/src/NewPanel.tsx"
+        self.assertTrue(branding.violations(path, 'const label = "Copyright T3 Code";'))
+        podspec = "agent-runtime/apps/mobile/modules/t3-terminal/T3TerminalNative.podspec"
+        notice = "s.author = { 'T3 Tools' => 'hello@t3tools.com' }"
+        self.assertEqual(branding.violations(podspec, notice), [])
+        self.assertTrue(branding.violations(podspec, notice + '; label = "T3 Code"'))
+        self.assertTrue(branding.violations(podspec, 's.author = "T3 Code"'))
+
     def test_preserves_original_notices_and_recorded_protocol_data(self):
         self.assertEqual(branding.violations("agent-runtime/LICENSE", "Copyright (c) 2026 T3 Tools Inc."), [])
         self.assertEqual(branding.violations("agent-runtime/apps/server/src/orchestration-v2/testkit/fixtures/simple/codex_transcript.ndjson", '{"input":"T3 Code"}'), [])

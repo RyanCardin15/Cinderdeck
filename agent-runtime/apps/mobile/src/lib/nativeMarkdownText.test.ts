@@ -190,44 +190,44 @@ describe("nativeMarkdownTextRuns", () => {
 
   it("keeps Windows path backslashes the parser reads as escapes", () => {
     const markdown = [
-      String.raw`![shot](C:\Users\me\.t3\_build\shot.png "Shot")`,
+      String.raw`![shot](C:\Users\me\.fixture\_build\shot.png "Shot")`,
       String.raw`[settings](C:\Users\me\.claude\settings.json) and [site](https://example.com/a\.b)`,
       "![ref][ref]",
-      String.raw`[ref]: \\wsl.localhost\Ubuntu\.t3\ref.png`,
+      String.raw`[ref]: \\wsl.localhost\Ubuntu\.fixture\ref.png`,
     ].join("\n\n");
     // md4c drops each backslash that precedes punctuation.
     const node: MarkdownNode = {
       type: "document",
       children: [
-        { type: "image", href: String.raw`C:\Users\me.t3_build\shot.png` },
+        { type: "image", href: String.raw`C:\Users\me.fixture_build\shot.png` },
         { type: "link", href: String.raw`C:\Users\me.claude\settings.json` },
         { type: "link", href: "https://example.com/a.b" },
-        { type: "image", href: String.raw`\wsl.localhost\Ubuntu.t3\ref.png` },
+        { type: "image", href: String.raw`\wsl.localhost\Ubuntu.fixture\ref.png` },
       ],
     };
 
     expect(
       nativeMarkdownWithAuthoredWindowsPaths(node, markdown).children?.map(({ href }) => href),
     ).toEqual([
-      String.raw`C:\Users\me\.t3\_build\shot.png`,
+      String.raw`C:\Users\me\.fixture\_build\shot.png`,
       String.raw`C:\Users\me\.claude\settings.json`,
       "https://example.com/a.b",
-      String.raw`\\wsl.localhost\Ubuntu\.t3\ref.png`,
+      String.raw`\\wsl.localhost\Ubuntu\.fixture\ref.png`,
     ]);
   });
 
   it("leaves a Windows path as parsed when two written paths could have produced it", () => {
     const markdown = [
-      String.raw`\`![example](C:\Users\me\.t3\shot.png)\``,
-      String.raw`![real](C:\Users\me.t3\shot.png)`,
+      String.raw`\`![example](C:\Users\me\.fixture\shot.png)\``,
+      String.raw`![real](C:\Users\me.fixture\shot.png)`,
     ].join("\n\n");
     const node: MarkdownNode = {
       type: "document",
-      children: [{ type: "image", href: String.raw`C:\Users\me.t3\shot.png` }],
+      children: [{ type: "image", href: String.raw`C:\Users\me.fixture\shot.png` }],
     };
 
     expect(nativeMarkdownWithAuthoredWindowsPaths(node, markdown).children?.[0]?.href).toBe(
-      String.raw`C:\Users\me.t3\shot.png`,
+      String.raw`C:\Users\me.fixture\shot.png`,
     );
   });
 

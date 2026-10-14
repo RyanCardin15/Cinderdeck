@@ -494,7 +494,7 @@ it.layer(TestLayer)("OrchestrationV2LayerLive", (it) => {
         interactionMode: "default",
         branch: null,
         // Its own path, so other rollback tests keep an isolated worktree.
-        worktreePath: `/tmp/t3-${name}`,
+        worktreePath: `/tmp/cinderdeck-${name}`,
       });
       yield* orchestrator.dispatch({
         type: "message.dispatch",
@@ -1663,7 +1663,7 @@ it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
         threadId,
         title: "Renamed lifecycle thread",
         branch: "feature/v2",
-        worktreePath: "/tmp/t3-v2-worktree",
+        worktreePath: "/tmp/cinderdeck-v2-worktree",
       });
       const staleWorkspaceUpdate = yield* orchestrator
         .dispatch({
@@ -1678,7 +1678,10 @@ it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
       assert.instanceOf(staleWorkspaceUpdate, Orchestrator.OrchestratorDispatchError);
       const projectionAfterStaleWorkspaceUpdate = yield* orchestrator.getThreadProjection(threadId);
       assert.equal(projectionAfterStaleWorkspaceUpdate.thread.branch, "feature/v2");
-      assert.equal(projectionAfterStaleWorkspaceUpdate.thread.worktreePath, "/tmp/t3-v2-worktree");
+      assert.equal(
+        projectionAfterStaleWorkspaceUpdate.thread.worktreePath,
+        "/tmp/cinderdeck-v2-worktree",
+      );
       const pullRequestSnapshot = yield* orchestrator.getShellSnapshot();
       const pullRequest = {
         projectId,
@@ -1697,7 +1700,7 @@ it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
           expected: {
             workspaceRoot: "/workspace/project",
             branch: "feature/v2",
-            worktreePath: "/tmp/t3-v2-worktree",
+            worktreePath: "/tmp/cinderdeck-v2-worktree",
             linkedPullRequest: null,
             branchPullRequest: null,
           },
@@ -1715,7 +1718,7 @@ it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
         expected: {
           workspaceRoot: "/workspace/project",
           branch: "feature/v2",
-          worktreePath: "/tmp/t3-v2-worktree",
+          worktreePath: "/tmp/cinderdeck-v2-worktree",
           linkedPullRequest: null,
           branchPullRequest: null,
         },
@@ -1735,7 +1738,7 @@ it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
           expected: {
             workspaceRoot: "/workspace/project",
             branch: "feature/v2",
-            worktreePath: "/tmp/t3-v2-worktree",
+            worktreePath: "/tmp/cinderdeck-v2-worktree",
             linkedPullRequest: null,
             branchPullRequest: null,
           },
@@ -1903,7 +1906,7 @@ it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
       const projection = yield* orchestrator.getThreadProjection(threadId);
       assert.equal(projection.thread.title, "Renamed lifecycle thread");
       assert.equal(projection.thread.branch, "feature/v2");
-      assert.equal(projection.thread.worktreePath, "/tmp/t3-v2-worktree");
+      assert.equal(projection.thread.worktreePath, "/tmp/cinderdeck-v2-worktree");
       assert.equal(projection.thread.runtimeMode, "approval-required");
       assert.equal(projection.thread.interactionMode, "plan");
       assert.equal(projection.thread.modelSelection.model, "gpt-5.5");

@@ -32,12 +32,12 @@ describe("resolvePreviousWorktreeSeed", () => {
       resolvePreviousWorktreeSeed({
         threads: [
           {
-            branch: "t3/older",
+            branch: "cinderdeck/older",
             worktreePath: "/repo/.t3/worktrees/older",
             updatedAt: "2026-07-20T00:00:00.000Z",
           },
           {
-            branch: "t3/newer",
+            branch: "cinderdeck/newer",
             worktreePath: "/repo/.t3/worktrees/newer",
             updatedAt: "2026-07-22T00:00:00.000Z",
           },
@@ -45,7 +45,7 @@ describe("resolvePreviousWorktreeSeed", () => {
         ],
         currentWorktreePath: null,
       }),
-    ).toEqual({ branch: "t3/newer", worktreePath: "/repo/.t3/worktrees/newer" });
+    ).toEqual({ branch: "cinderdeck/newer", worktreePath: "/repo/.t3/worktrees/newer" });
   });
 
   it("skips the worktree the composer already points at", () => {
@@ -53,7 +53,7 @@ describe("resolvePreviousWorktreeSeed", () => {
       resolvePreviousWorktreeSeed({
         threads: [
           {
-            branch: "t3/current",
+            branch: "cinderdeck/current",
             worktreePath: "/repo/.t3/worktrees/current",
             updatedAt: "2026-07-22T00:00:00.000Z",
           },
@@ -77,18 +77,18 @@ describe("resolvePreviousWorktreeSeed", () => {
       resolvePreviousWorktreeSeed({
         threads: [
           {
-            branch: "t3/archived",
+            branch: "cinderdeck/archived",
             worktreePath: "/repo/.t3/worktrees/archived",
             updatedAt: "2026-07-23T00:00:00.000Z",
             archivedAt: "2026-07-23T01:00:00.000Z",
           },
           {
-            branch: "t3/garbage-timestamp",
+            branch: "cinderdeck/garbage-timestamp",
             worktreePath: "/repo/.t3/worktrees/garbage",
             updatedAt: "not-a-date",
           },
           {
-            branch: "t3/live",
+            branch: "cinderdeck/live",
             worktreePath: "/repo/.t3/worktrees/live",
             updatedAt: "2026-07-21T00:00:00.000Z",
             archivedAt: null,
@@ -96,15 +96,15 @@ describe("resolvePreviousWorktreeSeed", () => {
         ],
         currentWorktreePath: null,
       }),
-    ).toEqual({ branch: "t3/live", worktreePath: "/repo/.t3/worktrees/live" });
+    ).toEqual({ branch: "cinderdeck/live", worktreePath: "/repo/.t3/worktrees/live" });
   });
 });
 
 describe("resolvePreviousWorktreeLabel", () => {
   it("includes the branch when known", () => {
-    expect(resolvePreviousWorktreeLabel({ branch: "t3/fix-thing", worktreePath: "/wt" })).toBe(
-      "Previous worktree (t3/fix-thing)",
-    );
+    expect(
+      resolvePreviousWorktreeLabel({ branch: "cinderdeck/fix-thing", worktreePath: "/wt" }),
+    ).toBe("Previous worktree (cinderdeck/fix-thing)");
     expect(resolvePreviousWorktreeLabel({ branch: null, worktreePath: "/wt" })).toBe(
       "Previous worktree",
     );
@@ -548,7 +548,9 @@ describe("resolveCurrentWorkspaceLabel", () => {
   });
 
   it("describes the active checkout as a worktree when one is attached", () => {
-    expect(resolveCurrentWorkspaceLabel("/repo/.t3/worktrees/feature-a")).toBe("Current worktree");
+    expect(resolveCurrentWorkspaceLabel("/repo/.t3/worktrees/feature-a")).toBe(
+      "Current worktree",
+    );
   });
 });
 

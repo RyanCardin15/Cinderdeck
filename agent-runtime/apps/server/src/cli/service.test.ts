@@ -125,7 +125,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NetService.layer))("service commands
   it.effect("restart restarts the installed service", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-cli-test-" });
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-service-cli-test-" });
       const { service, installOptions, restarts } = makeTestService(status);
       vi.spyOn(BootService, "layer").mockReturnValue(
         Layer.succeed(BootService.BootService, service),
@@ -150,7 +150,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NetService.layer))("service commands
     (command) =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
-        const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-cli-test-" });
+        const baseDir = yield* fs.makeTempDirectoryScoped({
+          prefix: "cinderdeck-service-cli-test-",
+        });
         const { service, installOptions } = makeTestService(newerServiceStatus);
         vi.spyOn(BootService, "layer").mockReturnValue(
           Layer.succeed(BootService.BootService, service),
@@ -178,7 +180,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NetService.layer))("service commands
   it.effect.each(["install", "update"] as const)("%s allows an explicit downgrade", (command) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-cli-test-" });
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-service-cli-test-" });
       const { service, installOptions } = makeTestService(newerServiceStatus);
       vi.spyOn(BootService, "layer").mockReturnValue(
         Layer.succeed(BootService.BootService, service),

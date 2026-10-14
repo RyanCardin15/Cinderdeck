@@ -12,7 +12,11 @@ vi.mock("../state/query", () => ({
   useEnvironmentQuery: () => ({ data: null, error: null, isSuccess: false }),
 }));
 vi.mock("./useAgentObservation", () => ({ useAgentObservation: () => ({ stale: false }) }));
-vi.mock("./ProductNavigation", () => ({ ProductNavigation: () => null }));
+vi.mock("./ProductNavigation", () => ({
+  ProductNavigation: ({ workspaceSearch }: { workspaceSearch?: unknown }) => (
+    <nav aria-label="Sessions" data-search={JSON.stringify(workspaceSearch)} />
+  ),
+}));
 vi.mock("./WorkspaceSidebar", () => ({ WorkspaceSidebar: () => null }));
 vi.mock("./WorkspaceSettingsButton", () => ({
   WorkspaceSettingsButton: () => null,
@@ -117,16 +121,20 @@ afterEach(async () => {
   container.remove();
   vi.unstubAllGlobals();
 });
-it("returns a removed lane's workspace breadcrumb to all saved conversations", async () => {
+it("keeps a legacy checkout conversation mounted with source workspace navigation", async () => {
   await render({ ...context, checkout: { ...context.checkout, laneName: "Release polish" } });
-  const breadcrumb = [...container.querySelectorAll("header a")].find(
-    (link) => link.textContent === "Payment",
-  )!;
-  expect(JSON.parse(breadcrumb.getAttribute("data-search")!)).toEqual({
+  const navigator = container.querySelector('[aria-label="Sessions"]')!;
+  expect(JSON.parse(navigator.getAttribute("data-search")!)).toEqual({
     environment: "remote-computer",
     workspace: "primary-workspace",
+    context: "review-lane",
     tab: "agents",
+    expectedGeneration: 7,
     expectedInstallationID: "native-installation",
   });
-  expect(container.querySelector("header strong")?.textContent).toBe("Release polish");
+  expect(container.querySelector("header")).toBeNull();
+  expect(container.textContent).toBe("Conversation");
+  await render({ ...context, nativeConnection: "unavailable" });
+  expect(container.textContent).toBe("Conversation");
+  expect(container.querySelector('[data-connected-context="true"]')).not.toBeNull();
 });

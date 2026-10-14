@@ -6,15 +6,15 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parent.parent
-BRAND = re.compile(r"\bT3\s+Code\b|\bT3Code\b|[>\"\x27]T3[<\"\x27]|\bt3\s+(?:serve|connect|pair|service|update|app|project)\b|@t3tools/|\bcom\.t3tools\b|\b(?:[\w-]+\.)*t3\.(?:codes|gg)\b|\bpingdotgg/t3code\b", re.I)
-BARE_BRAND = re.compile(r"\bT3\b")
-INTERNAL_BRAND = re.compile(r"\bT3[A-Z][a-z][A-Za-z0-9_]*\b")
+BRAND = re.compile(r"\bt3dotgg\b|\bt3chat\b|\bT3\s+Code\b|\bT3Code\b|[>\"\x27]T3[<\"\x27]|\bt3\s+(?:serve|connect|pair|service|update|app|project)\b|@t3tools/|\bcom\.t3tools\b|\b(?:[\w-]+\.)*t3\.(?:codes|gg)\b|\bpingdotgg/t3code\b", re.I)
+BARE_BRAND = re.compile(r"\bT3\b", re.I)
+INTERNAL_BRAND = re.compile(r"\b(?:T3|t3)[A-Z][a-z][A-Za-z0-9_]*\b")
 # Exact native registration names and wrappers outside their ABI source folders.
 NATIVE_REFERENCES = re.compile(r"\b(?:T3AgentNotifications|T3ComposerEditor|T3KeyboardCommands|T3NativeControls|T3NativeFilePresentation|T3NativePresentation|T3NativeVideoPresentation|T3ReviewDiffSurface|T3ReviewDiffView|T3SelectableMarkdownText|T3ShowcaseReadyScene|T3ShowcaseScene|T3TerminalNative|T3TerminalSurface|T3WidgetExpiry)\b")
 # These are data and API identifiers, never product labels. Limit exceptions to tokens,
 # rather than excluding the source files that also contain user-facing strings.
 COMPATIBILITY = re.compile(
-    r"https://t3\.codes/schema/t3\.json|t3\.json|t3code-client\.db|\bt3code-(?:dev|preview)\b|(?<![A-Za-z0-9])\.t3code\b|(?<![A-Za-z0-9])\.t3\b|\bT3CODE_[A-Z0-9_]+\b|\bt3code(?::[\w:.-]*|\.(?:preferences(?:\.fallback)?|connections(?:\.[\w-]+)?|connection-catalog\.v1|cloud\.(?:relay-access-tokens|dpop-proof-key)|agent-awareness\.(?:device-id|registration)|recent-thread-shortcuts|diffFileTreeOpen|fileExplorerOpen|renderMarkdown|renderBrowserFile|renderTable|pullRequestFileTreeOpen)|://)|"
+    r"\b(?:t3Home|t3SessionLoadReady|t3MintCredential)\b|/\.well-known/t3/environment|urn:t3:params:oauth:token-type:environment-bootstrap|app\.t3\.context-fragment|\bt3CodeRange\b|refs/t3/|\bt3\.pullRequests\.(?:detail|list|preferences)|\bt3\.backgroundActivity\.clientId|\bt3:chatgpt-sharing-welcome:v1|\bt3:paste-as-text|\bt3\.(?:settle_probe|flush_extension_errors)|\$t3:jsonrpc:|\bt3\.client\.surface|https://t3\.codes/schema/t3\.json|t3\.json|t3code-client\.db|\bt3code-(?:dev|preview)\b|(?<![A-Za-z0-9])\.t3code\b|(?<![A-Za-z0-9])\.t3\b|\bT3CODE_[A-Z0-9_]+\b|\bt3code(?::[\w:.-]*|\.(?:preferences(?:\.fallback)?|connections(?:\.[\w-]+)?|connection-catalog\.v1|cloud\.(?:relay-access-tokens|dpop-proof-key)|agent-awareness\.(?:device-id|registration)|recent-thread-shortcuts|diffFileTreeOpen|fileExplorerOpen|renderMarkdown|renderBrowserFile|renderTable|pullRequestFileTreeOpen)|://)|"
     r"\bpersist:t3code-preview(?:-profile)?-?|\bt3code-preview-ephemeral-|"
     r"\bt3(?:[-_]code|_[a-z][a-z0-9_]*|[-_]chat-(?:light|dark))\b|"
     r"(?:--|data-|font-|var\(--)?t3-[a-z][a-z0-9-]*|\bT3_ACP_[A-Z_]+\b",
@@ -26,6 +26,12 @@ LEGAL_LINES = {
     "agent-runtime/README.md": "The runtime incorporates MIT-licensed source originally from T3 Code. Its [original license](LICENSE), copyright notices, and bundled third-party acknowledgments are preserved.",
     "agent-runtime/third-party-licenses.config.json": '"name": "T3 Code upstream source",',
 }
+LEGAL_LINES['agent-runtime/apps/mobile/modules/t3-composer-editor/ios/T3ComposerEditor.podspec'] = "s.author         = 'T3 Tools'"
+LEGAL_LINES['agent-runtime/apps/mobile/modules/t3-markdown-text/T3MarkdownText.podspec'] = 's.author = { "T3 Tools" => "hello@t3tools.com" }'
+LEGAL_LINES['agent-runtime/apps/mobile/modules/t3-native-controls/ios/T3NativeControls.podspec'] = "s.author         = 'T3 Tools'"
+LEGAL_LINES['agent-runtime/apps/mobile/modules/t3-review-diff/T3ReviewDiffNative.podspec'] = "s.author = { 'T3 Tools' => 'hello@t3tools.com' }"
+LEGAL_LINES['agent-runtime/apps/mobile/modules/t3-terminal/T3TerminalNative.podspec'] = "s.author = { 'T3 Tools' => 'hello@t3tools.com' }"
+
 CHECK_FILES = {"scripts/check-branding.py", "scripts/tests/test_branding.py", "scripts/check-repository.py"}
 NATIVE_MODULES = {"t3-agent-notifications", "t3-composer-editor", "t3-keyboard-commands", "t3-markdown-text", "t3-native-controls", "t3-review-diff", "t3-terminal", "t3-widget-expiry", "t3-subscription-widget"}
 
@@ -62,7 +68,95 @@ TOKEN_EXCEPTIONS = {
 }
 
 
+# Existing compatibility lines remain exact so adjacent branding still fails.
+COMPATIBILITY_LINES = {
+    ("agent-runtime/patches/react-native-screens@4.28.0.patch", "+    // The t3 patch adds these iOS glass-chrome props to the native spec; they have"): "original third-party patch attribution",
+    ('agent-runtime/apps/server/src/cli/launcher.ts', '* only ever sees its own path. Walk PATH for a `t3.cmd` whose target is the'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cli/launcher.ts', 'const shimPath = path.join(directory, "t3.cmd");'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cli/service.test.ts', 'baseDir: "/test/t3",'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cli/service.test.ts', 'program: ["/test/t3/runtime/versions/1.0.0/t3", "__service-launcher"],'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cli/uninstall.test.ts', 'const copy = path.join(root, "copy/t3");'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cli/uninstall.test.ts', 'const exe = path.join(versionsDir, "1.0.0/t3");'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cli/uninstall.test.ts', 'const otherExe = path.join(root, "other/runtime/versions/1.0.0/t3");'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cli/uninstall.test.ts', 'const ours = path.join(root, "bin/t3");'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cli/uninstall.test.ts', 'const theirs = path.join(root, "other/bin/t3");'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cloud/bootService.test.ts', 'Layer.succeed(HostProcessExecutablePath, "/usr/bin/t3"),'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cloud/bootService.test.ts', '`t3 v${/versions\\/([^/]+)\\//.exec(input.command)?.[1] ?? "1.2.3"}\\n`'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cloud/bootService.test.ts', 'const linuxRuntime = "/home/theo/.deckhand/runtime/versions/1.2.3/t3";'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cloud/bootService.test.ts', 'const macRuntime = "/Users/theo/.deckhand/runtime/versions/1.2.3/t3";'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cloud/bootService.test.ts', 'expect(yield* fs.readFileString(plan.unitPath)).toContain("versions/1.2.4/t3");'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cloud/bootService.test.ts', 'host: { execPath: "/usr/bin/t3" },'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cloud/bootService.test.ts', 'program: [`${baseDir}/runtime/versions/1.2.3/t3`, "__service-launcher"],'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cloud/pinnedRuntime.test.ts', 'assert.equal(paths.entryPath, path.join(paths.versionDir, "t3"));'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cloud/pinnedRuntime.test.ts', 'assert.isFalse(yield* fs.exists(path.join(paths.versionDir, "t3-runtime-archive")));'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cloud/pinnedRuntime.test.ts', 'const archiveName = `t3-${version}-linux-x64.tar.gz`;'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cloud/pinnedRuntime.test.ts', 'yield* fs.writeFileString(path.join(stagingDir, "t3"), "#!/bin/sh\\n").pipe(Effect.orDie);'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cloud/pinnedRuntime.ts', '// strip it so the executable lands at <versionDir>/t3.'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cloud/pinnedRuntime.ts', 'const PINNED_RUNTIME_ARCHIVE_FILE = "t3-runtime-archive";'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cloud/pinnedRuntime.ts', 'entryPath: path.join(versionDir, platform === "win32" ? "t3.exe" : "t3"),'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cloud/selfUpdate.test.ts', 'new Response(`${hex}  t3-1.1.0-linux-x64.tar.gz\\n`),'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/cloud/selfUpdate.test.ts', 'yield* fs.writeFileString(path.join(stagingDir, "t3"), "#!/bin/sh\\n").pipe(Effect.orDie);'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/device/AgentDeviceTarget.ts', '`t3-${key(JSON.stringify([threadId, hostId, deviceId]))}`;'): 'stable device target identifier',
+    ('agent-runtime/apps/server/src/environment/ServerEnvironmentMachine.test.ts', 'machineKindFromDmi({ chassisType: "1", sysVendor: "Amazon EC2", productName: "t3.large" }),'): 'AWS instance type fixture',
+    ('agent-runtime/apps/server/src/orchestration-v2/Adapters/PiAdapterV2.testkit.ts', 'const ADAPTER_REQUEST_ID = /^t3-\\d+$/u;'): 'provider RPC correlation identifier',
+    ('agent-runtime/apps/server/src/orchestration-v2/Adapters/PiRpc.ts', 'const id = `t3-${nextRequestId++}`;'): 'provider RPC correlation identifier',
+    ('agent-runtime/apps/server/src/provider/acp/AcpRuntimeModel.ts', '/^(?:mcp[-_]{1,2})?(?<server>cinderdeck|deckhand|t3[-_ ]?code)[-_.:/ ]{1,3}(?<tool>[A-Za-z0-9][A-Za-z0-9_.-]*)(?::.*)?$/i;'): 'historical MCP server aliases',
+    ('agent-runtime/apps/server/src/provider/acp/AcpRuntimeModel.ts', '/^(?<tool>[A-Za-z0-9][A-Za-z0-9_.-]*?)(?: \\((?<server>cinderdeck|deckhand|t3[-_ ]?code) MCP Server\\)(?::|$)|[-_.](?<suffixServer>cinderdeck|deckhand|t3[-_ ]?code)$)/i;'): 'historical MCP server aliases',
+    ('agent-runtime/apps/server/src/provider/acp/AcpRuntimeModel.ts', 'if (/^t3[-_ ]?code$/i.test(server)) return "t3-code";'): 'historical MCP server aliases',
+    ('agent-runtime/apps/server/src/serviceLauncher.test.ts', '// A pinned runtime is an executable at <versionDir>/t3. The tests stand one up'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/serviceLauncher.test.ts', 'const entryPath = path.join(versionDir, "t3");'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/serviceLauncher.ts', 'const executableName = process.platform === "win32" ? "t3.exe" : "t3";'): 'historical archive and launcher ABI',
+    ('agent-runtime/apps/server/src/vcs/GitVcsDriver.ts', '// an unclean restart can leave 0-byte files under refs/t3/** that break every'): 'persisted checkpoint namespace',
+    ('agent-runtime/apps/web/index.html', '"t3-chat",'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/index.html', '"t3-chat": {'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/index.html', '"t3-chat-dark",'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/index.html', '"t3-chat-dark": "t3-chat",'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/index.html', '"t3-ember",'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/index.html', '"t3-ember": "ember",'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/index.html', '"t3-grove",'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/index.html', '"t3-grove": "grove",'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/index.html', '"t3-iris",'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/index.html', '"t3-iris": "iris",'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/index.html', '"t3-ocean",'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/index.html', '"t3-ocean": "ocean",'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/index.html', '// and every maintainer theme under a t3- prefix; keep those'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/index.html', 'const isLegacyT3ChatDark = storedTheme === "t3-chat-dark";'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/src/components/settings/ProviderInstanceCard.test.ts', '"Codex app-server provider probe failed: Cannot create Codex shadow home entry \'auth.json\' because \'/home/me/.codex-t3/work/auth.json\' already exists and is not a symlink.";'): 'historical provider shadow-home fixture',
+    ('agent-runtime/apps/web/src/components/settings/ResourceTelemetryDiagnostics.tsx', 'case "unknown-t3":'): 'telemetry wire discriminator',
+    ('agent-runtime/apps/web/src/pierre-icons.test.ts', '"t3-file-icon-pnpm",'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/src/pierre-icons.test.ts', 'Object.values(CINDERDECK_PIERRE_ICONS.byFileName).filter((name) => name.startsWith("t3-")),'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/src/pierre-icons.test.ts', 'assert.equal(resolvePierreIconForEntry("AGENTS.md", "file")?.name, "t3-file-icon-agents");'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/src/pierre-icons.test.ts', 'assert.equal(resolvePierreIconForEntry("pnpm-lock.yaml", "file")?.name, "t3-file-icon-pnpm");'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/src/themePalette.ts', '"t3-ember": EMBER_THEME_ID,'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/src/themePalette.ts', '"t3-grove": GROVE_THEME_ID,'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/src/themePalette.ts', '"t3-iris": IRIS_THEME_ID,'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/src/themePalette.ts', '"t3-ocean": OCEAN_THEME_ID,'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/src/themePalette.ts', '// Earlier builds shipped every maintainer theme under a t3- prefix; only the'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/src/themePalette.ts', 'const LEGACY_T3_CHAT_DARK_THEME_ID = "t3-chat-dark";'): 'historical theme and icon names',
+    ('agent-runtime/apps/web/src/themePalette.ts', 'export const CINDERDECK_CHAT_THEME_ID = "t3-chat" as const;'): 'historical theme and icon names',
+    ('agent-runtime/packages/contracts/src/resourceTelemetry.ts', '"unknown-t3",'): 'telemetry wire discriminator',
+    ('agent-runtime/packages/shared/src/cinderdeckMcpToolPresentation.ts', '/^(?:mcp[-_]{1,2})?(?:cinderdeck(?:[-_ ]code)?|deckhand|t3[-_ ]?code)(?:__|[-_.:/ ])(?<tool>.+)$/i.exec('): 'historical MCP server aliases',
+    ('agent-runtime/packages/shared/src/cliRelease.test.ts', '"https://mirror.example/t3/v1.2.3",'): 'historical archive and launcher ABI',
+    ('agent-runtime/packages/shared/src/cliRelease.test.ts', '"t3-1.2.3-preview.20260911.4-linux-x64.tar.gz",'): 'historical archive and launcher ABI',
+    ('agent-runtime/packages/shared/src/cliRelease.test.ts', '`${"B".repeat(64)} *t3-1.2.3-win32-x64.zip`,'): 'historical archive and launcher ABI',
+    ('agent-runtime/packages/shared/src/cliRelease.test.ts', '`${"a".repeat(64)}  t3-1.2.3-linux-x64.tar.gz`,'): 'historical archive and launcher ABI',
+    ('agent-runtime/packages/shared/src/cliRelease.test.ts', 'expect(checksums.get("t3-1.2.3-linux-x64.tar.gz")).toBe("a".repeat(64));'): 'historical archive and launcher ABI',
+    ('agent-runtime/packages/shared/src/cliRelease.test.ts', 'expect(checksums.get("t3-1.2.3-win32-x64.zip")).toBe("b".repeat(64));'): 'historical archive and launcher ABI',
+    ('agent-runtime/packages/shared/src/cliRelease.test.ts', 'expect(cliArchiveFileName("1.2.3", "win32-x64")).toBe("t3-1.2.3-win32-x64.zip");'): 'historical archive and launcher ABI',
+    ('agent-runtime/packages/shared/src/cliRelease.test.ts', 'expect(cliReleaseDownloadBaseUrl("1.2.3", "https://mirror.example/t3/")).toBe('): 'historical archive and launcher ABI',
+    ('agent-runtime/packages/shared/src/cliRelease.ts', 'return `t3-${version}-${platformKey}.${platformKey.startsWith("win32") ? "zip" : "tar.gz"}`;'): 'historical archive and launcher ABI',
+    ('agent-runtime/packages/shared/src/legacyCliLauncher.test.ts', '`node_modules/@cinderdeck/t3-${hostPlatform}-${hostArch}/t3`,'): 'historical archive and launcher ABI',
+    ('agent-runtime/packages/shared/src/legacyCliLauncher.test.ts', 'const entry = NodePath.join(root, "node_modules/t3/dist/bin.mjs");'): 'historical archive and launcher ABI',
+    ('agent-runtime/packages/shared/src/legacyCliLauncher.test.ts', 'const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-legacy-launcher-"));'): 'historical archive and launcher ABI',
+    ('agent-runtime/packages/shared/src/legacyCliLauncher.ts', '* executable in the sibling `@cinderdeck/t3-<platform>-<arch>` package.'): 'historical archive and launcher ABI',
+    ('agent-runtime/packages/shared/src/legacyCliLauncher.ts', 'const executable = join(dirname(require.resolve("@cinderdeck/t3-" + process.platform + "-" + process.arch + "/package.json")), executableName);'): 'historical archive and launcher ABI',
+    ('agent-runtime/packages/shared/src/legacyCliLauncher.ts', 'const executableName = process.platform === "win32" ? "t3.exe" : "t3";'): 'historical archive and launcher ABI',
+}
+
+
 def exemption(path: str, line: str) -> str | None:
+    if (path, line.strip()) in COMPATIBILITY_LINES:
+        return COMPATIBILITY_LINES[(path, line.strip())]
     if path == "agent-runtime/packages/client-runtime/src/errors/transport.ts" and line.strip() == r"/Unable to connect to the (?:Cinderdeck|T3) server WebSocket\./i,":
         return "historical server error compatibility pattern"
     if path == "Cinderdeck/Services/Stacks/Agents/StackControlProtocol.swift" and line.strip() == 'let appNames: Set<String> = ["deckhand", "t3", "t3 code"]':
@@ -77,7 +171,7 @@ def exemption(path: str, line: str) -> str | None:
         return "provider OAuth client referrer fixture"
     if path == "agent-runtime/packages/effect-codex-app-server/src/replay.ts" and line.strip() == 'const legacyClient = clientInfo.name === "T3 Code" && clientInfo.title === "T3 Code";':
         return "original provider recording client identity comparison"
-    if path in LEGAL_FILES or "Copyright " in line or re.match(r"\s*s\.author\s*=", line):
+    if path in LEGAL_FILES:
         return "legal attribution"
     if path in LEGAL_LINES and line.strip() == LEGAL_LINES[path]:
         return "legal attribution"

@@ -308,9 +308,9 @@ describe("resolveWorkEntryToolPresentation", () => {
     ["t3_thread_send_attachments", "Sending attachments", "Sent attachments"],
     ["run_scheduled_task_now", "Running a scheduled task", "Requested a run of a scheduled task"],
   ])("labels %s through its lifecycle", (tool, running, completed) => {
-    expect(resolveWorkEntryToolPresentation({ label: `Cinderdeck-code.${tool}` })?.displayName).toBe(
-      running,
-    );
+    expect(
+      resolveWorkEntryToolPresentation({ label: `Cinderdeck-code.${tool}` })?.displayName,
+    ).toBe(running);
     expect(
       resolveWorkEntryToolPresentation({
         label: `Cinderdeck-code.${tool}`,
@@ -790,7 +790,7 @@ describe("toolGroupAction", () => {
 describe("resolveViewedImageAsset", () => {
   const threadId = ThreadId.make("thread-1");
 
-  it("serves t3 attachment paths in place like any other host path", () => {
+  it("serves legacy attachment paths in place like any other host path", () => {
     const path = "/Users/demo/.t3/dev/attachments/11111111-1111-4111-8111-111111111111.png";
     expect(resolveViewedImageAsset(path, { threadId, workspaceRoot: "/workspace" })).toEqual({
       resource: { _tag: "media-file", threadId, path },
@@ -891,9 +891,9 @@ describe("pull request tool presentation", () => {
     expect(summarizeToolGroup([link, link, list]).summary).toBe(
       "Linked 2 pull requests and checked linked pull requests",
     );
-    expect(summarizeToolGroup([{ ...link, label: "Cinderdeck-code · unlink_pull_request" }]).summary).toBe(
-      "Unlinked 1 pull request",
-    );
+    expect(
+      summarizeToolGroup([{ ...link, label: "Cinderdeck-code · unlink_pull_request" }]).summary,
+    ).toBe("Unlinked 1 pull request");
     expect(toolGroupSummaryKind([link, link, list])).toBe("pull-request");
     expect(summarizeToolGroup([list, list]).summary).toBe("Checked linked pull requests 2 times");
     expect(
