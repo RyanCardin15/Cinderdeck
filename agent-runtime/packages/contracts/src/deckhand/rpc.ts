@@ -275,6 +275,7 @@ export const ManagedSessionView = Schema.Struct({
   ),
   binding: SessionBinding,
   title: Schema.String,
+  createdAt: Schema.optionalKey(Schema.String),
   objective: Schema.optionalKey(Schema.String),
   pullRequests: Schema.optionalKey(Schema.Array(ThreadPullRequestLink)),
   source: Schema.Literals(["current", "unavailable"]),

@@ -27,7 +27,7 @@ import {
   PlusIcon,
   StarIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { ContextMenuItem, EnvironmentId } from "@cinderdeck/contracts";
 import type { IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
 import { workspaceView } from "./state";
@@ -48,12 +48,11 @@ import { type WorkspaceSearch } from "./workspaceNavigation";
 import {
   orderedSidebarRows,
   isSidebarColor,
-  readSidebarPreferences,
   reorderSidebarRows,
   sidebarPreferenceKey,
-  type WorkspaceSidebarPreferences,
 } from "./workspaceSidebarPreferences";
 import styles from "./WorkspaceSidebar.module.css";
+import { useWorkspaceSidebarPreferences } from "./useWorkspaceSidebarPreferences";
 import { SidebarColorPicker } from "./SidebarColorPicker";
 import { WorkspaceSessions } from "./WorkspaceSessions";
 import { useParams } from "@tanstack/react-router";
@@ -65,30 +64,7 @@ const workspaceGroup = "workspaces";
 const name = (row: Resource) => row.workspace?.lane?.name ?? row.workspace?.name ?? row.workspaceID;
 const canLaunch = (row: Resource) => workspaceChatUnavailableReason(row) === null;
 
-function useSidebarPreferences(key: string) {
-  const [preferences, setPreferences] = useState(() => readSidebarPreferences(key));
-  useEffect(() => {
-    const refresh = () => setPreferences(readSidebarPreferences(key));
-    window.addEventListener("storage", refresh);
-    window.addEventListener("cinderdeck-sidebar-preferences", refresh);
-    return () => {
-      window.removeEventListener("storage", refresh);
-      window.removeEventListener("cinderdeck-sidebar-preferences", refresh);
-    };
-  }, [key]);
-  const update = (change: (value: WorkspaceSidebarPreferences) => WorkspaceSidebarPreferences) => {
-    const next = change(preferences);
-    setPreferences(next);
-    try {
-      localStorage.setItem(key, JSON.stringify(next));
-      window.dispatchEvent(new Event("cinderdeck-sidebar-preferences"));
-    } catch {
-      /* Session state still works when storage is unavailable. */
-    }
-  };
-  return { preferences, update };
-}
-type SidebarState = ReturnType<typeof useSidebarPreferences>;
+type SidebarState = ReturnType<typeof useWorkspaceSidebarPreferences>;
 
 function Siblings({
   rows,
@@ -361,7 +337,7 @@ function WorkspaceSidebarTree({
       "threadId" in params &&
       thread.id === params.threadId,
   );
-  const state = useSidebarPreferences(sidebarPreferenceKey(environmentId, installationID));
+  const state = useWorkspaceSidebarPreferences(sidebarPreferenceKey(environmentId, installationID));
   const navigationSearch = {
     ...search,
     environment: environmentId,

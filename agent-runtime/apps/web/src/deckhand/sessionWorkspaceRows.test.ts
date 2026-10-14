@@ -28,6 +28,7 @@ const thread = (id: string, updatedAt = "2026-10-12T12:00:00Z"): SessionShell =>
   environmentId,
   title: id,
   providerInstanceId: ProviderInstanceId.make("codex"),
+  createdAt: updatedAt,
   updatedAt,
   archivedAt: null,
   pinnedAt: null,
@@ -52,7 +53,7 @@ it("includes ordinary threads and saved sessions from removed checkouts without 
     [thread("ordinary"), thread("saved")],
     [saved],
   );
-  expect(rows.map((row) => row.id)).toEqual(["saved", "ordinary"]);
+  expect(rows.map((row) => row.id)).toEqual(["ordinary", "saved"]);
   expect(workspaceSessions(environmentId, resource, [], [], [], [saved])[0]?.title).toBe(
     "Saved checkout chat",
   );
@@ -73,7 +74,7 @@ it("keeps projects and computers separate and removes deleted sessions even from
   );
   expect(rows.map((row) => row.id)).toEqual(["ordinary"]);
 });
-it("orders pinned sessions first, then recent activity, and retains archived history", () => {
+it("orders by session start regardless of activity or pins, and retains archived history", () => {
   const rows = workspaceSessions(
     environmentId,
     resource,
@@ -81,13 +82,17 @@ it("orders pinned sessions first, then recent activity, and retains archived his
     [project],
     [
       { ...thread("pin", "2026-10-01T00:00:00Z"), pinnedAt: "2026-10-02T00:00:00Z" },
-      thread("recent"),
-      { ...thread("archive"), archivedAt: "2026-10-12T13:00:00Z" },
+      { ...thread("recent"), updatedAt: "2026-10-12T12:00:00Z" },
+      {
+        ...thread("archive", "2026-10-11T12:00:00Z"),
+        updatedAt: "2026-10-14T12:00:00Z",
+        archivedAt: "2026-10-12T13:00:00Z",
+      },
     ],
     [],
   );
-  expect(rows.map((row) => row.id)).toEqual(["pin", "recent", "archive"]);
-  expect(rows[2]?.archived).toBe(true);
+  expect(rows.map((row) => row.id)).toEqual(["recent", "archive", "pin"]);
+  expect(rows[1]?.archived).toBe(true);
 });
 it("reflects approvals and review needs from canonical ordinary thread state", () => {
   const rows = workspaceSessions(
@@ -136,3 +141,18 @@ it.each(["tmp", "var", "etc"])(
     }
   },
 );
+
+it("merges saved session start times and uses stable ties even when transport order changes", () => {
+  const history = [
+    { ...saved, createdAt: "2026-10-13T12:00:00Z" },
+    { ...saved, binding: { ...saved.binding, threadId: ThreadId.make("unknown") } },
+  ];
+  const threads = [thread("b"), thread("a")];
+  for (const input of [threads, threads.toReversed()]) {
+    expect(
+      workspaceSessions(environmentId, resource, [], [project], input, history).map(
+        (row) => row.id,
+      ),
+    ).toEqual(["saved", "a", "b", "unknown"]);
+  }
+});

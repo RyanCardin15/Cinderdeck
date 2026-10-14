@@ -31,6 +31,7 @@ export type SessionActionTarget = {
 
 type Action =
   | "open"
+  | "highlight-color"
   | "rename"
   | "mark-unread"
   | "pin"
@@ -72,6 +73,7 @@ export function useSessionActions(environmentId: EnvironmentId) {
     session: SessionActionTarget,
     position: { x: number; y: number },
     enabled: boolean,
+    appearance?: { onHighlight: () => void },
   ) => {
     const api = readLocalApi();
     if (!api || busy.current) return;
@@ -82,6 +84,9 @@ export function useSessionActions(environmentId: EnvironmentId) {
       !!shell && shell.activeProviderThreadId !== null && sessionTerminal.canOpen(threadRef);
     const items: ContextMenuItem<Action>[] = [
       { id: "open", label: "Open session" },
+      ...(appearance
+        ? [{ id: "highlight-color" as const, label: "Highlight color…", icon: "palette" }]
+        : []),
       { id: "rename", label: "Rename session", icon: "pencil", disabled: !enabled },
       { id: "mark-unread", label: "Mark unread", icon: "mail", disabled: !enabled },
       ...(shell && readEnvironmentSupportsPinning(environmentId)
@@ -151,6 +156,10 @@ export function useSessionActions(environmentId: EnvironmentId) {
       if (selected === "rename") {
         setTitle(session.title);
         setRename(session);
+        return;
+      }
+      if (selected === "highlight-color") {
+        appearance?.onHighlight();
         return;
       }
       if (selected === "mark-unread") {

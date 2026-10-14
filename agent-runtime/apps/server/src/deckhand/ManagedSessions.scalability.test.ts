@@ -8,6 +8,7 @@ import {
   type OrchestrationV2StoredEvent,
   type OrchestrationV2ThreadShell,
 } from "@cinderdeck/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -43,7 +44,7 @@ const encodeExternal = Schema.encodeEffect(
 const seed = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   yield* sql`CREATE TABLE IF NOT EXISTS orchestration_v2_projection_threads (
-    thread_id TEXT PRIMARY KEY, deleted_at TEXT
+    thread_id TEXT PRIMARY KEY, deleted_at TEXT, created_at TEXT
   )`;
   const workspaces = yield* decodeWorkspaces(
     Array.from({ length: 100 }, (_, index) => ({
@@ -233,6 +234,7 @@ const harness = (options: { startsConnecting?: boolean } = {}) => {
         count.shells++;
         return {
           id: threadId,
+          createdAt: DateTime.makeUnsafe("2026-10-01T00:00:00Z"),
           providerInstanceId: ProviderInstanceId.make("scale-codex"),
           status: sequence ? "completed" : "running",
           activityRunStatus: null,

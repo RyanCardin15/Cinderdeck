@@ -2,6 +2,7 @@ import { type ThreadId, type OrchestrationV2ThreadShell } from "@cinderdeck/cont
 import * as Contracts from "@cinderdeck/contracts/deckhand";
 import * as Rpc from "@cinderdeck/contracts/deckhand/rpc";
 import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -189,6 +190,7 @@ const make = Effect.gen(function* () {
           return {
             binding: next,
             title: shell.title || title,
+            createdAt: DateTime.formatIso(shell.createdAt),
             ...(objective !== undefined ? { objective } : {}),
             pullRequests: shell.pullRequests ?? [],
             source: "current" as const,
@@ -219,12 +221,14 @@ const make = Effect.gen(function* () {
       const rows = yield* sql<{
         record_json: string;
         title: string;
+        created_at: string;
         workspace_id: string;
         checkout_json: string;
         generation: number | null;
         lane_id: string | null;
         label: string | null;
       }>`SELECT s.record_json, c.record_json AS checkout_json,
+      COALESCE(t.created_at, json_extract(f.record_json, '$.createdAt')) AS created_at,
       COALESCE(json_extract(c.record_json, '$.laneId'), w.owner_id) AS workspace_id,
       json_extract(c.record_json, '$.nativeGeneration') AS generation,
       json_extract(c.record_json, '$.laneId') AS lane_id,
@@ -234,6 +238,7 @@ const make = Effect.gen(function* () {
       JOIN deckhand_features f ON f.id = s.feature_id
       JOIN deckhand_current_checkouts c ON c.origin_id = s.checkout_id
       JOIN deckhand_workspaces w ON w.id = c.workspace_id
+      LEFT JOIN orchestration_v2_projection_threads t ON t.thread_id = s.thread_id
       WHERE c.workspace_id = w.id AND w.environment_id = ${input.installationID} AND w.backend = 'cinderdeck'
         AND NOT EXISTS (SELECT 1 FROM orchestration_v2_projection_threads t
           WHERE t.thread_id = s.thread_id AND t.deleted_at IS NOT NULL)
@@ -241,7 +246,10 @@ const make = Effect.gen(function* () {
           OR (${input.scope !== "workspace" ? 1 : 0}
             AND json_extract(c.record_json, '$.nativeGeneration') = ${input.generation}
             AND COALESCE(json_extract(c.record_json, '$.laneId'), w.owner_id) = ${input.workspaceID}))
-      ORDER BY s.rowid DESC LIMIT ${input.limit} OFFSET ${input.offset ?? 0}`;
+      ORDER BY CASE WHEN ${input.scope === "workspace" ? 1 : 0}
+        THEN COALESCE(julianday(t.created_at), julianday(json_extract(f.record_json, '$.createdAt')), 0)
+        ELSE 0 END DESC, s.rowid DESC
+      LIMIT ${input.limit} OFFSET ${input.offset ?? 0}`;
       // History belongs to durable workspace/checkouts, not the live lane catalog.
       // Native availability annotates rows; it never decides whether history is readable.
       const catalog =
@@ -253,7 +261,11 @@ const make = Effect.gen(function* () {
       return yield* Effect.forEach(rows, (row) =>
         Effect.gen(function* () {
           const binding = yield* decodeBinding(row.record_json);
-          const session = yield* readCurrent(binding, row.title, sequence);
+          const currentSession = yield* readCurrent(binding, row.title, sequence);
+          const session = {
+            ...currentSession,
+            createdAt: "createdAt" in currentSession ? currentSession.createdAt : row.created_at,
+          };
           if (input.scope !== "workspace") return session;
           const resource = catalog?.resources.find((item) => item.workspaceID === row.workspace_id);
           const current =

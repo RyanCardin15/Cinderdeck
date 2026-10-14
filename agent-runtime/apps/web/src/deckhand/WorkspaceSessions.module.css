@@ -5,6 +5,9 @@
   display: grid;
   gap: 3px;
 }
+.row {
+  min-width: 0;
+}
 .session {
   display: flex;
   align-items: center;
@@ -20,6 +23,19 @@
 }
 .session[aria-current="page"] {
   background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.session[data-highlighted="true"] {
+  background: color-mix(in srgb, var(--session-accent) 7%, transparent);
+  box-shadow: inset 2px 0 var(--session-accent);
+}
+.session[data-highlighted="true"]:hover {
+  background: color-mix(in srgb, var(--session-accent) 12%, transparent);
+}
+.session[data-highlighted="true"][aria-current="page"] {
+  background: color-mix(in srgb, var(--session-accent) 18%, transparent);
+}
+.session[data-highlighted="true"] > svg:first-child {
+  color: var(--session-accent);
 }
 .session:focus-visible,
 .more:focus-visible {
@@ -115,10 +131,12 @@
   font-size: 12px;
 }
 .more {
+  display: inline-block;
   background: transparent;
   border: 0;
   padding: 8px 12px;
   cursor: pointer;
+  text-decoration: none;
 }
 .more:hover {
   color: var(--foreground);

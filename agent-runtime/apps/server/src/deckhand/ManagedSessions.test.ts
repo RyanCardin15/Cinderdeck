@@ -37,7 +37,7 @@ const decodeSession = Schema.decodeUnknownEffect(Contracts.SessionBinding);
 const seed = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   yield* sql`CREATE TABLE IF NOT EXISTS orchestration_v2_projection_threads (
-    thread_id TEXT PRIMARY KEY, deleted_at TEXT
+    thread_id TEXT PRIMARY KEY, deleted_at TEXT, created_at TEXT
   )`;
   const store = yield* Relationships.Relationships;
   const workspace = yield* decodeWorkspace({
@@ -121,6 +121,7 @@ const source = () => {
     shells: new Map<ThreadId, OrchestrationV2ThreadShell>(),
     shell: {
       id: threadId,
+      createdAt: DateTime.makeUnsafe("2026-10-01T00:00:00Z"),
       providerInstanceId: instanceId,
       status: "running",
       activityRunStatus: "running",
@@ -201,7 +202,7 @@ describe("managed session provider projection", () => {
               },
               null,
             );
-            yield* sql`INSERT INTO orchestration_v2_projection_threads VALUES (${`deleted-thread-${index}`}, '2026-10-05')`;
+            yield* sql`INSERT INTO orchestration_v2_projection_threads (thread_id, deleted_at) VALUES (${`deleted-thread-${index}`}, '2026-10-05')`;
           }
           f.state.shell = {
             ...f.state.shell!,
@@ -218,7 +219,7 @@ describe("managed session provider projection", () => {
           });
           assert.equal(overview[0]!.total, 1);
           assert.equal(overview[0]!.sessions[0]!.binding.id, original.id);
-          yield* sql`INSERT INTO orchestration_v2_projection_threads VALUES (${threadId}, '2026-10-05')`;
+          yield* sql`INSERT INTO orchestration_v2_projection_threads (thread_id, deleted_at) VALUES (${threadId}, '2026-10-05')`;
           assert.deepEqual(yield* service.list(scope), []);
           const [selected] = yield* service
             .subscribeThread({
@@ -725,6 +726,49 @@ const historyLane = (name: string): IntegrationView["resources"][number] => ({
 });
 
 describe("workspace conversation history", () => {
+  it.effect("pages by session start time instead of saved insertion order", () =>
+    Effect.gen(function* () {
+      const f = source();
+      yield* Effect.gen(function* () {
+        yield* seed;
+        const store = yield* Relationships.Relationships;
+        const sql = yield* SqlClient.SqlClient;
+        const original = yield* store.session("session");
+        yield* sql`UPDATE deckhand_features SET record_json = json_set(record_json, '$.createdAt', '2026-10-01T00:00:00Z')`;
+        for (const [id, createdAt] of [
+          ["newest", "2026-10-14T10:00:00Z"],
+          ["oldest", "2026-10-01T10:00:00Z"],
+          ["middle", "2026-10-12T10:00:00Z"],
+        ] as const) {
+          yield* store.putSession(
+            { ...original, id: Contracts.SessionBindingId.make(id), threadId: ThreadId.make(id) },
+            null,
+          );
+          yield* sql`INSERT INTO orchestration_v2_projection_threads (thread_id, created_at) VALUES (${id}, ${createdAt})`;
+          f.state.shells.set(ThreadId.make(id), {
+            ...f.state.shell!,
+            id: ThreadId.make(id),
+            createdAt: DateTime.makeUnsafe(createdAt),
+          });
+        }
+        const service = yield* ManagedSessions.ManagedSessions;
+        const input = { ...scope, workspaceID: "payment", scope: "workspace" as const, limit: 1 };
+        const first = yield* service.list(input);
+        assert.equal(first[0]!.binding.threadId, "newest");
+        assert.equal(first[0]!.createdAt, "2026-10-14T10:00:00.000Z");
+        assert.equal((yield* service.list({ ...input, offset: 1 }))[0]!.binding.threadId, "middle");
+        // A missing canonical projection still has its durable feature timestamp.
+        f.state.shell = null;
+        f.state.shells.clear();
+        yield* sql`UPDATE deckhand_features SET record_json = json_set(record_json, '$.createdAt', '2026-10-03T00:00:00Z')`;
+        const unavailable = yield* service.list({ ...input, offset: 3 });
+        assert.equal(unavailable[0]!.binding.threadId, "oldest");
+        assert.equal(unavailable[0]!.source, "unavailable");
+        const fallback = yield* service.list({ ...input, offset: 2 });
+        assert.equal(fallback[0]!.createdAt, "2026-10-03T00:00:00Z");
+      }).pipe(Effect.provide(f.layer().pipe(Layer.provideMerge(baseLayer))));
+    }),
+  );
   it.effect(
     "retains removed lanes and prior generations, isolates workspace/host identity, and pages archives",
     () =>
@@ -846,7 +890,7 @@ describe("workspace conversation history", () => {
           catalog = { ...catalog, state: "unavailable" };
           assert.equal((yield* service.list(input))[2]!.context?.availability, "unknown");
           const sql = yield* SqlClient.SqlClient;
-          yield* sql`INSERT INTO orchestration_v2_projection_threads VALUES ('old-lane', '2026-10-05')`;
+          yield* sql`INSERT INTO orchestration_v2_projection_threads (thread_id, deleted_at) VALUES ('old-lane', '2026-10-05')`;
           assert.deepEqual(
             (yield* service.list(input)).map((row) => row.binding.id),
             ["primary", "session"],

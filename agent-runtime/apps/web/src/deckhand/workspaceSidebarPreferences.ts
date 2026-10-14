@@ -3,6 +3,7 @@ export type WorkspaceSidebarPreferences = {
   favorites: string[];
   expanded: Record<string, boolean>;
   colors: Record<string, string>;
+  sessionColors: Record<string, string>;
 };
 
 const emptySidebarPreferences = (): WorkspaceSidebarPreferences => ({
@@ -10,6 +11,7 @@ const emptySidebarPreferences = (): WorkspaceSidebarPreferences => ({
   favorites: [],
   expanded: {},
   colors: {},
+  sessionColors: {},
 });
 
 export const isSidebarColor = (value: unknown): value is string =>
@@ -44,6 +46,11 @@ export function readSidebarPreferences(key: string): WorkspaceSidebarPreferences
         Object.entries(raw.colors && typeof raw.colors === "object" ? raw.colors : {}).filter(
           (entry): entry is [string, string] => isSidebarColor(entry[1]),
         ),
+      ),
+      sessionColors: Object.fromEntries(
+        Object.entries(
+          raw.sessionColors && typeof raw.sessionColors === "object" ? raw.sessionColors : {},
+        ).filter((entry): entry is [string, string] => isSidebarColor(entry[1])),
       ),
     };
   } catch {

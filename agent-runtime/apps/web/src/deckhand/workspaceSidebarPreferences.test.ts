@@ -43,6 +43,7 @@ it("validates saved state and scopes it by execution computer and installation",
       favorites: ["alpha", "alpha", false],
       expanded: { alpha: false, beta: "true" },
       colors: { alpha: "#579de5", "alpha/lane": "#ABCDEF", beta: "red", bad: 12 },
+      sessionColors: { alpha: "#de83b2", bad: "blue", invalid: false },
     }),
   );
   expect(readSidebarPreferences(key)).toEqual({
@@ -50,6 +51,7 @@ it("validates saved state and scopes it by execution computer and installation",
     favorites: ["alpha"],
     expanded: { alpha: false },
     colors: { alpha: "#579de5", "alpha/lane": "#ABCDEF" },
+    sessionColors: { alpha: "#de83b2" },
   });
   expect(readSidebarPreferences(sidebarPreferenceKey("another", "install")).favorites).toEqual([]);
   expect(readSidebarPreferences(sidebarPreferenceKey("computer", "replacement")).order).toEqual({});
@@ -59,6 +61,7 @@ it("validates saved state and scopes it by execution computer and installation",
     favorites: [],
     expanded: {},
     colors: {},
+    sessionColors: {},
   });
 });
 
@@ -70,5 +73,6 @@ it("keeps older sidebar preferences while adding an empty color map", () => {
     favorites: ["alpha"],
     expanded: { alpha: true },
     colors: {},
+    sessionColors: {},
   });
 });

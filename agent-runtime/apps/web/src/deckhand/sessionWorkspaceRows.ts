@@ -12,6 +12,7 @@ export type SessionShell = Pick<
   | "id"
   | "title"
   | "providerInstanceId"
+  | "createdAt"
   | "updatedAt"
   | "archivedAt"
   | "pinnedAt"
@@ -27,6 +28,7 @@ export type WorkspaceSession = {
   id: string;
   title: string;
   providerInstanceId: string;
+  createdAt: string;
   updatedAt: string;
   archived: boolean;
   pinned: boolean;
@@ -83,6 +85,7 @@ export function workspaceSessions(
       id: session.binding.threadId,
       title: session.title,
       providerInstanceId: session.binding.providerInstanceId,
+      createdAt: session.createdAt ?? "",
       updatedAt: "",
       archived: session.archived,
       pinned: false,
@@ -107,6 +110,7 @@ export function workspaceSessions(
       id: thread.id,
       title: thread.title,
       providerInstanceId: thread.providerInstanceId,
+      createdAt: thread.createdAt,
       updatedAt: thread.updatedAt,
       archived: !!thread.archivedAt,
       pinned: !!thread.pinnedAt,
@@ -123,7 +127,11 @@ export function workspaceSessions(
               : "idle",
     });
   }
+  const started = (value: string) => {
+    const time = Date.parse(value);
+    return Number.isFinite(time) ? time : 0;
+  };
   return [...result.values()].sort(
-    (a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt.localeCompare(a.updatedAt),
+    (a, b) => started(b.createdAt) - started(a.createdAt) || a.id.localeCompare(b.id),
   );
 }
