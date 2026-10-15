@@ -8,6 +8,13 @@
       "noticeFile": "LICENSE"
     },
     {
+      "bundles": ["desktop", "server", "web"],
+      "license": "MIT",
+      "name": "Native computer-use interoperability - Cua Driver and yabai",
+      "sourceUrl": "https://github.com/trycua/cua/tree/main/libs/cua-driver",
+      "noticeFile": "native/mac-computer-use/THIRD_PARTY_NOTICES.md"
+    },
+    {
       "bundles": ["assets", "desktop", "web"],
       "license": "CC0-1.0",
       "name": "Notification Sound 1 by deadrobotmusic",

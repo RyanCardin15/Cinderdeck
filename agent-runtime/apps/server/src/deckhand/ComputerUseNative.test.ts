@@ -21,6 +21,7 @@ readline.createInterface({input:process.stdin}).on("line", line => {
   const {id,method,params} = JSON.parse(line);
   if (method === "hang") return;
   if (method === "error") console.log(JSON.stringify({id,error:"element_missing",detail:"Read fresh state"}));
+  else if (method === "captureTimeout") console.log(JSON.stringify({id,error:"timeout",detail:"Screen capture stalled"}));
   else console.log(JSON.stringify({id,result:{pid:process.pid,method,params}}));
 });
 `,
@@ -58,6 +59,17 @@ describe.skipIf(HostProcessPlatform.defaultValue() !== "darwin")(
       await expect(call("hang", {}, 20)).rejects.toMatchObject({ reason: "timeout" });
       const next = await call("echo");
       expect(next.pid).not.toBe(first.pid);
+    });
+
+    it("restarts after a native capture deadline and rejects queued work", async () => {
+      const first = await call("echo");
+      const queued = call("hang").catch((error: unknown) => error);
+      await expect(call("captureTimeout")).rejects.toMatchObject({
+        reason: "timeout",
+        detail: "Screen capture stalled",
+      });
+      await expect(queued).resolves.toMatchObject({ reason: "timeout" });
+      expect((await call("echo")).pid).not.toBe(first.pid);
     });
 
     it("caps the queue even when calls arrive during startup", async () => {

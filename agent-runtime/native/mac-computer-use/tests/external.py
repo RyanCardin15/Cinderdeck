@@ -6,7 +6,7 @@ mac=app/'Contents/MacOS'
 mac.mkdir(parents=True,exist_ok=True)
 shutil.copy2(sys.argv[1],mac/'fixture')
 with (app/'Contents/Info.plist').open('wb') as f:
- plistlib.dump({'CFBundleIdentifier':'com.example.computer-use-fixture','CFBundleExecutable':'fixture','CFBundleName':'Computer Use Fixture','CFBundlePackageType':'APPL','LSUIElement':True},f)
+ plistlib.dump({'CFBundleIdentifier':'com.example.computer-use-fixture','CFBundleExecutable':'fixture','CFBundleName':'Computer Use Fixture','CFBundlePackageType':'APPL','LSUIElement':False},f)
 subprocess.run(['/usr/bin/codesign','--force','--sign','-',str(app)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 helper=sys.argv[2]
 fixture=None; native=None
@@ -17,6 +17,13 @@ def read(p,timeout=35):
  line=p.stdout.readline()
  if not line: raise RuntimeError('Owned process exited')
  return json.loads(line)
+
+class CaptureTimeout(Exception): pass
+
+def stop_helper(p):
+ p.stdin.close()
+ try:p.wait(timeout=5)
+ except subprocess.TimeoutExpired:p.terminate();p.wait(timeout=5)
 
 try:
  fixture=subprocess.Popen([str(mac/'fixture'),'--target'],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True)
@@ -31,11 +38,25 @@ try:
   native.stdin.write(json.dumps({'id':sequence,'method':method,'params':params})+'\n');native.stdin.flush()
   result=read(native)
   assert result.get('id')==sequence,result
+  if result.get('error')=='timeout': raise CaptureTimeout(result)
   if 'error' in result: raise RuntimeError(result)
   return result['result'],(time.perf_counter()-start)*1000
  def state(image=False):return call('getState',includeScreenshot=image)
- first,ms=state(True)
- print('initial',json.dumps({'ms':ms,'windows':first['windows'],'nodes':len(first['nodes']),'screenshot': {k:v for k,v in first.get('screenshot',{}).items() if k!='data'},'screenshotError':first.get('screenshotError')}),flush=True)
+ # Match the production transport: a capture deadline discards the owned helper
+ # and its pending work. The next state read starts a clean helper. Never retry
+ # a permission denial or a mutation, and keep recovery bounded.
+ recovery_start=time.perf_counter()
+ for attempt in range(3):
+  try:
+   first,ms=state(True)
+   break
+  except CaptureTimeout:
+   assert attempt < 2, 'Capture did not recover after three fresh helpers'
+   assert time.perf_counter()-recovery_start < 25, 'Capture deadline was not bounded'
+   stop_helper(native)
+   native=subprocess.Popen([helper,'--serve'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True)
+   print('capture recovery',{'attempt':attempt+1,'ready':read(native).get('ready')},flush=True)
+ print('initial',json.dumps({'ms':ms,'windows':first['windows'],'nodes':len(first['nodes']),'screenshot': {k:v for k,v in first.get('screenshot',{}).items() if k!='data'},'screenshotError':first.get('screenshotError'),'screenshotErrorDetail':first.get('screenshotErrorDetail')}),flush=True)
  assert first.get('screenshot',{}).get('data'),first.get('screenshotError')
  field=next(n for n in first['nodes'] if n.get('identifier')=='fixture-field');idx=field['id']
  def value(s):return next(n.get('value','') for n in s['nodes'] if n.get('identifier')=='fixture-field')

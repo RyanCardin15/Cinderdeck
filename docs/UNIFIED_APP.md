@@ -12,6 +12,13 @@ For isolated renderer development, `node scripts/dev-runner.ts dev --home-dir /a
 
 The UI still uses React/Electron as part of the bundled Mac app. This change removes standalone browser access; it does not replace the interface with SwiftUI. Whole-app validation still requires the packaged outer application.
 
+The composer **+** menu can attach the external app you most recently used or a
+chosen open window. Browser page metadata is read through Accessibility when
+available. Native Cinderdeck tracks app activation and captures the exact selected
+window; the runtime receives bounded, correlated metadata and image replies over
+the private parent pipe. Suggestions remain in memory, captures stay in the draft
+until sent, and app-control permission remains separate. See [Computer use](COMPUTER_USE.md).
+
 ## Build and assemble
 
 Clone the Cinderdeck repository normally. The maintained agent runtime source is included as tracked files under `agent-runtime/`, with full history and licenses. Use Xcode 26.2 or later and Rust/Cargo. The builder installs frozen dependencies and bootstraps the supported Node toolchain inside the clone when needed. It does not fetch a different harness revision.

@@ -39,11 +39,11 @@ struct Target {
     return list.first { AX.bool(AX.copy($0, kAXMinimizedAttribute)) != true } ?? list.first
   }
 
-  /// The window actions target: the one from the latest state read when it is
-  /// still open, else the app's focused/main window.
-  private func currentWindow() -> AXUIElement? {
+  /// Actions never silently retarget when the previously selected window closes.
+  private func currentWindow(allowFallback: Bool = false) -> AXUIElement? {
     let list = windows()
     if let window = store.window, list.contains(where: { CFEqual($0, window) }) { return window }
+    if store.window != nil && !allowFallback { return nil }
     let window = defaultWindow(list)
     store.window = window
     store.windowID = window.flatMap(windowID)
@@ -73,7 +73,8 @@ struct Target {
 
   func state(window index: Int?, includeScreenshot: Bool, maxNodes: Int) async throws -> [String: Any] {
     let list = windows()
-    var window = currentWindow()
+    let previousWindow = store.window
+    var window = currentWindow(allowFallback: true)
     if let index {
       guard list.indices.contains(index) else {
         throw Failed(.window_missing, "No window \(index); the app has \(list.count).")
@@ -84,6 +85,11 @@ struct Target {
     store.windowID = window.flatMap(windowID)
     store.elements.removeAll(keepingCapacity: true)
     let windowFrame = window.flatMap(AX.frame)
+    let sameWindow = previousWindow.flatMap { previous in window.map { CFEqual(previous, $0) } } ?? false
+    if includeScreenshot || !sameWindow || windowFrame != store.screenshotFrame {
+      store.screenshotID = nil
+      store.screenshotFrame = nil
+    }
     var walk = TreeWalk(
       store: store, windowFrame: windowFrame, maxNodes: maxNodes,
       deadline: Date().addingTimeInterval(4))
@@ -140,6 +146,7 @@ struct Target {
       result["window"] = [
         "title": window.flatMap { AX.string(AX.copy($0, kAXTitleAttribute)) } ?? "",
         "width": windowFrame.width, "height": windowFrame.height,
+        "id": store.windowID.map(Int.init) ?? -1,
       ]
     }
     if let focusedID { result["focusedId"] = focusedID }
@@ -148,9 +155,18 @@ struct Target {
     }
     if includeScreenshot, let windowID = store.windowID {
       do {
-        result["screenshot"] = try await Capture.window(windowID)
+        let screenshot = try await Capture.window(windowID)
+        guard let current = currentWindow(), AX.frame(current) == windowFrame else {
+          throw Failed(.invalid_input, "The window moved or resized during capture. Read a fresh screenshot.")
+        }
+        store.screenshotID = UUID().uuidString
+        store.screenshotFrame = windowFrame
+        result["screenshot"] = screenshot
+        result["screenshotID"] = store.screenshotID
       } catch let failed as Failed {
+        if failed.reason == .timeout { throw failed }
         result["screenshotError"] = failed.reason.rawValue
+        if !failed.detail.isEmpty { result["screenshotErrorDetail"] = String(failed.detail.prefix(300)) }
       } catch {
         result["screenshotError"] = Failure.unavailable.rawValue
       }
@@ -159,6 +175,9 @@ struct Target {
   }
 
   private func registered(_ id: Int) throws -> (element: AXUIElement, frame: CGRect?) {
+    if store.window != nil && currentWindow() == nil {
+      throw Failed(.window_missing, "The selected window closed. Read fresh state before choosing another window.")
+    }
     guard let entry = store.elements[id] else {
       throw Failed(.element_missing, "Element \(id) is not in the latest state. Read the app state again.")
     }
@@ -177,11 +196,27 @@ struct Target {
     guard let window = currentWindow(), let frame = AX.frame(window) else {
       throw Failed(.window_missing, "The app has no open window.")
     }
+    guard let captured = store.screenshotFrame, frame == captured else {
+      throw Failed(.invalid_input, "The window moved or resized. Read a fresh screenshot before coordinate actions.")
+    }
+    guard point.x.isFinite, point.y.isFinite, point.x >= 0, point.y >= 0,
+      point.x < frame.width, point.y < frame.height else {
+      throw Failed(.invalid_input, "Coordinates must be inside the latest window screenshot.")
+    }
     return CGPoint(x: frame.minX + point.x, y: frame.minY + point.y)
   }
 
+  func requireScreenshot(_ id: String?) throws {
+    guard let id, id == store.screenshotID else {
+      throw Failed(.invalid_input, "The screenshot is stale. Read a fresh screenshot before coordinate actions.")
+    }
+  }
+
   /// Prepares the target window for synthesized input without activating its app.
-  private func prepareInput() {
+  private func prepareInput() throws {
+    if store.window != nil && currentWindow() == nil {
+      throw Failed(.window_missing, "The selected window closed. Read fresh state before acting.")
+    }
     guard let windowID = store.windowID ?? currentWindow().flatMap(windowID) else { return }
     if NSRunningApplication(processIdentifier: pid)?.isActive == true,
       let window = store.window, let focused = AX.copy(element, kAXFocusedWindowAttribute),
@@ -222,21 +257,36 @@ struct Target {
       guard let point = center(entry.frame) else {
         throw Failed(.unsupported_action, "Element \(id) has no position to click.")
       }
-      prepareInput()
+      try prepareInput()
       await show(agent, at: point, click: true)
       try Input.click(pid: pid, windowID: store.windowID, at: point, button: button, count: count)
       return
     }
     guard let x, let y else { throw Failed(.invalid_input, "Pass element_index or x and y.") }
     let point = try global(CGPoint(x: x, y: y))
-    prepareInput()
+    try prepareInput()
     await show(agent, at: point, click: true)
     try Input.click(pid: pid, windowID: store.windowID, at: point, button: button, count: count)
   }
 
-  func drag(from: CGPoint, to: CGPoint, agent: Agent) async throws {
+  func drag(from: CGPoint, to: CGPoint, foreground: Bool = false, agent: Agent) async throws {
     let start = try global(from), end = try global(to)
-    prepareInput()
+    if foreground {
+      func verify() throws {
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+          let selected = currentWindow(), let focused = AX.copy(element, kAXFocusedWindowAttribute),
+          CFGetTypeID(focused) == AXUIElementGetTypeID(), CFEqual(selected, focused),
+          AX.frame(selected) == store.screenshotFrame else {
+          throw Failed(.invalid_input, "Foreground drag requires the exact selected window in front with unchanged geometry. Activate it and read a fresh screenshot.")
+        }
+      }
+      try verify()
+      await show(agent, at: start)
+      try Input.foregroundDrag(pid: pid, from: start, to: end, verify: verify)
+      await show(agent, at: end)
+      return
+    }
+    try prepareInput()
     await show(agent, at: start)
     try Input.drag(pid: pid, windowID: store.windowID, from: start, to: end)
     await show(agent, at: end)
@@ -270,7 +320,7 @@ struct Target {
     func unit(_ value: Double) -> Double { value == 0 ? 0 : value < 0 ? -1 : 1 }
     let deltaY = pages.map { unit(dy) * Double(height) * 0.85 * $0 } ?? dy
     let deltaX = pages.map { unit(dx) * Double(width) * 0.85 * $0 } ?? dx
-    prepareInput()
+    try prepareInput()
     await show(agent, at: point)
     // Large deltas are split so apps that clamp a single wheel event still move.
     let steps = max(1, Int((max(abs(deltaX), abs(deltaY)) / 600).rounded(.up)))
@@ -325,7 +375,7 @@ struct Target {
 
   func key(code: CGKeyCode, modifiers: [String], repeatCount: Int, agent: Agent) async throws {
     let flags = try Input.flags(modifiers)
-    prepareInput()
+    try prepareInput()
     if let window = store.window, let frame = AX.frame(window) {
       await show(agent, at: CGPoint(x: frame.midX, y: frame.minY + 12))
     }
@@ -355,11 +405,13 @@ struct Target {
       }
       await show(agent, at: center(entry.frame))
     }
-    prepareInput()
+    try prepareInput()
     try Input.type(pid: pid, text: text)
   }
 
-  func setValue(id: Int, value: String, agent: Agent) async throws {
+  // Preserve the caller's executor for in-process AX clients (including the
+  // fixture); real external targets still run on their per-app worker lane.
+  func setValue(id: Int, value: String, agent: Agent, isolation: isolated (any Actor)? = #isolation) async throws {
     let entry = try registered(id)
     var settable: DarwinBoolean = false
     guard
@@ -381,7 +433,8 @@ struct Target {
   }
 
   func selectText(
-    id: Int, text: String, prefix: String?, suffix: String?, mode: String, agent: Agent
+    id: Int, text: String, prefix: String?, suffix: String?, mode: String, agent: Agent,
+    isolation: isolated (any Actor)? = #isolation
   ) async throws {
     let entry = try registered(id)
     guard let value = AX.string(AX.copy(entry.element, kAXValueAttribute)) else {
@@ -443,7 +496,7 @@ struct Target {
   }
 
   func paste(_ text: String, agent: Agent) async throws {
-    prepareInput()
+    try prepareInput()
     try await Clipboard.paste(text, pid: pid)
   }
 

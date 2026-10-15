@@ -11,7 +11,7 @@ If these tools are absent, report that this conversation needs Cinderdeck's comp
 
 ## Read, act, verify
 
-1. Call `computer_list_apps` once to discover exact bundle IDs and permission status. Reuse the chosen bundle ID rather than repeatedly listing apps.
+1. Call `computer_list_apps` once to discover exact bundle IDs and permission status. Reuse its exact `target` (`pid:<number>`) while it is running. Multiple running copies can share a bundle ID; ambiguous names or IDs fail with `app_ambiguous` instead of choosing a process. A `pid:` target never launches a replacement.
 2. Call `computer_get_app_state({app, includeScreenshot:false})` for tasks identifiable through labels and values. This can launch the app in the background and requests the person's approval for this app in this conversation. Request a screenshot when layout or visual evidence matters.
 3. Confirm the intended window from the returned window list. Select it with `window` from that list; the selection persists for subsequent reads and actions. Identify the specific element by its label, role, value and surrounding context. Never invent an index or use the first text field without establishing its purpose.
 4. Choose the cheapest supported action below. Act on indexes from this conversation's latest state of that app/window.
@@ -33,7 +33,9 @@ Later reads are diffs: `+` adds, `~` changes and `-` removes an element. Unchang
 | Paste long text when direct editing is unavailable | `computer_paste({app, text})` | Establish the intended focus first. Temporarily uses the clipboard and restores it unless newer content was copied. |
 | Click or drag without a usable accessibility element | `computer_click({app, x, y})` / `computer_drag({app, from_x, from_y, to_x, to_y})` | Use a current screenshot's window-relative image pixels, not desktop coordinates or normalized values. |
 
-Get a fresh screenshot before coordinate actions after switching or resizing a window, or any layout change. Text-only reads preserve the last screenshot's scale for unchanged geometry; they do not supply fresh visual evidence. Prefer element actions when possible.
+Get a fresh screenshot before coordinate actions after moving, switching or resizing a window, or any layout change. Coordinates must be inside the returned image bounds. The native helper checks the exact screenshot identity and geometry; stale captures, replaced windows and restarted helpers are rejected. Text-only reads preserve the last screenshot's scale for unchanged geometry; they do not supply fresh visual evidence. A failed new capture clears the previous mapping. Input to a closed selected window fails instead of falling through to another window. Read fresh state and explicitly confirm the next target. Prefer element actions when possible.
+
+Chrome native HTML drag-and-drop can start but ignore background continuation events. Read state before retrying. When interrupting the foreground fits the user's authorized task, call `computer_activate_app`, read a fresh screenshot, then explicitly request `computer_drag({...coordinates, foreground:true})`. This fallback moves the system pointer, checks the exact selected foreground window throughout, and restores the pointer after completion if the person has not moved it. It is never selected automatically.
 
 Actions normally run in the background with an agent cursor. Use `computer_activate_app` only when the app demonstrably ignores background input and bringing it forward fits the user's request; it interrupts their foreground work.
 
@@ -68,6 +70,7 @@ The default script deadline is 60 seconds; the maximum is five minutes. Prefer a
 - `app_busy`: another conversation holds this app's mutation lease. Wait briefly or do independent work; do not steal focus or repeat mutations rapidly.
 - `timeout`, failed script, or interrupted call: earlier actions may already have completed. Read current state before retrying, particularly before an append, submit, save or export. Never replay the entire batch blindly.
 - Permission, locked-screen or denied-approval errors: follow the returned instructions and let the person resolve the permission or unlock. Do not automate security UI or retry a denial.
+- `app_ambiguous`: choose the intended running process from `computer_list_apps` and reuse its exact `pid:` target.
 - `app_missing` or `native_unavailable`: check the target/tool environment once and report what is missing rather than issuing repeated action calls.
 
 Finish with the observed result and any remaining uncertainty. Use fresh screenshots for visual claims and the app's actual completion state for save/export/submit claims. Complex drag/scroll and third-party background input vary by app; successful dispatch alone is insufficient evidence.

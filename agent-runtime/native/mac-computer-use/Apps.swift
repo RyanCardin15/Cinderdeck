@@ -111,11 +111,18 @@ enum Apps {
   }
 
   private static func refreshRunning(_ rows: [[String: Any]]) -> [[String: Any]] {
-    let live = Set(running().compactMap { $0.bundleIdentifier?.lowercased() })
-    return rows.map { row in
+    let live = Dictionary(grouping: running(), by: { $0.bundleIdentifier!.lowercased() })
+    return rows.flatMap { row -> [[String: Any]] in
       var row = row
-      row["isRunning"] = live.contains((row["id"] as? String ?? "").lowercased())
-      return row
+      let instances = live[(row["id"] as? String ?? "").lowercased()] ?? []
+      row["isRunning"] = !instances.isEmpty
+      if instances.isEmpty { return [row] }
+      return instances.map { app in
+        var instance = row
+        instance["processId"] = Int(app.processIdentifier)
+        instance["target"] = "pid:\(app.processIdentifier)"
+        return instance
+      }
     }.sorted { left, right in
       let l = left["isRunning"] as? Bool ?? false, r = right["isRunning"] as? Bool ?? false
       if l != r { return l }
@@ -130,10 +137,21 @@ enum Apps {
     guard !q.isEmpty, q.utf8.count <= 300 else { throw Failed(.invalid_input, "Name an app.") }
     let lower = q.lowercased()
     let candidates = running()
-    let match =
-      candidates.first { $0.bundleIdentifier?.lowercased() == lower }
-      ?? candidates.first { $0.localizedName?.lowercased() == lower }
-      ?? candidates.first { $0.executableURL?.lastPathComponent.lowercased() == lower }
+    if lower.hasPrefix("pid:") {
+      guard let pid = pid_t(lower.dropFirst(4)), pid > 0,
+        let app = candidates.first(where: { $0.processIdentifier == pid }), let id = app.bundleIdentifier else {
+        throw Failed(.app_missing, "That exact app process is no longer running. List apps again.")
+      }
+      guard !isBlocked(id) else { throw Failed(.app_blocked, id) }
+      return AppRef(bundleId: id, name: app.localizedName ?? id, url: app.bundleURL, pid: pid)
+    }
+    let ids = candidates.filter { $0.bundleIdentifier?.lowercased() == lower }
+    let names = candidates.filter { $0.localizedName?.lowercased() == lower }
+    let matches = !ids.isEmpty ? ids : !names.isEmpty ? names : candidates.filter { $0.executableURL?.lastPathComponent.lowercased() == lower }
+    guard matches.count <= 1 else {
+      throw Failed(.app_ambiguous, "Multiple app processes match. Use an exact target from computer_list_apps: \(matches.prefix(8).map { "pid:\($0.processIdentifier)" }.joined(separator: ", "))")
+    }
+    let match = matches.first
     if let match, let id = match.bundleIdentifier {
       guard !isBlocked(id) else { throw Failed(.app_blocked, id) }
       return AppRef(

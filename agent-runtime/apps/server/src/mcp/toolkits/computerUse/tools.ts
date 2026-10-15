@@ -36,7 +36,7 @@ export const ComputerUseToolkit = Toolkit.make(
     ...base,
     // No `parameters`: an explicit empty Struct is not a valid MCP input schema.
     success: C.ComputerListAppsResult,
-    description: `List installed and running Mac apps that computer use can target, with their bundle IDs and the Mac's permission status. ${background}`,
+    description: `List installed and running Mac apps with bundle IDs, exact pid:<number> targets for running processes, and permission status. Reuse the process target when several copies of an app are running; ambiguous names/bundle IDs fail instead of choosing one. ${background}`,
   })
     .annotate(Tool.Readonly, true)
     .annotate(Tool.Idempotent, true),
@@ -54,7 +54,7 @@ export const ComputerUseToolkit = Toolkit.make(
       ...base,
       parameters: C.ComputerClick,
       success: C.ComputerActionResult,
-      description: `Click an element by element_index (uses its accessibility action when it has one) or at screenshot x/y in the target window. ${after}`,
+      description: `Click an element by element_index (uses its accessibility action when it has one) or at screenshot x/y inside the target window's image bounds. Coordinate input requires a current screenshot; moved, resized, replaced or closed targets are rejected. Read a fresh screenshot after such errors. ${after}`,
     }),
   ),
   actionTool(
@@ -110,7 +110,7 @@ export const ComputerUseToolkit = Toolkit.make(
       ...base,
       parameters: C.ComputerDrag,
       success: C.ComputerActionResult,
-      description: `Drag with the left button between two screenshot points in the target window. ${after}`,
+      description: `Drag with the left button between two screenshot points in the target window. Background by default. For native drag-and-drop that ignores background events, foreground:true explicitly uses the system pointer; first activate the exact app and read a fresh screenshot. Use this fallback only when interrupting the user's work fits the authorized task. It checks the selected foreground window throughout, stops if the pointer is moved, and restores the pointer after completion. ${after}`,
     }),
   ),
   actionTool(

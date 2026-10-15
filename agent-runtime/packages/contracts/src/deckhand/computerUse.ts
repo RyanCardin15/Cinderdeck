@@ -5,7 +5,7 @@ import * as Schema from "effect/Schema";
 
 const appName = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(300)).annotate({
   description:
-    "App bundle ID (preferred, e.g. com.microsoft.Excel), display name, or process name from computer_list_apps.",
+    "Exact target from computer_list_apps (pid:<processId> when multiple instances are running), app bundle ID, display name, or process name. Reuse the same target for reads and actions.",
 });
 const elementIndex = Schema.Int.check(
   Schema.isBetween({ minimum: 1, maximum: 10_000_000 }),
@@ -14,10 +14,12 @@ const elementIndex = Schema.Int.check(
 });
 const coordinate = Schema.Number.check(Schema.isBetween({ minimum: -20_000, maximum: 20_000 }));
 const screenshotX = coordinate.annotate({
-  description: "X in the latest screenshot's pixels (window-relative).",
+  description:
+    "X inside the latest screenshot's pixel bounds (window-relative). Get a fresh screenshot after the window moves, resizes or changes.",
 });
 const screenshotY = coordinate.annotate({
-  description: "Y in the latest screenshot's pixels (window-relative).",
+  description:
+    "Y inside the latest screenshot's pixel bounds (window-relative). A stale or replaced window is rejected.",
 });
 
 export const ComputerApp = Schema.Struct({ app: appName });
@@ -61,6 +63,12 @@ export const ComputerDrag = Schema.Struct({
   from_y: screenshotY,
   to_x: screenshotX,
   to_y: screenshotY,
+  foreground: Schema.optionalKey(
+    Schema.Boolean.annotate({
+      description:
+        "Explicit fallback for native drag-and-drop that ignores background input. Requires the selected app window already in front (computer_activate_app). Temporarily moves the system pointer and restores it if the person has not moved it. Use only when interrupting their foreground work fits the authorized task.",
+    }),
+  ),
 });
 export type ComputerDrag = typeof ComputerDrag.Type;
 
@@ -159,6 +167,8 @@ export type ComputerPermissions = typeof ComputerPermissions.Type;
 
 export const ComputerAppInfo = Schema.Struct({
   id: Schema.String,
+  processId: Schema.optionalKey(Schema.Int),
+  target: Schema.optionalKey(Schema.String),
   displayName: Schema.optionalKey(Schema.String),
   isRunning: Schema.optionalKey(Schema.Boolean),
   lastUsedDate: Schema.optionalKey(Schema.String),
@@ -209,6 +219,7 @@ export class ComputerUseError extends Schema.TaggedError<ComputerUseError>()("Co
     "screen_permission",
     "post_event_permission",
     "app_missing",
+    "app_ambiguous",
     "app_blocked",
     "app_busy",
     "approval_denied",
@@ -237,6 +248,8 @@ export class ComputerUseError extends Schema.TaggedError<ComputerUseError>()("Co
       post_event_permission:
         "Allow Cinderdeck to control this computer (Accessibility) to send clicks and keys.",
       app_missing: "That app is not installed or running. Check computer_list_apps.",
+      app_ambiguous:
+        "Multiple running processes match that app. Use an exact pid: target from computer_list_apps.",
       app_blocked:
         "Computer use is not available for terminals, Cinderdeck itself, or system security and password prompts. Use a dedicated tool instead.",
       app_busy:
@@ -263,7 +276,7 @@ export class ComputerUseError extends Schema.TaggedError<ComputerUseError>()("Co
 }
 
 /** Never automated: terminals and the system's credential and consent UI. */
-const COMPUTER_USE_BLOCKED_BUNDLE_IDS: ReadonlySet<string> = new Set(
+export const COMPUTER_USE_BLOCKED_BUNDLE_IDS: ReadonlySet<string> = new Set(
   [
     "com.apple.Terminal",
     "com.googlecode.iterm2",

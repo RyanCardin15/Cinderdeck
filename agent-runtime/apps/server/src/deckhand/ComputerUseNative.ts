@@ -23,6 +23,7 @@ const reasons = new Set<string>([
   "screen_permission",
   "post_event_permission",
   "app_missing",
+  "app_ambiguous",
   "app_blocked",
   "window_missing",
   "element_stale",
@@ -33,6 +34,7 @@ const reasons = new Set<string>([
   "not_settable",
   "text_not_found",
   "launch_failed",
+  "timeout",
 ]);
 const fail = (reason: ComputerUseError["reason"], detail?: string) =>
   new ComputerUseError({ reason, ...(detail ? { detail: detail.slice(0, 500) } : {}) });
@@ -41,7 +43,7 @@ const record = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 
-function computerUseHelperPath(): string {
+export function computerUseHelperPath(): string {
   const candidates = [
     NodePath.join(NodePath.dirname(process.execPath), `native/${HELPER}`),
     ...(process.argv[1]
@@ -103,7 +105,7 @@ export function makeNativeComputerUse(
   const scheduleIdle = () => {
     if (idleTimer) clearTimeout(idleTimer);
     if (pending.size > 0) return;
-    idleTimer = setTimeout(() => stop(fail("unavailable", "idle")), 5 * 60_000);
+    idleTimer = setTimeout(() => stop(fail("unavailable", "idle")), options.idleMs ?? 5 * 60_000);
     idleTimer.unref();
   };
 
@@ -170,6 +172,7 @@ export function makeNativeComputerUse(
                 ? fail(message.error as ComputerUseError["reason"], detail)
                 : fail("unavailable", detail),
             );
+            if (message.error === "timeout" && child === spawned) stop(fail("timeout", detail));
           } else request.resolve(record(message.result));
           scheduleIdle();
         }

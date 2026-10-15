@@ -6,7 +6,10 @@ import Foundation
 enum CinderdeckRuntimeNativeUI {
   private static weak var captureViewModel: ScreenCaptureViewModel?
 
-  static func configure(_ viewModel: ScreenCaptureViewModel) { captureViewModel = viewModel }
+  static func configure(_ viewModel: ScreenCaptureViewModel) {
+    captureViewModel = viewModel
+    RecentAppContext.shared.start()
+  }
 
   static func open(_ request: CinderdeckRuntimeUIRequest) throws {
     if let workspaceID = request.workspaceID,

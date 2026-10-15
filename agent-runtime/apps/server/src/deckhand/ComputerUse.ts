@@ -86,6 +86,10 @@ type View = {
   readonly windowKey: string;
   readonly snapshot: TreeSnapshot;
   readonly scale: number | undefined;
+  readonly scaleY: number | undefined;
+  readonly screenshotID: string | undefined;
+  readonly imageWidth: number;
+  readonly imageHeight: number;
 };
 
 export function fileApprovalStore(stateDir: string): ApprovalStore {
@@ -143,7 +147,12 @@ export function makeComputerUseCore(options: {
     const bundleId = text(raw.bundleId);
     if (!bundleId) throw fail("app_missing", input);
     if (C.isComputerUseBlocked(bundleId)) throw fail("app_blocked", bundleId);
-    return { bundleId, name: text(raw.name) || bundleId };
+    const pid = finite(raw.pid, 0);
+    return {
+      bundleId,
+      name: text(raw.name) || bundleId,
+      nativeApp: pid > 0 ? `pid:${pid}` : bundleId,
+    };
   };
 
   const ensureAccess = async (actor: ComputerActor, bundleId: string, name: string) => {
@@ -200,13 +209,27 @@ export function makeComputerUseCore(options: {
 
   // Screenshot pixels to window points, using this conversation's latest read.
   const points = (actor: ComputerActor, bundleId: string, x: number, y: number) => {
-    const scale = views.get(grantKey(actor, bundleId))?.scale;
+    const view = views.get(grantKey(actor, bundleId));
+    const scale = view?.scale;
     if (scale === undefined)
       throw fail(
         "invalid_input",
         "Read the app with includeScreenshot: true before using screenshot coordinates.",
       );
-    return { x: x / scale, y: y / scale };
+    if (
+      !Number.isFinite(x) ||
+      !Number.isFinite(y) ||
+      x < 0 ||
+      y < 0 ||
+      x >= view!.imageWidth ||
+      y >= view!.imageHeight
+    )
+      throw fail("invalid_input", "Coordinates must be inside the latest window screenshot.");
+    return {
+      x: x / scale,
+      y: y / (view!.scaleY ?? scale),
+      ...(view!.screenshotID ? { screenshotID: view!.screenshotID } : {}),
+    };
   };
 
   const remember = (key: string, view: View) => {
@@ -219,11 +242,11 @@ export function makeComputerUseCore(options: {
   };
 
   const getAppState: ComputerUseCore["getAppState"] = async (actor, input) => {
-    const { bundleId, name } = await prepare(actor, input.app, false);
+    const { bundleId, name, nativeApp } = await prepare(actor, input.app, false);
     const raw = await call(
       "getState",
       {
-        app: bundleId,
+        app: nativeApp,
         includeScreenshot: input.includeScreenshot !== false,
         ...(input.window !== undefined ? { window: input.window } : {}),
         agent: agent(actor),
@@ -239,21 +262,39 @@ export function makeComputerUseCore(options: {
     const screenshot = record(raw.screenshot);
     const hasImage = typeof screenshot.data === "string" && screenshot.data.length > 0;
     const target = windows.find((row) => row.target === true);
-    const windowKey = `${finite(target?.index, -1)}:${text(target?.title)}:${finite(window.width, 0)}x${finite(window.height, 0)}`;
-    const key = grantKey(actor, bundleId);
+    const windowKey = `${finite(record(raw.app).pid, -1)}:${finite(window.id, -1)}:${finite(target?.index, -1)}:${text(target?.title)}:${finite(window.width, 0)}x${finite(window.height, 0)}`;
+    const key = grantKey(actor, nativeApp);
     const previous = views.get(key);
     const scale = hasImage
       ? finite(screenshot.scale, 1) || 1
-      : previous?.windowKey === windowKey
+      : input.includeScreenshot === false && previous?.windowKey === windowKey
         ? previous.scale
+        : undefined;
+    const scaleY = hasImage
+      ? finite(screenshot.height, 0) / Math.max(1, finite(window.height, 0))
+      : scale !== undefined
+        ? previous?.scaleY
+        : undefined;
+    const screenshotID = hasImage
+      ? text(raw.screenshotID) || undefined
+      : scale !== undefined
+        ? previous?.screenshotID
         : undefined;
     const diff =
       input.disableDiff !== true && previous?.windowKey === windowKey
         ? diffTree(previous.snapshot, nodes)
         : null;
-    remember(key, { windowKey, snapshot: snapshotTree(nodes), scale });
+    remember(key, {
+      windowKey,
+      snapshot: snapshotTree(nodes),
+      scale,
+      scaleY,
+      screenshotID,
+      imageWidth: hasImage ? finite(screenshot.width, 0) : (previous?.imageWidth ?? 0),
+      imageHeight: hasImage ? finite(screenshot.height, 0) : (previous?.imageHeight ?? 0),
+    });
 
-    const header = [`App: ${name} (${bundleId})`];
+    const header = [`App: ${name} (${bundleId})`, `Exact process target: ${nativeApp}`];
     if (windows.length > 0) {
       header.push(
         `Windows: ${windows
@@ -295,11 +336,11 @@ export function makeComputerUseCore(options: {
   };
 
   const act: ComputerUseCore["act"] = async (actor, action) => {
-    const { bundleId } = await prepare(actor, action.input.app, true);
+    const { bundleId, nativeApp } = await prepare(actor, action.input.app, true);
     const id = bundleId.toLowerCase();
     active.set(id, (active.get(id) ?? 0) + 1);
     try {
-      const base = { app: bundleId, agent: agent(actor) };
+      const base = { app: nativeApp, agent: agent(actor) };
       switch (action.kind) {
         case "click": {
           const { element_index, x, y } = action.input;
@@ -310,16 +351,24 @@ export function makeComputerUseCore(options: {
             ...base,
             ...(element_index !== undefined
               ? { id: element_index }
-              : points(actor, bundleId, x!, y!)),
+              : points(actor, nativeApp, x!, y!)),
             button: button in buttons ? buttons[button as keyof typeof buttons] : button,
             count: action.input.click_count ?? 1,
           });
           break;
         }
         case "drag": {
-          const from = points(actor, bundleId, action.input.from_x, action.input.from_y);
-          const to = points(actor, bundleId, action.input.to_x, action.input.to_y);
-          await call("drag", { ...base, fromX: from.x, fromY: from.y, toX: to.x, toY: to.y });
+          const from = points(actor, nativeApp, action.input.from_x, action.input.from_y);
+          const to = points(actor, nativeApp, action.input.to_x, action.input.to_y);
+          await call("drag", {
+            ...base,
+            fromX: from.x,
+            fromY: from.y,
+            toX: to.x,
+            toY: to.y,
+            ...(action.input.foreground === true ? { foreground: true } : {}),
+            ...("screenshotID" in from ? { screenshotID: from.screenshotID } : {}),
+          });
           break;
         }
         case "press_key": {
@@ -350,7 +399,7 @@ export function makeComputerUseCore(options: {
             ...(element_index !== undefined
               ? { id: element_index }
               : x !== undefined && y !== undefined
-                ? points(actor, bundleId, x, y)
+                ? points(actor, nativeApp, x, y)
                 : {}),
             dx: unit.dx,
             dy: unit.dy,
@@ -410,6 +459,8 @@ export function makeComputerUseCore(options: {
         .filter((row) => typeof row.id === "string" && !C.isComputerUseBlocked(row.id))
         .map((row) => ({
           id: text(row.id),
+          ...(typeof row.processId === "number" ? { processId: row.processId } : {}),
+          ...(typeof row.target === "string" ? { target: row.target } : {}),
           ...(typeof row.displayName === "string" ? { displayName: row.displayName } : {}),
           ...(typeof row.isRunning === "boolean" ? { isRunning: row.isRunning } : {}),
           ...(typeof row.lastUsedDate === "string" ? { lastUsedDate: row.lastUsedDate } : {}),
@@ -451,7 +502,7 @@ const attempt = <A>(run: () => Promise<A>) =>
     catch: (cause) => (isComputerUseError(cause) ? cause : fail("unavailable")),
   });
 
-const make = (core: ComputerUseCore, scripts = makeComputerUseScripts(core)) => {
+export const make = (core: ComputerUseCore, scripts = makeComputerUseScripts(core)) => {
   return ComputerUse.of({
     listApps: (actor) => attempt(() => core.listApps(actor)),
     getAppState: (actor, input) => attempt(() => core.getAppState(actor, input)),

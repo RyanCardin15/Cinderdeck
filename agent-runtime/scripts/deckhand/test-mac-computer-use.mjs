@@ -34,7 +34,7 @@ try {
     "COMPUTER_USE_TESTS",
     "-module-cache-path",
     NodePath.join(temporary, "modules"),
-    ...readdirSync(sources)
+    ...NodeFS.readdirSync(sources)
       .filter((name) => name.endsWith(".swift"))
       .sort()
       .map((name) => NodePath.join(sources, name)),

@@ -10,6 +10,7 @@ nonisolated struct CinderdeckRuntimeMessage: Encodable, Sendable {
   var text: String?
   var error: String?
   var settings: JSONValue?
+  var appContext: JSONValue?
 }
 
 nonisolated struct CinderdeckRuntimeUIRequest: Decodable, Equatable, Sendable {

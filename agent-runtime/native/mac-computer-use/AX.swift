@@ -109,6 +109,8 @@ final class ElementStore {
   var elements: [Int: (element: AXUIElement, frame: CGRect?)] = [:]
   var window: AXUIElement?
   var windowID: CGWindowID?
+  var screenshotID: String?
+  var screenshotFrame: CGRect?
 
   func id(for key: String) -> Int {
     if let id = keyToID[key] { return id }

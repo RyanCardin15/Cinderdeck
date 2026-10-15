@@ -179,7 +179,8 @@ final class CinderdeckRuntimeController: ObservableObject {
   private func send(_ message: CinderdeckRuntimeMessage) throws {
     guard let input, running else { throw StackControlError(code: "host_unavailable", message: "The agent window is not running") }
     var data = try JSONEncoder().encode(message)
-    guard data.count < (message.type == "settings" ? 131_072 : 16_384) else { throw StackControlError.invalid("Agent window request exceeds its limit") }
+    let limit = message.type == "app-context" ? 3_000_000 : message.type == "settings" ? 131_072 : 16_384
+    guard data.count < limit else { throw StackControlError.invalid("Agent window request exceeds its limit") }
     data.append(10)
     try input.write(contentsOf: data)
   }
@@ -254,6 +255,22 @@ final class CinderdeckRuntimeController: ObservableObject {
     if !stopping, ready, line.starts(with: dictationPrefix) {
       if let request = try? DictationCommand.decode(Data(line.dropFirst(dictationPrefix.count))) {
         DictationController.shared.handle(request)
+      }
+      return
+    }
+    let contextPrefix = Data("CINDERDECK_RUNTIME_APP_CONTEXT ".utf8)
+    if !stopping, ready, line.starts(with: contextPrefix) {
+      guard let request = try? RecentAppContextRequest.decode(Data(line.dropFirst(contextPrefix.count))) else { return }
+      let owner = process
+      Task { @MainActor [weak self] in
+        do {
+          let result = try await RecentAppContext.shared.handle(request)
+          guard self?.process === owner, self?.stopping == false else { return }
+          try self?.send(CinderdeckRuntimeMessage(type: "app-context", requestID: request.requestID, appContext: result))
+        } catch {
+          guard self?.process === owner, self?.stopping == false else { return }
+          try? self?.send(CinderdeckRuntimeMessage(type: "app-context", requestID: request.requestID, error: error.localizedDescription))
+        }
       }
       return
     }

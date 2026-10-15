@@ -974,7 +974,34 @@ export interface DictationEvent {
   readonly error?: string;
 }
 
+export interface RecentAppTarget {
+  readonly id: string;
+  readonly appName: string;
+  readonly bundleID: string;
+  readonly windowTitle: string;
+  readonly recent: boolean;
+  readonly tabTitle?: string;
+  readonly tabURL?: string;
+  readonly iconDataURL?: string;
+}
+export type AppContextCommand =
+  | { readonly action: "list" }
+  | { readonly action: "capture"; readonly targetID: string };
+export interface RecentAppTargets {
+  readonly targets: readonly RecentAppTarget[];
+  readonly screenRecording: boolean;
+  readonly accessibility: boolean;
+}
+export interface AppContextCapture {
+  readonly data: string;
+  readonly mimeType: "image/jpeg";
+  readonly source: typeof SnapShotSource.Type;
+}
 export interface DesktopBridge {
+  appContext?: {
+    list: () => Promise<RecentAppTargets>;
+    capture: (targetID: string) => Promise<AppContextCapture>;
+  };
   nativeSettings?: (command: NativeSettingsCommand) => Promise<NativeSettingsSnapshot>;
   dictation?: (command: DictationCommand) => Promise<boolean>;
   onDictation?: (listener: (event: DictationEvent) => void) => () => void;

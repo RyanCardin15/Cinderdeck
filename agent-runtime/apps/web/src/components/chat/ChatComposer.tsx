@@ -1,4 +1,5 @@
 import { DictationButton } from "./DictationButton";
+import { ComposerAddMenu } from "./ComposerAddMenu";
 import { DESKTOP_PASTE_AS_TEXT_EVENT } from "../../lib/desktopPasteAsText";
 import { runtimeModeConfig, runtimeModeOptions as runtimeModes } from "./runtimeModeConfig";
 import { isLocalEnvironmentDisabled } from "../../localEnvironment";
@@ -240,7 +241,10 @@ import { THREAD_CONTEXT_DROP_EVENT, threadContextDropTargetProps } from "./threa
 import { readThreadShell, useThreadShells } from "~/state/entities";
 import { requestConfirmDialog } from "~/confirmDialog";
 import { encodeComposerContextFragment } from "@cinderdeck/shared/composerContextClipboard";
-import type { ComposerContextClipboardFragment, ComposerContextRecord } from "@cinderdeck/contracts";
+import type {
+  ComposerContextClipboardFragment,
+  ComposerContextRecord,
+} from "@cinderdeck/contracts";
 import { resolveAssetUrl } from "~/assets/assetUrls";
 import { assetEnvironment } from "~/state/assets";
 import { readPreparedConnection } from "~/state/session";
@@ -1076,7 +1080,6 @@ import {
   FileIcon,
   BotIcon,
   CircleAlertIcon,
-  PaperclipIcon,
   PencilRulerIcon,
   PlayIcon,
   ShieldIcon,
@@ -5645,6 +5648,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     files: File[],
     options?: {
       readonly source?: ChatFileAttachment["source"];
+      readonly imageSource?: SnapShotSource;
       readonly selection?: { start: number; end: number };
       readonly skipImageInlineChip?: boolean;
     },
@@ -5819,6 +5823,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           sizeBytes: attachmentFile.size,
           previewUrl,
           file: attachmentFile,
+          ...(options?.imageSource ? { source: options.imageSource } : {}),
         });
       }
       if (
@@ -7470,23 +7475,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                           });
                         }}
                       />
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              onPointerDown={(event) => event.preventDefault()}
-                              onClick={() => attachmentInputRef.current?.click()}
-                              aria-label="Attach files"
-                            />
-                          }
-                        >
-                          <PaperclipIcon />
-                        </TooltipTrigger>
-                        <TooltipPopup>Attach files</TooltipPopup>
-                      </Tooltip>
+                      <ComposerAddMenu
+                        key={`${environmentId}:${activeThreadId ?? draftId}:${activePendingProgress?.activeQuestion?.id ?? "draft"}`}
+                        onChooseFiles={() => attachmentInputRef.current?.click()}
+                        onAttach={async (file, source) => {
+                          await addComposerAttachments([file], { imageSource: source });
+                          focusComposer();
+                        }}
+                      />
                     </>
                   ) : null}
                   <DictationButton

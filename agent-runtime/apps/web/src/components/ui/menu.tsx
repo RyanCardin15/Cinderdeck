@@ -6,6 +6,7 @@ import type * as React from "react";
 
 import { cn } from "~/lib/utils";
 import { buttonVariants } from "./button";
+import attachmentMenu from "./attachment-menu.module.css";
 
 const Menu = MenuPrimitive.Root;
 
@@ -26,6 +27,7 @@ function MenuPopup({
   side = "bottom",
   anchor,
   keepMounted = false,
+  appearance = "default",
   ...props
 }: MenuPrimitive.Popup.Props & {
   align?: MenuPrimitive.Positioner.Props["align"];
@@ -34,6 +36,7 @@ function MenuPopup({
   side?: MenuPrimitive.Positioner.Props["side"];
   anchor?: MenuPrimitive.Positioner.Props["anchor"];
   keepMounted?: boolean;
+  appearance?: "default" | "attachment";
 }) {
   return (
     <MenuPrimitive.Portal keepMounted={keepMounted}>
@@ -55,6 +58,7 @@ function MenuPopup({
             "[-webkit-app-region:no-drag]",
             // Menus size to their content from one minimum, never past the viewport.
             "min-w-[min(10rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)]",
+            appearance === "attachment" && attachmentMenu.popup,
             className,
           )}
           data-slot="menu-popup"
@@ -80,7 +84,7 @@ function MenuItem({
 }: MenuPrimitive.Item.Props & {
   inset?: boolean;
   density?: "default" | "touch";
-  variant?: "default" | "destructive" | "ghost";
+  variant?: "default" | "destructive" | "ghost" | "attachment";
 }) {
   return (
     <MenuPrimitive.Item
@@ -93,6 +97,7 @@ function MenuItem({
             className: "h-auto min-h-7 w-full sm:text-xs",
           }),
         density === "touch" && "min-h-10 sm:min-h-10",
+        variant === "attachment" && attachmentMenu.row,
         className,
       )}
       data-density={density}
@@ -269,11 +274,13 @@ function MenuSubTrigger({
   className,
   inset,
   density = "default",
+  appearance = "default",
   children,
   ...props
 }: MenuPrimitive.SubmenuTrigger.Props & {
   inset?: boolean;
   density?: "default" | "touch";
+  appearance?: "default" | "attachment";
 }) {
   return (
     <MenuPrimitive.SubmenuTrigger
@@ -285,6 +292,7 @@ function MenuSubTrigger({
         // only one, and these rules would take away its `ms-auto` alignment.
         "[&>svg:not(:last-child)]:-mx-0.5 flex min-h-8 cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-base text-foreground outline-none data-disabled:cursor-not-allowed data-disabled:pointer-events-none data-highlighted:bg-accent data-popup-open:bg-accent data-inset:ps-8 data-highlighted:text-accent-foreground data-popup-open:text-accent-foreground data-disabled:opacity-64 sm:min-h-7 sm:text-sm [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground [&>svg:not(:last-child):not([class*='opacity-'])]:opacity-80 [&_svg]:pointer-events-none [&>svg]:shrink-0",
         density === "touch" && "min-h-10 sm:min-h-10",
+        appearance === "attachment" && attachmentMenu.row,
         className,
       )}
       data-density={density}
@@ -308,6 +316,7 @@ function MenuSubPopup({
   align?: MenuPrimitive.Positioner.Props["align"];
   sideOffset?: MenuPrimitive.Positioner.Props["sideOffset"];
   alignOffset?: MenuPrimitive.Positioner.Props["alignOffset"];
+  appearance?: "default" | "attachment";
 }) {
   const defaultAlignOffset = align !== "center" ? -5 : undefined;
 

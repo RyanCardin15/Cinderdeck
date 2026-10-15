@@ -1,0 +1,41 @@
+.popup {
+  width: 286px;
+  border-radius: 14px;
+  transform-origin: var(--transform-origin);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  transition:
+    opacity 130ms ease,
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.popup[data-starting-style],
+.popup[data-ending-style] {
+  opacity: 0;
+  transform: translateY(4px) scale(0.96);
+}
+.popup > div {
+  padding: 5px;
+}
+.row[data-slot] {
+  min-height: 37px;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 17px;
+}
+.row[data-slot] > svg {
+  width: 18px;
+  height: 18px;
+}
+.row[data-recent="true"] {
+  min-height: 56px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .popup {
+    transition: none;
+  }
+  .popup[data-starting-style],
+  .popup[data-ending-style] {
+    transform: none;
+  }
+}

@@ -9,12 +9,13 @@ import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import { isNativeSettingsCommand, NativeSettingsRequests } from "./nativeSettingsProtocol.ts";
+import { AppContextRequests, isAppContextCommand } from "./appContextProtocol.ts";
 
 const NATIVE_HOST_ROUTE_CHANNEL = "cinderdeck:native-host-route";
 const NATIVE_HOST_READY_CHANNEL = "cinderdeck:native-host-ready";
 const NATIVE_TOOL_CHANNEL = "cinderdeck:native-tool";
 const NATIVE_HOST_INFO_CHANNEL = "cinderdeck:native-host-info";
-const MAX_LINE_BYTES = 128 * 1024;
+const MAX_LINE_BYTES = 3_000_000;
 const surfaces = new Set([
   "workspace",
   "lane-map",
@@ -104,6 +105,9 @@ export const install = Effect.gen(function* () {
   const settings = new NativeSettingsRequests((line) => {
     process.stdout.write(line);
   });
+  const appContext = new AppContextRequests((line) => {
+    process.stdout.write(line);
+  });
   const main = async () => Option.getOrNull(await run(windows.main));
   const trusted = async (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) => {
     const window = await main();
@@ -154,6 +158,11 @@ export const install = Effect.gen(function* () {
         continue;
       }
       if (!record(value)) continue;
+      if (value.type === "app-context") {
+        appContext.receive(value);
+        continue;
+      }
+      if (Buffer.byteLength(line) > 128 * 1024) continue;
       if (value.type === "settings") {
         settings.receive(value);
         continue;
@@ -202,6 +211,12 @@ export const install = Effect.gen(function* () {
     return true;
   });
 
+  Electron.ipcMain.handle("cinderdeck:app-context", async (event, value: unknown) => {
+    if (!(await trusted(event)) || !isAppContextCommand(value))
+      throw new Error("Invalid app context request.");
+    return appContext.request(value, crypto.randomUUID());
+  });
+
   Electron.ipcMain.handle("cinderdeck:native-settings", async (event, value: unknown) => {
     if (!(await trusted(event)) || !isNativeSettingsCommand(value))
       throw new Error("Invalid native settings request.");
@@ -225,6 +240,8 @@ export const install = Effect.gen(function* () {
 
       Electron.ipcMain.removeHandler(NATIVE_TOOL_CHANNEL);
       Electron.ipcMain.removeHandler("cinderdeck:native-settings");
+      Electron.ipcMain.removeHandler("cinderdeck:app-context");
+      appContext.close();
       settings.close();
       Electron.ipcMain.removeHandler("cinderdeck:dictation");
       process.stdin.removeListener("data", onInput);

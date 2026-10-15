@@ -24,6 +24,9 @@ function fixture(
     { id: 2, parent: 1, depth: 1, role: "AXTextField", description: "Name", value: "" },
   ];
   let clock = 1_000;
+  let windowID = 5;
+  let processID = 42;
+  let screenshotFails = false;
   const saved: string[][] = [];
   const call: ComputerUseCall = async (method, params = {}) => {
     calls.push({ method, params });
@@ -34,14 +37,16 @@ function fixture(
         return { decision: options.decision ?? "session" };
       case "getState":
         return {
-          app: excel,
+          app: { ...excel, pid: processID },
           windows: [{ index: 0, title: "Book1", target: true }],
-          window: { title: "Book1", width: 1600, height: 1000 },
+          window: { id: windowID, title: "Book1", width: 1600, height: 1000 },
           nodes,
           screenshot:
-            params.includeScreenshot === false
+            params.includeScreenshot === false || screenshotFails
               ? null
               : { data: "aW1n", mimeType: "image/jpeg", width: 800, height: 500, scale: 0.5 },
+          ...(screenshotFails ? { screenshotError: "screen_permission" } : {}),
+          screenshotID: "fixture-screenshot",
         };
       default:
         await options.waitForAction?.();
@@ -65,6 +70,15 @@ function fixture(
     },
     advance: (ms: number) => {
       clock += ms;
+    },
+    replaceWindow: () => {
+      windowID++;
+    },
+    restartApp: () => {
+      processID++;
+    },
+    failScreenshot: () => {
+      screenshotFails = true;
     },
   };
 }
@@ -152,7 +166,7 @@ describe("computer use state and actions", () => {
     const first = await test.core.getAppState(alice, { app: "Excel" });
     expect(first.diff).toBe(false);
     expect(first.text).toContain(
-      'App: Microsoft Excel (com.microsoft.Excel)\nWindows: [0] "Book1" (target)',
+      'App: Microsoft Excel (com.microsoft.Excel)\nExact process target: pid:42\nWindows: [0] "Book1" (target)',
     );
     expect(first.text).toContain('  2 text field "Name", Value: ""');
     expect(first.screenshot).toMatchObject({ width: 800, height: 500 });
@@ -179,7 +193,7 @@ describe("computer use state and actions", () => {
     });
     expect(test.calls.at(-1)).toMatchObject({
       method: "click",
-      params: { app: "com.microsoft.Excel", x: 200, y: 80, button: "right", count: 2 },
+      params: { app: "pid:42", x: 200, y: 80, button: "right", count: 2 },
     });
   });
 
@@ -212,6 +226,81 @@ describe("computer use state and actions", () => {
 });
 
 describe("computer use screenshot coordinates", () => {
+  it("uses foreground drag only when explicitly requested and keeps screenshot validation", async () => {
+    const test = fixture({ saved: ["com.microsoft.Excel"] });
+    const input = { app: "Excel", from_x: 10, from_y: 20, to_x: 30, to_y: 40 };
+    await expect(
+      test.core.act(alice, { kind: "drag", input: { ...input, foreground: true } }),
+    ).rejects.toMatchObject({ reason: "invalid_input" });
+    expect(test.methods()).not.toContain("drag");
+    await test.core.getAppState(alice, { app: "Excel" });
+    await test.core.act(alice, { kind: "drag", input });
+    expect(test.calls.at(-1)?.params).not.toHaveProperty("foreground");
+    await test.core.act(alice, { kind: "drag", input: { ...input, foreground: true } });
+    expect(test.calls.at(-1)?.params).toMatchObject({
+      app: "pid:42",
+      foreground: true,
+      fromX: 20,
+      fromY: 40,
+      toX: 60,
+      toY: 80,
+      screenshotID: "fixture-screenshot",
+    });
+  });
+  it("pins every native request to the resolved process rather than re-resolving its bundle ID", async () => {
+    const test = fixture({ saved: ["com.microsoft.Excel"], resolved: { pid: 987 } });
+    const state = await test.core.getAppState(alice, { app: "pid:987" });
+    expect(state.text).toContain("Exact process target: pid:987");
+    await test.core.act(alice, { kind: "press_key", input: { app: "pid:987", key: "Tab" } });
+    expect(
+      test.calls
+        .filter((call) => ["getState", "key"].includes(call.method))
+        .map((call) => call.params.app),
+    ).toEqual(["pid:987", "pid:987"]);
+  });
+  it("passes the exact screenshot identity to the native boundary", async () => {
+    const test = fixture({ saved: ["com.microsoft.Excel"] });
+    await test.core.getAppState(alice, { app: "Excel" });
+    await test.core.act(alice, { kind: "click", input: { app: "Excel", x: 10, y: 10 } });
+    expect(test.calls.at(-1)?.params.screenshotID).toBe("fixture-screenshot");
+  });
+  it.each(["replaceWindow", "restartApp"] as const)(
+    "invalidates coordinates after %s even with identical titles and dimensions",
+    async (change) => {
+      const test = fixture({ saved: ["com.microsoft.Excel"] });
+      await test.core.getAppState(alice, { app: "Excel" });
+      test[change]();
+      const next = await test.core.getAppState(alice, { app: "Excel", includeScreenshot: false });
+      expect(next.diff).toBe(false);
+      await expect(
+        test.core.act(alice, { kind: "click", input: { app: "Excel", x: 10, y: 10 } }),
+      ).rejects.toMatchObject({ reason: "invalid_input" });
+    },
+  );
+  it("clears an earlier scale when a newly requested screenshot fails", async () => {
+    const test = fixture({ saved: ["com.microsoft.Excel"] });
+    await test.core.getAppState(alice, { app: "Excel" });
+    test.failScreenshot();
+    const next = await test.core.getAppState(alice, { app: "Excel" });
+    expect(next.text).toContain("Screenshot unavailable");
+    await expect(
+      test.core.act(alice, { kind: "click", input: { app: "Excel", x: 10, y: 10 } }),
+    ).rejects.toMatchObject({ reason: "invalid_input" });
+  });
+  it.each([
+    [-1, 1],
+    [800, 1],
+    [1, 500],
+    [NaN, 1],
+    [1, Infinity],
+  ])("rejects out-of-image coordinates %s,%s before native dispatch", async (x, y) => {
+    const test = fixture({ saved: ["com.microsoft.Excel"] });
+    await test.core.getAppState(alice, { app: "Excel" });
+    await expect(
+      test.core.act(alice, { kind: "click", input: { app: "Excel", x, y } }),
+    ).rejects.toMatchObject({ reason: "invalid_input" });
+    expect(test.methods()).not.toContain("click");
+  });
   it("keeps the last screenshot scale across text-only reads of the same window", async () => {
     const test = fixture({ saved: ["com.microsoft.Excel"] });
     await test.core.getAppState(alice, { app: "Excel" });

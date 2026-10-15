@@ -48,6 +48,11 @@ if (clientPlatform === "darwin") {
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  appContext: {
+    list: () => ipcRenderer.invoke("cinderdeck:app-context", { action: "list" }),
+    capture: (targetID) =>
+      ipcRenderer.invoke("cinderdeck:app-context", { action: "capture", targetID }),
+  },
   nativeSettings: (command) => ipcRenderer.invoke("cinderdeck:native-settings", command),
   dictation: (command) => ipcRenderer.invoke("cinderdeck:dictation", command),
   onDictation: (listener) => {

@@ -5,13 +5,14 @@ import Foundation
 // Background computer use for Mac apps. Reads an app's accessibility tree and
 // acts on its elements without moving the user's pointer or activating the app:
 // element actions go through Accessibility, and coordinate/keyboard input is
-// posted to the target process only. Cinderdeck draws a separate agent cursor.
+// posted to the target process only. Explicit foreground drag is a separate,
+// guarded HID fallback. Cinderdeck draws a separate agent cursor.
 // JSONL over stdin/stdout, one JSON object per line, answered by request id.
 
 enum Failure: String, Error {
   case accessibility_permission, screen_permission, post_event_permission, app_missing,
-    app_blocked, window_missing, element_stale, element_missing, unsupported_action,
-    invalid_input, screen_locked, not_settable, text_not_found, launch_failed, unavailable
+    app_blocked, app_ambiguous, window_missing, element_stale, element_missing, unsupported_action,
+    invalid_input, screen_locked, not_settable, text_not_found, launch_failed, unavailable, timeout
 }
 
 struct Failed: Error {
@@ -116,6 +117,9 @@ func handle(_ method: String, _ params: [String: Any]) async throws -> [String: 
   let app = try await Apps.resolve(params["app"] as? String ?? "", launch: method == "getState")
   guard let pid = app.pid else { throw Failed(.app_missing, "\(app.name) is not running.") }
   let target = try Target(app: app, pid: pid, agent: agent)
+  if method == "drag" || (["click", "scroll"].contains(method) && params["id"] == nil && params["x"] != nil) {
+    try target.requireScreenshot(params["screenshotID"] as? String)
+  }
   switch method {
   case "getState":
     return try await target.state(
@@ -131,7 +135,8 @@ func handle(_ method: String, _ params: [String: Any]) async throws -> [String: 
     guard let fx = params["fromX"] as? Double, let fy = params["fromY"] as? Double,
       let tx = params["toX"] as? Double, let ty = params["toY"] as? Double
     else { throw Failed(.invalid_input) }
-    try await target.drag(from: CGPoint(x: fx, y: fy), to: CGPoint(x: tx, y: ty), agent: agent)
+    try await target.drag(from: CGPoint(x: fx, y: fy), to: CGPoint(x: tx, y: ty),
+      foreground: params["foreground"] as? Bool ?? false, agent: agent)
   case "scroll":
     try await target.scroll(
       id: params["id"] as? Int, x: params["x"] as? Double, y: params["y"] as? Double,
@@ -215,7 +220,9 @@ func handle(_ method: String, _ params: [String: Any]) async throws -> [String: 
       // The server closed our stdin: stop. Only our own process exits.
       exit(0)
     }
-    emit(["ready": true, "permissions": permissions()])
+    // Capture and AX callbacks need the AppKit run loop. Do not acknowledge
+    // startup until it is actually servicing work.
+    RunLoop.main.perform { emit(["ready": true, "permissions": permissions()]) }
     application.run()
   }
 }

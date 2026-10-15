@@ -19,3 +19,6 @@ Its MIT license (agent-runtime/LICENSE), copyright notices and third-party
 licenses are retained. The runtime is maintained as part of Cinderdeck and
 retains its original license terms.
 Cinderdeck-specific agent runtime contributions use those same MIT terms.
+
+The native computer-use interoperability layer also retains the MIT notices
+for Cua Driver and yabai in agent-runtime/native/mac-computer-use/THIRD_PARTY_NOTICES.md.
