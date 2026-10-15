@@ -5,11 +5,15 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import * as DateTime from "effect/DateTime";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 import {
+  DEFAULT_SERVER_SETTINGS,
   EnvironmentId,
   ProjectId,
   ProviderInstanceId,
+  ProviderDriverKind,
   ThreadId,
   type OrchestrationV2ThreadShell,
+  type ServerConfig,
+  type ServerProvider,
 } from "@cinderdeck/contracts";
 import type { ManagedSessionView, IntegrationView } from "@cinderdeck/contracts/deckhand/rpc";
 import type { SessionShell } from "./sessionWorkspaceRows";
@@ -22,6 +26,7 @@ const boundary = vi.hoisted(() => ({
   connected: true,
   archiveThreads: [] as OrchestrationV2ThreadShell[],
   archiveRequests: [] as EnvironmentId[][],
+  configs: new Map<string, Pick<ServerConfig, "providers" | "settings">>(),
 }));
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => boundary.result }));
 vi.mock("./state", () => ({
@@ -35,6 +40,7 @@ vi.mock("../state/query", () => ({ useEnvironmentQuery: () => ({ data: null }) }
 vi.mock("../state/entities", () => ({
   useProjects: () => [{ environmentId: "local", id: "project", workspaceRoot: "/fixture/app" }],
   useThreadShells: () => boundary.threads,
+  useServerConfigs: () => boundary.configs,
 }));
 vi.mock("../state/environments", () => ({
   useEnvironment: () => ({
@@ -209,6 +215,7 @@ beforeEach(() => {
   boundary.connected = true;
   boundary.archiveThreads = [];
   boundary.archiveRequests = [];
+  boundary.configs = new Map();
   boundary.menu.mockReset();
   container = document.createElement("div");
   host = document.createElement("div");
@@ -293,6 +300,144 @@ it("reorders main groups with the keyboard, saves on drop, and restores in the f
   expect(rootSessionIDs()).toEqual(["ordinary", "second"]);
 });
 
+it("prepends new threads after reordering and remounting in both session views", async () => {
+  boundary.result = AsyncResult.success([]);
+  boundary.threads = Array.from({ length: 12 }, (_, index) => ({
+    ...ordinary,
+    id: ThreadId.make(`main-${index}`),
+    createdAt: new Date(Date.UTC(2026, 9, index + 1)).toISOString(),
+  }));
+  const key = sidebarPreferenceKey("local", "installation");
+  const savedOrder = boundary.threads.map((thread) => thread.id).toReversed();
+  [savedOrder[0], savedOrder[1]] = [savedOrder[1]!, savedOrder[0]!];
+  localStorage.setItem(key, JSON.stringify({ order: { [sessionOrderGroup("app")]: savedOrder } }));
+  await render();
+  expect(rootSessionIDs()).toEqual(savedOrder.slice(0, 10));
+  boundary.threads = [
+    ...boundary.threads,
+    { ...ordinary, id: ThreadId.make("new-thread"), createdAt: "2026-10-15T12:00:00Z" },
+  ];
+  await render({ selectedThreadId: "new-thread" });
+  expect(rootSessionIDs()).toEqual(["new-thread", ...savedOrder.slice(0, 9)]);
+  await act(async () => root.render(null));
+  await render({ compact: false, selectedThreadId: "new-thread" });
+  expect(rootSessionIDs()).toEqual(["new-thread", ...savedOrder]);
+  boundary.result = AsyncResult.success([
+    { ...saved("older-page"), createdAt: "2026-09-01T00:00:00Z" },
+  ]);
+  await render({ compact: false, selectedThreadId: "new-thread" });
+  expect(rootSessionIDs()).toEqual(["new-thread", ...savedOrder, "older-page"]);
+  expect(readSidebarPreferences(key).order[sessionOrderGroup("app")]).toEqual(savedOrder);
+});
+
+it("preserves manual order through archive and search filters when a new thread arrives", async () => {
+  boundary.result = AsyncResult.success([]);
+  boundary.threads = [
+    { ...ordinary, id: ThreadId.make("latest"), archivedAt: "2026-10-15T00:00:00Z" },
+    { ...ordinary, id: ThreadId.make("older"), createdAt: "2026-10-10T00:00:00Z" },
+    { ...ordinary, id: ThreadId.make("unlisted-history"), createdAt: "2026-10-11T00:00:00Z" },
+  ];
+  localStorage.setItem(
+    sidebarPreferenceKey("local", "installation"),
+    JSON.stringify({
+      order: { [sessionOrderGroup("app")]: ["older", "latest"] },
+    }),
+  );
+  await render({ compact: false });
+  expect(rootSessionIDs()).toEqual(["older", "unlisted-history"]);
+  boundary.threads.push({
+    ...ordinary,
+    id: ThreadId.make("new-thread"),
+    createdAt: "2026-10-15T12:00:00Z",
+  });
+  await render({ compact: false });
+  expect(rootSessionIDs()).toEqual(["new-thread", "older", "unlisted-history"]);
+  await act(async () => {
+    const input = container.querySelector('input[aria-label="Search sessions"]')!;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+      input,
+      "Ordinary",
+    );
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(rootSessionIDs()).toEqual(["new-thread", "older", "unlisted-history"]);
+});
+
+const provider = (instance: string, driver: string, name: string): ServerProvider => ({
+  instanceId: ProviderInstanceId.make(instance),
+  driver: ProviderDriverKind.make(driver),
+  displayName: name,
+  enabled: false,
+  installed: true,
+  version: null,
+  status: "ready",
+  auth: { status: "authenticated" },
+  checkedAt: "2026-10-15T00:00:00Z",
+  models: [],
+  slashCommands: [],
+  skills: [],
+});
+it.each([true, false])(
+  "resolves each agent's provider in its own environment, including saved and offline sessions (compact: %s)",
+  async (compact) => {
+    const providers = [
+      provider("codex", "codex", "Codex"),
+      provider("work", "claudeAgent", "Work Claude"),
+    ];
+    boundary.configs = new Map([
+      ["local", { providers, settings: DEFAULT_SERVER_SETTINGS }],
+      [
+        "remote",
+        {
+          providers: [provider("work", "cursor", "Remote Cursor")],
+          settings: DEFAULT_SERVER_SETTINGS,
+        },
+      ],
+    ]);
+    boundary.threads = [
+      ordinary,
+      { ...child("Inspector"), providerInstanceId: ProviderInstanceId.make("work") },
+    ];
+    await render({ compact, selectedThreadId: "Inspector" });
+    const icon = (id: string) =>
+      container.querySelector(`[data-session-id="${id}"] [role="img"][aria-label^="Provider:"]`)!;
+    expect(icon("ordinary").getAttribute("aria-label")).toBe("Provider: Codex");
+    expect(icon("Inspector").getAttribute("aria-label")).toBe("Provider: Work Claude");
+    expect(icon("history").getAttribute("aria-label")).toBe("Provider: Codex");
+    expect(icon("Inspector").innerHTML).not.toBe(icon("ordinary").innerHTML);
+    boundary.connected = false;
+    await render({ compact, selectedThreadId: "Inspector" });
+    expect(icon("Inspector").getAttribute("aria-label")).toBe("Provider: Work Claude");
+    await render({
+      compact,
+      environmentId: EnvironmentId.make("remote"),
+      selectedThreadId: undefined,
+    });
+    boundary.result = AsyncResult.success([
+      {
+        ...saved("remote-history"),
+        binding: {
+          ...saved("remote-history").binding,
+          providerInstanceId: ProviderInstanceId.make("work"),
+        },
+      },
+    ]);
+    await render({
+      compact,
+      environmentId: EnvironmentId.make("remote"),
+      selectedThreadId: undefined,
+    });
+    expect(icon("remote-history").getAttribute("aria-label")).toBe("Provider: Remote Cursor");
+    boundary.configs = new Map();
+    await render({
+      compact,
+      environmentId: EnvironmentId.make("remote"),
+      selectedThreadId: undefined,
+    });
+    expect(icon("remote-history").getAttribute("aria-label")).toBe("Provider: work");
+  },
+);
+
 it("drags sub-agents within their parent, preserves other groups, and cancels without saving", async () => {
   boundary.result = AsyncResult.success([]);
   boundary.threads = [
@@ -329,7 +474,15 @@ it("drags sub-agents within their parent, preserves other groups, and cancels wi
   await act(async () => handle.dispatchEvent(pointer("pointerdown", 20)));
   await act(async () => document.dispatchEvent(pointer("pointermove", 30)));
   await act(async () => document.dispatchEvent(pointer("pointermove", 120)));
-  await act(async () => document.dispatchEvent(pointer("pointerup", 120)));
+  vi.useFakeTimers();
+  try {
+    await act(async () => document.dispatchEvent(pointer("pointerup", 120)));
+    // dnd-kit suppresses clicks for 50ms after a pointer drop. Drain its cleanup
+    // so the next test's clicks cannot be swallowed by this drag's listener.
+    await act(async () => vi.advanceTimersByTimeAsync(50));
+  } finally {
+    vi.useRealTimers();
+  }
   expect(childSessionIDs("ordinary")).toEqual(["Verifier", "Inspector"]);
   expect(childSessionIDs("Inspector")).toEqual(["Nested"]);
   const order = readSidebarPreferences(sidebarPreferenceKey("local", "installation")).order;

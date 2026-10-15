@@ -136,6 +136,30 @@ it("reflects approvals and review needs from canonical ordinary thread state", (
   );
   expect(rows.every((row) => row.status === "attention")).toBe(true);
 });
+it("uses the actual runtime provider when it differs from the selected provider", () => {
+  const current = thread("ordinary");
+  const rows = workspaceSessions(
+    environmentId,
+    resource,
+    [],
+    [project],
+    [
+      {
+        ...current,
+        runtime: {
+          status: "idle",
+          activeRunId: null,
+          providerInstanceId: ProviderInstanceId.make("work-claude"),
+          providerName: "Work Claude",
+          lastError: null,
+          updatedAt: current.updatedAt,
+        },
+      },
+    ],
+    [],
+  );
+  expect(rows[0]?.providerInstanceId).toBe("work-claude");
+});
 it.each(["tmp", "var", "etc"])(
   "matches macOS /%s aliases in either direction without matching sibling folders",
   (folder) => {

@@ -75,6 +75,46 @@ it("nests multiple generations under their immediate parents while preserving st
   expect(sessionTreeContains(tree[0]!, "grandchild")).toBe(false);
 });
 
+it("puts new starts ahead of manual order while older paged history stays below it", () => {
+  const started = (id: string, day: number, parent: string | null = null) => ({
+    ...session(id, parent),
+    createdAt: new Date(Date.UTC(2026, 9, day)).toISOString(),
+  });
+  const tree = workspaceSessionTree([
+    started("newest", 15),
+    started("new", 14),
+    started("recent", 13),
+    started("main", 12),
+    started("new-child", 15, "main"),
+    started("recent-child", 13, "main"),
+    started("older-child", 12, "main"),
+    started("old-history", 1),
+    { ...session("unknown-start"), createdAt: "invalid" },
+  ]);
+  const order = {
+    [sessionOrderGroup("app")]: ["missing", "main", "recent"],
+    [sessionOrderGroup("app", "main")]: ["older-child", "recent-child"],
+  };
+  const ordered = orderWorkspaceSessionTree(tree, "app", order);
+  expect(ids(ordered)).toEqual([
+    ["newest", []],
+    ["new", []],
+    [
+      "main",
+      [
+        ["new-child", []],
+        ["older-child", []],
+        ["recent-child", []],
+      ],
+    ],
+    ["recent", []],
+    ["old-history", []],
+    ["unknown-start", []],
+  ]);
+  expect(orderWorkspaceSessionTree(ordered, "app", order)).toEqual(ordered);
+  expect(order[sessionOrderGroup("app")]).toEqual(["missing", "main", "recent"]);
+});
+
 it("keeps missing, deleted and cyclic parent relationships reachable without duplicate sessions", () => {
   const tree = workspaceSessionTree([
     session("missing-parent", "missing"),

@@ -8,7 +8,7 @@ export type WorkspaceSessionNode = {
 export const sessionOrderGroup = (workspaceID: string, parentID: string | null = null) =>
   JSON.stringify(["sessions", workspaceID, parentID]);
 
-/** Saved positions apply only to siblings; unsorted sessions keep their start order. */
+/** New starts precede saved sibling positions; older history keeps its start order. */
 export function orderWorkspaceSessionTree(
   nodes: readonly WorkspaceSessionNode[],
   workspaceID: string,
@@ -18,12 +18,15 @@ export function orderWorkspaceSessionTree(
   const positions = new Map(
     (order[sessionOrderGroup(workspaceID, parentID)] ?? []).map((id, index) => [id, index]),
   );
+  const started = (node: WorkspaceSessionNode) => Date.parse(node.session.createdAt) || 0;
+  const newestSavedStart = nodes.reduce(
+    (newest, node) => (positions.has(node.session.id) ? Math.max(newest, started(node)) : newest),
+    0,
+  );
+  const position = (node: WorkspaceSessionNode) =>
+    positions.get(node.session.id) ?? (started(node) > newestSavedStart ? -1 : Infinity);
   return [...nodes]
-    .sort(
-      (left, right) =>
-        (positions.get(left.session.id) ?? Infinity) -
-          (positions.get(right.session.id) ?? Infinity) || 0,
-    )
+    .sort((left, right) => position(left) - position(right) || 0)
     .map((node) => ({
       ...node,
       children: orderWorkspaceSessionTree(node.children, workspaceID, order, node.session.id),

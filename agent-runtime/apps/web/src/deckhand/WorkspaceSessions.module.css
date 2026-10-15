@@ -110,8 +110,13 @@
 .session[data-highlighted="true"][aria-current="page"] {
   background: color-mix(in srgb, var(--session-accent) 18%, transparent);
 }
-.session[data-highlighted="true"] > svg:first-child {
-  color: var(--session-accent);
+.provider {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
 }
 .session:focus-visible,
 .handle:focus-visible,

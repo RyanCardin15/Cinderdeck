@@ -1,4 +1,12 @@
-import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import {
   DndContext,
   closestCenter,
@@ -30,11 +38,21 @@ import { ThreadId, type EnvironmentId } from "@cinderdeck/contracts";
 import type { IntegrationView, ManagedSessionView } from "@cinderdeck/contracts/deckhand/rpc";
 import { useArchivedThreadSnapshots } from "../lib/archivedThreadsState";
 import { presentThreadShell, scopeProject } from "@cinderdeck/client-runtime/state/models";
-import { useProjects, useThreadShells } from "../state/entities";
+import { useProjects, useServerConfigs, useThreadShells } from "../state/entities";
 import { useEnvironment } from "../state/environments";
 import { useEnvironmentQuery } from "../state/query";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { formatRelativeTimeLabel } from "../timestampFormat";
+import {
+  applyProviderInstanceSettings,
+  deriveProviderInstanceEntries,
+  type ProviderInstanceEntry,
+} from "../providerInstances";
+import {
+  ProviderInstanceIcon,
+  providerTextColorClassName,
+} from "../components/chat/ProviderInstanceIcon";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "../components/ui/tooltip";
 import { managedSessionsView, threadContextView } from "./state";
 import { useSessionActions } from "./useSessionActions";
 import { workspaceSessions, type WorkspaceSession } from "./sessionWorkspaceRows";
@@ -82,6 +100,20 @@ function SessionRows({
   const currentProjects = useProjects();
   const currentThreads = useThreadShells();
   const environment = useEnvironment(environmentId);
+  const config = useServerConfigs().get(environmentId);
+  const providers = useMemo(
+    () =>
+      new Map(
+        (config
+          ? applyProviderInstanceSettings(
+              deriveProviderInstanceEntries(config.providers),
+              config.settings,
+            )
+          : []
+        ).map((provider) => [provider.instanceId as string, provider]),
+      ),
+    [config],
+  );
   const { showMenu, renameDialog } = useSessionActions(environmentId);
   const sidebar = useWorkspaceSidebarPreferences(
     sidebarPreferenceKey(environmentId, installationID),
@@ -185,19 +217,21 @@ function SessionRows({
     ).values(),
   ];
   const all = workspaceSessions(environmentId, resource, resources, projects, threads, saved);
-  const sessions = filterWorkspaceSessionTree(workspaceSessionTree(all), {
-    archived,
-    query,
-    selectedThreadId,
-  });
-  const orderedSessions = orderWorkspaceSessionTree(
-    sessions,
-    resource.workspaceID,
-    sidebar.preferences.order,
+  const sessions = filterWorkspaceSessionTree(
+    orderWorkspaceSessionTree(
+      workspaceSessionTree(all),
+      resource.workspaceID,
+      sidebar.preferences.order,
+    ),
+    {
+      archived,
+      query,
+      selectedThreadId,
+    },
   );
-  const visibleSessions = compact ? orderedSessions.slice(0, sidebarSessionLimit) : orderedSessions;
+  const visibleSessions = compact ? sessions.slice(0, sidebarSessionLimit) : sessions;
   // An exact conversation link must remain visible even outside the newest groups.
-  const selectedGroup = orderedSessions.find((node) => sessionTreeContains(node, selectedThreadId));
+  const selectedGroup = sessions.find((node) => sessionTreeContains(node, selectedThreadId));
   if (compact && selectedGroup && !visibleSessions.includes(selectedGroup)) {
     visibleSessions.push(selectedGroup);
   }
@@ -250,6 +284,7 @@ function SessionRows({
                 showMenu={showMenu}
                 workspaceID={resource.workspaceID}
                 sidebar={sidebar}
+                providers={providers}
                 colors={sidebar.preferences.sessionColors}
                 onColorChange={(id, color) =>
                   sidebar.update((current) => {
@@ -367,6 +402,7 @@ function SessionBranch(props: {
   showMenu: ReturnType<typeof useSessionActions>["showMenu"];
   workspaceID: string;
   sidebar: ReturnType<typeof useWorkspaceSidebarPreferences>;
+  providers: ReadonlyMap<string, ProviderInstanceEntry>;
   colors: Readonly<Record<string, string>>;
   onColorChange: (id: string, color: string | undefined) => void;
 }) {
@@ -410,6 +446,7 @@ function SessionBranch(props: {
       <SessionRow
         {...props}
         session={node.session}
+        provider={props.providers.get(node.session.providerInstanceId)}
         selected={node.session.id === selectedThreadId}
         color={props.colors[node.session.id]}
         onColorChange={(color) => props.onColorChange(node.session.id, color)}
@@ -464,6 +501,7 @@ function SessionBranch(props: {
 
 function SessionRow({
   session,
+  provider,
   environmentId,
   selected,
   compact,
@@ -477,6 +515,7 @@ function SessionRow({
   dragHandle,
 }: {
   session: WorkspaceSession;
+  provider: ProviderInstanceEntry | undefined;
   environmentId: EnvironmentId;
   selected: boolean;
   compact: boolean;
@@ -491,6 +530,7 @@ function SessionRow({
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  const providerLabel = provider?.displayName ?? session.providerInstanceId;
   const openMenu = (position: { x: number; y: number }) =>
     showMenu(
       { binding: { threadId: session.id }, title: session.title, archived: session.archived },
@@ -523,11 +563,31 @@ function SessionRow({
           void openMenu({ x: rect.left, y: rect.bottom });
         }}
       >
-        {session.isSubagent ? (
-          <BotIcon size={14} aria-hidden />
-        ) : (
-          <MessageSquareIcon size={14} aria-hidden />
-        )}
+        <Tooltip>
+          <TooltipTrigger
+            render={<span />}
+            className={styles.provider}
+            role="img"
+            aria-label={`Provider: ${providerLabel}`}
+          >
+            {provider ? (
+              <ProviderInstanceIcon
+                driverKind={provider.driverKind}
+                displayName={provider.displayName}
+                accentColor={provider.accentColor}
+                acpRegistryAgentId={provider.acpRegistryAgentId}
+                acpRegistryIconUrl={provider.acpRegistryIconUrl}
+                className={providerTextColorClassName(provider.driverKind) ?? ""}
+                iconClassName="size-3.5"
+              />
+            ) : session.isSubagent ? (
+              <BotIcon size={14} aria-hidden />
+            ) : (
+              <MessageSquareIcon size={14} aria-hidden />
+            )}
+          </TooltipTrigger>
+          <TooltipPopup>{providerLabel}</TooltipPopup>
+        </Tooltip>
         <span className={styles.identity}>
           <span className={styles.title}>{session.title || "New session"}</span>
           {!compact && session.createdAt ? (

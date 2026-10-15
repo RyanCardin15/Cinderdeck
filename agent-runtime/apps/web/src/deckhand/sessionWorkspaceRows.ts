@@ -120,7 +120,7 @@ export function workspaceSessions(
       parentThreadId:
         thread.lineage.relationshipToParent === "subagent" ? thread.lineage.parentThreadId : null,
       isSubagent: thread.lineage.relationshipToParent === "subagent",
-      providerInstanceId: thread.providerInstanceId,
+      providerInstanceId: thread.runtime?.providerInstanceId ?? thread.providerInstanceId,
       createdAt: thread.createdAt,
       updatedAt: thread.updatedAt,
       archived: !!thread.archivedAt,
