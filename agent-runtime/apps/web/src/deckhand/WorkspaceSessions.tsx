@@ -385,7 +385,7 @@ function SessionBranch(props: {
     sessionTreeContains(child, selectedThreadId),
   );
   const [disclosure, setDisclosure] = useState({
-    expanded: true,
+    expanded: containsSelected,
     selectedThreadId,
     containsSelected,
   });

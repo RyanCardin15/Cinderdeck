@@ -385,9 +385,7 @@ function WorkspaceSidebarTree({
       <nav className={styles.tree} aria-label="Workspaces and sessions">
         <Siblings rows={bases} group={workspaceGroup} state={state}>
           {(base) => {
-            const expanded =
-              state.preferences.expanded[base.workspaceID] ??
-              activeWorkspaceID === base.workspaceID;
+            const expanded = state.preferences.expanded[base.workspaceID] ?? false;
             return (
               <SidebarRow
                 key={base.workspaceID}

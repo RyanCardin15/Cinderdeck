@@ -303,6 +303,13 @@ it("drags sub-agents within their parent, preserves other groups, and cancels wi
   ];
   mockSessionGeometry();
   await render();
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>(
+        'button[aria-label="Expand sub-agents for Ordinary conversation"]',
+      )!
+      .click(),
+  );
   expect(childSessionIDs("ordinary")).toEqual(["Inspector", "Verifier"]);
   const handle = container.querySelector(
     'button[aria-label="Reorder sub-agent Inspector"]',
@@ -488,6 +495,36 @@ it("opens highlight controls from the keyboard without triggering workspace menu
   ).not.toBeNull();
 });
 
+it.each([true, false])(
+  "starts sub-agents collapsed and expands each level independently (compact: %s)",
+  async (compact) => {
+    boundary.result = AsyncResult.success([]);
+    boundary.threads = [ordinary, child("Inspector"), child("Verifier", "Inspector")];
+    await render({ compact });
+    const main = container.querySelector('[data-session-id="ordinary"]')!.closest("li")!;
+    const inspector = container.querySelector('[data-session-id="Inspector"]')!.closest("li")!;
+    const mainToggle = main.querySelector("button")!;
+    const childToggle = inspector.querySelector("button")!;
+    expect(mainToggle.getAttribute("aria-expanded")).toBe("false");
+    expect(main.querySelector("ul")!.hidden).toBe(true);
+    expect(childToggle.getAttribute("aria-expanded")).toBe("false");
+
+    await act(async () => mainToggle.click());
+    expect(main.querySelector("ul")!.hidden).toBe(false);
+    expect(inspector.querySelector("ul")!.hidden).toBe(true);
+    await act(async () => childToggle.click());
+    expect(inspector.querySelector("ul")!.hidden).toBe(false);
+
+    await act(async () => root.render(null));
+    await render({ compact });
+    expect(
+      container
+        .querySelector('button[aria-label="Expand sub-agents for Ordinary conversation"]')
+        ?.getAttribute("aria-expanded"),
+    ).toBe("false");
+  },
+);
+
 it("nests and collapses sub-agents while preserving their navigation and independent colors", async () => {
   boundary.result = AsyncResult.success([]);
   boundary.threads = [ordinary, child("Inspector"), child("Verifier", "Inspector")];
@@ -501,6 +538,9 @@ it("nests and collapses sub-agents while preserving their navigation and indepen
   expect(inspector.closest("li")!.querySelector('ul [data-session-id="Verifier"]')).not.toBeNull();
   expect(inspector.textContent).toContain("Sub-agent");
   const toggle = main.querySelector("button")!;
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  await act(async () => toggle.click());
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
   await act(async () => toggle.click());
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
   expect(main.querySelector("ul")!.hidden).toBe(true);
@@ -571,9 +611,14 @@ it("opens ancestor groups when selection changes or search matches a nested chil
   await render({ compact: false });
   const main = container.querySelector('[data-session-id="ordinary"]')!.closest("li")!;
   const toggle = main.querySelector("button")!;
-  await act(async () => toggle.click());
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
   await render({ compact: false, selectedThreadId: "Verifier" });
   expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  expect(
+    container
+      .querySelector('button[aria-label="Collapse sub-agents for Inspector"]')
+      ?.getAttribute("aria-expanded"),
+  ).toBe("true");
   await act(async () => toggle.click());
   const input = container.querySelector('input[aria-label="Search sessions"]')!;
   await act(async () => {
@@ -589,6 +634,36 @@ it("opens ancestor groups when selection changes or search matches a nested chil
   expect(container.querySelector('a[href="/sessions/Sibling"]')).toBeNull();
   expect(toggle.getAttribute("aria-expanded")).toBe("true");
   expect(main.querySelector("ul")!.hidden).toBe(false);
+});
+
+it("reveals only a directly selected sub-agent's ancestor path on mount", async () => {
+  boundary.result = AsyncResult.success([]);
+  boundary.threads = [
+    ordinary,
+    child("Inspector"),
+    child("Verifier", "Inspector"),
+    child("Sibling"),
+    child("Sibling child", "Sibling"),
+  ];
+  await render({ selectedThreadId: "Verifier" });
+  expect(
+    container
+      .querySelector('button[aria-label="Collapse sub-agents for Ordinary conversation"]')
+      ?.getAttribute("aria-expanded"),
+  ).toBe("true");
+  expect(
+    container
+      .querySelector('button[aria-label="Collapse sub-agents for Inspector"]')
+      ?.getAttribute("aria-expanded"),
+  ).toBe("true");
+  expect(
+    container
+      .querySelector('button[aria-label="Expand sub-agents for Sibling"]')
+      ?.getAttribute("aria-expanded"),
+  ).toBe("false");
+  expect(
+    container.querySelector('a[href="/sessions/Verifier"]')?.getAttribute("aria-current"),
+  ).toBe("page");
 });
 
 it("loads archived parents only when needed and retains them as context for active children", async () => {

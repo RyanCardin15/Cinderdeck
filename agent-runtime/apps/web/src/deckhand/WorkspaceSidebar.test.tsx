@@ -484,24 +484,52 @@ it("workspace header tools also refuse remote IDs instead of opening a local wor
 
 it("shows sessions directly under each workspace and never renders lane rows or creation controls", async () => {
   await render();
-  expect(container.querySelector('[data-session-workspace="alpha"]')).not.toBeNull();
+  expect(container.querySelector('[data-session-workspace="alpha"]')).toBeNull();
   expect(container.querySelector('[data-workspace-id="lane-a"]')).toBeNull();
   expect(container.querySelector('[aria-label="Create lane in alpha"]')).toBeNull();
+  await act(async () => button("Expand sessions for alpha").click());
+  expect(container.querySelector('[data-session-workspace="alpha"]')).not.toBeNull();
   await act(async () => button("Expand sessions for beta").click());
   expect(container.querySelector('[data-session-workspace="beta"]')).not.toBeNull();
   await act(async () => button("Collapse sessions for alpha").click());
   expect(container.querySelector('[data-session-workspace="alpha"]')).toBeNull();
   expect(container.querySelector('[data-session-workspace="beta"]')).not.toBeNull();
 });
-it("expands and highlights an ordinary session's workspace without a native binding", async () => {
+it("highlights an ordinary session's workspace without expanding its sessions", async () => {
   boundary.projects = [{ environmentId, id: "ordinary-project", workspaceRoot: "/fixture/beta/" }];
   boundary.threads = [{ environmentId, id: "current", projectId: "ordinary-project" }];
   await render({});
-  expect(button("Collapse sessions for beta").getAttribute("aria-expanded")).toBe("true");
+  expect(button("Expand sessions for beta").getAttribute("aria-expanded")).toBe("false");
   expect(
     container.querySelector('[data-workspace-id="beta"] [data-current="true"]'),
   ).not.toBeNull();
+  expect(container.querySelector('[data-session-workspace="beta"]')).toBeNull();
+});
+it("selects workspaces without expanding sessions and preserves explicit disclosure choices", async () => {
+  await render();
+  expect(button("Expand sessions for alpha").getAttribute("aria-expanded")).toBe("false");
+  await act(async () =>
+    container.querySelector<HTMLAnchorElement>('[data-workspace-id="beta"] a')!.click(),
+  );
+  const selected = boundary.navigate.mock.calls.at(-1)![0] as WorkspaceSearch;
+  expect(selected).toMatchObject({ workspace: "beta", context: "beta" });
+  await render(selected);
+  expect(container.querySelectorAll("[data-session-workspace]")).toHaveLength(0);
+  expect(
+    container.querySelector('[data-workspace-id="beta"] a[aria-current="page"]'),
+  ).not.toBeNull();
+  expect(localStorage.getItem(key)).toBeNull();
+
+  await act(async () => button("Expand sessions for beta").click());
+  await render({ workspace: "alpha", context: "alpha" });
+  expect(container.querySelector('[data-session-workspace="alpha"]')).toBeNull();
   expect(container.querySelector('[data-session-workspace="beta"]')).not.toBeNull();
+  await render(selected);
+  expect(button("Collapse sessions for beta").getAttribute("aria-expanded")).toBe("true");
+  await act(async () => button("Collapse sessions for beta").click());
+  await render({ workspace: "alpha", context: "alpha" });
+  await render(selected);
+  expect(container.querySelectorAll("[data-session-workspace]")).toHaveLength(0);
 });
 it("preserves workspace order, favorites and collapsed sessions across remounts", async () => {
   localStorage.setItem(
