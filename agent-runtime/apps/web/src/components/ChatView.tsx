@@ -10603,56 +10603,6 @@ export default function ChatView(props: ChatViewProps) {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-      {laneSessionContext.data && activeThreadRef ? (
-        <LaneSessionContext
-          workingDirectory={activeThreadWorktreePath}
-          context={laneSessionContext.data}
-          threadRef={activeThreadRef}
-          providers={providerInstanceEntries}
-          stale={laneSessionContext.error !== null}
-          previewAvailable={isPreviewSupportedInRuntime()}
-          onOpenPreview={(url) => {
-            if (!isPreviewSupportedInRuntime()) return;
-            // The captured ref binds this browser command to the visible session,
-            // even if navigation changes while browser settings are loading.
-            void openUrlInPreview({ threadRef: activeThreadRef, url, openPreview }).then(
-              (result) => {
-                if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-                  toastManager.add(
-                    stackedThreadToast({
-                      type: "error",
-                      title: "Unable to open preview",
-                      description: "The execution computer could not open this service preview.",
-                    }),
-                  );
-                }
-              },
-            );
-          }}
-          panelMenu={{
-            onAddBrowser: () => createBrowserSurface(),
-            onAddBrowserInProfile: createBrowserSurface,
-            onAddTerminal: addTerminalSurface,
-            onAddDiff: addDiffSurface,
-            onAddFiles: addFilesSurface,
-            onAddPullRequest: addPullRequestSurface,
-            onAddPullRequests: addPullRequestsSurface,
-            onAddDevice: addDeviceSurface,
-            onAddExternalApp: addExternalAppSurface,
-            browserAvailable: isPreviewSupportedInRuntime(),
-            terminalAvailable: activeProject !== null,
-            diffAvailable: isServerThread && isGitRepo,
-            filesAvailable: activeProject !== null,
-            pullRequestAvailable: pullRequestSurfaceAvailable,
-            pullRequestsAvailable: pullRequestsSurfaceAvailable,
-            deviceAvailable: activeThreadRef !== null,
-          }}
-          onOpenPullRequests={addPullRequestsSurface}
-          pullRequestsAvailable={pullRequestsSurfaceAvailable}
-          pullRequestCount={visiblePullRequestCount}
-        />
-      ) : null}
-
       <div
         ref={workspaceLayoutRef}
         className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
@@ -10726,6 +10676,58 @@ export default function ChatView(props: ChatViewProps) {
                 : {})}
             />
           </header>
+
+          {/* Workspace actions stay below the window title bar and its panel controls. */}
+          {laneSessionContext.data && activeThreadRef ? (
+            <LaneSessionContext
+              workingDirectory={activeThreadWorktreePath}
+              context={laneSessionContext.data}
+              threadRef={activeThreadRef}
+              providers={providerInstanceEntries}
+              stale={laneSessionContext.error !== null}
+              previewAvailable={isPreviewSupportedInRuntime()}
+              onOpenPreview={(url) => {
+                if (!isPreviewSupportedInRuntime()) return;
+                // The captured ref binds this browser command to the visible session,
+                // even if navigation changes while browser settings are loading.
+                void openUrlInPreview({ threadRef: activeThreadRef, url, openPreview }).then(
+                  (result) => {
+                    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+                      toastManager.add(
+                        stackedThreadToast({
+                          type: "error",
+                          title: "Unable to open preview",
+                          description:
+                            "The execution computer could not open this service preview.",
+                        }),
+                      );
+                    }
+                  },
+                );
+              }}
+              panelMenu={{
+                onAddBrowser: () => createBrowserSurface(),
+                onAddBrowserInProfile: createBrowserSurface,
+                onAddTerminal: addTerminalSurface,
+                onAddDiff: addDiffSurface,
+                onAddFiles: addFilesSurface,
+                onAddPullRequest: addPullRequestSurface,
+                onAddPullRequests: addPullRequestsSurface,
+                onAddDevice: addDeviceSurface,
+                onAddExternalApp: addExternalAppSurface,
+                browserAvailable: isPreviewSupportedInRuntime(),
+                terminalAvailable: activeProject !== null,
+                diffAvailable: isServerThread && isGitRepo,
+                filesAvailable: activeProject !== null,
+                pullRequestAvailable: pullRequestSurfaceAvailable,
+                pullRequestsAvailable: pullRequestsSurfaceAvailable,
+                deviceAvailable: activeThreadRef !== null,
+              }}
+              onOpenPullRequests={addPullRequestsSurface}
+              pullRequestsAvailable={pullRequestsSurfaceAvailable}
+              pullRequestCount={visiblePullRequestCount}
+            />
+          ) : null}
 
           {/* Main content area with optional plan sidebar */}
           <div className="relative flex min-h-0 min-w-0 flex-1">
