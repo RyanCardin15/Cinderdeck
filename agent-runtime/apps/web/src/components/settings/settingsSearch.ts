@@ -261,6 +261,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["colors borders interface"],
   },
   {
+    id: "sidebar-highlight-colors",
+    title: "Highlight colors",
+    to: "/settings/appearance",
+    searchTerms: [
+      "sidebar workspaces sessions agents sub-agents ten 10 highlights highlighting presets palette default colors",
+    ],
+  },
+  {
     // Prefixed because the slider control already owns the `glass-opacity` id.
     id: "setting-glass-opacity",
     title: "Glass opacity",

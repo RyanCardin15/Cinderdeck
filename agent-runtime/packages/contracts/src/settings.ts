@@ -295,6 +295,22 @@ export const DiffColorScheme = Schema.Literals(["red-green", "blue-orange"]);
 export const ChatWidth = Schema.Literals(["comfortable", "wide", "full"]);
 export type ChatWidth = typeof ChatWidth.Type;
 
+export const DEFAULT_SIDEBAR_HIGHLIGHT_COLORS = [
+  "#ed854a",
+  "#dca537",
+  "#9ab64b",
+  "#51b57c",
+  "#43b3ad",
+  "#579de5",
+  "#8285e8",
+  "#b18ae5",
+  "#de83b2",
+  "#e47880",
+] as const;
+export const SidebarHighlightColors = Schema.Array(
+  Schema.String.check(Schema.isPattern(/^#[0-9a-f]{6}$/i)),
+).check(Schema.isMinLength(10), Schema.isMaxLength(10));
+
 export const ClientSettingsSchema = Schema.Struct({
   notificationMode: NotificationMode.pipe(
     Schema.withDecodingDefault(Effect.succeed("off" as const)),
@@ -308,6 +324,9 @@ export const ClientSettingsSchema = Schema.Struct({
   loadBalancingWeights: LoadBalancingWeights.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   appearanceContrast: AppearanceContrast.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_APPEARANCE_CONTRAST)),
+  ),
+  sidebarHighlightColors: SidebarHighlightColors.pipe(
+    Schema.withDecodingDefault(Effect.succeed([...DEFAULT_SIDEBAR_HIGHLIGHT_COLORS])),
   ),
   // Panel motion defaults to zero because width and height transitions cause
   // layout work on every frame, which is noticeable on lower-power clients.
@@ -1730,6 +1749,7 @@ export const ClientSettingsPatch = Schema.Struct({
   loadBalancingEnabled: Schema.optionalKey(Schema.Boolean),
   loadBalancingWeights: Schema.optionalKey(LoadBalancingWeights),
   appearanceContrast: Schema.optionalKey(AppearanceContrast),
+  sidebarHighlightColors: Schema.optionalKey(SidebarHighlightColors),
   panelAnimationDurationMs: Schema.optionalKey(PanelAnimationDurationMs),
   browserDefaultViewport: Schema.optionalKey(PreviewViewportSetting),
   browserDefaultZoomFactor: Schema.optionalKey(PreviewZoomFactor),

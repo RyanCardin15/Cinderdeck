@@ -30,6 +30,15 @@ vi.mock("../state/entities", () => ({
 vi.mock("../localApi", () => ({
   readLocalApi: () => ({ contextMenu: { show: boundary.contextMenu } }),
 }));
+vi.mock("../hooks/useSettings", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../hooks/useSettings")>();
+  const { DEFAULT_CLIENT_SETTINGS } = await import("@cinderdeck/contracts/settings");
+  return {
+    ...actual,
+    useClientSettings: (selector: (settings: typeof DEFAULT_CLIENT_SETTINGS) => unknown) =>
+      selector(DEFAULT_CLIENT_SETTINGS),
+  };
+});
 vi.mock("../state/use-atom-command", () => ({
   useAtomCommand: (command: "submit" | "inspect" | "recent") => boundary[command],
 }));
@@ -489,7 +498,9 @@ it("expands and highlights an ordinary session's workspace without a native bind
   boundary.threads = [{ environmentId, id: "current", projectId: "ordinary-project" }];
   await render({});
   expect(button("Collapse sessions for beta").getAttribute("aria-expanded")).toBe("true");
-  expect(container.querySelector('[data-workspace-id="beta"] [data-current="true"]')).not.toBeNull();
+  expect(
+    container.querySelector('[data-workspace-id="beta"] [data-current="true"]'),
+  ).not.toBeNull();
   expect(container.querySelector('[data-session-workspace="beta"]')).not.toBeNull();
 });
 it("preserves workspace order, favorites and collapsed sessions across remounts", async () => {

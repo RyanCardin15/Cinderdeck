@@ -3,9 +3,10 @@ import type { RefObject } from "react";
 import { Popover, PopoverPopup, PopoverTitle } from "../components/ui/popover";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../components/ui/tooltip";
 import { isSidebarColor } from "./workspaceSidebarPreferences";
+import { useClientSettings } from "../hooks/useSettings";
 import styles from "./SidebarColorPicker.module.css";
 
-const palette = [
+const defaultPalette = [
   { name: "Ember", value: "#ed854a" },
   { name: "Amber", value: "#dca537" },
   { name: "Lime", value: "#9ab64b" },
@@ -33,6 +34,14 @@ export function SidebarColorPicker({
   color: string | undefined;
   onChange: (color: string | undefined) => void;
 }) {
+  const colors = useClientSettings((settings) => settings.sidebarHighlightColors);
+  const palette = colors.map((value, index) => ({
+    value,
+    name:
+      value.toLowerCase() === defaultPalette[index]?.value
+        ? defaultPalette[index]!.name
+        : `Highlight ${index + 1}`,
+  }));
   const choose = (value: string | undefined) => {
     onChange(value);
     onOpenChange(false);
@@ -55,21 +64,23 @@ export function SidebarColorPicker({
             <span className={styles.target}>{label}</span>
           </div>
           <div className={styles.palette} role="group" aria-label="Preset colors">
-            {palette.map((swatch) => (
-              <Tooltip key={swatch.value}>
+            {palette.map((swatch, index) => (
+              <Tooltip key={defaultPalette[index]!.name}>
                 <TooltipTrigger
                   render={<button type="button" />}
                   className={styles.swatch}
                   style={{ backgroundColor: swatch.value }}
                   aria-label={swatch.name}
-                  aria-pressed={color?.toLowerCase() === swatch.value}
+                  aria-pressed={color?.toLowerCase() === swatch.value.toLowerCase()}
                   onClick={() => choose(swatch.value)}
                 >
-                  {color?.toLowerCase() === swatch.value ? (
+                  {color?.toLowerCase() === swatch.value.toLowerCase() ? (
                     <CheckIcon size={15} aria-hidden />
                   ) : null}
                 </TooltipTrigger>
-                <TooltipPopup>{swatch.name}</TooltipPopup>
+                <TooltipPopup>
+                  {swatch.name} ({swatch.value})
+                </TooltipPopup>
               </Tooltip>
             ))}
           </div>

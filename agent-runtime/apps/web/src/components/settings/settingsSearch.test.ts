@@ -45,6 +45,12 @@ const ITEMS: ReadonlyArray<SettingsSearchItem> = [
 ];
 
 describe("searchSettings", () => {
+  it.each(["highlight colors", "ten highlights", "presets"])(
+    "finds the sidebar palette for %s",
+    (query) => {
+      expect(searchSettings(query).map((item) => item.id)).toContain("sidebar-highlight-colors");
+    },
+  );
   it.each(["send shortcut", "multiline", "new line"])("finds Send shortcut for %s", (query) => {
     expect(searchSettings(query).map((item) => item.id)).toContain("send-shortcut");
   });

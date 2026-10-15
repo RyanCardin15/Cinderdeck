@@ -7,6 +7,7 @@ import {
   ClientSettingsPatch,
   ClaudeSettings,
   DEFAULT_SERVER_SETTINGS,
+  DEFAULT_SIDEBAR_HIGHLIGHT_COLORS,
   resolveProviderInstanceEnabled,
   ServerSettings,
   ServerSettingsPatch,
@@ -19,6 +20,35 @@ const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
 const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
+
+describe("sidebar highlight presets", () => {
+  it("defaults older settings to ten colors and round-trips a custom palette", () => {
+    expect(decodeClientSettings({}).sidebarHighlightColors).toEqual(
+      DEFAULT_SIDEBAR_HIGHLIGHT_COLORS,
+    );
+    const sidebarHighlightColors = Array.from({ length: 10 }, (_, index) => `#12345${index}`);
+    const input = { sidebarHighlightColors };
+    expect(decodeClientSettingsPatch(input)).toEqual(input);
+    expect(encodeClientSettings(decodeClientSettings(input))).toMatchObject(input);
+  });
+
+  it.each(
+    [
+      [],
+      Array(9).fill("#123456"),
+      Array(11).fill("#123456"),
+      [...DEFAULT_SIDEBAR_HIGHLIGHT_COLORS.slice(0, 9), "red"],
+      [...DEFAULT_SIDEBAR_HIGHLIGHT_COLORS.slice(0, 9), "#123"],
+      [...DEFAULT_SIDEBAR_HIGHLIGHT_COLORS.slice(0, 9), false],
+    ].map((colors) => ({ colors })),
+  )(
+    "rejects invalid presets $colors in storage and writes",
+    ({ colors: sidebarHighlightColors }) => {
+      expect(() => decodeClientSettings({ sidebarHighlightColors })).toThrow();
+      expect(() => decodeClientSettingsPatch({ sidebarHighlightColors })).toThrow();
+    },
+  );
+});
 
 describe("browser cookie sources", () => {
   it("keeps legacy imports unlinked and round-trips exact source links locally", () => {

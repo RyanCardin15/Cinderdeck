@@ -2,6 +2,8 @@ import { expect, it } from "vite-plus/test";
 import type { WorkspaceSession } from "./sessionWorkspaceRows";
 import {
   filterWorkspaceSessionTree,
+  orderWorkspaceSessionTree,
+  sessionOrderGroup,
   sessionTreeContains,
   workspaceSessionTree,
   type WorkspaceSessionNode,
@@ -21,6 +23,35 @@ const session = (id: string, parentThreadId: string | null = null): WorkspaceSes
 });
 const ids = (nodes: readonly WorkspaceSessionNode[]): unknown[] =>
   nodes.map((node) => [node.session.id, ids(node.children)]);
+
+it("applies saved sibling order without changing parents or unsorted start order", () => {
+  const tree = workspaceSessionTree([
+    session("newest"),
+    session("second"),
+    session("main"),
+    session("first-child", "main"),
+    session("second-child", "main"),
+    session("grandchild", "first-child"),
+  ]);
+  const order = {
+    [sessionOrderGroup("app")]: ["missing", "main", "second"],
+    [sessionOrderGroup("app", "main")]: ["second-child", "first-child"],
+  };
+  expect(ids(orderWorkspaceSessionTree(tree, "app", order))).toEqual([
+    [
+      "main",
+      [
+        ["second-child", []],
+        ["first-child", [["grandchild", []]]],
+      ],
+    ],
+    ["second", []],
+    ["newest", []],
+  ]);
+  expect(orderWorkspaceSessionTree(tree, "other-workspace", order)).toEqual(tree);
+  expect(orderWorkspaceSessionTree(tree, "app", {})).toEqual(tree);
+  expect(sessionOrderGroup("app", "main")).not.toBe(sessionOrderGroup("app:main"));
+});
 
 it("nests multiple generations under their immediate parents while preserving start order", () => {
   const tree = workspaceSessionTree([

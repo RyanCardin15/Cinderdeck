@@ -5,6 +5,31 @@ export type WorkspaceSessionNode = {
   children: WorkspaceSessionNode[];
 };
 
+export const sessionOrderGroup = (workspaceID: string, parentID: string | null = null) =>
+  JSON.stringify(["sessions", workspaceID, parentID]);
+
+/** Saved positions apply only to siblings; unsorted sessions keep their start order. */
+export function orderWorkspaceSessionTree(
+  nodes: readonly WorkspaceSessionNode[],
+  workspaceID: string,
+  order: Readonly<Record<string, readonly string[]>>,
+  parentID: string | null = null,
+): WorkspaceSessionNode[] {
+  const positions = new Map(
+    (order[sessionOrderGroup(workspaceID, parentID)] ?? []).map((id, index) => [id, index]),
+  );
+  return [...nodes]
+    .sort(
+      (left, right) =>
+        (positions.get(left.session.id) ?? Infinity) -
+          (positions.get(right.session.id) ?? Infinity) || 0,
+    )
+    .map((node) => ({
+      ...node,
+      children: orderWorkspaceSessionTree(node.children, workspaceID, order, node.session.id),
+    }));
+}
+
 /** Only sub-agent edges nest sessions; forks remain independent conversations. */
 export function workspaceSessionTree(
   sessions: readonly WorkspaceSession[],

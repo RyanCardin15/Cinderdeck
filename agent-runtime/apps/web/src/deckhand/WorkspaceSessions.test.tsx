@@ -55,6 +55,13 @@ vi.mock("../lib/archivedThreadsState", () => ({
 vi.mock("./useSessionActions", () => ({
   useSessionActions: () => ({ showMenu: boundary.menu, renameDialog: null }),
 }));
+vi.mock("../hooks/useSettings", async () => {
+  const { DEFAULT_CLIENT_SETTINGS } = await import("@cinderdeck/contracts/settings");
+  return {
+    useClientSettings: (selector: (settings: typeof DEFAULT_CLIENT_SETTINGS) => unknown) =>
+      selector(DEFAULT_CLIENT_SETTINGS),
+  };
+});
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
     params,
@@ -86,6 +93,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 import { WorkspaceSessions } from "./WorkspaceSessions";
 import { readSidebarPreferences, sidebarPreferenceKey } from "./workspaceSidebarPreferences";
+import { sessionOrderGroup } from "./workspaceSessionTree";
 const environmentId = EnvironmentId.make("local");
 const resource: IntegrationView["resources"][number] = {
   workspaceID: "app",
@@ -211,7 +219,123 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+const rootSessionIDs = () =>
+  [...container.querySelectorAll("nav > ul > li")].map((branch) =>
+    branch.querySelector("[data-session-id]")!.getAttribute("data-session-id"),
+  );
+const childSessionIDs = (parent: string) => {
+  const branch = container.querySelector(`[data-session-id="${parent}"]`)!.closest("li")!;
+  return [...branch.querySelectorAll(":scope > ul > li")].map((child) =>
+    child.querySelector("[data-session-id]")!.getAttribute("data-session-id"),
+  );
+};
+const keyDown = async (target: EventTarget, code: string) =>
+  act(async () => {
+    target.dispatchEvent(new KeyboardEvent("keydown", { code, bubbles: true, cancelable: true }));
+  });
+function mockSessionGeometry() {
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    const branch = this.closest("li");
+    const siblings = [...(branch?.parentElement?.children ?? [])].filter(
+      (child) => child.tagName === "LI",
+    );
+    const top = branch ? siblings.indexOf(branch) * 100 : 0;
+    return {
+      left: 0,
+      right: 200,
+      top,
+      bottom: top + 40,
+      width: 200,
+      height: 40,
+      x: 0,
+      y: top,
+      toJSON: () => ({}),
+    };
+  });
+}
+
+it("reorders main groups with the keyboard, saves on drop, and restores in the full session view", async () => {
+  boundary.result = AsyncResult.success([]);
+  boundary.threads = [
+    ordinary,
+    { ...ordinary, id: ThreadId.make("second"), title: "Second" },
+    child("Inspector"),
+  ];
+  mockSessionGeometry();
+  const onNavigate = vi.fn();
+  await render({ onNavigate });
+  expect(rootSessionIDs()).toEqual(["ordinary", "second"]);
+  const handle = container.querySelector(
+    'button[aria-label="Reorder session Ordinary conversation"]',
+  ) as HTMLButtonElement;
+  handle.focus();
+  await keyDown(handle, "Space");
+  await keyDown(document, "ArrowDown");
+  await keyDown(document, "Space");
+  expect(rootSessionIDs()).toEqual(["second", "ordinary"]);
+  expect(childSessionIDs("ordinary")).toEqual(["Inspector"]);
+  expect(onNavigate).not.toHaveBeenCalled();
+  expect(
+    readSidebarPreferences(sidebarPreferenceKey("local", "installation")).order[
+      sessionOrderGroup("app")
+    ],
+  ).toEqual(["second", "ordinary"]);
+  await act(async () => root.render(null));
+  await render({ compact: false });
+  expect(rootSessionIDs()).toEqual(["second", "ordinary"]);
+  await render({ installationID: "another-installation" });
+  expect(rootSessionIDs()).toEqual(["ordinary", "second"]);
+});
+
+it("drags sub-agents within their parent, preserves other groups, and cancels without saving", async () => {
+  boundary.result = AsyncResult.success([]);
+  boundary.threads = [
+    ordinary,
+    child("Inspector"),
+    child("Verifier"),
+    child("Nested", "Inspector"),
+  ];
+  mockSessionGeometry();
+  await render();
+  expect(childSessionIDs("ordinary")).toEqual(["Inspector", "Verifier"]);
+  const handle = container.querySelector(
+    'button[aria-label="Reorder sub-agent Inspector"]',
+  ) as HTMLButtonElement;
+  // React's pointer handler expects isPrimary; jsdom has no native PointerEvent.
+  const pointer = (type: string, y: number) => {
+    const event = new MouseEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: 10,
+      clientY: y,
+    });
+    Object.defineProperty(event, "isPrimary", { value: true });
+    return event;
+  };
+  await act(async () => handle.dispatchEvent(pointer("pointerdown", 20)));
+  await act(async () => document.dispatchEvent(pointer("pointermove", 30)));
+  await act(async () => document.dispatchEvent(pointer("pointermove", 120)));
+  await act(async () => document.dispatchEvent(pointer("pointerup", 120)));
+  expect(childSessionIDs("ordinary")).toEqual(["Verifier", "Inspector"]);
+  expect(childSessionIDs("Inspector")).toEqual(["Nested"]);
+  const order = readSidebarPreferences(sidebarPreferenceKey("local", "installation")).order;
+  expect(order[sessionOrderGroup("app", "ordinary")]).toEqual(["Verifier", "Inspector"]);
+  expect(order[sessionOrderGroup("app")]).toBeUndefined();
+  handle.focus();
+  await keyDown(handle, "Space");
+  await keyDown(document, "ArrowUp");
+  await keyDown(document, "Escape");
+  expect(childSessionIDs("ordinary")).toEqual(["Verifier", "Inspector"]);
+  expect(readSidebarPreferences(sidebarPreferenceKey("local", "installation")).order).toEqual(
+    order,
+  );
 });
 it("opens ordinary sessions alongside saved checkout history and retains selection offline", async () => {
   await render();

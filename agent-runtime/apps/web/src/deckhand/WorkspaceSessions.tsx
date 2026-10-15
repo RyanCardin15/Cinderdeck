@@ -1,7 +1,29 @@
-import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
-import { BotIcon, ChevronRightIcon, MessageSquareIcon, PinIcon, SearchIcon } from "lucide-react";
+import {
+  BotIcon,
+  ChevronRightIcon,
+  GripVerticalIcon,
+  MessageSquareIcon,
+  PinIcon,
+  SearchIcon,
+} from "lucide-react";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as Option from "effect/Option";
 import { ThreadId, type EnvironmentId } from "@cinderdeck/contracts";
@@ -18,12 +40,14 @@ import { useSessionActions } from "./useSessionActions";
 import { workspaceSessions, type WorkspaceSession } from "./sessionWorkspaceRows";
 import {
   filterWorkspaceSessionTree,
+  orderWorkspaceSessionTree,
   sessionTreeContains,
+  sessionOrderGroup,
   workspaceSessionTree,
   type WorkspaceSessionNode,
 } from "./workspaceSessionTree";
 import { SidebarColorPicker } from "./SidebarColorPicker";
-import { sidebarPreferenceKey } from "./workspaceSidebarPreferences";
+import { reorderSidebarRows, sidebarPreferenceKey } from "./workspaceSidebarPreferences";
 import { useWorkspaceSidebarPreferences } from "./useWorkspaceSidebarPreferences";
 import styles from "./WorkspaceSessions.module.css";
 
@@ -166,9 +190,14 @@ function SessionRows({
     query,
     selectedThreadId,
   });
-  const visibleSessions = compact ? sessions.slice(0, sidebarSessionLimit) : sessions;
+  const orderedSessions = orderWorkspaceSessionTree(
+    sessions,
+    resource.workspaceID,
+    sidebar.preferences.order,
+  );
+  const visibleSessions = compact ? orderedSessions.slice(0, sidebarSessionLimit) : orderedSessions;
   // An exact conversation link must remain visible even outside the newest groups.
-  const selectedGroup = sessions.find((node) => sessionTreeContains(node, selectedThreadId));
+  const selectedGroup = orderedSessions.find((node) => sessionTreeContains(node, selectedThreadId));
   if (compact && selectedGroup && !visibleSessions.includes(selectedGroup)) {
     visibleSessions.push(selectedGroup);
   }
@@ -203,28 +232,36 @@ function SessionRows({
       ) : null}
       <nav aria-label="Workspace sessions">
         <ul className={styles.list}>
-          {visibleSessions.map((node) => (
-            <SessionBranch
-              key={node.session.id}
-              node={node}
-              environmentId={environmentId}
-              selectedThreadId={selectedThreadId}
-              searching={!!query.trim()}
-              compact={compact}
-              connected={connected}
-              onNavigate={onNavigate}
-              showMenu={showMenu}
-              colors={sidebar.preferences.sessionColors}
-              onColorChange={(id, color) =>
-                sidebar.update((current) => {
-                  const sessionColors = { ...current.sessionColors };
-                  if (color) sessionColors[id] = color;
-                  else delete sessionColors[id];
-                  return { ...current, sessionColors };
-                })
-              }
-            />
-          ))}
+          <SessionSiblings
+            nodes={visibleSessions}
+            group={sessionOrderGroup(resource.workspaceID)}
+            sidebar={sidebar}
+          >
+            {(node) => (
+              <SessionBranch
+                key={node.session.id}
+                node={node}
+                environmentId={environmentId}
+                selectedThreadId={selectedThreadId}
+                searching={!!query.trim()}
+                compact={compact}
+                connected={connected}
+                onNavigate={onNavigate}
+                showMenu={showMenu}
+                workspaceID={resource.workspaceID}
+                sidebar={sidebar}
+                colors={sidebar.preferences.sessionColors}
+                onColorChange={(id, color) =>
+                  sidebar.update((current) => {
+                    const sessionColors = { ...current.sessionColors };
+                    if (color) sessionColors[id] = color;
+                    else delete sessionColors[id];
+                    return { ...current, sessionColors };
+                  })
+                }
+              />
+            )}
+          </SessionSiblings>
         </ul>
       </nav>
       {!sessions.length ? (
@@ -276,6 +313,49 @@ function SessionRows({
   );
 }
 
+function SessionSiblings({
+  nodes,
+  group,
+  sidebar,
+  children,
+}: {
+  nodes: readonly WorkspaceSessionNode[];
+  group: string;
+  sidebar: ReturnType<typeof useWorkspaceSidebarPreferences>;
+  children: (node: WorkspaceSessionNode) => ReactNode;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const ids = nodes.map((node) => node.session.id);
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={({ active, over }) => {
+        if (!over || active.id === over.id) return;
+        sidebar.update((current) => ({
+          ...current,
+          order: {
+            ...current.order,
+            [group]: reorderSidebarRows(
+              current.order[group] ?? [],
+              ids,
+              String(active.id),
+              String(over.id),
+            ),
+          },
+        }));
+      }}
+    >
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        {nodes.map(children)}
+      </SortableContext>
+    </DndContext>
+  );
+}
+
 function SessionBranch(props: {
   node: WorkspaceSessionNode;
   environmentId: EnvironmentId;
@@ -285,10 +365,21 @@ function SessionBranch(props: {
   connected: boolean;
   onNavigate: (() => void) | undefined;
   showMenu: ReturnType<typeof useSessionActions>["showMenu"];
+  workspaceID: string;
+  sidebar: ReturnType<typeof useWorkspaceSidebarPreferences>;
   colors: Readonly<Record<string, string>>;
   onColorChange: (id: string, color: string | undefined) => void;
 }) {
   const { node, selectedThreadId, searching } = props;
+  const {
+    setNodeRef,
+    setActivatorNodeRef,
+    attributes,
+    listeners,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: node.session.id });
   const childrenId = useId();
   const containsSelected = node.children.some((child) =>
     sessionTreeContains(child, selectedThreadId),
@@ -310,13 +401,30 @@ function SessionBranch(props: {
   }
   const open = searching || disclosure.expanded;
   return (
-    <li className={styles.branch}>
+    <li
+      ref={setNodeRef}
+      className={styles.branch}
+      data-dragging={isDragging}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+    >
       <SessionRow
         {...props}
         session={node.session}
         selected={node.session.id === selectedThreadId}
         color={props.colors[node.session.id]}
         onColorChange={(color) => props.onColorChange(node.session.id, color)}
+        dragHandle={
+          <button
+            type="button"
+            className={styles.handle}
+            ref={setActivatorNodeRef}
+            {...attributes}
+            {...listeners}
+            aria-label={`Reorder ${node.session.isSubagent ? "sub-agent" : "session"} ${node.session.title || "New session"}`}
+          >
+            <GripVerticalIcon size={12} aria-hidden />
+          </button>
+        }
         disclosure={
           node.children.length ? (
             <button
@@ -341,9 +449,13 @@ function SessionBranch(props: {
       />
       {node.children.length ? (
         <ul id={childrenId} className={`${styles.list} ${styles.children}`} hidden={!open}>
-          {node.children.map((child) => (
-            <SessionBranch key={child.session.id} {...props} node={child} />
-          ))}
+          <SessionSiblings
+            nodes={node.children}
+            group={sessionOrderGroup(props.workspaceID, node.session.id)}
+            sidebar={props.sidebar}
+          >
+            {(child) => <SessionBranch key={child.session.id} {...props} node={child} />}
+          </SessionSiblings>
         </ul>
       ) : null}
     </li>
@@ -362,6 +474,7 @@ function SessionRow({
   onColorChange,
   disclosure,
   childCount,
+  dragHandle,
 }: {
   session: WorkspaceSession;
   environmentId: EnvironmentId;
@@ -374,6 +487,7 @@ function SessionRow({
   onColorChange: (color: string | undefined) => void;
   disclosure: React.ReactNode;
   childCount: number;
+  dragHandle: ReactNode;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
@@ -387,6 +501,7 @@ function SessionRow({
   return (
     <div ref={rowRef} className={styles.row} data-session-id={session.id}>
       {disclosure}
+      {dragHandle}
       <Link
         to="/$environmentId/$threadId"
         params={buildThreadRouteParams({ environmentId, threadId: ThreadId.make(session.id) })}

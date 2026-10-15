@@ -27,7 +27,7 @@ The showcase includes the earlier lane interface. The current app lists ordinary
 
 Cinderdeck is a native Mac application for working in sessions and running your development environment. Group project folders into a workspace, open conversations directly beneath it, and manage its services from the app, a terminal, or your coding agent.
 
-Sub-agent sessions appear nested under their parent conversation. Expand or collapse the group with its arrow; each sub-agent remains clickable and can have its own highlight color. The full Sessions view keeps matching sub-agents under their parents when searching.
+Sub-agent sessions appear nested under their parent conversation. Expand or collapse the group with its arrow; each sub-agent remains clickable and can have its own highlight color. Drag a session’s grip to reorder main sessions or sibling sub-agents; main sessions move with their children, and the order is saved. The full Sessions view uses the same order and keeps matching sub-agents under their parents when searching. Customize the ten highlight presets in **Settings → Appearance → Sidebar highlights**.
 
 A web app, an API in another repository, a worker, a local database: bring whatever your project needs. No prescribed repositories, language, framework, or folder layout. Cinderdeck runs the commands you configure using the tools already installed on your Mac.
 

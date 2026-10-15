@@ -88,4 +88,18 @@ describe("restoring V2 settings", () => {
     expect(state.confirm).toHaveBeenCalledOnce();
     expect(state.update).not.toHaveBeenCalled();
   });
+
+  it("restores the custom highlight palette through the settings reset", async () => {
+    state.settings = {
+      ...DEFAULT_UNIFIED_SETTINGS,
+      sidebarHighlightColors: Array(10).fill("#123456"),
+    };
+    hooks.beginRender();
+    const restore = useSettingsRestore();
+    expect(restore.changedSettingLabels).toEqual(["Highlight colors"]);
+    await restore.restoreDefaults();
+    expect(state.update.mock.calls[0]?.[0].sidebarHighlightColors).toEqual(
+      DEFAULT_UNIFIED_SETTINGS.sidebarHighlightColors,
+    );
+  });
 });
