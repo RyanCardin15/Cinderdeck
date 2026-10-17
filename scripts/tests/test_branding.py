@@ -18,6 +18,17 @@ class BrandingTests(unittest.TestCase):
         self.assertEqual(branding.violations("agent-runtime/apps/mobile/src/features/terminal/nativeTerminalModule.ts", 'const name = "T3TerminalSurface";'), [])
         self.assertTrue(branding.violations("agent-runtime/apps/mobile/src/features/terminal/nativeTerminalModule.ts", 'const name = "T3TerminalSurface"; const brand = "T3DeviceStream";'))
 
+    def test_native_paths_only_exempt_registered_filenames(self):
+        for path in (
+            "agent-runtime/apps/mobile/modules/t3-terminal/ios/T3Promo.swift",
+            "agent-runtime/apps/mobile/src/native/T3Promo.tsx",
+            "agent-runtime/apps/mobile/modules/t3-terminal/t3-promo/T3TerminalNative.podspec",
+            "agent-runtime/apps/mobile/modules/t3-new-product/index.ts",
+        ):
+            self.assertTrue(branding.path_violations(path), path)
+        self.assertFalse(branding.path_violations(
+            "agent-runtime/apps/mobile/src/native/T3ComposerEditor.ios.tsx"))
+
     def test_user_agent_fixture_does_not_exempt_adjacent_branding(self):
         path = "agent-runtime/apps/desktop/src/preview/BrowserSession.test.ts"
         fixture = '"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) T3Code(Alpha)/0.0.33 Chrome/146.0.7680.216 Electron/41.5.0 Safari/537.36";'
@@ -30,7 +41,7 @@ class BrandingTests(unittest.TestCase):
 
     def test_paths_and_identities_cannot_hide_as_storage_keys(self):
         self.assertTrue(branding.path_violations("agent-runtime/apps/web/src/T3CodePanel.tsx"))
-        self.assertFalse(branding.path_violations("agent-runtime/apps/mobile/modules/t3-terminal/ios/T3TerminalNative.swift"))
+        self.assertFalse(branding.path_violations("agent-runtime/apps/mobile/modules/t3-terminal/ios/T3TerminalModule.swift"))
         self.assertTrue(branding.violations("agent-runtime/apps/web/src/NewPanel.tsx", '"https://github.com/example/t3code.git"'))
         self.assertTrue(branding.violations("agent-runtime/apps/mobile/app.config.ts", '"com.t3tools.mobile"'))
 

@@ -216,16 +216,73 @@ def violations(path: str, content: str) -> list[tuple[int, str]]:
             findings.append((number, line.strip()[:200]))
     return findings
 
+# Exact existing Expo/Fabric ABI source filenames, not entire native directories.
+NATIVE_ABI_FILENAMES = {
+    'T3AgentNotificationsModule.kt',
+    'T3ComposerEditor.android.tsx',
+    'T3ComposerEditor.ios.tsx',
+    'T3ComposerEditor.native.tsx',
+    'T3ComposerEditor.podspec',
+    'T3ComposerEditor.tsx',
+    'T3ComposerEditor.types.ts',
+    'T3ComposerEditorModule.kt',
+    'T3ComposerEditorModule.swift',
+    'T3ComposerEditorView.kt',
+    'T3ComposerEditorView.swift',
+    'T3ContextChip.h',
+    'T3ContextChip.kt',
+    'T3KeyboardCommands.android.tsx',
+    'T3KeyboardCommands.ios.tsx',
+    'T3KeyboardCommands.tsx',
+    'T3KeyboardCommandsModule.kt',
+    'T3KeyboardCommandsModule.swift',
+    'T3MarkdownText.h',
+    'T3MarkdownText.mm',
+    'T3MarkdownText.podspec',
+    'T3MarkdownTextComponentDescriptor.h',
+    'T3MarkdownTextManager.mm',
+    'T3MarkdownTextNativeComponent.ts',
+    'T3MarkdownTextRun.h',
+    'T3MarkdownTextRun.mm',
+    'T3MarkdownTextRunComponentDescriptor.h',
+    'T3MarkdownTextRunNativeComponent.ts',
+    'T3MarkdownTextRunShadowNode.cpp',
+    'T3MarkdownTextRunShadowNode.h',
+    'T3MarkdownTextSelectionModule.kt',
+    'T3MarkdownTextSelectionModule.ts',
+    'T3MarkdownTextShadowNode.h',
+    'T3MarkdownTextShadowNode.mm',
+    'T3NativeControls.podspec',
+    'T3NativeControlsModule.kt',
+    'T3NativeControlsModule.swift',
+    'T3NativeFilePresentation.swift',
+    'T3NativePresentation.swift',
+    'T3NativeVideoPresentation.swift',
+    'T3ReviewDiffModule.kt',
+    'T3ReviewDiffModule.swift',
+    'T3ReviewDiffNative.podspec',
+    'T3ReviewDiffView.kt',
+    'T3ReviewDiffView.swift',
+    'T3TerminalModule.kt',
+    'T3TerminalModule.swift',
+    'T3TerminalNative.podspec',
+    'T3TerminalView.kt',
+    'T3TerminalView.swift',
+    'T3WidgetExpiryModule.kt',
+}
+
 
 def path_violations(path: str) -> bool:
     if "/_generated/" in path or "/testkit/fixtures/" in path or "/Vendor/" in path:
         return False
+    native_abi_context = path.startswith("agent-runtime/apps/mobile/src/native/")
     if path.startswith("agent-runtime/apps/mobile/modules/"):
-        module = path.split("/")[4]
-        if module in NATIVE_MODULES:
-            return False  # Expo/Fabric module and native ABI source paths.
-    if path.startswith("agent-runtime/apps/mobile/src/native/"):
-        return False  # Native module import wrappers preserve their registered names.
+        parts = path.split("/")
+        if parts[4] in NATIVE_MODULES:
+            native_abi_context = True
+            path = "/".join(parts[5:])  # Only the registered module folder is exempt.
+    if native_abi_context and Path(path).name in NATIVE_ABI_FILENAMES:
+        path = str(Path(path).parent)  # Keep checking any surrounding directories.
     return bool(re.search(r"(?:T3Code|t3code|@t3tools|(?:^|/)t3-)", path, re.I) or INTERNAL_BRAND.search(path))
 
 
