@@ -2,7 +2,7 @@ import { HostProcessEnvironment, HostProcessPlatform } from "@cinderdeck/shared/
 import {
   listLoginShellCandidates,
   mergePathEntries,
-  readPathFromLoginShell,
+  readEnvironmentFromLoginShell,
   readPathFromLaunchctl,
   resolveWindowsEnvironment,
 } from "@cinderdeck/shared/shell";
@@ -18,21 +18,26 @@ function logPathHydrationWarning(message: string, error?: unknown): void {
 }
 
 function hydratePosixPath(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): void {
-  let shellPath: string | undefined;
+  let shellEnvironment: Partial<Record<string, string>> = {};
   for (const shell of listLoginShellCandidates(platform, env.SHELL)) {
     try {
-      shellPath = readPathFromLoginShell(shell);
+      shellEnvironment = readEnvironmentFromLoginShell(shell, ["PATH", "__MISE_DIFF"]);
     } catch (error) {
       logPathHydrationWarning(`Failed to read PATH from login shell ${shell}.`, error);
     }
 
-    if (shellPath) break;
+    if (shellEnvironment.PATH) break;
   }
 
+  const shellPath = shellEnvironment.PATH;
   const launchctlPath = platform === "darwin" && !shellPath ? readPathFromLaunchctl() : undefined;
   const mergedPath = mergePathEntries(shellPath ?? launchctlPath, env.PATH, platform);
   if (mergedPath) {
     env.PATH = mergedPath;
+  }
+  // Keep mise state paired with the shell PATH to avoid wrapper recursion.
+  if (shellPath && shellEnvironment.__MISE_DIFF) {
+    env.__MISE_DIFF = shellEnvironment.__MISE_DIFF;
   }
 }
 

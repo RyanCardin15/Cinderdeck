@@ -8,7 +8,7 @@
     "historicalMetadataCommit": "17877ebbea4790b5f0ecad9bf8599619f0387be3",
     "historicalMetadataPath": "docs/deckhand/upstream-patches.json"
   },
-  "examinedTarget": "3213a0c77b4ba8e37a361b884d1035eb8dfd76d1",
+  "examinedTarget": "2fbd4318fc5b610c3e7fcfcbd5bbd80b73521d8f",
   "ports": [
     {
       "commit": "f391794a35c604d57e166a3ab48d56fc6e4e469a",
@@ -81,8 +81,28 @@
     {
       "commit": "58d253231d83f669a2cdfefa5fe479751d22c582",
       "behavior": "Round context token counts consistently at the million boundary"
+    },
+    {
+      "commit": "7ee2839cb58263742301895a6be826505daa64ea",
+      "behavior": "Keep mise PATH state paired with login shell PATH for desktop and headless provider launches"
+    },
+    {
+      "commit": "aa81d1203ea43c3b6cc09c5442559fa0cf18db63",
+      "behavior": "Hydrate missing desktop CA trust settings without overriding explicit inherited trust"
+    },
+    {
+      "commit": "b7e376e96e2eb6fe5f23985ddf54172dd5f1fd98",
+      "behavior": "Count live background subagents across turns while excluding rolled-back runs"
+    },
+    {
+      "commit": "2cde3f770bbf7a6ed9d52a6b1f64a471c0303a5a",
+      "behavior": "Notify the terminal PTY of settled dimensions immediately on drag release"
+    },
+    {
+      "commit": "df8df0d53b39bfd6a5d8d69fabade19bd668e0a5",
+      "behavior": "Bound Bitbucket API headers and body consumption to thirty seconds"
     }
   ],
   "coverage": "Selected independent ports only. integratedThrough remains the last complete historical baseline; examinedTarget is not a claim of complete incorporation.",
-  "pending": "Review remaining changes across the Effect 4 stable migration, server service/layer reorganization and browser ownership relocation before selecting additional ports. Upstream hosted accounts, product release and deployment surfaces are excluded from Cinderdeck."
+  "pending": "Review remaining Effect/service/provider/browser ownership migrations, React Compiler changes, companion native UI/Markdown parser changes, and orchestration fixes against the owned architecture before additional ports. Upstream hosted accounts, product release and deployment surfaces remain excluded."
 }

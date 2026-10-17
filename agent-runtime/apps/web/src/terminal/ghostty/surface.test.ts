@@ -383,6 +383,30 @@ describe("GhosttyTerminalSurface visibility", () => {
     expect(onLinkActivate).not.toHaveBeenCalled();
   });
 
+  it("sends the settled grid when a resize drag is released", async () => {
+    const harness = createHarness();
+    const onResize = vi.fn<(cols: number, rows: number) => void>();
+    const surface = await harness.create({ onResize });
+    vi.advanceTimersByTime(150);
+    onResize.mockClear();
+
+    // Mid-drag, the grid reflows locally while the PTY waits for the debounce.
+    harness.mount.clientWidth = 120;
+    harness.resize();
+    expect(surface.cols).toBe(14);
+    expect(onResize).not.toHaveBeenCalled();
+
+    // The release writes the final width before the observer reports it.
+    harness.mount.clientWidth = 96;
+    window.dispatchEvent(new Event("pointerup"));
+    expect(onResize).toHaveBeenCalledExactlyOnceWith(11, 6);
+
+    harness.resize();
+    vi.advanceTimersByTime(150);
+    window.dispatchEvent(new Event("pointerup"));
+    expect(onResize).toHaveBeenCalledOnce();
+  });
+
   it("stops zero-size mounts and repaints when the same size returns", async () => {
     const harness = createHarness();
     const surface = await harness.create();

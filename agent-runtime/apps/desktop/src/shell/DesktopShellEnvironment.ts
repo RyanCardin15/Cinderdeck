@@ -69,6 +69,10 @@ const LOGIN_SHELL_ENV_NAMES = [
   "HOMEBREW_REPOSITORY",
   "XDG_CONFIG_HOME",
   "XDG_DATA_HOME",
+  "__MISE_DIFF",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+  "NODE_EXTRA_CA_CERTS",
 ] as const;
 const LOCALE_ENV_NAMES = ["LANG", "LC_ALL", "LC_CTYPE"] as const;
 const FALLBACK_LC_CTYPE = "en_US.UTF-8";
@@ -271,6 +275,11 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
     if (Option.isSome(mergedPath)) {
       config.env.PATH = mergedPath.value;
     }
+    // Keep mise state paired with the shell PATH, replacing stale inherited
+    // state, or a same-named wrapper can recursively run itself.
+    if (shellEnvironment.PATH && shellEnvironment.__MISE_DIFF) {
+      config.env.__MISE_DIFF = shellEnvironment.__MISE_DIFF;
+    }
     if (!config.env.SSH_AUTH_SOCK && shellEnvironment.SSH_AUTH_SOCK) {
       config.env.SSH_AUTH_SOCK = shellEnvironment.SSH_AUTH_SOCK;
     }
@@ -282,6 +291,10 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
       "HOMEBREW_REPOSITORY",
       "XDG_CONFIG_HOME",
       "XDG_DATA_HOME",
+      // Respect explicitly inherited CA trust; hydrate only missing shell settings.
+      "SSL_CERT_FILE",
+      "SSL_CERT_DIR",
+      "NODE_EXTRA_CA_CERTS",
     ] as const) {
       if (!config.env[name] && shellEnvironment[name]) {
         config.env[name] = shellEnvironment[name];
