@@ -72,6 +72,16 @@ describe("isMarkdownPreviewFile", () => {
 });
 
 describe("shouldShowFileExplorer", () => {
+  it("keeps the workspace explorer available when an individually added file is open", () => {
+    expect(
+      shouldShowFileExplorer({
+        relativePath: "/briefs/brief.md",
+        explorerOpen: true,
+        attachmentOpen: false,
+        workspaceFile: true,
+      }),
+    ).toBe(true);
+  });
   it("hides the workspace tree for host files and attachments", () => {
     expect(
       shouldShowFileExplorer({

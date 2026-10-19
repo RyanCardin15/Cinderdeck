@@ -7,7 +7,7 @@ import type { EnvironmentId, ProjectEntry } from "@cinderdeck/contracts";
 import { FileTree, useFileTree, useFileTreeSearch, useFileTreeSelector } from "@pierre/trees/react";
 import { serializeComposerFileLink } from "@cinderdeck/shared/composerTrigger";
 import { ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { InputGroup, InputGroupInput } from "~/components/ui/input-group";
@@ -26,12 +26,14 @@ import { createFileTreeDragMentionController } from "./fileTreeDragMention";
 import { areAllDirectoriesExpanded, setAllDirectoriesExpanded } from "./fileTreeExpansion";
 import { buildFileTreePathUpdates } from "./fileTreePathReconciliation";
 import { useDirectoryEntries } from "./useDirectoryEntries";
-import { useProjectPathSearch } from "~/state/queries";
+import { useWorkspacePathSearch } from "./useWorkspacePathSearch";
+import { resolveWorkspaceTreePath, type WorkspaceFileRoot } from "./workspaceFileRoots";
 
 interface FileBrowserPanelProps {
   environmentId: EnvironmentId;
   cwd: string;
   projectName: string;
+  roots: readonly WorkspaceFileRoot[];
   /** Entry currently open in the surface; revealed and selected in the tree. A directory is expanded. */
   selectedPath: string | null;
   /** Bumped when the same path should be revealed again (e.g. re-opened from search). */
@@ -98,6 +100,7 @@ export default function FileBrowserPanel({
   environmentId,
   cwd,
   projectName,
+  roots,
   selectedPath,
   selectedPathRevealId,
   onOpenFile,
@@ -114,10 +117,10 @@ export default function FileBrowserPanel({
     ready,
     error,
     isPending,
-  } = useDirectoryEntries(environmentId, cwd);
+  } = useDirectoryEntries(environmentId, cwd, roots);
   const [query, setQuery] = useState("");
   const [expandAll, setExpandAll] = useState(false);
-  const pathSearch = useProjectPathSearch({ environmentId, cwd, query: query.slice(0, 256) }, 200);
+  const pathSearch = useWorkspacePathSearch(environmentId, roots, query);
   const entries = useMemo(() => {
     const result = new Map(directoryEntries.map((entry) => [entry.path, entry]));
     if (query.trim() && !pathSearch.isPending) {
@@ -169,7 +172,12 @@ export default function FileBrowserPanel({
       context.close();
       return;
     }
-    const relativePath = item.path.replace(/\/$/, "");
+    const target = resolveWorkspaceTreePath(roots, item.path.replace(/\/$/, ""));
+    if (!target) {
+      context.close();
+      return;
+    }
+    const relativePath = target.absolutePath;
     const mention = serializeComposerFileLink(relativePath);
     const pointer = contextMenuPointerRef.current;
     const pointerIsFresh = pointer !== null && performance.now() - pointer.at < 1000;
@@ -177,7 +185,11 @@ export default function FileBrowserPanel({
     const position = pointerIsFresh
       ? { x: pointer.x, y: pointer.y }
       : { x: anchorRect.left, y: anchorRect.bottom };
-    const fileTarget = { environmentId, filePath: relativePath, workspaceRoot: cwd };
+    const fileTarget = {
+      environmentId,
+      filePath: relativePath,
+      workspaceRoot: target.root.kind === "directory" ? target.root.path : cwd,
+    };
     const fileMenuItems = fileContextMenu.buildItems(fileTarget);
     try {
       const clicked = await api.contextMenu.show(
@@ -239,12 +251,17 @@ export default function FileBrowserPanel({
   });
 
   const treeModelRef = useRef<ReturnType<typeof useFileTree>["model"] | null>(null);
+  const deselectTreePath = useCallback(
+    (path: string) => treeModelRef.current?.getItem(path)?.deselect(),
+    [treeModelRef],
+  );
   const dragMention = useMemo(
     () =>
       createFileTreeDragMentionController({
-        deselect: (path) => treeModelRef.current?.getItem(path)?.deselect(),
+        deselect: deselectTreePath,
+        resolvePath: (path) => resolveWorkspaceTreePath(roots, path)?.absolutePath ?? null,
       }),
-    [],
+    [deselectTreePath, roots],
   );
   const { model } = useFileTree({
     composition: {
@@ -260,9 +277,13 @@ export default function FileBrowserPanel({
     dragAndDrop: { canDrop: () => false },
     density: "compact",
     fileTreeSearchMode: "hide-non-matches",
-    flattenEmptyDirectories: true,
+    flattenEmptyDirectories: false,
     initialExpansion: "closed",
     icons: CINDERDECK_PIERRE_ICONS,
+    renderRowDecoration: ({ item }) => {
+      const root = roots.find((root) => root.treePath === item.path.replace(/\/$/, ""));
+      return root ? { text: root.path, title: root.path } : null;
+    },
     onSelectionChange: (selectedPaths) => {
       // The drag controller's selection cache must track every change,
       // including reveal-driven ones, or drags act on a stale selection.
@@ -278,13 +299,18 @@ export default function FileBrowserPanel({
       const selectedPath = selectedPaths.at(-1)?.replace(/\/$/, "");
       if (selectedPath && entryKindsRef.current.get(selectedPath) === "file") {
         treeSelectionPathRef.current = selectedPath;
-        onOpenFile(selectedPath);
+        const target = resolveWorkspaceTreePath(roots, selectedPath);
+        if (target) onOpenFile(target.absolutePath);
       }
     },
     paths: [],
     search: false,
     onSearchChange: (value) => setQuery(value ?? ""),
-    unsafeCSS: PIERRE_TREE_UNSAFE_CSS,
+    // Middle truncation splits names into separate grid cells. Preserve spaces
+    // at those boundaries (for example, "Added files" and "Empty folder").
+    unsafeCSS: `${PIERRE_TREE_UNSAFE_CSS}
+      [data-item-section='content'] [data-truncate-content] { white-space: pre; }
+    `,
   });
   const search = useFileTreeSearch(model);
   const allDirectoriesExpanded = useFileTreeSelector(model, (currentModel) =>
@@ -376,11 +402,16 @@ export default function FileBrowserPanel({
     previousTreePathsRef.current = treePaths;
     if (previousTreePaths === null) {
       model.resetPaths(treePaths);
+      // Show every configured root at once. Folder contents remain lazy.
+      for (const path of new Set(roots.map((root) => root.treePath.split("/")[0]!))) {
+        const group = model.getItem(`${path}/`);
+        if (group && "expand" in group) group.expand();
+      }
       return;
     }
     const updates = buildFileTreePathUpdates(previousTreePaths, treePaths);
     if (updates.length > 0) model.batch(updates);
-  }, [ready, entryKinds, model, treePaths]);
+  }, [ready, entryKinds, model, roots, treePaths]);
 
   useEffect(() => {
     if (expandAll && !query.trim()) setAllDirectoriesExpanded(model, directoryPaths, true);
@@ -465,7 +496,7 @@ export default function FileBrowserPanel({
   const panelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     treeModelRef.current = model;
-  }, [model]);
+  }, [model, treeModelRef]);
   useEffect(() => {
     const panel = panelRef.current;
     if (panel === null) {
@@ -540,6 +571,15 @@ export default function FileBrowserPanel({
       {query.trim() && pathSearch.truncated && !pathSearch.isPending ? (
         <div className="px-3 py-1 text-xs text-muted-foreground">
           More matches available. Refine your search.
+        </div>
+      ) : null}
+      {!isPending &&
+      !pathSearch.isPending &&
+      !error &&
+      !pathSearch.error &&
+      entries.length === 0 ? (
+        <div className="px-3 py-4 text-xs text-muted-foreground">
+          No folders or files in this workspace.
         </div>
       ) : null}
       {(isPending || pathSearch.isPending) && (

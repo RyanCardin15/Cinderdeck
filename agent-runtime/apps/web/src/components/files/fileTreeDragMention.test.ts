@@ -17,6 +17,29 @@ const rowNode = (path: string) => ({
 });
 
 describe("createFileTreeDragMentionController", () => {
+  it("resolves workspace display paths before creating mentions and ignores group headings", () => {
+    const controller = createFileTreeDragMentionController({
+      deselect: () => {},
+      resolvePath: (path) =>
+        path === "Folders/design/brief.md" ? "/documents/design/brief.md" : null,
+    });
+    const transfer = makeTransfer();
+    controller.handleSelectionChange(["Folders/", "Folders/design/brief.md"]);
+    controller.handleDragStart({
+      dataTransfer: transfer,
+      composedPath: () => [rowNode("Folders/design/brief.md")],
+    });
+    expect(transfer.getData(COMPOSER_MENTION_DRAG_TYPE)).toBe(
+      "[brief.md](/documents/design/brief.md)",
+    );
+    controller.handleDragEnd();
+    const headingTransfer = makeTransfer();
+    controller.handleDragStart({
+      dataTransfer: headingTransfer,
+      composedPath: () => [rowNode("Folders/")],
+    });
+    expect(headingTransfer.data.has(COMPOSER_MENTION_DRAG_TYPE)).toBe(false);
+  });
   it("tags a row drag with the mention payload and flags the drag", () => {
     const controller = createFileTreeDragMentionController({ deselect: () => {} });
     const transfer = makeTransfer();

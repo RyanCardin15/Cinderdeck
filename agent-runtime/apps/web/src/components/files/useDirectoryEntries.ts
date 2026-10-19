@@ -5,10 +5,35 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { projectEnvironment } from "~/state/projects";
+import {
+  resolveWorkspaceTreePath,
+  workspaceRootEntries,
+  type WorkspaceFileRoot,
+} from "./workspaceFileRoots";
 
 /** Loads only requested directories; collapsing a folder keeps its children cached. */
-export function useDirectoryEntries(environmentId: EnvironmentId, cwd: string) {
-  const [directories, setDirectories] = useState(new Map<string, readonly ProjectEntry[]>());
+export function useDirectoryEntries(
+  environmentId: EnvironmentId,
+  cwd: string,
+  roots?: readonly WorkspaceFileRoot[],
+) {
+  const [directories, setDirectories] = useState(() => {
+    const initial = new Map<string, readonly ProjectEntry[]>();
+    if (roots) {
+      const entries = workspaceRootEntries(roots);
+      initial.set(
+        "",
+        entries.filter((entry) => !entry.path.includes("/")),
+      );
+      for (const group of initial.get("")!) {
+        initial.set(
+          group.path,
+          entries.filter((entry) => entry.path.startsWith(`${group.path}/`)),
+        );
+      }
+    }
+    return initial;
+  });
   const [errors, setErrors] = useState(new Map<string, string>());
   const [pending, setPending] = useState(0);
   const requests = useRef(new Map<string, Promise<void>>());
@@ -20,13 +45,22 @@ export function useDirectoryEntries(environmentId: EnvironmentId, cwd: string) {
 
   const load = useCallback(
     function loadDirectory(directoryPath: string, refresh = false): Promise<void> {
+      const target = roots ? resolveWorkspaceTreePath(roots, directoryPath) : null;
+      // Group headings and individually added files are catalog entries, not disk directories.
+      if (roots && (!target || target.root.kind === "file")) return Promise.resolve();
       const existing = requests.current.get(directoryPath);
       if (existing)
         return refresh ? existing.then(() => loadDirectory(directoryPath, true)) : existing;
       if (!refresh && loaded.current.has(directoryPath)) return Promise.resolve();
       loaded.current.add(directoryPath);
       requested.current.add(directoryPath);
-      const atom = projectEnvironment.listEntries({ environmentId, input: { cwd, directoryPath } });
+      const atom = projectEnvironment.listEntries({
+        environmentId,
+        input: {
+          cwd: target?.root.path ?? cwd,
+          directoryPath: target?.relativePath ?? directoryPath,
+        },
+      });
       setPending((count) => count + 1);
       const request = (async () => {
         if (running.current >= 4)
@@ -51,10 +85,20 @@ export function useDirectoryEntries(environmentId: EnvironmentId, cwd: string) {
             setDirectories((previous) =>
               new Map(previous).set(
                 directoryPath,
-                result.value.entries.filter(
-                  (entry) =>
-                    entry.path.slice(0, Math.max(0, entry.path.lastIndexOf("/"))) === directoryPath,
-                ),
+                result.value.entries
+                  .map((entry) =>
+                    target
+                      ? {
+                          ...entry,
+                          path: `${target.root.treePath}/${entry.path}`,
+                        }
+                      : entry,
+                  )
+                  .filter(
+                    (entry) =>
+                      entry.path.slice(0, Math.max(0, entry.path.lastIndexOf("/"))) ===
+                      directoryPath,
+                  ),
               ),
             );
             setErrors((previous) => {
@@ -68,7 +112,7 @@ export function useDirectoryEntries(environmentId: EnvironmentId, cwd: string) {
             setErrors((previous) =>
               new Map(previous).set(
                 directoryPath,
-                cause instanceof Error ? cause.message : "Unable to load folder.",
+                `${target?.absolutePath ?? directoryPath}: ${cause instanceof Error ? cause.message : "Unable to load folder."}`,
               ),
             );
           }
@@ -80,7 +124,7 @@ export function useDirectoryEntries(environmentId: EnvironmentId, cwd: string) {
       requests.current.set(directoryPath, request);
       return request;
     },
-    [cwd, environmentId],
+    [cwd, environmentId, roots],
   );
 
   useEffect(() => {

@@ -91,11 +91,19 @@ import {
   setProjectFileQueryData,
   useProjectFileQuery,
 } from "./projectFilesQueryState";
+import type { ThreadContextView } from "@cinderdeck/contracts/deckhand/rpc";
+import {
+  joinWorkspaceFilePath,
+  workspaceFileRoots,
+  workspaceFilePreviewTarget,
+  type WorkspaceFileRoot,
+} from "./workspaceFileRoots";
 
 interface FilePreviewPanelProps {
   environmentId: EnvironmentId;
   cwd: string;
   projectName: string;
+  workspaceContext?: ThreadContextView | null;
   relativePath: string | null;
   attachment?: ChatFileAttachment;
   threadRef: ScopedThreadRef;
@@ -904,7 +912,48 @@ function initialExplorerOpen(): boolean {
   }
 }
 
-export default function FilePreviewPanel({
+export default function FilePreviewPanel(props: FilePreviewPanelProps) {
+  const { onOpenFile: openFile, onPendingChange: pendingChange, relativePath: surfacePath } = props;
+  const serializedRoots = JSON.stringify(
+    workspaceFileRoots(props.workspaceContext, props.cwd, props.projectName),
+  );
+  const roots = useMemo(
+    () => JSON.parse(serializedRoots) as WorkspaceFileRoot[],
+    [serializedRoots],
+  );
+  const target = workspaceFilePreviewTarget(roots, props.cwd, props.relativePath);
+  const selectedRoot = target.root;
+  const cwd = props.attachment === undefined ? target.cwd : props.cwd;
+  const relativePath = props.attachment === undefined ? target.relativePath : props.relativePath;
+  const onOpenFile = useCallback(
+    (path: string) => openFile(isAbsolutePath(path) ? path : joinWorkspaceFilePath(cwd, path)),
+    [cwd, openFile],
+  );
+  const onPendingChange = useCallback(
+    (path: string, pending: boolean) => pendingChange(surfacePath ?? path, pending),
+    [pendingChange, surfacePath],
+  );
+  return (
+    <FilePreviewContent
+      {...props}
+      cwd={cwd}
+      relativePath={relativePath}
+      projectName={
+        selectedRoot
+          ? `${props.workspaceContext?.workspace.name ?? props.projectName} · ${selectedRoot.treePath.split("/").at(-1)}`
+          : props.projectName
+      }
+      onOpenFile={onOpenFile}
+      onPendingChange={onPendingChange}
+      browserRoots={roots}
+      browserCwd={props.cwd}
+      browserName={props.workspaceContext?.workspace.name ?? props.projectName}
+      browserSelectedPath={target.treePath}
+    />
+  );
+}
+
+function FilePreviewContent({
   environmentId,
   cwd,
   projectName,
@@ -920,7 +969,16 @@ export default function FilePreviewPanel({
   onPendingChange,
   selectedFilePending,
   workspaceMutationId,
-}: FilePreviewPanelProps) {
+  browserRoots,
+  browserCwd,
+  browserName,
+  browserSelectedPath,
+}: FilePreviewPanelProps & {
+  browserRoots: readonly WorkspaceFileRoot[];
+  browserCwd: string;
+  browserName: string;
+  browserSelectedPath: string | null;
+}) {
   const relativePath =
     attachment === undefined ? resolveFilePreviewPath(requestedPath, cwd) : requestedPath;
   const { resolvedTheme } = useTheme();
@@ -967,6 +1025,7 @@ export default function FilePreviewPanel({
     relativePath: previewPath,
     explorerOpen,
     attachmentOpen: attachment !== undefined,
+    workspaceFile: browserSelectedPath !== null,
   });
   // Reading markdown rendered is a preference, not a property of one file. Keeping
   // it on the panel meant a thread switch dropped it and forced source back.
@@ -1163,7 +1222,9 @@ export default function FilePreviewPanel({
               <Globe2 className="size-3.5" />
             </FileSurfaceAction>
           ) : null}
-          {!isHostFile && previewPath !== null ? (
+          {(!isHostFile || browserSelectedPath !== null) &&
+          attachment === undefined &&
+          previewPath !== null ? (
             <FileSurfaceAction
               label={explorerOpen ? "Hide file explorer" : "Show file explorer"}
               pressed={explorerOpen}
@@ -1300,11 +1361,12 @@ export default function FilePreviewPanel({
             )}
           >
             <FileBrowserPanel
-              key={`${environmentId}:${cwd}`}
+              key={`${environmentId}:${JSON.stringify(browserRoots)}`}
               environmentId={environmentId}
-              cwd={cwd}
-              projectName={projectName}
-              selectedPath={relativePath}
+              cwd={browserCwd}
+              roots={browserRoots}
+              projectName={browserName}
+              selectedPath={browserSelectedPath}
               selectedPathRevealId={revealRequestId}
               onOpenFile={onOpenFile}
               workspaceMutationId={workspaceMutationId}

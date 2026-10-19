@@ -2,6 +2,8 @@
 
 A workspace can contain one repository, several independent repositories, regular folders, or a mix. Services and tasks keep their own working folders; Git is optional.
 
+Inside a session, **Files** shows every configured folder and individually added file in one tree, grouped under **Repositories**, **Folders**, and **Added files**. Root rows include their disk paths so similarly named folders are easy to distinguish. Expand a folder to browse its contents, including hidden and ignored files; directories load as needed. Search checks every configured folder, even when collapsed. Opening a file uses its own folder for previews and edits, and file mentions retain the exact path. Individually added files use the existing read-only host-file preview. An independent session worktree appears under **Session checkout** alongside the workspace folders. Refresh reloads visited folders while preserving expansion; unavailable folders show their path and a retry action.
+
 Open **Workspaces…** from the menu bar, or **History → Workspaces → Open Workspaces**. Launchers can use `cinderdeck://workspaces`. This is the new home for the existing Stacks feature.
 
 The compact History panel shows up to three complete workspace cards per page. Use the previous/next buttons for more workspaces, or the arrow keys to move the selection across pages. Service details scroll within each card while Start/Stop and workspace actions stay visible. **Open Workspaces** opens the full workspace window.

@@ -2,6 +2,8 @@
 
 Cinderdeck supports macOS 13 or later. Building requires Xcode 26.2 or later, its command-line tools, Rust/Cargo, and internet access for the first build. Swift packages and locked harness dependencies are installed automatically. The builder uses Node 24.13.1+ from your PATH, or downloads the pinned Node 24 toolchain into this clone's `.build/toolchains` directory. It uses the harness's pinned pnpm version.
 
+The builder reuses pnpm from PATH when its version matches the harness pin, otherwise it resolves that exact version through npm. Dependency installation uses the frozen lockfile and runs without terminal prompts, including when pnpm needs to repair its modules layout.
+
 ## Development
 
 Clone just this repository, then run from wherever you downloaded it:

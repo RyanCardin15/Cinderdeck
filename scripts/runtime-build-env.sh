@@ -28,15 +28,18 @@ ensure_runtime_node() {
   fi
 }
 install_runtime_dependencies() {
-  local pnpm_version npm_binary
+  local pnpm_version npm_binary pnpm_binary
   pnpm_version=$("$NODE_BINARY" -p 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).packageManager.split("@")[1]' "$RUNTIME_SOURCE/package.json")
   npm_binary="$(dirname "$NODE_BINARY")/npm"
+  pnpm_binary="$(PATH="$(dirname "$NODE_BINARY"):$PATH" command -v pnpm || true)"
   printf 'Installing locked agent runtime dependencies (pnpm %s).\n' "$pnpm_version"
   # Pin the package manager too; never depend on another checkout's node_modules.
-  if [[ -x "$npm_binary" ]]; then
-    (cd "$RUNTIME_SOURCE" && VP_GIT_HOOKS=0 PATH="$(dirname "$NODE_BINARY"):$PATH" "$npm_binary" exec --yes --package="pnpm@$pnpm_version" -- pnpm install --frozen-lockfile)
-  elif command -v pnpm >/dev/null 2>&1 && [[ "$(PATH="$(dirname "$NODE_BINARY"):$PATH" pnpm --version)" == "$pnpm_version" ]]; then
-    (cd "$RUNTIME_SOURCE" && VP_GIT_HOOKS=0 PATH="$(dirname "$NODE_BINARY"):$PATH" pnpm install --frozen-lockfile)
+  # Reuse an exact local match before asking npm to resolve/download it. Installs
+  # run unattended, including a pnpm-managed modules-layout repair when needed.
+  if [[ -n "$pnpm_binary" && "$(PATH="$(dirname "$NODE_BINARY"):$PATH" "$pnpm_binary" --version)" == "$pnpm_version" ]]; then
+    (cd "$RUNTIME_SOURCE" && CI=true VP_GIT_HOOKS=0 PATH="$(dirname "$NODE_BINARY"):$PATH" "$pnpm_binary" install --frozen-lockfile)
+  elif [[ -x "$npm_binary" ]]; then
+    (cd "$RUNTIME_SOURCE" && CI=true VP_GIT_HOOKS=0 PATH="$(dirname "$NODE_BINARY"):$PATH" "$npm_binary" exec --yes --package="pnpm@$pnpm_version" -- pnpm install --frozen-lockfile)
   else
     fail "Node installation lacks npm. Use a full Node 24 installation or install pnpm@$pnpm_version."
   fi

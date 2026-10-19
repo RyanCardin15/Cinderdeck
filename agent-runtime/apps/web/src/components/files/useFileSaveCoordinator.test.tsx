@@ -14,6 +14,7 @@ vi.mock("./projectFilesQueryState", () => ({ confirmProjectFileQueryData: confir
 
 import { setMarkdownTaskChecked } from "./filePreviewMode";
 import { useFileSaveCoordinator } from "./useFileSaveCoordinator";
+import { workspaceFilePreviewTarget } from "./workspaceFileRoots";
 
 const environmentId = EnvironmentId.make("save-lifecycle-audit");
 const onPendingChange = vi.fn();
@@ -64,6 +65,23 @@ afterEach(async () => {
 });
 
 describe("file-save React lifecycle", () => {
+  it("saves a second folder's file in that folder when filenames overlap", async () => {
+    const target = workspaceFilePreviewTarget(
+      [
+        { path: "/workspace/web", treePath: "Repositories/web", kind: "directory" },
+        { path: "/workspace/api", treePath: "Repositories/api", kind: "directory" },
+      ],
+      "/workspace/web",
+      "/workspace/api/README.md",
+    );
+    mount({ ...defaultProps, cwd: target.cwd, relativePath: target.relativePath! });
+    changeHandler()("API documentation");
+    await vi.advanceTimersByTimeAsync(500);
+    expect(writeFile).toHaveBeenCalledExactlyOnceWith({
+      environmentId,
+      input: { cwd: "/workspace/api", relativePath: "README.md", contents: "API documentation" },
+    });
+  });
   it("persists editor model changes after StrictMode setup replay", async () => {
     mount();
     changeHandler()("AUDIT7907NATIVE\n");

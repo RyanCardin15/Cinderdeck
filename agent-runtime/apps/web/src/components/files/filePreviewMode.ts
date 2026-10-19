@@ -13,8 +13,12 @@ export function shouldShowFileExplorer(input: {
   readonly relativePath: string | null;
   readonly explorerOpen: boolean;
   readonly attachmentOpen: boolean;
+  readonly workspaceFile?: boolean;
 }): boolean {
-  if (input.attachmentOpen || (input.relativePath && isAbsolutePath(input.relativePath))) {
+  if (
+    input.attachmentOpen ||
+    (input.relativePath && isAbsolutePath(input.relativePath) && !input.workspaceFile)
+  ) {
     return false;
   }
   return input.explorerOpen || input.relativePath === null;
