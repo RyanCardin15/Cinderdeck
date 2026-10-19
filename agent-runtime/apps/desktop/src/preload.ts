@@ -48,6 +48,28 @@ if (clientPlatform === "darwin") {
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  knowledge: {
+    listVaults: (workspacePath) =>
+      ipcRenderer.invoke("cinderdeck:local-knowledge", { action: "list-vaults", workspacePath }),
+    connectVault: (input) =>
+      ipcRenderer.invoke("cinderdeck:local-knowledge", { action: "connect-vault", ...input }),
+    disconnectVault: (id) =>
+      ipcRenderer.invoke("cinderdeck:local-knowledge", { action: "disconnect-vault", id }),
+    searchNotes: (input) =>
+      ipcRenderer.invoke("cinderdeck:local-knowledge", { action: "search-notes", ...input }),
+    readNote: (input) =>
+      ipcRenderer.invoke("cinderdeck:local-knowledge", { action: "read-note", ...input }),
+    openNote: (input) =>
+      ipcRenderer.invoke("cinderdeck:local-knowledge", { action: "open-note", ...input }),
+    previewSkill: () =>
+      ipcRenderer.invoke("cinderdeck:local-knowledge", { action: "preview-skill" }),
+    importSkill: (input) =>
+      ipcRenderer.invoke("cinderdeck:local-knowledge", { action: "import-skill", ...input }),
+    listImportedSkills: () =>
+      ipcRenderer.invoke("cinderdeck:local-knowledge", { action: "list-skills" }),
+    removeImportedSkill: (id) =>
+      ipcRenderer.invoke("cinderdeck:local-knowledge", { action: "forget-skill", id }),
+  },
   appContext: {
     list: () => ipcRenderer.invoke("cinderdeck:app-context", { action: "list" }),
     capture: (targetID) =>

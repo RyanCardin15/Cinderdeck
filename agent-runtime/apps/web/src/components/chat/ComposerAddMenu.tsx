@@ -1,5 +1,6 @@
+import { ObsidianNotes } from "../../knowledge/ObsidianNotes";
 import { useEffect, useRef, useState } from "react";
-import { AppWindowIcon, CameraIcon, ImagePlusIcon, PlusIcon } from "lucide-react";
+import { AppWindowIcon, CameraIcon, ImagePlusIcon, BookOpenIcon, PlusIcon } from "lucide-react";
 import type { RecentAppTarget, SnapShotSource } from "@cinderdeck/contracts";
 import {
   Menu,
@@ -37,12 +38,17 @@ function AppIcon({ target }: { target: RecentAppTarget }) {
 export function ComposerAddMenu({
   onChooseFiles,
   onAttach,
+  onAttachFile,
+  workspacePath,
 }: {
+  workspacePath?: string | null;
+  onAttachFile?: (file: File) => Promise<void>;
   onChooseFiles: () => void;
   onAttach: (file: File, source: SnapShotSource) => Promise<void>;
 }) {
   const bridge = typeof window === "undefined" ? undefined : window.desktopBridge;
   const native = bridge?.isNativeHost?.() === true ? bridge.appContext : undefined;
+  const [notesOpen, setNotesOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [targets, setTargets] = useState<readonly RecentAppTarget[]>([]);
   const [loading, setLoading] = useState(false);
@@ -131,6 +137,18 @@ export function ComposerAddMenu({
             <ImagePlusIcon />
             <span>Add photos & files</span>
           </MenuItem>
+          {bridge?.knowledge && onAttachFile && (
+            <MenuItem
+              variant="attachment"
+              onClick={() => {
+                setOpen(false);
+                setNotesOpen(true);
+              }}
+            >
+              <BookOpenIcon />
+              <span>Add Obsidian note</span>
+            </MenuItem>
+          )}
           {native && (
             <>
               <MenuSeparator />
@@ -184,6 +202,14 @@ export function ComposerAddMenu({
           )}
         </MenuPopup>
       </Menu>
+      {notesOpen && (
+        <ObsidianNotes
+          open={notesOpen}
+          onOpenChange={setNotesOpen}
+          workspacePath={workspacePath ?? null}
+          onAttach={onAttachFile}
+        />
+      )}
       {capturing && (
         <span role="status" className="sr-only">
           Attaching {capturing}…

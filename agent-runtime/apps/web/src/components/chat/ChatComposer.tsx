@@ -7477,6 +7477,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       />
                       <ComposerAddMenu
                         key={`${environmentId}:${activeThreadId ?? draftId}:${activePendingProgress?.activeQuestion?.id ?? "draft"}`}
+                        workspacePath={environmentId === primaryEnvironmentId ? gitCwd : null}
+                        onAttachFile={async (file) => {
+                          const inserted = await addComposerAttachments([file]);
+                          if (!inserted)
+                            throw new Error(
+                              "The note could not be attached. Check the composer attachment limits.",
+                            );
+                          focusComposer();
+                        }}
                         onChooseFiles={() => attachmentInputRef.current?.click()}
                         onAttach={async (file, source) => {
                           await addComposerAttachments([file], { imageSource: source });

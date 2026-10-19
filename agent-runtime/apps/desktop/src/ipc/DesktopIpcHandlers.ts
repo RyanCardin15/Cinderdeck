@@ -1,3 +1,4 @@
+import { installKnowledgeIpc } from "../knowledge/KnowledgeIpc.ts";
 import * as Effect from "effect/Effect";
 
 import { receiveProviderAuthCallback, cancelProviderAuthCallback } from "./methods/providerAuth.ts";
@@ -61,6 +62,7 @@ import * as AppActivationIpc from "./methods/appActivation.ts";
 export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers")(function* () {
   const ipc = yield* DesktopIpc.DesktopIpc;
   yield* installNotificationBadge();
+  yield* installKnowledgeIpc();
   yield* PreviewIpc.installPreviewEventForwarding();
 
   yield* ipc.handle(AppActivationIpc.setReady);

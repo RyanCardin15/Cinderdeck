@@ -1,3 +1,4 @@
+import { KnowledgeSettings } from "../../knowledge/KnowledgeSettings";
 import { CinderdeckIntegrationSettings } from "../../deckhand/CinderdeckIntegrationSettings";
 import { DeviceHostUpdates } from "../device/DeviceHostUpdates";
 import { DeviceToolVersions } from "../device/DeviceToolVersions";
@@ -1418,6 +1419,7 @@ export function IntegrationsSettingsPanel() {
       <CinderdeckIntegrationSettings
         environmentId={environment?.environmentId ?? primaryEnvironment?.environmentId ?? null}
       />
+      <KnowledgeSettings />
       <ProjectDefaultsSettings category="integrations" />
       <SettingsSection id="browser" title="Browser">
         {previewDefaultsDisabled ? (

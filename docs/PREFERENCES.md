@@ -67,3 +67,51 @@ servers and their tools using the provider instance's executable and environment
 supports session-only server and tool switches when conversations start or resume. Cursor
 supports inspection and CLI setup guidance; its server and tool permissions are managed in
 Cursor's own configuration. See [ACP providers](../agent-runtime/docs/user/providers-acp.md#mcp-servers-and-tools).
+
+### Obsidian and custom skills
+
+**Settings → Integrations → Obsidian** connects vault folders on the current Mac.
+Choose a folder containing `.obsidian`, optionally give it a name, and select
+availability to all chats or one workspace folder and its descendants. These
+connections are device-local, independent of the selected settings server. Scoped
+vaults are offered only to chats in that local folder; remote chats can attach from
+global local connections. Disconnecting removes the connection without changing notes.
+
+**Browse notes** searches Markdown titles, paths and text, then previews Markdown or
+its original source. Hidden folders, symlinks, non-text and oversized files are excluded.
+Search returns at most 100 notes, scans at most 30,000 entries, and has a five-second
+budget. Refine the query when results are limited. Notes are limited to 1 MiB. Previews
+do not fetch remote images, execute HTML, or load embedded notes. Obsidian-specific
+wikilinks and callouts remain visible in source; the preview uses standard Markdown.
+
+In a chat, **+ → Add Obsidian note** adds a Markdown snapshot through the normal
+attachment pipeline, including vault name, original note path and modification time.
+A snapshot can be removed before sending; later vault changes do not modify it.
+Attaching a note shares its contents with the selected AI provider when the message
+is sent. Links and embeds do not automatically attach other notes. **Open in Obsidian**
+sends an exact, URL-encoded local note path to the OS `obsidian://open` handler.
+Spaces use percent encoding (`%20`), rather than form-style `+` encoding. Obsidian
+reserves `#` in note URLs for heading links, so those filenames show guidance to
+open the note in Obsidian's file explorer; search, preview and attachments still work.
+Browsing does not require Obsidian or its CLI to be running. This connection does not
+edit vaults or execute CLI/plugin commands.
+
+**Your skills → Import skill folder…** reviews a single folder containing `SKILL.md`
+with `name` and `description` frontmatter. Supporting files are included, while hidden
+files and symlinks are excluded or rejected. Review the instructions and file list,
+choose an agent, then install. Imports are limited to 200 files / 5 MiB and reviewed
+snapshots expire after 15 minutes. Scripts are copied with their executable permission
+preserved but are never executed during import. Same-name destinations are refused.
+
+Personal destinations on this Mac are `~/.agents/skills` (Codex), `~/.claude/skills`
+(Claude Code), `~/.cursor/skills` (Cursor), and `~/.copilot/skills` (Copilot). Workspace
+imports use the corresponding folder under the selected project. These are the default
+provider locations; custom provider config homes may require moving the imported folder.
+Refresh or restart the agent after import. **Forget import** removes import history only;
+it preserves installed files and any later edits. Delete that folder separately to uninstall.
+
+The private desktop process owns file access and picker dialogs; only its main renderer
+can call this IPC API. It stores connection metadata and import history in
+`local-knowledge.json` under the isolated desktop state directory. It does not store a
+copy of vault contents or grant filesystem permission to providers. The bundled
+`cinderdeck-obsidian` skill explains how to use note snapshots and preserve Obsidian syntax.

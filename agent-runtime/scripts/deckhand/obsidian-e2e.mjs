@@ -1,0 +1,378 @@
+/** Whole-app fixture test. Launches the native host, automates its bundled renderer,
+ * and intercepts only folder dialogs / OS URL dispatch in the test child process.
+ * --real-obsidian delegates URLs to the OS and waits for manual registration/open verification.
+ * --live-ai waits for an authorized real AI turn and checks the response against a secret fixture code.
+ * Usage: node scripts/deckhand/obsidian-e2e.mjs /absolute/Cinderdeck\ Debug.app /absolute/new-artifacts
+ */
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import * as net from "node:net";
+import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+const require = createRequire(new URL("../../apps/desktop/package.json", import.meta.url));
+const { chromium } = require("playwright-core");
+const app = process.argv[2],
+  root = process.argv[3];
+const realObsidian = process.argv.includes("--real-obsidian");
+const liveAI = process.argv.includes("--live-ai");
+if (!app?.endsWith(".app") || !root || !path.isAbsolute(app) || !path.isAbsolute(root))
+  throw new Error("Supply an absolute whole-app bundle and a new artifact folder.");
+await fs.mkdir(root);
+const fixture = path.join(root, "vault");
+const project = path.join(root, "project");
+const skillFolder = path.join(root, "skill");
+await fs.mkdir(path.join(fixture, ".obsidian"), { recursive: true });
+await fs.mkdir(path.join(fixture, "Projects"));
+await fs.mkdir(project);
+await fs.mkdir(path.join(root, "stacks"));
+await fs.writeFile(
+  path.join(root, "stacks/fixture.toml"),
+  `name = "Fixture"\nroot = ${JSON.stringify(project)}\n`,
+);
+await fs.mkdir(path.join(skillFolder, "references"), { recursive: true });
+const verificationCode = `CINDERDECK-${randomUUID()}`;
+const noteText = `---\ntags: [architecture]\n---\n# Aurora decision\n\nKeep [[Research]] and **reviewable decisions**.\n\nVerification code: ${verificationCode}\nLaunch color: cobalt\n`;
+await fs.writeFile(path.join(fixture, "Projects", "Aurora decision.md"), noteText);
+await fs.writeFile(path.join(fixture, "Research.md"), "# Research\nFixture background.");
+await fs.writeFile(
+  path.join(skillFolder, "SKILL.md"),
+  "---\nname: fixture-obsidian\ndescription: Fixture skill for the Obsidian whole-app test.\n---\n# Fixture instructions\nPreserve [[wikilinks]].\n",
+);
+await fs.writeFile(path.join(skillFolder, "references", "rules.md"), "Fixture reference.");
+async function freePort() {
+  const server = net.createServer();
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = server.address().port;
+  await new Promise((resolve) => server.close(resolve));
+  return port;
+}
+const cdpPort = await freePort(),
+  inspectorPort = await freePort();
+const quote = (value) => `'${value.replace(/'/g, "'\\''")}'`;
+const wrapper = path.join(root, "runtime-wrapper");
+const runtime = path.join(app, "Contents/Resources/Cinderdeck.app/Contents/MacOS/Cinderdeck");
+await fs.writeFile(
+  wrapper,
+  `#!/bin/sh\nexec ${quote(runtime)} --remote-debugging-port=${cdpPort} --inspect=${inspectorPort}\n`,
+  { mode: 0o700 },
+);
+const child = spawn(path.join(app, "Contents/MacOS/Cinderdeck"), [], {
+  env: {
+    ...process.env,
+    CINDERDECK_STACKS_PREVIEW_ROOT: root,
+    CINDERDECK_STACKS_SOCKET: path.join(root, "control.sock"),
+    CINDERDECK_RUNTIME_PATH: wrapper,
+    DECKHAND_DISABLE_AUTO_UPDATE: "true",
+  },
+  stdio: ["ignore", "pipe", "pipe"],
+});
+let logs = "",
+  browser,
+  socket,
+  runtimePID,
+  page;
+child.stdout.on("data", (value) => {
+  logs = (logs + value).slice(-500000);
+});
+child.stderr.on("data", (value) => {
+  logs = (logs + value).slice(-500000);
+});
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function endpoint(port) {
+  for (let i = 0; i < 60; i++) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/json/list`);
+      if (response.ok) return await response.json();
+    } catch {}
+    if (child.exitCode !== null) throw new Error(`Host exited: ${child.exitCode}`);
+    await sleep(500);
+  }
+  throw new Error(`Debug endpoint ${port} did not start.`);
+}
+const evidence = { hostPID: child.pid, checks: [] };
+try {
+  const inspector = (await endpoint(inspectorPort))[0];
+  socket = new WebSocket(inspector.webSocketDebuggerUrl);
+  await new Promise((resolve, reject) => {
+    socket.onopen = resolve;
+    socket.onerror = reject;
+  });
+  const pending = new Map();
+  let counter = 0;
+  socket.onmessage = (event) => {
+    const message = JSON.parse(String(event.data));
+    if (message.id) {
+      const callback = pending.get(message.id);
+      pending.delete(message.id);
+      callback?.(message);
+    }
+  };
+  const evaluate = async (expression) => {
+    const id = ++counter;
+    const result = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        reject(new Error("Inspector evaluation timed out."));
+      }, 10000);
+      pending.set(id, (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      });
+      socket.send(
+        JSON.stringify({
+          id,
+          method: "Runtime.evaluate",
+          params: { expression, awaitPromise: true, returnByValue: true },
+        }),
+      );
+    });
+    if (result.error || result.result?.exceptionDetails) throw new Error(JSON.stringify(result));
+    return result.result.result.value;
+  };
+  runtimePID = await evaluate("process.pid");
+  evidence.runtimePID = runtimePID;
+  await evaluate(
+    `globalThis.__knowledgeElectron = process.getBuiltinModule('module').createRequire(process.cwd() + '/fixture.cjs')('electron'); globalThis.__knowledgePick = null; globalThis.__knowledgeURLs = []; globalThis.__knowledgeOriginalOpen = __knowledgeElectron.shell.openExternal.bind(__knowledgeElectron.shell); __knowledgeElectron.dialog.showOpenDialog = async () => ({ canceled: !__knowledgePick, filePaths: __knowledgePick ? [__knowledgePick] : [] }); __knowledgeElectron.shell.openExternal = async url => { __knowledgeURLs.push(url); ${realObsidian ? "return await __knowledgeOriginalOpen(url);" : ""} }; true`,
+  );
+  await endpoint(cdpPort);
+  browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`);
+  const context = browser.contexts()[0];
+  for (let i = 0; i < 60; i++) {
+    page = context.pages().find((p) => p.url().startsWith("deckhand://app"));
+    if (page) break;
+    await sleep(500);
+  }
+  assert(page, "Main bundled renderer appeared");
+  page.setDefaultTimeout(15000);
+  await page.waitForFunction(() => window.desktopBridge?.knowledge !== undefined);
+  assert.equal(await page.evaluate(() => window.desktopBridge.isNativeHost()), true);
+  await page.evaluate(async () => {
+    const current = await window.desktopBridge.getClientSettings();
+    await window.desktopBridge.setClientSettings({
+      ...current,
+      onboardingCompletedAt: new Date().toISOString(),
+    });
+  });
+  evidence.checks.push("native host owns bundled renderer");
+  const settings = async () => {
+    // Parent readiness can deliver its initial workspace route after hydration.
+    // Navigate in the existing renderer and retry only that initial route race.
+    for (let i = 0; i < 8; i++) {
+      await page.evaluate(() => {
+        window.location.hash = "/settings/integrations";
+      });
+      try {
+        await page
+          .getByRole("button", { name: "Connect vault…", exact: true })
+          .waitFor({ timeout: 1500 });
+        return;
+      } catch {
+        if (i === 7) throw new Error("Integrations did not become available.");
+      }
+    }
+  };
+  await page.reload();
+  await settings();
+  for (const notification of await page
+    .getByRole("button", { name: "Dismiss notification", exact: true })
+    .all())
+    await notification.click();
+  await evaluate(`__knowledgePick = ${JSON.stringify(fixture)}`);
+  await page.getByLabel("Vault name (optional)").fill("Fixture notes");
+  await page.getByRole("button", { name: "Connect vault…", exact: true }).click();
+  await page.getByRole("button", { name: "Disconnect Fixture notes", exact: true }).waitFor();
+  evidence.checks.push("connect through native folder dialog and real IPC");
+  await page.getByRole("button", { name: "Browse notes", exact: true }).click();
+  await page.getByRole("textbox", { name: "Search notes", exact: true }).fill("aurora");
+  await page.getByRole("button", { name: /Aurora decision/ }).click();
+  await page.getByRole("heading", { name: "Aurora decision", exact: true }).waitFor();
+  if (realObsidian) {
+    await fs.writeFile(
+      path.join(root, "ready-for-obsidian.json"),
+      JSON.stringify({ vault: fixture, note: path.join(fixture, "Projects/Aurora decision.md") }),
+    );
+    console.log("Waiting for disposable vault registration in Obsidian.");
+    for (let i = 0; i < 600; i++) {
+      if (
+        await fs
+          .stat(path.join(root, "obsidian-ready"))
+          .then(() => true)
+          .catch(() => false)
+      )
+        break;
+      if (i === 599) throw new Error("Disposable Obsidian setup was not completed.");
+      await sleep(1000);
+    }
+  }
+  await page.getByRole("button", { name: "Open in Obsidian", exact: true }).click();
+  const urls = await evaluate("__knowledgeURLs");
+  assert.equal(
+    new URL(urls.at(-1)).searchParams.get("path"),
+    path.join(fixture, "Projects/Aurora decision.md"),
+  );
+  evidence.checks.push(
+    realObsidian
+      ? "search, rendered preview and real OS Obsidian handoff"
+      : "search, rendered preview and encoded OS handoff (intercepted)",
+  );
+  if (realObsidian) await fs.writeFile(path.join(root, "obsidian-dispatched"), urls.at(-1));
+  if (realObsidian) {
+    console.log("Waiting for visible note-open verification in Obsidian.");
+    for (let i = 0; i < 600; i++) {
+      if (
+        await fs
+          .stat(path.join(root, "obsidian-open-verified"))
+          .then(() => true)
+          .catch(() => false)
+      )
+        break;
+      if (i === 599) throw new Error("The actual note was not verified in Obsidian.");
+      await sleep(1000);
+    }
+    evidence.checks.push("actual Obsidian window visibly opens the exact fixture note");
+  }
+  await page.screenshot({ path: path.join(root, "notes-preview.png") });
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await settings();
+  await page.getByRole("button", { name: "Disconnect Fixture notes", exact: true }).waitFor();
+  evidence.checks.push("connections survive renderer reload");
+  // Install only into a disposable workspace, never a personal provider home.
+  await evaluate(`__knowledgePick = ${JSON.stringify(project)}`);
+  await page.getByLabel("Connection and import scope").selectOption("workspace");
+  await page.getByText(`Workspace folder: ${project}`, { exact: true }).waitFor();
+  await evaluate(`__knowledgePick = ${JSON.stringify(skillFolder)}`);
+  await page.getByRole("button", { name: "Import skill folder…", exact: true }).click();
+  await page.getByRole("dialog").getByText("Preserve [[wikilinks]].", { exact: false }).waitFor();
+  assert.equal(
+    await fs
+      .stat(path.join(project, ".agents/skills/fixture-obsidian"))
+      .then(() => true)
+      .catch(() => false),
+    false,
+  );
+  await page.getByRole("button", { name: "Install skill", exact: true }).click();
+  await page.getByText(/Imported fixture-obsidian for codex/).waitFor();
+  assert.equal(
+    await fs.readFile(
+      path.join(project, ".agents/skills/fixture-obsidian/references/rules.md"),
+      "utf8",
+    ),
+    "Fixture reference.",
+  );
+  evidence.checks.push("reviewed skill import, selected provider and workspace destination");
+  await page.getByRole("button", { name: "Import skill folder…", exact: true }).click();
+  await page.getByRole("button", { name: "Install skill", exact: true }).click();
+  await page.getByRole("dialog").getByRole("alert").filter({ hasText: "already exists" }).waitFor();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  evidence.checks.push("duplicate skill refused without overwriting");
+  await page.screenshot({ path: path.join(root, "integrations.png") });
+  // Chat picker is reached from an actual draft; no provider request is sent.
+  await page.evaluate(() => {
+    window.location.hash = "/workspaces";
+  });
+  await page.getByRole("link", { name: "Fixture", exact: true }).first().hover();
+  await page.getByRole("button", { name: "New session in Fixture", exact: true }).click();
+  await page.getByRole("button", { name: "Add attachments", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Add attachments", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Add Obsidian note", exact: true }).click();
+  await page.getByRole("button", { name: /Aurora decision/ }).click();
+  await page.getByRole("button", { name: "Attach note", exact: true }).click();
+  await page.getByRole("dialog", { name: "Obsidian notes" }).waitFor({ state: "hidden" });
+  await page.getByText("Aurora decision.md", { exact: true }).first().waitFor();
+  await page.screenshot({ path: path.join(root, "chat-attachment.png") });
+  evidence.checks.push("composer picker attaches Markdown snapshot to a real draft");
+  const attachments = path.join(root, "Agent/AgentRuntime/userdata/attachments");
+  let uploaded;
+  for (let i = 0; i < 50 && !uploaded; i++) {
+    for (const file of await fs.readdir(attachments).catch(() => [])) {
+      if (!file.endsWith(".md")) continue;
+      const value = await fs.readFile(path.join(attachments, file), "utf8");
+      if (value.includes(noteText) && value.includes("Obsidian vault: Fixture notes"))
+        uploaded = { file, value };
+    }
+    if (!uploaded) await sleep(200);
+  }
+  assert(uploaded, "The normal attachment upload persisted the Markdown snapshot");
+  await fs.writeFile(
+    path.join(fixture, "Projects/Aurora decision.md"),
+    "Changed after attachment.",
+  );
+  assert.equal(await fs.readFile(path.join(attachments, uploaded.file), "utf8"), uploaded.value);
+  evidence.checks.push(
+    "authenticated attachment upload persists exact snapshot independently of vault edits",
+  );
+  if (liveAI) {
+    await fs.writeFile(path.join(root, "ready-for-live-turn"), "Fixture attachment uploaded.\n");
+    console.log("Waiting for live AI turn through the actual composer.");
+    for (let i = 0; i < 900; i++) {
+      if (
+        await fs
+          .stat(path.join(root, "live-turn-complete"))
+          .then(() => true)
+          .catch(() => false)
+      )
+        break;
+      if (i === 899) throw new Error("Live AI turn was not completed.");
+      await sleep(1000);
+    }
+    const transcript = await page.locator("body").innerText();
+    assert(
+      transcript.includes(verificationCode),
+      "Live response includes the unpredictable code from the uploaded note",
+    );
+    assert(
+      transcript.toLowerCase().includes("cobalt"),
+      "Live response includes the launch color from the note",
+    );
+    await page.screenshot({ path: path.join(root, "live-ai-response.png") });
+    await fs.writeFile(path.join(root, "live-transcript.txt"), transcript);
+    evidence.checks.push(
+      "live AI response reads the uploaded note and returns its unpredictable verification code",
+    );
+    evidence.verificationCode = verificationCode;
+  }
+  await settings();
+  await page.getByRole("button", { name: "Disconnect Fixture notes", exact: true }).click();
+  assert.equal(
+    await fs.readFile(path.join(fixture, "Projects/Aurora decision.md"), "utf8"),
+    "Changed after attachment.",
+  );
+  assert.equal((await page.evaluate(() => window.desktopBridge.knowledge.listVaults())).length, 0);
+  evidence.checks.push("disconnect removes access while preserving original notes");
+  await fs.writeFile(path.join(root, "chat-dom.txt"), await page.locator("body").innerText());
+  evidence.chatPage = page.url();
+  await fs.writeFile(path.join(root, "evidence.json"), JSON.stringify(evidence, null, 2));
+  console.log(JSON.stringify(evidence, null, 2));
+} catch (error) {
+  await fs.writeFile(
+    path.join(root, "evidence.json"),
+    JSON.stringify({ ...evidence, failure: String(error) }, null, 2),
+  );
+  if (page) {
+    await fs.writeFile(
+      path.join(root, "failure-dom.txt"),
+      await page
+        .locator("body")
+        .innerText()
+        .catch(() => "Unavailable"),
+    );
+    await page.screenshot({ path: path.join(root, "failure.png") }).catch(() => {});
+  }
+  throw error;
+} finally {
+  if (browser) await browser.close().catch(() => {});
+  socket?.close();
+  if (child.exitCode === null) {
+    child.kill("SIGTERM");
+    await Promise.race([new Promise((resolve) => child.once("exit", resolve)), sleep(5000)]);
+  }
+  if (runtimePID) {
+    try {
+      process.kill(runtimePID, "SIGTERM");
+    } catch {}
+  }
+  await fs.writeFile(path.join(root, "host.log"), logs);
+}

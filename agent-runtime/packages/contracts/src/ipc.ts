@@ -1,3 +1,4 @@
+import type { LocalKnowledgeBridge } from "./localKnowledge.ts";
 import * as Schema from "effect/Schema";
 import type { OwnedPreviewIntent, OwnedPreviewStatus } from "./deckhand/ownedPreviewRpc.ts";
 
@@ -998,6 +999,7 @@ export interface AppContextCapture {
   readonly source: typeof SnapShotSource.Type;
 }
 export interface DesktopBridge {
+  knowledge?: LocalKnowledgeBridge;
   appContext?: {
     list: () => Promise<RecentAppTargets>;
     capture: (targetID: string) => Promise<AppContextCapture>;

@@ -690,6 +690,22 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "obsidian",
+    title: "Obsidian vaults and notes",
+    to: "/settings/integrations",
+    targetId: "obsidian",
+    desktopOnly: true,
+    searchTerms: ["vault markdown knowledge search preview attachment notes connect"],
+  },
+  {
+    id: "custom-skills",
+    title: "Import your own skills",
+    to: "/settings/integrations",
+    targetId: "custom-skills",
+    desktopOnly: true,
+    searchTerms: ["custom skill import folder SKILL.md codex claude cursor copilot"],
+  },
+  {
     id: "cinderdeck-agent-access",
     title: "MCP & skills",
     to: "/settings/integrations",
