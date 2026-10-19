@@ -29,6 +29,23 @@ class BrandingTests(unittest.TestCase):
         self.assertFalse(branding.path_violations(
             "agent-runtime/apps/mobile/src/native/T3ComposerEditor.ios.tsx"))
 
+    def test_protocol_and_vendor_path_exemptions_stay_in_their_owned_roots(self):
+        for path in (
+            "agent-runtime/apps/web/src/_generated/T3Panel.tsx",
+            "agent-runtime/apps/web/src/testkit/fixtures/T3Panel.tsx",
+            "agent-runtime/apps/desktop/src/Vendor/T3Panel.ts",
+            "agent-runtime/apps/web/src/Vendor/libghostty/T3Panel.tsx",
+            "agent-runtime/packages/effect-acp/tools/_generated/T3Panel.ts",
+        ):
+            self.assertTrue(branding.path_violations(path), path)
+        for path in (
+            "agent-runtime/packages/effect-acp/src/_generated/T3Protocol.ts",
+            "agent-runtime/packages/effect-codex-app-server/src/_generated/T3Protocol.ts",
+            "agent-runtime/apps/server/src/orchestration-v2/testkit/fixtures/T3Transcript.json",
+            "agent-runtime/native/libghostty-vt/T3Original.h",
+        ):
+            self.assertFalse(branding.path_violations(path), path)
+
     def test_user_agent_fixture_does_not_exempt_adjacent_branding(self):
         path = "agent-runtime/apps/desktop/src/preview/BrowserSession.test.ts"
         fixture = '"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) T3Code(Alpha)/0.0.33 Chrome/146.0.7680.216 Electron/41.5.0 Safari/537.36";'

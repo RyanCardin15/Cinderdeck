@@ -8,7 +8,7 @@
     "historicalMetadataCommit": "17877ebbea4790b5f0ecad9bf8599619f0387be3",
     "historicalMetadataPath": "docs/deckhand/upstream-patches.json"
   },
-  "examinedTarget": "2fbd4318fc5b610c3e7fcfcbd5bbd80b73521d8f",
+  "examinedTarget": "54983e3f458871dffe755ea908ffe0d60cea101b",
   "ports": [
     {
       "commit": "f391794a35c604d57e166a3ab48d56fc6e4e469a",
@@ -101,6 +101,22 @@
     {
       "commit": "df8df0d53b39bfd6a5d8d69fabade19bd668e0a5",
       "behavior": "Bound Bitbucket API headers and body consumption to thirty seconds"
+    },
+    {
+      "commit": "346049725edd7f7ddb4abf62c8e27792ae8bed53",
+      "behavior": "Parse JSONC block comments containing URLs without joining adjacent JSON tokens"
+    },
+    {
+      "commit": "7f63b10275103541660c1269c72234a16192f898",
+      "behavior": "Detach bounded login-shell environment probes from inherited interactive terminal job control"
+    },
+    {
+      "commit": "fcab788163e7ad859bfb93ba584f6f8c77178164",
+      "behavior": "Route macOS command-plus zoom to the main app window even when a popup has focus"
+    },
+    {
+      "commit": "a195ba0809b5c1f16fad8119f3b961119924d1b2",
+      "behavior": "Recognize partial-clone fetch remote annotations across Git, repository identity, GitHub and Forgejo"
     }
   ],
   "coverage": "Selected independent ports only. integratedThrough remains the last complete historical baseline; examinedTarget is not a claim of complete incorporation.",

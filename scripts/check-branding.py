@@ -179,9 +179,9 @@ def exemption(path: str, line: str) -> str | None:
         return "branding enforcement literals"
     if path.startswith("agent-runtime/apps/server/src/orchestration-v2/testkit/fixtures/") and Path(path).suffix in {".json", ".ndjson", ".jsonl", ".ts"}:
         return "provider protocol fixture"
-    if "/_generated/" in path and path.startswith(("agent-runtime/packages/effect-acp/", "agent-runtime/packages/effect-codex-app-server/")):
+    if path.startswith(("agent-runtime/packages/effect-acp/src/_generated/", "agent-runtime/packages/effect-codex-app-server/src/_generated/")):
         return "provider protocol schema"
-    if path.startswith("agent-runtime/native/libghostty-vt/") or "/Vendor/libghostty/" in path:
+    if path.startswith(("agent-runtime/native/libghostty-vt/", "agent-runtime/apps/mobile/modules/t3-terminal/Vendor/libghostty/")):
         return "third-party terminal source"
     return None
 
@@ -273,7 +273,11 @@ NATIVE_ABI_FILENAMES = {
 
 
 def path_violations(path: str) -> bool:
-    if "/_generated/" in path or "/testkit/fixtures/" in path or "/Vendor/" in path:
+    if path.startswith("agent-runtime/apps/server/src/orchestration-v2/testkit/fixtures/"):
+        return False
+    if path.startswith(("agent-runtime/packages/effect-acp/src/_generated/", "agent-runtime/packages/effect-codex-app-server/src/_generated/")):
+        return False
+    if path.startswith(("agent-runtime/native/libghostty-vt/", "agent-runtime/apps/mobile/modules/t3-terminal/Vendor/libghostty/")):
         return False
     native_abi_context = path.startswith("agent-runtime/apps/mobile/src/native/")
     if path.startswith("agent-runtime/apps/mobile/modules/"):

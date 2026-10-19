@@ -83,10 +83,13 @@ describe("CinderdeckProjectFileFromJson", () => {
 });
 
 describe("parseCinderdeckProjectFile", () => {
-  it("returns the decoded file for valid contents", () => {
-    expect(parseCinderdeckProjectFile('{ "defaultThreadEnvMode": "worktree" }')).toEqual({
-      defaultThreadEnvMode: "worktree",
-    });
+  it("reads project defaults from JSONC with a URL in a block comment", () => {
+    expect(
+      parseCinderdeckProjectFile(`{
+        /* See https://example.com/project-defaults */
+        "defaultThreadEnvMode": "worktree"
+      }`),
+    ).toEqual({ defaultThreadEnvMode: "worktree" });
   });
 
   it("returns null for malformed or invalid contents", () => {
