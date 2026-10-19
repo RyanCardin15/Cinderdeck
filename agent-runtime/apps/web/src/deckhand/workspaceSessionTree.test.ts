@@ -4,6 +4,9 @@ import {
   filterWorkspaceSessionTree,
   orderWorkspaceSessionTree,
   sessionOrderGroup,
+  sessionArrangementGroup,
+  sessionArrangementID,
+  arrangeSessionRows,
   sessionTreeContains,
   workspaceSessionTree,
   type WorkspaceSessionNode,
@@ -48,8 +51,9 @@ it("applies saved sibling order without changing parents or unsorted start order
     ["second", []],
     ["newest", []],
   ]);
-  expect(orderWorkspaceSessionTree(tree, "other-workspace", order)).toEqual(tree);
-  expect(orderWorkspaceSessionTree(tree, "app", {})).toEqual(tree);
+  expect(orderWorkspaceSessionTree(tree, "other-workspace", order)).toEqual(
+    orderWorkspaceSessionTree(tree, "app", {}),
+  );
   expect(sessionOrderGroup("app", "main")).not.toBe(sessionOrderGroup("app:main"));
 });
 
@@ -75,7 +79,7 @@ it("nests multiple generations under their immediate parents while preserving st
   expect(sessionTreeContains(tree[0]!, "grandchild")).toBe(false);
 });
 
-it("puts new starts ahead of manual order while older paged history stays below it", () => {
+it("keeps arrangements ahead of new starts while remaining history stays chronological", () => {
   const started = (id: string, day: number, parent: string | null = null) => ({
     ...session(id, parent),
     createdAt: new Date(Date.UTC(2026, 9, day)).toISOString(),
@@ -97,22 +101,95 @@ it("puts new starts ahead of manual order while older paged history stays below 
   };
   const ordered = orderWorkspaceSessionTree(tree, "app", order);
   expect(ids(ordered)).toEqual([
-    ["newest", []],
-    ["new", []],
     [
       "main",
       [
-        ["new-child", []],
         ["older-child", []],
         ["recent-child", []],
+        ["new-child", []],
       ],
     ],
     ["recent", []],
+    ["newest", []],
+    ["new", []],
     ["old-history", []],
     ["unknown-start", []],
   ]);
   expect(orderWorkspaceSessionTree(ordered, "app", order)).toEqual(ordered);
   expect(order[sessionOrderGroup("app")]).toEqual(["missing", "main", "recent"]);
+});
+
+it("repeated drops preserve the displayed order while new unarranged sessions remain recent", () => {
+  const nodes = workspaceSessionTree(
+    Array.from({ length: 15 }, (_, index) => ({
+      ...session(`session-${index}`),
+      createdAt: new Date(Date.UTC(2026, 9, index + 1)).toISOString(),
+    })),
+  );
+  const group = sessionArrangementGroup("app");
+  const before = orderWorkspaceSessionTree(nodes, "app", {});
+  const first = arrangeSessionRows([], before, before.slice(0, 10), "session-5", "session-14");
+  expect(first).toEqual(["session-5"]);
+  const withNew = [
+    ...nodes,
+    { session: { ...session("new"), createdAt: "2026-10-19T00:00:00Z" }, children: [] },
+  ];
+  const next = orderWorkspaceSessionTree(withNew, "app", { [group]: first });
+  expect(next.slice(0, 4).map((node) => node.session.id)).toEqual([
+    "session-5",
+    "new",
+    "session-14",
+    "session-13",
+  ]);
+  const second = arrangeSessionRows(first, next, next.slice(0, 10), "session-13", "new");
+  expect(second).toEqual(["session-5", "session-13"]);
+  const after = orderWorkspaceSessionTree(withNew.toReversed(), "app", { [group]: second });
+  expect(after.map((node) => node.session.id)).toEqual([
+    "session-5",
+    "session-13",
+    "new",
+    "session-14",
+    ...Array.from({ length: 13 }, (_, i) => `session-${12 - i}`).filter((id) => id !== "session-5"),
+  ]);
+});
+
+it("keeps hidden sessions in place when arranging a filtered subset", () => {
+  const all = workspaceSessionTree([session("a"), session("hidden"), session("b"), session("c")]);
+  const saved = ["a", "missing", "hidden", "b"];
+  const visible = all.filter((node) => node.session.id !== "hidden");
+  const next = arrangeSessionRows(saved, all, visible, "c", "a");
+  expect(next).toEqual(["c", "missing", "hidden", "a", "b"]);
+  expect(arrangeSessionRows(saved, all, visible, "a", "other-workspace")).toEqual(saved);
+});
+
+it("new pins and repins lead arranged pins, and unpinning restores the regular arrangement", () => {
+  const a = {
+    session: { ...session("a"), pinned: true, pinnedAt: "2026-10-17T00:00:00Z" },
+    children: [],
+  };
+  const b = {
+    session: { ...session("b"), pinned: true, pinnedAt: "2026-10-18T00:00:00Z" },
+    children: [],
+  };
+  const order = {
+    [sessionArrangementGroup("app", null, true)]: [
+      sessionArrangementID(a),
+      sessionArrangementID(b),
+    ],
+    [sessionArrangementGroup("app")]: ["a"],
+  };
+  const list = (nodes: WorkspaceSessionNode[]) =>
+    orderWorkspaceSessionTree(nodes, "app", order).map((node) => node.session.id);
+  expect(list([b, a])).toEqual(["a", "b"]);
+  const repinned = { ...b, session: { ...b.session, pinnedAt: "2026-10-19T00:00:00Z" } };
+  expect(list([a, repinned])).toEqual(["b", "a"]);
+  expect(
+    list([
+      b,
+      { ...a, session: { ...a.session, pinned: false, pinnedAt: null } },
+      { session: session("new"), children: [] },
+    ]),
+  ).toEqual(["b", "a", "new"]);
 });
 
 it("keeps missing, deleted and cyclic parent relationships reachable without duplicate sessions", () => {

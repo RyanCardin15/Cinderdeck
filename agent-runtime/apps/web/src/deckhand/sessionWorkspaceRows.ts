@@ -35,6 +35,7 @@ export type WorkspaceSession = {
   updatedAt: string;
   archived: boolean;
   pinned: boolean;
+  pinnedAt?: string | null;
   status: "working" | "attention" | "failed" | "idle";
 };
 // Foundation and Node can return different spellings of macOS system symlinks.
@@ -125,6 +126,7 @@ export function workspaceSessions(
       updatedAt: thread.updatedAt,
       archived: !!thread.archivedAt,
       pinned: !!thread.pinnedAt,
+      pinnedAt: thread.pinnedAt,
       status:
         thread.runtime?.status === "failed"
           ? "failed"

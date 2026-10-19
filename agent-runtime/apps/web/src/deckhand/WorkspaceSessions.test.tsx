@@ -99,7 +99,11 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 import { WorkspaceSessions } from "./WorkspaceSessions";
 import { readSidebarPreferences, sidebarPreferenceKey } from "./workspaceSidebarPreferences";
-import { sessionOrderGroup } from "./workspaceSessionTree";
+import {
+  sessionOrderGroup,
+  sessionArrangementGroup,
+  pinnedSessionGroup,
+} from "./workspaceSessionTree";
 const environmentId = EnvironmentId.make("local");
 const resource: IntegrationView["resources"][number] = {
   workspaceID: "app",
@@ -290,7 +294,7 @@ it("reorders main groups with the keyboard, saves on drop, and restores in the f
   expect(onNavigate).not.toHaveBeenCalled();
   expect(
     readSidebarPreferences(sidebarPreferenceKey("local", "installation")).order[
-      sessionOrderGroup("app")
+      sessionArrangementGroup("app")
     ],
   ).toEqual(["second", "ordinary"]);
   await act(async () => root.render(null));
@@ -300,7 +304,7 @@ it("reorders main groups with the keyboard, saves on drop, and restores in the f
   expect(rootSessionIDs()).toEqual(["ordinary", "second"]);
 });
 
-it("prepends new threads after reordering and remounting in both session views", async () => {
+it("keeps manual arrangements above new threads in both session views", async () => {
   boundary.result = AsyncResult.success([]);
   boundary.threads = Array.from({ length: 12 }, (_, index) => ({
     ...ordinary,
@@ -318,15 +322,15 @@ it("prepends new threads after reordering and remounting in both session views",
     { ...ordinary, id: ThreadId.make("new-thread"), createdAt: "2026-10-15T12:00:00Z" },
   ];
   await render({ selectedThreadId: "new-thread" });
-  expect(rootSessionIDs()).toEqual(["new-thread", ...savedOrder.slice(0, 9)]);
+  expect(rootSessionIDs()).toEqual([...savedOrder.slice(0, 10), "new-thread"]);
   await act(async () => root.render(null));
   await render({ compact: false, selectedThreadId: "new-thread" });
-  expect(rootSessionIDs()).toEqual(["new-thread", ...savedOrder]);
+  expect(rootSessionIDs()).toEqual([...savedOrder, "new-thread"]);
   boundary.result = AsyncResult.success([
     { ...saved("older-page"), createdAt: "2026-09-01T00:00:00Z" },
   ]);
   await render({ compact: false, selectedThreadId: "new-thread" });
-  expect(rootSessionIDs()).toEqual(["new-thread", ...savedOrder, "older-page"]);
+  expect(rootSessionIDs()).toEqual([...savedOrder, "new-thread", "older-page"]);
   expect(readSidebarPreferences(key).order[sessionOrderGroup("app")]).toEqual(savedOrder);
 });
 
@@ -351,7 +355,7 @@ it("preserves manual order through archive and search filters when a new thread 
     createdAt: "2026-10-15T12:00:00Z",
   });
   await render({ compact: false });
-  expect(rootSessionIDs()).toEqual(["new-thread", "older", "unlisted-history"]);
+  expect(rootSessionIDs()).toEqual(["older", "new-thread", "unlisted-history"]);
   await act(async () => {
     const input = container.querySelector('input[aria-label="Search sessions"]')!;
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
@@ -360,7 +364,7 @@ it("preserves manual order through archive and search filters when a new thread 
     );
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  expect(rootSessionIDs()).toEqual(["new-thread", "older", "unlisted-history"]);
+  expect(rootSessionIDs()).toEqual(["older", "new-thread", "unlisted-history"]);
 });
 
 const provider = (instance: string, driver: string, name: string): ServerProvider => ({
@@ -472,7 +476,6 @@ it("drags sub-agents within their parent, preserves other groups, and cancels wi
     return event;
   };
   await act(async () => handle.dispatchEvent(pointer("pointerdown", 20)));
-  await act(async () => document.dispatchEvent(pointer("pointermove", 30)));
   await act(async () => document.dispatchEvent(pointer("pointermove", 120)));
   vi.useFakeTimers();
   try {
@@ -486,7 +489,7 @@ it("drags sub-agents within their parent, preserves other groups, and cancels wi
   expect(childSessionIDs("ordinary")).toEqual(["Verifier", "Inspector"]);
   expect(childSessionIDs("Inspector")).toEqual(["Nested"]);
   const order = readSidebarPreferences(sidebarPreferenceKey("local", "installation")).order;
-  expect(order[sessionOrderGroup("app", "ordinary")]).toEqual(["Verifier", "Inspector"]);
+  expect(order[sessionArrangementGroup("app", "ordinary")]).toEqual(["Verifier", "Inspector"]);
   expect(order[sessionOrderGroup("app")]).toBeUndefined();
   handle.focus();
   await keyDown(handle, "Space");
@@ -534,7 +537,7 @@ it("loads older saved sessions without replacing the earlier page or duplicating
   expect(container.querySelectorAll('a[href="/sessions/ordinary"]')).toHaveLength(1);
 });
 
-it("shows the ten newest starts and opens the exact workspace session view for more", async () => {
+it("shows pins first plus nine newest starts and opens the exact workspace session view for more", async () => {
   boundary.result = AsyncResult.success([]);
   boundary.threads = Array.from({ length: 12 }, (_, index) => ({
     ...ordinary,
@@ -547,8 +550,9 @@ it("shows the ten newest starts and opens the exact workspace session view for m
   await render({ onNavigate });
   const links = [...container.querySelectorAll("nav a")];
   expect(links).toHaveLength(10);
-  expect(links[0]?.getAttribute("href")).toBe("/sessions/thread-11");
-  expect(links[9]?.getAttribute("href")).toBe("/sessions/thread-2");
+  expect(links[0]?.getAttribute("href")).toBe("/sessions/thread-0");
+  expect(links[1]?.getAttribute("href")).toBe("/sessions/thread-11");
+  expect(links[9]?.getAttribute("href")).toBe("/sessions/thread-3");
   expect(container.textContent).not.toContain("Show older sessions");
   const more = [...container.querySelectorAll("a")].find(
     (link) => link.textContent === "Show more",
@@ -582,6 +586,124 @@ it("offers more for paged history and hides it when all ten sessions fit", async
   await render();
   expect(container.querySelectorAll("nav a")).toHaveLength(9);
   expect(container.textContent).toContain("Show more");
+});
+
+const pinnedToggle = () =>
+  [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
+    button.textContent?.startsWith("Pinned"),
+  )!;
+const pinnedIDs = () =>
+  [...container.querySelectorAll('ul[aria-label="Pinned sessions"] > li')].map((li) =>
+    li.querySelector("[data-session-id]")!.getAttribute("data-session-id"),
+  );
+
+it("collapses twelve pins into one row while keeping nine recent sessions and restores the disclosure", async () => {
+  boundary.result = AsyncResult.success([]);
+  boundary.threads = Array.from({ length: 24 }, (_, index) => ({
+    ...ordinary,
+    id: ThreadId.make(`thread-${index}`),
+    title: `Session ${index}`,
+    createdAt: new Date(Date.UTC(2026, 8, index + 1)).toISOString(),
+    pinnedAt: index < 12 ? new Date(Date.UTC(2026, 9, index + 1)).toISOString() : null,
+  }));
+  await render({ selectedThreadId: undefined });
+  expect(pinnedIDs()).toHaveLength(12);
+  expect(pinnedIDs()[0]).toBe("thread-11");
+  expect(rootSessionIDs()).toEqual(Array.from({ length: 9 }, (_, index) => `thread-${23 - index}`));
+  await act(async () => pinnedToggle().click());
+  expect(pinnedToggle().getAttribute("aria-expanded")).toBe("false");
+  expect(container.querySelector('ul[aria-label="Pinned sessions"]')!.hasAttribute("hidden")).toBe(
+    true,
+  );
+  expect(rootSessionIDs()).toHaveLength(9);
+  await act(async () => root.render(null));
+  await render({ selectedThreadId: undefined });
+  expect(pinnedToggle().getAttribute("aria-expanded")).toBe("false");
+  // An existing regular session is pinned; it must become the first pin and reveal the group.
+  boundary.threads = boundary.threads.map((thread) =>
+    thread.id === "thread-16" ? { ...thread, pinnedAt: "2026-10-19T00:00:00Z" } : thread,
+  );
+  await render({ selectedThreadId: undefined });
+  expect(pinnedToggle().getAttribute("aria-expanded")).toBe("true");
+  expect(pinnedIDs()[0]).toBe("thread-16");
+  expect(rootSessionIDs()).toHaveLength(9);
+  boundary.threads = boundary.threads.map((thread) => ({ ...thread, pinnedAt: null }));
+  await render({ selectedThreadId: undefined });
+  expect(pinnedToggle()).toBeUndefined();
+  expect(rootSessionIDs()).toHaveLength(10);
+  expect(rootSessionIDs()).toEqual(
+    Array.from({ length: 10 }, (_, index) => `thread-${23 - index}`),
+  );
+});
+
+it("shares the collapsed pin state with the full view and reveals a pin only on navigation", async () => {
+  boundary.result = AsyncResult.success([]);
+  boundary.threads = [ordinary, { ...child("Pinned child"), pinnedAt: "2026-10-19T00:00:00Z" }];
+  await render({ selectedThreadId: undefined });
+  expect(pinnedIDs()).toEqual(["ordinary"]);
+  await act(async () => pinnedToggle().click());
+  await render({ compact: false, selectedThreadId: undefined });
+  expect(pinnedToggle().getAttribute("aria-expanded")).toBe("false");
+  expect(
+    readSidebarPreferences(sidebarPreferenceKey("local", "installation")).expanded[
+      pinnedSessionGroup("app")
+    ],
+  ).toBe(false);
+  await render({ compact: false, selectedThreadId: "Pinned child" });
+  expect(pinnedToggle().getAttribute("aria-expanded")).toBe("true");
+  expect(
+    container.querySelector('a[href="/sessions/Pinned child"]')?.getAttribute("aria-current"),
+  ).toBe("page");
+  expect(container.querySelectorAll('a[href="/sessions/ordinary"]')).toHaveLength(1);
+});
+
+it("preserves collapsed pins through asynchronous hydration and search changes", async () => {
+  boundary.result = AsyncResult.success([]);
+  boundary.threads = [];
+  localStorage.setItem(
+    sidebarPreferenceKey("local", "installation"),
+    JSON.stringify({ expanded: { [pinnedSessionGroup("app")]: false } }),
+  );
+  await render({ compact: false, selectedThreadId: undefined });
+  boundary.threads = [ordinary, { ...child("Pinned child"), pinnedAt: "2026-10-19T00:00:00Z" }];
+  await render({ compact: false, selectedThreadId: undefined });
+  expect(pinnedToggle().getAttribute("aria-expanded")).toBe("false");
+  const search = async (value: string) =>
+    act(async () => {
+      const input = container.querySelector('input[aria-label="Search sessions"]')!;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  await search("absent");
+  expect(pinnedToggle()).toBeUndefined();
+  await search("");
+  expect(pinnedToggle().getAttribute("aria-expanded")).toBe("false");
+});
+
+it("keeps search-hidden pinned children in their group and excludes archived pins", async () => {
+  boundary.result = AsyncResult.success([]);
+  boundary.threads = [ordinary, { ...child("Pinned child"), pinnedAt: "2026-10-19T00:00:00Z" }];
+  await render({ compact: false, selectedThreadId: undefined });
+  await act(async () => {
+    const input = container.querySelector('input[aria-label="Search sessions"]')!;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+      input,
+      "Ordinary",
+    );
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(pinnedIDs()).toEqual(["ordinary"]);
+  boundary.threads = [
+    ordinary,
+    {
+      ...child("Pinned child"),
+      pinnedAt: "2026-10-19T00:00:00Z",
+      archivedAt: "2026-10-19T01:00:00Z",
+    },
+  ];
+  await render({ compact: false, selectedThreadId: undefined });
+  expect(pinnedToggle()).toBeUndefined();
+  expect(rootSessionIDs()).toEqual(["ordinary"]);
 });
 
 it("highlights via the session menu, persists across remounts and clears to default", async () => {

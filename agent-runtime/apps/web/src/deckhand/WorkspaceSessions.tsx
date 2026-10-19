@@ -60,12 +60,16 @@ import {
   filterWorkspaceSessionTree,
   orderWorkspaceSessionTree,
   sessionTreeContains,
+  sessionArrangementGroup,
   sessionOrderGroup,
+  arrangeSessionRows,
+  sessionPinTime,
+  pinnedSessionGroup,
   workspaceSessionTree,
   type WorkspaceSessionNode,
 } from "./workspaceSessionTree";
 import { SidebarColorPicker } from "./SidebarColorPicker";
-import { reorderSidebarRows, sidebarPreferenceKey } from "./workspaceSidebarPreferences";
+import { sidebarPreferenceKey } from "./workspaceSidebarPreferences";
 import { useWorkspaceSidebarPreferences } from "./useWorkspaceSidebarPreferences";
 import styles from "./WorkspaceSessions.module.css";
 
@@ -217,25 +221,85 @@ function SessionRows({
     ).values(),
   ];
   const all = workspaceSessions(environmentId, resource, resources, projects, threads, saved);
-  const sessions = filterWorkspaceSessionTree(
-    orderWorkspaceSessionTree(
-      workspaceSessionTree(all),
-      resource.workspaceID,
-      sidebar.preferences.order,
-    ),
-    {
-      archived,
-      query,
-      selectedThreadId,
-    },
+  const tree = workspaceSessionTree(all);
+  const orderedSessions = orderWorkspaceSessionTree(
+    filterWorkspaceSessionTree(tree, { archived, query: "", selectedThreadId }),
+    resource.workspaceID,
+    sidebar.preferences.order,
   );
-  const visibleSessions = compact ? sessions.slice(0, sidebarSessionLimit) : sessions;
+  const sessions = filterWorkspaceSessionTree(orderedSessions, {
+    archived,
+    query,
+    selectedThreadId,
+  });
+  const pinned = sessions.filter((node) => sessionPinTime(node) !== null);
+  const recent = sessions.filter((node) => sessionPinTime(node) === null);
+  const recentLimit = sidebarSessionLimit - (pinned.length ? 1 : 0);
+  const visibleSessions = compact ? recent.slice(0, recentLimit) : recent;
   // An exact conversation link must remain visible even outside the newest groups.
-  const selectedGroup = sessions.find((node) => sessionTreeContains(node, selectedThreadId));
+  const selectedGroup = recent.find((node) => sessionTreeContains(node, selectedThreadId));
   if (compact && selectedGroup && !visibleSessions.includes(selectedGroup)) {
     visibleSessions.push(selectedGroup);
   }
+  const pinnedKey = pinnedSessionGroup(resource.workspaceID);
+  const pinnedOpen = sidebar.preferences.expanded[pinnedKey] ?? true;
+  const pinnedListID = useId();
+  const previousPins = useRef(new Map(tree.map((node) => [node.session.id, sessionPinTime(node)])));
+  const previousSelection = useRef(selectedThreadId);
+  useEffect(() => {
+    const newlyPinned = tree.some(
+      (node) =>
+        sessionPinTime(node) !== null &&
+        previousPins.current.has(node.session.id) &&
+        previousPins.current.get(node.session.id) !== sessionPinTime(node),
+    );
+    const navigatedToPin =
+      previousSelection.current !== selectedThreadId &&
+      pinned.some((node) => sessionTreeContains(node, selectedThreadId));
+    previousPins.current = new Map(tree.map((node) => [node.session.id, sessionPinTime(node)]));
+    previousSelection.current = selectedThreadId;
+    if (!pinnedOpen && (newlyPinned || navigatedToPin)) {
+      sidebar.update((current) => ({
+        ...current,
+        expanded: { ...current.expanded, [pinnedKey]: true },
+      }));
+    }
+  });
+  const allNodes = new Map<string, WorkspaceSessionNode>();
+  const remember = (nodes: readonly WorkspaceSessionNode[]) => {
+    for (const node of nodes) {
+      allNodes.set(node.session.id, node);
+      remember(node.children);
+    }
+  };
+  remember(orderedSessions);
   const connected = environment?.connection.phase === "connected";
+  const renderBranch = (node: WorkspaceSessionNode) => (
+    <SessionBranch
+      key={node.session.id}
+      node={node}
+      allNodes={allNodes}
+      environmentId={environmentId}
+      selectedThreadId={selectedThreadId}
+      searching={!!query.trim()}
+      compact={compact}
+      connected={connected}
+      onNavigate={onNavigate}
+      showMenu={showMenu}
+      workspaceID={resource.workspaceID}
+      sidebar={sidebar}
+      providers={providers}
+      colors={sidebar.preferences.sessionColors}
+      onColorChange={(id, color) =>
+        sidebar.update((current) => {
+          const sessionColors = { ...current.sessionColors };
+          if (color) sessionColors[id] = color;
+          else delete sessionColors[id];
+          return { ...current, sessionColors };
+        })
+      }
+    />
+  );
   return (
     <section
       className={`${styles.sessions} ${compact ? styles.compact : ""}`}
@@ -265,37 +329,50 @@ function SessionRows({
         </div>
       ) : null}
       <nav aria-label="Workspace sessions">
+        {pinned.length ? (
+          <div className={styles.pinned}>
+            <button
+              type="button"
+              className={styles.pinnedHeading}
+              aria-expanded={pinnedOpen || !!query.trim()}
+              aria-controls={pinnedListID}
+              disabled={!!query.trim()}
+              onClick={() =>
+                sidebar.update((current) => ({
+                  ...current,
+                  expanded: { ...current.expanded, [pinnedKey]: !pinnedOpen },
+                }))
+              }
+            >
+              <ChevronRightIcon size={12} aria-hidden />
+              <PinIcon size={12} aria-hidden />
+              Pinned <span className={styles.count}>{pinned.length}</span>
+            </button>
+            <ul
+              id={pinnedListID}
+              className={styles.list}
+              hidden={!pinnedOpen && !query.trim()}
+              aria-label="Pinned sessions"
+            >
+              <SessionSiblings
+                nodes={pinned}
+                allNodes={orderedSessions}
+                workspaceID={resource.workspaceID}
+                sidebar={sidebar}
+              >
+                {renderBranch}
+              </SessionSiblings>
+            </ul>
+          </div>
+        ) : null}
         <ul className={styles.list}>
           <SessionSiblings
             nodes={visibleSessions}
-            group={sessionOrderGroup(resource.workspaceID)}
+            allNodes={orderedSessions}
+            workspaceID={resource.workspaceID}
             sidebar={sidebar}
           >
-            {(node) => (
-              <SessionBranch
-                key={node.session.id}
-                node={node}
-                environmentId={environmentId}
-                selectedThreadId={selectedThreadId}
-                searching={!!query.trim()}
-                compact={compact}
-                connected={connected}
-                onNavigate={onNavigate}
-                showMenu={showMenu}
-                workspaceID={resource.workspaceID}
-                sidebar={sidebar}
-                providers={providers}
-                colors={sidebar.preferences.sessionColors}
-                onColorChange={(id, color) =>
-                  sidebar.update((current) => {
-                    const sessionColors = { ...current.sessionColors };
-                    if (color) sessionColors[id] = color;
-                    else delete sessionColors[id];
-                    return { ...current, sessionColors };
-                  })
-                }
-              />
-            )}
+            {renderBranch}
           </SessionSiblings>
         </ul>
       </nav>
@@ -327,7 +404,7 @@ function SessionRows({
           Show older sessions
         </button>
       ) : null}
-      {compact && (sessions.length > sidebarSessionLimit || page?.length === sessionPageSize) ? (
+      {compact && (recent.length > recentLimit || page?.length === sessionPageSize) ? (
         <Link
           to="/workspaces"
           search={{
@@ -350,17 +427,23 @@ function SessionRows({
 
 function SessionSiblings({
   nodes,
-  group,
+  allNodes,
+  workspaceID,
+  parentID = null,
   sidebar,
   children,
 }: {
   nodes: readonly WorkspaceSessionNode[];
-  group: string;
+  allNodes: readonly WorkspaceSessionNode[];
+  workspaceID: string;
+  parentID?: string | null;
   sidebar: ReturnType<typeof useWorkspaceSidebarPreferences>;
   children: (node: WorkspaceSessionNode) => ReactNode;
 }) {
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    // This sensor is attached only to the dedicated grip. Activate immediately
+    // so a short/coalesced drag does not spend its only movement on activation.
+    useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
   const ids = nodes.map((node) => node.session.id);
@@ -370,13 +453,21 @@ function SessionSiblings({
       collisionDetection={closestCenter}
       onDragEnd={({ active, over }) => {
         if (!over || active.id === over.id) return;
+        const activeNode = nodes.find((node) => node.session.id === active.id);
+        const overNode = nodes.find((node) => node.session.id === over.id);
+        if (!activeNode || !overNode) return;
+        const pinned = sessionPinTime(activeNode) !== null;
+        if (pinned !== (sessionPinTime(overNode) !== null)) return;
+        const group = sessionArrangementGroup(workspaceID, parentID, pinned);
         sidebar.update((current) => ({
           ...current,
           order: {
             ...current.order,
-            [group]: reorderSidebarRows(
-              current.order[group] ?? [],
-              ids,
+            [group]: arrangeSessionRows(
+              current.order[group] ??
+                (pinned ? [] : (current.order[sessionOrderGroup(workspaceID, parentID)] ?? [])),
+              allNodes.filter((node) => (sessionPinTime(node) !== null) === pinned),
+              nodes.filter((node) => (sessionPinTime(node) !== null) === pinned),
               String(active.id),
               String(over.id),
             ),
@@ -393,6 +484,7 @@ function SessionSiblings({
 
 function SessionBranch(props: {
   node: WorkspaceSessionNode;
+  allNodes: ReadonlyMap<string, WorkspaceSessionNode>;
   environmentId: EnvironmentId;
   selectedThreadId: string | undefined;
   searching: boolean;
@@ -488,7 +580,9 @@ function SessionBranch(props: {
         <ul id={childrenId} className={`${styles.list} ${styles.children}`} hidden={!open}>
           <SessionSiblings
             nodes={node.children}
-            group={sessionOrderGroup(props.workspaceID, node.session.id)}
+            allNodes={props.allNodes.get(node.session.id)?.children ?? node.children}
+            workspaceID={props.workspaceID}
+            parentID={node.session.id}
             sidebar={props.sidebar}
           >
             {(child) => <SessionBranch key={child.session.id} {...props} node={child} />}
