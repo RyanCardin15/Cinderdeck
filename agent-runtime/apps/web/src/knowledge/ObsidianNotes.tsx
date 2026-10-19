@@ -2,7 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import type { ObsidianNote, ObsidianSearchResult, ObsidianVault } from "@cinderdeck/contracts";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Dialog, DialogPopup, DialogTitle, DialogDescription } from "../components/ui/dialog";
+import {
+  Dialog,
+  DialogPopup,
+  DialogHeader,
+  DialogPanel,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
 import styles from "./knowledge.module.css";
 
@@ -134,118 +142,122 @@ export function ObsidianNotes({
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogPopup className="max-w-4xl p-6">
-        <DialogTitle>Obsidian notes</DialogTitle>
-        <DialogDescription>
-          Browse connected vaults on this Mac. Attach a snapshot to share a note with your selected
-          AI provider.
-        </DialogDescription>
-        {error && (
-          <p role="alert" className={styles.error}>
-            {error}
-          </p>
-        )}
-        <div className={styles.filters}>
-          <label>
-            Vault
-            <select
-              aria-label="Obsidian vault"
-              value={vaultID}
-              onChange={(e) => setVaultID(e.target.value)}
-              disabled={busy}
-            >
-              {vaults.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Search notes
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Title, path, or note text"
-              maxLength={500}
-            />
-          </label>
-        </div>
-        {!vaults.length && !error && (
-          <p className={styles.empty}>
-            Connect a vault in Settings → Integrations → Obsidian to browse notes here.
-          </p>
-        )}
-        <div className={styles.browser}>
-          <div className={styles.results} aria-label="Note results" aria-busy={loading}>
-            {loading && <p role="status">Searching…</p>}
-            {!loading && vaultID && !result.notes.length && <p>No notes match your search.</p>}
-            {result.notes.map((item) => (
-              <button
-                type="button"
-                key={item.path}
-                aria-pressed={note?.path === item.path}
-                onClick={() => void read(item.path)}
+      <DialogPopup className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Obsidian notes</DialogTitle>
+          <DialogDescription>
+            Browse connected vaults on this Mac. Attach a snapshot to share a note with your
+            selected AI provider.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogPanel>
+          {error && (
+            <p role="alert" className={styles.error}>
+              {error}
+            </p>
+          )}
+          <div className={styles.filters}>
+            <label>
+              Vault
+              <select
+                aria-label="Obsidian vault"
+                value={vaultID}
+                onChange={(e) => setVaultID(e.target.value)}
                 disabled={busy}
               >
-                <strong>{item.title}</strong>
-                <small>{item.path}</small>
-                <span>{item.excerpt}</span>
-              </button>
-            ))}
-            {result.limited && (
-              <p role="status">Showing a limited set of results. Refine your search.</p>
-            )}
+                {vaults.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Search notes
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Title, path, or note text"
+                maxLength={500}
+              />
+            </label>
           </div>
-          <div className={styles.preview} aria-label="Note preview">
-            {note ? (
-              <>
-                <h3>{note.path}</h3>
-                <details>
-                  <summary>Markdown source</summary>
-                  <pre className={styles.source}>{note.content}</pre>
-                </details>
-                <div className={styles.markdown}>
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    allowedElements={[
-                      "p",
-                      "h1",
-                      "h2",
-                      "h3",
-                      "h4",
-                      "h5",
-                      "h6",
-                      "ul",
-                      "ol",
-                      "li",
-                      "blockquote",
-                      "pre",
-                      "code",
-                      "em",
-                      "strong",
-                      "del",
-                      "hr",
-                      "br",
-                      "table",
-                      "thead",
-                      "tbody",
-                      "tr",
-                      "th",
-                      "td",
-                    ]}
-                    unwrapDisallowed
-                  >
-                    {note.content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "")}
-                  </ReactMarkdown>
-                </div>
-              </>
-            ) : (
-              <p>Select a note to preview it.</p>
-            )}
+          {!vaults.length && !error && (
+            <p className={styles.empty}>
+              Connect a vault in Settings → Integrations → Obsidian to browse notes here.
+            </p>
+          )}
+          <div className={styles.browser}>
+            <div className={styles.results} aria-label="Note results" aria-busy={loading}>
+              {loading && <p role="status">Searching…</p>}
+              {!loading && vaultID && !result.notes.length && <p>No notes match your search.</p>}
+              {result.notes.map((item) => (
+                <button
+                  type="button"
+                  key={item.path}
+                  aria-pressed={note?.path === item.path}
+                  onClick={() => void read(item.path)}
+                  disabled={busy}
+                >
+                  <strong>{item.title}</strong>
+                  <small>{item.path}</small>
+                  <span>{item.excerpt}</span>
+                </button>
+              ))}
+              {result.limited && (
+                <p role="status">Showing a limited set of results. Refine your search.</p>
+              )}
+            </div>
+            <div className={styles.preview} aria-label="Note preview">
+              {note ? (
+                <>
+                  <h3>{note.path}</h3>
+                  <details>
+                    <summary>Markdown source</summary>
+                    <pre className={styles.source}>{note.content}</pre>
+                  </details>
+                  <div className={styles.markdown}>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      allowedElements={[
+                        "p",
+                        "h1",
+                        "h2",
+                        "h3",
+                        "h4",
+                        "h5",
+                        "h6",
+                        "ul",
+                        "ol",
+                        "li",
+                        "blockquote",
+                        "pre",
+                        "code",
+                        "em",
+                        "strong",
+                        "del",
+                        "hr",
+                        "br",
+                        "table",
+                        "thead",
+                        "tbody",
+                        "tr",
+                        "th",
+                        "td",
+                      ]}
+                      unwrapDisallowed
+                    >
+                      {note.content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "")}
+                    </ReactMarkdown>
+                  </div>
+                </>
+              ) : (
+                <p>Select a note to preview it.</p>
+              )}
+            </div>
           </div>
-        </div>
-        <div className={styles.actions}>
+        </DialogPanel>
+        <DialogFooter>
           <Button variant="outline" disabled={!note || busy} onClick={() => void action("open")}>
             Open in Obsidian
           </Button>
@@ -254,7 +266,7 @@ export function ObsidianNotes({
               {busy ? "Working…" : "Attach note"}
             </Button>
           )}
-        </div>
+        </DialogFooter>
       </DialogPopup>
     </Dialog>
   );

@@ -166,6 +166,18 @@
   outline: 2px solid var(--ring);
   outline-offset: 3px;
 }
+.dh-list {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.dh-list > a {
+  justify-content: flex-start;
+  padding: 16px 20px;
+}
+.dh-list > a > svg:last-child {
+  margin-left: auto;
+}
 .dh-accent {
   background: var(--dh-accent);
   color: var(--primary-foreground);

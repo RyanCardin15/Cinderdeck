@@ -11,9 +11,11 @@ import type {
 import { ArrowDownIcon, ArrowUpIcon, RefreshCwIcon } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 import {
   SettingsPageContainer,
   SettingsRow,
+  SettingsContent,
   SettingsSection,
   SettingsSearchTarget,
   useSettingsSearchTargetId,
@@ -304,28 +306,30 @@ function NativeShortcuts({
                           <div className={styles.shortcutModifiers}>
                             {(["command", "control", "option", "shift"] as const).map(
                               (modifier) => (
-                                <label
-                                  key={modifier}
-                                  className={styles.shortcutModifier}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    disabled={disabled}
-                                    checked={selected.includes(modifier)}
-                                    aria-label={`${settingLabel(group.split(".").at(-1)!)} · ${settingLabel(modifier)}`}
-                                    onChange={(event) =>
-                                      onChange(
-                                        modifiers.id,
-                                        event.target.checked
-                                          ? [...selected, modifier]
-                                          : selected.filter((value) => value !== modifier),
-                                      )
-                                    }
-                                  />
-                                  <span aria-hidden="true">
-                                    {settingLabel(modifier).split(" ")[0]}
-                                  </span>
-                                </label>
+                                <Tooltip key={modifier}>
+                                  <TooltipTrigger
+                                    render={<label className={styles.shortcutModifier} />}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      disabled={disabled}
+                                      checked={selected.includes(modifier)}
+                                      aria-label={`${settingLabel(group.split(".").at(-1)!)} · ${settingLabel(modifier)}`}
+                                      onChange={(event) =>
+                                        onChange(
+                                          modifiers.id,
+                                          event.target.checked
+                                            ? [...selected, modifier]
+                                            : selected.filter((value) => value !== modifier),
+                                        )
+                                      }
+                                    />
+                                    <span aria-hidden="true">
+                                      {settingLabel(modifier).split(" ")[0]}
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipPopup>{settingLabel(modifier)}</TooltipPopup>
+                                </Tooltip>
                               ),
                             )}
                           </div>
@@ -699,7 +703,7 @@ function NativeSettingsForm({
           <SettingsSection key={group} title={nativeSettingsGroupLabel(group)}>
             {fields.map((field) =>
               field.id === "capture.ocr.custom_models" ? (
-                <div key={field.id} className="p-4">
+                <SettingsContent key={field.id}>
                   <p className="mb-3 text-sm font-medium">Custom recognition models</p>
                   <OCRModels
                     value={String(draft[field.id] ?? field.value)}
@@ -714,7 +718,7 @@ function NativeSettingsForm({
                     onChange={(value) => setDraft((state) => ({ ...state, [field.id]: value }))}
                     action={safeAction}
                   />
-                </div>
+                </SettingsContent>
               ) : (
                 <SettingsRow
                   key={field.id}
@@ -724,10 +728,7 @@ function NativeSettingsForm({
                   control={
                     field.id === "general.export_location" ? (
                       <div className={styles.actions}>
-                        <span
-                          className="max-w-64 truncate text-xs text-muted-foreground"
-                          aria-label={String(field.value)}
-                        >
+                        <span className="max-w-64 text-xs wrap-anywhere text-muted-foreground">
                           {String(field.value)}
                         </span>
                         <Button
@@ -807,7 +808,7 @@ function NativeSettingsForm({
       ) : null}
       {category === "dictation" && snapshot ? (
         <SettingsSection title="Transcription API key">
-          <div className="p-4">
+          <SettingsContent>
             <SecretInput
               label="Dictation API key"
               saved={snapshot.status.hasKey === true}
@@ -815,14 +816,14 @@ function NativeSettingsForm({
               onSave={(key) => request("dictation-key", { key })}
             />
             <p className={styles.note}>Keys are stored in macOS Keychain.</p>
-          </div>
+          </SettingsContent>
         </SettingsSection>
       ) : null}
       {category === "cloud" && snapshot && !snapshot.status.locked ? (
         <>
           <CloudCredentials snapshot={snapshot} disabled={pending || dirty} action={safeAction} />
           <SettingsSection title="Credential protection">
-            <div className="p-4">
+            <SettingsContent>
               <CloudProtection
                 label="New cloud protection password"
                 saved={snapshot.status.protected === true}
@@ -832,7 +833,7 @@ function NativeSettingsForm({
               <p className={styles.note}>
                 Use at least four characters. You’ll need this password to edit cloud credentials.
               </p>
-            </div>
+            </SettingsContent>
           </SettingsSection>
         </>
       ) : null}
@@ -879,7 +880,7 @@ function NativeSettingsForm({
               </Button>
             }
           />
-          <div className="p-4">
+          <SettingsContent>
             <div className={styles.actions}>
               {(["config-export", "config-import", "config-restore"] as const).map((action, i) => (
                 <Button
@@ -893,12 +894,12 @@ function NativeSettingsForm({
                 </Button>
               ))}
             </div>
-          </div>
+          </SettingsContent>
         </SettingsSection>
       ) : null}
       {category === "menuBar" && snapshot ? (
         <SettingsSection title="Menu customization">
-          <div className="p-4">
+          <SettingsContent>
             <div className={styles.actions}>
               <Button
                 size="sm"
@@ -927,12 +928,12 @@ function NativeSettingsForm({
                 Reset menu
               </Button>
             </div>
-          </div>
+          </SettingsContent>
         </SettingsSection>
       ) : null}
       {category === "history" ? (
         <SettingsSection title="Local history storage">
-          <div className="p-4">
+          <SettingsContent>
             <div className={styles.actions}>
               {(["history-open", "clipboard-clear", "history-clear"] as const).map(
                 (action, index) => (
@@ -952,7 +953,7 @@ function NativeSettingsForm({
                 ),
               )}
             </div>
-          </div>
+          </SettingsContent>
         </SettingsSection>
       ) : null}
       {category === "advanced" ? (
@@ -1024,7 +1025,7 @@ function NativeSettingsForm({
       ) : null}
       {category === "updates" && snapshot ? (
         <SettingsSection title="Software update">
-          <div className="space-y-3 p-4">
+          <SettingsContent>
             <p role="status" className="text-sm">
               {snapshot.status.message}
             </p>
@@ -1078,7 +1079,7 @@ function NativeSettingsForm({
                 </Button>
               ) : null}
             </div>
-          </div>
+          </SettingsContent>
         </SettingsSection>
       ) : null}
       {category === "about" && snapshot ? (
@@ -1191,7 +1192,7 @@ function GitHubConnection({
           </div>
         }
       />
-      <div className="p-4 space-y-3">
+      <SettingsContent>
         {status.error ? (
           <p role="alert" className={styles.error}>
             {status.error}
@@ -1229,7 +1230,7 @@ function GitHubConnection({
             Refresh
           </Button>
         </div>
-      </div>
+      </SettingsContent>
     </SettingsSection>
   );
 }
@@ -1290,7 +1291,7 @@ function CloudCredentials({
     snapshot.fields.find((field) => field.id === "cloud.provider")?.value === "google_drive";
   return (
     <SettingsSection title="Credentials">
-      <div className="p-4 space-y-3">
+      <SettingsContent>
         <p className={styles.note}>
           {snapshot.status.configured
             ? "Storage is connected. Enter credentials to replace them."
@@ -1341,7 +1342,7 @@ function CloudCredentials({
             </Button>
           ) : null}
         </div>
-      </div>
+      </SettingsContent>
     </SettingsSection>
   );
 }
@@ -1388,7 +1389,7 @@ function CloudTransfer({
   };
   return (
     <SettingsSection title="Encrypted credential transfer">
-      <div className="space-y-3 p-4">
+      <SettingsContent>
         <p className={styles.note}>
           Move your storage connection using an encrypted archive. Use the same archive passphrase
           on both Macs, with at least 12 characters.
@@ -1420,7 +1421,7 @@ function CloudTransfer({
             Export archive…
           </Button>
         </div>
-      </div>
+      </SettingsContent>
     </SettingsSection>
   );
 }

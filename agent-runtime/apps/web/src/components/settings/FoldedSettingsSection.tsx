@@ -43,7 +43,7 @@ export function FoldedSettingsSection({
           <div className="space-y-2.5">
             <div
               data-settings-scroll-target
-              className="flex min-h-7 items-start justify-between gap-4 px-3 sm:px-4"
+              className="flex min-h-7 flex-wrap items-start justify-between gap-x-4 gap-y-2 px-3 sm:px-4"
             >
               <h2>
                 <CollapsibleTrigger className="flex min-h-7 items-center gap-2 rounded-md text-sm font-normal text-foreground/70 outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -71,7 +71,7 @@ export function FoldedSettingsSection({
   return (
     <section id={id} ref={targetRef} tabIndex={-1} className="outline-none">
       <Collapsible open={open} onOpenChange={setOpen} render={<SettingsGroup divided={false} />}>
-        <div className="flex items-center gap-4 px-3 sm:px-4">
+        <div className="flex min-w-0 items-center gap-4 px-3 sm:px-4">
           <CollapsibleTrigger className="flex min-h-11 min-w-0 flex-1 items-center gap-2 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md">
             <ChevronRightIcon
               aria-hidden
@@ -80,7 +80,7 @@ export function FoldedSettingsSection({
                 open && "rotate-90",
               )}
             />
-            <span className="shrink-0 text-sm font-medium">{title}</span>
+            <span className="min-w-0 text-sm font-medium wrap-anywhere">{title}</span>
             {summary ? (
               <span className="min-w-0 truncate text-xs text-muted-foreground">{summary}</span>
             ) : null}

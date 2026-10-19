@@ -45,9 +45,10 @@ export function ExternalAppsSettings() {
       <SettingsSection
         title="External apps"
         id="external-apps"
+        variant="plain"
         headerAction={
           <Button
-            size="sm"
+            size="xs"
             variant="outline"
             disabled={profiles.length >= 16}
             onClick={() =>

@@ -13,6 +13,7 @@
   font-family: var(--font-sans);
 }
 .page {
+  container: recordings-page / inline-size;
   height: 100dvh;
   overflow: auto;
   padding: 34px 32px;
@@ -56,6 +57,24 @@
   font-size: 12px;
   min-width: 180px;
 }
+@container recordings-page (max-width: 52rem) {
+  .pageHeader {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+  .pageHeader > div {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+  .pageHeader label {
+    min-width: 0;
+  }
+  .pageHeader select {
+    min-width: 0;
+    width: 100%;
+  }
+}
 .root {
   padding: 0;
   min-width: 0;
@@ -80,6 +99,7 @@
 }
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;

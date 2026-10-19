@@ -9,6 +9,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 vi.mock("../components/settings/settingsLayout", () => ({
   useSettingsSearchTargetId: () => null,
+  SettingsContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   SettingsSection: ({ children, title }: { children: ReactNode; title: string }) => (
     <section>
       <h3>{title}</h3>

@@ -956,6 +956,7 @@ export function ResourceTelemetryDiagnostics({
   return (
     <>
       <SettingsSection
+        variant="plain"
         title="Resource monitor"
         icon={<ActivityIcon className="size-4 text-muted-foreground" />}
         headerAction={
@@ -1080,6 +1081,7 @@ export function ResourceTelemetryDiagnostics({
       </SettingsSection>
 
       <SettingsSection
+        variant="plain"
         title="Host & collection"
         icon={<GaugeIcon className="size-4 text-muted-foreground" />}
         headerAction={
@@ -1211,6 +1213,7 @@ export function ResourceTelemetryDiagnostics({
       </SettingsSection>
 
       <SettingsSection
+        variant="plain"
         title="Resource timeline"
         icon={<HardDriveIcon className="size-4 text-muted-foreground" />}
         headerAction={
@@ -1241,6 +1244,7 @@ export function ResourceTelemetryDiagnostics({
       </SettingsSection>
 
       <SettingsSection
+        variant="plain"
         title="Live process tree"
         icon={<CpuIcon className="size-4 text-muted-foreground" />}
         headerAction={
@@ -1261,6 +1265,7 @@ export function ResourceTelemetryDiagnostics({
       </SettingsSection>
 
       <SettingsSection
+        variant="plain"
         title="Instrumented application I/O"
         icon={<DatabaseIcon className="size-4 text-muted-foreground" />}
         headerAction={
@@ -1270,8 +1275,8 @@ export function ResourceTelemetryDiagnostics({
         <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs/5">
           <div className="bg-muted/15 px-4 py-3 text-2xs leading-relaxed text-muted-foreground sm:px-5">
             Native counters identify which process is reading or writing. These application-level
-            counters identify known Cinderdeck operations so process spikes can be correlated with specific
-            persistence and logging paths.
+            counters identify known Cinderdeck operations so process spikes can be correlated with
+            specific persistence and logging paths.
           </div>
           <AttributionTable entries={snapshot?.attribution.entries ?? []} />
         </div>

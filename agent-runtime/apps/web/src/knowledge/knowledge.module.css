@@ -1,12 +1,9 @@
-.content {
-  display: grid;
-  gap: 16px;
-  font-size: 13px;
-}
 .intro,
 .empty {
   color: var(--muted-foreground);
   font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 .filters {
   display: flex;
@@ -18,7 +15,7 @@
   display: grid;
   gap: 5px;
   flex: 1;
-  min-width: 160px;
+  min-width: min(160px, 100%);
   font-size: 12px;
 }
 .filters input,
@@ -37,28 +34,12 @@
   margin-top: 14px;
   flex-wrap: wrap;
 }
-.row {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px;
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
-}
-.details {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-.details small {
-  color: var(--muted-foreground);
-  overflow-wrap: anywhere;
-}
 .error {
   color: var(--destructive);
   font-size: 13px;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
 }
 .browser {
   display: grid;
@@ -98,6 +79,7 @@
   overflow: hidden;
 }
 .preview {
+  min-width: 0;
   overflow: auto;
   padding: 16px;
   overflow-wrap: anywhere;
@@ -146,6 +128,7 @@
   background: var(--muted);
   padding: 12px;
   border-radius: 6px;
+  overflow-wrap: anywhere;
 }
 @media (max-width: 600px) {
   .browser {

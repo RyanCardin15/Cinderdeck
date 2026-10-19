@@ -70,6 +70,14 @@ Cursor's own configuration. See [ACP providers](../agent-runtime/docs/user/provi
 
 ### Obsidian and custom skills
 
+Settings use a shared layout throughout the unified app: `SettingsSection` supplies
+the heading and card, and `SettingsRow` supplies the label, description, controls
+and inset. Free-form native settings content uses `SettingsContent` for the same
+horizontal inset. Sections containing their own cards use `variant="plain"` to
+avoid nested borders. Headers and controls wrap within the available panel width;
+long paths wrap rather than pushing controls outside the card. Browse and import
+dialogs use the shared header, scrollable panel and footer components.
+
 **Settings → Integrations → Obsidian** connects vault folders on the current Mac.
 Choose a folder containing `.obsidian`, optionally give it a name, and select
 availability to all chats or one workspace folder and its descendants. These

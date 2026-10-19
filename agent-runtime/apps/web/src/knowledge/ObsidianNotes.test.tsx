@@ -37,6 +37,10 @@ const bridge = {
 };
 let root: Root, container: HTMLDivElement;
 beforeEach(() => {
+  Object.defineProperty(Element.prototype, "getAnimations", {
+    configurable: true,
+    value: () => [],
+  });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal(
     "ResizeObserver",
@@ -73,6 +77,7 @@ afterEach(async () => {
   container.remove();
   delete window.desktopBridge;
   vi.unstubAllGlobals();
+  Reflect.deleteProperty(Element.prototype, "getAnimations");
 });
 const buttons = () => [...document.querySelectorAll<HTMLButtonElement>("button")];
 async function click(label: string) {

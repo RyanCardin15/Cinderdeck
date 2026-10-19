@@ -42,7 +42,7 @@ export function NativeMenuItems({
   return (
     <SettingsSearchTarget id="native-menu_bar.hidden_items">
       <SettingsSection title="Menu items" id="native-menu_bar.item_order">
-        <p className="px-4 pt-3 text-xs text-muted-foreground">
+        <p className="px-3 py-3 text-xs leading-relaxed text-muted-foreground sm:px-4">
           Choose which actions appear, and arrange their order within each menu group.
         </p>
         {items.map((item, index) => (
