@@ -1131,3 +1131,49 @@ it("removes a deleted app's tabs across conversations while preserving other sur
     { id: "external-app:excel", kind: "external-app", profileId: "excel", title: "Excel" },
   ]);
 });
+
+describe("Obsidian note tabs", () => {
+  it("restores distinct notes by vault and path, and keeps them without a workspace", () => {
+    const note = {
+      vaultID: "v1",
+      vaultName: "Work",
+      path: "Project/Decision.md",
+      activity: "viewed" as const,
+    };
+    const store = useRightPanelStore.getState();
+    store.openNote(refA, note);
+    store.openNote(refA, { ...note, vaultID: "v2" });
+    store.openNote(refA, note);
+    let state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+    expect(state.surfaces).toHaveLength(2);
+    useRightPanelStore.setState(
+      migratePersistedRightPanelState(
+        JSON.parse(JSON.stringify({ byThreadKey: useRightPanelStore.getState().byThreadKey })),
+      ),
+    );
+    store.reconcileFileSurfaces(refA, false);
+    state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+    expect(state.surfaces).toHaveLength(2);
+    expect(
+      selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA),
+    ).toMatchObject({ kind: "note", note });
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refB).surfaces,
+    ).toHaveLength(0);
+  });
+  it("drops malformed saved note descriptors", () => {
+    const restored = migratePersistedRightPanelState({
+      byThreadKey: {
+        bad: {
+          isOpen: true,
+          activeSurfaceId: "note:bad",
+          surfaces: [
+            { id: "note:bad", kind: "note", note: { vaultID: "v", path: "../private.md" } },
+          ],
+        },
+      },
+    });
+    expect(restored.byThreadKey.bad?.surfaces).toEqual([]);
+    expect(restored.byThreadKey.bad?.isOpen).toBe(false);
+  });
+});

@@ -148,6 +148,17 @@ try {
   }
   NodeAssert.ok(page, "Main bundled renderer appeared");
   page.setDefaultTimeout(15000);
+  // Provider version notices may arrive after setup and cover panel controls.
+  // Dismiss them through the normal UI without installing or changing providers.
+  await page.addLocatorHandler(
+    page.getByRole("button", { name: "Dismiss notification", exact: true }).first(),
+    async () => {
+      for (const notice of await page
+        .getByRole("button", { name: "Dismiss notification", exact: true })
+        .all())
+        await notice.click();
+    },
+  );
   await page.waitForFunction(() => window.desktopBridge?.knowledge !== undefined);
   NodeAssert.equal(await page.evaluate(() => window.desktopBridge.isNativeHost()), true);
   await page.evaluate(async () => {
@@ -182,7 +193,7 @@ try {
     .all())
     await notification.click();
   await evaluate(`__knowledgePick = ${JSON.stringify(fixture)}`);
-  await page.getByLabel("Vault name (optional)").fill("Fixture notes");
+  await page.getByRole("textbox", { name: "Vault name", exact: true }).fill("Fixture notes");
   await page.getByRole("button", { name: "Connect vault…", exact: true }).click();
   await page.getByRole("button", { name: "Disconnect Fixture notes", exact: true }).waitFor();
   evidence.checks.push("connect through native folder dialog and real IPC");
@@ -245,7 +256,8 @@ try {
   evidence.checks.push("connections survive renderer reload");
   // Install only into a disposable workspace, never a personal provider home.
   await evaluate(`__knowledgePick = ${JSON.stringify(project)}`);
-  await page.getByLabel("Connection and import scope").selectOption("workspace");
+  await page.getByRole("combobox", { name: "Connection and import scope", exact: true }).click();
+  await page.getByRole("option", { name: "Workspace folder…", exact: true }).click();
   await page.getByText(`Workspace folder: ${project}`, { exact: true }).waitFor();
   await evaluate(`__knowledgePick = ${JSON.stringify(skillFolder)}`);
   await page.getByRole("button", { name: "Import skill folder…", exact: true }).click();
@@ -310,6 +322,40 @@ try {
   evidence.checks.push(
     "authenticated attachment upload persists exact snapshot independently of vault edits",
   );
+  const sessionURL = page.url();
+  const notesSection = page.getByRole("region", { name: "Notes", exact: true });
+  if (!(await notesSection.isVisible()))
+    await page.getByRole("button", { name: "Toggle thread details panel", exact: true }).click();
+  await notesSection.getByRole("button", { name: /Aurora decision.md/ }).waitFor();
+  await page.screenshot({ path: NodePath.join(root, "session-notes-list.png") });
+  await notesSection.getByRole("button", { name: /Aurora decision.md/ }).click();
+  const notePanel = page.getByRole("region", { name: "Obsidian note panel", exact: true });
+  await notePanel.getByText("Changed after attachment.", { exact: true }).waitFor();
+  await notePanel.getByRole("button", { name: "Source", exact: true }).click();
+  await notePanel.getByText("Changed after attachment.", { exact: true }).waitFor();
+  await NodeFSP.writeFile(
+    NodePath.join(fixture, "Projects/Aurora decision.md"),
+    "Live session note update.",
+  );
+  await notePanel.getByText("Live session note update.", { exact: true }).waitFor();
+  await NodeFSP.writeFile(
+    NodePath.join(fixture, "Projects/Aurora decision.md"),
+    "Changed after attachment.",
+  );
+  await page.reload();
+  await page
+    .getByRole("region", { name: "Obsidian note panel", exact: true })
+    .getByText("Changed after attachment.", { exact: true })
+    .waitFor();
+  NodeAssert.equal(page.url(), sessionURL);
+  await page.screenshot({ path: NodePath.join(root, "session-notes.png") });
+  if (!(await notesSection.isVisible()))
+    await page.getByRole("button", { name: "Toggle thread details panel", exact: true }).click();
+  await notesSection.getByRole("button", { name: /Aurora decision.md/ }).waitFor();
+  evidence.checks.push(
+    "session Notes list opens a persistent peer tab with source view and live vault updates",
+  );
+
   if (liveAI) {
     await NodeFSP.writeFile(
       NodePath.join(root, "ready-for-live-turn"),

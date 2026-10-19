@@ -1,3 +1,4 @@
+import { useSessionNotesStore } from "../../knowledge/sessionNotes";
 import { DictationButton } from "./DictationButton";
 import { ComposerAddMenu } from "./ComposerAddMenu";
 import { DESKTOP_PASTE_AS_TEXT_EVENT } from "../../lib/desktopPasteAsText";
@@ -7478,6 +7479,17 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       <ComposerAddMenu
                         key={`${environmentId}:${activeThreadId ?? draftId}:${activePendingProgress?.activeQuestion?.id ?? "draft"}`}
                         workspacePath={environmentId === primaryEnvironmentId ? gitCwd : null}
+                        onUseNote={(note) =>
+                          useSessionNotesStore
+                            .getState()
+                            .remember(draftId ?? routeThreadRef, [note])
+                        }
+                        onOpenNote={(note) => {
+                          useSessionNotesStore
+                            .getState()
+                            .remember(draftId ?? routeThreadRef, [note]);
+                          useRightPanelStore.getState().openNote(routeThreadRef, note);
+                        }}
                         onAttachFile={async (file) => {
                           const inserted = await addComposerAttachments([file]);
                           if (!inserted)

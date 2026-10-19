@@ -69,6 +69,7 @@ export function KnowledgeSettings() {
     try {
       await fn();
       await refresh();
+      window.dispatchEvent(new Event("cinderdeck:knowledge-changed"));
     } catch (cause) {
       if (alive.current) setError(knowledgeError(cause));
     } finally {

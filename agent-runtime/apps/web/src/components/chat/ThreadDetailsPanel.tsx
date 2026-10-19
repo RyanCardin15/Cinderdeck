@@ -1,3 +1,5 @@
+import { SessionNotesSection } from "../../knowledge/SessionNotesSection";
+import { usePrimaryEnvironmentId } from "../../state/environments";
 import type {
   EditorId,
   EnvironmentId,
@@ -78,6 +80,7 @@ export interface ThreadDetailsPanelProps extends Pick<
 }
 
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
   const fileScripts = useCinderdeckProjectFileScripts(
     props.environmentId,
     props.activeProjectScripts ? props.gitCwd : null,
@@ -221,6 +224,17 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
               </div>
             </ThreadDetailsSection>
           ) : null}
+
+          {density === "full" && (
+            <SessionNotesSection
+              key={`${props.environmentId}:${props.draftId ?? props.threadId}`}
+              target={
+                props.draftId ?? { environmentId: props.environmentId, threadId: props.threadId }
+              }
+              threadRef={{ environmentId: props.environmentId, threadId: props.threadId }}
+              workspacePath={props.environmentId === primaryEnvironmentId ? props.gitCwd : null}
+            />
+          )}
 
           {density === "full" && !props.draftId ? (
             <ThreadAutomationsPanel environmentId={props.environmentId} threadId={props.threadId} />

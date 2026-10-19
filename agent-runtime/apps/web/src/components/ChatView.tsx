@@ -1,3 +1,5 @@
+import { SessionNotePanel } from "../knowledge/SessionNotePanel";
+import { useSessionNotesTracking } from "../knowledge/useSessionNotesTracking";
 import { useChatDefaultsStore } from "../deckhand/chatDefaults";
 import { useAgentExternalApps } from "../deckhand/useAgentExternalApps";
 import { useDisconnectExternalApps } from "../deckhand/externalAppSessions";
@@ -4047,6 +4049,20 @@ export default function ChatView(props: ChatViewProps) {
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
   const activeWorkspaceRoot = activeThreadWorktreePath ?? activeProjectCwd ?? undefined;
+  const openedWorkspaceFiles = useMemo(
+    () =>
+      rightPanelState.surfaces.flatMap((surface) =>
+        surface.kind === "file" && !surface.attachment ? [surface.relativePath] : [],
+      ),
+    [rightPanelState.surfaces],
+  );
+  useSessionNotesTracking(
+    baseComposerDraftTarget,
+    serverVisibleTurnItems,
+    gitCwd,
+    routeThreadRef.environmentId === primaryEnvironmentId,
+    openedWorkspaceFiles,
+  );
   useLayoutEffect(() => {
     if (
       threadDetailLoading ||
@@ -10320,6 +10336,13 @@ export default function ChatView(props: ChatViewProps) {
           }}
         />
       </Suspense>
+    ) : renderedRightPanelSurface?.kind === "note" ? (
+      <SessionNotePanel
+        key={`${routeThreadKey}:${renderedRightPanelSurface.id}`}
+        reference={renderedRightPanelSurface.note}
+        workspacePath={activeThread.environmentId === primaryEnvironmentId ? gitCwd : null}
+        visible={rightPanelOpen}
+      />
     ) : renderedRightPanelSurface?.kind === "terminal" ? (
       <PersistentThreadTerminalPanel
         visible={rightPanelOpen}

@@ -95,6 +95,22 @@ wikilinks and callouts remain visible in source; the preview uses standard Markd
 In a chat, **+ → Add Obsidian note** adds a Markdown snapshot through the normal
 attachment pipeline, including vault name, original note path and modification time.
 A snapshot can be removed before sending; later vault changes do not modify it.
+The session details sidebar's **Notes** section keeps notes opened in the session,
+attached through the picker, or reported by structured agent read/edit activity in
+connected vaults. Local workspace files opened in the panel are included when they
+belong to a connected vault. Remote agent paths are not matched against this Mac's
+vaults. Shell command text alone is not treated as proof that a note was used.
+
+Click a note to open a tab beside Files, Browser and Terminal. **Preview** renders
+Markdown; **Source** shows the original text. This live, read-only view refreshes
+while visible, including changes made by Obsidian or an agent. It does not change
+previously attached snapshots. Notes and tabs are kept separately per session and
+execution environment across reloads; only vault identities and relative paths are
+stored in the session list, not note contents. Closing a tab keeps its Notes entry.
+Use the section's **+** to browse connected notes and **Open in panel** to open one
+without attaching it. Missing, disconnected or out-of-scope notes show an error
+instead of falling back to an unrestricted file read.
+
 Attaching a note shares its contents with the selected AI provider when the message
 is sent. Links and embeds do not automatically attach other notes. **Open in Obsidian**
 sends an exact, URL-encoded local note path to the OS `obsidian://open` handler.

@@ -40,8 +40,12 @@ export function ComposerAddMenu({
   onAttach,
   onAttachFile,
   workspacePath,
+  onUseNote,
+  onOpenNote,
 }: {
   workspacePath?: string | null;
+  onUseNote?: (note: import("../../knowledge/sessionNotes").SessionNote) => void;
+  onOpenNote?: (note: import("../../knowledge/sessionNotes").SessionNote) => void;
   onAttachFile?: (file: File) => Promise<void>;
   onChooseFiles: () => void;
   onAttach: (file: File, source: SnapShotSource) => Promise<void>;
@@ -208,6 +212,8 @@ export function ComposerAddMenu({
           onOpenChange={setNotesOpen}
           workspacePath={workspacePath ?? null}
           onAttach={onAttachFile}
+          onUseNote={onUseNote}
+          onOpenInPanel={onOpenNote}
         />
       )}
       {capturing && (

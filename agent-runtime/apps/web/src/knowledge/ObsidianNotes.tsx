@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ObsidianNote, ObsidianSearchResult, ObsidianVault } from "@cinderdeck/contracts";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { NoteContent } from "./NoteContent";
+import type { SessionNote } from "./sessionNotes";
 import {
   Dialog,
   DialogPopup,
@@ -34,11 +34,15 @@ export function ObsidianNotes({
   onOpenChange,
   workspacePath,
   onAttach,
+  onUseNote,
+  onOpenInPanel,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workspacePath?: string | null | undefined;
   onAttach?: ((file: File) => Promise<void>) | undefined;
+  onUseNote?: ((note: SessionNote) => void) | undefined;
+  onOpenInPanel?: ((note: SessionNote) => void) | undefined;
 }) {
   const bridge = typeof window === "undefined" ? undefined : window.desktopBridge?.knowledge;
   const [vaults, setVaults] = useState<readonly ObsidianVault[]>([]);
@@ -119,7 +123,10 @@ export function ObsidianNotes({
     setNote(null);
     try {
       const value = await bridge.readNote({ vaultID, path, workspacePath });
-      if (mounted.current && current === readGeneration.current) setNote(value);
+      if (mounted.current && current === readGeneration.current) {
+        setNote(value);
+        onUseNote?.({ vaultID, vaultName: value.vaultName, path: value.path, activity: "viewed" });
+      }
     } catch (cause) {
       if (mounted.current && current === readGeneration.current) setError(knowledgeError(cause));
     }
@@ -131,6 +138,7 @@ export function ObsidianNotes({
     try {
       if (kind === "attach" && onAttach) {
         await onAttach(noteAttachment(note));
+        onUseNote?.({ vaultID, vaultName: note.vaultName, path: note.path, activity: "attached" });
         if (mounted.current) onOpenChange(false);
       }
       if (kind === "open") await bridge.openNote({ vaultID, path: note.path, workspacePath });
@@ -216,40 +224,7 @@ export function ObsidianNotes({
                     <summary>Markdown source</summary>
                     <pre className={styles.source}>{note.content}</pre>
                   </details>
-                  <div className={styles.markdown}>
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      allowedElements={[
-                        "p",
-                        "h1",
-                        "h2",
-                        "h3",
-                        "h4",
-                        "h5",
-                        "h6",
-                        "ul",
-                        "ol",
-                        "li",
-                        "blockquote",
-                        "pre",
-                        "code",
-                        "em",
-                        "strong",
-                        "del",
-                        "hr",
-                        "br",
-                        "table",
-                        "thead",
-                        "tbody",
-                        "tr",
-                        "th",
-                        "td",
-                      ]}
-                      unwrapDisallowed
-                    >
-                      {note.content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "")}
-                    </ReactMarkdown>
-                  </div>
+                  <NoteContent content={note.content} />
                 </>
               ) : (
                 <p>Select a note to preview it.</p>
@@ -258,6 +233,24 @@ export function ObsidianNotes({
           </div>
         </DialogPanel>
         <DialogFooter>
+          {onOpenInPanel && (
+            <Button
+              variant="outline"
+              disabled={!note || busy}
+              onClick={() => {
+                if (!note) return;
+                onOpenInPanel({
+                  vaultID,
+                  vaultName: note.vaultName,
+                  path: note.path,
+                  activity: "viewed",
+                });
+                onOpenChange(false);
+              }}
+            >
+              Open in panel
+            </Button>
+          )}
           <Button variant="outline" disabled={!note || busy} onClick={() => void action("open")}>
             Open in Obsidian
           </Button>

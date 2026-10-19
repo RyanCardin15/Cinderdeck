@@ -1,3 +1,4 @@
+import { useSessionNotesStore } from "./knowledge/sessionNotes";
 import { stripInlineContextReferences } from "./lib/composerContextReferences";
 import { elementContextToPreviewAnnotation } from "./lib/elementContext";
 import {
@@ -2983,6 +2984,8 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               },
             };
           });
+          const promoted = get().draftThreadsByThreadKey[threadKey]?.promotedTo;
+          if (promoted) useSessionNotesStore.getState().copySession(threadRef, promoted);
         },
         finalizePromotedDraftThread: (threadRef) => {
           const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";

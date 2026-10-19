@@ -1,3 +1,4 @@
+import { isSessionNote, sessionNoteKey, type SessionNote } from "./knowledge/sessionNotes";
 /**
  * Thread-scoped right-panel surface state.
  *
@@ -24,6 +25,7 @@ const RIGHT_PANEL_KINDS = [
   "diff",
   "files",
   "file",
+  "note",
   "preview",
   "device",
   "external-app",
@@ -53,6 +55,7 @@ export type RightPanelSurface =
       activeTerminalId: string;
       splitDirection?: "horizontal" | "vertical";
     }
+  | { id: `note:${string}`; kind: "note"; note: SessionNote }
   | { id: "diff"; kind: "diff" }
   | { id: "files"; kind: "files" }
   | {
@@ -94,7 +97,8 @@ const RIGHT_PANEL_STORAGE_KEY = "deckhand:right-panel-state:v2";
 // v11 stops persisting the pull-request list's shared panel, so a restart opens the page fresh.
 // v12 adds the device surface.
 // v14 removes the agents surface; lineage lives in the thread title bar.
-const RIGHT_PANEL_STORAGE_VERSION = 15;
+// v16 adds device-local Obsidian note tabs, retaining vault identity rather than Markdown.
+const RIGHT_PANEL_STORAGE_VERSION = 16;
 
 /** A fixed workspace-level ref: each PR surface carries its own real environment. */
 export const PULL_REQUESTS_PANEL_REF = scopeThreadRef(
@@ -140,7 +144,7 @@ interface RightPanelStoreState {
   ) => boolean;
   open: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request">,
+    kind: Exclude<RightPanelKind, "note" | "file" | "terminal" | "pull-request">,
   ) => void;
   openDevice: (ref: ScopedThreadRef, target: DeviceTabTarget, automatic?: boolean) => void;
   openExternalApp: (ref: ScopedThreadRef, profileId: string | null, title?: string) => void;
@@ -149,6 +153,7 @@ interface RightPanelStoreState {
   openBrowser: (ref: ScopedThreadRef, tabId: string | null) => void;
   openFile: (ref: ScopedThreadRef, relativePath: string, line?: number) => void;
   openAttachment: (ref: ScopedThreadRef, attachment: ChatFileAttachment) => void;
+  openNote: (ref: ScopedThreadRef, note: SessionNote) => void;
   openPullRequest: (
     ref: ScopedThreadRef,
     target: {
@@ -181,7 +186,7 @@ interface RightPanelStoreState {
   toggleVisibility: (ref: ScopedThreadRef) => void;
   toggle: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request">,
+    kind: Exclude<RightPanelKind, "note" | "file" | "terminal" | "pull-request">,
   ) => void;
   setThreadPanelOpen: (
     ref: ScopedThreadRef,
@@ -204,7 +209,7 @@ const DEFAULT_THREAD_PANEL_VISIBILITY: ThreadPanelVisibility = {
 };
 
 const singletonSurface = (
-  kind: Exclude<RightPanelKind, "file" | "preview" | "terminal" | "pull-request">,
+  kind: Exclude<RightPanelKind, "note" | "file" | "preview" | "terminal" | "pull-request">,
 ): RightPanelSurface => {
   switch (kind) {
     case "diff":
@@ -463,6 +468,17 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                           title: surface.title.slice(0, 120),
                         },
                       ];
+                    }
+                    if (surface.kind === "note") {
+                      return isSessionNote(surface.note)
+                        ? [
+                            {
+                              id: `note:${sessionNoteKey(surface.note)}`,
+                              kind: "note",
+                              note: surface.note,
+                            },
+                          ]
+                        : [];
                     }
                     if (surface.kind === "file") {
                       const revealLine =
@@ -779,6 +795,14 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
             };
           }),
         ),
+      openNote: (ref, note) => {
+        if (!isSessionNote(note)) return;
+        set((state) =>
+          userAction(state, scopedThreadKey(ref), (current) =>
+            upsertSurface(current, { id: `note:${sessionNoteKey(note)}`, kind: "note", note }),
+          ),
+        );
+      },
       openAttachment: (ref, attachment) =>
         set((state) =>
           userAction(state, scopedThreadKey(ref), (current) => {

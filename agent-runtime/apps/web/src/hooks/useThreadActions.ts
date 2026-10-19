@@ -1,3 +1,4 @@
+import { useSessionNotesStore } from "../knowledge/sessionNotes";
 import {
   parseScopedThreadKey,
   scopeProjectRef,
@@ -519,6 +520,7 @@ export function useThreadActions() {
       refreshArchivedThreadsForEnvironment(threadRef.environmentId);
       releaseComposerDraftUploads(threadRef);
       clearComposerDraftForThread(threadRef);
+      useSessionNotesStore.getState().removeSession(threadRef);
       clearProjectDraftThreadById(
         scopeProjectRef(threadRef.environmentId, thread.projectId),
         threadRef,

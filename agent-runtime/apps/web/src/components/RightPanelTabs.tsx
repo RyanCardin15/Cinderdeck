@@ -15,6 +15,7 @@ import type {
 import { getTerminalLabel } from "@cinderdeck/shared/terminalLabels";
 import {
   AppWindow,
+  BookOpen,
   Smartphone,
   ChevronDown,
   ChevronLeft,
@@ -597,6 +598,8 @@ function surfaceTitle(
       return "Diff";
     case "files":
       return "Files";
+    case "note":
+      return surface.note.path.split("/").at(-1) ?? surface.note.path;
     case "file":
       return surface.relativePath.slice(
         Math.max(surface.relativePath.lastIndexOf("/"), surface.relativePath.lastIndexOf("\\")) + 1,
@@ -672,6 +675,8 @@ function SurfaceIcon({
     }
     case "diff":
       return <FileDiff className="size-3 shrink-0" />;
+    case "note":
+      return <BookOpen className="size-3 shrink-0" />;
     case "files":
       return <Files className="size-3 shrink-0" />;
     case "file":
