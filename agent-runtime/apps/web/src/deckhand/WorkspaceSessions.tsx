@@ -60,9 +60,7 @@ import {
   filterWorkspaceSessionTree,
   orderWorkspaceSessionTree,
   sessionTreeContains,
-  sessionArrangementGroup,
-  sessionOrderGroup,
-  arrangeSessionRows,
+  reorderWorkspaceSessions,
   sessionPinTime,
   pinnedSessionGroup,
   workspaceSessionTree,
@@ -226,6 +224,8 @@ function SessionRows({
     filterWorkspaceSessionTree(tree, { archived, query: "", selectedThreadId }),
     resource.workspaceID,
     sidebar.preferences.order,
+    null,
+    tree,
   );
   const sessions = filterWorkspaceSessionTree(orderedSessions, {
     archived,
@@ -266,19 +266,25 @@ function SessionRows({
     }
   });
   const allNodes = new Map<string, WorkspaceSessionNode>();
-  const remember = (nodes: readonly WorkspaceSessionNode[]) => {
+  const snapshotNodes = new Map<string, WorkspaceSessionNode>();
+  const remember = (
+    nodes: readonly WorkspaceSessionNode[],
+    target: Map<string, WorkspaceSessionNode>,
+  ) => {
     for (const node of nodes) {
-      allNodes.set(node.session.id, node);
-      remember(node.children);
+      target.set(node.session.id, node);
+      remember(node.children, target);
     }
   };
-  remember(orderedSessions);
+  remember(orderedSessions, allNodes);
+  remember(tree, snapshotNodes);
   const connected = environment?.connection.phase === "connected";
   const renderBranch = (node: WorkspaceSessionNode) => (
     <SessionBranch
       key={node.session.id}
       node={node}
       allNodes={allNodes}
+      snapshotNodes={snapshotNodes}
       environmentId={environmentId}
       selectedThreadId={selectedThreadId}
       searching={!!query.trim()}
@@ -357,6 +363,7 @@ function SessionRows({
               <SessionSiblings
                 nodes={pinned}
                 allNodes={orderedSessions}
+                snapshot={tree}
                 workspaceID={resource.workspaceID}
                 sidebar={sidebar}
               >
@@ -369,6 +376,7 @@ function SessionRows({
           <SessionSiblings
             nodes={visibleSessions}
             allNodes={orderedSessions}
+            snapshot={tree}
             workspaceID={resource.workspaceID}
             sidebar={sidebar}
           >
@@ -428,6 +436,7 @@ function SessionRows({
 function SessionSiblings({
   nodes,
   allNodes,
+  snapshot,
   workspaceID,
   parentID = null,
   sidebar,
@@ -435,6 +444,7 @@ function SessionSiblings({
 }: {
   nodes: readonly WorkspaceSessionNode[];
   allNodes: readonly WorkspaceSessionNode[];
+  snapshot: readonly WorkspaceSessionNode[];
   workspaceID: string;
   parentID?: string | null;
   sidebar: ReturnType<typeof useWorkspaceSidebarPreferences>;
@@ -453,25 +463,18 @@ function SessionSiblings({
       collisionDetection={closestCenter}
       onDragEnd={({ active, over }) => {
         if (!over || active.id === over.id) return;
-        const activeNode = nodes.find((node) => node.session.id === active.id);
-        const overNode = nodes.find((node) => node.session.id === over.id);
-        if (!activeNode || !overNode) return;
-        const pinned = sessionPinTime(activeNode) !== null;
-        if (pinned !== (sessionPinTime(overNode) !== null)) return;
-        const group = sessionArrangementGroup(workspaceID, parentID, pinned);
         sidebar.update((current) => ({
           ...current,
-          order: {
-            ...current.order,
-            [group]: arrangeSessionRows(
-              current.order[group] ??
-                (pinned ? [] : (current.order[sessionOrderGroup(workspaceID, parentID)] ?? [])),
-              allNodes.filter((node) => (sessionPinTime(node) !== null) === pinned),
-              nodes.filter((node) => (sessionPinTime(node) !== null) === pinned),
-              String(active.id),
-              String(over.id),
-            ),
-          },
+          order: reorderWorkspaceSessions(
+            current.order,
+            workspaceID,
+            parentID,
+            allNodes,
+            nodes,
+            String(active.id),
+            String(over.id),
+            snapshot,
+          ),
         }));
       }}
     >
@@ -485,6 +488,7 @@ function SessionSiblings({
 function SessionBranch(props: {
   node: WorkspaceSessionNode;
   allNodes: ReadonlyMap<string, WorkspaceSessionNode>;
+  snapshotNodes: ReadonlyMap<string, WorkspaceSessionNode>;
   environmentId: EnvironmentId;
   selectedThreadId: string | undefined;
   searching: boolean;
@@ -581,6 +585,7 @@ function SessionBranch(props: {
           <SessionSiblings
             nodes={node.children}
             allNodes={props.allNodes.get(node.session.id)?.children ?? node.children}
+            snapshot={props.snapshotNodes.get(node.session.id)?.children ?? node.children}
             workspaceID={props.workspaceID}
             parentID={node.session.id}
             sidebar={props.sidebar}

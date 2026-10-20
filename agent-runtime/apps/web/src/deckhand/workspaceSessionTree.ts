@@ -20,6 +20,12 @@ export const sessionArrangementGroup = (
 export const pinnedSessionGroup = (workspaceID: string) =>
   JSON.stringify(["pinned-sessions", workspaceID]);
 
+export const manuallyMovedSessionGroup = (workspaceID: string, parentID: string | null = null) =>
+  JSON.stringify(["session-moved", workspaceID, parentID]);
+
+export const sessionOrderSnapshotGroup = (workspaceID: string, parentID: string | null = null) =>
+  JSON.stringify(["session-order-snapshot", workspaceID, parentID]);
+
 const time = (value: string | null | undefined) => {
   const parsed = Date.parse(value ?? "");
   return Number.isFinite(parsed) ? parsed : 0;
@@ -69,14 +75,65 @@ export function arrangeSessionRows(
   return [...merged, ...prefix.slice(index)];
 }
 
+/** Record the actual moved row separately from neighbors captured by a drop. */
+export function reorderWorkspaceSessions(
+  order: Record<string, string[]>,
+  workspaceID: string,
+  parentID: string | null,
+  all: readonly WorkspaceSessionNode[],
+  visible: readonly WorkspaceSessionNode[],
+  active: string,
+  over: string,
+  snapshot: readonly WorkspaceSessionNode[] = all,
+): Record<string, string[]> {
+  const activeNode = visible.find((node) => node.session.id === active);
+  const overNode = visible.find((node) => node.session.id === over);
+  if (!activeNode || !overNode || active === over) return order;
+  const pinned = sessionPinTime(activeNode) !== null;
+  if (pinned !== (sessionPinTime(overNode) !== null)) return order;
+  const siblings = all.filter((node) => (sessionPinTime(node) !== null) === pinned);
+  const group = sessionArrangementGroup(workspaceID, parentID, pinned);
+  const next = {
+    ...order,
+    [group]: arrangeSessionRows(
+      order[group] ?? (pinned ? [] : (order[sessionOrderGroup(workspaceID, parentID)] ?? [])),
+      siblings,
+      visible.filter((node) => (sessionPinTime(node) !== null) === pinned),
+      active,
+      over,
+    ),
+  };
+  if (!pinned) {
+    const movedGroup = manuallyMovedSessionGroup(workspaceID, parentID);
+    const snapshotGroup = sessionOrderSnapshotGroup(workspaceID, parentID);
+    next[movedGroup] = [...new Set([...(order[movedGroup] ?? []), active])];
+    // Persist the boundary, so archived/missing rows cannot change what counts as new.
+    const newest = snapshot.reduce(
+      (latest, node) => Math.max(latest, time(node.session.createdAt)),
+      time(order[snapshotGroup]?.[0]),
+    );
+    const sameBoundary = time(order[snapshotGroup]?.[0]) === newest;
+    next[snapshotGroup] = [
+      new Date(newest).toISOString(),
+      ...new Set([
+        ...(sameBoundary ? (order[snapshotGroup]?.slice(1) ?? []) : []),
+        ...snapshot.map((node) => node.session.id),
+      ]),
+    ];
+  }
+  return next;
+}
+
 /** Pinned groups, arranged positions, then deterministic newest-first sessions. */
 export function orderWorkspaceSessionTree(
   nodes: readonly WorkspaceSessionNode[],
   workspaceID: string,
   order: Readonly<Record<string, readonly string[]>>,
   parentID: string | null = null,
+  snapshot: readonly WorkspaceSessionNode[] = nodes,
 ): WorkspaceSessionNode[] {
   const annotated = nodes.map((node) => ({ ...node, pinTime: sessionPinTime(node) }));
+  const snapshotByID = new Map(snapshot.map((node) => [node.session.id, node]));
   const groups = [true, false].flatMap((pinned) => {
     const siblings = annotated.filter((node) => (sessionPinTime(node) !== null) === pinned);
     const arrangement = order[sessionArrangementGroup(workspaceID, parentID, pinned)];
@@ -87,6 +144,46 @@ export function orderWorkspaceSessionTree(
     );
     const key = (node: WorkspaceSessionNode) =>
       arrangement ? sessionArrangementID(node) : node.session.id;
+    if (!pinned) {
+      const saved = arrangement ?? order[sessionOrderGroup(workspaceID, parentID)] ?? [];
+      const moved = new Set(order[manuallyMovedSessionGroup(workspaceID, parentID)] ?? []);
+      const firstAutomatic = saved.findIndex((id) => !moved.has(id));
+      const stickyCount = firstAutomatic === -1 ? saved.length : firstAutomatic;
+      const savedSnapshot = order[sessionOrderSnapshotGroup(workspaceID, parentID)]?.[0];
+      const knownAtSnapshot = new Set(
+        order[sessionOrderSnapshotGroup(workspaceID, parentID)]?.slice(1) ?? [],
+      );
+      const newestSavedStart =
+        savedSnapshot === undefined
+          ? snapshot.reduce(
+              (latest, node) =>
+                positions.has(node.session.id)
+                  ? Math.max(latest, time(node.session.createdAt))
+                  : latest,
+              0,
+            )
+          : time(savedSnapshot);
+      const rank = (node: WorkspaceSessionNode) => {
+        const position = positions.get(node.session.id);
+        if (position !== undefined && position < stickyCount) return 0;
+        const started = time(node.session.createdAt);
+        if (
+          position === undefined &&
+          (started > newestSavedStart ||
+            (started === newestSavedStart && !knownAtSnapshot.has(node.session.id)))
+        )
+          return 1;
+        return position !== undefined ? 2 : 3;
+      };
+      return siblings.sort(
+        (left, right) =>
+          rank(left) - rank(right) ||
+          (positions.get(left.session.id) ?? Infinity) -
+            (positions.get(right.session.id) ?? Infinity) ||
+          time(right.session.createdAt) - time(left.session.createdAt) ||
+          left.session.id.localeCompare(right.session.id),
+      );
+    }
     // Newly pinned sessions always lead existing pins; old hidden pins retain their slots.
     const latestArrangedPin = (arrangement ?? []).reduce((latest, token) => {
       try {
@@ -111,7 +208,13 @@ export function orderWorkspaceSessionTree(
   });
   return groups.map((node) => ({
     ...node,
-    children: orderWorkspaceSessionTree(node.children, workspaceID, order, node.session.id),
+    children: orderWorkspaceSessionTree(
+      node.children,
+      workspaceID,
+      order,
+      node.session.id,
+      snapshotByID.get(node.session.id)?.children ?? node.children,
+    ),
   }));
 }
 

@@ -7,6 +7,9 @@ import {
   sessionArrangementGroup,
   sessionArrangementID,
   arrangeSessionRows,
+  reorderWorkspaceSessions,
+  manuallyMovedSessionGroup,
+  sessionOrderSnapshotGroup,
   sessionTreeContains,
   workspaceSessionTree,
   type WorkspaceSessionNode,
@@ -41,6 +44,7 @@ it("applies saved sibling order without changing parents or unsorted start order
     [sessionOrderGroup("app", "main")]: ["second-child", "first-child"],
   };
   expect(ids(orderWorkspaceSessionTree(tree, "app", order))).toEqual([
+    ["newest", []],
     [
       "main",
       [
@@ -49,7 +53,6 @@ it("applies saved sibling order without changing parents or unsorted start order
       ],
     ],
     ["second", []],
-    ["newest", []],
   ]);
   expect(orderWorkspaceSessionTree(tree, "other-workspace", order)).toEqual(
     orderWorkspaceSessionTree(tree, "app", {}),
@@ -79,7 +82,7 @@ it("nests multiple generations under their immediate parents while preserving st
   expect(sessionTreeContains(tree[0]!, "grandchild")).toBe(false);
 });
 
-it("keeps arrangements ahead of new starts while remaining history stays chronological", () => {
+it("puts new starts ahead of old snapshots while preserving their existing relative order", () => {
   const started = (id: string, day: number, parent: string | null = null) => ({
     ...session(id, parent),
     createdAt: new Date(Date.UTC(2026, 9, day)).toISOString(),
@@ -101,17 +104,17 @@ it("keeps arrangements ahead of new starts while remaining history stays chronol
   };
   const ordered = orderWorkspaceSessionTree(tree, "app", order);
   expect(ids(ordered)).toEqual([
+    ["newest", []],
+    ["new", []],
     [
       "main",
       [
+        ["new-child", []],
         ["older-child", []],
         ["recent-child", []],
-        ["new-child", []],
       ],
     ],
     ["recent", []],
-    ["newest", []],
-    ["new", []],
     ["old-history", []],
     ["unknown-start", []],
   ]);
@@ -128,28 +131,104 @@ it("repeated drops preserve the displayed order while new unarranged sessions re
   );
   const group = sessionArrangementGroup("app");
   const before = orderWorkspaceSessionTree(nodes, "app", {});
-  const first = arrangeSessionRows([], before, before.slice(0, 10), "session-5", "session-14");
+  const firstOrder = reorderWorkspaceSessions(
+    {},
+    "app",
+    null,
+    before,
+    before.slice(0, 10),
+    "session-5",
+    "session-14",
+  );
+  const first = firstOrder[group];
   expect(first).toEqual(["session-5"]);
   const withNew = [
     ...nodes,
     { session: { ...session("new"), createdAt: "2026-10-19T00:00:00Z" }, children: [] },
   ];
-  const next = orderWorkspaceSessionTree(withNew, "app", { [group]: first });
+  const next = orderWorkspaceSessionTree(withNew, "app", firstOrder);
   expect(next.slice(0, 4).map((node) => node.session.id)).toEqual([
     "session-5",
     "new",
     "session-14",
     "session-13",
   ]);
-  const second = arrangeSessionRows(first, next, next.slice(0, 10), "session-13", "new");
+  const secondOrder = reorderWorkspaceSessions(
+    firstOrder,
+    "app",
+    null,
+    next,
+    next.slice(0, 10),
+    "session-13",
+    "new",
+  );
+  const second = secondOrder[group];
   expect(second).toEqual(["session-5", "session-13"]);
-  const after = orderWorkspaceSessionTree(withNew.toReversed(), "app", { [group]: second });
+  const after = orderWorkspaceSessionTree(withNew.toReversed(), "app", secondOrder);
   expect(after.map((node) => node.session.id)).toEqual([
     "session-5",
     "session-13",
     "new",
     "session-14",
     ...Array.from({ length: 13 }, (_, i) => `session-${12 - i}`).filter((id) => id !== "session-5"),
+  ]);
+});
+
+it("does not let untouched neighbors captured by a downward drag outrank new threads", () => {
+  const node = (id: string, day: number): WorkspaceSessionNode => ({
+    session: { ...session(id), createdAt: new Date(Date.UTC(2026, 9, day)).toISOString() },
+    children: [],
+  });
+  const original = [node("a", 4), node("b", 3), node("c", 2), node("d", 1)];
+  const down = reorderWorkspaceSessions({}, "app", null, original, original, "a", "c");
+  expect(down[sessionArrangementGroup("app")]).toEqual(["b", "c", "a"]);
+  expect(down[manuallyMovedSessionGroup("app")]).toEqual(["a"]);
+  const nextNodes = [node("e", 5), ...original];
+  const next = orderWorkspaceSessionTree(nextNodes, "app", down);
+  expect(next.map((row) => row.session.id)).toEqual(["e", "b", "c", "a", "d"]);
+  const up = reorderWorkspaceSessions(down, "app", null, next, next, "a", "e");
+  expect(up[manuallyMovedSessionGroup("app")]).toEqual(["a"]);
+  const newest = orderWorkspaceSessionTree([node("f", 6), ...nextNodes], "app", up);
+  expect(newest.map((row) => row.session.id)).toEqual(["a", "f", "e", "b", "c", "d"]);
+});
+
+it("keeps the new-thread boundary stable when a saved row disappears or older history arrives late", () => {
+  const node = (id: string, day: number): WorkspaceSessionNode => ({
+    session: { ...session(id), createdAt: new Date(Date.UTC(2026, 9, day)).toISOString() },
+    children: [],
+  });
+  const rows = [node("latest", 15), node("older", 10), node("oldest", 1)];
+  const order = reorderWorkspaceSessions({}, "app", null, rows, rows, "latest", "older");
+  expect(order[sessionOrderSnapshotGroup("app")]).toEqual([
+    "2026-10-15T00:00:00.000Z",
+    "latest",
+    "older",
+    "oldest",
+  ]);
+  const partial = [node("fresh", 16), node("late-history", 12), rows[1]!, rows[2]!];
+  expect(orderWorkspaceSessionTree(partial, "app", order).map((row) => row.session.id)).toEqual([
+    "fresh",
+    "older",
+    "late-history",
+    "oldest",
+  ]);
+  expect(
+    orderWorkspaceSessionTree([...partial, rows[0]!], "app", order).map((row) => row.session.id),
+  ).toEqual(["fresh", "older", "latest", "late-history", "oldest"]);
+  expect(
+    orderWorkspaceSessionTree(partial.toReversed(), "app", order).map((row) => row.session.id),
+  ).toEqual(["fresh", "older", "late-history", "oldest"]);
+});
+
+it("puts a newly created thread first even when its creation timestamp matches the last snapshot", () => {
+  const rows = workspaceSessionTree([session("latest"), session("older"), session("untouched")]);
+  const order = reorderWorkspaceSessions({}, "app", null, rows, rows, "latest", "older");
+  const created = workspaceSessionTree([session("new"), ...rows.map((node) => node.session)]);
+  expect(orderWorkspaceSessionTree(created, "app", order).map((row) => row.session.id)).toEqual([
+    "new",
+    "older",
+    "latest",
+    "untouched",
   ]);
 });
 
@@ -177,6 +256,7 @@ it("new pins and repins lead arranged pins, and unpinning restores the regular a
       sessionArrangementID(b),
     ],
     [sessionArrangementGroup("app")]: ["a"],
+    [manuallyMovedSessionGroup("app")]: ["a"],
   };
   const list = (nodes: WorkspaceSessionNode[]) =>
     orderWorkspaceSessionTree(nodes, "app", order).map((node) => node.session.id);

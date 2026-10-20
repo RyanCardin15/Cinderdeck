@@ -103,6 +103,7 @@ import {
   sessionOrderGroup,
   sessionArrangementGroup,
   pinnedSessionGroup,
+  manuallyMovedSessionGroup,
 } from "./workspaceSessionTree";
 const environmentId = EnvironmentId.make("local");
 const resource: IntegrationView["resources"][number] = {
@@ -304,34 +305,85 @@ it("reorders main groups with the keyboard, saves on drop, and restores in the f
   expect(rootSessionIDs()).toEqual(["ordinary", "second"]);
 });
 
-it("keeps manual arrangements above new threads in both session views", async () => {
+it.each([sessionOrderGroup("app"), sessionArrangementGroup("app")])(
+  "puts new threads ahead of saved snapshots in both session views (%s)",
+  async (group) => {
+    boundary.result = AsyncResult.success([]);
+    boundary.threads = Array.from({ length: 12 }, (_, index) => ({
+      ...ordinary,
+      id: ThreadId.make(`main-${index}`),
+      createdAt: new Date(Date.UTC(2026, 9, index + 1)).toISOString(),
+    }));
+    const key = sidebarPreferenceKey("local", "installation");
+    const savedOrder = boundary.threads.map((thread) => thread.id).toReversed();
+    [savedOrder[0], savedOrder[1]] = [savedOrder[1]!, savedOrder[0]!];
+    localStorage.setItem(key, JSON.stringify({ order: { [group]: savedOrder } }));
+    await render();
+    expect(rootSessionIDs()).toEqual(savedOrder.slice(0, 10));
+    boundary.threads = [
+      ...boundary.threads,
+      { ...ordinary, id: ThreadId.make("new-thread"), createdAt: "2026-10-15T12:00:00Z" },
+    ];
+    await render({ selectedThreadId: "new-thread" });
+    expect(rootSessionIDs()).toEqual(["new-thread", ...savedOrder.slice(0, 9)]);
+    await act(async () => root.render(null));
+    await render({ compact: false, selectedThreadId: "new-thread" });
+    expect(rootSessionIDs()).toEqual(["new-thread", ...savedOrder]);
+    boundary.result = AsyncResult.success([
+      { ...saved("older-page"), createdAt: "2026-09-01T00:00:00Z" },
+    ]);
+    await render({ compact: false, selectedThreadId: "new-thread" });
+    expect(rootSessionIDs()).toEqual(["new-thread", ...savedOrder, "older-page"]);
+    expect(readSidebarPreferences(key).order[group]).toEqual(savedOrder);
+  },
+);
+
+it("keeps only explicitly dragged leading rows above new threads after later drops and remounts", async () => {
   boundary.result = AsyncResult.success([]);
-  boundary.threads = Array.from({ length: 12 }, (_, index) => ({
-    ...ordinary,
-    id: ThreadId.make(`main-${index}`),
-    createdAt: new Date(Date.UTC(2026, 9, index + 1)).toISOString(),
-  }));
-  const key = sidebarPreferenceKey("local", "installation");
-  const savedOrder = boundary.threads.map((thread) => thread.id).toReversed();
-  [savedOrder[0], savedOrder[1]] = [savedOrder[1]!, savedOrder[0]!];
-  localStorage.setItem(key, JSON.stringify({ order: { [sessionOrderGroup("app")]: savedOrder } }));
-  await render();
-  expect(rootSessionIDs()).toEqual(savedOrder.slice(0, 10));
   boundary.threads = [
-    ...boundary.threads,
-    { ...ordinary, id: ThreadId.make("new-thread"), createdAt: "2026-10-15T12:00:00Z" },
+    ordinary,
+    { ...ordinary, id: ThreadId.make("older"), title: "Older", createdAt: "2026-10-10T00:00:00Z" },
   ];
-  await render({ selectedThreadId: "new-thread" });
-  expect(rootSessionIDs()).toEqual([...savedOrder.slice(0, 10), "new-thread"]);
+  mockSessionGeometry();
+  await render({ selectedThreadId: undefined });
+  let handle = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Reorder session Ordinary conversation"]',
+  )!;
+  handle.focus();
+  await keyDown(handle, "Space");
+  await keyDown(document, "ArrowDown");
+  await keyDown(document, "Space");
+  expect(rootSessionIDs()).toEqual(["older", "ordinary"]);
+  boundary.threads.push({
+    ...ordinary,
+    id: ThreadId.make("new-first"),
+    title: "New first",
+    createdAt: "2026-10-18T00:00:00Z",
+  });
+  await render({ selectedThreadId: undefined });
+  expect(rootSessionIDs()).toEqual(["new-first", "older", "ordinary"]);
+  handle = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Reorder session Ordinary conversation"]',
+  )!;
+  handle.focus();
+  await keyDown(handle, "Space");
+  await keyDown(document, "ArrowUp");
+  await keyDown(document, "ArrowUp");
+  await keyDown(document, "Space");
+  expect(rootSessionIDs()).toEqual(["ordinary", "new-first", "older"]);
+  boundary.threads.push({
+    ...ordinary,
+    id: ThreadId.make("new-second"),
+    title: "New second",
+    createdAt: "2026-10-19T00:00:00Z",
+  });
+  await render({ selectedThreadId: undefined });
+  expect(rootSessionIDs()).toEqual(["ordinary", "new-second", "new-first", "older"]);
+  const key = sidebarPreferenceKey("local", "installation");
+  expect(readSidebarPreferences(key).order[manuallyMovedSessionGroup("app")]).toEqual(["ordinary"]);
   await act(async () => root.render(null));
-  await render({ compact: false, selectedThreadId: "new-thread" });
-  expect(rootSessionIDs()).toEqual([...savedOrder, "new-thread"]);
-  boundary.result = AsyncResult.success([
-    { ...saved("older-page"), createdAt: "2026-09-01T00:00:00Z" },
-  ]);
-  await render({ compact: false, selectedThreadId: "new-thread" });
-  expect(rootSessionIDs()).toEqual([...savedOrder, "new-thread", "older-page"]);
-  expect(readSidebarPreferences(key).order[sessionOrderGroup("app")]).toEqual(savedOrder);
+  await render({ compact: false, selectedThreadId: undefined });
+  expect(rootSessionIDs()).toEqual(["ordinary", "new-second", "new-first", "older"]);
 });
 
 it("preserves manual order through archive and search filters when a new thread arrives", async () => {
@@ -355,7 +407,7 @@ it("preserves manual order through archive and search filters when a new thread 
     createdAt: "2026-10-15T12:00:00Z",
   });
   await render({ compact: false });
-  expect(rootSessionIDs()).toEqual(["older", "new-thread", "unlisted-history"]);
+  expect(rootSessionIDs()).toEqual(["new-thread", "older", "unlisted-history"]);
   await act(async () => {
     const input = container.querySelector('input[aria-label="Search sessions"]')!;
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
@@ -364,7 +416,7 @@ it("preserves manual order through archive and search filters when a new thread 
     );
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  expect(rootSessionIDs()).toEqual(["older", "new-thread", "unlisted-history"]);
+  expect(rootSessionIDs()).toEqual(["new-thread", "older", "unlisted-history"]);
 });
 
 const provider = (instance: string, driver: string, name: string): ServerProvider => ({
