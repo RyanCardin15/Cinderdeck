@@ -46,6 +46,11 @@ class BrandingTests(unittest.TestCase):
         ):
             self.assertFalse(branding.path_violations(path), path)
 
+    def test_parser_benchmark_comments_do_not_exempt_upstream_branding(self):
+        path = "agent-runtime/apps/server/src/pullRequest/gitHubPullRequestJson.ts"
+        self.assertTrue(branding.violations(path, "// Measured against pingdotgg/t3code"))
+        self.assertTrue(branding.violations(path, 'const upstream = "https://github.com/pingdotgg/t3code";'))
+
     def test_user_agent_fixture_does_not_exempt_adjacent_branding(self):
         path = "agent-runtime/apps/desktop/src/preview/BrowserSession.test.ts"
         fixture = '"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) T3Code(Alpha)/0.0.33 Chrome/146.0.7680.216 Electron/41.5.0 Safari/537.36";'

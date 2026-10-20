@@ -62,7 +62,6 @@ TOKEN_EXCEPTIONS = {
     "agent-runtime/apps/server/src/serviceLauncher.ts": ('"t3"', "historical archive executable layout"),
     "agent-runtime/packages/shared/src/legacyCliLauncher.ts": ('"t3"', "historical archive executable layout"),
     "agent-runtime/apps/server/src/orchestration-v2/Orchestrator.ts": ("pingdotgg/t3code", "source issue attribution"),
-    "agent-runtime/apps/server/src/pullRequest/gitHubPullRequestJson.ts": ("pingdotgg/t3code", "source measurement attribution"),
     "agent-runtime/apps/server/src/terminal/NodePtyAdapter.ts": ("pingdotgg/t3code", "source contribution attribution"),
     "agent-runtime/scripts/lib/deckhand-distribution.ts": ("T3CODE", "refused vendor environment names"),
 }
