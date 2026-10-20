@@ -22,6 +22,7 @@ import type {
 } from "@cinderdeck/contracts";
 
 import * as BitbucketApi from "../sourceControl/BitbucketApi.ts";
+import { sortChecks } from "./pullRequestChecks.ts";
 import { parseDiffFileRevisions } from "./bitbucketDiffRevisions.ts";
 import {
   buildReviewThreads,
@@ -742,7 +743,7 @@ export const make = Effect.gen(function* () {
           decode: decodeStatusesJson,
           items: [],
           prepend: false,
-        }),
+        }).pipe(Effect.map(sortChecks)),
       ),
 
     listReviewerCandidates: (input) =>

@@ -8,7 +8,7 @@
     "historicalMetadataCommit": "17877ebbea4790b5f0ecad9bf8599619f0387be3",
     "historicalMetadataPath": "docs/deckhand/upstream-patches.json"
   },
-  "examinedTarget": "54983e3f458871dffe755ea908ffe0d60cea101b",
+  "examinedTarget": "90c3f8350d777f09c7afdf643db63bf8135161e6",
   "ports": [
     {
       "commit": "f391794a35c604d57e166a3ab48d56fc6e4e469a",
@@ -117,6 +117,10 @@
     {
       "commit": "a195ba0809b5c1f16fad8119f3b961119924d1b2",
       "behavior": "Recognize partial-clone fetch remote annotations across Git, repository identity, GitHub and Forgejo"
+    },
+    {
+      "commit": "03c1a76de90e8e4bf9320e4f278a4ab6f5ee4b00",
+      "behavior": "Show failed and cancelled pull-request checks first, preserving stable order after deduplication and across Bitbucket pages; GitCafe is not present in the owned runtime"
     }
   ],
   "coverage": "Selected independent ports only. integratedThrough remains the last complete historical baseline; examinedTarget is not a claim of complete incorporation.",
