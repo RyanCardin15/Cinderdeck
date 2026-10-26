@@ -7014,3 +7014,70 @@ it.effect("keeps Azure continuation cursors separate for repositories with the s
     assert.deepStrictEqual(seen, ["/org-b"]);
   }),
 );
+
+it.effect("reads Forgejo jobs that did not run as finished checks", () =>
+  Effect.gen(function* () {
+    const provider = yield* ForgejoPullRequestProvider.make;
+    const read = provider.getChangeRequestChecks;
+    if (read === undefined) return yield* Effect.die("checks read missing");
+    const result = yield* read({
+      cwd: "/repo",
+      repository: "acme/web",
+      host: "forgejo.test",
+      number: 1,
+    });
+    assert.deepStrictEqual(
+      result.checks.map((check) => [check.name, check.status]),
+      [
+        ["deploy", "skipped"],
+        ["audit", "neutral"],
+        ["docs", "pending"],
+      ],
+    );
+  }).pipe(
+    Effect.provide(
+      Layer.mock(ForgejoCli.ForgejoCli)({
+        api: (input) => {
+          const status = (context: string, state: string) => ({
+            context,
+            status: state,
+            description: null,
+            target_url: null,
+            updated_at: "2026-10-11T00:00:00Z",
+          });
+          const body = input.path.endsWith("pulls/1")
+            ? {
+                number: 1,
+                title: "Checks",
+                body: "",
+                html_url: "https://forgejo.test/acme/web/pulls/1",
+                user: null,
+                state: "open",
+                merged: false,
+                head: { ref: "feature", sha: "head", repo: null },
+                base: { ref: "main", sha: "base", repo: null },
+                created_at: "2026-10-11T00:00:00Z",
+                updated_at: "2026-10-11T00:00:00Z",
+                closed_at: null,
+                merged_at: null,
+                labels: [],
+              }
+            : input.path.endsWith("page=1")
+              ? [
+                  status("deploy", "skipped"),
+                  status("audit", "warning"),
+                  status("docs", "future-state"),
+                ]
+              : [];
+          return Effect.succeed({
+            exitCode: ChildProcessSpawner.ExitCode(0),
+            stdout: JSON.stringify(body),
+            stderr: "",
+            stdoutTruncated: false,
+            stderrTruncated: false,
+          });
+        },
+      }),
+    ),
+  ),
+);

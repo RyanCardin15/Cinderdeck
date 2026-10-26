@@ -67,7 +67,12 @@ describe("readPathFromLoginShell", () => {
     expect(args?.[1]).toContain("printenv PATH || true");
     expect(args?.[1]).toContain("__DECKHAND_ENV_PATH_START__");
     expect(args?.[1]).toContain("__DECKHAND_ENV_PATH_END__");
-    expect(options).toEqual({ encoding: "utf8", timeout: 5000 });
+    expect(options).toEqual({
+      encoding: "utf8",
+      timeout: 5000,
+      detached: true,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
   });
 });
 
@@ -419,7 +424,7 @@ effectIt.layer(NodeServices.layer)("resolveCommandPath", (it) => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "t3-case-sensitive-path-" });
+        const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-case-sensitive-path-" });
         const executable = path.join(cwd, "audit-command.cmd");
         yield* fs.writeFileString(executable, "@echo off\n");
 
@@ -444,7 +449,7 @@ effectIt.layer(NodeServices.layer)("resolveCommandPath", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "t3-path-cache-" });
+      const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-path-cache-" });
       const executable = path.join(cwd, "appeared.CMD");
       const options = { env: { PATH: `${cwd};${cwd}`, PATHEXT: ".CMD" } };
 

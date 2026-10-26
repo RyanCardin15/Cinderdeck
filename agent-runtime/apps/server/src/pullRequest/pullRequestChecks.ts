@@ -6,6 +6,16 @@ function isAtLeastAsNew(candidate: string | null, kept: string | null): boolean 
   return kept === null || candidate >= kept;
 }
 
+export function sortChecks(
+  checks: ReadonlyArray<PullRequestCheck>,
+): ReadonlyArray<PullRequestCheck> {
+  return checks.toSorted(
+    (a, b) =>
+      Number(b.status === "failure" || b.status === "cancelled") -
+      Number(a.status === "failure" || a.status === "cancelled"),
+  );
+}
+
 /**
  * One row per check rather than one per run of it.
  *
@@ -19,8 +29,8 @@ function isAtLeastAsNew(candidate: string | null, kept: string | null): boolean 
  * one before it, and a run that never said when it happened loses to one that did. A tie goes to
  * whichever came last, because a host lists a re-run after the run it repeats.
  *
- * The order is the host's own, held at the place each check first appeared, so a re-run landing
- * mid-read replaces a row where it stands instead of reshuffling the list under the reader.
+ * Failed and cancelled checks appear first. Within each group the host's order is held at
+ * the place each check first appeared, so a re-run replaces a row where it stands.
  *
  * Two checks that survive under the same name are then genuinely different ones, since they came
  * from different workflows — each is shown as `workflow / name`, the way GitHub writes it itself.
@@ -46,10 +56,12 @@ export function dedupeChecks(
   for (const entry of survivors) {
     countsByName.set(entry.check.name, (countsByName.get(entry.check.name) ?? 0) + 1);
   }
-  return survivors.map((entry) => {
-    const workflowName = entry.workflowName ?? "";
-    return workflowName.length > 0 && (countsByName.get(entry.check.name) ?? 0) > 1
-      ? { ...entry.check, name: `${workflowName} / ${entry.check.name}` }
-      : entry.check;
-  });
+  return sortChecks(
+    survivors.map((entry) => {
+      const workflowName = entry.workflowName ?? "";
+      return workflowName.length > 0 && (countsByName.get(entry.check.name) ?? 0) > 1
+        ? { ...entry.check, name: `${workflowName} / ${entry.check.name}` }
+        : entry.check;
+    }),
+  );
 }

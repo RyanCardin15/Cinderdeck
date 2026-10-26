@@ -4,45 +4,47 @@
  * --live-ai waits for an authorized real AI turn and checks the response against a secret fixture code.
  * Usage: node scripts/deckhand/obsidian-e2e.mjs /absolute/Cinderdeck\ Debug.app /absolute/new-artifacts
  */
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
-import * as net from "node:net";
-import { spawn } from "node:child_process";
-import { createRequire } from "node:module";
-import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
-const require = createRequire(new URL("../../apps/desktop/package.json", import.meta.url));
+import * as NodeFSP from "node:fs/promises";
+import * as NodePath from "node:path";
+import * as NodeNet from "node:net";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeModule from "node:module";
+import * as NodeAssert from "node:assert/strict";
+import * as NodeCrypto from "node:crypto";
+const require = NodeModule.createRequire(
+  new URL("../../apps/desktop/package.json", import.meta.url),
+);
 const { chromium } = require("playwright-core");
 const app = process.argv[2],
   root = process.argv[3];
 const realObsidian = process.argv.includes("--real-obsidian");
 const liveAI = process.argv.includes("--live-ai");
-if (!app?.endsWith(".app") || !root || !path.isAbsolute(app) || !path.isAbsolute(root))
+if (!app?.endsWith(".app") || !root || !NodePath.isAbsolute(app) || !NodePath.isAbsolute(root))
   throw new Error("Supply an absolute whole-app bundle and a new artifact folder.");
-await fs.mkdir(root);
-const fixture = path.join(root, "vault");
-const project = path.join(root, "project");
-const skillFolder = path.join(root, "skill");
-await fs.mkdir(path.join(fixture, ".obsidian"), { recursive: true });
-await fs.mkdir(path.join(fixture, "Projects"));
-await fs.mkdir(project);
-await fs.mkdir(path.join(root, "stacks"));
-await fs.writeFile(
-  path.join(root, "stacks/fixture.toml"),
+await NodeFSP.mkdir(root);
+const fixture = NodePath.join(root, "vault");
+const project = NodePath.join(root, "project");
+const skillFolder = NodePath.join(root, "skill");
+await NodeFSP.mkdir(NodePath.join(fixture, ".obsidian"), { recursive: true });
+await NodeFSP.mkdir(NodePath.join(fixture, "Projects"));
+await NodeFSP.mkdir(project);
+await NodeFSP.mkdir(NodePath.join(root, "stacks"));
+await NodeFSP.writeFile(
+  NodePath.join(root, "stacks/fixture.toml"),
   `name = "Fixture"\nroot = ${JSON.stringify(project)}\n`,
 );
-await fs.mkdir(path.join(skillFolder, "references"), { recursive: true });
-const verificationCode = `CINDERDECK-${randomUUID()}`;
+await NodeFSP.mkdir(NodePath.join(skillFolder, "references"), { recursive: true });
+const verificationCode = `CINDERDECK-${NodeCrypto.randomUUID()}`;
 const noteText = `---\ntags: [architecture]\n---\n# Aurora decision\n\nKeep [[Research]] and **reviewable decisions**.\n\nVerification code: ${verificationCode}\nLaunch color: cobalt\n`;
-await fs.writeFile(path.join(fixture, "Projects", "Aurora decision.md"), noteText);
-await fs.writeFile(path.join(fixture, "Research.md"), "# Research\nFixture background.");
-await fs.writeFile(
-  path.join(skillFolder, "SKILL.md"),
+await NodeFSP.writeFile(NodePath.join(fixture, "Projects", "Aurora decision.md"), noteText);
+await NodeFSP.writeFile(NodePath.join(fixture, "Research.md"), "# Research\nFixture background.");
+await NodeFSP.writeFile(
+  NodePath.join(skillFolder, "SKILL.md"),
   "---\nname: fixture-obsidian\ndescription: Fixture skill for the Obsidian whole-app test.\n---\n# Fixture instructions\nPreserve [[wikilinks]].\n",
 );
-await fs.writeFile(path.join(skillFolder, "references", "rules.md"), "Fixture reference.");
+await NodeFSP.writeFile(NodePath.join(skillFolder, "references", "rules.md"), "Fixture reference.");
 async function freePort() {
-  const server = net.createServer();
+  const server = NodeNet.createServer();
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = server.address().port;
   await new Promise((resolve) => server.close(resolve));
@@ -51,18 +53,18 @@ async function freePort() {
 const cdpPort = await freePort(),
   inspectorPort = await freePort();
 const quote = (value) => `'${value.replace(/'/g, "'\\''")}'`;
-const wrapper = path.join(root, "runtime-wrapper");
-const runtime = path.join(app, "Contents/Resources/Cinderdeck.app/Contents/MacOS/Cinderdeck");
-await fs.writeFile(
+const wrapper = NodePath.join(root, "runtime-wrapper");
+const runtime = NodePath.join(app, "Contents/Resources/Cinderdeck.app/Contents/MacOS/Cinderdeck");
+await NodeFSP.writeFile(
   wrapper,
   `#!/bin/sh\nexec ${quote(runtime)} --remote-debugging-port=${cdpPort} --inspect=${inspectorPort}\n`,
   { mode: 0o700 },
 );
-const child = spawn(path.join(app, "Contents/MacOS/Cinderdeck"), [], {
+const child = NodeChildProcess.spawn(NodePath.join(app, "Contents/MacOS/Cinderdeck"), [], {
   env: {
     ...process.env,
     CINDERDECK_STACKS_PREVIEW_ROOT: root,
-    CINDERDECK_STACKS_SOCKET: path.join(root, "control.sock"),
+    CINDERDECK_STACKS_SOCKET: NodePath.join(root, "control.sock"),
     CINDERDECK_RUNTIME_PATH: wrapper,
     DECKHAND_DISABLE_AUTO_UPDATE: "true",
   },
@@ -144,10 +146,10 @@ try {
     if (page) break;
     await sleep(500);
   }
-  assert(page, "Main bundled renderer appeared");
+  NodeAssert.ok(page, "Main bundled renderer appeared");
   page.setDefaultTimeout(15000);
   await page.waitForFunction(() => window.desktopBridge?.knowledge !== undefined);
-  assert.equal(await page.evaluate(() => window.desktopBridge.isNativeHost()), true);
+  NodeAssert.equal(await page.evaluate(() => window.desktopBridge.isNativeHost()), true);
   await page.evaluate(async () => {
     const current = await window.desktopBridge.getClientSettings();
     await window.desktopBridge.setClientSettings({
@@ -189,15 +191,17 @@ try {
   await page.getByRole("button", { name: /Aurora decision/ }).click();
   await page.getByRole("heading", { name: "Aurora decision", exact: true }).waitFor();
   if (realObsidian) {
-    await fs.writeFile(
-      path.join(root, "ready-for-obsidian.json"),
-      JSON.stringify({ vault: fixture, note: path.join(fixture, "Projects/Aurora decision.md") }),
+    await NodeFSP.writeFile(
+      NodePath.join(root, "ready-for-obsidian.json"),
+      JSON.stringify({
+        vault: fixture,
+        note: NodePath.join(fixture, "Projects/Aurora decision.md"),
+      }),
     );
     console.log("Waiting for disposable vault registration in Obsidian.");
     for (let i = 0; i < 600; i++) {
       if (
-        await fs
-          .stat(path.join(root, "obsidian-ready"))
+        await NodeFSP.stat(NodePath.join(root, "obsidian-ready"))
           .then(() => true)
           .catch(() => false)
       )
@@ -208,22 +212,22 @@ try {
   }
   await page.getByRole("button", { name: "Open in Obsidian", exact: true }).click();
   const urls = await evaluate("__knowledgeURLs");
-  assert.equal(
+  NodeAssert.equal(
     new URL(urls.at(-1)).searchParams.get("path"),
-    path.join(fixture, "Projects/Aurora decision.md"),
+    NodePath.join(fixture, "Projects/Aurora decision.md"),
   );
   evidence.checks.push(
     realObsidian
       ? "search, rendered preview and real OS Obsidian handoff"
       : "search, rendered preview and encoded OS handoff (intercepted)",
   );
-  if (realObsidian) await fs.writeFile(path.join(root, "obsidian-dispatched"), urls.at(-1));
+  if (realObsidian)
+    await NodeFSP.writeFile(NodePath.join(root, "obsidian-dispatched"), urls.at(-1));
   if (realObsidian) {
     console.log("Waiting for visible note-open verification in Obsidian.");
     for (let i = 0; i < 600; i++) {
       if (
-        await fs
-          .stat(path.join(root, "obsidian-open-verified"))
+        await NodeFSP.stat(NodePath.join(root, "obsidian-open-verified"))
           .then(() => true)
           .catch(() => false)
       )
@@ -233,7 +237,7 @@ try {
     }
     evidence.checks.push("actual Obsidian window visibly opens the exact fixture note");
   }
-  await page.screenshot({ path: path.join(root, "notes-preview.png") });
+  await page.screenshot({ path: NodePath.join(root, "notes-preview.png") });
   await page.keyboard.press("Escape");
   await page.reload();
   await settings();
@@ -246,18 +250,17 @@ try {
   await evaluate(`__knowledgePick = ${JSON.stringify(skillFolder)}`);
   await page.getByRole("button", { name: "Import skill folder…", exact: true }).click();
   await page.getByRole("dialog").getByText("Preserve [[wikilinks]].", { exact: false }).waitFor();
-  assert.equal(
-    await fs
-      .stat(path.join(project, ".agents/skills/fixture-obsidian"))
+  NodeAssert.equal(
+    await NodeFSP.stat(NodePath.join(project, ".agents/skills/fixture-obsidian"))
       .then(() => true)
       .catch(() => false),
     false,
   );
   await page.getByRole("button", { name: "Install skill", exact: true }).click();
   await page.getByText(/Imported fixture-obsidian for codex/).waitFor();
-  assert.equal(
-    await fs.readFile(
-      path.join(project, ".agents/skills/fixture-obsidian/references/rules.md"),
+  NodeAssert.equal(
+    await NodeFSP.readFile(
+      NodePath.join(project, ".agents/skills/fixture-obsidian/references/rules.md"),
       "utf8",
     ),
     "Fixture reference.",
@@ -268,7 +271,7 @@ try {
   await page.getByRole("dialog").getByRole("alert").filter({ hasText: "already exists" }).waitFor();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   evidence.checks.push("duplicate skill refused without overwriting");
-  await page.screenshot({ path: path.join(root, "integrations.png") });
+  await page.screenshot({ path: NodePath.join(root, "integrations.png") });
   // Chat picker is reached from an actual draft; no provider request is sent.
   await page.evaluate(() => {
     window.location.hash = "/workspaces";
@@ -282,35 +285,40 @@ try {
   await page.getByRole("button", { name: "Attach note", exact: true }).click();
   await page.getByRole("dialog", { name: "Obsidian notes" }).waitFor({ state: "hidden" });
   await page.getByText("Aurora decision.md", { exact: true }).first().waitFor();
-  await page.screenshot({ path: path.join(root, "chat-attachment.png") });
+  await page.screenshot({ path: NodePath.join(root, "chat-attachment.png") });
   evidence.checks.push("composer picker attaches Markdown snapshot to a real draft");
-  const attachments = path.join(root, "Agent/AgentRuntime/userdata/attachments");
+  const attachments = NodePath.join(root, "Agent/AgentRuntime/userdata/attachments");
   let uploaded;
   for (let i = 0; i < 50 && !uploaded; i++) {
-    for (const file of await fs.readdir(attachments).catch(() => [])) {
+    for (const file of await NodeFSP.readdir(attachments).catch(() => [])) {
       if (!file.endsWith(".md")) continue;
-      const value = await fs.readFile(path.join(attachments, file), "utf8");
+      const value = await NodeFSP.readFile(NodePath.join(attachments, file), "utf8");
       if (value.includes(noteText) && value.includes("Obsidian vault: Fixture notes"))
         uploaded = { file, value };
     }
     if (!uploaded) await sleep(200);
   }
-  assert(uploaded, "The normal attachment upload persisted the Markdown snapshot");
-  await fs.writeFile(
-    path.join(fixture, "Projects/Aurora decision.md"),
+  NodeAssert.ok(uploaded, "The normal attachment upload persisted the Markdown snapshot");
+  await NodeFSP.writeFile(
+    NodePath.join(fixture, "Projects/Aurora decision.md"),
     "Changed after attachment.",
   );
-  assert.equal(await fs.readFile(path.join(attachments, uploaded.file), "utf8"), uploaded.value);
+  NodeAssert.equal(
+    await NodeFSP.readFile(NodePath.join(attachments, uploaded.file), "utf8"),
+    uploaded.value,
+  );
   evidence.checks.push(
     "authenticated attachment upload persists exact snapshot independently of vault edits",
   );
   if (liveAI) {
-    await fs.writeFile(path.join(root, "ready-for-live-turn"), "Fixture attachment uploaded.\n");
+    await NodeFSP.writeFile(
+      NodePath.join(root, "ready-for-live-turn"),
+      "Fixture attachment uploaded.\n",
+    );
     console.log("Waiting for live AI turn through the actual composer.");
     for (let i = 0; i < 900; i++) {
       if (
-        await fs
-          .stat(path.join(root, "live-turn-complete"))
+        await NodeFSP.stat(NodePath.join(root, "live-turn-complete"))
           .then(() => true)
           .catch(() => false)
       )
@@ -319,16 +327,16 @@ try {
       await sleep(1000);
     }
     const transcript = await page.locator("body").innerText();
-    assert(
+    NodeAssert.ok(
       transcript.includes(verificationCode),
       "Live response includes the unpredictable code from the uploaded note",
     );
-    assert(
+    NodeAssert.ok(
       transcript.toLowerCase().includes("cobalt"),
       "Live response includes the launch color from the note",
     );
-    await page.screenshot({ path: path.join(root, "live-ai-response.png") });
-    await fs.writeFile(path.join(root, "live-transcript.txt"), transcript);
+    await page.screenshot({ path: NodePath.join(root, "live-ai-response.png") });
+    await NodeFSP.writeFile(NodePath.join(root, "live-transcript.txt"), transcript);
     evidence.checks.push(
       "live AI response reads the uploaded note and returns its unpredictable verification code",
     );
@@ -336,30 +344,36 @@ try {
   }
   await settings();
   await page.getByRole("button", { name: "Disconnect Fixture notes", exact: true }).click();
-  assert.equal(
-    await fs.readFile(path.join(fixture, "Projects/Aurora decision.md"), "utf8"),
+  NodeAssert.equal(
+    await NodeFSP.readFile(NodePath.join(fixture, "Projects/Aurora decision.md"), "utf8"),
     "Changed after attachment.",
   );
-  assert.equal((await page.evaluate(() => window.desktopBridge.knowledge.listVaults())).length, 0);
+  NodeAssert.equal(
+    (await page.evaluate(() => window.desktopBridge.knowledge.listVaults())).length,
+    0,
+  );
   evidence.checks.push("disconnect removes access while preserving original notes");
-  await fs.writeFile(path.join(root, "chat-dom.txt"), await page.locator("body").innerText());
+  await NodeFSP.writeFile(
+    NodePath.join(root, "chat-dom.txt"),
+    await page.locator("body").innerText(),
+  );
   evidence.chatPage = page.url();
-  await fs.writeFile(path.join(root, "evidence.json"), JSON.stringify(evidence, null, 2));
+  await NodeFSP.writeFile(NodePath.join(root, "evidence.json"), JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify(evidence, null, 2));
 } catch (error) {
-  await fs.writeFile(
-    path.join(root, "evidence.json"),
+  await NodeFSP.writeFile(
+    NodePath.join(root, "evidence.json"),
     JSON.stringify({ ...evidence, failure: String(error) }, null, 2),
   );
   if (page) {
-    await fs.writeFile(
-      path.join(root, "failure-dom.txt"),
+    await NodeFSP.writeFile(
+      NodePath.join(root, "failure-dom.txt"),
       await page
         .locator("body")
         .innerText()
         .catch(() => "Unavailable"),
     );
-    await page.screenshot({ path: path.join(root, "failure.png") }).catch(() => {});
+    await page.screenshot({ path: NodePath.join(root, "failure.png") }).catch(() => {});
   }
   throw error;
 } finally {
@@ -374,5 +388,5 @@ try {
       process.kill(runtimePID, "SIGTERM");
     } catch {}
   }
-  await fs.writeFile(path.join(root, "host.log"), logs);
+  await NodeFSP.writeFile(NodePath.join(root, "host.log"), logs);
 }

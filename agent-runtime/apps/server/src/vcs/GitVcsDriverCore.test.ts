@@ -41,7 +41,7 @@ import * as GitVcsDriver from "./GitVcsDriver.ts";
 const encodeGitCommandError = Schema.encodeEffect(Schema.fromJsonString(GitCommandError));
 
 const ServerConfigLayer = ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3-git-vcs-driver-test-",
+  prefix: "cinderdeck-git-vcs-driver-test-",
 });
 const TestLayer = GitVcsDriver.layer.pipe(
   Layer.provide(ServerConfigLayer),
@@ -2228,7 +2228,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           "GIT_TERMINAL_PROMPT",
           "SSH_ASKPASS",
           "SSH_ASKPASS_REQUIRE",
-          "T3_TEST_SSH_ASKPASS_LOG",
+          "CINDERDECK_TEST_SSH_ASKPASS_LOG",
         ] as const;
         const previousEnv = new Map(envKeys.map((key) => [key, process.env[key]]));
 
@@ -2236,11 +2236,11 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           sshWrapperPath,
           [
             "#!/bin/sh",
-            'printf "GCM_INTERACTIVE=%s\\n" "${GCM_INTERACTIVE:-}" > "$T3_TEST_SSH_ASKPASS_LOG"',
-            'printf "GIT_ASKPASS=%s\\n" "${GIT_ASKPASS:-}" >> "$T3_TEST_SSH_ASKPASS_LOG"',
-            'printf "GIT_TERMINAL_PROMPT=%s\\n" "${GIT_TERMINAL_PROMPT:-}" >> "$T3_TEST_SSH_ASKPASS_LOG"',
-            'printf "SSH_ASKPASS=%s\\n" "${SSH_ASKPASS:-}" >> "$T3_TEST_SSH_ASKPASS_LOG"',
-            'printf "SSH_ASKPASS_REQUIRE=%s\\n" "${SSH_ASKPASS_REQUIRE:-}" >> "$T3_TEST_SSH_ASKPASS_LOG"',
+            'printf "GCM_INTERACTIVE=%s\\n" "${GCM_INTERACTIVE:-}" > "$CINDERDECK_TEST_SSH_ASKPASS_LOG"',
+            'printf "GIT_ASKPASS=%s\\n" "${GIT_ASKPASS:-}" >> "$CINDERDECK_TEST_SSH_ASKPASS_LOG"',
+            'printf "GIT_TERMINAL_PROMPT=%s\\n" "${GIT_TERMINAL_PROMPT:-}" >> "$CINDERDECK_TEST_SSH_ASKPASS_LOG"',
+            'printf "SSH_ASKPASS=%s\\n" "${SSH_ASKPASS:-}" >> "$CINDERDECK_TEST_SSH_ASKPASS_LOG"',
+            'printf "SSH_ASKPASS_REQUIRE=%s\\n" "${SSH_ASKPASS_REQUIRE:-}" >> "$CINDERDECK_TEST_SSH_ASKPASS_LOG"',
             "exit 1",
             "",
           ].join("\n"),
@@ -2257,7 +2257,7 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
           process.env.GIT_TERMINAL_PROMPT = "1";
           process.env.SSH_ASKPASS = "ssh-askpass";
           process.env.SSH_ASKPASS_REQUIRE = "force";
-          process.env.T3_TEST_SSH_ASKPASS_LOG = sshLogPath;
+          process.env.CINDERDECK_TEST_SSH_ASKPASS_LOG = sshLogPath;
 
           yield* (yield* GitVcsDriver.GitVcsDriver).statusDetails(cwd);
 
@@ -2997,6 +2997,30 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
   });
 
   describe("remote operations", () => {
+    it.effect("ensureRemote reuses a partial clone remote and avoids its name", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* git(cwd, ["init"]);
+        yield* git(cwd, ["remote", "add", "origin", "https://github.com/acme/widget.git"]);
+        yield* git(cwd, ["config", "remote.origin.promisor", "true"]);
+        yield* git(cwd, ["config", "remote.origin.partialclonefilter", "blob:none"]);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+
+        const reused = yield* driver.ensureRemote({
+          cwd,
+          preferredName: "origin",
+          url: "git@github.com:acme/widget.git",
+        });
+        assert.equal(reused, "origin");
+        const added = yield* driver.ensureRemote({
+          cwd,
+          preferredName: "origin",
+          url: "https://github.com/another-owner/widget.git",
+        });
+        assert.equal(added, "origin-1");
+      }),
+    );
+
     it.effect("explains a real fetch failure for a missing local remote", () =>
       Effect.gen(function* () {
         const cwd = yield* makeTmpDir();

@@ -473,7 +473,7 @@ function parseGitRemoteVerboseOutput(
       continue;
     }
 
-    const match = /^(\S+)\s+(\S+)\s+\((fetch|push)\)$/.exec(trimmed);
+    const match = /^(\S+)\s+(\S+)\s+\((fetch|push)\)(?:\s+\[[^\]]+\])?$/.exec(trimmed);
     if (!match) {
       continue;
     }
@@ -837,7 +837,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       const gitCommonDir = yield* resolveGitCommonDir(input.cwd);
       const tempIndexPath = path.join(
         gitCommonDir,
-        `t3-checkpoint-index-${NodeCrypto.randomUUID()}`,
+        `cinderdeck-checkpoint-index-${NodeCrypto.randomUUID()}`,
       );
       const commitEnv: NodeJS.ProcessEnv = {
         ...process.env,
