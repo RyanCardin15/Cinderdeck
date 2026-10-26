@@ -114,7 +114,9 @@ actor LogBuffer {
       partial = Data(partial.suffix(64 * 1024))
       truncatedPartial = true
     }
-    checkReadiness(String(decoding: partial, as: UTF8.self))
+    if !reachedReadiness, readinessRegex != nil {
+      checkReadiness(String(decoding: partial, as: UTF8.self))
+    }
   }
 
   func append(_ text: String, at date: Date = Date()) {
@@ -135,8 +137,22 @@ actor LogBuffer {
   func snapshot(limit: Int? = nil, after: Double? = nil) -> [StackLogLine] {
     // Polling agents usually have nothing new to read. Test before copying.
     if let after, latestTimestamp <= after { return [] }
-    let selected = after.map { after in lines.filter { $0.timestamp.timeIntervalSince1970 > after } } ?? lines
-    return limit.map { Array(selected.suffix(max(0, $0))) } ?? selected
+    if let limit {
+      guard limit > 0 else { return [] }
+      // Stop once the requested tail is found. Do not assume timestamps are
+      // monotonic: wall-clock changes can leave older dates after newer ones.
+      if let after {
+        var selected: [StackLogLine] = []
+        selected.reserveCapacity(min(limit, lines.count))
+        for line in lines.reversed() where line.timestamp.timeIntervalSince1970 > after {
+          selected.append(line)
+          if selected.count == limit { break }
+        }
+        return selected.reversed()
+      }
+      return Array(lines.suffix(limit))
+    }
+    return after.map { after in lines.filter { $0.timestamp.timeIntervalSince1970 > after } } ?? lines
   }
   func revision() -> Int { version }
   /// Lines appended after `position`, a value this method returned earlier (0 at first).

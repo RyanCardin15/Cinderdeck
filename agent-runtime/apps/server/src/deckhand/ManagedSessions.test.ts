@@ -118,6 +118,7 @@ const seed = Effect.gen(function* () {
 const source = () => {
   const state = {
     sequence: 8,
+    shellReads: 0,
     shells: new Map<ThreadId, OrchestrationV2ThreadShell>(),
     shell: {
       id: threadId,
@@ -139,7 +140,11 @@ const source = () => {
     attachedSessionId: ProviderSessionId.make("provider-session") as ProviderSessionId | null,
   };
   const projectionLayer = Layer.mock(ProjectionStore.ProjectionStoreV2)({
-    getThreadShell: (id) => Effect.sync(() => state.shells.get(id) ?? state.shell),
+    getThreadShell: (id) =>
+      Effect.sync(() => {
+        state.shellReads++;
+        return state.shells.get(id) ?? state.shell;
+      }),
     getThreadRecords: (() =>
       Effect.sync(() => ({
         thread: {},
@@ -660,6 +665,42 @@ describe("managed session provider projection", () => {
       }).pipe(Effect.provide(baseLayer)),
   );
 
+  it.effect("does not project an exact session for a burst of unrelated session events", () =>
+    Effect.gen(function* () {
+      const f = source();
+      let requestedThread: ThreadId | undefined;
+      const layer = f.layer((request) => {
+        requestedThread = request?.threadId;
+        return Stream.fromIterable(
+          Array.from(
+            { length: 1000 },
+            (_, index) =>
+              ({
+                sequence: index + 9,
+                commandId: null,
+                event: { type: "run.updated", threadId: ThreadId.make(`other-${index}`) },
+              }) as OrchestrationV2StoredEvent,
+          ),
+        );
+      });
+      yield* Effect.gen(function* () {
+        yield* seed;
+        const service = yield* ManagedSessions.ManagedSessions;
+        const updates = yield* service
+          .subscribeThread({
+            ...scope,
+            sessionID: Contracts.SessionBindingId.make("session"),
+            threadID: threadId,
+            checkoutID: Contracts.CheckoutBindingId.make("checkout"),
+          })
+          .pipe(Stream.runCollect);
+        assert.equal(requestedThread, threadId);
+        assert.equal(updates.length, 1);
+        assert.equal(f.state.shellReads, 1);
+      }).pipe(Effect.provide(layer));
+    }).pipe(Effect.provide(baseLayer)),
+  );
+
   it.effect(
     "replays the exact opened thread after its initial watermark without widening scope",
     () =>
@@ -675,7 +716,7 @@ describe("managed session provider projection", () => {
               return Stream.make({
                 sequence: 9,
                 commandId: null,
-                event: { type: "run.updated" },
+                event: { type: "run.updated", threadId },
               } as OrchestrationV2StoredEvent);
             }),
           ),

@@ -191,3 +191,103 @@ path. Both opt-in benchmarks passed. The whole-app builder rebuilt native Debug,
 bundled the existing runtime, and passed bundle identity and signature verification.
 Manual typing responsiveness in the running app and performance on personal
 repositories have not been profiled.
+
+## Unified application audit: October 22, 2026
+
+This pass audited the current working tree, including its existing uncommitted
+product changes. Baseline copies and validation output are under
+`.build/performance-audit-20261022/`. All fixtures use disposable data; the installed
+application and live stores were not used. Independent changes in five other
+source/test files appeared during the audit and were preserved; the final checks
+and runtime build ran after those edits.
+
+### Coverage and changes
+
+| Surface | Finding and resulting behavior |
+| --- | --- |
+| Native service logs | Timestamp-filtered tails filtered the entire retained buffer before taking the last requested lines. They now walk backwards and stop after enough matches, preserving arrival order even after clock changes. Partial output is decoded for readiness only while a configured readiness expression still needs it. |
+| Native history thumbnails | Concurrent dispatch allowed an unlimited number of image/video decoders. An operation queue now runs at most four, with an autorelease pool per decode. The memory cache stores one identity/image per record; eviction releases the identity metadata too. Generated images enter the cache once, charged by decoded pixels rather than JPEG bytes. |
+| Exact managed session streams | Lifecycle changes in unrelated sessions caused another exact-session projection. The event source now receives the thread ID and the invalidation filter checks it. Ownership changes and durable watermark replay remain supported. |
+| Workspace activity summaries | Counting older agents read each canonical shell, then the four displayed summaries read those shells again. Summaries reuse the shells from the same transaction. Page grouping uses indexes instead of repeatedly filtering every saved session for each context. Older-agent counts and generation boundaries remain intact. |
+| Sidebar preferences | Every mounted session list read and parsed the same local storage document and repeated that work for local preference updates. Consumers now share one subscribed snapshot per execution computer and installation, with key-filtered storage events and listener cleanup. Updates remain shared when persistence fails. |
+| Sub-agent navigation | Collapsed groups mounted every descendant and its sortable controls. Descendants now mount on first expansion or selected-path reveal. Once mounted, their disclosure state survives collapsing a parent. Search, ordering, drag/drop, archived ancestors and exact links retain regression coverage. |
+| Existing transport and timelines | Inspected bounded recent-history snapshots, catch-up budgets, event buffering and desktop/mobile LegendList timelines; ran the v2 transport gate against the active path. |
+| Existing background work and media | Inspected native Git refresh limits, event-driven log reads, incremental recording logs, preview diagnostic retention, renderer background throttling, history preloads, capture frame queues and encoding configuration. Capture quality and frame-rate settings remain workload choices; no hardware speedup is claimed for these inspected paths. |
+
+### Measurements
+
+Measurements used the same local machine and disposable synthetic fixtures.
+They establish costs for these operations, not overall application speed, Release
+frame pacing, energy use or peak memory.
+
+| Workload | Before | After | Interpretation |
+| --- | ---: | ---: | --- |
+| Mount a collapsed group with 500 sub-agents, median of seven jsdom samples | 340.436 ms; 501 session links mounted | 6.156 ms; one session link mounted | About 55 times faster mounting in this fixture. Both runs used the same current preference hook; only the session component was replaced with its saved baseline source for comparison. |
+| Last 200 timestamp-matching lines of 5,000 retained lines, median of 50 Debug actor calls | 0.531 ms | 0.046 ms | About 11.5 times faster. The reference actor runs the former filter-then-tail operation on identical retained lines; every result is compared for equality. |
+| 100 contexts with six saved sessions each | 1,000 shell reads | 600 shell reads | 40% fewer canonical reads, retaining 400 visible provider-record summaries and all older-agent activity counts. |
+| 1,000 unrelated run updates while observing one exact session | Unrelated updates invalidated the subscription | One initial shell read; no subsequent projection | Consumed-stream regression, not a latency benchmark. |
+
+The broad native workload also retained its existing merge/search performance:
+32 buffers of 5,000 lines merged in 169.759 ms median; taking a 200-line merged tail
+cost 0.244 ms median. These are observations of existing optimizations, not gains
+attributed to this pass.
+
+### Validation
+
+- 52 native tests passed across thumbnails, log buffers/filtering, recording
+  lifecycle and opt-in performance workloads. After the final log-loop refinement,
+  the 13 applicable log/benchmark tests passed again.
+- All 13 runtime workspace package typechecks passed, including desktop, server,
+  web, companion and shared packages. Focused runtime lint passed with one existing
+  session-history effect warning.
+- `scripts/build-unified.sh` rebuilt the runtime and assembled the complete Debug
+  app; the final assembly uses a normal native build, with bundle identity and
+  recursive signature verification. The artifact is
+  `.build/performance-audit-20261022/app/Cinderdeck Debug.app`. It was not installed
+  or launched for interactive profiling.
+- The active v2 transport gate passed 297 tests in 18 files.
+- The broader web navigation suite passed 316 tests; seven failures in existing
+  PR/router/navigation fixtures reproduced with the saved pre-audit source.
+  The optional mounting benchmark is skipped without its environment flag.
+- The broader server integration selection passed 51 tests; two existing failures
+  reproduced with the saved pre-audit source: the external-session migration
+  fixture recreates an existing table, and a native integration guard fixture
+  expects an older access result. These failures were not hidden or changed.
+
+Reproduce the targeted checks from `agent-runtime/`:
+
+```sh
+pnpm typecheck
+node_modules/.bin/vp run test:perf:v2-wire
+(cd apps/server && ../../node_modules/.bin/vp test run \
+  src/deckhand/ManagedSessions.test.ts src/deckhand/ManagedSessions.scalability.test.ts \
+  src/deckhand/ThreadContext.test.ts)
+(cd apps/web && ../../node_modules/.bin/vp test run --project unit \
+  src/deckhand/WorkspaceSessions.test.tsx src/deckhand/WorkspaceSidebar.test.tsx \
+  src/deckhand/useWorkspaceSidebarPreferences.test.tsx)
+```
+
+The mounting benchmark accepts `CINDERDECK_PERFORMANCE_AUDIT=1`, optional
+`CINDERDECK_PERFORMANCE_REPORT=/absolute/report.json`, and the test-name filter
+`-t 'measures collapsed session mounting'`. The native diagnostic runs with
+`TEST_RUNNER_CINDERDECK_PERFORMANCE_AUDIT=1` and
+`-only-testing:CinderdeckTests/StackPerformanceTests` using the Xcode command above.
+
+### Measurement boundaries
+
+Interactive Chromium/native frame pacing, cold-launch tracing, sustained provider
+bursts, long recording/export workloads and device performance remain unprofiled.
+Collapsed descendants remain mounted after their first expansion to preserve nested
+state. Workspace activity counts still inspect saved agents in the requested
+contexts, so their cost grows with that history; returning four summaries does not
+make the complete activity query constant-cost. Thumbnail concurrency and cache
+accounting are structural improvements, not a measured RSS or GPU reduction.
+
+### Integration onto current main: October 26, 2026
+
+The audit changes were rebased onto the current product implementation, preserving
+session pinning and sibling reorder snapshots. Main already reused canonical
+shells for displayed activity summaries, so that existing API and its 600-read
+scalability gate were retained. The remaining server change adds indexed grouping
+and filters exact-session invalidations at the event source. Original audit
+timings and validation counts above describe the October 22 fixture run.

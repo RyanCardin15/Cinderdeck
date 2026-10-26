@@ -36,6 +36,21 @@ final class StackLogPerformanceRegressionTests: XCTestCase {
     XCTAssertTrue(cleared.isEmpty)
   }
 
+  func testBoundedSnapshotsMatchFilterThenTailAcrossClockChanges() async {
+    let buffer = LogBuffer(service: "fixture", capacity: 500)
+    for index in 0..<600 {
+      await buffer.append("\(index)", at: Date(timeIntervalSince1970: Double((index * 37) % 113)))
+    }
+    let full = await buffer.snapshot()
+    for after in [-1.0, 0, 50, 111, 112, 200] {
+      for limit in [-1, 0, 1, 17, 200, 1000] {
+        let result = await buffer.snapshot(limit: limit, after: after)
+        let expected = Array(full.filter { $0.timestamp.timeIntervalSince1970 > after }.suffix(max(0, limit)))
+        XCTAssertEqual(result, expected, "after=\(after), limit=\(limit)")
+      }
+    }
+  }
+
   func testLiveFilterTracksAppendsEvictionsQueryChangesAndClear() {
     var filter = StackLogFilter()
     let first = StackLogLine(service: "web", text: "\u{1B}[31mERROR: café\u{1B}[0m")

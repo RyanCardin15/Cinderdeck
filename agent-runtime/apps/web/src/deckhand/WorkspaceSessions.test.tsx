@@ -283,6 +283,13 @@ it("reorders main groups with the keyboard, saves on drop, and restores in the f
   const onNavigate = vi.fn();
   await render({ onNavigate });
   expect(rootSessionIDs()).toEqual(["ordinary", "second"]);
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>(
+        'button[aria-label="Expand sub-agents for Ordinary conversation"]',
+      )!
+      .click(),
+  );
   const handle = container.querySelector(
     'button[aria-label="Reorder session Ordinary conversation"]',
   ) as HTMLButtonElement;
@@ -512,6 +519,11 @@ it("drags sub-agents within their parent, preserves other groups, and cancels wi
       .click(),
   );
   expect(childSessionIDs("ordinary")).toEqual(["Inspector", "Verifier"]);
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[aria-label="Expand sub-agents for Inspector"]')!
+      .click(),
+  );
   const handle = container.querySelector(
     'button[aria-label="Reorder sub-agent Inspector"]',
   ) as HTMLButtonElement;
@@ -829,14 +841,15 @@ it.each([true, false])(
     boundary.threads = [ordinary, child("Inspector"), child("Verifier", "Inspector")];
     await render({ compact });
     const main = container.querySelector('[data-session-id="ordinary"]')!.closest("li")!;
-    const inspector = container.querySelector('[data-session-id="Inspector"]')!.closest("li")!;
     const mainToggle = main.querySelector("button")!;
-    const childToggle = inspector.querySelector("button")!;
     expect(mainToggle.getAttribute("aria-expanded")).toBe("false");
     expect(main.querySelector("ul")!.hidden).toBe(true);
-    expect(childToggle.getAttribute("aria-expanded")).toBe("false");
+    expect(container.querySelector('[data-session-id="Inspector"]')).toBeNull();
 
     await act(async () => mainToggle.click());
+    const inspector = container.querySelector('[data-session-id="Inspector"]')!.closest("li")!;
+    const childToggle = inspector.querySelector("button")!;
+    expect(childToggle.getAttribute("aria-expanded")).toBe("false");
     expect(main.querySelector("ul")!.hidden).toBe(false);
     expect(inspector.querySelector("ul")!.hidden).toBe(true);
     await act(async () => childToggle.click());
@@ -861,13 +874,13 @@ it("nests and collapses sub-agents while preserving their navigation and indepen
   const onNavigate = vi.fn();
   await render({ onNavigate });
   const main = container.querySelector('[data-session-id="ordinary"]')!.closest("li")!;
-  const inspector = main.querySelector('ul [data-session-id="Inspector"]')!;
-  expect(inspector.closest("li")!.querySelector('ul [data-session-id="Verifier"]')).not.toBeNull();
-  expect(inspector.textContent).toContain("Sub-agent");
+  expect(main.querySelector('ul [data-session-id="Inspector"]')).toBeNull();
   const toggle = main.querySelector("button")!;
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
   await act(async () => toggle.click());
   expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  const inspector = main.querySelector('ul [data-session-id="Inspector"]')!;
+  expect(inspector.textContent).toContain("Sub-agent");
   await act(async () => toggle.click());
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
   expect(main.querySelector("ul")!.hidden).toBe(true);
@@ -917,7 +930,7 @@ it("limits main sessions instead of sub-agents and reveals an older selected chi
   ];
   await render({ selectedThreadId: undefined });
   expect(container.querySelectorAll("nav > ul > li")).toHaveLength(10);
-  expect(container.querySelectorAll('nav a[href^="/sessions/child-"]')).toHaveLength(15);
+  expect(container.querySelectorAll('nav a[href^="/sessions/child-"]')).toHaveLength(0);
   expect(container.querySelector('a[href="/sessions/main-2"]')).not.toBeNull();
   expect(container.querySelector('a[href="/sessions/main-0"]')).toBeNull();
   await render({ selectedThreadId: "older-selected" });
@@ -1016,3 +1029,54 @@ it("loads archived parents only when needed and retains them as context for acti
   );
   expect(container.querySelector('a[href="/sessions/unrelated-archive"]')).not.toBeNull();
 });
+
+it("keeps a large collapsed sub-agent group out of the mounted row tree", async () => {
+  boundary.result = AsyncResult.success([]);
+  boundary.threads = [
+    ordinary,
+    ...Array.from({ length: 1000 }, (_, index) => child(`worker-${index}`)),
+  ];
+  await render();
+  expect(container.querySelectorAll("nav a")).toHaveLength(1);
+  await render({ selectedThreadId: "worker-999" });
+  expect(
+    container.querySelector('a[href="/sessions/worker-999"]')?.getAttribute("aria-current"),
+  ).toBe("page");
+  expect(container.querySelectorAll("nav a")).toHaveLength(1001);
+});
+
+it.skipIf(!process.env.CINDERDECK_PERFORMANCE_AUDIT)(
+  "measures collapsed session mounting",
+  async () => {
+    const samples: number[] = [];
+    let mounted = 0;
+    boundary.result = AsyncResult.success([]);
+    boundary.threads = [
+      ordinary,
+      ...Array.from({ length: 500 }, (_, index) => child(`worker-${index}`)),
+    ];
+    for (let sample = 0; sample < 7; sample++) {
+      await act(async () => root.render(null));
+      const start = performance.now();
+      await render();
+      samples.push(performance.now() - start);
+      mounted = container.querySelectorAll("nav a").length;
+    }
+    samples.sort((a, b) => a - b);
+    const result = {
+      workload: "collapsed_500_subagents",
+      medianMs: samples[3],
+      maxMs: samples.at(-1),
+      mounted,
+      samples,
+    };
+    console.log(JSON.stringify(result));
+    if (process.env.CINDERDECK_PERFORMANCE_REPORT) {
+      const fs = await import("node:fs/promises");
+      await fs.writeFile(
+        process.env.CINDERDECK_PERFORMANCE_REPORT,
+        JSON.stringify(result, null, 2),
+      );
+    }
+  },
+);

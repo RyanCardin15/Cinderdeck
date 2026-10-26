@@ -354,8 +354,11 @@ const make = Effect.gen(function* () {
         return Stream.concat(
           Stream.make(initial),
           Stream.merge(
-            events.stream({ afterSequence }).pipe(
-              Stream.filter((stored) => stateEvent(stored.event.type)),
+            events.stream({ afterSequence, threadId: input.threadID }).pipe(
+              Stream.filter(
+                (stored) =>
+                  stored.event.threadId === input.threadID && stateEvent(stored.event.type),
+              ),
               Stream.map(() => undefined),
             ),
             ownershipChanges,
@@ -426,9 +429,29 @@ const make = Effect.gen(function* () {
               .pipe(Effect.catch(() => Effect.succeed(null)));
             shells.set(binding.threadId, shell);
           }
-          return { row, threadId: binding.threadId, shell: shells.get(binding.threadId) ?? null };
+          return {
+            row,
+            binding,
+            threadId: binding.threadId,
+            shell: shells.get(binding.threadId) ?? null,
+          };
         }),
       );
+      // Index once for the page instead of scanning all saved sessions twice
+      // for every context. Counts still include agents outside the visible four.
+      const contextKey = (id: string, generation: number) => JSON.stringify([id, generation]);
+      const groups = new Map<string, typeof observed>();
+      const ownerGroups = new Map<string, typeof observed>();
+      for (const item of observed) {
+        const key = contextKey(item.row.workspace_id, item.row.generation);
+        const group = groups.get(key) ?? [];
+        group.push(item);
+        groups.set(key, group);
+        const ownerKey = contextKey(item.row.owner_id, item.row.owner_generation);
+        const ownerGroup = ownerGroups.get(ownerKey) ?? [];
+        ownerGroup.push(item);
+        ownerGroups.set(ownerKey, ownerGroup);
+      }
       const activityFor = (matches: typeof observed): Rpc.AgentActivityCounts => {
         const counts = { running: 0, review: 0, unavailable: false };
         const seen = new Set<ThreadId>();
@@ -466,39 +489,17 @@ const make = Effect.gen(function* () {
       );
       return yield* Effect.forEach(input.contexts, (target) =>
         Effect.gen(function* () {
-          const group = rows.filter(
-            (row) =>
-              row.workspace_id === target.workspaceID && row.generation === target.generation,
-          );
-          const sessions = yield* Effect.forEach(group.slice(0, 4), (row) =>
-            decodeBinding(row.record_json).pipe(
-              Effect.flatMap((binding) =>
-                readCurrent(
-                  binding,
-                  row.title,
-                  sequence,
-                  row.objective,
-                  shells.get(binding.threadId),
-                ),
-              ),
-            ),
+          const key = contextKey(target.workspaceID, target.generation);
+          const group = groups.get(key) ?? [];
+          const sessions = yield* Effect.forEach(group.slice(0, 4), ({ row, binding, shell }) =>
+            readCurrent(binding, row.title, sequence, row.objective, shell),
           );
           return {
             ...target,
-            total: group[0]?.total ?? 0,
+            total: group[0]?.row.total ?? 0,
             sessions,
-            agentActivity: activityFor(
-              observed.filter(
-                ({ row }) =>
-                  row.workspace_id === target.workspaceID && row.generation === target.generation,
-              ),
-            ),
-            workspaceAgentActivity: activityFor(
-              observed.filter(
-                ({ row }) =>
-                  row.owner_id === target.workspaceID && row.owner_generation === target.generation,
-              ),
-            ),
+            agentActivity: activityFor(group),
+            workspaceAgentActivity: activityFor(ownerGroups.get(key) ?? []),
             externalSessions: externalSummaries.find(
               (item) =>
                 item.workspaceID === target.workspaceID && item.generation === target.generation,

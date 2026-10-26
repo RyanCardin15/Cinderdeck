@@ -532,6 +532,10 @@ function SessionBranch(props: {
     });
   }
   const open = searching || disclosure.expanded;
+  // A collapsed group can contain thousands of agents. Mount its sortable rows
+  // on first expansion, then retain them to preserve nested disclosure state.
+  const [childrenMounted, setChildrenMounted] = useState(open);
+  if (open && !childrenMounted) setChildrenMounted(true);
   return (
     <li
       ref={setNodeRef}
@@ -582,16 +586,18 @@ function SessionBranch(props: {
       />
       {node.children.length ? (
         <ul id={childrenId} className={`${styles.list} ${styles.children}`} hidden={!open}>
-          <SessionSiblings
-            nodes={node.children}
-            allNodes={props.allNodes.get(node.session.id)?.children ?? node.children}
-            snapshot={props.snapshotNodes.get(node.session.id)?.children ?? node.children}
-            workspaceID={props.workspaceID}
-            parentID={node.session.id}
-            sidebar={props.sidebar}
-          >
-            {(child) => <SessionBranch key={child.session.id} {...props} node={child} />}
-          </SessionSiblings>
+          {childrenMounted ? (
+            <SessionSiblings
+              nodes={node.children}
+              allNodes={props.allNodes.get(node.session.id)?.children ?? node.children}
+              snapshot={props.snapshotNodes.get(node.session.id)?.children ?? node.children}
+              workspaceID={props.workspaceID}
+              parentID={node.session.id}
+              sidebar={props.sidebar}
+            >
+              {(child) => <SessionBranch key={child.session.id} {...props} node={child} />}
+            </SessionSiblings>
+          ) : null}
         </ul>
       ) : null}
     </li>

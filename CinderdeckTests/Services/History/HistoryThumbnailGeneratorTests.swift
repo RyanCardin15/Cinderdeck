@@ -138,6 +138,42 @@ final class HistoryThumbnailGeneratorTests: XCTestCase {
 
   // MARK: - Helpers
 
+  func testConcurrentLoadsCoalesceAndKeepDecodedImagesSmall() async throws {
+    let imageURL = try createTestImage(width: 2400, height: 1600)
+    let record = makeRecord(filePath: imageURL.path)
+    let images = await withTaskGroup(of: NSImage?.self, returning: [NSImage?].self) { group in
+      for _ in 0..<32 { group.addTask { await self.generator.loadThumbnailImage(for: record) } }
+      var images: [NSImage?] = []
+      for await image in group { images.append(image) }
+      return images
+    }
+    XCTAssertEqual(images.count, 32)
+    let first = try XCTUnwrap(images.first.flatMap { $0 })
+    XCTAssertLessThanOrEqual(max(first.size.width, first.size.height), 416)
+    XCTAssertTrue(images.allSatisfy { $0 === first })
+  }
+
+  func testCacheInvalidationKeepsOtherRecordsAndReleasesDeletedRecord() async throws {
+    let imageURL = try createTestImage(width: 100, height: 100)
+    let record = makeRecord(filePath: imageURL.path)
+    let other = makeRecord(filePath: imageURL.path)
+    let firstLoad = await generator.loadThumbnailImage(for: record)
+    let first = try XCTUnwrap(firstLoad)
+    let unrelatedLoad = await generator.loadThumbnailImage(for: other)
+    let unrelated = try XCTUnwrap(unrelatedLoad)
+    var revised = record
+    revised.fileSize += 1
+    let replacementLoad = await generator.loadThumbnailImage(for: revised)
+    let replacement = try XCTUnwrap(replacementLoad)
+    XCTAssertFalse(replacement === first)
+    let stillCached = await generator.loadThumbnailImage(for: other)
+    XCTAssertTrue(stillCached === unrelated)
+    generator.deleteThumbnail(for: revised.id)
+    try FileManager.default.removeItem(at: imageURL)
+    let deleted = await generator.loadThumbnailImage(for: revised)
+    XCTAssertNil(deleted)
+  }
+
   private func makeRecord(filePath: String, captureType: CaptureHistoryType = .screenshot) -> CaptureHistoryRecord {
     CaptureHistoryRecord(
       id: UUID(),

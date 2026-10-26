@@ -22,16 +22,25 @@ final class HistoryThumbnailGenerator {
   private let cacheVersion = "preview-v2"
   private let maxDimension: CGFloat = 208
   private let compressionFactor: CGFloat = 0.58
-  private let workerQueue = DispatchQueue(
-    label: "cinderdeck.history-thumbnail-generator.worker",
-    qos: .utility,
-    attributes: .concurrent
-  )
+  // ImageIO and AVFoundation can each allocate a decoder for every request.
+  // Queue work instead of occupying an unbounded number of dispatch workers.
+  private let workerQueue: OperationQueue = {
+    let queue = OperationQueue()
+    queue.name = "cinderdeck.history-thumbnail-generator.worker"
+    queue.qualityOfService = .utility
+    queue.maxConcurrentOperationCount = 4
+    return queue
+  }()
   private let thumbnailsDirectoryURL: URL
   private let stateQueue = DispatchQueue(label: "cinderdeck.history-thumbnail-generator.state")
-  private let memoryCache = NSCache<NSString, NSImage>()
+  private let memoryCache = NSCache<NSString, CachedThumbnail>()
   private var inFlightRequests: [String: [(NSImage?) -> Void]] = [:]
-  private var memoryCacheKeysByRecordId: [UUID: Set<String>] = [:]
+
+  private final class CachedThumbnail {
+    let identity: String
+    let image: NSImage
+    init(identity: String, image: NSImage) { self.identity = identity; self.image = image }
+  }
 
   var thumbnailsDirectory: URL {
     thumbnailsDirectoryURL
@@ -82,11 +91,11 @@ final class HistoryThumbnailGenerator {
     completion: @escaping (NSImage?) -> Void
   ) {
     let identity = cacheIdentity(for: record)
-    let cacheKey = NSString(string: identity.cacheKey)
+    let cacheKey = NSString(string: record.id.uuidString)
 
-    if let cachedImage = memoryCache.object(forKey: cacheKey) {
+    if let cached = memoryCache.object(forKey: cacheKey), cached.identity == identity.cacheKey {
       DispatchQueue.main.async {
-        completion(cachedImage)
+        completion(cached.image)
       }
       return
     }
@@ -103,9 +112,8 @@ final class HistoryThumbnailGenerator {
 
     guard shouldStartWork else { return }
 
-    workerQueue.async { [weak self] in
-      guard let self else { return }
-      let image = self.resolveThumbnailImage(for: record, identity: identity)
+    workerQueue.addOperation { [self] in
+      let image = autoreleasepool { self.resolveThumbnailImage(for: record, identity: identity) }
 
       if let image {
         let cost = max(Int(image.size.width * image.size.height * 4), 1)
@@ -214,12 +222,7 @@ final class HistoryThumbnailGenerator {
   /// Delete thumbnail for a specific record ID
   func deleteThumbnail(for recordId: UUID) {
     deleteThumbnailFiles(for: recordId)
-    let keys = stateQueue.sync {
-      Array(memoryCacheKeysByRecordId.removeValue(forKey: recordId) ?? [])
-    }
-    keys.forEach { key in
-      memoryCache.removeObject(forKey: NSString(string: key))
-    }
+    memoryCache.removeObject(forKey: NSString(string: recordId.uuidString))
   }
 
   // MARK: - Private
@@ -386,12 +389,9 @@ final class HistoryThumbnailGenerator {
   }
 
   private func storeInMemory(_ image: NSImage, identity: ThumbnailCacheIdentity, cost: Int) {
-    memoryCache.setObject(image, forKey: NSString(string: identity.cacheKey), cost: cost)
-    stateQueue.sync {
-      var keys = memoryCacheKeysByRecordId[identity.recordId] ?? []
-      keys.insert(identity.cacheKey)
-      memoryCacheKeysByRecordId[identity.recordId] = keys
-    }
+    // One entry per record; NSCache eviction also releases all identity metadata.
+    memoryCache.setObject(CachedThumbnail(identity: identity.cacheKey, image: image),
+      forKey: NSString(string: identity.recordId.uuidString), cost: cost)
   }
 
   private func downsampledImage(at url: URL) -> CGImage? {
@@ -472,21 +472,8 @@ final class HistoryThumbnailGenerator {
       size: NSSize(width: image.width, height: image.height)
     )
 
-    do {
-      let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-      let fileSize = (attributes[.size] as? NSNumber)?.intValue ?? 0
-      storeInMemory(thumbnailImage, identity: identity, cost: max(fileSize, 1))
-      return GeneratedThumbnail(url: url, image: thumbnailImage)
-    } catch {
-      logger.error("Failed to read thumbnail metadata: \(error.localizedDescription)")
-      DiagnosticLogger.shared.logError(
-        .history,
-        error,
-        "History thumbnail metadata read failed",
-        context: ["recordId": identity.recordId.uuidString]
-      )
-      return nil
-    }
+    // The caller charges decoded pixels, not the much smaller JPEG file size.
+    return GeneratedThumbnail(url: url, image: thumbnailImage)
   }
 }
 

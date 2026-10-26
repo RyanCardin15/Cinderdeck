@@ -4,6 +4,37 @@ import XCTest
 
 /// Opt-in, repeatable workloads. Timings are observations, not flaky CI thresholds.
 final class StackPerformanceTests: XCTestCase {
+  func testBoundedSnapshotPerformanceAudit() async throws {
+    guard ProcessInfo.processInfo.environment["CINDERDECK_PERFORMANCE_AUDIT"] == "1" else {
+      throw XCTSkip("Set TEST_RUNNER_CINDERDECK_PERFORMANCE_AUDIT=1 to collect timings")
+    }
+    let buffer = LogBuffer(service: "fixture")
+    for index in 0..<5000 {
+      await buffer.append("line \(index)", at: Date(timeIntervalSince1970: Double(index)))
+    }
+    // The former actor operation, with identical retained data and actor hops.
+    actor ReferenceSnapshot {
+      let lines: [StackLogLine]
+      init(_ lines: [StackLogLine]) { self.lines = lines }
+      func snapshot(limit: Int, after: Double) -> [StackLogLine] {
+        Array(lines.filter { $0.timestamp.timeIntervalSince1970 > after }.suffix(limit))
+      }
+    }
+    let reference = ReferenceSnapshot(await buffer.snapshot())
+    var previous: [Double] = [], bounded: [Double] = []
+    for _ in 0..<50 {
+      var start = Date()
+      let old = await reference.snapshot(limit: 200, after: 0)
+      previous.append(Date().timeIntervalSince(start) * 1000)
+      start = Date()
+      let current = await buffer.snapshot(limit: 200, after: 0)
+      bounded.append(Date().timeIntervalSince(start) * 1000)
+      XCTAssertEqual(current, old)
+    }
+    report("snapshot_200_of_5000_previous_ms", previous)
+    report("snapshot_200_of_5000_bounded_ms", bounded)
+  }
+
   func testPerformanceAudit() async throws {
     guard ProcessInfo.processInfo.environment["CINDERDECK_PERFORMANCE_AUDIT"] == "1" else {
       throw XCTSkip("Set TEST_RUNNER_CINDERDECK_PERFORMANCE_AUDIT=1 to collect timings")
