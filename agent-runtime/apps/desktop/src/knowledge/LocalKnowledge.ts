@@ -2,10 +2,10 @@
 // @effect-diagnostics nodeBuiltinImport:off -- Device-local file I/O is isolated from the renderer and tested with disposable roots.
 // @effect-diagnostics cryptoRandomUUID:off -- Persistent connection and import identifiers.
 import { skillMetadata } from "./skillMetadata.ts";
-import * as fs from "node:fs/promises";
-import { constants } from "node:fs";
-import * as path from "node:path";
-import { createHash, randomUUID } from "node:crypto";
+import * as NodeFSP from "node:fs/promises";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
+import * as NodeCrypto from "node:crypto";
 import type {
   ImportedSkill,
   ObsidianNote,
@@ -34,11 +34,11 @@ interface Staged {
   modes: Map<string, number>;
   expires: number;
 }
-const hash = (value: Buffer) => createHash("sha256").update(value).digest("hex");
+const hash = (value: Buffer) => NodeCrypto.createHash("sha256").update(value).digest("hex");
 const contains = (root: string, file: string) =>
   file === root ||
-  (!path.isAbsolute(path.relative(root, file)) &&
-    !path.relative(root, file).split(path.sep).includes(".."));
+  (!NodePath.isAbsolute(NodePath.relative(root, file)) &&
+    !NodePath.relative(root, file).split(NodePath.sep).includes(".."));
 function text(value: unknown, label: string, max = 4096): string {
   if (typeof value !== "string" || !value.trim() || value.length > max || value.includes("\0"))
     throw new Error(`Invalid ${label}.`);
@@ -47,7 +47,7 @@ function text(value: unknown, label: string, max = 4096): string {
 function relative(value: string): string {
   text(value, "note path");
   if (
-    path.isAbsolute(value) ||
+    NodePath.isAbsolute(value) ||
     value.includes("\\") ||
     value.split("/").some((p) => !p || p === "." || p === ".." || p.startsWith("."))
   )
@@ -55,9 +55,10 @@ function relative(value: string): string {
   return value;
 }
 async function directory(value: string): Promise<string> {
-  if (!path.isAbsolute(text(value, "folder"))) throw new Error("Choose an absolute folder path.");
-  const real = await fs.realpath(value);
-  if (!(await fs.stat(real)).isDirectory()) throw new Error("Choose a folder.");
+  if (!NodePath.isAbsolute(text(value, "folder")))
+    throw new Error("Choose an absolute folder path.");
+  const real = await NodeFSP.realpath(value);
+  if (!(await NodeFSP.stat(real)).isDirectory()) throw new Error("Choose a folder.");
   return real;
 }
 async function regularFile(
@@ -65,18 +66,18 @@ async function regularFile(
   rel: string,
   max: number,
 ): Promise<{ content: Buffer; modifiedAt: number; mode: number }> {
-  const file = path.join(root, relative(rel));
+  const file = NodePath.join(root, relative(rel));
   let current = root;
   for (const part of rel.split("/")) {
-    current = path.join(current, part);
-    if ((await fs.lstat(current)).isSymbolicLink())
+    current = NodePath.join(current, part);
+    if ((await NodeFSP.lstat(current)).isSymbolicLink())
       throw new Error("Symbolic links are excluded from connected folders.");
   }
-  if (!contains(root, await fs.realpath(file)))
+  if (!contains(root, await NodeFSP.realpath(file)))
     throw new Error("The file is outside the connected folder.");
-  const handle = await fs.open(
+  const handle = await NodeFSP.open(
     file,
-    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    NodeFS.constants.O_RDONLY | NodeFS.constants.O_NOFOLLOW | NodeFS.constants.O_NONBLOCK,
   );
   try {
     const stat = await handle.stat();
@@ -116,11 +117,11 @@ export class LocalKnowledge {
     this.homeDir = homeDir;
   }
   private get stateFile() {
-    return path.join(this.stateDir, "local-knowledge.json");
+    return NodePath.join(this.stateDir, "local-knowledge.json");
   }
   private async state(): Promise<State> {
     try {
-      const raw = JSON.parse(await fs.readFile(this.stateFile, "utf8")) as State;
+      const raw = JSON.parse(await NodeFSP.readFile(this.stateFile, "utf8")) as State;
       if (raw.version !== 1 || !Array.isArray(raw.vaults) || !Array.isArray(raw.skills))
         throw new Error("Invalid knowledge settings.");
       return raw;
@@ -134,13 +135,13 @@ export class LocalKnowledge {
     const operation = this.queue.then(async () => {
       const state = await this.state();
       const result = await fn(state);
-      await fs.mkdir(this.stateDir, { recursive: true, mode: 0o700 });
-      const temporary = `${this.stateFile}.${randomUUID()}`;
+      await NodeFSP.mkdir(this.stateDir, { recursive: true, mode: 0o700 });
+      const temporary = `${this.stateFile}.${NodeCrypto.randomUUID()}`;
       try {
-        await fs.writeFile(temporary, JSON.stringify(state), { mode: 0o600, flag: "wx" });
-        await fs.rename(temporary, this.stateFile);
+        await NodeFSP.writeFile(temporary, JSON.stringify(state), { mode: 0o600, flag: "wx" });
+        await NodeFSP.rename(temporary, this.stateFile);
       } finally {
-        await fs.rm(temporary, { force: true });
+        await NodeFSP.rm(temporary, { force: true });
       }
       return result;
     });
@@ -163,7 +164,7 @@ export class LocalKnowledge {
     workspacePath: string | null,
   ): Promise<ObsidianVault> {
     const root = await directory(folder);
-    const config = await fs.lstat(path.join(root, ".obsidian")).catch(() => null);
+    const config = await NodeFSP.lstat(NodePath.join(root, ".obsidian")).catch(() => null);
     if (!config?.isDirectory() || config.isSymbolicLink())
       throw new Error("Choose an Obsidian vault folder containing .obsidian.");
     const scope = workspacePath === null ? null : await directory(workspacePath);
@@ -173,8 +174,8 @@ export class LocalKnowledge {
       if (state.vaults.some((v) => v.path === root && v.workspacePath === scope))
         throw new Error("This vault is already connected in that scope.");
       const vault = {
-        id: randomUUID(),
-        name: name.trim() ? text(name, "vault name", 100) : path.basename(root),
+        id: NodeCrypto.randomUUID(),
+        name: name.trim() ? text(name, "vault name", 100) : NodePath.basename(root),
         path: root,
         workspacePath: scope,
       };
@@ -206,7 +207,7 @@ export class LocalKnowledge {
     if (body.includes("\0")) throw new Error("This note is not a text file.");
     return {
       path: input.path,
-      title: path.basename(input.path, path.extname(input.path)),
+      title: NodePath.basename(input.path, NodePath.extname(input.path)),
       excerpt: body.slice(0, 220),
       content: body,
       modifiedAt,
@@ -230,13 +231,13 @@ export class LocalKnowledge {
     const folders = [""];
     while (folders.length && !limited) {
       const rel = folders.pop()!;
-      const folder = path.join(vault.path, rel);
+      const folder = NodePath.join(vault.path, rel);
       if (
-        !contains(vault.path, await fs.realpath(folder)) ||
-        (await fs.lstat(folder)).isSymbolicLink()
+        !contains(vault.path, await NodeFSP.realpath(folder)) ||
+        (await NodeFSP.lstat(folder)).isSymbolicLink()
       )
         continue;
-      const entries = await fs.readdir(folder, { withFileTypes: true });
+      const entries = await NodeFSP.readdir(folder, { withFileTypes: true });
       entries.sort((a, b) => a.name.localeCompare(b.name));
       for (const entry of entries) {
         if (
@@ -266,7 +267,7 @@ export class LocalKnowledge {
             : 0;
           notes.push({
             path: target,
-            title: path.basename(target, path.extname(target)),
+            title: NodePath.basename(target, NodePath.extname(target)),
             excerpt: body.slice(offset, offset + 220),
           });
         } catch {
@@ -290,7 +291,7 @@ export class LocalKnowledge {
     const vault = await this.vault(input.vaultID, input.workspacePath);
     // Obsidian decodes URI values with percent decoding; form-style '+' spaces
     // are treated as literal plus signs and fail to resolve the intended note.
-    return `obsidian://open?path=${encodeURIComponent(path.join(vault.path, input.path))}`;
+    return `obsidian://open?path=${encodeURIComponent(NodePath.join(vault.path, input.path))}`;
   }
   async previewSkill(folder: string): Promise<SkillImportPreview> {
     const root = await directory(folder);
@@ -300,7 +301,9 @@ export class LocalKnowledge {
       entries = 0;
     const deadline = Date.now() + 5000;
     const walk = async (rel: string) => {
-      for (const entry of await fs.readdir(path.join(root, rel), { withFileTypes: true })) {
+      for (const entry of await NodeFSP.readdir(NodePath.join(root, rel), {
+        withFileTypes: true,
+      })) {
         if (++entries > 1000 || Date.now() > deadline)
           throw new Error("This skill folder is too large. Choose a single skill folder.");
         if (entry.name.startsWith(".")) continue;
@@ -335,7 +338,7 @@ export class LocalKnowledge {
       if (item.expires < Date.now()) this.staged.delete(token);
     if (this.staged.size >= 3) this.staged.delete(this.staged.keys().next().value!);
     const preview = {
-      token: randomUUID(),
+      token: NodeCrypto.randomUUID(),
       name,
       description,
       content,
@@ -363,16 +366,19 @@ export class LocalKnowledge {
         throw new Error("This preview expired. Choose the skill folder again.");
       let parent = root;
       for (const part of AGENTS[input.agent].split("/")) {
-        parent = path.join(parent, part);
-        await fs.mkdir(parent).catch((error) => {
+        parent = NodePath.join(parent, part);
+        await NodeFSP.mkdir(parent).catch((error) => {
           if (error.code !== "EEXIST") throw error;
         });
-        if ((await fs.lstat(parent)).isSymbolicLink() || !(await fs.stat(parent)).isDirectory())
+        if (
+          (await NodeFSP.lstat(parent)).isSymbolicLink() ||
+          !(await NodeFSP.stat(parent)).isDirectory()
+        )
           throw new Error("The skill destination must be a regular folder, not a symbolic link.");
       }
-      const destination = path.join(parent, staged.preview.name);
+      const destination = NodePath.join(parent, staged.preview.name);
       try {
-        await fs.mkdir(destination);
+        await NodeFSP.mkdir(destination);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "EEXIST")
           throw new Error("A skill with this name already exists. Your existing skill was kept.");
@@ -384,15 +390,17 @@ export class LocalKnowledge {
         for (const [rel, data] of [...staged.files].sort(
           ([a], [b]) => Number(a === "SKILL.md") - Number(b === "SKILL.md"),
         )) {
-          await fs.mkdir(path.dirname(path.join(destination, rel)), { recursive: true });
-          await fs.writeFile(path.join(destination, rel), data, {
+          await NodeFSP.mkdir(NodePath.dirname(NodePath.join(destination, rel)), {
+            recursive: true,
+          });
+          await NodeFSP.writeFile(NodePath.join(destination, rel), data, {
             flag: "wx",
             mode: staged.modes.get(rel) ?? 0o600,
           });
           hashes[rel] = hash(data);
         }
         const skill = {
-          id: randomUUID(),
+          id: NodeCrypto.randomUUID(),
           name: staged.preview.name,
           agent: input.agent,
           path: destination,
@@ -402,7 +410,7 @@ export class LocalKnowledge {
         this.staged.delete(input.token);
         return skill;
       } catch (error) {
-        await fs.rm(destination, { recursive: true, force: true });
+        await NodeFSP.rm(destination, { recursive: true, force: true });
         throw error;
       }
     });

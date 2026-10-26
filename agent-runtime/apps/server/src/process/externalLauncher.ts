@@ -157,7 +157,8 @@ function resolveCommandEditorArgs(
           line,
           ...Option.match(column, {
             onNone: () => [],
-            onSome: (value) => ["--column", value],
+            // JetBrains counts columns from zero; file targets count from one.
+            onSome: (value) => ["--column", String(Math.max(0, Number(value) - 1))],
           }),
           path,
         ],
