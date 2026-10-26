@@ -129,6 +129,10 @@
     {
       "commit": "1befc717f0b277c86a066e46598e60465e7f23c2",
       "behavior": "Open JetBrains file links at the correct zero-based command-line column"
+    },
+    {
+      "commit": "61e2747f2ea801c58bb40c11dfec7acf2d80e2f4",
+      "behavior": "Pin Electron 44.9.3 for the private runtime, incorporating the upstream certificate-trust security update"
     }
   ],
   "coverage": "Selected independent ports only. integratedThrough remains the last complete historical baseline; examinedTarget is not a claim of complete incorporation.",
