@@ -49,6 +49,20 @@ function unsupportedState(
   };
 }
 
+/** A server-reported id alone must never replace a saved connection's address. */
+export const assertKnownPairingAddress = Effect.fn("EnvironmentRegistry.assertKnownPairingAddress")(
+  function* (saved: ConnectionCatalogEntry | undefined, candidate: ConnectionCatalogEntry) {
+    if (saved === undefined) return;
+    const address = gitHubRoutingConnectionKey(candidate);
+    if (address === null || address !== gitHubRoutingConnectionKey(saved)) {
+      return yield* new ConnectionBlockedError({
+        reason: "configuration",
+        detail: `That address claims to be ${saved.target.label}, which is already saved. Change its address from that environment's settings instead.`,
+      });
+    }
+  },
+);
+
 export class EnvironmentNotRegisteredError extends Schema.TaggedError<EnvironmentNotRegisteredError>()(
   "EnvironmentNotRegisteredError",
   {
@@ -81,7 +95,8 @@ export class EnvironmentRegistry extends Context.Service<
     readonly start: Effect.Effect<void>;
     readonly register: (
       registration: ConnectionRegistration,
-    ) => Effect.Effect<void, Persistence.ConnectionPersistenceError>;
+      options?: { readonly knownAddressOnly?: boolean },
+    ) => Effect.Effect<void, Persistence.ConnectionPersistenceError | ConnectionBlockedError>;
     readonly registerPlatform: (registration: PrimaryConnectionRegistration) => Effect.Effect<void>;
     readonly reconcilePlatform: (
       registrations: ReadonlyArray<PlatformConnectionRegistration>,
@@ -442,6 +457,7 @@ export const make = Effect.gen(function* () {
 
   const register = Effect.fn("EnvironmentRegistry.register")(function* (
     registration: ConnectionRegistration,
+    options?: { readonly knownAddressOnly?: boolean },
   ) {
     const registered = connectionRegistrationCatalogEntry(registration);
     const environmentId = registered.target.environmentId;
@@ -453,6 +469,9 @@ export const make = Effect.gen(function* () {
         }
         // Editing a saved environment must preserve its disabled state.
         const previous = (yield* SubscriptionRef.get(entries)).get(environmentId);
+        if (options?.knownAddressOnly === true) {
+          yield* assertKnownPairingAddress(previous, registered);
+        }
         const entry: ConnectionCatalogEntry =
           previous === undefined
             ? registered

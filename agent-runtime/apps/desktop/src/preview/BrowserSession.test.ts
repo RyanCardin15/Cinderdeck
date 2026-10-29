@@ -28,12 +28,23 @@ vi.mock("electron", () => ({
 }));
 
 import * as BrowserSession from "./BrowserSession.ts";
+import * as ElectronDialog from "../electron/ElectronDialog.ts";
 
-const layer = BrowserSession.layer.pipe(Layer.provide(NodeServices.layer));
+const showMessageBox = vi.fn<ElectronDialog.ElectronDialog["Service"]["showMessageBox"]>();
+const dialogLayer = Layer.succeed(ElectronDialog.ElectronDialog, {
+  ...ElectronDialog.make,
+  showMessageBox,
+});
+
+const layer = BrowserSession.layer.pipe(
+  Layer.provide(Layer.mergeAll(NodeServices.layer, dialogLayer)),
+);
 
 describe("BrowserSession", () => {
   beforeEach(() => {
     sessions.clear();
+    showMessageBox.mockReset();
+    showMessageBox.mockReturnValue(Effect.succeed({ response: 1, checkboxChecked: false }));
     fromPartition.mockReset();
     fromPartition.mockImplementation((partition: string) => {
       const browserSession = {
@@ -48,6 +59,116 @@ describe("BrowserSession", () => {
       return browserSession;
     });
   });
+
+  it.effect("asks once per origin and isolates clipboard decisions by preview partition", () =>
+    Effect.gen(function* () {
+      const browserSessions = yield* BrowserSession.BrowserSession;
+      const firstPartition = yield* browserSessions.getPartition("scope-a");
+      yield* browserSessions.getSession("scope-a");
+      yield* browserSessions.getSession("scope-b");
+      const first = sessions.get(firstPartition)!;
+      const second = sessions.get(yield* browserSessions.getPartition("scope-b"))!;
+      const readClipboard = (preview: typeof first, requestingUrl?: string) =>
+        Effect.callback<boolean>((resume) => {
+          preview.setPermissionRequestHandler.mock.calls[0]![0](
+            null,
+            "clipboard-read",
+            (granted: boolean) => resume(Effect.succeed(granted)),
+            { requestingUrl, isMainFrame: true },
+          );
+        });
+      const checkClipboard = (preview: typeof first, origin: string): boolean =>
+        preview.setPermissionCheckHandler.mock.calls[0]![0](null, "clipboard-read", origin, {});
+
+      showMessageBox.mockReturnValueOnce(Effect.succeed({ response: 0, checkboxChecked: false }));
+      assert.isFalse(checkClipboard(first, "https://allowed.test"));
+      assert.isTrue(yield* readClipboard(first, "https://allowed.test/page"));
+      assert.isTrue(yield* readClipboard(first, "https://allowed.test/other"));
+      assert.isTrue(checkClipboard(first, "https://allowed.test"));
+      assert.isFalse(checkClipboard(second, "https://allowed.test"));
+      assert.strictEqual(showMessageBox.mock.calls.length, 1);
+      assert.deepStrictEqual(showMessageBox.mock.calls[0]?.[0], {
+        type: "question",
+        buttons: ["Allow", "Block"],
+        defaultId: 1,
+        cancelId: 1,
+        message: "https://allowed.test wants to see text and images copied to the clipboard",
+      });
+      assert.isFalse(yield* readClipboard(first, "https://blocked.test/"));
+      assert.isFalse(yield* readClipboard(first, "https://blocked.test/again"));
+      assert.isFalse(checkClipboard(first, "https://blocked.test"));
+      assert.strictEqual(showMessageBox.mock.calls.length, 2);
+      for (const url of [
+        undefined,
+        "invalid",
+        "file:///tmp/example.html",
+        "data:text/html,example",
+      ]) {
+        assert.isFalse(yield* readClipboard(first, url));
+      }
+      assert.strictEqual(showMessageBox.mock.calls.length, 2);
+    }).pipe(Effect.provide(layer)),
+  );
+
+  it.effect("denies concurrent reads and retries after a clipboard dialog fails", () =>
+    Effect.gen(function* () {
+      const browserSessions = yield* BrowserSession.BrowserSession;
+      const partition = yield* browserSessions.getPartition("scope-a");
+      yield* browserSessions.getSession("scope-a");
+      const request = sessions.get(partition)!.setPermissionRequestHandler.mock.calls[0]![0];
+      let finish: (() => void) | undefined;
+      showMessageBox.mockReturnValueOnce(
+        Effect.callback((resume) => {
+          finish = () =>
+            resume(
+              Effect.fail(
+                new ElectronDialog.ElectronDialogShowMessageBoxError({
+                  type: "question",
+                  titleLength: null,
+                  messageLength: 1,
+                  detailLength: null,
+                  buttonCount: 2,
+                  cause: new Error("synthetic dialog failure"),
+                }),
+              ),
+            );
+        }),
+      );
+      let firstAnswer: boolean | undefined;
+      request(
+        null,
+        "clipboard-read",
+        (answer: boolean) => {
+          firstAnswer = answer;
+        },
+        { requestingUrl: "https://retry.test/" },
+      );
+      yield* Effect.yieldNow;
+      assert.isDefined(finish);
+      let concurrentAnswer: boolean | undefined;
+      request(
+        null,
+        "clipboard-read",
+        (answer: boolean) => {
+          concurrentAnswer = answer;
+        },
+        { requestingUrl: "https://other.test/" },
+      );
+      assert.isFalse(concurrentAnswer);
+      assert.strictEqual(showMessageBox.mock.calls.length, 1);
+      finish!();
+      yield* Effect.yieldNow;
+      assert.isFalse(firstAnswer);
+      showMessageBox.mockReturnValueOnce(Effect.succeed({ response: 0, checkboxChecked: false }));
+      const retry = yield* Effect.callback<boolean>((resume) => {
+        request(null, "clipboard-read", (answer: boolean) => resume(Effect.succeed(answer)), {
+          requestingUrl: "https://retry.test/again",
+        });
+      });
+      assert.isTrue(retry);
+      assert.strictEqual(showMessageBox.mock.calls.length, 2);
+    }).pipe(Effect.provide(layer)),
+  );
 
   it.effect("derives deterministic partitions and memoizes sessions", () =>
     Effect.gen(function* () {
@@ -163,12 +284,7 @@ describe("BrowserSession", () => {
         return granted;
       };
 
-      for (const permission of [
-        "clipboard-read",
-        "clipboard-sanitized-write",
-        "notifications",
-        "geolocation",
-      ]) {
+      for (const permission of ["clipboard-sanitized-write", "notifications", "geolocation"]) {
         assert.isTrue(requestAllows(permission), `request handler should allow ${permission}`);
         assert.isTrue(
           checkHandler(null, permission) as boolean,
@@ -218,7 +334,11 @@ describe("BrowserSession", () => {
         "Failed to derive a desktop preview browser partition for scope environment-a.",
       );
       assert.notInclude(error.message, nativeCause.message);
-    }).pipe(Effect.provide(BrowserSession.layer.pipe(Layer.provide(failingCryptoLayer))));
+    }).pipe(
+      Effect.provide(
+        BrowserSession.layer.pipe(Layer.provide(Layer.mergeAll(failingCryptoLayer, dialogLayer))),
+      ),
+    );
   });
 
   it.effect("preserves session scope, partition, and the Electron failure", () =>

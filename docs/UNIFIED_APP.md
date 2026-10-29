@@ -10,6 +10,10 @@ The main interface is available only inside the macOS application. Packaged buil
 
 For isolated renderer development, `node scripts/dev-runner.ts dev --home-dir /absolute/path/to/disposable-state` starts the desktop runtime with a private Vite renderer. Each launcher generates a credential held by the Electron main process; only its private protocol proxy can request renderer files. Direct browser requests are rejected, and the interface requires the desktop preload bridge before mounting. `--browser` and `--share` are rejected. The legacy `dev:web` invocation selects desktop development. `dev:server` starts only a headless companion API backend. Development data without a selected home or worktree goes into disposable temporary storage. Pairing QR codes and links retain their compatible format as connection data to paste into Cinderdeck or scan with the companion; they do not open a browser interface. Pairing and Tailscale API exposure always target the backend port, including when old state records a renderer URL.
 
+Preview pages request permission before reading clipboard text or images. Allow and Block apply only to that site's origin in the current preview partition until Cinderdeck quits. Copy buttons retain clipboard-write access. Pages with opaque origins cannot read the clipboard.
+
+Pairing a new connection cannot replace an already saved environment's address merely by claiming its identifier. Re-pairing the same address remains supported; change an existing address explicitly in that environment's settings.
+
 The UI still uses React/Electron as part of the bundled Mac app. This change removes standalone browser access; it does not replace the interface with SwiftUI. Whole-app validation still requires the packaged outer application.
 
 The composer **+** menu can attach the external app you most recently used or a

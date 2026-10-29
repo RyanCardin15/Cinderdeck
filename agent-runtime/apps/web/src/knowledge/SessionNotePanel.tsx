@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ObsidianNote } from "@cinderdeck/contracts";
 import { ExternalLinkIcon, RefreshCwIcon } from "lucide-react";
 import { Button } from "../components/ui/button";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "../components/ui/tooltip";
 import { knowledgeError } from "./ObsidianNotes";
 import { NoteContent } from "./NoteContent";
 import type { SessionNote } from "./sessionNotes";
@@ -74,9 +75,12 @@ export function SessionNotePanel({
     <section className="flex h-full min-h-0 flex-col" aria-label="Obsidian note panel">
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-medium" title={reference.path}>
-            {reference.path}
-          </h2>
+          <Tooltip>
+            <TooltipTrigger render={<h2 className="truncate text-sm font-medium" />}>
+              {reference.path}
+            </TooltipTrigger>
+            <TooltipPopup variant="code">{reference.path}</TooltipPopup>
+          </Tooltip>
           <p className="text-xs text-muted-foreground">
             {note?.vaultName ?? reference.vaultName} · Live note · Read only
           </p>

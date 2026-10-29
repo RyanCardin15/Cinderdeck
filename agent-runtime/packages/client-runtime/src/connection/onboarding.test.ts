@@ -7,11 +7,15 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Stream from "effect/Stream";
+import * as SubscriptionRef from "effect/SubscriptionRef";
+import type { ConnectionCatalogEntry } from "./catalog.ts";
+import * as EnvironmentRegistry from "./registry.ts";
 
 import { remoteHttpClientLayer } from "../rpc/http.ts";
 import * as ClientCapabilities from "../platform/capabilities.ts";
 import { BearerConnectionCredential, BearerConnectionProfile } from "./catalog.ts";
-import { BearerConnectionTarget } from "./model.ts";
+import { BearerConnectionTarget, type NetworkStatus } from "./model.ts";
 import { prepareBearerConnectionUpdate, preparePairingRegistration } from "./onboarding.ts";
 
 const CLIENT_PRESENTATION_LAYER = Layer.succeed(
@@ -32,6 +36,7 @@ function pairingHttpLayer(
     readonly failDescriptor?: boolean;
     readonly protocolVersion?: number;
     readonly selfUpdate?: boolean;
+    readonly saved?: ConnectionCatalogEntry;
   },
 ) {
   const fetchFn = ((input, init = {}) => {
@@ -77,7 +82,34 @@ function pairingHttpLayer(
     return Promise.reject(new Error(`Unexpected request: ${url}`));
   }) satisfies typeof fetch;
 
-  return remoteHttpClientLayer(fetchFn);
+  const registryLayer = Layer.effect(
+    EnvironmentRegistry.EnvironmentRegistry,
+    Effect.gen(function* () {
+      const entries = yield* SubscriptionRef.make<
+        ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>
+      >(new Map(options?.saved ? [[options.saved.target.environmentId, options.saved]] : []));
+      const unused = () => Effect.die("Unexpected registry operation");
+      return EnvironmentRegistry.EnvironmentRegistry.of({
+        entries,
+        networkStatus: yield* SubscriptionRef.make<NetworkStatus>("online"),
+        start: Effect.void,
+        register: unused,
+        registerPlatform: unused,
+        reconcilePlatform: unused,
+        remove: unused,
+        removeRelayEnvironments: unused,
+        retryNow: unused,
+        setEnabled: unused,
+        setCompatibility: unused,
+        state: unused,
+        stateChanges: () => Stream.die("Unexpected registry operation"),
+        run: unused,
+        runStream: () => Stream.die("Unexpected registry operation"),
+        followStream: () => Stream.die("Unexpected registry operation"),
+      });
+    }),
+  );
+  return Layer.mergeAll(remoteHttpClientLayer(fetchFn), registryLayer);
 }
 
 describe("connection onboarding", () => {
@@ -121,6 +153,56 @@ describe("connection onboarding", () => {
       expect(tokenParams.get("subject_token")).toBe("pairing-token");
       expect(tokenParams.get("scope")).toBe(AuthStandardClientScopes.join(" "));
       expect(tokenParams.get("client_label")).toBe("Cinderdeck Test");
+    }),
+  );
+
+  it.effect.each([
+    ["https://remote.example.test", true],
+    ["https://attacker.example.test", false],
+    ["https://remote.example.test:8443", false],
+    ["https://remote.example.test/other", false],
+  ] as const)("checks saved address %s before spending a pairing code", ([savedAddress, allowed]) =>
+    Effect.gen(function* () {
+      const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
+      const environmentId = EnvironmentId.make("environment-paired");
+      const profile = new BearerConnectionProfile({
+        connectionId: "saved-connection",
+        environmentId,
+        label: "Saved environment",
+        httpBaseUrl: savedAddress,
+        wsBaseUrl: savedAddress.replace("https:", "wss:"),
+      });
+      const result = yield* preparePairingRegistration({
+        host: "remote.example.test",
+        pairingCode: "pairing-token",
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            CLIENT_PRESENTATION_LAYER,
+            pairingHttpLayer(calls, {
+              saved: {
+                target: new BearerConnectionTarget({
+                  environmentId,
+                  label: "Saved environment",
+                  connectionId: "saved-connection",
+                }),
+                profile: Option.some(profile),
+                enabled: true,
+              },
+            }),
+          ),
+        ),
+        Effect.result,
+      );
+      expect(result._tag).toBe(allowed ? "Success" : "Failure");
+      expect(calls.map((call) => call.url)).toEqual(
+        allowed
+          ? [
+              "https://remote.example.test/.well-known/t3/environment",
+              "https://remote.example.test/oauth/token",
+            ]
+          : ["https://remote.example.test/.well-known/t3/environment"],
+      );
     }),
   );
 

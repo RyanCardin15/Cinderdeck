@@ -1168,6 +1168,90 @@ describe("EnvironmentRegistry", () => {
     }),
   );
 
+  it.effect("rechecks pairing addresses under the lease and preserves saved credentials", () =>
+    Effect.gen(function* () {
+      const started = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+      const harness = yield* makeHarness([], [], [], {
+        beforeRegistrationRegister: () =>
+          Effect.gen(function* () {
+            yield* Deferred.succeed(started, undefined);
+            yield* Deferred.await(release);
+          }),
+      });
+      yield* Effect.gen(function* () {
+        const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+        const registration = new BearerConnectionRegistration({
+          target: BEARER_TARGET,
+          profile: BEARER_PROFILE,
+          credential: BEARER_CREDENTIAL,
+        });
+        const first = yield* registry
+          .register(registration, { knownAddressOnly: true })
+          .pipe(Effect.forkChild);
+        yield* Deferred.await(started);
+        // Both calls began before an entry was saved. Check again after acquiring the lease.
+        const changedProfile = new BearerConnectionProfile({
+          ...BEARER_PROFILE,
+          httpBaseUrl: "https://other.example.test",
+          wsBaseUrl: "wss://other.example.test",
+        });
+        const second = yield* registry
+          .register(
+            new BearerConnectionRegistration({
+              ...registration,
+              profile: changedProfile,
+              credential: new BearerConnectionCredential({ token: "other-token" }),
+            }),
+            { knownAddressOnly: true },
+          )
+          .pipe(Effect.result, Effect.forkChild);
+        yield* Deferred.succeed(release, undefined);
+        yield* Fiber.join(first);
+        const refused = yield* Fiber.join(second);
+        expect(refused._tag).toBe("Failure");
+        expect(yield* Ref.get(harness.storedProfiles)).toEqual(
+          new Map([[BEARER_TARGET.connectionId, BEARER_PROFILE]]),
+        );
+        expect(yield* Ref.get(harness.storedCredentials)).toEqual(
+          new Map([[BEARER_TARGET.connectionId, BEARER_CREDENTIAL]]),
+        );
+        // Re-pairing the same normalized address refreshes credentials without enabling it.
+        yield* registry.setEnabled(BEARER_TARGET.environmentId, false);
+        const refreshed = new BearerConnectionCredential({ token: "refreshed-token" });
+        yield* registry.register(
+          new BearerConnectionRegistration({
+            ...registration,
+            profile: new BearerConnectionProfile({
+              ...BEARER_PROFILE,
+              httpBaseUrl: `${BEARER_PROFILE.httpBaseUrl}/`,
+              wsBaseUrl: `${BEARER_PROFILE.wsBaseUrl}/`,
+            }),
+            credential: refreshed,
+          }),
+          { knownAddressOnly: true },
+        );
+        expect(
+          (yield* SubscriptionRef.get(registry.entries)).get(BEARER_TARGET.environmentId)?.enabled,
+        ).toBe(false);
+        expect((yield* Ref.get(harness.storedCredentials)).get(BEARER_TARGET.connectionId)).toEqual(
+          refreshed,
+        );
+        // Changing a known address remains an explicit Settings operation.
+        yield* registry.register(
+          new BearerConnectionRegistration({
+            ...registration,
+            profile: changedProfile,
+            credential: refreshed,
+          }),
+        );
+        expect((yield* Ref.get(harness.storedProfiles)).get(BEARER_TARGET.connectionId)).toEqual(
+          changedProfile,
+        );
+      }).pipe(Effect.provide(harness.layer), Effect.scoped);
+    }),
+  );
+
   it.effect("starts a newly paired bearer environment without re-reading its profile", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness([]);

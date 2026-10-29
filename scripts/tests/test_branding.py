@@ -29,6 +29,16 @@ class BrandingTests(unittest.TestCase):
         self.assertFalse(branding.path_violations(
             "agent-runtime/apps/mobile/src/native/T3ComposerEditor.ios.tsx"))
 
+    def test_bare_brand_asset_and_module_paths_are_rejected(self):
+        for path in (
+            "assets/T3.png",
+            "agent-runtime/apps/desktop/resources/t3.icns",
+            "agent-runtime/apps/web/src/t3.ts",
+            "agent-runtime/apps/web/public/t3/logo.svg",
+        ):
+            self.assertTrue(branding.path_violations(path), path)
+        self.assertFalse(branding.path_violations("assets/cinderdeck-icon.png"))
+
     def test_protocol_and_vendor_path_exemptions_stay_in_their_owned_roots(self):
         for path in (
             "agent-runtime/apps/web/src/_generated/T3Panel.tsx",

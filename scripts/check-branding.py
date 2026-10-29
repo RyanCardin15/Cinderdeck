@@ -286,7 +286,7 @@ def path_violations(path: str) -> bool:
             path = "/".join(parts[5:])  # Only the registered module folder is exempt.
     if native_abi_context and Path(path).name in NATIVE_ABI_FILENAMES:
         path = str(Path(path).parent)  # Keep checking any surrounding directories.
-    return bool(re.search(r"(?:T3Code|t3code|@t3tools|(?:^|/)t3-)", path, re.I) or INTERNAL_BRAND.search(path))
+    return bool(re.search(r"(?:T3Code|t3code|@t3tools|(?:^|/)t3(?:[./-]|$))", path, re.I) or INTERNAL_BRAND.search(path))
 
 
 def main() -> int:
