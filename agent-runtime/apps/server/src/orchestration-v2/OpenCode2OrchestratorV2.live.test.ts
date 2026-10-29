@@ -129,7 +129,9 @@ const PlatformTestLayer = Layer.merge(
     resolveLink: () => Effect.die("unused title link"),
   }),
 );
-const serverConfigLayer = ServerConfig.layerTest(`${ROOT}/work`, { prefix: "t3-opencode2-live-" });
+const serverConfigLayer = ServerConfig.layerTest(`${ROOT}/work`, {
+  prefix: "cinderdeck-opencode2-live-",
+});
 const vcsDriverRegistryLayer = VcsDriverRegistry.layer.pipe(
   Layer.provide(VcsProcess.layer),
   Layer.provide(serverConfigLayer),

@@ -474,7 +474,9 @@ it.effect.skipIf(!symlinksSupported)(
   () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
-      const cwd = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-restore-isolation-" });
+      const cwd = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "cinderdeck-restore-isolation-",
+      });
       const path = yield* Path.Path;
       const alias = path.join(cwd, "alias");
       yield* fileSystem.symlink(cwd, alias);

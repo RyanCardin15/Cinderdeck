@@ -32,7 +32,7 @@ registerHooks({
 
 const { isCursorShellSpawnFailure } = await import(${JSON.stringify(cursorSdkUrl)});
 const mode = process.argv[1];
-const missingCwd = join(tmpdir(), "t3-missing-cwd-" + process.pid);
+const missingCwd = join(tmpdir(), "cinderdeck-missing-cwd-" + process.pid);
 
 if (mode === "predicate") {
   const cursorShell = Object.assign(new Error("spawn /bin/zsh ENOENT"), {

@@ -85,7 +85,7 @@ const PlatformTestLayer = Layer.merge(
 );
 
 const ServerConfigLayer = ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3-orchestration-v2-runtime-layer-",
+  prefix: "cinderdeck-orchestration-v2-runtime-layer-",
 });
 
 const modelSelection = {

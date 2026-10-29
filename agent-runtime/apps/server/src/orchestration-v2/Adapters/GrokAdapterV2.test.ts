@@ -312,7 +312,7 @@ describe("Grok permission prompts", () => {
 
 describe("Grok launch permission mode", () => {
   const serverConfigLayer = ServerConfig.layerTest(process.cwd(), {
-    prefix: "t3-grok-v2-launch-",
+    prefix: "cinderdeck-grok-v2-launch-",
   }).pipe(Layer.provide(NodeServices.layer));
   const testLayer = Layer.mergeAll(NodeServices.layer, IdAllocator.layer, serverConfigLayer);
 

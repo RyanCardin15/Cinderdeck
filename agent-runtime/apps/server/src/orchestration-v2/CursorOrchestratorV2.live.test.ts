@@ -48,7 +48,7 @@ const PlatformTestLayer = Layer.merge(
 );
 
 const serverConfigLayer = ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3-cursor-v2-live-",
+  prefix: "cinderdeck-cursor-v2-live-",
 });
 
 const vcsDriverRegistryLayer = VcsDriverRegistry.layer.pipe(

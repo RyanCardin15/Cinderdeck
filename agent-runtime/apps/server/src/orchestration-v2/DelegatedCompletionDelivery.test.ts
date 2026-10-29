@@ -50,7 +50,7 @@ const PlatformTestLayer = Layer.merge(
 );
 
 const ServerConfigLayer = ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3-orchestration-v2-delegated-completion-",
+  prefix: "cinderdeck-orchestration-v2-delegated-completion-",
 });
 
 const modelSelection = {

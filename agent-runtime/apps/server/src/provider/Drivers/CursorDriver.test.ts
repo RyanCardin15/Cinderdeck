@@ -24,7 +24,7 @@ import { Cursor } from "../cursorSdk.ts";
 const testLayer = ServerSecretStore.layer.pipe(
   Layer.provideMerge(
     ServerConfig.layerTest(process.cwd(), {
-      prefix: "t3-cursor-driver-copy-command-",
+      prefix: "cinderdeck-cursor-driver-copy-command-",
     }),
   ),
   Layer.provideMerge(NodeServices.layer),

@@ -63,7 +63,7 @@ describe("session cookie isolation", () => {
       mode: "web",
       port: 5775,
       host: "127.0.0.1",
-      instanceKey: "/tmp/t3-agent-one",
+      instanceKey: "/tmp/cinderdeck-agent-one",
       environmentId: "environment-one",
       development: true,
     });
@@ -71,7 +71,7 @@ describe("session cookie isolation", () => {
       mode: "web",
       port: 5775,
       host: "127.0.0.1",
-      instanceKey: "/tmp/t3-agent-two",
+      instanceKey: "/tmp/cinderdeck-agent-two",
       environmentId: "environment-two",
       development: true,
     });
@@ -144,7 +144,7 @@ describe("session cookie isolation", () => {
         mode: "web",
         port: 5775,
         host: "0.0.0.0",
-        instanceKey: "/tmp/t3-wildcard-dev",
+        instanceKey: "/tmp/cinderdeck-wildcard-dev",
         environmentId: "environment-one",
         development: true,
       }),

@@ -28,7 +28,7 @@ import * as ThreadManagementService from "./ThreadManagementService.ts";
 import { dispatchCommand } from "./ThreadMessageIntake.ts";
 
 const intakeTestLayer = ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3-question-intake-",
+  prefix: "cinderdeck-question-intake-",
 }).pipe(Layer.provideMerge(NodeServices.layer));
 
 const failingDispatch = (captured: OrchestrationV2ServerCommand[]) =>

@@ -65,7 +65,7 @@ const liveModelSelection = {
 } satisfies ModelSelection;
 
 const serverConfigLayer = ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3-acp-registry-v2-live-",
+  prefix: "cinderdeck-acp-registry-v2-live-",
 });
 
 const vcsDriverRegistryLayer = VcsDriverRegistry.layer.pipe(

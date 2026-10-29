@@ -38,7 +38,11 @@ const makeServerConfigLayer = (overrides?: Partial<ServerConfig.ServerConfig["Se
         ...overrides,
       } satisfies ServerConfig.ServerConfig["Service"];
     }),
-  ).pipe(Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-auth-session-test-" })));
+  ).pipe(
+    Layer.provide(
+      ServerConfig.layerTest(process.cwd(), { prefix: "cinderdeck-auth-session-test-" }),
+    ),
+  );
 
 const makeServerEnvironmentLayer = (environmentId: EnvironmentId) =>
   Layer.succeed(ServerEnvironment.ServerEnvironmentIdentity, {
@@ -268,8 +272,8 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const token = "reusable-dev-auth-token-that-is-long-enough";
-      const baseA = yield* fs.makeTempDirectoryScoped({ prefix: "t3-dev-auth-a-" });
-      const baseB = yield* fs.makeTempDirectoryScoped({ prefix: "t3-dev-auth-b-" });
+      const baseA = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-dev-auth-a-" });
+      const baseB = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-dev-auth-b-" });
       const layerA = yield* makeDiskSessionStoreLayer(baseA, token);
       const fromA = yield* Effect.gen(function* () {
         const sessions = yield* SessionStore.SessionStore;
@@ -313,7 +317,9 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
   it.effect("invalidates old dev credentials and tickets after rotation or removal", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-dev-auth-rotation-" });
+      const baseDir = yield* fs.makeTempDirectoryScoped({
+        prefix: "cinderdeck-dev-auth-rotation-",
+      });
       const oldToken = "old-reusable-dev-auth-token-that-is-long-enough";
       const newToken = "new-reusable-dev-auth-token-that-is-long-enough";
       const initialLayer = yield* makeDiskSessionStoreLayer(baseDir, oldToken);

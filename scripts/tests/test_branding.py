@@ -39,6 +39,17 @@ class BrandingTests(unittest.TestCase):
             self.assertTrue(branding.path_violations(path), path)
         self.assertFalse(branding.path_violations("assets/cinderdeck-icon.png"))
 
+    def test_disposable_names_are_not_storage_compatibility_exceptions(self):
+        for content in (
+            'fs.makeTempDirectoryScoped({ prefix: "t3-preview-" });',
+            'NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-preview-"));',
+            'fs.makeTempDirectoryScoped({\n  prefix: "t3-preview-",\n});',
+        ):
+            self.assertTrue(branding.violations("agent-runtime/apps/desktop/src/preview/NewService.ts", content))
+        self.assertTrue(branding.violations("agent-runtime/apps/desktop/src/preview/NewService.test.ts", 'prefix: "t3-preview-",'))
+        self.assertTrue(branding.violations("agent-runtime/apps/desktop/src/preview/NewService.test.ts", 'prefix: ".t3-preview-",'))
+        self.assertEqual(branding.violations("agent-runtime/apps/desktop/src/preview/NewService.ts", 'fs.makeTempDirectoryScoped({ prefix: "cinderdeck-preview-" });'), [])
+
     def test_protocol_and_vendor_path_exemptions_stay_in_their_owned_roots(self):
         for path in (
             "agent-runtime/apps/web/src/_generated/T3Panel.tsx",

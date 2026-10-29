@@ -19,7 +19,9 @@ it.layer(NodeServices.layer)("DesktopPreReadyFileSystem", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-pre-ready-fs-" });
+      const root = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "cinderdeck-pre-ready-fs-",
+      });
 
       assert.equal(yield* resolveDevelopmentUserData(root), path.join(root, "deckhand-dev"));
 
@@ -33,7 +35,9 @@ it.layer(NodeServices.layer)("DesktopPreReadyFileSystem", (it) => {
     () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
-        const root = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-pre-ready-fs-" });
+        const root = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "cinderdeck-pre-ready-fs-",
+        });
         yield* fileSystem.chmod(root, 0o000);
         yield* Effect.addFinalizer(() => fileSystem.chmod(root, 0o700).pipe(Effect.orDie));
 
