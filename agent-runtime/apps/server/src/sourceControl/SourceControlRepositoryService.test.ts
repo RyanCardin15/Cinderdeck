@@ -83,7 +83,9 @@ function makeLayer(input: {
     Layer.provide(
       ServerConfig.layerTest(
         process.cwd(),
-        input.fileSystem ? "/tmp/t3-source-control-repos" : { prefix: "t3-source-control-repos-" },
+        input.fileSystem
+          ? "/tmp/cinderdeck-source-control-repos"
+          : { prefix: "cinderdeck-source-control-repos-" },
       ),
     ),
   );
@@ -157,7 +159,7 @@ it.effect("clones a looked-up repository into the requested destination", () =>
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const parent = yield* fs.makeTempDirectoryScoped({
-      prefix: "t3-source-control-clone-parent-",
+      prefix: "cinderdeck-source-control-clone-parent-",
     });
     const destinationPath = path.join(parent, "cinderdeck");
     const cloneCalls: Array<{ cwd: string; args: ReadonlyArray<string> }> = [];
@@ -205,7 +207,7 @@ it.effect.each(["--bare", "source.git"])(
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const git = yield* GitVcsDriver.GitVcsDriver;
-      const parent = yield* fs.makeTempDirectoryScoped({ prefix: "t3-clone-options-" });
+      const parent = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-clone-options-" });
       yield* git.execute({
         operation: "test.init",
         cwd: parent,
@@ -226,7 +228,7 @@ it.effect.each(["--bare", "source.git"])(
         GitVcsDriver.layer.pipe(
           Layer.provide(
             ServerConfig.layerTest(process.cwd(), {
-              prefix: "t3-clone-options-config-",
+              prefix: "cinderdeck-clone-options-config-",
             }),
           ),
           Layer.provideMerge(NodeServices.layer),
@@ -240,7 +242,7 @@ it.effect("reports clone progress from git's stderr and keeps its error text on 
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const parent = yield* fs.makeTempDirectoryScoped({
-      prefix: "t3-source-control-clone-progress-",
+      prefix: "cinderdeck-source-control-clone-progress-",
     });
     const destinationPath = path.join(parent, "cinderdeck");
     const progress: Array<{ stage: string; percent: number | null; detail: string | null }> = [];
@@ -300,7 +302,9 @@ it.effect("strips embedded credentials from the remote URL it reports", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const parent = yield* fs.makeTempDirectoryScoped({ prefix: "t3-source-control-redact-" });
+    const parent = yield* fs.makeTempDirectoryScoped({
+      prefix: "cinderdeck-source-control-redact-",
+    });
     const destinationPath = path.join(parent, "cinderdeck");
     const cloneArgs: Array<ReadonlyArray<string>> = [];
     const result = yield* Effect.gen(function* () {
@@ -332,7 +336,9 @@ it.effect("discards only a directory git wrote to", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const parent = yield* fs.makeTempDirectoryScoped({ prefix: "t3-source-control-discard-" });
+    const parent = yield* fs.makeTempDirectoryScoped({
+      prefix: "cinderdeck-source-control-discard-",
+    });
     const partial = path.join(parent, "partial");
     yield* fs.makeDirectory(path.join(partial, ".git"), { recursive: true });
     yield* fs.writeFileString(path.join(partial, "README.md"), "half");
@@ -366,7 +372,9 @@ it.effect("redacts query tokens and userinfo containing '@' from reported URLs",
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const parent = yield* fs.makeTempDirectoryScoped({ prefix: "t3-source-control-redact2-" });
+    const parent = yield* fs.makeTempDirectoryScoped({
+      prefix: "cinderdeck-source-control-redact2-",
+    });
     yield* Effect.gen(function* () {
       const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
       const query = yield* service.prepareClone({

@@ -219,7 +219,7 @@ it.effect("finds remote editors installed without PATH launchers", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const home = yield* fs.makeTempDirectoryScoped({ prefix: "t3-remote-editors-" });
+    const home = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-remote-editors-" });
     for (const app of ["Cursor", "Visual Studio Code", "WebStorm"]) {
       const executable = path.join(
         home,

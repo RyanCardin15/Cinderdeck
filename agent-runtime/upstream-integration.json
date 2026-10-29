@@ -8,7 +8,7 @@
     "historicalMetadataCommit": "17877ebbea4790b5f0ecad9bf8599619f0387be3",
     "historicalMetadataPath": "docs/deckhand/upstream-patches.json"
   },
-  "examinedTarget": "cc93cc564b052a9dcf73323783e7b60506cda5e0",
+  "examinedTarget": "ccaa3ad2956b90484052198af7f0e40996e403ca",
   "ports": [
     {
       "commit": "f391794a35c604d57e166a3ab48d56fc6e4e469a",
@@ -133,6 +133,18 @@
     {
       "commit": "61e2747f2ea801c58bb40c11dfec7acf2d80e2f4",
       "behavior": "Pin Electron 44.9.3 for the private runtime, incorporating the upstream certificate-trust security update"
+    },
+    {
+      "commit": "6d82a22e9df93f1dd14afa89d820b7dd1b624eef",
+      "behavior": "Pin the private Cinderdeck runtime to Electron 44.10.0, incorporating the upstream Node.js Brotli security update"
+    },
+    {
+      "commit": "3ae672f82e17235972620f0085b5d527d3282cf2",
+      "behavior": "Ask once per HTTP(S) origin and preview partition before reading the clipboard; deny opaque origins, concurrent prompts and dialog failures without persisting undecided answers"
+    },
+    {
+      "commit": "003ccd336dc8c2b9a0cbe62cfc358075e86db28c",
+      "behavior": "Refuse pairing that replaces a saved environment address before consuming a code and again under the registration lease; retain explicit Settings edits in the owned single-address catalog"
     }
   ],
   "coverage": "Selected independent ports only. integratedThrough remains the last complete historical baseline; examinedTarget is not a claim of complete incorporation.",

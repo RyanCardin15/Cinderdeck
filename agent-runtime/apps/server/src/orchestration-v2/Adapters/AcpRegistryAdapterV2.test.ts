@@ -43,7 +43,7 @@ const decodeAcpRegistryAdapterSettings = Schema.decodeUnknownEffect(
 );
 
 const serverConfigLayer = ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3-acp-registry-v2-adapter-",
+  prefix: "cinderdeck-acp-registry-v2-adapter-",
 }).pipe(Layer.provide(NodeServices.layer));
 
 const registryLayer = Layer.succeed(
@@ -161,7 +161,7 @@ describe("AcpRegistryAdapterV2", () => {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const replayDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-acp-registry-mode-pick-",
+        prefix: "cinderdeck-acp-registry-mode-pick-",
       });
       const statusPath = path.join(replayDir, "status.json");
       const transcript = yield* decodeAcpReplayTranscript(

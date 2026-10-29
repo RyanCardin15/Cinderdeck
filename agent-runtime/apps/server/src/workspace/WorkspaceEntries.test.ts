@@ -27,7 +27,7 @@ const TestLayer = Layer.empty.pipe(
   Layer.provideMerge(VcsProcess.layer),
   Layer.provide(
     ServerConfig.ServerConfig.layerTest(process.cwd(), {
-      prefix: "t3-workspace-entries-test-",
+      prefix: "cinderdeck-workspace-entries-test-",
     }),
   ),
   Layer.provideMerge(NodeServices.layer),
@@ -484,7 +484,10 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceEntries", (it) => {
 
     it.effect("honors case sensitivity and gitignore rules", () =>
       Effect.gen(function* () {
-        const cwd = yield* makeTempDir({ prefix: "cinderdeck-workspace-content-ignore-", git: true });
+        const cwd = yield* makeTempDir({
+          prefix: "cinderdeck-workspace-content-ignore-",
+          git: true,
+        });
         yield* writeTextFile(cwd, ".gitignore", "ignored.txt\n");
         yield* writeTextFile(cwd, "src/keep.ts", "square\nSquare\n");
         yield* writeTextFile(cwd, "ignored.txt", "Square\n");
@@ -618,7 +621,9 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceEntries", (it) => {
 
     it.effect("matches punctuation-edged regex queries as whole words", () =>
       Effect.gen(function* () {
-        const cwd = yield* makeTempDir({ prefix: "cinderdeck-workspace-content-regex-punctuation-" });
+        const cwd = yield* makeTempDir({
+          prefix: "cinderdeck-workspace-content-regex-punctuation-",
+        });
         yield* writeTextFile(cwd, "src/words.ts", "foo- foo-\nafoo-b\n");
 
         const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;

@@ -124,7 +124,7 @@ const makeRuntimeLayer = (dbPath: string) => {
     }),
   );
   const serverConfig = ServerConfig.layerTest(process.cwd(), {
-    prefix: "t3-project-upgrade-",
+    prefix: "cinderdeck-project-upgrade-",
   });
   const checkpointStore = CheckpointStore.layer.pipe(
     Layer.provide(
@@ -179,7 +179,7 @@ it.live("keeps project settings through the V2 migrations and the first V2 boot"
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const stateDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-project-upgrade-" });
+      const stateDir = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-project-upgrade-" });
       const dbPath = path.join(stateDir, "statev2.sqlite");
 
       // Seed the released V1 schema, then boot the V2 runtime, which runs 055+, on the same file.

@@ -1904,7 +1904,7 @@ it.layer(
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const cacheDir = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "t3-terminal-acp-path-",
+        prefix: "cinderdeck-terminal-acp-path-",
       });
       const installBin = path.join(
         cacheDir,
@@ -2466,7 +2466,9 @@ it.layer(
           Layer.provide(ServerSecretStore.layer),
           Layer.provide(SqlitePersistenceMemory),
           Layer.provide(
-            ServerConfig.layerTest(process.cwd(), { prefix: "cinderdeck-terminal-provider-restart-" }),
+            ServerConfig.layerTest(process.cwd(), {
+              prefix: "cinderdeck-terminal-provider-restart-",
+            }),
           ),
         ),
       ),

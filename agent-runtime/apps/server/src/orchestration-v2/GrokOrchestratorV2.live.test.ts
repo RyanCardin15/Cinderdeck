@@ -47,7 +47,7 @@ const PlatformTestLayer = Layer.merge(
 );
 
 const serverConfigLayer = ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3-grok-v2-live-",
+  prefix: "cinderdeck-grok-v2-live-",
 });
 
 const vcsDriverRegistryLayer = VcsDriverRegistry.layer.pipe(

@@ -9,6 +9,8 @@ import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
+import * as ElectronDialog from "../electron/ElectronDialog.ts";
+
 const PREVIEW_PARTITION_PREFIX = "persist:t3code-preview-";
 /**
  * Incognito partitions deliberately omit the `persist:` prefix, which is what
@@ -29,7 +31,6 @@ export type BrowserSessionPartitionNamespace = "profile";
 // buttons — e.g. the Next.js / Vercel error overlay — fail with
 // `Failed to execute 'writeText' on 'Clipboard': Write permission denied`.
 const ALLOWED_PREVIEW_PERMISSIONS: ReadonlySet<string> = new Set([
-  "clipboard-read",
   "clipboard-sanitized-write",
   "notifications",
   "geolocation",
@@ -38,6 +39,16 @@ const ALLOWED_PREVIEW_PERMISSIONS: ReadonlySet<string> = new Set([
   // fingerprint (and font file bytes via FontData.blob()). The app's own font
   // picker runs in the main window session, which is unaffected by this list.
 ]);
+
+const permissionOrigin = (rawUrl: string | undefined): string | null => {
+  if (!rawUrl) return null;
+  try {
+    const { origin, protocol } = new URL(rawUrl);
+    return ["http:", "https:"].includes(protocol) && origin !== "null" ? origin : null;
+  } catch {
+    return null;
+  }
+};
 
 export class BrowserSessionPartitionDerivationError extends Schema.TaggedError<BrowserSessionPartitionDerivationError>()(
   "BrowserSessionPartitionDerivationError",
@@ -162,6 +173,10 @@ const encodeScopeForDigest = (scope: string): Uint8Array =>
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* BrowserSessionMake() {
   const crypto = yield* Crypto.Crypto;
+  const electronDialog = yield* ElectronDialog.ElectronDialog;
+  const runFork = Effect.runForkWith(yield* Effect.context<never>());
+  // One prompt across all preview partitions prevents a page from stacking dialogs.
+  let clipboardPromptOpen = false;
   const sessionsRef = yield* SynchronizedRef.make<ReadonlyMap<string, Session>>(new Map());
 
   const getPartition = Effect.fn("BrowserSession.getPartition")(function* (
@@ -197,17 +212,75 @@ export const make = Effect.gen(function* BrowserSessionMake() {
       return Effect.try({
         try: () => {
           const browserSession = session.fromPartition(partition);
+          // Decisions are scoped to this partition and origin, and expire with the process.
+          const clipboardReadDecisions = new Map<string, boolean>();
+          const confirmClipboardRead = (
+            rawUrl: string | undefined,
+            callback: (granted: boolean) => void,
+          ): void => {
+            const origin = permissionOrigin(rawUrl);
+            if (origin === null) {
+              callback(false);
+              return;
+            }
+            const remembered = clipboardReadDecisions.get(origin);
+            if (remembered !== undefined) {
+              callback(remembered);
+              return;
+            }
+            if (clipboardPromptOpen) {
+              callback(false);
+              return;
+            }
+            clipboardPromptOpen = true;
+            const settle = (answer: boolean | undefined) =>
+              Effect.sync(() => {
+                clipboardPromptOpen = false;
+                // A failed or interrupted prompt is not a remembered user decision.
+                if (answer !== undefined) clipboardReadDecisions.set(origin, answer);
+                callback(answer === true);
+              });
+            const shownOrigin = origin.length > 300 ? `${origin.slice(0, 300)}…` : origin;
+            runFork(
+              electronDialog
+                .showMessageBox({
+                  type: "question",
+                  buttons: ["Allow", "Block"],
+                  // Enter typed into the page must not accept a prompt it raised.
+                  defaultId: 1,
+                  cancelId: 1,
+                  message: `${shownOrigin} wants to see text and images copied to the clipboard`,
+                })
+                .pipe(
+                  Effect.map(({ response }): boolean | undefined => response === 0),
+                  Effect.orElseSucceed(() => undefined),
+                  Effect.flatMap(settle),
+                  Effect.onInterrupt(() => settle(undefined)),
+                ),
+            );
+          };
           // The guest keeps Electron's native User-Agent. Rewriting it in any
           // form — even variants that keep the Electron token — makes Cloudflare
           // Turnstile fail its integrity check with error 600010 and recreate
           // the challenge every few seconds, so logins behind it never complete
           // (#5002). Re-setting the unchanged native string is harmless, so it
           // is the rewritten string itself that trips the check.
-          browserSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-            callback(ALLOWED_PREVIEW_PERMISSIONS.has(permission));
-          });
-          browserSession.setPermissionCheckHandler((_webContents, permission) =>
-            ALLOWED_PREVIEW_PERMISSIONS.has(permission),
+          browserSession.setPermissionRequestHandler(
+            (_webContents, permission, callback, details) => {
+              if (permission === "clipboard-read") {
+                confirmClipboardRead(
+                  "requestingUrl" in details ? details.requestingUrl : undefined,
+                  callback,
+                );
+                return;
+              }
+              callback(ALLOWED_PREVIEW_PERMISSIONS.has(permission));
+            },
+          );
+          browserSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin) =>
+            permission === "clipboard-read"
+              ? clipboardReadDecisions.get(permissionOrigin(requestingOrigin) ?? "") === true
+              : ALLOWED_PREVIEW_PERMISSIONS.has(permission),
           );
           const next = new Map(sessions);
           next.set(partition, browserSession);

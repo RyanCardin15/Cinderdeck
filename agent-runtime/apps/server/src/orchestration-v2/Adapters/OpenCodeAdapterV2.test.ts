@@ -2291,7 +2291,7 @@ describe("OpenCodeAdapterV2", () => {
         Layer.mergeAll(
           IdAllocator.layer,
           ServerConfig.layerTest(process.cwd(), {
-            prefix: "t3-opencode-v2-adapter-",
+            prefix: "cinderdeck-opencode-v2-adapter-",
           }).pipe(Layer.provide(NodeServices.layer)),
         ),
       ),

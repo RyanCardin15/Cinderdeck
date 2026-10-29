@@ -1766,9 +1766,9 @@ it.effect("creates a strong provider-thread mapping for an imported native sessi
 
 it.effect("shared intake preserves durable attachment bytes after a lost launch result", () => {
   const harness = makeHarness();
-  const files = ServerConfig.layerTest(process.cwd(), { prefix: "t3-message-intake-" }).pipe(
-    Layer.provideMerge(NodeServices.layer),
-  );
+  const files = ServerConfig.layerTest(process.cwd(), {
+    prefix: "cinderdeck-message-intake-",
+  }).pipe(Layer.provideMerge(NodeServices.layer));
   return Effect.gen(function* () {
     const config = yield* ServerConfig.ServerConfig;
     const fs = yield* FileSystem.FileSystem;

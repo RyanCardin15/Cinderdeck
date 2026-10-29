@@ -37,7 +37,7 @@ it.effect("keeps a legacy development profile and otherwise uses the current nam
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-v2-profile-" });
+    const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-v2-profile-" });
 
     assert.equal(
       yield* resolveUserDataPath({ appDataDirectory: directory, isDevelopment: true }),
@@ -55,7 +55,7 @@ it.effect("gives a packaged build its own profile without copying legacy state",
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-v2-profile-" });
+    const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-v2-profile-" });
     yield* fs.makeDirectory(path.join(directory, "Cinderdeck (Alpha)"));
     yield* fs.writeFileString(path.join(directory, "Cinderdeck (Alpha)", "Local State"), "{}");
 

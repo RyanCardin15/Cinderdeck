@@ -151,7 +151,7 @@ describe("pi Cinderdeck MCP injection", () => {
   it.effect("materializes the MCP bridge with namespaced tool registration", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const cacheDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pi-extensions-" });
+      const cacheDir = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-pi-extensions-" });
       const mcpDest = yield* materializePiT3McpExtension(cacheDir);
       assert.isTrue(mcpDest.endsWith(PI_T3_MCP_EXTENSION_FILENAME));
       const mcpSource = yield* fs.readFileString(mcpDest);

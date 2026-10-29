@@ -18,7 +18,7 @@ import { GrokDriver } from "./GrokDriver.ts";
 import * as IdAllocator from "../../orchestration-v2/IdAllocator.ts";
 
 const testLayer = ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3-grok-driver-update-",
+  prefix: "cinderdeck-grok-driver-update-",
 }).pipe(
   Layer.provideMerge(NodeServices.layer),
   Layer.provideMerge(IdAllocator.layer),
@@ -54,7 +54,7 @@ it.layer(testLayer)("GrokDriver", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-grok-driver-" });
+      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-grok-driver-" });
       const grokHome = path.join(tempDir, "Grok Home");
       const binaryPath = path.join(grokHome, "bin", "grok");
       yield* fs.makeDirectory(path.dirname(binaryPath), { recursive: true });
@@ -88,7 +88,7 @@ it.layer(testLayer)("GrokDriver", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-grok-missing-" });
+      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-grok-missing-" });
       const instance = yield* GrokDriver.create({
         instanceId: ProviderInstanceId.make("grok-missing"),
         displayName: "Grok test",

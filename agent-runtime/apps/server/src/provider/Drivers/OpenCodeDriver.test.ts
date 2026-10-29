@@ -48,7 +48,7 @@ const openCode2Runtime = {
 } as unknown as OpenCodeRuntime.OpenCodeRuntimeShape;
 
 const layer = Layer.mergeAll(
-  ServerConfig.layerTest(process.cwd(), { prefix: "t3-opencode-driver-" }),
+  ServerConfig.layerTest(process.cwd(), { prefix: "cinderdeck-opencode-driver-" }),
   IdAllocator.layer,
   ServerSettings.layerTest(),
   Layer.mock(BackgroundPolicy.BackgroundPolicy)({}),
@@ -160,7 +160,7 @@ it.effect.skipIf(HostProcessPlatform.defaultValue() === "win32")(
   () =>
     Effect.gen(function* () {
       const root = NodeFS.realpathSync(
-        NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-opencode-update-")),
+        NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-opencode-update-")),
       );
       const v2Prefix = NodePath.join(root, "v2");
       const v1Prefix = NodePath.join(root, "v1");
@@ -212,7 +212,7 @@ const changingRuntime = {
   connectToOpenCodeServer: () => reachedServer("connect"),
 } as unknown as OpenCodeRuntime.OpenCodeRuntimeShape;
 const updateLayer = Layer.mergeAll(
-  ServerConfig.layerTest(process.cwd(), { prefix: "t3-opencode-driver-update-" }),
+  ServerConfig.layerTest(process.cwd(), { prefix: "cinderdeck-opencode-driver-update-" }),
   IdAllocator.layer,
   ServerSettings.layerTest(),
   Layer.mock(BackgroundPolicy.BackgroundPolicy)({}),
@@ -247,7 +247,7 @@ it.layer(updateLayer)("OpenCodeDriver updates", (it) => {
     () =>
       Effect.gen(function* () {
         const root = NodeFS.realpathSync(
-          NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-opencode-driver-update-")),
+          NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-opencode-driver-update-")),
         );
         const binaryPath = npmGlobalInstall(NodePath.join(root, "v1"), ["opencode-ai"], "opencode");
         const instance = yield* OpenCodeDriver.create({

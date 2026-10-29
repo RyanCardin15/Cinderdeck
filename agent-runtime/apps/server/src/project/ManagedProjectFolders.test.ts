@@ -104,7 +104,9 @@ const withScratch = <A, E>(
 ) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
-    const baseDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-managed-folders-" });
+    const baseDir = yield* fileSystem.makeTempDirectoryScoped({
+      prefix: "cinderdeck-managed-folders-",
+    });
     return yield* body({ baseDir }).pipe(Effect.provide(makeLayer(baseDir, options)));
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer));
 
@@ -132,7 +134,9 @@ it.effect("offers nothing when the data dir sits inside a Git checkout", () =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const checkout = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-scratch-repo-" });
+    const checkout = yield* fileSystem.makeTempDirectoryScoped({
+      prefix: "cinderdeck-scratch-repo-",
+    });
     yield* git(checkout, ["init", "--quiet"]);
     const baseDir = path.join(checkout, ".t3");
     yield* fileSystem.makeDirectory(baseDir);
@@ -300,7 +304,7 @@ const withGitEnv = <A, E, R>(
 ) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
-    const emptyConfig = yield* fileSystem.makeTempFileScoped({ prefix: "t3-gitconfig-" });
+    const emptyConfig = yield* fileSystem.makeTempFileScoped({ prefix: "cinderdeck-gitconfig-" });
     return yield* Effect.acquireUseRelease(
       Effect.sync(() => {
         const saved = GIT_IDENTITY_KEYS.map((key) => [key, process.env[key]] as const);

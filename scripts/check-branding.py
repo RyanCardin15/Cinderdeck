@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BRAND = re.compile(r"\bt3dotgg\b|\bt3chat\b|\bT3\s+Code\b|\bT3Code\b|[>\"\x27]T3[<\"\x27]|\bt3\s+(?:serve|connect|pair|service|update|app|project)\b|@t3tools/|\bcom\.t3tools\b|\b(?:[\w-]+\.)*t3\.(?:codes|gg)\b|\bpingdotgg/t3code\b", re.I)
 BARE_BRAND = re.compile(r"\bT3\b", re.I)
 INTERNAL_BRAND = re.compile(r"\b(?:T3|t3)[A-Z][a-z][A-Za-z0-9_]*\b")
+TEMPORARY_BRAND = re.compile(r"(?:\bprefix\s*:\s*|\btmpdir\(\)\s*,\s*)[\"'`]\.?t3-", re.I)
 # Exact native registration names and wrappers outside their ABI source folders.
 NATIVE_REFERENCES = re.compile(r"\b(?:T3AgentNotifications|T3ComposerEditor|T3KeyboardCommands|T3NativeControls|T3NativeFilePresentation|T3NativePresentation|T3NativeVideoPresentation|T3ReviewDiffSurface|T3ReviewDiffView|T3SelectableMarkdownText|T3ShowcaseReadyScene|T3ShowcaseScene|T3TerminalNative|T3TerminalSurface|T3WidgetExpiry)\b")
 # These are data and API identifiers, never product labels. Limit exceptions to tokens,
@@ -146,7 +147,6 @@ COMPATIBILITY_LINES = {
     ('agent-runtime/packages/shared/src/cliRelease.ts', 'return `t3-${version}-${platformKey}.${platformKey.startsWith("win32") ? "zip" : "tar.gz"}`;'): 'historical archive and launcher ABI',
     ('agent-runtime/packages/shared/src/legacyCliLauncher.test.ts', '`node_modules/@cinderdeck/t3-${hostPlatform}-${hostArch}/t3`,'): 'historical archive and launcher ABI',
     ('agent-runtime/packages/shared/src/legacyCliLauncher.test.ts', 'const entry = NodePath.join(root, "node_modules/t3/dist/bin.mjs");'): 'historical archive and launcher ABI',
-    ('agent-runtime/packages/shared/src/legacyCliLauncher.test.ts', 'const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-legacy-launcher-"));'): 'historical archive and launcher ABI',
     ('agent-runtime/packages/shared/src/legacyCliLauncher.ts', '* executable in the sibling `@cinderdeck/t3-<platform>-<arch>` package.'): 'historical archive and launcher ABI',
     ('agent-runtime/packages/shared/src/legacyCliLauncher.ts', 'const executable = join(dirname(require.resolve("@cinderdeck/t3-" + process.platform + "-" + process.arch + "/package.json")), executableName);'): 'historical archive and launcher ABI',
     ('agent-runtime/packages/shared/src/legacyCliLauncher.ts', 'const executableName = process.platform === "win32" ? "t3.exe" : "t3";'): 'historical archive and launcher ABI',
@@ -187,8 +187,17 @@ def exemption(path: str, line: str) -> str | None:
 
 def violations(path: str, content: str) -> list[tuple[int, str]]:
     findings = []
-    for number, line in enumerate(content.splitlines(), 1):
+    lines = content.splitlines()
+    for number, line in enumerate(lines, 1):
         if exemption(path, line):
+            continue
+        # Disposable directory names are not stored/wire identifiers. Check them
+        # before removing compatibility tokens used elsewhere in the same file.
+        context = "\n".join(lines[max(0, number - 4):number])
+        if TEMPORARY_BRAND.search(line) and (
+            ".test." in path or re.search(r"mkdtemp|makeTempDirectory", context)
+        ):
+            findings.append((number, line.strip()))
             continue
         candidate = COMPATIBILITY.sub("", line)
         if path in TOKEN_EXCEPTIONS:
@@ -286,7 +295,7 @@ def path_violations(path: str) -> bool:
             path = "/".join(parts[5:])  # Only the registered module folder is exempt.
     if native_abi_context and Path(path).name in NATIVE_ABI_FILENAMES:
         path = str(Path(path).parent)  # Keep checking any surrounding directories.
-    return bool(re.search(r"(?:T3Code|t3code|@t3tools|(?:^|/)t3-)", path, re.I) or INTERNAL_BRAND.search(path))
+    return bool(re.search(r"(?:T3Code|t3code|@t3tools|(?:^|/)t3(?:[./-]|$))", path, re.I) or INTERNAL_BRAND.search(path))
 
 
 def main() -> int:

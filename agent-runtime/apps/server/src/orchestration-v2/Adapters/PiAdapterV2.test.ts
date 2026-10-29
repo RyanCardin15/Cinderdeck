@@ -44,7 +44,7 @@ import { makePiAdapterV2, PI_PROVIDER } from "./PiAdapterV2.ts";
 import { makePiRpcConnection, type PiRpcRecord } from "./PiRpc.ts";
 
 const serverConfigLayer = ServerConfig.layerTest(process.cwd(), {
-  prefix: "t3-pi-v2-adapter-",
+  prefix: "cinderdeck-pi-v2-adapter-",
 }).pipe(Layer.provide(NodeServices.layer));
 
 const testLayer = Layer.mergeAll(NodeServices.layer, IdAllocator.layer, serverConfigLayer);
