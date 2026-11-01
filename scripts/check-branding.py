@@ -10,6 +10,11 @@ BRAND = re.compile(r"\bt3dotgg\b|\bt3chat\b|\bT3\s+Code\b|\bT3Code\b|[>\"\x27]T3
 BARE_BRAND = re.compile(r"\bT3\b", re.I)
 INTERNAL_BRAND = re.compile(r"\b(?:T3|t3)[A-Z][a-z][A-Za-z0-9_]*\b")
 TEMPORARY_BRAND = re.compile(r"(?:\bprefix\s*:\s*|\btmpdir\(\)\s*,\s*)[\"'`]\.?t3-", re.I)
+# Display identities cannot borrow exceptions for legacy schemes and storage prefixes.
+DISPLAY_IDENTITY = re.compile(
+    r"(?:[\"']?(?:appName|productName|displayName|CFBundleDisplayName|CFBundleName)[\"']?\s*[:=]\s*[\"'`])(?:t3(?:[-_ ]?code)?(?:[-_](?:dev|preview))?)(?=[\"'`])",
+    re.I,
+)
 # Exact native registration names and wrappers outside their ABI source folders.
 NATIVE_REFERENCES = re.compile(r"\b(?:T3AgentNotifications|T3ComposerEditor|T3KeyboardCommands|T3NativeControls|T3NativeFilePresentation|T3NativePresentation|T3NativeVideoPresentation|T3ReviewDiffSurface|T3ReviewDiffView|T3SelectableMarkdownText|T3ShowcaseReadyScene|T3ShowcaseScene|T3TerminalNative|T3TerminalSurface|T3WidgetExpiry)\b")
 # These are data and API identifiers, never product labels. Limit exceptions to tokens,
@@ -197,6 +202,9 @@ def violations(path: str, content: str) -> list[tuple[int, str]]:
         if TEMPORARY_BRAND.search(line) and (
             ".test." in path or re.search(r"mkdtemp|makeTempDirectory", context)
         ):
+            findings.append((number, line.strip()))
+            continue
+        if DISPLAY_IDENTITY.search(line):
             findings.append((number, line.strip()))
             continue
         candidate = COMPATIBILITY.sub("", line)

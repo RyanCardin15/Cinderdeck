@@ -7,6 +7,18 @@ import {
 } from "./AcpStderr.ts";
 
 describe("AcpStderr", () => {
+  it("redacts the whole key when its body contains underscores", () => {
+    const excerpt = sanitizeAcpStderrExcerpt(
+      [
+        "anthropic=sk-ant-api03-AbCdEf_GhIjKlMnOpQr-StUvWx_yz0123456789-AA",
+        "openai=sk-proj-AbCdEfGhIj_KlMnOpQrStUv-WxYz_0123456789",
+      ].join("\n"),
+      {},
+    );
+
+    expect(excerpt).toBe("anthropic=[redacted]\nopenai=[redacted]");
+  });
+
   it("keeps a bounded tail of stderr chunks", () => {
     const prefix = "x".repeat(ACP_STDERR_TAIL_MAX_CHARS);
     expect(appendAcpStderrTail(prefix, "abc")).toBe(`${prefix.slice(3)}abc`);

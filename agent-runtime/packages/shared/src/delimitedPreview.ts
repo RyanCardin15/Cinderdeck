@@ -18,6 +18,14 @@ export function parseDelimitedPreview(text: string, delimiter: "," | "\t") {
   let truncated = false;
   let rowStart = text.charCodeAt(0) === 0xfeff ? 1 : 0;
   const endCell = () => {
+    if (cell.length > 2000) {
+      let end = 2000;
+      const before = cell.charCodeAt(end - 1);
+      const after = cell.charCodeAt(end);
+      if (before >= 0xd800 && before <= 0xdbff && after >= 0xdc00 && after <= 0xdfff) end--;
+      cell = cell.slice(0, end);
+      truncated = true;
+    }
     if (row.length < 30) row.push(cell);
     else truncated = true;
     cell = "";
@@ -26,7 +34,7 @@ export function parseDelimitedPreview(text: string, delimiter: "," | "\t") {
     const char = text[index];
     if (char === '"') {
       if (quoted && text[index + 1] === '"') {
-        if (cell.length < 2000) cell += '"';
+        if (cell.length <= 2000) cell += '"';
         else truncated = true;
         index++;
         continue;
@@ -45,7 +53,7 @@ export function parseDelimitedPreview(text: string, delimiter: "," | "\t") {
         rowStart = index + 1;
         if (rows.length === 100) return { rows, truncated: truncated || index < text.length - 1 };
       }
-    } else if (cell.length < 2000) cell += char;
+    } else if (cell.length <= 2000) cell += char;
     else truncated = true;
   }
   if (rowStart < text.length) {

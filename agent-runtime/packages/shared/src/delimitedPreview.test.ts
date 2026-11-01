@@ -2,6 +2,40 @@ import { describe, expect, it } from "vite-plus/test";
 import { filePreviewDelimiter, parseDelimitedPreview } from "./delimitedPreview.ts";
 
 describe("delimited file previews", () => {
+  describe.each([",", "\t"] as const)("Unicode cells with delimiter %j", (delimiter) => {
+    it.each([false, true])("does not split surrogate pairs in quoted=%s cells", (quoted) => {
+      const prefix = "x".repeat(1999);
+      const value = `${prefix}😀tail`;
+      const input = `${quoted ? `"${value}"` : value}${delimiter}next\nlast`;
+      expect(parseDelimitedPreview(input, delimiter)).toEqual({
+        rows: [[prefix, "next"], ["last"]],
+        truncated: true,
+      });
+    });
+    it("keeps pairs that fit and truncates later characters", () => {
+      const value = `${"x".repeat(1998)}😀`;
+      expect(parseDelimitedPreview(value, delimiter)).toEqual({
+        rows: [[value]],
+        truncated: false,
+      });
+      expect(parseDelimitedPreview(`${value}tail`, delimiter)).toEqual({
+        rows: [[value]],
+        truncated: true,
+      });
+    });
+    it("keeps escaped quotes and BMP text at the same limit", () => {
+      const prefix = "x".repeat(1999);
+      expect(parseDelimitedPreview(`"${prefix}""tail"`, delimiter)).toEqual({
+        rows: [[`${prefix}"`]],
+        truncated: true,
+      });
+      expect(parseDelimitedPreview(`${prefix}éextra`, delimiter)).toEqual({
+        rows: [[`${prefix}é`]],
+        truncated: true,
+      });
+    });
+  });
+
   it("respects a specific MIME type before the extension", () => {
     expect(filePreviewDelimiter({ name: "data.CSV", mimeType: "text/plain" })).toBe(",");
     expect(filePreviewDelimiter({ name: "data.csv", mimeType: "application/pdf" })).toBeNull();

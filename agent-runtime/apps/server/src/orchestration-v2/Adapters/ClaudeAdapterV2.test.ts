@@ -153,6 +153,21 @@ function makeClaudeTestTurnInput(input: {
 }
 
 describe("ClaudeAdapterV2 runtime query policy", () => {
+  it.each([
+    "-- --thinking-display omitted",
+    "--thinking-display summarized -- --thinking-display omitted",
+  ])("does not treat operands after -- as SDK flags: %s", (launchArgs) => {
+    const options = ClaudeAdapterV2.makeClaudeQueryOptions({
+      modelSelection: CLAUDE_TEST_MODEL_SELECTION,
+      nativeThreadId: "thinking-thread",
+      resume: false,
+      cwd: "/workspace",
+      settings: { ...DEFAULT_CLAUDE_SETTINGS, launchArgs },
+    });
+    assert.deepEqual(options.thinking, { type: "adaptive", display: "summarized" });
+    assert.equal(options.extraArgs?.["thinking-display"], "summarized");
+  });
+
   it.each([false, true])("requests thinking summaries with resume=%s", (resume) => {
     const options = ClaudeAdapterV2.makeClaudeQueryOptions({
       modelSelection: CLAUDE_TEST_MODEL_SELECTION,

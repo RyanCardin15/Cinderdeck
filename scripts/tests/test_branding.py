@@ -8,6 +8,18 @@ spec.loader.exec_module(branding)
 
 
 class BrandingTests(unittest.TestCase):
+    def test_display_identity_cannot_use_compatibility_exceptions(self):
+        for value in (
+            'productName: "t3-code"',
+            'appName: "t3code-dev"',
+            '"displayName": "t3_code"',
+            'CFBundleDisplayName = "t3code-preview"',
+            'CFBundleName: "T3"',
+        ):
+            self.assertTrue(branding.violations("agent-runtime/apps/desktop/config.ts", value), value)
+        self.assertEqual(branding.violations("agent-runtime/apps/desktop/config.ts", 'productName: "Cinderdeck"'), [])
+        self.assertEqual(branding.violations("agent-runtime/apps/desktop/config.ts", 'scheme: "t3code-dev"'), [])
+
     def test_rejects_product_labels_urls_and_package_identity(self):
         for value in ('<h1>T3 Code</h1>', '<strong>T3</strong>', '"T3Code"', '"@t3tools/web"', '"https://app.t3.codes"'):
             self.assertTrue(branding.violations("agent-runtime/apps/web/src/NewPanel.tsx", value), value)

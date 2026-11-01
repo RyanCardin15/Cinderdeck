@@ -8,7 +8,7 @@ export interface ParseCliArgsOptions {
 }
 
 export function tokenizeCliArgs(args?: string): ReadonlyArray<string> {
-  const input = args?.trim();
+  const input = args;
   if (!input) return [];
 
   const tokens: string[] = [];
@@ -98,9 +98,13 @@ export function parseCliArgs(
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i]!;
 
+    if (token === "--") {
+      positionals.push(...tokens.slice(i + 1));
+      break;
+    }
+
     if (token.startsWith("--")) {
       const rest = token.slice(2);
-      if (!rest) continue;
 
       // Handle --key=value syntax
       const eqIndex = rest.indexOf("=");
