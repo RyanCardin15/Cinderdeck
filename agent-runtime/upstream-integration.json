@@ -8,7 +8,7 @@
     "historicalMetadataCommit": "17877ebbea4790b5f0ecad9bf8599619f0387be3",
     "historicalMetadataPath": "docs/deckhand/upstream-patches.json"
   },
-  "examinedTarget": "ccaa3ad2956b90484052198af7f0e40996e403ca",
+  "examinedTarget": "b50d8a1b15eed3a75e1e0969765e14c6436d80d7",
   "ports": [
     {
       "commit": "f391794a35c604d57e166a3ab48d56fc6e4e469a",
@@ -145,8 +145,40 @@
     {
       "commit": "003ccd336dc8c2b9a0cbe62cfc358075e86db28c",
       "behavior": "Refuse pairing that replaces a saved environment address before consuming a code and again under the registration lease; retain explicit Settings edits in the owned single-address catalog"
+    },
+    {
+      "commit": "1cc9d413a52c05ad51df5faa8d11437ca97043c7",
+      "behavior": "Remove query credentials from clone failure diagnostics, including quoted tokens and pathless URLs"
+    },
+    {
+      "commit": "4afdabab4479a68c7ea02d09174fe7936f084882",
+      "behavior": "Exclude signed media and attachment upload bearer paths from HTTP server spans"
+    },
+    {
+      "commit": "67afdd56c7905e9df721c61f5795578bb8c27867",
+      "behavior": "Redact compound credential keys in provider failures without hiding token counts"
+    },
+    {
+      "commit": "49d014245777bbf47756635886ddf0846d2330d3",
+      "behavior": "Redact whole API keys containing underscores in ACP stderr diagnostics"
+    },
+    {
+      "commit": "aa33734f8aac52b13b6d8b43be910cd5c69c72e8",
+      "behavior": "Use bearer authentication when the primary session cookie is empty"
+    },
+    {
+      "commit": "8084e00bced3939c93c87f70301a7135c2f9d794",
+      "behavior": "Stop CLI flag parsing at the operand separator, including provider SDK options"
+    },
+    {
+      "commit": "6977721d00e1c29a1d87825f747dbb8ec6eb1f36",
+      "behavior": "Preserve escaped trailing whitespace in provider launch arguments"
+    },
+    {
+      "commit": "c018660572d1dbe326ef0e72d3f14dd69fb7c41f",
+      "behavior": "Keep Unicode surrogate pairs intact at the CSV and TSV preview cell limit"
     }
   ],
   "coverage": "Selected independent ports only. integratedThrough remains the last complete historical baseline; examinedTarget is not a claim of complete incorporation.",
-  "pending": "Review remaining Effect/service/provider/browser ownership migrations, React Compiler changes, companion native UI/Markdown parser changes, and orchestration fixes against the owned architecture before additional ports. Upstream hosted accounts, product release and deployment surfaces remain excluded."
+  "pending": "Remaining applicable changes require review against the owned runtime: Effect/service/provider/browser ownership migrations, React Compiler and UI changes, companion native changes, scheduler and orchestration fixes. Hosted accounts, product releases, relay deployments and vendor telemetry remain excluded. Selected ports do not establish full parity."
 }
