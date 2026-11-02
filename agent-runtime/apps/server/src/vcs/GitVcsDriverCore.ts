@@ -27,7 +27,10 @@ import {
   type ReviewDiffPreviewSource,
   type VcsRef,
 } from "@cinderdeck/contracts";
-import { dedupeRemoteBranchesWithLocalMatches, normalizeGitRemoteUrl } from "@cinderdeck/shared/git";
+import {
+  dedupeRemoteBranchesWithLocalMatches,
+  normalizeGitRemoteUrl,
+} from "@cinderdeck/shared/git";
 import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
 import { compactTraceAttributes } from "@cinderdeck/shared/observability";
 import { decodeJsonResult } from "@cinderdeck/shared/schemaJson";
@@ -2037,11 +2040,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
   const prepareCommitContext: GitVcsDriver.GitVcsDriver["Service"]["prepareCommitContext"] =
     Effect.fn("prepareCommitContext")(function* (cwd, filePaths) {
       if (filePaths && filePaths.length > 0) {
-        yield* runGit("GitVcsDriver.prepareCommitContext.reset", cwd, ["reset"]).pipe(
-          Effect.catchTags({
-            GitCommandError: () => Effect.void,
-          }),
-        );
+        yield* runGit("GitVcsDriver.prepareCommitContext.reset", cwd, ["reset", "--quiet"]);
         yield* runGit("GitVcsDriver.prepareCommitContext.addSelected", cwd, [
           "--literal-pathspecs",
           "add",

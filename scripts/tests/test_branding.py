@@ -20,6 +20,15 @@ class BrandingTests(unittest.TestCase):
         self.assertEqual(branding.violations("agent-runtime/apps/desktop/config.ts", 'productName: "Cinderdeck"'), [])
         self.assertEqual(branding.violations("agent-runtime/apps/desktop/config.ts", 'scheme: "t3code-dev"'), [])
 
+    def test_plist_names_cannot_borrow_scheme_exceptions(self):
+        for key in ("CFBundleDisplayName", "CFBundleName", "CFBundleExecutable"):
+            for value in ("T3", "t3-code", "t3code-dev", "t3code-preview"):
+                xml = f"<key>{key}</key>\n<string>{value}</string>"
+                self.assertTrue(branding.violations("resources/Info.plist", xml), xml)
+            xml = f"<key>{key}</key>\n<string>Cinderdeck</string>"
+            self.assertEqual(branding.violations("resources/Info.plist", xml), [])
+        self.assertEqual(branding.violations("resources/Info.plist", "<key>CFBundleURLSchemes</key>\n<string>t3-code</string>"), [])
+
     def test_rejects_product_labels_urls_and_package_identity(self):
         for value in ('<h1>T3 Code</h1>', '<strong>T3</strong>', '"T3Code"', '"@t3tools/web"', '"https://app.t3.codes"'):
             self.assertTrue(branding.violations("agent-runtime/apps/web/src/NewPanel.tsx", value), value)

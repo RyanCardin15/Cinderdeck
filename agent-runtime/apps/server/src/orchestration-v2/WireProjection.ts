@@ -4,10 +4,16 @@ import type {
   OrchestrationV2ThreadProjection,
   OrchestrationV2TurnItem,
 } from "@cinderdeck/contracts";
-import { compactDynamicToolOutput, toolOutputIndicatesFailure } from "@cinderdeck/shared/toolOutput";
+import {
+  compactDynamicToolOutput,
+  toolOutputIndicatesFailure,
+} from "@cinderdeck/shared/toolOutput";
 
 const MAX_DETAIL_STRING_BYTES = 32_768;
 const MAX_DYNAMIC_VALUE_BYTES = 16_384;
+
+const TRUNCATION_MARKER = "\n… output truncated for transport";
+const TRUNCATION_MARKER_BYTES = Buffer.byteLength(TRUNCATION_MARKER, "utf8");
 
 function truncateDetail(value: string | undefined): string | undefined {
   if (
@@ -19,11 +25,13 @@ function truncateDetail(value: string | undefined): string | undefined {
   }
   // UTF-8 needs at least one byte per UTF-16 code unit. Only encode the prefix
   // that could fit, rather than allocating a buffer for the complete output.
-  const prefix = Buffer.from(value.slice(0, MAX_DETAIL_STRING_BYTES), "utf8")
-    .subarray(0, MAX_DETAIL_STRING_BYTES)
+  // Include the marker in the cap so repeated projection leaves text unchanged.
+  const budget = MAX_DETAIL_STRING_BYTES - TRUNCATION_MARKER_BYTES;
+  const prefix = Buffer.from(value.slice(0, budget), "utf8")
+    .subarray(0, budget)
     .toString("utf8")
     .replace(/\uFFFD$/u, "");
-  return `${prefix}\n… output truncated for transport`;
+  return `${prefix}${TRUNCATION_MARKER}`;
 }
 
 function summarizeDynamicValue(value: unknown): unknown {

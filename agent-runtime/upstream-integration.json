@@ -8,7 +8,7 @@
     "historicalMetadataCommit": "17877ebbea4790b5f0ecad9bf8599619f0387be3",
     "historicalMetadataPath": "docs/deckhand/upstream-patches.json"
   },
-  "examinedTarget": "b50d8a1b15eed3a75e1e0969765e14c6436d80d7",
+  "examinedTarget": "47f2c8d29e981c7723467efe137ee19e91df924e",
   "ports": [
     {
       "commit": "f391794a35c604d57e166a3ab48d56fc6e4e469a",
@@ -177,6 +177,38 @@
     {
       "commit": "c018660572d1dbe326ef0e72d3f14dd69fb7c41f",
       "behavior": "Keep Unicode surrogate pairs intact at the CSV and TSV preview cell limit"
+    },
+    {
+      "commit": "16f35ce29bda0e8b73b0073177bacaaa6aea8e5c",
+      "behavior": "Truncate shared labels by Unicode code point without splitting surrogate pairs"
+    },
+    {
+      "commit": "d7171d30a4e0d51b308326a8b7adb25f4c7277f4",
+      "behavior": "Emit no terminal context lines for an inverted captured range"
+    },
+    {
+      "commit": "7c511b3d28b8814131dd255c2de1d1cf1aab3adb",
+      "behavior": "Prune only canonical numeric log rotations, preserving adjacent non-rotation files; owned runtime has a synchronous sink only"
+    },
+    {
+      "commit": "88483a5cf05669c4fec976c3b87e0d80e12d27a3",
+      "behavior": "Finish short workspace-file reads before decoding text or rejecting binary bytes"
+    },
+    {
+      "commit": "851328784fc320645caf7eccce0b12f111423ae7",
+      "behavior": "Include the transport truncation marker in the byte budget so repeated projection is stable; preserve owned projection points"
+    },
+    {
+      "commit": "a8a32bbdf4070cf08c1b6759003ac8cbe51864aa",
+      "behavior": "Accept case-insensitive bearer schemes for environment and provider MCP authentication while preserving case-sensitive credentials and private rejection reasons; external MCP OAuth is not present"
+    },
+    {
+      "commit": "47f2c8d29e981c7723467efe137ee19e91df924e",
+      "behavior": "Remove inherited launching Claude session and messaging credentials before explicit provider-instance overrides, retaining native UI token removal and owned entrypoint behavior"
+    },
+    {
+      "commit": "cf5e6d3f0cbb41334b6d7c27e37f1e8817775e95",
+      "behavior": "Stop selected-file preparation if the Git index reset fails; adapt to owned prepareCommitContext API"
     }
   ],
   "coverage": "Selected independent ports only. integratedThrough remains the last complete historical baseline; examinedTarget is not a claim of complete incorporation.",

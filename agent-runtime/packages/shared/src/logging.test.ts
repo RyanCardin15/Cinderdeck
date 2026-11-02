@@ -36,6 +36,24 @@ afterEach(() => {
 });
 
 describe("RotatingFileSink", () => {
+  it("prunes only canonical rotation suffixes and preserves other files", () => {
+    const directory = makeTempDirectory();
+    const filePath = NodePath.join(directory, "debug.log");
+    const retained = ["1", "3", "04", "4.0", "4e0", "0x4", "+4", "notes"];
+    for (const suffix of [...retained, "4", "50"]) {
+      NodeFS.writeFileSync(`${filePath}.${suffix}`, suffix);
+    }
+    const sink = new RotatingFileSink({ filePath, maxBytes: 100, maxFiles: 3 });
+    sink.write("current");
+    expect(NodeFS.readdirSync(directory).sort()).toEqual(
+      ["debug.log", ...retained.map((suffix) => `debug.log.${suffix}`)].sort(),
+    );
+    expect(NodeFS.readFileSync(filePath, "utf8")).toBe("current");
+    for (const suffix of retained) {
+      expect(NodeFS.readFileSync(`${filePath}.${suffix}`, "utf8")).toBe(suffix);
+    }
+  });
+
   it.each([
     { option: "maxBytes" as const, maxBytes: 0, maxFiles: 1 },
     { option: "maxFiles" as const, maxBytes: 1, maxFiles: 0 },

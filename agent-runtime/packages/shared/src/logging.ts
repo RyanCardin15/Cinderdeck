@@ -146,8 +146,10 @@ export class RotatingFileSink {
       const baseName = NodePath.basename(this.filePath);
       for (const entry of NodeFS.readdirSync(dir)) {
         if (!entry.startsWith(`${baseName}.`)) continue;
-        const suffix = Number(entry.slice(baseName.length + 1));
-        if (!Number.isInteger(suffix) || suffix <= this.maxFiles) continue;
+        const suffixText = entry.slice(baseName.length + 1);
+        const suffix = Number(suffixText);
+        if (!Number.isInteger(suffix) || String(suffix) !== suffixText || suffix <= this.maxFiles)
+          continue;
         NodeFS.rmSync(NodePath.join(dir, entry), { force: true });
       }
     } catch (cause) {
