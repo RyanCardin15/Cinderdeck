@@ -1,3 +1,5 @@
+import type { OrchestrationV2ThreadStreamItem } from "@cinderdeck/contracts";
+import { loadDeferredShell, readShellPage } from "./orchestration-v2/ShellPaging.ts";
 import * as GitHubWorkspace from "./deckhand/GitHubWorkspace.ts";
 import * as AgentAccess from "./deckhand/AgentAccess.ts";
 import { GITHUB_WORKSPACE_METHOD } from "@cinderdeck/contracts/deckhand/gitHubWorkspace";
@@ -166,6 +168,7 @@ import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import {
   archivedShellStreamItemFromThreadShell,
   buildActiveShellSnapshot,
+  bufferShellLiveStream,
   coalesceShellApplicationEvents,
   coalesceStoredThreadEvents,
   composeShellStreamWithEnrichment,
@@ -194,6 +197,7 @@ import {
 } from "./orchestration-v2/threadHistoryPaging.ts";
 import {
   projectDomainEventForWire,
+  makeLiveBodyDeduper,
   projectThreadProjectionForWire,
 } from "./orchestration-v2/WireProjection.ts";
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
@@ -659,7 +663,14 @@ export const subscribeOrchestrationV2Thread = Effect.fn("ws.orchestrationV2.subs
     readonly afterSequence?: number;
     readonly requestCompletionMarker?: boolean;
     readonly acceptBoundedSnapshot?: boolean;
+    readonly acceptCompactTurnItems?: boolean;
+    readonly acceptDedupedBodies?: boolean;
+    readonly acceptCompactIds?: boolean;
   }) {
+    const withLiveDedupe = <E, R>(stream: Stream.Stream<OrchestrationV2ThreadStreamItem, E, R>) =>
+      input.acceptDedupedBodies === true
+        ? Stream.suspend(() => Stream.map(stream, makeLiveBodyDeduper()))
+        : stream;
     const threadManagement = yield* ThreadManagementService.ThreadManagementService;
     const applicationEvents = yield* OrchestrationEventStore.OrchestrationEventStore;
 
@@ -752,7 +763,12 @@ export const subscribeOrchestrationV2Thread = Effect.fn("ws.orchestrationV2.subs
       );
       const { snapshotSequence } = snapshot;
       const snapshotItem = useBoundedSnapshot
-        ? buildBoundedThreadStreamSnapshot(snapshot)
+        ? buildBoundedThreadStreamSnapshot({
+            ...snapshot,
+            compactTurnItems: input.acceptCompactTurnItems === true,
+            dedupeBodies: input.acceptDedupedBodies === true,
+            compactIds: input.acceptCompactIds === true,
+          })
         : {
             kind: "snapshot" as const,
             snapshotSequence,
@@ -761,7 +777,7 @@ export const subscribeOrchestrationV2Thread = Effect.fn("ws.orchestrationV2.subs
       return Stream.concat(
         Stream.concat(rpcInitialItems([snapshotItem]), completionMarker),
         eventStreamFrom(snapshotSequence),
-      );
+      ).pipe(withLiveDedupe);
     });
 
     // When the client already holds the projection (cached, or loaded over
@@ -838,7 +854,7 @@ export const subscribeOrchestrationV2Thread = Effect.fn("ws.orchestrationV2.subs
       return Stream.concat(
         Stream.concat(rpcInitialItems(replay), completionMarker),
         eventStreamFrom(highWater),
-      );
+      ).pipe(withLiveDedupe);
     }
 
     return yield* snapshotThenLive();
@@ -849,6 +865,7 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
   function* (input: {
     readonly afterSequence?: number;
     readonly requestCompletionMarker?: boolean;
+    readonly deferThreads?: boolean;
   }) {
     const sql = yield* SqlClient.SqlClient;
     const threadManagement = yield* ThreadManagementService.ThreadManagementService;
@@ -874,16 +891,18 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
       },
     );
     const loadSnapshot = Effect.fn("ws.orchestrationV2.loadShellSnapshot")(function* () {
-      const base = yield* sql.withTransaction(
-        Effect.gen(function* () {
-          const threads = yield* threadManagement.getShellSnapshot({ location: "active" });
-          return buildActiveShellSnapshot({
-            projects: yield* projects.listShells(),
-            threads,
-            snapshotSequence: yield* applicationEvents.latestApplicationSequence,
-          });
-        }),
-      );
+      const base = yield* input.deferThreads === true
+        ? loadDeferredShell
+        : sql.withTransaction(
+            Effect.gen(function* () {
+              const threads = yield* threadManagement.getShellSnapshot({ location: "active" });
+              return buildActiveShellSnapshot({
+                projects: yield* projects.listShells(),
+                threads,
+                snapshotSequence: yield* applicationEvents.latestApplicationSequence,
+              });
+            }),
+          );
       const enriched = yield* enrichProjectShells(base.projects);
       return {
         snapshot: { ...base, projects: enriched.projects } as OrchestrationV2ShellSnapshot,
@@ -944,7 +963,7 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
       );
 
     const liveFrom = (afterSequence: number) =>
-      bufferLiveStream(
+      bufferShellLiveStream(
         toShellStream(
           applicationEvents.streamProjectedApplicationEvents({
             afterSequence,
@@ -1682,6 +1701,7 @@ const makeWsRpcLayer = (
                 }),
             threadResumeCompletionMarker: true,
             threadSnapshotPagination: true,
+            shellThreadPages: true,
             ...Option.match(scratchWorkspaceRoot, {
               onNone: () => ({}),
               onSome: (root) => ({ scratchWorkspaceRoot: root }),
@@ -2987,6 +3007,16 @@ const makeWsRpcLayer = (
               ),
             ),
             { "rpc.aggregate": "orchestration" },
+          ),
+        [ORCHESTRATION_V2_WS_METHODS.getShellPage]: (input) =>
+          readShellPage(input).pipe(
+            Effect.mapError(
+              (cause) =>
+                new OrchestrationV2GetShellSnapshotError({
+                  message: "Failed to read shell page",
+                  cause,
+                }),
+            ),
           ),
         [ORCHESTRATION_V2_WS_METHODS.getArchivedShellSnapshot]: (_input) =>
           observeRpcEffect(

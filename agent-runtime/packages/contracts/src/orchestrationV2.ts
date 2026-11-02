@@ -1,3 +1,4 @@
+import { withRecordIdTable } from "./orchestrationV2IdTable.ts";
 import { OrchestrationMessageContext } from "./composerContext.ts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -656,6 +657,7 @@ export const OrchestrationV2Subagent = Schema.Struct({
   childThreadId: Schema.NullOr(ThreadId),
   nativeTaskRef: Schema.NullOr(OrchestrationV2ProviderRef),
   prompt: Schema.String,
+  promptOmitted: Schema.optionalKey(Schema.Literal(true)),
   title: Schema.NullOr(Schema.String),
   model: Schema.NullOr(Schema.String),
   // Parent-wake policy for app-owned tasks: "always" offers a continuation on
@@ -677,6 +679,7 @@ export const OrchestrationV2Subagent = Schema.Struct({
   ]),
   progress: Schema.optional(Schema.String),
   result: Schema.NullOr(Schema.String),
+  resultOmitted: Schema.optionalKey(Schema.Literal(true)),
   startedAt: Schema.NullOr(Schema.DateTimeUtc),
   completedAt: Schema.NullOr(Schema.DateTimeUtc),
   updatedAt: Schema.DateTimeUtc,
@@ -1292,6 +1295,7 @@ export const OrchestrationV2TurnItem = Schema.Union([
     senderThreadId: Schema.optional(ThreadId),
     inputIntent: OrchestrationV2UserMessageInputIntent,
     text: Schema.String,
+    textOmitted: Schema.optionalKey(Schema.Literal(true)),
     context: Schema.optional(OrchestrationMessageContext),
     attachments: Schema.Array(ChatAttachment),
   }),
@@ -1300,6 +1304,7 @@ export const OrchestrationV2TurnItem = Schema.Union([
     type: Schema.Literal("assistant_message"),
     messageId: MessageId,
     text: Schema.String,
+    textOmitted: Schema.optionalKey(Schema.Literal(true)),
     attachments: Schema.optional(Schema.Array(ChatAttachment)),
     streaming: Schema.Boolean,
   }),
@@ -1379,6 +1384,7 @@ export const OrchestrationV2TurnItem = Schema.Union([
     checkpointId: CheckpointId,
     scopeId: CheckpointScopeId,
     files: Schema.Array(OrchestrationV2CheckpointFileSummary),
+    filesOmitted: Schema.optionalKey(Schema.Literal(true)),
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
@@ -1463,8 +1469,10 @@ export const OrchestrationV2TurnItem = Schema.Union([
     providerInstanceId: ProviderInstanceId,
     childThreadId: Schema.NullOr(ThreadId),
     prompt: Schema.String,
+    promptOmitted: Schema.optionalKey(Schema.Literal(true)),
     progress: Schema.optional(Schema.String),
     result: Schema.NullOr(Schema.String),
+    resultOmitted: Schema.optionalKey(Schema.Literal(true)),
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
@@ -1796,6 +1804,16 @@ export type OrchestrationV2ThreadShellSnapshot = typeof OrchestrationV2ThreadShe
 export const OrchestrationV2ShellSnapshot = Schema.Struct({
   ...OrchestrationV2ThreadShellSnapshot.fields,
   projects: Schema.Array(OrchestrationProjectShell),
+  deferredThreads: Schema.optionalKey(Schema.Boolean),
+  deferredThreadRefs: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        id: ThreadId,
+        projectId: ProjectId,
+        rootThreadId: Schema.optionalKey(ThreadId),
+      }),
+    ),
+  ),
 });
 export type OrchestrationV2ShellSnapshot = typeof OrchestrationV2ShellSnapshot.Type;
 
@@ -2019,6 +2037,7 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
     senderThreadId: Schema.optional(ThreadId),
     inputIntent: OrchestrationV2UserMessageInputIntent,
     text: Schema.String,
+    textOmitted: Schema.optionalKey(Schema.Literal(true)),
     context: Schema.optional(OrchestrationMessageContext),
     attachments: Schema.Array(ChatAttachment),
   }),
@@ -2027,6 +2046,7 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
     type: Schema.Literal("assistant_message"),
     messageId: MessageId,
     text: Schema.String,
+    textOmitted: Schema.optionalKey(Schema.Literal(true)),
     attachments: Schema.optional(Schema.Array(ChatAttachment)),
     streaming: Schema.Boolean,
   }),
@@ -2106,6 +2126,7 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
     checkpointId: CheckpointId,
     scopeId: CheckpointScopeId,
     files: Schema.Array(OrchestrationV2CheckpointFileSummary),
+    filesOmitted: Schema.optionalKey(Schema.Literal(true)),
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemJsonBaseFields,
@@ -2187,8 +2208,10 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
     providerInstanceId: ProviderInstanceId,
     childThreadId: Schema.NullOr(ThreadId),
     prompt: Schema.String,
+    promptOmitted: Schema.optionalKey(Schema.Literal(true)),
     progress: Schema.optional(Schema.String),
     result: Schema.NullOr(Schema.String),
+    resultOmitted: Schema.optionalKey(Schema.Literal(true)),
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemJsonBaseFields,
@@ -2943,6 +2966,7 @@ export const ORCHESTRATION_V2_WS_METHODS = {
   getFullThreadDiff: "orchestration.getFullThreadDiff",
   searchThreads: "orchestration.searchThreads",
   getArchivedShellSnapshot: "orchestration.getArchivedShellSnapshot",
+  getShellPage: "orchestration.getShellPage",
   getThreadProjection: "orchestration.getThreadProjection",
   getWorkflowScript: "orchestration.getWorkflowScript",
   launchThread: "orchestration.launchThread",
@@ -3033,6 +3057,17 @@ export const OrchestrationV2DispatchCommandResult = Schema.Struct({
 });
 export type OrchestrationV2DispatchCommandResult = typeof OrchestrationV2DispatchCommandResult.Type;
 
+export const OrchestrationV2ShellPageInput = Schema.Struct({
+  projectIds: Schema.optionalKey(Schema.Array(ProjectId).check(Schema.isMaxLength(2048))),
+  threadIds: Schema.optionalKey(Schema.Array(ThreadId).check(Schema.isMaxLength(2048))),
+  afterId: Schema.optionalKey(ThreadId),
+});
+export const OrchestrationV2ShellPage = Schema.Struct({
+  snapshotSequence: NonNegativeInt,
+  threads: Schema.Array(OrchestrationV2ThreadShell),
+  nextId: Schema.NullOr(ThreadId),
+});
+export type OrchestrationV2ShellPage = typeof OrchestrationV2ShellPage.Type;
 export const OrchestrationV2GetThreadProjectionInput = Schema.Struct({
   threadId: ThreadId,
 });
@@ -3051,6 +3086,7 @@ export const OrchestrationV2SubscribeShellInput = Schema.Struct({
   afterSequence: Schema.optionalKey(NonNegativeInt),
   /** Requests a marker between initial catch-up and live delivery. */
   requestCompletionMarker: Schema.optionalKey(Schema.Boolean),
+  deferThreads: Schema.optionalKey(Schema.Boolean),
 });
 export type OrchestrationV2SubscribeShellInput = typeof OrchestrationV2SubscribeShellInput.Type;
 
@@ -3068,6 +3104,9 @@ export const OrchestrationV2SubscribeThreadInput = Schema.Struct({
   requestCompletionMarker: Schema.optionalKey(Schema.Boolean),
   /** Allows snapshot fallbacks to contain a bounded, pageable history window. */
   acceptBoundedSnapshot: Schema.optionalKey(Schema.Boolean),
+  acceptCompactTurnItems: Schema.optionalKey(Schema.Boolean),
+  acceptDedupedBodies: Schema.optionalKey(Schema.Boolean),
+  acceptCompactIds: Schema.optionalKey(Schema.Boolean),
 });
 export type OrchestrationV2SubscribeThreadInput = typeof OrchestrationV2SubscribeThreadInput.Type;
 
@@ -3094,29 +3133,38 @@ export type OrchestrationV2ThreadDetailSnapshot = typeof OrchestrationV2ThreadDe
  * recent window of timeline rows. `historyCursor` is opaque; clients must not
  * parse it. Resume live events with `afterSequence = snapshotSequence`.
  */
-export const OrchestrationV2ThreadBoundedSnapshot = Schema.Struct({
-  snapshotSequence: NonNegativeInt,
-  projection: OrchestrationV2ThreadProjection,
-  historyCursor: Schema.NullOr(TrimmedNonEmptyString),
-  hasMoreHistory: Schema.Boolean,
-  /**
-   * Max local turn ordinal over the authoritative full projection turnItems.
-   * Clients use this as a partial-timeline watermark when the bounded window
-   * has no local rows (inherited-only).
-   */
-  latestLocalTurnOrdinal: Schema.NullOr(NonNegativeInt),
-  /** True when complete turns or required live control state exceed the usual byte budget. */
-  payloadBudgetExceeded: Schema.optional(Schema.Boolean),
-});
+export const OrchestrationV2ThreadBoundedSnapshot = withRecordIdTable(
+  Schema.Struct({
+    snapshotSequence: NonNegativeInt,
+    projection: OrchestrationV2ThreadProjection,
+    historyCursor: Schema.NullOr(TrimmedNonEmptyString),
+    hasMoreHistory: Schema.Boolean,
+    /**
+     * Max local turn ordinal over the authoritative full projection turnItems.
+     * Clients use this as a partial-timeline watermark when the bounded window
+     * has no local rows (inherited-only).
+     */
+    latestLocalTurnOrdinal: Schema.NullOr(NonNegativeInt),
+    /** True when complete turns or required live control state exceed the usual byte budget. */
+    payloadBudgetExceeded: Schema.optional(Schema.Boolean),
+    turnItemsOmitLocalVisible: Schema.optionalKey(Schema.Literal(true)),
+    idTable: Schema.optionalKey(Schema.Literal(true)),
+  }),
+  () => "projection",
+);
 export type OrchestrationV2ThreadBoundedSnapshot = typeof OrchestrationV2ThreadBoundedSnapshot.Type;
 
 /** Older timeline page for progressive history. Rows are chronological. */
-export const OrchestrationV2ThreadHistoryPage = Schema.Struct({
-  snapshotSequence: NonNegativeInt,
-  items: Schema.Array(OrchestrationV2ProjectedTurnItem),
-  nextCursor: Schema.NullOr(TrimmedNonEmptyString),
-  hasMoreHistory: Schema.Boolean,
-});
+export const OrchestrationV2ThreadHistoryPage = withRecordIdTable(
+  Schema.Struct({
+    snapshotSequence: NonNegativeInt,
+    items: Schema.Array(OrchestrationV2ProjectedTurnItem),
+    nextCursor: Schema.NullOr(TrimmedNonEmptyString),
+    hasMoreHistory: Schema.Boolean,
+    idTable: Schema.optionalKey(Schema.Literal(true)),
+  }),
+  () => null,
+);
 export type OrchestrationV2ThreadHistoryPage = typeof OrchestrationV2ThreadHistoryPage.Type;
 
 const knownDomainEventTypes: ReadonlySet<string> = new Set(
@@ -3161,31 +3209,36 @@ const OrchestrationV2UnknownThreadStreamEvent = Schema.Struct({
   ),
 );
 
-export const OrchestrationV2ThreadStreamItem = Schema.Union([
-  Schema.Struct({
-    kind: Schema.Literal("synchronized"),
-  }),
-  Schema.Struct({
-    kind: Schema.Literal("snapshot"),
-    snapshotSequence: NonNegativeInt,
-    projection: OrchestrationV2ThreadProjection,
-    /**
-     * Progressive history metadata is present on bounded socket fallbacks and
-     * absent on legacy-compatible full snapshots.
-     */
-    historyCursor: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
-    hasMoreHistory: Schema.optionalKey(Schema.Boolean),
-    latestLocalTurnOrdinal: Schema.optionalKey(Schema.NullOr(NonNegativeInt)),
-    payloadBudgetExceeded: Schema.optionalKey(Schema.Boolean),
-  }),
-  Schema.Struct({
-    kind: Schema.Literal("event"),
-    sequence: NonNegativeInt,
-    event: OrchestrationV2DomainEvent,
-  }),
-  // After the known arm: union members are tried in order.
-  OrchestrationV2UnknownThreadStreamEvent,
-]);
+export const OrchestrationV2ThreadStreamItem = withRecordIdTable(
+  Schema.Union([
+    Schema.Struct({
+      kind: Schema.Literal("synchronized"),
+    }),
+    Schema.Struct({
+      kind: Schema.Literal("snapshot"),
+      snapshotSequence: NonNegativeInt,
+      projection: OrchestrationV2ThreadProjection,
+      /**
+       * Progressive history metadata is present on bounded socket fallbacks and
+       * absent on legacy-compatible full snapshots.
+       */
+      historyCursor: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
+      hasMoreHistory: Schema.optionalKey(Schema.Boolean),
+      latestLocalTurnOrdinal: Schema.optionalKey(Schema.NullOr(NonNegativeInt)),
+      turnItemsOmitLocalVisible: Schema.optionalKey(Schema.Literal(true)),
+      idTable: Schema.optionalKey(Schema.Literal(true)),
+      payloadBudgetExceeded: Schema.optionalKey(Schema.Boolean),
+    }),
+    Schema.Struct({
+      kind: Schema.Literal("event"),
+      sequence: NonNegativeInt,
+      event: OrchestrationV2DomainEvent,
+    }),
+    // After the known arm: union members are tried in order.
+    OrchestrationV2UnknownThreadStreamEvent,
+  ]),
+  (item) => (item.kind === "snapshot" ? "projection" : undefined),
+);
 export type OrchestrationV2ThreadStreamItem = typeof OrchestrationV2ThreadStreamItem.Type;
 
 export class OrchestrationV2DispatchCommandError extends Schema.TaggedError<OrchestrationV2DispatchCommandError>()(
@@ -3296,6 +3349,10 @@ export const OrchestrationV2RpcSchemas = {
   getFullThreadDiff: {
     input: OrchestrationGetFullThreadDiffInput,
     output: OrchestrationGetFullThreadDiffResult,
+  },
+  getShellPage: {
+    input: OrchestrationV2ShellPageInput,
+    output: OrchestrationV2ShellPage,
   },
   getArchivedShellSnapshot: {
     input: Schema.Struct({}),

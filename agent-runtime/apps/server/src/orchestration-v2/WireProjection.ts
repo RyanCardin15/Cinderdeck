@@ -1,4 +1,16 @@
 import type {
+  CheckpointId,
+  MessageId,
+  NodeId,
+  OrchestrationV2Checkpoint,
+  OrchestrationV2Subagent,
+  OrchestrationV2ThreadStreamItem,
+} from "@cinderdeck/contracts";
+import {
+  dedupeSubagentBodies,
+  dedupeTurnItemBodies,
+} from "@cinderdeck/shared/orchestrationV2DedupedBodies";
+import type {
   OrchestrationV2DomainEvent,
   OrchestrationV2ContextHandoff,
   OrchestrationV2ThreadProjection,
@@ -155,4 +167,65 @@ export function projectDomainEventForWire(
     : event.type === "context-handoff.updated"
       ? { ...event, payload: projectContextHandoffForWire(event.payload) }
       : event;
+}
+
+const LIVE_DEDUPE_MEMORY = 32;
+
+function remember<K, V>(memory: Map<K, V>, key: K, value: V): void {
+  memory.delete(key);
+  memory.set(key, value);
+  if (memory.size > LIVE_DEDUPE_MEMORY) memory.delete(memory.keys().next().value as K);
+}
+
+/**
+ * One per subscription, after coalescing, so it remembers only records the client received. A
+ * record event comes before the turn item that repeats its body, so the item (or a repeated
+ * subagent record) ships blank and marked. The other order, or a forgotten record, only costs
+ * bytes: the repeat ships whole.
+ */
+export function makeLiveBodyDeduper(): (
+  item: OrchestrationV2ThreadStreamItem,
+) => OrchestrationV2ThreadStreamItem {
+  const messageText = new Map<MessageId, string>();
+  const checkpointFiles = new Map<CheckpointId, OrchestrationV2Checkpoint["files"]>();
+  const subagents = new Map<NodeId, Pick<OrchestrationV2Subagent, "prompt" | "result">>();
+  const source = {
+    messageText: (id: MessageId) => messageText.get(id),
+    checkpointFiles: (id: CheckpointId) => checkpointFiles.get(id),
+    subagent: (id: NodeId) => subagents.get(id),
+  };
+  const rememberSubagent = ({ id, prompt, result }: OrchestrationV2Subagent) =>
+    remember(subagents, id, { prompt, result });
+  return (item) => {
+    if (item.kind === "snapshot") {
+      // The client now holds exactly these records; their bodies are never blanked.
+      const { messages, checkpoints, subagents: records } = item.projection;
+      for (const message of messages) remember(messageText, message.id, message.text);
+      for (const checkpoint of checkpoints)
+        remember(checkpointFiles, checkpoint.id, checkpoint.files);
+      for (const subagent of records) rememberSubagent(subagent);
+      return item;
+    }
+    if (item.kind !== "event") return item;
+    const { event } = item;
+    switch (event.type) {
+      case "message.updated":
+        remember(messageText, event.payload.id, event.payload.text);
+        return item;
+      case "checkpoint.captured":
+        remember(checkpointFiles, event.payload.id, event.payload.files);
+        return item;
+      case "subagent.updated": {
+        const payload = dedupeSubagentBodies(event.payload, subagents.get(event.payload.id));
+        rememberSubagent(event.payload);
+        return payload === event.payload ? item : { ...item, event: { ...event, payload } };
+      }
+      case "turn-item.updated": {
+        const payload = dedupeTurnItemBodies(event.payload, source);
+        return payload === event.payload ? item : { ...item, event: { ...event, payload } };
+      }
+      default:
+        return item;
+    }
+  };
 }

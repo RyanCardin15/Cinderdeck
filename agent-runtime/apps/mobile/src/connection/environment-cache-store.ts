@@ -1,3 +1,5 @@
+import { mergeDeferredShellCache } from "@cinderdeck/client-runtime/platform";
+import * as Semaphore from "effect/Semaphore";
 import {
   ORCHESTRATION_CACHE_SCHEMA_VERSION,
   StoredOrchestrationShellSnapshot,
@@ -102,134 +104,165 @@ function loadDecodedCache<A, B>(input: {
 export const make = Effect.fn("MobileEnvironmentCacheStore.make")(function* () {
   const database = yield* MobileDatabase.MobileDatabase;
   attachProjectFaviconDatabase(database);
-  return Persistence.EnvironmentCacheStore.of({
-    loadShell: Effect.fn("MobileEnvironmentCache.loadShell")((environmentId) =>
-      loadDecodedCache({
-        database,
-        environmentId,
-        kind: "shell",
-        cacheKey: "snapshot",
-        operation: "load-shell",
-        decode: decodeStoredShellSnapshot,
-        select: (stored) =>
-          stored.environmentId === environmentId ? Option.some(stored.snapshot) : Option.none(),
-      }).pipe(Effect.tap(() => Effect.promise(() => projectFaviconDatabaseCache.hydrate()))),
-    ),
-    saveShell: Effect.fn("MobileEnvironmentCache.saveShell")(function* (environmentId, snapshot) {
-      const payload = yield* encodeStoredShellSnapshot({
-        schemaVersion: ORCHESTRATION_CACHE_SCHEMA_VERSION,
-        environmentId,
-        snapshot,
-      }).pipe(Effect.mapError((cause) => persistenceError("save-shell", cause)));
-      yield* database
-        .saveCache(environmentId, "shell", "snapshot", ORCHESTRATION_CACHE_SCHEMA_VERSION, payload)
-        .pipe(Effect.mapError(mapDatabaseError("save-shell")));
-    }),
-    loadThread: Effect.fn("MobileEnvironmentCache.loadThread")((environmentId, threadId) =>
-      loadDecodedCache({
-        database,
-        environmentId,
-        kind: "thread",
-        cacheKey: threadId,
-        operation: "load-thread",
-        decode: decodeStoredThreadSnapshot,
-        select: (stored) =>
-          stored.environmentId === environmentId && stored.threadId === threadId
-            ? Option.some(stored.snapshot)
-            : Option.none(),
-      }),
-    ),
-    saveThread: Effect.fn("MobileEnvironmentCache.saveThread")(function* (environmentId, snapshot) {
-      const threadId = snapshot.projection.thread.id;
-      const payload = yield* encodeStoredThreadSnapshot({
-        schemaVersion: ORCHESTRATION_CACHE_SCHEMA_VERSION,
-        environmentId,
-        threadId,
-        snapshot,
-      }).pipe(Effect.mapError((cause) => persistenceError("save-thread", cause)));
-      yield* database
-        .saveCache(environmentId, "thread", threadId, ORCHESTRATION_CACHE_SCHEMA_VERSION, payload)
-        .pipe(Effect.mapError(mapDatabaseError("save-thread")));
-    }),
-    removeThread: Effect.fn("MobileEnvironmentCache.removeThread")((environmentId, threadId) =>
-      database
-        .removeCache(environmentId, "thread", threadId)
-        .pipe(Effect.mapError(mapDatabaseError("remove-thread"))),
-    ),
-    loadServerConfig: Effect.fn("MobileEnvironmentCache.loadServerConfig")((environmentId) =>
-      loadDecodedCache({
-        database,
-        environmentId,
-        kind: "server-config",
-        cacheKey: "config",
-        operation: "load-server-config",
-        decode: decodeStoredServerConfig,
-        select: (stored) =>
-          stored.environmentId === environmentId ? Option.some(stored.config) : Option.none(),
-      }),
-    ),
-    saveServerConfig: Effect.fn("MobileEnvironmentCache.saveServerConfig")(
-      function* (environmentId, config) {
-        const payload = yield* encodeStoredServerConfig({
-          schemaVersion: SERVER_CONFIG_CACHE_SCHEMA_VERSION,
+  const shellCacheLock = yield* Semaphore.make(1);
+  const cacheStore: Persistence.EnvironmentCacheStore["Service"] =
+    Persistence.EnvironmentCacheStore.of({
+      loadShell: Effect.fn("MobileEnvironmentCache.loadShell")((environmentId) =>
+        loadDecodedCache({
+          database,
           environmentId,
-          config,
-        }).pipe(Effect.mapError((cause) => persistenceError("save-server-config", cause)));
+          kind: "shell",
+          cacheKey: "snapshot",
+          operation: "load-shell",
+          decode: decodeStoredShellSnapshot,
+          select: (stored) =>
+            stored.environmentId === environmentId ? Option.some(stored.snapshot) : Option.none(),
+        }).pipe(Effect.tap(() => Effect.promise(() => projectFaviconDatabaseCache.hydrate()))),
+      ),
+      saveShell: Effect.fn("MobileEnvironmentCache.saveShell")(function* (
+        environmentId,
+        snapshot,
+        options,
+      ) {
+        if (snapshot.deferredThreads || options?.metadataOnly) {
+          const previous = yield* cacheStore
+            .loadShell(environmentId)
+            .pipe(Effect.orElseSucceed(() => Option.none()));
+          snapshot = mergeDeferredShellCache(
+            Option.getOrNull(previous),
+            snapshot,
+            options?.metadataOnly,
+          );
+        }
+        const payload = yield* encodeStoredShellSnapshot({
+          schemaVersion: ORCHESTRATION_CACHE_SCHEMA_VERSION,
+          environmentId,
+          snapshot,
+        }).pipe(Effect.mapError((cause) => persistenceError("save-shell", cause)));
         yield* database
           .saveCache(
             environmentId,
-            "server-config",
-            "config",
-            SERVER_CONFIG_CACHE_SCHEMA_VERSION,
+            "shell",
+            "snapshot",
+            ORCHESTRATION_CACHE_SCHEMA_VERSION,
             payload,
           )
-          .pipe(Effect.mapError(mapDatabaseError("save-server-config")));
-      },
-    ),
-    loadVcsRefs: Effect.fn("MobileEnvironmentCache.loadVcsRefs")((environmentId, cwd) =>
-      loadDecodedCache({
-        database,
-        environmentId,
-        kind: "vcs-refs",
-        cacheKey: cwd,
-        operation: "load-vcs-refs",
-        decode: decodeStoredVcsRefs,
-        select: (stored) =>
-          stored.environmentId === environmentId && stored.cwd === cwd
-            ? Option.some(stored.refs)
-            : Option.none(),
-      }),
-    ),
-    saveVcsRefs: Effect.fn("MobileEnvironmentCache.saveVcsRefs")(
-      function* (environmentId, cwd, refs) {
-        const payload = yield* encodeStoredVcsRefs({
-          schemaVersion: VCS_REFS_CACHE_SCHEMA_VERSION,
+          .pipe(Effect.mapError(mapDatabaseError("save-shell")));
+      }, shellCacheLock.withPermits(1)),
+      loadThread: Effect.fn("MobileEnvironmentCache.loadThread")((environmentId, threadId) =>
+        loadDecodedCache({
+          database,
           environmentId,
-          cwd,
-          refs,
-        }).pipe(Effect.mapError((cause) => persistenceError("save-vcs-refs", cause)));
-        yield* database
-          .saveCache(environmentId, "vcs-refs", cwd, VCS_REFS_CACHE_SCHEMA_VERSION, payload)
-          .pipe(Effect.mapError(mapDatabaseError("save-vcs-refs")));
-      },
-    ),
-    removeVcsRefs: Effect.fn("MobileEnvironmentCache.removeVcsRefs")((environmentId, cwd) =>
-      database
-        .removeCache(environmentId, "vcs-refs", cwd)
-        .pipe(Effect.mapError(mapDatabaseError("remove-vcs-refs"))),
-    ),
-    clearVcsRefs: Effect.fn("MobileEnvironmentCache.clearVcsRefs")((environmentId) =>
-      database
-        .clearCacheKind(environmentId, "vcs-refs")
-        .pipe(Effect.mapError(mapDatabaseError("clear-vcs-refs"))),
-    ),
-    clear: Effect.fn("MobileEnvironmentCache.clear")((environmentId) =>
-      Effect.promise(() => projectFaviconDatabaseCache.clearEnvironment(environmentId)).pipe(
-        Effect.andThen(database.clearEnvironmentCache(environmentId)),
-        Effect.mapError(mapDatabaseError("clear-environment")),
+          kind: "thread",
+          cacheKey: threadId,
+          operation: "load-thread",
+          decode: decodeStoredThreadSnapshot,
+          select: (stored) =>
+            stored.environmentId === environmentId && stored.threadId === threadId
+              ? Option.some(stored.snapshot)
+              : Option.none(),
+        }),
       ),
-    ),
-  });
+      saveThread: Effect.fn("MobileEnvironmentCache.saveThread")(
+        function* (environmentId, snapshot) {
+          const threadId = snapshot.projection.thread.id;
+          const payload = yield* encodeStoredThreadSnapshot({
+            schemaVersion: ORCHESTRATION_CACHE_SCHEMA_VERSION,
+            environmentId,
+            threadId,
+            snapshot,
+          }).pipe(Effect.mapError((cause) => persistenceError("save-thread", cause)));
+          yield* database
+            .saveCache(
+              environmentId,
+              "thread",
+              threadId,
+              ORCHESTRATION_CACHE_SCHEMA_VERSION,
+              payload,
+            )
+            .pipe(Effect.mapError(mapDatabaseError("save-thread")));
+        },
+      ),
+      removeThread: Effect.fn("MobileEnvironmentCache.removeThread")((environmentId, threadId) =>
+        database
+          .removeCache(environmentId, "thread", threadId)
+          .pipe(Effect.mapError(mapDatabaseError("remove-thread"))),
+      ),
+      loadServerConfig: Effect.fn("MobileEnvironmentCache.loadServerConfig")((environmentId) =>
+        loadDecodedCache({
+          database,
+          environmentId,
+          kind: "server-config",
+          cacheKey: "config",
+          operation: "load-server-config",
+          decode: decodeStoredServerConfig,
+          select: (stored) =>
+            stored.environmentId === environmentId ? Option.some(stored.config) : Option.none(),
+        }),
+      ),
+      saveServerConfig: Effect.fn("MobileEnvironmentCache.saveServerConfig")(
+        function* (environmentId, config) {
+          const payload = yield* encodeStoredServerConfig({
+            schemaVersion: SERVER_CONFIG_CACHE_SCHEMA_VERSION,
+            environmentId,
+            config,
+          }).pipe(Effect.mapError((cause) => persistenceError("save-server-config", cause)));
+          yield* database
+            .saveCache(
+              environmentId,
+              "server-config",
+              "config",
+              SERVER_CONFIG_CACHE_SCHEMA_VERSION,
+              payload,
+            )
+            .pipe(Effect.mapError(mapDatabaseError("save-server-config")));
+        },
+      ),
+      loadVcsRefs: Effect.fn("MobileEnvironmentCache.loadVcsRefs")((environmentId, cwd) =>
+        loadDecodedCache({
+          database,
+          environmentId,
+          kind: "vcs-refs",
+          cacheKey: cwd,
+          operation: "load-vcs-refs",
+          decode: decodeStoredVcsRefs,
+          select: (stored) =>
+            stored.environmentId === environmentId && stored.cwd === cwd
+              ? Option.some(stored.refs)
+              : Option.none(),
+        }),
+      ),
+      saveVcsRefs: Effect.fn("MobileEnvironmentCache.saveVcsRefs")(
+        function* (environmentId, cwd, refs) {
+          const payload = yield* encodeStoredVcsRefs({
+            schemaVersion: VCS_REFS_CACHE_SCHEMA_VERSION,
+            environmentId,
+            cwd,
+            refs,
+          }).pipe(Effect.mapError((cause) => persistenceError("save-vcs-refs", cause)));
+          yield* database
+            .saveCache(environmentId, "vcs-refs", cwd, VCS_REFS_CACHE_SCHEMA_VERSION, payload)
+            .pipe(Effect.mapError(mapDatabaseError("save-vcs-refs")));
+        },
+      ),
+      removeVcsRefs: Effect.fn("MobileEnvironmentCache.removeVcsRefs")((environmentId, cwd) =>
+        database
+          .removeCache(environmentId, "vcs-refs", cwd)
+          .pipe(Effect.mapError(mapDatabaseError("remove-vcs-refs"))),
+      ),
+      clearVcsRefs: Effect.fn("MobileEnvironmentCache.clearVcsRefs")((environmentId) =>
+        database
+          .clearCacheKind(environmentId, "vcs-refs")
+          .pipe(Effect.mapError(mapDatabaseError("clear-vcs-refs"))),
+      ),
+      clear: Effect.fn("MobileEnvironmentCache.clear")((environmentId) =>
+        Effect.promise(() => projectFaviconDatabaseCache.clearEnvironment(environmentId)).pipe(
+          Effect.andThen(database.clearEnvironmentCache(environmentId)),
+          Effect.mapError(mapDatabaseError("clear-environment")),
+        ),
+      ),
+    });
+  return cacheStore;
 });
 
 export const layer = Layer.effect(Persistence.EnvironmentCacheStore, make());

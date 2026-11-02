@@ -5,3 +5,5 @@ export { ConnectionPersistenceError } from "./persistence.ts";
 export * from "./orchestrationCache.ts";
 export * as PlatformConnectionSource from "./source.ts";
 export * from "./storageDocument.ts";
+
+export { mergeDeferredShellCache } from "./shellCache.ts";

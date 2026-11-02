@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("../state/entities", () => ({
   useProjects: () => [],
+  useShellMetadataStatus: () => ({ loading: false, error: false, retry: () => {} }),
   useThreadShells: () => mocks.threads,
   useAllEnvironmentShellsBootstrapped: () => true,
 }));

@@ -291,3 +291,109 @@ shells for displayed activity summaries, so that existing API and its 600-read
 scalability gate were retained. The remaining server change adds indexed grouping
 and filters exact-session invalidations at the event source. Original audit
 timings and validation counts above describe the October 22 fixture run.
+
+## T3 runtime comparison and integration (2026-11-01)
+
+Compared the current Cinderdeck working source with T3 Code commit
+[`ddfc4a92edbdc934fede54c32f19be9ff5af1bb4`](https://github.com/pingdotgg/t3code/tree/ddfc4a92edbdc934fede54c32f19be9ff5af1bb4),
+read directly from the upstream repository. This comparison covers desktop navigation,
+thread state, live shell delivery, bounded history and the Cinderdeck session/native
+integration. It does not establish end-to-end performance parity with T3.
+
+| Area | Comparison and resulting implementation |
+| --- | --- |
+| Chat rendering | Both implementations use virtualized timelines and memoized rows. Upstream has split more timeline code into separate modules. File size alone is not evidence of runtime cost; Cinderdeck retains its attachment, preview and conversation behavior. |
+| Workspace navigation | T3 exposes project-scoped and exact-thread selectors. Cinderdeck's workspace session lists and both navigator containers were reading the global thread-shell array. Session lists now compose the shared project selector with exact saved/selected-thread selectors; navigator containers observe only the selected thread. Saved sessions outside current project membership, archived ancestors, remote environments, nested sub-agents and paging remain supported. |
+| Slow shell subscribers | Upstream retains only the newest queued full state per aggregate. Ported `bufferLatestLiveStream` and `bufferShellLiveStream` into the existing delivery path, adapting the semaphore API to our pinned Effect version. Thread location is part of the key, so archive transitions remain distinct. Snapshots/enrichment/synchronization markers bypass this coalescer. Item/byte limits still include the batch waiting for acknowledgement; durable transcript events retain ordered replay. |
+| Native activity | Workspace session subscriptions now compare the cached resources used by their current page before rebuilding session projections. Native activity and timestamp-only refreshes do not reload unchanged sessions. Changed identities, connection states, generation, availability and resource contents still invalidate; thread events still update the watched resource set. |
+| History and protocol | The current bounded snapshot, resume, raw-payload and replay limits already pass the transport performance gate. Newer upstream shell trimming and compact wire formats span additional schemas and client decoding. They were not copied piecemeal in this initial pass; the coordinated migration below adds the corresponding shared client restoration and scoped paging. |
+| Packaging | Pinned `node-pty` to the already locked and patched `1.2.0-beta.15`. The previous range allowed the production staging install to resolve a newer beta for which its declared patch was unused, failing the whole-app build. |
+
+Deterministic comparisons use disposable state, not user databases:
+
+- 1,000 updates in each of two environments change the global thread-shell array
+  2,000 times; the scoped workspace array changes zero times. Updates to an exact
+  saved session still propagate, and removed sessions disappear.
+- 1,000 unchanged native snapshots followed by checkout removal previously caused
+  1,002 canonical shell reads. The same fixture now needs at most three, while
+  retaining the removed checkout's conversation and updating its availability.
+  The prior stream was restored temporarily to verify the 1,002-read baseline.
+- With one state awaiting acknowledgement, 1,000 subsequent states for that thread
+  and an update for another thread fit a three-item live budget. The consumer
+  receives the latest pending states in sequence order. Separate tests verify both
+  item and byte overflow while a delivery remains unacknowledged.
+
+Validation: 99 focused tests passed (nine files; one opt-in mounting benchmark
+skipped), the v2 wire performance gate passed 297 tests in 18 files, and all 13
+runtime packages typechecked. A broader navigation selection found seven failures
+in existing PR/router/breadcrumb fixtures; all seven reproduced after restoring
+the previous navigator implementation. The complete Debug app was built with
+`scripts/build-unified.sh`, including recursive signature checks.
+
+These are measured reductions in state replacement, projection reads and retained
+queue work. Interactive frame pacing, cold startup, provider latency, energy and
+RSS were not measured; those require an isolated whole-app profiling workload.
+
+
+## Coordinated protocol migration (2026-11-02)
+
+The server, contracts and shared desktop/mobile runtime now support the remaining
+snapshot transport improvements from the same T3 source baseline above:
+
+- Bounded HTTP snapshots accept `compactTurnItems=1`, `dedupeBodies=1` and
+  `compactIds=1`. Socket fallbacks use the corresponding `acceptCompactTurnItems`,
+  `acceptDedupedBodies` and `acceptCompactIds` flags. History pages also support
+  compact ID tables. Plain requests retain their previous complete format.
+- Local timeline items are transmitted once when exact restoration is possible.
+  Repeated message, checkpoint and sub-agent bodies carry explicit omission
+  markers. Shared client code restores them before reducers, caches or either
+  client UI sees them. A per-subscription live deduper retains at most 32 records
+  of each body category and runs after event coalescing. Canonical server records,
+  tool output, attachments and inherited conversation content remain intact.
+- Initial shells can defer idle sub-agent and older settled metadata. A lightweight
+  SQL index selects live work, pins, snoozes, the newest 25 settled roots (including
+  timestamp ties), and ancestors. Full shell materialization reads only the chosen
+  IDs before loading related control records. Lightweight membership/root IDs
+  remain complete so terminals and draft reconciliation do not interpret deferral
+  as deletion.
+- Cinderdeck advertises `shellThreadPages`; its clients opt into `deferThreads`.
+  The authorized read-only `orchestration.getShellPage` endpoint returns at most
+  100 active thread shells, scoped to project IDs or an exact conversation's entire
+  family. Desktop workspace lists hydrate their requested scopes. Global views
+  and mobile lists that need every thread can hydrate every page asynchronously.
+  Each page retains its own event watermark; live updates and removals override
+  old pages. New authoritative snapshots invalidate previous page generations.
+  Family lookups and retry/status views share the canonical root query.
+- Desktop and mobile retain richer metadata only in their existing offline cache.
+  Thin saves merge against authoritative membership rather than deleting cached
+  older conversations. Hydrated page writes share a cache lock and cannot replace
+  a newer cached sequence. A rewound authoritative sequence discards
+  older cache data. Disconnect restores available offline metadata without keeping
+  the complete cache in the connected live shell. Existing storage keys and cache
+  versions remain compatible.
+
+The real HTTP/WebSocket fixture verifies exact restoration, history cursors and
+live message text alongside plain legacy requests. Its bounded response shrank
+from **210,136 to 89,899 decoded bytes**, and **5,939 to 4,275 gzip bytes**. The real
+SQLite shell fixture initially materializes **11 of 250** full thread records,
+retains membership for all 250, and pages all 240 records belonging to its large
+project in batches of at most 100. These are deterministic fixture results, not
+whole-app latency, energy or RSS measurements.
+
+The expanded local `test:perf:v2-wire` gate covers the codecs, SQL paging,
+version-skew behavior, late pages, live moves, cache recovery and actual network
+round trips. Global views may still load all metadata when their features need it;
+scoped paging does not make those views constant-cost. Existing offline caches can
+also remain large. No provider protocol fixtures, persisted domain event formats,
+native service authority or independent runtime release mechanism changed.
+
+
+Migration validation: the expanded protocol gate passes 343 tests in 28 files,
+including real HTTP/WebSocket sockets and SQLite fixtures. All 13 runtime packages
+typecheck. Focused lint passes with warnings in surrounding existing code. The
+broader UI/cache/outbox selection passes 372 tests with one opt-in benchmark
+skipped; its seven known PR/router/breadcrumb fixture failures have the same
+signatures as the pre-migration comparison above. Desktop/mobile cache tests and
+workspace/direct-link tests pass. The complete Debug app builds and passes its
+bundle/signature checks. No browser or device was launched, and live provider,
+interactive frame pacing and physical-device behavior remain unverified.

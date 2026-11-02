@@ -330,6 +330,7 @@ export interface ProjectionStoreV2Shape {
    * threads before any of their run, item or session rows are read.
    */
   readonly getShellSnapshot: (options?: {
+    readonly threadIds?: ReadonlyArray<ThreadId>;
     readonly location?: "active" | "archive";
     readonly unsettledOnly?: boolean;
   }) => Effect.Effect<OrchestrationV2ThreadShellSnapshot, ProjectionStoreV2Error>;
@@ -4756,6 +4757,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       threadId?: ThreadId,
       location?: "active" | "archive",
       unsettledOnly = false,
+      threadIds?: ReadonlyArray<ThreadId>,
     ) =>
       sql<ShellThreadRow>`
             SELECT
@@ -4899,7 +4901,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 )
               ORDER BY candidate.ordinal DESC, candidate.run_id DESC LIMIT 1
             ) AND blocked.status = 'failed'
-            WHERE t.deleted_at IS NULL${threadId === undefined ? sql`` : sql` AND t.thread_id = ${threadId}`}${
+            WHERE t.deleted_at IS NULL${threadIds === undefined ? sql`` : sql` AND t.thread_id IN ${sql.in(threadIds)}`}${threadId === undefined ? sql`` : sql` AND t.thread_id = ${threadId}`}${
               location === "active"
                 ? sql` AND json_extract(t.payload_json, '$.archivedAt') IS NULL`
                 : location === "archive"
@@ -5299,6 +5301,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               undefined,
               options?.location,
               options?.unsettledOnly ?? false,
+              options?.threadIds,
             );
             const targetThreadIds = new Set(
               targetThreadRows.map((row) => ThreadId.make(row.thread_id)),
@@ -5522,7 +5525,8 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
         Effect.gen(function* () {
           const existing = (yield* Ref.get(replayState)).projections;
           const selectedThreadIds = [...existing.entries()]
-            .filter(([, projection]) => {
+            .filter(([id, projection]) => {
+              if (options?.threadIds && !options.threadIds.includes(id)) return false;
               if (
                 options?.unsettledOnly &&
                 (projection.thread.settledAt !== null ||

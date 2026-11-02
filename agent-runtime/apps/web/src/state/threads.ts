@@ -1,3 +1,4 @@
+import { createShellPagingAtoms } from "@cinderdeck/client-runtime/state/shellPaging";
 import { useAtomValue } from "@effect/atom-react";
 import { enabledEnvironmentIds } from "@cinderdeck/client-runtime/state/connections";
 import { arrayElementsEqual } from "@cinderdeck/client-runtime/state/entities";
@@ -15,7 +16,7 @@ import { AsyncResult, Atom } from "effect/unstable/reactivity";
 
 import { environmentCatalog } from "../connection/catalog";
 import { connectionAtomRuntime } from "../connection/runtime";
-import { environmentSnapshotAtom } from "./shell";
+import { environmentSnapshotAtom, environmentShell } from "./shell";
 import { orchestrationEnvironment } from "./orchestration";
 
 export const threadEnvironment = createThreadEnvironmentAtoms(
@@ -35,8 +36,13 @@ const archivedShellSnapshotAtom = Atom.family((environmentId: EnvironmentId) =>
     ),
   ),
 );
+export const shellPaging = createShellPagingAtoms(
+  connectionAtomRuntime,
+  environmentShell.stateValueAtom,
+);
 export const environmentThreadShells = createEnvironmentThreadShellAtoms({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
+  additionalThreads: shellPaging,
   snapshotAtom: threadEnvironment.snapshotAtom,
   archivedSnapshotAtom: archivedShellSnapshotAtom,
 });

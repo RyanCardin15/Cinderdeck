@@ -1,3 +1,4 @@
+import type { ShellScope } from "./shellPaging.ts";
 import type {
   EnvironmentId,
   OrchestrationV2ShellSnapshot,
@@ -35,6 +36,10 @@ export function createEnvironmentThreadShellAtoms(input: {
   readonly snapshotAtom: (
     environmentId: EnvironmentId,
   ) => Atom.Atom<OrchestrationV2ShellSnapshot | null>;
+  readonly additionalThreads?: (
+    id: EnvironmentId,
+    scope: ShellScope,
+  ) => Atom.Atom<ReadonlyArray<OrchestrationV2ThreadShell>>;
   readonly archivedSnapshotAtom?: (
     environmentId: EnvironmentId,
   ) => Atom.Atom<OrchestrationV2ArchivedShellSnapshot | null>;
@@ -79,7 +84,10 @@ export function createEnvironmentThreadShellAtoms(input: {
   const environmentThreadRefsAtom = Atom.family((environmentId: EnvironmentId) => {
     let previous: ReadonlyArray<ScopedThreadRef> = [];
     return Atom.make((get) => {
-      const next = get(environmentThreadsAtom(environmentId)).map((thread) => ({
+      const snapshot = get(input.snapshotAtom(environmentId));
+      const listed = new Map((snapshot?.deferredThreadRefs ?? []).map((row) => [row.id, row]));
+      for (const row of get(environmentThreadsAtom(environmentId))) listed.set(row.id, row);
+      const next = [...listed.values()].map((thread) => ({
         environmentId,
         threadId: thread.id,
       }));
@@ -98,7 +106,14 @@ export function createEnvironmentThreadShellAtoms(input: {
     > = EMPTY_THREAD_REFS_BY_PROJECT;
     return Atom.make((get) => {
       const grouped = new Map<ProjectId, ScopedThreadRef[]>();
-      for (const thread of get(environmentThreadsAtom(environmentId))) {
+      const listed = new Map(
+        (get(input.snapshotAtom(environmentId))?.deferredThreadRefs ?? []).map((row) => [
+          row.id,
+          row,
+        ]),
+      );
+      for (const row of get(environmentThreadsAtom(environmentId))) listed.set(row.id, row);
+      for (const thread of listed.values()) {
         const refs = grouped.get(thread.projectId);
         const ref = { environmentId, threadId: thread.id };
         if (refs === undefined) {
@@ -154,9 +169,20 @@ export function createEnvironmentThreadShellAtoms(input: {
   const threadShellAtomFamily = Atom.family((key: string) => {
     const ref = parseThreadKey(key);
     return Atom.make((get) => {
+      const deferredRef = get(input.snapshotAtom(ref.environmentId))?.deferredThreadRefs?.find(
+        (row) => row.id === ref.threadId,
+      );
       const source =
         get(environmentThreadIndexAtom(ref.environmentId)).get(ref.threadId) ??
-        get(archivedThreadIndexAtom(ref.environmentId)).get(ref.threadId) ??
+        (input.additionalThreads
+          ? get(
+              input.additionalThreads(ref.environmentId, {
+                projectIds: [],
+                threadIds: [deferredRef?.rootThreadId ?? ref.threadId],
+              }),
+            ).find((row) => row.id === ref.threadId)
+          : undefined) ??
+        (deferredRef ? null : get(archivedThreadIndexAtom(ref.environmentId)).get(ref.threadId)) ??
         null;
       return source === null ? null : scopedThread(ref.environmentId, source);
     }).pipe(Atom.withLabel(`environment-thread-shell:${key}`));
@@ -173,26 +199,63 @@ export function createEnvironmentThreadShellAtoms(input: {
           get(environmentThreadRefsByProjectAtom(projectRef.environmentId)).get(
             projectRef.projectId,
           ) ?? EMPTY_SCOPED_THREAD_REFS;
-        if (refs.length === 0) continue;
         const threads = get(environmentThreadIndexAtom(projectRef.environmentId));
         for (const ref of refs) {
           const key = threadKey(ref);
           if (seen.has(key)) {
             continue;
           }
-          seen.add(key);
           const thread = threads.get(ref.threadId);
           if (thread !== undefined) {
+            seen.add(key);
             next.push(scopedThread(ref.environmentId, thread));
           }
         }
       }
+      if (input.additionalThreads)
+        for (const projectRef of projectRefs) {
+          for (const row of get(
+            input.additionalThreads(projectRef.environmentId, {
+              projectIds: [projectRef.projectId],
+            }),
+          )) {
+            const key = threadKey({ environmentId: projectRef.environmentId, threadId: row.id });
+            const latest = get(environmentThreadIndexAtom(projectRef.environmentId)).get(row.id);
+            if (latest && latest.projectId !== projectRef.projectId) continue;
+            if (!seen.has(key)) {
+              seen.add(key);
+              next.push(scopedThread(projectRef.environmentId, latest ?? row));
+            }
+          }
+        }
       if (arrayElementsEqual(previous, next)) {
         return previous;
       }
       previous = next;
       return previous;
     }).pipe(Atom.withLabel(`environment-thread-shells-for-projects:${key}`));
+  });
+
+  // Compose existing project and point selectors instead of subscribing a workspace
+  // view to the global shell list. Saved threads can outlive project membership.
+  const threadShellsForScopeAtomFamily = Atom.family((key: string) => {
+    const [projectKeys, threadKeys] = JSON.parse(key) as [string, string[]];
+    let previous: ReadonlyArray<EnvironmentThreadShell> = [];
+    return Atom.make((get) => {
+      const next = new Map<string, EnvironmentThreadShell>();
+      for (const thread of get(threadShellsForProjectRefsAtomFamily(projectKeys))) {
+        next.set(threadKey({ environmentId: thread.environmentId, threadId: thread.id }), thread);
+      }
+      for (const key of threadKeys) {
+        if (next.has(key)) continue;
+        const thread = get(threadShellAtomFamily(key));
+        if (thread) next.set(key, thread);
+      }
+      const values = [...next.values()];
+      if (arrayElementsEqual(previous, values)) return previous;
+      previous = values;
+      return values;
+    }).pipe(Atom.withLabel(`environment-thread-shells-for-scope:${key}`));
   });
 
   let previousThreadRefs: ReadonlyArray<ScopedThreadRef> = [];
@@ -216,6 +279,15 @@ export function createEnvironmentThreadShellAtoms(input: {
         next.push(scopedThread(environmentId, thread));
       }
     }
+    if (input.additionalThreads)
+      for (const environmentId of enabledEnvironmentIds(get(input.catalogValueAtom))) {
+        const seen = new Set(
+          next.filter((row) => row.environmentId === environmentId).map((row) => row.id),
+        );
+        for (const row of get(input.additionalThreads(environmentId, {}))) {
+          if (!seen.has(row.id)) next.push(scopedThread(environmentId, row));
+        }
+      }
     if (arrayElementsEqual(previousThreadShells, next)) {
       return previousThreadShells;
     }
@@ -233,6 +305,14 @@ export function createEnvironmentThreadShellAtoms(input: {
         next.push(scopedThread(environmentId, thread));
       }
     }
+    if (input.additionalThreads)
+      for (const environmentId of enabledEnvironmentIds(get(input.catalogValueAtom))) {
+        const seen = new Set(get(environmentThreadIndexAtom(environmentId)).keys());
+        for (const row of get(input.additionalThreads(environmentId, {}))) {
+          if (!seen.has(row.id) && row.lineage.relationshipToParent !== "subagent")
+            next.push(scopedThread(environmentId, row));
+        }
+      }
     if (arrayElementsEqual(previousNavigationShells, next)) return previousNavigationShells;
     previousNavigationShells = next;
     return next;
@@ -248,6 +328,16 @@ export function createEnvironmentThreadShellAtoms(input: {
     navigationThreadShellsAtom,
     threadShellsForProjectRefsAtom: (refs: ReadonlyArray<ScopedProjectRef>) =>
       threadShellsForProjectRefsAtomFamily(projectRefCollectionKey(refs)),
+    threadShellsForScopeAtom: (
+      projects: ReadonlyArray<ScopedProjectRef>,
+      threads: ReadonlyArray<ScopedThreadRef>,
+    ) =>
+      threadShellsForScopeAtomFamily(
+        JSON.stringify([
+          projectRefCollectionKey(projects),
+          [...new Set(threads.map(threadKey))].sort(),
+        ]),
+      ),
     threadShellAtom: (ref: ScopedThreadRef) => threadShellAtomFamily(threadKey(ref)),
   };
 }

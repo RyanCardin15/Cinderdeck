@@ -1,3 +1,4 @@
+import { ThreadId } from "@cinderdeck/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { Link, useParams } from "@tanstack/react-router";
 import { AsyncResult } from "effect/unstable/reactivity";
@@ -8,7 +9,7 @@ import { workspaceView } from "./state";
 import { overviewResources, type WorkspaceSearch } from "./workspaceNavigation";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { useEnvironmentQuery } from "../state/query";
-import { useProjects, useThreadShells } from "../state/entities";
+import { useProjects, useThreadShell } from "../state/entities";
 import styles from "./WorkspaceSidebar.module.css";
 
 /** App-wide views use the same native catalog as the selected workspace view. */
@@ -41,7 +42,11 @@ function ConnectedWorkspaces({
   search: WorkspaceSearch;
 }) {
   const params = useParams({ strict: false });
-  const threads = useThreadShells();
+  const thread = useThreadShell(
+    "threadId" in params && params.threadId
+      ? { environmentId, threadId: ThreadId.make(params.threadId) }
+      : null,
+  );
   const projects = useProjects();
   const result = useAtomValue(workspaceView({ environmentId, input: { offset: 0, limit: 50 } }));
   const view = Option.getOrNull(AsyncResult.value(result));
@@ -73,10 +78,6 @@ function ConnectedWorkspaces({
       ].map((resource) => [resource.workspaceID, resource]),
     ).values(),
   ];
-  const thread = threads.find(
-    (item) =>
-      item.environmentId === environmentId && "threadId" in params && item.id === params.threadId,
-  );
   const project = projects.find(
     (item) => item.environmentId === environmentId && item.id === thread?.projectId,
   );

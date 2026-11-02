@@ -1,3 +1,7 @@
+import {
+  restoreSubagentBodies,
+  restoreTurnItemBodies,
+} from "@cinderdeck/shared/orchestrationV2DedupedBodies";
 import type {
   OrchestrationV2DomainEvent,
   OrchestrationV2ThreadProjection,
@@ -159,6 +163,25 @@ export function applyOrchestrationV2ProjectionEvent(
 
   const partialTimeline = options?.partialTimeline === true;
   const latestLocalTurnOrdinal = options?.latestLocalTurnOrdinal;
+  if (event.type === "turn-item.updated")
+    event = {
+      ...event,
+      payload: restoreTurnItemBodies(event.payload, {
+        messageText: (id) => projection.messages.findLast((row) => row.id === id)?.text,
+        checkpointFiles: (id) => projection.checkpoints.findLast((row) => row.id === id)?.files,
+        subagent: (id) => projection.subagents.findLast((row) => row.id === id),
+      }),
+    };
+  else if (event.type === "subagent.updated") {
+    const payload = event.payload;
+    event = {
+      ...event,
+      payload: restoreSubagentBodies(
+        payload,
+        projection.subagents.findLast((row) => row.id === payload.id),
+      ),
+    };
+  }
   const base = { ...projection, updatedAt: event.occurredAt };
   switch (event.type) {
     case "thread.created":

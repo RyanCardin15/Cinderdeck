@@ -1,3 +1,7 @@
+import { EventId, TurnItemId, type OrchestrationV2DomainEvent } from "@cinderdeck/contracts";
+import { applyOrchestrationV2ProjectionEvent } from "../../../packages/client-runtime/src/state/orchestrationV2Projection.ts";
+import { boundedSnapshotProjection } from "@cinderdeck/shared/orchestrationV2BoundedSnapshot";
+import { OrchestrationV2ThreadBoundedSnapshot } from "@cinderdeck/contracts";
 // @effect-diagnostics nodeBuiltinImport:off - Measures real local HTTP/WebSocket sockets.
 import * as NodeHttp from "node:http";
 import { assert, it } from "@effect/vitest";
@@ -184,6 +188,7 @@ const subscribe = Effect.fn("transfer.subscribe")(function* (
   client: MeasuredWsClient,
   kind: "thread" | "shell",
   afterSequence: number,
+  compact = false,
 ) {
   const queue = yield* Queue.unbounded<StreamItem>();
   const stream: Stream.Stream<StreamItem, unknown> =
@@ -193,6 +198,9 @@ const subscribe = Effect.fn("transfer.subscribe")(function* (
           afterSequence,
           requestCompletionMarker: true,
           acceptBoundedSnapshot: true,
+          ...(compact
+            ? { acceptCompactTurnItems: true, acceptDedupedBodies: true, acceptCompactIds: true }
+            : {}),
         })
       : client.client[ORCHESTRATION_V2_WS_METHODS.subscribeShell]({
           afterSequence,
@@ -350,5 +358,179 @@ it.live(
       yield* Effect.log(report);
       assert.deepEqual(transferBudgetViolations(runs), []);
     }).pipe(Effect.provide(NodeServices.layer)),
+  30_000,
+);
+
+function withMessageItems(
+  events: ReadonlyArray<OrchestrationV2DomainEvent>,
+): ReadonlyArray<OrchestrationV2DomainEvent> {
+  return events.flatMap((event): ReadonlyArray<OrchestrationV2DomainEvent> => {
+    if (event.type !== "message.updated") return [event];
+    return [
+      event,
+      {
+        ...event,
+        id: EventId.make(`item-event:${event.payload.id}`),
+        type: "turn-item.updated",
+        payload: {
+          id: TurnItemId.make(`message-item:${event.payload.id}`),
+          threadId: event.threadId,
+          runId: event.runId ?? null,
+          nodeId: event.nodeId ?? null,
+          providerThreadId: null,
+          providerTurnId: null,
+          nativeItemRef: null,
+          parentItemId: null,
+          ordinal: event.payload.role === "user" ? 0 : 100,
+          status: "completed",
+          title: null,
+          startedAt: event.occurredAt,
+          completedAt: event.occurredAt,
+          updatedAt: event.occurredAt,
+          ...(event.payload.role === "user"
+            ? {
+                type: "user_message" as const,
+                createdBy: event.payload.createdBy,
+                creationSource: event.payload.creationSource,
+                inputIntent: "turn_start" as const,
+                attachments: event.payload.attachments,
+              }
+            : { type: "assistant_message" as const, streaming: false }),
+          messageId: event.payload.id,
+          text: event.payload.text,
+        },
+      },
+    ];
+  });
+}
+
+it.live(
+  "round-trips compact HTTP and socket snapshots while legacy requests remain complete",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const sink = yield* EventSink.EventSinkV2;
+        const provider = ProviderDriverKind.make("codex");
+        yield* sink.write({ events: [threadCreated(provider)] });
+        for (let index = 0; index < 12; index++)
+          yield* sink.write({ events: withMessageItems(turnEvents(provider, index, false)) });
+        const context = yield* Effect.context<Layer.Success<typeof services>>();
+        const server = yield* Layer.build(
+          HttpRouter.serve(routes, { disableListenLog: true }).pipe(
+            Layer.provide(Layer.succeedContext(context)),
+            Layer.provideMerge(
+              NodeHttpServer.layer(NodeHttp.createServer, {
+                port: 0,
+                websocket: { perMessageDeflate: true },
+              }),
+            ),
+          ),
+        );
+        const address = Context.get(server, HttpServer.HttpServer).address;
+        if (!("port" in address)) return yield* Effect.die("Expected TCP server");
+        const base = `http://127.0.0.1:${address.port}`;
+        const headers = { [ORCHESTRATION_PROTOCOL_HEADER]: String(ORCHESTRATION_PROTOCOL_VERSION) };
+        const plain = yield* measureHttpGet({
+          url: `${base}/api/orchestration/threads/${THREAD_ID}/bounded`,
+          headers,
+        });
+        const compact = yield* measureHttpGet({
+          url: `${base}/api/orchestration/threads/${THREAD_ID}/bounded?compactTurnItems=1&dedupeBodies=1&compactIds=1`,
+          headers,
+        });
+        assert.equal(plain.status, 200);
+        assert.equal(compact.status, 200, Buffer.from(compact.decodedBody).toString());
+        const decode = Schema.decodeUnknownEffect(
+          Schema.fromJsonString(Schema.toCodecJson(OrchestrationV2ThreadBoundedSnapshot)),
+        );
+        const legacy = yield* decode(Buffer.from(plain.decodedBody).toString());
+        const modern = yield* decode(Buffer.from(compact.decodedBody).toString());
+        assert.isTrue(modern.turnItemsOmitLocalVisible);
+        assert.deepEqual(boundedSnapshotProjection(modern), legacy.projection);
+        assert.equal(modern.historyCursor, legacy.historyCursor);
+        assert.equal(modern.hasMoreHistory, legacy.hasMoreHistory);
+        assert.isBelow(compact.decodedBodyBytes, plain.decodedBodyBytes);
+        const thin = yield* measureHttpGet({
+          url: `${base}/api/orchestration/shell?deferThreads=1`,
+          headers,
+        });
+        assert.equal(thin.status, 200, Buffer.from(thin.decodedBody).toString());
+        assert.isTrue(
+          (yield* decodeShellSnapshot(Buffer.from(thin.decodedBody).toString())).deferredThreads,
+        );
+        const socket = yield* openMeasuredWsClient({
+          url: `${base.replace("http:", "ws:")}/ws`,
+          cookie: "",
+        });
+        const items = yield* socket.client[ORCHESTRATION_V2_WS_METHODS.subscribeThread]({
+          threadId: THREAD_ID,
+          requestCompletionMarker: true,
+          acceptBoundedSnapshot: true,
+          acceptCompactTurnItems: true,
+          acceptDedupedBodies: true,
+          acceptCompactIds: true,
+        }).pipe(
+          Stream.takeUntil((item) => item.kind === "synchronized"),
+          Stream.runCollect,
+        );
+        const snapshot = items.find((item) => item.kind === "snapshot");
+        assert.isDefined(snapshot);
+        if (snapshot?.kind === "snapshot")
+          assert.deepEqual(boundedSnapshotProjection(snapshot), legacy.projection);
+        const liveQueue = yield* subscribe(socket, "thread", legacy.snapshotSequence, true);
+        yield* synchronized(liveQueue);
+        const stored = yield* sink.write({
+          events: withMessageItems(turnEvents(provider, 12, true)),
+        });
+        const live = yield* collectUntil(
+          liveQueue,
+          (item) => "sequence" in item && item.sequence >= stored.at(-1)!.sequence,
+        );
+        let restored = legacy.projection;
+        for (const item of live)
+          if (item.kind === "event")
+            restored = applyOrchestrationV2ProjectionEvent(restored, item.event)!;
+        const current = yield* (yield* ProjectionStore.ProjectionStoreV2).getThreadProjection(
+          THREAD_ID,
+        );
+        assert.deepEqual(
+          restored.messages
+            .filter((row) => row.runId === stored[0]!.event.runId)
+            .sort((a, b) => a.id.localeCompare(b.id)),
+          current.messages
+            .filter((row) => row.runId === stored[0]!.event.runId)
+            .sort((a, b) => a.id.localeCompare(b.id)),
+        );
+        assert.deepEqual(
+          restored.turnItems
+            .filter((item) => item.runId === stored[0]!.event.runId)
+            .filter((item) => item.type === "user_message" || item.type === "assistant_message")
+            .map((item) => `${item.id}:${item.text}`)
+            .sort(),
+          current.turnItems
+            .filter((item) => item.runId === stored[0]!.event.runId)
+            .filter((item) => item.type === "user_message" || item.type === "assistant_message")
+            .map((item) => `${item.id}:${item.text}`)
+            .sort(),
+        );
+        assert.isTrue(
+          live.some(
+            (item) =>
+              item.kind === "event" &&
+              item.event.type === "turn-item.updated" &&
+              "textOmitted" in item.event.payload,
+          ),
+        );
+        const reportPath = process.env.DECKHAND_PROTOCOL_REPORT_PATH;
+        if (reportPath)
+          yield* (yield* FileSystem.FileSystem).writeFileString(
+            reportPath,
+            `decoded: ${plain.decodedBodyBytes} -> ${compact.decodedBodyBytes} bytes\ngzip: ${plain.encodedBodyBytes} -> ${compact.encodedBodyBytes} bytes\n`,
+          );
+        yield* Effect.log(
+          `Compacted bounded fixture: decoded ${plain.decodedBodyBytes} -> ${compact.decodedBodyBytes} bytes; gzip ${plain.encodedBodyBytes} -> ${compact.encodedBodyBytes} bytes`,
+        );
+      }),
+    ).pipe(Effect.provide(Layer.fresh(services).pipe(Layer.provideMerge(NodeServices.layer)))),
   30_000,
 );

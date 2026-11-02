@@ -237,3 +237,111 @@ it("resolves exact archived chats without adding them to active lists or crossin
   dispose();
   harness.registry.dispose();
 });
+
+it("isolates workspace subscriptions from 1000 unrelated updates while preserving saved sessions", () => {
+  const { registry, threads, snapshotAtom } = makeHarness([environmentId, remoteEnvironmentId]);
+  const saved = { ...v2ThreadShell, id: ThreadId.make("saved"), projectId: otherProjectId };
+  const unrelated = { ...saved, id: ThreadId.make("unrelated") };
+  let snapshot = { ...v2ShellSnapshot, threads: [v2ThreadShell, saved, unrelated] };
+  registry.set(snapshotAtom(environmentId), snapshot);
+  const atom = threads.threadShellsForScopeAtom(
+    [{ environmentId, projectId: v2ThreadShell.projectId }],
+    [
+      { environmentId, threadId: saved.id },
+      { environmentId, threadId: v2ThreadShell.id },
+    ],
+  );
+  const dispose = registry.mount(atom);
+  let globalChanges = 0;
+  let scopedChanges = 0;
+  const stopGlobal = registry.mount(threads.threadShellsAtom);
+  let globalValue = registry.get(threads.threadShellsAtom);
+  try {
+    const initial = registry.get(atom);
+    expect(initial.map((thread) => thread.id)).toEqual([v2ThreadShell.id, saved.id]);
+    for (let index = 0; index < 1000; index++) {
+      snapshot = {
+        ...snapshot,
+        threads: [v2ThreadShell, saved, { ...unrelated, title: `stream ${index}` }],
+      };
+      registry.set(snapshotAtom(environmentId), snapshot);
+      let nextGlobal = registry.get(threads.threadShellsAtom);
+      if (nextGlobal !== globalValue) globalChanges++;
+      globalValue = nextGlobal;
+      registry.set(snapshotAtom(remoteEnvironmentId), { ...snapshot, snapshotSequence: index });
+      nextGlobal = registry.get(threads.threadShellsAtom);
+      if (nextGlobal !== globalValue) globalChanges++;
+      globalValue = nextGlobal;
+      if (registry.get(atom) !== initial) scopedChanges++;
+      expect(registry.get(atom)).toBe(initial);
+    }
+    expect(globalChanges).toBe(2000);
+    expect(scopedChanges).toBe(0);
+    registry.set(snapshotAtom(environmentId), {
+      ...snapshot,
+      threads: [v2ThreadShell, { ...saved, title: "Saved session updated" }, unrelated],
+    });
+    expect(registry.get(atom)[1]?.title).toBe("Saved session updated");
+    registry.set(snapshotAtom(environmentId), { ...snapshot, threads: [unrelated] });
+    expect(registry.get(atom)).toEqual([]);
+  } finally {
+    stopGlobal();
+    dispose();
+    registry.dispose();
+  }
+});
+
+it("retains deferred membership, shares exact family reads and lets live moves override stale scoped pages", () => {
+  const snapshotAtom = Atom.make<OrchestrationV2ShellSnapshot | null>({
+    ...v2ShellSnapshot,
+    threads: [],
+    deferredThreads: true,
+    deferredThreadRefs: [
+      { id: v2ThreadShell.id, projectId: v2ThreadShell.projectId, rootThreadId: v2ThreadShell.id },
+    ],
+  });
+  const extra = Atom.make<ReadonlyArray<typeof v2ThreadShell>>([]);
+  const requests: string[] = [];
+  let archiveReads = 0;
+  const { catalogValueAtom } = makeHarness();
+  const threads = createEnvironmentThreadShellAtoms({
+    catalogValueAtom,
+    snapshotAtom: () => snapshotAtom,
+    additionalThreads: (_id, scope) => {
+      requests.push(JSON.stringify(scope));
+      return extra;
+    },
+    archivedSnapshotAtom: () => {
+      archiveReads++;
+      return Atom.make(null);
+    },
+  });
+  const registry = AtomRegistry.make();
+  const exact = threads.threadShellAtom({ environmentId, threadId: v2ThreadShell.id });
+  const list = threads.threadShellsForProjectRefsAtom([
+    { environmentId, projectId: v2ThreadShell.projectId },
+  ]);
+  const stop = registry.mount(exact);
+  const stopList = registry.mount(list);
+  try {
+    expect(registry.get(threads.environmentThreadRefsAtom(environmentId))).toEqual([
+      { environmentId, threadId: v2ThreadShell.id },
+    ]);
+    expect(registry.get(exact)).toBeNull();
+    expect(archiveReads).toBe(0);
+    registry.set(extra, [v2ThreadShell]);
+    expect(registry.get(list)).toHaveLength(1);
+    expect(registry.get(exact)?.id).toBe(v2ThreadShell.id);
+    registry.set(snapshotAtom, {
+      ...v2ShellSnapshot,
+      deferredThreads: true,
+      threads: [{ ...v2ThreadShell, projectId: otherProjectId, title: "Moved live" }],
+    });
+    expect(registry.get(exact)?.title).toBe("Moved live");
+    expect(registry.get(list)).toEqual([]);
+  } finally {
+    stop();
+    stopList();
+    registry.dispose();
+  }
+});

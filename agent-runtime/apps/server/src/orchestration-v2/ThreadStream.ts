@@ -1,3 +1,5 @@
+import { omitLocalVisibleTurnItems } from "@cinderdeck/shared/orchestrationV2BoundedSnapshot";
+import { dedupeSnapshotBodies } from "@cinderdeck/shared/orchestrationV2DedupedBodies";
 import type {
   OrchestrationV2ThreadProjection,
   OrchestrationV2ThreadStreamItem,
@@ -39,10 +41,28 @@ type ThreadSnapshotStreamItem = Extract<
   { readonly kind: "snapshot" }
 >;
 
+export function compactSnapshotProjection(input: {
+  readonly projection: OrchestrationV2ThreadProjection;
+  readonly compactTurnItems?: boolean;
+  readonly dedupeBodies?: boolean;
+  readonly compactIds?: boolean;
+}) {
+  const projection = input.dedupeBodies ? dedupeSnapshotBodies(input.projection) : input.projection;
+  const compact = input.compactTurnItems ? omitLocalVisibleTurnItems(projection) : null;
+  return {
+    projection: compact ?? projection,
+    ...(compact === null ? {} : { turnItemsOmitLocalVisible: true as const }),
+    ...(input.compactIds ? { idTable: true as const } : {}),
+  };
+}
+
 /** Build the same bounded, wire-projected snapshot for every socket fallback path. */
 export function buildBoundedThreadStreamSnapshot(input: {
   readonly snapshotSequence: number;
   readonly projection: OrchestrationV2ThreadProjection;
+  readonly compactTurnItems?: boolean;
+  readonly dedupeBodies?: boolean;
+  readonly compactIds?: boolean;
 }): ThreadSnapshotStreamItem {
   const bounded = buildBoundedThreadProjection({
     snapshotSequence: input.snapshotSequence,
@@ -51,7 +71,7 @@ export function buildBoundedThreadStreamSnapshot(input: {
   return {
     kind: "snapshot",
     snapshotSequence: input.snapshotSequence,
-    projection: bounded.projection,
+    ...compactSnapshotProjection({ ...input, projection: bounded.projection }),
     historyCursor: bounded.historyCursor,
     hasMoreHistory: bounded.hasMoreHistory,
     latestLocalTurnOrdinal: bounded.latestLocalTurnOrdinal,

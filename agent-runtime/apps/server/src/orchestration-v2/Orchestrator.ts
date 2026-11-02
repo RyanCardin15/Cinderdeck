@@ -281,6 +281,7 @@ export interface OrchestratorV2Shape {
     OrchestratorV2Error
   >;
   readonly getShellSnapshot: (options?: {
+    readonly threadIds?: ReadonlyArray<ThreadId>;
     readonly location?: "active" | "archive";
     /** Background sweeps only: skips settled threads. */
     readonly unsettledOnly?: boolean;

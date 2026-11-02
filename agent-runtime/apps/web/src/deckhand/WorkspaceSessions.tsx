@@ -38,7 +38,13 @@ import { ThreadId, type EnvironmentId } from "@cinderdeck/contracts";
 import type { IntegrationView, ManagedSessionView } from "@cinderdeck/contracts/deckhand/rpc";
 import { useArchivedThreadSnapshots } from "../lib/archivedThreadsState";
 import { presentThreadShell, scopeProject } from "@cinderdeck/client-runtime/state/models";
-import { useProjects, useServerConfigs, useThreadShells } from "../state/entities";
+import {
+  useProjects,
+  useServerConfigs,
+  useScopedThreadShells,
+  useEnvironmentThreadRefs,
+  useShellMetadataStatus,
+} from "../state/entities";
 import { useEnvironment } from "../state/environments";
 import { useEnvironmentQuery } from "../state/query";
 import { buildThreadRouteParams } from "../threadRoutes";
@@ -55,7 +61,11 @@ import {
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../components/ui/tooltip";
 import { managedSessionsView, threadContextView } from "./state";
 import { useSessionActions } from "./useSessionActions";
-import { workspaceSessions, type WorkspaceSession } from "./sessionWorkspaceRows";
+import {
+  workspaceSessions,
+  workspaceProjectIDs,
+  type WorkspaceSession,
+} from "./sessionWorkspaceRows";
 import {
   filterWorkspaceSessionTree,
   orderWorkspaceSessionTree,
@@ -100,7 +110,6 @@ function SessionRows({
   compact = false,
 }: Parameters<typeof WorkspaceSessions>[0]) {
   const currentProjects = useProjects();
-  const currentThreads = useThreadShells();
   const environment = useEnvironment(environmentId);
   const config = useServerConfigs().get(environmentId);
   const providers = useMemo(
@@ -138,11 +147,36 @@ function SessionRows({
     }),
   );
   const page = Option.getOrNull(AsyncResult.value(result));
-  const currentIDs = new Set(
-    currentThreads
-      .filter((thread) => thread.environmentId === environmentId)
-      .map((thread) => thread.id),
+  const projectIDs = workspaceProjectIDs(environmentId, resource, resources, currentProjects);
+  const shellMetadata = useShellMetadataStatus([
+    ...[...projectIDs].map((id) => ({
+      environmentId,
+      scope: { projectIds: [id as import("@cinderdeck/contracts").ProjectId] },
+    })),
+    ...[...history, ...(page ?? [])].map((session) => ({
+      environmentId,
+      scope: { projectIds: [], threadIds: [session.binding.threadId] },
+    })),
+    ...(selectedThreadId
+      ? [{ environmentId, scope: { projectIds: [], threadIds: [ThreadId.make(selectedThreadId)] } }]
+      : []),
+  ]);
+  const currentThreads = useScopedThreadShells(
+    currentProjects
+      .filter((project) => project.environmentId === environmentId && projectIDs.has(project.id))
+      .map((project) => ({ environmentId, projectId: project.id })),
+    [...history, ...(page ?? [])]
+      .map((session) => ({
+        environmentId,
+        threadId: session.binding.threadId,
+      }))
+      .concat(
+        selectedThreadId ? [{ environmentId, threadId: ThreadId.make(selectedThreadId) }] : [],
+      ),
   );
+  // Membership changes independently of shell updates. Missing archived ancestors
+  // still load lazily without observing every live thread's status or title.
+  const currentIDs = new Set(useEnvironmentThreadRefs(environmentId).map((ref) => ref.threadId));
   const missingParent = (lineage: ManagedSessionView["lineage"]) =>
     lineage?.relationshipToParent === "subagent" &&
     lineage.parentThreadId !== null &&
@@ -384,7 +418,20 @@ function SessionRows({
           </SessionSiblings>
         </ul>
       </nav>
-      {!sessions.length ? (
+      {shellMetadata.loading ? (
+        <p className={styles.empty} role="status">
+          Loading older sessions…
+        </p>
+      ) : null}
+      {shellMetadata.error ? (
+        <p className={styles.empty} role="alert">
+          Some sessions could not be loaded.{" "}
+          <button type="button" onClick={shellMetadata.retry}>
+            Retry
+          </button>
+        </p>
+      ) : null}
+      {!sessions.length && !shellMetadata.loading && !shellMetadata.error ? (
         <p className={styles.empty} role="status">
           {query
             ? "No matching sessions"

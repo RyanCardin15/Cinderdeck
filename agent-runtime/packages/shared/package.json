@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./orchestrationV2BoundedSnapshot": "./src/orchestrationV2BoundedSnapshot.ts",
+    "./orchestrationV2DedupedBodies": "./src/orchestrationV2DedupedBodies.ts",
     "./workspaceChat": "./src/workspaceChat.ts",
     "./orchestrationV2ThreadError": {
       "types": "./src/orchestrationV2ThreadError.ts",

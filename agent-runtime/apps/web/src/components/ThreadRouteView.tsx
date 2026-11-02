@@ -16,7 +16,12 @@ import {
   useComposerDraftStore,
 } from "../composerDraftStore";
 import { useSidebarPendingFileDropStore } from "../sidebarPendingFileDropStore";
-import { useEnvironmentThreadRefs, useThreadRefs, useThreadShell } from "../state/entities";
+import {
+  useEnvironmentThreadRefs,
+  useThreadRefs,
+  useThreadShell,
+  useShellMetadataStatus,
+} from "../state/entities";
 import { useEnvironmentQuery } from "../state/query";
 import { environmentShell } from "../state/shell";
 import { useEnvironmentThread } from "../state/threads";
@@ -58,6 +63,16 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
   const serverThreadRef: ScopedThreadRef | null =
     target.kind === "server" ? target.threadRef : (draftSession?.promotedTo ?? inferredThreadRef);
   useDiscardEmptySession(serverThreadRef);
+  const shellMetadata = useShellMetadataStatus(
+    serverThreadRef
+      ? [
+          {
+            environmentId: serverThreadRef.environmentId,
+            scope: { projectIds: [], threadIds: [serverThreadRef.threadId] },
+          },
+        ]
+      : [],
+  );
   const serverThread = useThreadShell(serverThreadRef);
   const backgroundSubmissionPending = useBackgroundDraftSubmissionPending(
     target.kind === "draft" ? serverThreadRef : null,
@@ -209,7 +224,14 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
   if (target.kind === "server" && renderState === "loading" && view === null) {
     view = (
       <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">
-        {availabilityError ? (
+        {shellMetadata.error ? (
+          <p role="alert">
+            This conversation could not be loaded.{" "}
+            <button type="button" onClick={shellMetadata.retry}>
+              Retry
+            </button>
+          </p>
+        ) : availabilityError ? (
           <p role="alert">This conversation is unavailable: {availabilityError}</p>
         ) : (
           <p role="status">Waiting for this conversation…</p>

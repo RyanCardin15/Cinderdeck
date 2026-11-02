@@ -1,3 +1,6 @@
+import { mergeDeferredShellCache } from "../platform/shellCache.ts";
+import * as Layer from "effect/Layer";
+import { ThreadId } from "@cinderdeck/contracts";
 import {
   EnvironmentId,
   ORCHESTRATION_V2_WS_METHODS,
@@ -954,3 +957,70 @@ describe("environment shell synchronization", () => {
     }),
   );
 });
+
+it.effect(
+  "restores previously cached deferred conversations on disconnect without enlarging the live shell",
+  () =>
+    Effect.gen(function* () {
+      const root = LIVE_SHELL_SNAPSHOT.threads[0]!;
+      const older = { ...root, id: ThreadId.make("offline-older"), title: "Offline history" };
+      let disk: OrchestrationV2ShellSnapshot = { ...LIVE_SHELL_SNAPSHOT, threads: [root, older] };
+      const events = yield* Queue.unbounded<OrchestrationV2ShellStreamItem>();
+      const client = {
+        [ORCHESTRATION_V2_WS_METHODS.subscribeShell]: () => Stream.fromQueue(events),
+      } as unknown as WsRpcProtocolClient;
+      const connection = yield* SubscriptionRef.make(AVAILABLE_CONNECTION_STATE);
+      const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
+        target: TARGET,
+        state: connection,
+        session: yield* SubscriptionRef.make(Option.some(session(client))),
+        prepared: yield* SubscriptionRef.make(Option.some(PREPARED)),
+        connect: Effect.void,
+        disconnect: Effect.void,
+        retryNow: Effect.void,
+      });
+      const cache = Layer.mock(Persistence.EnvironmentCacheStore)({
+        loadShell: () => Effect.sync(() => Option.some(disk)),
+        saveShell: (_id, incoming, options) =>
+          Effect.sync(() => {
+            disk = mergeDeferredShellCache(disk, incoming, options?.metadataOnly);
+          }),
+      });
+      const state = yield* makeEnvironmentShellState().pipe(
+        Effect.provide(cache),
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        Effect.provideService(ShellSnapshotLoader.ShellSnapshotLoader, {
+          load: () => Effect.succeedNone,
+        }),
+      );
+      yield* Queue.offerAll(events, [
+        {
+          kind: "snapshot",
+          snapshot: {
+            ...LIVE_SHELL_SNAPSHOT,
+            snapshotSequence: 10,
+            threads: [{ ...root, title: "Current root" }],
+            deferredThreads: true,
+            deferredThreadRefs: [root, older].map(({ id, projectId }) => ({ id, projectId })),
+          },
+        },
+        { kind: "synchronized" },
+      ]);
+      const live = yield* SubscriptionRef.changes(state).pipe(
+        Stream.filter((value) => value.status === "live"),
+        Stream.runHead,
+      );
+      expect(Option.getOrThrow(Option.getOrThrow(live).snapshot).threads).toHaveLength(1);
+      yield* SubscriptionRef.set(connection, { ...AVAILABLE_CONNECTION_STATE, desired: false });
+      const offline = yield* SubscriptionRef.changes(state).pipe(
+        Stream.filter(
+          (value) =>
+            value.status === "cached" && Option.getOrNull(value.snapshot)?.threads.length === 2,
+        ),
+        Stream.runHead,
+      );
+      expect(
+        Option.getOrThrow(Option.getOrThrow(offline).snapshot).threads.map((row) => row.title),
+      ).toEqual(["Current root", "Offline history"]);
+    }),
+);

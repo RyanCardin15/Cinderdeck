@@ -39,7 +39,13 @@ vi.mock("./state", () => ({
 vi.mock("../state/query", () => ({ useEnvironmentQuery: () => ({ data: null }) }));
 vi.mock("../state/entities", () => ({
   useProjects: () => [{ environmentId: "local", id: "project", workspaceRoot: "/fixture/app" }],
-  useThreadShells: () => boundary.threads,
+  useShellMetadataStatus: () => ({ loading: false, error: false, retry: () => {} }),
+  useScopedThreadShells: () => boundary.threads,
+  useEnvironmentThreadRefs: () =>
+    boundary.threads.map((thread) => ({
+      environmentId: thread.environmentId,
+      threadId: thread.id,
+    })),
   useServerConfigs: () => boundary.configs,
 }));
 vi.mock("../state/environments", () => ({

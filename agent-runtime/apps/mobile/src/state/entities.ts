@@ -1,3 +1,5 @@
+import { environmentCatalog } from "../connection/catalog";
+import { enabledEnvironmentIds } from "@cinderdeck/client-runtime/state/connections";
 import { useAtomValue } from "@effect/atom-react";
 import { deriveReportedModelSelection } from "@cinderdeck/client-runtime/state/thread-execution";
 
@@ -13,11 +15,11 @@ import type {
   ScopedThreadRef,
   ServerConfig,
 } from "@cinderdeck/contracts";
-import { Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
 
 import { environmentProjects } from "./projects";
 import { environmentServerConfigsAtom, serverEnvironment } from "./server";
-import { environmentThreadDetails, environmentThreadShells } from "./threads";
+import { environmentThreadDetails, environmentThreadShells, shellPaging } from "./threads";
 
 const EMPTY_PROJECT_ATOM = Atom.make<EnvironmentProject | null>(null).pipe(
   Atom.withLabel("mobile-project:empty"),
@@ -95,4 +97,25 @@ const selectReportedModelSelection = (thread: EnvironmentThread | null) =>
 
 export function useThreadReportedModelSelection(ref: ScopedThreadRef) {
   return useAtomValue(environmentThreadDetails.threadAtom(ref), selectReportedModelSelection);
+}
+
+const metadataStatusAtom = Atom.make((get) => {
+  const ids = enabledEnvironmentIds(get(environmentCatalog.catalogValueAtom));
+  const results = ids.map((id) => get(shellPaging.statusAtom(id, {})));
+  return {
+    loading: results.some((result) => result.waiting || AsyncResult.isInitial(result)),
+    error: results.some(AsyncResult.isFailure),
+  };
+});
+export function useShellMetadataStatus() {
+  const status = useAtomValue(metadataStatusAtom);
+  return {
+    ...status,
+    retry: () => {
+      for (const id of enabledEnvironmentIds(
+        appAtomRegistry.get(environmentCatalog.catalogValueAtom),
+      ))
+        shellPaging.refresh(appAtomRegistry, id, {});
+    },
+  };
 }

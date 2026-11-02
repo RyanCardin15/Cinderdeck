@@ -115,6 +115,15 @@ const stateEvent = (type: string) =>
   type.startsWith("runtime-request.") ||
   type.startsWith("thread.") ||
   type.startsWith("plan.");
+// Native log/activity batches do not change session availability. Compare only
+// the selected resource snapshot before re-reading canonical session projections.
+const sameSessionCatalog = Schema.toEquivalence(
+  Schema.Struct({
+    state: Rpc.IntegrationView.fields.state,
+    hello: Rpc.IntegrationView.fields.hello,
+    resources: Rpc.IntegrationView.fields.resources,
+  }),
+);
 const isManagedContextsInput = Schema.is(Rpc.ManagedContextsInput);
 const encodeContextTargets = Schema.encodeEffect(
   Schema.fromJsonString(Rpc.ManagedContextsInput.fields.contexts),
@@ -136,17 +145,16 @@ const make = Effect.gen(function* () {
     title: string,
     sequence: number,
     objective?: string,
-    cachedShell?: OrchestrationV2ThreadShell | null,
+    knownShell?: { shell: OrchestrationV2ThreadShell | null },
   ) =>
     sql
       .withTransaction(
         Effect.gen(function* () {
           // Canonical control reads and their durable event watermark share one SQLite
           // transaction. No transcript is copied and a timer never advances session state.
-          const shell =
-            cachedShell === undefined
-              ? yield* projections.getThreadShell(binding.threadId)
-              : cachedShell;
+          const shell = knownShell
+            ? knownShell.shell
+            : yield* projections.getThreadShell(binding.threadId);
           if (!shell) return yield* new ManagedSessionsError({ reason: "source_unavailable" });
           const records = yield* projections.getThreadRecords(binding.threadId, [
             "providerThreads",
@@ -492,7 +500,7 @@ const make = Effect.gen(function* () {
           const key = contextKey(target.workspaceID, target.generation);
           const group = groups.get(key) ?? [];
           const sessions = yield* Effect.forEach(group.slice(0, 4), ({ row, binding, shell }) =>
-            readCurrent(binding, row.title, sequence, row.objective, shell),
+            readCurrent(binding, row.title, sequence, row.objective, { shell }),
           );
           return {
             ...target,
@@ -679,7 +687,21 @@ const make = Effect.gen(function* () {
     Stream.unwrap(
       Effect.gen(function* () {
         const afterSequence = yield* events.latestSequence();
-        const initial = yield* list(input);
+        let workspaceIDs: ReadonlyArray<string> = [];
+        const read = list(input).pipe(
+          Effect.tap((rows) =>
+            Effect.sync(() => {
+              workspaceIDs = [
+                ...new Set(
+                  rows.flatMap((row) =>
+                    "context" in row && row.context ? [row.context.workspaceID] : [],
+                  ),
+                ),
+              ];
+            }),
+          ),
+        );
+        const initial = yield* read;
         // Replay after the captured watermark closes the gap between initial read and
         // live subscription. Only lifecycle/control events trigger another bounded read.
         return Stream.concat(
@@ -693,6 +715,8 @@ const make = Effect.gen(function* () {
               ownershipChanges,
               input.scope === "workspace" && Option.isSome(hub)
                 ? hub.value.subscribe({ offset: 0, limit: 1 }).pipe(
+                    Stream.mapEffect(() => hub.value.currentResources(workspaceIDs)),
+                    Stream.changesWith(sameSessionCatalog),
                     Stream.map(() => undefined),
                     Stream.catch(() => Stream.make(undefined)),
                   )
@@ -700,7 +724,7 @@ const make = Effect.gen(function* () {
             ),
           ).pipe(
             Stream.buffer({ capacity: 1, strategy: "sliding" }),
-            Stream.mapEffect(() => list(input)),
+            Stream.mapEffect(() => read),
           ),
         );
       }),

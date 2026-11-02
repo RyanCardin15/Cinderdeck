@@ -23,6 +23,7 @@ import * as Option from "effect/Option";
 import { AsyncResult } from "effect/unstable/reactivity";
 import {
   useThreadShells,
+  useShellMetadataStatus,
   useProjects,
   useAllEnvironmentShellsBootstrapped,
 } from "../state/entities";
@@ -41,6 +42,9 @@ export function Inbox() {
   const threads = useThreadShells();
   const ready = useAllEnvironmentShellsBootstrapped();
   const { environments } = useEnvironments();
+  const metadata = useShellMetadataStatus(
+    environments.map(({ environmentId }) => ({ environmentId, scope: {} })),
+  );
   const [view, setView] = useState<View>("active");
   const [unread, setUnread] = useState(false);
   const [query, setQuery] = useState("");
@@ -54,6 +58,15 @@ export function Inbox() {
           <h1>Inbox</h1>
           <p>What needs you, organized by workspace. Review requests and take action right here.</p>
         </header>
+        {metadata.loading ? <p role="status">Loading older conversations…</p> : null}
+        {metadata.error ? (
+          <p role="alert">
+            Some conversations could not be loaded.{" "}
+            <button type="button" onClick={metadata.retry}>
+              Retry
+            </button>
+          </p>
+        ) : null}
         <div className={styles.filters}>
           {(["active", "snoozed", "history"] as const).map((value) => (
             <button key={value} aria-pressed={view === value} onClick={() => setView(value)}>

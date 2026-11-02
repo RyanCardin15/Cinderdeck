@@ -15,6 +15,7 @@ import {
 import {
   useProjects,
   useThreadShells,
+  useShellMetadataStatus,
   useAllEnvironmentShellsBootstrapped,
 } from "../state/entities";
 import { useEnvironments, type EnvironmentPresentation } from "../state/environments";
@@ -41,6 +42,9 @@ import styles from "./agentsOverview.module.css";
 
 export function AgentsOverview() {
   const { environments } = useEnvironments();
+  const metadata = useShellMetadataStatus(
+    environments.map(({ environmentId }) => ({ environmentId, scope: {} })),
+  );
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [archived, setArchived] = useState(false);
@@ -119,6 +123,15 @@ export function AgentsOverview() {
         {!ready ? (
           <p role="status" className={styles.notice}>
             Synchronizing sessions… Saved status may be out of date.
+          </p>
+        ) : null}
+        {metadata.loading ? <p role="status">Loading older conversations…</p> : null}
+        {metadata.error ? (
+          <p role="alert">
+            Some conversations could not be loaded.{" "}
+            <button type="button" onClick={metadata.retry}>
+              Retry
+            </button>
           </p>
         ) : null}
         {archived && (archive.error || archive.isLoading) ? (

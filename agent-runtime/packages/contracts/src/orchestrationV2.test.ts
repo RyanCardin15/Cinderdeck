@@ -70,6 +70,7 @@ const decodeOrchestrationV2Subagent = Schema.decodeUnknownSync(OrchestrationV2Su
 const decodeOrchestrationV2ThreadProjection = Schema.decodeUnknownSync(
   OrchestrationV2ThreadProjection,
 );
+const encodeOrchestrationV2ThreadStreamItem = Schema.encodeSync(OrchestrationV2ThreadStreamItem);
 const decodeOrchestrationV2ThreadStreamItem = Schema.decodeUnknownSync(
   OrchestrationV2ThreadStreamItem,
 );
@@ -843,15 +844,17 @@ describe("orchestration V2 contracts", () => {
 
     expect(projection.turnItems.map((item) => item.type)).toEqual(["command_execution"]);
 
-    const boundedSnapshot = decodeOrchestrationV2ThreadStreamItem({
-      kind: "snapshot",
-      snapshotSequence: 12,
-      projection,
-      historyCursor: "older-page",
-      hasMoreHistory: true,
-      latestLocalTurnOrdinal: 1,
-      payloadBudgetExceeded: false,
-    });
+    const boundedSnapshot = decodeOrchestrationV2ThreadStreamItem(
+      encodeOrchestrationV2ThreadStreamItem({
+        kind: "snapshot",
+        snapshotSequence: 12,
+        projection,
+        historyCursor: "older-page",
+        hasMoreHistory: true,
+        latestLocalTurnOrdinal: 1,
+        payloadBudgetExceeded: false,
+      }),
+    );
     expect(boundedSnapshot).toMatchObject({
       kind: "snapshot",
       historyCursor: "older-page",

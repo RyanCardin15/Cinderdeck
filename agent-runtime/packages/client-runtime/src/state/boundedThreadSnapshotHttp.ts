@@ -1,3 +1,4 @@
+import { boundedSnapshotProjection } from "@cinderdeck/shared/orchestrationV2BoundedSnapshot";
 import type { ThreadId } from "@cinderdeck/contracts";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -40,9 +41,12 @@ export const fetchEnvironmentBoundedThreadSnapshot = Effect.fn(
     request: ({ client, headers }) =>
       client.threadBoundedSnapshot({
         params: { threadId: input.threadId },
+        query: { compactTurnItems: "1", dedupeBodies: "1", compactIds: "1" },
         headers: withOrchestrationProtocolHeader(headers),
       }),
-  });
+  }).pipe(
+    Effect.map((snapshot) => ({ ...snapshot, projection: boundedSnapshotProjection(snapshot) })),
+  );
 });
 
 /**

@@ -11,7 +11,7 @@ import {
 } from "@cinderdeck/client-runtime/state/threads";
 import type { ScopedProjectRef, ScopedThreadRef, ServerConfig } from "@cinderdeck/contracts";
 import type { EnvironmentId, OrchestrationV2ProjectedTurnItem } from "@cinderdeck/contracts";
-import { Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentProjects } from "./projects";
 import { environmentServerConfigsAtom } from "./server";
@@ -19,7 +19,7 @@ import {
   allEnvironmentProjectSnapshotsReadyAtom,
   allEnvironmentShellsBootstrappedAtom,
 } from "./shell";
-import { environmentThreadDetails, environmentThreadShells } from "./threads";
+import { environmentThreadDetails, environmentThreadShells, shellPaging } from "./threads";
 import { waitForAtomValue } from "./waitForAtomValue";
 
 const EMPTY_THREAD_REFS: ReadonlyArray<ScopedThreadRef> = Object.freeze([]);
@@ -98,6 +98,14 @@ export function useThreadShellsForProjectRefs(
   refs: ReadonlyArray<ScopedProjectRef>,
 ): ReadonlyArray<EnvironmentThreadShell> {
   return useAtomValue(environmentThreadShells.threadShellsForProjectRefsAtom(refs));
+}
+
+/** Project membership plus exact saved/selected threads, using the shared T3 state selectors. */
+export function useScopedThreadShells(
+  projects: ReadonlyArray<ScopedProjectRef>,
+  threads: ReadonlyArray<ScopedThreadRef>,
+): ReadonlyArray<EnvironmentThreadShell> {
+  return useAtomValue(environmentThreadShells.threadShellsForScopeAtom(projects, threads));
 }
 
 export function useProject(ref: ScopedProjectRef | null): EnvironmentProject | null {
@@ -281,4 +289,35 @@ export function readEnvironmentThreadRefs(
 
 export function readThreadShells(): ReadonlyArray<EnvironmentThreadShell> {
   return appAtomRegistry.get(environmentThreadShells.threadShellsAtom);
+}
+
+const shellMetadataStatusAtom = Atom.family((key: string) => {
+  const scopes = JSON.parse(key) as Array<{
+    environmentId: EnvironmentId;
+    scope: import("@cinderdeck/client-runtime/state/shellPaging").ShellScope;
+  }>;
+  return Atom.make((get) => {
+    const results = scopes.map(({ environmentId, scope }) =>
+      get(shellPaging.statusAtom(environmentId, scope)),
+    );
+    return {
+      loading: results.some((result) => result.waiting || AsyncResult.isInitial(result)),
+      error: results.some(AsyncResult.isFailure),
+    };
+  });
+});
+export function useShellMetadataStatus(
+  scopes: ReadonlyArray<{
+    environmentId: EnvironmentId;
+    scope: import("@cinderdeck/client-runtime/state/shellPaging").ShellScope;
+  }>,
+) {
+  const status = useAtomValue(shellMetadataStatusAtom(JSON.stringify(scopes)));
+  return {
+    ...status,
+    retry: () => {
+      for (const { environmentId, scope } of scopes)
+        shellPaging.refresh(appAtomRegistry, environmentId, scope);
+    },
+  };
 }

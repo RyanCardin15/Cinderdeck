@@ -115,3 +115,28 @@ down, so new native capability goes in a child with a deadline, not an `import` 
 
 See the [glossary](./glossary.md) for shared terms and the
 [development runbook](../operations/development.md) for setup and checks.
+
+## Compact transport and deferred navigation metadata
+
+Snapshot transport is additive and opt-in. Bounded HTTP and WebSocket responses can
+compact record IDs, omit duplicated local timeline items, and mark repeated bodies.
+The shared client restores these representations before applying events or saving
+thread caches. Live deduplication follows coalescing so only delivered records can
+be referenced. Clients that omit the flags receive complete legacy payloads.
+
+Cinderdeck servers advertise `shellThreadPages`. New clients request thin shells
+with `deferThreads`; full membership remains in `deferredThreadRefs`, while exact
+families and project metadata load through the read-authorized `getShellPage` RPC.
+Never infer deletion or close terminals from the absence of a deferred full shell.
+Pages are bounded to 100 rows, scoped by project/family, and invalidated on a new
+authoritative shell generation. Individual page watermarks protect against late
+responses resurrecting archived/deleted rows; live shells win over page copies.
+Global views may deliberately read every page. Query failures expose retry actions.
+
+The live shell and disk cache have different purposes. Disk-only merging retains
+previously cached metadata for offline navigation, filters it through authoritative
+membership, and serializes scope writes with live cache writes. Late metadata-only
+writes cannot move a cache cursor backwards. Complete or rewound authoritative
+snapshots replace cache membership. Keep these rules shared across desktop and the
+mobile companion; do not persist compact thread bodies or treat cached metadata as
+fresh execution authority.

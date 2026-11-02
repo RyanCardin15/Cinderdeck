@@ -1,3 +1,4 @@
+import { boundedSnapshotProjection } from "@cinderdeck/shared/orchestrationV2BoundedSnapshot";
 import {
   ORCHESTRATION_V2_WS_METHODS,
   type EnvironmentId as EnvironmentIdType,
@@ -589,7 +590,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
       // Bounded socket fallbacks carry their cursor. Legacy-compatible full
       // snapshots omit these fields and still replace progressive state.
       yield* setThread(
-        item.projection,
+        boundedSnapshotProjection(item),
         hasProgressiveHistory
           ? {
               history: {
@@ -919,7 +920,14 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
           threadId,
           ...(canResume ? { afterSequence: sequence } : {}),
           ...(supportsCompletionMarker ? { requestCompletionMarker: true as const } : {}),
-          ...(acceptBoundedSnapshot ? { acceptBoundedSnapshot: true as const } : {}),
+          ...(acceptBoundedSnapshot
+            ? {
+                acceptCompactTurnItems: true,
+                acceptDedupedBodies: true,
+                acceptCompactIds: true,
+                acceptBoundedSnapshot: true as const,
+              }
+            : {}),
         };
       }),
       {

@@ -35,8 +35,11 @@ export interface EnvironmentShellState {
   readonly snapshot: Option.Option<OrchestrationV2ShellSnapshot>;
   readonly status: EnvironmentShellStatus;
   readonly error: Option.Option<string>;
+  readonly generation?: number;
+  readonly removedAt?: ReadonlyMap<string, number>;
 }
 
+const EMPTY_SHELL_REMOVALS: ReadonlyMap<string, number> = new Map();
 const EMPTY_SHELL_STATE: EnvironmentShellState = {
   snapshot: Option.none(),
   status: "empty",
@@ -122,7 +125,23 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
         status: shellStatusForSnapshot(current.snapshot),
       })),
     ),
-    Effect.andThen(flushLiveShellSnapshot.pipe(Effect.forkScoped)),
+    Effect.andThen(
+      Effect.gen(function* () {
+        const current = yield* SubscriptionRef.get(state);
+        if (!Option.getOrNull(current.snapshot)?.deferredThreads) {
+          yield* flushLiveShellSnapshot.pipe(Effect.forkScoped);
+          return;
+        }
+        yield* flushLiveShellSnapshot;
+        const saved = yield* cache
+          .loadShell(environmentId)
+          .pipe(Effect.orElseSucceed(() => Option.none()));
+        if (Option.isSome(saved))
+          yield* SubscriptionRef.update(state, (latest) =>
+            latest.status === "cached" ? { ...latest, snapshot: saved } : latest,
+          );
+      }),
+    ),
     Effect.asVoid,
   );
   const setSynchronizing = SubscriptionRef.update(state, (current) => ({
@@ -193,7 +212,16 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
             });
       if (nextSnapshot === null) continue;
       receivedSnapshot ||= item.kind === "snapshot";
+      const authoritative =
+        item.kind === "snapshot" && item.resolvedRepositoryIdentityRoots === undefined;
+      const removedAt = authoritative
+        ? new Map<string, number>()
+        : item.kind === "thread.removed"
+          ? new Map(next.removedAt ?? []).set(item.threadId, item.sequence)
+          : (next.removedAt ?? EMPTY_SHELL_REMOVALS);
       next = {
+        generation: (next.generation ?? 0) + (authoritative ? 1 : 0),
+        removedAt,
         snapshot: Option.some(nextSnapshot),
         status: waiting ? "synchronizing" : "live",
         error: Option.none(),
@@ -228,6 +256,10 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
       ORCHESTRATION_V2_WS_METHODS.subscribeShell,
       Effect.fn("EnvironmentShellState.makeSubscribeInput")(function* (session) {
         yield* Ref.set(activeSubscriptionSession, session);
+        const deferThreads = yield* session.initialConfig.pipe(
+          Effect.map((config) => config.shellThreadPages === true),
+          Effect.orElseSucceed(() => false),
+        );
         const supportsCompletionMarker = yield* session.initialConfig.pipe(
           Effect.map((config) => config.shellResumeCompletionMarker === true),
           Effect.orElseSucceed(() => false),
@@ -267,7 +299,10 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
         // If the authoritative refresh failed, omit the cached cursor so the
         // socket fallback sends a complete snapshot for this new session.
         if (!canResume || Option.isNone(current.snapshot)) {
-          return supportsCompletionMarker ? { requestCompletionMarker: true as const } : {};
+          return {
+            ...(deferThreads ? { deferThreads: true as const } : {}),
+            ...(supportsCompletionMarker ? { requestCompletionMarker: true as const } : {}),
+          };
         }
         if (!supportsCompletionMarker) {
           // Without a completion marker there is no synchronized signal for a
@@ -280,6 +315,7 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
         }
         return {
           afterSequence: current.snapshot.value.snapshotSequence,
+          ...(deferThreads ? { deferThreads: true as const } : {}),
           ...(supportsCompletionMarker ? { requestCompletionMarker: true as const } : {}),
         };
       }),

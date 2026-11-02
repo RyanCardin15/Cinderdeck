@@ -93,6 +93,32 @@ export function mergeShellSnapshotProjects(
 }
 
 /** Applies one committed V2 shell delta while preserving active/archive exclusivity. */
+function deferredRefsForUpdate(
+  snapshot: OrchestrationV2ShellSnapshot,
+  thread: OrchestrationV2ShellSnapshot["threads"][number],
+  location: "active" | "archive",
+) {
+  const refs = snapshot.deferredThreadRefs;
+  if (!refs) return {};
+  const previous = refs.find((row) => row.id === thread.id);
+  if (
+    location === "active" &&
+    previous?.projectId === thread.projectId &&
+    previous.rootThreadId === thread.lineage.rootThreadId
+  )
+    return { deferredThreadRefs: refs };
+  return {
+    deferredThreadRefs:
+      location === "active"
+        ? upsertById(refs, {
+            id: thread.id,
+            projectId: thread.projectId,
+            rootThreadId: thread.lineage.rootThreadId,
+          })
+        : refs.filter((row) => row.id !== thread.id),
+  };
+}
+
 export function applyShellStreamEvent(
   snapshot: OrchestrationV2ShellSnapshot,
   event: Exclude<
@@ -127,6 +153,7 @@ export function applyShellStreamEvent(
         threads.filter((thread) => thread.id !== event.thread.id);
       return {
         ...snapshot,
+        ...deferredRefsForUpdate(snapshot, event.thread, event.location),
         threads:
           event.location === "active"
             ? upsertById(snapshot.threads, event.thread)
@@ -141,6 +168,13 @@ export function applyShellStreamEvent(
     case "thread.removed":
       return {
         ...snapshot,
+        ...(snapshot.deferredThreadRefs === undefined
+          ? {}
+          : {
+              deferredThreadRefs: snapshot.deferredThreadRefs.filter(
+                (row) => row.id !== event.threadId,
+              ),
+            }),
         threads: snapshot.threads.filter((thread) => thread.id !== event.threadId),
         archivedThreads: snapshot.archivedThreads.filter((thread) => thread.id !== event.threadId),
         snapshotSequence: event.sequence,

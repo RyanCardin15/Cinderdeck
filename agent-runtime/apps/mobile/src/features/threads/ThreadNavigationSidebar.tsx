@@ -14,7 +14,7 @@ import type { MenuAction } from "@react-native-menu/menu";
 import { useAtomValue } from "@effect/atom-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LayoutChangeEvent, TextInputInstance } from "react-native";
-import { Platform, StyleSheet, TextInput, View } from "react-native";
+import { Platform, Pressable, StyleSheet, TextInput, View } from "react-native";
 import { GestureDetector, useNativeGesture } from "react-native-gesture-handler";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,7 +27,11 @@ import { SymbolView } from "../../components/AppSymbol";
 import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { scopedProjectKey, scopedThreadKey } from "../../lib/scopedEntities";
-import { useProjects, useNavigationThreadShells } from "../../state/entities";
+import {
+  useProjects,
+  useNavigationThreadShells,
+  useShellMetadataStatus,
+} from "../../state/entities";
 import { useThreadSearch } from "../../state/queries";
 import { useThreadListV2ShelfPreferences } from "./use-thread-list-v2-shelf-preferences";
 import { usePendingThreadOrder } from "../../state/thread-order";
@@ -136,6 +140,7 @@ function ThreadNavigationSidebarPane(
   const { fabClearance } = useAndroidControlSizing();
   const projects = useProjects();
   const threads = useNavigationThreadShells();
+  const metadata = useShellMetadataStatus();
   const { environments: workspaceEnvironments, state: catalogState } = useWorkspaceState();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const searchInputRef = useRef<TextInputInstance>(null);
@@ -831,7 +836,13 @@ function ThreadNavigationSidebarPane(
   );
   // Snoozed threads need no special case: the shelf header is a list row
   // even while collapsed.
-  const listEmpty = (
+  const listEmpty = metadata.error ? (
+    <Pressable accessibilityRole="button" onPress={metadata.retry}>
+      <Text className="p-4 text-sm text-drawer-foreground-muted">
+        Some conversations could not be loaded. Retry
+      </Text>
+    </Pressable>
+  ) : (
     <Text
       className={
         Platform.OS === "android"
@@ -839,7 +850,7 @@ function ThreadNavigationSidebarPane(
           : "px-2 py-4 text-sm text-drawer-foreground-muted"
       }
     >
-      {catalogState.isLoadingConnections
+      {catalogState.isLoadingConnections || metadata.loading
         ? "Loading threads…"
         : Platform.OS === "android" && !catalogState.hasConnections
           ? "No environments connected"

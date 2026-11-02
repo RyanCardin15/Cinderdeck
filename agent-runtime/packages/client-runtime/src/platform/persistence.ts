@@ -72,6 +72,7 @@ export class EnvironmentCacheStore extends Context.Service<
     readonly saveShell: (
       environmentId: EnvironmentId,
       snapshot: OrchestrationV2ShellSnapshot,
+      options?: { readonly metadataOnly: boolean },
     ) => Effect.Effect<void, ConnectionPersistenceError>;
     readonly loadThread: (
       environmentId: EnvironmentId,

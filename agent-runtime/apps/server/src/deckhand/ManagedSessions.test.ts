@@ -1005,3 +1005,49 @@ it.effect("updates workspace history when a lane disappears without a thread eve
     }).pipe(Effect.provide(f.layer().pipe(Layer.provide(hub))));
   }).pipe(Effect.provide(baseLayer)),
 );
+
+it.effect(
+  "ignores 1000 unchanged native activity snapshots but keeps removed checkout history",
+  () =>
+    Effect.gen(function* () {
+      const f = source();
+      let resources = [historyLane("Payments")];
+      const hub = Layer.mock(IntegrationHub.IntegrationHub)({
+        currentResources: () =>
+          Effect.sync(() => ({
+            state: "connected" as const,
+            hello: {
+              protocolVersion: 1,
+              installationID: "installation",
+              executionHostID: "host",
+              channel: "development",
+              runtimeEpoch: "epoch",
+              capabilities: [],
+              maximumFrameBytes: 1000000,
+              maximumPageSize: 100,
+              maximumWaitMs: 1000,
+            },
+            resources,
+          })),
+        subscribe: () =>
+          Stream.fromIterable(Array.from({ length: 1001 }, (_, index) => index)).pipe(
+            Stream.rechunk(1),
+            Stream.map((index) => {
+              if (index === 1000) resources = [];
+              return {} as IntegrationView;
+            }),
+          ),
+      });
+      yield* Effect.gen(function* () {
+        yield* seed;
+        const service = yield* ManagedSessions.ManagedSessions;
+        const images = yield* service
+          .subscribe({ ...scope, workspaceID: "payment", scope: "workspace" })
+          .pipe(Stream.runCollect);
+        assert.equal(images[0]![0]!.context?.availability, "available");
+        assert.equal(images.at(-1)![0]!.context?.availability, "removed");
+        assert.equal(images.at(-1)![0]!.binding.threadId, threadId);
+        assert.isAtMost(f.state.shellReads, 3);
+      }).pipe(Effect.provide(f.layer().pipe(Layer.provide(hub))));
+    }).pipe(Effect.provide(baseLayer)),
+);

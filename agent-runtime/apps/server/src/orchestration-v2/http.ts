@@ -1,3 +1,5 @@
+import { loadDeferredShell } from "./ShellPaging.ts";
+import { compactSnapshotProjection } from "./ThreadStream.ts";
 import {
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
@@ -173,6 +175,18 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
         Effect.fn("environment.orchestration.shellSnapshot")(function* (args) {
           yield* annotateEnvironmentRequest(args.endpoint.name);
           yield* requireEnvironmentScope(AuthOrchestrationReadScope);
+          if (args.query.deferThreads === "1") {
+            return yield* loadDeferredShell.pipe(
+              Effect.flatMap((snapshot) =>
+                enrichProjectShells(snapshot.projects).pipe(
+                  Effect.map((projects) => ({ ...snapshot, projects })),
+                ),
+              ),
+              Effect.catch((cause) =>
+                failEnvironmentInternal("orchestration_snapshot_failed", cause),
+              ),
+            );
+          }
           return yield* loadShellSnapshot().pipe(
             Effect.catch((cause) =>
               failEnvironmentInternal("orchestration_snapshot_failed", cause),
@@ -207,7 +221,12 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
           });
           return {
             snapshotSequence: snapshot.snapshotSequence,
-            projection: bounded.projection,
+            ...compactSnapshotProjection({
+              projection: bounded.projection,
+              compactTurnItems: args.query.compactTurnItems === "1",
+              dedupeBodies: args.query.dedupeBodies === "1",
+              compactIds: args.query.compactIds === "1",
+            }),
             historyCursor: bounded.historyCursor,
             hasMoreHistory: bounded.hasMoreHistory,
             latestLocalTurnOrdinal: bounded.latestLocalTurnOrdinal,
@@ -252,6 +271,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
           return {
             snapshotSequence: snapshot.snapshotSequence,
             items: pageOrError.page.items,
+            ...(args.query.compactIds === "1" ? { idTable: true as const } : {}),
             nextCursor: pageOrError.page.nextCursor,
             hasMoreHistory: pageOrError.page.hasMoreHistory,
           };

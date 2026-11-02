@@ -512,7 +512,13 @@ const EnvironmentOrchestrationThreadSnapshotParams = Schema.Struct({
   threadId: ThreadId,
 });
 
+const SnapshotCompactionQuery = {
+  compactTurnItems: Schema.optionalKey(Schema.Literal("1")),
+  dedupeBodies: Schema.optionalKey(Schema.Literal("1")),
+  compactIds: Schema.optionalKey(Schema.Literal("1")),
+};
 const EnvironmentOrchestrationThreadHistoryQuery = Schema.Struct({
+  compactIds: Schema.optionalKey(Schema.Literal("1")),
   cursor: TrimmedNonEmptyString,
 });
 
@@ -526,6 +532,7 @@ const EnvironmentOrchestrationThreadHistoryErrors = [
 class EnvironmentOrchestrationHttpApi extends HttpApiGroup.make("orchestration")
   .add(
     HttpApiEndpoint.get("shellSnapshot", "/api/orchestration/shell", {
+      query: Schema.Struct({ deferThreads: Schema.optionalKey(Schema.Literal("1")) }),
       headers: OrchestrationProtocolHeaders,
       success: OrchestrationV2ShellSnapshot,
       error: EnvironmentOrchestrationSnapshotErrors,
@@ -541,6 +548,7 @@ class EnvironmentOrchestrationHttpApi extends HttpApiGroup.make("orchestration")
   )
   .add(
     HttpApiEndpoint.get("threadBoundedSnapshot", "/api/orchestration/threads/:threadId/bounded", {
+      query: Schema.Struct(SnapshotCompactionQuery),
       headers: OrchestrationProtocolHeaders,
       params: EnvironmentOrchestrationThreadSnapshotParams,
       success: OrchestrationV2ThreadBoundedSnapshot,

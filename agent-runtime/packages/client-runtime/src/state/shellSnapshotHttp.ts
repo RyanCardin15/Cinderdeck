@@ -46,7 +46,10 @@ export const fetchEnvironmentShellSnapshot = Effect.fn(
     url: (httpBaseUrl) => environmentEndpointUrl(httpBaseUrl, "/api/orchestration/shell"),
     timeoutMs: input.timeoutMs ?? DEFAULT_SHELL_SNAPSHOT_TIMEOUT_MS,
     request: ({ client, headers }) =>
-      client.shellSnapshot({ headers: withOrchestrationProtocolHeader(headers) }),
+      client.shellSnapshot({
+        query: { deferThreads: "1" },
+        headers: withOrchestrationProtocolHeader(headers),
+      }),
   });
 });
 

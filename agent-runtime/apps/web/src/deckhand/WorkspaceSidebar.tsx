@@ -1,3 +1,4 @@
+import { ThreadId } from "@cinderdeck/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { workspaceChatUnavailableReason } from "@cinderdeck/shared/workspaceChat";
 import { Link } from "@tanstack/react-router";
@@ -56,7 +57,7 @@ import { useWorkspaceSidebarPreferences } from "./useWorkspaceSidebarPreferences
 import { SidebarColorPicker } from "./SidebarColorPicker";
 import { WorkspaceSessions } from "./WorkspaceSessions";
 import { useParams } from "@tanstack/react-router";
-import { useProjects, useThreadShells } from "../state/entities";
+import { useProjects, useThreadShell } from "../state/entities";
 import { workspaceProjectIDs } from "./sessionWorkspaceRows";
 
 type Resource = IntegrationView["resources"][number];
@@ -330,12 +331,10 @@ function WorkspaceSidebarTree({
 }: SidebarProps) {
   const params = useParams({ strict: false });
   const projects = useProjects();
-  const threads = useThreadShells();
-  const selectedThread = threads.find(
-    (thread) =>
-      thread.environmentId === environmentId &&
-      "threadId" in params &&
-      thread.id === params.threadId,
+  const selectedThread = useThreadShell(
+    "threadId" in params && params.threadId
+      ? { environmentId, threadId: ThreadId.make(params.threadId) }
+      : null,
   );
   const state = useWorkspaceSidebarPreferences(sidebarPreferenceKey(environmentId, installationID));
   const navigationSearch = {

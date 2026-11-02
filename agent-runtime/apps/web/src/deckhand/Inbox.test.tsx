@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   links: [] as Array<{ to: string; search?: unknown; params?: unknown }>,
 }));
 vi.mock("../state/entities", () => ({
+  useShellMetadataStatus: () => ({ loading: false, error: false, retry: () => {} }),
   useThreadShells: () => [],
   useProjects: () => [],
   useAllEnvironmentShellsBootstrapped: () => true,

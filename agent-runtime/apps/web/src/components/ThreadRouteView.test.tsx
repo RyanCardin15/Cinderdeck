@@ -33,6 +33,7 @@ vi.mock("./ui/sidebar", () => ({
   SidebarInset: ({ children }: { children: ReactNode }) => <main>{children}</main>,
 }));
 vi.mock("../state/entities", () => ({
+  useShellMetadataStatus: () => ({ loading: false, error: false, retry: () => {} }),
   useThreadShell: () => useAtomValue(shellAtom),
   useThreadRefs: () => [{ environmentId: "execution-computer", threadId: "older-thread" }],
   useEnvironmentThreadRefs: () => [

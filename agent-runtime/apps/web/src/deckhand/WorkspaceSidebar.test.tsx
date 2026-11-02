@@ -25,7 +25,12 @@ const boundary = vi.hoisted(() => ({
 }));
 vi.mock("../state/entities", () => ({
   useProjects: () => boundary.projects,
-  useThreadShells: () => boundary.threads,
+  useThreadShell: (ref: { environmentId: string; threadId: string } | null) =>
+    ref
+      ? (boundary.threads.find(
+          (thread) => thread.environmentId === ref.environmentId && thread.id === ref.threadId,
+        ) ?? null)
+      : null,
 }));
 vi.mock("../localApi", () => ({
   readLocalApi: () => ({ contextMenu: { show: boundary.contextMenu } }),

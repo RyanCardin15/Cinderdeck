@@ -9,6 +9,7 @@ import { describe, expect } from "vite-plus/test";
 
 import {
   bufferLiveStream,
+  bufferLatestLiveStream,
   makeLiveStreamBudget,
   replayAndBufferLiveEvents,
   type RetainedLiveItem,
@@ -276,3 +277,77 @@ describe("replayAndBufferLiveEvents", () => {
       ),
   );
 });
+
+describe("bufferLatestLiveStream", () => {
+  it.effect.each(["items", "bytes"] as const)(
+    "counts an unacknowledged state against the %s limit when its replacement arrives",
+    (limit) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const releaseUpdate = yield* Deferred.make<void>();
+          const closed = yield* Deferred.make<void>();
+          const first = { sequence: 1, text: "é".repeat(20) };
+          const next = { ...first, sequence: 2 };
+          const pull = yield* Stream.toPull(
+            bufferLatestLiveStream(
+              Stream.concat(
+                Stream.succeed(first),
+                Stream.fromEffect(Deferred.await(releaseUpdate)).pipe(Stream.map(() => next)),
+              ).pipe(Stream.ensuring(Deferred.succeed(closed, undefined))),
+              () => "same-thread",
+              limit === "items"
+                ? { maxItems: 1 }
+                : {
+                    maxSerializedBytes: Buffer.byteLength(`{"sequence":1,"text":"${first.text}"}`),
+                  },
+            ),
+          );
+          expect(yield* pull).toEqual([first]);
+          yield* Deferred.succeed(releaseUpdate, undefined);
+          yield* Deferred.await(closed);
+          const result = yield* pull.pipe(Effect.result);
+          expect(result._tag).toBe("Failure");
+          if (result._tag === "Failure") expect(result.failure._tag).toBe("LiveStreamBufferError");
+        }),
+      ),
+  );
+});
+
+it.effect(
+  "retains the latest of 1000 queued states without dropping other threads or exceeding the item budget",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const release = yield* Deferred.make<void>();
+        const produced = yield* Deferred.make<void>();
+        const first = { sequence: 1, threadId: "a", text: "initial" };
+        const updates = Array.from({ length: 1000 }, (_, index) => ({
+          sequence: index + 2,
+          threadId: "a",
+          text: `update-${index}`,
+        }));
+        updates.push({ sequence: 1002, threadId: "b", text: "other thread" });
+        const pull = yield* Stream.toPull(
+          bufferLatestLiveStream(
+            Stream.concat(
+              Stream.succeed(first),
+              Stream.fromEffect(Deferred.await(release)).pipe(
+                Stream.flatMap(() => Stream.fromIterable(updates)),
+                Stream.tap((value) =>
+                  value.sequence === 1002 ? Deferred.succeed(produced, undefined) : Effect.void,
+                ),
+              ),
+            ),
+            (value) => value.threadId,
+            { maxItems: 3 },
+          ),
+        );
+        expect(yield* pull).toEqual([first]);
+        yield* Deferred.succeed(release, undefined);
+        yield* Deferred.await(produced);
+        const next = [...(yield* pull)];
+        if (next.length === 1) next.push(...(yield* pull));
+        expect(next).toEqual([updates[999], updates[1000]]);
+      }),
+    ),
+);

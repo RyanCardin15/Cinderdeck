@@ -33,7 +33,7 @@ export const fetchEnvironmentThreadHistoryPage = Effect.fn(
     request: ({ client, headers }) =>
       client.threadHistoryPage({
         params: { threadId: input.threadId },
-        query: { cursor: input.cursor },
+        query: { cursor: input.cursor, compactIds: "1" },
         headers: withOrchestrationProtocolHeader(headers),
       }),
   });

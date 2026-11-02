@@ -1,13 +1,18 @@
+import { AppText as Text } from "../../components/AppText";
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
 import { useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Platform, useWindowDimensions } from "react-native";
+import { Platform, Pressable, View, useWindowDimensions } from "react-native";
 
 import type { EnvironmentThreadShell } from "@cinderdeck/client-runtime/state/shell";
 
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
-import { useProjects, useNavigationThreadShells } from "../../state/entities";
+import {
+  useProjects,
+  useNavigationThreadShells,
+  useShellMetadataStatus,
+} from "../../state/entities";
 import { usePendingNewTasks } from "../../state/use-pending-new-tasks";
 import { useWorkspaceState } from "../../state/workspace";
 import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
@@ -32,6 +37,7 @@ export function HomeRouteScreen() {
   const { layout, panes } = useAdaptiveWorkspaceLayout();
   const projects = useProjects();
   const threads = useNavigationThreadShells();
+  const metadata = useShellMetadataStatus();
   const { environments: workspaceEnvironments, state: catalogState } = useWorkspaceState();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const navigation = useNavigation();
@@ -206,6 +212,20 @@ export function HomeRouteScreen() {
           onStartNewTask={() => navigation.navigate("NewTaskSheet", { screen: "NewTask" })}
         />
 
+        {metadata.loading || metadata.error ? (
+          <View className="px-4 py-2">
+            <Text className="text-sm text-muted-foreground">
+              {metadata.error
+                ? "Some conversations could not be loaded."
+                : "Loading older conversations…"}
+            </Text>
+            {metadata.error ? (
+              <Pressable accessibilityRole="button" onPress={metadata.retry}>
+                <Text>Retry</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
         <HomeScreen
           catalogState={catalogState}
           environments={environments}
