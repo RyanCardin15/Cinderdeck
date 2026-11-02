@@ -36,6 +36,7 @@ import { DeckhandToolkitHandlersLive } from "./toolkits/deckhand/handlers.ts";
 import * as DeckhandMcpAccess from "./DeckhandMcpAccess.ts";
 import * as ManagedMcpToolPolicy from "./ManagedMcpToolPolicy.ts";
 import packageJson from "../../package.json" with { type: "json" };
+import { parseBearerToken } from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
 import * as DeviceService from "../device/DeviceService.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
@@ -124,17 +125,21 @@ const makeMcpAuthMiddleware = McpSessionRegistry.McpSessionRegistry.pipe(
     Effect.fn("McpHttpServer.authenticateRequest")(function* (httpEffect) {
       const request = yield* HttpServerRequest.HttpServerRequest;
       const authorization = request.headers.authorization;
-      const token =
-        authorization?.startsWith("Bearer ") === true
-          ? authorization.slice("Bearer ".length).trim()
-          : "";
+      const token = parseBearerToken(request) ?? "";
       const invocation = yield* registry.resolve(token);
       if (!invocation) {
         // Without this the only symptom of a dead credential is the agent
-        // quietly losing the whole `t3-code` toolkit for the rest of its
+        // quietly losing the whole Cinderdeck toolkit for the rest of its
         // session, with nothing on the server to explain why.
         yield* Effect.logWarning("rejected MCP request with an unusable credential", {
-          reason: token.length === 0 ? "missing_bearer_token" : "unknown_or_expired_token",
+          reason:
+            authorization === undefined
+              ? "missing_authorization_header"
+              : authorization.split(" ", 1)[0]?.toLowerCase() !== "bearer"
+                ? "unsupported_scheme"
+                : token.length === 0
+                  ? "missing_bearer_token"
+                  : "unknown_or_expired_token",
         });
         return unauthorized;
       }
@@ -842,7 +847,7 @@ const ManagedToolRegistrationLive = Layer.effect(
   }),
 ).pipe(Layer.provide(ManagedMcpToolPolicy.layer));
 
-const McpTransportLive = McpServer.layerHttp({
+export const McpTransportLive = McpServer.layerHttp({
   name: "Cinderdeck",
   version: packageJson.version,
   path: "/mcp",

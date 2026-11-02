@@ -15,6 +15,12 @@ DISPLAY_IDENTITY = re.compile(
     r"(?:[\"']?(?:appName|productName|displayName|CFBundleDisplayName|CFBundleName)[\"']?\s*[:=]\s*[\"'`])(?:t3(?:[-_ ]?code)?(?:[-_](?:dev|preview))?)(?=[\"'`])",
     re.I,
 )
+# Plist values may span lines and legacy scheme exceptions must not hide bundle names.
+PLIST_DISPLAY_IDENTITY = re.compile(
+    r"<key>\s*(?:CFBundleDisplayName|CFBundleName|CFBundleExecutable)\s*</key>\s*"
+    r"<string>\s*t3(?:[-_ ]?code)?(?:[-_](?:dev|preview))?\s*</string>",
+    re.I,
+)
 # Exact native registration names and wrappers outside their ABI source folders.
 NATIVE_REFERENCES = re.compile(r"\b(?:T3AgentNotifications|T3ComposerEditor|T3KeyboardCommands|T3NativeControls|T3NativeFilePresentation|T3NativePresentation|T3NativeVideoPresentation|T3ReviewDiffSurface|T3ReviewDiffView|T3SelectableMarkdownText|T3ShowcaseReadyScene|T3ShowcaseScene|T3TerminalNative|T3TerminalSurface|T3WidgetExpiry)\b")
 # These are data and API identifiers, never product labels. Limit exceptions to tokens,
@@ -192,6 +198,11 @@ def exemption(path: str, line: str) -> str | None:
 
 def violations(path: str, content: str) -> list[tuple[int, str]]:
     findings = []
+    for match in PLIST_DISPLAY_IDENTITY.finditer(content):
+        number = content.count("\n", 0, match.start()) + 1
+        line = content.splitlines()[number - 1]
+        if not exemption(path, line):
+            findings.append((number, "removable upstream bundle display identity"))
     lines = content.splitlines()
     for number, line in enumerate(lines, 1):
         if exemption(path, line):

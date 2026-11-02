@@ -9,11 +9,47 @@ import {
   claudeSignedOutMessage,
   makeClaudeCapabilitiesCacheKey,
   makeClaudeContinuationGroupKey,
+  mergeClaudeProcessEnvironment,
   makeClaudeEnvironment,
   resolveClaudeHomePath,
 } from "./ClaudeHome.ts";
 
 it.layer(NodeServices.layer)("ClaudeHome", (it) => {
+  it("starts independent sessions while preserving explicit instance settings and native privacy", () => {
+    const host = {
+      CLAUDECODE: "1",
+      CLAUDE_CODE_SESSION_ID: "synthetic-host-session",
+      CLAUDE_CODE_HOST_SESSION_ID: "synthetic-parent-session",
+      CLAUDE_CODE_CHILD_SESSION: "1",
+      CLAUDE_CODE_SESSION_ATTENDED: "1",
+      CLAUDE_CODE_MESSAGING_SOCKET: "/synthetic/host.sock",
+      CLAUDE_CODE_MESSAGING_TOKEN: "synthetic-host-token",
+      CLAUDE_CODE_EXECPATH: "/synthetic/claude",
+      CLAUDE_CODE_DESKTOP_APP_VERSION: "synthetic",
+      CLAUDE_EFFORT: "high",
+      CLAUDE_PID: "123",
+      CLAUDE_AGENT_SDK_VERSION: "synthetic",
+      CINDERDECK_NATIVE_UI_TOKEN: "synthetic-native-token",
+      CLAUDE_CONFIG_DIR: "/synthetic/claude-config",
+      KEEP: "1",
+    };
+    const original = { ...host };
+    expect(mergeClaudeProcessEnvironment(undefined, host)).toEqual({
+      CLAUDE_CONFIG_DIR: "/synthetic/claude-config",
+      KEEP: "1",
+    });
+    expect(
+      mergeClaudeProcessEnvironment(
+        [
+          { name: "CLAUDE_EFFORT", value: "low", sensitive: false },
+          { name: "CINDERDECK_NATIVE_UI_TOKEN", value: "override", sensitive: true },
+        ],
+        host,
+      ),
+    ).toEqual({ CLAUDE_CONFIG_DIR: "/synthetic/claude-config", CLAUDE_EFFORT: "low", KEEP: "1" });
+    expect(host).toEqual(original);
+  });
+
   describe("Claude home resolution", () => {
     it.effect("treats empty, ~/.claude, and the expanded default as the same Claude home", () =>
       Effect.gen(function* () {

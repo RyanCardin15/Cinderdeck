@@ -212,6 +212,16 @@ describe("provider projection", () => {
     expect(project("a\n")).toContain("3 | a\n4 | \n</context>");
   });
 
+  it("emits no terminal lines when the captured range is inverted", () => {
+    const projected = projectComposerContextForProvider({
+      text: "[log](t3-context://v1/terminal/ctx_t)",
+      records: [{ ...terminal, lineStart: 10, lineEnd: 5, text: "a\nb\nc\nd\ne\nf" }],
+    });
+    expect(projected).toContain('<context kind="terminal" id="ctx_t">');
+    expect(projected).toContain("terminal: Terminal 1\n</context>");
+    expect(projected).not.toContain(" | ");
+  });
+
   it("formats markers with kind, label and ref", () => {
     expect(formatComposerContextProviderMarker("review-comment", "File.ts L4", ctx("ctx_9"))).toBe(
       "[Review comment: File.ts L4; ref=ctx_9]",

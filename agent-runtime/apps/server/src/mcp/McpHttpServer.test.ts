@@ -8,6 +8,8 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
+import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -25,6 +27,7 @@ const threadId = ThreadId.make("thread-mcp-test");
 const tabId = PreviewTabId.make("tab-mcp-test");
 const alternateTabId = PreviewTabId.make("tab-mcp-alternate");
 const decodeJsonText = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
+const encodeJsonText = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 const invocation = {
   environmentId,
   threadId,
@@ -671,6 +674,73 @@ it.effect("sheds log entries before locators when every list is full", () =>
       expect(noticeText).not.toMatch(/\d+ of \d+ interactiveElements/);
     }),
   ).pipe(Effect.provide(TestLayer)),
+);
+
+it.effect(
+  "accepts bearer scheme casing while rejecting wrong, empty and revoked credentials privately",
+  () => {
+    const token = "synthetic-Mcp-Credential";
+    const messages: Array<unknown> = [];
+    const logger = Logger.make(({ message }) => messages.push(message));
+    let revoked = false;
+    return Effect.scoped(
+      Effect.gen(function* () {
+        yield* HttpRouter.serve(
+          McpHttpServer.McpTransportLive.pipe(
+            Layer.provide(
+              Layer.mock(McpSessionRegistry.McpSessionRegistry)({
+                resolve: (raw) =>
+                  Effect.succeed(raw === token && !revoked ? invocation : undefined),
+              }),
+            ),
+          ),
+          { disableListenLog: true, disableLogger: true },
+        ).pipe(Layer.build);
+        const httpClient = yield* HttpClient.HttpClient;
+        const initialize = (authorization?: string) =>
+          httpClient.post("/mcp", {
+            headers: {
+              accept: "application/json, text/event-stream",
+              ...(authorization === undefined ? {} : { authorization }),
+            },
+            body: HttpBody.text(
+              `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"mcp-header-test","version":"1.0.0"}}}`,
+              "application/json",
+            ),
+          });
+        for (const scheme of ["Bearer", "bearer", "bEaReR"]) {
+          expect((yield* initialize(`${scheme} ${token}`)).status).toBe(200);
+        }
+        for (const [authorization, reason] of [
+          [undefined, "missing_authorization_header"],
+          [`Basic ${token}`, "unsupported_scheme"],
+          ["Bearer", "missing_bearer_token"],
+          ["bEaReR ", "missing_bearer_token"],
+          [`bearer ${token.toUpperCase()}`, "unknown_or_expired_token"],
+        ] as const) {
+          const response = yield* initialize(authorization);
+          expect(response.status).toBe(401);
+          expect(messages.at(-1)).toEqual([
+            "rejected MCP request with an unusable credential",
+            { reason },
+          ]);
+          expect(yield* response.text).not.toContain(token);
+          expect(encodeJsonText(response.headers)).not.toContain(token);
+        }
+        revoked = true;
+        expect((yield* initialize(`bearer ${token}`)).status).toBe(401);
+        expect(encodeJsonText(messages)).not.toContain(token);
+        expect(encodeJsonText(messages)).not.toContain(token.toUpperCase());
+      }),
+    ).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          NodeHttpServer.layerTest,
+          Logger.layer([logger], { mergeWithExisting: false }),
+        ),
+      ),
+    );
+  },
 );
 
 it.effect("terminates HTTP MCP sessions with DELETE", () =>

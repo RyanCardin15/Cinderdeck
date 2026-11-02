@@ -3092,6 +3092,26 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
   });
 
   describe("commit context", () => {
+    it.effect("refuses selected-file staging when the index reset is locked", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        yield* writeTextFile(cwd, "a.txt", "a\n");
+        yield* writeTextFile(cwd, "staged.txt", "staged\n");
+        yield* git(cwd, ["add", "staged.txt"]);
+        const lockPath = (yield* Path.Path).join(cwd, ".git", "index.lock");
+        yield* (yield* FileSystem.FileSystem).writeFileString(lockPath, "");
+        const error = yield* driver.prepareCommitContext(cwd, ["a.txt"]).pipe(Effect.flip);
+        assert.equal(error.operation, "GitVcsDriver.prepareCommitContext.reset");
+        assert.equal(yield* git(cwd, ["diff", "--cached", "--name-only"]), "staged.txt");
+        yield* (yield* FileSystem.FileSystem).remove(lockPath);
+        // The reverse action remains usable after the other writer releases its lock.
+        yield* driver.prepareCommitContext(cwd, ["a.txt"]);
+        assert.equal(yield* git(cwd, ["diff", "--cached", "--name-only"]), "a.txt");
+      }),
+    );
+
     it.effect("stages selected files and commits only those files", () =>
       Effect.gen(function* () {
         const cwd = yield* makeTmpDir();

@@ -5,7 +5,35 @@ import * as Effect from "effect/Effect";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
+import type { ProviderInstanceEnvironment } from "@cinderdeck/contracts";
+import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import { expandHomePath } from "../../pathExpansion.ts";
+
+// A launching Claude process exports session and messaging credentials. Children
+// must establish their own sessions; explicit provider-instance overrides still apply.
+const CLAUDE_HOST_SESSION_VARIABLES = [
+  "CLAUDECODE",
+  "CLAUDE_CODE_SESSION_ID",
+  "CLAUDE_CODE_HOST_SESSION_ID",
+  "CLAUDE_CODE_CHILD_SESSION",
+  "CLAUDE_CODE_SESSION_ATTENDED",
+  "CLAUDE_CODE_MESSAGING_SOCKET",
+  "CLAUDE_CODE_MESSAGING_TOKEN",
+  "CLAUDE_CODE_EXECPATH",
+  "CLAUDE_CODE_DESKTOP_APP_VERSION",
+  "CLAUDE_EFFORT",
+  "CLAUDE_PID",
+  "CLAUDE_AGENT_SDK_VERSION",
+] as const;
+
+export function mergeClaudeProcessEnvironment(
+  instanceEnvironment: ProviderInstanceEnvironment | undefined,
+  hostEnvironment: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const baseEnvironment = { ...hostEnvironment };
+  for (const name of CLAUDE_HOST_SESSION_VARIABLES) delete baseEnvironment[name];
+  return mergeProviderInstanceEnvironment(instanceEnvironment, baseEnvironment);
+}
 
 const quotePath = Schema.encodeSync(Schema.fromJsonString(Schema.String));
 

@@ -53,7 +53,7 @@ import {
   type ProviderInstance,
 } from "../ProviderDriver.ts";
 import { withInstanceIdentity } from "./instanceIdentity.ts";
-import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
+import { mergeClaudeProcessEnvironment } from "./ClaudeHome.ts";
 import {
   enrichProviderSnapshotWithVersionAdvisory,
   makeCachedProviderMaintenanceResolution,
@@ -128,7 +128,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
       const serverSettings = yield* ServerSettings.ServerSettingsService;
       const modelManifest = yield* ModelManifest.ModelManifest;
       const modelCatalog = modelManifest.current.pipe(Effect.map(resolveClaudeModelCatalog));
-      const processEnv = mergeProviderInstanceEnvironment(environment);
+      const processEnv = mergeClaudeProcessEnvironment(environment);
       const fallbackContinuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,

@@ -159,7 +159,13 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
       const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
       const token = "reusable-dev-auth-token-that-is-long-enough";
       const devExchange = yield* serverAuth.createBrowserSession(token, requestMetadata);
-      for (const authorization of ["Bearer invalid", ""] as const) {
+      for (const authorization of [
+        "Bearer invalid",
+        "bearer invalid",
+        "bEaReR invalid",
+        "Basic invalid",
+        "",
+      ] as const) {
         const request = {
           cookies: { [devExchange.cookieName ?? "missing"]: devExchange.sessionToken },
           headers: { authorization },
@@ -348,12 +354,14 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
       const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
       const sessions = yield* SessionStore.SessionStore;
       const bearer = yield* serverAuth.issueSession();
-      const verified = yield* serverAuth.authenticateHttpRequest({
-        cookies: { [sessions.cookieName]: "" },
-        headers: { authorization: `Bearer ${bearer.token}` },
-      } as never);
-
-      expect(verified.sessionId).toBe(bearer.sessionId);
+      for (const scheme of ["Bearer", "bearer", "bEaReR"]) {
+        const request = {
+          cookies: { [sessions.cookieName]: "" },
+          headers: { authorization: `${scheme} ${bearer.token}` },
+        };
+        const verified = yield* serverAuth.authenticateHttpRequest(request as never);
+        expect(verified.sessionId).toBe(bearer.sessionId);
+      }
     }).pipe(Effect.provide(makeEnvironmentAuthLayer({ mode: "web", host: "192.168.1.50" }))),
   );
 
