@@ -16,13 +16,7 @@ struct HistoryFloatingContentView: View {
   @Environment(\.colorScheme) private var colorScheme
 
   @State private var selectedCompactFilter: CaptureHistoryType? = nil
-  @AppStorage(PreferencesKeys.stacksEnabled) private var stacksEnabled = true
-  // Held without observing: service, Git, and claim updates redraw the Workspaces
-  // views that read them, not the whole panel and its capture grid.
-  @State private var stacksHolder = StacksViewModelHolder()
-  private var stacksViewModel: StacksViewModel { stacksHolder.model }
   @State private var selectedClipboardID: UUID?
-  @State private var selectedClipboardCollectionID: UUID?
   @State private var usesExplicitCompactFilterSelection = false
   @State private var selectedId: UUID? = nil
   @State private var expandedSelectedIds: Set<UUID> = []
@@ -108,12 +102,8 @@ struct HistoryFloatingContentView: View {
       .frame(width: scaledPanelSize.width, height: scaledPanelSize.height)
       .preferredColorScheme(themeManager.systemAppearance)
       .onAppear {
-        if !stacksEnabled && manager.selectedSection == .stacks { manager.selectedSection = .captures }
         syncSelectionIfNeeded()
         syncExpandedGridPresentation(for: manager.presentationMode)
-      }
-      .onChange(of: stacksEnabled) { enabled in
-        if !enabled && manager.selectedSection == .stacks { manager.selectedSection = .captures }
       }
       .onDisappear {
         expandedGridWarmupTask?.cancel()
@@ -189,12 +179,8 @@ struct HistoryFloatingContentView: View {
     VStack(spacing: 18) {
       compactHeader
 
-      if manager.selectedSection == .stacks && stacksEnabled {
-        StacksTabView(viewModel: stacksViewModel, manager: manager)
-      } else if manager.selectedSection == .clipboard {
+      if manager.selectedSection == .clipboard {
         clipboardContent
-      } else if manager.selectedSection == .saved {
-        SavedHistoryView(manager: manager)
       } else if compactRecords.isEmpty {
         compactEmptyState
       } else {
@@ -211,7 +197,6 @@ struct HistoryFloatingContentView: View {
       compactFilterBar
     } controls: {
       HStack(spacing: 8) {
-        pullRequestsButton(size: 30)
 
         controlButton(
           systemName: "arrow.up.forward.app",
@@ -277,8 +262,6 @@ struct HistoryFloatingContentView: View {
         )
       }
       clipboardFilterPill
-      savedFilterPill
-      if stacksEnabled { stacksFilterPill }
     }
   }
 
@@ -314,12 +297,8 @@ struct HistoryFloatingContentView: View {
       VStack(spacing: 18) {
         expandedHeader
 
-        if manager.selectedSection == .stacks && stacksEnabled {
-          StacksTabView(viewModel: stacksViewModel, manager: manager)
-        } else if manager.selectedSection == .clipboard {
+        if manager.selectedSection == .clipboard {
           clipboardContent
-        } else if manager.selectedSection == .saved {
-          SavedHistoryView(manager: manager)
         } else if expandedRecords.isEmpty {
           expandedEmptyState
         } else if isExpandedGridReady {
@@ -357,7 +336,6 @@ struct HistoryFloatingContentView: View {
     ClipboardTextHistoryView(
       manager: manager,
       selectedID: $selectedClipboardID,
-      selectedCollectionID: $selectedClipboardCollectionID,
       isExpanded: manager.presentationMode == .expanded
     )
   }
@@ -369,45 +347,6 @@ struct HistoryFloatingContentView: View {
       manager.focusPanel()
     }
     .accessibilityIdentifier("history.clipboardTextTab")
-  }
-
-  private var savedFilterPill: some View {
-    selectionPill(title: "Favorites & groups", isSelected: manager.selectedSection == .saved, count: nil) {
-      manager.selectedSection = .saved
-      manager.focusPanel()
-    }
-    .help("Favorites and groups of captures and copied text")
-    .accessibilityIdentifier("history.savedTab")
-  }
-
-  private func pullRequestsButton(size: CGFloat) -> some View {
-    controlButton(
-      systemName: "arrow.triangle.pull",
-      help: pullRequestsHelp,
-      size: size
-    ) {
-      manager.hide()
-      PullRequestsWindowController.shared.show()
-    }
-    .accessibilityLabel("Open pull requests")
-    .accessibilityIdentifier("history.pullRequests")
-  }
-
-  private var pullRequestsHelp: String {
-    let keyboard = KeyboardShortcutManager.shared
-    guard keyboard.isEnabled, keyboard.isShortcutEnabled(for: .pullRequests),
-      let shortcut = keyboard.shortcut(for: .pullRequests) else { return "Open pull requests" }
-    return "Open pull requests (\(shortcut.displayString))"
-  }
-
-  private var stacksFilterPill: some View {
-    StacksRunningCount(viewModel: stacksViewModel) { count in
-      selectionPill(title: "Workspaces", isSelected: manager.selectedSection == .stacks, count: count) {
-        manager.selectedSection = .stacks
-        manager.focusPanel()
-      }
-    }
-    .accessibilityIdentifier("history.stacksTab")
   }
 
   private var expandedTypeFilters: some View {
@@ -430,8 +369,6 @@ struct HistoryFloatingContentView: View {
         )
       }
       clipboardFilterPill
-      savedFilterPill
-      if stacksEnabled { stacksFilterPill }
     }
   }
 
@@ -488,7 +425,6 @@ struct HistoryFloatingContentView: View {
 
   private var expandedControls: some View {
     HStack(spacing: 6) {
-      pullRequestsButton(size: 34)
 
       if manager.isEnabled {
         controlButton(
@@ -1086,15 +1022,4 @@ struct HistoryFloatingContentView: View {
       }
     }
   }
-}
-
-private final class StacksViewModelHolder {
-  lazy var model = StacksViewModel()
-}
-
-/// Observes the Workspaces model for the running-count badge alone.
-private struct StacksRunningCount<Content: View>: View {
-  @ObservedObject var viewModel: StacksViewModel
-  let content: (Int?) -> Content
-  var body: some View { content(viewModel.runningCount > 0 ? viewModel.runningCount : nil) }
 }

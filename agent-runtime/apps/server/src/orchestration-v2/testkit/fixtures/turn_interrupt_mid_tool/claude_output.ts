@@ -1,5 +1,5 @@
 import { assert } from "@effect/vitest";
-import type { ProviderReplayTranscript } from "@cinderdeck/contracts";
+import type { ProviderReplayTranscript } from "@t3tools/contracts";
 
 import type { OrchestratorV2ScenarioResult } from "../../OrchestratorScenario.ts";
 import {
@@ -81,7 +81,7 @@ export function assertTurnInterruptMidToolClaudeOutput(
   assert.isDefined(commandItem);
   assert.isDefined(interruptRequest);
   assert.isDefined(interruptResult);
-  assert.equal(commandItem.status, "failed");
+  assert.equal(commandItem.status, "interrupted");
   assert.include(commandItem.input, "node -e");
   assert.equal(interruptRequest.status, "completed");
   assert.equal(interruptResult.status, "interrupted");

@@ -1,21 +1,22 @@
 import {
   BearerConnectionTarget,
   PrimaryConnectionTarget,
-} from "@cinderdeck/client-runtime/connection";
-import type { EnvironmentCatalogState } from "@cinderdeck/client-runtime/state/connections";
-import type { EnvironmentShellState } from "@cinderdeck/client-runtime/state/shell";
-import { EnvironmentId } from "@cinderdeck/contracts";
+} from "@t3tools/client-runtime/connection";
+import type { EnvironmentCatalogState } from "@t3tools/client-runtime/state/connections";
+import { EMPTY_SHELL_STATE, type EnvironmentShellState } from "@t3tools/client-runtime/state/shell";
+import { EnvironmentId } from "@t3tools/contracts";
 import * as Option from "effect/Option";
-import { Atom, AtomRegistry } from "effect/unstable/reactivity";
-import { describe, expect, it } from "vite-plus/test";
+import { Atom, AtomRegistry } from "effect/reactivity";
+import { describe, expect, it, vi } from "vite-plus/test";
 
-import { createAllEnvironmentProjectSnapshotsReadyAtom } from "./shell";
+import { createAllEnvironmentProjectSnapshotsReadyAtom, expectsPrimaryEnvironment } from "./shell";
 
 const LOCAL = EnvironmentId.make("local");
 const REMOTE = EnvironmentId.make("remote");
 
 function shellState(status: EnvironmentShellState["status"]): EnvironmentShellState {
   return {
+    ...EMPTY_SHELL_STATE,
     status,
     snapshot:
       status === "empty"
@@ -59,7 +60,7 @@ function catalogState(environmentIds: readonly EnvironmentId[]): EnvironmentCata
   };
 }
 
-function makeHarness() {
+function makeHarness(requiresPrimaryEnvironment = true) {
   const catalog = Atom.make<EnvironmentCatalogState>({ isReady: false, entries: new Map() });
   const shells = Atom.family((_environmentId: EnvironmentId) =>
     Atom.make<EnvironmentShellState>(shellState("empty")),
@@ -67,6 +68,7 @@ function makeHarness() {
   const ready = createAllEnvironmentProjectSnapshotsReadyAtom({
     catalogValueAtom: catalog,
     shellStateValueAtom: shells,
+    requiresPrimaryEnvironment,
   });
   const registry = AtomRegistry.make();
   return { catalog, shells, ready, registry };
@@ -94,13 +96,21 @@ describe("project snapshot readiness", () => {
     registry.dispose();
   });
 
+  it("allows a hosted client to load projects without a primary environment", () => {
+    const { catalog, shells, ready, registry } = makeHarness(false);
+    registry.set(catalog, catalogState([REMOTE]));
+    expect(registry.get(ready)).toBe(false);
+    registry.set(shells(REMOTE), shellState("live"));
+    expect(registry.get(ready)).toBe(true);
+    registry.dispose();
+  });
+
   it("waits for live snapshots through offline startup and reconnect", () => {
     const { catalog, shells, ready, registry } = makeHarness();
     registry.set(catalog, catalogState([LOCAL, REMOTE]));
     registry.set(shells(LOCAL), shellState("live"));
     expect(registry.get(ready)).toBe(false);
 
-    // An old cache and a reconnect in progress can both omit a real project.
     registry.set(shells(REMOTE), shellState("cached"));
     expect(registry.get(ready)).toBe(false);
     registry.set(shells(REMOTE), shellState("synchronizing"));
@@ -124,4 +134,17 @@ describe("project snapshot readiness", () => {
     expect(registry.get(ready)).toBe(true);
     registry.dispose();
   });
+});
+
+it("expects a primary environment only on desktops with the local environment enabled", () => {
+  const desktop = (enabled: boolean) => {
+    vi.stubGlobal("window", { desktopBridge: { getLocalEnvironmentEnabled: () => enabled } });
+    try {
+      return expectsPrimaryEnvironment();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  };
+  expect(desktop(true)).toBe(true);
+  expect(desktop(false)).toBe(false);
 });

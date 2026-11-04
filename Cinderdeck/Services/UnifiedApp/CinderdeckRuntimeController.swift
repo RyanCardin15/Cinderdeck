@@ -58,11 +58,6 @@ final class CinderdeckRuntimeController: ObservableObject {
     if running { return true }
     do {
       guard let executable = try executableURL() else { phase = .absent; return false }
-      guard StackControlService.shared.isServing else {
-        throw StackControlError(code: "host_unavailable", message: "The native workspace control service is unavailable")
-      }
-      let journal = try StackControlService.shared.integrationStore()
-      let token = UUID().uuidString + UUID().uuidString
       let child = Process(), stdin = Pipe(), stdout = Pipe()
       guard fcntl(stdin.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1) != -1 else {
         throw StackControlError(code: "host_unavailable", message: "Could not establish the agent window control pipe")
@@ -71,24 +66,15 @@ final class CinderdeckRuntimeController: ObservableObject {
       child.currentDirectoryURL = executable.deletingLastPathComponent()
       var environment = ProcessInfo.processInfo.environment
       environment["CINDERDECK_NATIVE_HOST"] = "1"
-      environment["CINDERDECK_NATIVE_SOCKET_PATH"] = StackControlPaths.socket.path
-      environment["CINDERDECK_NATIVE_INSTALLATION_ID"] = journal.installationID
-      environment["CINDERDECK_NATIVE_UI_TOKEN"] = token
-      environment["DECKHAND_CINDERDECK_SOCKET"] = StackControlPaths.socket.path
-      environment["DECKHAND_CINDERDECK_STATE"] = StackControlPaths.state.path
-      #if DEBUG
-      let channel = "development"
-      #else
-      let channel = "release"
-      #endif
-      environment["CINDERDECK_NATIVE_CHANNEL"] = channel
-      environment["DECKHAND_CINDERDECK_CHANNEL"] = channel
-      let runtimeDirectory = StackControlPaths.directory.appendingPathComponent("AgentRuntime", isDirectory: true)
+      let runtimeDirectory = StackControlPaths.directory.appendingPathComponent("T3Runtime", isDirectory: true)
       let profileDirectory = runtimeDirectory.appendingPathComponent("Profile", isDirectory: true)
       try FileManager.default.createDirectory(at: profileDirectory, withIntermediateDirectories: true,
         attributes: [.posixPermissions: 0o700])
-      environment["DECKHAND_HOME"] = runtimeDirectory.path
-      environment["DECKHAND_PROFILE_ROOT"] = profileDirectory.path
+      environment.removeValue(forKey: "VITE_DEV_SERVER_URL")
+      environment["T3CODE_DISABLE_AUTO_UPDATE"] = "true"
+      environment["T3CODE_TELEMETRY_ENABLED"] = "false"
+      environment["T3CODE_HOME"] = runtimeDirectory.path
+      environment["CINDERDECK_PROFILE_ROOT"] = profileDirectory.path
       child.environment = environment
       child.standardInput = stdin
       child.standardOutput = stdout
@@ -112,8 +98,6 @@ final class CinderdeckRuntimeController: ObservableObject {
       process = child
       input = stdin.fileHandleForWriting
       output = stdout.fileHandleForReading
-      installationID = journal.installationID
-      uiToken = token
       ready = false; stopping = false; quitRequested = false; lastError = nil; phase = .starting
       do { try child.run() }
       catch { cleanup(); throw error }
@@ -135,18 +119,7 @@ final class CinderdeckRuntimeController: ObservableObject {
   func show(workspaceID: String? = nil, section: String? = nil) -> Bool {
     do {
       guard try executableURL() != nil else { return false }
-      if let workspaceID {
-        guard workspaceID.utf8.count <= 512,
-          !StackControlService.shared.isServing || StackSupervisor.shared.files.contains(where: { $0.id == workspaceID }) else {
-          throw StackControlError(code: "resource_missing", message: "The requested workspace is unavailable")
-        }
-      }
-      let sections: Set<String> = ["overview", "agents", "code-review-skill", "pull-requests", "services", "tasks", "workflows", "lane-map", "runs", "recordings", AgentAccessNavigation.section]
-      guard section.map({ sections.contains($0) || UnifiedSettingsNavigation.sections.contains($0) }) ?? true else { throw StackControlError.invalid("Unknown workspace section") }
-      pendingRoute = CinderdeckRuntimeMessage(type: "route", workspaceID: workspaceID, section: section)
-      // Deep links can arrive while the native supervisor is still bootstrapping.
-      // The coordinator starts the shell once its authoritative socket is ready.
-      guard StackControlService.shared.isServing else { return true }
+      pendingRoute = section?.hasPrefix("settings:") == true ? CinderdeckRuntimeMessage(type: "settings-open") : nil
       guard startIfAvailable() else { throw StackControlError(code: "host_unavailable", message: lastError ?? "The agent window is unavailable") }
       if ready { try flushRoute() }
       return true
@@ -196,11 +169,6 @@ final class CinderdeckRuntimeController: ObservableObject {
 
   private func flushRoute() throws {
     if let pendingRoute {
-      if let workspaceID = pendingRoute.workspaceID,
-        !StackSupervisor.shared.files.contains(where: { $0.id == workspaceID }) {
-        self.pendingRoute = nil
-        throw StackControlError(code: "resource_missing", message: "The requested workspace is unavailable")
-      }
       try send(pendingRoute); self.pendingRoute = nil
     }
     try send(CinderdeckRuntimeMessage(type: "activate"))
@@ -215,24 +183,6 @@ final class CinderdeckRuntimeController: ObservableObject {
         lastError = "The agent window could not receive its route."
         let alert = NSAlert(); alert.messageText = "The workspace could not open"; alert.informativeText = error.localizedDescription; alert.runModal()
       }
-      return
-    }
-    if line == Data("CINDERDECK_RUNTIME_HIDE_OTHERS".utf8) {
-      guard !stopping else { return }
-      let ownedPID = process?.processIdentifier
-      for application in NSWorkspace.shared.runningApplications
-        where application.activationPolicy == .regular
-          && application.processIdentifier != getpid()
-          && application.processIdentifier != ownedPID {
-        application.hide()
-      }
-      return
-    }
-    if line == Data("CINDERDECK_RUNTIME_HIDE".utf8) {
-      guard !stopping, !NSApp.isHidden else { return }
-      // The accessory runtime otherwise leaves its regular native owner active,
-      // which immediately focuses it again. Hide the owner as well.
-      NSApp.hide(nil)
       return
     }
     if line == Data("CINDERDECK_RUNTIME_QUIT_REQUEST".utf8) {
@@ -251,58 +201,15 @@ final class CinderdeckRuntimeController: ObservableObject {
       }
       return
     }
-    let dictationPrefix = Data("CINDERDECK_RUNTIME_DICTATION ".utf8)
-    if !stopping, ready, line.starts(with: dictationPrefix) {
-      if let request = try? DictationCommand.decode(Data(line.dropFirst(dictationPrefix.count))) {
-        DictationController.shared.handle(request)
-      }
-      return
-    }
-    let contextPrefix = Data("CINDERDECK_RUNTIME_APP_CONTEXT ".utf8)
-    if !stopping, ready, line.starts(with: contextPrefix) {
-      guard let request = try? RecentAppContextRequest.decode(Data(line.dropFirst(contextPrefix.count))) else { return }
-      let owner = process
-      Task { @MainActor [weak self] in
-        do {
-          let result = try await RecentAppContext.shared.handle(request)
-          guard self?.process === owner, self?.stopping == false else { return }
-          try self?.send(CinderdeckRuntimeMessage(type: "app-context", requestID: request.requestID, appContext: result))
-        } catch {
-          guard self?.process === owner, self?.stopping == false else { return }
-          try? self?.send(CinderdeckRuntimeMessage(type: "app-context", requestID: request.requestID, error: error.localizedDescription))
-        }
-      }
-      return
-    }
-    let settingsPrefix = Data("CINDERDECK_RUNTIME_SETTINGS ".utf8)
-    if !stopping, ready, line.starts(with: settingsPrefix) {
-      guard let request = try? NativeSettingsRequest.decode(Data(line.dropFirst(settingsPrefix.count))) else { return }
-      let owner = process
-      Task { @MainActor [weak self] in
-        do {
-          let result = try await CinderdeckNativeSettings.handle(request)
-          guard self?.process === owner, self?.stopping == false else { return }
-          try self?.send(CinderdeckRuntimeMessage(type: "settings", requestID: request.requestID, settings: result))
-        } catch {
-          guard self?.process === owner, self?.stopping == false else { return }
-          try? self?.send(CinderdeckRuntimeMessage(type: "settings", requestID: request.requestID, error: error.localizedDescription))
-        }
-      }
-      return
-    }
-    let prefix = Data("CINDERDECK_RUNTIME_UI_REQUEST ".utf8)
-    guard !stopping, ready, line.starts(with: prefix) else { return }
-    do { try CinderdeckRuntimeNativeUI.open(CinderdeckRuntimeUIRequest.decode(Data(line.dropFirst(prefix.count)))) }
-    catch {
-      let alert = NSAlert(); alert.messageText = "Native action is unavailable"; alert.informativeText = error.localizedDescription; alert.runModal()
-    }
   }
 
   private func didExit(_ child: Process) {
     guard process === child else { return }
     let expected = stopping
+    let relaunch = !expected && child.terminationStatus == 75
     cleanup()
     phase = expected || child.terminationStatus == 0 ? .exited : .failed
+    if relaunch { _ = startIfAvailable(); return }
     if !expected && child.terminationStatus != 0 { lastError = "The agent window exited. Reopen Workspaces to reconnect to its saved conversations." }
     DiagnosticLogger.shared.log(.info, .lifecycle, "Unified agent window exited", context: ["status": String(child.terminationStatus)])
   }

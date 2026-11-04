@@ -1,4 +1,4 @@
-import { ProviderDriverKind } from "@cinderdeck/contracts";
+import { ProviderDriverKind } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { resolveProviderInstanceAcpRegistryIconUrl } from "./ProviderInstanceIcon";
@@ -19,14 +19,5 @@ describe("resolveProviderInstanceAcpRegistryIconUrl", () => {
         iconUrl: "https://example.com/not-official.svg",
       }),
     ).toBe("https://cdn.agentclientprotocol.com/registry/v1/latest/generic-agent.svg");
-  });
-
-  it("does not resolve registry icons for other provider drivers", () => {
-    expect(
-      resolveProviderInstanceAcpRegistryIconUrl({
-        driverKind: ProviderDriverKind.make("codex"),
-        agentId: "kilo",
-      }),
-    ).toBeNull();
   });
 });

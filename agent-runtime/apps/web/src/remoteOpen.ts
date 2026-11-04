@@ -1,30 +1,24 @@
-/**
- * Remote open-in-editor: when this client is not on the environment's
- * machine, "Open" must hand the OS a `vscode://vscode-remote/ssh-remote+…`
- * deep link (local editor connects over SSH) instead of exec'ing an editor
- * on the environment host.
- *
- * Host precedence: among server-advertised names the tailnet MagicDNS name
- * beats mDNS `<hostname>.local` (server sends them in that order).
- */
-import type { ConnectionTarget } from "@cinderdeck/client-runtime/connection";
+import type { ConnectionTarget } from "@t3tools/client-runtime/connection";
 import {
   REMOTE_CAPABLE_EDITOR_IDS,
   type EditorId,
   type EnvironmentId,
   type RemoteOpenTarget,
-} from "@cinderdeck/contracts";
+} from "@t3tools/contracts";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { useEffect, useMemo, useState } from "react";
+import { Atom } from "effect/reactivity";
+import { useAtomValue } from "@effect/atom-react";
 
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
 import { isLoopbackHostname } from "~/environments/primary/target";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
-import { useEnvironmentPresentation } from "~/state/presentation";
+import { environmentPresentations } from "~/state/presentation";
 
 export interface RemoteOpenHost {
-  readonly kind: RemoteOpenTarget["kind"];
+  readonly kind: "ssh-alias" | RemoteOpenTarget["kind"];
   readonly host: string;
+  readonly username?: string;
 }
 
 export type RemoteOpenState =
@@ -56,21 +50,16 @@ function parseHostname(url: string): string | null {
 
 export function resolveRemoteOpenState(input: {
   readonly target: ConnectionTarget | null;
-  /** Server-advertised hosts; undefined on servers that predate the feature. */
+  readonly sshTarget: { readonly alias: string; readonly username: string | null } | null;
   readonly remoteOpenTargets: ReadonlyArray<RemoteOpenTarget> | undefined;
-  /** True when running inside the desktop app's renderer. */
   readonly isDesktopRenderer: boolean;
 }): RemoteOpenState {
   const { target } = input;
-  // No catalog entry: keep today's exec behavior rather than guessing.
   if (target === null) {
     return LOCAL_EXEC;
   }
   if (target._tag === "PrimaryConnectionTarget") {
-    // The desktop app manages its own primary backend, so it is always on
-    // this machine even when its URL is not loopback. In a browser, a
-    // loopback primary means the
-    // browser runs on the serving machine; a tailnet/LAN URL means remote.
+    // Desktop owns its primary even at a non-loopback WSL2 NAT address.
     if (input.isDesktopRenderer) {
       return LOCAL_EXEC;
     }
@@ -82,6 +71,22 @@ export function resolveRemoteOpenState(input: {
     return LOCAL_EXEC;
   }
 
+  if (input.sshTarget !== null && input.sshTarget.alias.length > 0) {
+    const { alias } = input.sshTarget;
+    const userSeparator = alias.lastIndexOf("@");
+    const host = userSeparator === -1 ? alias : alias.slice(userSeparator + 1);
+    const username =
+      input.sshTarget.username?.trim() ||
+      (userSeparator === -1 ? null : alias.slice(0, userSeparator));
+    return {
+      mode: "remote-links",
+      host: {
+        kind: "ssh-alias",
+        host,
+        ...(username === null ? {} : { username }),
+      },
+    };
+  }
   const advertised = input.remoteOpenTargets?.[0];
   if (advertised !== undefined) {
     return { mode: "remote-links", host: advertised };
@@ -89,81 +94,76 @@ export function resolveRemoteOpenState(input: {
   return REMOTE_UNAVAILABLE;
 }
 
-export function useRemoteOpenResolution(environmentId: EnvironmentId | null): RemoteOpenResolution {
-  const { presentation } = useEnvironmentPresentation(environmentId);
+function remoteOpenStatesEqual(previous: RemoteOpenState, next: RemoteOpenState): boolean {
+  if (previous.mode !== next.mode) return false;
+  if (previous.mode !== "remote-links" || next.mode !== "remote-links") return true;
+  return (
+    previous.host.kind === next.host.kind &&
+    previous.host.host === next.host.host &&
+    previous.host.username === next.host.username
+  );
+}
 
-  return useMemo(() => {
-    if (presentation === null) {
+// Config pushes recreate presentations; preserve equal resolutions to avoid re-rendering file links.
+const remoteOpenResolutionAtom = Atom.family((environmentId: EnvironmentId) =>
+  Atom.make((get): RemoteOpenResolution => {
+    const presentation = get(environmentPresentations.presentationAtom(environmentId));
+    const entry = presentation?.entry ?? null;
+    if (entry === null) {
       return UNRESOLVED_REMOTE_OPEN;
     }
-    return {
+    const profile = Option.getOrNull(entry.profile);
+    const next: RemoteOpenResolution = {
       state: resolveRemoteOpenState({
-        target: presentation.entry.target,
-        remoteOpenTargets: presentation.serverConfig?.remoteOpenTargets,
+        target: entry.target,
+        sshTarget:
+          profile !== null && profile._tag === "SshConnectionProfile" ? profile.target : null,
+        remoteOpenTargets: presentation?.serverConfig?.remoteOpenTargets,
         isDesktopRenderer: window.desktopBridge !== undefined,
       }),
       isResolved: true,
     };
-  }, [presentation]);
+    const previous = Option.getOrNull(get.self<RemoteOpenResolution>());
+    return previous !== null &&
+      previous.isResolved &&
+      remoteOpenStatesEqual(previous.state, next.state)
+      ? previous
+      : next;
+  }).pipe(Atom.withLabel(`remote-open-resolution:${environmentId}`)),
+);
+
+const UNRESOLVED_REMOTE_OPEN_ATOM = Atom.make(UNRESOLVED_REMOTE_OPEN);
+
+export function useRemoteOpenResolution(environmentId: EnvironmentId | null): RemoteOpenResolution {
+  return useAtomValue(
+    environmentId === null ? UNRESOLVED_REMOTE_OPEN_ATOM : remoteOpenResolutionAtom(environmentId),
+  );
 }
 
 export function useRemoteOpenState(environmentId: EnvironmentId | null): RemoteOpenState {
   return useRemoteOpenResolution(environmentId).state;
 }
 
-/**
- * Editors offered in remote-link mode. The desktop app probes the machine the
- * renderer runs on; a browser cannot, so it offers VS Code only.
- */
 const REMOTE_FALLBACK_EDITORS: ReadonlyArray<EditorId> = ["vscode"];
 
-let cachedProbedEditors: ReadonlyArray<EditorId> | null = null;
+// Probed once per page: installed editors rarely change, and the probe spawns processes.
+const remoteCapableEditorsAtom = Atom.make((get): ReadonlyArray<EditorId> => {
+  const probe = window.desktopBridge?.probeRemoteEditors;
+  probe?.().then(
+    (ids) => {
+      const remoteCapable = ids.filter((id) => REMOTE_CAPABLE_EDITOR_IDS.includes(id));
+      if (remoteCapable.length > 0) get.setSelf(remoteCapable);
+    },
+    () => undefined,
+  );
+  return REMOTE_FALLBACK_EDITORS;
+}).pipe(Atom.keepAlive, Atom.withLabel("remote-capable-editors"));
 
 export function useRemoteCapableEditors(): ReadonlyArray<EditorId> {
-  const [editors, setEditors] = useState<ReadonlyArray<EditorId>>(
-    () => cachedProbedEditors ?? REMOTE_FALLBACK_EDITORS,
-  );
-
-  useEffect(() => {
-    if (cachedProbedEditors !== null) {
-      return;
-    }
-    const probe = window.desktopBridge?.probeRemoteEditors;
-    if (probe === undefined) {
-      cachedProbedEditors = REMOTE_FALLBACK_EDITORS;
-      return;
-    }
-    let cancelled = false;
-    probe().then(
-      (ids) => {
-        const remoteCapable = ids.filter((id) => REMOTE_CAPABLE_EDITOR_IDS.includes(id));
-        cachedProbedEditors = remoteCapable.length > 0 ? remoteCapable : REMOTE_FALLBACK_EDITORS;
-        if (!cancelled) {
-          setEditors(cachedProbedEditors);
-        }
-      },
-      () => {
-        cachedProbedEditors = REMOTE_FALLBACK_EDITORS;
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return editors;
+  return useAtomValue(remoteCapableEditorsAtom);
 }
 
-/**
- * Fire a remote editor deep link. In desktop, route through the Electron
- * shell so the OS handler opens without navigating the renderer; in a
- * browser, assign the location — unlike window.open this does not leave a
- * blank tab behind.
- *
- * Resolves false when the desktop shell refused the URL (e.g. an older
- * build whose protocol allowlist predates editor schemes) so callers do not
- * record a successful open that never happened.
- */
+/** Resolves false when the desktop refuses the URL, including unsupported editor schemes. */
 export async function openRemoteEditorUrl(url: string): Promise<boolean> {
   const bridge = window.desktopBridge;
   if (bridge !== undefined) {
@@ -177,12 +177,7 @@ export async function openRemoteEditorUrl(url: string): Promise<boolean> {
   return true;
 }
 
-/**
- * One-time "you need SSH keys on that machine" hint, shown in the picker menu
- * until the first remote open fires (we cannot observe SSH success from here,
- * so first click is the dismiss signal).
- */
-const REMOTE_OPEN_HINT_KEY = "deckhand:remote-open-hint-seen";
+const REMOTE_OPEN_HINT_KEY = "t3code:remote-open-hint-seen";
 
 export function useRemoteOpenHint(): readonly [seen: boolean, markSeen: () => void] {
   const [seen, setSeen] = useLocalStorage(REMOTE_OPEN_HINT_KEY, false, Schema.Boolean);

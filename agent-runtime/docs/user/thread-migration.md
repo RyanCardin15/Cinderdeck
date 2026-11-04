@@ -1,6 +1,6 @@
-# Threads from older Cinderdeck versions
+# Threads from older T3 Code versions
 
-On your first V2 launch, Cinderdeck copies the V1 database, `state.sqlite`, into `statev2.sqlite`
+On your first V2 launch, T3 Code copies the V1 database, `state.sqlite`, into `statev2.sqlite`
 in the same data directory and migrates the copy. Your threads appear automatically, with full
 transcripts imported as needed. You do not need to run an import command.
 
@@ -10,11 +10,13 @@ and changes in either version do not sync to the other. Settings, attachments, a
 remain shared.
 
 The V2 desktop app uses a separate browser profile, so browser cookies and caches do not carry
-over from V1. You may need to sign in again to websites opened inside the app.
+over from V1. You may need to sign in again to websites opened inside the app. On its first launch,
+the V2 desktop app copies stashed prompts, unsent drafts, layout, and theme from V1. Anything you
+change in V2 afterwards stays in V2.
 
 The migrated thread keeps its title, project, provider and model selection, permission and
 interaction modes, branch or worktree, archive state, settlement state, snooze and pin state, and
-linked pull request. Cinderdeck also brings over user and assistant messages, their timestamps, and
+linked pull request. T3 Code also brings over user and assistant messages, their timestamps, and
 supported attachments. Large histories may appear in stages while the server imports transcripts.
 
 The migration does not recreate the old provider's live session. It also does not convert old run
@@ -24,7 +26,7 @@ present.
 
 ## Continuing a migrated thread
 
-The first new message starts a fresh provider session. Cinderdeck selects intact user and assistant
+The first new message starts a fresh provider session. T3 Code selects intact user and assistant
 messages using the same [handoff budget](./portable-handoffs.md) as a provider switch. Omitted text
 remains in the thread and can be retrieved by the agent. The migration retains its separate
 32,000-character recovery excerpt; neither that excerpt nor the handoff replaces the full imported
@@ -36,9 +38,9 @@ handoff is also a good choice when the old conversation contains conflicting ins
 
 ## Keeping a recovery copy
 
-Cinderdeck does not currently have a whole-thread export command. Before a major server update, stop
+T3 Code does not currently have a whole-thread export command. Before a major server update, stop
 the server and copy its `userdata` directory to a safe location. The default is
-`~/.t3/userdata`; a server started with `--home-dir <path>` uses `<path>/userdata`.
+`~/.t3/userdata`; a server started with `--base-dir <path>` uses `<path>/userdata`.
 
 If a migrated transcript is missing from the app, keep that copy unchanged. You can inspect the
 old transcript without starting a server against it:

@@ -4,7 +4,7 @@ import type {
   ServerProcessDiagnosticsResult,
   ServerProcessSignal,
   ServerSignalProcessResult,
-} from "@cinderdeck/contracts";
+} from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -36,7 +36,7 @@ export class ProcessDiagnostics extends Context.Service<
       readonly signal: ServerProcessSignal;
     }) => Effect.Effect<ServerSignalProcessResult>;
   }
->()("@cinderdeck/server/diagnostics/ProcessDiagnostics") {}
+>()("t3/diagnostics/ProcessDiagnostics") {}
 
 function formatElapsed(runTimeMs: number): string {
   const totalSeconds = Math.max(0, Math.floor(runTimeMs / 1_000));
@@ -54,7 +54,7 @@ function canSignalCategory(category: ResourceTelemetryProcessCategory): boolean 
   );
 }
 
-/** @public Service construction is part of the canonical Effect module API. */
+/** @public */
 export const make = Effect.fn("makeProcessDiagnostics")(function* () {
   const telemetry = yield* ResourceTelemetry.ResourceTelemetry;
   const refreshedTelemetry = telemetry.refresh.pipe(Effect.catch(() => telemetry.latest));
@@ -94,7 +94,7 @@ export const make = Effect.fn("makeProcessDiagnostics")(function* () {
           pid: input.pid,
           signal: input.signal,
           signaled: false,
-          message: Option.some("Refusing to signal the Cinderdeck server process."),
+          message: Option.some("Refusing to signal the T3 server process."),
         };
       }
       const current = yield* telemetry.refresh.pipe(Effect.option);
@@ -127,7 +127,7 @@ export const make = Effect.fn("makeProcessDiagnostics")(function* () {
           pid: input.pid,
           signal: input.signal,
           signaled: false,
-          message: Option.some(`Process ${input.pid} is not a signalable Cinderdeck backend descendant.`),
+          message: Option.some(`Process ${input.pid} is not a signalable T3 backend descendant.`),
         };
       }
       return yield* Effect.try({

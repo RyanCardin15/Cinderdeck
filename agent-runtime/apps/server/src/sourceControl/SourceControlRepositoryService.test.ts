@@ -1,4 +1,6 @@
+import { SourceControlProviderKind } from "@t3tools/contracts";
 import * as NodePath from "@effect/platform-node/NodePath";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -6,20 +8,24 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Layer from "effect/Layer";
 import * as PlatformError from "effect/PlatformError";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/process";
 
-import { GitCommandError, SourceControlProviderError } from "@cinderdeck/contracts";
+import {
+  GitCommandError,
+  SourceControlProviderError,
+  type SourceControlCloneRepositoryInput,
+} from "@t3tools/contracts";
 
 import * as ServerConfig from "../config.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
-import type * as SourceControlProvider from "./SourceControlProvider.ts";
+import type * as SourceControlProvider from "@t3tools/source-control-core/server/SourceControlProvider";
 import * as SourceControlProviderRegistry from "./SourceControlProviderRegistry.ts";
 import * as SourceControlRepositoryService from "./SourceControlRepositoryService.ts";
 
 const CLONE_URLS = {
-  nameWithOwner: "octocat/cinderdeck",
-  url: "https://github.com/octocat/cinderdeck",
-  sshUrl: "git@github.com:octocat/cinderdeck.git",
+  nameWithOwner: "octocat/t3code",
+  url: "https://github.com/octocat/t3code",
+  sshUrl: "git@github.com:octocat/t3code.git",
 };
 
 function makeProvider(
@@ -32,7 +38,7 @@ function makeProvider(
     >;
 
   return {
-    kind: "github",
+    kind: SourceControlProviderKind.make("github"),
     listChangeRequests: () => unsupported("listChangeRequests"),
     getChangeRequest: () => unsupported("getChangeRequest"),
     createChangeRequest: () => unsupported("createChangeRequest"),
@@ -54,12 +60,12 @@ function processOutput(): GitVcsDriver.ExecuteGitResult {
   };
 }
 
-function makeLayer(input: {
+function layer(input: {
   readonly provider?: SourceControlProvider.SourceControlProvider["Service"];
   readonly git?: Partial<GitVcsDriver.GitVcsDriver["Service"]>;
   readonly fileSystem?: FileSystem.FileSystem;
 }) {
-  const serviceLayer = SourceControlRepositoryService.layer.pipe(
+  const layerService = SourceControlRepositoryService.layer.pipe(
     Layer.provide(
       Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
         resolveLink: () => undefined,
@@ -83,92 +89,80 @@ function makeLayer(input: {
     Layer.provide(
       ServerConfig.layerTest(
         process.cwd(),
-        input.fileSystem
-          ? "/tmp/cinderdeck-source-control-repos"
-          : { prefix: "cinderdeck-source-control-repos-" },
+        input.fileSystem ? "/tmp/t3-source-control-repos" : { prefix: "t3-source-control-repos-" },
       ),
     ),
   );
 
   return input.fileSystem
-    ? serviceLayer.pipe(
+    ? layerService.pipe(
         Layer.provide(Layer.succeed(FileSystem.FileSystem, input.fileSystem)),
         Layer.provideMerge(NodePath.layer),
       )
-    : serviceLayer.pipe(Layer.provideMerge(NodeServices.layer));
+    : layerService.pipe(Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)));
 }
 
-it.effect("looks up repositories through the requested provider without search", () => {
-  const calls: Array<{ cwd: string; repository: string }> = [];
-  const provider = makeProvider({
-    getRepositoryCloneUrls: (input) =>
-      Effect.sync(() => {
-        calls.push({ cwd: input.cwd, repository: input.repository });
-        return CLONE_URLS;
-      }),
-  });
-
-  return Effect.gen(function* () {
+const lookupFailingWith = (cause: unknown, detail: string) =>
+  Effect.gen(function* () {
     const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
-    const result = yield* service.lookupRepository({
-      provider: "github",
-      repository: "octocat/cinderdeck",
-      cwd: "/workspace",
-    });
-
-    assert.deepStrictEqual(result, { provider: "github", ...CLONE_URLS });
-    assert.deepStrictEqual(calls, [{ cwd: "/workspace", repository: "octocat/cinderdeck" }]);
-  }).pipe(Effect.provide(makeLayer({ provider })));
-});
-
-it.effect("preserves provider failures without deriving the repository message from them", () => {
-  const providerCause = new SourceControlProviderError({
-    provider: "github",
-    operation: "getRepositoryCloneUrls",
-    cwd: "/workspace",
-    repository: "octocat/cinderdeck",
-    detail: "credential token abc123 was rejected",
-  });
-  const provider = makeProvider({
-    getRepositoryCloneUrls: () => Effect.fail(providerCause),
-  });
-
-  return Effect.gen(function* () {
-    const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
-    const error = yield* Effect.flip(
-      service.lookupRepository({
-        provider: "github",
-        repository: "octocat/cinderdeck",
-        cwd: "/workspace",
+    return yield* service
+      .lookupRepository({ provider: SourceControlProviderKind.make("bitbucket"), repository: "x" })
+      .pipe(Effect.flip);
+  }).pipe(
+    Effect.provide(
+      layer({
+        provider: makeProvider({
+          getRepositoryCloneUrls: (input) =>
+            Effect.fail(
+              new SourceControlProviderError({
+                provider: SourceControlProviderKind.make("bitbucket"),
+                operation: "getRepositoryCloneUrls",
+                cwd: input.cwd,
+                detail,
+                cause,
+              }),
+            ),
+        }),
       }),
+    ),
+  );
+
+it.effect("tells the user a host's fixed explanation of a failed repository lookup", () =>
+  Effect.gen(function* () {
+    const error = yield* lookupFailingWith(
+      { userFacingDetail: "Repositories are named workspace/repository." },
+      "Repositories are named workspace/repository.",
     );
+    assert.strictEqual(error.detail, "Repositories are named workspace/repository.");
+  }),
+);
 
-    assert.strictEqual(error.provider, "github");
-    assert.strictEqual(error.operation, "lookupRepository");
+it.effect("keeps a host's raw response text out of a failed repository lookup", () =>
+  Effect.gen(function* () {
+    const error = yield* lookupFailingWith(
+      new Error("upstream"),
+      "<html>internal token=abc</html>",
+    );
     assert.strictEqual(error.detail, "The source control operation could not be completed.");
-    assert.strictEqual(
-      error.message,
-      "Source control repository operation lookupRepository failed for github: The source control operation could not be completed.",
-    );
-    assert.strictEqual(error.cause, providerCause);
-  }).pipe(Effect.provide(makeLayer({ provider })));
-});
+  }),
+);
 
-it.effect("clones a looked-up repository into the requested destination", () =>
+it.effect("clones a looked-up repository after creating missing parent directories", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const parent = yield* fs.makeTempDirectoryScoped({
-      prefix: "cinderdeck-source-control-clone-parent-",
+    const temporaryDirectory = yield* fs.makeTempDirectoryScoped({
+      prefix: "t3-source-control-clone-parent-",
     });
-    const destinationPath = path.join(parent, "cinderdeck");
+    const parent = path.join(temporaryDirectory, "missing", "nested");
+    const destinationPath = path.join(parent, "t3code");
     const cloneCalls: Array<{ cwd: string; args: ReadonlyArray<string> }> = [];
 
     yield* Effect.gen(function* () {
       const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
       const result = yield* service.cloneRepository({
-        provider: "github",
-        repository: "octocat/cinderdeck",
+        provider: SourceControlProviderKind.make("github"),
+        repository: "octocat/t3code",
         destinationPath,
         protocol: "https",
       });
@@ -176,20 +170,21 @@ it.effect("clones a looked-up repository into the requested destination", () =>
       assert.deepStrictEqual(result, {
         cwd: destinationPath,
         remoteUrl: CLONE_URLS.url,
-        repository: { provider: "github", ...CLONE_URLS },
+        repository: { provider: SourceControlProviderKind.make("github"), ...CLONE_URLS },
       });
       assert.deepStrictEqual(cloneCalls, [
         {
           cwd: parent,
-          args: ["clone", "--progress", "--", CLONE_URLS.url, "cinderdeck"],
+          args: ["clone", "--progress", "--", CLONE_URLS.url, "t3code"],
         },
       ]);
     }).pipe(
       Effect.provide(
-        makeLayer({
+        layer({
           git: {
             execute: (input) =>
-              Effect.sync(() => {
+              Effect.gen(function* () {
+                assert.isTrue(yield* fs.exists(parent).pipe(Effect.orDie));
                 cloneCalls.push({ cwd: input.cwd, args: input.args });
                 return processOutput();
               }),
@@ -197,7 +192,7 @@ it.effect("clones a looked-up repository into the requested destination", () =>
         }),
       ),
     );
-  }).pipe(Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
 
 it.effect.each(["--bare", "source.git"])(
@@ -207,7 +202,7 @@ it.effect.each(["--bare", "source.git"])(
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const git = yield* GitVcsDriver.GitVcsDriver;
-      const parent = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-clone-options-" });
+      const parent = yield* fs.makeTempDirectoryScoped({ prefix: "t3-clone-options-" });
       yield* git.execute({
         operation: "test.init",
         cwd: parent,
@@ -222,16 +217,16 @@ it.effect.each(["--bare", "source.git"])(
         });
         assert.strictEqual(result.cwd, destinationPath);
         assert.isTrue(yield* fs.exists(path.join(destinationPath, ".git")));
-      }).pipe(Effect.provide(makeLayer({ git: { execute: git.execute } })));
+      }).pipe(Effect.provide(layer({ git: { execute: git.execute } })));
     }).pipe(
       Effect.provide(
         GitVcsDriver.layer.pipe(
           Layer.provide(
             ServerConfig.layerTest(process.cwd(), {
-              prefix: "cinderdeck-clone-options-config-",
+              prefix: "t3-clone-options-config-",
             }),
           ),
-          Layer.provideMerge(NodeServices.layer),
+          Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
         ),
       ),
     ),
@@ -242,18 +237,18 @@ it.effect("reports clone progress from git's stderr and keeps its error text on 
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const parent = yield* fs.makeTempDirectoryScoped({
-      prefix: "cinderdeck-source-control-clone-progress-",
+      prefix: "t3-source-control-clone-progress-",
     });
-    const destinationPath = path.join(parent, "cinderdeck");
+    const destinationPath = path.join(parent, "t3code");
     const progress: Array<{ stage: string; percent: number | null; detail: string | null }> = [];
 
     const stderrLines = [
-      "Cloning into 'cinderdeck'...",
+      "Cloning into 't3code'...",
       "remote: Enumerating objects: 10, done.",
       "Receiving objects:  40% (4/10), 1.00 MiB | 2.00 MiB/s",
       "Receiving objects: 100% (10/10), 2.50 MiB | 2.00 MiB/s, done.",
       "fatal: early EOF",
-      "fatal: unable to access 'https://user:s3c@ret@github.com/octocat/cinderdeck.git/': could not resolve host",
+      "fatal: unable to access 'https://user:s3c@ret@github.com/octocat/t3code.git/': could not resolve host",
     ];
     const error = yield* Effect.gen(function* () {
       const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
@@ -265,7 +260,7 @@ it.effect("reports clone progress from git's stderr and keeps its error text on 
       );
     }).pipe(
       Effect.provide(
-        makeLayer({
+        layer({
           git: {
             execute: (input) =>
               Effect.gen(function* () {
@@ -290,33 +285,123 @@ it.effect("reports clone progress from git's stderr and keeps its error text on 
       { stage: "receiving", percent: 40, detail: "1.00 MiB | 2.00 MiB/s" },
       { stage: "receiving", percent: 100, detail: "2.50 MiB | 2.00 MiB/s" },
     ]);
-    // Git echoes the remote in some failures; the credentials must not follow.
     assert.strictEqual(
       error.detail,
-      "fatal: early EOF fatal: unable to access 'https://github.com/octocat/cinderdeck.git/': could not resolve host",
+      "fatal: early EOF fatal: unable to access 'https://github.com/octocat/t3code.git/': could not resolve host",
     );
-  }).pipe(Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
 
-function cloneInTemporaryDirectory(
-  git: Partial<GitVcsDriver.GitVcsDriver["Service"]>,
-  input: { remoteUrl: string },
+function rejectingSsh(
+  urls: Array<string>,
+  httpsFails: boolean,
+  reason: GitCommandError["reason"] = "authentication_failed",
 ) {
-  return Effect.gen(function* () {
+  return {
+    execute: (input: GitVcsDriver.ExecuteGitInput) =>
+      Effect.gen(function* () {
+        const url = input.args.at(-2)!;
+        urls.push(url);
+        if (url.startsWith("https://") && !httpsFails) return processOutput();
+        yield* (
+          input.progress?.onStderrLine?.(
+            url.startsWith("https://")
+              ? "fatal: could not read Username for 'https://github.com': terminal prompts disabled"
+              : "git@github.com: Permission denied (publickey).",
+          ) ?? Effect.void
+        );
+        return yield* new GitCommandError({
+          operation: input.operation,
+          command: "git",
+          cwd: input.cwd,
+          reason,
+          detail: "Git command exited with a non-zero status.",
+        });
+      }),
+  } satisfies Partial<GitVcsDriver.GitVcsDriver["Service"]>;
+}
+
+const cloneInTemporaryDirectory = (
+  git: Partial<GitVcsDriver.GitVcsDriver["Service"]>,
+  input: Omit<SourceControlCloneRepositoryInput, "destinationPath">,
+) =>
+  Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const parent = yield* fs
-      .makeTempDirectoryScoped({ prefix: "cinderdeck-clone-query-" })
+      .makeTempDirectoryScoped({ prefix: "t3-clone-fallback-" })
       .pipe(Effect.orDie);
-    const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
-    return yield* Effect.flip(
-      service.cloneRepository({
+    return yield* Effect.gen(function* () {
+      const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
+      return yield* service.cloneRepository({
         ...input,
-        destinationPath: path.join(parent, "repository"),
+        destinationPath: path.join(parent, "t3code"),
+      });
+    }).pipe(Effect.provide(layer({ git }).pipe(Layer.orDie)));
+  }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)));
+
+it.effect("retries a clone over HTTPS when the SSH login is refused", () =>
+  Effect.gen(function* () {
+    const urls: Array<string> = [];
+    const result = yield* cloneInTemporaryDirectory(rejectingSsh(urls, false), {
+      remoteUrl: CLONE_URLS.sshUrl,
+    });
+
+    assert.deepStrictEqual(urls, [CLONE_URLS.sshUrl, "https://github.com/octocat/t3code.git"]);
+    assert.strictEqual(result.remoteUrl, "https://github.com/octocat/t3code.git");
+  }),
+);
+
+it.effect("reports both failures when the HTTPS retry fails too", () =>
+  Effect.gen(function* () {
+    const urls: Array<string> = [];
+    const error = yield* Effect.flip(
+      cloneInTemporaryDirectory(rejectingSsh(urls, true), { remoteUrl: CLONE_URLS.sshUrl }),
+    );
+
+    assert.strictEqual(urls.length, 2);
+    assert.strictEqual(
+      error.detail,
+      "git@github.com: Permission denied (publickey). Cloning over HTTPS instead also failed: fatal: could not read Username for 'https://github.com': terminal prompts disabled",
+    );
+  }),
+);
+
+it.effect.each([
+  "git@ssh.dev.azure.com:v3/Fabrikam/Project1/fab_repo",
+  "ssh://user:pa@rt@ssh.dev.azure.com/v3/Fabrikam/Project1/fab_repo",
+  "ssh://us%40er:pa%40ss@ssh.dev.azure.com/v3/Fabrikam/Project1/fab_repo",
+])("retries Azure SSH URL %s using its HTTPS host and repository path", (remoteUrl) =>
+  Effect.gen(function* () {
+    const urls: Array<string> = [];
+    const result = yield* cloneInTemporaryDirectory(rejectingSsh(urls, false), {
+      remoteUrl,
+    });
+
+    assert.deepStrictEqual(urls, [
+      remoteUrl,
+      "https://dev.azure.com/Fabrikam/Project1/_git/fab_repo",
+    ]);
+    assert.strictEqual(result.remoteUrl, "https://dev.azure.com/Fabrikam/Project1/_git/fab_repo");
+  }),
+);
+
+it.effect.each([
+  ["the caller asked for SSH", "ssh", "authentication_failed"],
+  ["git failed for another reason", undefined, "remote_unreachable"],
+] as const)("does not retry over HTTPS when %s", ([, protocol, reason]) =>
+  Effect.gen(function* () {
+    const urls: Array<string> = [];
+    yield* Effect.flip(
+      cloneInTemporaryDirectory(rejectingSsh(urls, false, reason), {
+        remoteUrl: CLONE_URLS.sshUrl,
+        ...(protocol === undefined ? {} : { protocol }),
       }),
     );
-  }).pipe(Effect.provide(Layer.merge(NodeServices.layer, makeLayer({ git }))));
-}
+
+    assert.deepStrictEqual(urls, [CLONE_URLS.sshUrl]);
+  }),
+);
 
 it.effect.each([
   ["a plain token", "s3cret"],
@@ -332,35 +417,37 @@ it.effect.each([
       token === "abc@secret"
         ? "https://github.com"
         : token === "path-token"
-          ? "https://github.com/octocat/cinderdeck's.git"
-          : "https://github.com/octocat/cinderdeck.git";
-    const error = yield* cloneInTemporaryDirectory(
-      {
-        execute: (input) =>
-          Effect.gen(function* () {
-            const cloneUrl = input.args.at(-2)!;
-            // Git treats @ in a pathless URL's query as userinfo, losing the query delimiter.
-            const diagnosticUrl =
-              cloneUrl === "https://github.com?access_token=abc@secret"
-                ? "https://secret"
-                : cloneUrl;
-            yield* (
-              input.progress?.onStderrLine?.(
-                unquoted
-                  ? `fatal: ${diagnosticUrl}/info/refs not valid: is this a git repository?`
-                  : `fatal: unable to access '${diagnosticUrl}/': Could not resolve host: github.com`,
-              ) ?? Effect.void
-            );
-            return yield* new GitCommandError({
-              operation: input.operation,
-              command: "git",
-              cwd: input.cwd,
-              detail: "Git command exited with a non-zero status.",
-              exitCode: 128,
-            });
-          }),
-      },
-      { remoteUrl: `${remote}?access_token=${token}` },
+          ? "https://github.com/octocat/t3code's.git"
+          : "https://github.com/octocat/t3code.git";
+    const error = yield* Effect.flip(
+      cloneInTemporaryDirectory(
+        {
+          execute: (input) =>
+            Effect.gen(function* () {
+              const cloneUrl = input.args.at(-2)!;
+              // Git treats @ in a pathless URL's query as userinfo, losing the query delimiter.
+              const diagnosticUrl =
+                cloneUrl === "https://github.com?access_token=abc@secret"
+                  ? "https://secret"
+                  : cloneUrl;
+              yield* (
+                input.progress?.onStderrLine?.(
+                  unquoted
+                    ? `fatal: ${diagnosticUrl}/info/refs not valid: is this a git repository?`
+                    : `fatal: unable to access '${diagnosticUrl}/': Could not resolve host: github.com`,
+                ) ?? Effect.void
+              );
+              return yield* new GitCommandError({
+                operation: input.operation,
+                command: "git",
+                cwd: input.cwd,
+                detail: "Git command exited with a non-zero status.",
+                exitCode: 128,
+              });
+            }),
+        },
+        { remoteUrl: `${remote}?access_token=${token}` },
+      ),
     );
 
     assert.strictEqual(
@@ -376,20 +463,18 @@ it.effect("strips embedded credentials from the remote URL it reports", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const parent = yield* fs.makeTempDirectoryScoped({
-      prefix: "cinderdeck-source-control-redact-",
-    });
-    const destinationPath = path.join(parent, "cinderdeck");
+    const parent = yield* fs.makeTempDirectoryScoped({ prefix: "t3-source-control-redact-" });
+    const destinationPath = path.join(parent, "t3code");
     const cloneArgs: Array<ReadonlyArray<string>> = [];
     const result = yield* Effect.gen(function* () {
       const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
       return yield* service.prepareClone({
-        remoteUrl: "https://user:s3cret@github.com/octocat/cinderdeck.git",
+        remoteUrl: "https://user:s3cret@github.com/octocat/t3code.git",
         destinationPath,
       });
     }).pipe(
       Effect.provide(
-        makeLayer({
+        layer({
           git: {
             execute: (input) =>
               Effect.sync(() => {
@@ -400,19 +485,16 @@ it.effect("strips embedded credentials from the remote URL it reports", () =>
         }),
       ),
     );
-    assert.equal(result.remoteUrl, "https://github.com/octocat/cinderdeck.git");
-    // Git itself still receives the credentials.
-    assert.equal(result.cloneUrl, "https://user:s3cret@github.com/octocat/cinderdeck.git");
-  }).pipe(Effect.provide(NodeServices.layer)),
+    assert.equal(result.remoteUrl, "https://github.com/octocat/t3code.git");
+    assert.equal(result.cloneUrl, "https://user:s3cret@github.com/octocat/t3code.git");
+  }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
 
 it.effect("discards only a directory git wrote to", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const parent = yield* fs.makeTempDirectoryScoped({
-      prefix: "cinderdeck-source-control-discard-",
-    });
+    const parent = yield* fs.makeTempDirectoryScoped({ prefix: "t3-source-control-discard-" });
     const partial = path.join(parent, "partial");
     yield* fs.makeDirectory(path.join(partial, ".git"), { recursive: true });
     yield* fs.writeFileString(path.join(partial, "README.md"), "half");
@@ -420,7 +502,6 @@ it.effect("discards only a directory git wrote to", () =>
     yield* fs.makeDirectory(foreign);
     yield* fs.writeFileString(path.join(foreign, "notes.txt"), "mine");
 
-    // A file where the directory should be must not be removed either.
     const replaced = path.join(parent, "replaced");
     yield* fs.writeFileString(replaced, "not a directory");
 
@@ -431,38 +512,34 @@ it.effect("discards only a directory git wrote to", () =>
       assert.include(error.detail, "not from the clone");
       const replacedError = yield* Effect.flip(service.discardClone(replaced));
       assert.include(replacedError.detail, "could not be inspected");
-      // A destination that never got created is nothing to discard.
       yield* service.discardClone(path.join(parent, "missing"));
-    }).pipe(Effect.provide(makeLayer({})));
+    }).pipe(Effect.provide(layer({})));
 
-    // The partial clone is emptied but its directory (the workspace root) stays.
     assert.deepStrictEqual(yield* fs.readDirectory(partial), []);
     assert.deepStrictEqual(yield* fs.readDirectory(foreign), ["notes.txt"]);
     assert.strictEqual(yield* fs.readFileString(replaced), "not a directory");
-  }).pipe(Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
 
 it.effect("redacts query tokens and userinfo containing '@' from reported URLs", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const parent = yield* fs.makeTempDirectoryScoped({
-      prefix: "cinderdeck-source-control-redact2-",
-    });
+    const parent = yield* fs.makeTempDirectoryScoped({ prefix: "t3-source-control-redact2-" });
     yield* Effect.gen(function* () {
       const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
       const query = yield* service.prepareClone({
-        remoteUrl: "https://github.com/octocat/cinderdeck.git?access_token=s3cret",
+        remoteUrl: "https://github.com/octocat/t3code.git?access_token=s3cret",
         destinationPath: path.join(parent, "a"),
       });
-      assert.equal(query.remoteUrl, "https://github.com/octocat/cinderdeck.git");
+      assert.equal(query.remoteUrl, "https://github.com/octocat/t3code.git");
       const nested = yield* service.prepareClone({
-        remoteUrl: "https://user:pa@rt@github.com/octocat/cinderdeck.git",
+        remoteUrl: "https://user:pa@rt@github.com/octocat/t3code.git",
         destinationPath: path.join(parent, "b"),
       });
-      assert.equal(nested.remoteUrl, "https://github.com/octocat/cinderdeck.git");
-    }).pipe(Effect.provide(makeLayer({})));
-  }).pipe(Effect.provide(NodeServices.layer)),
+      assert.equal(nested.remoteUrl, "https://github.com/octocat/t3code.git");
+    }).pipe(Effect.provide(layer({})));
+  }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
 
 it.effect("preserves destination probe failures instead of treating them as missing paths", () => {
@@ -470,7 +547,7 @@ it.effect("preserves destination probe failures instead of treating them as miss
     _tag: "PermissionDenied",
     module: "FileSystem",
     method: "exists",
-    pathOrDescriptor: "/restricted/cinderdeck",
+    pathOrDescriptor: "/restricted/t3code",
   });
 
   return Effect.gen(function* () {
@@ -478,7 +555,7 @@ it.effect("preserves destination probe failures instead of treating them as miss
     const error = yield* Effect.flip(
       service.cloneRepository({
         remoteUrl: CLONE_URLS.sshUrl,
-        destinationPath: "/restricted/cinderdeck",
+        destinationPath: "/restricted/t3code",
       }),
     );
 
@@ -487,79 +564,11 @@ it.effect("preserves destination probe failures instead of treating them as miss
     assert.strictEqual(error.cause, fileSystemCause);
   }).pipe(
     Effect.provide(
-      makeLayer({
+      layer({
         fileSystem: FileSystem.makeNoop({
           exists: () => Effect.fail(fileSystemCause),
           makeDirectory: () => Effect.void,
         }),
-      }),
-    ),
-  );
-});
-
-it.effect("publishes by creating the repository, adding a remote, and pushing upstream", () => {
-  const createCalls: Array<{ cwd: string; repository: string; visibility: string }> = [];
-  const remoteCalls: Array<{ cwd: string; preferredName: string; url: string }> = [];
-  const pushCalls: Array<{ cwd: string; remoteName: string | null | undefined }> = [];
-  const provider = makeProvider({
-    createRepository: (input) =>
-      Effect.sync(() => {
-        createCalls.push({
-          cwd: input.cwd,
-          repository: input.repository,
-          visibility: input.visibility,
-        });
-        return CLONE_URLS;
-      }),
-  });
-
-  return Effect.gen(function* () {
-    const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
-    const result = yield* service.publishRepository({
-      cwd: "/workspace",
-      provider: "github",
-      repository: "octocat/cinderdeck",
-      visibility: "private",
-      remoteName: "origin",
-      protocol: "ssh",
-    });
-
-    assert.deepStrictEqual(result, {
-      repository: { provider: "github", ...CLONE_URLS },
-      remoteName: "origin",
-      remoteUrl: CLONE_URLS.sshUrl,
-      branch: "feature/remote-v1",
-      upstreamBranch: "origin/feature/remote-v1",
-      status: "pushed",
-    });
-    assert.deepStrictEqual(createCalls, [
-      { cwd: "/workspace", repository: "octocat/cinderdeck", visibility: "private" },
-    ]);
-    assert.deepStrictEqual(remoteCalls, [
-      { cwd: "/workspace", preferredName: "origin", url: CLONE_URLS.sshUrl },
-    ]);
-    assert.deepStrictEqual(pushCalls, [{ cwd: "/workspace", remoteName: "origin" }]);
-  }).pipe(
-    Effect.provide(
-      makeLayer({
-        provider,
-        git: {
-          ensureRemote: (input) =>
-            Effect.sync(() => {
-              remoteCalls.push(input);
-              return "origin";
-            }),
-          pushCurrentBranch: (cwd, _fallbackBranch, options) =>
-            Effect.sync(() => {
-              pushCalls.push({ cwd, remoteName: options?.remoteName });
-              return {
-                status: "pushed" as const,
-                branch: "feature/remote-v1",
-                upstreamBranch: "origin/feature/remote-v1",
-                setUpstream: true,
-              };
-            }),
-        },
       }),
     ),
   );
@@ -572,8 +581,8 @@ it.effect("publishes to the remote name returned by ensureRemote", () => {
     const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
     const result = yield* service.publishRepository({
       cwd: "/workspace",
-      provider: "github",
-      repository: "octocat/cinderdeck",
+      provider: SourceControlProviderKind.make("github"),
+      repository: "octocat/t3code",
       visibility: "private",
       remoteName: "origin",
       protocol: "ssh",
@@ -583,7 +592,7 @@ it.effect("publishes to the remote name returned by ensureRemote", () => {
     assert.deepStrictEqual(pushCalls, [{ cwd: "/workspace", remoteName: "origin-1" }]);
   }).pipe(
     Effect.provide(
-      makeLayer({
+      layer({
         git: {
           ensureRemote: () => Effect.succeed("origin-1"),
           pushCurrentBranch: (cwd, _fallbackBranch, options) =>
@@ -602,21 +611,125 @@ it.effect("publishes to the remote name returned by ensureRemote", () => {
   );
 });
 
+function failingPush(reason?: GitCommandError["reason"]) {
+  return {
+    pushCurrentBranch: (cwd: string) =>
+      Effect.fail(
+        new GitCommandError({
+          operation: "GitVcsDriver.pushCurrentBranch.pushWithRequestedRemote",
+          command: "git",
+          cwd,
+          ...(reason === undefined ? {} : { reason }),
+          detail: "Git command exited with a non-zero status.",
+        }),
+      ),
+  } satisfies Partial<GitVcsDriver.GitVcsDriver["Service"]>;
+}
+
+it.effect("explains a rejected SSH push after creating the repository", () =>
+  Effect.gen(function* () {
+    const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
+    const error = yield* Effect.flip(
+      service.publishRepository({
+        cwd: "/workspace",
+        provider: SourceControlProviderKind.make("github"),
+        repository: "octocat/t3code",
+        visibility: "private",
+        protocol: "ssh",
+      }),
+    );
+
+    assert.strictEqual(error.operation, "publishRepository");
+    assert.strictEqual(
+      error.detail,
+      'Created octocat/t3code and added it as remote "origin", but the push failed because SSH authentication was rejected. Add an SSH key to your account, or switch the remote to HTTPS with "git remote set-url origin https://github.com/octocat/t3code", then push again.',
+    );
+    assert.instanceOf(error.cause, GitCommandError);
+  }).pipe(Effect.provide(layer({ git: failingPush("authentication_failed") }))),
+);
+
+// regression: an auto-selected SSH remote kept failing every later fetch after a refused push
+it.effect("switches an auto-selected remote to HTTPS when the SSH push is refused", () => {
+  const gitArgs: Array<ReadonlyArray<string>> = [];
+  let pushAttempts = 0;
+  return Effect.gen(function* () {
+    const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
+    const result = yield* service.publishRepository({
+      cwd: "/workspace",
+      provider: SourceControlProviderKind.make("github"),
+      repository: "octocat/t3code",
+      visibility: "private",
+    });
+
+    assert.strictEqual(result.status, "pushed");
+    assert.strictEqual(result.remoteUrl, CLONE_URLS.url);
+    assert.strictEqual(pushAttempts, 2);
+    assert.deepStrictEqual(gitArgs, [
+      ["rev-parse", "--verify", "HEAD"],
+      ["remote", "set-url", "origin", CLONE_URLS.url],
+    ]);
+  }).pipe(
+    Effect.provide(
+      layer({
+        git: {
+          execute: (input) =>
+            Effect.sync(() => {
+              gitArgs.push(input.args);
+              return processOutput();
+            }),
+          pushCurrentBranch: (cwd) => {
+            pushAttempts += 1;
+            return pushAttempts === 1
+              ? failingPush("authentication_failed").pushCurrentBranch(cwd)
+              : Effect.succeed({
+                  status: "pushed" as const,
+                  branch: "main",
+                  upstreamBranch: "origin/main",
+                  setUpstream: true,
+                });
+          },
+        },
+      }),
+    ),
+  );
+});
+
+// regression: #19219 publishing did not explain why the first push failed
+it.effect("says the repository exists when an unclassified publish push fails", () =>
+  Effect.gen(function* () {
+    const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
+    const error = yield* Effect.flip(
+      service.publishRepository({
+        cwd: "/workspace",
+        provider: SourceControlProviderKind.make("github"),
+        repository: "octocat/t3code",
+        visibility: "private",
+        protocol: "https",
+      }),
+    );
+
+    assert.strictEqual(
+      error.detail,
+      'Created octocat/t3code and added it as remote "origin", but the push failed. Fix the problem, then push again.',
+    );
+  }).pipe(Effect.provide(layer({ git: failingPush() }))),
+);
+
 it.effect("publish succeeds with status remote_added when the local repo has no commits", () => {
   let pushCalls = 0;
   return Effect.gen(function* () {
     const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
     const result = yield* service.publishRepository({
       cwd: "/workspace",
-      provider: "github",
-      repository: "octocat/cinderdeck",
+      provider: SourceControlProviderKind.make("github"),
+      repository: "octocat/t3code",
       visibility: "private",
       remoteName: "origin",
       protocol: "ssh",
     });
 
     assert.deepStrictEqual(result, {
-      repository: { provider: "github", ...CLONE_URLS },
+      repository: { provider: SourceControlProviderKind.make("github"), ...CLONE_URLS },
       remoteName: "origin",
       remoteUrl: CLONE_URLS.sshUrl,
       branch: "main",
@@ -625,7 +738,7 @@ it.effect("publish succeeds with status remote_added when the local repo has no 
     assert.strictEqual(pushCalls, 0);
   }).pipe(
     Effect.provide(
-      makeLayer({
+      layer({
         git: {
           execute: (input) =>
             input.args[0] === "rev-parse"

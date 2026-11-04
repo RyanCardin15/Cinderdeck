@@ -12,9 +12,7 @@ import * as DesktopAppSettings from "../../settings/DesktopAppSettings.ts";
 import * as DesktopWindow from "../../window/DesktopWindow.ts";
 import { getLocalEnvironmentEnabled, setLocalEnvironmentEnabled } from "./localEnvironment.ts";
 
-// `relaunch` declares the lifecycle runtime services as requirements even
-// though the mocked relaunch never touches them.
-const unusedLifecycleRuntimeLayer = Layer.mergeAll(
+const layerUnusedLifecycleRuntime = Layer.mergeAll(
   DesktopShutdown.layer,
   DesktopState.layer,
   Layer.succeed(
@@ -34,7 +32,7 @@ describe("local environment IPC", () => {
     const layer = Layer.mergeAll(
       DesktopAppSettings.layerTest({
         ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
-        tailscaleServeEnabled: true,
+        wslBackendEnabled: true,
       }),
       Layer.mock(DesktopLifecycle.DesktopLifecycle, {
         relaunch: (reason) =>
@@ -42,7 +40,7 @@ describe("local environment IPC", () => {
             relaunchReasons.push(reason);
           }),
       }),
-      unusedLifecycleRuntimeLayer,
+      layerUnusedLifecycleRuntime,
     );
     return Effect.gen(function* () {
       yield* setLocalEnvironmentEnabled.handler(false);
@@ -53,7 +51,7 @@ describe("local environment IPC", () => {
       yield* setLocalEnvironmentEnabled.handler(true);
       assert.isTrue(yield* getLocalEnvironmentEnabled.handler());
       const appSettings = yield* DesktopAppSettings.DesktopAppSettings;
-      assert.isTrue((yield* appSettings.get).tailscaleServeEnabled);
+      assert.isTrue((yield* appSettings.get).wslBackendEnabled);
       assert.deepEqual(relaunchReasons, [
         "localEnvironmentEnabled=false",
         "localEnvironmentEnabled=true",

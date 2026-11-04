@@ -3,7 +3,7 @@ import type {
   OrchestrationGetFullThreadDiffResult,
   OrchestrationGetTurnDiffResult,
   ThreadId,
-} from "@cinderdeck/contracts";
+} from "@t3tools/contracts";
 
 export type CheckpointDiffResult =
   | OrchestrationGetTurnDiffResult

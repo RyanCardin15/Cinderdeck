@@ -1,5 +1,7 @@
 # Cinderdeck releases
 
+The repository is private. Its raw GitHub appcast and release assets require authentication. Before distributing an update, configure Sparkle with a feed and signed archive URLs that installed copies can access.
+
 Cinderdeck has its own release line, beginning at **1.0.0 (200)**. Its repository is `RyanCardin15/Cinderdeck`; its default branch is `main`. Upstream Snapzy tags and history are provenance, not Cinderdeck release artifacts.
 
 GitHub Actions is disabled for this repository. Builds, checks, signing, and release publication run locally and are initiated by a maintainer. Pull requests, pushes, tags, and release commits do not automatically build or publish anything.

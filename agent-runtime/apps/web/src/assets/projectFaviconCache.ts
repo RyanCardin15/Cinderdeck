@@ -3,9 +3,9 @@ import {
   createProjectFaviconImageLoader,
   PROJECT_FAVICON_MAX_DATA_URL_LENGTH,
   PROJECT_FAVICON_THUMBNAIL_SIZE,
-} from "@cinderdeck/client-runtime/project-favicon-cache";
+} from "@t3tools/client-runtime/project-favicon-cache";
 
-const DATABASE_NAME = "deckhand:project-favicons";
+const DATABASE_NAME = "t3code:project-favicons";
 const DATABASE_VERSION = 2;
 const STORE_NAME = "images";
 let database: Promise<IDBDatabase> | undefined;
@@ -45,7 +45,6 @@ async function withStore<A>(
   return request?.result;
 }
 
-/** Rasterizes a bitmap that is too large to inline, retrying at half size. */
 async function downscaleProjectFavicon(
   image: { readonly mimeType: string; readonly bytes: Uint8Array<ArrayBuffer> },
   signal: AbortSignal,

@@ -1,5 +1,7 @@
 {
   "id": "/",
+  "name": "Cinderdeck",
+  "short_name": "Cinderdeck",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

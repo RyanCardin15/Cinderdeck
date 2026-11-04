@@ -2,7 +2,7 @@ import type {
   ResourceTelemetryProcessCategory,
   ServerProcessResourceHistoryInput,
   ServerProcessResourceHistoryResult,
-} from "@cinderdeck/contracts";
+} from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -17,7 +17,7 @@ export class ProcessResourceMonitor extends Context.Service<
       input: ServerProcessResourceHistoryInput,
     ) => Effect.Effect<ServerProcessResourceHistoryResult>;
   }
->()("@cinderdeck/server/diagnostics/ProcessResourceMonitor") {}
+>()("t3/diagnostics/ProcessResourceMonitor") {}
 
 function isLegacyBackendCategory(category: ResourceTelemetryProcessCategory): boolean {
   return (
@@ -28,7 +28,7 @@ function isLegacyBackendCategory(category: ResourceTelemetryProcessCategory): bo
   );
 }
 
-/** @public Service construction is part of the canonical Effect module API. */
+/** @public */
 export const make = Effect.fn("makeProcessResourceMonitor")(function* () {
   const telemetry = yield* ResourceTelemetry.ResourceTelemetry;
   const readHistory: ProcessResourceMonitor["Service"]["readHistory"] = (input) =>

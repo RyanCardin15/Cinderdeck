@@ -1,54 +1,19 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { it as effectIt } from "@effect/vitest";
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import { parseKeybindingShortcut } from "@t3tools/shared/keybindings";
+import * as Effect from "effect/Effect";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   accessibleWindowElementTree,
   accessibleWindowText,
-  capturedImageBounds,
   compactAccessibilityTree,
   findAccessibleWindow,
-  findCaptureSource,
-  hideAndWaitForBlur,
-  snapShotShortcutRegistrationFailureMessage,
-  snapShotShortcutSystemConflict,
+  isWaylandSession,
   toElectronAccelerator,
 } from "./snapShot.ts";
-import { DesktopSnapShotError } from "./DesktopSnapShot.ts";
-
-describe("window capture errors", () => {
-  it.each([
-    ["unsupported", "SnapShots are not supported here."],
-    ["disabled", "Enable SnapShots in Settings first."],
-    ["no-window-selected", "No window was selected."],
-    ["window-unavailable", "The active window is not available for capture."],
-    ["capture", "Could not capture the active window."],
-  ] as const)("keeps %s failures user-facing", (operation, message) => {
-    expect(new DesktopSnapShotError({ operation }).message).toBe(message);
-  });
-});
 
 describe("accessibleWindowText", () => {
-  it("keeps unique names and values in tree order", () => {
-    expect(
-      accessibleWindowText(
-        {
-          name: "Settings",
-          children: [
-            {
-              name: "General",
-              children: [],
-            },
-            {
-              name: "Name",
-              value: "Bilal",
-              children: [],
-            },
-          ],
-        },
-        100,
-      ),
-    ).toBe("Settings\nGeneral\nName\nBilal");
-  });
-
   it("caps large text without splitting a surrogate pair", () => {
     expect(
       accessibleWindowText(
@@ -122,6 +87,72 @@ describe("accessibleWindowElementTree", () => {
     });
   });
 
+  it("uses null child bounds when a Wayland provider reports only the root origin", async () => {
+    const tree = await accessibleWindowElementTree(
+      {
+        role: "window",
+        bounds: { x: 0, y: 0, width: 800, height: 600 },
+        children: async () => [
+          {
+            role: "button",
+            name: "Save",
+            bounds: { x: 0, y: 0, width: 100, height: 50 },
+            children: async () => [],
+          },
+        ],
+      },
+      { x: 0, y: 0, width: 800, height: 600 },
+      { width: 1_600, height: 1_200 },
+      { locationsReliable: true, verifyDescendantLocations: true },
+    );
+
+    expect(tree?.root.bounds).toEqual({ x: 0, y: 0, width: 1_600, height: 1_200 });
+    expect(tree?.root.children[0]?.bounds).toBeNull();
+  });
+
+  it("keeps Wayland child bounds after observing real position variation", async () => {
+    const tree = await accessibleWindowElementTree(
+      {
+        role: "window",
+        bounds: { x: 0, y: 0, width: 800, height: 600 },
+        children: async () => [
+          {
+            role: "button",
+            name: "Save",
+            bounds: { x: 20, y: 30, width: 100, height: 50 },
+            children: async () => [],
+          },
+        ],
+      },
+      { x: 0, y: 0, width: 800, height: 600 },
+      { width: 1_600, height: 1_200 },
+      { locationsReliable: true, verifyDescendantLocations: true },
+    );
+
+    expect(tree?.root.children[0]?.bounds).toEqual({ x: 40, y: 60, width: 200, height: 100 });
+  });
+
+  it("does not mistake a title-bar offset for varying descendant positions", async () => {
+    const tree = await accessibleWindowElementTree(
+      {
+        role: "window",
+        bounds: { x: 100, y: 229, width: 800, height: 571 },
+        children: async () => [
+          {
+            role: "button",
+            name: "Save",
+            bounds: { x: 100, y: 229, width: 100, height: 50 },
+            children: async () => [],
+          },
+        ],
+      },
+      { x: 100, y: 200, width: 800, height: 600 },
+      { width: 1_600, height: 1_200 },
+      { locationsReliable: true, verifyDescendantLocations: true },
+    );
+    expect(tree?.root.children[0]?.bounds).toBeNull();
+  });
+
   it("collapses anonymous wrapper chains and removes duplicate text fields", async () => {
     const tree = await accessibleWindowElementTree(
       {
@@ -193,23 +224,6 @@ describe("accessibleWindowElementTree", () => {
     expect(tree?.root.children.length).toBeLessThan(10);
     expect(JSON.stringify(tree).length).toBeLessThanOrEqual(32_000);
   });
-
-  it.each(["name", "value", "description"] as const)(
-    "reports clipped %s text in partial trees",
-    async (field) => {
-      const tree = await accessibleWindowElementTree(
-        {
-          role: "window",
-          children: async () => [{ role: "text_area", [field]: "x".repeat(8_001) }],
-        },
-        { x: 0, y: 0, width: 800, height: 600 },
-        { width: 800, height: 600 },
-      );
-
-      expect(tree?.truncated).toBe(true);
-      expect(tree?.root.children[0]?.[field]?.length).toBeLessThan(8_001);
-    },
-  );
 });
 
 describe("compactAccessibilityTree", () => {
@@ -234,33 +248,63 @@ describe("compactAccessibilityTree", () => {
   });
 });
 
-describe("capturedImageBounds", () => {
-  it("clips locations to the attached image", () => {
-    expect(
-      capturedImageBounds(
-        { x: 50, y: 150, width: 200, height: 200 },
-        { x: 100, y: 200, width: 800, height: 600 },
-        { width: 1_600, height: 1_200 },
-      ),
-    ).toEqual({ x: 0, y: 0, width: 300, height: 300 });
-  });
-
-  it("returns null when an accessibility provider omits a location", () => {
-    expect(
-      capturedImageBounds(
-        null,
-        { x: 0, y: 0, width: 800, height: 600 },
-        { width: 800, height: 600 },
-      ),
-    ).toBeNull();
-  });
-});
-
 describe("findAccessibleWindow", () => {
   const captured = {
     title: "Editor",
     bounds: { x: 100, y: 200, width: 800, height: 600 },
   };
+
+  const chromeCapture = {
+    title: "Issues · pingdotgg/t3code",
+    bounds: captured.bounds,
+    platform: "darwin" as const,
+    bundleId: "com.google.Chrome",
+  };
+  const chromeWindow = {
+    name: `${chromeCapture.title} - Google Chrome – Profile`,
+    bounds: chromeCapture.bounds,
+    active: true,
+  };
+
+  it("uses a browser suffix only when no exact title matches", () => {
+    const exact = { name: chromeCapture.title, bounds: chromeCapture.bounds };
+    expect(findAccessibleWindow([chromeWindow, exact], chromeCapture)).toBe(exact);
+    expect(findAccessibleWindow([chromeWindow], chromeCapture)).toBe(chromeWindow);
+  });
+
+  it("rejects browser suffix matches with wrong bounds, page titles, or ambiguous windows", () => {
+    expect(
+      findAccessibleWindow(
+        [{ ...chromeWindow, bounds: { ...chromeWindow.bounds, x: 0 } }],
+        chromeCapture,
+      ),
+    ).toBeUndefined();
+    expect(
+      findAccessibleWindow([chromeWindow, { ...chromeWindow, active: false }], chromeCapture),
+    ).toBeUndefined();
+    expect(
+      findAccessibleWindow([chromeWindow], { ...chromeCapture, title: "Issues" }),
+    ).toBeUndefined();
+    expect(
+      findAccessibleWindow([chromeWindow], {
+        ...chromeCapture,
+        title: `${chromeCapture.title} - Google Chrome`,
+      }),
+    ).toBeUndefined();
+  });
+
+  it("keeps strict titles outside macOS Chrome and Chromium", () => {
+    for (const identity of [
+      { platform: "linux" as const, bundleId: "com.google.Chrome" },
+      { platform: "win32" as const, bundleId: "com.google.Chrome" },
+      { platform: "darwin" as const, bundleId: "com.example.Editor" },
+      { platform: "darwin" as const, bundleId: undefined },
+    ]) {
+      expect(
+        findAccessibleWindow([chromeWindow], { ...chromeCapture, ...identity }),
+      ).toBeUndefined();
+    }
+  });
 
   it("matches one window by its captured bounds", () => {
     const windows = [
@@ -269,17 +313,6 @@ describe("findAccessibleWindow", () => {
     ];
 
     expect(findAccessibleWindow(windows, captured)).toBe(windows[1]);
-  });
-
-  it("uses the matched source title when macOS omits the active title", () => {
-    const windows = [{ name: "Editor", bounds: captured.bounds }];
-    expect(
-      findAccessibleWindow(windows, {
-        ...captured,
-        title: "",
-        sourceTitle: "Editor",
-      }),
-    ).toBe(windows[0]);
   });
 
   it("uses the captured source title when the active title changed", () => {
@@ -312,254 +345,168 @@ describe("findAccessibleWindow", () => {
     ).toBeUndefined();
   });
 
-  it("does not use a title match when the bounds differ", () => {
+  it("matches a Wayland window whose accessibility provider omits its screen position", () => {
+    const captured = {
+      title: "hello world (Draft) - Text Editor",
+      bounds: { x: 479, y: 342, width: 700, height: 520 },
+    };
+    const windows = [{ name: captured.title, bounds: { x: 0, y: 0, width: 700, height: 520 } }];
+
+    expect(findAccessibleWindow(windows, captured, "wayland")).toBe(windows[0]);
+    expect(findAccessibleWindow(windows, captured)).toBeUndefined();
+  });
+
+  it("matches a decorated Wayland window by its verified client size", () => {
+    const clientBounds = { x: 100, y: 229, width: 800, height: 571 };
+    const windows = [{ name: captured.title, bounds: { ...clientBounds, x: 0, y: 0 } }];
+    expect(findAccessibleWindow(windows, { ...captured, clientBounds }, "wayland")).toBe(
+      windows[0],
+    );
+    expect(findAccessibleWindow(windows, { ...captured, clientBounds })).toBeUndefined();
+    expect(findAccessibleWindow(windows, captured, "wayland")).toBeUndefined();
+  });
+
+  it("does not guess between client-size and frame-size matches", () => {
+    const clientBounds = { x: 100, y: 229, width: 800, height: 571 };
+    const windows = [
+      { name: captured.title, bounds: clientBounds },
+      { name: captured.title, bounds: captured.bounds },
+    ];
+    expect(findAccessibleWindow(windows, { ...captured, clientBounds }, "wayland")).toBeUndefined();
     expect(
       findAccessibleWindow(
-        [{ name: "Editor", bounds: { x: 0, y: 0, width: 800, height: 600 } }],
-        captured,
+        [
+          { name: "Private", bounds: clientBounds },
+          { name: captured.title, bounds: { ...clientBounds, height: 550 } },
+        ],
+        { ...captured, clientBounds },
+        "wayland",
       ),
     ).toBeUndefined();
+  });
+
+  it("distinguishes same-title Wayland windows by size", () => {
+    const windows = [
+      { name: "Editor", bounds: { x: 0, y: 0, width: 400, height: 300 } },
+      { name: "Editor", bounds: { x: 0, y: 0, width: 801, height: 599 } },
+    ];
+
+    expect(findAccessibleWindow(windows, captured, "wayland")).toBe(windows[1]);
+  });
+
+  it("does not match an untitled Wayland window by size alone", () => {
+    const windows = [{ name: "", bounds: captured.bounds }];
+
+    expect(findAccessibleWindow(windows, { ...captured, title: "" }, "wayland")).toBeUndefined();
   });
 
   it("accepts one PID-scoped untitled window whose bounds match", () => {
     const windows = [{ name: null, bounds: captured.bounds }];
 
-    expect(findAccessibleWindow(windows, captured, { allowUntitledUniqueBounds: true })).toBe(
-      windows[0],
-    );
-    expect(findAccessibleWindow(windows, captured)).toBeUndefined();
-  });
-
-  it("rejects ambiguous PID-scoped untitled windows even when bounds match", () => {
-    const windows = [
-      { name: null, bounds: captured.bounds },
-      { name: "", bounds: captured.bounds },
-    ];
-
     expect(
-      findAccessibleWindow(windows, captured, { allowUntitledUniqueBounds: true }),
-    ).toBeUndefined();
+      findAccessibleWindow(windows, captured, "wayland", { allowUntitledUniqueBounds: true }),
+    ).toBe(windows[0]);
+    expect(findAccessibleWindow(windows, captured, "wayland")).toBeUndefined();
   });
 
   it("does not fall back to a differently titled PID-scoped window with matching bounds", () => {
     const windows = [{ name: "Preferences", bounds: captured.bounds }];
 
     expect(
-      findAccessibleWindow(windows, captured, { allowUntitledUniqueBounds: true }),
+      findAccessibleWindow(windows, captured, "wayland", { allowUntitledUniqueBounds: true }),
     ).toBeUndefined();
   });
 
   it("does not use unique bounds when a titled match is already ambiguous", () => {
     const windows = [
       { name: "Editor", bounds: captured.bounds },
-      { name: "Editor", bounds: { ...captured.bounds, x: 101, y: 201 } },
+      { name: "Editor", bounds: { ...captured.bounds, x: 0, y: 0 } },
     ];
 
     expect(
-      findAccessibleWindow(windows, captured, { allowUntitledUniqueBounds: true }),
+      findAccessibleWindow(windows, captured, "wayland", { allowUntitledUniqueBounds: true }),
     ).toBeUndefined();
   });
 
-  it("keeps exact title matching", () => {
+  it.each([
+    ["⠋ t3code", "t3code"],
+    ["t3code", "⠙ t3code"],
+  ])("matches a Wayland spinner starting or stopping: %s → %s", (title, name) => {
+    const windows = [{ name, bounds: captured.bounds }];
+
+    expect(findAccessibleWindow(windows, { ...captured, title }, "wayland")).toBe(windows[0]);
+  });
+
+  it.each([
+    ["⠋ t3code", "⠙ private"],
+    ["t3code ⠋", "t3code ⠙"],
+    ["⠋t3code", "⠙t3code"],
+    ["⠁ t3code", "⠙ t3code"],
+    ["⠋", "⠋"],
+  ])("does not guess a Wayland title match: %s → %s", (title, name) => {
     expect(
-      findAccessibleWindow([{ name: "⠙ cinderdeck", bounds: captured.bounds }], {
-        ...captured,
-        title: "⠋ cinderdeck",
-      }),
+      findAccessibleWindow([{ name, bounds: captured.bounds }], { ...captured, title }, "wayland"),
     ).toBeUndefined();
-  });
-});
-
-describe("hideAndWaitForBlur", () => {
-  it("waits for a delayed blur after hiding the window", async () => {
-    let blur: (() => void) | undefined;
-    let settled = false;
-    const hidden = hideAndWaitForBlur({
-      hide: () => undefined,
-      once: (_event, listener) => {
-        blur = listener;
-      },
-      removeListener: () => undefined,
-    }).then(() => {
-      settled = true;
-    });
-
-    await Promise.resolve();
-    expect(settled).toBe(false);
-    blur?.();
-    await hidden;
-    expect(settled).toBe(true);
-  });
-
-  it("rejects when the hidden window never blurs", async () => {
-    vi.useFakeTimers();
-    try {
-      let rejected = false;
-      const hidden = hideAndWaitForBlur({
-        hide: () => undefined,
-        once: () => undefined,
-        removeListener: () => undefined,
-      }).catch(() => {
-        rejected = true;
-      });
-
-      await vi.advanceTimersByTimeAsync(1_000);
-      expect(rejected).toBe(true);
-      await hidden;
-    } finally {
-      vi.useRealTimers();
-    }
   });
 });
 
 describe("toElectronAccelerator", () => {
-  it("converts the default portable shortcut", () => {
-    expect(
-      toElectronAccelerator({
-        key: "2",
-        metaKey: false,
-        ctrlKey: false,
-        shiftKey: true,
-        altKey: false,
-        modKey: true,
-      }),
-    ).toBe("CommandOrControl+Shift+2");
-  });
-
-  it("maps the portable meta key to Super", () => {
-    expect(
-      toElectronAccelerator({
-        key: "k",
-        metaKey: true,
-        ctrlKey: false,
-        shiftKey: false,
-        altKey: false,
-        modKey: false,
-      }),
-    ).toBe("Super+K");
-  });
-
-  it("normalizes Electron key names", () => {
-    expect(
-      toElectronAccelerator({
-        key: "ArrowUp",
-        metaKey: false,
-        ctrlKey: true,
-        shiftKey: false,
-        altKey: true,
-        modKey: false,
-      }),
-    ).toBe("Control+Alt+Up");
+  // The settings recorder stores shortcuts through parseKeybindingShortcut, which lowercases keys.
+  it.each([
+    ["mod+shift+arrowup", "CommandOrControl+Shift+Up"],
+    ["mod+shift+arrowdown", "CommandOrControl+Shift+Down"],
+    ["ctrl+alt+arrowleft", "Control+Alt+Left"],
+    ["ctrl+alt+arrowright", "Control+Alt+Right"],
+    ["mod+shift+esc", "CommandOrControl+Shift+Esc"],
+    ["mod+shift+space", "CommandOrControl+Shift+Space"],
+    ["mod+shift+2", "CommandOrControl+Shift+2"],
+  ])("maps a recorded %s to an Electron accelerator", (recorded, accelerator) => {
+    expect(toElectronAccelerator(parseKeybindingShortcut(recorded)!)).toBe(accelerator);
   });
 });
 
-describe("findCaptureSource", () => {
-  const sources = [
-    { id: "window:42:0", name: "Terminal" },
-    { id: "window:84:0", name: "Editor" },
-  ];
-
-  it("matches the native window id before its title", () => {
-    expect(
-      findCaptureSource(sources, {
-        id: 84,
-        title: "Changed title",
+describe("isWaylandSession", () => {
+  effectIt.effect(
+    "falls back to a live runtime directory socket when session variables are stripped",
+    () =>
+      Effect.gen(function* () {
+        if ((yield* HostProcess.Platform) !== "linux") return;
+        yield* Effect.promise(async () => {
+          const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+          const { createServer } = await import("node:net");
+          const { tmpdir } = await import("node:os");
+          const { join } = await import("node:path");
+          const runtimeDirectory = await mkdtemp(join(tmpdir(), "t3-wayland-"));
+          const socketPath = join(runtimeDirectory, "wayland-0");
+          const server = createServer();
+          try {
+            expect(isWaylandSession("linux", { XDG_RUNTIME_DIR: runtimeDirectory })).toBe(false);
+            await writeFile(socketPath, "");
+            expect(isWaylandSession("linux", { XDG_RUNTIME_DIR: runtimeDirectory })).toBe(false);
+            await rm(socketPath);
+            await new Promise<void>((resolve, reject) => {
+              server.once("error", reject);
+              server.listen(socketPath, resolve);
+            });
+            expect(isWaylandSession("linux", { XDG_RUNTIME_DIR: runtimeDirectory })).toBe(true);
+            expect(
+              isWaylandSession("linux", {
+                XDG_RUNTIME_DIR: runtimeDirectory,
+                XDG_SESSION_TYPE: "x11",
+              }),
+            ).toBe(false);
+            expect(isWaylandSession("linux", { XDG_RUNTIME_DIR: "/nonexistent-t3-test" })).toBe(
+              false,
+            );
+          } finally {
+            if (server.listening) {
+              await new Promise<void>((resolve, reject) => {
+                server.close((error) => (error ? reject(error) : resolve()));
+              });
+            }
+            await rm(runtimeDirectory, { recursive: true, force: true });
+          }
+        });
       }),
-    ).toEqual(sources[1]);
-  });
-
-  it("falls back to a unique title match", () => {
-    expect(
-      findCaptureSource(sources, {
-        id: 100,
-        title: "Terminal",
-      }),
-    ).toEqual(sources[0]);
-  });
-
-  it("does not guess when a title is ambiguous", () => {
-    expect(
-      findCaptureSource(
-        [
-          { id: "window:42:0", name: "Editor" },
-          { id: "window:84:0", name: "Editor" },
-        ],
-        {
-          id: 100,
-          title: "Editor",
-        },
-      ),
-    ).toBeUndefined();
-  });
-});
-
-describe("snapShotShortcutRegistrationFailureMessage", () => {
-  it("distinguishes a modifier listener failure from a reserved key chord", () => {
-    expect(
-      snapShotShortcutRegistrationFailureMessage({ kind: "both-shift-keys" }, "darwin"),
-    ).toMatch(/Shift \+ Shift is not available/);
-    expect(
-      snapShotShortcutRegistrationFailureMessage(
-        { kind: "modifier-pair", modifier: "meta" },
-        "darwin",
-      ),
-    ).toMatch(/Command \+ Command is not available/);
-    expect(
-      snapShotShortcutRegistrationFailureMessage(
-        { kind: "modifier-pair", modifier: "meta" },
-        "linux",
-      ),
-    ).toMatch(/Super \+ Super is not available/);
-    expect(
-      snapShotShortcutRegistrationFailureMessage(
-        {
-          key: "2",
-          metaKey: false,
-          ctrlKey: false,
-          shiftKey: true,
-          altKey: false,
-          modKey: true,
-        },
-        "darwin",
-      ),
-    ).toMatch(/already used/);
-  });
-});
-
-describe("snapShotShortcutSystemConflict", () => {
-  it("blocks shortcuts that would break typing or common app actions", () => {
-    expect(
-      snapShotShortcutSystemConflict({
-        key: "s",
-        metaKey: false,
-        ctrlKey: false,
-        shiftKey: true,
-        altKey: false,
-        modKey: false,
-      }),
-    ).toMatch(/typing/);
-    expect(
-      snapShotShortcutSystemConflict({
-        key: "c",
-        metaKey: false,
-        ctrlKey: false,
-        shiftKey: false,
-        altKey: false,
-        modKey: true,
-      }),
-    ).toMatch(/Copy/);
-  });
-
-  it("allows a specific multi-modifier shortcut", () => {
-    expect(
-      snapShotShortcutSystemConflict({
-        key: "2",
-        metaKey: false,
-        ctrlKey: false,
-        shiftKey: true,
-        altKey: false,
-        modKey: true,
-      }),
-    ).toBeNull();
-  });
+  );
 });

@@ -4,15 +4,17 @@ import {
   type ModelSelection,
   ProviderDriverKind,
   type ServerProviderModel,
-} from "@cinderdeck/contracts";
+  type ServerProviderUpdateRequiredModel,
+} from "@t3tools/contracts";
+import type { ModelInfo as ClaudeModelInfo } from "@anthropic-ai/claude-agent-sdk";
 import * as Option from "effect/Option";
 import {
   getModelSelectionStringOptionValue,
   getProviderOptionCurrentValue,
   getProviderOptionDescriptors,
   readCustomModelEntries,
-} from "@cinderdeck/shared/model";
-import { compareSemverVersions } from "@cinderdeck/shared/semver";
+} from "@t3tools/shared/model";
+import { compareSemverVersions } from "@t3tools/shared/semver";
 
 import {
   type ClaudeCodeCompatibility,
@@ -20,11 +22,8 @@ import {
   decodeClaudeModelAdapter,
   decodeClaudeProfileAdapter,
 } from "./ClaudeModelManifest.ts";
-import {
-  BUNDLED_MODEL_MANIFEST,
-  type ModelManifestData,
-  resolveProviderCatalog,
-} from "./ModelManifest.ts";
+import * as ModelCatalog from "@t3tools/provider-core/server/ModelCatalog";
+import { BUNDLED_MODEL_MANIFEST, resolveProviderCatalog } from "./ModelManifest.ts";
 
 const CLAUDE = ProviderDriverKind.make("claudeAgent");
 const EMPTY_CAPABILITIES: ModelCapabilities = { optionDescriptors: [] };
@@ -39,8 +38,9 @@ export interface ClaudeModelCatalog {
   readonly models: ReadonlyArray<ClaudeCatalogModel>;
 }
 
-function tryResolveClaudeModelCatalog(manifest: ModelManifestData): ClaudeModelCatalog | null {
-  const resolved = resolveProviderCatalog(manifest, CLAUDE);
+function tryResolveClaudeModelCatalog(
+  resolved: ModelCatalog.ProviderCatalog | undefined,
+): ClaudeModelCatalog | null {
   if (!resolved) return null;
 
   const models: Array<ClaudeCatalogModel> = [];
@@ -49,7 +49,7 @@ function tryResolveClaudeModelCatalog(manifest: ModelManifestData): ClaudeModelC
     const adapter = decodeClaudeModelAdapter(entry.adapter ?? {});
     if (Option.isNone(profile) || Option.isNone(adapter)) return null;
     models.push({
-      model: entry.model,
+      model: ModelCatalog.catalogServerModel(resolved, entry),
       runtime: profile.value.claudeCode ?? {},
       compatibility: adapter.value.claudeCode ?? {},
     });
@@ -60,25 +60,22 @@ function tryResolveClaudeModelCatalog(manifest: ModelManifestData): ClaudeModelC
   };
 }
 
-export function resolveClaudeModelCatalog(manifest: ModelManifestData): ClaudeModelCatalog {
+/** Resolve the fallback on each read so its new-model badges can expire. */
+export function resolveClaudeModelCatalog(
+  catalog: ModelCatalog.ProviderCatalog | undefined,
+): ClaudeModelCatalog {
   return (
-    tryResolveClaudeModelCatalog(manifest) ??
-    tryResolveClaudeModelCatalog(BUNDLED_MODEL_MANIFEST) ?? {
+    tryResolveClaudeModelCatalog(catalog) ??
+    tryResolveClaudeModelCatalog(
+      resolveProviderCatalog(BUNDLED_MODEL_MANIFEST, CLAUDE) ?? undefined,
+    ) ?? {
       models: [],
     }
   );
 }
 
-export const BUNDLED_CLAUDE_MODEL_CATALOG = resolveClaudeModelCatalog(BUNDLED_MODEL_MANIFEST);
+export const BUNDLED_CLAUDE_MODEL_CATALOG = resolveClaudeModelCatalog(undefined);
 
-/**
- * Scope the catalog to one instance's settings: custom model slugs stay opaque
- * (a built-in alias they shadow is dropped, canonical slugs and capabilities
- * are preserved), and custom entries that declare their own capabilities are
- * appended so the adapter resolves effort / fast mode / thinking against the
- * user's descriptors instead of the empty default. Custom entries carry no
- * runtime profile, so option values pass through to Claude Code verbatim.
- */
 export function scopeClaudeModelCatalog(
   catalog: ClaudeModelCatalog,
   customModels: ReadonlyArray<CustomModelSetting>,
@@ -116,6 +113,66 @@ export function scopeClaudeModelCatalog(
   }
 
   return { models: [...builtInModels, ...customCatalogModels] };
+}
+
+const CLAUDE_EFFORT_LABELS: Readonly<Record<string, string>> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  xhigh: "Extra High",
+  max: "Max",
+};
+
+function stripClaudeContextWindowSuffix(value: string): string {
+  return value.replace(/\[[^\]]*\]$/, "").trim();
+}
+
+export function claudeReportedModels(
+  catalog: ClaudeModelCatalog,
+  customModels: ReadonlyArray<CustomModelSetting>,
+  reported: ReadonlyArray<ClaudeModelInfo> | undefined,
+): ReadonlyArray<ServerProviderModel> {
+  if (!reported?.length) return [];
+  const known = new Set(
+    [
+      ...catalog.models.flatMap(({ model }) => [model.slug, ...(model.aliases ?? [])]),
+      ...readCustomModelEntries(customModels).map((entry) => entry.slug),
+    ].map((id) => stripClaudeContextWindowSuffix(id).toLowerCase()),
+  );
+  const models: Array<ServerProviderModel> = [];
+  for (const info of reported) {
+    const slug = info.value.trim();
+    // `default` is Claude Code's pointer at its own default model, not a model.
+    if (!slug || slug === "default") continue;
+    const ids = [slug, info.resolvedModel ?? ""]
+      .map((id) => stripClaudeContextWindowSuffix(id).toLowerCase())
+      .filter((id) => id.length > 0);
+    if (ids.some((id) => known.has(id))) continue;
+    for (const id of ids) known.add(id);
+    const efforts = info.supportsEffort ? (info.supportedEffortLevels ?? []) : [];
+    models.push({
+      slug,
+      name: info.displayName.trim() || slug,
+      isCustom: false,
+      capabilities: {
+        optionDescriptors: efforts.length
+          ? [
+              {
+                id: "effort",
+                label: "Reasoning",
+                type: "select",
+                // `default` is not an effort, so choosing it sends none and Claude Code picks.
+                options: [
+                  { id: "default", label: "Default", isDefault: true },
+                  ...efforts.map((id) => ({ id, label: CLAUDE_EFFORT_LABELS[id] ?? id })),
+                ],
+              },
+            ]
+          : [],
+      },
+    });
+  }
+  return models;
 }
 
 function resolveClaudeCatalogModel(
@@ -167,6 +224,27 @@ export function resolveClaudeModelsForVersion(
     .map((entry) => entry.model);
 }
 
+export function resolveClaudeUpdateRequiredModels(
+  catalog: ClaudeModelCatalog,
+  version: string | null | undefined,
+): ReadonlyArray<ServerProviderUpdateRequiredModel> {
+  if (!version) return [];
+  return catalog.models.flatMap(({ model, compatibility }) => {
+    const minVersion = compatibility.minVersion;
+    if (model.isLegacy || !minVersion || compareSemverVersions(version, minVersion) >= 0) {
+      return [];
+    }
+    return [
+      {
+        slug: model.slug,
+        name: model.name,
+        ...(model.badge ? { badge: model.badge } : {}),
+        minVersion,
+      },
+    ];
+  });
+}
+
 export function formatClaudeVersionUpgradeMessage(
   catalog: ClaudeModelCatalog,
   version: string | null,
@@ -190,6 +268,13 @@ export function resolveClaudeCatalogEffort(
   model: string | null | undefined,
   raw: string | null | undefined,
 ): string | undefined {
+  if (!resolveClaudeCatalogModel(catalog, model)) {
+    const effort = raw?.trim();
+    return effort && ["low", "medium", "high", "xhigh", "max"].includes(effort)
+      ? effort
+      : undefined;
+  }
+
   const caps = getClaudeCatalogModelCapabilities(catalog, model);
   const descriptors = getProviderOptionDescriptors({
     caps,
@@ -215,7 +300,7 @@ export function isClaudeCatalogUltracodeEffort(effort: string | null | undefined
   return effort === "ultracode";
 }
 
-export function resolveClaudeCatalogContextWindow(
+function resolveClaudeCatalogContextWindow(
   catalog: ClaudeModelCatalog,
   modelSelection: ModelSelection | undefined,
 ): string | undefined {

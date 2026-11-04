@@ -1,10 +1,10 @@
-import type { AssistantCitation } from "@cinderdeck/contracts";
-import { collectAssistantCitations } from "@cinderdeck/shared/assistantCitations";
-import { collectComposerContextReferences } from "@cinderdeck/shared/composerContextReferences";
+import type { AssistantCitation } from "@t3tools/contracts";
+import { collectAssistantCitations } from "@t3tools/shared/assistantCitations";
+import { collectComposerContextReferences } from "@t3tools/shared/composerContextReferences";
 import {
   collectComposerInlineTokens,
   type ComposerInlineToken,
-} from "@cinderdeck/shared/composerInlineTokens";
+} from "@t3tools/shared/composerInlineTokens";
 
 export type ComposerPromptSegment =
   | {

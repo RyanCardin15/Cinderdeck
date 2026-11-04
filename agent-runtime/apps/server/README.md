@@ -1,3 +1,3 @@
 # Server
 
-Node.js WebSocket server for the Cinderdeck app.
+Node.js WebSocket server for the T3 Code app.

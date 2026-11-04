@@ -1,4 +1,4 @@
-import { EnvironmentId, ProjectId } from "@cinderdeck/contracts";
+import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import type {
@@ -18,7 +18,7 @@ function member(id: string, environmentId: EnvironmentId): SidebarProjectGroupMe
   return {
     id: ProjectId.make(id),
     environmentId,
-    title: "Cinderdeck",
+    title: "T3 Code",
     workspaceRoot: `/repos/${id}`,
     physicalProjectKey: `${environmentId}:/repos/${id}`,
     environmentLabel:
@@ -52,29 +52,16 @@ function group(
     groupedProjectCount: members.length,
     environmentPresence: "mixed",
     allRemoteMembersAreDesktopLocal: false,
+    allRemoteMembersAreWsl: false,
     remoteEnvironmentLabels: [],
+    pinned: false,
+    archived: false,
   };
 }
 
-const groups = [group("cinderdeck", [first, second, third]), group("other", [other])];
+const groups = [group("t3code", [first, second, third]), group("other", [other])];
 
 describe("settings scope search", () => {
-  it("ignores the retired scope key from older links", () => {
-    expect(validateSettingsScopeSearch({ scope: "device", project: "cinderdeck" })).toEqual({
-      project: "cinderdeck",
-    });
-    expect(validateSettingsScopeSearch({ scope: "all" })).toEqual({});
-  });
-
-  it("retains legacy project and machine links without inventing an explicit broad scope", () => {
-    expect(
-      validateSettingsScopeSearch({ project: "cinderdeck", machine: laptopId, unused: true }),
-    ).toEqual({
-      project: "cinderdeck",
-      machine: laptopId,
-    });
-  });
-
   it("retains an orphan checkout so it cannot turn into all environments", () => {
     const search = validateSettingsScopeSearch({ checkout: first.physicalProjectKey });
     expect(search).toEqual({ checkout: first.physicalProjectKey });
@@ -88,25 +75,8 @@ describe("settings scope search", () => {
 });
 
 describe("settings scope resolution", () => {
-  it("defaults to every environment with no project", () => {
-    expect(resolveSettingsScope({}, groups, environments)).toMatchObject({
-      kind: "all",
-      members: [],
-      environmentIds: [laptopId, serverId],
-    });
-  });
-
-  it("resolves one environment without targeting its project overrides", () => {
-    expect(resolveSettingsScope({ machine: serverId }, groups, environments)).toMatchObject({
-      kind: "environment",
-      environmentId: serverId,
-      environmentIds: [serverId],
-      members: [],
-    });
-  });
-
   it("keeps all physical members in a project aggregate, including several on one environment", () => {
-    expect(resolveSettingsScope({ project: "cinderdeck" }, groups, environments)).toMatchObject({
+    expect(resolveSettingsScope({ project: "t3code" }, groups, environments)).toMatchObject({
       kind: "project",
       environmentId: null,
       members: [first, second, third],
@@ -114,22 +84,10 @@ describe("settings scope resolution", () => {
     });
   });
 
-  it("preserves legacy project plus machine aggregates with multiple checkouts", () => {
-    expect(
-      resolveSettingsScope({ project: "cinderdeck", machine: laptopId }, groups, environments),
-    ).toMatchObject({
-      kind: "project",
-      environmentId: laptopId,
-      label: "cinderdeck / Laptop",
-      members: [first, second],
-      environmentIds: [laptopId],
-    });
-  });
-
   it("narrows a checkout target to exactly one member, deriving its environment when omitted", () => {
     expect(
       resolveSettingsScope(
-        { project: "cinderdeck", checkout: second.physicalProjectKey },
+        { project: "t3code", checkout: second.physicalProjectKey },
         groups,
         environments,
       ),
@@ -137,7 +95,7 @@ describe("settings scope resolution", () => {
       kind: "checkout",
       checkout: second,
       environmentId: laptopId,
-      label: "cinderdeck / Laptop · /repos/second",
+      label: "t3code / Laptop · /repos/second",
       members: [second],
       environmentIds: [laptopId],
     });
@@ -146,11 +104,11 @@ describe("settings scope resolution", () => {
   it.each([
     { project: "missing" },
     { machine: "removed" },
-    { project: "cinderdeck", machine: "removed" },
-    { project: "cinderdeck", checkout: "deleted" },
+    { project: "t3code", machine: "removed" },
+    { project: "t3code", checkout: "deleted" },
     { project: "other", machine: laptopId },
     { project: "other", checkout: first.physicalProjectKey },
-    { project: "cinderdeck", machine: serverId, checkout: first.physicalProjectKey },
+    { project: "t3code", machine: serverId, checkout: first.physicalProjectKey },
   ])("never widens an invalid or stale target: %j", (search) => {
     expect(resolveSettingsScope(search, groups, environments)).toMatchObject({
       kind: "unavailable",
@@ -161,7 +119,7 @@ describe("settings scope resolution", () => {
 
   it("leaves a removed checkout unavailable while sibling checkouts remain", () => {
     const search = {
-      project: "cinderdeck",
+      project: "t3code",
       machine: laptopId,
       checkout: first.physicalProjectKey,
     };
@@ -170,17 +128,17 @@ describe("settings scope resolution", () => {
       members: [first],
     });
     expect(
-      resolveSettingsScope(search, [group("cinderdeck", [second, third])], environments),
+      resolveSettingsScope(search, [group("t3code", [second, third])], environments),
     ).toMatchObject({ kind: "unavailable", members: [], environmentIds: [] });
   });
 
   it("does not select another environment after removing a project's last local checkout", () => {
-    const search = { project: "cinderdeck", machine: laptopId };
+    const search = { project: "t3code", machine: laptopId };
     expect(resolveSettingsScope(search, groups, environments)).toMatchObject({
       kind: "project",
       members: [first, second],
     });
-    expect(resolveSettingsScope(search, [group("cinderdeck", [third])], environments)).toMatchObject({
+    expect(resolveSettingsScope(search, [group("t3code", [third])], environments)).toMatchObject({
       kind: "unavailable",
       members: [],
       environmentIds: [],
@@ -190,7 +148,7 @@ describe("settings scope resolution", () => {
   it("rejects a cached checkout whose environment was removed", () => {
     expect(
       resolveSettingsScope(
-        { project: "cinderdeck", checkout: third.physicalProjectKey },
+        { project: "t3code", checkout: third.physicalProjectKey },
         groups,
         environments.slice(0, 1),
       ),

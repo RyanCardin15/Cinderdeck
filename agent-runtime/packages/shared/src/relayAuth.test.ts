@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  ClerkPublishableKeyDecodeError,
   ClerkPublishableKeyFrontendApiError,
   clerkFrontendApiHostnameFromPublishableKey,
   clerkFrontendApiUrlFromPublishableKey,
@@ -20,26 +19,17 @@ const captureError = (run: () => unknown): unknown => {
 
 describe("Clerk relay auth", () => {
   it("derives a custom Frontend API hostname from a Clerk publishable key", () => {
-    expect(clerkFrontendApiHostnameFromPublishableKey(clerkPublishableKey("clerk.abc.test"))).toBe(
-      "clerk.abc.test",
+    expect(clerkFrontendApiHostnameFromPublishableKey(clerkPublishableKey("clerk.t3.codes"))).toBe(
+      "clerk.t3.codes",
     );
-    expect(clerkFrontendApiUrlFromPublishableKey(clerkPublishableKey("clerk.abc.test"))).toBe(
-      "https://clerk.abc.test",
+    expect(clerkFrontendApiUrlFromPublishableKey(clerkPublishableKey("clerk.t3.codes"))).toBe(
+      "https://clerk.t3.codes",
     );
-  });
-
-  it("preserves Clerk publishable key decoding failures", () => {
-    const error = captureError(() => clerkFrontendApiUrlFromPublishableKey("pk_test_%"));
-
-    expect(error).toBeInstanceOf(ClerkPublishableKeyDecodeError);
-    expect(error).toMatchObject({ keyPrefix: "pk_test" });
-    expect((error as ClerkPublishableKeyDecodeError).cause).toBeInstanceOf(Error);
-    expect((error as Error).message).toBe("Failed to decode Clerk publishable key (pk_test).");
   });
 
   it("reports semantic frontend API failures without inventing a cause", () => {
     const emptyError = captureError(() => clerkFrontendApiUrlFromPublishableKey("pk_test_"));
-    const pathFrontendApi = "clerk.abc.test/path";
+    const pathFrontendApi = "clerk.t3.codes/path";
     const pathError = captureError(() =>
       clerkFrontendApiUrlFromPublishableKey(clerkPublishableKey(pathFrontendApi)),
     );
@@ -58,20 +48,5 @@ describe("Clerk relay auth", () => {
       reason: "contains-path",
     });
     expect((pathError as Error & { cause?: unknown }).cause).toBeUndefined();
-  });
-
-  it("preserves URL parser failures for decoded frontend APIs", () => {
-    const frontendApi = "[invalid-host";
-    const error = captureError(() =>
-      clerkFrontendApiHostnameFromPublishableKey(clerkPublishableKey(frontendApi)),
-    );
-
-    expect(error).toBeInstanceOf(ClerkPublishableKeyFrontendApiError);
-    expect(error).toMatchObject({
-      keyPrefix: "pk_test",
-      frontendApi,
-      reason: "invalid-url",
-    });
-    expect((error as ClerkPublishableKeyFrontendApiError).cause).toBeInstanceOf(Error);
   });
 });

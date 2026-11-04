@@ -78,7 +78,7 @@ export class DesktopIpc extends Context.Service<
       input: DesktopSyncIpcMethod<E, R>,
     ) => Effect.Effect<void, DesktopIpcRegistrationError, R | Scope.Scope>;
   }
->()("@cinderdeck/desktop/ipc/DesktopIpc") {}
+>()("@t3tools/desktop/ipc/DesktopIpc") {}
 
 export const make = (ipcMain: DesktopIpcMain): DesktopIpc["Service"] =>
   DesktopIpc.of({
@@ -153,10 +153,6 @@ export const make = (ipcMain: DesktopIpcMain): DesktopIpc["Service"] =>
   });
 
 export const layer = (ipcMain: DesktopIpcMain) => Layer.succeed(DesktopIpc, make(ipcMain));
-
-/**
- * Convenience helpers for creating IPC methods
- */
 
 export interface DesktopIpcMethodRegistration<
   Payload,

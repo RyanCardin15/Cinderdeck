@@ -1,8 +1,9 @@
-import type { RelayEnvironmentStatusResponse } from "@cinderdeck/contracts/relay";
+import type { RelayEnvironmentStatusResponse } from "@t3tools/contracts/relay";
 import {
   orchestrationProtocolCompatibilityError,
   type EnvironmentConnectionPhase,
-} from "@cinderdeck/client-runtime/connection";
+} from "@t3tools/client-runtime/connection";
+import { relayOfflineReasonMessage } from "@t3tools/client-runtime/relay";
 
 export interface AvailableCloudEnvironmentPresentation {
   readonly connectionError: string | null;
@@ -26,7 +27,7 @@ export function availableCloudEnvironmentPresentation(input: {
       connectionError: compatibilityError.message,
       connectionErrorTraceId: null,
       connectionState: "unsupported",
-      statusText: "Client not supported",
+      statusText: compatibilityError.message,
     };
   }
   if (input.status?.status === "online") {
@@ -39,7 +40,8 @@ export function availableCloudEnvironmentPresentation(input: {
   }
 
   if (input.status?.status === "offline") {
-    const connectionError = input.status.error ?? "Relay is offline.";
+    const connectionError =
+      relayOfflineReasonMessage(input.status) ?? input.status.error ?? "Relay is offline.";
     return {
       connectionError,
       connectionErrorTraceId: input.status.traceId ?? null,

@@ -1,50 +1,66 @@
-# ACP Registry
+# ACP providers
 
-Cinderdeck can run coding agents from the official
+T3 Code can run installed ACP commands or coding agents from the official
 [ACP Registry](https://agentclientprotocol.com/get-started/registry). Registry agents bring their
-own models, tools, and sign-in, while Cinderdeck provides projects, threads, checkpoints, and task
+own models, tools, and sign-in, while T3 Code provides projects, threads, checkpoints, and task
 delegation.
 
-Google Antigravity is available through its official `antigravity-acp` Registry entry. Add it like
-any other Registry agent; it does not need an Antigravity-specific Cinderdeck provider.
+Agents that T3 Code supports as their own providers, such as Codex, Claude, Cursor, Grok, OpenCode,
+Pi, and [Antigravity](./providers-antigravity.md), don't appear in the Registry list. Enable them in
+**Settings → Providers** instead.
 
-Cinderdeck prefers the current ACP v2 preview protocol and uses its richer messages, usage, plans,
+T3 Code prefers the current ACP v2 preview protocol and uses its richer messages, usage, plans,
 configuration, compaction, and agent-terminal updates when the agent supports them. It also
-negotiates ACP v1 for Registry agents that have not migrated yet, so agents such as Pi continue to
-work through the same generic integration.
+negotiates ACP v1 for Registry agents that have not migrated yet, so they continue to work through
+the same generic integration.
+
+Claude Agent uses the ACP v2 preview by default for Registry and local `claude-agent-acp`
+commands. If you encounter preview issues, set `CLAUDE_AGENT_ACP_EXPERIMENTAL_V2=0` in the
+provider instance's environment overrides to use ACP v1.
 
 ## Add an agent
 
 1. Open **Settings → Providers**.
-2. Select **Add provider** and search the ACP Registry.
-3. Search for the agent and select **Add** on its result.
+2. Select **Add provider**, then **Show more**.
+3. Search the ACP Registry for the agent and select **Add** on its result.
 4. Confirm the name and instance ID, then complete the agent's sign-in step.
 
 Search only shows agents that can run on the connected server. Registry agents are third-party
 code; review an agent's source and license before adding it.
 
+## Add a local command
+
+In **Settings → Providers → Add provider**, select **Show more**, then **Local ACP command**. Enter the executable
+name or path on the selected environment, add one literal argument per row, and choose a display
+name. For DeepSeek Harness, use `dsh` with arguments `--profile` and `acp`.
+
+Local commands require no registry entry or download. Environment overrides apply to the command;
+credentials and skills remain managed by the installed agent or its wrapper. Models and reasoning
+options come from ACP, including model IDs that contain JSON. T3 Code launches the executable directly
+without expanding shell expressions.
+
 ## Where agents run
 
-Registry agents always run on the machine that hosts your Cinderdeck server. That stays true when you
-connect through a separately configured hosted client, Remote connections, or a relay.
+Registry agents always run on the machine that hosts your T3 Code server. That stays true when you
+connect through `app.t3.codes`, T3 Connect, or a relay.
 
-Agents install under `tools/<agent-id>/<version>/` inside Cinderdeck home. Cinderdeck verifies SHA-256 when the Registry entry
+Agents install under `tools/<agent-id>/<version>/` inside T3 home. T3 Code verifies SHA-256 when the Registry entry
 provides one; entries without a checksum retain the Registry's HTTPS distribution guarantee.
-Registry `npx` and `uvx` packages use Cinderdeck-owned npm prefixes and Python tool directories at the exact
+Registry `npx` and `uvx` packages use T3-owned npm prefixes and Python tool directories at the exact
 version published by the Registry. Their commands are available in a new server terminal for
-sign-in and direct use. Removing an agent's last provider instance removes Cinderdeck-managed binary files
+sign-in and direct use. Removing an agent's last provider instance removes T3-managed binary files
 but keeps package installs. To use an existing local binary, set **Executable override** explicitly.
 
 ## Signing in
 
 Open the agent's account section in **Settings → Providers** on web or desktop. Choose
 **Sign in** and, if the agent offers several methods, select one. For an installed, configured
-provider, mobile also offers **Settings → Provider accounts**.
+provider, mobile also offers **Settings → Providers**.
 
 Browser sign-in shows the agent's URL and waits for you to open or copy it before telling the
 agent to proceed. The page opens on your device, while the agent runs on the environment.
 Terminal methods run in an in-app terminal on that environment. On mobile, send responses
-through the terminal response field. Cinderdeck reconnects after terminal login and waits for the
+through the terminal response field. T3 Code reconnects after terminal login and waits for the
 agent to confirm sign-in before reporting success. You can cancel or retry an expired attempt.
 
 Browser and terminal sign-in leave credentials in the agent's own store. Agents that use API keys
@@ -66,48 +82,28 @@ The model picker lists the models the agent reports. If the agent reports none, 
 your own model IDs under **Custom models** in the instance settings.
 
 Other settings the agent offers, such as reasoning effort or approval mode, appear in the
-composer's model options menu like they do for built-in providers. Agents with their own plan and
-build modes follow Cinderdeck's Plan and Build toggle. Models and options that change while an agent
+composer's model picker, beside the model list, like they do for built-in providers. Agents with their own plan and
+build modes follow T3 Code's Plan and Build toggle. Models and options that change while an agent
 is running update the picker without waiting for another provider probe.
 
 ## Commands and skills
 
 Slash commands the agent provides appear under **Provider** in the `/` menu while a session is
-running. Commands the agent names with a `$` prefix appear in Cinderdeck's `$` skill menu instead.
-
-## MCP servers and tools
-
-Open **Settings → Providers → Copilot CLI / Cursor CLI → MCP servers** to inspect
-that instance's servers and tools. Opening the section or refreshing connects to its
-MCP servers on the environment hosting the CLI. The configured executable and instance
-environment are used; inspection does not send a chat prompt. A disabled provider is not probed.
-
-Copilot uses its SDK runtime's MCP inventory, including connection failures and sign-in
-requirements. Cinderdeck closes and deletes the temporary inventory session afterwards.
-Server and tool switches apply through Copilot's session-only disable and deny flags when a
-conversation starts or resumes. They do not edit Copilot's configuration. Manage server
-registration with `copilot mcp add`; complete MCP sign-in through `/mcp` in Copilot CLI.
-
-Cursor uses `agent mcp list` and `agent mcp list-tools` to show connection status and tool
-names. This integration supports inspection; Cursor's CLI currently has no session-only
-server or tool deny override, so Cinderdeck does not offer switches it cannot enforce.
-Manage servers with `agent mcp enable <name>` / `agent mcp disable <name>`, sign in with
-`agent mcp login <name>`, and configure tool permissions in Cursor's own CLI configuration.
-Then refresh the inventory. Unapproved servers require approval in Cursor before tools can
-be listed. Other Registry agents retain their own MCP configuration until they provide an
-inventory interface.
+running. Commands the agent names with a `$` prefix appear in T3 Code's `$` skill menu instead.
 
 ## Native sessions
 
 When an agent advertises ACP session listing and import support, expand its provider card,
-choose a project, and select **List sessions**. Importing one creates a deterministic Cinderdeck thread
+choose a project, and select **List sessions**. Importing one creates a deterministic T3 thread
 backed by that native session. Importing the same agent session again returns the existing thread,
 including when another client performs the import.
 
 The thread keeps the native session's title and last-update value as provider metadata without
-overwriting a title you set in Cinderdeck. Agents that report ACP context usage drive the composer's
-context meter and cumulative cost metadata. Text resources and links render as assistant output;
-binary resources, images, and audio that Cinderdeck cannot render yet appear as explicit placeholders
+overwriting a title you set in T3 Code. Agents that report ACP context usage drive the composer's
+context meter and cumulative cost metadata. The meter is off by default; see
+[commands and skills](./composer.md#commands-and-skills) to enable it on web and desktop.
+Text resources and links render as assistant output;
+binary resources, images, and audio that T3 Code cannot render yet appear as explicit placeholders
 instead of disappearing.
 
 ## Permissions and terminals
@@ -117,28 +113,18 @@ approval rules. They start in their own default mode, and their mode picker in t
 menu switches it. How far an agent is confined depends on that mode and the agent's own settings,
 so use its sandbox and permission controls when that matters.
 
-When a registry agent asks for approval, Cinderdeck answers by the thread's
+When a registry agent asks for approval, T3 Code answers by the thread's
 [permission mode](./permission-modes.md): **Supervised** shows the request in the conversation,
 **Auto-accept edits** approves edits and shows the rest, and **Auto** and **Full access** approve
 automatically. File reads and searches never wait for approval.
 
-Devin runs its commands through Cinderdeck's terminals, and those commands follow the thread's
-permission mode. For other agents, Cinderdeck shows the command, output, and exit status the agent
+Devin runs its commands through T3 Code's terminals, and those commands follow the thread's
+permission mode. For other agents, T3 Code shows the command, output, and exit status the agent
 reports but does not run or stop their terminals.
 
-Registry agents can schedule work and use Cinderdeck's MCP tools. Child-task presentation depends on what
+Registry agents can schedule work and use T3's MCP tools. Child-task presentation depends on what
 the agent exposes: ACP has no portable native subagent-lineage contract, so richer delegation views
-remain agent-specific. Devin, Copilot CLI, and Cursor CLI subagents appear as read-only child
-threads with their tools, reply, and status:
-
-- **Copilot CLI** streams every subagent's frames on the parent session. Its tools are matched to the
-  subagent by Copilot's agent ID. Its reply streams into the child thread when only one subagent is
-  running; when several run at once, each child thread shows the reply that its `task` call returns.
-  Copilot doesn't link a foreground subagent's agent ID to the `task` call that started it, so with
-  parallel foreground subagents Cinderdeck matches them by the order they finish.
-- **Cursor CLI** runs each subagent as its own ACP session when the client asks for it, so Cinderdeck
-  routes those sessions to child threads directly. Background subagents stay running until Cursor
-  reports their end.
+remain agent-specific.
 
 ## Checkpoints
 
@@ -146,7 +132,7 @@ Checkpoint rollback restores your files as usual. ACP agents cannot rewind their
 so the next turn after a rollback starts a fresh agent session that no longer remembers the
 conversation from before the checkpoint.
 
-Registry instances are not used for Cinderdeck's app-owned text generation, such as thread titles, commit
+Registry instances are not used for T3's app-owned text generation, such as thread titles, commit
 messages, branch names, or pull request descriptions. Configure a text-generation-capable provider
 for those actions.
 

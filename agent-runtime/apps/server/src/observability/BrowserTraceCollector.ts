@@ -1,4 +1,4 @@
-import type { TraceRecord, TraceSink } from "@cinderdeck/shared/observability";
+import type { TraceRecord, TraceSink } from "@t3tools/shared/observability";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -8,17 +8,18 @@ export class BrowserTraceCollector extends Context.Service<
   {
     readonly record: (records: ReadonlyArray<TraceRecord>) => Effect.Effect<void>;
   }
->()("@cinderdeck/server/observability/BrowserTraceCollector") {}
+>()("t3/observability/BrowserTraceCollector") {}
 
-/** @public Service construction is part of the canonical Effect module API. */
+/** @public */
 export const make = (sink: TraceSink): BrowserTraceCollector["Service"] =>
   BrowserTraceCollector.of({
-    record: (records) =>
-      Effect.sync(() => {
+    record: Effect.fn("BrowserTraceCollector.record")(function (records) {
+      return Effect.sync(() => {
         for (const record of records) {
           sink.push(record);
         }
-      }),
+      });
+    }),
   });
 
 export const layer = (sink: TraceSink) => Layer.succeed(BrowserTraceCollector, make(sink));

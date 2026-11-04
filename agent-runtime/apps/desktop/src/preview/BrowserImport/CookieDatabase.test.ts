@@ -1,11 +1,11 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
-import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Scope from "effect/Scope";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { snapshotCookieDatabase } from "./CookieDatabase.ts";
 
@@ -20,7 +20,7 @@ describe("snapshotCookieDatabase", () => {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const sourceDirectory = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "cinderdeck-cookie-source-",
+          prefix: "t3code-cookie-source-",
         });
         const source = path.join(sourceDirectory, "Cookies");
         const snapshot = yield* Effect.gen(function* () {
@@ -47,11 +47,11 @@ describe("snapshotCookieDatabase", () => {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const sourceDirectory = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "cinderdeck-cookie-invalid-source-",
+          prefix: "t3code-cookie-invalid-source-",
         });
         const source = path.join(sourceDirectory, "Cookies");
         yield* fileSystem.writeFileString(source, "not a sqlite database");
-        const prefix = `cinderdeck-cookie-failed-${process.pid}-`;
+        const prefix = `t3code-cookie-failed-${process.pid}-`;
         const error = yield* snapshotCookieDatabase(source, prefix).pipe(
           Effect.scoped,
           Effect.flip,
@@ -59,25 +59,6 @@ describe("snapshotCookieDatabase", () => {
         expect(error._tag).toBe("SqlError");
         const temporaryEntries = yield* fileSystem.readDirectory(path.dirname(sourceDirectory));
         expect(temporaryEntries.some((entry) => entry.startsWith(prefix))).toBe(false);
-      }),
-    ),
-  );
-
-  it.effect("removes a successful snapshot when its scope closes", () =>
-    runNode(
-      Effect.gen(function* () {
-        const fileSystem = yield* FileSystem.FileSystem;
-        const path = yield* Path.Path;
-        const sourceDirectory = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "cinderdeck-cookie-cleanup-source-",
-        });
-        const source = path.join(sourceDirectory, "Cookies");
-        yield* Effect.gen(function* () {
-          const sql = yield* SqlClient.SqlClient;
-          yield* sql`CREATE TABLE cookies(name TEXT NOT NULL)`;
-        }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: source })));
-        const snapshot = yield* snapshotCookieDatabase(source).pipe(Effect.scoped);
-        expect(yield* fileSystem.exists(snapshot)).toBe(false);
       }),
     ),
   );

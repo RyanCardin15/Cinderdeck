@@ -1,11 +1,11 @@
-import { EnvironmentId } from "@cinderdeck/contracts";
+import { EnvironmentId } from "@t3tools/contracts";
 
 import type { RelayEnvironmentView } from "../connection/useConnectionController";
 import type { ConnectedEnvironmentSummary } from "../../state/remote-runtime-types";
 
 const SHOWCASE_LOCAL_ENVIRONMENT_DISPLAY_URLS: Readonly<Record<string, string>> = {
   "Moonbase Terminal": "https://moonbase.tail9f3a.ts.net/",
-  "Suspense Station": "https://suspense.example.com/",
+  "Suspense Station": "https://suspense-vps.hel1.t3.sh/",
   "Kernel Cabin": "http://100.82.16.5:3773/",
 };
 
@@ -32,8 +32,8 @@ export function resolveShowcaseEnvironmentUpdateDisplayUrl(input: {
 
 const pocketPiId = EnvironmentId.make("showcase-pocket-pi");
 const pocketPiEndpoint = {
-  httpBaseUrl: "https://pocket-pi.example.com",
-  wsBaseUrl: "wss://pocket-pi.example.com",
+  httpBaseUrl: "https://pocket-pi.t3.sh",
+  wsBaseUrl: "wss://pocket-pi.t3.sh",
   providerKind: "t3_relay" as const,
 };
 
@@ -41,7 +41,7 @@ export const SHOWCASE_CONNECTED_CLOUD_ENVIRONMENTS: ReadonlyArray<ConnectedEnvir
   {
     environmentId: EnvironmentId.make("showcase-aurora-gpu"),
     environmentLabel: "Aurora GPU Pod",
-    displayUrl: "https://aurora-gpu.example.com",
+    displayUrl: "https://aurora-gpu.t3.sh",
     isRelayManaged: true,
     isEnabled: true,
     connectionState: "connected",

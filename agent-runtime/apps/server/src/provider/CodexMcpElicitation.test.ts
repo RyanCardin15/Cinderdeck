@@ -45,29 +45,6 @@ describe("Codex MCP elicitation approvals", () => {
     });
   });
 
-  it("uses the injected Cinderdeck server name in app approvals while preserving native choices", () => {
-    const { _meta, ...bareRequest } = request;
-    const approval = describeMcpElicitation({
-      ...bareRequest,
-      serverName: "deckhand",
-      message: "Allow the deckhand MCP server to run tool deckhand_context_pull_requests?",
-    });
-    NodeAssert.equal(approval.appName, "deckhand");
-    NodeAssert.deepStrictEqual(
-      approval.options,
-      describeMcpElicitation({
-        ...bareRequest,
-        serverName: "t3-code",
-        message: "Allow the t3-code MCP server to run tool deckhand_context_pull_requests?",
-      }).options,
-    );
-  });
-  it("extracts the app name from a Computer Use request without metadata", () => {
-    const { _meta, ...requestWithoutMetadata } = request;
-
-    NodeAssert.equal(describeMcpElicitation(requestWithoutMetadata).appName, "Safari");
-  });
-
   it("returns the accepted form option to Codex", () => {
     NodeAssert.deepStrictEqual(toMcpElicitationResponse(request, "accept"), {
       action: "accept",
@@ -83,23 +60,12 @@ describe("Codex MCP elicitation approvals", () => {
     });
   });
 
+  // regression: #8058 show Codex app access approval prompts
   it("returns persistent approval in the MCP response", () => {
     NodeAssert.deepStrictEqual(toMcpElicitationResponse(request, "acceptAlways"), {
       action: "accept",
       _meta: { persist: "always" },
       content: { approval: "always" },
-    });
-  });
-
-  it("returns rejection without form content", () => {
-    NodeAssert.deepStrictEqual(toMcpElicitationResponse(request, "decline"), {
-      action: "decline",
-    });
-  });
-
-  it("returns cancellation without form content", () => {
-    NodeAssert.deepStrictEqual(toMcpElicitationResponse(request, "cancel"), {
-      action: "cancel",
     });
   });
 

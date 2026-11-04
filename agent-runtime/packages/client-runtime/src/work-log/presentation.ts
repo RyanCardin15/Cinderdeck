@@ -1,4 +1,5 @@
 import {
+  isOrchestrationV2WorkActive,
   isToolLifecycleItemType,
   type AssetResource,
   type RuntimeItemStatus,
@@ -7,29 +8,29 @@ import {
   type ToolActivityIcon,
   type OrchestrationV2TurnItem,
   type ThreadId,
-} from "@cinderdeck/contracts";
+} from "@t3tools/contracts";
 import {
-  resolveCinderdeckMcpToolDefinition,
-  type CinderdeckMcpToolDefinition,
-  type CinderdeckMcpToolSummaryAction,
-} from "@cinderdeck/shared/cinderdeckMcpToolPresentation";
-import { classifyMarkdownImageSource } from "@cinderdeck/client-runtime/markdown-images";
-import { resolveMediaSource } from "@cinderdeck/client-runtime/media-source";
-import { parseChangeRequestUrl } from "@cinderdeck/shared/changeRequestUrl";
-import { isWorkspaceImagePreviewPath } from "@cinderdeck/shared/filePreview";
-import { formatTokens } from "@cinderdeck/shared/usageFormat";
-import { classifyToolActivity } from "@cinderdeck/shared/toolActivity";
-import { toolOutputIndicatesFailure } from "@cinderdeck/shared/toolOutput";
+  resolveT3McpSummaryAction,
+  resolveT3McpToolDefinition,
+  type T3McpToolDefinition,
+  type T3McpToolSummaryAction,
+} from "@t3tools/shared/t3McpToolPresentation";
+import { classifyMarkdownImageSource } from "@t3tools/client-runtime/markdown-images";
+import { resolveMediaSource } from "@t3tools/client-runtime/media-source";
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
+import { isWorkspaceImagePreviewPath } from "@t3tools/shared/mediaPreview";
+import { formatTokens } from "@t3tools/shared/usageFormat";
+import { classifyToolActivity } from "@t3tools/shared/toolActivity";
+import { toolOutputIndicatesFailure } from "@t3tools/shared/toolOutput";
 
 import {
-  summarizeCinderdeckToolCalls,
-  cinderdeckToolResultIndicatesFailure,
-  type CinderdeckToolSummaryCall,
-} from "@cinderdeck/client-runtime/cinderdeckToolSummary";
+  summarizeT3ToolCalls,
+  t3ToolResultIndicatesFailure,
+  type T3ToolSummaryCall,
+} from "@t3tools/client-runtime/t3ToolSummary";
 
 export type WorkLogToolLifecycleStatus = RuntimeItemStatus | "stopped" | "idle";
 
-/** Inspection and copying omit raw outputs, including values from older caches. */
 export function toolItemForDisplay(item: OrchestrationV2TurnItem): OrchestrationV2TurnItem {
   switch (item.type) {
     case "command_execution":
@@ -38,29 +39,48 @@ export function toolItemForDisplay(item: OrchestrationV2TurnItem): Orchestration
       return displayItem;
     }
     case "file_change": {
-      const { diffStr: _diffStr, oldStr: _oldStr, newStr: _newStr, ...displayItem } = item;
-      return displayItem;
+      const { diffStr, oldStr: _oldStr, newStr: _newStr, ...displayItem } = item;
+      // A failed edit's diffStr holds the provider's error, not a diff.
+      return item.status === "failed" && diffStr?.trim()
+        ? { ...displayItem, diffStr }
+        : displayItem;
     }
     default:
       return item;
   }
 }
 
-export function contextCompactionLabel(
-  item: Pick<
-    Extract<OrchestrationV2TurnItem, { type: "compaction" }>,
-    "status" | "beforeTokenCount" | "afterTokenCount"
-  >,
-): string {
-  if (item.status === "running") return "Compacting context";
-  if (item.beforeTokenCount !== undefined && item.afterTokenCount !== undefined) {
-    return `Context compacted ${formatTokens(item.beforeTokenCount)} → ${formatTokens(item.afterTokenCount)} tokens`;
+type CompactionLabelItem = Pick<
+  Extract<OrchestrationV2TurnItem, { type: "compaction" }>,
+  "status" | "beforeTokenCount" | "afterTokenCount"
+>;
+
+export function contextCompactionTokenCounts(
+  item: CompactionLabelItem,
+): { readonly before: string; readonly after: string } | null {
+  if (
+    item.status === "running" ||
+    item.beforeTokenCount === undefined ||
+    item.afterTokenCount === undefined
+  ) {
+    return null;
   }
-  return "Context compacted";
+  return { before: formatTokens(item.beforeTokenCount), after: formatTokens(item.afterTokenCount) };
+}
+
+export function contextCompactionLabel(item: CompactionLabelItem): string {
+  if (item.status === "failed") return "Context compaction failed";
+  if (item.status === "cancelled" || item.status === "interrupted")
+    return "Context compaction stopped";
+  if (isOrchestrationV2WorkActive(item.status)) return "Compacting context";
+  const tokens = contextCompactionTokenCounts(item);
+  return tokens
+    ? `Context compacted ${tokens.before} → ${tokens.after} tokens`
+    : "Context compacted";
 }
 
 export interface WorkLogPresentationEntry {
-  readonly questionAnswer?: import("@cinderdeck/contracts").UserInputAttachmentAnswerPayload;
+  readonly questionAnswer?: import("@t3tools/contracts").UserInputAttachmentAnswerPayload;
   readonly id: string;
   readonly createdAt: string;
   readonly label: string;
@@ -111,7 +131,6 @@ export function normalizeCompactToolLabel(value: string): string {
   return value.replace(/\s+(?:complete|completed)\s*$/i, "").trim();
 }
 
-/** Structured identity is authoritative, including when it identifies a foreign server. */
 function workEntryToolName(
   entry: Pick<WorkLogPresentationEntry, "label" | "toolTitle" | "toolData" | "structuredPayload">,
 ): string | undefined {
@@ -122,7 +141,17 @@ function workEntryToolName(
     return `${data.server}.${data.tool}`;
   }
   if (typeof data?.toolName === "string") return data.toolName;
-  return resolveCinderdeckMcpToolDefinition(entry.toolTitle) ? entry.toolTitle : entry.label;
+  return resolveT3McpToolDefinition(entry.toolTitle) ? entry.toolTitle : entry.label;
+}
+
+function workEntryToolInput(
+  entry: Pick<WorkLogPresentationEntry, "toolData" | "structuredPayload">,
+): unknown {
+  const item = entry.structuredPayload;
+  const data = asRecord(entry.toolData);
+  return item?.type === "dynamic_tool"
+    ? item.input
+    : (data?.arguments ?? data?.input ?? data?.rawInput);
 }
 
 function workEntryToolOutput(
@@ -135,8 +164,8 @@ function workEntryToolOutput(
     : (data?.output ?? data?.result ?? data?.rawOutput ?? data?.content);
 }
 
-function resolveCinderdeckMcpToolPresentation(
-  definition: CinderdeckMcpToolDefinition | null,
+function resolveT3McpToolPresentation(
+  definition: T3McpToolDefinition | null,
   status: string | undefined,
   data?: unknown,
 ) {
@@ -166,15 +195,18 @@ function resolveCinderdeckMcpToolPresentation(
   const payload = asRecord(data);
   const input =
     asRecord(payload?.arguments) ?? asRecord(payload?.input) ?? asRecord(payload?.rawInput);
-  const urlTarget = typeof input?.url === "string" ? parseChangeRequestUrl(input.url) : null;
-  const number = urlTarget?.number ?? input?.number;
+  const urlTarget =
+    typeof input?.url === "string" ? sourceControlClients.parseChangeRequestUrl(input.url) : null;
+  const number = urlTarget?.link.number ?? input?.number;
+  const { shortLabel } = (urlTarget?.definition ?? sourceControlClients.get(undefined))
+    .changeRequest;
   const target =
     actionKind !== undefined &&
     actionKind !== "list-prs" &&
     typeof number === "number" &&
     Number.isSafeInteger(number) &&
     number > 0
-      ? `PR #${number}`
+      ? `${shortLabel} #${number}`
       : detail;
   return {
     displayName: `${verb} ${target}`,
@@ -183,7 +215,6 @@ function resolveCinderdeckMcpToolPresentation(
   };
 }
 
-/** Only active or completed calls can inherit the live group’s present tense. */
 export function liveActivityToolStatus(status: string | undefined, presentTense: boolean) {
   if (status === "failed" || status === "declined" || status === "stopped" || status === "idle") {
     return status;
@@ -192,7 +223,6 @@ export function liveActivityToolStatus(status: string | undefined, presentTense:
   return "completed";
 }
 
-/** Resolves tool identity before choosing labels or icons in either client. */
 export function resolveWorkEntryToolPresentation(
   entry: Pick<
     WorkLogPresentationEntry,
@@ -200,13 +230,14 @@ export function resolveWorkEntryToolPresentation(
   >,
   fallbackStatus?: "inProgress" | "completed",
 ) {
-  const definition = resolveCinderdeckMcpToolDefinition(workEntryToolName(entry));
+  const definition = resolveT3McpToolDefinition(
+    workEntryToolName(entry),
+    workEntryToolInput(entry),
+  );
   const status = entry.toolLifecycleStatus ?? fallbackStatus;
-  return resolveCinderdeckMcpToolPresentation(
+  return resolveT3McpToolPresentation(
     definition,
-    definition && cinderdeckToolResultIndicatesFailure(workEntryToolOutput(entry))
-      ? "failed"
-      : status,
+    definition && t3ToolResultIndicatesFailure(workEntryToolOutput(entry)) ? "failed" : status,
     entry.toolData,
   );
 }
@@ -215,141 +246,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
-}
-
-function nonEmptyString(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value : null;
-}
-
-function commandResultContent(value: unknown): string | null {
-  const direct = nonEmptyString(value);
-  if (direct) return direct;
-
-  const directContent = Array.isArray(value) ? value : null;
-  const record = asRecord(value);
-  const content = record?.content;
-  const contentText = nonEmptyString(content);
-  if (contentText) return contentText;
-  const blocks = directContent ?? (Array.isArray(content) ? content : null);
-  if (!blocks) return null;
-
-  const chunks = blocks.flatMap((entry) => {
-    const text = nonEmptyString(entry) ?? nonEmptyString(asRecord(entry)?.text);
-    return text ? [text] : [];
-  });
-  return chunks.length > 0 ? chunks.join("\n") : null;
-}
-
-/** Returns provider command output before it is formatted for a work-log row. */
-export function extractCommandOutputText(dataValue: unknown): string | null {
-  const data = asRecord(dataValue);
-  const item = asRecord(data?.item);
-  const itemResult = asRecord(item?.result);
-  const rawOutput = asRecord(data?.rawOutput);
-  const outputStreams = [
-    nonEmptyString(rawOutput?.stdout),
-    nonEmptyString(rawOutput?.stderr),
-  ].filter((value): value is string => value !== null);
-  const acpContent = Array.isArray(data?.content)
-    ? data.content
-        .flatMap((entryValue) => {
-          const entry = asRecord(entryValue);
-          const content = asRecord(entry?.content);
-          const text = entry?.type === "content" ? nonEmptyString(content?.text) : null;
-          return text ? [text] : [];
-        })
-        .join("\n")
-    : null;
-
-  const candidates = [
-    item?.aggregatedOutput,
-    itemResult?.content,
-    data?.rawOutput,
-    rawOutput?.content,
-    outputStreams.length > 0 ? outputStreams.join("\n") : null,
-    rawOutput?.output,
-    acpContent,
-    data?.result,
-  ];
-  for (const candidate of candidates) {
-    const text = commandResultContent(candidate);
-    if (text) return text;
-  }
-  return null;
-}
-
-/**
- * Ingestion caps tool details at 180 chars and appends "...", so a long command
- * echo no longer equals the command it repeats. Treat a truncated prefix of the
- * command as the same echo.
- */
-function textRepeatsCommand(text: string, commands: ReadonlyArray<string | null>): boolean {
-  const truncated = text.endsWith("...")
-    ? text.slice(0, -3)
-    : text.endsWith("\u2026")
-      ? text.slice(0, -1)
-      : null;
-  return commands.some((candidate) => {
-    const command = candidate?.trim();
-    if (!command) return false;
-    if (command === text) return true;
-    return (
-      truncated !== null &&
-      truncated.length > 0 &&
-      command.length > truncated.length &&
-      command.startsWith(truncated)
-    );
-  });
-}
-
-/**
- * Decides whether a command row's `detail` is a synthetic echo of the command
- * rather than real output. OpenCode stores completed output in `detail` with no
- * other output channel, so plain equality is only treated as synthetic when the
- * payload shape shows the detail came from the command: Codex item metadata,
- * an ACP tool call (`data.toolCallId`, `kind: "execute"`), a Claude tool-name
- * prefix, or no structured command at all.
- */
-export function commandDetailRepeatsCommand(input: {
-  readonly detail: string;
-  readonly command: string | null;
-  readonly rawCommand: string | null;
-  readonly toolName: unknown;
-  readonly data: unknown;
-}): boolean {
-  const toolName = nonEmptyString(input.toolName)?.trim();
-  const detail = input.detail.trim();
-  const commands = [input.command, input.rawCommand];
-  if (toolName) {
-    const prefix = `${toolName}:`;
-    if (detail.toLowerCase().startsWith(prefix.toLowerCase())) {
-      const unprefixed = detail.slice(prefix.length).trim();
-      if (textRepeatsCommand(unprefixed, commands)) return true;
-    }
-  }
-
-  if (!textRepeatsCommand(detail, commands)) return false;
-
-  const data = asRecord(input.data);
-  const item = asRecord(data?.item);
-  const itemInput = asRecord(item?.input);
-  const itemResult = asRecord(item?.result);
-  const hasStructuredCommand = [
-    item?.command,
-    itemInput?.command,
-    itemResult?.command,
-    data?.command,
-  ].some((value) =>
-    Array.isArray(value)
-      ? value.some((part) => nonEmptyString(part) !== null)
-      : nonEmptyString(value) !== null,
-  );
-  return (
-    !hasStructuredCommand ||
-    item !== null ||
-    data?.toolCallId !== undefined ||
-    nonEmptyString(data?.kind)?.toLowerCase() === "execute"
-  );
 }
 
 function workLogEntryIsToolLike(entry: WorkLogPresentationEntry): boolean {
@@ -370,20 +266,21 @@ function workEntryIndicatesToolFailureFromOutput(
   ) {
     return true;
   }
-  if (!workLogEntryIsToolLike(entry)) return false;
+  // Reasoning detail is the model's own prose (often tens of KB), not tool
+  // output: scanning it is slow on long threads and misreads phrases like
+  // "that exit code 2 is expected" as a failed tool.
+  if (!workLogEntryIsToolLike(entry) || entry.itemType === "reasoning") return false;
   if (
-    resolveCinderdeckMcpToolDefinition(workEntryToolName(entry)) &&
-    cinderdeckToolResultIndicatesFailure(workEntryToolOutput(entry))
+    resolveT3McpToolDefinition(workEntryToolName(entry)) &&
+    t3ToolResultIndicatesFailure(workEntryToolOutput(entry))
   ) {
     return true;
   }
   const item = entry.structuredPayload;
   if (item?.type === "command_execution") {
-    if (item.outputIndicatesFailure || (item.exitCode !== undefined && item.exitCode !== 0)) {
-      return true;
-    }
-    // Older servers/caches can still carry output. Read only the previous
-    // preview-sized prefix for status, without exposing it in the row detail.
+    // The exit code outranks text in the output or the command itself.
+    if (item.exitCode !== undefined) return item.exitCode !== 0;
+    if (item.outputIndicatesFailure) return true;
     if (item.output && toolOutputIndicatesFailure(item.output.slice(0, 32_768))) {
       return true;
     }
@@ -394,26 +291,31 @@ function workEntryIndicatesToolFailureFromOutput(
   return output.length > 0 && toolOutputIndicatesFailure(output);
 }
 
-/** Includes legacy activities that stored error output in the command field. */
+// Rows are re-derived on every timeline update but entries are reused while
+// their item is unchanged, so these per-entry checks are computed once.
+const entryChecks = new WeakMap<
+  WorkLogPresentationEntry,
+  { failure?: boolean; displayFailure?: boolean; action?: ToolGroupAction }
+>();
+
+function checksFor(entry: WorkLogPresentationEntry) {
+  let checks = entryChecks.get(entry);
+  if (!checks) {
+    checks = {};
+    entryChecks.set(entry, checks);
+  }
+  return checks;
+}
+
 export function workEntryIndicatesToolFailure(entry: WorkLogPresentationEntry): boolean {
-  return workEntryIndicatesToolFailureFromOutput(entry, true);
+  return (checksFor(entry).failure ??= workEntryIndicatesToolFailureFromOutput(entry, true));
 }
 
-/** Checks rendered output without treating the user's command as an error. */
 export function workEntryDisplayIndicatesToolFailure(entry: WorkLogPresentationEntry): boolean {
-  return workEntryIndicatesToolFailureFromOutput(entry, false);
-}
-
-/** Decides whether the row can show a success marker. */
-export function workEntryIndicatesToolSuccess(entry: WorkLogPresentationEntry): boolean {
-  return (
-    workLogEntryIsToolLike(entry) &&
-    !workEntryIndicatesToolFailure(entry) &&
-    entry.tone !== "thinking" &&
-    entry.toolLifecycleStatus !== "idle" &&
-    entry.toolLifecycleStatus !== "inProgress" &&
-    entry.toolLifecycleStatus !== "stopped"
-  );
+  return (checksFor(entry).displayFailure ??= workEntryIndicatesToolFailureFromOutput(
+    entry,
+    false,
+  ));
 }
 
 function workLogEntryIsLocalCodeSearch(entry: WorkLogPresentationEntry): boolean {
@@ -425,13 +327,16 @@ function workLogEntryIsLocalCodeSearch(entry: WorkLogPresentationEntry): boolean
 }
 
 export function toolGroupAction(entry: WorkLogPresentationEntry): ToolGroupAction {
+  return (checksFor(entry).action ??= computeToolGroupAction(entry));
+}
+
+function computeToolGroupAction(entry: WorkLogPresentationEntry): ToolGroupAction {
   if (entry.itemType === "thread_created") return "thread-create";
   const presentation = resolveWorkEntryToolPresentation(entry);
   if (presentation?.action !== undefined) return presentation.action;
   if (presentation?.icon === "browser") return "browser";
   if (presentation?.icon === "device") return "device";
   if (entry.requestKind === "file-read" || entry.viewedImagePath !== undefined) return "read";
-  // Approvals and questions describe requested work, not work that ran.
   if (entry.itemType === "approval_request" || entry.itemType === "user_input_request") {
     return workLogEntryIsToolLike(entry) ? "other" : "update";
   }
@@ -504,8 +409,6 @@ export function resolveViewedImageAsset(
     readonly workspaceRoot?: string | null | undefined;
   },
 ): ViewedImageAsset | null {
-  // A relative path with no known workspace still names a media-file relative
-  // to the thread's workspace, so classify against "." and drop the prefix.
   const imageSource = classifyMarkdownImageSource(source, input.workspaceRoot ?? ".");
   if (imageSource._tag !== "WorkspaceFile") return null;
   const resolvedFilePath =
@@ -576,17 +479,9 @@ function toolGroupActionLabel(action: ToolGroupAction, count: number): string {
   }
 }
 
-function cinderdeckToolSummaryCall(entry: WorkLogPresentationEntry): CinderdeckToolSummaryCall {
-  const item = entry.structuredPayload;
-  const data =
-    entry.toolData !== null && typeof entry.toolData === "object"
-      ? (entry.toolData as Record<string, unknown>)
-      : undefined;
+function t3ToolSummaryCall(entry: WorkLogPresentationEntry): T3ToolSummaryCall {
   return {
-    input:
-      item?.type === "dynamic_tool"
-        ? item.input
-        : (data?.arguments ?? data?.input ?? data?.rawInput),
+    input: workEntryToolInput(entry),
     output: workEntryToolOutput(entry),
     outcome:
       entry.toolLifecycleStatus === "failed" ||
@@ -599,7 +494,7 @@ function cinderdeckToolSummaryCall(entry: WorkLogPresentationEntry): CinderdeckT
   };
 }
 
-function summaryActionPriority(action: ToolGroupAction | CinderdeckMcpToolSummaryAction): number {
+function summaryActionPriority(action: ToolGroupAction | T3McpToolSummaryAction): number {
   switch (action) {
     case "command":
     case "edit":
@@ -608,6 +503,8 @@ function summaryActionPriority(action: ToolGroupAction | CinderdeckMcpToolSummar
     case "thread-create":
     case "thread-send":
     case "thread-interrupt":
+    case "workflow-stop":
+    case "background-wait":
     case "schedule-create":
     case "schedule-update":
     case "schedule-delete":
@@ -640,7 +537,6 @@ function summaryActionPriority(action: ToolGroupAction | CinderdeckMcpToolSummar
   }
 }
 
-/** Summarizes at most two action categories; every omitted call still counts in the remainder. */
 export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEntry>): {
   summary: string;
   hasFailure: boolean;
@@ -654,36 +550,35 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEnt
   }
   entries = toolEntries;
   const groups = new Map<
-    ToolGroupAction | CinderdeckMcpToolSummaryAction,
+    ToolGroupAction | T3McpToolSummaryAction,
     {
       action: ToolGroupAction;
-      cinderdeckAction: CinderdeckMcpToolSummaryAction | null;
+      t3Action: T3McpToolSummaryAction | null;
       entries: WorkLogPresentationEntry[];
     }
   >();
   const sources = new Map<string, ToolActivitySource>();
   for (const entry of entries) {
-    const cinderdeckAction =
-      resolveCinderdeckMcpToolDefinition(workEntryToolName(entry))?.summaryAction ?? null;
-    if (entry.toolSource && cinderdeckAction === null) {
+    const t3Action = resolveT3McpSummaryAction(
+      workEntryToolName(entry),
+      t3ToolSummaryCall(entry).input,
+    );
+    if (entry.toolSource && t3Action === null) {
       sources.set(entry.toolSource.key, entry.toolSource);
       continue;
     }
     const action = toolGroupAction(entry);
-    const key = cinderdeckAction ?? action;
+    const key = t3Action ?? action;
     const group = groups.get(key);
     if (group) group.entries.push(entry);
-    else groups.set(key, { action, cinderdeckAction, entries: [entry] });
+    else groups.set(key, { action, t3Action, entries: [entry] });
   }
   const summaries = [...groups].map(([action, group], index) => ({
     index,
     count: group.entries.length,
     priority: summaryActionPriority(action),
-    ...(group.cinderdeckAction
-      ? summarizeCinderdeckToolCalls(
-          group.cinderdeckAction,
-          group.entries.map(cinderdeckToolSummaryCall),
-        )
+    ...(group.t3Action
+      ? summarizeT3ToolCalls(group.t3Action, group.entries.map(t3ToolSummaryCall))
       : {
           label: toolGroupActionLabel(
             group.action,
@@ -699,7 +594,7 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEnt
   const labels = selected.map(({ label }) => label);
   if (sources.size > 0) {
     const sourceValues = [...sources.values()];
-    const sourceNames = sourceValues.map((source) => source.name);
+    const sourceNames = [...new Set(sourceValues.map((source) => source.name))];
     const formattedNames =
       sourceNames.length < 2
         ? sourceNames[0]!
@@ -708,13 +603,13 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEnt
           : `${sourceNames.slice(0, -1).join(", ")}, and ${sourceNames.at(-1)}`;
     const allIntegrations = sourceValues.every((source) => source.kind === "integration");
     labels.unshift(
-      `Used ${formattedNames}${allIntegrations ? ` ${sources.size === 1 ? "integration" : "integrations"}` : ""}`,
+      `Used ${formattedNames}${allIntegrations ? ` ${sourceNames.length === 1 ? "integration" : "integrations"}` : ""}`,
     );
   }
   const sourcedCount = entries.filter(
     (entry) =>
       entry.toolSource !== undefined &&
-      resolveCinderdeckMcpToolDefinition(workEntryToolName(entry)) === null,
+      resolveT3McpToolDefinition(workEntryToolName(entry)) === null,
   ).length;
   const remainingCount =
     entries.length - sourcedCount - selected.reduce((count, group) => count + group.count, 0);
@@ -756,4 +651,18 @@ export function toolGroupSummaryKind(
     }),
   );
   return fallbackKinds.size === 1 ? fallbackKinds.values().next().value! : "mixed";
+}
+
+export function liveThoughtLine(markdown: string): string {
+  const heading = /^\s*\*\*([^*\r\n]+)\*\*[ \t]*\r?(?:\n|$)/.exec(markdown)?.[1];
+  const text = (heading ?? markdown)
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/^[ \t]*(?:#{1,6}|[-*+]|\d+\.)[ \t]+/gm, "")
+    .replace(/`+|\*\*|~~/g, "")
+    .replace(/(^|[^\w*])[*_]([^*_\n]+)[*_](?![\w*])/g, "$1$2")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (heading !== undefined) return text;
+  const end = /[.?!]["'”’)]?(?=\s)/.exec(text);
+  return end ? text.slice(0, end.index + end[0].length) : text;
 }

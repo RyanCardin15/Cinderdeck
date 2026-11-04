@@ -5,7 +5,7 @@ import {
   type ServerSelfUpdateInput,
   type ServerSelfUpdateResult,
   WS_METHODS,
-} from "@cinderdeck/contracts";
+} from "@t3tools/contracts";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -15,17 +15,24 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import * as RpcClient from "effect/unstable/rpc/RpcClient";
-import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
-import * as Socket from "effect/unstable/socket/Socket";
+import * as HttpClient from "effect/http/HttpClient";
+import * as RpcClient from "effect/rpc/RpcClient";
+import * as RpcSerialization from "effect/rpc/RpcSerialization";
+import * as Socket from "effect/socket/Socket";
 
 import { fetchRemoteEnvironmentDescriptor } from "../environment/descriptor.ts";
-import { makeWsRpcProtocolClient } from "../rpc/protocol.ts";
+import { makeWsRpcProtocolClient, PING_TIMEOUT } from "../rpc/protocol.ts";
 import { isLegacyUpdateHandoffLoss, resolveServerUpdateProgressResult } from "../state/server.ts";
 import * as RelayEnvironmentDiscovery from "../relay/discovery.ts";
 import * as ConnectionResolver from "./resolver.ts";
 import * as EnvironmentRegistry from "./registry.ts";
+import {
+  connectionRoutes,
+  hasRelayRoute,
+  routeEntry,
+  routeHttpBaseUrl,
+  usableRoutes,
+} from "./routes.ts";
 
 // A v1 host restarting into v2 runs migrations before its descriptor answers again.
 const OUTDATED_HOST_RESTART_TIMEOUT = Duration.minutes(4);
@@ -41,13 +48,29 @@ export class OutdatedHostUpdateError extends Schema.TaggedError<OutdatedHostUpda
 
 export type OutdatedHostUpdateStage = "downloading" | "installing" | "resuming";
 
+const reachOutdatedHost = Effect.fn("clientRuntime.connection.reachOutdatedHost")(function* (
+  environmentId: EnvironmentId,
+) {
+  const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+  const resolver = yield* ConnectionResolver.ConnectionResolver;
+  const entry = (yield* SubscriptionRef.get(registry.entries)).get(environmentId);
+  if (entry === undefined) {
+    return yield* new EnvironmentRegistry.EnvironmentNotRegisteredError({ environmentId });
+  }
+  const { prepared, descriptor } = yield* Effect.firstSuccessOf(
+    usableRoutes(entry).map((route) => resolver.prepareForUpdate(routeEntry(entry, route))),
+  );
+  return { entry, prepared, descriptor };
+});
+
+// The normal session cannot read config from a host behind the protocol gate.
+export const describeOutdatedHost = (environmentId: EnvironmentId) =>
+  reachOutdatedHost(environmentId).pipe(Effect.map(({ descriptor }) => descriptor));
+
 /**
- * Updates a host whose orchestration protocol is too old for this client.
- *
- * The normal session refuses to open against such a host, so this opens a
- * bare socket and calls only the self-update RPCs, whose wire shape has not
- * changed across protocol versions. Once the host relaunches on a compatible
- * protocol the environment is switched back on and connects normally.
+ * The normal session refuses to open against such a host, so this opens a bare
+ * socket and calls only the self-update RPCs, whose wire shape has not changed
+ * across protocol versions.
  */
 export const updateOutdatedHost = Effect.fn("clientRuntime.connection.updateOutdatedHost")(
   function* (
@@ -56,14 +79,27 @@ export const updateOutdatedHost = Effect.fn("clientRuntime.connection.updateOutd
     onStage: (stage: OutdatedHostUpdateStage) => Effect.Effect<void>,
   ) {
     const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
-    const resolver = yield* ConnectionResolver.ConnectionResolver;
     const webSocketConstructor = yield* Socket.WebSocketConstructor;
     const httpClient = yield* HttpClient.HttpClient;
-    const entry = (yield* SubscriptionRef.get(registry.entries)).get(environmentId);
-    if (entry === undefined) {
-      return yield* new EnvironmentRegistry.EnvironmentNotRegisteredError({ environmentId });
+    const { entry, prepared, descriptor } = yield* reachOutdatedHost(environmentId);
+    // Discovery still holds the old relay descriptor and would re-block the
+    // environment from it, so replace that before clearing the block.
+    const switchBackOn = Effect.gen(function* () {
+      if (hasRelayRoute(entry)) {
+        const discovery = yield* RelayEnvironmentDiscovery.RelayEnvironmentDiscovery;
+        yield* discovery.refresh;
+      }
+      yield* registry.setCompatibility(environmentId, null);
+      yield* registry.setEnabled(environmentId, true);
+    });
+
+    // A host updated by hand is already compatible, and a bare socket would be
+    // rejected with 426, so there is nothing to update.
+    if (isCompatibleDescriptor(descriptor)) {
+      yield* switchBackOn;
+      return { targetVersion: descriptor.serverVersion };
     }
-    const { prepared, descriptor } = yield* resolver.prepareForUpdate(entry);
+
     const capabilities = descriptor.capabilities;
     if (
       capabilities.serverSelfUpdate === undefined ||
@@ -72,7 +108,7 @@ export const updateOutdatedHost = Effect.fn("clientRuntime.connection.updateOutd
     ) {
       return yield* new OutdatedHostUpdateError({
         environmentId,
-        message: `Update Cinderdeck on ${descriptor.label} manually; it cannot update itself.`,
+        message: `Update T3 Code on ${descriptor.label} manually; it cannot update itself.`,
       });
     }
 
@@ -82,6 +118,7 @@ export const updateOutdatedHost = Effect.fn("clientRuntime.connection.updateOutd
           Layer.effect(
             RpcClient.Protocol,
             RpcClient.makeProtocolSocket({
+              pingTimeout: PING_TIMEOUT,
               retryTransientErrors: false,
               retryPolicy: Schedule.recurs(0),
             }),
@@ -104,20 +141,31 @@ export const updateOutdatedHost = Effect.fn("clientRuntime.connection.updateOutd
           capabilities.serverSelfUpdateProgress === true
             ? yield* Effect.gen(function* () {
                 const terminal = yield* Ref.make(Option.none<ServerSelfUpdateResult>());
+                let receivedProgress = false;
                 const streamExit = yield* client[WS_METHODS.serverUpdateServerWithProgress](
                   input,
                 ).pipe(
                   Stream.runForEach((event) =>
                     event.type === "complete"
                       ? Ref.set(terminal, Option.some(event.result))
-                      : onStage(event.stage),
+                      : Effect.sync(() => {
+                          receivedProgress = true;
+                        }).pipe(Effect.andThen(onStage(event.stage))),
                   ),
                   Effect.exit,
                 );
+                const selfUpdateMethod = capabilities.serverSelfUpdate;
+                // Desktop preparation needs its terminal commit token.
+                const accepted =
+                  receivedProgress &&
+                  (selfUpdateMethod === "boot-service" || selfUpdateMethod === "respawn")
+                    ? { targetVersion: input.targetVersion, method: selfUpdateMethod }
+                    : undefined;
                 return yield* resolveServerUpdateProgressResult(
                   input.targetVersion,
                   yield* Ref.get(terminal),
                   streamExit,
+                  accepted,
                 );
               })
             : yield* client[WS_METHODS.serverUpdateServer](input).pipe(
@@ -154,9 +202,21 @@ export const updateOutdatedHost = Effect.fn("clientRuntime.connection.updateOutd
     );
 
     yield* onStage("resuming");
-    const resumed = yield* fetchRemoteEnvironmentDescriptor({
-      httpBaseUrl: prepared.httpBaseUrl,
-    }).pipe(
+    const pollUrls = [
+      prepared.httpBaseUrl,
+      ...connectionRoutes(entry).flatMap((route) => routeHttpBaseUrl(route) ?? []),
+    ].filter((url, index, all) => all.indexOf(url) === index);
+    const resumed = yield* Effect.firstSuccessOf(
+      pollUrls.map((httpBaseUrl) =>
+        fetchRemoteEnvironmentDescriptor({ httpBaseUrl }).pipe(
+          Effect.filterOrFail(
+            (descriptor) =>
+              descriptor.environmentId === environmentId && isCompatibleDescriptor(descriptor),
+            () => "not-ready" as const,
+          ),
+        ),
+      ),
+    ).pipe(
       Effect.provideService(HttpClient.HttpClient, httpClient),
       Effect.option,
       Effect.repeat({
@@ -169,18 +229,11 @@ export const updateOutdatedHost = Effect.fn("clientRuntime.connection.updateOutd
     if (Option.isNone(resumed)) {
       return yield* new OutdatedHostUpdateError({
         environmentId,
-        message: `${descriptor.label} did not come back on a compatible Cinderdeck version.`,
+        message: `${descriptor.label} did not come back on a compatible T3 Code version.`,
       });
     }
 
-    // Discovery still holds the old relay descriptor and would re-block the
-    // environment from it, so replace that before clearing the block.
-    if (entry.target._tag === "RelayConnectionTarget") {
-      const discovery = yield* RelayEnvironmentDiscovery.RelayEnvironmentDiscovery;
-      yield* discovery.refresh;
-    }
-    yield* registry.setCompatibility(environmentId, null);
-    yield* registry.setEnabled(environmentId, true);
+    yield* switchBackOn;
     return { ...result, targetVersion: resumed.value.serverVersion };
   },
 );

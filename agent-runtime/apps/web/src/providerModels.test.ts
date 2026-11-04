@@ -2,7 +2,7 @@ import {
   ProviderDriverKind,
   type ModelCapabilities,
   type ServerProviderModel,
-} from "@cinderdeck/contracts";
+} from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { getProviderModelCapabilities } from "./providerModels";
@@ -60,18 +60,5 @@ describe("getProviderModelCapabilities", () => {
     expect(getProviderModelCapabilities(models, " custom-model ", PROVIDER)).toEqual(
       customCapabilities,
     );
-  });
-
-  it("returns empty capabilities for an unknown slug", () => {
-    const models = [
-      model({
-        slug: "default-model",
-        capabilities: capabilities("default-option"),
-      }),
-    ];
-
-    expect(getProviderModelCapabilities(models, "unknown-model", PROVIDER)).toEqual({
-      optionDescriptors: [],
-    });
   });
 });

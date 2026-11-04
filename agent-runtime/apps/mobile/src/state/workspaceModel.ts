@@ -1,15 +1,14 @@
-import { type EnvironmentShellSummary } from "@cinderdeck/client-runtime/state/shell";
-import type { EnvironmentId, ServerConfig } from "@cinderdeck/contracts";
+import { type EnvironmentShellSummary } from "@t3tools/client-runtime/state/shell";
+import type { EnvironmentId, ServerConfig } from "@t3tools/contracts";
 
 import {
   type EnvironmentConnectionPhase,
   type NetworkStatus,
-} from "@cinderdeck/client-runtime/connection";
+} from "@t3tools/client-runtime/connection";
 
-import type { EnvironmentConnectionSummary as WorkspaceEnvironment } from "@cinderdeck/client-runtime/state/presentation";
+import type { EnvironmentConnectionSummary as WorkspaceEnvironment } from "@t3tools/client-runtime/state/presentation";
 
-export { projectEnvironmentConnectionSummary as projectWorkspaceEnvironment } from "@cinderdeck/client-runtime/state/presentation";
-export type { EnvironmentConnectionSummary as WorkspaceEnvironment } from "@cinderdeck/client-runtime/state/presentation";
+export type { EnvironmentConnectionSummary as WorkspaceEnvironment } from "@t3tools/client-runtime/state/presentation";
 
 export interface WorkspaceConnectionState {
   readonly isLoadingConnections: boolean;
@@ -25,6 +24,7 @@ export interface WorkspaceConnectionState {
 export interface WorkspaceState extends WorkspaceConnectionState {
   readonly hasLoadedShellSnapshot: boolean;
   readonly hasPendingShellSnapshot: boolean;
+  readonly hasSyncingConnectedEnvironment: boolean;
   readonly shellSnapshotError: string | null;
 }
 
@@ -64,8 +64,6 @@ export function projectWorkspaceConnectionState(input: {
   readonly networkStatus: NetworkStatus;
   readonly environments: ReadonlyArray<WorkspaceEnvironment>;
 }): WorkspaceConnectionState {
-  // Switched-off environments still count as saved connections, but they do
-  // not drive the overall connection state or surface their last error.
   const activeEnvironments = input.environments.filter((environment) => environment.isEnabled);
   const connectingEnvironments = activeEnvironments.filter(
     (environment) =>
@@ -94,11 +92,13 @@ export function projectWorkspaceState(input: {
   readonly networkStatus: NetworkStatus;
   readonly environments: ReadonlyArray<WorkspaceEnvironment>;
   readonly shellSummary: EnvironmentShellSummary;
+  readonly hasSyncingConnectedEnvironment: boolean;
 }): WorkspaceState {
   return {
     ...projectWorkspaceConnectionState(input),
     hasLoadedShellSnapshot: input.shellSummary.hasSnapshot,
     hasPendingShellSnapshot: input.shellSummary.hasSynchronizingShell,
+    hasSyncingConnectedEnvironment: input.hasSyncingConnectedEnvironment,
     shellSnapshotError: input.shellSummary.firstError,
   };
 }

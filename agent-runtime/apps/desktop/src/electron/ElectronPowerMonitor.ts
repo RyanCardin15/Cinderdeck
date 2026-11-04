@@ -26,7 +26,7 @@ export class ElectronPowerMonitor extends Context.Service<
       listener: (limit: number) => void,
     ) => Effect.Effect<void, never, Scope.Scope>;
   }
->()("@cinderdeck/desktop/electron/ElectronPowerMonitor") {}
+>()("@t3tools/desktop/electron/ElectronPowerMonitor") {}
 
 const onSimpleEvent: ElectronPowerMonitor["Service"]["onSimpleEvent"] = (eventName, listener) =>
   Effect.acquireRelease(
@@ -75,12 +75,15 @@ const onSpeedLimitChange: ElectronPowerMonitor["Service"]["onSpeedLimitChange"] 
   ).pipe(Effect.asVoid);
 };
 
-/** @public Service construction is part of the canonical Effect module API. */
+/** @public */
 export const make = ElectronPowerMonitor.of({
   isOnBatteryPower: Effect.sync(() => Electron.powerMonitor.isOnBatteryPower()),
   getSystemIdleTime: Effect.sync(() => Electron.powerMonitor.getSystemIdleTime()),
-  getSystemIdleState: (idleThresholdSeconds) =>
-    Effect.sync(() => Electron.powerMonitor.getSystemIdleState(idleThresholdSeconds)),
+  getSystemIdleState: Effect.fn("ElectronPowerMonitor.getSystemIdleState")(
+    function (idleThresholdSeconds) {
+      return Effect.sync(() => Electron.powerMonitor.getSystemIdleState(idleThresholdSeconds));
+    },
+  ),
   getCurrentThermalState: Effect.sync(() => Electron.powerMonitor.getCurrentThermalState()),
   onSimpleEvent,
   onThermalStateChange,

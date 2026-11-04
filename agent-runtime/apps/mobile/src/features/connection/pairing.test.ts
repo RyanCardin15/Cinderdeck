@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  buildPairingUrl,
-  extractPairingUrlFromQrPayload,
-  PairingQrPayloadEmptyError,
-  parsePairingUrl,
-} from "./pairing";
+import { buildPairingUrl, extractPairingUrlFromQrPayload, parsePairingUrl } from "./pairing";
 
 describe("buildPairingUrl", () => {
   it("uses HTTP for a schemeless IP address", () => {
@@ -28,30 +23,12 @@ describe("buildPairingUrl", () => {
 });
 
 describe("extractPairingUrlFromQrPayload", () => {
-  it("trims raw pairing urls from qr payloads", () => {
-    expect(
-      extractPairingUrlFromQrPayload("  https://remote.example.com/pair#token=pairing-token  "),
-    ).toBe("https://remote.example.com/pair#token=pairing-token");
-  });
-
-  it.each([
-    "t3code:",
-    "cinderdeck-companion:",
-    "cinderdeck-companion-dev:",
-    "cinderdeck-companion-preview:",
-  ])("unwraps %s links that carry an encoded pairing url", (scheme) => {
+  it("unwraps mobile deep links that carry an encoded pairing url", () => {
     expect(
       extractPairingUrlFromQrPayload(
-        `${scheme}//pair?pairingUrl=https%3A%2F%2Fremote.example.com%2Fpair%23token%3Dpairing-token`,
+        "t3code://pair?pairingUrl=https%3A%2F%2Fremote.example.com%2Fpair%23token%3Dpairing-token",
       ),
     ).toBe("https://remote.example.com/pair#token=pairing-token");
-  });
-
-  it("rejects empty qr payloads", () => {
-    expect(() => extractPairingUrlFromQrPayload("   ")).toThrowError(PairingQrPayloadEmptyError);
-    expect(() => extractPairingUrlFromQrPayload("   ")).toThrowError(
-      "Scanned QR code did not contain a pairing URL.",
-    );
   });
 });
 
@@ -59,7 +36,7 @@ describe("parsePairingUrl", () => {
   it("reads hosted pairing links into backend host fields", () => {
     expect(
       parsePairingUrl(
-        "https://app.abc.test/pair?host=https%3A%2F%2Fdesktop.tailnet.ts.net%2F#token=pairing-token",
+        "https://app.t3.codes/pair?host=https%3A%2F%2Fdesktop.tailnet.ts.net%2F#token=pairing-token",
       ),
     ).toEqual({
       host: "https://desktop.tailnet.ts.net",

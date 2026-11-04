@@ -1,6 +1,6 @@
 import * as Option from "effect/Option";
 import { describe, expect, it } from "vite-plus/test";
-import { EnvironmentId, type DeviceHostSummary } from "@cinderdeck/contracts";
+import { EnvironmentId, type DeviceHostSummary } from "@t3tools/contracts";
 import {
   checkDeviceHostConnections,
   parseDeviceHostDraft,
@@ -8,7 +8,7 @@ import {
   type DeviceHostCheck,
 } from "./deviceHostConnectionChecks";
 
-const host = { id: "mac", label: "Mac mini", target: "user@mac" };
+const host = { kind: "ssh" as const, id: "mac", label: "Mac mini", target: "user@mac" };
 const ids = ["a", "b", "c", "d"].map((id) => EnvironmentId.make(id));
 const targets = ids.map((environmentId, index) => ({
   environmentId,

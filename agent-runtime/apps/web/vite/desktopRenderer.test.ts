@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off -- This middleware integration test owns a disposable native HTTP listener.
 import * as NodeHttp from "node:http";
 import { describe, expect, it } from "vite-plus/test";
-import { DESKTOP_RENDERER_ACCESS_HEADER } from "@cinderdeck/shared/desktopRendererAccess";
+import { DESKTOP_RENDERER_ACCESS_HEADER } from "@t3tools/shared/desktopRendererAccess";
 import { desktopRendererMiddleware } from "./desktopRenderer.ts";
 
 describe("desktop development renderer", () => {

@@ -66,7 +66,7 @@ final class PullRequestsShortcutTests: XCTestCase {
     await fulfillment(of: [received], timeout: 2)
   }
 
-  func testDisabledAndClearedShortcutReleaseGlobalKey() throws {
+  func testRetiredShortcutLeavesGlobalKeyAvailable() throws {
     try skipIfRunningInCI("Carbon hotkey registration requires a desktop session")
     let manager = KeyboardShortcutManager.shared
     preserveSettings(manager)
@@ -81,11 +81,11 @@ final class PullRequestsShortcutTests: XCTestCase {
     manager.setPullRequestsShortcut(config)
     manager.setShortcutEnabled(true, for: .pullRequests)
     manager.enable()
-    XCTAssertEqual(probe(), OSStatus(-9878))
+    XCTAssertEqual(probe(), noErr)
     manager.setShortcutEnabled(false, for: .pullRequests)
     XCTAssertEqual(probe(), noErr)
     manager.setShortcutEnabled(true, for: .pullRequests)
-    XCTAssertEqual(probe(), OSStatus(-9878))
+    XCTAssertEqual(probe(), noErr)
     manager.setPullRequestsShortcut(nil)
     XCTAssertEqual(probe(), noErr)
   }

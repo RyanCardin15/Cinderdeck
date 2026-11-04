@@ -2,8 +2,9 @@ import {
   computeDpopAccessTokenHash,
   computeDpopJwkThumbprint,
   DpopPublicJwk,
-} from "@cinderdeck/shared/dpop";
-import * as Crypto from "effect/Crypto";
+} from "@t3tools/shared/dpop";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -21,24 +22,13 @@ export class BrowserDpopError extends Data.TaggedError("BrowserDpopError")<{
   readonly cause?: unknown;
 }> {}
 
-const DPOP_DATABASE_NAME = "deckhand:cloud-auth";
+const DPOP_DATABASE_NAME = "t3code:cloud-auth";
 const DPOP_DATABASE_VERSION = 1;
 const DPOP_KEY_STORE_NAME = "keys";
 const DPOP_KEY_ID = "relay-dpop-proof-key";
 const decodeDpopPublicJwk = Schema.decodeUnknownEffect(DpopPublicJwk);
 
-export const browserCryptoLayer = Layer.succeed(
-  Crypto.Crypto,
-  Crypto.make({
-    randomBytes: (size) => globalThis.crypto.getRandomValues(new Uint8Array(size)),
-    digest: (algorithm, data) =>
-      Effect.promise(async () => {
-        const input = new Uint8Array(data.length);
-        input.set(data);
-        return new Uint8Array(await globalThis.crypto.subtle.digest(algorithm, input.buffer));
-      }),
-  }),
-);
+export const layer = Layer.mergeAll(SecureRandom.layerWebCrypto, Digest.layerWebCrypto);
 
 function dpopError(message: string, cause?: unknown) {
   return new BrowserDpopError({ message, ...(cause === undefined ? {} : { cause }) });
@@ -142,44 +132,39 @@ export const generateBrowserDpopKey = Effect.gen(function* () {
   };
 });
 
-export function createBrowserDpopProof(input: {
+export const createBrowserDpopProof = Effect.fn("dpop.createBrowserDpopProof")(function* (input: {
   readonly method: string;
   readonly url: string;
   readonly accessToken?: string;
   readonly proofKey: BrowserDpopKey;
-}): Effect.Effect<
+}): Effect.fn.Return<
   { readonly proof: string; readonly thumbprint: string },
   BrowserDpopError,
-  Crypto.Crypto
+  SecureRandom.SecureRandom
 > {
-  return Effect.gen(function* () {
-    const normalizedUrl = yield* Effect.try({
-      try: () => new URL(input.url),
-      catch: (cause) => dpopError("Could not normalize DPoP proof URL.", cause),
-    });
-    normalizedUrl.search = "";
-    normalizedUrl.hash = "";
-    const jti = yield* Crypto.Crypto.pipe(
-      Effect.flatMap((crypto) => crypto.randomUUIDv4),
-      Effect.mapError((cause) => dpopError("Could not generate DPoP proof identifier.", cause)),
-    );
-    const proof = yield* Effect.tryPromise({
-      try: () =>
-        new SignJWT({
-          htm: input.method.toUpperCase(),
-          htu: normalizedUrl.toString(),
-          jti,
-          ...(input.accessToken ? { ath: computeDpopAccessTokenHash(input.accessToken) } : {}),
-        })
-          .setProtectedHeader({
-            typ: "dpop+jwt",
-            alg: "ES256",
-            jwk: input.proofKey.publicJwk,
-          })
-          .setIssuedAt()
-          .sign(input.proofKey.privateKey),
-      catch: (cause) => dpopError("Could not sign DPoP proof.", cause),
-    });
-    return { proof, thumbprint: input.proofKey.thumbprint };
+  const normalizedUrl = yield* Effect.try({
+    try: () => new URL(input.url),
+    catch: (cause) => dpopError("Could not normalize DPoP proof URL.", cause),
   });
-}
+  normalizedUrl.search = "";
+  normalizedUrl.hash = "";
+  const jti = yield* SecureRandom.SecureRandom.pipe(Effect.flatMap((random) => random.uuidV4()));
+  const proof = yield* Effect.tryPromise({
+    try: () =>
+      new SignJWT({
+        htm: input.method.toUpperCase(),
+        htu: normalizedUrl.toString(),
+        jti,
+        ...(input.accessToken ? { ath: computeDpopAccessTokenHash(input.accessToken) } : {}),
+      })
+        .setProtectedHeader({
+          typ: "dpop+jwt",
+          alg: "ES256",
+          jwk: input.proofKey.publicJwk,
+        })
+        .setIssuedAt()
+        .sign(input.proofKey.privateKey),
+    catch: (cause) => dpopError("Could not sign DPoP proof.", cause),
+  });
+  return { proof, thumbprint: input.proofKey.thumbprint };
+});

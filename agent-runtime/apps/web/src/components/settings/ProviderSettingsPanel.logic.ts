@@ -1,89 +1,14 @@
-import type { EnvironmentConnectionPhase } from "@cinderdeck/client-runtime/connection";
+import type { EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
 import {
-  AuthOrchestrationOperateScope,
-  defaultInstanceIdForDriver,
-  type AuthSessionState,
+  AuthProvidersManageScope,
   type EnvironmentId,
-  type ProviderDriverKind,
-  type ProviderInstanceConfig,
+  type ProjectId,
+  type ProjectSettingsOverrides,
   type ProviderInstanceId,
+  sessionGrantsScope,
   type ServerSettings,
-} from "@cinderdeck/contracts";
-import { DEFAULT_UNIFIED_SETTINGS } from "@cinderdeck/contracts/settings";
-import * as Equal from "effect/Equal";
-
-import { DRIVER_OPTIONS } from "./providerDriverMeta";
-
-export interface ProviderSettingsInstanceRow {
-  readonly instanceId: ProviderInstanceId;
-  readonly instance: ProviderInstanceConfig;
-  readonly driver: ProviderDriverKind;
-  readonly isDefault: boolean;
-  readonly isDirty?: boolean;
-}
-
-/** Show every supported default slot, including providers awaiting setup or disabled by the user. */
-export function buildProviderSettingsInstanceRows(
-  settings: Pick<ServerSettings, "providers" | "providerInstances">,
-): ReadonlyArray<ProviderSettingsInstanceRow> {
-  const instancesByDriver = new Map<
-    ProviderDriverKind,
-    Array<[ProviderInstanceId, ProviderInstanceConfig]>
-  >();
-  for (const [rawId, instance] of Object.entries(settings.providerInstances ?? {})) {
-    const list = instancesByDriver.get(instance.driver) ?? [];
-    list.push([rawId as ProviderInstanceId, instance]);
-    instancesByDriver.set(instance.driver, list);
-  }
-
-  type LegacyProviderSettings = ServerSettings["providers"][keyof ServerSettings["providers"]];
-  const legacyProviders = settings.providers as Record<string, LegacyProviderSettings>;
-  const defaultLegacyProviders = DEFAULT_UNIFIED_SETTINGS.providers as Record<
-    string,
-    LegacyProviderSettings
-  >;
-  const rows: ProviderSettingsInstanceRow[] = [];
-
-  for (const definition of DRIVER_OPTIONS) {
-    const driver = definition.value;
-    const defaultInstanceId = defaultInstanceIdForDriver(driver);
-    const explicitInstance = settings.providerInstances?.[defaultInstanceId];
-    // Older remote servers may not support this driver. Registry agents also
-    // have no legacy default slot; their configured instances still appear below.
-    const legacyConfig = legacyProviders[driver];
-    let effectiveInstance = explicitInstance;
-    if (effectiveInstance === undefined && legacyConfig !== undefined) {
-      // The envelope owns the enabled flag so enabling a synthesized default
-      // cannot be overridden by its old in-config flag.
-      const { enabled, ...config } = legacyConfig;
-      effectiveInstance = { driver, enabled, config };
-    }
-    if (effectiveInstance !== undefined) {
-      rows.push({
-        instanceId: defaultInstanceId,
-        instance: effectiveInstance,
-        driver,
-        isDefault: true,
-        isDirty:
-          explicitInstance !== undefined ||
-          !Equal.equals(legacyConfig, defaultLegacyProviders[driver]),
-      });
-    }
-    for (const [instanceId, instance] of instancesByDriver.get(driver) ?? []) {
-      if (instanceId === defaultInstanceId) continue;
-      rows.push({ instanceId, instance, driver: instance.driver, isDefault: false });
-    }
-    instancesByDriver.delete(driver);
-  }
-
-  // Preserve instances supplied by newer servers or custom drivers.
-  for (const list of instancesByDriver.values()) {
-    for (const [instanceId, instance] of list) {
-      rows.push({ instanceId, instance, driver: instance.driver, isDefault: false });
-    }
-  }
-  return rows;
-}
+  type SessionGrantInput,
+} from "@t3tools/contracts";
 
 export interface ProviderEnvironmentOptionLike {
   readonly environmentId: EnvironmentId;
@@ -140,91 +65,47 @@ export function resolveSelectedProviderEnvironmentId(
 
 export type ProviderEnvironmentAccess =
   | { readonly kind: "editable" }
-  /** `reason` distinguishes waiting on the device from waiting on permissions. */
   | { readonly kind: "loading"; readonly reason: "config" | "permissions" }
   | { readonly kind: "read-only" }
   | { readonly kind: "unavailable" }
   | { readonly kind: "error" };
 
-/**
- * Whether the session may change provider configuration on an environment.
- * `pending` means the answer is still unknown, which must not be presented as
- * editable: rendering controls we already know might be rejected only turns a
- * permission problem into a failed write.
- */
 export type ProviderOperateAccess = "granted" | "denied" | "pending";
 
-/**
- * Resolve operate access from an environment's `/api/auth/session` answer.
- *
- * Cached session data wins over an in-flight revalidation. The session atoms
- * are SWR-backed, so they report `isPending` on every background refresh;
- * treating that as unknown would flip a working panel back to loading and
- * discard in-progress edits.
- *
- * `missingScopesAccess` decides the case where the session resolved but did
- * not report scopes: the primary serves the web app itself so its server
- * always reports them (absence means denial), while a remote device may run an
- * older server version that predates scope reporting, where denial would lock
- * out a legitimate session. The environment RPC layer stays authoritative
- * either way.
- */
-function resolveSessionOperateAccess(input: {
-  readonly session: Pick<AuthSessionState, "authenticated" | "scopes"> | null;
-  readonly isPending: boolean;
-  readonly hasError: boolean;
-  readonly missingScopesAccess: "granted" | "denied";
-}): ProviderOperateAccess {
-  if (input.session === null) {
-    if (input.isPending) {
-      return "pending";
-    }
-    // A failed session fetch is a transport problem, not a permission
-    // decision — locking the panel read-only would misreport it. Stay
-    // optimistic; the environment RPC layer still rejects unauthorized writes.
-    return input.hasError ? "granted" : "denied";
-  }
-  if (!input.session.authenticated) {
-    return "denied";
-  }
-  if (input.session.scopes === undefined) {
-    return input.missingScopesAccess;
-  }
-  return input.session.scopes.includes(AuthOrchestrationOperateScope) ? "granted" : "denied";
-}
-
-/** Operate access for the primary environment's own browser session. */
-export function resolvePrimaryOperateAccess(input: {
-  readonly isPrimary: boolean;
-  readonly hasDesktopBridge: boolean;
-  readonly session: Pick<AuthSessionState, "authenticated" | "scopes"> | null;
-  readonly isPending: boolean;
-  readonly hasError: boolean;
-}): ProviderOperateAccess {
-  if (!input.isPrimary || input.hasDesktopBridge) {
-    return "granted";
-  }
-  return resolveSessionOperateAccess({
-    session: input.session,
-    isPending: input.isPending,
-    hasError: input.hasError,
-    missingScopesAccess: "denied",
-  });
-}
-
-/**
- * Operate access for a non-primary environment, derived from the scopes its
- * `/api/auth/session` endpoint reports for this client's credential.
- */
 export function resolveRemoteOperateAccess(input: {
-  readonly session: Pick<AuthSessionState, "authenticated" | "scopes"> | null;
+  readonly session: SessionGrantInput | null;
   readonly isPending: boolean;
   readonly hasError: boolean;
 }): ProviderOperateAccess {
-  return resolveSessionOperateAccess({
-    ...input,
-    missingScopesAccess: "granted",
-  });
+  if (input.hasError) return "denied";
+  if (input.session === null) return input.isPending ? "pending" : "denied";
+  return sessionGrantsScope(input.session, AuthProvidersManageScope) ? "granted" : "denied";
+}
+
+/** Send providerInstances even when empty; omission preserves the stored map for older clients. */
+
+export function buildProviderInstanceOverridePatch(
+  settings: Pick<ServerSettings, "projectSettingsOverrides">,
+  projectIds: readonly ProjectId[],
+  instanceId: ProviderInstanceId,
+  value: boolean | undefined,
+): Record<ProjectId, ProjectSettingsOverrides | null> {
+  const patch: Record<ProjectId, ProjectSettingsOverrides | null> = {};
+  for (const projectId of projectIds) {
+    const current = settings.projectSettingsOverrides[projectId];
+    const instances = { ...current?.providerInstances };
+    const instance = { ...instances[instanceId] };
+    if (value === undefined) delete instance.enabled;
+    else instance.enabled = value;
+    if (Object.keys(instance).length > 0) instances[instanceId] = instance;
+    else delete instances[instanceId];
+
+    const { providerInstances: _omit, ...rest } = current ?? {};
+    const nextEntry: ProjectSettingsOverrides = { ...rest, providerInstances: instances };
+    patch[projectId] =
+      Object.keys(rest).length === 0 && Object.keys(instances).length === 0 ? null : nextEntry;
+  }
+  return patch;
 }
 
 export function classifyProviderEnvironmentAccess(input: {

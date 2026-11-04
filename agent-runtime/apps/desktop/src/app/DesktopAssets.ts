@@ -8,6 +8,7 @@ import * as Schema from "effect/Schema";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 
 export interface DesktopIconPaths {
+  readonly ico: Option.Option<string>;
   readonly icns: Option.Option<string>;
   readonly png: Option.Option<string>;
 }
@@ -33,7 +34,7 @@ export class DesktopAssets extends Context.Service<
       fileName: string,
     ) => Effect.Effect<Option.Option<string>, DesktopAssetProbeError>;
   }
->()("@cinderdeck/desktop/app/DesktopAssets") {}
+>()("@t3tools/desktop/app/DesktopAssets") {}
 
 const resolveResourcePath = Effect.fn("desktop.assets.resolveResourcePath")(function* (
   fileName: string,
@@ -60,7 +61,18 @@ const resolveResourcePath = Effect.fn("desktop.assets.resolveResourcePath")(func
   return Option.none<string>();
 });
 
-const SOURCE_TREE_ICON_FILE_NAME = "macos-1024.png";
+const sourceTreeIconFileNames = {
+  dev: {
+    ico: "blueprint-windows.ico",
+    macPng: "blueprint-macos-1024.png",
+    universalPng: "blueprint-universal-1024.png",
+  },
+  prod: {
+    ico: "t3-black-windows.ico",
+    macPng: "black-macos-1024.png",
+    universalPng: "black-universal-1024.png",
+  },
+} as const;
 
 function resolveSourceTreeIconPath(
   environment: DesktopEnvironment.DesktopEnvironment["Service"],
@@ -68,13 +80,14 @@ function resolveSourceTreeIconPath(
 ): string | undefined {
   if (environment.isPackaged || ext === "icns") return undefined;
   const brand = environment.isDevelopment ? "dev" : "prod";
-  return environment.path.join(
-    environment.rootDir,
-    "assets",
-    "cinderdeck",
-    brand,
-    SOURCE_TREE_ICON_FILE_NAME,
-  );
+  const fileNames = sourceTreeIconFileNames[brand];
+  const fileName =
+    ext === "ico"
+      ? fileNames.ico
+      : environment.platform === "darwin"
+        ? fileNames.macPng
+        : fileNames.universalPng;
+  return environment.path.join(environment.rootDir, "assets", brand, fileName);
 }
 
 const resolveIconPath = Effect.fn("desktop.assets.resolveIconPath")(function* (
@@ -106,16 +119,16 @@ const resolveIconPath = Effect.fn("desktop.assets.resolveIconPath")(function* (
   return yield* resolveResourcePath(`icon.${ext}`);
 });
 
-/** @public Service construction is part of the canonical Effect module API. */
+/** @public */
 export const make = Effect.gen(function* () {
   const context = yield* Effect.context<
     FileSystem.FileSystem | DesktopEnvironment.DesktopEnvironment
   >();
-  const [icns, png] = yield* Effect.all(
-    [resolveIconPath("icns"), resolveIconPath("png")] as const,
+  const [ico, icns, png] = yield* Effect.all(
+    [resolveIconPath("ico"), resolveIconPath("icns"), resolveIconPath("png")] as const,
     { concurrency: "unbounded" },
   );
-  const iconPaths = { icns, png } satisfies DesktopIconPaths;
+  const iconPaths = { ico, icns, png } satisfies DesktopIconPaths;
 
   return DesktopAssets.of({
     iconPaths: Effect.succeed(iconPaths),

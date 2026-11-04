@@ -7,7 +7,7 @@ describe("isPublicFaviconHost", () => {
     for (const host of [
       "github.com",
       "www.google.com",
-      "example.com",
+      "t3.chat",
       "sub.domain.example.co.uk",
       "8.8.8.8",
       "1.1.1.1",
@@ -71,7 +71,6 @@ describe("isPublicFaviconHost", () => {
       "::ffff:10.0.0.1",
       "::ffff:100.126.17.15",
       "[::ffff:192.168.1.10]",
-      // c0a8:010a is 192.168.1.10, 0a00:0001 is 10.0.0.1.
       "::ffff:c0a8:010a",
       "::ffff:a00:1",
     ]) {

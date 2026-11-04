@@ -1,6 +1,6 @@
 import { DownloadIcon } from "lucide-react";
 import { useSyncExternalStore } from "react";
-import type { RelayClientInstallProgressStage } from "@cinderdeck/contracts";
+import type { RelayClientInstallProgressStage } from "@t3tools/contracts";
 
 import {
   completeRelayClientInstallDialogClose,
@@ -69,8 +69,8 @@ export function RelayClientInstallDialog() {
           </DialogTitle>
           <DialogDescription>
             {isInstalling
-              ? "Cinderdeck is preparing this environment for secure access through Remote connections."
-              : "Cinderdeck needs the relay client to make this environment available through Remote connections."}
+              ? "Cinderdeck is preparing this environment for secure access through T3 Connect."
+              : "Cinderdeck needs the relay client to make this environment available through T3 Connect."}
           </DialogDescription>
         </DialogHeader>
         <DialogPanel scrollFade={false}>

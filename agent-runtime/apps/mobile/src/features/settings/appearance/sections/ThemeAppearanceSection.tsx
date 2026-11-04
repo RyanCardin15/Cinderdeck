@@ -3,10 +3,10 @@ import { Pressable, View } from "react-native";
 import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
 import { ScopedTheme, ScopedVariables } from "uniwind";
 
-import { mixThemePreviewBase, THEME_PREVIEW_RENDER_SPECS } from "@cinderdeck/shared/themePreview";
+import { mixThemePreviewBase, THEME_PREVIEW_RENDER_SPECS } from "@t3tools/shared/themePreview";
 
-import { SymbolView } from "../../../../components/AppSymbol";
-import { AppText as Text } from "../../../../components/AppText";
+import { SymbolView } from "../../../../components/ui/AppSymbol";
+import { AppText as Text } from "../../../../components/ui/AppText";
 import {
   getMobileThemePreviewColors,
   MOBILE_THEME_OPTIONS,

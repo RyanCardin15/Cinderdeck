@@ -1,31 +1,20 @@
 // @effect-diagnostics nodeBuiltinImport:off - `node:crypto` implements the
 // OSCrypt primitives Chromium uses; Effect has no equivalent.
-/**
- * Chromium cookie extraction.
- *
- * Reads a Chromium-family browser's cookie database and decrypts each record
- * with the key its prefix calls for. Key acquisition — and the consent it
- * needs — lives in `ChromiumKeys`.
- *
- * Records whose scheme we hold no key for are skipped rather than failing the
- * whole import. A partial result reported honestly is more useful than an
- * all-or-nothing error.
- *
- * @module ChromiumCookies
- */
 import * as NodeCrypto from "node:crypto";
 
-import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
+import { ChildProcessSpawner } from "effect/process";
 
 import {
   ChromiumKeyError,
   ChromiumKeyFailure,
+  readWindowsKey,
   resolveChromiumKeys,
   type ChromiumKeyMaterial,
 } from "./ChromiumKeys.ts";
@@ -39,13 +28,11 @@ import {
 
 /** OSCrypt's CBC mode uses a fixed IV of 16 spaces rather than a per-record one. */
 const AES_CBC_IV = Buffer.alloc(16, 0x20);
+const AES_GCM_NONCE_LENGTH = 12;
+const AES_GCM_TAG_LENGTH = 16;
+const isChromiumKeyError = Schema.is(ChromiumKeyError);
 
-/**
- * Every way the read can fail: the key failures, plus the ones this module
- * raises itself.
- */
 export const ChromiumCookieReadReason = Schema.Literals([
-  // `readFailed` already comes from the key failures, so it is not repeated.
   ...ChromiumKeyFailure.literals,
   "browserRunning",
 ]);
@@ -55,13 +42,7 @@ export class ChromiumCookieReadError extends Schema.TaggedError<ChromiumCookieRe
   "ChromiumCookieReadError",
   {
     reason: ChromiumCookieReadReason,
-    /**
-     * Which database the read was for. Without it every `readFailed` and
-     * keychain failure logs identically, and a user with several browsers
-     * installed has no way to tell which one refused.
-     */
     cookieDatabasePath: Schema.String,
-    /** Kept for the log; never surfaced to the user. */
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
@@ -70,7 +51,6 @@ export class ChromiumCookieReadError extends Schema.TaggedError<ChromiumCookieRe
   }
 }
 
-/** Row shape of the cookie table, decoded rather than cast. */
 const CookieRow = Schema.Struct({
   host_key: Schema.String,
   name: Schema.String,
@@ -93,13 +73,7 @@ const decodeSchemaVersion = Schema.decodeUnknownEffect(
   Schema.Tuple([Schema.Struct({ value: SchemaVersion })]),
 );
 
-/**
- * Chromium stores `SameSite` as an int: -1 = unspecified, 0 = none, 1 = lax,
- * 2 = strict. Unspecified is imported as Electron's own `unspecified` rather
- * than pinned to Lax, so the target browser applies its default just as the
- * source did; anything unrecognised lands there too, since guessing "none"
- * would widen a cookie's scope on import.
- */
+/** Preserve unspecified SameSite; guessing no_restriction would widen cookie scope. */
 const sameSiteFromColumn = (value: number): ImportedCookie["sameSite"] => {
   if (value === 0) return "no_restriction";
   if (value === 1) return "lax";
@@ -107,22 +81,14 @@ const sameSiteFromColumn = (value: number): ImportedCookie["sameSite"] => {
   return "unspecified";
 };
 
-/**
- * Chromium timestamps count microseconds from 1601-01-01; Electron wants
- * seconds from the UNIX epoch. The microsecond value overflows JavaScript's
- * safe integer range and `node:sqlite` refuses to narrow it, so the division
- * happens in SQL and this only ever sees seconds.
- */
+/** Convert microseconds in SQL: node:sqlite refuses integers beyond JavaScript's safe range. */
 const WEBKIT_EPOCH_OFFSET_SECONDS = 11_644_473_600;
 const toUnixSeconds = (webkitSeconds: number): number | undefined => {
   if (webkitSeconds <= 0) return undefined;
   return webkitSeconds - WEBKIT_EPOCH_OFFSET_SECONDS;
 };
 
-/**
- * Chromium >= 127 prefixes the plaintext with SHA-256 of the host key, binding
- * a cookie to its domain. Strip it when present.
- */
+// Chromium 127+ prefixes plaintext with the host-key SHA-256 to bind its domain.
 const stripDomainBinding = (
   plaintext: Buffer,
   domain: string,
@@ -151,35 +117,68 @@ const decryptCbc = (
   }
 };
 
-/**
- * Decrypts one stored value, choosing the scheme from its prefix. Returns null
- * when no key covers that scheme. macOS Chromium writes `v10` records; any
- * other versioned record has no key here.
- */
-function decryptChromiumValue(
+const decryptGcm = (
+  payload: Buffer,
+  key: Buffer,
+  domain: string,
+  schemaVersion: number,
+): string | null => {
+  if (payload.length < AES_GCM_NONCE_LENGTH + AES_GCM_TAG_LENGTH) return null;
+  try {
+    const nonce = payload.subarray(0, AES_GCM_NONCE_LENGTH);
+    const ciphertext = payload.subarray(AES_GCM_NONCE_LENGTH, -AES_GCM_TAG_LENGTH);
+    const tag = payload.subarray(-AES_GCM_TAG_LENGTH);
+    const decipher = NodeCrypto.createDecipheriv("aes-256-gcm", key, nonce);
+    decipher.setAuthTag(tag);
+    const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    return stripDomainBinding(plaintext, domain, schemaVersion)?.toString("utf8") ?? null;
+  } catch {
+    return null;
+  }
+};
+
+export function decryptChromiumValue(
   encrypted: Uint8Array,
   keys: ChromiumKeyMaterial,
   domain: string,
   schemaVersion = 23,
+  platform: NodeJS.Platform = "linux",
 ): string | null {
   const buffer = Buffer.from(encrypted);
   if (buffer.length === 0) return "";
   const prefix = buffer.subarray(0, 3).toString("latin1");
   const payload = buffer.subarray(3);
 
-  if (prefix === "v10") {
-    return keys.cbcV10 ? decryptCbc(payload, keys.cbcV10, domain, schemaVersion) : null;
+  // Windows v10 uses AES-256-GCM; app-bound v20 records have no key here.
+  if (platform === "win32") {
+    return prefix === "v10" && keys.gcmV10
+      ? decryptGcm(payload, keys.gcmV10, domain, schemaVersion)
+      : null;
   }
-  if (prefix === "v11") return null;
-  // No recognised prefix: Chromium treats this as legacy data stored in the
-  // clear and returns it as-is, so it is a readable cookie rather than an
-  // undecryptable one.
-  return stripDomainBinding(buffer, domain, schemaVersion)?.toString("utf8") ?? null;
+
+  // Retry the empty-passphrase key used by some Linux clients (crbug.com/1195256).
+  if (prefix === "v10") {
+    if (!keys.cbcV10) return null;
+    return (
+      decryptCbc(payload, keys.cbcV10, domain, schemaVersion) ??
+      (keys.cbcEmpty ? decryptCbc(payload, keys.cbcEmpty, domain, schemaVersion) : null)
+    );
+  }
+  if (prefix === "v11") {
+    if (!keys.cbcV11) return null;
+    return (
+      decryptCbc(payload, keys.cbcV11, domain, schemaVersion) ??
+      (keys.cbcEmpty ? decryptCbc(payload, keys.cbcEmpty, domain, schemaVersion) : null)
+    );
+  }
+  if (platform === "darwin" || platform === "linux") {
+    return stripDomainBinding(buffer, domain, schemaVersion)?.toString("utf8") ?? null;
+  }
+  return null;
 }
 
-/** Reads and decodes one snapshotted Chromium cookie database. */
 export const readChromiumCookieDatabase = Effect.fn("ChromiumCookies.readChromiumCookieDatabase")(
-  function* (snapshotPath: string, keys: ChromiumKeyMaterial) {
+  function* (snapshotPath: string, keys: ChromiumKeyMaterial, platform: NodeJS.Platform) {
     const result = yield* Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const schemaVersion = yield* sql`select value from meta where key = 'version' limit 1`.pipe(
@@ -209,7 +208,13 @@ export const readChromiumCookieDatabase = Effect.fn("ChromiumCookies.readChromiu
       const value =
         row.encrypted_value.length === 0
           ? row.value
-          : decryptChromiumValue(row.encrypted_value, keys, row.host_key, result.schemaVersion);
+          : decryptChromiumValue(
+              row.encrypted_value,
+              keys,
+              row.host_key,
+              result.schemaVersion,
+              platform,
+            );
       if (value === null) {
         undecryptable += 1;
         undecryptableHosts.add(bareHost(row.host_key));
@@ -229,6 +234,17 @@ export const readChromiumCookieDatabase = Effect.fn("ChromiumCookies.readChromiu
         sameSite: sameSiteFromColumn(row.samesite),
       });
     }
+    if (
+      cookies.length === 0 &&
+      keys.cbcV11Error !== undefined &&
+      result.rows.some(
+        (row) =>
+          row.top_frame_site_key === "" &&
+          Buffer.from(row.encrypted_value.subarray(0, 3)).toString("latin1") === "v11",
+      )
+    ) {
+      return yield* keys.cbcV11Error;
+    }
     return {
       cookies,
       undecryptable,
@@ -241,7 +257,8 @@ export interface ChromiumCookieSource {
   readonly cookieDatabasePath: string;
   readonly keychainService: string | undefined;
   readonly keychainAccount: string | undefined;
-  /** Supplied by the caller from `HostProcessPlatform` rather than read here. */
+  readonly linuxSecretApplication: string | undefined;
+  readonly windowsLocalStatePath?: string;
   readonly platform: NodeJS.Platform;
 }
 
@@ -250,13 +267,18 @@ export const readChromiumCookies = Effect.fn("ChromiumCookies.readChromiumCookie
 ): Effect.fn.Return<
   CookieReadResult,
   ChromiumCookieReadError,
-  FileSystem.FileSystem | Path.Path | Scope.Scope
+  FileSystem.FileSystem | Path.Path | Scope.Scope | ChildProcessSpawner.ChildProcessSpawner
 > {
-  const keys = yield* resolveChromiumKeys({
-    platform: source.platform,
-    keychainService: source.keychainService,
-    keychainAccount: source.keychainAccount,
-  }).pipe(
+  const keys = yield* (
+    source.platform === "win32" && source.windowsLocalStatePath
+      ? readWindowsKey(source.windowsLocalStatePath).pipe(Effect.map((gcmV10) => ({ gcmV10 })))
+      : resolveChromiumKeys({
+          platform: source.platform,
+          keychainService: source.keychainService,
+          keychainAccount: source.keychainAccount,
+          linuxSecretApplication: source.linuxSecretApplication,
+        })
+  ).pipe(
     Effect.mapError(
       (cause: ChromiumKeyError) =>
         new ChromiumCookieReadError({
@@ -278,11 +300,11 @@ export const readChromiumCookies = Effect.fn("ChromiumCookies.readChromiumCookie
     ),
   );
 
-  return yield* readChromiumCookieDatabase(snapshotPath, keys).pipe(
+  return yield* readChromiumCookieDatabase(snapshotPath, keys, source.platform).pipe(
     Effect.mapError(
       (cause) =>
         new ChromiumCookieReadError({
-          reason: "readFailed",
+          reason: isChromiumKeyError(cause) ? cause.reason : "readFailed",
           cookieDatabasePath: source.cookieDatabasePath,
           cause,
         }),

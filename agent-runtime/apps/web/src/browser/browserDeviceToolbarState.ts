@@ -1,4 +1,4 @@
-import type { PreviewViewportSetting } from "@cinderdeck/contracts";
+import type { PreviewViewportSetting } from "@t3tools/contracts";
 
 export async function commitViewportAndAspectRatio(
   setting: PreviewViewportSetting,

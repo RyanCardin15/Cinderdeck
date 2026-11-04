@@ -4,10 +4,10 @@ import {
   resolveV2ItemSupport,
   v2ItemSupportEqual,
   type V2ItemSupport,
-} from "@cinderdeck/client-runtime/state/item-support";
-import type { EnvironmentId, ThreadId, TurnItemId } from "@cinderdeck/contracts";
-import { scopeThreadRef } from "@cinderdeck/client-runtime/environment";
-import { Atom } from "effect/unstable/reactivity";
+} from "@t3tools/client-runtime/state/item-support";
+import type { EnvironmentId, ThreadId, TurnItemId } from "@t3tools/contracts";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { Atom } from "effect/reactivity";
 
 import { environmentThreadDetails } from "./threads";
 

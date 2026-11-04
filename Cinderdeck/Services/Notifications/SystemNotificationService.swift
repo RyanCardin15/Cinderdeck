@@ -167,7 +167,7 @@ private final class ForegroundPresentationDelegate: NSObject, UNUserNotification
     guard response.notification.request.content.categoryIdentifier == "cinderdeck.stacks.crash",
       let stack = response.notification.request.content.userInfo["stackID"] as? String,
       let service = response.notification.request.content.userInfo["serviceID"] as? String else { return }
-    await MainActor.run { HistoryFloatingManager.shared.show(section: .stacks) }
+    await MainActor.run { WorkspaceWindowController.shared.show() }
     if response.actionIdentifier == "cinderdeck.stacks.restart" {
       await StackSupervisor.shared.restart(stack: stack, service: service)
     }

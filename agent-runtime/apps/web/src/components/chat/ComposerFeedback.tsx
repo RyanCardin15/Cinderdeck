@@ -1,7 +1,7 @@
 import {
   codexFeedbackNotice,
   type CodexFeedbackSubmission,
-} from "@cinderdeck/client-runtime/state/threads";
+} from "@t3tools/client-runtime/state/threads";
 import { MessageSquareIcon } from "lucide-react";
 
 import { writeTextToClipboard } from "../../hooks/useCopyToClipboard";
@@ -19,7 +19,6 @@ export function feedbackBannerItem(
     id: `feedback:${submission.id}`,
     variant:
       submission.status === "failed" ? "error" : submission.status === "sent" ? "success" : "info",
-    priority: submission.status === "uploading" ? "activity" : "notice",
     icon: <MessageSquareIcon />,
     ...notice,
     actions:

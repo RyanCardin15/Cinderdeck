@@ -1,17 +1,19 @@
 import Foundation
 
 enum HistorySection: String, CaseIterable {
-  case captures, clipboard, saved, stacks
+  case captures, clipboard
   var searchPrompt: String {
     switch self {
     case .captures: return "Search captures"
     case .clipboard: return "Search clipboard text"
-    case .saved: return "Search saved items"
-    case .stacks: return "Search workspaces"
     }
   }
   static func stored(defaults: UserDefaults = .standard) -> HistorySection {
-    if let raw = defaults.string(forKey: PreferencesKeys.historySelectedSection), let section = Self(rawValue: raw) { return section }
+    if let raw = defaults.string(forKey: PreferencesKeys.historySelectedSection), !raw.isEmpty {
+      let section: Self = Self(rawValue: raw) ?? .captures
+      if section.rawValue != raw { defaults.set(section.rawValue, forKey: PreferencesKeys.historySelectedSection) }
+      return section
+    }
     let section: Self = defaults.bool(forKey: PreferencesKeys.historyClipboardTextSelected) ? .clipboard : .captures
     defaults.set(section.rawValue, forKey: PreferencesKeys.historySelectedSection)
     return section

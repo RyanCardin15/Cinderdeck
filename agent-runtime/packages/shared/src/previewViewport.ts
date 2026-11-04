@@ -2,8 +2,8 @@ import type {
   PreviewAutomationResizeInput,
   PreviewViewportPresetId,
   PreviewViewportSetting,
-} from "@cinderdeck/contracts";
-import { PREVIEW_VIEWPORT_PRESET_IDS } from "@cinderdeck/contracts";
+} from "@t3tools/contracts";
+import { PREVIEW_VIEWPORT_PRESET_IDS } from "@t3tools/contracts";
 
 export interface PreviewViewportPreset {
   readonly id: PreviewViewportPresetId;
@@ -16,8 +16,7 @@ export interface PreviewViewportPreset {
 
 type PreviewViewportPresetDefinition = Omit<PreviewViewportPreset, "id">;
 
-// Keep this in Chrome DevTools' default-device order. Dimensions are CSS
-// viewport sizes from Chromium's EmulatedDevices.ts standard catalog.
+// Chromium EmulatedDevices.ts CSS viewport sizes in Chrome DevTools default-device order.
 const PREVIEW_VIEWPORT_PRESET_DEFINITIONS = {
   "iphone-se": {
     label: "iPhone SE",

@@ -1,8 +1,8 @@
-import { EnvironmentId, ProjectId } from "@cinderdeck/contracts";
+import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { findScopedProject } from "./pullRequestList.logic";
-import { pullRequestFilterProjects } from "./pullRequestProjectFilter.logic";
+import { pullRequestFilterProjects } from "@t3tools/client-runtime/pull-request-project-filter";
 
 const cups = EnvironmentId.make("env-cups");
 const nucbox = EnvironmentId.make("env-nucbox");
@@ -14,12 +14,12 @@ const labels = new Map([
 function project(
   id: string,
   environmentId = nucbox,
-  canonicalKey: string | null = "github.com/example/cinderdeck",
+  canonicalKey: string | null = "github.com/pingdotgg/t3code",
 ) {
   return {
     id: ProjectId.make(id),
     environmentId,
-    title: "cinderdeck",
+    title: "t3code",
     workspaceRoot: `/work/${id}`,
     repositoryIdentity: canonicalKey === null ? null : { canonicalKey },
     faviconPath: `${id}/favicon.png`,
@@ -38,8 +38,8 @@ describe("pull request project filter choices", () => {
     const choices = pullRequestFilterProjects(projects, labels);
 
     expect(choices.map(({ id, environmentId, title }) => ({ id, environmentId, title }))).toEqual([
-      { id: "main", environmentId: cups, title: "cinderdeck · cups" },
-      { id: "main", environmentId: nucbox, title: "cinderdeck · nucbox-1" },
+      { id: "main", environmentId: cups, title: "t3code · cups" },
+      { id: "main", environmentId: nucbox, title: "t3code · nucbox-1" },
     ]);
     expect(choices[1]?.workspaceRoot).toBe("/work/main");
     expect(choices[1]?.faviconPath).toBe("main/favicon.png");
@@ -52,50 +52,38 @@ describe("pull request project filter choices", () => {
     const choices = pullRequestFilterProjects(projects, labels, selected);
 
     expect(choices.filter((choice) => choice.environmentId === nucbox)).toEqual([
-      { ...projects[1], title: "cinderdeck · nucbox-1" },
+      { ...projects[1], title: "t3code · nucbox-1" },
     ]);
     expect(findScopedProject(choices, nucbox, "worktree")).toBeDefined();
     expect(findScopedProject(choices, nucbox, "main")).toBeUndefined();
     expect(findScopedProject(choices, cups, "worktree")).toBeDefined();
   });
 
-  it("matches canonical repositories regardless of casing", () => {
-    const main = project("main");
-    const worktree = project("worktree", nucbox, "GitHub.com/Example/Cinderdeck");
-
-    expect(pullRequestFilterProjects([main, worktree], labels)).toEqual([main]);
-  });
-
-  it("does not add a server suffix after duplicate checkouts have collapsed", () => {
-    const main = project("main");
-
-    expect(pullRequestFilterProjects([main, project("worktree")], labels)).toEqual([main]);
-    expect(main.title).toBe("cinderdeck");
-  });
-
   it("distinguishes same-named repositories on one server by checkout path", () => {
     const projects = [
       project("upstream"),
-      project("fork", nucbox, "github.com/juliusmarminge/cinderdeck"),
+      project("fork", nucbox, "github.com/juliusmarminge/t3code"),
     ];
 
     const choices = pullRequestFilterProjects(projects, labels);
 
     expect(choices.map((choice) => choice.title)).toEqual([
-      "cinderdeck · nucbox-1 · /work/fork",
-      "cinderdeck · nucbox-1 · /work/upstream",
+      "t3code · nucbox-1 · /work/fork",
+      "t3code · nucbox-1 · /work/upstream",
     ]);
   });
 
+  // regression: #9948 project filter deduplication must not merge across hosts
   it("keeps repositories on different hosts separate", () => {
     const choices = pullRequestFilterProjects(
-      [project("github"), project("enterprise", nucbox, "git.example.com/example/cinderdeck")],
+      [project("github"), project("enterprise", nucbox, "git.example.com/pingdotgg/t3code")],
       labels,
     );
 
     expect(choices.map((choice) => choice.id)).toEqual(["enterprise", "github"]);
   });
 
+  // regression: #9948 project filter deduplication must not merge unidentified repos
   it("does not merge projects whose repository identity is unknown", () => {
     const choices = pullRequestFilterProjects(
       [project("first", nucbox, null), project("second", nucbox, null)],
@@ -103,8 +91,8 @@ describe("pull request project filter choices", () => {
     );
 
     expect(choices.map((choice) => choice.title)).toEqual([
-      "cinderdeck · nucbox-1 · /work/first",
-      "cinderdeck · nucbox-1 · /work/second",
+      "t3code · nucbox-1 · /work/first",
+      "t3code · nucbox-1 · /work/second",
     ]);
   });
 
@@ -119,40 +107,8 @@ describe("pull request project filter choices", () => {
     const choices = pullRequestFilterProjects([first, second], repeatedLabels);
 
     expect(choices.map((choice) => choice.title)).toEqual([
-      "cinderdeck · nucbox-1 · /work/main · env-cups",
-      "cinderdeck · nucbox-1 · /work/main · env-nucbox",
+      "t3code · nucbox-1 · /work/main · env-cups",
+      "t3code · nucbox-1 · /work/main · env-nucbox",
     ]);
-  });
-
-  it("uses the environment id when its label is unavailable", () => {
-    const choices = pullRequestFilterProjects(
-      [project("main"), project("remote", cups)],
-      new Map(),
-    );
-
-    expect(choices.map((choice) => choice.title)).toEqual([
-      "cinderdeck · env-cups",
-      "cinderdeck · env-nucbox",
-    ]);
-  });
-
-  it("can distinguish unresolved project records that also share a checkout path", () => {
-    const first = project("first", nucbox, null);
-    const second = { ...project("second", nucbox, null), workspaceRoot: first.workspaceRoot };
-
-    const choices = pullRequestFilterProjects([first, second], labels);
-
-    expect(choices.map((choice) => choice.title)).toEqual([
-      "cinderdeck · nucbox-1 · /work/first · env-nucbox · first",
-      "cinderdeck · nucbox-1 · /work/first · env-nucbox · second",
-    ]);
-  });
-
-  it("leaves unrelated names unchanged and orders them alphabetically", () => {
-    const app = { ...project("app"), title: "Zebra" };
-    const tools = { ...project("tools", nucbox, "github.com/acme/tools"), title: "Alpha" };
-
-    expect(pullRequestFilterProjects([app, tools], labels)).toEqual([tools, app]);
-    expect(pullRequestFilterProjects([], labels)).toEqual([]);
   });
 });

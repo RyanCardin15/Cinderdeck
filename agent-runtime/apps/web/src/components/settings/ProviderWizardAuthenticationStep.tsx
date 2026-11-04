@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { EnvironmentId, ProviderInstanceId } from "@cinderdeck/contracts";
+import type { EnvironmentId, ProviderInstanceId } from "@t3tools/contracts";
 
 import { useEnvironmentQuery } from "../../state/query";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../../state/server";
@@ -9,7 +9,6 @@ import { ProviderAuthenticationSection } from "./ProviderAuthenticationSection";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsRow } from "./settingsLayout";
 
-/** Sign-in uses the saved instance's environment and credentials, just like chat. */
 export function ProviderWizardAuthenticationStep({
   environmentId,
   environmentLabel,

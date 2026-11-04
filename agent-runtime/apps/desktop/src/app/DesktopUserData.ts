@@ -7,7 +7,7 @@ import * as Schema from "effect/Schema";
 export class DesktopUserDataInitializationError extends Schema.TaggedError<DesktopUserDataInitializationError>()(
   "DesktopUserDataInitializationError",
   {
-    operation: Schema.Literals(["inspect"]),
+    operation: Schema.Literals(["inspect", "read", "create-directory", "write"]),
     resourcePath: Schema.String,
     category: Schema.String,
     cause: Schema.Defect(),
@@ -31,14 +31,19 @@ export class DesktopUserDataInitializationError extends Schema.TaggedError<Deskt
   }
 }
 
-/** Select Electron's profile independently of the server's Cinderdeck home. */
 export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPath")(
-  function* (input: { readonly appDataDirectory: string; readonly isDevelopment: boolean }) {
+  function* (input: {
+    readonly appDataDirectory: string;
+    readonly isDevelopment: boolean;
+    readonly platform: NodeJS.Platform;
+  }) {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+    const profile = process.env.CINDERDECK_PROFILE_ROOT;
+    if (profile && path.isAbsolute(profile)) return profile;
     const names = input.isDevelopment
-      ? { current: "deckhand-dev", legacy: "Cinderdeck (Dev)" }
-      : { current: "deckhand-v2", legacy: "Cinderdeck (Alpha)" };
+      ? { current: "t3code-dev", legacy: "T3 Code (Dev)" }
+      : { current: "t3code-v2", legacy: "T3 Code (Alpha)" };
     const destinationPath = path.join(input.appDataDirectory, names.current);
     const legacyPath = path.join(input.appDataDirectory, names.legacy);
     const inspect = (resourcePath: string) =>
@@ -53,6 +58,42 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
       return (yield* inspect(legacyPath)) ? legacyPath : destinationPath;
     }
     // Chromium databases require their own profile for each running version.
+    if (input.platform !== "win32") return destinationPath;
+    const destinationState = path.join(destinationPath, "Local State");
+    if (yield* inspect(destinationState)) return destinationPath;
+    const legacyState = path.join(legacyPath, "Local State");
+    const sourceState = (yield* inspect(legacyState))
+      ? legacyState
+      : path.join(input.appDataDirectory, "t3code", "Local State");
+    if (!(yield* inspect(sourceState))) return destinationPath;
+    // Windows safeStorage keys live here. Copy only these preferences, never locked databases.
+    const state = yield* fs
+      .readFileString(sourceState)
+      .pipe(
+        Effect.mapError((cause) =>
+          DesktopUserDataInitializationError.fromFileSystem(cause, "read", sourceState),
+        ),
+      );
+    yield* fs
+      .makeDirectory(destinationPath, { recursive: true })
+      .pipe(
+        Effect.mapError((cause) =>
+          DesktopUserDataInitializationError.fromFileSystem(
+            cause,
+            "create-directory",
+            destinationPath,
+          ),
+        ),
+      );
+    yield* fs.writeFileString(destinationState, state, { flag: "wx" }).pipe(
+      Effect.catchIf(
+        (error) => error.reason._tag === "AlreadyExists",
+        () => Effect.void,
+      ),
+      Effect.mapError((cause) =>
+        DesktopUserDataInitializationError.fromFileSystem(cause, "write", destinationState),
+      ),
+    );
     return destinationPath;
   },
 );

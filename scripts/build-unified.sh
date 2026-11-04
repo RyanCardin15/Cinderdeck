@@ -47,7 +47,7 @@ runtime (.build/runtime-cache) when the runtime sources, ignored .env
 files, toolchains, build environment and Git metadata it embeds are unchanged.
 
 Environment:
-  CINDERDECK_NODE_BINARY       Absolute Node 24.13.1+ executable for runtime builds.
+  CINDERDECK_NODE_BINARY       Absolute Node 26.12.1 executable for runtime builds.
   CINDERDECK_SIGNING_IDENTITY  Same as --signing-identity; no automatic identity creation.
   CINDERDECK_SIGNING_KEYCHAIN  Existing signing keychain; default login.keychain-db.
   CINDERDECK_RUNTIME_CACHE     Set to 0 to behave like --no-runtime-cache.
@@ -238,7 +238,7 @@ if [[ -z "$RUNTIME_APP" ]]; then
   printf 'Building Cinderdeck runtime. Log: %s\n' "$STAGING_DIR/runtime-build.log"
   (cd "$RUNTIME_SOURCE" && \
     export PATH="$(dirname "$NODE_BINARY"):$RUNTIME_SOURCE/node_modules/.bin:$PATH" \
-      CINDERDECK_NATIVE_SHELL_BUILD=1 DECKHAND_DESKTOP_SIGNED=false && \
+      CINDERDECK_NATIVE_SHELL_BUILD=1 T3CODE_DESKTOP_SIGNED=false && \
     exec "$NODE_BINARY" scripts/build-desktop-artifact.ts --platform mac --target dir --arch "$ARCH" --output-dir "$RUNTIME_OUTPUT") \
     > "$STAGING_DIR/runtime-build.log" 2>&1 &
   RUNTIME_PID=$!

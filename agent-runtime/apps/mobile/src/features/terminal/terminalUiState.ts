@@ -1,4 +1,4 @@
-import type { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
+import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 
 export interface TerminalGridSize {
   readonly cols: number;
@@ -31,8 +31,4 @@ export function cacheTerminalGridSize(
   };
   terminalGridSizeCache.set(terminalUiStateKey(target), normalized);
   return normalized;
-}
-
-export function resetTerminalUiStateCaches() {
-  terminalGridSizeCache.clear();
 }

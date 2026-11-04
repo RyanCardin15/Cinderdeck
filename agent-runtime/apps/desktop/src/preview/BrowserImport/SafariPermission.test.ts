@@ -1,6 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import { HostProcessEnvironment, HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as PlatformError from "effect/PlatformError";
@@ -9,7 +9,7 @@ import { safariPermissionCheck } from "./SafariPermission.ts";
 it.effect("detects Safari access becoming available without reading or importing cookies", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const home = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-safari-access-" });
+    const home = yield* fs.makeTempDirectoryScoped({ prefix: "t3-safari-access-" });
     const directory = `${home}/Library/Containers/com.apple.Safari/Data/Library/Cookies`;
     yield* fs.makeDirectory(directory, { recursive: true });
     const jar = `${directory}/Cookies.binarycookies`;
@@ -30,8 +30,8 @@ it.effect("detects Safari access becoming available without reading or importing
             ),
     });
     const check = yield* safariPermissionCheck.pipe(
-      Effect.provideService(HostProcessEnvironment, { HOME: home }),
-      Effect.provideService(HostProcessPlatform, "darwin"),
+      Effect.provideService(HostProcess.Environment, { HOME: home }),
+      Effect.provideService(HostProcess.Platform, "darwin"),
       Effect.provideService(FileSystem.FileSystem, guardedFs),
     );
     assert.isFalse(yield* Effect.promise(check));
@@ -45,10 +45,10 @@ it.effect("detects Safari access becoming available without reading or importing
 it.effect("recognizes access when cookies exist only in a named Safari profile", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const home = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-safari-named-access-" });
+    const home = yield* fs.makeTempDirectoryScoped({ prefix: "t3-safari-named-access-" });
     const check = yield* safariPermissionCheck.pipe(
-      Effect.provideService(HostProcessEnvironment, { HOME: home }),
-      Effect.provideService(HostProcessPlatform, "darwin"),
+      Effect.provideService(HostProcess.Environment, { HOME: home }),
+      Effect.provideService(HostProcess.Platform, "darwin"),
     );
     assert.isFalse(yield* Effect.promise(check));
     const directory = `${home}/Library/Containers/com.apple.Safari/Data/Library/WebKit/WebsiteDataStore/12345678-1234-1234-1234-123456789abc/Cookies`;

@@ -158,9 +158,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
     guard didFinishLaunching else { return .terminateNow }
-    return StackQuitCoordinator.shouldTerminate(sender, beforeTermination: {
-      await CinderdeckRuntimeController.shared.stopForTermination()
-    })
+    guard CinderdeckRuntimeController.shared.running else { return .terminateNow }
+    Task { @MainActor in
+      let closed = await CinderdeckRuntimeController.shared.stopForTermination()
+      sender.reply(toApplicationShouldTerminate: closed)
+    }
+    return .terminateLater
   }
 
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

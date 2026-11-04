@@ -1,6 +1,6 @@
 # Composer context references
 
-> For maintainers. Using Cinderdeck? See [docs/user](../user/).
+> For maintainers. Using T3 Code? See [docs/user](../user/).
 
 Inline context references let a user message point at a typed payload from an exact position in
 its prose: an image, a file, a terminal excerpt, a picked page element, a preview annotation, a
@@ -91,8 +91,9 @@ transcript renderer moves to records.
 
 ## Editor model (web and desktop)
 
-`ComposerContextReferenceNode` (`apps/web/src/components/ComposerContextReferenceNode.tsx`) is
-the one inline Lexical node for every context kind. It stores `kind`, `contextId`, `label`, and a
+`ComposerContextReferenceExtension` in
+[`ComposerPromptEditorTiptap.tsx`](../../apps/web/src/components/ComposerPromptEditorTiptap.tsx) is
+the inline Tiptap node for every context kind. It stores `kind`, `contextId`, `label`, and a
 per-occurrence `referenceId`, and its text content is the canonical link. The prompt string carries
 payload identity and position, so rebuilding the editor restores equivalent chips; it does not
 preserve the editor-local occurrence ids. Old drafts that used the U+FFFC ordinal placeholder

@@ -4,7 +4,7 @@ import {
   ProviderUserInputAnswers,
   RuntimeRequestId,
   ThreadId,
-} from "@cinderdeck/contracts";
+} from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -54,6 +54,7 @@ export interface RuntimeRequestServiceV2Shape {
     readonly providerSessionId: ProviderSessionId;
     readonly requestId: RuntimeRequestId;
     readonly decision?: ProviderApprovalDecision;
+    readonly feedback?: string;
     readonly answers?: ProviderUserInputAnswers;
   }) => Effect.Effect<void, RuntimeRequestResponseExecutionError>;
 }
@@ -61,7 +62,7 @@ export interface RuntimeRequestServiceV2Shape {
 export class RuntimeRequestServiceV2 extends Context.Service<
   RuntimeRequestServiceV2,
   RuntimeRequestServiceV2Shape
->()("@cinderdeck/server/orchestration-v2/RuntimeRequestService/RuntimeRequestServiceV2") {}
+>()("t3/orchestration-v2/RuntimeRequestService/RuntimeRequestServiceV2") {}
 
 export const layer: Layer.Layer<
   RuntimeRequestServiceV2,
@@ -74,8 +75,8 @@ export const layer: Layer.Layer<
     const sessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
 
     return RuntimeRequestServiceV2.of({
-      respond: (input) =>
-        Effect.gen(function* () {
+      respond: Effect.fn("RuntimeRequestService.respond")(
+        function* (input) {
           const request = yield* projections.getRuntimeRequest(input.threadId, input.requestId);
           if (request === undefined) {
             return yield* new RuntimeRequestResponseExecutionError({
@@ -85,8 +86,7 @@ export const layer: Layer.Layer<
               requestId: input.requestId,
             });
           }
-          // Dispatch validates the request while it is pending, then persists the
-          // resolved projection before this effect is executed.
+          // Dispatch persists resolution before this effect runs; pending requests are not executable.
           if (request.status !== "resolved") {
             return yield* new RuntimeRequestResponseExecutionError({
               reason: "request-not-ready",
@@ -118,21 +118,25 @@ export const layer: Layer.Layer<
           yield* session.value.respondToRuntimeRequest({
             requestId: input.requestId,
             ...(input.decision === undefined ? {} : { decision: input.decision }),
+            ...(input.feedback === undefined ? {} : { feedback: input.feedback }),
             ...(input.answers === undefined ? {} : { answers: input.answers }),
           });
-        }).pipe(
-          Effect.mapError((cause) =>
-            isRuntimeRequestResponseExecutionError(cause)
-              ? cause
-              : new RuntimeRequestResponseExecutionError({
-                  reason: "unexpected-failure",
-                  threadId: input.threadId,
-                  providerSessionId: input.providerSessionId,
-                  requestId: input.requestId,
-                  cause,
-                }),
+        },
+        (effect, input) =>
+          effect.pipe(
+            Effect.mapError((cause) =>
+              isRuntimeRequestResponseExecutionError(cause)
+                ? cause
+                : new RuntimeRequestResponseExecutionError({
+                    reason: "unexpected-failure",
+                    threadId: input.threadId,
+                    providerSessionId: input.providerSessionId,
+                    requestId: input.requestId,
+                    cause,
+                  }),
+            ),
           ),
-        ),
+      ),
     });
   }),
 );

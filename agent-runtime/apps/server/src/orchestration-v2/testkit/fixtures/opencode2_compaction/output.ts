@@ -1,5 +1,5 @@
 import { assert } from "@effect/vitest";
-import type { ProviderReplayTranscript } from "@cinderdeck/contracts";
+import type { ProviderReplayTranscript } from "@t3tools/contracts";
 
 import type { OrchestratorV2ScenarioResult } from "../../OrchestratorScenario.ts";
 import {
@@ -13,11 +13,7 @@ import {
   projectionFor,
 } from "../shared.ts";
 
-/**
- * `/compact` runs `session.compact`: OpenCode queues a compaction item and
- * summarizes in its own execution, which ends the `/compact` turn. The next
- * turn answers from the summary.
- */
+/** session.compact queues a compaction execution that ends /compact; the next turn uses its summary. */
 export function assertOpenCode2CompactionOutput(
   result: OrchestratorV2ScenarioResult,
   transcript: ProviderReplayTranscript,
@@ -44,10 +40,8 @@ export function assertOpenCode2CompactionOutput(
   assert.equal(compaction?.runId, compactRun?.id);
   assert.equal(compaction?.status, "completed");
   assert.equal(compaction?.title, "Context compacted");
-  // The summary OpenCode carries forward is `compaction.ended`'s full text.
   assert.include(compaction?.type === "compaction" ? compaction.summary : "", "PAPAYA");
   assert.include(compaction?.type === "compaction" ? compaction.summary : "", "## Objective");
-  // The `/compact` run shows no assistant reply; the recall run answers from the summary.
   assert.isUndefined(
     projection.turnItems.find(
       (item) => item.type === "assistant_message" && item.runId === compactRun?.id,

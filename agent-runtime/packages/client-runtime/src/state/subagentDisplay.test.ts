@@ -1,38 +1,41 @@
-import type { OrchestrationV2TurnItemStatus } from "@cinderdeck/contracts";
 import { describe, expect, it } from "vite-plus/test";
-import { subagentGroupSummary } from "./subagentDisplay.js";
 
-describe("subagentGroupSummary", () => {
-  it.each(["pending", "running", "waiting"] as const)(
-    "keeps a mixed group live while a member is %s",
-    (status) => {
-      expect(subagentGroupSummary([{ status: "completed" }, { status }])).toEqual({
-        label: "Kicked off 2 subagents",
-        active: true,
-        failed: false,
-      });
-    },
+import { subagentDetailPreview } from "./subagentDisplay.js";
+
+describe("subagentDetailPreview", () => {
+  it("prefers progress for live work and results for settled work", () => {
+    const details = { progress: "Reading files", result: "Found two\n  problems" };
+    expect(subagentDetailPreview({ ...details, status: "running" })).toBe("Reading files");
+    expect(subagentDetailPreview({ ...details, status: "completed" })).toBe("Found two problems");
+    expect(
+      subagentDetailPreview({ status: "failed", progress: "Last progress", result: " " }),
+    ).toBe("Last progress");
+    expect(subagentDetailPreview({ status: "pending" })).toBeNull();
+  });
+});
+
+it.each([279, 280, 281])("preserves the preview boundary at %i characters", (length) => {
+  const result = "x".repeat(length);
+  expect(subagentDetailPreview({ status: "completed", result })).toBe(
+    length > 280 ? "x".repeat(280) + "…" : result,
   );
+});
 
-  it("settles the label without disguising a failed member as success", () => {
-    const statuses: OrchestrationV2TurnItemStatus[] = [
-      "completed",
-      "failed",
-      "cancelled",
-      "interrupted",
-    ];
-    expect(subagentGroupSummary(statuses.map((status) => ({ status })))).toEqual({
-      label: "Ran 4 subagents",
-      active: false,
-      failed: true,
-    });
-  });
-
-  it("uses a singular label for one idle member", () => {
-    expect(subagentGroupSummary([{ status: "idle" }])).toEqual({
-      label: "Ran 1 subagent",
-      active: false,
-      failed: false,
-    });
-  });
+it("normalizes Unicode whitespace and ignores a large hidden suffix", () => {
+  const progress = " \u00a0Reading\tfiles\n" + "x".repeat(1_000_000);
+  expect(subagentDetailPreview({ status: "running", progress })).toBe(
+    "Reading files " + "x".repeat(266) + "…",
+  );
+  expect(
+    subagentDetailPreview({ status: "completed", result: "x".repeat(280) + " \n\u2028" }),
+  ).toBe("x".repeat(280));
+  expect(subagentDetailPreview({ status: "completed", result: "x".repeat(279) + " \n y" })).toBe(
+    "x".repeat(279) + "…",
+  );
+  expect(
+    subagentDetailPreview({ status: "running", progress: "\uFEFF\u2029", result: " Done " }),
+  ).toBe("Done");
+  expect(subagentDetailPreview({ status: "failed", result: "x".repeat(279) + "😀" })).toBe(
+    "x".repeat(279) + "\uD83D…",
+  );
 });

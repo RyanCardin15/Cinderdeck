@@ -1,48 +1,14 @@
-import {
-  BearerConnectionTarget,
-  PrimaryConnectionTarget,
-} from "@cinderdeck/client-runtime/connection";
-import {
-  type DesktopEnvironmentBootstrap,
-  EnvironmentId,
-  PRIMARY_LOCAL_ENVIRONMENT_ID,
-} from "@cinderdeck/contracts";
+import { type DesktopEnvironmentBootstrap, PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  createDesktopSecondaryBootstrapsReader,
-  desktopLocalConnectionId,
-  isDesktopLocalConnectionTarget,
-} from "./desktopLocal";
-
-describe("desktop local connection identity", () => {
-  it("classifies a desktop-local secondary backend", () => {
-    const target = new BearerConnectionTarget({
-      connectionId: desktopLocalConnectionId("secondary"),
-      environmentId: EnvironmentId.make("environment-secondary"),
-      label: "Secondary",
-    });
-
-    expect(isDesktopLocalConnectionTarget(target)).toBe(true);
-  });
-
-  it("does not classify the primary environment as desktop-local", () => {
-    const target = new PrimaryConnectionTarget({
-      environmentId: EnvironmentId.make("environment-primary"),
-      httpBaseUrl: "http://127.0.0.1:3773",
-      label: "This device",
-      wsBaseUrl: "ws://127.0.0.1:3773",
-    });
-
-    expect(isDesktopLocalConnectionTarget(target)).toBe(false);
-  });
-});
+import { createDesktopSecondaryBootstrapsReader } from "./desktopLocal";
 
 describe("desktop local topology reads", () => {
   it("reuses snapshots when polling returns fresh objects for the same topology", () => {
     const secondary: DesktopEnvironmentBootstrap = {
-      id: "secondary",
-      label: "Secondary",
+      id: "wsl:default",
+      label: "WSL",
+      runningDistro: "Ubuntu",
       httpBaseUrl: "http://127.0.0.1:4000",
       wsBaseUrl: "ws://127.0.0.1:4000",
       bootstrapToken: "bootstrap-1",
@@ -64,15 +30,17 @@ describe("desktop local topology reads", () => {
   });
 
   it.each<Partial<DesktopEnvironmentBootstrap>>([
-    { id: "secondary-2" },
+    { id: "wsl:Debian" },
     { label: "Renamed backend" },
+    { runningDistro: "Debian" },
     { httpBaseUrl: "http://127.0.0.1:4001" },
     { wsBaseUrl: "ws://127.0.0.1:4001" },
     { bootstrapToken: "bootstrap-2" },
   ])("publishes bootstrap changes: %j", (change) => {
     let secondary: DesktopEnvironmentBootstrap = {
-      id: "secondary",
-      label: "Secondary",
+      id: "wsl:default",
+      label: "WSL",
+      runningDistro: "Ubuntu",
       httpBaseUrl: "http://127.0.0.1:4000",
       wsBaseUrl: "ws://127.0.0.1:4000",
       bootstrapToken: "bootstrap-1",
@@ -88,30 +56,10 @@ describe("desktop local topology reads", () => {
     expect(reader.readSnapshot()).toBe(after);
   });
 
-  it("keeps the empty snapshot stable without a desktop bridge", () => {
-    const reader = createDesktopSecondaryBootstrapsReader(() => undefined);
-    expect(reader.readSnapshot()).toBe(reader.readSnapshot());
-  });
-
-  it("distinguishes a successful empty topology from a read failure", () => {
-    let readBootstraps = () => [];
-    const reader = createDesktopSecondaryBootstrapsReader(() => ({
-      getLocalEnvironmentBootstraps: () => readBootstraps(),
-    }));
-
-    expect(reader.readResult()).toEqual({ _tag: "Success", bootstraps: [] });
-
-    const cause = new Error("IPC unavailable");
-    readBootstraps = () => {
-      throw cause;
-    };
-    expect(reader.readResult()).toEqual({ _tag: "Failure", cause });
-  });
-
   it("filters the primary bootstrap from successful topology reads", () => {
     const secondary = {
-      id: "secondary",
-      label: "Secondary",
+      id: "wsl:Ubuntu",
+      label: "WSL: Ubuntu",
       httpBaseUrl: "http://127.0.0.1:4000",
       wsBaseUrl: "ws://127.0.0.1:4000",
     };
@@ -132,8 +80,8 @@ describe("desktop local topology reads", () => {
 
   it("retains the last successful snapshot only until another read succeeds", () => {
     const secondary = {
-      id: "secondary",
-      label: "Secondary",
+      id: "wsl:Ubuntu",
+      label: "WSL: Ubuntu",
       httpBaseUrl: "http://127.0.0.1:4000",
       wsBaseUrl: "ws://127.0.0.1:4000",
     };

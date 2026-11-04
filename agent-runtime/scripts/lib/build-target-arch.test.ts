@@ -1,27 +1,37 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
-import { HostProcessArchitecture } from "@cinderdeck/shared/hostProcess";
+import * as Layer from "effect/Layer";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import { getDefaultBuildArch } from "./build-target-arch.ts";
 
-const withHostArch = (arch: NodeJS.Architecture) =>
-  Effect.provideService(HostProcessArchitecture, arch);
-
-describe("build-target-arch", () => {
-  it.effect("selects the host architecture when the target supports it", () =>
-    Effect.gen(function* () {
-      const arch = yield* getDefaultBuildArch(["arm64", "x64", "universal"]).pipe(
-        withHostArch("x64"),
-      );
-
-      assert.equal(arch, "x64");
-    }),
+const compactEnv = (env: Readonly<Record<string, string | undefined>>): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined),
   );
 
-  it.effect("falls back to the first supported architecture for other hosts", () =>
+const withHostRuntime = (
+  platform: NodeJS.Platform,
+  arch: NodeJS.Architecture,
+  env: Readonly<Record<string, string | undefined>> = {},
+) =>
+  Effect.provide(
+    Layer.mergeAll(
+      Layer.succeed(HostProcess.Platform, platform),
+      Layer.succeed(HostProcess.Architecture, arch),
+      ConfigProvider.layer(ConfigProvider.fromEnv({ env: compactEnv(env) })),
+    ),
+  );
+
+describe("build-target-arch", () => {
+  it.effect("uses the resolved host arch when selecting the default Windows build arch", () =>
     Effect.gen(function* () {
-      const arch = yield* getDefaultBuildArch(["arm64", "x64", "universal"]).pipe(
-        withHostArch("ia32"),
+      const arch = yield* getDefaultBuildArch("win", { archChoices: ["x64", "arm64"] }).pipe(
+        withHostRuntime("win32", "x64", {
+          PROCESSOR_ARCHITECTURE: "AMD64",
+          PROCESSOR_ARCHITEW6432: "ARM64",
+        }),
       );
 
       assert.equal(arch, "arm64");

@@ -4,12 +4,14 @@ import {
   OrchestrationV2ThreadDetailSnapshot,
   OrchestrationV2ThreadProjectionJson,
   ThreadId,
-} from "@cinderdeck/contracts";
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 export const ORCHESTRATION_CACHE_SCHEMA_VERSION = 3 as const;
+// Older caches may contain human turns that bypassed server history budgets.
+export const ORCHESTRATION_THREAD_CACHE_SCHEMA_VERSION = 5 as const;
 
 export const StoredOrchestrationShellSnapshot = Schema.Struct({
   schemaVersion: Schema.Literal(ORCHESTRATION_CACHE_SCHEMA_VERSION),
@@ -18,7 +20,7 @@ export const StoredOrchestrationShellSnapshot = Schema.Struct({
 });
 
 export const StoredOrchestrationThreadSnapshot = Schema.Struct({
-  schemaVersion: Schema.Literal(ORCHESTRATION_CACHE_SCHEMA_VERSION),
+  schemaVersion: Schema.Literal(ORCHESTRATION_THREAD_CACHE_SCHEMA_VERSION),
   environmentId: EnvironmentId,
   threadId: ThreadId,
   snapshot: OrchestrationV2ThreadDetailSnapshot.mapFields((fields) => ({
@@ -27,7 +29,6 @@ export const StoredOrchestrationThreadSnapshot = Schema.Struct({
   })),
 });
 
-/** Invalid orchestration caches are disposable and must never block live synchronization. */
 export function decodeOrDiscardOrchestrationCache<A, E, R, E2, R2>(
   decode: Effect.Effect<Option.Option<A>, E, R>,
   discard: Effect.Effect<void, E2, R2>,

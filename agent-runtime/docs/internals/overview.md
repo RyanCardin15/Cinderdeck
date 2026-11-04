@@ -1,6 +1,6 @@
 # Architecture
 
-Cinderdeck keeps execution in the environment that owns the workspace. Desktop and mobile
+T3 Code keeps execution in the environment that owns the workspace. Web, desktop, and mobile
 clients control it over authenticated RPC. A remote client must never substitute its own filesystem,
 provider credentials, or machine state for the environment's. The desktop app bundles a server,
 but its renderer follows the same boundary.
@@ -10,7 +10,7 @@ but its renderer follows the same boundary.
 Provider processes, terminals, Git, and project files belong to the server. Shared connection and
 domain state belongs in `packages/client-runtime`; clients supply platform services and UI.
 Keeping that logic shared prevents reconnect and multi-environment behavior from diverging between
-desktop and mobile. See [connection runtime](./connection-runtime.md) and
+web and mobile. See [connection runtime](./connection-runtime.md) and
 [remote environments](./remote.md).
 
 The [RPC contract](../../packages/contracts/src/rpc.ts) is the boundary between independently
@@ -20,22 +20,14 @@ method on it. See [environment auth](./environment-auth.md).
 
 ### Pull request linking compatibility
 
-Desktop, mobile, and environments upgrade independently. Negotiate linking through the
-environment descriptor, never through a client version or an assumed coordinated release:
+Every protocol-2 environment advertises `threadPullRequests`. Once an environment's server config
+has loaded, clients use persisted `pullRequests[]`, multi-link commands, stack UI, and reverse thread
+lookup. Before that, they hide linking actions.
 
-| Environment capability                | Client behavior                                                                                                   |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `threadPullRequests: true`            | Use persisted `pullRequests[]`, multi-link commands, stack UI, and reverse thread lookup.                         |
-| Only `threadPullRequestLinking: true` | Use `linkedPullRequest` and the existing `thread.meta.update` single-link operation. Do not call multi-link RPCs. |
-| Neither flag                          | Hide linking actions; existing branch-discovered PR display remains available.                                    |
-
-New environments continue advertising the legacy flag, accepting legacy metadata commands, and
-emitting the derived `linkedPullRequest` field for older clients. That hostless field includes only
-links in the thread project's own repository; cross-host and cross-repository links require the
-multi-link protocol. New clients accept snapshots that
-omit `pullRequests`. Retain the legacy wire fields, projection column, and replay support; this feature
-does not schedule their removal. Missing new capabilities must also override cached multi-link data
-after an environment downgrade.
+Environments keep advertising `threadPullRequestLinking`, accepting legacy metadata commands, and
+emitting the derived `linkedPullRequest` field, because older clients still read them. That
+hostless field includes only links in the thread project's own repository. Retain the legacy wire
+fields, projection column, and replay support.
 
 Provider-specific behavior belongs behind an adapter. Orchestration works with normalized commands
 and events, so adding a provider should not require branches throughout the domain or clients.
@@ -44,7 +36,7 @@ See [provider constraints](./providers.md).
 ## Settings ownership
 
 Client preferences stay in the current client; environment defaults and project overrides stay
-on their owning server. The desktop settings target is URL state, resolved against current
+on their owning server. The web and desktop settings target is URL state, resolved against current
 connections and project membership. An unavailable target must not fall back to another environment.
 **All environments** is an explicit bulk edit of connected, loaded servers, not a durable global
 default or a promise to synchronize offline or future environments. Project-group targets similarly
@@ -52,8 +44,8 @@ select known environment-local checkouts; the group itself does not store inheri
 
 ## Durable intent and side effects
 
-The event log is the source of truth for orchestration state. The
-[v2 orchestrator](../../apps/server/src/orchestration-v2/Orchestrator.ts) serializes commands and
+Orchestration state is decided as events, and projections are the source of truth once they apply
+them. The [v2 orchestrator](../../apps/server/src/orchestration-v2/Orchestrator.ts) serializes commands and
 decides events without performing provider or filesystem work.
 [EventSink](../../apps/server/src/orchestration-v2/EventSink.ts) commits events, persisted projections,
 the accepted command receipt, and outbox effects in one database transaction. Subscribers receive
@@ -66,7 +58,21 @@ therefore means the intent committed, not that the provider, checkpoint, or othe
 finished. Keep external I/O out of command decisions and the database transaction. Effects tied to
 a lost provider process cannot simply replay; recovery retires them before admitting new work.
 
-Persisted events must remain decodable on replay. Changing a schema affects old environments at
+The event log only keeps what live readers need: about a day of history for reconnect replay and
+command-id retries.
+[ProjectionMaintenance](../../apps/server/src/orchestration-v2/ProjectionMaintenance.ts) deletes
+older events the projections cover, so projections cannot be rebuilt from the log. It keeps each
+stream's newest event (high-water marks, stream versions, snapshot sequences), `thread.created`
+(the legacy importer's marker), every `running` run update (Codex usage history reads the first
+of each attempt), and prompt anchors that retained subagent rows reference. A client whose cursor
+is below both its thread's newest event and the recorded pruned-through sequence missed pruned
+events, so it resumes from a snapshot; an idle thread's cursor resumes without one. Resumes
+recheck that sequence after reading the replay, since a pass can prune during the read. V2 command
+receipts stay for idempotency: a retry older than the retained history is still deduplicated,
+but its replay comes back without the pruned events. Receipts of imported legacy commands are
+removed once their threads are imported.
+
+Retained events must remain decodable on replay. Changing a schema affects old environments at
 startup as well as live RPC traffic. Compatibility work must account for stored history, not just
 what the newest client sends.
 
@@ -87,9 +93,10 @@ must reject that operation before changing the filesystem.
 Thread settlement is server-owned. The
 [settlement service](../../apps/server/src/orchestration-v2/ThreadSettlementService.ts) evaluates PR
 and inactivity settings without a connected client. Merge notifications invalidate cached PR state
-and trigger a check. A merge outside Cinderdeck, such as an agent running `gh pr merge`, sends no
+and trigger a check. A merge outside T3, such as an agent running `gh pr merge`, sends no
 notification, so the [PR sync reactor](../../apps/server/src/orchestration-v2/PullRequestSyncReactor.ts)
-re-reads a thread's open links when a run that ran a merge or close command ends. The guarded
+re-reads a thread's open links when a run that ran a merge or close command ends. Each forge's
+definition names its CLI's commands in `changeRequestCloseCommand`. The guarded
 `thread.auto-settle` command rejects newer activity, explicit settlement overrides, and live or
 blocked work. It records the activity timestamp for stable
 sorting and detaches idle provider sessions. Clients render the persisted result; they do not
@@ -105,38 +112,22 @@ are separate from the durable command receipts that make dispatch idempotent. Pr
 must use persisted state and events, not test instrumentation or assumptions about elapsed time.
 
 The Electron shell acquires `DesktopPreReadyPlatform.layer` synchronously before asynchronous
-services, so custom scheme privileges are registered before Electron's ready event.
+services. On Linux this sets the desktop-entry identity and global-shortcut portal flags before
+Chromium initializes its portal connection. Setting the identity later in `DesktopAppIdentity`
+is too late: Chromium caches the first registration, including failures. The identity must match
+the installed entry managed by `DesktopLinuxUrlHandler`. Pre-ready setup also refreshes that entry's
+`Exec` path before portal registration: AppImage updates can remove the previous executable, which
+makes the old entry invalid even though its filename is correct. The later URL handler avoids
+rewriting an identical entry while the portal may be reading it. On Wayland, Electron's synchronous
+shortcut-registration result only confirms submission; it does not confirm desktop consent or
+an active binding.
 
-Native modules never load in the Electron main process on the startup path. The snapshot feature's
-`@crowecawcaw/xa11y` runs only in the forked Node-mode `SnapShotAccessibilityWorker` child, and the
-modifier-pair shortcut listener is a separate native poller process. macOS window lookup shells out
+Native modules never load in the Electron main process on the startup path, and the two the
+snapshot feature keeps are isolated: `@crowecawcaw/xa11y` runs only in forked Node-mode children
+(`SnapShotAccessibilityWorker`, `RegionSnapShotWorker`) and a worker thread, and `ffi-rs` loads
+lazily inside `WindowsForeground.ts` for a handful of Win32 calls. macOS window lookup shells out
 to `osascript` instead of a native addon. A crash or stall in any of these must not take the app
 down, so new native capability goes in a child with a deadline, not an `import` in main.
 
 See the [glossary](./glossary.md) for shared terms and the
 [development runbook](../operations/development.md) for setup and checks.
-
-## Compact transport and deferred navigation metadata
-
-Snapshot transport is additive and opt-in. Bounded HTTP and WebSocket responses can
-compact record IDs, omit duplicated local timeline items, and mark repeated bodies.
-The shared client restores these representations before applying events or saving
-thread caches. Live deduplication follows coalescing so only delivered records can
-be referenced. Clients that omit the flags receive complete legacy payloads.
-
-Cinderdeck servers advertise `shellThreadPages`. New clients request thin shells
-with `deferThreads`; full membership remains in `deferredThreadRefs`, while exact
-families and project metadata load through the read-authorized `getShellPage` RPC.
-Never infer deletion or close terminals from the absence of a deferred full shell.
-Pages are bounded to 100 rows, scoped by project/family, and invalidated on a new
-authoritative shell generation. Individual page watermarks protect against late
-responses resurrecting archived/deleted rows; live shells win over page copies.
-Global views may deliberately read every page. Query failures expose retry actions.
-
-The live shell and disk cache have different purposes. Disk-only merging retains
-previously cached metadata for offline navigation, filters it through authoritative
-membership, and serializes scope writes with live cache writes. Late metadata-only
-writes cannot move a cache cursor backwards. Complete or rewound authoritative
-snapshots replace cache membership. Keep these rules shared across desktop and the
-mobile companion; do not persist compact thread bodies or treat cached metadata as
-fresh execution authority.

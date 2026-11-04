@@ -16,8 +16,7 @@ const COMMIT_HASH_PATTERN = /^[0-9a-f]{7,40}$/i;
 const COMMIT_HASH_DISPLAY_LENGTH = 12;
 
 const AppPackageMetadata = Schema.Struct({
-  deckhandCommitHash: Schema.optional(Schema.String),
-  deckhandSourceDirty: Schema.optional(Schema.NullOr(Schema.Boolean)),
+  t3codeCommitHash: Schema.optional(Schema.String),
 });
 const decodeAppPackageMetadata = Schema.decodeEffect(Schema.fromJsonString(AppPackageMetadata));
 
@@ -30,7 +29,7 @@ export class DesktopAppIdentity extends Context.Service<
     >;
     readonly configure: Effect.Effect<void>;
   }
->()("@cinderdeck/desktop/app/DesktopAppIdentity") {}
+>()("@t3tools/desktop/app/DesktopAppIdentity") {}
 
 const normalizeCommitHash = (value: string): Option.Option<string> => {
   const trimmed = value.trim();
@@ -39,7 +38,7 @@ const normalizeCommitHash = (value: string): Option.Option<string> => {
     : Option.none();
 };
 
-/** @public Service construction is part of the canonical Effect module API. */
+/** @public */
 export const make = Effect.gen(function* () {
   const assets = yield* DesktopAssets.DesktopAssets;
   const electronApp = yield* ElectronApp.ElectronApp;
@@ -56,16 +55,7 @@ export const make = Effect.gen(function* () {
       onSome: (value) =>
         decodeAppPackageMetadata(value).pipe(
           Effect.map((parsed) =>
-            Option.fromNullishOr(parsed.deckhandCommitHash).pipe(
-              Option.flatMap(normalizeCommitHash),
-              Option.map((hash) =>
-                parsed.deckhandSourceDirty === true
-                  ? `${hash} + local changes`
-                  : parsed.deckhandSourceDirty === null
-                    ? `${hash} + source state unknown`
-                    : hash,
-              ),
-            ),
+            Option.fromNullishOr(parsed.t3codeCommitHash).pipe(Option.flatMap(normalizeCommitHash)),
           ),
           Effect.orElseSucceed(() => Option.none<string>()),
         ),
@@ -101,13 +91,9 @@ export const make = Effect.gen(function* () {
 
   const configure = Effect.gen(function* () {
     const commitHash = yield* resolveAboutCommitHash;
-    // Electron removes spaces from this name to build the native User-Agent
-    // product token, but leaves parentheses intact. Keep the runtime name valid
-    // without rewriting preview sessions (which breaks Turnstile, #7110).
+    // Electron strips spaces but keeps parentheses in its User-Agent token, breaking Turnstile in preview sessions.
     yield* electronApp.setName(
-      environment.nativeHost
-        ? environment.displayName
-        : `${environment.branding.baseName} ${environment.branding.stageLabel}`,
+      `${environment.branding.baseName} ${environment.branding.stageLabel}`,
     );
     yield* electronApp.setAboutPanelOptions({
       applicationName: environment.displayName,
@@ -115,9 +101,11 @@ export const make = Effect.gen(function* () {
       version: Option.getOrElse(commitHash, () => "unknown"),
     });
 
-    // Unpackaged runs only. A packaged bundle already carries its icon in
-    // Info.plist, so setting the dock tile again changes nothing except to
-    // overwrite a custom icon the user attached to the app themselves.
+    if (environment.platform === "win32") {
+      yield* electronApp.setAppUserModelId(environment.appUserModelId);
+    }
+
+    // Packaged bundles carry their icon in Info.plist; setting it again overwrites the user's custom icon.
     if (environment.platform === "darwin" && !environment.isPackaged) {
       const iconPaths = yield* assets.iconPaths;
       yield* Option.match(iconPaths.png, {

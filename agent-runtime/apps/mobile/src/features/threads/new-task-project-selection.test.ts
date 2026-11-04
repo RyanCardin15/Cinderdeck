@@ -1,13 +1,14 @@
-import { EnvironmentId, ProjectId } from "@cinderdeck/contracts";
+import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { EnvironmentProject } from "@cinderdeck/client-runtime/state/shell";
+import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import type { HomeProjectScope } from "../home/homeThreadList";
 import {
-  filterProjectScopes,
   getProjectScopeSelectionTarget,
+  newTaskDestination,
   resolveDraftProjectSelection,
   resolveEnvironmentProjectMatch,
+  resolveNewTaskScratchOption,
 } from "./new-task-project-selection";
 
 function makeProject(
@@ -43,155 +44,301 @@ function makeProject(
 
 function makeScope(projects: ReadonlyArray<EnvironmentProject>): HomeProjectScope {
   return {
-    key: "github.com/fixture/cinderdeck",
-    title: "Cinderdeck",
+    key: "github.com/t3tools/t3code",
+    title: "T3 Code",
     representative: projects[0]!,
     projects,
     projectRefs: projects.map((project) => ({
       environmentId: project.environmentId,
       projectId: project.id,
     })),
+    pinned: false,
+    archived: false,
   };
 }
 
 describe("getProjectScopeSelectionTarget", () => {
-  it("keeps the current environment when it hosts the selected logical project", () => {
-    const projects = [
-      makeProject("cinderdeck-mac", "mac"),
-      makeProject("cinderdeck-server", "server"),
-    ];
-    expect(getProjectScopeSelectionTarget(makeScope(projects), EnvironmentId.make("server"))).toBe(
-      projects[1],
-    );
-  });
-
-  it("falls back to the representative when the current environment does not host the project", () => {
-    const projects = [
-      makeProject("cinderdeck-mac", "mac"),
-      makeProject("cinderdeck-server", "server"),
-    ];
-    expect(getProjectScopeSelectionTarget(makeScope(projects), EnvironmentId.make("other"))).toBe(
-      projects[0],
-    );
+  it("prefers a connected copy of a project that spans environments", () => {
+    const mac = makeProject("t3code", "mac");
+    const server = makeProject("t3code", "server");
+    const target = (connected: ReadonlyArray<string>, preferred: string | null = null) =>
+      getProjectScopeSelectionTarget(
+        makeScope([mac, server]),
+        preferred === null ? null : EnvironmentId.make(preferred),
+        new Set(connected.map((id) => EnvironmentId.make(id))),
+      );
+    expect(target(["server"])).toBe(server);
+    expect(target(["server"], "mac")).toBe(server);
+    expect(target(["mac", "server"], "server")).toBe(server);
+    expect(target(["mac", "server"])).toBe(mac);
+    // With nothing connected, the usual order still applies.
+    expect(target([], "server")).toBe(server);
+    expect(target([])).toBe(mac);
   });
 });
 
 describe("resolveEnvironmentProjectMatch", () => {
   it("follows the same repository onto the target machine", () => {
-    const selected = makeProject("cinderdeck", "mac", {
-      repositoryKey: "github.com/fixture/cinderdeck",
-    });
+    const selected = makeProject("t3code", "mac", { repositoryKey: "github.com/t3tools/t3code" });
     const target = [
-      makeProject("other", "server", { repositoryKey: "github.com/fixture/other" }),
-      makeProject("cinderdeck-clone", "server", { repositoryKey: "github.com/fixture/cinderdeck" }),
+      makeProject("other", "server", { repositoryKey: "github.com/t3tools/other" }),
+      makeProject("t3code-clone", "server", { repositoryKey: "github.com/t3tools/t3code" }),
     ];
     expect(resolveEnvironmentProjectMatch(target, selected)).toBe(target[1]);
   });
 
   it("falls back to workspace basename, then title, for unindexed projects", () => {
-    const selected = makeProject("cinderdeck", "mac", { workspaceRoot: "/Users/me/cinderdeck" });
+    const selected = makeProject("t3code", "mac", { workspaceRoot: "/Users/me/t3code" });
     const byBasename = [
       makeProject("other", "server"),
-      makeProject("srv", "server", { workspaceRoot: "/home/me/cinderdeck" }),
+      makeProject("srv", "server", { workspaceRoot: "/home/me/t3code" }),
     ];
     expect(resolveEnvironmentProjectMatch(byBasename, selected)).toBe(byBasename[1]);
 
     const byTitle = [
       makeProject("other", "server"),
-      makeProject("srv", "server", { title: "cinderdeck" }),
+      makeProject("srv", "server", { title: "t3code" }),
     ];
     expect(resolveEnvironmentProjectMatch(byTitle, selected)).toBe(byTitle[1]);
   });
 
   it("does not treat a known different repository as a basename or title match", () => {
-    const selected = makeProject("cinderdeck", "mac", {
-      repositoryKey: "github.com/fixture/cinderdeck",
-      workspaceRoot: "/Users/me/cinderdeck",
+    const selected = makeProject("t3code", "mac", {
+      repositoryKey: "github.com/t3tools/t3code",
+      workspaceRoot: "/Users/me/t3code",
     });
     const fork = makeProject("fork", "server", {
-      repositoryKey: "github.com/someone/cinderdeck",
-      title: "cinderdeck",
-      workspaceRoot: "/home/me/cinderdeck",
+      repositoryKey: "github.com/someone/t3code",
+      title: "t3code",
+      workspaceRoot: "/home/me/t3code",
     });
-    const unindexed = makeProject("unindexed", "server", { workspaceRoot: "/srv/cinderdeck" });
+    const unindexed = makeProject("unindexed", "server", { workspaceRoot: "/srv/t3code" });
     expect(resolveEnvironmentProjectMatch([fork, unindexed], selected)).toBe(unindexed);
-    // Without any weaker match the fork is still the first-project fallback.
     expect(resolveEnvironmentProjectMatch([fork], selected)).toBe(fork);
-  });
-
-  it("falls back to the first project on the target so the draft has a key to carry over to", () => {
-    const selected = makeProject("cinderdeck", "mac", {
-      repositoryKey: "github.com/fixture/cinderdeck",
-    });
-    const target = [makeProject("unrelated", "server"), makeProject("also-unrelated", "server")];
-    expect(resolveEnvironmentProjectMatch(target, selected)).toBe(target[0]);
-    expect(resolveEnvironmentProjectMatch([], selected)).toBeNull();
   });
 });
 
 describe("resolveDraftProjectSelection", () => {
-  it("preserves an explicit project selection", () => {
-    const project = makeProject("cinderdeck");
+  const projects = [makeProject("t3code"), makeProject("t3code-2")];
+  const draft = { incomingShareId: undefined, pickerClosed: false };
+
+  it("opens the picker instead of auto-selecting the only project", () => {
+    expect(resolveDraftProjectSelection(null, projects, [makeScope(projects)], draft)).toEqual({
+      kind: "pick",
+    });
+  });
+
+  it("selects the only logical project for shared content", () => {
     expect(
-      resolveDraftProjectSelection("environment:cinderdeck", [project], [makeScope([project])]),
+      resolveDraftProjectSelection(null, projects, [makeScope(projects)], {
+        ...draft,
+        incomingShareId: "share",
+      }),
+    ).toEqual({ kind: "select", project: projects[0] });
+  });
+
+  it("dismisses the draft when the first picker closes without a choice", () => {
+    expect(
+      resolveDraftProjectSelection(null, projects, [makeScope(projects)], {
+        ...draft,
+        pickerClosed: true,
+      }),
+    ).toEqual({ kind: "dismiss" });
+  });
+
+  it("keeps the draft when the picker closes after a choice", () => {
+    expect(
+      resolveDraftProjectSelection("environment:t3code-2", projects, [makeScope(projects)], {
+        ...draft,
+        pickerClosed: true,
+      }),
     ).toEqual({ kind: "preserve" });
   });
 
-  it("selects the only physical project when no project was explicitly selected", () => {
-    const project = makeProject("cinderdeck");
-    expect(resolveDraftProjectSelection(null, [project], [makeScope([project])])).toEqual({
-      kind: "select",
-      project,
-    });
-  });
-
-  it("selects one logical project even when it has multiple physical workspaces", () => {
-    const projects = [
-      makeProject("cinderdeck"),
-      makeProject("cinderdeck-2"),
-      makeProject("cinderdeck-3"),
-    ];
-    expect(resolveDraftProjectSelection(null, projects, [makeScope(projects)])).toEqual({
-      kind: "select",
-      project: projects[0],
-    });
-  });
-
-  it("does not preserve a project key that is missing from the catalog", () => {
-    const project = makeProject("cinderdeck");
+  it("keeps a share draft asking for a project when its picker closes without a choice", () => {
+    const scopes = [makeScope([projects[0]!]), makeScope([projects[1]!])];
     expect(
-      resolveDraftProjectSelection("environment:removed", [project], [makeScope([project])]),
-    ).toEqual({
-      kind: "select",
-      project,
-    });
+      resolveDraftProjectSelection(null, projects, scopes, {
+        incomingShareId: "share",
+        pickerClosed: true,
+      }),
+    ).toEqual({ kind: "pick" });
   });
 });
 
-describe("filterProjectScopes", () => {
-  const mac = makeProject("code", "mac", { title: "Desktop checkout" });
-  const server = makeProject("remote-code", "server", { workspaceRoot: "/srv/remote-workspace" });
-  const code = makeScope([mac, server]);
-  const docs = { ...makeScope([makeProject("docs")]), key: "docs", title: "Documentation" };
-  const scopes = [code, docs];
+describe("newTaskDestination", () => {
+  const picker = { draft: { requestId: "request" } };
 
-  it("keeps all projects for an empty or whitespace-only query", () => {
-    expect(filterProjectScopes(scopes, "")).toBe(scopes);
-    expect(filterProjectScopes(scopes, "  ")).toBe(scopes);
+  function destination(options: {
+    readonly useLastProject: boolean | undefined;
+    readonly projects: ReadonlyArray<EnvironmentProject>;
+    readonly current?: EnvironmentProject;
+    readonly last?: { readonly environmentId: string; readonly projectId: string };
+  }) {
+    return newTaskDestination({
+      projects: options.projects,
+      requestId: "request",
+      useLastProject: options.useLastProject,
+      currentProject: options.current && {
+        environmentId: options.current.environmentId,
+        projectId: options.current.id,
+      },
+      lastProject: options.last,
+    });
+  }
+
+  it("starts in the current thread's project ahead of the remembered one", () => {
+    const projects = [makeProject("remembered"), makeProject("current", "other-environment")];
+    expect(
+      destination({
+        useLastProject: true,
+        projects,
+        current: projects[1],
+        last: { environmentId: "environment", projectId: "remembered" },
+      }),
+    ).toEqual({
+      draft: { requestId: "request", environmentId: "other-environment", projectId: "current" },
+    });
   });
 
-  it("matches logical names and workspace names or paths without case sensitivity", () => {
-    expect(filterProjectScopes(scopes, "  CINDERDECK ")).toEqual([code]);
-    expect(filterProjectScopes(scopes, "DESKTOP")).toEqual([code]);
-    expect(filterProjectScopes(scopes, "REMOTE-WORKSPACE")).toEqual([code]);
-    expect(filterProjectScopes(scopes, "documentation")).toEqual([docs]);
-    expect(filterProjectScopes(scopes, "missing-project")).toEqual([]);
+  it("opens the picker for an archived last project, but keeps an archived current one", () => {
+    const archived = { ...makeProject("archived"), archivedAt: "2026-01-01T00:00:00.000Z" };
+    expect(
+      destination({
+        useLastProject: true,
+        projects: [archived],
+        last: { environmentId: "environment", projectId: "archived" },
+      }),
+    ).toEqual(picker);
+    expect(destination({ useLastProject: true, projects: [archived], current: archived })).toEqual({
+      draft: { requestId: "request", environmentId: "environment", projectId: "archived" },
+    });
   });
 
-  it("preserves the whole logical project and preferred environment when a workspace matches", () => {
-    const matches = filterProjectScopes(scopes, "REMOTE-WORKSPACE");
-    expect(matches[0]).toBe(code);
-    expect(getProjectScopeSelectionTarget(matches[0]!, EnvironmentId.make("mac"))).toBe(mac);
-    expect(code.projects).toEqual([mac, server]);
+  it("treats an unset preference as on", () => {
+    const projects = [makeProject("first"), makeProject("current")];
+    expect(destination({ useLastProject: undefined, projects, current: projects[1] })).toEqual({
+      draft: { requestId: "request", environmentId: "environment", projectId: "current" },
+    });
+  });
+
+  it("starts in the remembered project of its own environment when there is no current one", () => {
+    const projects = [makeProject("chosen"), makeProject("chosen", "other-environment")];
+    expect(
+      destination({
+        useLastProject: true,
+        projects,
+        last: { environmentId: "other-environment", projectId: "chosen" },
+      }),
+    ).toEqual({
+      draft: { requestId: "request", environmentId: "other-environment", projectId: "chosen" },
+    });
+  });
+
+  it("ignores a remembered project id from another environment", () => {
+    expect(
+      destination({
+        useLastProject: true,
+        projects: [makeProject("chosen")],
+        last: { environmentId: "removed-environment", projectId: "chosen" },
+      }),
+    ).toEqual(picker);
+  });
+
+  it("opens the picker rather than the first project when nothing matches", () => {
+    expect(
+      destination({
+        useLastProject: true,
+        projects: [makeProject("first"), makeProject("second")],
+        current: makeProject("removed"),
+      }),
+    ).toEqual(picker);
+  });
+
+  it("always opens the picker when the preference is off", () => {
+    const only = makeProject("only");
+    expect(
+      destination({
+        useLastProject: false,
+        projects: [only],
+        current: only,
+        last: { environmentId: "environment", projectId: "only" },
+      }),
+    ).toEqual(picker);
+  });
+});
+
+describe("resolveNewTaskScratchOption", () => {
+  const environmentId = EnvironmentId.make("environment");
+  const otherId = EnvironmentId.make("other");
+  const configs = new Map([[environmentId, { scratchWorkspaceRoot: "/scratch" }]]);
+
+  it("offers the option from the cached config while the environment is still connecting", () => {
+    expect(
+      resolveNewTaskScratchOption({
+        environments: [{ environmentId, connectionState: "connecting" }],
+        serverConfigs: configs,
+        selectedEnvironmentId: null,
+      }),
+    ).toEqual({ environmentId, ready: false });
+  });
+
+  it("becomes ready without changing environment once connected", () => {
+    expect(
+      resolveNewTaskScratchOption({
+        environments: [{ environmentId, connectionState: "connected" }],
+        serverConfigs: configs,
+        selectedEnvironmentId: null,
+      }),
+    ).toEqual({ environmentId, ready: true });
+  });
+
+  it("hides the option when no environment reports a scratch root", () => {
+    expect(
+      resolveNewTaskScratchOption({
+        environments: [{ environmentId, connectionState: "connected" }],
+        serverConfigs: new Map([[environmentId, {}]]),
+        selectedEnvironmentId: null,
+      }),
+    ).toBeNull();
+    expect(
+      resolveNewTaskScratchOption({
+        environments: [{ environmentId, connectionState: "connected" }],
+        serverConfigs: new Map(),
+        selectedEnvironmentId: null,
+      }),
+    ).toBeNull();
+  });
+
+  it("prefers a connected environment over the selected one that is still reconnecting", () => {
+    expect(
+      resolveNewTaskScratchOption({
+        environments: [
+          { environmentId, connectionState: "reconnecting" },
+          { environmentId: otherId, connectionState: "connected" },
+        ],
+        serverConfigs: new Map([
+          [environmentId, { scratchWorkspaceRoot: "/scratch" }],
+          [otherId, { scratchWorkspaceRoot: "/other-scratch" }],
+        ]),
+        selectedEnvironmentId: environmentId,
+      }),
+    ).toEqual({ environmentId: otherId, ready: true });
+  });
+
+  it("keeps the selected environment when every offering environment is connected", () => {
+    expect(
+      resolveNewTaskScratchOption({
+        environments: [
+          { environmentId: otherId, connectionState: "connected" },
+          { environmentId, connectionState: "connected" },
+        ],
+        serverConfigs: new Map([
+          [environmentId, { scratchWorkspaceRoot: "/scratch" }],
+          [otherId, { scratchWorkspaceRoot: "/other-scratch" }],
+        ]),
+        selectedEnvironmentId: environmentId,
+      }),
+    ).toEqual({ environmentId, ready: true });
   });
 });

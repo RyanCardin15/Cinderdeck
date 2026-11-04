@@ -1,32 +1,36 @@
 import {
   WorktreeMcpFailure,
+  OrchestratorMcpEnvironmentTarget,
   OrchestratorMcpFailure,
   VcsListRefsInput,
   VcsListRefsResult,
   WorktreeMcpHandoffInput,
   WorktreeMcpHandoffResult,
   WorktreeMcpStatusResult,
-} from "@cinderdeck/contracts";
+  ThreadId,
+} from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import * as GitWorkflowService from "../../../git/GitWorkflowService.ts";
 import * as ProjectService from "../../../project/ProjectService.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
-import { Tool, Toolkit } from "effect/unstable/ai";
+import { Tool, Toolkit } from "effect/ai";
 
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as WorktreeMcpService from "../../WorktreeMcpService.ts";
 
 const dependencies = [
   McpInvocationContext.McpInvocationContext,
+  ThreadManagementService.ThreadManagementService,
   WorktreeMcpService.WorktreeMcpService,
 ];
 
+const WorktreeToolFailure = Schema.Union([WorktreeMcpFailure, OrchestratorMcpFailure]);
+
 const WorktreeHandoffTool = Tool.make("t3_worktree_handoff", {
   description:
-    "Move this session into an ordinary Git worktree. Pass branch and optionally baseRef/path/startFromOrigin. Use adoptExisting with an existing absolute path and matching branch to use that checkout. Sessions do not reserve checkouts or create lanes. The move detaches the current provider; pass continuationPrompt with your own brief to queue the next turn there. Setup runs by default. Existing files, terminals and recordings retain their original locations. Worktrees are never removed automatically when a session is deleted.",
+    "Move THIS thread into a new git worktree on a new branch. Runs the setup script by default. A separate agent in a worktree: `t3_thread_launch` with `workspaceStrategy`. Call last in your turn. The move ends the live session. `continuationPrompt` resumes work there next turn. Without it, the thread waits. The worktree stays after the thread is deleted. Fails if this thread has a worktree.",
   parameters: WorktreeMcpHandoffInput,
   success: WorktreeMcpHandoffResult,
-  failure: WorktreeMcpFailure,
+  failure: WorktreeToolFailure,
   failureMode: "return",
   dependencies,
 })
@@ -38,13 +42,13 @@ const WorktreeHandoffTool = Tool.make("t3_worktree_handoff", {
 
 const WorktreeStatusTool = Tool.make("t3_worktree_status", {
   description:
-    "Read this session's optional Git worktree path, branch, project root and default origin setting. Sessions can share a checkout. This read does not require a native workspace or ownership reservation.",
+    "Report this thread's worktree: attached or not, path, branch, project root, and the `startFromOrigin` default. Check before `t3_worktree_handoff`.",
   // No `parameters`: Tool.make defaults to Tool.EmptyParams, which serializes
   // to a top-level `type: "object"` JSON Schema. An explicit empty
   // Schema.Struct({}) serializes to `anyOf: [object, array]`, which is not a
   // valid MCP tool input schema and makes clients reject the whole server.
   success: WorktreeMcpStatusResult,
-  failure: WorktreeMcpFailure,
+  failure: WorktreeToolFailure,
   failureMode: "return",
   dependencies,
 })
@@ -56,8 +60,10 @@ const WorktreeStatusTool = Tool.make("t3_worktree_status", {
 
 const WorktreeListTool = Tool.make("t3_worktree_list", {
   description:
-    "List branch refs and their associated checkout paths for this thread's workspace using the app's ref inventory. Detached worktrees without a branch are not included. Use t3_worktree_status for the thread binding and t3_worktree_handoff to create a new worktree.",
+    "List branch refs and checkout paths for a thread's workspace. Omit `threadId` for this thread. Detached worktrees with no branch are left out.",
   parameters: Schema.Struct({
+    environmentId: OrchestratorMcpEnvironmentTarget,
+    threadId: Schema.optional(ThreadId),
     query: VcsListRefsInput.fields.query,
     cursor: VcsListRefsInput.fields.cursor,
     limit: VcsListRefsInput.fields.limit,
@@ -71,7 +77,7 @@ const WorktreeListTool = Tool.make("t3_worktree_list", {
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
     ProjectService.ProjectService,
-    GitWorkflowService.GitWorkflowService,
+    WorktreeMcpService.WorktreeMcpService,
   ],
 })
   .annotate(Tool.Readonly, true)

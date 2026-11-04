@@ -1,5 +1,5 @@
-import { scopedThreadKey } from "@cinderdeck/client-runtime/environment";
-import type { ScopedThreadRef, SnapShotSource } from "@cinderdeck/contracts";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import type { ScopedThreadRef, SnapShotSource } from "@t3tools/contracts";
 
 import type { DraftId } from "../composerDraftStore";
 import { getDesktopSnapShotBridge } from "./desktopSnapShot";
@@ -62,7 +62,7 @@ export async function dismissSnapShotAnimation(id: string): Promise<void> {
   if (!pendingAnimations.some((capture) => capture.id === id)) return;
   finishSnapShotAnimation(id);
   const bridge = getDesktopSnapShotBridge();
-  if (typeof bridge?.dismissSnapShotAnimation !== "function") return;
+  if (!bridge) return;
   await bridge.dismissSnapShotAnimation(id).catch(() => undefined);
 }
 
@@ -74,7 +74,7 @@ export function dismissAllSnapShotAnimations(): void {
   destinationMountCounts.clear();
   emitChange();
   const bridge = getDesktopSnapShotBridge();
-  if (typeof bridge?.dismissSnapShotAnimation !== "function") return;
+  if (!bridge) return;
   for (const id of ids) {
     void bridge.dismissSnapShotAnimation(id).catch(() => undefined);
   }
@@ -108,7 +108,7 @@ export function setSnapShotAnimationDestination(
     return;
   }
   const bridge = getDesktopSnapShotBridge();
-  if (typeof bridge?.setSnapShotAnimationDestination !== "function") return;
+  if (!bridge) return;
   const frame = target.getBoundingClientRect();
   if (frame.width <= 0 || frame.height <= 0) return;
   const style = window.getComputedStyle(target);

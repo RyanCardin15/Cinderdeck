@@ -1,4 +1,4 @@
-import type { EnvironmentId, ThreadId } from "@cinderdeck/contracts";
+import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 
 export interface CheckpointDiffTarget {
   readonly environmentId: EnvironmentId | null;

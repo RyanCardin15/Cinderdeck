@@ -1,4 +1,4 @@
-import type { EnvironmentId } from "@cinderdeck/contracts";
+import type { EnvironmentId } from "@t3tools/contracts";
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
 import { useFocusEffect } from "@react-navigation/native";
@@ -57,12 +57,9 @@ export function ArchivedThreadsRouteScreen() {
       }),
     [environmentLabels, searchQuery, selectedEnvironmentId, snapshots, sortOrder],
   );
-  const refreshChangedEnvironment = useCallback(
-    (thread: { readonly environmentId: EnvironmentId }) => {
-      refreshArchivedThreadsForEnvironment(thread.environmentId);
-    },
-    [],
-  );
+  const refreshChangedEnvironment = (thread: { readonly environmentId: EnvironmentId }) => {
+    refreshArchivedThreadsForEnvironment(thread.environmentId);
+  };
   const { unarchiveThread, confirmDeleteThread } =
     useArchivedThreadListActions(refreshChangedEnvironment);
 

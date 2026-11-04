@@ -1,8 +1,8 @@
-import { EnvironmentId, type PersistedSavedEnvironmentRecord } from "@cinderdeck/contracts";
-import { fromLenientJson } from "@cinderdeck/shared/schemaJson";
+import { EnvironmentId, type PersistedSavedEnvironmentRecord } from "@t3tools/contracts";
+import { fromLenientJson } from "@t3tools/shared/schemaJson";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import * as Encoding from "effect/Encoding";
+import * as Base64 from "effect/encoding/Base64";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -130,7 +130,6 @@ export type DesktopSavedEnvironmentsGetSecretError =
   | DesktopSavedEnvironmentSecretDecodeError
   | DesktopSavedEnvironmentSecretProtectionError;
 
-/** Reads the previous registry for connection-catalog migration. */
 export class DesktopSavedEnvironments extends Context.Service<
   DesktopSavedEnvironments,
   {
@@ -143,7 +142,7 @@ export class DesktopSavedEnvironments extends Context.Service<
       environmentId: string,
     ) => Effect.Effect<Option.Option<string>, DesktopSavedEnvironmentsGetSecretError>;
   }
->()("@cinderdeck/desktop/settings/DesktopSavedEnvironments") {}
+>()("@t3tools/desktop/settings/DesktopSavedEnvironments") {}
 
 function toPersistedSavedEnvironmentRecord(
   record: PersistedSavedEnvironmentStorageRecord,
@@ -209,7 +208,7 @@ function decodeSecretBytes(
   registryPath: string,
   encoded: string,
 ): Effect.Effect<Uint8Array, DesktopSavedEnvironmentSecretDecodeError> {
-  return Effect.fromResult(Encoding.decodeBase64(encoded)).pipe(
+  return Effect.fromResult(Base64.decode(encoded)).pipe(
     Effect.mapError(
       (cause) =>
         new DesktopSavedEnvironmentSecretDecodeError({
@@ -222,7 +221,7 @@ function decodeSecretBytes(
   );
 }
 
-/** @public Service construction is part of the canonical Effect module API. */
+/** @public */
 export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;

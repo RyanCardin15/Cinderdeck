@@ -56,11 +56,6 @@ enum StackPreviewHarness {
       ReproRecorder.shared.start()
       StackControlService.shared.start()
       WorkspaceWindowController.shared.show()
-      if !usesUnifiedShell {
-        let manager = HistoryFloatingManager.shared
-        manager.show(section: .stacks)
-        if !manager.isPinned { manager.togglePin() }
-      }
       NSApp.activate(ignoringOtherApps: true)
       // "1" opens area selection; "toolbar" opens the real toolbar at a fixed region
       // so the workspace picker can be exercised without automating a display overlay.

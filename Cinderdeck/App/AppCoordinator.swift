@@ -11,7 +11,6 @@ import Foundation
 @MainActor
 final class AppCoordinator {
   private let environment: AppEnvironment
-  private var observers: [NSObjectProtocol] = []
 
   init(environment: AppEnvironment) {
     self.environment = environment
@@ -70,22 +69,7 @@ final class AppCoordinator {
     RecordingMetadataCleanupScheduler.shared.start()
     CaptureHistoryRetentionService.shared.start()
     ClipboardTextHistoryStore.shared.start()
-    DictationShortcutMonitor.shared.restart()
-    ReproRecorder.shared.start()
-    ReproRecorder.shared.onSaved = { session in
-      // Agent and Workspaces recordings confirm through their own controls.
-      if session.origin == .recording { ReproControlsPanel.shared.showCaptured(session) }
-    }
-    CinderdeckRuntimeNativeUI.configure(environment.screenCaptureViewModel)
-    Task {
-      await StackSupervisor.shared.bootstrap()
-      await WorkspaceRunner.shared.recover()
-      StackControlService.shared.start()
-      if !CinderdeckRuntimeController.shared.startIfAvailable(), !CinderdeckRuntimeController.shared.configured {
-        WorkspaceWindowController.shared.show()
-      }
-    }
-    DiagnosticLogger.shared.log(.debug, .lifecycle, "Background schedulers started")
+    _ = CinderdeckRuntimeController.shared.startIfAvailable()
 
     AppStatusBarController.shared.setup(
       viewModel: environment.screenCaptureViewModel,
@@ -98,13 +82,6 @@ final class AppCoordinator {
       "Status bar controller configured",
       context: ["crashPrompt": (didCrash && DiagnosticLogger.shared.isEnabled) ? "true" : "false"]
     )
-
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-      DiagnosticLogger.shared.log(.debug, .ui, "Splash presentation scheduled")
-      self.presentStartupExperience(configurationAutoImportResult: configurationAutoImportResult)
-    }
-
-    observeNotifications()
   }
 
   func applicationWillTerminate() {
@@ -115,41 +92,12 @@ final class AppCoordinator {
     RecordingMetadataCleanupScheduler.shared.stop()
     CinderdeckConfigurationSyncCoordinator.shared.stop()
     ClipboardTextHistoryStore.shared.stop()
-    DictationShortcutMonitor.shared.stop()
-    DictationController.shared.cancel()
     CinderdeckRuntimeController.shared.closeInputOnTermination()
-    StackControlService.shared.stop()
-
-    for observer in observers {
-      NotificationCenter.default.removeObserver(observer)
-    }
-    observers.removeAll()
   }
 
   func handleDeepLink(_ url: URL) {
     CinderdeckDeepLinkHandler(screenCaptureViewModel: environment.screenCaptureViewModel)
       .handle(url)
-  }
-
-  private func observeNotifications() {
-    let onboardingObserver = NotificationCenter.default.addObserver(
-      forName: .showOnboarding,
-      object: nil,
-      queue: .main
-    ) { _ in
-      Task { @MainActor in
-        DiagnosticLogger.shared.log(.info, .ui, "Onboarding requested from notification")
-        SplashWindowController.shared.show(forceOnboarding: true)
-      }
-    }
-
-    observers.append(onboardingObserver)
-    DiagnosticLogger.shared.log(
-      .debug,
-      .lifecycle,
-      "App notifications observed",
-      context: ["observerCount": "\(observers.count)"]
-    )
   }
 
   private func applyUserConfigurationIfNeeded() -> CinderdeckConfigurationAutoImportResult {
@@ -224,42 +172,5 @@ final class AppCoordinator {
         "TOML configuration sync before termination failed"
       )
     }
-  }
-
-  private func presentStartupExperience(
-    configurationAutoImportResult: CinderdeckConfigurationAutoImportResult
-  ) {
-    if shouldPresentConfigurationAccessOnboarding(for: configurationAutoImportResult) {
-      UserDefaults.standard.set(true, forKey: PreferencesKeys.configurationAccessOnboardingPrompted)
-      DiagnosticLogger.shared.log(.info, .ui, "Configuration access onboarding scheduled")
-      SplashWindowController.shared.showConfigurationAccess()
-      return
-    }
-
-    SplashWindowController.shared.show()
-    
-    // Automatically show the new feature intro once
-    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-      // Cleanup legacy key
-      UserDefaults.standard.removeObject(forKey: "hasSeenSmartElementIntro")
-      
-      if let campaign = FeatureIntroManager.shared.getPendingCampaign() {
-        FeatureIntroManager.shared.showCampaign(campaign)
-      }
-    }
-  }
-
-  private func shouldPresentConfigurationAccessOnboarding(
-    for result: CinderdeckConfigurationAutoImportResult
-  ) -> Bool {
-    guard result.status == .skippedPermissionRequired else {
-      return false
-    }
-
-    guard OnboardingFlowView.hasCompletedOnboarding else {
-      return false
-    }
-
-    return !UserDefaults.standard.bool(forKey: PreferencesKeys.configurationAccessOnboardingPrompted)
   }
 }

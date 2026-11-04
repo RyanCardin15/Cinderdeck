@@ -1,7 +1,7 @@
 apply plugin: 'com.android.library'
 apply plugin: 'org.jetbrains.kotlin.android'
 
-group = 'com.cardinlabs.cinderdeck.composereditor'
+group = 'com.t3tools.composereditor'
 version = '0.0.0'
 
 android {
@@ -20,7 +20,6 @@ android {
 
 dependencies {
   implementation project(':expo-modules-core')
-  implementation project(':t3tools-mobile-markdown-text')
   testImplementation 'junit:junit:4.13.2'
   testImplementation 'org.robolectric:robolectric:4.16.1'
 }

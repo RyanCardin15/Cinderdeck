@@ -1,4 +1,8 @@
 // @effect-diagnostics globalTimers:off -- The Electron window-blur handshake uses a native timeout outside any Effect fiber.
+// @effect-diagnostics nodeBuiltinImport:off -- This desktop-only platform check reads procfs and resolves Wayland socket paths with Node.
+
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
 
 import {
   SNAP_SHOT_ACCESSIBILITY_MAX_NODES,
@@ -8,8 +12,9 @@ import {
   snapShotShortcutModifierPair,
   type SnapShotAccessibilityNode,
   type SnapShotKeyChord,
+  type SnapShotModifier,
   type SnapShotShortcut,
-} from "@cinderdeck/contracts";
+} from "@t3tools/contracts";
 
 interface AccessibilityTreeNode {
   readonly name?: string;
@@ -18,7 +23,16 @@ interface AccessibilityTreeNode {
 }
 
 const MAX_ACCESSIBILITY_TREE_NODES = 10_000;
-const WINDOW_BLUR_TIMEOUT_MS = 1_000;
+
+export const WINDOWS_MODIFIER_PAIR_VIRTUAL_KEYS: Record<
+  SnapShotModifier,
+  readonly [number, number]
+> = {
+  shift: [0xa0, 0xa1],
+  control: [0xa2, 0xa3],
+  alt: [0xa4, 0xa5],
+  meta: [0x5b, 0x5c],
+};
 
 export function snapShotShortcutRegistrationFailureMessage(
   shortcut: SnapShotShortcut,
@@ -153,7 +167,7 @@ export function boundedSnapShotString(
   return candidate.slice(0, end).trimEnd();
 }
 
-export function capturedImageBounds(
+function capturedImageBounds(
   bounds: WindowBounds | null | undefined,
   sourceBounds: WindowBounds,
   imageSize: CapturedImageSize,
@@ -332,6 +346,7 @@ type AccessibleWindowElementTreeOptions = {
     descendantLocationsReliable: boolean,
   ) => void;
   readonly shouldContinue?: () => boolean;
+  readonly verifyDescendantLocations?: boolean;
 };
 
 export async function accessibleWindowElementTree(
@@ -345,8 +360,12 @@ export async function accessibleWindowElementTree(
   let truncated = false;
   let root: MutableAccessibilityNode | undefined;
   const shouldContinue = options.shouldContinue ?? (() => true);
+  let descendantLocationVaries = false;
+  let rootBounds = sourceBounds;
 
-  const descendantLocationsReliable = () => options.locationsReliable !== false;
+  const descendantLocationsReliable = () =>
+    options.locationsReliable !== false &&
+    (options.verifyDescendantLocations !== true || descendantLocationVaries);
 
   const visit = async (
     current: AccessibilityElement,
@@ -361,6 +380,15 @@ export async function accessibleWindowElementTree(
       return undefined;
     }
     const elementBounds = safeProperty(() => current.bounds);
+    if (required && elementBounds) rootBounds = elementBounds;
+    if (
+      !required &&
+      elementBounds !== null &&
+      elementBounds !== undefined &&
+      (Math.abs(elementBounds.x - rootBounds.x) > 2 || Math.abs(elementBounds.y - rootBounds.y) > 2)
+    ) {
+      descendantLocationVaries = true;
+    }
     const node = accessibilityNode(
       current,
       elementBounds,
@@ -409,25 +437,6 @@ export async function accessibleWindowElementTree(
   return { root: compacted.root, truncated: completedTruncated };
 }
 
-export function hideAndWaitForBlur(window: {
-  readonly hide: () => void;
-  readonly once: (event: "blur", listener: () => void) => unknown;
-  readonly removeListener: (event: "blur", listener: () => void) => unknown;
-}): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      window.removeListener("blur", onBlur);
-      reject(new Error("Timed out waiting for Cinderdeck to lose focus."));
-    }, WINDOW_BLUR_TIMEOUT_MS);
-    const onBlur = () => {
-      clearTimeout(timeout);
-      resolve();
-    };
-    window.once("blur", onBlur);
-    window.hide();
-  });
-}
-
 type WindowBounds = {
   readonly x: number;
   readonly y: number;
@@ -447,19 +456,37 @@ export function findAccessibleWindow<
     readonly title: string;
     readonly sourceTitle?: string;
     readonly bounds: WindowBounds;
+    readonly clientBounds?: WindowBounds | undefined;
+    readonly platform?: NodeJS.Platform;
+    readonly bundleId?: string | undefined;
   },
+  matchMode: "screen-bounds" | "wayland" = "screen-bounds",
   options: { readonly allowUntitledUniqueBounds?: boolean } = {},
 ): T | undefined {
-  const normalizeTitle = (value: string) => value.trim();
+  const normalizeTitle = (value: string) => {
+    const title = value.trim();
+    // Terminal apps can animate a leading CLI spinner between capture and AT-SPI lookup.
+    return matchMode === "wayland" ? title.replace(/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏](?:\s+|$)/u, "") : title;
+  };
   const titles = new Set(
     [captured.title, captured.sourceTitle ?? ""].map(normalizeTitle).filter(Boolean),
   );
-  const boundsKeys = ["x", "y", "width", "height"] as const;
+  // Wayland accessibility providers can expose window size without a screen position.
+  const boundsKeys =
+    matchMode === "wayland"
+      ? (["width", "height"] as const)
+      : (["x", "y", "width", "height"] as const);
+  const candidateBounds =
+    matchMode === "wayland" && captured.clientBounds
+      ? [captured.bounds, captured.clientBounds]
+      : [captured.bounds];
   const matchesBounds = (window: T) => {
     const bounds = window.bounds;
     return (
       bounds !== null &&
-      boundsKeys.every((key) => Math.abs(bounds[key] - captured.bounds[key]) <= 2)
+      candidateBounds.some((candidate) =>
+        boundsKeys.every((key) => Math.abs(bounds[key] - candidate[key]) <= 2),
+      )
     );
   };
   if (titles.size > 0) {
@@ -470,9 +497,10 @@ export function findAccessibleWindow<
     const activeMatches = matches.filter((window) => safeProperty(() => window.active) === true);
     if (activeMatches.length === 1) return activeMatches[0];
     if (matches.length > 1) return undefined;
+    const browserMatch = findBrowserTitleMatch(windows, titles, captured, matchMode, matchesBounds);
+    if (browserMatch) return browserMatch;
   }
-  // Some toolkits expose the frame as an unnamed group. A PID-scoped lookup can
-  // accept the one window whose bounds match.
+  // GTK4 frames may be unnamed; accept only a PID-scoped unique bounds match, never size alone.
   if (!options.allowUntitledUniqueBounds) return undefined;
   const boundsMatches = windows.filter(
     (window) => normalizeTitle(window.name ?? "") === "" && matchesBounds(window),
@@ -480,17 +508,48 @@ export function findAccessibleWindow<
   return boundsMatches.length === 1 ? boundsMatches[0] : undefined;
 }
 
+// Chrome's macOS AX title can append the browser and profile to the captured page title.
+function findBrowserTitleMatch<T extends { readonly name?: string | null }>(
+  windows: readonly T[],
+  titles: ReadonlySet<string>,
+  captured: { readonly platform?: NodeJS.Platform; readonly bundleId?: string | undefined },
+  matchMode: "screen-bounds" | "wayland",
+  matchesBounds: (window: T) => boolean,
+): T | undefined {
+  if (captured.platform !== "darwin" || matchMode !== "screen-bounds") return undefined;
+  const browserName = /^com\.google\.Chrome(?:\.(?:beta|dev|canary))?$/.test(
+    captured.bundleId ?? "",
+  )
+    ? "Google Chrome"
+    : captured.bundleId === "org.chromium.Chromium"
+      ? "Chromium"
+      : undefined;
+  if (!browserName) return undefined;
+  const browserMatches = windows.filter((window) => {
+    if (!matchesBounds(window)) return false;
+    const name = window.name?.trim() ?? "";
+    return [...titles].some((title) => {
+      const prefix = `${title} - ${browserName}`;
+      return (
+        name === prefix ||
+        (name.startsWith(prefix) && /^ [–—-] \S.*$/u.test(name.slice(prefix.length)))
+      );
+    });
+  });
+  return browserMatches.length === 1 ? browserMatches[0] : undefined;
+}
+
+// Keyed by the lowercase tokens parseKeybindingShortcut stores; Electron has no `ArrowUp` token.
 const ELECTRON_KEY_NAMES: Readonly<Record<string, string>> = {
   " ": "Space",
   "+": "Plus",
-  ArrowDown: "Down",
-  ArrowLeft: "Left",
-  ArrowRight: "Right",
-  ArrowUp: "Up",
-  Escape: "Esc",
+  arrowdown: "Down",
+  arrowleft: "Left",
+  arrowright: "Right",
+  arrowup: "Up",
+  escape: "Esc",
 };
 
-/** Two shortcuts are the same when they would register the same listener. */
 export function sameSnapShotShortcut(left: SnapShotShortcut, right: SnapShotShortcut): boolean {
   if (isModifierPairShortcut(left) || isModifierPairShortcut(right)) {
     return (
@@ -513,26 +572,33 @@ export function toElectronAccelerator(shortcut: SnapShotKeyChord): string {
   return parts.join("+");
 }
 
-interface CaptureSourceLike {
-  readonly id: string;
-  readonly name: string;
-}
-
-interface ActiveWindowLike {
-  readonly id: number;
-  readonly title: string;
-}
-
-export function findCaptureSource<T extends CaptureSourceLike>(
-  sources: readonly T[],
-  activeWindow: ActiveWindowLike,
-): T | undefined {
-  const idPrefix = `window:${activeWindow.id}:`;
-  const idMatch = sources.find((source) => source.id.startsWith(idPrefix));
-  if (idMatch) return idMatch;
-
-  const title = activeWindow.title.trim();
-  if (!title) return undefined;
-  const titleMatches = sources.filter((source) => source.name.trim() === title);
-  return titleMatches.length === 1 ? titleMatches[0] : undefined;
+export function isWaylandSession(
+  platform: NodeJS.Platform,
+  environment: NodeJS.ProcessEnv,
+): boolean {
+  if (platform !== "linux") return false;
+  if (
+    environment.XDG_SESSION_TYPE?.toLowerCase() === "wayland" ||
+    Boolean(environment.WAYLAND_DISPLAY)
+  ) {
+    return true;
+  }
+  if (environment.XDG_SESSION_TYPE?.toLowerCase() === "x11") return false;
+  const runtimeDirectory = environment.XDG_RUNTIME_DIR;
+  if (!runtimeDirectory) return false;
+  try {
+    const liveSockets = new Set(
+      NodeFS.readFileSync("/proc/net/unix", "utf8")
+        .split("\n")
+        .flatMap((line) => line.match(/\s(\/.*)$/)?.[1] ?? []),
+    );
+    return NodeFS.readdirSync(runtimeDirectory, { withFileTypes: true }).some(
+      (entry) =>
+        /^wayland-\d+$/.test(entry.name) &&
+        entry.isSocket() &&
+        liveSockets.has(NodePath.join(runtimeDirectory, entry.name)),
+    );
+  } catch {
+    return false;
+  }
 }

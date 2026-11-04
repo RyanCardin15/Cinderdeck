@@ -14,8 +14,8 @@ for workflow in (ROOT / ".github/workflows").glob("*"):
         errors.append(f"GitHub Actions workflows are disabled for this project: {workflow.relative_to(ROOT)}")
 
 for obsolete in (
-    ".repos", ".github", "apps/marketing", "infra", "packaging", "t3.json",
-    "oxlint-plugin-t3code", "docs/deckhand/upstream-patches.json",
+    ".repos", ".github", "apps/marketing", "infra", "packaging",
+    "docs/deckhand/upstream-patches.json",
     "scripts/deckhand/upstream-maintenance.mjs", "scripts/install.sh", "scripts/install.ps1",
     "scripts/build-cli-archive.ts", "scripts/smoke-cli-archive.ts",
 ):
@@ -34,8 +34,6 @@ for path in manifests:
     if name in packages:
         errors.append(f"Duplicate workspace package: {name}")
     packages[name] = (path, data)
-    if name == "t3" or name.startswith("@t3tools/"):
-        errors.append(f"Inherited package identity: {path.relative_to(ROOT)}")
 
 for path, data in packages.values():
     for section in ("dependencies", "devDependencies", "optionalDependencies"):
@@ -43,12 +41,12 @@ for path, data in packages.values():
             if version.startswith("workspace:") and name not in packages:
                 errors.append(f"Missing workspace dependency {name} in {path.relative_to(ROOT)}")
 
-for required in ("@cinderdeck/server", "@cinderdeck/web", "@cinderdeck/desktop", "@cinderdeck/mobile"):
+for required in ("t3", "@t3tools/web", "@t3tools/desktop", "@t3tools/mobile"):
     if required not in packages:
         errors.append(f"Required Cinderdeck component missing: {required}")
 
-server = packages["@cinderdeck/server"][1]
-if not server.get("private") or "bin" in server or "build:exe" in server.get("scripts", {}):
+server = packages["t3"][1]
+if not server.get("private") or "build:exe" in server.get("scripts", {}):
     errors.append("The embedded server must remain private and have no standalone executable release.")
 
 mobile = (RUNTIME / "apps/mobile/app.config.ts").read_text()

@@ -1,6 +1,0 @@
-{
-  "id": "declined-payment-retry-v1",
-  "firstResult": "declined",
-  "retryResult": "paid",
-  "fixtureVersion": 1
-}

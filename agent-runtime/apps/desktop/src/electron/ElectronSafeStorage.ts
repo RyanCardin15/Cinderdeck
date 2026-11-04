@@ -1,9 +1,11 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import * as Electron from "electron";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 
 const electronSafeStorageErrorFields = {
   cause: Schema.Defect(),
@@ -59,29 +61,42 @@ export class ElectronSafeStorage extends Context.Service<
     readonly decryptString: (
       value: Uint8Array,
     ) => Effect.Effect<string, ElectronSafeStorageDecryptError>;
+    readonly selectedStorageBackend: Effect.Effect<Option.Option<string>>;
   }
->()("@cinderdeck/desktop/electron/ElectronSafeStorage") {}
+>()("@t3tools/desktop/electron/ElectronSafeStorage") {}
 
-/** @public Service construction is part of the canonical Effect module API. */
-export const make = Effect.sync(() =>
-  // OS-backed secure storage may wait for Keychain approval. Keep that work off
-  // Electron's main thread so windows, IPC, and shutdown remain responsive.
-  ElectronSafeStorage.of({
-    isEncryptionAvailable: Effect.tryPromise({
-      try: () => Electron.safeStorage.isAsyncEncryptionAvailable(),
+/** @public */
+export const make = Effect.gen(function* () {
+  const platform = yield* HostProcess.Platform;
+
+  return ElectronSafeStorage.of({
+    isEncryptionAvailable: Effect.try({
+      try: () => Electron.safeStorage.isEncryptionAvailable(),
       catch: (cause) => new ElectronSafeStorageAvailabilityError({ cause }),
     }),
-    encryptString: (value) =>
-      Effect.tryPromise({
-        try: () => Electron.safeStorage.encryptStringAsync(value),
+    encryptString: Effect.fn("ElectronSafeStorage.encryptString")(function (value) {
+      return Effect.try({
+        try: () => Electron.safeStorage.encryptString(value),
         catch: (cause) => new ElectronSafeStorageEncryptError({ cause }),
-      }),
-    decryptString: (value) =>
-      Effect.tryPromise({
-        try: () => Electron.safeStorage.decryptStringAsync(Buffer.from(value)),
+      });
+    }),
+    decryptString: Effect.fn("ElectronSafeStorage.decryptString")(function (value) {
+      return Effect.try({
+        try: () => Electron.safeStorage.decryptString(Buffer.from(value)),
         catch: (cause) => new ElectronSafeStorageDecryptError({ cause }),
-      }).pipe(Effect.map((decrypted) => decrypted.result)),
-  }),
-);
+      });
+    }),
+    selectedStorageBackend: Effect.sync(() => {
+      if (platform !== "linux") {
+        return Option.none();
+      }
+      try {
+        return Option.fromNullishOr(Electron.safeStorage.getSelectedStorageBackend());
+      } catch {
+        return Option.none();
+      }
+    }),
+  });
+});
 
 export const layer = Layer.effect(ElectronSafeStorage, make);

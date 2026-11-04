@@ -1,10 +1,11 @@
 # Activity log
 
 On web and desktop, consecutive tool calls appear as an expandable summary. Open it to inspect
-commands, tool inputs, status, and exit codes. Raw command output and tool-result bodies are not
-shown. Use **Open diff** on a file change to review its contents.
+commands, tool inputs, status, and exit codes. Expand a tool call to see its output. A running
+command's output updates live, and long output shows only its most recent part. Use **Open diff** on
+a file change to review its contents.
 
-Cinderdeck Orchestrator summaries describe the actions taken, such as **Ran 2 commands and sent messages
+T3 Orchestrator summaries describe the actions taken, such as **Ran 2 commands and sent messages
 to 3 threads**. Repeated messages to the same destinations show both counts: **Sent 5 messages to
 2 threads**. Thread creation counts the threads returned by the tool, including batches.
 

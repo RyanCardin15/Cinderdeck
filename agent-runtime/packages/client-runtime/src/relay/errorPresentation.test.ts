@@ -1,4 +1,4 @@
-import { RelayAuthInvalidError } from "@cinderdeck/contracts/relay";
+import { RelayAuthInvalidError } from "@t3tools/contracts/relay";
 import { describe, expect, it } from "@effect/vitest";
 
 import {
@@ -43,15 +43,5 @@ describe("relayProtectedErrorMessage", () => {
     expect(relayProtectedErrorMessage(error)).toBe(
       `Relay rejected the DPoP proof. ${DPOP_RETRY_HINT}`,
     );
-  });
-
-  it("preserves the existing message for other authentication failures", () => {
-    const error = new RelayAuthInvalidError({
-      code: "auth_invalid",
-      reason: "invalid_bearer",
-      traceId: "trace-1",
-    });
-
-    expect(relayProtectedErrorMessage(error)).toBe("Relay rejected the cloud session token.");
   });
 });

@@ -6,7 +6,6 @@ export type ThemePreviewColors = Readonly<{
   messageAction: string;
 }>;
 
-/** The standard Cinderdeck artwork is not a built-in theme, so its preview colors live here. */
 export const STANDARD_THEME_PREVIEW_COLORS: Readonly<Record<ThemeAppearance, ThemePreviewColors>> =
   {
     light: {
@@ -39,7 +38,6 @@ export type ThemePreviewRenderSpec = Readonly<{
   blurAt56Px: number;
 }>;
 
-/** Shared geometry and falloff for the web and native theme preview orbs. */
 export const THEME_PREVIEW_RENDER_SPECS: Readonly<Record<ThemeAppearance, ThemePreviewRenderSpec>> =
   {
     light: {
@@ -87,7 +85,7 @@ function srgbToLinear(value: number): number {
   return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
 }
 
-export function linearToSrgb(value: number): number {
+function linearToSrgb(value: number): number {
   const converted = value <= 0.0031308 ? 12.92 * value : 1.055 * value ** (1 / 2.4) - 0.055;
   return Math.round(Math.min(1, Math.max(0, converted)) * 255);
 }

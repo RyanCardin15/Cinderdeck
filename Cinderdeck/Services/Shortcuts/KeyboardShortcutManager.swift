@@ -1578,18 +1578,6 @@ final class KeyboardShortcutManager {
       ref: &applicationRecordingHotkeyRef
     )
     registerShortcutIfNeeded(
-      kind: .annotate,
-      config: shortcut(for: .annotate),
-      hotkeyID: annotateHotkeyID,
-      ref: &annotateHotkeyRef
-    )
-    registerShortcutIfNeeded(
-      kind: .videoEditor,
-      config: shortcut(for: .videoEditor),
-      hotkeyID: videoEditorHotkeyID,
-      ref: &videoEditorHotkeyRef
-    )
-    registerShortcutIfNeeded(
       kind: .ocr,
       config: shortcut(for: .ocr),
       hotkeyID: ocrHotkeyID,
@@ -1602,18 +1590,6 @@ final class KeyboardShortcutManager {
       ref: &smartElementHotkeyRef
     )
     registerShortcutIfNeeded(
-      kind: .cloudUploads,
-      config: shortcut(for: .cloudUploads),
-      hotkeyID: cloudUploadsHotkeyID,
-      ref: &cloudUploadsHotkeyRef
-    )
-    registerShortcutIfNeeded(
-      kind: .shortcutList,
-      config: shortcut(for: .shortcutList),
-      hotkeyID: shortcutListHotkeyID,
-      ref: &shortcutListHotkeyRef
-    )
-    registerShortcutIfNeeded(
       kind: .objectCutout,
       config: shortcut(for: .objectCutout),
       hotkeyID: objectCutoutHotkeyID,
@@ -1624,12 +1600,6 @@ final class KeyboardShortcutManager {
       config: shortcut(for: .history),
       hotkeyID: historyHotkeyID,
       ref: &historyHotkeyRef
-    )
-    registerShortcutIfNeeded(
-      kind: .pullRequests,
-      config: shortcut(for: .pullRequests),
-      hotkeyID: pullRequestsHotkeyID,
-      ref: &pullRequestsHotkeyRef
     )
 
     logRegistrationAudit()

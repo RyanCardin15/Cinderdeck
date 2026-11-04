@@ -2,4 +2,4 @@ export {
   CodexAuthCallbackError,
   cancelCodexAuthCallback,
   receiveCodexAuthCallback,
-} from "@cinderdeck/shared/codexAuthCallback";
+} from "@t3tools/shared/codexAuthCallback";

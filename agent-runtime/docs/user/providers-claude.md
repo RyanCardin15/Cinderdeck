@@ -1,6 +1,6 @@
 # Claude
 
-Cinderdeck uses Claude Code's login and configuration. Start with the default provider
+T3 Code uses Claude Code's login and configuration. Start with the default provider
 for one account; [provider setup](./install.md#providers) covers installation and
 shared provider settings.
 
@@ -39,7 +39,7 @@ For presets that differ only in API keys or endpoints, use the instance's
 
 Claude Code's verbose mode can stay enabled when you use Claude for text generation, including
 thread titles, branch names, commit messages, and pull request descriptions. On a remote connection,
-Cinderdeck uses the Claude configuration on the connected server.
+T3 Code uses the Claude configuration on the connected server.
 
 ## Compact long conversations
 
@@ -49,9 +49,30 @@ Set **Auto-compact after** in the Claude provider settings to an integer between
 window. Leave it empty for Claude Code's default.
 
 You can also send `/compact` in an existing conversation. Web and desktop offer
-**Compact context** from the context meter and may suggest it when you return to
-a large older thread. See [commands and skills](./composer.md#commands-and-skills)
-for using composer commands.
+**Compact context** from the context meter. The meter is off by default; see
+[commands and skills](./composer.md#commands-and-skills) to enable it. Claude Code
+compacts automatically whether the meter is on or off.
+
+When you return to a large thread after Claude's prompt cache expires, a
+**Compact** chip with the thread's token count shows
+next to the send button. While it is on, Enter summarizes the history first, then
+sends your message. Click the chip to switch it to **Keep** and keep the full
+history for that message. The cache lasts about an hour on a Claude
+subscription and 5 minutes with an API key, Bedrock, or Vertex. See [commands and skills](./composer.md#commands-and-skills) for using
+composer commands.
+
+**Compact idle threads** in **Settings > Providers > Advanced** controls this for threads
+over 200,000 tokens. Each Claude provider's settings can override it:
+
+- **When you return** shows the **Compact** chip described above. This is the default.
+- **Before the cache expires (beta)** tries to compact an idle thread shortly before its
+  prompt cache expires, while the history is still cached.
+  The compaction appears in the thread as a `/compact` turn sent by T3 Code.
+  If the window is missed, such as when you enable this mode after the cache has
+  expired or the server restarts before compaction runs, it falls back to
+  **When you return**. Switch the chip to **Keep** to keep the full history for that message.
+- **Never** skips idle compaction and Claude's resume prompt. **Auto-compact after**
+  still applies, and you can still compact by hand.
 
 ## Usage limits
 
@@ -67,21 +88,18 @@ Claude skills come from the config directory's `skills` folder and the project's
 `.claude/skills` folder. If both define the same name, the config-directory copy
 wins. Skills disabled in Claude's settings do not appear in the composer.
 
-Use `$` in the composer to select a skill. Skills marked `disable-model-invocation`
+Use `$` in the composer to select a skill. Enabled installed Claude plugins also
+contribute skills under names such as `plugin:review`. Skills marked `disable-model-invocation`
 can still be started by you. Invoke those one per message: Claude directly runs
 only the last named skill and may try to start earlier ones through its Skill
 tool, which refuses skills reserved for manual invocation.
 
-## MCP servers
+## Task lists
 
-Settings > Providers > Claude > MCP servers lists the servers Claude Code loads
-from your user, project and claude.ai configuration, with each one's status and
-tools. Opening the section or pressing refresh connects to every server, so it
-can take a few seconds. Servers that need sign-in show how to sign in; run
-`/mcp` in Claude Code, then refresh.
-
-Turn a server or a single tool off to keep it out of new Claude sessions in
-Cinderdeck. Claude's own configuration files are not changed.
+To show Claude task lists in the web and desktop apps, add
+`CLAUDE_CODE_ENABLE_TODO_TOOLS=1` under **Variables** in the Claude instance's
+**Environment** section in **Settings > Providers**. Each update shows as a Tasks
+row in the thread; open it to see every step.
 
 ## OpenRouter
 
@@ -99,11 +117,11 @@ If that Claude config directory has a cached Anthropic login, run `/logout` in a
 Claude Code session using that directory before starting the router setup. Cached
 login credentials can conflict with the router token.
 
-Select the model you want in Cinderdeck. For an OpenRouter model outside the built-in
+Select the model you want in T3 Code. For an OpenRouter model outside the built-in
 list, open that Claude instance in **Settings > Providers** and add its full model
 ID with **Add custom model**. Then select it in the chat model picker.
 `ANTHROPIC_DEFAULT_*_MODEL` variables map Claude Code aliases such as `sonnet`; they
-do not replace the explicit model ID selected in Cinderdeck. Custom models may have
+do not replace the explicit model ID selected in T3 Code. Custom models may have
 fewer effort, thinking, or context controls than built-in models.
 
 Verify the model used in OpenRouter's activity dashboard. For current compatibility

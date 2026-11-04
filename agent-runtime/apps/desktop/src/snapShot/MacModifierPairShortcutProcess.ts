@@ -2,7 +2,7 @@
 
 import * as NodeChildProcess from "node:child_process";
 
-import type { SnapShotModifier } from "@cinderdeck/contracts";
+import type { SnapShotModifier } from "@t3tools/contracts";
 
 const MAC_MODIFIER_PAIR_DEVICE_MASKS: Record<SnapShotModifier, readonly [number, number]> = {
   shift: [0x2, 0x4],
@@ -11,8 +11,7 @@ const MAC_MODIFIER_PAIR_DEVICE_MASKS: Record<SnapShotModifier, readonly [number,
   meta: [0x8, 0x10],
 };
 
-// The CoreGraphics query connects osascript to the window server, which registers it as a
-// foreground app attributed to Cinderdeck. Go background-only first so it never gets a Dock tile.
+// CoreGraphics registers osascript as a foreground app; go background-only first to avoid a Dock tile.
 const POLLER_SCRIPT = `
 ObjC.import("AppKit");
 $.NSApplication.sharedApplication.setActivationPolicy($.NSApplicationActivationPolicyProhibited);

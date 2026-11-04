@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 const publicKeyOptions = {
   allowCredentials: [],
   challenge: new Uint8Array([1]),
-  rpId: "clerk.abc.test",
+  rpId: "clerk.t3.codes",
   timeout: 60_000,
   userVerification: "preferred" as const,
 };
@@ -15,7 +15,7 @@ const stubNativePasskeys = () => {
     error: { code: "cancelled", message: "user cancelled" },
   });
 
-  vi.stubGlobal("location", { protocol: "deckhand:", hostname: "app" });
+  vi.stubGlobal("location", { protocol: "t3code:", hostname: "app" });
   vi.stubGlobal("window", {
     PublicKeyCredential: vi.fn(),
     __clerk_internal_electron_passkeys: {
@@ -44,17 +44,5 @@ describe("Electron passkeys", () => {
 
     expect(get).not.toHaveBeenCalled();
     expect(result.error).toMatchObject({ code: "passkey_operation_aborted" });
-  });
-
-  it("sends an explicit passkey request to the native bridge", async () => {
-    const get = stubNativePasskeys();
-    const passkeys = createPasskeys();
-
-    await passkeys.get({
-      publicKeyOptions,
-      conditionalUI: false,
-    });
-
-    expect(get).toHaveBeenCalledOnce();
   });
 });

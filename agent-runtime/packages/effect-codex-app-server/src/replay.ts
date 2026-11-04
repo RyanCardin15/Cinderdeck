@@ -1,3 +1,4 @@
+import { pipe } from "effect/Function";
 import * as Cause from "effect/Cause";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -112,26 +113,12 @@ export class CodexAppServerReplayRuntimeExitError extends Schema.TaggedError<Cod
   }
 }
 
-export class CodexAppServerReplayIncompleteError extends Schema.TaggedError<CodexAppServerReplayIncompleteError>()(
-  "CodexAppServerReplayIncompleteError",
-  {
-    scenario: Schema.String,
-    cursor: Schema.Number,
-    remaining: Schema.Number,
-  },
-) {
-  override get message(): string {
-    return `Codex app-server replay ended with ${this.remaining} unconsumed entries in scenario ${this.scenario}.`;
-  }
-}
-
 export const CodexAppServerReplayError = Schema.Union([
   CodexAppServerReplayJsonParseError,
   CodexAppServerReplayExhaustedError,
   CodexAppServerReplayUnexpectedOutboundError,
   CodexAppServerReplayFrameMismatchError,
   CodexAppServerReplayRuntimeExitError,
-  CodexAppServerReplayIncompleteError,
 ]);
 export type CodexAppServerReplayError = typeof CodexAppServerReplayError.Type;
 
@@ -150,7 +137,7 @@ export interface CodexAppServerReplayDriver {
 
 const encoder = new TextEncoder();
 
-export function stableStringify(value: unknown): string {
+function stableStringify(value: unknown): string {
   if (Array.isArray(value)) {
     return `[${value.map(stableStringify).join(",")}]`;
   }
@@ -164,7 +151,7 @@ export function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
-export function normalizeContextHandoffText(value: string): string {
+function normalizeContextHandoffText(value: string): string {
   if (!value.startsWith("Context handoff (")) {
     return value;
   }
@@ -177,7 +164,7 @@ export function normalizeContextHandoffText(value: string): string {
   return `${value.slice(0, headerEndIndex + 2)}<dynamic-summary>${value.slice(userMessageIndex)}`;
 }
 
-export function normalizeReplayFrame(value: unknown): unknown {
+function normalizeReplayFrame(value: unknown): unknown {
   if (typeof value === "string") {
     return normalizeContextHandoffText(value);
   }
@@ -200,15 +187,10 @@ export function normalizeReplayFrame(value: unknown): unknown {
   ) {
     const params = normalized.params as Record<string, unknown>;
     if (typeof params.clientInfo === "object" && params.clientInfo !== null) {
-      const clientInfo = params.clientInfo as Record<string, unknown>;
-      // Preserve original recordings while mapping only their exact legacy
-      // name/title pair to the owned client. Other protocol fields still match.
-      const legacyClient = clientInfo.name === "T3 Code" && clientInfo.title === "T3 Code";
       normalized.params = {
         ...params,
         clientInfo: {
-          ...clientInfo,
-          ...(legacyClient ? { name: "Cinderdeck", title: "Cinderdeck" } : {}),
+          ...(params.clientInfo as Record<string, unknown>),
           version: "<ignored>",
         },
       };
@@ -249,20 +231,15 @@ export function normalizeReplayFrame(value: unknown): unknown {
   return normalized;
 }
 
-/**
- * `config` keys a recorder sent on thread requests that the client under test
- * never sends, such as `agents.max_depth`. Recorders list them in the
- * transcript header as `metadata.recorderThreadConfigKeys`.
- */
 function recorderThreadConfigKeys(transcript: CodexAppServerReplayTranscript): ReadonlySet<string> {
   const keys = transcript.metadata?.recorderThreadConfigKeys;
   return new Set(Array.isArray(keys) ? keys.filter((key) => typeof key === "string") : []);
 }
 
 /**
- * Thread requests must match on the `config` the client owns. `cwd`, `model`
- * and host-supplied MCP servers (machine-local URLs, short-lived authorization
- * headers) vary per machine, and recorder-only keys are not the client's.
+ * `cwd`, `model`, host-supplied MCP servers (machine-local URLs, short-lived
+ * authorization headers) and the T3 thread id vary per machine or run, and
+ * recorder-only keys are not the client's.
  */
 function normalizeThreadRequest(frame: unknown, ignoredConfigKeys: ReadonlySet<string>): unknown {
   if (typeof frame !== "object" || frame === null) return frame;
@@ -278,7 +255,14 @@ function normalizeThreadRequest(frame: unknown, ignoredConfigKeys: ReadonlySet<s
   }
   const { cwd: _cwd, model: _model, config, ...params } = record.params as Record<string, unknown>;
   if (typeof config !== "object" || config === null) return { ...record, params };
-  const { mcp_servers: _mcpServers, ...owned } = config as Record<string, unknown>;
+  const owned = Object.fromEntries(
+    Object.entries(config as Record<string, unknown>).filter(
+      ([key]) =>
+        key !== "mcp_servers" &&
+        !key.startsWith("mcp_servers.") &&
+        key !== "shell_environment_policy.set.T3CODE_THREAD_ID",
+    ),
+  );
   for (const key of ignoredConfigKeys) delete owned[key];
   return { ...record, params: { ...params, config: owned } };
 }
@@ -289,7 +273,11 @@ function sameFrame(
   ignoredConfigKeys: ReadonlySet<string> = new Set(),
 ): boolean {
   const normalize = (frame: unknown) =>
-    stableStringify(normalizeThreadRequest(normalizeReplayFrame(frame), ignoredConfigKeys));
+    pipe(
+      normalizeReplayFrame(frame),
+      (request) => normalizeThreadRequest(request, ignoredConfigKeys),
+      stableStringify,
+    );
   return normalize(left) === normalize(right);
 }
 

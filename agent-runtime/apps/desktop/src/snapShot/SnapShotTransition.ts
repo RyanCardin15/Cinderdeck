@@ -17,6 +17,7 @@ type SnapShotAnimationDetails = {
 
 export type SnapShotAnimationDestination = {
   readonly frame: Electron.Rectangle;
+  readonly relativeFrame?: Electron.Rectangle | undefined;
   readonly backgroundColor: string;
   readonly borderColor: string;
   readonly borderWidth: number;
@@ -25,7 +26,7 @@ export type SnapShotAnimationDestination = {
   readonly details?: SnapShotAnimationDetails | undefined;
 };
 
-export function snapShotAnimationDurationMs(
+function snapShotAnimationDurationMs(
   source: Electron.Rectangle,
   target: Electron.Rectangle,
 ): number {
@@ -51,9 +52,19 @@ type ActiveTransition = {
   details?: SnapShotAnimationDetails | undefined;
   timer?: Fiber.Fiber<void> | undefined;
   flight?: Promise<void> | undefined;
+  landed?: boolean | undefined;
 };
 
-export function snapShotAnimationOverlayBounds(
+type SnapShotTransitionOptions = {
+  readonly showWindow?: ((window: Electron.BaseWindow) => void) | undefined;
+  readonly boundOverlayToCaptureDisplays?: boolean | undefined;
+  readonly waitForCompositorFrame?: boolean | undefined;
+  readonly alwaysOnTopLevel?:
+    | NonNullable<Parameters<Electron.BrowserWindow["setAlwaysOnTop"]>[1]>
+    | undefined;
+};
+
+function snapShotAnimationOverlayBounds(
   displays: ReadonlyArray<Pick<Electron.Display, "bounds">>,
 ): Electron.Rectangle {
   const firstDisplay = displays[0];
@@ -89,7 +100,10 @@ export function snapShotAnimationDisplayBounds(
     );
 }
 
-function createWindow(bounds: Electron.Rectangle): Electron.BrowserWindow {
+function createWindow(
+  bounds: Electron.Rectangle,
+  alwaysOnTopLevel: SnapShotTransitionOptions["alwaysOnTopLevel"],
+): Electron.BrowserWindow {
   const window = new Electron.BrowserWindow({
     ...bounds,
     alwaysOnTop: true,
@@ -100,7 +114,7 @@ function createWindow(bounds: Electron.Rectangle): Electron.BrowserWindow {
     resizable: false,
     show: false,
     skipTaskbar: true,
-    title: "Cinderdeck Snapshot Animation",
+    title: "T3 Code Snapshot Animation",
     transparent: true,
     webPreferences: {
       backgroundThrottling: false,
@@ -109,7 +123,7 @@ function createWindow(bounds: Electron.Rectangle): Electron.BrowserWindow {
       sandbox: true,
     },
   });
-  window.setAlwaysOnTop(true, "pop-up-menu");
+  if (alwaysOnTopLevel) window.setAlwaysOnTop(true, alwaysOnTopLevel);
   window.setIgnoreMouseEvents(true);
   return window;
 }
@@ -188,6 +202,21 @@ window.prepareCaptureTransition=async destination=>{
 
 export class SnapShotTransition {
   private active: ActiveTransition | undefined;
+  private readonly boundOverlayToCaptureDisplays: boolean;
+  private readonly waitForCompositorFrame: boolean;
+  private readonly alwaysOnTopLevel: SnapShotTransitionOptions["alwaysOnTopLevel"];
+  private readonly showWindow: (window: Electron.BaseWindow) => void;
+
+  get isAnimating(): boolean {
+    return this.active?.flight !== undefined && !this.active.landed;
+  }
+
+  constructor(options: SnapShotTransitionOptions = {}) {
+    this.boundOverlayToCaptureDisplays = options.boundOverlayToCaptureDisplays ?? false;
+    this.waitForCompositorFrame = options.waitForCompositorFrame ?? false;
+    this.alwaysOnTopLevel = options.alwaysOnTopLevel;
+    this.showWindow = options.showWindow ?? ((window) => window.showInactive());
+  }
 
   async begin(
     id: string,
@@ -198,11 +227,16 @@ export class SnapShotTransition {
   ): Promise<void> {
     this.dispose();
     const sourceDisplay = Electron.screen.getDisplayMatching(source);
-    const requestedBounds = snapShotAnimationDisplayBounds(
-      [sourceDisplay, ...Electron.screen.getAllDisplays().filter((d) => d.id !== sourceDisplay.id)],
-      source,
-      destinationWindowBounds ?? source,
-    );
+    const requestedBounds = this.boundOverlayToCaptureDisplays
+      ? snapShotAnimationDisplayBounds(
+          [
+            sourceDisplay,
+            ...Electron.screen.getAllDisplays().filter((d) => d.id !== sourceDisplay.id),
+          ],
+          source,
+          destinationWindowBounds ?? source,
+        )
+      : [snapShotAnimationOverlayBounds(Electron.screen.getAllDisplays())];
     const active: ActiveTransition = {
       id,
       source,
@@ -235,7 +269,7 @@ export class SnapShotTransition {
     const overlays: ActiveTransition["overlays"] = [];
     try {
       for (const bounds of requestedBounds) {
-        const window = createWindow(bounds);
+        const window = createWindow(bounds, this.alwaysOnTopLevel);
         const overlay = { window, requestedBounds: bounds, bounds: window.getBounds() };
         active.overlays.push(overlay);
         overlays.push(overlay);
@@ -256,7 +290,7 @@ export class SnapShotTransition {
       for (const overlay of overlays) {
         if (this.active !== active) return;
         if (overlay.window.isDestroyed()) continue;
-        overlay.window.showInactive();
+        this.showWindow(overlay.window);
         const bounds = overlay.window.getBounds();
         if (
           bounds.x !== overlay.bounds.x ||
@@ -274,6 +308,15 @@ export class SnapShotTransition {
             })})`,
           );
         }
+      }
+      if (this.waitForCompositorFrame) {
+        // Renderer frames alone can leave a transparent gap; composite the snapshot before revealing T3.
+        await Promise.all(
+          overlays.map(async (overlay) => {
+            if (this.active !== active || overlay.window.isDestroyed()) return;
+            await overlay.window.webContents.capturePage({ x: 0, y: 0, width: 1, height: 1 });
+          }),
+        );
       }
       if (this.active !== active) return;
       if (flash) {
@@ -311,7 +354,9 @@ export class SnapShotTransition {
       }
       return;
     }
-    active.flight = this.runFlight(active, destination);
+    active.flight = this.runFlight(active, destination).finally(() => {
+      active.landed = true;
+    });
   }
 
   private async runFlight(
@@ -319,23 +364,25 @@ export class SnapShotTransition {
     destination: SnapShotAnimationDestination,
   ): Promise<void> {
     if (this.active !== active) return;
-    const missingBounds = snapShotAnimationDisplayBounds(
-      Electron.screen.getAllDisplays(),
-      active.source,
-      destination.frame,
-    ).filter(
-      (bounds) =>
-        !active.overlays.some(
-          (overlay) =>
-            !overlay.window.isDestroyed() &&
-            overlay.requestedBounds.x === bounds.x &&
-            overlay.requestedBounds.y === bounds.y &&
-            overlay.requestedBounds.width === bounds.width &&
-            overlay.requestedBounds.height === bounds.height,
-        ),
-    );
-    if (missingBounds.length > 0) {
-      await this.showOverlays(active, missingBounds, false).catch(() => undefined);
+    if (this.boundOverlayToCaptureDisplays) {
+      const missingBounds = snapShotAnimationDisplayBounds(
+        Electron.screen.getAllDisplays(),
+        active.source,
+        destination.frame,
+      ).filter(
+        (bounds) =>
+          !active.overlays.some(
+            (overlay) =>
+              !overlay.window.isDestroyed() &&
+              overlay.requestedBounds.x === bounds.x &&
+              overlay.requestedBounds.y === bounds.y &&
+              overlay.requestedBounds.width === bounds.width &&
+              overlay.requestedBounds.height === bounds.height,
+          ),
+      );
+      if (missingBounds.length > 0) {
+        await this.showOverlays(active, missingBounds, false).catch(() => undefined);
+      }
     }
     if (this.active !== active) return;
     const durationMs = snapShotAnimationDurationMs(active.source, destination.frame);
@@ -359,11 +406,14 @@ export class SnapShotTransition {
           })})`,
         );
         if (this.active !== active || overlay.window.isDestroyed()) return;
+        if (this.waitForCompositorFrame) {
+          // Read back one pixel to flush compositor work before starting any display's animation clock.
+          await overlay.window.webContents.capturePage({ x: 0, y: 0, width: 1, height: 1 });
+        }
         return overlay;
       }),
     );
     if (this.active !== active) return;
-    // One display failing must not cut the flight short on the others.
     await Promise.allSettled(
       prepared.map((result) => {
         if (result.status !== "fulfilled" || !result.value || result.value.window.isDestroyed()) {

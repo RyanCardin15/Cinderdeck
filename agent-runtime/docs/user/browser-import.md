@@ -3,31 +3,18 @@
 The desktop app can import cookies from another browser so you can reuse its signed-in sessions
 in the preview browser.
 
-Open **Settings → Integrations → Browser profiles → Add profile**, then choose a browser under
-**Import from**. Allow the macOS Keychain prompt if one appears. You can leave Chrome and your
-other browser windows open; Cinderdeck reads a consistent snapshot of saved cookies.
+Open **Settings → Browser → Browser profiles → Add profile**, then choose a browser under
+**Import from**. Close the source browser before importing, and allow an operating-system keyring
+unlock prompt if one appears.
 
-After a successful import, Cinderdeck remembers the exact source browser and profile for that
-environment and destination profile. It automatically refreshes cookies when you open a new browser
-instance or recover a browser instance after its connection is lost. Switching chats, reopening
-the same Browser panel, and resizing it keep the current cookies and page without a refresh.
-New and recovering instances wait briefly for the refresh; if it takes longer, the page opens with
-its saved cookies and reloads once the refresh finishes. You can enter a URL during the refresh,
-and that URL loads when the browser opens.
-Use **Refresh cookies now** in the Browser panel menu or the profile's Settings menu to refresh
-manually. **Stop refreshing from source** keeps the current cookies and disconnects the source.
-Clearing cookies or removing a profile also disconnects its source, so opening the panel will not
-bring cleared logins back. Existing profiles from older imports need one new import to establish
-their source link.
+This is a one-time copy. Later login changes stay separate between the two browsers, and some
+sites may still require you to sign in again.
 
-Refresh copies saved cookies in one direction; it does not write back to the source browser or keep
-a site session alive indefinitely. Some sites may still require sign-in, and changes not yet saved
-by the source browser appear on a later refresh. An unavailable source or denied permission leaves
-the existing cookies usable and shows a refresh error. Partial refreshes report skipped cookies.
-
-On macOS, Safari imports need Full Disk Access. Choose **Allow**, drag Cinderdeck into the
+On macOS, Safari imports need Full Disk Access. Choose **Allow**, drag T3 Code into the
 System Settings permission list, and turn access on. **Continue** becomes available when access
-is detected. macOS may require you to quit and reopen Cinderdeck before the grant applies; reopen
+is detected. macOS may require you to quit and reopen T3 Code before the grant applies; reopen
 the import wizard afterward. You can revoke Full Disk Access once the import is done.
 
-Partitioned cookies are skipped.
+On Windows, import supports Firefox, Zen, and Helium profiles that use standard profile encryption.
+Other Chromium-based browsers use app-bound encryption and cannot be imported. Partitioned cookies
+are skipped on all platforms.

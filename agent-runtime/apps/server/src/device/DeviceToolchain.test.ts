@@ -4,7 +4,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
-import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import * as ProcessRunner from "../processRunner.ts";
 import {
@@ -18,7 +18,7 @@ it.effect("failed installation cleans staging and exposes only a safe failure me
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-device-install-" });
+    const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-device-install-" });
     const result = {
       code: ChildProcessSpawner.ExitCode(1),
       stdout: "",

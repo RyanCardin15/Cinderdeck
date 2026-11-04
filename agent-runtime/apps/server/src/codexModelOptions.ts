@@ -1,8 +1,8 @@
-import type { ModelSelection } from "@cinderdeck/contracts";
+import type { ModelSelection } from "@t3tools/contracts";
 import {
   getModelSelectionBooleanOptionValue,
   getModelSelectionStringOptionValue,
-} from "@cinderdeck/shared/model";
+} from "@t3tools/shared/model";
 
 export function getCodexServiceTierOptionValue(
   modelSelection: ModelSelection | null | undefined,

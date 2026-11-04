@@ -1,5 +1,5 @@
 import { assert } from "@effect/vitest";
-import type { ProviderReplayTranscript } from "@cinderdeck/contracts";
+import type { ProviderReplayTranscript } from "@t3tools/contracts";
 
 import type { OrchestratorV2ScenarioResult } from "../../OrchestratorScenario.ts";
 import {
@@ -72,12 +72,7 @@ export function assertSubagentV2Output(
   assert.equal(childProjection.thread.lineage.parentThreadId, projection.thread.id);
   assert.equal(childProjection.thread.lineage.relationshipToParent, "subagent");
   assert.equal(childProjection.thread.activeProviderThreadId, providerThread.id);
-  assert.lengthOf(childProjection.runs, 1);
-  assert.isTrue(
-    childProjection.runs.every(
-      (run) => run.status === "completed" && run.nativeSubagentTurnId !== undefined,
-    ),
-  );
+  assert.lengthOf(childProjection.runs, 0);
   assert.lengthOf(childProjection.providerThreads, 1);
   assert.lengthOf(childProjection.providerTurns, 1);
   assertTurnItemTypes(childProjection, ["assistant_message"]);
@@ -88,4 +83,14 @@ export function assertSubagentV2Output(
     "child thread must contain the post-root subagent response",
   );
   assert.equal(childProjection.providerTurns[0]?.status, "completed");
+
+  // Codex reports each agent's counts on its own turn. Only the root's model was reported.
+  assert.deepInclude(projection.providerTurns[0]?.turnTokenUsage, {
+    usageStatus: "complete",
+    outputTokens: 69,
+    models: ["gpt-6-luna"],
+  });
+  const childUsage = childProjection.providerTurns[0]?.turnTokenUsage;
+  assert.deepInclude(childUsage, { usageStatus: "complete", outputTokens: 6 });
+  assert.notProperty(childUsage, "models");
 }

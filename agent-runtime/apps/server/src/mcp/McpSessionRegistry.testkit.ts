@@ -1,4 +1,4 @@
-import { EnvironmentId } from "@cinderdeck/contracts";
+import { EnvironmentId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
@@ -19,6 +19,7 @@ export const layer = Layer.succeed(
           browserToolsAvailable: true,
         },
       }),
+    // @effect-diagnostics-next-line effectSucceedWithVoid:off - This optional result requires undefined, not the wider void type.
     resolve: () => Effect.succeed(undefined),
     touch: () => Effect.void,
     revokeProviderSession: () => Effect.void,

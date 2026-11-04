@@ -1,25 +1,34 @@
 export const BRAND_ASSET_PATHS = {
-  developmentIosIconPng: "assets/cinderdeck/dev/ios-1024.png",
+  developmentIconComposerProject: "assets/dev/app-icon.icon",
+  developmentIosIconPng: "assets/dev/blueprint-ios-1024.png",
+  developmentUniversalIconPng: "assets/dev/blueprint-universal-1024.png",
 
-  productionIosIconPng: "assets/cinderdeck/prod/ios-1024.png",
-  productionMacIconPng: "assets/cinderdeck/prod/macos-1024.png",
-  productionWebFaviconIco: "assets/cinderdeck/prod/web-favicon.ico",
-  productionWebFavicon16Png: "assets/cinderdeck/prod/web-favicon-16x16.png",
-  productionWebFavicon32Png: "assets/cinderdeck/prod/web-favicon-32x32.png",
-  productionWebAppleTouchIconPng: "assets/cinderdeck/prod/web-apple-touch-180.png",
+  productionIconComposerProject: "assets/prod/app-icon.icon",
+  productionIosIconPng: "assets/prod/black-ios-1024.png",
+  productionMacIconPng: "assets/prod/black-macos-1024.png",
+  productionLinuxIconPng: "assets/prod/black-universal-1024.png",
+  productionWindowsIconIco: "assets/prod/t3-black-windows.ico",
+  productionWebFaviconIco: "assets/prod/t3-black-web-favicon.ico",
+  productionWebFavicon16Png: "assets/prod/t3-black-web-favicon-16x16.png",
+  productionWebFavicon32Png: "assets/prod/t3-black-web-favicon-32x32.png",
+  productionWebAppleTouchIconPng: "assets/prod/t3-black-web-apple-touch-180.png",
 
-  nightlyIosIconPng: "assets/cinderdeck/nightly/ios-1024.png",
-  nightlyMacIconPng: "assets/cinderdeck/nightly/macos-1024.png",
-  nightlyWebFaviconIco: "assets/cinderdeck/nightly/web-favicon.ico",
-  nightlyWebFavicon16Png: "assets/cinderdeck/nightly/web-favicon-16x16.png",
-  nightlyWebFavicon32Png: "assets/cinderdeck/nightly/web-favicon-32x32.png",
-  nightlyWebAppleTouchIconPng: "assets/cinderdeck/nightly/web-apple-touch-180.png",
+  nightlyIconComposerProject: "assets/nightly/app-icon.icon",
+  nightlyIosIconPng: "assets/nightly/nightly-ios-1024.png",
+  nightlyMacIconPng: "assets/nightly/nightly-macos-1024.png",
+  nightlyLinuxIconPng: "assets/nightly/nightly-universal-1024.png",
+  nightlyWindowsIconIco: "assets/nightly/nightly-windows.ico",
+  nightlyWebFaviconIco: "assets/nightly/nightly-web-favicon.ico",
+  nightlyWebFavicon16Png: "assets/nightly/nightly-web-favicon-16x16.png",
+  nightlyWebFavicon32Png: "assets/nightly/nightly-web-favicon-32x32.png",
+  nightlyWebAppleTouchIconPng: "assets/nightly/nightly-web-apple-touch-180.png",
 
-  developmentDesktopIconPng: "assets/cinderdeck/dev/macos-1024.png",
-  developmentWebFaviconIco: "assets/cinderdeck/dev/web-favicon.ico",
-  developmentWebFavicon16Png: "assets/cinderdeck/dev/web-favicon-16x16.png",
-  developmentWebFavicon32Png: "assets/cinderdeck/dev/web-favicon-32x32.png",
-  developmentWebAppleTouchIconPng: "assets/cinderdeck/dev/web-apple-touch-180.png",
+  developmentDesktopIconPng: "assets/dev/blueprint-macos-1024.png",
+  developmentWindowsIconIco: "assets/dev/blueprint-windows.ico",
+  developmentWebFaviconIco: "assets/dev/blueprint-web-favicon.ico",
+  developmentWebFavicon16Png: "assets/dev/blueprint-web-favicon-16x16.png",
+  developmentWebFavicon32Png: "assets/dev/blueprint-web-favicon-32x32.png",
+  developmentWebAppleTouchIconPng: "assets/dev/blueprint-web-apple-touch-180.png",
 } as const;
 
 export type WebAssetBrand = "development" | "nightly" | "production";
@@ -30,10 +39,6 @@ export type WebAssetChannel = (typeof WEB_ASSET_CHANNELS)[number];
 
 export function resolveWebAssetBrandForChannel(channel: WebAssetChannel): WebAssetBrand {
   return channel === "nightly" ? "nightly" : "production";
-}
-
-export function resolveWebAssetBrandForPackageVersion(version: string): WebAssetBrand {
-  return /^[^-+]+-(?:nightly|preview)\./.test(version) ? "nightly" : "production";
 }
 
 export interface IconOverride {

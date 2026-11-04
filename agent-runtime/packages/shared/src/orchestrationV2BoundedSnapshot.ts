@@ -1,7 +1,7 @@
 import type {
   OrchestrationV2ProjectedTurnItem,
   OrchestrationV2ThreadProjection,
-} from "@cinderdeck/contracts";
+} from "@t3tools/contracts";
 
 import { restoreSnapshotBodies } from "./orchestrationV2DedupedBodies.ts";
 

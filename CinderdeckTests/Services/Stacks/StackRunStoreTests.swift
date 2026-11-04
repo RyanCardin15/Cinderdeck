@@ -158,6 +158,7 @@ final class StackConfigurationTests: XCTestCase {
     XCTAssertEqual(HistorySection.stored(defaults: defaults), .clipboard)
     defaults.set("stacks", forKey: PreferencesKeys.historySelectedSection)
     defaults.set(false, forKey: PreferencesKeys.historyClipboardTextSelected)
-    XCTAssertEqual(HistorySection.stored(defaults: defaults), .stacks)
+    XCTAssertEqual(HistorySection.stored(defaults: defaults), .captures)
+    XCTAssertEqual(defaults.string(forKey: PreferencesKeys.historySelectedSection), "captures")
   }
 }

@@ -1,19 +1,6 @@
 "use strict";
 
-// Ships the branded Cinderdeck mark to the Live Activity / widget extension.
-//
-// expo-widgets generates ExpoWidgetsTarget without a Resources build phase and
-// has no asset support, so this plugin (a) writes an SVG template image set into
-// the generated widget asset catalog and (b) wires that catalog into the widget
-// target with an actool build phase.
-//
-// ORDERING: must be listed BEFORE "expo-widgets" in the plugins array. Expo
-// chains same-type mods so the last-registered runs FIRST; registering this
-// plugin earlier makes its mods run AFTER expo-widgets' mods. That matters
-// twice: expo-widgets' dangerous mod rmSync's ios/ExpoWidgetsTarget/ (deleting
-// any catalog written before it), and its xcodeproj mod is what creates the
-// widget target. Listed after expo-widgets, both steps silently no-op on a
-// fresh prebuild — which is how prod build 8 shipped without the logo.
+// Precede expo-widgets so its reverse-ordered mods create and wipe the target before assets are added.
 
 const path = require("path");
 const fs = require("fs");
@@ -22,8 +9,8 @@ const { addWidgetAssetCatalog } = require("./lib/addWidgetAssetCatalog.cjs");
 
 const TARGET_NAME = "ExpoWidgetsTarget";
 const CATALOG_NAME = "Assets.xcassets";
-const IMAGE_SET = "CinderdeckMark.imageset";
-const SVG_NAME = "CinderdeckMark.svg";
+const IMAGE_SET = "T3Mark.imageset";
+const SVG_NAME = "T3Mark.svg";
 
 const CATALOG_CONTENTS = JSON.stringify({ info: { author: "expo", version: 1 } }, null, 2) + "\n";
 const IMAGE_SET_CONTENTS =

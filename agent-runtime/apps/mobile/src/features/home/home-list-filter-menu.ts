@@ -1,4 +1,4 @@
-import type { EnvironmentId } from "@cinderdeck/contracts";
+import type { EnvironmentId } from "@t3tools/contracts";
 
 export interface HomeListFilterMenuEnvironment {
   readonly environmentId: EnvironmentId;

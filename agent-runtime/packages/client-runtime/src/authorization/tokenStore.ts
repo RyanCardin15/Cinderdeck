@@ -1,15 +1,14 @@
-import { EnvironmentId } from "@cinderdeck/contracts";
-import { RelayManagedEndpoint } from "@cinderdeck/contracts/relay";
+import { EnvironmentId } from "@t3tools/contracts";
+import { RelayManagedEndpoint } from "@t3tools/contracts/relay";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 import type * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import type { ConnectionAttemptError } from "../connection/model.ts";
 
 export class RemoteDpopAccessToken extends Schema.Class<RemoteDpopAccessToken>(
-  "@cinderdeck/client-runtime/authorization/RemoteDpopAccessToken",
+  "@t3tools/client-runtime/authorization/RemoteDpopAccessToken",
 )({
   environmentId: EnvironmentId,
   accountId: Schema.optionalKey(Schema.String),
@@ -29,10 +28,7 @@ export class RemoteDpopAccessTokenStore extends Context.Service<
     readonly put: (token: RemoteDpopAccessToken) => Effect.Effect<void, ConnectionAttemptError>;
     readonly remove: (environmentId: EnvironmentId) => Effect.Effect<void, ConnectionAttemptError>;
   }
->()("@cinderdeck/client-runtime/authorization/tokenStore/RemoteDpopAccessTokenStore") {}
+>()("@t3tools/client-runtime/authorization/tokenStore/RemoteDpopAccessTokenStore") {}
 
 export const make = (service: RemoteDpopAccessTokenStore["Service"]) =>
   RemoteDpopAccessTokenStore.of(service);
-
-export const layer = (service: RemoteDpopAccessTokenStore["Service"]) =>
-  Layer.succeed(RemoteDpopAccessTokenStore, make(service));

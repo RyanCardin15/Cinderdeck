@@ -1,4 +1,4 @@
-import { EnvironmentId } from "@cinderdeck/contracts";
+import { DesktopSshEnvironmentTargetSchema, EnvironmentId } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
@@ -6,6 +6,7 @@ import {
   BearerConnectionTarget,
   PrimaryConnectionTarget,
   RelayConnectionTarget,
+  SshConnectionTarget,
   type ConnectionTarget,
 } from "./model.ts";
 
@@ -21,20 +22,38 @@ export class BearerConnectionProfile extends Schema.TaggedClass<BearerConnection
     ...ConnectionProfileBase,
     httpBaseUrl: Schema.String,
     wsBaseUrl: Schema.String,
+    learned: Schema.optionalKey(Schema.Literal(true)),
+    authorization: Schema.optionalKey(Schema.Literal("t3-connect")),
+    /**
+     * "tailscale" on a learned route the server found on its Tailscale
+     * interface. A bare 100.64.0.0/10 address could belong to any VPN.
+     */
+    network: Schema.optionalKey(Schema.Literal("tailscale")),
   },
 ) {}
 
-export const ConnectionProfile = Schema.Union([BearerConnectionProfile]);
+export class SshConnectionProfile extends Schema.TaggedClass<SshConnectionProfile>()(
+  "SshConnectionProfile",
+  {
+    ...ConnectionProfileBase,
+    target: DesktopSshEnvironmentTargetSchema,
+  },
+) {}
+
+export const ConnectionProfile = Schema.Union([BearerConnectionProfile, SshConnectionProfile]);
 export type ConnectionProfile = typeof ConnectionProfile.Type;
+
+export interface ConnectionRoute {
+  readonly target: ConnectionTarget;
+  readonly profile: Option.Option<ConnectionProfile>;
+}
 
 export interface ConnectionCatalogEntry {
   readonly target: ConnectionTarget;
   readonly profile: Option.Option<ConnectionProfile>;
-  /** False when the user switched the environment off: saved, but never connects. */
+  readonly alternateRoutes?: ReadonlyArray<ConnectionRoute>;
   readonly enabled: boolean;
-  /** Discovery rejection stays visible while the saved connection is switched off. */
   readonly unsupportedReason?: string;
-  /** The rejection came from an outdated host, which can still be updated remotely. */
   readonly serverUpdateRequired?: boolean;
 }
 
@@ -71,20 +90,28 @@ export class BearerConnectionRegistration extends Schema.TaggedClass<BearerConne
   },
 ) {}
 
+export class SshConnectionRegistration extends Schema.TaggedClass<SshConnectionRegistration>()(
+  "SshConnectionRegistration",
+  {
+    target: SshConnectionTarget,
+    profile: SshConnectionProfile,
+    /** The token from pairing over SSH, which later connects reuse. */
+    credential: BearerConnectionCredential,
+  },
+) {}
+
 export const ConnectionRegistration = Schema.Union([
   RelayConnectionRegistration,
   BearerConnectionRegistration,
+  SshConnectionRegistration,
 ]);
 export type ConnectionRegistration = typeof ConnectionRegistration.Type;
 
 /**
- * Platform-managed registrations are reconciled from the host (the desktop
- * bootstrap IPC) rather than persisted by the user. They cover the primary
- * local environment plus any additional desktop-local backends running
- * alongside it. The primary stays on same-origin
- * cookie auth (`PrimaryConnectionRegistration`); secondary local backends live
- * on a separate loopback origin and authenticate with a bearer token minted
- * from their bootstrap credential (`BearerConnectionRegistration`).
+ * The primary stays on same-origin cookie auth
+ * (`PrimaryConnectionRegistration`); secondary local backends live on a
+ * separate loopback origin and authenticate with a bearer token minted from
+ * their bootstrap credential (`BearerConnectionRegistration`).
  */
 export const PlatformConnectionRegistration = Schema.Union([
   PrimaryConnectionRegistration,
@@ -104,6 +131,7 @@ export function connectionRegistrationCatalogEntry(
         enabled: true,
       };
     case "BearerConnectionRegistration":
+    case "SshConnectionRegistration":
       return {
         target: registration.target,
         profile: Option.some(registration.profile),

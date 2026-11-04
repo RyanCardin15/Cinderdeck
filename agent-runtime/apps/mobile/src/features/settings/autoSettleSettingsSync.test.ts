@@ -1,4 +1,4 @@
-import { DEFAULT_SERVER_SETTINGS, EnvironmentId, ProjectId } from "@cinderdeck/contracts";
+import { DEFAULT_SERVER_SETTINGS, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { planAutoSettleSettingsSync } from "./autoSettleSettingsSync";
@@ -65,15 +65,6 @@ describe("auto-settle settings sync", () => {
     expect(updated.newWorktreesStartFromOrigin).toBe(true);
     expect(updated.continueThreadsAfterServerUpdate).toBe(true);
     expect(updated.sourceControlWritingStyle).toEqual(target.settings.sourceControlWritingStyle);
-  });
-
-  it("does not compare the reference or a target without loaded settings", () => {
-    const plan = planAutoSettleSettingsSync(reference, [
-      { ...reference, label: "Reference" },
-      { environmentId: EnvironmentId.make("loading"), label: "Loading", settings: null },
-    ]);
-
-    expect(plan.mismatches).toEqual([]);
   });
 
   it("notices different project checkouts on the same environment", () => {

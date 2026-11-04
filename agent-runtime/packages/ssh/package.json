@@ -1,5 +1,5 @@
 {
-  "name": "@cinderdeck/ssh",
+  "name": "@t3tools/ssh",
   "private": true,
   "type": "module",
   "exports": {
@@ -11,9 +11,17 @@
       "types": "./src/command.ts",
       "import": "./src/command.ts"
     },
+    "./config": {
+      "types": "./src/config.ts",
+      "import": "./src/config.ts"
+    },
     "./errors": {
       "types": "./src/errors.ts",
       "import": "./src/errors.ts"
+    },
+    "./tunnel": {
+      "types": "./src/tunnel.ts",
+      "import": "./src/tunnel.ts"
     }
   },
   "scripts": {
@@ -21,8 +29,8 @@
     "test": "vp test run --config ../../vite.config.ts --dir ."
   },
   "dependencies": {
-    "@cinderdeck/contracts": "workspace:*",
-    "@cinderdeck/shared": "workspace:*",
+    "@t3tools/contracts": "workspace:*",
+    "@t3tools/shared": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

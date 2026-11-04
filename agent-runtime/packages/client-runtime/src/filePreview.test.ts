@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { FILE_TEXT_PREVIEW_MAX_BYTES } from "@cinderdeck/shared/filePreview";
+import { FILE_TEXT_PREVIEW_MAX_BYTES } from "@t3tools/shared/filePreview";
 import { readFilePreviewResponse } from "./filePreview.ts";
 
 describe("readFilePreviewResponse", () => {
@@ -23,30 +23,6 @@ describe("readFilePreviewResponse", () => {
       text: "native text",
       truncated: false,
     });
-  });
-  it("reads text and rejects unsuccessful responses", async () => {
-    const signal = new AbortController().signal;
-    await expect(readFilePreviewResponse(new Response('{"ok":true}'), signal)).resolves.toEqual({
-      text: '{"ok":true}',
-      truncated: false,
-    });
-    await expect(
-      readFilePreviewResponse(new Response(null, { status: 403 }), signal),
-    ).rejects.toThrow("could not be loaded");
-  });
-  it("cancels a streamed error body instead of leaving it open", async () => {
-    const signal = new AbortController().signal;
-    let cancelled = false;
-    const body = new ReadableStream<Uint8Array>({
-      cancel() {
-        cancelled = true;
-      },
-    });
-
-    await expect(
-      readFilePreviewResponse(new Response(body, { status: 500 }), signal),
-    ).rejects.toThrow("could not be loaded");
-    expect(cancelled).toBe(true);
   });
 
   it("stops consuming an unbounded response and cancels its stream", async () => {

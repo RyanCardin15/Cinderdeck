@@ -1,5 +1,5 @@
-import { EnvironmentRegistry } from "@cinderdeck/client-runtime/connection";
-import { createRuntimeCommand } from "@cinderdeck/client-runtime/state/runtime";
+import { EnvironmentRegistry, removedWithRelay } from "@t3tools/client-runtime/connection";
+import { createRuntimeCommand } from "@t3tools/client-runtime/state/runtime";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SubscriptionRef from "effect/SubscriptionRef";
@@ -26,14 +26,17 @@ export const removeCloudEnvironments = createRuntimeCommand(connectionAtomRuntim
     const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
     const entries = yield* SubscriptionRef.get(registry.entries);
     const environmentIds = new Set(
-      [...entries.values()]
-        .filter((entry) => entry.target._tag === "RelayConnectionTarget")
-        .map((entry) => entry.target.environmentId),
+      [...entries.values()].filter(removedWithRelay).map((entry) => entry.target.environmentId),
     );
-    // Credentials are already revoked. A failed backup must leave the local
-    // owners intact so a later sign-in can retry without losing their files.
+    // Backup failure must retain local file owners so a later sign-in can retry.
     yield* Effect.tryPromise({
-      try: () => archiveCloudComposerDrafts(accountId, environmentIds),
+      // Resolve draft owners against every environment, not just the removed ones.
+      try: () =>
+        archiveCloudComposerDrafts(
+          accountId,
+          environmentIds,
+          [...entries.values()].map((entry) => entry.target.environmentId),
+        ),
       catch: (cause) =>
         new CloudDraftArchiveError({
           environmentCount: environmentIds.size,

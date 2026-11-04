@@ -6,8 +6,8 @@ import {
   type ProviderInstanceId,
   ProviderSetupError,
   type ProviderSetupInput,
-} from "@cinderdeck/contracts";
-import { resolveCommandPath } from "@cinderdeck/shared/shell";
+} from "@t3tools/contracts";
+import { resolveCommandPath } from "@t3tools/shared/shell";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -15,17 +15,16 @@ import * as Stream from "effect/Stream";
 import * as CodexInstallation from "./CodexInstallation.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as AntigravityInstallation from "./AntigravityInstallation.ts";
-import { deriveProviderInstanceConfigMap } from "./Layers/ProviderInstanceRegistryHydration.ts";
-import * as ProviderInstanceRegistry from "./Services/ProviderInstanceRegistry.ts";
-import * as ProviderRegistry from "./Services/ProviderRegistry.ts";
-import { mergeProviderInstanceEnvironment } from "./ProviderInstanceEnvironment.ts";
+import { deriveProviderInstanceConfigMap } from "./ProviderInstanceRegistryHydration.ts";
+import * as ProviderInstanceRegistry from "./ProviderInstanceRegistry.ts";
+import * as ProviderRegistry from "./ProviderRegistry.ts";
+import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 
 const ANTIGRAVITY = ProviderDriverKind.make("antigravity");
 const hasBinaryPath = Schema.is(Schema.Struct({ binaryPath: Schema.String }));
 const decodeCodexSettings = Schema.decodeUnknownEffect(CodexSettings);
 const decodeAntigravitySettings = Schema.decodeUnknownEffect(AntigravitySettings);
 
-/** Route instance setup to the environment-owned installer without owning the download. */
 export const makeProviderInstallation = Effect.fn("makeProviderInstallation")(function* () {
   const antigravityInstallation = yield* AntigravityInstallation.AntigravityInstallation;
   const codexInstallation = yield* CodexInstallation.CodexInstallation;
@@ -83,7 +82,7 @@ export const makeProviderInstallation = Effect.fn("makeProviderInstallation")(fu
       return yield* new ProviderSetupError({
         instanceId,
         operation,
-        detail: "Choose managed setup to install Codex in Cinderdeck.",
+        detail: "Choose managed setup to install Codex in T3 Code.",
       });
     }
     if (managedOnly && config.binaryPath && (!isCodex || config.binaryPath !== "codex")) {
@@ -91,7 +90,7 @@ export const makeProviderInstallation = Effect.fn("makeProviderInstallation")(fu
         instanceId,
         operation,
         detail:
-          "This instance uses a custom executable. Clear its binary path to manage installation in Cinderdeck.",
+          "This instance uses a custom executable. Clear its binary path to manage installation in T3 Code.",
       });
     }
     return { installation, driver: instance.driverKind };
@@ -134,18 +133,19 @@ export const makeProviderInstallation = Effect.fn("makeProviderInstallation")(fu
       true,
     );
     const entries = yield* readEntries(input.instanceId, "remove-install");
-    const protectedPaths = yield* Effect.forEach(Object.values(entries), (entry) => {
-      if (!hasBinaryPath(entry.config) || !entry.config.binaryPath.trim()) {
-        return Effect.succeed([]);
-      }
-      const binaryPath = entry.config.binaryPath.trim();
-      return resolveCommandPath(binaryPath, {
-        env: mergeProviderInstanceEnvironment(entry.environment),
-      }).pipe(
-        Effect.map((resolved) => [binaryPath, resolved]),
-        Effect.orElseSucceed(() => [binaryPath]),
-      );
-    });
+    const protectedPaths = yield* Effect.forEach(
+      Object.values(entries),
+      Effect.fnUntraced(function* (entry) {
+        if (!hasBinaryPath(entry.config) || !entry.config.binaryPath.trim()) {
+          return [];
+        }
+        const binaryPath = entry.config.binaryPath.trim();
+        const resolved = yield* resolveCommandPath(binaryPath, {
+          env: yield* mergeProviderInstanceEnvironment(entry.environment),
+        });
+        return resolved === null ? [binaryPath] : [binaryPath, resolved];
+      }),
+    );
     yield* installation
       .remove(protectedPaths.flat())
       .pipe(Effect.mapError(failure(input.instanceId)));

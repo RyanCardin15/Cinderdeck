@@ -8,7 +8,7 @@ import {
   TurnItemId,
   type OrchestrationV2Subagent,
   type OrchestrationV2TurnItem,
-} from "@cinderdeck/contracts";
+} from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

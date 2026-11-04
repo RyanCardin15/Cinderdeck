@@ -1,12 +1,15 @@
 import * as Effect from "effect/Effect";
 import { beforeEach, expect, vi } from "vite-plus/test";
 import { it } from "@effect/vitest";
-import { HostProcessPlatform } from "@cinderdeck/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 
 const native = vi.hoisted(() => ({
   setBadgeCount: vi.fn(),
+  setOverlayIcon: vi.fn(),
   isDestroyed: vi.fn(() => false),
   getFocusedWindow: vi.fn(() => null as object | null),
+  image: { isEmpty: vi.fn(() => false) },
+  createFromDataURL: vi.fn(),
   webContents: { send: vi.fn() },
   listeners: new Map<string, () => void>(),
 }));
@@ -20,11 +23,12 @@ vi.mock("electron", () => ({
     getFocusedWindow: native.getFocusedWindow,
     getAllWindows: () => [native],
   },
+  nativeImage: { createFromDataURL: native.createFromDataURL },
 }));
 
 import * as ElectronApp from "../../electron/ElectronApp.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
-import { applyNotificationBadge, installNotificationBadge } from "./notificationBadge.ts";
+import { installNotificationBadge } from "./notificationBadge.ts";
 
 const badge = { count: 2, image: "data:image/png;base64,aGVsbG8=" };
 
@@ -32,27 +36,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   native.getFocusedWindow.mockReturnValue(null);
   native.isDestroyed.mockReturnValue(false);
+  native.image.isEmpty.mockReturnValue(false);
+  native.createFromDataURL.mockReturnValue(native.image);
   native.setBadgeCount.mockImplementation(() => true);
   native.listeners.clear();
-});
-
-it("sets and clears the dock count", () => {
-  applyNotificationBadge("darwin", badge);
-  applyNotificationBadge("darwin", { count: 0, image: null });
-  expect(native.setBadgeCount.mock.calls).toEqual([[2], [0]]);
-});
-
-it("rejects a late positive count while the app is focused", () => {
-  native.getFocusedWindow.mockReturnValue({});
-  applyNotificationBadge("darwin", badge);
-  expect(native.setBadgeCount).toHaveBeenCalledWith(0);
-});
-
-it("keeps notifications working when the native badge API fails", () => {
-  native.setBadgeCount.mockImplementation(() => {
-    throw new Error("Unavailable");
-  });
-  expect(() => applyNotificationBadge("darwin", badge)).not.toThrow();
 });
 
 it.effect("validates IPC and clears on native focus, quit, and disposal", () =>
@@ -90,7 +77,7 @@ it.effect("validates IPC and clears on native focus, quit, and disposal", () =>
         expect(native.setBadgeCount).toHaveBeenLastCalledWith(0);
       }),
     ).pipe(
-      Effect.provideService(HostProcessPlatform, "darwin"),
+      Effect.provideService(HostProcess.Platform, "linux"),
       Effect.provide([
         ElectronApp.layer,
         DesktopIpc.layer({

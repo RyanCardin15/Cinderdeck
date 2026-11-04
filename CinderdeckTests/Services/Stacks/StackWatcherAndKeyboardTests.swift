@@ -35,42 +35,20 @@ final class StackDefinitionWatcherTests: XCTestCase {
 @MainActor
 final class StackKeyboardTests: XCTestCase {
   private var original: HistorySection!
-  override func setUp() { original = HistoryFloatingManager.shared.selectedSection; HistoryFloatingManager.shared.selectedSection = .stacks }
+  override func setUp() { original = HistoryFloatingManager.shared.selectedSection; HistoryFloatingManager.shared.selectedSection = .clipboard }
   override func tearDown() { HistoryFloatingManager.shared.selectedSection = original; HistoryFloatingManager.shared.isPresentingAuxiliaryUI = false }
-  func testDeleteDoesNotEmitCaptureDeletion() {
-    let expectation = expectation(forNotification: .historyDeleteSelection, object: nil)
-    expectation.isInverted = true
-    panel().keyDown(with: event(51))
-    wait(for: [expectation], timeout: 0.05)
-  }
-  func testReturnAndRestartRouteToStacks() {
-    let panel = panel()
-    let toggle = expectation(forNotification: .stacksCommand, object: panel) { $0.userInfo?["command"] as? String == "toggle" }
-    panel.keyDown(with: event(36))
-    wait(for: [toggle], timeout: 0.1)
-    let restart = expectation(forNotification: .stacksCommand, object: panel) { $0.userInfo?["command"] as? String == "restartService" }
-    XCTAssertTrue(panel.performKeyEquivalent(with: event(15, flags: [.command, .shift])))
-    wait(for: [restart], timeout: 0.1)
-  }
   func testArrowNotificationIncludesSection() {
     let panel = panel()
     let moved = expectation(forNotification: .historyMoveSelection, object: panel) {
-      $0.userInfo?["section"] as? String == "stacks" && $0.userInfo?["delta"] as? Int == 1
+      $0.userInfo?["section"] as? String == "clipboard" && $0.userInfo?["delta"] as? Int == 1
     }
     panel.keyDown(with: event(124))
     wait(for: [moved], timeout: 0.1)
   }
-  func testAuxiliaryUIBlocksStackCommands() {
-    HistoryFloatingManager.shared.isPresentingAuxiliaryUI = true
-    let restarted = expectation(forNotification: .stacksCommand, object: nil)
-    restarted.isInverted = true
-    _ = panel().performKeyEquivalent(with: event(15, flags: .command))
-    wait(for: [restarted], timeout: 0.05)
-  }
   func testArrowNavigationAcceptsNativeFunctionAndNumericPadFlags() {
     let panel = panel()
     let moved = expectation(forNotification: .historyMoveSelection, object: panel) {
-      $0.userInfo?["section"] as? String == "stacks" && $0.userInfo?["delta"] as? Int == -1
+      $0.userInfo?["section"] as? String == "clipboard" && $0.userInfo?["delta"] as? Int == -1
     }
     panel.keyDown(with: event(123, flags: [.function, .numericPad]))
     wait(for: [moved], timeout: 0.1)

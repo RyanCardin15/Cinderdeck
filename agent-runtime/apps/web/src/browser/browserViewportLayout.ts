@@ -4,22 +4,20 @@ import {
   PREVIEW_VIEWPORT_MIN_DIMENSION,
   type PreviewViewportSetting,
   type PreviewViewportSize,
-} from "@cinderdeck/contracts";
+} from "@t3tools/contracts";
 
 export interface BrowserViewportLayout {
   readonly canvasWidth: number;
   readonly canvasHeight: number;
   readonly viewportX: number;
   readonly viewportY: number;
-  /** Visible footprint inside the preview panel after fit-to-panel scaling. */
   readonly viewportWidth: number;
   readonly viewportHeight: number;
-  /** Presentation-only scale; the guest keeps its requested CSS viewport. */
   readonly viewportScale: number;
   readonly fillsPanel: boolean;
 }
 
-export const BROWSER_DEVICE_TOOLBAR_HEIGHT = 32;
+export const BROWSER_DEVICE_TOOLBAR_HEIGHT = 38;
 export const BROWSER_VIEWPORT_RESIZE_RAIL_SIZE = 10;
 
 export type BrowserViewportResizeDirection =
@@ -39,6 +37,12 @@ export const browserViewportSettingKey = (setting: PreviewViewportSetting): stri
 
 const normalizeZoomFactor = (zoomFactor: number): number =>
   Number.isFinite(zoomFactor) && zoomFactor > 0 ? zoomFactor : 1;
+
+// Convert guest CSS pixels to host CSS pixels without changing the guest's page zoom.
+export const resolveBrowserLayoutZoomFactor = (
+  previewZoomFactor: number,
+  windowZoomFactor: number,
+): number => normalizeZoomFactor(previewZoomFactor) / normalizeZoomFactor(windowZoomFactor);
 
 export function resolveFittedBrowserViewport(
   setting: PreviewViewportSetting,

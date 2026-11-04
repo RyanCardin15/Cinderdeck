@@ -5,12 +5,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Result from "effect/Result";
 
-import {
-  HostProcessArguments,
-  HostProcessExecutablePath,
-  HostProcessIsExecutable,
-  HostProcessPlatform,
-} from "./hostProcess.ts";
+import * as HostProcess from "./HostProcess.ts";
 import { resolveNodeExecutable, resolveSelfInvocation, selfInvocationArgs } from "./nodeRuntime.ts";
 import { symlinksSupported } from "./testing/symlinks.ts";
 
@@ -19,9 +14,9 @@ describe("Self invocation", () => {
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const invocation = yield* resolveSelfInvocation().pipe(
-        Effect.provideService(HostProcessExecutablePath, "/runtime/node"),
-        Effect.provideService(HostProcessIsExecutable, false),
-        Effect.provideService(HostProcessArguments, ["/runtime/node", "dist/bin.mjs", "serve"]),
+        Effect.provideService(HostProcess.ExecutablePath, "/runtime/node"),
+        Effect.provideService(HostProcess.IsExecutable, false),
+        Effect.provideService(HostProcess.Arguments, ["/runtime/node", "dist/bin.mjs", "serve"]),
       );
       expect(invocation.command).toBe("/runtime/node");
       expect(invocation.entrypoint).toBe(path.resolve("dist/bin.mjs"));
@@ -36,15 +31,11 @@ describe("Self invocation", () => {
     Effect.gen(function* () {
       // Node repeats the binary at argv[1] for a single-executable; it is not a script.
       const invocation = yield* resolveSelfInvocation().pipe(
-        Effect.provideService(HostProcessExecutablePath, "/packaged/cinderdeck"),
-        Effect.provideService(HostProcessIsExecutable, true),
-        Effect.provideService(HostProcessArguments, [
-          "/packaged/cinderdeck",
-          "/packaged/cinderdeck",
-          "serve",
-        ]),
+        Effect.provideService(HostProcess.ExecutablePath, "/packaged/t3"),
+        Effect.provideService(HostProcess.IsExecutable, true),
+        Effect.provideService(HostProcess.Arguments, ["/packaged/t3", "/packaged/t3", "serve"]),
       );
-      expect(invocation).toEqual({ command: "/packaged/cinderdeck", entrypoint: undefined });
+      expect(invocation).toEqual({ command: "/packaged/t3", entrypoint: undefined });
       expect(selfInvocationArgs(invocation, ["acp-mcp-bridge"])).toEqual(["acp-mcp-bridge"]);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
@@ -53,18 +44,18 @@ describe("Self invocation", () => {
 describe("Node runtime selection", () => {
   it.effect("keeps the current Node or Electron runtime without requiring Node on PATH", () =>
     Effect.gen(function* () {
-      for (const executable of ["/runtime/node", "/Applications/Cinderdeck.app/Electron"]) {
+      for (const executable of ["/runtime/node", "/Applications/T3 Code.app/Electron"]) {
         expect(
           yield* resolveNodeExecutable("Local device support", { PATH: "" }).pipe(
-            Effect.provideService(HostProcessExecutablePath, executable),
-            Effect.provideService(HostProcessIsExecutable, false),
+            Effect.provideService(HostProcess.ExecutablePath, executable),
+            Effect.provideService(HostProcess.IsExecutable, false),
           ),
         ).toBe(executable);
       }
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("uses installed Node instead of the standalone Cinderdeck executable", () =>
+  it.effect("uses installed Node instead of the standalone T3 executable", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       expect(
@@ -73,22 +64,8 @@ describe("Node runtime selection", () => {
         }),
       ).toBe(process.execPath);
     }).pipe(
-      Effect.provideService(HostProcessExecutablePath, "/packaged/cinderdeck"),
-      Effect.provideService(HostProcessIsExecutable, true),
-      Effect.provide(NodeServices.layer),
-    ),
-  );
-
-  it.effect("explains how to install Node when a standalone helper has no runtime", () =>
-    Effect.gen(function* () {
-      const error = yield* resolveNodeExecutable("Local device support", { PATH: "" }).pipe(
-        Effect.flip,
-      );
-      expect(error._tag).toBe("NodeRuntimeUnavailableError");
-      expect(error.message).toContain("Local device support requires Node.js");
-      expect(error.message).toContain("Install Node.js");
-    }).pipe(
-      Effect.provideService(HostProcessIsExecutable, true),
+      Effect.provideService(HostProcess.ExecutablePath, "/packaged/t3"),
+      Effect.provideService(HostProcess.IsExecutable, true),
       Effect.provide(NodeServices.layer),
     ),
   );
@@ -98,7 +75,7 @@ describe("Node runtime selection", () => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const directory = yield* fs.makeTempDirectoryScoped();
-      const platform = yield* HostProcessPlatform;
+      const platform = yield* HostProcess.Platform;
       const node = path.join(directory, platform === "win32" ? "node.exe" : "node");
       const env = { PATH: directory };
       expect(
@@ -111,8 +88,8 @@ describe("Node runtime selection", () => {
       expect(yield* resolveNodeExecutable("Local device support", env)).toBe(node);
     }).pipe(
       Effect.scoped,
-      Effect.provideService(HostProcessExecutablePath, "/packaged/cinderdeck"),
-      Effect.provideService(HostProcessIsExecutable, true),
+      Effect.provideService(HostProcess.ExecutablePath, "/packaged/t3"),
+      Effect.provideService(HostProcess.IsExecutable, true),
       Effect.provide(NodeServices.layer),
     ),
   );
@@ -138,9 +115,9 @@ describe("Node runtime selection", () => {
       ).toBe(node);
     }).pipe(
       Effect.scoped,
-      Effect.provideService(HostProcessExecutablePath, "/packaged/cinderdeck"),
-      Effect.provideService(HostProcessIsExecutable, true),
-      Effect.provideService(HostProcessPlatform, "win32"),
+      Effect.provideService(HostProcess.ExecutablePath, "/packaged/t3"),
+      Effect.provideService(HostProcess.IsExecutable, true),
+      Effect.provideService(HostProcess.Platform, "win32"),
       Effect.provide(NodeServices.layer),
     ),
   );
@@ -160,8 +137,8 @@ describe("Node runtime selection", () => {
       expect(error.message).toContain("Install Node.js");
     }).pipe(
       Effect.scoped,
-      Effect.provideService(HostProcessIsExecutable, true),
-      Effect.provideService(HostProcessPlatform, "win32"),
+      Effect.provideService(HostProcess.IsExecutable, true),
+      Effect.provideService(HostProcess.Platform, "win32"),
       Effect.provide(NodeServices.layer),
     ),
   );
@@ -171,24 +148,21 @@ describe("Node runtime selection", () => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const directory = yield* fs.makeTempDirectoryScoped();
-      const platform = yield* HostProcessPlatform;
-      const executable = path.join(
-        directory,
-        platform === "win32" ? "cinderdeck.exe" : "cinderdeck",
-      );
+      const platform = yield* HostProcess.Platform;
+      const executable = path.join(directory, platform === "win32" ? "t3.exe" : "t3");
       const node = path.join(directory, platform === "win32" ? "node.exe" : "node");
       yield* fs.writeFileString(executable, "standalone executable fixture");
       yield* fs.chmod(executable, 0o755);
       yield* fs.link(executable, node);
       const error = yield* resolveNodeExecutable("Local device support", { PATH: directory }).pipe(
-        Effect.provideService(HostProcessExecutablePath, executable),
+        Effect.provideService(HostProcess.ExecutablePath, executable),
         Effect.flip,
       );
       expect(error._tag).toBe("NodeRuntimeUnavailableError");
       expect(error.message).toContain("Install Node.js");
     }).pipe(
       Effect.scoped,
-      Effect.provideService(HostProcessIsExecutable, true),
+      Effect.provideService(HostProcess.IsExecutable, true),
       Effect.provide(NodeServices.layer),
     ),
   );
@@ -198,14 +172,14 @@ describe("Node runtime selection", () => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const directory = yield* fs.makeTempDirectoryScoped();
-      const platform = yield* HostProcessPlatform;
+      const platform = yield* HostProcess.Platform;
       const node = path.join(directory, platform === "win32" ? "node.exe" : "node");
       yield* fs.symlink(process.execPath, node);
       expect(yield* resolveNodeExecutable("Local device support", { PATH: directory })).toBe(node);
     }).pipe(
       Effect.scoped,
-      Effect.provideService(HostProcessExecutablePath, "/packaged/cinderdeck"),
-      Effect.provideService(HostProcessIsExecutable, true),
+      Effect.provideService(HostProcess.ExecutablePath, "/packaged/t3"),
+      Effect.provideService(HostProcess.IsExecutable, true),
       Effect.provide(NodeServices.layer),
     ),
   );
@@ -217,7 +191,7 @@ describe("Node runtime selection", () => {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const directory = yield* fs.makeTempDirectoryScoped();
-        const platform = yield* HostProcessPlatform;
+        const platform = yield* HostProcess.Platform;
         const node = path.join(directory, platform === "win32" ? "node.exe" : "node");
         yield* fs.symlink(process.execPath, node);
         const error = yield* resolveNodeExecutable("Local device support", {
@@ -226,7 +200,7 @@ describe("Node runtime selection", () => {
         expect(error.message).toContain("Install Node.js");
       }).pipe(
         Effect.scoped,
-        Effect.provideService(HostProcessIsExecutable, true),
+        Effect.provideService(HostProcess.IsExecutable, true),
         Effect.provide(NodeServices.layer),
       ),
   );

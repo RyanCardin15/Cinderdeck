@@ -441,7 +441,7 @@ final class AppStatusBarController: ObservableObject {
     // Customizable groups (Capture → Recording → Tools): user-ordered, hidden
     // items filtered out, separators only between non-empty groups.
     for group in MenuBarItemGroup.allCases {
-      let groupItems = menuBarCustomizationStore.orderedVisibleItems(for: group).map {
+      let groupItems = menuBarCustomizationStore.orderedVisibleItems(for: group).filter { [.captureArea, .captureFullscreen, .recordScreen, .openHistory, .openWorkspaces].contains($0) }.map {
         makeMenuItem(for: $0, viewModel: viewModel, shortcutManager: shortcutManager)
       }
       guard !groupItems.isEmpty else { continue }
@@ -462,19 +462,6 @@ final class AppStatusBarController: ObservableObject {
       permissionItem.isEnabled = true
       menu?.addItem(permissionItem)
       menu?.addItem(NSMenuItem.separator())
-    }
-
-    // What's New
-    if let campaign = FeatureIntroManager.shared.getPendingCampaign() {
-      let whatsNewItem = NSMenuItem(
-        title: campaign.menuTitle ?? "What's New",
-        action: #selector(showPendingFeatureIntroAction),
-        keyEquivalent: ""
-      )
-      whatsNewItem.target = self
-      whatsNewItem.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: nil)
-      whatsNewItem.isEnabled = true
-      menu?.addItem(whatsNewItem)
     }
 
     // Check for Updates (hideable, fixed position)

@@ -1,5 +1,5 @@
-import type { ProjectGroupingSettings } from "@cinderdeck/client-runtime/state/project-grouping";
-import type { SidebarProjectGroupingMode } from "@cinderdeck/contracts";
+import type { ProjectGroupingSettings } from "@t3tools/client-runtime/state/project-grouping";
+import type { SidebarProjectGroupingMode } from "@t3tools/contracts";
 
 import type { Preferences } from "../persistence/mobile-preferences";
 
@@ -19,10 +19,7 @@ export function resolveMobileProjectGroupingSettings(
   };
 }
 
-/**
- * Dual-writes the legacy boolean for one release so an OTA rollback to an
- * older mobile bundle preserves the user's grouping choice.
- */
+/** Dual-write the legacy boolean for one release so OTA rollback preserves grouping choice. */
 export function mobileProjectGroupingModePatch(
   mode: SidebarProjectGroupingMode,
 ): Partial<Preferences> {

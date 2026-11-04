@@ -1,4 +1,4 @@
-import type { VcsRef } from "@cinderdeck/contracts";
+import type { VcsRef } from "@t3tools/contracts";
 
 export interface BaseRefChoice {
   readonly id: string;

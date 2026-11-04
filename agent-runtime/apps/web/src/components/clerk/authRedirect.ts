@@ -5,7 +5,7 @@ export interface ClerkSignInProps {
 
 export function resolveClerkSignInProps(href: string, isElectron: boolean): ClerkSignInProps {
   if (isElectron) {
-    // Electron routes through the hash, so reset any Clerk virtual pathname without losing the Cinderdeck page.
+    // Electron routes through the hash, so reset any Clerk virtual pathname without losing the T3 page.
     const redirectUrl = new URL(href);
     redirectUrl.pathname = "/";
     redirectUrl.search = "";
@@ -15,7 +15,6 @@ export function resolveClerkSignInProps(href: string, isElectron: boolean): Cler
       signUpForceRedirectUrl: redirectUrl.toString(),
     };
   }
-  // The sign-in modal can switch to sign-up, which follows its own redirect
-  // target; without one Clerk falls back to the URL the modal was opened from.
+  // Set sign-up's redirect too; switching from sign-in otherwise falls back to the modal's opening URL.
   return { forceRedirectUrl: href, signUpForceRedirectUrl: href };
 }

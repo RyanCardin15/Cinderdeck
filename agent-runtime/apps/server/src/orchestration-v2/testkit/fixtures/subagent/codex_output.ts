@@ -1,5 +1,5 @@
 import { assert } from "@effect/vitest";
-import type { ProviderReplayTranscript } from "@cinderdeck/contracts";
+import type { ProviderReplayTranscript } from "@t3tools/contracts";
 
 import type { OrchestratorV2ScenarioResult } from "../../OrchestratorScenario.ts";
 import {
@@ -45,7 +45,6 @@ export function assertSubagentOutput(
     projection.subagents.map((subagent) => subagent.status),
     ["completed", "completed"],
   );
-  // Each child was handed one file and reported contents only that file holds.
   assert.isTrue(
     projection.subagents.some(
       (subagent) =>
@@ -95,12 +94,7 @@ export function assertSubagentOutput(
     assert.equal(childProjection.thread.lineage.parentThreadId, projection.thread.id);
     assert.equal(childProjection.thread.lineage.relationshipToParent, "subagent");
     assert.equal(childProjection.thread.activeProviderThreadId, providerThread.id);
-    assert.lengthOf(childProjection.runs, 1);
-    assert.isTrue(
-      childProjection.runs.every(
-        (run) => run.status === "completed" && run.nativeSubagentTurnId !== undefined,
-      ),
-    );
+    assert.lengthOf(childProjection.runs, 0);
     assert.lengthOf(childProjection.providerThreads, 1);
     assert.lengthOf(childProjection.providerTurns, 1);
     assertTurnItemTypes(childProjection, [

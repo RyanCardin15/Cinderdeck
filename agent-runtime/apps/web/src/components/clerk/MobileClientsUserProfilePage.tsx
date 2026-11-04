@@ -1,4 +1,4 @@
-import type { RelayClientDeviceRecord } from "@cinderdeck/contracts/relay";
+import type { RelayClientDeviceRecord } from "@t3tools/contracts/relay";
 import { SmartphoneIcon } from "lucide-react";
 
 import { useManagedRelayDevices } from "../../cloud/managedRelayState";
@@ -94,8 +94,8 @@ function EmptyMobileClients() {
       <EmptyHeader>
         <EmptyTitle>No mobile clients</EmptyTitle>
         <EmptyDescription>
-          Install Cinderdeck on your phone and sign in to Remote connections to get push notifications and
-          Live Activities.
+          Install Cinderdeck on your phone and sign in to T3 Connect to get push notifications and Live
+          Activities.
         </EmptyDescription>
       </EmptyHeader>
     </Empty>

@@ -1,5 +1,5 @@
 import { assert } from "@effect/vitest";
-import type { ProviderReplayTranscript } from "@cinderdeck/contracts";
+import type { ProviderReplayTranscript } from "@t3tools/contracts";
 
 import type { OrchestratorV2ScenarioResult } from "../../OrchestratorScenario.ts";
 import {
@@ -44,12 +44,7 @@ export function assertSubagentContinueOutput(
 
   const childProjection = result.projections.get(subagent.childThreadId);
   assert.isDefined(childProjection);
-  assert.lengthOf(childProjection.runs, 2);
-  assert.isTrue(
-    childProjection.runs.every(
-      (run) => run.status === "completed" && run.nativeSubagentTurnId !== undefined,
-    ),
-  );
+  assert.lengthOf(childProjection.runs, 0);
   assert.lengthOf(childProjection.providerTurns, 2);
   assertUserMessagesInclude(childProjection, [subagent.prompt, SUBAGENT_CONTINUE_CHILD_PROMPT]);
   assert.isTrue(

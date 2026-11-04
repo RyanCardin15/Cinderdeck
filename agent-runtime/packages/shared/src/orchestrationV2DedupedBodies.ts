@@ -7,7 +7,7 @@ import {
   type OrchestrationV2Subagent,
   type OrchestrationV2ThreadProjection,
   type OrchestrationV2TurnItem,
-} from "@cinderdeck/contracts";
+} from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
 /**

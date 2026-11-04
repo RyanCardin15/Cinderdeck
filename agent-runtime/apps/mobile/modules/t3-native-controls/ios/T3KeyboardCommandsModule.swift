@@ -17,12 +17,16 @@ public final class T3KeyboardCommandsModule: Module {
 public final class T3KeyboardCommandsView: ExpoView {
   let onCommand = EventDispatcher()
   private var enabledCommands = Set<String>()
+  private let shortcutInputView = UIView(frame: .zero)
 
   public override var canBecomeFirstResponder: Bool { true }
 
+  // This responder handles hardware shortcuts, so reclaiming it must not show a software keyboard.
+  public override var inputView: UIView? { shortcutInputView }
+
   public override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
     if action == #selector(openCommandPalette) || action == #selector(paletteNext) || action == #selector(palettePrevious) || action == #selector(paletteDismiss),
-       let input = window?.cinderdeckFirstResponder as? UITextInput,
+       let input = window?.t3FirstResponder as? UITextInput,
        input.markedTextRange != nil {
       return false
     }
@@ -49,9 +53,10 @@ public final class T3KeyboardCommandsView: ExpoView {
         input: "c",
         modifiers: [.command, .shift],
         action: #selector(copyThreadReference),
-        title: "Copy PR Link or Thread ID"
+        title: "Copy PR Link or Thread"
       ),
       enabledCommand("toggleSidebar", input: "\\", modifiers: .command, action: #selector(handleToggleSidebar), title: "Toggle Sidebar"),
+      enabledCommand("cycleHost", input: "h", modifiers: [.command, .shift], action: #selector(cycleHost), title: "Next Machine"),
     ].compactMap { $0 }
     if isPad {
       commands += (1...9).compactMap { index in
@@ -88,6 +93,8 @@ public final class T3KeyboardCommandsView: ExpoView {
 
   public required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
+    inputAssistantItem.leadingBarButtonGroups = []
+    inputAssistantItem.trailingBarButtonGroups = []
     NotificationCenter.default.addObserver(
       self,
       selector: #selector(reclaimFirstResponderIfAvailable),
@@ -150,6 +157,7 @@ public final class T3KeyboardCommandsView: ExpoView {
   @objc private func openReview() { emit("review") }
   @objc private func copyThreadReference() { emit("copyThreadReference") }
   @objc private func handleToggleSidebar() { emit("toggleSidebar") }
+  @objc private func cycleHost() { emit("cycleHost") }
 
   private func emit(_ command: String) {
     onCommand(["command": command])
@@ -157,17 +165,17 @@ public final class T3KeyboardCommandsView: ExpoView {
 
   @objc private func reclaimFirstResponderIfAvailable() {
     DispatchQueue.main.async { [weak self] in
-      guard let self, self.window?.cinderdeckFirstResponder == nil else { return }
+      guard let self, self.window?.t3FirstResponder == nil else { return }
       self.becomeFirstResponder()
     }
   }
 }
 
 private extension UIView {
-  var cinderdeckFirstResponder: UIResponder? {
+  var t3FirstResponder: UIResponder? {
     if isFirstResponder { return self }
     for subview in subviews {
-      if let responder = subview.cinderdeckFirstResponder { return responder }
+      if let responder = subview.t3FirstResponder { return responder }
     }
     return nil
   }

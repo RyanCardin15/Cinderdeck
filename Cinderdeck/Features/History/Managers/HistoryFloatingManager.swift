@@ -590,8 +590,6 @@ enum HistoryFloatingTimeFilter: String, CaseIterable, Identifiable, Equatable {
 enum HistoryFloatingLayout {
   static let compactBasePanelSize = CGSize(width: 920, height: 316)
   static let compactClipboardPanelSize = CGSize(width: 920, height: 400)
-  static let compactStacksPanelSize = CGSize(width: 920, height: 400)
-  static let compactSavedPanelSize = CGSize(width: 920, height: 360)
   static let expandedBasePanelSize = CGSize(width: 1_040, height: 680)
   static let compactBaseCornerRadius: CGFloat = 30
   static let expandedBaseCornerRadius: CGFloat = 32
@@ -602,8 +600,6 @@ enum HistoryFloatingLayout {
     switch mode {
     case .compact:
       switch section {
-      case .stacks: return compactStacksPanelSize
-      case .saved: return compactSavedPanelSize
       case .clipboard: return compactClipboardPanelSize
       case .captures: return compactBasePanelSize
       }

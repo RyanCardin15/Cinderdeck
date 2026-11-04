@@ -1,8 +1,15 @@
-import { type SnapShotModifier, type SnapShotShortcut } from "@cinderdeck/contracts";
-import { parseKeybindingShortcut } from "@cinderdeck/shared/keybindings";
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  isModifierPairShortcut,
+  type SnapShotModifier,
+  type SnapShotShortcut,
+} from "@t3tools/contracts";
+import { parseKeybindingShortcut } from "@t3tools/shared/keybindings";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { getDesktopSnapShotBridge } from "../../lib/desktopSnapShot";
-import { formatSnapShotShortcutLabel } from "../../lib/snapShotShortcut";
+import {
+  formatSnapShotShortcutLabel,
+  parseDesktopSnapShotShortcut,
+} from "../../lib/snapShotShortcut";
 import { SnapShotShortcutKeys } from "../desktop/SnapShotShortcutKeys";
 import { Button } from "../ui/button";
 import { keybindingFromKeyboardEvent } from "./KeybindingsSettings.logic";
@@ -23,30 +30,34 @@ const MODIFIER_CODES: Readonly<Record<SnapShotModifier, readonly [string, string
   alt: ["AltLeft", "AltRight"],
 };
 
-/** The same recorder for inline changes and the setup wizard, without saving either. */
 export function useSnapShotShortcutRecorder({
   shortcut,
+  shortcutLabel,
   disabled = false,
+  allowModifierPairs = true,
   onRecord,
   onStart,
   onError,
 }: {
   shortcut: SnapShotShortcut;
+  shortcutLabel?: string | undefined;
   disabled?: boolean;
+  allowModifierPairs?: boolean;
   onRecord: (shortcut: SnapShotShortcut) => void;
   onStart?: () => void;
   onError: (message: string) => void;
 }) {
   const bridge = getDesktopSnapShotBridge();
+  const displayShortcut = shortcutLabel ? parseDesktopSnapShotShortcut(shortcutLabel) : shortcut;
   const [recording, setRecording] = useState(false);
   const [requests] = useState(createRecordingRequestTracker);
   const heldModifierCodes = useRef(new Set<string>());
-  const stopRecording = useCallback(() => {
+  const stopRecording = () => {
     requests.clear();
     heldModifierCodes.current.clear();
     setRecording(false);
     void bridge?.setSnapShotShortcutSuppressed(false).catch(() => undefined);
-  }, [bridge, requests]);
+  };
   const startRecording = async () => {
     if (!bridge || disabled) return;
     const request = requests.tryBegin();
@@ -62,6 +73,7 @@ export function useSnapShotShortcutRecorder({
       onError(error instanceof Error ? error.message : "Could not start shortcut recording.");
     }
   };
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- releases the desktop bridge's SnapShot shortcut suppression on unmount
   useEffect(
     () => () => {
       requests.clear();
@@ -83,6 +95,10 @@ export function useSnapShotShortcutRecorder({
       held.add(event.code);
       const [left, right] = MODIFIER_CODES[modifier];
       if (held.has(left) && held.has(right)) {
+        if (!allowModifierPairs) {
+          onError("Add a letter, number, or function key to your shortcut.");
+          return;
+        }
         stopRecording();
         onRecord(
           modifier === "shift" ? { kind: "both-shift-keys" } : { kind: "modifier-pair", modifier },
@@ -109,7 +125,11 @@ export function useSnapShotShortcutRecorder({
         size="xs"
         variant={recording ? "secondary" : "outline"}
         disabled={disabled}
-        aria-label={`Record snapshot shortcut, currently ${formatSnapShotShortcutLabel(shortcut)}`}
+        aria-label={
+          displayShortcut
+            ? `Record snapshot shortcut, currently ${formatSnapShotShortcutLabel(displayShortcut)}`
+            : "Change snapshot shortcut"
+        }
         aria-pressed={recording}
         data-keybinding-capture=""
         onClick={() => void startRecording()}
@@ -117,7 +137,15 @@ export function useSnapShotShortcutRecorder({
         onKeyUp={(event) => heldModifierCodes.current.delete(event.code)}
         onBlur={stopRecording}
       >
-        {recording ? "Press shortcut…" : <SnapShotShortcutKeys shortcut={shortcut} />}
+        {recording ? (
+          "Press shortcut…"
+        ) : !displayShortcut ? (
+          "Change shortcut"
+        ) : !allowModifierPairs && isModifierPairShortcut(displayShortcut) ? (
+          "Choose shortcut"
+        ) : (
+          <SnapShotShortcutKeys shortcut={displayShortcut} />
+        )}
       </Button>
     ),
   };

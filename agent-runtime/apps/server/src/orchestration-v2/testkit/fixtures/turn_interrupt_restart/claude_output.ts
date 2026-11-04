@@ -1,5 +1,5 @@
 import { assert } from "@effect/vitest";
-import type { ProviderReplayTranscript } from "@cinderdeck/contracts";
+import type { ProviderReplayTranscript } from "@t3tools/contracts";
 
 import type { OrchestratorV2ScenarioResult } from "../../OrchestratorScenario.ts";
 import {
@@ -111,7 +111,7 @@ export function assertTurnInterruptRestartClaudeOutput(
   assert.equal(projection.providerThreads[0]?.status, "idle");
   const commandItem = projection.turnItems.find((item) => item.type === "command_execution");
   assert.isDefined(commandItem);
-  assert.equal(commandItem.status, "failed");
+  assert.equal(commandItem.status, "interrupted");
   assert.include(commandItem.input, "node -e");
 
   const outboundFrames = transcript.entries.flatMap((entry) =>

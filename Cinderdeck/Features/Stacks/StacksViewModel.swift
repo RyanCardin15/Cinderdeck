@@ -71,12 +71,7 @@ final class StacksViewModel: ObservableObject {
     supervisor.$states.removeDuplicates().assign(to: &$states)
     supervisor.gitMonitor.$statuses.assign(to: &$repoStatuses)
     supervisor.$errorMessage.compactMap { $0 }.sink { [weak self] in self?.error = $0 }.store(in: &subscriptions)
-    let manager = HistoryFloatingManager.shared
-    Publishers.CombineLatest3(manager.$panelIsVisible, manager.$selectedSection, manager.$presentationMode)
-      .debounce(for: .milliseconds(20), scheduler: RunLoop.main)
-      .sink { [weak self] visible, section, mode in
-        self?.setPresentation(visible: visible && section == .stacks, expanded: mode == .expanded)
-      }.store(in: &subscriptions)
+
   }
 
   var runningCount: Int { states.values.filter(\.isActive).count }

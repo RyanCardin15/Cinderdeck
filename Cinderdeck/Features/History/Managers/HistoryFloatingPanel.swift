@@ -72,23 +72,6 @@ final class HistoryFloatingPanel: NSPanel {
 
     let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
-    if HistoryFloatingManager.shared.selectedSection == .stacks,
-      !HistoryFloatingManager.shared.isPresentingAuxiliaryUI {
-      let command: StackKeyboardCommand?
-      switch (event.keyCode, flags) {
-      case (15, .command): command = .restart
-      case (15, [.command, .shift]): command = .restartService
-      case (47, .command): command = .stop
-      case (11, .command): command = .branch
-      case (37, .command): command = .logs
-      default: command = nil
-      }
-      if let command {
-        NotificationCenter.default.post(name: .stacksCommand, object: self, userInfo: ["command": command.rawValue])
-        return true
-      }
-    }
-
     if event.keyCode == 8 && flags == .command {
       if isTextInputActive {
         return super.performKeyEquivalent(with: event)
@@ -145,16 +128,11 @@ final class HistoryFloatingPanel: NSPanel {
     }
 
     if !isTextInputActive, flags.isEmpty, (event.keyCode == 51 || event.keyCode == 117) {
-      if section == .stacks { return }
       NotificationCenter.default.post(name: .historyDeleteSelection, object: self)
       return
     }
 
     if !isTextInputActive, flags.isEmpty, (event.keyCode == 36 || event.keyCode == 76) {
-      if section == .stacks {
-        NotificationCenter.default.post(name: .stacksCommand, object: self, userInfo: ["command": StackKeyboardCommand.toggle.rawValue])
-        return
-      }
       NotificationCenter.default.post(name: .historyActivateSelection, object: self)
       return
     }

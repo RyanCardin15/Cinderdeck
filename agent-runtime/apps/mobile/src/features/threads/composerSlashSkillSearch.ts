@@ -1,4 +1,4 @@
-import type { ServerProviderSkill } from "@cinderdeck/contracts";
+import type { ServerProviderSkill } from "@t3tools/contracts";
 
 export function matchesSlashSkillQuery(skill: ServerProviderSkill, query: string): boolean {
   if (!skill.enabled) return false;
