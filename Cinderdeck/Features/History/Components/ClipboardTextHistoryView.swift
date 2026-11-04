@@ -5,6 +5,7 @@ struct ClipboardTextHistoryView: View {
   @ObservedObject var store = ClipboardTextHistoryStore.shared
   @ObservedObject private var collectionStore = HistoryCollectionStore.shared
   @Binding var selectedID: UUID?
+  @Binding var selectedCollectionID: UUID?
   let isExpanded: Bool
   @AppStorage(PreferencesKeys.clipboardTextHistoryEnabled) private var isEnabled = false
   @State private var copiedID: UUID?
@@ -15,13 +16,18 @@ struct ClipboardTextHistoryView: View {
     let now = Date()
     let filtered = store.records.filter { record in
       (query.isEmpty || record.text.localizedCaseInsensitiveContains(query)) &&
-        (!isExpanded || manager.expandedTimeFilter.includes(record.copiedAt, relativeTo: now))
+        (!isExpanded || manager.expandedTimeFilter.includes(record.copiedAt, relativeTo: now)) &&
+        (selectedCollectionID.map { collectionStore.contains(.clipboardText(record.id), in: $0) } ?? true)
     }
     return isExpanded ? filtered : Array(filtered.prefix(manager.maxDisplayedItems))
   }
 
   private var selectedRecord: ClipboardTextRecord? {
     records.first { $0.id == selectedID }
+  }
+
+  private var selectedCollection: HistoryCollection? {
+    collectionStore.collections.first { $0.id == selectedCollectionID }
   }
 
   var body: some View {
@@ -38,6 +44,8 @@ struct ClipboardTextHistoryView: View {
       }
       .font(.system(size: 11, weight: .medium))
 
+      collectionBar
+
       if let error = store.errorMessage ?? collectionStore.errorMessage {
         Label(error, systemImage: "exclamationmark.triangle")
           .font(.caption)
@@ -53,9 +61,15 @@ struct ClipboardTextHistoryView: View {
       }
     }
     .onAppear {
+      if selectedCollectionID != nil, selectedCollection == nil { selectedCollectionID = nil }
       syncSelection()
     }
     .onChange(of: records.map(\.id)) { _ in syncSelection() }
+    .onChange(of: collectionStore.collections.map(\.id)) { ids in
+      if let selectedCollectionID, !ids.contains(selectedCollectionID) {
+        self.selectedCollectionID = nil
+      }
+    }
     .task(id: copiedID) {
       guard copiedID != nil else { return }
       try? await Task.sleep(nanoseconds: 2_000_000_000)
@@ -84,10 +98,77 @@ struct ClipboardTextHistoryView: View {
     }
   }
 
+  private var collectionBar: some View {
+    HStack(spacing: 10) {
+      ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 6) {
+          collectionFilter(title: "All text", icon: "text.alignleft", id: nil, count: store.records.count)
+          ForEach(collectionStore.collections) { collection in
+            collectionFilter(
+              title: collection.name,
+              icon: collection.systemIconName,
+              id: collection.id,
+              count: collectionStore.items(in: collection.id).filter {
+                if case .clipboardText = $0 { return true }
+                return false
+              }.count
+            )
+            .contextMenu {
+              if !collection.isFavorites {
+                Button("Rename…") { HistoryCollectionPrompt.rename(collection) }
+                Button("Delete Group…", role: .destructive) { HistoryCollectionPrompt.delete(collection) }
+              }
+            }
+          }
+        }
+        .padding(2)
+      }
+      Button {
+        if let group = HistoryCollectionPrompt.createGroup() {
+          selectedCollectionID = group.id
+        }
+      } label: {
+        Label("New Group", systemImage: "folder.badge.plus")
+      }
+      .buttonStyle(DeckButtonStyle())
+      .controlSize(.small)
+      .fixedSize()
+      .accessibilityIdentifier("history.clipboard.newGroup")
+    }
+  }
+
+  private func collectionFilter(title: String, icon: String, id: UUID?, count: Int) -> some View {
+    let isSelected = selectedCollectionID == id
+    return Button {
+      selectedCollectionID = id
+      manager.focusPanel()
+    } label: {
+      HStack(spacing: 5) {
+        Label(title, systemImage: icon)
+        Text(count.formatted()).opacity(0.7)
+      }
+      .font(.system(size: 11, weight: .semibold))
+      .lineLimit(1)
+      .padding(.horizontal, 10)
+      .padding(.vertical, 7)
+      .foregroundColor(isSelected ? .white : .primary)
+      .background(isSelected ? Color.accentColor : Color.primary.opacity(0.06), in: Capsule())
+      .contentShape(Capsule())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(title)
+    .accessibilityValue("\(count) text items")
+    .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    .accessibilityIdentifier("history.clipboard.collection.\(id?.uuidString ?? "all")")
+  }
+
   private var emptyState: some View {
-    DeckEmptyState(icon: "doc.on.clipboard",
+    DeckEmptyState(icon: selectedCollection?.systemIconName ?? "doc.on.clipboard",
       title: emptyTitle, detail: emptyMessage, compact: !isExpanded) {
-      if !isEnabled {
+      if selectedCollectionID != nil {
+        Button("Show all text") { selectedCollectionID = nil }
+          .buttonStyle(DeckButtonStyle())
+      } else if !isEnabled {
         Button("Enable clipboard text history") { isEnabled = true }
           .buttonStyle(DeckButtonStyle(prominent: true))
       }
@@ -96,10 +177,16 @@ struct ClipboardTextHistoryView: View {
   }
 
   private var emptyTitle: String {
+    if let selectedCollection {
+      return selectedCollection.isFavorites ? "No favorite text matches" : "No text matches in \(selectedCollection.name)"
+    }
     return store.records.isEmpty ? "Your copied text will appear here" : "No matching text"
   }
 
   private var emptyMessage: String {
+    if selectedCollectionID != nil {
+      return "Use the star or folder on any text item to save it here. If it is already saved, try another search or time filter."
+    }
     return store.records.isEmpty
       ? "Copy text in any app to keep it here. Images, files, and text marked sensitive are skipped."
       : "Try another search or time filter."
@@ -126,7 +213,7 @@ struct ClipboardTextHistoryView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
               groupMembership(record)
               HStack {
-                Button("View text") {
+                Button("Expand text") {
                   select(record)
                   manager.showExpanded()
                 }
@@ -271,7 +358,7 @@ struct ClipboardTextHistoryView: View {
   @ViewBuilder
   private func contextMenu(_ record: ClipboardTextRecord) -> some View {
     Button("Copy") { copy(record) }
-    Button("View text") {
+    Button("Expand text") {
       select(record)
       manager.showExpanded()
     }

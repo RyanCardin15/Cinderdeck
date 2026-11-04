@@ -17,6 +17,7 @@ struct HistoryFloatingContentView: View {
 
   @State private var selectedCompactFilter: CaptureHistoryType? = nil
   @State private var selectedClipboardID: UUID?
+  @State private var selectedClipboardCollectionID: UUID?
   @State private var usesExplicitCompactFilterSelection = false
   @State private var selectedId: UUID? = nil
   @State private var expandedSelectedIds: Set<UUID> = []
@@ -198,11 +199,20 @@ struct HistoryFloatingContentView: View {
     } controls: {
       HStack(spacing: 8) {
 
-        controlButton(
-          systemName: "arrow.up.forward.app",
-          help: L10n.Actions.openHistory,
-          action: openFullHistory
-        )
+        if manager.selectedSection == .clipboard {
+          Button(action: openFullHistory) {
+            Label("Expand", systemImage: "arrow.up.left.and.arrow.down.right")
+          }
+          .buttonStyle(DeckButtonStyle())
+          .help("Expand clipboard text history")
+          .accessibilityIdentifier("history.clipboard.expand")
+        } else {
+          controlButton(
+            systemName: "arrow.up.forward.app",
+            help: L10n.Actions.openHistory,
+            action: openFullHistory
+          )
+        }
 
         controlButton(
           systemName: manager.isPinned ? "pin.fill" : "pin",
@@ -336,6 +346,7 @@ struct HistoryFloatingContentView: View {
     ClipboardTextHistoryView(
       manager: manager,
       selectedID: $selectedClipboardID,
+      selectedCollectionID: $selectedClipboardCollectionID,
       isExpanded: manager.presentationMode == .expanded
     )
   }

@@ -20,6 +20,7 @@ Persistent history of screenshots, videos, and GIFs backed by GRDB SQLite, surfa
 ## Clipboard text
 
 - The **Clipboard text** section is available in both compact and expanded history via the existing ⌘⇧H shortcut. The expanded view searches text, applies time filters, and shows the complete selected text beside the list. Copy buttons or ⌘C restore the exact plain text; Return copies and dismisses, arrow keys move selection, and Delete removes the selected text entry.
+- Choose **Expand** in the compact header to open the full clipboard panel, or **Expand text** on a card to read that item. **All text**, **Favorites**, and your named groups appear above the list in both layouts. Use **New Group** to create a folder.
 - Each text card has visible star and folder actions; expanded list rows also have a copy action. Filled stars identify favorites, and group names appear on the card. The folder opens group membership directly, including **New Group…**.
 - Enable or pause collection in the panel or Settings → History → Save copied text. This is opt-in (`history.clipboardTextEnabled`, exported as `history.clipboard_text_enabled` in TOML). It records new copies while Cinderdeck runs; clipboard contents from before launch or while paused are not imported.
 - `ClipboardTextHistoryStore` polls `NSPasteboard.changeCount` every 0.5 seconds, keeps exact Unicode/whitespace, and deduplicates repeated text by SHA-256, moving external recopies to the top. Copying from Cinderdeck history does not create a new record.
