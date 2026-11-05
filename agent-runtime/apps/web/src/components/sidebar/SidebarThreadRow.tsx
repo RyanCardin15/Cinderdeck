@@ -1234,6 +1234,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             {/* `contents` keeps one-line rows a single flex row. */}
             <div className={multiline ? "flex h-6 min-w-0 items-center gap-2.5" : "contents"}>
               {accessibleTitle}
+              {inFolder && thread.settledOverride === "settled" ? (
+                <CircleCheckIcon
+                  role="img"
+                  aria-label="Settled"
+                  className="size-3.5 shrink-0 text-sidebar-muted-foreground"
+                />
+              ) : null}
               {inFolder ? null : (
                 <span
                   className={cn(

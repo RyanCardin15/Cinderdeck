@@ -1,6 +1,6 @@
 # Cinderdeck
 
-Cinderdeck combines coding agents with native macOS capture history. Add a project folder in the main window to group its agent conversations. The embedded desktop runtime and mobile companion are maintained in `agent-runtime/`.
+Cinderdeck combines coding agents with native macOS capture history. Add a project folder in the main window to group its agent conversations. Expand a project to see up to ten threads, with unsettled threads first. **Show more** opens a searchable list for that project, including older settled threads. The embedded desktop runtime and mobile companion are maintained in `agent-runtime/`.
 
 Press **⌘⇧H** to open History, or use your existing custom shortcut. Browse All Captures, Screenshots, Videos, GIFs, and Clipboard Text. You can enable or pause clipboard collection inside the panel.
 

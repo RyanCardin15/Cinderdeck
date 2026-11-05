@@ -156,6 +156,7 @@ import { environmentPresentations } from "../state/presentation";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { environmentProjects } from "../state/projects";
 import { threadEnvironment } from "../state/threads";
+import { ProjectThreadBrowser, PROJECT_THREAD_LIMIT } from "./sidebar/ProjectThreadBrowser";
 import { useOlderSettledShelf, useOlderSettledShelfGrowth } from "../state/olderSettledShelf";
 import { useThreadSearch } from "../state/queries";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
@@ -507,7 +508,7 @@ function useSidebarThreads(input: {
   // Older settled threads load in pages; the shelf lists them only as far as they are loaded.
   const olderSettledShelf = useOlderSettledShelf({
     scopes: olderSettledScopes([...serverConfigs.keys()], scopedProjectKeys),
-    expanded: settledShelfExpanded,
+    expanded: folderGroups === null && settledShelfExpanded,
     visibleCount: settledVisibleCount,
   });
   const listedSettledThreads = settledThreads.filter(olderSettledShelf.isListed);
@@ -539,32 +540,48 @@ function useSidebarThreads(input: {
   const projectFolders =
     folderGroups === null
       ? null
-      : groupSidebarThreadsByProject(folderGroups, activeThreads, keepEmpty).map((folder) => {
+      : groupSidebarThreadsByProject(
+          folderGroups,
+          [...pinnedThreads, ...activeThreads, ...snoozedThreads, ...settledThreads],
+          (group) =>
+            keepEmpty(group) ||
+            group.memberProjectRefs.some(({ environmentId, projectId }) =>
+              olderSettledShelf.environments.get(environmentId)?.older?.counts.has(projectId),
+            ),
+        ).map((folder) => {
           const collapsed = !resolveProjectExpanded(
             projectExpandedById,
             sidebarFolderExpansionKeys(folder.group),
           );
+          // Cached settlement stays meaningful while provider capabilities reconnect.
+          const ordered = [...folder.threads].sort(
+            (a, b) =>
+              Number(a.settledOverride === "settled") - Number(b.settledOverride === "settled"),
+          );
+          const selected = routeThreadOnly(ordered, routeRowThreadKey);
+          const preview = ordered.slice(0, PROJECT_THREAD_LIMIT);
+          if (selected[0] && !preview.includes(selected[0])) {
+            preview[preview.length - 1] = selected[0];
+          }
           return {
             group: folder.group,
             collapsed,
-            // A closed folder still shows the open thread, and hints at the rest.
-            threads: collapsed
-              ? routeThreadOnly(folder.threads, routeRowThreadKey)
-              : folder.threads,
+            allThreads: ordered,
+            threads: collapsed ? selected : preview,
             hiddenThreads: collapsed
               ? folder.threads.filter((thread) => threadShellKey(thread) !== routeRowThreadKey)
               : EMPTY_THREADS,
           };
         });
-  const orderedThreads = [
-    ...pinnedThreads,
-    ...(projectFolders === null
-      ? activeThreads
-      : projectFolders.flatMap((folder) => folder.threads)),
-    ...visibleWorkingThreads,
-    ...visibleSnoozedThreads,
-    ...renderedSettledThreads,
-  ];
+  const orderedThreads = projectFolders
+    ? projectFolders.flatMap((folder) => folder.threads)
+    : [
+        ...pinnedThreads,
+        ...activeThreads,
+        ...visibleWorkingThreads,
+        ...visibleSnoozedThreads,
+        ...renderedSettledThreads,
+      ];
   const sectionByThreadKey = new Map<string, SidebarSection>();
   for (const [list, section] of [
     [pinnedThreads, "pinned"],
@@ -1941,6 +1958,18 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         0
     ) {
       return [];
+    }
+    if (projectFolders !== null) {
+      return [
+        { kind: "marker", marker: "active-placeholder" },
+        ...projectFolders.flatMap((folder) =>
+          folder.threads.map((thread): SidebarListItem => ({
+            kind: "thread",
+            key: threadShellKey(thread),
+            section: sectionByThreadKey.get(threadShellKey(thread)) ?? "active",
+          })),
+        ),
+      ];
     }
     const items: SidebarListItem[] = [{ kind: "marker", marker: "pinned-header" }];
     const pinnedRows = rowsOf(pinnedThreads, "pinned");
@@ -3440,7 +3469,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       for (const item of sidebarListItems) {
                         if (item.kind === "thread") {
                           // Folders draw active rows in their own place below.
-                          if (projectFolders !== null && item.section === "active") continue;
+                          if (projectFolders !== null) continue;
                           items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
                           continue;
                         }
@@ -3461,11 +3490,20 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               items.push(
                                 renderThreadRow(
                                   thread,
-                                  "active",
+                                  sectionByThreadKey.get(threadShellKey(thread)) ?? "active",
                                   sidebarFolderRowId(folder.group.projectKey),
                                 ),
                               );
                             }
+                            if (!folder.collapsed)
+                              items.push(
+                                <ProjectThreadBrowser
+                                  key={`browse:${folder.group.projectKey}`}
+                                  group={folder.group}
+                                  threads={folder.allThreads}
+                                  onOpenThread={navigateToThread}
+                                />,
+                              );
                           }
                           continue;
                         }
@@ -3581,7 +3619,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       }
                       return items;
                     })()}
-                    {settledShelfExpanded && hiddenSettledCount > 0 ? (
+                    {projectFolders === null && settledShelfExpanded && hiddenSettledCount > 0 ? (
                       <li className="list-none">
                         <button
                           type="button"
