@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 describe("loadRepoEnv", () => {
-  it("applies process, root local, and root precedence in that order", () => {
+  it("discards inherited account and relay configuration at every precedence level", () => {
     const repoRoot = makeTemporaryDirectory();
     NodeFS.writeFileSync(
       NodePath.join(repoRoot, ".env"),
@@ -26,9 +26,7 @@ describe("loadRepoEnv", () => {
       "T3CODE_CLERK_PUBLISHABLE_KEY=pk_local\nT3CODE_CLERK_JWT_TEMPLATE=template_local\nT3CODE_CLERK_CLI_OAUTH_CLIENT_ID=oauth_local\nT3CODE_RELAY_URL=https://local.example.test\n",
     );
 
-    expect(loadRepoEnv({ baseEnv: {}, repoRoot }).T3CODE_RELAY_URL).toBe(
-      "https://local.example.test",
-    );
+    expect(loadRepoEnv({ baseEnv: {}, repoRoot }).T3CODE_RELAY_URL).toBe("");
     expect(
       loadRepoEnv({
         baseEnv: {
@@ -36,25 +34,29 @@ describe("loadRepoEnv", () => {
           T3CODE_CLERK_JWT_TEMPLATE: "template_ci",
           T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: "oauth_ci",
           T3CODE_RELAY_URL: "https://ci.example.test",
+          VITE_POSTHOG_KEY: "synthetic-telemetry-key",
+          CINDERDECK_TEST_SETTING: "kept",
         },
         repoRoot,
       }),
     ).toMatchObject({
-      T3CODE_CLERK_PUBLISHABLE_KEY: "pk_ci",
-      T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: "oauth_ci",
-      VITE_CLERK_PUBLISHABLE_KEY: "pk_ci",
-      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_ci",
-      T3CODE_CLERK_JWT_TEMPLATE: "template_ci",
-      VITE_CLERK_JWT_TEMPLATE: "template_ci",
-      EXPO_PUBLIC_CLERK_JWT_TEMPLATE: "template_ci",
-      T3CODE_RELAY_URL: "https://ci.example.test",
-      VITE_T3CODE_RELAY_URL: "https://ci.example.test",
+      CINDERDECK_TEST_SETTING: "kept",
+      VITE_POSTHOG_KEY: "",
+      T3CODE_CLERK_PUBLISHABLE_KEY: "",
+      T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: "",
+      VITE_CLERK_PUBLISHABLE_KEY: "",
+      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: "",
+      T3CODE_CLERK_JWT_TEMPLATE: "",
+      VITE_CLERK_JWT_TEMPLATE: "",
+      EXPO_PUBLIC_CLERK_JWT_TEMPLATE: "",
+      T3CODE_RELAY_URL: "",
+      VITE_T3CODE_RELAY_URL: "",
     });
   });
 });
 
 function makeTemporaryDirectory() {
-  const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-public-config-"));
+  const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-public-config-"));
   temporaryDirectories.push(directory);
   return directory;
 }

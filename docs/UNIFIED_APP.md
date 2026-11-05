@@ -1,8 +1,8 @@
 # Building Cinderdeck
 
-Cinderdeck opens the T3 Code desktop interface. Its project picker groups conversations by folder. Native Cinderdeck owns the Dock identity, menu bar, capture permissions, History shortcut, and Sparkle updates. The embedded desktop process handles projects, agent providers, threads, terminals, and previews.
+Cinderdeck opens its bundled agent interface. The project picker groups conversations by folder. Native Cinderdeck owns the Dock identity, menu bar, capture permissions, History shortcut, and Sparkle updates. The embedded desktop process handles projects, agent providers, threads, terminals, and previews.
 
-The native host starts the bundled Electron executable with a dedicated T3Runtime directory and Chromium profile. This keeps the previous AgentRuntime store available to earlier builds. The host sends window and shutdown commands through an inherited pipe. Closing the pipe also shuts down the child.
+The native host starts the bundled Electron executable with a dedicated `T3Runtime` compatibility directory and Chromium profile. This keeps the previous AgentRuntime store available to earlier builds. The host sends window and shutdown commands through an inherited pipe. Closing the pipe also shuts down the child.
 
 ## Build and assemble
 
