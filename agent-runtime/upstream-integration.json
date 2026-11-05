@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 1,
+  "upstreamRepository": "https://github.com/pingdotgg/t3code",
+  "sourceBaseline": "9e85538535c8553901351112ab02dd1dd62db5ee",
+  "sourceBaselineEvidence": {
+    "cinderdeckCommit": "b756c9c6f0b03e5d1b7fd911ea2cbdb4a7972ab9",
+    "documents": [
+      "README.md",
+      "agent-runtime/README.md"
+    ],
+    "meaning": "Replacement source baseline recorded by the November 4 rebuild; owned exclusions and adaptations remain."
+  },
+  "reviewedThrough": "337c5858c33bc7f8f6dfd391a2c279fa0f7e4d17",
+  "integrationMode": "selected-ports",
+  "ports": [
+    {
+      "commit": "8ab024f31a6d285015c4fb84e52a0183f614e237",
+      "subject": "fix(client-runtime): a thread keeps syncing after a stream defect (#31071)"
+    },
+    {
+      "commit": "b9522c845b06cb8c852c28e9fa747c6335e9f6b3",
+      "subject": "fix(client): a big server config on a slow link no longer drops the connection in a loop (#23758)"
+    },
+    {
+      "commit": "c15e49a77cbbc071f68f18cbf65e1b1e3481d036",
+      "subject": "fix: keep older pending questions answerable (#26435)"
+    },
+    {
+      "commit": "4dff7de3f99677dd886018dbc195062c0768f2c7",
+      "subject": "fix(server): preserve sibling wakeups when interrupting a completion wake (#28204)"
+    },
+    {
+      "commit": "67eebaca23f8f7bc46e8817434087fc9c5acf8e3",
+      "subject": "fix(server): a stopped run no longer shrinks thread history to one row (#31266)"
+    },
+    {
+      "commit": "01a8db0aad27fa18010c552340e1b36168707ae8",
+      "subject": "fix(server): refresh divergence after a merged branch ref changes (#31342)"
+    }
+  ],
+  "deferred": [
+    {
+      "commit": "dd5f98eeecad5db5b10314296221df115f130fbd",
+      "reason": "Vendor relay, signing or deployment behavior is outside the owned product boundary."
+    },
+    {
+      "commit": "95e53a54dbd312fea7e8a2ef94514dc5f1c8ee3d",
+      "reason": "Broad toolchain, Effect or cryptographic migration deferred; keep the current frozen dependency graph."
+    },
+    {
+      "commit": "14e8f393faeb7e74f576525d63b540d61e4331fc",
+      "reason": "Broad toolchain, Effect or cryptographic migration deferred; keep the current frozen dependency graph."
+    },
+    {
+      "commit": "fb99a5e4b026162812bf078ea37f161f6ae007c8",
+      "reason": "Broad toolchain, Effect or cryptographic migration deferred; keep the current frozen dependency graph."
+    },
+    {
+      "commit": "16fc3cc45b3816184efe4061195d695efc8cafea",
+      "reason": "Broad toolchain, Effect or cryptographic migration deferred; keep the current frozen dependency graph."
+    },
+    {
+      "commit": "33ba7bf5ef098cd7c27d9cf44b79e2b06c020e6a",
+      "reason": "Vendor relay, signing or deployment behavior is outside the owned product boundary."
+    },
+    {
+      "commit": "a07be97ab0753b2b5b0caecebba69d7f872594fa",
+      "reason": "Broad toolchain, Effect or cryptographic migration deferred; keep the current frozen dependency graph."
+    },
+    {
+      "commit": "62db6623cb30ed32968fc9ee0db1ea5355f9b39a",
+      "reason": "Independent scanner-test race change; no scanner behavior ported in this batch."
+    },
+    {
+      "commit": "7f6f47b27b44456f1c8214d3b566b375c09f629e",
+      "reason": "UI or contract migration deferred until owned branding and validation blockers are resolved."
+    },
+    {
+      "commit": "df70f505a3c3e3ad7ea0fde2ad2c01a6d57d2297",
+      "reason": "Vendor policy or product attribution behavior requires adaptation to the native host."
+    },
+    {
+      "commit": "a21d788752695764028e6d26ba924f3963e05806",
+      "reason": "Browser or provider lifecycle behavior needs interactive/provider validation outside this run."
+    },
+    {
+      "commit": "4b87a45770d24a47f7e6bc40e3f19011e41c7724",
+      "reason": "Broad toolchain, Effect or cryptographic migration deferred; keep the current frozen dependency graph."
+    },
+    {
+      "commit": "299f0db1e51a91dad6126b4e4927d5de63108b6f",
+      "reason": "Companion native/editor dependency chain requires separate validation; no browser or device launch authorized."
+    },
+    {
+      "commit": "2ef6435f5092a9aa3dfe19a7ef9a98d8c1ecc945",
+      "reason": "Browser or provider lifecycle behavior needs interactive/provider validation outside this run."
+    },
+    {
+      "commit": "c1f91b5be101820daa7006336f1d143528f5028f",
+      "reason": "UI or contract migration deferred until owned branding and validation blockers are resolved."
+    },
+    {
+      "commit": "c94ad22ad135d72c81ac728e54be44156ebc0050",
+      "reason": "Companion native/editor dependency chain requires separate validation; no browser or device launch authorized."
+    },
+    {
+      "commit": "cda88429475ba7e21098af10b5ad305009ec65fd",
+      "reason": "Companion native/editor dependency chain requires separate validation; no browser or device launch authorized."
+    },
+    {
+      "commit": "b3041a8cb9e69856be5a48602a06fe480b70d4b1",
+      "reason": "UI or contract migration deferred until owned branding and validation blockers are resolved."
+    },
+    {
+      "commit": "c9d29e09efc64775eb387714d873b442da9e6967",
+      "reason": "Companion native/editor dependency chain requires separate validation; no browser or device launch authorized."
+    },
+    {
+      "commit": "199cb5b6a9d17f2b55881338dc4381ca59d0e5e9",
+      "reason": "UI or contract migration deferred until owned branding and validation blockers are resolved."
+    },
+    {
+      "commit": "b28bb8fc9d582ca7cc95aebb9fd6ceb24cc28884",
+      "reason": "Companion native/editor dependency chain requires separate validation; no browser or device launch authorized."
+    },
+    {
+      "commit": "70738cbd8aa94e506801c00df22d5d6ab5b86c83",
+      "reason": "Companion native/editor dependency chain requires separate validation; no browser or device launch authorized."
+    },
+    {
+      "commit": "707dcdaa16b749ef73513187829cb71564d8628a",
+      "reason": "UI or contract migration deferred until owned branding and validation blockers are resolved."
+    },
+    {
+      "commit": "8a65c000433b1a1d7da65897af6456488a9aafc7",
+      "reason": "UI or contract migration deferred until owned branding and validation blockers are resolved."
+    },
+    {
+      "commit": "af54fe23442617c7269d3447d84d2b1241a02692",
+      "reason": "UI or contract migration deferred until owned branding and validation blockers are resolved."
+    },
+    {
+      "commit": "e4e3657344e5ed70afd671e8d0ff5c2573f90f52",
+      "reason": "Companion native/editor dependency chain requires separate validation; no browser or device launch authorized."
+    },
+    {
+      "commit": "7384cf20da1a1031c58b91d5900e4f81ae7d0024",
+      "reason": "Companion native/editor dependency chain requires separate validation; no browser or device launch authorized."
+    },
+    {
+      "commit": "c192c439c15f85310b6f1732d83c562c19d5978a",
+      "reason": "Vendor relay, signing or deployment behavior is outside the owned product boundary."
+    },
+    {
+      "commit": "754e1d1534ce38a21927756cabcaad1d67f944fc",
+      "reason": "Companion native/editor dependency chain requires separate validation; no browser or device launch authorized."
+    },
+    {
+      "commit": "d520d5bb850de9c17c2bbec0f9a37593a2d78d09",
+      "reason": "UI or contract migration deferred until owned branding and validation blockers are resolved."
+    },
+    {
+      "commit": "9bfecb8f1e91892a5f87020203bde70694ab256e",
+      "reason": "UI or contract migration deferred until owned branding and validation blockers are resolved."
+    },
+    {
+      "commit": "90f0158e60b08946bcaae1df07109a893e7c36af",
+      "reason": "Vendor policy or product attribution behavior requires adaptation to the native host."
+    },
+    {
+      "commit": "3f905cac2e4dd968684298673546aacca3323b1d",
+      "reason": "Browser or provider lifecycle behavior needs interactive/provider validation outside this run."
+    },
+    {
+      "commit": "935818e422f9b58c46e14d70f4ef386fa3575105",
+      "reason": "UI or contract migration deferred until owned branding and validation blockers are resolved."
+    },
+    {
+      "commit": "34701646e39077be00302a7fd66a12a96e2fcf37",
+      "reason": "UI or contract migration deferred until owned branding and validation blockers are resolved."
+    },
+    {
+      "commit": "e313a122452835da330feef41d0b74a4d2eddbeb",
+      "reason": "Broad toolchain, Effect or cryptographic migration deferred; keep the current frozen dependency graph."
+    },
+    {
+      "commit": "5a906583fed3fa41dc806f2a19bd9d095537ed3e",
+      "reason": "Broad toolchain, Effect or cryptographic migration deferred; keep the current frozen dependency graph."
+    },
+    {
+      "commit": "20e92ffe022fe7813c854eeb68195ffa8e04850f",
+      "reason": "UI or contract migration deferred until owned branding and validation blockers are resolved."
+    },
+    {
+      "commit": "298cb24140fdddebfbfaedad3a097e86ff3d9d04",
+      "reason": "Broad toolchain, Effect or cryptographic migration deferred; keep the current frozen dependency graph."
+    },
+    {
+      "commit": "8a14762c9093ea11e1e58d65cfe788f458a0d6b5",
+      "reason": "Companion native/editor dependency chain requires separate validation; no browser or device launch authorized."
+    },
+    {
+      "commit": "337c5858c33bc7f8f6dfd391a2c279fa0f7e4d17",
+      "reason": "Companion native/editor dependency chain requires separate validation; no browser or device launch authorized."
+    }
+  ],
+  "compatibility": "Preserve legal notices, provider fixtures, persisted keys, native module registrations and wire identifiers. No repository-root upstream merge. reviewedThrough is an examined target, not complete parity."
+}

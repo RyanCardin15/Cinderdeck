@@ -1,12 +1,12 @@
-import { createInterface } from "node:readline";
+import * as NodeReadline from "node:readline";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- The native host passes Node stdin and stdout pipes.
-import type { Readable, Writable } from "node:stream";
+import type * as NodeStream from "node:stream";
 import * as Electron from "electron";
 
 // Only the bundled runtime inherits this pipe. EOF also covers an unexpected parent exit.
 export function connectCinderdeckHost(
-  input: Readable,
-  output: Writable,
+  input: NodeStream.Readable,
+  output: NodeStream.Writable,
   app: Pick<Electron.App, "quit" | "hide">,
 ) {
   let closing = false;
@@ -19,7 +19,7 @@ export function connectCinderdeckHost(
     app.quit();
   }
 
-  const lines = createInterface({ input });
+  const lines = NodeReadline.createInterface({ input });
   lines.on("close", close);
   lines.on("line", (line) => {
     let command: unknown;
@@ -51,6 +51,7 @@ export function connectCinderdeckHost(
   };
 }
 
-export const cinderdeckHost = process.env.CINDERDECK_NATIVE_HOST === "1"
-  ? connectCinderdeckHost(process.stdin, process.stdout, Electron.app)
-  : null;
+export const cinderdeckHost =
+  process.env.CINDERDECK_NATIVE_HOST === "1"
+    ? connectCinderdeckHost(process.stdin, process.stdout, Electron.app)
+    : null;

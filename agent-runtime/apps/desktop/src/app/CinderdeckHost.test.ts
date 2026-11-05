@@ -1,14 +1,13 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- The native host passes Node stdin and stdout pipes.
-import { PassThrough } from "node:stream";
-import { once } from "node:events";
+import * as NodeStream from "node:stream";
 import { expect, it, vi } from "vite-plus/test";
 import { connectCinderdeckHost } from "./CinderdeckHost.ts";
 
 vi.mock("electron", () => ({ app: {} }));
 
 it("delivers queued window actions and waits for the parent to approve quitting", () => {
-  const input = new PassThrough();
-  const output = new PassThrough();
+  const input = new NodeStream.PassThrough();
+  const output = new NodeStream.PassThrough();
   const app = { quit: vi.fn(), hide: vi.fn() };
   const host = connectCinderdeckHost(input, output, app);
   const dispatch = vi.fn();
@@ -28,10 +27,10 @@ it("delivers queued window actions and waits for the parent to approve quitting"
 });
 
 it("quits if the parent exits before the desktop window is ready", async () => {
-  const input = new PassThrough();
+  const input = new NodeStream.PassThrough();
   const app = { quit: vi.fn(), hide: vi.fn() };
-  connectCinderdeckHost(input, new PassThrough(), app);
-  const ended = once(input, "end");
+  connectCinderdeckHost(input, new NodeStream.PassThrough(), app);
+  const ended = new Promise<void>((resolve) => input.once("end", resolve));
   input.end();
   await ended;
   expect(app.quit).toHaveBeenCalledOnce();
