@@ -59,6 +59,17 @@ for inherited in ("owner:", "d763fcb8", "ARK85ZXQ4Z", "app.t3.codes", "u.expo.de
 if "enabled: false" not in mobile:
     errors.append("Companion OTA updates must be disabled until an owned service is configured.")
 
+# Exact fixture import bindings preserve recorded source without restoring vendor packages.
+fixture_imports = {
+    "@t3tools/contracts": ["../../packages/contracts/src/index.ts"],
+    "@t3tools/shared/terminalOutput": ["../../packages/shared/src/terminalOutput.ts"],
+    "@t3tools/shared/orchestrationV2PendingBackgroundWork": ["../../packages/shared/src/orchestrationV2PendingBackgroundWork.ts"],
+    "@t3tools/provider-core/server/IdAllocator": ["../../packages/provider-core/src/server/IdAllocator.ts"],
+}
+server_compiler_paths = json.loads((RUNTIME / "apps/server/tsconfig.json").read_text())["compilerOptions"].get("paths", {})
+if server_compiler_paths != fixture_imports:
+    errors.append("Provider fixture imports must retain their exact owned source bindings.")
+
 for license_path in (ROOT / "LICENSE", RUNTIME / "LICENSE", ROOT / "NOTICE"):
     if not license_path.is_file():
         errors.append(f"Required license notice missing: {license_path.relative_to(ROOT)}")

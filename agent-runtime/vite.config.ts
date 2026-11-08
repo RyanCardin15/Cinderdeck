@@ -433,8 +433,8 @@ export default defineConfig({
                     "../../server/*",
                     "../../../client/*",
                     "../../../server/*",
-                    "@t3tools/source-control-*/client/*",
-                    "@t3tools/source-control-*/server/*",
+                    "@cinderdeck/source-control-*/client/*",
+                    "@cinderdeck/source-control-*/server/*",
                   ],
                   message:
                     "Shared forge definitions load on the server and every client; keep UI and server code out.",
@@ -454,7 +454,7 @@ export default defineConfig({
               patterns: [
                 {
                   group: [
-                    "@t3tools/source-control-*/client/*",
+                    "@cinderdeck/source-control-*/client/*",
                     "../client/*",
                     "../../client/*",
                     "../../../client/*",
