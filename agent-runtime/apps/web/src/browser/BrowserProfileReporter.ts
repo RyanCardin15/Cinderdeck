@@ -1,7 +1,7 @@
-import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
-import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
-import { AuthPreviewOperateScope, type EnvironmentId } from "@t3tools/contracts";
-import type { ClientSettings } from "@t3tools/contracts/settings";
+import type { EnvironmentServerConfig } from "@cinderdeck/client-runtime/connection";
+import { runAtomCommand } from "@cinderdeck/client-runtime/state/runtime";
+import { AuthPreviewOperateScope, type EnvironmentId } from "@cinderdeck/contracts";
+import type { ClientSettings } from "@cinderdeck/contracts/settings";
 import { Atom } from "effect/reactivity";
 
 import {

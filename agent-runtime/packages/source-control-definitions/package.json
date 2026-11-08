@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/source-control-definitions",
+  "name": "@cinderdeck/source-control-definitions",
   "private": true,
   "type": "module",
   "exports": {
@@ -12,12 +12,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@t3tools/source-control-azure-devops": "workspace:*",
-    "@t3tools/source-control-bitbucket": "workspace:*",
-    "@t3tools/source-control-core": "workspace:*",
-    "@t3tools/source-control-forgejo": "workspace:*",
-    "@t3tools/source-control-gitcafe": "workspace:*",
-    "@t3tools/source-control-github": "workspace:*",
-    "@t3tools/source-control-gitlab": "workspace:*"
+    "@cinderdeck/source-control-azure-devops": "workspace:*",
+    "@cinderdeck/source-control-bitbucket": "workspace:*",
+    "@cinderdeck/source-control-core": "workspace:*",
+    "@cinderdeck/source-control-forgejo": "workspace:*",
+    "@cinderdeck/source-control-gitcafe": "workspace:*",
+    "@cinderdeck/source-control-github": "workspace:*",
+    "@cinderdeck/source-control-gitlab": "workspace:*"
   }
 }

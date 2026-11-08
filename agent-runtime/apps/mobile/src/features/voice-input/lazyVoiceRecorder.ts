@@ -1,7 +1,7 @@
 import {
   throwIfVoiceTranscriptionAborted,
   type VoiceRecorder,
-} from "@t3tools/client-runtime/voice-input";
+} from "@cinderdeck/client-runtime/voice-input";
 
 type Subscription = { remove(): void };
 

@@ -1,6 +1,6 @@
 // Client-supplied worktrees count only under managed folders or when Git lists them for the project.
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -44,7 +44,7 @@ export class KnownWorkspaces extends Context.Service<
     /** Fails unless `cwd` exists and resolves inside a known workspace. */
     readonly assertContains: (cwd: string) => Effect.Effect<void, UnknownWorkspaceError>;
   }
->()("t3/workspace/KnownWorkspaces") {}
+>()("@cinderdeck/server/workspace/KnownWorkspaces") {}
 
 /** @public */
 export const make = Effect.gen(function* () {

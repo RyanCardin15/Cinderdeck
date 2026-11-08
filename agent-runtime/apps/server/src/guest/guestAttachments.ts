@@ -2,10 +2,10 @@ import {
   GUEST_MESSAGE_MAX_ATTACHMENT_BYTES,
   GUEST_MESSAGE_MAX_ATTACHMENTS,
   isProviderSendTurnSupportedImageMimeType,
-} from "@t3tools/contracts";
-import { markdownDestinationHostPath } from "@t3tools/shared/markdownLinks";
-import { chatMarkdownImageSources } from "@t3tools/shared/markdownPipeline";
-import { isAbsolutePath, isNetworkPath } from "@t3tools/shared/path";
+} from "@cinderdeck/contracts";
+import { markdownDestinationHostPath } from "@cinderdeck/shared/markdownLinks";
+import { chatMarkdownImageSources } from "@cinderdeck/shared/markdownPipeline";
+import { isAbsolutePath, isNetworkPath } from "@cinderdeck/shared/path";
 
 /** A file from a guest's message request, saved by the multipart parser to a temporary path. */
 export interface GuestUpload {

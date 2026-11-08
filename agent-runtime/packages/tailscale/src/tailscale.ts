@@ -1,5 +1,5 @@
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { normalizeHostname } from "@t3tools/shared/hostClassification";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { normalizeHostname } from "@cinderdeck/shared/hostClassification";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";

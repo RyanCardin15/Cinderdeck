@@ -1,13 +1,13 @@
-import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
+import { parseScopedThreadKey } from "@cinderdeck/client-runtime/environment";
 import {
   AuthPreviewOperateScope,
   type DesktopPreviewBridge,
   type DesktopPreviewOpenLinkEvent,
   type EnvironmentId,
   FILL_PREVIEW_VIEWPORT,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
+import { runAtomCommand } from "@cinderdeck/client-runtime/state/runtime";
 import { type ComponentProps, useState } from "react";
 
 import { primaryEnvironmentIdAtom } from "~/state/primaryEnvironment";

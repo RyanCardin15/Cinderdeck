@@ -1,5 +1,5 @@
-import { Discovery } from "@t3tools/client-runtime/relay";
-import type { EnvironmentId } from "@t3tools/contracts";
+import { Discovery } from "@cinderdeck/client-runtime/relay";
+import type { EnvironmentId } from "@cinderdeck/contracts";
 import { useState } from "react";
 
 import { useRelayEnvironmentDiscovery } from "../../state/environments";

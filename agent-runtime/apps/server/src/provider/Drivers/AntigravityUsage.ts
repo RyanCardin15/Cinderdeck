@@ -1,12 +1,12 @@
-import { type AntigravitySettings, UsageReadError } from "@t3tools/contracts";
-import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
-import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
+import { type AntigravitySettings, UsageReadError } from "@cinderdeck/contracts";
+import { expandHomePath } from "@cinderdeck/provider-core/server/pathExpansion";
+import * as ProviderHost from "@cinderdeck/provider-core/server/ProviderHost";
 import type {
   ProviderUsageInstance,
   ProviderUsageReader,
   ProviderUsageScan,
-} from "@t3tools/provider-core/server/usage";
-import * as HostProcess from "@t3tools/shared/HostProcess";
+} from "@cinderdeck/provider-core/server/usage";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
 import * as Context from "effect/Context";
 import * as Digest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
@@ -25,7 +25,7 @@ export class AntigravityUsage extends Context.Service<
       readonly windowStartMs: number;
     }) => Effect.Effect<ReadonlyArray<ProviderUsageScan>, UsageReadError>;
   }
->()("t3/provider/Drivers/AntigravityUsage") {}
+>()("@cinderdeck/server/provider/Drivers/AntigravityUsage") {}
 
 const make = Effect.gen(function* () {
   const digest = yield* Digest.Digest;

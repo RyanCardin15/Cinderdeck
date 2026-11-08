@@ -76,7 +76,7 @@ export default mergeConfig(
       tasks: {
         build: {
           command: "node scripts/cli.ts build",
-          dependsOn: ["@t3tools/web#build"],
+          dependsOn: ["@cinderdeck/web#build"],
           cache: false,
         },
       },

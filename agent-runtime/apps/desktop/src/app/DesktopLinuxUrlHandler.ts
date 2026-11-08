@@ -112,7 +112,7 @@ export class DesktopLinuxUrlHandler extends Context.Service<
   {
     readonly register: Effect.Effect<void>;
   }
->()("@t3tools/desktop/app/DesktopLinuxUrlHandler") {}
+>()("@cinderdeck/desktop/app/DesktopLinuxUrlHandler") {}
 
 /** @public */
 export const make = Effect.gen(function* () {

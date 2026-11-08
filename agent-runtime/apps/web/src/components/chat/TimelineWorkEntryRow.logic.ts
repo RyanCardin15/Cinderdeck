@@ -3,8 +3,8 @@ import type { Root, RootContent } from "mdast";
 import {
   resolveWorkEntryToolPresentation,
   toolGroupAction,
-} from "@t3tools/client-runtime/work-log/presentation";
-import { isJavaScriptReplTool } from "@t3tools/shared/toolActivity";
+} from "@cinderdeck/client-runtime/work-log/presentation";
+import { isJavaScriptReplTool } from "@cinderdeck/shared/toolActivity";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import { type TimelineWorkEntry, type TimelineRow } from "./timelineRowContext";
 import { type WorkEntryIconName } from "./TimelineToolActivityIcon";

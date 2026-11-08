@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/evals",
+  "name": "@cinderdeck/evals",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,9 +13,9 @@
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",
-    "@t3tools/contracts": "workspace:*",
-    "@t3tools/provider-core": "workspace:*",
-    "@t3tools/shared": "workspace:*",
+    "@cinderdeck/contracts": "workspace:*",
+    "@cinderdeck/provider-core": "workspace:*",
+    "@cinderdeck/shared": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

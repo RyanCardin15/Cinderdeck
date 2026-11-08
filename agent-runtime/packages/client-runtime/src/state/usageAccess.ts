@@ -2,7 +2,7 @@ import {
   AuthDiagnosticsReadScope,
   sessionGrantsScope,
   type SessionGrantInput,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 
 import type { EnvironmentConnectionPhase } from "../connection/presentation.ts";
 

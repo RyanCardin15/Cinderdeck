@@ -401,7 +401,7 @@ describe("server browser drag", () => {
       void settled.then(() => (finished = true));
       // Two macrotask turns: Node reports a rejection nobody observed after the first.
       for (let turn = 0; turn < 2; turn++) {
-        // oxlint-disable-next-line t3code/no-real-time-wait-in-tests -- Node emits unhandledRejection only between macrotasks; no promise can mark that point.
+        // oxlint-disable-next-line cinderdeck/no-real-time-wait-in-tests -- Node emits unhandledRejection only between macrotasks; no promise can mark that point.
         await new Promise((resolve) => setImmediate(resolve));
       }
       expect(finished).toBe(false);

@@ -6,7 +6,7 @@ import { vi } from "vite-plus/test";
 import { describe, expect, it } from "@effect/vitest";
 import * as Digest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
-import { verifyDpopProof } from "@t3tools/shared/dpop";
+import { verifyDpopProof } from "@cinderdeck/shared/dpop";
 
 import { createDpopProof, generateDpopProofKeyPair, loadOrCreateDpopProofKeyPair } from "./dpop";
 import * as Dpop from "./dpop";

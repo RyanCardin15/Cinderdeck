@@ -1,5 +1,5 @@
-import type { ChangeRequestTerminology } from "@t3tools/client-runtime/source-control-clients";
-import { EnvironmentId, ProjectId, type PullRequestListEntry } from "@t3tools/contracts";
+import type { ChangeRequestTerminology } from "@cinderdeck/client-runtime/source-control-clients";
+import { EnvironmentId, ProjectId, type PullRequestListEntry } from "@cinderdeck/contracts";
 import { useAtomRefresh } from "@effect/atom-react";
 import { useLayoutEffect, useMemo, useState } from "react";
 
@@ -44,7 +44,7 @@ export function usePullRequestDiffEntry(navigation: {
   ) => () => void;
 }) {
   const [ready, setReady] = useState(false);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to navigator transition events and frames to defer the diff until the opening transition ends
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- subscribes to navigator transition events and frames to defer the diff until the opening transition ends
   useLayoutEffect(() => {
     if (ready) return;
     let opening = false;

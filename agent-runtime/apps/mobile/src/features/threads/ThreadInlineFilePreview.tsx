@@ -1,5 +1,5 @@
 import { useIsFocused } from "@react-navigation/native";
-import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
+import { formatAttachmentSize } from "@cinderdeck/client-runtime/state/attachments";
 import { useAudioPlayerStatus } from "expo-audio";
 import { useContext, useEffect, useRef, useState } from "react";
 import { AppState, Pressable, View } from "react-native";
@@ -84,7 +84,7 @@ function InlineAudio(props: PreviewProps & { readonly resolveUri: () => Promise<
   };
   useMediaAudioSessionHold(status.playing);
   const fullscreenVideoOpen = useFullscreenVideoOpen();
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- drops the play request on fullscreen video, finish or error, and pauses the player for fullscreen
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- drops the play request on fullscreen video, finish or error, and pauses the player for fullscreen
   useEffect(() => {
     if (fullscreenVideoOpen || status.didJustFinish || status.error) {
       // oxlint-disable-next-line react/set-state-in-effect -- Native completion and fullscreen takeover invalidate the pending playback request.
@@ -92,7 +92,7 @@ function InlineAudio(props: PreviewProps & { readonly resolveUri: () => Promise<
     }
     if (fullscreenVideoOpen) pauseAudioPlayer(player);
   }, [fullscreenVideoOpen, status.didJustFinish, status.error, player, requestPlayback]);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to AppState to pause audio in the background and releases the audio session on cleanup
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- subscribes to AppState to pause audio in the background and releases the audio session on cleanup
   useEffect(() => {
     active.current = true;
     const subscription = AppState.addEventListener("change", (state) => {

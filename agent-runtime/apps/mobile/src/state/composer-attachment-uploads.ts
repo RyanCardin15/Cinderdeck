@@ -1,6 +1,6 @@
-import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { settlePromise, squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
 import { useAtomValue } from "@effect/atom-react";
-import { AuthOrchestrationOperateScope, type EnvironmentId } from "@t3tools/contracts";
+import { AuthOrchestrationOperateScope, type EnvironmentId } from "@cinderdeck/contracts";
 import { Atom, AsyncResult } from "effect/reactivity";
 
 import { prepareTurnAttachments } from "../lib/attachmentUpload";

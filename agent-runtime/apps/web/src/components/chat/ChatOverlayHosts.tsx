@@ -4,7 +4,7 @@ import type {
   MessageId,
   ScopedThreadRef,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { Atom } from "effect/reactivity";
 

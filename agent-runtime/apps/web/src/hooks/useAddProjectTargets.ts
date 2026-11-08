@@ -1,6 +1,6 @@
-import { canCreateProjectInEnvironment } from "@t3tools/client-runtime/operations/projects";
-import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import { AuthSourceControlWriteScope, resolveEnvironmentMachineKind } from "@t3tools/contracts";
+import { canCreateProjectInEnvironment } from "@cinderdeck/client-runtime/operations/projects";
+import type { EnvironmentProject } from "@cinderdeck/client-runtime/state/shell";
+import { AuthSourceControlWriteScope, resolveEnvironmentMachineKind } from "@cinderdeck/contracts";
 
 import type { EnvironmentOption } from "../components/BranchToolbar.logic";
 import { useEnvironments } from "../state/environments";

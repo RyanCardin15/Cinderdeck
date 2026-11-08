@@ -3,8 +3,8 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
-import * as NetService from "@t3tools/shared/Net";
-import * as HostProcess from "@t3tools/shared/HostProcess";
+import * as NetService from "@cinderdeck/shared/Net";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
 import { assert, describe, it } from "@effect/vitest";
 import * as ByteSize from "effect/ByteSize";
 import * as ConfigProvider from "effect/ConfigProvider";
@@ -412,7 +412,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
       }),
     );
 
-    it.effect("expands a home-relative T3 home the way the server does", () =>
+    it.effect("expands an explicitly selected home directory", () =>
       Effect.gen(function* () {
         const path = yield* Path.Path;
         const homeFor = (t3Home: string) =>
@@ -433,158 +433,67 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
             Effect.map((env) => env.T3CODE_HOME),
           );
 
-        assert.equal(yield* homeFor("~/t3-dev"), path.join("/home/dev", "t3-dev"));
+        assert.equal(yield* homeFor("~/cinderdeck-dev"), path.join("/home/dev", "cinderdeck-dev"));
         assert.equal(yield* homeFor("~"), "/home/dev");
-        assert.equal(yield* homeFor("~\\t3-dev"), path.join("/home/dev", "t3-dev"));
-        assert.equal(yield* homeFor("  ~/t3-dev  "), path.join("/home/dev", "t3-dev"));
-        assert.equal(yield* homeFor("~someone/t3-dev"), path.resolve("~someone/t3-dev"));
-        assert.equal(yield* homeFor("relative/t3-dev"), path.resolve("relative/t3-dev"));
-        assert.equal(yield* homeFor("/tmp/t3-dev"), path.resolve("/tmp/t3-dev"));
+        assert.equal(yield* homeFor("~\\cinderdeck-dev"), path.join("/home/dev", "cinderdeck-dev"));
+        assert.equal(
+          yield* homeFor("  ~/cinderdeck-dev  "),
+          path.join("/home/dev", "cinderdeck-dev"),
+        );
+        assert.equal(
+          yield* homeFor("~someone/cinderdeck-dev"),
+          path.resolve("~someone/cinderdeck-dev"),
+        );
+        assert.equal(
+          yield* homeFor("relative/cinderdeck-dev"),
+          path.resolve("relative/cinderdeck-dev"),
+        );
+        assert.equal(yield* homeFor("/tmp/cinderdeck-dev"), path.resolve("/tmp/cinderdeck-dev"));
       }),
     );
 
-    it.effect("rejects a specific non-loopback --host for browser dev modes", () => {
-      const spawnerLayer = Layer.succeed(
-        ChildProcessSpawner.ChildProcessSpawner,
-        ChildProcessSpawner.make(() => Effect.succeed(mockProcess(0))),
-      );
+    it.effect("routes legacy web development through the private desktop shell", () =>
+      Effect.gen(function* () {
+        const spawned: Array<string> = [];
+        const spawnerLayer = Layer.succeed(
+          ChildProcessSpawner.ChildProcessSpawner,
+          ChildProcessSpawner.make((command) => {
+            spawned.push(...(command as unknown as { readonly args: ReadonlyArray<string> }).args);
+            return Effect.succeed(mockProcess(0));
+          }),
+        );
+        yield* runDevRunnerWithInput({ ...devServerInput, mode: "dev", port: undefined }).pipe(
+          Effect.provide(Layer.mergeAll(emptyConfigLayer, netServiceLayer, spawnerLayer)),
+          Effect.provideService(HostProcess.Platform, "linux"),
+        );
+        assert.include(spawned, "--filter=@cinderdeck/desktop");
+        assert.notInclude(spawned, "--filter=@cinderdeck/server");
+      }),
+    );
 
-      return Effect.gen(function* () {
-        const error = yield* runDevRunnerWithInput({
-          ...devServerInput,
-          mode: "dev",
-          port: undefined,
-          host: "192.168.1.10",
-        }).pipe(
+    it.effect.each([
+      { share: true, browser: undefined, built: false },
+      { share: false, browser: true, built: false },
+      { share: false, browser: undefined, built: true },
+    ])("refuses browser/sharing flags before spawning: $share/$browser/$built", (flags) =>
+      Effect.gen(function* () {
+        let spawned = false;
+        const spawnerLayer = Layer.succeed(
+          ChildProcessSpawner.ChildProcessSpawner,
+          ChildProcessSpawner.make(() => {
+            spawned = true;
+            return Effect.succeed(mockProcess(0));
+          }),
+        );
+        const error = yield* runDevRunnerWithInput({ ...devServerInput, ...flags }).pipe(
           Effect.provide(Layer.mergeAll(emptyConfigLayer, netServiceLayer, spawnerLayer)),
           Effect.provideService(HostProcess.Platform, "linux"),
           Effect.flip,
         );
-
-        if (error._tag !== "DevRunnerHostNotProxiableError") {
-          assert.fail(`Unexpected error: ${error._tag}`);
-        }
-        assert.equal(error.mode, "dev");
-        assert.equal(error.host, "192.168.1.10");
-        assert.include(error.message, "0.0.0.0");
-        assert.include(error.message, "--share");
-      });
-    });
-
-    // A shared origin means a remote browser, where unbundled dev's
-    // per-module waterfall pays a tailnet round trip per import level. The
-    // runner defaults bundled dev on for the spawned stack, but only
-    // defaults: an explicit T3CODE_BUNDLED_DEV (even "0") must pass through.
-    describe("--share spawn wiring", () => {
-      const shareSpawned = (input: {
-        readonly ambientBundledDev?: string | undefined;
-        readonly built?: boolean;
-        readonly host?: string;
-      }) =>
-        Effect.gen(function* () {
-          let captured: Record<string, string | undefined> | undefined;
-          let vpArgs: ReadonlyArray<string> = [];
-          const tailscaleCalls: Array<ReadonlyArray<string>> = [];
-          const spawnerLayer = Layer.succeed(
-            ChildProcessSpawner.ChildProcessSpawner,
-            ChildProcessSpawner.make((command) => {
-              const spawned = command as unknown as {
-                readonly command: string;
-                readonly args: ReadonlyArray<string>;
-                readonly options?: { readonly env?: Record<string, string | undefined> };
-              };
-              if (spawned.command === "vp") {
-                captured = spawned.options?.env;
-                vpArgs = spawned.args;
-                return Effect.succeed(mockProcess(0));
-              }
-              tailscaleCalls.push(spawned.args);
-              return Effect.succeed(
-                ChildProcessSpawner.makeHandle({
-                  pid: ChildProcessSpawner.ProcessId(2),
-                  exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(0)),
-                  isRunning: Effect.succeed(false),
-                  kill: () => Effect.void,
-                  unref: Effect.succeed(Effect.void),
-                  stdin: Sink.drain,
-                  stdout: spawned.args.includes("status")
-                    ? Stream.make(
-                        new TextEncoder().encode(
-                          JSON.stringify({ Self: { DNSName: "host.example.ts.net." } }),
-                        ),
-                      )
-                    : Stream.empty,
-                  stderr: Stream.empty,
-                  all: Stream.empty,
-                  getInputFd: () => Sink.drain,
-                  getOutputFd: () => Stream.empty,
-                }),
-              );
-            }),
-          );
-
-          yield* runDevRunnerWithInput({
-            ...devServerInput,
-            mode: "dev",
-            port: undefined,
-            share: true,
-            built: input.built ?? false,
-            host: input.host,
-          }).pipe(
-            Effect.provide(Layer.mergeAll(emptyConfigLayer, netServiceLayer, spawnerLayer)),
-            Effect.provideService(HostProcess.Platform, "linux"),
-            Effect.provideService(
-              HostProcess.Environment,
-              input.ambientBundledDev === undefined
-                ? {}
-                : { T3CODE_BUNDLED_DEV: input.ambientBundledDev },
-            ),
-          );
-
-          return { env: captured, vpArgs, tailscaleCalls };
-        });
-
-      it.effect("keeps an explicit T3CODE_BUNDLED_DEV=0 opt-out", () =>
-        Effect.gen(function* () {
-          const { env } = yield* shareSpawned({ ambientBundledDev: "0" });
-          assert.equal(env?.T3CODE_BUNDLED_DEV, "0");
-        }),
-      );
-
-      it.effect("--built serves the backend on the web port's tailnet URL", () =>
-        Effect.gen(function* () {
-          const { env, vpArgs, tailscaleCalls } = yield* shareSpawned({ built: true });
-          assert.include(vpArgs, "dev:built");
-          assert.equal(env?.T3CODE_BUILT_DEV, "1");
-          assert.equal(env?.T3CODE_BUNDLED_DEV, undefined);
-          assert.equal(env?.VITE_DEV_SERVER_URL, `https://host.example.ts.net:${env?.PORT}/`);
-          const serve = tailscaleCalls.find((args) => args.includes("--bg"));
-          assert.deepEqual(serve?.slice(-2), [
-            `--https=${env?.PORT}`,
-            `http://127.0.0.1:${env?.T3CODE_PORT}`,
-          ]);
-        }),
-      );
-
-      it.effect("--built --host ::1 targets the backend's IPv6 loopback", () =>
-        Effect.gen(function* () {
-          const { env, tailscaleCalls } = yield* shareSpawned({ built: true, host: "::1" });
-          const serve = tailscaleCalls.find((args) => args.includes("--bg"));
-          assert.equal(serve?.at(-1), `http://[::1]:${env?.T3CODE_PORT}`);
-        }),
-      );
-
-      it.effect("without --built keeps Vite behind the tailnet URL", () =>
-        Effect.gen(function* () {
-          const { env, vpArgs, tailscaleCalls } = yield* shareSpawned({});
-          assert.include(vpArgs, "dev");
-          assert.notInclude(vpArgs, "dev:built");
-          assert.equal(env?.T3CODE_BUNDLED_DEV, "1");
-          const serve = tailscaleCalls.find((args) => args.includes("--bg"));
-          assert.equal(serve?.at(-1), `http://localhost:${env?.PORT}`);
-        }),
-      );
-    });
+        assert.equal(error._tag, "DevRunnerConfigurationError");
+        assert.isFalse(spawned);
+      }),
+    );
 
     it.effect.each([
       { mode: "dev", share: false },
@@ -609,7 +518,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           Effect.flip,
         );
 
-        assert.equal(error._tag, "DevRunnerBuiltNeedsShareError");
+        assert.equal(error._tag, "DevRunnerConfigurationError");
       });
     });
 
@@ -640,10 +549,10 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
       });
     });
 
-    describe("t3 home precedence", () => {
+    describe("isolated runtime state precedence", () => {
       const makeWorktree = Effect.acquireRelease(
         Effect.sync(() => {
-          const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-devrunner-"));
+          const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-devrunner-"));
           NodeFS.writeFileSync(
             NodePath.join(root, ".git"),
             "gitdir: /elsewhere/.git/worktrees/x\n",
@@ -726,7 +635,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
         }).pipe(Effect.scoped),
       );
 
-      it.effect("seeds a worktree database from ~/.t3 only when it has none", () =>
+      it.effect("does not seed a worktree from the ambient home database", () =>
         Effect.gen(function* () {
           const path = yield* Path.Path;
           const root = yield* makeWorktree;
@@ -759,8 +668,8 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
             });
 
           assert.deepStrictEqual(yield* spawnedArgs(false), []);
-          const [seedArgs] = yield* spawnedArgs(undefined);
-          assert.includeMembers([...(seedArgs ?? [])], ["--base-dir", path.join(root, ".t3")]);
+          assert.deepStrictEqual(yield* spawnedArgs(undefined), []);
+          assert.deepStrictEqual(yield* spawnedArgs(true), []);
 
           // Either database means the worktree already has data.
           for (const name of ["state.sqlite", "statev2.sqlite"]) {
@@ -774,11 +683,11 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
       );
 
       it.effect.each([
-        { sourceBytes: 500 * 1024 * 1024 - 1, shouldSeed: true },
-        { sourceBytes: 500 * 1024 * 1024, shouldSeed: true },
+        { sourceBytes: 500 * 1024 * 1024 - 1, shouldSeed: false },
+        { sourceBytes: 500 * 1024 * 1024, shouldSeed: false },
         { sourceBytes: 500 * 1024 * 1024 + 1, shouldSeed: false },
       ])(
-        "checks source size before seeding an empty worktree: $sourceBytes bytes",
+        "keeps ambient data untouched regardless of source size: $sourceBytes bytes",
         ({ sourceBytes, shouldSeed }) =>
           Effect.gen(function* () {
             const fs = yield* FileSystem.FileSystem;
@@ -832,22 +741,15 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
             );
             assert.deepStrictEqual(spawned.at(-1), [
               "run",
-              "--filter=t3",
+              "--filter=@cinderdeck/server",
               "dev",
               ...devServerInput.runArgs,
             ]);
-            if (shouldSeed) {
-              assert.deepStrictEqual(warnings, []);
-            } else {
-              assert.lengthOf(warnings, 1);
-              assert.include(warnings[0]!, source);
-              assert.include(warnings[0]!, "skipping automatic database seeding");
-              assert.include(warnings[0]!, "vp run migrate-dev-db");
-            }
+            assert.deepStrictEqual(warnings, []);
           }).pipe(Effect.scoped),
       );
 
-      it.effect("falls back to an ambient T3CODE_HOME outside a worktree", () =>
+      it.effect("uses disposable state instead of ambient T3CODE_HOME outside a worktree", () =>
         Effect.gen(function* () {
           const path = yield* Path.Path;
           const home = yield* spawnedHome({
@@ -855,7 +757,10 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
             cwd: NodeOS.tmpdir(),
             ambientHome: "/home/user/.t3",
           });
-          assert.equal(home, path.resolve("/home/user/.t3"));
+          assert.isDefined(home);
+          assert.notEqual(home, path.resolve("/home/user/.t3"));
+          assert.match(path.basename(home!), /^cinderdeck-dev-/);
+          NodeFS.rmSync(home!, { recursive: true, force: true });
         }),
       );
     });

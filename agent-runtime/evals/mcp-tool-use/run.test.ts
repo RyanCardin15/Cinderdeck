@@ -7,8 +7,8 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { FetchHttpClient } from "effect/http";
 import { assert, expect, it } from "@effect/vitest";
-import { ComposerContextId, EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
+import { ComposerContextId, EnvironmentId, ThreadId } from "@cinderdeck/contracts";
+import { projectComposerContextForProvider } from "@cinderdeck/shared/composerContextReferences";
 
 import {
   answerToolCall,

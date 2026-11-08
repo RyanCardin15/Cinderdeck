@@ -9,11 +9,11 @@ import { useNavigation } from "@react-navigation/native";
 import { useMemo, useState } from "react";
 import { Platform, useWindowDimensions } from "react-native";
 
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import type { EnvironmentThreadShell } from "@cinderdeck/client-runtime/state/shell";
 import {
   pickableProjectGroups,
   resolveScratchProjectScopeKey,
-} from "@t3tools/client-runtime/state/project-grouping";
+} from "@cinderdeck/client-runtime/state/project-grouping";
 
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { useProjects } from "../../state/entities";

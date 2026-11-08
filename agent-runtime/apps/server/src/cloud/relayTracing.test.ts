@@ -1,7 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import type { ManagedPolicyDocument } from "@t3tools/contracts";
-import * as RelayTracing from "@t3tools/shared/relayTracing";
+import type { ManagedPolicyDocument } from "@cinderdeck/contracts";
+import * as RelayTracing from "@cinderdeck/shared/relayTracing";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";

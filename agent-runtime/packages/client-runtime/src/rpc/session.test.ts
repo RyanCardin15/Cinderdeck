@@ -7,8 +7,8 @@ import {
   type ServerConfigStreamEvent as ServerConfigStreamEventType,
   WS_METHODS,
   UsageLimitSourceId,
-} from "@t3tools/contracts";
-import { splitSocketFrame } from "@t3tools/shared/socketFrameParts";
+} from "@cinderdeck/contracts";
+import { splitSocketFrame } from "@cinderdeck/shared/socketFrameParts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";

@@ -1,18 +1,18 @@
-import { buildProjectGroups } from "@t3tools/client-runtime/state/project-grouping";
+import { buildProjectGroups } from "@cinderdeck/client-runtime/state/project-grouping";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/shell";
+} from "@cinderdeck/client-runtime/state/shell";
 import {
   getThreadSortTimestamp,
   toSortableTimestamp,
-} from "@t3tools/client-runtime/state/thread-sort";
+} from "@cinderdeck/client-runtime/state/thread-sort";
 import type {
   EnvironmentId,
   ScopedProjectRef,
   SidebarProjectGroupingMode,
   SidebarProjectSortOrder,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
 

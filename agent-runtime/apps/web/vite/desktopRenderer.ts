@@ -1,7 +1,7 @@
 import {
   DESKTOP_RENDERER_ACCESS_HEADER,
   hasDesktopRendererAccess,
-} from "@t3tools/shared/desktopRendererAccess";
+} from "@cinderdeck/shared/desktopRendererAccess";
 import type { Connect, Plugin } from "vite-plus";
 
 export function desktopRendererMiddleware(token: string | undefined): Connect.NextHandleFunction {

@@ -1,4 +1,4 @@
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { scopeThreadRef } from "@cinderdeck/client-runtime/environment";
 import {
   DEFAULT_CLIENT_SETTINGS,
   EnvironmentId,
@@ -6,7 +6,7 @@ import {
   type ClientSettings,
   type DesktopPreviewBridge,
   type PreviewSessionSnapshot,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { act, fakeTimers, render } from "../../test/render";

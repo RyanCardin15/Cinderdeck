@@ -18,7 +18,7 @@ import {
   type OrchestrationV2ProviderThread,
   OrchestrationV2UserInputQuestion,
   type OrchestrationV2ProviderTurn,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -35,16 +35,16 @@ import * as Stream from "effect/Stream";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
-import * as TestProviderHost from "@t3tools/provider-testing/TestProviderHost";
-import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
-import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
-import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
-import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
-import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
-import { handoffBudget } from "@t3tools/provider-core/server/handoffBudget";
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { AgentScope } from "@t3tools/shared/AgentScope";
-import { toolOutputImages, compactDynamicToolOutput } from "@t3tools/shared/toolOutput";
+import * as TestProviderHost from "@cinderdeck/provider-testing/TestProviderHost";
+import * as ProviderContinuationRequests from "@cinderdeck/provider-core/server/ProviderContinuationRequests";
+import * as McpProviderSessions from "@cinderdeck/provider-core/server/McpProviderSessions";
+import * as IdAllocator from "@cinderdeck/provider-core/server/IdAllocator";
+import * as ProviderAdapter from "@cinderdeck/provider-core/server/ProviderAdapter";
+import * as ProviderHost from "@cinderdeck/provider-core/server/ProviderHost";
+import { handoffBudget } from "@cinderdeck/provider-core/server/handoffBudget";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { AgentScope } from "@cinderdeck/shared/AgentScope";
+import { toolOutputImages, compactDynamicToolOutput } from "@cinderdeck/shared/toolOutput";
 import {
   makePiAdapterV2,
   PiAdapterV2Driver,

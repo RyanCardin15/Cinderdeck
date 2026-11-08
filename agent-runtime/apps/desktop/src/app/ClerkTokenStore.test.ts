@@ -9,7 +9,7 @@ vi.mock("node:fs", { spy: true });
 
 import { openClerkTokenStorage, type ClerkTokenStorage } from "./ClerkTokenStore.ts";
 
-// oxlint-disable-next-line t3code/no-global-process-runtime -- Unix mode bits are the assertion; Windows reports them through ACLs.
+// oxlint-disable-next-line cinderdeck/no-global-process-runtime -- Unix mode bits are the assertion; Windows reports them through ACLs.
 const describePosix = describe.skipIf(process.platform === "win32");
 
 const modeOf = (path: string): number => NodeFS.statSync(path).mode & 0o777;

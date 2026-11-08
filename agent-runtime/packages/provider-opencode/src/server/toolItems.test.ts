@@ -3,7 +3,7 @@ import {
   MAX_TOOL_OUTPUT_IMAGES,
   MAX_TOOL_OUTPUT_IMAGE_BASE64_LENGTH,
   toolOutputImages,
-} from "@t3tools/shared/toolOutput";
+} from "@cinderdeck/shared/toolOutput";
 
 import { openCodeToolOutput } from "./toolItems.ts";
 

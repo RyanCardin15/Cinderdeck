@@ -1,9 +1,9 @@
 import {
   type AddProjectRemoteSource,
   type NewProjectPublishTarget,
-} from "@t3tools/client-runtime/operations/projects";
-import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
-import type { SourceControlProviderKind } from "@t3tools/contracts";
+} from "@cinderdeck/client-runtime/operations/projects";
+import { sourceControlClients } from "@cinderdeck/client-runtime/source-control-clients";
+import type { SourceControlProviderKind } from "@cinderdeck/contracts";
 import { FolderGit2Icon, LinkIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 

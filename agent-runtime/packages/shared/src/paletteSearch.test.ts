@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import { LEGACY_WORKTREE_BRANCH_PREFIX, WORKTREE_BRANCH_PREFIX } from "./git.ts";
+
 import {
   findSearchTokenRanges,
   foldSearchQuery,
@@ -40,6 +42,43 @@ describe("scoreThreadSearch", () => {
         thread("Share auth across worktrees"),
       ]),
     ).toEqual(["Share auth across worktrees", "Authentication cleanup", "Fix oauth redirect"]);
+    expect(
+      rankTitles("share auth", [
+        thread("Share authentication cleanup", {
+          activityAt: NOW,
+          opens: { openedAt: NOW, score: 12, picks: [] },
+        }),
+        thread("Auth across worktrees to share", { activityAt: NOW - 90 * DAY }),
+      ]),
+    ).toEqual(["Auth across worktrees to share", "Share authentication cleanup"]);
+    expect(
+      rankTitles("ui", [
+        thread("Parse ui tokens", { activityAt: NOW - 200 * DAY }),
+        thread("Polish UIs", { activityAt: NOW, opens: { openedAt: NOW, score: 12, picks: [] } }),
+      ]),
+    ).toEqual(["Polish UIs", "Parse ui tokens"]);
+    expect(
+      rankTitles("fix in sidebar", [
+        thread("Fix sidebar", { activityAt: NOW - 200 * DAY }),
+        thread("Fix crash in sidebar", {
+          activityAt: NOW,
+          opens: { openedAt: NOW, score: 12, picks: [] },
+        }),
+        thread("Fix sidebar input focus", {
+          activityAt: NOW,
+          opens: { openedAt: NOW, score: 6, picks: [] },
+        }),
+      ]),
+    ).toEqual(["Fix crash in sidebar", "Fix sidebar input focus", "Fix sidebar"]);
+    expect(
+      rankTitles("and", [
+        thread("Fix auth and sync", { activityAt: NOW - 200 * DAY }),
+        thread("Android build", {
+          activityAt: NOW,
+          opens: { openedAt: NOW, score: 12, picks: [] },
+        }),
+      ]),
+    ).toEqual(["Android build", "Fix auth and sync"]);
   });
 
   it("treats camelCase, kebab, path, and digit boundaries as word starts", () => {
@@ -170,30 +209,36 @@ describe("scoreThreadSearch", () => {
   it("ranks a title holding the words above the app's own branch prefix and project name", () => {
     const busy = { activityAt: NOW, opens: { openedAt: NOW, score: 6, picks: [] } };
     expect(
-      rankTitles("t3 connect", [
+      rankTitles(`${WORKTREE_BRANCH_PREFIX} connect`, [
         thread("Diagnose Connect provisioning failures", {
           ...busy,
           branch: "t3/diagnose-connect",
-          projectTitle: "t3code",
+          projectTitle: "r2tools",
         }),
-        thread("T3 Connect Tunnel Lifecycle Review", { projectTitle: "t3code" }),
+        thread(`${WORKTREE_BRANCH_PREFIX.toUpperCase()} Connect Tunnel Lifecycle Review`, {
+          projectTitle: "r2tools",
+        }),
       ])[0],
-    ).toBe("T3 Connect Tunnel Lifecycle Review");
+    ).toBe(`${WORKTREE_BRANCH_PREFIX.toUpperCase()} Connect Tunnel Lifecycle Review`);
     expect(
-      rankTitles("t3code", [
-        thread("Fix sidebar lag", { ...busy, projectTitle: "t3code", branch: "t3code/sidebar" }),
-        thread("T3 Code vs Gemini Token Volume", { projectTitle: "slophouse" }),
+      rankTitles("r2tools", [
+        thread("Fix sidebar lag", {
+          ...busy,
+          projectTitle: "r2tools",
+          branch: `${LEGACY_WORKTREE_BRANCH_PREFIX}/sidebar`,
+        }),
+        thread("R2 Tools vs Gemini Token Volume", { projectTitle: "slophouse" }),
       ])[0],
-    ).toBe("T3 Code vs Gemini Token Volume");
+    ).toBe("R2 Tools vs Gemini Token Volume");
   });
 
   it("matches pull request numbers, branches, and projects with every token somewhere", () => {
     const subject = thread("Trim model lists", {
       branch: "t3/trim-mcp-models",
-      projectTitle: "t3code",
+      projectTitle: "r2tools",
       pullRequests: [{ number: 22889, title: "Smaller MCP payloads" }],
     });
-    for (const query of ["#22889", "22889", "trim mcp", "payloads t3code", "models trim"]) {
+    for (const query of ["#22889", "22889", "trim mcp", "payloads r2tools", "models trim"]) {
       expect(scoreThreadSearch(foldSearchQuery(query), subject, NOW), query).not.toBeNull();
     }
     expect(scoreThreadSearch("trim lakebed", subject, NOW)).toBeNull();
@@ -210,8 +255,8 @@ describe("scoreThreadSearch", () => {
       [],
     );
     // Words with digits still forgive one.
-    expect(rankTitles("t3coed", [thread("t3code perf audit"), thread("Other")])).toEqual([
-      "t3code perf audit",
+    expect(rankTitles("r2toosl", [thread("r2tools perf audit"), thread("Other")])).toEqual([
+      "r2tools perf audit",
     ]);
     expect(rankTitles("oath2", [thread("Fix oauth2 redirect")])).toEqual(["Fix oauth2 redirect"]);
     // A typo beats a mid-word accident: "ilde" is "idle", not the middle of "Builder".
@@ -323,7 +368,7 @@ describe("scoreThreadSearch beyond Latin text and titles", () => {
     // Short words before a mere prefix are a coincidence.
     expect(rankTitles("inth", [thread("Show skill names in thread overview")])).toEqual([]);
     expect(rankTitles("tos", [thread("Move Client State to Server")])).toEqual([]);
-    expect(rankTitles("t3co", [thread("T3 Code vs Gemini")])).toEqual(["T3 Code vs Gemini"]);
+    expect(rankTitles("r2to", [thread("R2 Tools vs Gemini")])).toEqual(["R2 Tools vs Gemini"]);
     expect(rankTitles('"sidebar lag"', [thread("Fix sidebar lag")])).toEqual(["Fix sidebar lag"]);
     // A pasted query with a separate accent mark matches the composed title.
     expect(rankTitles("cafe\u0301", [thread("Café menu")])).toEqual(["Café menu"]);
@@ -412,14 +457,14 @@ describe("scoreThreadSearch with heavy use and loose input", () => {
       pullRequests: [
         {
           number: 22889,
-          references: ["pingdotgg/t3code#22889", "https://github.com/pingdotgg/t3code/pull/22889"],
+          references: ["acme/r2tools#22889", "https://github.com/acme/r2tools/pull/22889"],
         },
       ],
     });
     for (const query of [
-      "t3code#22889",
-      "github.com/pingdotgg/t3code/pull/22889",
-      "https://github.com/pingdotgg/t3code/pull/22889/files",
+      "r2tools#22889",
+      "github.com/acme/r2tools/pull/22889",
+      "https://github.com/acme/r2tools/pull/22889/files",
       "5fe6f59c",
       "beebox",
     ]) {
@@ -427,7 +472,7 @@ describe("scoreThreadSearch with heavy use and loose input", () => {
     }
     expect(scoreThreadSearch("github.com", subject, NOW)).toBeNull();
     // A number is never cut short.
-    for (const query of ["github.com/pingdotgg/t3code/pull/2288", "t3code#2288"]) {
+    for (const query of ["github.com/acme/r2tools/pull/2288", "r2tools#2288"]) {
       expect(scoreThreadSearch(foldSearchQuery(query), subject, NOW), query).toBeNull();
     }
   });

@@ -1,4 +1,4 @@
-import { SourceControlProviderKind } from "@t3tools/contracts";
+import { SourceControlProviderKind } from "@cinderdeck/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import {
   OrchestrationDispatchCommandError,
@@ -6,7 +6,7 @@ import {
   projectCloneProgressSummary,
   type SourceControlCloneProtocol,
   SourceControlRepositoryError,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";

@@ -1,10 +1,10 @@
-import { SourceControlProviderKind } from "@t3tools/contracts";
+import { SourceControlProviderKind } from "@cinderdeck/contracts";
 import type {
   EnvironmentId,
   ProjectId,
   PullRequestAction,
   PullRequestListEntry,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

@@ -7,7 +7,7 @@ import * as Path from "effect/Path";
 import { afterAll, expect } from "vite-plus/test";
 import * as NodeChildProcess from "node:child_process";
 
-import { ManagedPolicyFileError } from "@t3tools/shared/managedPolicyFile";
+import { ManagedPolicyFileError } from "@cinderdeck/shared/managedPolicyFile";
 
 import * as DesktopManagedPolicy from "../app/DesktopManagedPolicy.ts";
 import {

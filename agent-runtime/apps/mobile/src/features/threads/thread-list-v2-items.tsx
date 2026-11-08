@@ -19,16 +19,16 @@ import type { ThreadMoveDestination } from "./threadOrder";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/shell";
-import type { EnvironmentThreadSearchMatch } from "@t3tools/client-runtime/state/thread-search";
+} from "@cinderdeck/client-runtime/state/shell";
+import type { EnvironmentThreadSearchMatch } from "@cinderdeck/client-runtime/state/thread-search";
 import {
   formatWorkingDurationLabel,
   resolveThreadWorkingStartedAt,
-} from "@t3tools/client-runtime/state/models";
-import { AuthOrchestrationOperateScope, type EnvironmentMachineKind } from "@t3tools/contracts";
-import type { SnoozePresetSetting } from "@t3tools/contracts/settings";
-import { canSnooze } from "@t3tools/client-runtime/state/thread-settled";
-import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
+} from "@cinderdeck/client-runtime/state/models";
+import { AuthOrchestrationOperateScope, type EnvironmentMachineKind } from "@cinderdeck/contracts";
+import type { SnoozePresetSetting } from "@cinderdeck/contracts/settings";
+import { canSnooze } from "@cinderdeck/client-runtime/state/thread-settled";
+import { threadChipCopyTarget } from "@cinderdeck/client-runtime/thread-reference";
 import type { MenuAction } from "@react-native-menu/menu";
 import { memo, useCallback, useMemo, useState, type ComponentProps } from "react";
 import { Platform, Pressable, useWindowDimensions, View } from "react-native";

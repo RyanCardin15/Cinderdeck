@@ -1,6 +1,6 @@
-import { resolveChangeRequestLinkTarget } from "@t3tools/client-runtime/change-request-links";
-import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import { resolveChangeRequestLinkTarget } from "@cinderdeck/client-runtime/change-request-links";
+import type { EnvironmentProject } from "@cinderdeck/client-runtime/state/shell";
+import { EnvironmentId, ProjectId } from "@cinderdeck/contracts";
 
 /** The PullRequest route for a change request link from a project, or null for the browser. */
 export function nativePullRequestDestination(

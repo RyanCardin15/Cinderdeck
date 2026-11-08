@@ -1,5 +1,5 @@
 import { assert, it } from "@effect/vitest";
-import { RunId, ThreadId } from "@t3tools/contracts";
+import { RunId, ThreadId } from "@cinderdeck/contracts";
 import * as Effect from "effect/Effect";
 
 import { readLatestMessages, type ThreadTools, titleFromMessage, waitForRun } from "./thread.ts";

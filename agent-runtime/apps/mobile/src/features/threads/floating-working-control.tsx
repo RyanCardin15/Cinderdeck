@@ -1,5 +1,5 @@
-import type { SubagentPillSegment } from "@t3tools/client-runtime/state/thread-subagents";
-import { formatDuration } from "@t3tools/shared/orchestrationTiming";
+import type { SubagentPillSegment } from "@cinderdeck/client-runtime/state/thread-subagents";
+import { formatDuration } from "@cinderdeck/shared/orchestrationTiming";
 import { GlassContainer, GlassView } from "expo-glass-effect";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
@@ -108,7 +108,7 @@ export function FloatingWorkingControl(props: {
   );
   const separationProgress = useSharedValue(props.showScrollToEnd ? 1 : 0);
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- animates the Reanimated separation value when scroll-to-end visibility changes
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- animates the Reanimated separation value when scroll-to-end visibility changes
   useEffect(() => {
     separationProgress.set(withTiming(props.showScrollToEnd ? 1 : 0, CONTROL_TIMING));
   }, [props.showScrollToEnd, separationProgress]);
@@ -138,7 +138,7 @@ export function FloatingWorkingControl(props: {
   };
   const hasStatus = props.status !== null;
   const hasCapsule = hasStatus || hasQueue || hasAgents || hasPreview;
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears the Reanimated capsule width value and measured width when the status goes away
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- clears the Reanimated capsule width value and measured width when the status goes away
   useEffect(() => {
     if (!hasStatus) {
       measuredWidthRef.current = null;

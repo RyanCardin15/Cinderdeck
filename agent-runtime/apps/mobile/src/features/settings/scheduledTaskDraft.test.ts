@@ -5,7 +5,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   ProjectId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   scheduledTaskDefaultModel,
   DEFAULT_SCHEDULE,

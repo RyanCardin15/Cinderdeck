@@ -86,6 +86,16 @@ TOKEN_EXCEPTIONS = {
 
 # Existing compatibility lines remain exact so adjacent branding still fails.
 COMPATIBILITY_LINES = {
+    ("agent-runtime/vite.config.ts", '"@t3tools/contracts": NodeURL.fileURLToPath(new URL("./packages/contracts/src/index.ts", import.meta.url)),'): "imports in immutable provider fixtures",
+    ("agent-runtime/vite.config.ts", '"@t3tools/shared/terminalOutput": NodeURL.fileURLToPath(new URL("./packages/shared/src/terminalOutput.ts", import.meta.url)),'): "imports in immutable provider fixtures",
+    ("agent-runtime/vite.config.ts", '"@t3tools/shared/orchestrationV2PendingBackgroundWork": NodeURL.fileURLToPath(new URL("./packages/shared/src/orchestrationV2PendingBackgroundWork.ts", import.meta.url)),'): "imports in immutable provider fixtures",
+    ("agent-runtime/vite.config.ts", '"@t3tools/provider-core/server/IdAllocator": NodeURL.fileURLToPath(new URL("./packages/provider-core/src/server/IdAllocator.ts", import.meta.url)),'): "imports in immutable provider fixtures",
+    ("agent-runtime/apps/server/tsconfig.json", '"@t3tools/contracts": ["../../packages/contracts/src/index.ts"],'): "imports in immutable provider fixtures",
+    ("agent-runtime/apps/server/tsconfig.json", '"@t3tools/shared/terminalOutput": ["../../packages/shared/src/terminalOutput.ts"],'): "imports in immutable provider fixtures",
+    ("agent-runtime/apps/server/tsconfig.json", '"@t3tools/shared/orchestrationV2PendingBackgroundWork": ["../../packages/shared/src/orchestrationV2PendingBackgroundWork.ts"],'): "imports in immutable provider fixtures",
+    ("agent-runtime/apps/server/tsconfig.json", '"@t3tools/provider-core/server/IdAllocator": ["../../packages/provider-core/src/server/IdAllocator.ts"]'): "imports in immutable provider fixtures",
+    ("agent-runtime/packages/shared/src/git.ts", 'export const LEGACY_WORKTREE_BRANCH_PREFIX = "t3code";'): "persisted worktree branch prefix",
+    ("agent-runtime/packages/shared/src/git.ts", 'export const WORKTREE_BRANCH_PREFIX = "t3";'): "persisted worktree branch prefix",
     ("Cinderdeck/Services/UnifiedApp/CinderdeckRuntimeController.swift", 'let runtimeDirectory = StackControlPaths.directory.appendingPathComponent("T3Runtime", isDirectory: true)'): "persisted native runtime store path",
     ("agent-runtime/patches/react-native-screens@4.28.0.patch", "+    // The t3 patch adds these iOS glass-chrome props to the native spec; they have"): "original third-party patch attribution",
     ('agent-runtime/apps/server/src/cli/launcher.ts', '* only ever sees its own path. Walk PATH for a `t3.cmd` whose target is the'): 'historical archive and launcher ABI',

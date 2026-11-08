@@ -4,7 +4,7 @@ import type {
   UsageModelFilter,
   UsageSummary,
   UsageSummaryInput,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Schema from "effect/Schema";
 import type { AtomRegistry } from "effect/reactivity";
 

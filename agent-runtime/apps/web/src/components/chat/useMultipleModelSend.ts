@@ -3,11 +3,11 @@ import {
   type ModelSelection,
   type RuntimeMode,
   type ThreadId,
-} from "@t3tools/contracts";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { deriveThreadTitleSeed } from "@t3tools/client-runtime/operations";
-import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
+} from "@cinderdeck/contracts";
+import { scopeThreadRef } from "@cinderdeck/client-runtime/environment";
+import { deriveThreadTitleSeed } from "@cinderdeck/client-runtime/operations";
+import { settlePromise, squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
+import type { EnvironmentProject } from "@cinderdeck/client-runtime/state/shell";
 import { useNavigate } from "@tanstack/react-router";
 import { newMessageId } from "~/lib/utils";
 import { collapseExpandedComposerCursor } from "../../composer-logic";

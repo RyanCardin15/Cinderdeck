@@ -2,7 +2,7 @@ import type {
   ModelSelection,
   OrchestrationV2ThreadShell,
   ServerProvider,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 
 import { BUNDLED_MODEL_MANIFEST } from "../provider/ModelManifest.ts";
 

@@ -1,13 +1,13 @@
 import type {
   DesktopSshEnvironmentBootstrap,
   DesktopSshEnvironmentTarget,
-} from "@t3tools/contracts";
-import { waitForHttpReady as waitForHttpReadyShared } from "@t3tools/shared/httpReadiness";
-import { cliReleaseDownloadBaseUrl } from "@t3tools/shared/cliRelease";
-import * as KeyedLock from "@t3tools/shared/KeyedLock";
-import * as NetService from "@t3tools/shared/Net";
-import { extractJsonObject, fromLenientJson } from "@t3tools/shared/schemaJson";
-import { satisfiesSemverRange } from "@t3tools/shared/semver";
+} from "@cinderdeck/contracts";
+import { waitForHttpReady as waitForHttpReadyShared } from "@cinderdeck/shared/httpReadiness";
+import { cliReleaseDownloadBaseUrl } from "@cinderdeck/shared/cliRelease";
+import * as KeyedLock from "@cinderdeck/shared/KeyedLock";
+import * as NetService from "@cinderdeck/shared/Net";
+import { extractJsonObject, fromLenientJson } from "@cinderdeck/shared/schemaJson";
+import { satisfiesSemverRange } from "@cinderdeck/shared/semver";
 import * as Context from "effect/Context";
 import * as Digest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
@@ -1783,7 +1783,7 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
 export class SshEnvironmentManager extends Context.Service<
   SshEnvironmentManager,
   SshEnvironmentManagerShape
->()("@t3tools/ssh/tunnel/SshEnvironmentManager") {
+>()("@cinderdeck/ssh/tunnel/SshEnvironmentManager") {
   static readonly layer = (options: SshEnvironmentManagerOptions = {}) =>
     Layer.effect(SshEnvironmentManager, makeSshEnvironmentManager(options));
 }

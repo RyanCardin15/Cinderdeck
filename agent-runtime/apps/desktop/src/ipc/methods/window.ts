@@ -13,11 +13,11 @@ import {
   SystemSettingsPaneSchema,
   type DesktopEnvironmentBootstrap,
   type PickedThemeFile,
-} from "@t3tools/contracts";
-import { PROJECT_FAVICON_EXTENSIONS } from "@t3tools/shared/projectFavicon";
-import { resolveEditorCommand } from "@t3tools/shared/editor";
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { isRelayTracingEnabled } from "@t3tools/shared/otelEnvironment";
+} from "@cinderdeck/contracts";
+import { PROJECT_FAVICON_EXTENSIONS } from "@cinderdeck/shared/projectFavicon";
+import { resolveEditorCommand } from "@cinderdeck/shared/editor";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { isRelayTracingEnabled } from "@cinderdeck/shared/otelEnvironment";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Effect from "effect/Effect";

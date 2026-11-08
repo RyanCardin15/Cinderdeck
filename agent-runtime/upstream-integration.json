@@ -36,6 +36,58 @@
     {
       "commit": "01a8db0aad27fa18010c552340e1b36168707ae8",
       "subject": "fix(server): refresh divergence after a merged branch ref changes (#31342)"
+    },
+    {
+      "commit": "e4ff8433ee8d17964cec4bc2cee2758a612d1288",
+      "subject": "fix(shared): command output keeps text after an unterminated OSC (#30479)"
+    },
+    {
+      "commit": "cd890ba3469956fac81f1989641f409c66b03d1b",
+      "subject": "fix(shared): command output no longer prints the final byte of escape sequences with intermediates (#30724)"
+    },
+    {
+      "commit": "a7f6c68fe958e7f3afab76c2bfeac647ea44e2af",
+      "subject": "fix(shared): underline styles and colours no longer scramble command output colours (#21542)"
+    },
+    {
+      "commit": "260d84387fbfbf97c0b7391e3f95e9d10429cdd2",
+      "subject": "fix(shared): recognize numeric bare-repository config (#27500)"
+    },
+    {
+      "commit": "2b0f08b5246f59fa57610dcc63e05266d55717ab",
+      "subject": "fix(shared): ignore unfinished quoted Git config continuations (#30743)"
+    },
+    {
+      "commit": "00d1a828aba57ee9ce0195277f2fe950658130c7",
+      "subject": "fix(client-runtime): sanitized error stacks keep line and column for URLs with a query (#30726)"
+    },
+    {
+      "commit": "4821696509d268eac35a8c3fa04cb4211d68a504",
+      "subject": "fix(client-runtime): pull request bodies with CRLF line endings keep their code blocks whole (#30352)"
+    },
+    {
+      "commit": "09a54f01bc0ae83865347a965ced50f8c8ec2953",
+      "subject": "fix(search): keep whole-word title matches above busy prefixes (#32242)"
+    },
+    {
+      "commit": "97d04c3bb791f47d9893da5a33c51e94a9011345",
+      "subject": "fix(forgejo): tea's `pull` and `m` aliases count as shell merges (#32401)"
+    },
+    {
+      "commit": "d1667e833c81b62ed76dabf783e7c501888f987e",
+      "subject": "fix(server): an invalid regex in project search still finds its text when Match case is off (#30569)"
+    },
+    {
+      "commit": "2d0a9dfd5137b3c0e90bec7329ee018b27643b46",
+      "subject": "fix(provider-acp): preserve UTF-8 across interleaved terminal streams (#32391)"
+    },
+    {
+      "commit": "10581521d27d14d8f0a15dfc24525efbd52ae057",
+      "subject": "fix(shared): preserve IPv6 hosts when switching clone protocols (#30798)"
+    },
+    {
+      "commit": "a601caaffd45ba7527bf2e8dcb1e8b966c70fa92",
+      "subject": "fix(gitlab): `glab mr accept` counts as a shell merge (#32400)"
     }
   ],
   "deferred": [
@@ -204,5 +256,13 @@
       "reason": "Companion native/editor dependency chain requires separate validation; no browser or device launch authorized."
     }
   ],
-  "compatibility": "Preserve legal notices, provider fixtures, persisted keys, native module registrations and wire identifiers. No repository-root upstream merge. reviewedThrough is an examined target, not complete parity."
+  "compatibility": "Preserve legal notices, provider fixtures, persisted keys, native module registrations and wire identifiers. No repository-root upstream merge. reviewedThrough is an examined target, not complete parity.",
+  "latestSelectedPortBatch": {
+    "upstreamBase": "337c5858c33bc7f8f6dfd391a2c279fa0f7e4d17",
+    "upstreamTarget": "dff0b1159bf7aa3ad5e5598d6e1bb7d6243f51a2",
+    "newUpstreamCommits": 294,
+    "portedCommits": 13,
+    "remainingCommits": 281,
+    "reviewScope": "Commit and path inventory triaged; source diffs reviewed for selected ports only. reviewedThrough remains the prior full triage boundary. Remaining changes require dependency, provider, native/mobile or owned-product adaptation review."
+  }
 }

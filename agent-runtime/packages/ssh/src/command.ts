@@ -1,5 +1,5 @@
-import type { DesktopSshEnvironmentTarget } from "@t3tools/contracts";
-import * as HostProcess from "@t3tools/shared/HostProcess";
+import type { DesktopSshEnvironmentTarget } from "@cinderdeck/contracts";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
 import * as Digest from "effect/crypto/Digest";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";

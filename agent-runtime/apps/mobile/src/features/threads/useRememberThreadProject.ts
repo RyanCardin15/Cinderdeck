@@ -1,7 +1,7 @@
 import { useAtomSet } from "@effect/atom-react";
 import { useFocusEffect } from "@react-navigation/native";
-import { isScratchProject } from "@t3tools/client-runtime/state/projects";
-import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
+import { isScratchProject } from "@cinderdeck/client-runtime/state/projects";
+import type { EnvironmentProject } from "@cinderdeck/client-runtime/state/shell";
 import { AsyncResult } from "effect/reactivity";
 import { useCallback } from "react";
 

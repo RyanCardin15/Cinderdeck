@@ -112,7 +112,7 @@ export class ProjectFaviconResolver extends Context.Service<
     /** Forgets cached lookups for a workspace whose files changed, such as a finished clone. */
     readonly invalidate: (cwd: string) => Effect.Effect<void>;
   }
->()("t3/project/ProjectFaviconResolver") {}
+>()("@cinderdeck/server/project/ProjectFaviconResolver") {}
 
 function extractIconHref(source: string): string | null {
   const htmlMatch = source.match(LINK_ICON_HTML_RE);

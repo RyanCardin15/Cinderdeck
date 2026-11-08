@@ -1,5 +1,5 @@
-import { SourceControlProviderKind } from "@t3tools/contracts";
-import { ProjectId, type PullRequestSummary, type VcsStatusResult } from "@t3tools/contracts";
+import { SourceControlProviderKind } from "@cinderdeck/contracts";
+import { ProjectId, type PullRequestSummary, type VcsStatusResult } from "@cinderdeck/contracts";
 import { describe, expect, it } from "@effect/vitest";
 
 import {

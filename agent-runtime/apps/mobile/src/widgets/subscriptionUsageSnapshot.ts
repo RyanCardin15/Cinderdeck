@@ -3,7 +3,7 @@ import {
   collectLimitPools,
   type LimitAccount,
   type LimitPresentations,
-} from "@t3tools/shared/usageLimits";
+} from "@cinderdeck/shared/usageLimits";
 
 import type { WidgetTheme } from "./widgetTheme";
 

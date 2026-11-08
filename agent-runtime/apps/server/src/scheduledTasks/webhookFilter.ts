@@ -1,4 +1,4 @@
-import type { ScheduledTaskWebhookFilter } from "@t3tools/contracts";
+import type { ScheduledTaskWebhookFilter } from "@cinderdeck/contracts";
 
 import { webhookExpressionResolver, type WebhookRequest } from "./webhookTemplate.ts";
 

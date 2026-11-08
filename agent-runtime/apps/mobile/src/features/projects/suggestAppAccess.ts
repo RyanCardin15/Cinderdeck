@@ -2,9 +2,9 @@ import type {
   EnvironmentId,
   SourceControlAppAccess,
   SourceControlAppAccessInput,
-} from "@t3tools/contracts";
-import { appSignInTargetForRemote } from "@t3tools/client-runtime/source-control-clients";
-import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
+} from "@cinderdeck/contracts";
+import { appSignInTargetForRemote } from "@cinderdeck/client-runtime/source-control-clients";
+import type { AtomCommandResult } from "@cinderdeck/client-runtime/state/runtime";
 import { Alert, Linking } from "react-native";
 
 /**

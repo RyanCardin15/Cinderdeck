@@ -4,9 +4,9 @@ import {
   threadSearchSubject,
   type EnvironmentThreadSearchMatch,
   type ShownOrder,
-} from "@t3tools/client-runtime/state/thread-search";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import { foldSearchQuery, rankMessageMatches } from "@t3tools/shared/paletteSearch";
+} from "@cinderdeck/client-runtime/state/thread-search";
+import type { EnvironmentThreadShell } from "@cinderdeck/client-runtime/state/shell";
+import { foldSearchQuery, rankMessageMatches } from "@cinderdeck/shared/paletteSearch";
 import { useMemo, useState } from "react";
 
 const NO_MATCHES: ReadonlyMap<string, EnvironmentThreadSearchMatch> = new Map();

@@ -1,20 +1,20 @@
-import { AuthProvidersManageScope, ProviderDriverKind } from "@t3tools/contracts";
+import { AuthProvidersManageScope, ProviderDriverKind } from "@cinderdeck/contracts";
 import { readPreparedConnection, useEnvironmentScope } from "../../state/session";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
   type AtomCommandResult,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@cinderdeck/client-runtime/state/runtime";
 import type {
   ChatGptHandoffInput,
   ChatGptTransferredProfile,
   EnvironmentId,
   ProviderInstanceId,
   ServerProvider,
-} from "@t3tools/contracts";
-import { codexAuthHandoffUrl } from "@t3tools/shared/codexAuthHandoff";
-import { providerAuthReturnUrl } from "@t3tools/shared/providerAuthReturnUrl";
-import { isLoopbackHost } from "@t3tools/shared/preview";
+} from "@cinderdeck/contracts";
+import { codexAuthHandoffUrl } from "@cinderdeck/shared/codexAuthHandoff";
+import { providerAuthReturnUrl } from "@cinderdeck/shared/providerAuthReturnUrl";
+import { isLoopbackHost } from "@cinderdeck/shared/preview";
 import { CheckIcon, ChevronRightIcon, ExternalLinkIcon } from "lucide-react";
 import {
   Children,
@@ -324,7 +324,7 @@ function ManagedCodexSetup({
   };
   const abortOperation = () => operation.current?.abort();
   // Once the card unmounts, nothing may start a sign-in or open a page on its behalf.
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- aborts the in-flight setup or sign-in AbortController on unmount
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- aborts the in-flight setup or sign-in AbortController on unmount
   useEffect(() => () => operation.current?.abort(), []);
   const [autoStartHandled, setAutoStartHandled] = useState(false);
   const installed = installation?.installedVersion != null;
@@ -346,7 +346,7 @@ function ManagedCodexSetup({
   }
   // The server does not refresh the provider snapshot when a sign-in flow
   // succeeds, and the flow can finish elsewhere (callback, pasted redirect URL).
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- asks the server to refresh the provider snapshot once the sign-in flow succeeds
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- asks the server to refresh the provider snapshot once the sign-in flow succeeds
   useEffect(() => {
     if (awaitingProvider && auth?.phase === "succeeded") {
       void refreshProviders({ environmentId, input: { instanceId } });
@@ -416,7 +416,7 @@ function ManagedCodexSetup({
   const transferFinishedProfile = useEffectEvent((profile: ChatGptTransferredProfile) =>
     transferProfile(profile),
   );
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- imports the finished handoff profile to the server once per attempt when the handoff query completes
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- imports the finished handoff profile to the server once per attempt when the handoff query completes
   useEffect(() => {
     if (!handoff || handoffQuery.data?.phase !== "finished") return;
     const attemptId = handoff.input.attemptId;
@@ -583,13 +583,13 @@ function ManagedCodexSetup({
     onAutoStartConsumed();
     void setup();
   });
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- dispatches the automatic setup server command after the auto-start flag commits
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- dispatches the automatic setup server command after the auto-start flag commits
   useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect -- Starting setup dispatches a server command, which marks itself pending before it awaits.
     if (autoStartHandled) startAutomatically();
   }, [autoStartHandled]);
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- cancels the desktop bridge provider auth callback when the URL changes or the card unmounts
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- cancels the desktop bridge provider auth callback when the URL changes or the card unmounts
   useEffect(() => {
     if (!clientCallback || !url || !window.desktopBridge) return;
     return () => {

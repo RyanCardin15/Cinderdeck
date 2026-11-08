@@ -2,7 +2,7 @@ packages:
   - apps/*
   - evals
   - infra/*
-  - oxlint-plugin-t3code
+  - oxlint-plugin-cinderdeck
   - packages/*
   - scripts
 

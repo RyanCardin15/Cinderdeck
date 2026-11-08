@@ -10,7 +10,7 @@ export function enableCliCompileCache(): void {
     if (process.env.APPIMAGE || NodeSea.isSea()) return;
     const cacheRoot =
       process.env.XDG_CACHE_HOME ||
-      // oxlint-disable-next-line t3code/no-global-process-runtime -- Runs before the CLI's Effect runtime loads.
+      // oxlint-disable-next-line cinderdeck/no-global-process-runtime -- Runs before the CLI's Effect runtime loads.
       (process.platform === "linux" ? NodePath.join(NodeOS.homedir(), ".cache") : NodeOS.tmpdir());
     NodeModule.enableCompileCache(NodePath.join(cacheRoot, "t3code", "compile-cache"));
   } catch {}

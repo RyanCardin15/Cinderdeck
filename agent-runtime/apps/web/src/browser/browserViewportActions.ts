@@ -1,5 +1,5 @@
-import { runAtomCommand, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import type { PreviewViewportSetting, ScopedThreadRef } from "@t3tools/contracts";
+import { runAtomCommand, squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
+import type { PreviewViewportSetting, ScopedThreadRef } from "@cinderdeck/contracts";
 
 import { toastManager } from "~/components/ui/toast";
 import { updatePreviewServerSnapshot } from "~/previewStateStore";

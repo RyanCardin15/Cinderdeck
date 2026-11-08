@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-global-process-runtime -- Packaging must compare the build host with the executable target. */
+/* oxlint-disable cinderdeck/no-global-process-runtime -- Packaging must compare the build host with the executable target. */
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const fs = require("node:fs");

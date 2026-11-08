@@ -1,13 +1,13 @@
 import { useAtomValue } from "@effect/atom-react";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { scopeThreadRef } from "@cinderdeck/client-runtime/environment";
 import {
   resolveWorkflowOpening,
   workflowOpeningHeadline,
   workflowOpeningParentThreadId,
   type RuntimeSubagent,
-} from "@t3tools/client-runtime/state/subagentRuntime";
-import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
-import type { EnvironmentThread } from "@t3tools/client-runtime/state/shell";
+} from "@cinderdeck/client-runtime/state/subagentRuntime";
+import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@cinderdeck/contracts";
+import type { EnvironmentThread } from "@cinderdeck/client-runtime/state/shell";
 import { Atom } from "effect/reactivity";
 import { useState } from "react";
 import { Pressable, View } from "react-native";

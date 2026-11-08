@@ -1,4 +1,4 @@
-import { SecretProviderId } from "@t3tools/contracts";
+import { SecretProviderId } from "@cinderdeck/contracts";
 import * as Result from "effect/Result";
 import { describe, expect, it } from "vite-plus/test";
 

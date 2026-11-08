@@ -1,7 +1,7 @@
-import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
-import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import { EnvironmentId } from "@t3tools/contracts";
+import { scopeThreadRef, scopedThreadKey } from "@cinderdeck/client-runtime/environment";
+import { runAtomCommand } from "@cinderdeck/client-runtime/state/runtime";
+import type { EnvironmentThreadShell } from "@cinderdeck/client-runtime/state/shell";
+import { EnvironmentId } from "@cinderdeck/contracts";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -13,7 +13,7 @@ const state = vi.hoisted(() => ({
   localVisits: {} as Record<string, string>,
 }));
 
-vi.mock("@t3tools/client-runtime/state/runtime", () => ({ runAtomCommand: vi.fn() }));
+vi.mock("@cinderdeck/client-runtime/state/runtime", () => ({ runAtomCommand: vi.fn() }));
 vi.mock("../uiStateStore", () => ({
   useUiStateStore: { getState: () => ({ threadLastVisitedAtById: state.localVisits }) },
 }));

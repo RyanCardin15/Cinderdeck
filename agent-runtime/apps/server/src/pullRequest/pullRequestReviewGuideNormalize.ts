@@ -1,6 +1,6 @@
-import type { PullRequestReviewGuideExcerpt, PullRequestReviewGuideStop } from "@t3tools/contracts";
-import type { ReviewGuideGenerationResult } from "@t3tools/provider-core/server/textGeneration";
-import { unquoteGitPatchPath } from "@t3tools/shared/gitPatchPath";
+import type { PullRequestReviewGuideExcerpt, PullRequestReviewGuideStop } from "@cinderdeck/contracts";
+import type { ReviewGuideGenerationResult } from "@cinderdeck/provider-core/server/textGeneration";
+import { unquoteGitPatchPath } from "@cinderdeck/shared/gitPatchPath";
 
 const MAX_EXCERPT_LINES = 25;
 

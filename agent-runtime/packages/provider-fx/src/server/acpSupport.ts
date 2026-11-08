@@ -4,9 +4,9 @@ import {
   type ProviderOptionDescriptor,
   ProviderDriverKind,
   type RuntimeMode,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import type { FxSettings } from "../settings.ts";
-import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
+import { getModelSelectionStringOptionValue } from "@cinderdeck/shared/model";
 import type * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -14,13 +14,13 @@ import type * as Scope from "effect/Scope";
 import type * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as EffectAcpErrors from "effect-acp/errors";
 
-import * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
-import { collectSessionConfigOptionValues } from "@t3tools/provider-acp/server/runtimeModel";
+import * as AcpSessionRuntime from "@cinderdeck/provider-acp/server/AcpSessionRuntime";
+import { collectSessionConfigOptionValues } from "@cinderdeck/provider-acp/server/runtimeModel";
 import {
   acpPermissionDisposition,
   type AcpPermissionDisposition,
-} from "@t3tools/provider-acp/server/clientPolicy";
-import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+} from "@cinderdeck/provider-acp/server/clientPolicy";
+import type * as ProviderAdapter from "@cinderdeck/provider-core/server/ProviderAdapter";
 
 export const FX_DRIVER_KIND = ProviderDriverKind.make("fx");
 /** T3's slug for "Default": the model `fx status` reports, never an fx model id. */

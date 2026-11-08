@@ -1,7 +1,7 @@
 import {
   commandHighlightLanguage,
   withVisibleControlCharacters,
-} from "@t3tools/client-runtime/work-log/command-label";
+} from "@cinderdeck/client-runtime/work-log/command-label";
 import { Suspense, use } from "react";
 
 import { useRenderedAppearance } from "../../hooks/useTheme";

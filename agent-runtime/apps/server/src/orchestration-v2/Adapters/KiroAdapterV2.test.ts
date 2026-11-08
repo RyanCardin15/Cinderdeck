@@ -15,9 +15,9 @@ import {
   type RuntimeMode,
   type RuntimeRequestId,
   ThreadId,
-} from "@t3tools/contracts";
-import { resolveSelfInvocation } from "@t3tools/shared/nodeRuntime";
-import { htmlRenderFromToolItem } from "@t3tools/shared/toolOutput";
+} from "@cinderdeck/contracts";
+import { resolveSelfInvocation } from "@cinderdeck/shared/nodeRuntime";
+import { htmlRenderFromToolItem } from "@cinderdeck/shared/toolOutput";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -33,15 +33,15 @@ import * as TestClock from "effect/testing/TestClock";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import type * as EffectAcpSchema from "effect-acp/compat";
 
-import * as TestProviderHost from "@t3tools/provider-testing/TestProviderHost";
-import type * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
-import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
-import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
+import * as TestProviderHost from "@cinderdeck/provider-testing/TestProviderHost";
+import type * as AcpSessionRuntime from "@cinderdeck/provider-acp/server/AcpSessionRuntime";
+import * as IdAllocator from "@cinderdeck/provider-core/server/IdAllocator";
+import * as McpProviderSessions from "@cinderdeck/provider-core/server/McpProviderSessions";
 import {
   type ProviderAdapterV2Error,
   type ProviderAdapterV2Event,
   ProviderAdapterV2RuntimePolicy,
-} from "@t3tools/provider-core/server/ProviderAdapter";
+} from "@cinderdeck/provider-core/server/ProviderAdapter";
 import {
   decodeAcpReplayTranscript,
   makeAcpReplayCompletenessAssertion,
@@ -50,16 +50,16 @@ import {
 import {
   makeProviderReplayGate,
   type ProviderReplayGate,
-} from "@t3tools/provider-testing/replayGate";
-import { readProviderReplayTranscript } from "@t3tools/provider-testing/replayTranscript";
-import { KiroSettings } from "@t3tools/provider-kiro/settings";
+} from "@cinderdeck/provider-testing/replayGate";
+import { readProviderReplayTranscript } from "@cinderdeck/provider-testing/replayTranscript";
+import { KiroSettings } from "@cinderdeck/provider-kiro/settings";
 import {
   KIRO_PROVIDER,
   kiroApprovalOptions,
   kiroAutopilotValue,
   kiroPermissionDisposition,
   makeKiroAdapterV2,
-} from "@t3tools/provider-kiro/testing";
+} from "@cinderdeck/provider-kiro/testing";
 
 const testLayer = Layer.mergeAll(
   NodeServices.layer,

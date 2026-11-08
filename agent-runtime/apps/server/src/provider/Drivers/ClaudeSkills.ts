@@ -1,16 +1,16 @@
-import type { ClaudeSettings, ServerProviderSkill } from "@t3tools/contracts";
+import type { ClaudeSettings, ServerProviderSkill } from "@cinderdeck/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { tokenizeCliArgs } from "@t3tools/shared/cliArgs";
-import { fromLenientJson } from "@t3tools/shared/schemaJson";
-import { SKILL_MENTION_PATTERN } from "@t3tools/shared/composerInlineTokens";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { tokenizeCliArgs } from "@cinderdeck/shared/cliArgs";
+import { fromLenientJson } from "@cinderdeck/shared/schemaJson";
+import { SKILL_MENTION_PATTERN } from "@cinderdeck/shared/composerInlineTokens";
 import { parse as parseYamlDocument } from "yaml";
 
-import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
+import { expandHomePath } from "@cinderdeck/provider-core/server/pathExpansion";
 
 type ClaudeSkillScope = "user" | "project";
 

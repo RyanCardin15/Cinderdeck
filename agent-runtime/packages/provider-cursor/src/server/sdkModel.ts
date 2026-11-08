@@ -1,6 +1,6 @@
 import type { ModelSelection as CursorSdkModelSelection, ModelParameterValue } from "@cursor/sdk";
-import type { ModelSelection, ServerProviderModel } from "@t3tools/contracts";
-import { getProviderOptionCurrentValue } from "@t3tools/shared/model";
+import type { ModelSelection, ServerProviderModel } from "@cinderdeck/contracts";
+import { getProviderOptionCurrentValue } from "@cinderdeck/shared/model";
 
 const CURSOR_SDK_PARAMETER_TO_PROVIDER_OPTION: Readonly<Record<string, string>> = {
   context: "contextWindow",

@@ -1,16 +1,16 @@
-import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
+import { formatAttachmentSize } from "@cinderdeck/client-runtime/state/attachments";
 import {
   ARCHIVE_ENTRY_MAX_BYTES,
   ARCHIVE_MAX_BYTES,
   boundedZip,
-} from "@t3tools/client-runtime/zip/bounded-zip";
-import type { EnvironmentId } from "@t3tools/contracts";
-import { filePreviewDelimiter, parseDelimitedPreview } from "@t3tools/shared/delimitedPreview";
+} from "@cinderdeck/client-runtime/zip/bounded-zip";
+import type { EnvironmentId } from "@cinderdeck/contracts";
+import { filePreviewDelimiter, parseDelimitedPreview } from "@cinderdeck/shared/delimitedPreview";
 import {
   decodeFilePreviewText,
   filePreviewKind,
   hostPreviewMimeTypeFromExtension,
-} from "@t3tools/shared/filePreview";
+} from "@cinderdeck/shared/filePreview";
 import { LegendList } from "@legendapp/list/react-native";
 import { fetch } from "expo/fetch";
 import { File } from "expo-file-system";
@@ -178,7 +178,7 @@ function useZipArchive(input: {
   const { uri, isLocal, sizeBytes } = input;
   // The parent mints a new refresh callback on every render; it must not reload the archive.
   const refresh = useEffectEvent(input.refresh);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Load archive bytes and cancel the stream on cleanup.
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- Load archive bytes and cancel the stream on cleanup.
   useEffect(() => {
     if (!uri) return;
     const abort = new AbortController();
@@ -653,9 +653,9 @@ function ZipEntryView(props: {
   const [busy, setBusy] = useState<"save" | "attach" | null>(null);
   const action = useRef<AbortController | null>(null);
   const pendingViewerError = useRef<string | null>(null);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Cancel a pending save or attach when the entry closes.
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- Cancel a pending save or attach when the entry closes.
   useEffect(() => () => action.current?.abort(), []);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Write the selected entry to a cached file and release it on cleanup.
+  // oxlint-disable-next-line cinderdeck/no-unreasoned-state-sync -- Write the selected entry to a cached file and release it on cleanup.
   useEffect(() => {
     if (tooBig) return;
     const controller = new AbortController();

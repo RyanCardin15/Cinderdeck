@@ -7,7 +7,7 @@ import * as NodeURL from "node:url";
 import type {
   OrchestrationV2NativeChildStep,
   OrchestrationV2NativeChildWork,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";

@@ -4,7 +4,7 @@ import {
   ORCHESTRATION_PROTOCOL_VERSION,
   SETTINGS_SECRET_REFERENCES_CAPABILITY,
   type ExecutionEnvironmentDescriptor,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 
 import { ConnectionBlockedError } from "./model.ts";
 

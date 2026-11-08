@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-global-process-runtime -- Runs in the packaged engine before an Effect runtime exists. */
+/* oxlint-disable cinderdeck/no-global-process-runtime -- Runs in the packaged engine before an Effect runtime exists. */
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";

@@ -1,4 +1,4 @@
-import * as HostProcess from "@t3tools/shared/HostProcess";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
 import {
   CLI_RELEASE_BASE_URL_ENV,
   CLI_RELEASE_CHANNELS,
@@ -8,7 +8,7 @@ import {
   releaseAssetUrl,
   updateFeedFileName,
   type CliReleaseChannel,
-} from "@t3tools/shared/cliRelease";
+} from "@cinderdeck/shared/cliRelease";
 import * as Console from "effect/Console";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";

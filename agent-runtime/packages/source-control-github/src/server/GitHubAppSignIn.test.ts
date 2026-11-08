@@ -10,12 +10,12 @@ import { HttpClient, HttpClientResponse } from "effect/http";
 import { ChildProcessSpawner } from "effect/process";
 import * as TestClock from "effect/testing/TestClock";
 
-import { DEFAULT_SERVER_SETTINGS, ServerSettingsError } from "@t3tools/contracts";
-import * as SourceControlHost from "@t3tools/source-control-core/server/SourceControlHost";
-import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
-import { readSourceControlHostSettings } from "@t3tools/source-control-core/shared/definition";
-import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
-import * as TestSourceControlHost from "@t3tools/source-control-testing/TestSourceControlHost";
+import { DEFAULT_SERVER_SETTINGS, ServerSettingsError } from "@cinderdeck/contracts";
+import * as SourceControlHost from "@cinderdeck/source-control-core/server/SourceControlHost";
+import * as SourceControlRateLimit from "@cinderdeck/source-control-core/server/SourceControlRateLimit";
+import { readSourceControlHostSettings } from "@cinderdeck/source-control-core/shared/definition";
+import { applyServerSettingsPatch } from "@cinderdeck/shared/serverSettings";
+import * as TestSourceControlHost from "@cinderdeck/source-control-testing/TestSourceControlHost";
 
 import * as GitHubClient from "../shared/definition.ts";
 import * as GitHubAppAccess from "./GitHubAppAccess.ts";

@@ -1,7 +1,7 @@
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentShellStatus } from "@t3tools/client-runtime/state/shell";
-import type { EnvironmentThreadState } from "@t3tools/client-runtime/state/threads";
-import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import { scopeThreadRef } from "@cinderdeck/client-runtime/environment";
+import type { EnvironmentShellStatus } from "@cinderdeck/client-runtime/state/shell";
+import type { EnvironmentThreadState } from "@cinderdeck/client-runtime/state/threads";
+import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@cinderdeck/contracts";
 import * as Option from "effect/Option";
 import type { DraftId } from "./composerDraftStore";
 

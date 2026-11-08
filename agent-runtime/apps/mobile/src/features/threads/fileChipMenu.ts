@@ -1,9 +1,9 @@
-import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
-import { fileBasename } from "@t3tools/shared/path";
-import type { ThreadId } from "@t3tools/contracts";
+import { formatFilePathForClipboard } from "@cinderdeck/client-runtime/media-actions";
+import { fileBasename } from "@cinderdeck/shared/path";
+import type { ThreadId } from "@cinderdeck/contracts";
 import { resolveMarkdownLinkPresentation } from "../../lib/markdownLinks";
 import type { MarkdownFileContextMenu } from "../../native/SelectableMarkdownText.types";
-import { hostPreviewMimeTypeFromExtension } from "@t3tools/shared/filePreview";
+import { hostPreviewMimeTypeFromExtension } from "@cinderdeck/shared/filePreview";
 
 import {
   isAbsolutePath,

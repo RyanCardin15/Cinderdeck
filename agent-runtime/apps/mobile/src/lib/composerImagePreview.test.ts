@@ -39,7 +39,7 @@ vi.mock("expo-file-system", () => ({
   },
 }));
 
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@cinderdeck/contracts";
 import { AsyncResult, AtomRegistry } from "effect/reactivity";
 
 import type { DraftComposerImageAttachment } from "./composerImages";

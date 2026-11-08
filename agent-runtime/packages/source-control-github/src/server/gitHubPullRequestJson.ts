@@ -1,4 +1,4 @@
-import { trimOptionalString as trimmed } from "@t3tools/source-control-core/server/pullRequestUtils";
+import { trimOptionalString as trimmed } from "@cinderdeck/source-control-core/server/pullRequestUtils";
 import * as Cause from "effect/Cause";
 import * as Exit from "effect/Exit";
 import * as Result from "effect/Result";
@@ -33,10 +33,10 @@ import type {
   PullRequestLabelCandidateList,
   PullRequestState,
   PullRequestThreadComment,
-} from "@t3tools/contracts";
-import { quoteGitPatchPath } from "@t3tools/shared/gitPatchPath";
-import { decodeJsonResult } from "@t3tools/shared/schemaJson";
-import { dedupeChecks } from "@t3tools/source-control-core/server/pullRequestChecks";
+} from "@cinderdeck/contracts";
+import { quoteGitPatchPath } from "@cinderdeck/shared/gitPatchPath";
+import { decodeJsonResult } from "@cinderdeck/shared/schemaJson";
+import { dedupeChecks } from "@cinderdeck/source-control-core/server/pullRequestChecks";
 
 import type * as GitHubSchema from "../../schema/github.graphql.ts";
 import type {

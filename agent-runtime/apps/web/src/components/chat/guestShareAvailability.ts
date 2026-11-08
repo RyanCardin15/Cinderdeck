@@ -1,4 +1,4 @@
-import { type EnvironmentId, managedCapabilityDenial } from "@t3tools/contracts";
+import { type EnvironmentId, managedCapabilityDenial } from "@cinderdeck/contracts";
 import { Atom } from "effect/reactivity";
 
 import { environmentPresentations } from "~/state/presentation";

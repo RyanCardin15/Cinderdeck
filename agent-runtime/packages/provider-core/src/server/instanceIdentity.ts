@@ -1,7 +1,7 @@
-import type { ProviderDriverKind, ServerProvider } from "@t3tools/contracts";
+import type { ProviderDriverKind, ServerProvider } from "@cinderdeck/contracts";
 
-import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
-import type { ServerProviderDraft } from "@t3tools/provider-core/server/snapshotProbe";
+import type { ProviderInstance } from "@cinderdeck/provider-core/server/driver";
+import type { ServerProviderDraft } from "@cinderdeck/provider-core/server/snapshotProbe";
 
 export const withInstanceIdentity =
   (input: {

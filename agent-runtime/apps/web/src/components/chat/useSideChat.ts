@@ -1,11 +1,11 @@
-import type { ScopedThreadRef } from "@t3tools/contracts";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { deriveThreadTitleSeed } from "@t3tools/client-runtime/operations";
+import type { ScopedThreadRef } from "@cinderdeck/contracts";
+import { scopeThreadRef } from "@cinderdeck/client-runtime/environment";
+import { deriveThreadTitleSeed } from "@cinderdeck/client-runtime/operations";
 import {
   type AtomCommandResult,
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@cinderdeck/client-runtime/state/runtime";
 import { useRef } from "react";
 
 import { newMessageId, newThreadId } from "~/lib/utils";

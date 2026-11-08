@@ -5,7 +5,7 @@ import {
   type ProviderOptionDescriptor,
   type ProviderOptionSelection,
   type ServerProviderModel,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   getComposerProviderState,
   getComposerReasoningStep,

@@ -4,7 +4,7 @@ import {
   VoiceTranscriptionError,
   throwIfVoiceTranscriptionAborted,
   type VoiceTranscriber,
-} from "@t3tools/client-runtime/voice-input";
+} from "@cinderdeck/client-runtime/voice-input";
 
 type PreparedGoogleTranscription = { readonly locale: string; readonly mode: number };
 

@@ -1,4 +1,4 @@
-import { DESKTOP_RENDERER_ACCESS_HEADER, hasDesktopRendererAccess } from "@t3tools/shared/desktopRendererAccess";
+import { DESKTOP_RENDERER_ACCESS_HEADER, hasDesktopRendererAccess } from "@cinderdeck/shared/desktopRendererAccess";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -65,7 +65,7 @@ export class ElectronProtocol extends Context.Service<
       input: DesktopProtocolRegistrationInput,
     ) => Effect.Effect<void, ElectronProtocolRegistrationError, Scope.Scope>;
   }
->()("@t3tools/desktop/electron/ElectronProtocol") {}
+>()("@cinderdeck/desktop/electron/ElectronProtocol") {}
 
 function makeDesktopContentSecurityPolicy(input: DesktopProtocolRegistrationInput): string {
   const clerkOrigin = input.clerkFrontendApiHostname

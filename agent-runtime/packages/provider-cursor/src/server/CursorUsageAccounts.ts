@@ -1,8 +1,8 @@
-import type { ProviderInstanceId } from "@t3tools/contracts";
-import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
-import type { ProviderUsageScan } from "@t3tools/provider-core/server/usage";
-import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
-import * as HostProcess from "@t3tools/shared/HostProcess";
+import type { ProviderInstanceId } from "@cinderdeck/contracts";
+import * as ProviderHost from "@cinderdeck/provider-core/server/ProviderHost";
+import type { ProviderUsageScan } from "@cinderdeck/provider-core/server/usage";
+import { writeFileStringAtomically } from "@cinderdeck/shared/atomicWrite";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Digest from "effect/crypto/Digest";
@@ -51,7 +51,7 @@ export class CursorUsageAccounts extends Context.Service<
     }) => Effect.Effect<ReadonlyArray<ProviderUsageScan>>;
     readonly awaitPersisted: Effect.Effect<void>;
   }
->()("@t3tools/provider-cursor/server/CursorUsageAccounts") {}
+>()("@cinderdeck/provider-cursor/server/CursorUsageAccounts") {}
 
 const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;

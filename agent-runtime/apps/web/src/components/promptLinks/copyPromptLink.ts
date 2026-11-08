@@ -1,16 +1,16 @@
-import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import { isAttachmentOnlyBootstrapPrompt } from "@t3tools/shared/composerContextReferences";
+import type { EnvironmentProject } from "@cinderdeck/client-runtime/state/shell";
+import { isAttachmentOnlyBootstrapPrompt } from "@cinderdeck/shared/composerContextReferences";
 import {
   type ModelSelection,
   repositoryGroupingKeyOf,
   type ServerProvider,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import {
   buildNewThreadLink,
   parsePromptLinkRepository,
   PROMPT_LINK_MAX_PROMPT_LENGTH,
   type PromptLinkRepository,
-} from "@t3tools/shared/promptLinks";
+} from "@cinderdeck/shared/promptLinks";
 
 import { type ComposerThreadTarget, useComposerDraftStore } from "~/composerDraftStore";
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";

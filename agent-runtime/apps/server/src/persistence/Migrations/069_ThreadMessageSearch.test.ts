@@ -1,6 +1,6 @@
 import { assert, it } from "@effect/vitest";
-import { ATTACHMENT_ONLY_BOOTSTRAP_PROMPT } from "@t3tools/shared/composerContextReferences";
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import { ATTACHMENT_ONLY_BOOTSTRAP_PROMPT } from "@cinderdeck/shared/composerContextReferences";
+import * as NodeSqliteClient from "@cinderdeck/shared/nodeSqliteClient";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
 

@@ -1,4 +1,4 @@
-import { recognizeRemoteWith } from "@t3tools/source-control-core/shared/definition";
+import { recognizeRemoteWith } from "@cinderdeck/source-control-core/shared/definition";
 import { describe, expect, it } from "vite-plus/test";
 
 import { definition } from "./definition.ts";
@@ -85,6 +85,15 @@ describe("GitLab change request URLs", () => {
         webUrl: "https://gitlab.com/group/sub/project",
       }),
     ).toBe("https://gitlab.com/group/sub/project/-/merge_requests/4");
+  });
+});
+
+describe("GitLab CLI commands", () => {
+  it("recognizes shell merges and closes, including glab's `accept` alias", () => {
+    for (const command of ["glab mr merge 7 --yes", "glab mr accept 7 --yes", "glab mr close 7"]) {
+      expect(definition.changeRequestCloseCommand.test(command), command).toBe(true);
+    }
+    expect(definition.changeRequestCloseCommand.test("glab mr view 7")).toBe(false);
   });
 });
 

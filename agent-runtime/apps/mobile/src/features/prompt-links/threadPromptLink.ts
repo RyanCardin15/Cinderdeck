@@ -1,7 +1,7 @@
 import * as Dialog from "../../components/ui/Dialog";
 import type { NavigationState, PartialState } from "@react-navigation/native";
-import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
-import { parseThreadLinkPrompt, type LinkedPrompt } from "@t3tools/shared/promptLinks";
+import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@cinderdeck/contracts";
+import { parseThreadLinkPrompt, type LinkedPrompt } from "@cinderdeck/shared/promptLinks";
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/reactivity";
 

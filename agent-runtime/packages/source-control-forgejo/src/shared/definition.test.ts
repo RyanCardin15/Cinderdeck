@@ -1,5 +1,5 @@
-import type { ChangeRequestProjectIdentity } from "@t3tools/source-control-core/shared/definition";
-import { recognizeRemoteWith } from "@t3tools/source-control-core/shared/definition";
+import type { ChangeRequestProjectIdentity } from "@cinderdeck/source-control-core/shared/definition";
+import { recognizeRemoteWith } from "@cinderdeck/source-control-core/shared/definition";
 import { describe, expect, it } from "vite-plus/test";
 
 import { definition } from "./definition.ts";
@@ -117,6 +117,21 @@ describe("Forgejo remotes", () => {
       recognizeRemoteWith(definition, "ssh://git@forgejo.example.test:2222/team/repo.git")?.baseUrl,
     ).toBe("https://forgejo.example.test");
     expect(recognizeRemoteWith(definition, "https://git.example.test/team/repo")).toBeNull();
+  });
+});
+
+describe("Forgejo CLI commands", () => {
+  it("recognizes shell merges and closes under every spelling tea accepts", () => {
+    for (const command of [
+      "tea pulls merge 7",
+      "tea pull merge 7",
+      "tea pr m 7",
+      "tea pull close 7",
+      "fj pr close 7",
+    ]) {
+      expect(definition.changeRequestCloseCommand.test(command), command).toBe(true);
+    }
+    expect(definition.changeRequestCloseCommand.test("tea pull checkout 7")).toBe(false);
   });
 });
 

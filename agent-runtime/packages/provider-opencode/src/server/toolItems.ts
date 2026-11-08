@@ -1,11 +1,11 @@
-import type { OrchestrationV2TurnItem } from "@t3tools/contracts";
-import { resolveT3McpToolId } from "@t3tools/shared/t3McpToolPresentation";
-import { formatReadToolLabel, formatSearchToolLabel } from "@t3tools/shared/toolActivity";
+import type { OrchestrationV2TurnItem } from "@cinderdeck/contracts";
+import { resolveT3McpToolId } from "@cinderdeck/shared/t3McpToolPresentation";
+import { formatReadToolLabel, formatSearchToolLabel } from "@cinderdeck/shared/toolActivity";
 import {
   MAX_TOOL_OUTPUT_IMAGES,
   readToolOutputImage,
   type ToolOutputImage,
-} from "@t3tools/shared/toolOutput";
+} from "@cinderdeck/shared/toolOutput";
 
 export function openCodeToolOutput(
   output: string | undefined,

@@ -1,18 +1,18 @@
-import { SourceControlProviderKind, VcsProcessSpawnError } from "@t3tools/contracts";
+import { SourceControlProviderKind, VcsProcessSpawnError } from "@cinderdeck/contracts";
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import { providerAuth } from "@t3tools/source-control-core/server/discovery";
-import type * as SourceControlHost from "@t3tools/source-control-core/server/SourceControlHost";
+import { providerAuth } from "@cinderdeck/source-control-core/server/discovery";
+import type * as SourceControlHost from "@cinderdeck/source-control-core/server/SourceControlHost";
 import {
   fakeDiscovery,
   fakeSourceControlProvider,
-} from "@t3tools/source-control-testing/fakeSourceControlDriver";
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { SpawnExecutableResolution } from "@t3tools/shared/shell";
-import * as TestSourceControlHost from "@t3tools/source-control-testing/TestSourceControlHost";
+} from "@cinderdeck/source-control-testing/fakeSourceControlDriver";
+import * as HostProcess from "@cinderdeck/shared/HostProcess";
+import { SpawnExecutableResolution } from "@cinderdeck/shared/shell";
+import * as TestSourceControlHost from "@cinderdeck/source-control-testing/TestSourceControlHost";
 
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";

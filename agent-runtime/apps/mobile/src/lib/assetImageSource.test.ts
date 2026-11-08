@@ -1,4 +1,4 @@
-import { EnvironmentId, SOURCE_CONTROL_MEDIA_ASSET, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, SOURCE_CONTROL_MEDIA_ASSET, ThreadId } from "@cinderdeck/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { assetImageCacheKey, assetImageSource } from "./assetImageSource";

@@ -34,6 +34,9 @@ for path in manifests:
     if name in packages:
         errors.append(f"Duplicate workspace package: {name}")
     packages[name] = (path, data)
+    # These two unscoped libraries retain their existing consumer import names.
+    if not name.startswith("@cinderdeck/") and name not in {"effect-acp", "effect-codex-app-server"}:
+        errors.append(f"Owned workspace package must use @cinderdeck/: {name} in {path.relative_to(ROOT)}")
 
 for path, data in packages.values():
     for section in ("dependencies", "devDependencies", "optionalDependencies"):
@@ -41,12 +44,12 @@ for path, data in packages.values():
             if version.startswith("workspace:") and name not in packages:
                 errors.append(f"Missing workspace dependency {name} in {path.relative_to(ROOT)}")
 
-for required in ("t3", "@t3tools/web", "@t3tools/desktop", "@t3tools/mobile"):
+for required in ("@cinderdeck/server", "@cinderdeck/web", "@cinderdeck/desktop", "@cinderdeck/mobile"):
     if required not in packages:
         errors.append(f"Required Cinderdeck component missing: {required}")
 
-server = packages["t3"][1]
-if not server.get("private") or "build:exe" in server.get("scripts", {}):
+server = packages.get("@cinderdeck/server", (None, {}))[1]
+if not server.get("private") or "build:exe" in server.get("scripts", {}) or server.get("bin"):
     errors.append("The embedded server must remain private and have no standalone executable release.")
 
 mobile = (RUNTIME / "apps/mobile/app.config.ts").read_text()

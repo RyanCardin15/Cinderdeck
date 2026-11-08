@@ -4,7 +4,7 @@ import type {
   OrchestrationV2NativeChildStep,
   OrchestrationV2NativeChildWork,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@cinderdeck/contracts";
 import { ListTreeIcon } from "lucide-react";
 import { useState } from "react";
 

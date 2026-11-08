@@ -2,8 +2,8 @@ import { useAtomValue } from "@effect/atom-react";
 import {
   makeQueuedRunEditStore,
   makeQueuedRunsAtom,
-} from "@t3tools/client-runtime/queued-run-edit";
-import type { ThreadStructure } from "@t3tools/client-runtime/state/shell";
+} from "@cinderdeck/client-runtime/queued-run-edit";
+import type { ThreadStructure } from "@cinderdeck/client-runtime/state/shell";
 import {
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   type ChatAttachment,
@@ -16,12 +16,12 @@ import {
   type ScopedThreadRef,
   type ThreadContextRecord,
   type ThreadId,
-} from "@t3tools/contracts";
-import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+} from "@cinderdeck/contracts";
+import { scopedThreadKey } from "@cinderdeck/client-runtime/environment";
 import {
   restoreAttachmentOnlyBootstrapPrompt,
   stripAttachmentOnlyBootstrapPrompt,
-} from "@t3tools/shared/composerContextReferences";
+} from "@cinderdeck/shared/composerContextReferences";
 import { Atom } from "effect/reactivity";
 import type { RefObject } from "react";
 import { useAssetUrls } from "../../assets/assetUrls";

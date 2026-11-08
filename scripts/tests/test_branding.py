@@ -132,6 +132,18 @@ class BrandingTests(unittest.TestCase):
         self.assertTrue(branding.violations("agent-runtime/apps/web/src/NewPanel.tsx", '"https://github.com/example/t3code.git"'))
         self.assertTrue(branding.violations("agent-runtime/apps/mobile/app.config.ts", '"com.t3tools.mobile"'))
 
+    def test_fixture_import_aliases_cannot_exempt_product_imports(self):
+        line = '"@t3tools/contracts": ["../../packages/contracts/src/index.ts"],'
+        self.assertEqual(branding.violations("agent-runtime/apps/server/tsconfig.json", line), [])
+        self.assertTrue(branding.violations("agent-runtime/apps/server/src/new.ts", line))
+        self.assertTrue(branding.violations("agent-runtime/apps/server/tsconfig.json", line + ' "T3 Code"'))
+
+    def test_worktree_prefix_exception_only_covers_the_exact_compatibility_declaration(self):
+        line = 'export const LEGACY_WORKTREE_BRANCH_PREFIX = "t3code";'
+        self.assertEqual(branding.violations("agent-runtime/packages/shared/src/git.ts", line), [])
+        self.assertTrue(branding.violations("agent-runtime/apps/web/src/new.ts", line))
+        self.assertTrue(branding.violations("agent-runtime/packages/shared/src/git.ts", line + ' const brand = "T3 Code";'))
+
     def test_credential_exception_is_only_for_the_persisted_owner(self):
         path = "agent-runtime/packages/contracts/src/providerSetup.ts"
         self.assertEqual(branding.violations(path, 'credentialOwner: Schema.Literals(["provider", "t3"]),'), [])

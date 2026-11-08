@@ -1,16 +1,16 @@
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../ui/tooltip";
 import { useAtomValue } from "@effect/atom-react";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { visibleLinkedThreads } from "@t3tools/client-runtime/state/threads";
-import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentId, PullRequestRef, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import { scopeThreadRef } from "@cinderdeck/client-runtime/environment";
+import { visibleLinkedThreads } from "@cinderdeck/client-runtime/state/threads";
+import { settlePromise, squashAtomCommandFailure } from "@cinderdeck/client-runtime/state/runtime";
+import type { EnvironmentId, PullRequestRef, ScopedThreadRef, ThreadId } from "@cinderdeck/contracts";
 import { CheckIcon, MessageSquareIcon } from "lucide-react";
 import { useState } from "react";
-import { threadPullRequestLinkMode } from "@t3tools/client-runtime/thread-pull-request-compatibility";
+import { threadPullRequestLinkMode } from "@cinderdeck/client-runtime/thread-pull-request-compatibility";
 import { usePullRequestLinking } from "~/hooks/usePullRequestLinking";
 
-import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
-import { normalizeThreadPullRequestKey } from "@t3tools/client-runtime/thread-pull-requests";
+import { sourceControlClients } from "@cinderdeck/client-runtime/source-control-clients";
+import { normalizeThreadPullRequestKey } from "@cinderdeck/client-runtime/thread-pull-requests";
 import {
   useAnyEnvironmentHiding,
   useEnvironmentThreadRefs,
