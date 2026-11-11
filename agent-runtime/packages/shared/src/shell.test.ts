@@ -72,7 +72,7 @@ describe("readEnvironmentFromLoginShell", () => {
     "captures Nushell PATH and multiline values without external tools",
     () => {
       const shell = process.env.T3_TEST_NU_PATH!;
-      const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-nu-env-"));
+      const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-nu-env-"));
       try {
         const toolPath = NodePath.join(home, "nu tools", "bin");
         const extraToolPath = NodePath.join(home, "extra-tools", "bin");
@@ -109,6 +109,39 @@ describe("readEnvironmentFromLoginShell", () => {
           PATH: `${toolPath}:${extraToolPath}:rel/dir:`,
           CUSTOM_VAR: "  first\nsecond  ",
         });
+      } finally {
+        NodeFS.rmSync(home, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.runIf(NodeFS.existsSync("/bin/bash"))(
+    "ignores probe markers a bash DEBUG trap echoes into the terminal title",
+    () => {
+      const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "cinderdeck-bash-env-"));
+      try {
+        const shellPath = `${NodePath.join(home, "bin")}:/usr/bin:/bin`;
+        const bashEnv = NodePath.join(home, "env.bash");
+        NodeFS.writeFileSync(
+          bashEnv,
+          [
+            `export PATH=${JSON.stringify(shellPath)}`,
+            `trap 'echo -ne "\\033]0;\${BASH_COMMAND}\\007"' DEBUG`,
+          ].join("\n"),
+        );
+
+        expect(
+          readEnvironmentFromLoginShell(
+            "/bin/bash",
+            ["XDG_DATA_HOME", "PATH"],
+            // Non-interactive bash reads only BASH_ENV, not the host's /etc startup files that -il runs.
+            (file, [, command = ""], options) =>
+              NodeChildProcess.execFileSync(file, ["-c", command], {
+                ...options,
+                env: { HOME: home, PATH: "/usr/bin:/bin", TERM: "dumb", BASH_ENV: bashEnv },
+              }),
+          ),
+        ).toEqual({ PATH: shellPath });
       } finally {
         NodeFS.rmSync(home, { recursive: true, force: true });
       }
@@ -507,7 +540,9 @@ effectIt.layer(NodeServices.layer)("resolveCommandPath", (it) => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "t3-case-sensitive-path-" });
+        const cwd = yield* fs.makeTempDirectoryScoped({
+          prefix: "cinderdeck-case-sensitive-path-",
+        });
         const executable = path.join(cwd, "audit-command.cmd");
         yield* fs.writeFileString(executable, "@echo off\n");
 
@@ -745,7 +780,7 @@ effectIt.layer(NodeServices.layer)("resolveSpawnCommand", (it) => {
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
           const path = yield* Path.Path;
-          const prefix = yield* fs.makeTempDirectoryScoped({ prefix: "t3-npm-shim-" });
+          const prefix = yield* fs.makeTempDirectoryScoped({ prefix: "cinderdeck-npm-shim-" });
           const shim = path.join(prefix, "opencode.cmd");
           const executable = path.join(
             prefix,

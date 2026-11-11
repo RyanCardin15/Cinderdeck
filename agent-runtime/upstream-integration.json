@@ -88,6 +88,18 @@
     {
       "commit": "a601caaffd45ba7527bf2e8dcb1e8b966c70fa92",
       "subject": "fix(gitlab): `glab mr accept` counts as a shell merge (#32400)"
+    },
+    {
+      "commit": "1c17285e58350e6df91b0de805dc4030ced9c6c6",
+      "subject": "fix(shared): cite assistant messages with IDs over 512 characters (#28084)"
+    },
+    {
+      "commit": "ba4d01cf7f78b29f2fb3a5be019e7ea8562ee692",
+      "subject": "fix(shared): login-shell environment probe ignores DEBUG trap output (#32646)"
+    },
+    {
+      "commit": "d152d2c8240618f60308c3b42a160a414be57538",
+      "subject": "fix(client-runtime): a search query pasted from github.com lists pull requests again (#30150)"
     }
   ],
   "deferred": [
@@ -258,11 +270,22 @@
   ],
   "compatibility": "Preserve legal notices, provider fixtures, persisted keys, native module registrations and wire identifiers. No repository-root upstream merge. reviewedThrough is an examined target, not complete parity.",
   "latestSelectedPortBatch": {
-    "upstreamBase": "337c5858c33bc7f8f6dfd391a2c279fa0f7e4d17",
-    "upstreamTarget": "dff0b1159bf7aa3ad5e5598d6e1bb7d6243f51a2",
-    "newUpstreamCommits": 294,
-    "portedCommits": 13,
-    "remainingCommits": 281,
-    "reviewScope": "Commit and path inventory triaged; source diffs reviewed for selected ports only. reviewedThrough remains the prior full triage boundary. Remaining changes require dependency, provider, native/mobile or owned-product adaptation review."
-  }
+    "upstreamBase": "dff0b1159bf7aa3ad5e5598d6e1bb7d6243f51a2",
+    "upstreamTarget": "46afd69a8b6dd4149747fd04d86576af009f7eec",
+    "newUpstreamCommits": 336,
+    "portedCommits": 3,
+    "remainingCommits": 333,
+    "previousBatchRemainingCommits": 281,
+    "reviewScope": "Commit inventory examined; source diffs reviewed and ported for the three listed fixes only. The earlier 281 pending changes and 333 remaining newer changes require further review; reviewedThrough remains unchanged. No upstream parity claim."
+  },
+  "selectedPortBatches": [
+    {
+      "upstreamBase": "337c5858c33bc7f8f6dfd391a2c279fa0f7e4d17",
+      "upstreamTarget": "dff0b1159bf7aa3ad5e5598d6e1bb7d6243f51a2",
+      "newUpstreamCommits": 294,
+      "portedCommits": 13,
+      "remainingCommits": 281,
+      "reviewScope": "Commit and path inventory triaged; source diffs reviewed for selected ports only. reviewedThrough remains the prior full triage boundary. Remaining changes require dependency, provider, native/mobile or owned-product adaptation review."
+    }
+  ]
 }
