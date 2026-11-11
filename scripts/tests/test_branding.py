@@ -154,6 +154,15 @@ class BrandingTests(unittest.TestCase):
         self.assertEqual(branding.violations(path, 'class T3TerminalNative {}'), [])
         self.assertTrue(branding.violations(path, 'let label = "T3 Code"'))
 
+    def test_lowercase_product_identity_cannot_hide_behind_compatibility(self):
+        path = "agent-runtime/apps/web/src/NewPanel.tsx"
+        for line in ('const product = "t3code";', 'const url = "https://example.com/t3code";', 'const t3code = {};'):
+            self.assertTrue(branding.violations(path, line), line)
+        for token in ("t3code-client.db", "t3code://thread/1", "t3code:renderer-state:v8"):
+            line = f'const key = "{token}";'
+            self.assertEqual(branding.violations(path, line), [], token)
+            self.assertTrue(branding.violations(path, line + ' const product = "t3code";'), token)
+
     def test_lowercase_identifiers_help_and_demo_urls_are_rejected(self):
         for text in ('const t3 = {};', 'const t3Panel = {};', '"t3dotgg/fleet"', '"t3chat"', '"Run t3 theme set"', '"https://demo.t3.sh"'):
             self.assertTrue(branding.violations("agent-runtime/apps/web/src/NewPanel.tsx", text))

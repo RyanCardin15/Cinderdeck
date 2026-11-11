@@ -1,6 +1,6 @@
 // The production icon, as GitHub shows the Cinderdeck app, whatever this build's channel.
-import appIconUrl from "../../../../assets/prod/t3-black-web-apple-touch-180.png";
+import appIconUrl from "../../../../assets/cinderdeck/prod/web-apple-touch-180.png";
 
-export function T3AppIcon(props: { readonly className?: string }) {
+export function CinderdeckAppIcon(props: { readonly className?: string }) {
   return <img src={appIconUrl} alt="" className={props.className} />;
 }

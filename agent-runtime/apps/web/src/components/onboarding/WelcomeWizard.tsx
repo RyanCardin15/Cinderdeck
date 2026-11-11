@@ -91,7 +91,7 @@ import { TerminalViewport } from "../ThreadTerminalDrawer";
 import { CloudEnvironmentConnectRows } from "../cloud/CloudEnvironmentConnectList";
 import { presentSavedCloudEnvironmentConnection } from "../cloud/cloudEnvironmentConnectionPresentation";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
-import { T3Wordmark } from "../T3Wordmark";
+import { CinderdeckMark } from "../CinderdeckMark";
 import { Alert, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
 import { CommandBlock } from "../CommandBlock";
@@ -242,7 +242,7 @@ export function WelcomeWizard({
           title="Set up Cinderdeck"
           identity={
             <div className="flex items-baseline gap-1.5" role="img" aria-label="Cinderdeck">
-              <T3Wordmark className="h-4 w-auto shrink-0" aria-hidden />
+              <CinderdeckMark className="h-4 w-auto shrink-0" aria-hidden />
               <span className="text-2xl font-medium tracking-tight text-muted-foreground">
                 Cinderdeck
               </span>
@@ -444,9 +444,9 @@ function ConnectionStep({
       ) : null}
       <div className="mt-6 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <p className="min-w-0 text-xs leading-relaxed text-muted-foreground">
-          {telemetryOff ?? "Cinderdeck collects anonymous usage data to help us improve it."} To read
-          more about how your data is used{telemetryOff === undefined ? " and how to opt out" : ""},
-          see our{" "}
+          {telemetryOff ?? "Cinderdeck collects anonymous usage data to help us improve it."} To
+          read more about how your data is used
+          {telemetryOff === undefined ? " and how to opt out" : ""}, see our{" "}
           <a
             className="underline underline-offset-2 hover:text-foreground"
             href={PRIVACY_POLICY_URL}
